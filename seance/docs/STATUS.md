@@ -19,8 +19,10 @@ and that must not block an open. Checkouts are now owner-only on macOS
 as on Linux (0700 directory, 0600 file), and a refresh sets the mode
 and mark on its new file before renaming it into place: the renamed-in
 file used to arrive 0644, and a failure now leaves the old copy intact.
-An editor's atomic save still drops the mark, as it does for any
-downloaded file the user edits.
+The checkout root itself is made owner-only (0700) when the store loads
+and on every checkout, which also shields copies written before this
+change. An editor's atomic save still drops the mark, as it does for
+any downloaded file the user edits.
 
 Validated on Linux: service tests that simulate the Windows stream and
 the macOS `xattr` call, failures that never throw, controller tests

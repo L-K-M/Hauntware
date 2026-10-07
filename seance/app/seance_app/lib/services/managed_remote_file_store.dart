@@ -6,6 +6,7 @@ import 'dart:io';
 import 'package:crypto/crypto.dart';
 
 import 'atomic_file.dart';
+import 'file_permissions.dart';
 import 'managed_remote_file.dart';
 
 const _indexVersion = 1;
@@ -254,6 +255,22 @@ class ManagedRemoteFileStore {
 
   Future<void> _loadUnlocked() async {
     if (_loaded) return;
+    // Owner-only at the top keeps every checkout below it out of other
+    // users' reach, including copies written before checkouts were
+    // restricted on macOS. Best effort here: the index must still load.
+    try {
+      if (await checkoutRoot.exists()) {
+        restrictDirectoryToOwner(checkoutRoot.absolute);
+      }
+    } catch (error, stackTrace) {
+      developer.log(
+        'Could not restrict the checkout folder to its owner',
+        name: 'seance.app',
+        level: 900,
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
     // A failed load is retried by the next operation, so it starts clean: a
     // half-read index left behind would read as duplicate ids.
     _files.clear();
@@ -473,6 +490,7 @@ class ManagedRemoteFileStore {
         root.path,
       );
     }
+    restrictDirectoryToOwner(root);
 
     var path = root.path;
     for (final segment in segments.take(segments.length - 1)) {

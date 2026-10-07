@@ -62,7 +62,7 @@ class DownloadProvenance {
   }
 
   /// `0081;<seconds since 1970, hex>;<agent>;<event id>`, e.g.
-  /// `0081;6704a1c3;Seance;6F9619FF-8B86-D011-B42D-00C04FC964FF`. Written
+  /// `0081;6704a1c3;Seance;3f2a9c01-7b4e-4d8a-9c1b-2e5f6a7b8c9d`. Written
   /// as hex (`-wx`) so the attribute holds exactly these bytes, and with
   /// the ASCII product name the bundle itself uses.
   Future<void> _quarantine(String path) async {

@@ -139,6 +139,7 @@ class _RemoteBrowser extends StatefulWidget {
 class _RemoteBrowserState extends State<_RemoteBrowser> {
   bool _dragging = false;
   final ExternalFileOpener _fileOpener = const ExternalFileOpener();
+  final DownloadProvenance _provenance = DownloadProvenance();
   final TextEditingController _filter = TextEditingController();
   final Set<String> _promptedDirtyCopies = {};
 
@@ -1316,7 +1317,7 @@ class _RemoteBrowserState extends State<_RemoteBrowser> {
       await sink.flush();
       await sink.close();
       // Share hands this copy on as it is.
-      await DownloadProvenance().markDownloaded(file.path);
+      await _provenance.markDownloaded(file.path);
       return StagedExportFile(
         file: file,
         fileName: _safeLocalName(entry.name),
@@ -1340,7 +1341,7 @@ class _RemoteBrowserState extends State<_RemoteBrowser> {
           );
           if (destination == null) return null;
           await _copyExportAtomically(file.file, File(destination));
-          await DownloadProvenance().markDownloaded(destination);
+          await _provenance.markDownloaded(destination);
           return destination;
         },
       );

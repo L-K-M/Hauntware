@@ -31,6 +31,24 @@ void main() {
     }
   });
 
+  test(
+    'the checkout root is owner-only, also for copies made before',
+    () async {
+      // An install from before checkouts were restricted on macOS left a
+      // world-readable root behind.
+      await checkoutRoot.create(recursive: true);
+      await Process.run('chmod', ['755', checkoutRoot.path]);
+
+      await store.reconcileAll();
+      expect(checkoutRoot.statSync().mode & 0x1ff, 0x1c0); // 0700
+
+      await Process.run('chmod', ['755', checkoutRoot.path]);
+      await store.createCheckout('one/file.txt');
+      expect(checkoutRoot.statSync().mode & 0x1ff, 0x1c0);
+    },
+    skip: Platform.isWindows ? 'POSIX modes only' : false,
+  );
+
   test('model JSON round-trips metadata but not runtime state', () {
     final original = _managedFile(
       id: 'edit-1',
@@ -293,30 +311,26 @@ void main() {
     skip: Platform.isWindows,
   );
 
-  test(
-    'creation and deletion refuse to traverse a parent symlink',
-    () async {
-      final outside = Directory('${temporaryDirectory.path}/outside')
-        ..createSync();
-      final victim = File('${outside.path}/victim.txt');
-      await victim.writeAsString('keep');
-      await store.list();
-      await checkoutRoot.create(recursive: true);
-      await Link('${checkoutRoot.path}/redirect').create(outside.path);
+  test('creation and deletion refuse to traverse a parent symlink', () async {
+    final outside = Directory('${temporaryDirectory.path}/outside')
+      ..createSync();
+    final victim = File('${outside.path}/victim.txt');
+    await victim.writeAsString('keep');
+    await store.list();
+    await checkoutRoot.create(recursive: true);
+    await Link('${checkoutRoot.path}/redirect').create(outside.path);
 
-      await expectLater(
-        store.createCheckout('redirect/new.txt'),
-        throwsA(isA<FileSystemException>()),
-      );
-      await expectLater(
-        store.deleteCheckout('redirect/victim.txt'),
-        throwsA(isA<FileSystemException>()),
-      );
-      expect(await victim.readAsString(), 'keep');
-      expect(await File('${outside.path}/new.txt').exists(), isFalse);
-    },
-    skip: Platform.isWindows,
-  );
+    await expectLater(
+      store.createCheckout('redirect/new.txt'),
+      throwsA(isA<FileSystemException>()),
+    );
+    await expectLater(
+      store.deleteCheckout('redirect/victim.txt'),
+      throwsA(isA<FileSystemException>()),
+    );
+    expect(await victim.readAsString(), 'keep');
+    expect(await File('${outside.path}/new.txt').exists(), isFalse);
+  }, skip: Platform.isWindows);
 
   ManagedRemoteFileStore relaunch() =>
       ManagedRemoteFileStore(indexFile: indexFile, checkoutRoot: checkoutRoot);
