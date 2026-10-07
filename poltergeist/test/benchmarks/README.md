@@ -375,6 +375,25 @@ entries/s; all pass the unchanged budgets. Only the shared runner-image
 calibration moves. Budget thresholds, landed flags, enforcement, and
 per-scenario configs are unchanged.
 
+## Baseline refresh: runner image rotation (2026-10-07)
+
+Main run 37509970591 exposed the controlled `ubuntu-latest` rotation from
+`20260927.320.1` to `20261004.327.1`. The refresh pools raw rows from that
+run and main runs 37610163919 and 37650844135. All three share the complete
+recorded fingerprint, including `AMD EPYC 7763 64-Core Processor`, and the
+scenario configs are unchanged. Pooled medians: P1 1084.964 ms (n=9), P2
+11146.722 ms (n=9), and P4 49.641 ms (n=15). P6 still has no entry: all nine
+rows errored at 811–910 captured frames against the required minimum of 1800.
+
+The new image rolled out over a day. Main runs 37514863977, 37516749547,
+37521829674, 37593823722, 37593905549, 37599078500, 37603120663, and
+37608094388 still carried the old image; 37642560178 and 37654488587 carried
+the new image on `AMD EPYC 9V74` and `Intel(R) Xeon(R) 6973P-C`. All were
+excluded. The pooled tier-A medians are P3 4450.073 ms, P5 4774.867 ms, and
+P7 2278.627 entries/s; all pass the unchanged budgets. Only the shared
+runner-image calibration moves. Budget thresholds, landed flags, enforcement,
+and per-scenario configs are unchanged.
+
 ## First fixture-backed observations (2026-09-14)
 
 The job's first real runs produced stable medians (within-run spread
