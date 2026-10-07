@@ -65,6 +65,13 @@ const _modernAlpineImage =
 const _modernOpenSshVersion = '10.6_p1-r0';
 // Keep in sync with the sshd-modern Dockerfile; bump both on rotation.
 const _modernIproute2Version = '7.2.0-r0';
+// The fixture and its frozen base pin the same set until the fixture
+// builds on the published base.
+const _modernDockerfiles = [
+  'test/integration/sshd-modern/Dockerfile',
+  'test/integration/sshd-modern-base/Dockerfile',
+];
+const _modernBaseImage = 'ghcr.io/l-k-m/poltergeist-sshd-modern-base';
 const _modernOpenSshPackages = [
   'openssh-client-common',
   'openssh-server-pam',
@@ -136,22 +143,78 @@ void main() {
   });
 
   test('pins the current modern OpenSSH fixture', () {
-    final dockerfile = File(
-      'test/integration/sshd-modern/Dockerfile',
-    ).readAsStringSync();
+    for (final path in _modernDockerfiles) {
+      final dockerfile = File(path).readAsStringSync();
 
-    expect(dockerfile.split('\n').first, 'FROM $_modernAlpineImage');
-    for (final package in _modernOpenSshPackages) {
-      expect(dockerfile, contains('$package=$_modernOpenSshVersion'));
+      expect(
+        dockerfile.split('\n').first,
+        'FROM $_modernAlpineImage',
+        reason: path,
+      );
+      for (final package in _modernOpenSshPackages) {
+        expect(
+          dockerfile,
+          contains('$package=$_modernOpenSshVersion'),
+          reason: path,
+        );
+      }
     }
   });
 
   test('pins the current modern iproute2 package', () {
-    final dockerfile = File(
-      'test/integration/sshd-modern/Dockerfile',
-    ).readAsStringSync();
+    for (final path in _modernDockerfiles) {
+      final dockerfile = File(path).readAsStringSync();
 
-    expect(dockerfile, contains('iproute2=$_modernIproute2Version'));
+      expect(
+        dockerfile,
+        contains('iproute2=$_modernIproute2Version'),
+        reason: path,
+      );
+    }
+  });
+
+  test('builds the modern base on PRs and publishes it from main', () {
+    final workflow =
+        loadYaml(
+              File(
+                '../.github/workflows/fixture-images.yml',
+              ).readAsStringSync(),
+            )
+            as YamlMap;
+    final events = workflow['on'] as YamlMap;
+    final env = workflow['env'] as YamlMap;
+    final jobs = workflow['jobs'] as YamlMap;
+    YamlMap build(String job) =>
+        ((jobs[job] as YamlMap)['steps'] as YamlList)
+                .cast<YamlMap>()
+                .singleWhere((step) => step['id'] == 'build')['with']
+            as YamlMap;
+
+    expect(env['IMAGE'], _modernBaseImage);
+    expect(env['CONTEXT'], 'poltergeist/test/integration/sshd-modern-base');
+    expect(env['PLATFORMS'], 'linux/amd64,linux/arm64');
+    expect(
+      (events['pull_request'] as YamlMap)['paths'],
+      contains('poltergeist/test/integration/sshd-modern-base/**'),
+    );
+
+    final verify = jobs['verify'] as YamlMap;
+    expect(verify['if'], "github.event_name == 'pull_request'");
+    expect(verify.containsKey('permissions'), isFalse);
+    expect(build('verify')['push'], isFalse);
+
+    final publish = jobs['publish'] as YamlMap;
+    expect(
+      publish['if'],
+      "github.event_name == 'workflow_dispatch' && "
+      "github.ref == 'refs/heads/main'",
+    );
+    expect((publish['permissions'] as YamlMap)['packages'], 'write');
+    expect(build('publish')['push'], isTrue);
+    for (final job in ['verify', 'publish']) {
+      expect(build(job)['context'], r'${{ env.CONTEXT }}', reason: job);
+      expect(build(job)['platforms'], r'${{ env.PLATFORMS }}', reason: job);
+    }
   });
 
   test('pins matching legacy OpenSSH client and server packages', () {
