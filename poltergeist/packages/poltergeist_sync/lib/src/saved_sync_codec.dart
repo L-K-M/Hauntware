@@ -154,7 +154,11 @@ SyncPair syncPairFromSavedSync(
   name: name,
   left: endpointFromBookmarkLocation(spec.source),
   right: endpointFromBookmarkLocation(spec.destination),
-  rules: syncRuleSetFromJson(spec.rules).withExcludeGlobs(spec.ignoreRules),
+  // The rules map never carries excludeGlobs (see [syncRuleSetToJson]):
+  // the spec's first-class ignoreRules are re-attached here.
+  rules: syncRuleSetFromJson(
+    spec.rules,
+  ).copyWith(excludeGlobs: spec.ignoreRules),
 );
 
 /// SyncPair → a savedSync-kind [Bookmark] (04 §2.1, §9: the bookmark
@@ -187,28 +191,4 @@ SyncPair? syncPairFromBookmark(Bookmark bookmark) {
     return null;
   }
   return syncPairFromSavedSync(spec, id: bookmark.id, name: bookmark.label);
-}
-
-extension _ExcludeGlobs on SyncRuleSet {
-  /// Re-attaches the spec's first-class `ignoreRules` onto a decoded
-  /// ruleset (the rules map never carries excludeGlobs — see
-  /// [syncRuleSetToJson]).
-  SyncRuleSet withExcludeGlobs(List<String> globs) => SyncRuleSet(
-    direction: direction,
-    deletions: deletions,
-    backups: backups,
-    comparison: comparison,
-    mtimeToleranceSecs: mtimeToleranceSecs,
-    acceptedTimeShifts: acceptedTimeShifts,
-    conflictDefault: conflictDefault,
-    excludeGlobs: globs,
-    includeHidden: includeHidden,
-    symlinks: symlinks,
-    trashPathLeft: trashPathLeft,
-    trashPathRight: trashPathRight,
-    maxDelete: maxDelete,
-    deleteFractionWarn: deleteFractionWarn,
-    preserveMtime: preserveMtime,
-    transferConcurrency: transferConcurrency,
-  );
 }
