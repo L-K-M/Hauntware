@@ -312,6 +312,7 @@ port candidates.
   (D19 scope) — plus `deleteApiKey` for sign-out (no Séance counterpart;
   tolerant like the reads, the orphaned entry is harmless); Séance types
   imported via the poltergeist_core barrel, never seance_core directly.
+  Since 2026-10-07 `hasKeystoreKey` is dropped: nothing here called it.
   The ported exception messages are frozen port text allowlisted in the
   localization contract; the D20 ARB rule applies where the UI renders
   them (prompt-UI slice).

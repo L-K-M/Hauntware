@@ -109,19 +109,6 @@ class MasterKeyManager {
     }
   }
 
-  /// Whether a master key is stored. Tolerant like the reads: a keystore
-  /// that throws reads as "no key", not as a crash.
-  Future<bool> hasKeystoreKey() async {
-    try {
-      final v = await _storage.read(key: _keyName);
-      _markAvailable();
-      return v != null;
-    } catch (e) {
-      _markUnavailable(e);
-      return false;
-    }
-  }
-
   /// Replace the stored master key (used when sync enrolment switches the
   /// vault to the passphrase-derived key that is shared across devices).
   Future<void> setKeystoreKey(List<int> key) =>
