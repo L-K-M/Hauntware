@@ -6272,7 +6272,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get serverEditorStartDirectoryInvalid =>
-      'Enter a folder path such as /var/www or ~/sites.';
+      'Use an absolute path such as /var/www, or one in your own home such as ~/sites.';
 
   @override
   String get serverEditorLoginScript => 'Login script (optional)';

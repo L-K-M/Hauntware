@@ -337,9 +337,25 @@ void main() {
 
       expect(delegate.saved, isNull);
       expect(
-        find.text('Enter a folder path such as /var/www or ~/sites.'),
+        find.text(
+          'Use an absolute path such as /var/www, or one in your own home '
+          'such as ~/sites.',
+        ),
         findsOneWidget,
       );
+    });
+
+    testWidgets('refuses a control character rather than dropping it', (
+      tester,
+    ) async {
+      await openEditor(tester);
+      await fillRequired(tester);
+      await scrollTo(tester, startField());
+      await tester.enterText(startField(), '/srv/\u{7}www');
+
+      await save(tester);
+
+      expect(delegate.saved, isNull);
     });
   });
 
