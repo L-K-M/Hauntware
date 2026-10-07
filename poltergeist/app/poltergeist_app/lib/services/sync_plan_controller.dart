@@ -535,7 +535,11 @@ final class SyncPlanController extends ChangeNotifier {
   Map<SyncSide, SyncTrashLocation> _trashLocations = {};
   Map<SyncTrashLocation, _SyncTrashTargetState> _trashTargets = {};
   Map<SyncSide, RemoteFileException> _trashLocationFailures = {};
-  bool _trashLocationResolutionFailed = false;
+
+  /// Whether a side's trash root failed to resolve on the last scan.
+  bool get _trashLocationResolutionFailed =>
+      _trashLocationFailures.isNotEmpty;
+
   Future<void>? _trashInventoryRefresh;
   RemoteTransferCancellation? _trashPurgeCancellation;
   bool _isPurgingTrash = false;
@@ -1679,7 +1683,6 @@ final class SyncPlanController extends ChangeNotifier {
   Future<void> _resolveTrashLocations(int generation) async {
     final locations = <SyncSide, SyncTrashLocation>{};
     final failures = <SyncSide, RemoteFileException>{};
-    var failed = false;
     for (final side in SyncSide.values) {
       final endpoint = side == SyncSide.left ? _pair.left : _pair.right;
       if (!_environment.endpointAvailable(endpoint)) continue;
@@ -1689,6 +1692,7 @@ final class SyncPlanController extends ChangeNotifier {
           (side == SyncSide.left ? _leftCaseSensitive : _rightCaseSensitive)
           ? SyncTrashPathCase.sensitive
           : SyncTrashPathCase.insensitive;
+      final RemoteFileException failure;
       try {
         final location = await _environment.resolveTrashLocation(
           endpoint: endpoint,
@@ -1699,43 +1703,29 @@ final class SyncPlanController extends ChangeNotifier {
         );
         if (_disposed || generation != _scanGeneration) return;
         locations[side] = location;
+        continue;
       } on RemoteFileException catch (error) {
-        failed = true;
-        failures[side] = error;
-        locations[side] = await _environment.trashLocationFor(
-          endpoint: endpoint,
-          canonicalRoot: root,
-          rules: _pair.rules,
-          side: side,
-          pathCase: pathCase,
-        );
+        failure = error;
       } on SyncTrashActivityLockException catch (error) {
-        failed = true;
-        failures[side] = _trashLocationFailure(side, root, error);
-        locations[side] = await _environment.trashLocationFor(
-          endpoint: endpoint,
-          canonicalRoot: root,
-          rules: _pair.rules,
-          side: side,
-          pathCase: pathCase,
-        );
+        failure = _trashLocationFailure(side, root, error);
       } on SyncTrashPurgeInProgressException catch (error) {
-        failed = true;
-        failures[side] = _trashLocationFailure(side, root, error);
-        locations[side] = await _environment.trashLocationFor(
-          endpoint: endpoint,
-          canonicalRoot: root,
-          rules: _pair.rules,
-          side: side,
-          pathCase: pathCase,
-        );
+        failure = _trashLocationFailure(side, root, error);
       }
+      // A side that could not resolve still shows where its trash would
+      // be; the recorded failure keeps it from being written.
+      failures[side] = failure;
+      locations[side] = await _environment.trashLocationFor(
+        endpoint: endpoint,
+        canonicalRoot: root,
+        rules: _pair.rules,
+        side: side,
+        pathCase: pathCase,
+      );
     }
     if (_disposed || generation != _scanGeneration) return;
 
     _trashLocations = locations;
     _trashLocationFailures = failures;
-    _trashLocationResolutionFailed = failed;
   }
 
   RemoteFileException _trashLocationFailure(
@@ -1782,7 +1772,6 @@ final class SyncPlanController extends ChangeNotifier {
     _trashLocations = {};
     _trashTargets = {};
     _trashLocationFailures = {};
-    _trashLocationResolutionFailed = false;
     _phase = SyncPlanPhase.scanning;
     _errorMessage = null;
     _errorKind = null;
