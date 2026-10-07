@@ -8,10 +8,10 @@ import 'package:ghost_ui/ghost_ui.dart'
 import 'package:poltergeist_core/poltergeist_core.dart'
     show DirectoryGrouping, FileSortKey, RemoteFileType;
 
+import '../../services/application_error_reporter.dart';
 import '../../services/pane_controller.dart';
 import '../../services/pane_permissions.dart' show nameIsFlagged;
 import '../../services/preview_session.dart';
-import '../../services/application_error_reporter.dart';
 import '../../services/registered_command.dart';
 import '../../services/settings_models.dart' show DirectoryGroupingModel;
 import '../../services/workspace_controller.dart';

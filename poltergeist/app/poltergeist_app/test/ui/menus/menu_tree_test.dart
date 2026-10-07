@@ -535,9 +535,7 @@ void main() {
             ? member.members
             : [member];
         for (final item in items) {
-          if (item is! PlatformMenuItem || item.label != 'Keep Folders on Top') {
-            continue;
-          }
+          if (item.label != 'Keep Folders on Top') continue;
           return item
                   .toChannelRepresentation(delegate, getId: (_) => 1)
                   .single['checked']
