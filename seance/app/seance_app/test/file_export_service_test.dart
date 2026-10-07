@@ -87,34 +87,6 @@ void main() {
     );
   });
 
-  test('stages a stream and returns a share-ready XFile', () async {
-    final root = await Directory.systemTemp.createTemp('seance_export_test');
-    addTearDown(() async {
-      if (await root.exists()) await root.delete(recursive: true);
-    });
-    final service = FileExportService(
-      platform: _UnexpectedPlatform(),
-      stagingDirectoryProvider: () async => root,
-      useAndroidSaf: false,
-    );
-
-    final staged = await service.stageFile(
-      fileName: 'session.log',
-      contents: Stream<List<int>>.fromIterable([
-        [1, 2],
-        [3, 4],
-      ]),
-      mimeType: 'text/plain',
-    );
-    final shareFile = await service.shareReadyFile(staged);
-
-    expect(await staged.file.readAsBytes(), [1, 2, 3, 4]);
-    expect(staged.file.path, contains('seance-export-'));
-    expect(shareFile.path, staged.file.path);
-    expect(shareFile.name, 'session.log');
-    expect(shareFile.mimeType, 'text/plain');
-  });
-
   test('uses the injected desktop saver without invoking Android', () async {
     final root = await Directory.systemTemp.createTemp('seance_export_test');
     addTearDown(() async {
@@ -123,16 +95,17 @@ void main() {
     StagedExportFile? received;
     final service = FileExportService(
       platform: _UnexpectedPlatform(),
-      stagingDirectoryProvider: () async => root,
       desktopSave: (file) async {
         received = file;
         return '/saved/${file.fileName}';
       },
       useAndroidSaf: false,
     );
-    final staged = await service.stageFile(
+    final file = File('${root.path}/keys.json');
+    await file.writeAsBytes([7, 8, 9]);
+    final staged = StagedExportFile(
+      file: file,
       fileName: 'keys.json',
-      contents: Stream<List<int>>.value([7, 8, 9]),
       mimeType: 'application/json',
     );
 

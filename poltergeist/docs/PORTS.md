@@ -930,6 +930,10 @@ counterpart is ported here.
   copy shape are upstream's.
 - 2026-10-07: both copies carry the new `startDirectory`, changed in the
   same commit upstream; no divergence.
+- Shared: 2026-10-07. `duplicateServerLabel` and `duplicateServerConfig`
+  moved into `seance_protocol` beside `ServerConfig` and reach this file
+  through the core barrel, so a new field is carried in one place. The
+  planner, the stale-source check and `ServerDuplication` stay here.
 - Port-back candidates: none — the omission is sandbox-specific.
 
 ## app/poltergeist_app/lib/services/server_editor_backend.dart
@@ -1073,6 +1077,9 @@ counterpart is ported here.
   coverage carried verbatim. Since 2026-10-04 the two locked-vault cases
   use `DynamicSecretVault` with a null key provider, the production
   locked shape, instead of upstream's `LockedSecretVault`.
+- Shared: 2026-10-07. The label grammar and config-copy groups moved with
+  their functions to `seance_protocol`'s `server_duplication_test.dart`;
+  the planner and stale-source cases stay here.
 - Port-back candidates: none.
 
 ## app/poltergeist_app/test/ui/server_editor_test.dart
@@ -1905,7 +1912,7 @@ the commit-level detail, without adding names to docs.
 - Lineage: `75b1e84bf231d149d64c295430a9dda9dc7f4ffb`, `76e466fbcbfe5dc90b4fa399e5dfac990b23c30d`
 - Identity: 32 lines; `sha256:2e10b1bab6544e2c08709838075d83be92605d33beb72ed328cb15b1579ce232`
 - Unmatched attributions: 1 lines; `sha256:41240f7bf814a29257ba1dcf6ca3af20d744a98f374fdd6781eef8d4950b4bab`
-- License scan: 63 lines; `sha256:9ad9cba72703271dbc203b7847e6079b2d2d6f01402adb7c00751d2be7eefe76`
+- License scan: 63 lines; `sha256:8b61e1556adb906492d2257b3911df631ff45815e7f47304401e645f7470242f`
 - Vendored paths: 152 lines; `sha256:e7745f2f0331e95079ba6bfb63eebfc142fa7654f34869805c6957e0e8bad11c`
 - Gitlinks: 0 lines; `sha256:8c9771035e10619d9c2e084cc0f914772bfff45bd0b0a37c831f98bdf4a94839`
 <!-- SEANCE_PIN_AUDIT_V3:END -->

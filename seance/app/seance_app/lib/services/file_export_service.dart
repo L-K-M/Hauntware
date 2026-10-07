@@ -1,8 +1,6 @@
 import 'dart:io';
 
-import 'package:cross_file/cross_file.dart';
 import 'package:flutter/services.dart';
-import 'package:path_provider/path_provider.dart';
 
 /// Injectable boundary around Android's Storage Access Framework channel.
 abstract interface class FileExportPlatform {
@@ -93,23 +91,18 @@ class StagedExportFile {
 }
 
 typedef DesktopSaveCallback = Future<String?> Function(StagedExportFile file);
-typedef StagingDirectoryProvider = Future<Directory> Function();
 
-/// Stages streams locally, exports them through SAF, or prepares them to share.
+/// Exports staged files through SAF on Android or the app's desktop saver.
 class FileExportService {
   final FileExportPlatform _platform;
-  final StagingDirectoryProvider _stagingDirectoryProvider;
   final DesktopSaveCallback? desktopSave;
   final bool _useAndroidSaf;
 
   FileExportService({
     FileExportPlatform? platform,
-    StagingDirectoryProvider? stagingDirectoryProvider,
     this.desktopSave,
     bool? useAndroidSaf,
   }) : _platform = platform ?? MethodChannelFileExportPlatform(),
-       _stagingDirectoryProvider =
-           stagingDirectoryProvider ?? getTemporaryDirectory,
        _useAndroidSaf = useAndroidSaf ?? Platform.isAndroid;
 
   Future<bool> pickExportDirectory() {
@@ -125,40 +118,6 @@ class FileExportService {
   Future<void> releaseExportDirectory() {
     if (!_useAndroidSaf) return Future<void>.value();
     return _platform.releaseExportDirectory();
-  }
-
-  /// Writes [contents] to a unique cache directory without buffering it all.
-  Future<StagedExportFile> stageFile({
-    required String fileName,
-    required Stream<List<int>> contents,
-    String mimeType = 'application/octet-stream',
-  }) async {
-    _validateFileName(fileName);
-    _validateMimeType(mimeType);
-
-    final root = await _stagingDirectoryProvider();
-    await root.create(recursive: true);
-    final directory = await root.createTemp('seance-export-');
-    final file = File('${directory.path}${Platform.pathSeparator}$fileName');
-    final sink = file.openWrite();
-    try {
-      await sink.addStream(contents);
-      await sink.flush();
-      await sink.close();
-    } catch (_) {
-      try {
-        await sink.close();
-      } catch (_) {
-        // Preserve the original stream or filesystem error.
-      }
-      try {
-        await directory.delete(recursive: true);
-      } catch (_) {
-        // Best effort; cache cleanup must not mask the staging error.
-      }
-      rethrow;
-    }
-    return StagedExportFile(file: file, fileName: fileName, mimeType: mimeType);
   }
 
   /// Exports with Android SAF or delegates the desktop save dialog to the app.
@@ -180,33 +139,5 @@ class FileExportService {
       throw UnsupportedError('No desktop file saver was provided.');
     }
     return save(stagedFile);
-  }
-
-  /// Returns an [XFile] suitable for a platform share sheet.
-  Future<XFile> shareReadyFile(StagedExportFile stagedFile) async {
-    if (!await stagedFile.file.exists()) {
-      throw StateError('The staged export file no longer exists.');
-    }
-    return XFile(stagedFile.file.path, mimeType: stagedFile.mimeType);
-  }
-
-  static void _validateFileName(String fileName) {
-    if (fileName.trim().isEmpty ||
-        fileName == '.' ||
-        fileName == '..' ||
-        fileName.length > 255 ||
-        RegExp(r'[\x00-\x1f\x7f/\\]').hasMatch(fileName)) {
-      throw ArgumentError.value(fileName, 'fileName', 'Invalid file name');
-    }
-  }
-
-  static void _validateMimeType(String mimeType) {
-    final separator = mimeType.indexOf('/');
-    if (separator <= 0 ||
-        separator == mimeType.length - 1 ||
-        separator != mimeType.lastIndexOf('/') ||
-        RegExp(r'[\x00-\x20\x7f]').hasMatch(mimeType)) {
-      throw ArgumentError.value(mimeType, 'mimeType', 'Invalid MIME type');
-    }
   }
 }

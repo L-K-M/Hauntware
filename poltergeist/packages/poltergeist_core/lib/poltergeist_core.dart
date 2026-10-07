@@ -89,6 +89,10 @@ export 'package:seance_core/seance_core.dart'
         normalizeServerEmoji,
         normalizeLoginScript,
         normalizeServerStartDirectory,
+        // The Duplicate command's copy label and field-for-field copy,
+        // shared so a new ServerConfig field is carried in one place.
+        duplicateServerConfig,
+        duplicateServerLabel,
         kMaxServerIconImageBytes,
         runConnectionTest,
         liveHostAuthenticator,
