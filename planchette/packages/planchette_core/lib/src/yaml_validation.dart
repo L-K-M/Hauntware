@@ -154,7 +154,12 @@ final class _YamlReader {
       // Inside a flow collection the line goes on after the quote, and
       // may close the collection.
       if (_flowDepth > 0) {
-        _flowDepth = _flowDepthAfter(close + 1, end, _flowDepth);
+        _flowDepth = _flowDepthAfter(
+          close + 1,
+          end,
+          _flowDepth,
+          nodeStart: false,
+        );
       }
       return true;
     }
@@ -342,28 +347,39 @@ final class _YamlReader {
     return out.toString();
   }
 
-  /// [depth] after the brackets between [from] and [end], ignoring quoted
-  /// text and a comment. A quote still open at the end of the line is left
-  /// in [_quote], since flow scalars span lines too.
-  int _flowDepthAfter(int from, int end, int depth) {
+  /// [depth] after the brackets between [from] and [end], skipping quoted
+  /// scalars and a comment. A quote opens a scalar only where a node
+  /// starts: after `[`, `{`, `,` or `:` and any blanks, or at [from] when
+  /// [nodeStart]. Elsewhere it is part of a plain scalar, as in `[it's]`.
+  /// A quote still open at the end of the line is left in [_quote], since
+  /// flow scalars span lines too.
+  int _flowDepthAfter(int from, int end, int depth, {bool nodeStart = true}) {
+    var expectNode = nodeStart;
     for (var i = from; i < end; i++) {
       final c = _text.codeUnitAt(i);
-      if (c == 0x22 || c == 0x27) {
+      if (_isBlank(c)) continue;
+      if (c == 0x23 &&
+          (i == 0 ||
+              _isBlank(_text.codeUnitAt(i - 1)) ||
+              _isLineBreak(_text.codeUnitAt(i - 1)))) {
+        return depth;
+      }
+      if ((c == 0x22 || c == 0x27) && expectNode) {
         final close = _closingQuote(i + 1, end, c);
         if (close < 0) {
           _quote = c;
           return depth;
         }
         i = close;
-      } else if (c == 0x23 &&
-          (i == 0 ||
-              _isBlank(_text.codeUnitAt(i - 1)) ||
-              _isLineBreak(_text.codeUnitAt(i - 1)))) {
-        return depth;
+        expectNode = false;
       } else if (c == 0x5b || c == 0x7b) {
         depth++;
-      } else if ((c == 0x5d || c == 0x7d) && --depth == 0) {
-        return 0;
+        expectNode = true;
+      } else if (c == 0x5d || c == 0x7d) {
+        if (--depth == 0) return 0;
+        expectNode = false;
+      } else {
+        expectNode = c == 0x2c /* , */ || c == 0x3a /* : */;
       }
     }
     return depth;

@@ -297,6 +297,19 @@ void main() {
       ]);
     });
 
+    test('reads quotes inside a flow collection only where a node starts', () {
+      // An apostrophe inside a plain scalar opens nothing.
+      const text = "tags: [it's, ok]\nname: a\nname: b\n";
+      expect(_problems(text, TextFormat.yaml), [
+        'duplicateKey | warning | name | name | line 2',
+      ]);
+      // A quote after a closed one on the same line still opens a scalar.
+      const spanning = 'a: ["x\ny", "[oops\n"]\nb: 1\nb: 2\n';
+      expect(_problems(spanning, TextFormat.yaml), [
+        'duplicateKey | warning | b | b | line 4',
+      ]);
+    });
+
     test('starts afresh for each document', () {
       expect(
         _problems('a: 1\n---\na: 2\n...\n---\na: 3\n', TextFormat.yaml),
@@ -368,8 +381,8 @@ void main() {
           'a.b = 1\n'
           'a . b = 2\n';
       expect(_problems(text, TextFormat.toml), [
-        'duplicateKey | error | "name" | "name" | line 3',
-        'duplicateKey | error | a . b | a . b | line 6',
+        'duplicateKey | error | "name" | name | line 3',
+        'duplicateKey | error | a . b | a.b | line 6',
       ]);
     });
 
@@ -385,6 +398,18 @@ void main() {
       // only closes on line 4.
       const text = 'a = 1\nx = """v\\"""\na = 2\n"""\n';
       expect(_problems(text, TextFormat.toml), isEmpty);
+    });
+
+    test('starts a new table even when its header does not parse', () {
+      expect(_problems('[a]\nx = 1\n[b c]\nx = 2\n', TextFormat.toml), isEmpty);
+    });
+
+    test('names a repeated key or table by the parts it spells', () {
+      const text = 'name = 1\n"name" = 2\n[a.b]\n[ a . "b" ]\n';
+      expect(_problems(text, TextFormat.toml), [
+        'duplicateKey | error | "name" | name | line 1',
+        'duplicateTable | error | a . "b" | a.b | line 3',
+      ]);
     });
 
     test('flags a table that is also an array of tables', () {
@@ -505,6 +530,13 @@ void main() {
       ]);
       expect(_problems('<r>\n<a foo=', TextFormat.xml), [
         'syntaxError | error | <a foo= | unterminated tag',
+      ]);
+    });
+
+    test('a tag a bad attribute leaves unclosed is unterminated', () {
+      expect(_problems('<r>\n<a b c="x', TextFormat.xml), [
+        'syntaxError | error | <a b c="x | unterminated tag',
+        'syntaxError | error | b | attribute without a value',
       ]);
     });
 

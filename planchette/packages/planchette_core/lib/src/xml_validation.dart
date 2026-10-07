@@ -228,7 +228,10 @@ int? _xmlStartTag(
       detail: problem,
     );
     final close = _xmlTagEnd(text, pos);
-    if (close < 0) return null;
+    if (close < 0) {
+      _xmlUnterminated(text, sink, start, 'unterminated tag');
+      return null;
+    }
     if (text.codeUnitAt(close - 1) != 0x2f /* / */ ) {
       open.add((
         name: name,

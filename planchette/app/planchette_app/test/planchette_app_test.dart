@@ -1015,6 +1015,13 @@ void main() {
     expect(tab.editor.text.selection.baseOffset, conflicted.indexOf('<'));
     expect(find.text('Unresolved merge conflict'), findsOneWidget);
 
+    // From the top, Previous Problem goes round to the last one.
+    tab.editor.text.selection = const TextSelection.collapsed(offset: 0);
+    await tester.pump();
+    item('Find', 'Previous Problem').onSelected!();
+    await tester.pump();
+    expect(tab.editor.text.selection.baseOffset, conflicted.indexOf('<'));
+
     tab.editor.text.value = const TextEditingValue(
       text: 'resolved\n',
       selection: TextSelection.collapsed(offset: 0),

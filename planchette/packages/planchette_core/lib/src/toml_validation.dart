@@ -18,8 +18,15 @@ void _validateToml(String text, _ProblemSink sink) {
   }
 }
 
-/// A key or table name: its parts joined, as written, and where it ends.
-typedef _TomlKey = ({String identity, int start, int end, int after});
+/// A key or table name: its parts joined for comparing and for reading,
+/// where it is written, and where the line goes on after it.
+typedef _TomlKey = ({
+  String identity,
+  String name,
+  int start,
+  int end,
+  int after,
+});
 
 final class _TomlReader {
   _TomlReader(this._text, this._sink);
@@ -66,7 +73,7 @@ final class _TomlReader {
         TextProblemSeverity.error,
         key.start,
         key.end,
-        subject: _text.substring(key.start, key.end),
+        subject: key.name,
         relatedLine: first,
       );
     }
@@ -77,8 +84,10 @@ final class _TomlReader {
   void _header(int pos, int end) {
     final array = pos + 1 < end && _text.codeUnitAt(pos + 1) == 0x5b;
     final name = _key(pos + (array ? 2 : 1), end, 0x5d /* ] */);
-    if (name == null) return;
+    // Even a header that does not parse ends the table before it, so its
+    // keys are not compared with the next table's.
     _keys = {};
+    if (name == null) return;
     // A name is a table or an array of tables, never both.
     final clash = array ? _tables[name.identity] : _arrays[name.identity];
     if (clash != null) {
@@ -108,7 +117,7 @@ final class _TomlReader {
       TextProblemSeverity.error,
       name.start,
       name.end,
-      subject: _text.substring(name.start, name.end),
+      subject: name.name,
       relatedLine: first,
     );
   }
@@ -148,6 +157,7 @@ final class _TomlReader {
       if (pos >= end || _text.codeUnitAt(pos) != stop) return null;
       return (
         identity: parts.join(_tomlKeySeparator),
+        name: parts.join('.'),
         start: start,
         end: keyEnd,
         after: pos + 1,
