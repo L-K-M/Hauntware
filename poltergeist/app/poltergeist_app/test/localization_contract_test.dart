@@ -2505,6 +2505,8 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     // numbers rather than copy.
     "'serverEditor.transferLimit'",
     r"'$files'",
+    // The start folder field's key.
+    "'serverEditor.startDirectory'",
   },
   'lib/ui/server_mark_picker.dart': {
     // The no-bytes picker fault (raised for the caller's localized error
