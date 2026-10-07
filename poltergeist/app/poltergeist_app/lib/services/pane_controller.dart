@@ -3798,28 +3798,23 @@ class PaneController extends ChangeNotifier {
 
     try {
       await connect(lanes, attempt);
-    } on RemoteFileException catch (error) {
+    } on Object catch (error, stackTrace) {
       if (_disposed || attempt != _bindAttempt) return;
       // A replace candidate's failure ends the transaction and retires
       // the parked prior binding. A retainCache recovery RETRY failing
       // is different: the rollback stays parked so Esc can still
       // restore the prior binding out of the failed reconnect.
       if (presentation == _BindingPresentation.replace) _retireRollback();
+      // A typed failure is the answer; anything else is a defect to
+      // report, shown as the authored fault.
+      if (error is! RemoteFileException) _report(error, stackTrace);
       _finishFailedStatusWatch();
       if (presentation == _BindingPresentation.retainCache) {
         _recovery = _RecoveryPhase.failed;
       }
-      _error = error;
-      notifyListeners();
-    } on Object catch (error, stackTrace) {
-      if (_disposed || attempt != _bindAttempt) return;
-      if (presentation == _BindingPresentation.replace) _retireRollback();
-      _report(error, stackTrace);
-      _finishFailedStatusWatch();
-      if (presentation == _BindingPresentation.retainCache) {
-        _recovery = _RecoveryPhase.failed;
-      }
-      _error = PaneFaultException(fault, operation: operation);
+      _error = error is RemoteFileException
+          ? error
+          : PaneFaultException(fault, operation: operation);
       notifyListeners();
     }
   }
@@ -4293,7 +4288,7 @@ class PaneController extends ChangeNotifier {
       // A change signalled while this listing was in flight may
       // postdate it.
       _flushWatchRefresh();
-    } on RemoteFileException catch (error) {
+    } on Object catch (error, stackTrace) {
       if (_disposed ||
           generation != _issuedGeneration ||
           !identical(channel, _channel)) {
@@ -4304,22 +4299,12 @@ class PaneController extends ChangeNotifier {
       // back — Esc next routes to Retry, not restore.
       _retireRollback();
       _dropFailedListingWatch(channel);
+      if (error is! RemoteFileException) _report(error, stackTrace);
       _answeredGeneration = generation;
       if (connectionLost) _recovery = _RecoveryPhase.failed;
-      _error = error;
-      notifyListeners();
-    } on Object catch (error, stackTrace) {
-      if (_disposed ||
-          generation != _issuedGeneration ||
-          !identical(channel, _channel)) {
-        return;
-      }
-      _retireRollback();
-      _dropFailedListingWatch(channel);
-      _report(error, stackTrace);
-      _answeredGeneration = generation;
-      if (connectionLost) _recovery = _RecoveryPhase.failed;
-      _error = PaneFaultException(PaneFault.listFolder, operation: 'list');
+      _error = error is RemoteFileException
+          ? error
+          : PaneFaultException(PaneFault.listFolder, operation: 'list');
       notifyListeners();
     }
   }
