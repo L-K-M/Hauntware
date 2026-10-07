@@ -378,6 +378,56 @@ void main() {
     });
   });
 
+  group('indentation conversion counts', () {
+    // Both directions over the same CRLF block at a two-column width,
+    // selected backwards from the end of line 3 to the start of line 1:
+    // the counts, the mapped selection and the adopted setting (width
+    // included) come out of one outcome.
+    const text = '\t  a\r\n    b\r\n  c\r\nd';
+    TextToolChanged convert(String id) {
+      final tool = textToolById(id)!;
+      final base = text.indexOf('c') + 1;
+      final resolved = resolveTextToolRange(tool, text, base, 0);
+      return tool.run(
+            TextToolRun(
+              text: text,
+              base: resolved.base,
+              extent: resolved.extent,
+              caret: resolved.caret,
+              ranOn: resolved.ranOn,
+              options: const {},
+              context: TextToolContext(
+                fold: _lowercase,
+                indentation: const Indentation.spaces(2),
+                displayPath: 'test.txt',
+              ),
+            ),
+          )
+          as TextToolChanged;
+    }
+
+    test('to spaces counts the touched lines it rewrote', () {
+      final outcome = convert('convertIndentationToSpaces');
+      expect(marked(outcome.edit), ']    a\r\n    b\r\n  c[\r\nd');
+      expect((outcome.changed, outcome.scope), (1, 3));
+      expect(outcome.indentation, const Indentation.spaces(2));
+    });
+
+    test('to tabs counts the touched lines it rewrote', () {
+      final outcome = convert('convertIndentationToTabs');
+      expect(marked(outcome.edit), ']\t\ta\r\n\t\tb\r\n\tc[\r\nd');
+      expect((outcome.changed, outcome.scope), (3, 3));
+      expect(outcome.indentation, const Indentation.tabs(width: 2));
+    });
+
+    test('only the spaces direction refuses a tabs-only format', () {
+      expect(
+        run('convertIndentationToTabs', '    a|', path: 'Makefile'),
+        '\ta| <tabs>',
+      );
+    });
+  });
+
   group('uppercase/lowercase', () {
     test('acts on the word the caret is in, keeping the caret', () {
       expect(run('uppercase', 'he|llo'), 'HE|LLO');
