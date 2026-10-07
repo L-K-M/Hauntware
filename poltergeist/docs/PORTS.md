@@ -930,6 +930,10 @@ counterpart is ported here.
   copy shape are upstream's.
 - 2026-10-07: both copies carry the new `startDirectory`, changed in the
   same commit upstream; no divergence.
+- Shared: 2026-10-07. `duplicateServerLabel` and `duplicateServerConfig`
+  moved into `seance_protocol` beside `ServerConfig` and reach this file
+  through the core barrel, so a new field is carried in one place. The
+  planner, the stale-source check and `ServerDuplication` stay here.
 - Port-back candidates: none — the omission is sandbox-specific.
 
 ## app/poltergeist_app/lib/services/server_editor_backend.dart
@@ -1073,6 +1077,9 @@ counterpart is ported here.
   coverage carried verbatim. Since 2026-10-04 the two locked-vault cases
   use `DynamicSecretVault` with a null key provider, the production
   locked shape, instead of upstream's `LockedSecretVault`.
+- Shared: 2026-10-07. The label grammar and config-copy groups moved with
+  their functions to `seance_protocol`'s `server_duplication_test.dart`;
+  the planner and stale-source cases stay here.
 - Port-back candidates: none.
 
 ## app/poltergeist_app/test/ui/server_editor_test.dart

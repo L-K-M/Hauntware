@@ -2465,12 +2465,6 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'<svg'",
   },
   'lib/services/server_duplication.dart': {
-    // The duplicate-label grammar and its cleanup regex — upstream label
-    // machinery (labels are data, not copy), plus the empty strip result.
-    r"'$base copy'",
-    r"'$base copy $n'",
-    "r'(^|\\s+)copy(\\s+\\d+)?\$'",
-    "''",
     // SourceServerChanged's message — upstream-authored English surfaced
     // verbatim in the failure toast, the same posture as
     // RemoteFileException messages.
