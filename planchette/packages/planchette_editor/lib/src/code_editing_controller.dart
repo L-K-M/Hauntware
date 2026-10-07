@@ -320,6 +320,12 @@ class CodeEditingController extends TextEditingController {
 
   void setProblems(List<TextProblem> problems) {
     if (identical(_problems, problems)) return;
+    assert(() {
+      for (var i = 1; i < problems.length; i++) {
+        if (problems[i].start < problems[i - 1].start) return false;
+      }
+      return true;
+    }(), 'Problems are drawn in document order; sort them by start.');
     _problems = problems;
     notifyListeners();
   }

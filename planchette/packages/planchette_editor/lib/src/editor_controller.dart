@@ -2545,7 +2545,7 @@ class EditorController extends ChangeNotifier {
     }
     _problemLinesFor = _problems;
     _problemLinesText = text.text;
-    return _problemLines = lines;
+    return _problemLines = Map.unmodifiable(lines);
   }
 
   /// Moves the caret to the start of the next problem after it, round to

@@ -7,8 +7,8 @@ import 'package:planchette_editor/planchette_editor.dart';
 /// Two keys set twice: problems on lines 3 and 4.
 const _env = 'HOST=a\nPORT=1\nPORT=2\nHOST=b\n';
 
-/// Longer than the controller's pause before it checks again.
-const _settle = Duration(milliseconds: 600);
+/// Well past the pause after which the editor view checks again.
+const _settle = Duration(seconds: 1);
 
 EditorController _controller(String path, String text) {
   final editor = EditorController(displayPath: path, initialText: text);
