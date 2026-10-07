@@ -121,7 +121,9 @@ a folder is refused before the transfer instead of failing at the rename.
 Opening a remote file locally is a managed checkout:
 
 1. Download to a private application-support directory with a sanitized local
-   filename.
+   filename, owner-only (0700/0600) on Linux and macOS, and marked as an
+   internet download (Mark-of-the-Web on Windows, `com.apple.quarantine`
+   on macOS). Download and Save as targets get the same mark.
 2. Record the remote path, size, modification time, type, and mode.
 3. Open UTF-8 text up to 4 MB in Séance's built-in editor, the default, in a
    tab beside the terminals; or choose the platform default app or a

@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:seance_core/seance_core.dart';
 
+import 'download_provenance.dart';
 import 'managed_remote_file.dart';
 import 'managed_remote_file_store.dart';
 
@@ -44,6 +45,9 @@ class RemoteTransferItem {
 class RemoteFilesController extends ChangeNotifier {
   final Future<RemoteFileSystem> Function() _openRemoteFileSystem;
   final ValueListenable<String?> shellDirectory;
+  /// Marks every file this controller downloads as untrusted for the OS.
+  final DownloadProvenance _provenance;
+
   final ValueListenable<String?> terminalTitle;
   final ValueListenable<String?> activeCommand;
   final ManagedRemoteFileStore managedFileStore;
@@ -65,8 +69,10 @@ class RemoteFilesController extends ChangeNotifier {
     ValueListenable<String?>? terminalTitle,
     ValueListenable<String?>? activeCommand,
     Map<String, ManagedRemoteFile>? initialLocalCopies,
+    DownloadProvenance? provenance,
   }) : terminalTitle = terminalTitle ?? const _EmptyStringListenable(),
-       activeCommand = activeCommand ?? const _EmptyStringListenable() {
+       activeCommand = activeCommand ?? const _EmptyStringListenable(),
+       _provenance = provenance ?? DownloadProvenance() {
     if (initialLocalCopies != null) localCopies.addAll(initialLocalCopies);
     showHidden = initialShowHidden;
     bookmarks.addAll(initialBookmarks.where(_isAbsolutePath));
@@ -711,6 +717,7 @@ class RemoteFilesController extends ChangeNotifier {
           await sink.close();
           sink = null;
           await _replaceLocalFile(partial, local);
+          await _provenance.markDownloaded(local.path);
           completedBytes += plan.entry.size ?? await local.length();
         } finally {
           await sink?.close();
@@ -896,6 +903,13 @@ class RemoteFilesController extends ChangeNotifier {
         if (await partial.exists()) await partial.delete();
         return copy;
       }
+      // The mode and the download mark travel with the renamed-in file, so
+      // set them first: a failure then leaves the old copy in place rather
+      // than new bytes under the old baseline.
+      if (_restrictsCheckoutModes) {
+        await _restrictCheckoutPermissions(partial.path, '600');
+      }
+      await _provenance.markDownloaded(partial.path);
       await _replaceLocalFile(partial, local);
       final updated = copy.copyWith(
         remoteSnapshot: snapshot,
@@ -1024,11 +1038,12 @@ class RemoteFilesController extends ChangeNotifier {
       fileName: entry.name,
     );
     final local = await managedFileStore.createCheckout(localPath);
-    if (Platform.isLinux) {
-      await _restrictLinuxPermissions(local.parent.path, '700');
-    }
     IOSink? sink;
     try {
+      // Inside the try, so a failure still removes the new checkout.
+      if (_restrictsCheckoutModes) {
+        await _restrictCheckoutPermissions(local.parent.path, '700');
+      }
       sink = local.openWrite();
       final destination = maximumBytes == null
           ? sink
@@ -1037,9 +1052,10 @@ class RemoteFilesController extends ChangeNotifier {
       await sink.flush();
       await sink.close();
       sink = null;
-      if (Platform.isLinux) {
-        await _restrictLinuxPermissions(local.path, '600');
+      if (_restrictsCheckoutModes) {
+        await _restrictCheckoutPermissions(local.path, '600');
       }
+      await _provenance.markDownloaded(local.path);
       final copy = ManagedRemoteFile(
         id: id,
         serverId: serverId,
@@ -1444,7 +1460,12 @@ class RemoteFilesController extends ChangeNotifier {
     await _checkoutWatches.remove(id)?.cancel();
   }
 
-  static Future<void> _restrictLinuxPermissions(
+  /// Checkouts are owner-only where the OS has POSIX modes; Windows relies
+  /// on the per-user application data ACLs.
+  static bool get _restrictsCheckoutModes =>
+      Platform.isLinux || Platform.isMacOS;
+
+  static Future<void> _restrictCheckoutPermissions(
     String path,
     String mode,
   ) async {

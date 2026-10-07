@@ -3,6 +3,8 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:seance_app/services/download_provenance.dart';
+import 'package:seance_app/services/external_file_opener.dart';
 import 'package:seance_app/services/managed_remote_file_store.dart';
 import 'package:seance_app/services/remote_files_controller.dart';
 import 'package:seance_core/seance_core.dart';
@@ -578,6 +580,114 @@ void main() {
 
       expect(asked, 0);
       expect(reopened.id, copy.id);
+    });
+  });
+
+  group('downloaded files', () {
+    late _FakeRemoteFileSystem remote;
+    late ValueNotifier<String?> shellDirectory;
+    late List<String> marked;
+    late RemoteFilesController controller;
+
+    setUp(() async {
+      remote = _FakeRemoteFileSystem();
+      shellDirectory = ValueNotifier<String?>(null);
+      marked = [];
+      controller = RemoteFilesController(
+        () async => remote,
+        shellDirectory: shellDirectory,
+        managedFileStore: _store(),
+        serverId: 'server',
+        editSessionId: 'session',
+        // Marking as macOS does records each file without touching the OS.
+        provenance: DownloadProvenance.forHost(
+          EditorHostPlatform.macos,
+          runProcess: (_, arguments) async {
+            marked.add(arguments.last);
+            return ProcessResult(0, 0, '', '');
+          },
+        ),
+      );
+      await controller.initialize();
+    });
+
+    tearDown(() {
+      controller.dispose();
+      shellDirectory.dispose();
+    });
+
+    RemoteFileEntry listed() =>
+        controller.entries.singleWhere((item) => item.name == 'a.txt');
+
+    test('a checkout and its refresh are marked as downloaded', () async {
+      final copy = await controller.checkoutRemoteFile(listed());
+      final local = controller.localFile(copy).path;
+      expect(marked, [local]);
+
+      remote.contents[copy.remotePath] = [9, 8, 7, 6];
+      remote.directories['/home/test']![0] = RemoteFileEntry(
+        path: copy.remotePath,
+        name: 'a.txt',
+        type: RemoteFileType.file,
+        size: 4,
+        modifiedAt: DateTime.utc(2024),
+      );
+      await controller.checkoutRemoteFile(copy.remoteSnapshot);
+
+      // The refresh marks its new file before renaming it into place.
+      expect(marked, hasLength(2));
+      expect(marked.first, local);
+      expect(
+        marked.last,
+        allOf(startsWith('$local.seance-'), endsWith('.part')),
+      );
+    });
+
+    test('a refreshed copy stays owner-only', () async {
+      final copy = await controller.checkoutRemoteFile(listed());
+      remote.contents[copy.remotePath] = [9, 8, 7, 6];
+      remote.directories['/home/test']![0] = RemoteFileEntry(
+        path: copy.remotePath,
+        name: 'a.txt',
+        type: RemoteFileType.file,
+        size: 4,
+        modifiedAt: DateTime.utc(2024),
+      );
+      await controller.checkoutRemoteFile(copy.remoteSnapshot);
+
+      final mode = controller.localFile(copy).statSync().mode;
+      expect(mode & 0x1ff, 0x180); // 0600
+    }, skip: Platform.isWindows ? 'POSIX modes only' : false);
+
+    test('a failed mark still opens the checkout', () async {
+      final failing = RemoteFilesController(
+        () async => remote,
+        shellDirectory: shellDirectory,
+        managedFileStore: _store(),
+        serverId: 'server',
+        editSessionId: 'other',
+        provenance: DownloadProvenance.forHost(
+          EditorHostPlatform.macos,
+          runProcess: (_, _) => throw const ProcessException('xattr', []),
+        ),
+      );
+      addTearDown(failing.dispose);
+      await failing.initialize();
+
+      final copy = await failing.checkoutRemoteFile(
+        failing.entries.singleWhere((item) => item.name == 'a.txt'),
+      );
+
+      expect(await failing.localFile(copy).exists(), isTrue);
+    });
+
+    test('Download marks each file it writes', () async {
+      final target = await Directory.systemTemp.createTemp('seance-dl-');
+      addTearDown(() => target.delete(recursive: true));
+
+      await controller.downloadEntries([listed()], target);
+
+      expect(marked, ['${target.path}${Platform.pathSeparator}a.txt']);
     });
   });
 
