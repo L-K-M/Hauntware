@@ -1662,6 +1662,71 @@ void main() {
     controller.dispose();
   });
 
+  test('a failed open reports only an opaque error and surfaces the open '
+      'fault; a typed one surfaces as it is', () async {
+    final reported = <Object>[];
+    final lanes = FakePaneLanes()..localOpenFailure = StateError('spawn');
+    final controller = PaneController(
+      paneTabId: 'pane.left',
+      lanes: lanes,
+      onError: (error, _) => reported.add(error),
+    );
+
+    await controller.openLocalHome();
+    final fault = controller.error;
+    expect(fault, isA<PaneFaultException>());
+    expect((fault! as PaneFaultException).fault, PaneFault.localOpen);
+    expect(fault.operation, 'open');
+    expect(reported.single, isA<StateError>());
+
+    const refused = RemoteFileException(
+      kind: RemoteFileErrorKind.permissionDenied,
+      operation: 'open',
+      path: '/home/tester',
+      message: 'refused',
+    );
+    lanes.localOpenFailure = refused;
+    await controller.openLocalHome();
+    expect(controller.error, same(refused));
+    expect(reported, hasLength(1));
+    controller.dispose();
+  });
+
+  test('a failed listing reports only an opaque error and surfaces the '
+      'list fault; a typed one surfaces as it is', () async {
+    final reported = <Object>[];
+    final lanes = FakePaneLanes();
+    final channel = FakePaneChannel('/home/tester')
+      ..listingFailure = StateError('io exploded');
+    lanes.nextLocalChannel = channel;
+    final controller = PaneController(
+      paneTabId: 'pane.left',
+      lanes: lanes,
+      onError: (error, _) => reported.add(error),
+    );
+
+    await controller.openLocalHome();
+    await settle();
+    final fault = controller.error;
+    expect(fault, isA<PaneFaultException>());
+    expect((fault! as PaneFaultException).fault, PaneFault.listFolder);
+    expect(fault.operation, 'list');
+    expect(reported.single, isA<StateError>());
+
+    const denied = RemoteFileException(
+      kind: RemoteFileErrorKind.permissionDenied,
+      operation: 'list',
+      path: '/home/tester',
+      message: 'denied',
+    );
+    channel.listingFailure = denied;
+    await controller.retry();
+    await settle();
+    expect(controller.error, same(denied));
+    expect(reported, hasLength(1));
+    controller.dispose();
+  });
+
   test('the post-first-cancel remote state can still unbind', () async {
     final lanes = FakePaneLanes();
     final channel = FakePaneChannel('/srv/home');

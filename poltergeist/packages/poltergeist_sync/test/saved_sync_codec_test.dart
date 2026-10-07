@@ -69,6 +69,27 @@ void main() {
       expect(spec.toJson()['ignoreRules'], ['.git/', 'node_modules/']);
     });
 
+    test('the spec\'s ignoreRules replace any excludeGlobs in the map', () {
+      // The writer never puts excludeGlobs in the map, but the decoder
+      // tolerates one; the first-class field still wins, even when empty.
+      for (final ignoreRules in [<String>[], ['build/']]) {
+        final spec = SavedSyncSpec(
+          source: const BookmarkLocation(path: '/l'),
+          destination: const BookmarkLocation(path: '/r'),
+          ignoreRules: ignoreRules,
+          rules: const {
+            'excludeGlobs': ['legacy/'],
+            'maxDelete': 9,
+          },
+        );
+        // The map's globs do decode, so the field genuinely replaces them.
+        expect(syncRuleSetFromJson(spec.rules).excludeGlobs, ['legacy/']);
+        final rules = syncPairFromSavedSync(spec, id: 'x', name: 'n').rules;
+        expect(rules.excludeGlobs, ignoreRules);
+        expect(rules.maxDelete, 9);
+      }
+    });
+
     test('a missing rules map decodes to the default ruleset', () {
       final spec = SavedSyncSpec(
         source: const BookmarkLocation(path: '/l'),

@@ -95,7 +95,7 @@ void main() {
 
     test('reads degrade to "not set" instead of throwing', () async {
       final keys = MasterKeyManager(_LockedKeystore());
-      expect(await keys.hasKeystoreKey(), isFalse);
+      expect(await keys.getApiKey('sync.token'), isNull);
       expect(keys.keystoreStatus, KeystoreStatus.unavailable);
     });
 

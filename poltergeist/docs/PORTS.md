@@ -312,6 +312,7 @@ port candidates.
   (D19 scope) — plus `deleteApiKey` for sign-out (no Séance counterpart;
   tolerant like the reads, the orphaned entry is harmless); Séance types
   imported via the poltergeist_core barrel, never seance_core directly.
+  Since 2026-10-07 `hasKeystoreKey` is dropped: nothing here called it.
   The ported exception messages are frozen port text allowlisted in the
   localization contract; the D20 ARB rule applies where the UI renders
   them (prompt-UI slice).
@@ -768,6 +769,9 @@ counterpart is ported here.
 - Divergences: none — carried verbatim (imports re-pointed). Operates on
   `ServerConfig`, so the catalog's filter matches Séance's haystack
   term-for-term.
+- Pruned: 2026-10-07. Only `serverSearchHaystack` is carried; the sidebar
+  matches it with `sidebarQueryMatches`, Séance's term rule over any row.
+  `serverMatchesQuery` and `filterServers` had no caller here.
 - Port-back candidates: none — Séance owns the source.
 
 ## app/poltergeist_app/test/ui/server_grouping_test.dart
@@ -788,7 +792,9 @@ counterpart is ported here.
 - Source: app/seance_app/test/server_filter_test.dart
 - Séance commit: ded9228aaf8aa45fe2a5fb7df9559db8c820ec4d
 - Ported: 2026-09-24
-- Divergences: none — carried verbatim (imports re-pointed).
+- Divergences: since 2026-10-07 the matching cases run through
+  `sidebarQueryMatches` over `serverSearchHaystack`, the pair the sidebar
+  uses; the order case went with the pruned `filterServers`.
 - Port-back candidates: none.
 
 ## app/poltergeist_app/lib/ui/middle_ellipsis_text.dart

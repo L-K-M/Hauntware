@@ -1,11 +1,12 @@
 // Ported from Séance app/seance_app/lib/ui/server_filter.dart @ ded9228; see docs/PORTS.md.
-/// Filtering for the server list.
+/// The text the server list's filter searches.
 ///
 /// Kept free of Flutter so the matching rules can be unit-tested directly.
-/// A query is split on whitespace and **every** term must match somewhere in
-/// the server — so `web eu` finds `prod-web-01.eu-west` without the user
-/// having to remember which order the parts appear in, and `root 2222` finds
-/// the one host reached as root on a non-standard port.
+/// The sidebar splits a query on whitespace and **every** term must match
+/// somewhere in this haystack (`sidebarQueryMatches`) — so `web eu` finds
+/// `prod-web-01.eu-west` without the user having to remember which order the
+/// parts appear in, and `root 2222` finds the one host reached as root on a
+/// non-standard port.
 library;
 
 import 'package:poltergeist_core/poltergeist_core.dart';
@@ -20,19 +21,3 @@ String serverSearchHaystack(ServerConfig server) =>
     '${server.label} ${server.username}@${server.host}:${server.port} '
             '${server.group ?? ''}'
         .toLowerCase();
-
-/// Whether [server] matches [query]. An empty or whitespace-only query matches
-/// everything, so the list is never mysteriously empty.
-bool serverMatchesQuery(ServerConfig server, String query) {
-  final terms = query.toLowerCase().split(RegExp(r'\s+'))
-    ..removeWhere((t) => t.isEmpty);
-  if (terms.isEmpty) return true;
-  final haystack = serverSearchHaystack(server);
-  return terms.every(haystack.contains);
-}
-
-/// [servers] filtered by [query], preserving the configured order.
-List<ServerConfig> filterServers(List<ServerConfig> servers, String query) => [
-  for (final server in servers)
-    if (serverMatchesQuery(server, query)) server,
-];

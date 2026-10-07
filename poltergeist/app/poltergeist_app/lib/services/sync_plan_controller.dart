@@ -47,7 +47,6 @@ final class SyncEffectiveStats {
     required this.counts,
     required this.bytes,
     required this.replacedFiles,
-    required this.replacedBytes,
     required this.replacedBySide,
     required this.replacedRowsBySide,
     required this.fileDeletesBySide,
@@ -69,7 +68,6 @@ final class SyncEffectiveStats {
   /// [replacedBySide] keeps the per-file toll.
   final Map<SyncSide, int> replacedRowsBySide;
   final int replacedFiles;
-  final int replacedBytes;
 
   /// File deletions per side — delete rows whose destination is not a
   /// directory (the §8 rail weight). Empty-directory cleanup rows stay
@@ -537,7 +535,11 @@ final class SyncPlanController extends ChangeNotifier {
   Map<SyncSide, SyncTrashLocation> _trashLocations = {};
   Map<SyncTrashLocation, _SyncTrashTargetState> _trashTargets = {};
   Map<SyncSide, RemoteFileException> _trashLocationFailures = {};
-  bool _trashLocationResolutionFailed = false;
+
+  /// Whether a side's trash root failed to resolve on the last scan.
+  bool get _trashLocationResolutionFailed =>
+      _trashLocationFailures.isNotEmpty;
+
   Future<void>? _trashInventoryRefresh;
   RemoteTransferCancellation? _trashPurgeCancellation;
   bool _isPurgingTrash = false;
@@ -1681,7 +1683,6 @@ final class SyncPlanController extends ChangeNotifier {
   Future<void> _resolveTrashLocations(int generation) async {
     final locations = <SyncSide, SyncTrashLocation>{};
     final failures = <SyncSide, RemoteFileException>{};
-    var failed = false;
     for (final side in SyncSide.values) {
       final endpoint = side == SyncSide.left ? _pair.left : _pair.right;
       if (!_environment.endpointAvailable(endpoint)) continue;
@@ -1691,6 +1692,7 @@ final class SyncPlanController extends ChangeNotifier {
           (side == SyncSide.left ? _leftCaseSensitive : _rightCaseSensitive)
           ? SyncTrashPathCase.sensitive
           : SyncTrashPathCase.insensitive;
+      final RemoteFileException failure;
       try {
         final location = await _environment.resolveTrashLocation(
           endpoint: endpoint,
@@ -1701,43 +1703,29 @@ final class SyncPlanController extends ChangeNotifier {
         );
         if (_disposed || generation != _scanGeneration) return;
         locations[side] = location;
+        continue;
       } on RemoteFileException catch (error) {
-        failed = true;
-        failures[side] = error;
-        locations[side] = await _environment.trashLocationFor(
-          endpoint: endpoint,
-          canonicalRoot: root,
-          rules: _pair.rules,
-          side: side,
-          pathCase: pathCase,
-        );
+        failure = error;
       } on SyncTrashActivityLockException catch (error) {
-        failed = true;
-        failures[side] = _trashLocationFailure(side, root, error);
-        locations[side] = await _environment.trashLocationFor(
-          endpoint: endpoint,
-          canonicalRoot: root,
-          rules: _pair.rules,
-          side: side,
-          pathCase: pathCase,
-        );
+        failure = _trashLocationFailure(side, root, error);
       } on SyncTrashPurgeInProgressException catch (error) {
-        failed = true;
-        failures[side] = _trashLocationFailure(side, root, error);
-        locations[side] = await _environment.trashLocationFor(
-          endpoint: endpoint,
-          canonicalRoot: root,
-          rules: _pair.rules,
-          side: side,
-          pathCase: pathCase,
-        );
+        failure = _trashLocationFailure(side, root, error);
       }
+      // A side that could not resolve still shows where its trash would
+      // be; the recorded failure keeps it from being written.
+      failures[side] = failure;
+      locations[side] = await _environment.trashLocationFor(
+        endpoint: endpoint,
+        canonicalRoot: root,
+        rules: _pair.rules,
+        side: side,
+        pathCase: pathCase,
+      );
     }
     if (_disposed || generation != _scanGeneration) return;
 
     _trashLocations = locations;
     _trashLocationFailures = failures;
-    _trashLocationResolutionFailed = failed;
   }
 
   RemoteFileException _trashLocationFailure(
@@ -1784,7 +1772,6 @@ final class SyncPlanController extends ChangeNotifier {
     _trashLocations = {};
     _trashTargets = {};
     _trashLocationFailures = {};
-    _trashLocationResolutionFailed = false;
     _phase = SyncPlanPhase.scanning;
     _errorMessage = null;
     _errorKind = null;
@@ -2994,7 +2981,6 @@ SyncEffectiveStats computeSyncEffectiveStats(SyncPlan plan) {
   final fileDeletes = <SyncSide, int>{SyncSide.left: 0, SyncSide.right: 0};
   final dirDeletes = <SyncSide, int>{SyncSide.left: 0, SyncSide.right: 0};
   var replacedFiles = 0;
-  var replacedBytes = 0;
   for (final item in plan.items) {
     counts[item.effective] = (counts[item.effective] ?? 0) + 1;
     // Delete-phase rows split by destination kind: files count on the
@@ -3051,21 +3037,15 @@ SyncEffectiveStats computeSyncEffectiveStats(SyncPlan plan) {
     };
     if (!typeChange) continue;
     var weight = 0;
-    var weightBytes = 0;
     if (dest.kind == EntryKind.directory) {
       for (final snapshot
           in item.destinationSubtree?.values ?? const <EntrySnapshot>[]) {
-        if (snapshot.kind != EntryKind.directory) {
-          weight++;
-          weightBytes += snapshot.size ?? 0;
-        }
+        if (snapshot.kind != EntryKind.directory) weight++;
       }
     } else {
       weight = 1;
-      weightBytes = dest.size ?? 0;
     }
     replacedFiles += weight;
-    replacedBytes += weightBytes;
     replacedBySide[destSide] = replacedBySide[destSide]! + weight;
     replacedRowsBySide[destSide] = replacedRowsBySide[destSide]! + 1;
   }
@@ -3073,7 +3053,6 @@ SyncEffectiveStats computeSyncEffectiveStats(SyncPlan plan) {
     counts: counts,
     bytes: bytes,
     replacedFiles: replacedFiles,
-    replacedBytes: replacedBytes,
     replacedBySide: replacedBySide,
     replacedRowsBySide: replacedRowsBySide,
     fileDeletesBySide: fileDeletes,
