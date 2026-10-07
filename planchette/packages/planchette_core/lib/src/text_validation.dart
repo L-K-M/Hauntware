@@ -20,7 +20,7 @@ library;
 import 'editor_syntax.dart'
     show SyntaxLanguage, SyntaxLanguages, SyntaxTokenType, tokenizeSyntax;
 import 'text_json_tools.dart';
-import 'text_metrics.dart' show lineStartOffsets;
+import 'text_metrics.dart' show lineIndexAt, lineStartOffsets;
 import 'text_problem.dart';
 
 part 'conflict_markers.dart';
@@ -180,20 +180,8 @@ final class _ProblemSink {
   }
 
   /// The 1-based line holding [offset].
-  int lineOf(int offset) {
-    final starts = _lineStarts ??= lineStartOffsets(_text);
-    var lo = 0;
-    var hi = starts.length - 1;
-    while (lo < hi) {
-      final mid = (lo + hi + 1) >> 1;
-      if (starts[mid] <= offset) {
-        lo = mid;
-      } else {
-        hi = mid - 1;
-      }
-    }
-    return lo + 1;
-  }
+  int lineOf(int offset) =>
+      lineIndexAt(_lineStarts ??= lineStartOffsets(_text), offset) + 1;
 }
 
 /// Each line of [text] as `(start, end)` offsets, `end` before its `\n` and
