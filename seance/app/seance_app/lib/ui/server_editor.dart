@@ -940,6 +940,9 @@ class _ServerEditorState extends State<_ServerEditor> {
       iconEmoji: mark.emoji,
       iconImage: mark.image,
       loginScript: normalizeLoginScript(_loginScript.text),
+      // Set in Poltergeist and not editable here; preserved for the same
+      // reason as jumpHostId: a save without it would clear it everywhere.
+      startDirectory: existing?.startDirectory,
       excludeFromSync: _excludeFromSync,
       createdAt: existing?.createdAt ?? now,
       updatedAt: now,

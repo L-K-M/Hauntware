@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Servers: editing a server keeps the start folder Poltergeist set for
+  it, so a save in Séance no longer clears it on every device.
 - Built-in editor: mistakes in common config files are underlined as
   you type: JSON that doesn't parse, a key set twice in a `.env`, JSON,
   YAML or TOML file, broken XML tags, and leftover merge-conflict

@@ -413,6 +413,73 @@ void main() {
       expect(crOnly.loginScript, 'cd work\ntail -f log');
     });
 
+    test('ServerConfig round-trips a start directory', () {
+      final c = ServerConfig(
+        id: 's1',
+        label: 'l',
+        host: 'h',
+        username: 'u',
+        startDirectory: '~/sites',
+        createdAt: 1,
+        updatedAt: 2,
+      );
+      final back = ServerConfig.fromJson(c.toJson());
+      expect(back.startDirectory, '~/sites');
+      expect(back.toJson(), equals(c.toJson()));
+      // Unset is no key at all, so a record without one reads as before.
+      final legacy = {...c.toJson()}..remove('startDirectory');
+      expect(ServerConfig.fromJson(legacy).startDirectory, isNull);
+      expect(
+        c.copyWith(clearStartDirectory: true).toJson(),
+        isNot(contains('startDirectory')),
+      );
+    });
+
+    test('a start directory is a path or nothing', () {
+      expect(normalizeServerStartDirectory('/var/www'), '/var/www');
+      expect(normalizeServerStartDirectory('  ~/sites/ '), '~/sites/');
+      expect(normalizeServerStartDirectory('~'), '~');
+      expect(normalizeServerStartDirectory('sites/blog'), 'sites/blog');
+      // Blank is the home folder; neither of the others names a folder SFTP
+      // can open.
+      expect(normalizeServerStartDirectory('   '), isNull);
+      expect(normalizeServerStartDirectory(null), isNull);
+      expect(normalizeServerStartDirectory('/srv\nwww'), isNull);
+      expect(normalizeServerStartDirectory('~bob/www'), isNull);
+    });
+
+    test('a start directory this build refuses costs the folder, not the '
+        'server', () {
+      final base = ServerConfig(
+        id: 's1',
+        label: 'l',
+        host: 'h',
+        username: 'u',
+        createdAt: 1,
+        updatedAt: 2,
+      );
+      for (final value in ['~bob', 42, ['/srv']]) {
+        final decoded = ServerConfig.fromJson({
+          ...base.toJson(),
+          'startDirectory': value,
+        });
+        expect(decoded.startDirectory, isNull, reason: '$value');
+        expect(decoded.toJson().containsKey('startDirectory'), isFalse);
+      }
+      // The const constructor cannot normalize, so toJson does.
+      const raw = ServerConfig(
+        id: 's1',
+        label: 'l',
+        host: 'h',
+        username: 'u',
+        startDirectory: ' ',
+        createdAt: 1,
+        updatedAt: 2,
+      );
+      expect(raw.toJson().containsKey('startDirectory'), isFalse);
+      expect(base.copyWith(startDirectory: '').startDirectory, isNull);
+    });
+
     test('Secret does not leak its value in toString', () {
       final s = Secret(id: 's1', kind: SecretKind.password, value: 'hunter2');
       expect(s.toString(), isNot(contains('hunter2')));
