@@ -7,6 +7,7 @@ export 'src/code_editing_controller.dart';
 export 'src/editor_commands.dart';
 export 'src/editor_controller.dart';
 export 'src/editor_fonts.dart';
+export 'src/editor_problem_status.dart';
 export 'src/editor_strings.dart';
 export 'src/editor_text_size.dart';
 export 'src/editor_view.dart';

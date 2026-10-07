@@ -57,6 +57,9 @@ void main() {
         'secondary text': scheme.onSurfaceVariant,
         for (final type in SyntaxTokenType.values)
           type.name: syntax.colorFor(type),
+        // Problem colours number gutter lines and mark the status row.
+        'error': syntax.error,
+        'warning': syntax.warning,
       };
       for (final background in backgrounds.entries) {
         for (final color in colors.entries) {

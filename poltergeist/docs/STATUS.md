@@ -4,6 +4,19 @@ Living snapshot of where Poltergeist is, what's proven, and what to pick up
 next. Read [AGENTS.md](../AGENTS.md) for build/test commands and
 [09-PLAYBOOK.md](plan/09-PLAYBOOK.md) for the PR process.
 
+## Editor problem checks (2026-10-06)
+
+The built-in editor shows the shared editor's problem checks: JSON that
+does not parse, keys set twice in `.env`, JSON, YAML and TOML files,
+broken XML nesting and leftover merge-conflict markers, underlined and
+marked in the gutter. The status row counts them, or describes the one
+on the caret's line, and a tap or F8 goes to the next (Shift+F8 back);
+the tool browser lists Next and Previous Problem. The 16 new strings come
+from `app_en.arb`, except a syntax error's parser detail, which stays the
+package's English like a regex engine's. The read-only compare view
+underlines too but has no status row. Details in Planchette's
+`docs/STATUS.md`.
+
 ## Launch guard: installers and loadable bundles (2026-10-06)
 
 The shared launch classifier (`seance_core` `executable_launch.dart`)

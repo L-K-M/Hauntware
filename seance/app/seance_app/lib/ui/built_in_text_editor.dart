@@ -477,9 +477,9 @@ class BuiltInTextEditorScreenState extends State<BuiltInTextEditorScreen>
       child: Row(
         children: [
           Expanded(
-            child: Align(
-              alignment: AlignmentDirectional.centerStart,
-              child: Tooltip(
+            child: EditorStatusLead(
+              controller: _editor,
+              position: Tooltip(
                 message: strings.goToLine,
                 child: InkWell(
                   onTap: _editor.openGoToLine,

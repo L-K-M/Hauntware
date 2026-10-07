@@ -7,8 +7,9 @@ import '../l10n/app_localizations.dart';
 /// shows it — find and replace bars, Go to Line, the text-tools browser,
 /// the tool bar, the post-run notice and the status row — comes from the
 /// ARB catalog. [regexHint] stays the package's own technical text, like
-/// the engine detail inside [patternInvalid]; so do the status row's
-/// format names (LF, CRLF, UTF-8) and the proper-noun language names.
+/// the engine detail inside [patternInvalid] and the parser detail inside a
+/// syntax error's [problemMessage]; so do the status row's format names
+/// (LF, CRLF, UTF-8) and the proper-noun language names.
 class PoltergeistEditorStrings extends EditorStrings {
   const PoltergeistEditorStrings(this.l10n);
   final AppLocalizations l10n;
@@ -84,6 +85,51 @@ class PoltergeistEditorStrings extends EditorStrings {
       return l10n.editorLanguageCStyle;
     }
     return super.languageName(language);
+  }
+
+  // ── Problems ──
+
+  @override
+  String problemCount(int count) => l10n.editorStatusProblemCount(count);
+  @override
+  String get nextProblemHint => l10n.editorStatusNextProblemHint;
+  @override
+  String problemMessage(TextProblem problem) {
+    // The kinds that name something always carry it; the fallbacks only
+    // keep a hand-built problem from failing the status row.
+    final subject = problem.subject ?? '';
+    final line = problem.relatedLine ?? 0;
+    return switch (problem.kind) {
+      TextProblemKind.syntaxError => l10n.editorProblemSyntaxError(
+        problem.detail ?? '',
+      ),
+      TextProblemKind.duplicateKey => l10n.editorProblemDuplicateKey(
+        subject,
+        line,
+      ),
+      TextProblemKind.duplicateTable => l10n.editorProblemDuplicateTable(
+        subject,
+        line,
+      ),
+      TextProblemKind.duplicateAttribute =>
+        l10n.editorProblemDuplicateAttribute(subject),
+      TextProblemKind.jsonComment => l10n.editorProblemJsonComment,
+      TextProblemKind.jsonTrailingComma => l10n.editorProblemJsonTrailingComma,
+      TextProblemKind.unterminatedQuote => l10n.editorProblemUnterminatedQuote,
+      TextProblemKind.tabIndentation => l10n.editorProblemTabIndentation,
+      TextProblemKind.mismatchedClosingTag =>
+        l10n.editorProblemMismatchedClosingTag(
+          subject,
+          problem.counterpart ?? '',
+          line,
+        ),
+      TextProblemKind.unclosedElement => l10n.editorProblemUnclosedElement(
+        subject,
+      ),
+      TextProblemKind.unexpectedClosingTag =>
+        l10n.editorProblemUnexpectedClosingTag(subject),
+      TextProblemKind.mergeConflict => l10n.editorProblemMergeConflict,
+    };
   }
 
   // ── Find-bar extras ──
@@ -187,6 +233,8 @@ class PoltergeistEditorStrings extends EditorStrings {
       l10n.editorCommandSelectToMatchingBracket,
     // Already in the catalog for the find bar's own copy.
     EditorCommand.findInSelection => findInSelection,
+    EditorCommand.nextProblem => l10n.editorCommandNextProblem,
+    EditorCommand.previousProblem => l10n.editorCommandPreviousProblem,
   };
   @override
   String get browseTextTools => l10n.editorTextToolsTooltip;

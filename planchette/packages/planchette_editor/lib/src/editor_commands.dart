@@ -28,7 +28,9 @@ enum EditorCommand {
   pasteAndMatchIndentation(_Requirement.editableText),
   goToMatchingBracket(_Requirement.movableCaret),
   selectToMatchingBracket(_Requirement.movableCaret),
-  findInSelection(_Requirement.selection);
+  findInSelection(_Requirement.selection),
+  nextProblem(_Requirement.problems),
+  previousProblem(_Requirement.problems);
 
   const EditorCommand(this._requirement);
 
@@ -52,6 +54,10 @@ enum _Requirement {
 
   /// A non-empty selection in a loaded document.
   selection,
+
+  /// A caret that may move in a document with problems: see
+  /// [EditorController.problems].
+  problems,
 }
 
 /// Runs [EditorCommand]s against the controller's existing methods.
@@ -63,6 +69,7 @@ extension EditorCommandRunner on EditorController {
     _Requirement.commentSyntax => canToggleComment,
     _Requirement.movableCaret => canMoveCaret,
     _Requirement.selection => !isLoading && error == null && hasSelection,
+    _Requirement.problems => canMoveCaret && problems.isNotEmpty,
   };
 
   /// Runs [command] and reports whether it applied: false when its
@@ -88,6 +95,8 @@ extension EditorCommandRunner on EditorController {
     EditorCommand.goToMatchingBracket => goToMatchingBracket(),
     EditorCommand.selectToMatchingBracket => goToMatchingBracket(extend: true),
     EditorCommand.findInSelection => _findInSelection(),
+    EditorCommand.nextProblem => nextProblem(),
+    EditorCommand.previousProblem => previousProblem(),
   };
 
   bool _findInSelection() {

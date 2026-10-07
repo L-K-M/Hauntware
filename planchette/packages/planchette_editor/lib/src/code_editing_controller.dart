@@ -4,8 +4,9 @@ import 'package:planchette_core/planchette_core.dart'
     hide SearchResult, findSearchMatches, searchText;
 import 'package:planchette_core/planchette_core.dart' as core;
 
-/// Token and search-match colors. Pass one to [PlanchetteEditor.syntaxTheme],
-/// or add it to a host's `ThemeData.extensions` to style every editor.
+/// Token, search-match and problem colors. Pass one to
+/// [PlanchetteEditor.syntaxTheme], or add it to a host's
+/// `ThemeData.extensions` to style every editor.
 class EditorSyntaxTheme extends ThemeExtension<EditorSyntaxTheme> {
   final Color comment;
   final Color string;
@@ -21,6 +22,12 @@ class EditorSyntaxTheme extends ThemeExtension<EditorSyntaxTheme> {
   /// [matchBackground] so matches still stand out inside it.
   final Color searchScopeBackground;
 
+  /// The wavy underline and line number of an error, such as JSON that does
+  /// not parse, and of a warning, such as a key set twice. Both mark text
+  /// in every token colour, so they need contrast with the background.
+  final Color error;
+  final Color warning;
+
   const EditorSyntaxTheme({
     required this.comment,
     required this.string,
@@ -32,6 +39,8 @@ class EditorSyntaxTheme extends ThemeExtension<EditorSyntaxTheme> {
     required this.activeMatchBackground,
     required this.activeMatchForeground,
     required this.searchScopeBackground,
+    required this.error,
+    required this.warning,
   });
 
   static const dark = EditorSyntaxTheme(
@@ -45,6 +54,8 @@ class EditorSyntaxTheme extends ThemeExtension<EditorSyntaxTheme> {
     activeMatchBackground: Color(0xFF8AD8C8),
     activeMatchForeground: Color(0xFF10181A),
     searchScopeBackground: Color(0x22E6C177),
+    error: Color(0xFFF2777A),
+    warning: Color(0xFFF0A35E),
   );
 
   static const light = EditorSyntaxTheme(
@@ -60,6 +71,8 @@ class EditorSyntaxTheme extends ThemeExtension<EditorSyntaxTheme> {
     activeMatchBackground: Color(0xFF377A69),
     activeMatchForeground: Color(0xFFFFFFFF),
     searchScopeBackground: Color(0x33F5D89B),
+    error: Color(0xFFC62828),
+    warning: Color(0xFFA35200),
   );
 
   static EditorSyntaxTheme of(Brightness brightness) =>
@@ -77,6 +90,8 @@ class EditorSyntaxTheme extends ThemeExtension<EditorSyntaxTheme> {
     Color? activeMatchBackground,
     Color? activeMatchForeground,
     Color? searchScopeBackground,
+    Color? error,
+    Color? warning,
   }) => EditorSyntaxTheme(
     comment: comment ?? this.comment,
     string: string ?? this.string,
@@ -88,6 +103,8 @@ class EditorSyntaxTheme extends ThemeExtension<EditorSyntaxTheme> {
     activeMatchBackground: activeMatchBackground ?? this.activeMatchBackground,
     activeMatchForeground: activeMatchForeground ?? this.activeMatchForeground,
     searchScopeBackground: searchScopeBackground ?? this.searchScopeBackground,
+    error: error ?? this.error,
+    warning: warning ?? this.warning,
   );
 
   @override
@@ -114,6 +131,8 @@ class EditorSyntaxTheme extends ThemeExtension<EditorSyntaxTheme> {
         searchScopeBackground,
         other.searchScopeBackground,
       ),
+      error: mix(error, other.error),
+      warning: mix(warning, other.warning),
     );
   }
 
@@ -131,7 +150,9 @@ class EditorSyntaxTheme extends ThemeExtension<EditorSyntaxTheme> {
       other.matchForeground == matchForeground &&
       other.activeMatchBackground == activeMatchBackground &&
       other.activeMatchForeground == activeMatchForeground &&
-      other.searchScopeBackground == searchScopeBackground;
+      other.searchScopeBackground == searchScopeBackground &&
+      other.error == error &&
+      other.warning == warning;
 
   @override
   int get hashCode => Object.hash(
@@ -145,6 +166,8 @@ class EditorSyntaxTheme extends ThemeExtension<EditorSyntaxTheme> {
     activeMatchBackground,
     activeMatchForeground,
     searchScopeBackground,
+    error,
+    warning,
   );
 
   Color colorFor(SyntaxTokenType type) => switch (type) {
@@ -154,13 +177,22 @@ class EditorSyntaxTheme extends ThemeExtension<EditorSyntaxTheme> {
     SyntaxTokenType.keyword => keyword,
     SyntaxTokenType.meta => meta,
   };
+
+  /// The colour that marks a problem of [severity].
+  Color problemColor(TextProblemSeverity severity) => switch (severity) {
+    TextProblemSeverity.error => error,
+    TextProblemSeverity.warning => warning,
+  };
 }
 
 /// Flatten syntax [tokens] and search [matches] into styled spans. Both
 /// inputs are ordered and internally non-overlapping; a search hit overlaying
 /// a token keeps the token's color and adds the hit background. [scope],
 /// a stored find-in-selection range, washes the text inside it — under any
-/// match, whose own background stays on top.
+/// match, whose own background stays on top. [problems], in document order,
+/// add a wavy underline in their severity's colour over whatever else styles
+/// the text; where two overlap, the later one starts where the earlier ends,
+/// and one inside another takes that one's colour.
 ///
 /// One `TextStyle` per token type is built up front and shared by every
 /// span, because a highlighted document produces thousands of spans per
@@ -172,10 +204,19 @@ List<InlineSpan> buildHighlightedSpans({
   required int activeMatchIndex,
   required EditorSyntaxTheme theme,
   TextRange? scope,
+  List<TextProblem> problems = const [],
 }) {
   final tokenStyles = <SyntaxTokenType, TextStyle>{
     for (final type in SyntaxTokenType.values)
       type: TextStyle(color: theme.colorFor(type)),
+  };
+  final underlines = {
+    for (final severity in TextProblemSeverity.values)
+      severity: TextStyle(
+        decoration: TextDecoration.underline,
+        decorationStyle: TextDecorationStyle.wavy,
+        decorationColor: theme.problemColor(severity),
+      ),
   };
   final spans = <InlineSpan>[];
   final n = text.length;
@@ -184,6 +225,7 @@ List<InlineSpan> buildHighlightedSpans({
   var position = 0;
   var tokenIndex = 0;
   var matchIndex = 0;
+  var problemIndex = 0;
   while (position < n) {
     while (tokenIndex < tokens.length && tokens[tokenIndex].end <= position) {
       tokenIndex++;
@@ -191,14 +233,25 @@ List<InlineSpan> buildHighlightedSpans({
     while (matchIndex < matches.length && matches[matchIndex].end <= position) {
       matchIndex++;
     }
+    while (problemIndex < problems.length &&
+        problems[problemIndex].end <= position) {
+      problemIndex++;
+    }
     final token = tokenIndex < tokens.length ? tokens[tokenIndex] : null;
     final match = matchIndex < matches.length ? matches[matchIndex] : null;
+    final problem = problemIndex < problems.length
+        ? problems[problemIndex]
+        : null;
     final inToken = token != null && token.start <= position;
     final inMatch = match != null && match.start <= position;
+    final inProblem = problem != null && problem.start <= position;
     final inScope = position >= scopeStart && position < scopeEnd;
     var end = n;
     if (token != null) end = end.clamp(0, inToken ? token.end : token.start);
     if (match != null) end = end.clamp(0, inMatch ? match.end : match.start);
+    if (problem != null) {
+      end = end.clamp(0, inProblem ? problem.end : problem.start);
+    }
     if (inScope) {
       end = end.clamp(0, scopeEnd);
     } else if (position < scopeStart) {
@@ -217,6 +270,10 @@ List<InlineSpan> buildHighlightedSpans({
       style = (style ?? const TextStyle()).copyWith(
         backgroundColor: theme.searchScopeBackground,
       );
+    }
+    if (inProblem) {
+      final underline = underlines[problem.severity]!;
+      style = style?.merge(underline) ?? underline;
     }
     spans.add(TextSpan(text: text.substring(position, end), style: style));
     position = end;
@@ -237,6 +294,7 @@ class CodeEditingController extends TextEditingController {
   List<TextRange> _matches = const [];
   int _activeMatchIndex = -1;
   TextRange? _scope;
+  List<TextProblem> _problems = const [];
 
   String? _tokenizedText;
   SyntaxLanguage? _tokenizedLanguage;
@@ -255,6 +313,21 @@ class CodeEditingController extends TextEditingController {
   void setSearchScope(TextRange? scope) {
     if (_scope == scope) return;
     _scope = scope;
+    notifyListeners();
+  }
+
+  /// The problems underlined, in document order.
+  List<TextProblem> get problems => _problems;
+
+  void setProblems(List<TextProblem> problems) {
+    if (identical(_problems, problems)) return;
+    assert(() {
+      for (var i = 1; i < problems.length; i++) {
+        if (problems[i].start < problems[i - 1].start) return false;
+      }
+      return true;
+    }(), 'Problems are drawn in document order; sort them by start.');
+    _problems = problems;
     notifyListeners();
   }
 
@@ -304,7 +377,10 @@ class CodeEditingController extends TextEditingController {
     }
     final tokens = _tokensFor(text);
     final scope = _scope;
-    if (tokens.isEmpty && _matches.isEmpty && scope == null) {
+    if (tokens.isEmpty &&
+        _matches.isEmpty &&
+        scope == null &&
+        _problems.isEmpty) {
       return TextSpan(style: style, text: text);
     }
     return TextSpan(
@@ -316,6 +392,7 @@ class CodeEditingController extends TextEditingController {
         activeMatchIndex: _activeMatchIndex,
         theme: theme,
         scope: scope,
+        problems: _problems,
       ),
     );
   }

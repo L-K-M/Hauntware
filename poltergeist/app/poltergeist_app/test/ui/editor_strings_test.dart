@@ -294,6 +294,8 @@ void main() {
       EditorCommand.selectToMatchingBracket:
           'editorCommandSelectToMatchingBracket',
       EditorCommand.findInSelection: 'editorFindInSelection',
+      EditorCommand.nextProblem: 'editorCommandNextProblem',
+      EditorCommand.previousProblem: 'editorCommandPreviousProblem',
     };
     expect(keys.keys, unorderedEquals(EditorCommand.values));
     for (final MapEntry(key: command, value: key) in keys.entries) {
@@ -303,6 +305,76 @@ void main() {
         reason: '$command',
       );
     }
+  });
+
+  test('every problem string comes from the ARB catalog', () {
+    final strings = PoltergeistEditorStrings(_KeyNames());
+    expect(strings.problemCount(2), 'Symbol("editorStatusProblemCount")');
+    expect(strings.nextProblemHint, 'Symbol("editorStatusNextProblemHint")');
+    // Exact keys, so two kinds sharing one message fails too.
+    const keys = {
+      TextProblemKind.syntaxError: 'editorProblemSyntaxError',
+      TextProblemKind.duplicateKey: 'editorProblemDuplicateKey',
+      TextProblemKind.duplicateTable: 'editorProblemDuplicateTable',
+      TextProblemKind.duplicateAttribute: 'editorProblemDuplicateAttribute',
+      TextProblemKind.jsonComment: 'editorProblemJsonComment',
+      TextProblemKind.jsonTrailingComma: 'editorProblemJsonTrailingComma',
+      TextProblemKind.unterminatedQuote: 'editorProblemUnterminatedQuote',
+      TextProblemKind.tabIndentation: 'editorProblemTabIndentation',
+      TextProblemKind.mismatchedClosingTag:
+          'editorProblemMismatchedClosingTag',
+      TextProblemKind.unclosedElement: 'editorProblemUnclosedElement',
+      TextProblemKind.unexpectedClosingTag:
+          'editorProblemUnexpectedClosingTag',
+      TextProblemKind.mergeConflict: 'editorProblemMergeConflict',
+    };
+    expect(keys.keys, unorderedEquals(TextProblemKind.values));
+    for (final MapEntry(key: kind, value: key) in keys.entries) {
+      final problem = TextProblem(
+        kind: kind,
+        severity: TextProblemSeverity.error,
+        start: 0,
+        end: 1,
+      );
+      expect(
+        strings.problemMessage(problem),
+        'Symbol("$key")',
+        reason: '$kind',
+      );
+    }
+  });
+
+  test('problem messages fill in what they name', () {
+    final strings = PoltergeistEditorStrings(AppLocalizationsEn());
+    expect(
+      strings.problemMessage(
+        const TextProblem(
+          kind: TextProblemKind.duplicateKey,
+          severity: TextProblemSeverity.warning,
+          start: 0,
+          end: 4,
+          subject: 'PORT',
+          relatedLine: 2,
+        ),
+      ),
+      'Duplicate key "PORT", first set on line 2',
+    );
+    expect(
+      strings.problemMessage(
+        const TextProblem(
+          kind: TextProblemKind.mismatchedClosingTag,
+          severity: TextProblemSeverity.error,
+          start: 0,
+          end: 1,
+          subject: 'b',
+          counterpart: 'a',
+          relatedLine: 3,
+        ),
+      ),
+      '</b> does not match <a> on line 3',
+    );
+    expect(strings.problemCount(1), '1 problem');
+    expect(strings.problemCount(3), '3 problems');
   });
 
   test('the ARB catalog covers every shared text tool, option and choice', () {

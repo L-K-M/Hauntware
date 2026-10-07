@@ -18,6 +18,8 @@ const _dark = EditorSyntaxTheme(
   matchForeground: Color(0xFFF4F2FA),
   activeMatchBackground: Color(0xFFB9AFEE),
   activeMatchForeground: Color(0xFF15141B),
+  error: Color(0xFFF2777A),
+  warning: Color(0xFFF0A35E),
 );
 
 const _light = EditorSyntaxTheme(
@@ -31,4 +33,6 @@ const _light = EditorSyntaxTheme(
   matchForeground: Color(0xFF2A2733),
   activeMatchBackground: Color(0xFFB9AFEE),
   activeMatchForeground: Color(0xFF15141B),
+  error: Color(0xFFC62828),
+  warning: Color(0xFFA35200),
 );

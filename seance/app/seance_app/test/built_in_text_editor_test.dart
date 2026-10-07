@@ -1055,6 +1055,31 @@ void main() {
     expect(editor.controller.goToLineOpen, isTrue);
   });
 
+  testWidgets('the status bar reports problems and steps to them', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: BuiltInTextEditorScreen(
+          file: file,
+          remotePath: '/srv/app/.env',
+          initialText: 'PORT=1\nPORT=2\n',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('1 problem'), findsOneWidget);
+    expect(find.textContaining('Spaces: 4 · .env'), findsOneWidget);
+
+    await tester.tap(find.text('1 problem'));
+    await tester.pumpAndSettle();
+    expect(
+      find.text('Duplicate key "PORT", first set on line 1'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('Ln 2, Col 1'), findsOneWidget);
+  });
+
   testWidgets('the status bar counts UTF-8 bytes, not characters', (
     tester,
   ) async {

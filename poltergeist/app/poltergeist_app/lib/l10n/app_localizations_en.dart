@@ -2685,6 +2685,12 @@ class AppLocalizationsEn extends AppLocalizations {
       'Select to Matching Bracket';
 
   @override
+  String get editorCommandNextProblem => 'Next Problem';
+
+  @override
+  String get editorCommandPreviousProblem => 'Previous Problem';
+
+  @override
   String get editorTextToolGroupLines => 'Lines';
 
   @override
@@ -4606,6 +4612,73 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get editorStatusLargeFile => 'Large file: no highlighting';
+
+  @override
+  String editorStatusProblemCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count problems',
+      one: '1 problem',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get editorStatusNextProblemHint => 'Go to the next problem (F8)';
+
+  @override
+  String editorProblemSyntaxError(String detail) {
+    return 'Syntax error: $detail';
+  }
+
+  @override
+  String editorProblemDuplicateKey(String key, int line) {
+    return 'Duplicate key \"$key\", first set on line $line';
+  }
+
+  @override
+  String editorProblemDuplicateTable(String table, int line) {
+    return 'Duplicate table [$table], first declared on line $line';
+  }
+
+  @override
+  String editorProblemDuplicateAttribute(String attribute) {
+    return 'Duplicate attribute \"$attribute\"';
+  }
+
+  @override
+  String get editorProblemJsonComment => 'Comments are not allowed in JSON';
+
+  @override
+  String get editorProblemJsonTrailingComma =>
+      'Trailing commas are not allowed in JSON';
+
+  @override
+  String get editorProblemUnterminatedQuote =>
+      'This quoted value is never closed';
+
+  @override
+  String get editorProblemTabIndentation =>
+      'YAML does not allow tabs for indentation';
+
+  @override
+  String editorProblemMismatchedClosingTag(String tag, String open, int line) {
+    return '</$tag> does not match <$open> on line $line';
+  }
+
+  @override
+  String editorProblemUnclosedElement(String tag) {
+    return '<$tag> is never closed';
+  }
+
+  @override
+  String editorProblemUnexpectedClosingTag(String tag) {
+    return '</$tag> closes no open element';
+  }
+
+  @override
+  String get editorProblemMergeConflict => 'Unresolved merge conflict';
 
   @override
   String editorStatusIndentSpaces(int width) {

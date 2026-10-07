@@ -10,6 +10,7 @@ import 'package:planchette_core/planchette_core.dart';
 import 'code_editing_controller.dart';
 import 'editor_controller.dart';
 import 'editor_fonts.dart';
+import 'editor_problem_status.dart';
 import 'editor_strings.dart';
 import 'ghost_menus.dart';
 import 'text_tools_browser.dart';
@@ -128,6 +129,13 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
   late int _installSeen;
   int _lastCaretReveal = 0;
   bool _revealQueued = false;
+
+  /// How long typing must pause before the document is checked again: a
+  /// half-typed key or quote is not flagged at every keystroke, and the
+  /// check still lands as soon as the hands stop. The view owns the wait,
+  /// so it ends with the view.
+  static const _problemCheckDelay = Duration(milliseconds: 500);
+  Timer? _problemCheck;
   EditorController get c => widget.controller;
   TextStyle get _style {
     // Installed fonts follow the operating system, not a theme's platform.
@@ -170,6 +178,7 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
     _installSeen = c.installGeneration;
     _lastCaretReveal = c.caretRevealRequest;
     c.setViewEditingLocked(this, widget.editingLocked);
+    _scheduleProblemCheck();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) c.initialize();
     });
@@ -205,7 +214,9 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
     if (oldWidget.controller != c) {
       oldWidget.controller.removeListener(_changed);
       oldWidget.controller.setViewEditingLocked(this, false);
+      _problemCheck?.cancel();
       c.addListener(_changed);
+      _scheduleProblemCheck();
       _lastReveal = -1;
       _lastCaretReveal = c.caretRevealRequest;
       _installSeen = c.installGeneration;
@@ -239,6 +250,7 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
       _installSeen = c.installGeneration;
       _carryOverInstall();
     }
+    _scheduleProblemCheck();
     setState(() {});
     if (_lastCaretReveal != c.caretRevealRequest) {
       _lastCaretReveal = c.caretRevealRequest;
@@ -255,6 +267,14 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
         _revealMatch();
       });
     }
+  }
+
+  /// Checks the document once typing pauses, restarting the wait with every
+  /// change while an edit is unchecked.
+  void _scheduleProblemCheck() {
+    if (!c.problemsOutdated) return;
+    _problemCheck?.cancel();
+    _problemCheck = Timer(_problemCheckDelay, c.checkProblems);
   }
 
   /// Each install gets a new document field (see the [KeyedSubtree] in the
@@ -357,6 +377,7 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
   void dispose() {
     c.removeListener(_changed);
     c.setViewEditingLocked(this, false);
+    _problemCheck?.cancel();
     _gutterRepaint.dispose();
     _searchBarFocus.dispose();
     _textToolsFocus.dispose();
@@ -417,6 +438,11 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
         const SingleActivator(LogicalKeyboardKey.f3): c.nextMatch,
         const SingleActivator(LogicalKeyboardKey.f3, shift: true):
             c.previousMatch,
+        // Next and Previous Problem, F8 as in the common code editors, with
+        // no platform modifier to clash with.
+        const SingleActivator(LogicalKeyboardKey.f8): c.nextProblem,
+        const SingleActivator(LogicalKeyboardKey.f8, shift: true):
+            c.previousProblem,
         if (c.searchOpen || c.goToLineOpen || c.toolBarOpen || c.textToolsOpen)
           const SingleActivator(LogicalKeyboardKey.escape): _escape,
       },
@@ -1092,9 +1118,10 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
       child: Row(
         children: [
           Expanded(
-            child: Align(
-              alignment: AlignmentDirectional.centerStart,
-              child: Tooltip(
+            child: EditorStatusLead(
+              controller: c,
+              strings: widget.strings,
+              position: Tooltip(
                 message: widget.strings.goToLine,
                 child: InkWell(
                   onTap: c.openGoToLine,
@@ -1192,6 +1219,8 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
       textScaler: scaler,
       numberColor: theme.colorScheme.onSurfaceVariant,
       caretNumberColor: theme.colorScheme.onSurface,
+      problemLines: c.problemLines,
+      syntaxTheme: _syntaxTheme,
       dividerColor: theme.dividerColor,
       currentLineColor:
           widget.currentLineColor ??
@@ -1832,6 +1861,8 @@ class _DocumentDecorations extends SingleChildRenderObjectWidget {
     required this.textScaler,
     required this.numberColor,
     required this.caretNumberColor,
+    required this.problemLines,
+    required this.syntaxTheme,
     required this.dividerColor,
     required this.currentLineColor,
     required this.rightInset,
@@ -1845,6 +1876,10 @@ class _DocumentDecorations extends SingleChildRenderObjectWidget {
   final TextScaler textScaler;
   final Color numberColor;
   final Color caretNumberColor;
+
+  /// Lines with problems, numbered and marked in their severity's colour.
+  final Map<int, TextProblemSeverity> problemLines;
+  final EditorSyntaxTheme syntaxTheme;
   final Color dividerColor;
   final Color currentLineColor;
   final double rightInset;
@@ -1862,6 +1897,10 @@ class _DocumentDecorations extends SingleChildRenderObjectWidget {
 
 class _RenderDocumentDecorations extends RenderProxyBox {
   _RenderDocumentDecorations(this._configuration);
+
+  // The problem bar sits inside the gutter's left inset, clear of numbers.
+  static const _problemMarkInset = 2.0;
+  static const _problemMarkWidth = 3.0;
 
   _DocumentDecorations _configuration;
   set configuration(_DocumentDecorations value) {
@@ -2025,17 +2064,36 @@ class _RenderDocumentDecorations extends RenderProxyBox {
       for (var line = first; line < starts.length; line++) {
         final top = lineTop(line);
         if (top > viewport.bottom) break;
+        final problem = config.problemLines[line];
+        final problemColor = problem == null
+            ? null
+            : config.syntaxTheme.problemColor(problem);
         painter
           ..text = TextSpan(
             text: '${line + 1}',
             style: config.textStyle.copyWith(
-              color: line == caretLine
-                  ? config.caretNumberColor
-                  : config.numberColor,
+              color:
+                  problemColor ??
+                  (line == caretLine
+                      ? config.caretNumberColor
+                      : config.numberColor),
             ),
           )
           ..layout()
           ..paint(canvas, Offset(right - painter.width, top));
+        // A bar in the gutter's left margin, which a glance down the
+        // gutter catches where a coloured number alone could be missed.
+        if (problemColor != null) {
+          canvas.drawRect(
+            Rect.fromLTWH(
+              offset.dx + _problemMarkInset,
+              top,
+              _problemMarkWidth,
+              editable.preferredLineHeight,
+            ),
+            Paint()..color = problemColor,
+          );
+        }
       }
       painter.dispose();
     }

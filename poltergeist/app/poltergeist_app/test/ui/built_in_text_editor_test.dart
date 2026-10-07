@@ -633,6 +633,26 @@ void main() {
     );
   });
 
+  testWidgets('the status row reports problems in the catalog wording', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      editorApp(
+        remotePath: '/srv/app/config.json',
+        initialText: '{\n  "a": 1,\n  "a": 2\n}\n',
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('1 problem'), findsOneWidget);
+
+    await tester.tap(find.text('1 problem'));
+    await tester.pumpAndSettle();
+    expect(
+      find.text('Duplicate key "a", first set on line 2'),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('the status row clears the bottom safe area', (tester) async {
     const homeIndicator = 34.0;
     tester.view.physicalSize = const Size(390, 844);
