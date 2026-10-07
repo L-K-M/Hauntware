@@ -89,19 +89,11 @@ final class _ProductionFocus {
 /// arrow-stepping back to it) attaches to the same work instead of
 /// queueing a duplicate (06 §5.2/§5.3's dedupe rule).
 final class _Production {
-  _Production({
-    required this.ticket,
-    required this.slot,
-    required this.focus,
-    required this.entry,
-    required this.serverId,
-  });
+  _Production({required this.ticket, required this.focus, required this.entry});
 
   final PreviewProduceTicket ticket;
-  final PreviewCacheSlot slot;
   final _ProductionFocus focus;
   final RemoteFileEntry entry;
-  final String serverId;
 
   int get generation => focus.generation;
 
@@ -472,7 +464,7 @@ final class PreviewSession extends ChangeNotifier {
     if (_desktop) {
       return _quickLookVerb(pane);
     }
-    return _panelVerb(pane);
+    return _panelVerb();
   }
 
   bool get _desktop => switch (_platform) {
@@ -491,7 +483,7 @@ final class PreviewSession extends ChangeNotifier {
   /// prompt card, start the download; everything else is a no-op. The
   /// Info tab is persistent chrome, so Space never hides the inspector —
   /// the old rendered → close leg hid the whole column.
-  bool _panelVerb(PaneController pane) {
+  bool _panelVerb() {
     if (_panelHidden) {
       // The shown edge evaluates the focused item.
       _workspace.setPreviewPanelHidden(false);
@@ -734,7 +726,7 @@ final class PreviewSession extends ChangeNotifier {
       _evaluateLocal(entry);
       return;
     }
-    _evaluateRemote(entry, location.serverId);
+    _evaluateRemote(entry);
   }
 
   void _evaluateLocal(RemoteFileEntry entry) {
@@ -758,7 +750,7 @@ final class PreviewSession extends ChangeNotifier {
     }
   }
 
-  void _evaluateRemote(RemoteFileEntry entry, String serverId) {
+  void _evaluateRemote(RemoteFileEntry entry) {
     if (entry.isDirectory) {
       _kind = PreviewKind.metadata;
       _setPhase(PreviewPhase.rendered);
@@ -788,79 +780,14 @@ final class PreviewSession extends ChangeNotifier {
       return;
     }
     final key = _focusedKey!;
-    final production = _productions[key];
-    if (production != null) {
-      production.focus.generation = _generation;
-      production.focus.kind = kind;
-      _transferred = production.transferred;
-      _totalBytes = production.total;
-      _gate = production.gate;
-      _setPhase(
-        production.gate != null && production.gate!.isAwaitingConfirmation
-            ? PreviewPhase.gateConfirm
-            : PreviewPhase.producing,
-      );
-      return;
-    }
-    final pending = _pendingStarts[key];
-    if (pending != null) {
-      if (pending.cancelled) {
-        _refusal = PreviewRefusal.cancelled;
-        _setPhase(PreviewPhase.prompt);
-        return;
-      }
-      pending.reattach(
-        generation: _generation,
-        kind: kind,
-        decision: pending.thresholdDecision,
-      );
-      _transferred = 0;
-      _totalBytes = size;
-      _gate = null;
-      _setPhase(PreviewPhase.producing);
-      return;
-    }
+    if (_reattachInFlight(key, kind, size)) return;
     unawaited(
       _cache.lookup(key).then((file) {
         if (_disposed) return;
         if (!identical(_focusedPane, pane) || _focusedKey != key) return;
         if (file == null) {
-          // An in-flight production for this key re-attaches — rapid
-          // paging back to the item shows live progress, never a second
-          // task (§5.3's dedupe).
-          final currentProduction = _productions[key];
-          if (currentProduction != null) {
-            currentProduction.focus.generation = _generation;
-            currentProduction.focus.kind = kind;
-            _transferred = currentProduction.transferred;
-            _totalBytes = currentProduction.total;
-            _gate = currentProduction.gate;
-            _setPhase(
-              currentProduction.gate != null &&
-                      currentProduction.gate!.isAwaitingConfirmation
-                  ? PreviewPhase.gateConfirm
-                  : PreviewPhase.producing,
-            );
-            return;
-          }
-          final currentPending = _pendingStarts[key];
-          if (currentPending != null) {
-            if (currentPending.cancelled) {
-              _refusal = PreviewRefusal.cancelled;
-              _setPhase(PreviewPhase.prompt);
-              return;
-            }
-            currentPending.reattach(
-              generation: _generation,
-              kind: kind,
-              decision: currentPending.thresholdDecision,
-            );
-            _transferred = 0;
-            _totalBytes = size;
-            _gate = null;
-            _setPhase(PreviewPhase.producing);
-            return;
-          }
+          // Work for this key may have started during the lookup.
+          if (_reattachInFlight(key, kind, size)) return;
           _setPhase(PreviewPhase.prompt);
           return;
         }
@@ -879,6 +806,44 @@ final class PreviewSession extends ChangeNotifier {
         }
       }),
     );
+  }
+
+  /// Attaches the focus to [key]'s in-flight production or pending start,
+  /// adopting its live progress or parked gate: rapid paging back to an
+  /// item shows that work, never a second task (§5.3's dedupe). False
+  /// when [key] has neither.
+  bool _reattachInFlight(String key, PreviewKind kind, int? size) {
+    final production = _productions[key];
+    if (production != null) {
+      production.focus.generation = _generation;
+      production.focus.kind = kind;
+      _transferred = production.transferred;
+      _totalBytes = production.total;
+      _gate = production.gate;
+      _setPhase(
+        production.gate != null && production.gate!.isAwaitingConfirmation
+            ? PreviewPhase.gateConfirm
+            : PreviewPhase.producing,
+      );
+      return true;
+    }
+    final pending = _pendingStarts[key];
+    if (pending == null) return false;
+    if (pending.cancelled) {
+      _refusal = PreviewRefusal.cancelled;
+      _setPhase(PreviewPhase.prompt);
+      return true;
+    }
+    pending.reattach(
+      generation: _generation,
+      kind: kind,
+      decision: pending.thresholdDecision,
+    );
+    _transferred = 0;
+    _totalBytes = size;
+    _gate = null;
+    _setPhase(PreviewPhase.producing);
+    return true;
   }
 
   Future<void> _sniffLocal(File file, int generation) async {
@@ -1223,10 +1188,8 @@ final class PreviewSession extends ChangeNotifier {
     );
     final production = _Production(
       ticket: ticket,
-      slot: slot,
       focus: focus,
       entry: entry,
-      serverId: location.serverId,
     )..gate = gate;
     _productions[key] = production;
     if (_isCurrentProduction(key, focus.generation) &&
@@ -1390,7 +1353,7 @@ final class PreviewSession extends ChangeNotifier {
       // Channel absent on a non-macOS host or a headless test — the
       // Info tab's well is the honest fallback surface, and Space gets
       // its answer there (show it, or the visible card's own verb).
-      _panelVerb(currentPane);
+      _panelVerb();
       return;
     }
     if (!identical(pane, currentPane) || openingGeneration != _generation) {
