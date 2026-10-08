@@ -5,6 +5,7 @@ import 'package:ghost_ui/ghost_ui.dart' as ghost;
 
 import '../l10n/app_localizations.dart';
 import '../theme/app_theme.dart' show poltergeistMonoTextStyle;
+import 'server_appearance_strings.dart';
 
 export 'package:ghost_ui/ghost_ui.dart' show ColorSwatchBox;
 
@@ -29,45 +30,5 @@ Future<Color?> showColorPicker(
   preview: preview,
   note: note,
   hexStyle: poltergeistMonoTextStyle,
-  strings: _LocalizedColorPickerStrings(AppLocalizations.of(context)),
+  strings: PoltergeistColorPickerStrings(AppLocalizations.of(context)),
 );
-
-/// The picker's words from the ARB catalog.
-final class _LocalizedColorPickerStrings extends ghost.ColorPickerStrings {
-  const _LocalizedColorPickerStrings(this._l10n);
-
-  final AppLocalizations _l10n;
-
-  @override
-  String get hexLabel => _l10n.colorPickerHexLabel;
-
-  @override
-  String get hexError => _l10n.colorPickerHexError;
-
-  @override
-  String get hexErrorAlpha => _l10n.colorPickerHexErrorAlpha;
-
-  @override
-  String get hue => _l10n.colorPickerHue;
-
-  @override
-  String get saturation => _l10n.colorPickerSaturation;
-
-  @override
-  String get brightness => _l10n.colorPickerBrightness;
-
-  @override
-  String get opacity => _l10n.colorPickerOpacity;
-
-  @override
-  String degrees(int degrees) => _l10n.colorPickerDegrees(degrees);
-
-  @override
-  String percent(int percent) => _l10n.colorPickerPercent(percent);
-
-  @override
-  String get cancel => _l10n.colorPickerCancel;
-
-  @override
-  String get use => _l10n.colorPickerUse;
-}

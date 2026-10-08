@@ -5,6 +5,13 @@ import '../theme.dart' show SeanceTheme;
 
 export 'package:ghost_ui/ghost_ui.dart' show ColorSwatchBox;
 
+/// The hex box's style in Séance's pickers: the monospace stack. A bare
+/// 'monospace' resolves on Android only.
+final TextStyle seanceHexStyle = TextStyle(
+  fontFamily: SeanceTheme.monoFallback.first,
+  fontFamilyFallback: SeanceTheme.monoFallback,
+);
+
 /// ghost_ui's colour picker in Séance's words and monospace stack: hue,
 /// saturation and brightness sliders, and a hex box.
 ///
@@ -25,9 +32,5 @@ Future<Color?> showColorPicker(
   allowAlpha: allowAlpha,
   preview: preview,
   note: note,
-  // A bare 'monospace' resolves on Android only.
-  hexStyle: TextStyle(
-    fontFamily: SeanceTheme.monoFallback.first,
-    fontFamilyFallback: SeanceTheme.monoFallback,
-  ),
+  hexStyle: seanceHexStyle,
 );

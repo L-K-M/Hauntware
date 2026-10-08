@@ -6522,7 +6522,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get serverMarkPickerIncompressible =>
-      'That image would not fit in a server record even at badge size. Try a smaller or simpler one.';
+      'That image would not fit in a server record even at badge size. Try a simpler picture — a logo rather than a photograph.';
 
   @override
   String get serverMarkPickerNoImage => 'No image on this server yet.';
