@@ -2767,16 +2767,9 @@ class _LocationTitle extends StatelessWidget {
     final total = controller.entries.length;
     final selected = controller.selectedCount;
     if (selected == 0) return l10n.paneItemCount(total);
-    var bytes = 0;
-    var files = 0;
-    for (final entry in controller.selectedEntries) {
-      final size = entry.size;
-      if (entry.type != RemoteFileType.file || size == null) continue;
-      bytes += size;
-      files++;
-    }
+    final bytes = selectedFileBytes(controller.selectedEntries);
     final summary = l10n.paneSelectionSummary(selected, total);
-    if (files == 0) return summary;
+    if (bytes == null) return summary;
     return l10n.paneSelectionSummaryWithSize(
       summary,
       formatPaneSize(bytes, platform: Theme.of(context).platform),

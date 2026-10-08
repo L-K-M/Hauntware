@@ -8,6 +8,38 @@ import 'package:poltergeist_core/poltergeist_core.dart'
 
 void main() {
   setUpAll(() => initializeDateFormatting('en'));
+  group('selectedFileBytes', () {
+    RemoteFileEntry entry(
+      String name, {
+      int? size,
+      RemoteFileType type = RemoteFileType.file,
+    }) => RemoteFileEntry(path: '/d/$name', name: name, type: type, size: size);
+
+    test('sums known file sizes and ignores folders', () {
+      expect(
+        selectedFileBytes([
+          entry('a', size: 10),
+          entry('b', size: 5),
+          entry('dir', size: 4096, type: RemoteFileType.directory),
+          entry('unknown'),
+        ]),
+        15,
+      );
+    });
+
+    test('a 0-byte file is a real 0, nothing to sum is null', () {
+      expect(selectedFileBytes([entry('empty', size: 0)]), 0);
+      expect(
+        selectedFileBytes([
+          entry('dir', size: 4096, type: RemoteFileType.directory),
+          entry('unknown'),
+        ]),
+        isNull,
+      );
+      expect(selectedFileBytes(const []), isNull);
+    });
+  });
+
   group('formatPaneSize', () {
     test('bytes render bare, mantissas trim their trailing zero', () {
       expect(
