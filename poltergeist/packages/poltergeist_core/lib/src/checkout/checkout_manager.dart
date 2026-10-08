@@ -86,12 +86,11 @@ final class CheckoutManager {
   /// the record commits under the post-rename path (06 §3.5).
   final Map<(String, String), _CheckoutFlight> _checkoutFlights = {};
 
-  /// checkoutId → in-flight save's serializing future.
-  final Map<String, Future<bool>> _uploadFlights = {};
-
-  /// checkoutId → the `overwriteRemoteChanges` flag the in-flight save
-  /// was started with — dedupe may only coalesce identical semantics.
-  final Map<String, bool> _uploadFlightFlags = {};
+  /// checkoutId → the in-flight save's serializing future and the
+  /// `overwriteRemoteChanges` flag it was started with — dedupe may only
+  /// coalesce identical semantics.
+  final Map<String, ({Future<bool> future, bool overwrite})> _uploadFlights =
+      {};
 
   /// taskId → the completer a `checkout`/`uploadLocalCopy` caller awaits.
   final Map<String, _PendingTransfer> _pendingTransfers = {};
@@ -408,24 +407,23 @@ final class CheckoutManager {
       // Never coalesce saves with different conflict semantics: an
       // overwrite riding a CAS flight would be silently blocked, and
       // the reverse would drop the CAS the caller asked for.
-      if (_uploadFlightFlags[copy.id] == overwriteRemoteChanges) {
-        return inFlight;
+      if (inFlight.overwrite == overwriteRemoteChanges) {
+        return inFlight.future;
       }
-      await inFlight.catchError((_) => false);
+      await inFlight.future.catchError((_) => false);
       // A new flight may have started while this waiter slept — the
       // loop re-checks so two mismatched waiters never race duplicate
       // uploads of the same record.
       inFlight = _uploadFlights[copy.id];
     }
     final future = _upload(copy, overwriteRemoteChanges);
-    _uploadFlights[copy.id] = future;
-    _uploadFlightFlags[copy.id] = overwriteRemoteChanges;
+    _uploadFlights[copy.id] = (
+      future: future,
+      overwrite: overwriteRemoteChanges,
+    );
     // whenComplete derives a second future — ignore() swallows ITS copy
     // of the error; the returned future still delivers it to callers.
-    future.whenComplete(() {
-      _uploadFlights.remove(copy.id);
-      _uploadFlightFlags.remove(copy.id);
-    }).ignore();
+    future.whenComplete(() => _uploadFlights.remove(copy.id)).ignore();
     return future;
   }
 
