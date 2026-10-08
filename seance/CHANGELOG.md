@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Servers: a server saved on another device without its password or key
+  no longer tries to connect with an empty one and fail with a
+  misleading login error. Its tab says the credential is required on
+  this device and offers to edit the server, where you can enter it or
+  switch to the SSH agent. Test Connection says the same.
 - Servers: editing a server keeps the start folder Poltergeist set for
   it, so a save in Séance no longer clears it on every device.
 - Built-in editor: mistakes in common config files are underlined as
