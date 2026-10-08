@@ -615,9 +615,9 @@ Do not "simplify" these away — they are load-bearing:
   `LocalSettingsBackend` holds the logic (the assistant save's guards, the
   sync switches' rollbacks) over `AppState`, for the route and for the
   window's host; `RemoteSettingsBackend` forwards each call over the link
-  from the settings window's isolate. A new setting is a backend method plus
-  a `_Link` case, not an edit to `settings` from the screen — the window's
-  `settings` is a copy.
+  from the settings window's isolate over `ghost_desktop`'s link engine. A
+  new setting is a backend method plus a `SettingsLinkMethod` case, not an
+  edit to `settings` from the screen — the window's `settings` is a copy.
 - `ThemePalette` (`lib/theme/`) — the device's one editable theme: an
   accent, nullable ("Automatic") colour slots, status colours, an optional
   terminal block, a font family and a corner scale, stored as one JSON
