@@ -7,6 +7,7 @@ import '../ui/terminal_appearance.dart';
 import 'app_settings.dart';
 import 'external_file_opener.dart';
 import 'local_shell_service.dart';
+import 'secrets_recovery.dart';
 
 /// The Settings screen's tabs, in the order the screen shows them. Here
 /// rather than beside the screen because the settings window's opener names
@@ -114,6 +115,29 @@ abstract class SettingsBackend implements Listenable {
 
   /// Revokes the app's token on the server and its key on every device.
   Future<void> removeInboxApp(String appId);
+
+  /// Whether this device has a recovery code (CRED-05).
+  Future<bool> recoveryConfigured();
+
+  /// A new recovery code, formatted, for the screen to show once. Nothing is
+  /// stored until [saveRecoveryCode].
+  Future<String> newRecoveryCode();
+
+  /// Keeps [code] as this device's recovery code, replacing any earlier one,
+  /// once the user has confirmed writing it down.
+  Future<void> saveRecoveryCode(String code);
+
+  /// Saves the vault, encrypted, where the user chooses; the save panel runs
+  /// in the app's engine. Where it went, or null when the user cancelled.
+  Future<String?> exportSecrets();
+
+  /// Asks for an export file, opens it with [code] and merges it per
+  /// [policy]; the file panel runs in the app's engine. Null when the user
+  /// cancelled. A failure throws, printing the sentence to show.
+  Future<SecretsRestoreSummary?> restoreSecrets({
+    required String code,
+    required RestoreConflictPolicy policy,
+  });
 }
 
 /// Thrown by a backend whose work failed in the app's isolate, carrying the

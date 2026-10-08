@@ -73,6 +73,12 @@ class _UnreadableVaultStore implements VaultStore {
 
   @override
   Future<void> deleteSecret(String id) => inner.deleteSecret(id);
+
+  @override
+  Future<Map<String, Uint8List>> allSecretBlobs() {
+    if (failReads) throw const FileSystemException('vault unreadable');
+    return inner.allSecretBlobs();
+  }
 }
 
 ServerConfig server(String id, String label, int updatedAt) => ServerConfig(
@@ -1185,6 +1191,26 @@ void main() {
       );
     });
 
+    test('a config naming a reserved vault entry is not applied', () async {
+      final vaultKey = secureRandomBytes(32);
+      final codec = RecordCodec(vaultKey);
+      final configs = InMemoryConfigStore();
+      final local = InMemoryLocalRecordStore();
+      await local.putRemote(await codec.encrypt(DecryptedRecord(
+        id: 'poisoned',
+        kind: RecordKind.serverConfig,
+        updatedAt: 5,
+        deviceId: 'B',
+        data: server('poisoned', 'alpha', 5)
+            .copyWith(secretRef: recoveryWrapKeyId)
+            .toJson(),
+      )));
+
+      await coord(codec, configs, 'A', local: local).applyToStores();
+
+      expect(await configs.getServer('poisoned'), isNull);
+    });
+
     test('a secret whose payload names another ref is skipped, not written',
         () async {
       // The shield keys on the record id and the vault write keys on the
@@ -1222,6 +1248,46 @@ void main() {
 
       expect((await vault.getSecret('sec-shielded'))?.value, 'local-only');
       expect(await vault.getSecret('sec-other'), isNull);
+    });
+
+    test('the recovery entry is neither applied from sync nor published',
+        () async {
+      // Recovery's wrap key lives in the vault under a reserved id; a record
+      // or a config naming that id must not replace it or carry it off.
+      final vaultKey = secureRandomBytes(32);
+      final codec = RecordCodec(vaultKey);
+      final store = InMemoryVaultStore();
+      final vault = SecretVault(store, vaultKey);
+      final recovery = await RecoveryWrapKey.derive(secureRandomBytes(32));
+      final sealed = await VaultCrypto.sealJson(vaultKey, recovery.toJson());
+      await store.putSecretBlob(recoveryWrapKeyId, sealed);
+      final configs = InMemoryConfigStore();
+      await configs.putServer(server('s1', 'alpha', 20).copyWith(
+          secretRef: recoveryWrapKeyId, syncSecret: true, updatedAt: 21));
+      final local = InMemoryLocalRecordStore();
+      await local.putRemote(await codec.encrypt(DecryptedRecord(
+        id: 'secret:$recoveryWrapKeyId',
+        kind: RecordKind.secret,
+        updatedAt: 99,
+        deviceId: 'B',
+        data: const Secret(
+          id: recoveryWrapKeyId,
+          kind: SecretKind.password,
+          value: 'not a wrap key',
+        ).toJson(),
+      )));
+      final coordinator = coord(codec, configs, 'A',
+          local: local, syncSecrets: true, secretVault: vault);
+
+      await coordinator.applyToStores();
+      expect(await store.getSecretBlob(recoveryWrapKeyId), sealed);
+
+      final pushed = InMemoryLocalRecordStore();
+      final pushedIds = await collected(
+          coord(codec, configs, 'A',
+              local: pushed, syncSecrets: true, secretVault: vault),
+          pushed);
+      expect(pushedIds.keys, isNot(contains('secret:$recoveryWrapKeyId')));
     });
 
     test('no tombstone deletes a vault entry, referenced or not', () async {

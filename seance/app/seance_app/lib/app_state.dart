@@ -16,8 +16,10 @@ import 'services/background_keep_alive.dart';
 import 'services/chat_session.dart';
 import 'services/default_snippets.dart';
 import 'services/managed_remote_file.dart';
+import 'services/missing_credential.dart';
 import 'services/remote_files_controller.dart';
 import 'services/remote_git_controller.dart';
+import 'services/secrets_recovery.dart';
 import 'services/server_duplication.dart';
 import 'services/xterm_engine.dart';
 import 'theme/app_appearance.dart';
@@ -2654,6 +2656,106 @@ class AppState extends ChangeNotifier {
       }
     }
   }
+
+  /// Whether this device has a recovery code (CRED-05).
+  Future<bool> recoveryConfigured() => services.recoveryConfigured();
+
+  /// A new recovery code to show once; nothing is stored until
+  /// [saveRecoveryCode].
+  String newRecoveryCode() => services.newRecoveryCode();
+
+  /// Keeps [code] as this device's recovery code, once the user confirmed
+  /// writing it down.
+  Future<void> saveRecoveryCode(String code) =>
+      _mutate(() => services.saveRecoveryCode(code));
+
+  /// Remembers "Not now" to the offer of a recovery code, so it is not made
+  /// again; Settings still offers it.
+  Future<void> declineRecoveryPrompt() async {
+    services.settings.recoveryPromptDeclined = true;
+    try {
+      await services.saveSettings();
+    } catch (_) {
+      // Not remembered on disk, so not in memory either: the next launch
+      // would offer it again anyway.
+      services.settings.recoveryPromptDeclined = false;
+      rethrow;
+    }
+  }
+
+  /// Answers a credential-required tab (CRED-05): stores [credential] as
+  /// [serverId]'s password or key, under the entry its config already names,
+  /// or switches the server to the SSH agent. Saved as an edit would be, so
+  /// the new credential is the newest copy anywhere it syncs. The caller
+  /// reconnects. Returns whether a credential was written to the vault.
+  Future<bool> provideMissingCredential(
+    String serverId,
+    MissingCredential credential,
+  ) => _mutate(() async {
+    final server = await services.configStore.getServer(serverId);
+    if (server == null) throw StateError('This server was deleted.');
+    // The editor's rule (`nextUpdatedAt`): past both the clock and the
+    // record, so this edit outranks the copy this device pulled.
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final updatedAt = now > server.updatedAt ? now : server.updatedAt + 1;
+    // A config naming one of the app's own vault entries gets an entry of
+    // its own instead: the vault refuses credentials under a reserved id.
+    final existingRef = server.secretRef;
+    final ref = existingRef == null || isReservedVaultId(existingRef)
+        ? uuidV4()
+        : existingRef;
+    switch (credential) {
+      case UseSshAgent():
+        await _saveServerNow(
+          server.copyWith(authMethod: AuthMethod.agent, updatedAt: updatedAt),
+        );
+        return false;
+      case MissingPassword(:final password):
+        await _saveServerNow(
+          server.copyWith(
+            authMethod: AuthMethod.password,
+            secretRef: ref,
+            clearIdentityFilePath: true,
+            updatedAt: updatedAt,
+          ),
+          secret: Secret(id: ref, kind: SecretKind.password, value: password),
+        );
+        return true;
+      case MissingPrivateKey(:final pem, :final passphrase):
+        // A stored key, as the editor saves a pasted one: a key-file path
+        // left on the config would be read instead of this key.
+        await _saveServerNow(
+          server.copyWith(
+            authMethod: AuthMethod.privateKey,
+            secretRef: ref,
+            clearIdentityFilePath: true,
+            updatedAt: updatedAt,
+          ),
+          secret: Secret(
+            id: ref,
+            kind: SecretKind.privateKey,
+            value: pem,
+            keyPassphrase: passphrase,
+          ),
+        );
+        return true;
+    }
+  });
+
+  /// The vault as an encrypted export the recovery code opens. In the
+  /// mutation queue, so a save cannot land halfway through the snapshot.
+  Future<Uint8List> exportSecrets() => _mutate(services.exportSecrets);
+
+  /// Merges an export into this device's vault. In the mutation queue, so a
+  /// save or a sync round cannot write a credential between the restore's
+  /// read of the vault and its single write.
+  Future<SecretsRestoreSummary> restoreSecrets(
+    Uint8List export,
+    String code, {
+    required RestoreConflictPolicy policy,
+  }) => _mutate(
+    () => services.restoreSecrets(export, code, policy: policy),
+  );
 
   /// Connect a producer. Returns the pairing string, which is shown once.
   Future<String> addInboxApp({

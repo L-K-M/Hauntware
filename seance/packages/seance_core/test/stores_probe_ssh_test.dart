@@ -42,6 +42,9 @@ class _CountingVaultStore implements VaultStore {
 
   @override
   Future<void> deleteSecret(String id) async => _blobs.remove(id);
+
+  @override
+  Future<Map<String, Uint8List>> allSecretBlobs() async => Map.of(_blobs);
 }
 
 ServerConfig server(String id, String host) => ServerConfig(
@@ -70,6 +73,30 @@ void main() {
       final loaded = await vault.getSecret('s1');
       expect(loaded!.value, 'hunter2-very-secret');
       expect(loaded.kind, SecretKind.password);
+    });
+
+    test('the app\'s own entries are not credentials', () async {
+      final key = secureRandomBytes(32);
+      final store = InMemoryVaultStore();
+      final vault = SecretVault(store, key);
+      final wrap = await VaultCrypto.sealJson(key, {'version': 1});
+      await store.putSecretBlob(recoveryWrapKeyId, wrap);
+      const reserved = Secret(
+        id: recoveryWrapKeyId,
+        kind: SecretKind.password,
+        value: 'x',
+      );
+
+      expect(await vault.getSecret(recoveryWrapKeyId), isNull);
+      expect(await vault.readableSecret(recoveryWrapKeyId), isNull);
+      expect(() => vault.putSecret(reserved), throwsArgumentError);
+      expect(() => vault.putSecrets([reserved]), throwsArgumentError);
+      expect(
+        () => vault.putLocalSecret(reserved, updatedAt: 1),
+        throwsArgumentError,
+      );
+      expect(() => vault.deleteSecret(recoveryWrapKeyId), throwsArgumentError);
+      expect(await store.getSecretBlob(recoveryWrapKeyId), wrap);
     });
 
     test('cannot open a secret with the wrong vault key', () async {

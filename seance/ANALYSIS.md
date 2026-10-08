@@ -528,23 +528,31 @@ sandbox, unless SSH-06 decides to drop it).
 
 ### CRED-05: Missing credentials, recovery material and onboarding
 **IDs:** SOL-035, workflow backlog · **Priority:** P1 · **Status:** Partial
-(the credential-required state landed: `CredentialMissingException`)
+(the credential-required state landed: `CredentialMissingException`; so did
+recovery codes with encrypted export and restore, the inline credential prompt
+and the recovery offer after the first saved credential)
 
 **Problem.** A synced local-only `secretRef` used to become an empty
 credential on a new device with misleading auth errors. Since 2026-10-08
 `resolveCredentials` throws `CredentialMissingException` for a named entry
 the vault lacks, and the failed tab reads "Credential required on this
-device" with the server's (or jump host's) editor one tap away. `RecoveryKey`
-(`seance_protocol/lib/src/crypto/recovery_key.dart`) is unused by the app. No
-app lock. Mitigation since: keyless servers default to agent (#131), which has
-its own problems (SSH-06).
+device" with the server's (or jump host's) editor one tap away. Also since
+2026-10-08, Settings > Sync > Recovery sets up a recovery code (a
+`RecoveryKey`, shown once and never stored; the vault keeps only the derived
+wrap key and key check, as the reserved entry `recovery:wrap-key`, which every
+re-key re-seals), exports the vault encrypted (`SecretsExport`) and restores
+an export on any device, keeping or replacing credentials already there
+([design](../docs/design/cred-05-recovery.md)). No app lock. Mitigation
+since: keyless servers default to agent (#131), which has its own problems
+(SSH-06).
 
-**Next.** An inline prompt for the missing password or key on the failed tab
-(today it opens the editor). Then encrypted offline export/import using
-`RecoveryKey` with canonical recovery codes and verified restore, before
-promoting sync;
-offer recovery enrolment when the first secret is saved; an optional biometric
-or passcode app lock at the same boundary.
+The failed tab asks for the missing password or key in place (or switches the
+server to the SSH agent), and saving a credential on a device without a
+recovery code offers one once; "Not now" is remembered and Settings still
+offers it.
+
+**Next.** An optional biometric or passcode app lock at the same boundary,
+off by default.
 
 **Gate.** Two devices with and without credential opt-in; locked and missing
 keys; export round-trip and tamper rejection; cancelled recovery; interrupted
