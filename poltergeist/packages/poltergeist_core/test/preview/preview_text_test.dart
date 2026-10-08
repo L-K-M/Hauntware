@@ -69,6 +69,15 @@ void main() {
     }
   });
 
+  test('still refuses a window ending on a byte no character starts with',
+      () async {
+    for (final byte in [0xC0, 0xC1, 0xF5]) {
+      final pad = List<int>.filled(previewTextMaximumBytes - 1, 0x61);
+      final file = await writeFile('bad-$byte.txt', [...pad, byte, 0x80]);
+      expect(await fileLooksLikeUtf8Text(file), isFalse, reason: '$byte');
+    }
+  });
+
   test('strips a leading UTF-8 BOM', () async {
     final file = await writeFile(
       'bom.txt',
