@@ -262,6 +262,14 @@ final class PreviewProduceTicket {
   final Future<RemoteFileEntry> result;
 }
 
+/// How a preview production ends when it was cancelled or its queue row
+/// disappeared.
+const _cancelled = RemoteFileException(
+  kind: RemoteFileErrorKind.cancelled,
+  operation: 'preview produce',
+  message: 'preview production cancelled',
+);
+
 /// [PreviewProducer] over a concrete [TransferQueue] — the composition
 /// the app wires once (the session and tests see only the seam).
 /// Completion is the task's terminal state observed on the queue's
@@ -308,9 +316,15 @@ final class QueuePreviewProducer implements PreviewProducer {
         break;
       }
     }
-    // A removed row resolves its waiter as cancelled — nothing else
+    // A row removed before its event reached us (removeTask drops only
+    // finished rows) resolves its waiter as cancelled — nothing else
     // will ever complete it.
-    if (task == null || !task.isTerminal) return;
+    if (task == null) {
+      _pending.remove(event.taskId);
+      completer.completeError(_cancelled);
+      return;
+    }
+    if (!task.isTerminal) return;
     _pending.remove(event.taskId);
     _settleAfterDrain(completer, task);
   }
@@ -336,13 +350,7 @@ final class QueuePreviewProducer implements PreviewProducer {
     }
     if (task.state == TransferTaskState.cancelled ||
         task.cancellation.isCancelled) {
-      completer.completeError(
-        const RemoteFileException(
-          kind: RemoteFileErrorKind.cancelled,
-          operation: 'preview produce',
-          message: 'preview production cancelled',
-        ),
-      );
+      completer.completeError(_cancelled);
       return;
     }
     // The unknown-size stream cap aborts the hop mid-pipe and the

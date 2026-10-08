@@ -96,6 +96,45 @@ void main() {
     expect(s1.calls.where((c) => c == 'download:/r/hello.txt'), hasLength(1));
   });
 
+  test('a row removed before its event resolves the waiter as cancelled',
+      () async {
+    s1.addFile('/r/gone.txt', [1]);
+    // A listener ahead of the producer clears every finished row as its
+    // event arrives, so the producer handles the event of a row that is
+    // already gone.
+    final clearing = queue.events.listen((event) {
+      if (event is TransferQueueTaskEvent &&
+          const {
+            TransferTaskState.completed,
+            TransferTaskState.failed,
+            TransferTaskState.cancelled,
+          }.contains(event.state)) {
+        queue.removeTask(event.taskId);
+      }
+    });
+    addTearDown(clearing.cancel);
+
+    final ticket = QueuePreviewProducer(queue).start(
+      PreviewProduceSpec(
+        serverId: 's1',
+        remotePath: '/r/gone.txt',
+        destinationPath: '${outDir.path}/gone.txt',
+        expectedSize: 1,
+      ),
+    );
+
+    await expectLater(
+      ticket.result.timeout(const Duration(seconds: 5)),
+      throwsA(
+        isA<RemoteFileException>().having(
+          (e) => e.kind,
+          'kind',
+          RemoteFileErrorKind.cancelled,
+        ),
+      ),
+    );
+  });
+
   test('a stale known size remains a progress hint', () async {
     s1.addFile('/r/grown.txt', [1, 2, 3, 4]);
     final producer = QueuePreviewProducer(queue);
