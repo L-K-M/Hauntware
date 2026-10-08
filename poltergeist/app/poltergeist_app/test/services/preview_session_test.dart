@@ -857,6 +857,29 @@ void main() {
       expect(h.session.text, isNotNull);
     });
 
+    test('a late text sniff never retypes the item selected after it',
+        () async {
+      final h = await PreviewHarness.create(infoTabShown: true);
+      File('${h.tempDir.path}/note').writeAsStringSync('plain words\n');
+      File('${h.tempDir.path}/pic.png').writeAsBytesSync([0x89, 0x50, 0x4E]);
+      await h.connectLocal(h.tempDir, [
+        previewEntry('note', size: 12, parent: h.tempDir.path),
+        previewEntry('pic.png', size: 3, parent: h.tempDir.path),
+      ], cursor: -1);
+
+      // The shown well evaluates note at once; its extensionless name
+      // sends it through the asynchronous text sniff, and the selection
+      // moves on before that read answers.
+      h.left.setCursorIndex(0);
+      h.left.setCursorIndex(1);
+      await untilTrue(() => h.session.entry?.name == 'pic.png');
+      await previewSettle();
+      await previewSettle();
+
+      expect(h.session.entry?.name, 'pic.png');
+      expect(h.session.kind, PreviewKind.image);
+    });
+
     test('a missing local file reports the missing refusal', () async {
       final h = await PreviewHarness.create();
       final ghost = Directory('${h.tempDir.path}/listing')
