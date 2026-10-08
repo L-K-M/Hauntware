@@ -262,8 +262,7 @@ final class PreviewProduceTicket {
   final Future<RemoteFileEntry> result;
 }
 
-/// How a preview production ends when it was cancelled or its queue row
-/// disappeared.
+/// How a cancelled preview production ends.
 const _cancelled = RemoteFileException(
   kind: RemoteFileErrorKind.cancelled,
   operation: 'preview produce',
@@ -317,11 +316,17 @@ final class QueuePreviewProducer implements PreviewProducer {
       }
     }
     // A row removed before its event reached us (removeTask drops only
-    // finished rows) resolves its waiter as cancelled — nothing else
-    // will ever complete it.
+    // finished rows) fails its waiter, as CheckoutManager does: nothing
+    // else will ever complete it, and its outcome went with the row.
     if (task == null) {
       _pending.remove(event.taskId);
-      completer.completeError(_cancelled);
+      completer.completeError(
+        RemoteFileException(
+          kind: RemoteFileErrorKind.other,
+          operation: 'preview produce',
+          message: 'the preview task is no longer tracked by the queue',
+        ),
+      );
       return;
     }
     if (!task.isTerminal) return;

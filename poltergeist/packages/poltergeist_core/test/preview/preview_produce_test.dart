@@ -96,7 +96,7 @@ void main() {
     expect(s1.calls.where((c) => c == 'download:/r/hello.txt'), hasLength(1));
   });
 
-  test('a row removed before its event resolves the waiter as cancelled',
+  test('a row removed before its event fails the waiter instead of hanging',
       () async {
     s1.addFile('/r/gone.txt', [1]);
     // A listener ahead of the producer clears every finished row as its
@@ -127,9 +127,9 @@ void main() {
       ticket.result.timeout(const Duration(seconds: 5)),
       throwsA(
         isA<RemoteFileException>().having(
-          (e) => e.kind,
-          'kind',
-          RemoteFileErrorKind.cancelled,
+          (e) => e.message,
+          'message',
+          contains('no longer tracked'),
         ),
       ),
     );
