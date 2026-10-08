@@ -19,7 +19,7 @@ import '../../support/test_panes.dart';
 
 /// Real-font captures of the §2.6 file-open surfaces for visual review:
 /// the informational notice strip (remote unavailable, Edit deferred,
-/// Transfer deferred) and the launcher failure in the pane's inline
+/// Transfer with no other pane) and the launcher failure in the pane's inline
 /// error overlay. The widget-test default font renders hollow boxes, so
 /// the capture loads a real face when the host provides one — set
 /// POLTERGEIST_CAPTURE_FONT_DIR or rely on the DejaVu fallback. The PNGs
@@ -230,12 +230,13 @@ void main() {
     expect(left.notice, PaneNotice.editLater);
     await capture('notice-edit-later', leftBoundary);
 
-    // Transfer to other pane posts its own later-milestone notice (M4).
+    // Transfer to other pane with nowhere to send says what it needs.
     left.doubleClickAction = DoubleClickAction.transfer;
+    left.otherPaneTransfer = (_, _) => OtherPaneTransferOutcome.needsOtherPane;
     await left.openEntry(left.entries[4]);
     await tester.pump();
-    expect(left.notice, PaneNotice.transferLater);
-    await capture('notice-transfer-later', leftBoundary);
+    expect(left.notice, PaneNotice.transferNeedsOtherPane);
+    await capture('notice-transfer-needs-other-pane', leftBoundary);
 
     // A launcher refusal lands in the pane's inline error overlay with
     // its Retry affordance — never a modal dialog.

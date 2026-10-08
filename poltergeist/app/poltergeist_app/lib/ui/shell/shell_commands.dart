@@ -10,7 +10,7 @@ import '../../services/pane_controller.dart';
 import '../../services/pane_location.dart';
 import '../../services/pane_drop.dart';
 import '../../services/pane_file_ops.dart';
-import '../../services/pane_tabs_controller.dart';
+import '../../services/other_pane_transfer.dart';
 import '../../services/registered_command.dart';
 import '../../services/window_full_screen.dart';
 import '../../services/workspace_controller.dart';
@@ -59,18 +59,8 @@ List<ShortcutActivator> Function(TargetPlatform) _perPlatform({
 
 /// The pane the selection verbs send to: the other visible pane's
 /// active tab, when it is bound to a location.
-PaneController? _otherPaneTarget(WorkspaceController workspace) {
-  if (!workspace.secondPaneShown) return null;
-  final PaneTabsController other = identical(
-        workspace.activePane,
-        workspace.left,
-      )
-      ? workspace.right
-      : workspace.left;
-  final target = other.activeTab?.controller;
-  if (target == null || target.location == null) return null;
-  return target;
-}
+PaneController? _otherPaneTarget(WorkspaceController workspace) =>
+    otherPaneTarget(workspace, workspace.activePane);
 
 /// The roots a selection verb acts on: the selected rows, else the
 /// cursor row (Finder's "the focused item is the selection" rule). A row

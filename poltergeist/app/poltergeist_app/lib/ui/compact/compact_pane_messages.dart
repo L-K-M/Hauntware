@@ -84,7 +84,8 @@ String compactNoticeText(
 }) => switch (notice) {
   PaneNotice.openRemoteUnavailable => l10n.paneNoticeOpenRemoteUnavailable,
   PaneNotice.editLater => l10n.paneNoticeEditLater,
-  PaneNotice.transferLater => l10n.paneNoticeTransferLater,
+  PaneNotice.transferNeedsOtherPane => l10n.paneNoticeTransferNeedsOtherPane,
+  PaneNotice.transferUnavailable => l10n.paneNoticeTransferUnavailable,
   PaneNotice.saveFavoriteLater => l10n.paneNoticeSaveFavoriteLater,
   PaneNotice.pathCopied => l10n.paneNoticePathCopied,
   PaneNotice.dragOutRemote => l10n.paneNoticeDragOutRemote,

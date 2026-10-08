@@ -349,6 +349,35 @@ typedef ExternalEditorOpen =
       String? editorId,
     );
 
+/// What the "Double-click action: Transfer to other pane" activation came
+/// to (02 §2.6): the shell's answer through [OtherPaneTransfer], which the
+/// controller turns into its notice.
+enum OtherPaneTransferOutcome {
+  /// The file was queued as a copy into the other pane's folder; the
+  /// transfer queue reports its progress from here.
+  queued,
+
+  /// There is no other pane to receive it: the second pane is hidden, or
+  /// shows no folder.
+  needsOtherPane,
+
+  /// The transfer cannot run from here: no queue is wired, this pane has
+  /// lost its folder or connection, or the copy is one the drop rules
+  /// refuse (02 §5.1).
+  unavailable,
+}
+
+/// The other-pane transfer seam (02 §2.6, the double-click form of 02 §8's
+/// Transfer to Other Pane): the shell resolves the pane opposite [pane] and
+/// queues [entry] as a copy into its folder, under the same rules as the
+/// command. Null leaves transfers unwired; the activation then posts
+/// [PaneNotice.transferUnavailable].
+typedef OtherPaneTransfer =
+    OtherPaneTransferOutcome Function(
+      PaneController pane,
+      RemoteFileEntry entry,
+    );
+
 /// Resolves a shared-account server at the moment a pane binds or rebinds.
 typedef PaneServerConfigLookup = ServerConfig? Function(String id);
 
@@ -366,9 +395,14 @@ enum PaneNotice {
   /// editor is 06's.
   editLater,
 
-  /// "Double-click action: Transfer to other pane" was chosen; the
-  /// transfer queue is M4's.
-  transferLater,
+  /// "Double-click action: Transfer to other pane" had no pane to send
+  /// the file to: the second pane is hidden or shows no folder.
+  transferNeedsOtherPane,
+
+  /// "Double-click action: Transfer to other pane" could not queue the
+  /// file (no queue, this pane's folder or connection gone, or a copy the
+  /// drop rules refuse).
+  transferUnavailable,
 
   /// "Save as favorite…" was pressed where no bookmark store is wired;
   /// the favorites store is M5's.
@@ -823,15 +857,23 @@ class PaneController extends ChangeNotifier {
   /// listing of a live binding (02 §2.8): unbound and mid-open phases
   /// carry nothing to act on, and neither does the post-first-cancel
   /// state (browsing phase, snapshot restored, no location).
-  bool get verbsEnabled =>
+  bool get verbsEnabled => _listingActionable && !loading;
+
+  /// [verbsEnabled] for a row the user just activated (the double-click
+  /// Transfer): a directory watch's own re-list (03 §7.5) does not hold
+  /// it back, since the rows stay current; a navigation still does.
+  bool get activatedRowVerbsEnabled =>
+      _listingActionable && !navigationInFlight;
+
+  /// [verbsEnabled]'s terms other than an in-flight listing.
+  bool get _listingActionable =>
       _phase == PanePhase.browsing &&
       _location != null &&
       // A failed file Open is about that one file: the listing is
       // intact, so it never locks the folder's verbs (02 §2.6's inline
       // error stays up for its Retry until the selection moves on).
       (_error == null || _error is OpenEntryError) &&
-      !connectionLost &&
-      !loading;
+      !connectionLost;
 
   /// The remote binding's live connection truth (current value first from
   /// the engine's watch); null for local panes and unbound panes.
@@ -880,6 +922,11 @@ class PaneController extends ChangeNotifier {
   /// choice on either binding — local files launch directly, remote
   /// ones ride the managed checkout.
   ExternalEditorOpen? externalEditorOpen;
+
+  /// The other-pane transfer seam (02 §2.6), stamped by the owning strip
+  /// alongside [externalEditorOpen]: "Double-click action: Transfer to
+  /// other pane" hands the activated file to it.
+  OtherPaneTransfer? otherPaneTransfer;
 
   /// The active transient notice (02 §10's notice family): set when an
   /// activation resolves to a registered-but-deferred action, cleared
@@ -1476,11 +1523,16 @@ class PaneController extends ChangeNotifier {
   /// routes as a file). A file runs the "Double-click action" live
   /// value: Open launches a local file in the OS default application
   /// through the engine's seam (D8 — the UI never spawns the launcher)
-  /// and posts the unavailable notice for a remote one (managed
-  /// checkout is 06's); the registered-but-deferred Edit and Transfer
-  /// values post their honest not-yet notices; Do nothing is inert.
-  /// Any fresh activation clears a lingering notice first.
-  Future<void> openEntry(RemoteFileEntry entry) async {
+  /// and a remote one through the managed checkout; Edit opens the
+  /// built-in editor; Transfer queues a copy into the other pane's
+  /// folder; Do nothing is inert. An unwired seam posts its notice.
+  /// [action] overrides the setting for an explicit verb: the preview's
+  /// Open always opens (06 §5.2). Any fresh activation clears a
+  /// lingering notice first.
+  Future<void> openEntry(
+    RemoteFileEntry entry, {
+    DoubleClickAction? action,
+  }) async {
     // A stale row activation is fully inert — not even a notice clear:
     // the row is disowned presentation, and navigating into it would
     // supersede the pending navigation with the old directory's data.
@@ -1490,14 +1542,14 @@ class PaneController extends ChangeNotifier {
       navigate(entry.path);
       return;
     }
-    switch (doubleClickAction) {
+    switch (action ?? doubleClickAction) {
       case DoubleClickAction.nothing:
         return;
       case DoubleClickAction.edit:
         await _openInBuiltInEditor(entry);
         return;
       case DoubleClickAction.transfer:
-        _postNotice(PaneNotice.transferLater);
+        _transferToOtherPane(entry);
         return;
       case DoubleClickAction.open:
         // The BINDING names remote-ness (navigate's rule): a cancelled
@@ -1564,6 +1616,24 @@ class PaneController extends ChangeNotifier {
     if (!_rowsInteractive) return;
     dismissNotice();
     await _openInBuiltInEditor(entry);
+  }
+
+  /// The Transfer-to-other-pane resolution: the shell queues the copy, or
+  /// says why it could not; the reason becomes the pane's notice, never a
+  /// silent no-op (02 §10's notice family).
+  void _transferToOtherPane(RemoteFileEntry entry) {
+    final transfer = otherPaneTransfer;
+    final outcome = transfer == null
+        ? OtherPaneTransferOutcome.unavailable
+        : transfer(this, entry);
+    switch (outcome) {
+      case OtherPaneTransferOutcome.queued:
+        return;
+      case OtherPaneTransferOutcome.needsOtherPane:
+        _postNotice(PaneNotice.transferNeedsOtherPane);
+      case OtherPaneTransferOutcome.unavailable:
+        _postNotice(PaneNotice.transferUnavailable);
+    }
   }
 
   /// The shared Edit-in-Poltergeist resolution: a wired seam opens the

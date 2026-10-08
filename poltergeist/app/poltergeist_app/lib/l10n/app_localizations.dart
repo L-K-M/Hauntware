@@ -1240,11 +1240,17 @@ abstract class AppLocalizations {
   /// **'Editing files in Poltergeist isn\'t available yet — the editor arrives in a later milestone.'**
   String get paneNoticeEditLater;
 
-  /// Transient notice strip (02 §10): the Double-click action preference resolved to Transfer to other pane, whose queue arrives in a later milestone.
+  /// Transient notice strip (02 §10): the Double-click action preference resolved to Transfer to other pane, but the second pane is hidden or shows no folder.
   ///
   /// In en, this message translates to:
-  /// **'Transferring to the other pane isn\'t available yet — the transfer queue arrives in a later milestone.'**
-  String get paneNoticeTransferLater;
+  /// **'To transfer files, show the other pane and open a folder in it.'**
+  String get paneNoticeTransferNeedsOtherPane;
+
+  /// Transient notice strip (02 §10): the Double-click action preference resolved to Transfer to other pane, but the copy could not be queued (no transfer queue, this pane lost its folder or connection, or the drop rules refuse it).
+  ///
+  /// In en, this message translates to:
+  /// **'This file can\'t be transferred to the other pane.'**
+  String get paneNoticeTransferUnavailable;
 
   /// Transient notice strip (02 §10): a drag of remote rows left the window on a platform without file promises (Linux, Windows); the drag continues in-app.
   ///
@@ -6832,7 +6838,7 @@ abstract class AppLocalizations {
   /// **'Edit in Poltergeist'**
   String get doubleClickActionEdit;
 
-  /// Double-click action option: transfer the file to the other pane (not available yet; opening a file shows a notice).
+  /// Double-click action option: copy the file into the folder the other pane shows.
   ///
   /// In en, this message translates to:
   /// **'Transfer to other pane'**

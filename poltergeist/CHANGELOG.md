@@ -2,11 +2,16 @@
 
 ## Unreleased
 
+- **Double-click to copy to the other pane.** With Double-click action
+  set to Transfer to other pane, opening a file copies it into the
+  folder the other pane shows, like Copy to Other Pane does for a
+  selection. If the other pane is hidden or has no folder open, the
+  pane says so instead. The preview's Open button now always opens the
+  file, whatever this setting says.
 - **Choose what opening a file does.** Settings → Editing has a
   Double-click action setting: Open (the default), Edit in Poltergeist,
   Transfer to other pane or Do nothing. It also applies to opening a file
-  from the keyboard, in every pane and window at once. Transfer to other
-  pane still only says it is not available yet.
+  from the keyboard, in every pane and window at once.
 - **Dialogs from menus and shortcuts stay one at a time.** While
   Settings, an import, Synchronize or Connect is open, the other dialog
   commands stay unavailable until it closes, whether it was opened from
