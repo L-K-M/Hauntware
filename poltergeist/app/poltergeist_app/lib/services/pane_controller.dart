@@ -1314,22 +1314,18 @@ class PaneController extends ChangeNotifier {
   /// boundary cannot drift as new entry points appear.
   bool get _rowsInteractive => !_disposed && !_staleRows && _entries.isNotEmpty;
 
-  /// Binds the pane to a remote bookmark: closes any previous channel,
-  /// subscribes to the server's state lane BEFORE connecting (live
-  /// streams keep no replay, 03 §5), opens the browse channel, and
-  /// navigates to the bookmark's path ('/' meaning the canonical home).
-  /// Binds the pane to a remote bookmark: closes any previous channel,
-  /// subscribes to the server's state lane BEFORE connecting (live
-  /// streams keep no replay, 03 §5), opens the browse channel, and
-  /// navigates to the bookmark's path ('/' meaning the canonical home).
-  /// [initialPath] overrides the landing directory — retry after a
-  /// severed transport uses it to return the user where they were.
   /// The intended landing directory for the pending remote bind: set
   /// by every remote bind, consumed on the first SUCCESSFUL navigation,
   /// and cleared on unbind — so a reconnect that fails and is retried
   /// still returns the user where they were, not the bookmark root.
   String? _pendingRemotePath;
 
+  /// Binds the pane to a remote bookmark: closes any previous channel,
+  /// subscribes to the server's state lane BEFORE connecting (live
+  /// streams keep no replay, 03 §5), opens the browse channel, and
+  /// navigates to the bookmark's path ('/' meaning the canonical home).
+  /// [initialPath] overrides the landing directory — retry after a
+  /// severed transport uses it to return the user where they were.
   Future<void> connectRemote(
     Bookmark bookmark, {
     String? initialPath,
