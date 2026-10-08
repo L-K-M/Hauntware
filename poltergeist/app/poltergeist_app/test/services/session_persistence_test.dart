@@ -341,6 +341,30 @@ void main() {
       expect(otherWindows(), isEmpty);
     });
 
+    test('a detached window stops scheduling writes, and re-attaching '
+        'listens once again', () async {
+      persistence.attach(workspace);
+      persistence.attach(other);
+      await persistence.flush();
+      persistence.detach(other);
+      await debounce.fire();
+      final writesBefore = writeCount;
+
+      // Changes on the detached workspace or either of its strips.
+      other.setSecondPaneHidden(true);
+      await bindLocal(otherLeft, '/home/tester/docs');
+      await bindLocal(otherRight, '/home/tester/docs');
+      await debounce.fire();
+      expect(writeCount, writesBefore);
+
+      persistence.attach(other);
+      await debounce.fire();
+      final afterAttach = writeCount;
+      other.setSecondPaneHidden(false);
+      await debounce.fire();
+      expect(writeCount, afterAttach + 1);
+    });
+
     test('the last window detaching writes nothing and keeps the document',
         () async {
       persistence.attach(workspace);
