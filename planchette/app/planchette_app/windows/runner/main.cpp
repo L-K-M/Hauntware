@@ -25,7 +25,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   project.set_dart_entrypoint_arguments(std::move(command_line_arguments));
 
   FlutterWindow window(project);
-  // Match the runtime WindowOptions in desktop_window.dart so a window that
+  // Match the runtime window options in desktop_window.dart so a window that
   // becomes visible before Dart resizes it already has the final geometry:
   // 1080x760 centered on the work area instead of 1280x720 at (10, 10).
   Win32Window::Size size(1080, 760);

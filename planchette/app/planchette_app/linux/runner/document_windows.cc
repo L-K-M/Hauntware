@@ -32,7 +32,7 @@ constexpr char kCreateFailedError[] = "CREATE_FAILED";
 
 constexpr char kWindowTitle[] = "Planchette";
 
-// The workspace's minimum content size (WindowOptions in
+// The workspace's minimum content size (window options in
 // lib/services/desktop_window.dart), which window_manager applies to the
 // main window.
 constexpr int kMinimumWidth = 640;
