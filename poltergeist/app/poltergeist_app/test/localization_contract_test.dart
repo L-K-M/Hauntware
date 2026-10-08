@@ -476,12 +476,10 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'$error'",
   },
   'lib/services/settings_window/settings_window_host.dart': {
-    r"'No Settings window method ${call.method}'",
-    r"'${method.name} goes to the window'",
+    r"'No Settings window method $name'",
     "'This section is not available.'",
   },
   'lib/services/settings_window/remote_settings.dart': {
-    r"'No Settings window method ${call.method}'",
     "'Settings link closed'",
   },
   // 10 §8's platform-row command ids (D21 plumbing), never rendered.

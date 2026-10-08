@@ -1763,6 +1763,12 @@ Files: `app/poltergeist_app/macos/Runner/SettingsWindow.swift`,
   screen over `AppState`, while Poltergeist's host and proxies front the
   existing sections' seams (`BackupSettingsModel`,
   `EditorRegistryModel`, `GeneralSettings`, `PreviewDownloadsSettings`).
+  Since 2026-10-08 the link engine under both Dart sides (the handshake,
+  snapshots, hide-not-destroy showings, the quit question) is shared:
+  `GhostSettingsWindowHost`/`GhostSettingsWindowClient` in
+  `planchette/packages/ghost_desktop`
+  ([design](../../docs/design/settings-window-link.md)). Poltergeist keeps
+  its sections, method table, error codec and runners.
   `window_title.{h,cc}` is Poltergeist's own title code moved out of
   `my_application.cc` so both windows share it, not a copy.
 - Exact-pin disposition: Séance's post-port fixes for a window-creation

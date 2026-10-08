@@ -1,12 +1,11 @@
 // The Settings window's side of the link: the section models, each a copy
 // of the app's replaced by every snapshot the host sends, whose every call
 // runs in the app's isolate through [SettingsWindowHost].
-import 'dart:async';
 import 'dart:convert';
-import 'dart:ui' show AppExitResponse;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:ghost_desktop/ghost_desktop.dart';
 import 'package:planchette_editor/planchette_editor.dart' show EditorTextSize;
 import 'package:poltergeist_core/poltergeist_core.dart';
 
@@ -23,42 +22,20 @@ import '../sync_account_gate.dart';
 import 'settings_window_link.dart';
 
 /// What the window shows: nothing while it is hidden, or a Settings screen
-/// opened on [tab]. [generation] changes every time the window is shown, so
-/// each showing is a fresh screen rather than the last one's fields and
-/// half-typed passwords.
-@immutable
-class SettingsWindowPage {
-  const SettingsWindowPage({required this.tab, required this.generation});
+/// opened on a tab, fresh at each showing.
+typedef SettingsWindowPage = GhostSettingsPage<SettingsWindowTab>;
 
-  final SettingsWindowTab tab;
-  final int generation;
-}
-
-/// Calls into the app's isolate. A [PlatformException] from there is the
-/// failure it reported, rebuilt as its own type where the sections word it
-/// differently; no answer at all means the app is gone.
+/// Calls into the app's isolate by Poltergeist's method names. A
+/// [PlatformException] from there is the failure it reported, rebuilt as
+/// its own type where the sections word it differently; no answer at all
+/// means the app is gone.
 final class _Link {
-  _Link(this.channel);
+  _Link(this._invoke);
 
-  final MethodChannel channel;
+  final Future<Object?> Function(String method, Object? argument) _invoke;
 
-  /// Told when a call finds no app to answer it.
-  VoidCallback? onLost;
-
-  Future<Object?> call(SettingsLinkMethod method, [Object? argument]) async {
-    try {
-      final reply = await channel.invokeMethod<String>(
-        method.name,
-        argument == null ? null : jsonEncode(argument),
-      );
-      return reply == null ? null : jsonDecode(reply);
-    } on PlatformException catch (error) {
-      throw decodeLinkError(error);
-    } on MissingPluginException {
-      onLost?.call();
-      throw const SettingsLinkException(_linkClosed);
-    }
-  }
+  Future<Object?> call(SettingsLinkMethod method, [Object? argument]) =>
+      _invoke(method.name, argument);
 }
 
 /// A diagnostic, never shown: a window that loses the app says so in its
@@ -66,32 +43,16 @@ final class _Link {
 const _linkClosed = 'Settings link closed';
 
 /// The Settings window's view of the app's settings.
-class RemoteSettings extends ChangeNotifier {
-  RemoteSettings._(MethodChannel channel) : _link = _Link(channel) {
-    _link.onLost = () {
-      if (_lost) return;
-      _lost = true;
-      notifyListeners();
-    };
-  }
+class RemoteSettings extends GhostSettingsWindowClient<SettingsWindowTab> {
+  RemoteSettings._(MethodChannel channel)
+    : super(
+        link: channel,
+        tabs: SettingsWindowTab.values,
+        decodeError: decodeLinkError,
+        lostError: () => const SettingsLinkException(_linkClosed),
+      );
 
-  bool _lost = false;
-
-  /// Whether a call found no app to answer it: the app went away, and the
-  /// window can only say so.
-  bool get lost => _lost;
-
-  final _Link _link;
-  final StreamController<SettingsWindowTab> _tabRequests =
-      StreamController<SettingsWindowTab>.broadcast();
-  int _generation = 1;
-
-  /// What the window shows; see [SettingsWindowPage].
-  late final ValueNotifier<SettingsWindowPage?> page;
-
-  /// Tabs the app asks a showing window to switch to (Settings chosen again
-  /// from another entry point while the window is behind).
-  Stream<SettingsWindowTab> get tabRequests => _tabRequests.stream;
+  late final _Link _link = _Link(invoke);
 
   /// Say hello to the app and take its first snapshot. Throws when there is
   /// no app to answer — the window was started by hand rather than by the
@@ -100,25 +61,7 @@ class RemoteSettings extends ChangeNotifier {
     MethodChannel link = settingsWindowLinkChannel,
   }) async {
     final remote = RemoteSettings._(link);
-    link.setMethodCallHandler(remote._handle);
-    try {
-      final hello = (await remote._link.call(SettingsLinkMethod.hello))! as Map;
-      remote._apply(
-        (hello[SettingsLinkKey.snapshot.name]! as Map).cast<String, Object?>(),
-      );
-      remote.page = ValueNotifier(
-        SettingsWindowPage(
-          tab: SettingsWindowTab.values.byName(
-            hello[SettingsLinkKey.tab.name]! as String,
-          ),
-          generation: 0,
-        ),
-      );
-    } catch (_) {
-      // Nothing may reach a window that never got its page.
-      link.setMethodCallHandler(null);
-      rethrow;
-    }
+    await remote.connectToApp();
     return remote;
   }
 
@@ -215,20 +158,8 @@ class RemoteSettings extends ChangeNotifier {
           );
   }
 
-  /// Whether the application may quit, as the app's isolate decides it —
-  /// its quit guard and exit flush included. See
-  /// [SettingsWindowHost]'s `_requestAppExit` for why this engine is the
-  /// one asked on macOS. With no app left to ask, quitting is not held up.
-  Future<AppExitResponse> requestAppExit() async {
-    try {
-      final name = await _link.call(SettingsLinkMethod.requestAppExit);
-      return AppExitResponse.values.byName(name! as String);
-    } on Exception {
-      return AppExitResponse.exit;
-    }
-  }
-
-  void _apply(Map<String, Object?> snapshot) {
+  @override
+  void applySnapshot(Map<String, Object?> snapshot) {
     final general = snapshot[SettingsLinkKey.general.name] as Map?;
     _checkForUpdates = general?[SettingsLinkKey.checkForUpdates.name] as bool?;
     _preview = (snapshot[SettingsLinkKey.preview.name] as Map?)
@@ -284,46 +215,8 @@ class RemoteSettings extends ChangeNotifier {
     );
   }
 
-  Future<Object?> _handle(MethodCall call) async {
-    final Object? argument = call.arguments is String
-        ? jsonDecode(call.arguments as String)
-        : null;
-    final method = SettingsLinkMethod.values
-        .where((value) => value.name == call.method)
-        .firstOrNull;
-    switch (method) {
-      case SettingsLinkMethod.snapshot:
-        _apply((argument! as Map).cast<String, Object?>());
-        notifyListeners();
-      case SettingsLinkMethod.selectTab:
-        _tabRequests.add(SettingsWindowTab.values.byName(argument! as String));
-      case SettingsLinkMethod.hidden:
-        page.value = null;
-      case SettingsLinkMethod.show:
-        final json = (argument! as Map).cast<String, Object?>();
-        _apply(
-          (json[SettingsLinkKey.snapshot.name]! as Map).cast<String, Object?>(),
-        );
-        notifyListeners();
-        page.value = SettingsWindowPage(
-          tab: SettingsWindowTab.values.byName(
-            json[SettingsLinkKey.tab.name]! as String,
-          ),
-          generation: _generation++,
-        );
-      default:
-        throw MissingPluginException(
-          'No Settings window method ${call.method}',
-        );
-    }
-    return null;
-  }
-
   @override
   void dispose() {
-    _link.channel.setMethodCallHandler(null);
-    unawaited(_tabRequests.close());
-    page.dispose();
     _appearance.dispose();
     _directoryGrouping.dispose();
     _doubleClickAction.dispose();

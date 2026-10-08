@@ -6,8 +6,8 @@
 // (macos/Runner/SettingsWindow.swift, linux/runner/settings_window.cc,
 // windows/runner/settings_window.cpp) relays every message one engine sends
 // on [settingsWindowLinkChannel] to the other, byte for byte, with its reply.
-// Every payload is a JSON string in both directions, so each side decodes
-// exactly what the other encoded.
+// ghost_desktop's link engine owns the handshake, the snapshots and the quit
+// question; what is here is Poltergeist's own.
 import 'package:flutter/services.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
 
@@ -40,11 +40,11 @@ enum SettingsWindowTab { general, appearance, editing, sync }
 /// dialog instead. `SettingsWindowHost.open` in the app.
 typedef OpenSettingsWindow = Future<bool> Function(SettingsWindowTab tab);
 
-/// The link's methods; each crosses as its [name], so a typo is a compile
-/// error rather than a silent `null` on the far side.
+/// Poltergeist's link methods, window to app; each crosses as its [name],
+/// so a typo is a compile error rather than a silent `null` on the far
+/// side. The names of ghost_desktop's `GhostSettingsLinkMethod` are the
+/// engine's.
 enum SettingsLinkMethod {
-  // Window → app.
-  hello,
   setCheckForUpdates,
   setAppearance,
   setEditorTextSize,
@@ -67,18 +67,7 @@ enum SettingsLinkMethod {
   resolvePinConflict,
   deleteRetainedSeparateAccount,
   declineRetainedDelete,
-  requestAppExit,
-
-  // App → window.
-  snapshot,
-  selectTab,
-  hidden,
-  show,
 }
-
-/// The control channel's methods: `open` from the app, `closed` from the
-/// runner.
-enum SettingsWindowControl { open, closed }
 
 /// The keys of every JSON object on the link, spelled once for both sides:
 /// each crosses as its [name].
@@ -122,10 +111,8 @@ enum SettingsLinkKey {
   quarantinedPath,
   retainedAccount,
   sharedIncludesSeance56Fix,
-  snapshot,
   syncSecrets,
   syncing,
-  tab,
   thresholdBytes,
   trippedIds,
   username,
