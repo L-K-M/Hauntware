@@ -18,6 +18,7 @@ export 'src/terminal/shell_command.dart';
 
 export 'src/ssh/executable_launch.dart';
 export 'src/ssh/home_path.dart';
+export 'src/ssh/identity_audit_log.dart';
 export 'src/ssh/remote_command.dart';
 export 'src/ssh/remote_git.dart';
 export 'src/ssh/ssh_session.dart';
@@ -40,6 +41,7 @@ export 'src/ssh/remote_file_system.dart'
 
 export 'src/probe/probe_service.dart';
 
+export 'src/store/file_permissions.dart';
 export 'src/store/stores.dart';
 
 export 'src/inbox/inbox_api.dart';

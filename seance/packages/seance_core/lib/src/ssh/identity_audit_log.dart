@@ -2,8 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'atomic_file.dart';
-import 'file_permissions.dart';
+import '../store/file_permissions.dart';
 
 /// 0o077: the group + other rwx bits. A log with any of them set is
 /// permissive; without them it is already owner-only.
@@ -17,8 +16,9 @@ class IdentityReadEvent {
   final String serverLabel;
   final String path;
 
-  /// True when the read went through a security-scoped bookmark grant rather
-  /// than the plain (entitlement-covered) path.
+  /// True when the read went through a scoped grant (a macOS security-scoped
+  /// bookmark) rather than the plain path. A host without grants records
+  /// false.
   final bool viaBookmark;
   final bool ok;
   final String? error;
@@ -81,9 +81,17 @@ class IdentityAuditLog {
   /// rotations so appends stay cheap.
   final int maxEntries;
 
+  /// Replaces the file's contents crash-safely and owner-only: the host's
+  /// atomic writer, which rotation goes through.
+  final Future<void> Function(File file, String contents) _rewriteOwnerOnly;
+
   Future<void> _tail = Future<void>.value();
 
-  IdentityAuditLog(this.file, {this.maxEntries = 500});
+  IdentityAuditLog(
+    this.file, {
+    required this._rewriteOwnerOnly,
+    this.maxEntries = 500,
+  });
 
   /// Append [event], rotating the file down to the newest [maxEntries] when it
   /// has grown past twice that. Writes are serialized so concurrent connects
@@ -137,7 +145,6 @@ class IdentityAuditLog {
     final lines = const LineSplitter().convert(await file.readAsString());
     if (lines.length <= maxEntries * 2) return;
     final kept = lines.sublist(lines.length - maxEntries);
-    await writeStringAtomically(file, '${kept.join('\n')}\n',
-        privacy: AtomicFilePrivacy.ownerOnly);
+    await _rewriteOwnerOnly(file, '${kept.join('\n')}\n');
   }
 }

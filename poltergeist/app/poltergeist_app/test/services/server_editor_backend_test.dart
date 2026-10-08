@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:poltergeist_app/services/bookmark_backup_service.dart';
-import 'package:poltergeist_app/services/identity_audit_log.dart';
+import 'package:poltergeist_app/services/atomic_file.dart';
 import 'package:poltergeist_app/services/identity_file_reader.dart';
 import 'package:poltergeist_app/services/server_editor_backend.dart';
 import 'package:poltergeist_app/services/transfer_limits_controller.dart';
@@ -42,7 +42,10 @@ final class _ScriptedVault extends SecretVault {
 }
 
 final class _RecordingIdentityReader extends IdentityFileReader {
-  _RecordingIdentityReader() : super(IdentityAuditLog(File('unused')));
+  _RecordingIdentityReader() : super(IdentityAuditLog(
+          File('unused'),
+          rewriteOwnerOnly: writeOwnerOnlyAtomically,
+        ));
 
   final reads = <String>[];
 

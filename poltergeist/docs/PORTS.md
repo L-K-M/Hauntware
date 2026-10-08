@@ -529,6 +529,11 @@ port candidates.
 - Port-back candidates: none — the read-side repair gate's mirror and
   its procfs regressions close the last recorded divergence; both
   sides now behave identically.
+- Shared: 2026-10-08. `IdentityAuditLog` and the owner-only file helpers
+  moved into `seance_core` (with `posix`), reached here through the core
+  barrel; this file and `file_permissions.dart` are removed. Rotation
+  writes through the host's atomic writer, which each app passes in
+  (`writeOwnerOnlyAtomically`), so both keep their own.
 
 ## app/poltergeist_app/test/services/identity_audit_log_test.dart
 
@@ -547,6 +552,9 @@ port candidates.
   `readAll` closed with that errno pinned), mirroring the lib entry's
   read-side repair gate. Temp prefix and home paths carry Poltergeist
   names (`poltergeist-audit-`, `/home/...`) per the 08 §2 rename rule.
+- Shared: 2026-10-08. The cases moved to `seance_core`'s
+  `identity_audit_log_test.dart` and `file_permissions_test.dart`; this
+  file and the local permissions test are removed.
 - Port-back candidates: none — the procfs regressions landed upstream in
   [Séance #81](https://github.com/L-K-M/Seance/pull/81) (merge
   `2e6d1f138f1704e683870f75e11262bf50e37379`) and are now ported here

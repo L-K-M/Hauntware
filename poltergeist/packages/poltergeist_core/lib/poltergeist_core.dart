@@ -49,6 +49,8 @@ export 'package:seance_core/seance_core.dart'
         HostKeyPrompter,
         HostKeyStore,
         HostKeyVerdict,
+        IdentityAuditLog,
+        IdentityReadEvent,
         ImportedHost,
         InMemoryHostKeyStore,
         InMemoryVaultStore,
@@ -133,6 +135,7 @@ export 'package:seance_core/seance_core.dart'
         remoteBasename,
         remoteJoin,
         remoteParent,
+        restrictFileToOwner,
         secureRandomBytes,
         serverGroupKey,
         serverSearchHaystack;

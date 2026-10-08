@@ -4,7 +4,8 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:poltergeist_app/services/identity_audit_log.dart';
+import 'package:poltergeist_app/services/atomic_file.dart';
+import 'package:poltergeist_core/poltergeist_core.dart';
 import 'package:poltergeist_app/services/identity_file_reader.dart';
 
 const _shortAuditTimeout = Duration(milliseconds: 1);
@@ -92,7 +93,7 @@ void main() {
 
       final file = File('${dir.path}/reads.jsonl');
       final reader = IdentityFileReader(
-        IdentityAuditLog(file),
+        IdentityAuditLog(file, rewriteOwnerOnly: writeOwnerOnlyAtomically),
         environment: {'HOME': home.path},
       );
 
@@ -103,7 +104,7 @@ void main() {
       );
 
       expect(pem, 'KEY PEM');
-      final entries = await IdentityAuditLog(file).readAll();
+      final entries = await IdentityAuditLog(file, rewriteOwnerOnly: writeOwnerOnlyAtomically).readAll();
       expect(entries, hasLength(1));
       expect(entries.single.ok, isTrue);
       expect(entries.single.serverId, 's1');
@@ -114,7 +115,7 @@ void main() {
         () async {
       final file = File('${dir.path}/reads.jsonl');
       final reader = IdentityFileReader(
-        IdentityAuditLog(file),
+        IdentityAuditLog(file, rewriteOwnerOnly: writeOwnerOnlyAtomically),
         environment: {'HOME': dir.path},
       );
 
@@ -127,7 +128,7 @@ void main() {
         throwsA(isA<IdentityFileReadException>()),
       );
 
-      final entries = await IdentityAuditLog(file).readAll();
+      final entries = await IdentityAuditLog(file, rewriteOwnerOnly: writeOwnerOnlyAtomically).readAll();
       expect(entries, hasLength(1));
       expect(entries.single.ok, isFalse);
       // The OS error wording differs per platform; only its presence is

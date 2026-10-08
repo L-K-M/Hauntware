@@ -616,21 +616,6 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'DejaVu Sans Mono'",
     "'monospace'",
   },
-  // Ported Séance JSONL record shape (see docs/PORTS.md): the field names
-  // and separators are the frozen on-disk format, not UI copy.
-  'lib/services/identity_audit_log.dart': {
-    "'at'",
-    "'serverId'",
-    "'serverLabel'",
-    "'path'",
-    "'viaBookmark'",
-    "'ok'",
-    "'error'",
-    "''",
-    "'\${jsonEncode(event.toJson())}\\n'",
-    "'\${kept.join('\\n')}\\n'",
-    "'\\n'",
-  },
   // Exception texts and audit-record fields — machine-facing data the
   // dialog renders inside an ARB-authored sentence, never standalone UI
   // copy (the reader's wording mirrors Séance's).
