@@ -227,6 +227,29 @@ void main() {
       final rows = await store.load();
       expect(rows.map((s) => s.id), ['a', 'c', 'b']);
     });
+
+    test('equal labels order by id, in memory, on disk and in the '
+        'catalog', () async {
+      final path = pathIn('servers.json');
+      final store = storeAt(path);
+      final servers = [
+        _server('z', label: 'web'),
+        _server('m', label: 'Web'),
+        _server('a', label: 'WEB'),
+      ];
+      for (final server in servers) {
+        await store.save(server);
+      }
+
+      expect((await store.load()).map((s) => s.id), ['a', 'm', 'z']);
+      final stored = jsonDecode(await File(path).readAsString()) as Map;
+      expect(
+        [for (final row in stored['servers'] as List) (row as Map)['id']],
+        ['a', 'm', 'z'],
+      );
+      final catalog = SeanceServerCatalog()..replace(servers);
+      expect(catalog.servers.map((s) => s.id), ['a', 'm', 'z']);
+    });
   });
 
   group('sync bookkeeping', () {
