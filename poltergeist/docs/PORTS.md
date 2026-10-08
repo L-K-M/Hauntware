@@ -1884,6 +1884,12 @@ behaviour, and is not repeated below.
   `SeanceTheme.monoFallback`.
 - Port-back candidates: none (Séance took `scrollable: true` in
   8714859).
+- Moved (2026-10-08): the dialog and `ColorSwatchBox` now live in
+  `planchette/packages/ghost_ui` (`showColorPicker` with a
+  `ColorPickerStrings` bag and a `hexStyle`), shared with Séance
+  ([design](../../docs/design/server-appearance-package.md)). This file
+  is a wrapper passing the ARB strings and `poltergeistMonoTextStyle`;
+  the mechanics tests moved with the dialog.
 
 ### app/poltergeist_app/lib/ui/settings/appearance_settings.dart
 
@@ -1924,6 +1930,8 @@ behaviour, and is not repeated below.
 - `test/ui/color_picker_test.dart` from `test/color_picker_test.dart`, and
   `test/ui/server_color_picker_test.dart` from
   `test/server_color_picker_test.dart`: wrapped in `AppLocalizations`.
+  Since 2026-10-08 the former keeps only the ARB labels and the mono
+  stack; the dialog's mechanics are tested in ghost_ui.
 - `test/ui/settings/appearance_settings_test.dart`, adapted from the
   Appearance group of `test/settings_screen_test.dart` over a fake
   `AppearanceSettingsModel`, plus Poltergeist's own cases (a Séance

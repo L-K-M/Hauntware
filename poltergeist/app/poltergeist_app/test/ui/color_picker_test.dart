@@ -1,15 +1,15 @@
 // Ported from Séance app/seance_app/test/color_picker_test.dart @ 8714859; see docs/PORTS.md.
 // Divergence: the app is wrapped in AppLocalizations for the picker's ARB
-// strings.
+// strings. The dialog's mechanics are ghost_ui's and tested there; this
+// keeps what the wrapper adds: the ARB words and the monospace stack.
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:poltergeist_app/l10n/app_localizations.dart';
 import 'package:poltergeist_app/theme/app_theme.dart';
 import 'package:poltergeist_app/ui/color_picker.dart';
 
-/// The picker the server colour picker is built on, in the two ways only
-/// the Appearance section uses it: without a preview of its own, and with an
-/// opacity slider. The server picker's own test covers the rest.
+/// The picker the server colour picker is built on, as this app words and
+/// sets it.
 void main() {
   final picked = <Color?>[];
   setUp(picked.clear);
@@ -75,18 +75,6 @@ void main() {
     expect(style.fontFamilyFallback, poltergeistMonoFontFamilies);
   });
 
-  testWidgets('without a preview it shows the colour as a swatch', (
-    tester,
-  ) async {
-    await open(tester, start: const Color(0xFF336699));
-    expect(find.text('Lines'), findsOneWidget);
-    expect(
-      tester.widget<ColorSwatchBox>(find.byType(ColorSwatchBox)).color,
-      const Color(0xFF336699),
-    );
-    expect(find.byType(Slider), findsNWidgets(3));
-  });
-
   testWidgets('with alpha, the opacity slider and eight digits', (
     tester,
   ) async {
@@ -108,15 +96,5 @@ void main() {
     await tester.tap(find.text('Use colour'));
     await tester.pumpAndSettle();
     expect(picked.single, const Color(0x40336699));
-  });
-
-  testWidgets('without alpha, a translucent colour comes back opaque', (
-    tester,
-  ) async {
-    await open(tester, start: const Color(0x80336699));
-    expect(hex(tester), '336699');
-    await tester.tap(find.text('Use colour'));
-    await tester.pumpAndSettle();
-    expect(picked.single, const Color(0xFF336699));
   });
 }
