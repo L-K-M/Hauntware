@@ -23,6 +23,7 @@ import 'package:seance_core/seance_core.dart';
 
 import '../bookmarks/bookmark_store.dart' show BookmarkSyncTuple;
 import '../transfer/transfer_journal.dart' show TransferJournalIo;
+import 'server_order.dart';
 
 /// The materialized LWW tuple for one server id — the same
 /// `(updatedAt, deviceId, deleted)` envelope bookkeeping the bookmark
@@ -263,11 +264,8 @@ final class FileServerConfigStore implements SyncTrackingServerStore {
     );
   }
 
-  List<ServerConfig> _sorted() => _servers.values.toList()
-    ..sort((a, b) {
-      final byLabel = a.label.toLowerCase().compareTo(b.label.toLowerCase());
-      return byLabel != 0 ? byLabel : a.id.compareTo(b.id);
-    });
+  List<ServerConfig> _sorted() =>
+      _servers.values.toList()..sort(compareServersByLabel);
 
   Future<void> _ensureLoaded() {
     final activeLoad = _loadFuture;
@@ -416,12 +414,7 @@ final class FileServerConfigStore implements SyncTrackingServerStore {
     Map<String, ServerConfig> servers,
     Map<String, ServerSyncTuple> tuples,
   ) {
-    final sorted = servers.values.toList()
-      ..sort((a, b) {
-        final byLabel =
-            a.label.toLowerCase().compareTo(b.label.toLowerCase());
-        return byLabel != 0 ? byLabel : a.id.compareTo(b.id);
-      });
+    final sorted = servers.values.toList()..sort(compareServersByLabel);
     return _atomicWriter(
       _file,
       jsonEncode({

@@ -8,6 +8,8 @@ library;
 
 import 'package:seance_core/seance_core.dart';
 
+import 'server_order.dart';
+
 /// A read-only view over the Séance servers visible to the shared account.
 /// `servers` is replaced wholesale by the coordinator's rebuild; consumers
 /// hold no reference into it.
@@ -40,12 +42,9 @@ final class SeanceServerCatalog {
   /// publisher runs synchronously after assignment, so a consumer can order
   /// the new routing snapshot before any connection reads it.
   void replace(Iterable<ServerConfig> servers) {
-    final snapshot = List<ServerConfig>.unmodifiable(servers.toList()
-      ..sort((a, b) {
-        final byLabel =
-            a.label.toLowerCase().compareTo(b.label.toLowerCase());
-        return byLabel != 0 ? byLabel : a.id.compareTo(b.id);
-      }));
+    final snapshot = List<ServerConfig>.unmodifiable(
+      servers.toList()..sort(compareServersByLabel),
+    );
     _servers = snapshot;
     _onReplaced?.call(snapshot);
   }

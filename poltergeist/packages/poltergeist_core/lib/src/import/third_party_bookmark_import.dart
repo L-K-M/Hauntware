@@ -161,10 +161,16 @@ final class ThirdPartyBookmarkImportRow {
   final String sourceName;
   final String _sortKey;
   final List<ThirdPartyBookmarkImportIssue> issues;
-  final bool matchesExistingBookmark;
   final String? existingBookmarkLabel;
-  final bool matchesEarlierImportRow;
   final String? earlierImportRowLabel;
+
+  /// Whether a saved bookmark already reaches this destination; its label
+  /// is [existingBookmarkLabel] (an empty label still counts).
+  bool get matchesExistingBookmark => existingBookmarkLabel != null;
+
+  /// Whether an earlier row of this import already reaches this
+  /// destination; its label is [earlierImportRowLabel].
+  bool get matchesEarlierImportRow => earlierImportRowLabel != null;
 
   const ThirdPartyBookmarkImportRow._({
     required this.id,
@@ -180,9 +186,7 @@ final class ThirdPartyBookmarkImportRow {
     required this.sourceName,
     required String importSortKey,
     required this.issues,
-    this.matchesExistingBookmark = false,
     this.existingBookmarkLabel,
-    this.matchesEarlierImportRow = false,
     this.earlierImportRowLabel,
   }) : _sortKey = importSortKey;
 
@@ -224,11 +228,10 @@ final class ThirdPartyBookmarkImportRow {
   }
 
   ThirdPartyBookmarkImportRow _withEarlierImportRow(String label) =>
-      _copyWith(matchesEarlierImportRow: true, earlierImportRowLabel: label);
+      _copyWith(earlierImportRowLabel: label);
 
   ThirdPartyBookmarkImportRow _copyWith({
     List<ThirdPartyBookmarkImportIssue>? issues,
-    bool? matchesEarlierImportRow,
     String? earlierImportRowLabel,
   }) {
     return ThirdPartyBookmarkImportRow._(
@@ -245,10 +248,7 @@ final class ThirdPartyBookmarkImportRow {
       sourceName: sourceName,
       importSortKey: _sortKey,
       issues: issues ?? this.issues,
-      matchesExistingBookmark: matchesExistingBookmark,
       existingBookmarkLabel: existingBookmarkLabel,
-      matchesEarlierImportRow:
-          matchesEarlierImportRow ?? this.matchesEarlierImportRow,
       earlierImportRowLabel:
           earlierImportRowLabel ?? this.earlierImportRowLabel,
     );
@@ -359,7 +359,6 @@ final class ThirdPartyBookmarkImportService {
         issues: List.unmodifiable(
           issues..sort((left, right) => left.index.compareTo(right.index)),
         ),
-        matchesExistingBookmark: existingLabel != null,
         existingBookmarkLabel: existingLabel,
       );
       candidates.add(_ThirdPartyBookmarkCandidate(row, destination));
