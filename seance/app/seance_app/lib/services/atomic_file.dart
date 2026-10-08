@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'file_permissions.dart';
+import 'package:seance_core/seance_core.dart' show restrictFileToOwner;
 
 final _pendingWrites = <String, Future<void>>{};
 
@@ -87,3 +87,8 @@ Future<void> quarantineCorruptFile(File file) async {
     // Best effort: if we can't move it aside, the caller still starts empty.
   }
 }
+
+/// [writeStringAtomically] with owner-only privacy: the rewrite the
+/// identity audit log rotates through.
+Future<void> writeOwnerOnlyAtomically(File file, String contents) =>
+    writeStringAtomically(file, contents, privacy: AtomicFilePrivacy.ownerOnly);

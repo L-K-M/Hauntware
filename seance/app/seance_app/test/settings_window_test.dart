@@ -11,7 +11,6 @@ import 'package:seance_app/services/settings_backend.dart';
 import 'package:seance_app/services/settings_window.dart';
 import 'package:seance_app/theme/app_appearance.dart';
 import 'package:seance_app/theme/theme_presets.dart';
-import 'package:seance_app/ui/sync_enrollment_validation.dart';
 import 'package:seance_app/ui/terminal_appearance.dart';
 import 'package:seance_core/seance_core.dart';
 

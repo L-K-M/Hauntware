@@ -4,7 +4,6 @@ import 'package:seance_core/seance_core.dart';
 import '../app_state.dart';
 import '../theme/app_appearance.dart';
 import '../theme/theme_palette.dart';
-import '../ui/sync_enrollment_validation.dart';
 import '../ui/terminal_appearance.dart';
 import 'app_settings.dart';
 import 'assistant_settings_sync.dart';

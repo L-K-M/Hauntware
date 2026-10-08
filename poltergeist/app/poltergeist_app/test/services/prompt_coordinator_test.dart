@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:poltergeist_app/app.dart';
 import 'package:poltergeist_app/services/application_error_reporter.dart';
-import 'package:poltergeist_app/services/identity_audit_log.dart';
+import 'package:poltergeist_app/services/atomic_file.dart';
 import 'package:poltergeist_app/services/identity_file_reader.dart';
 import 'package:poltergeist_app/services/prompt_coordinator.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
@@ -70,7 +70,10 @@ class ScriptedIdentityReader extends IdentityFileReader {
   Object? failure;
   final List<String> reads = [];
 
-  ScriptedIdentityReader() : super(IdentityAuditLog(File('unused')));
+  ScriptedIdentityReader() : super(IdentityAuditLog(
+          File('unused'),
+          rewriteOwnerOnly: writeOwnerOnlyAtomically,
+        ));
 
   @override
   Future<String> read({

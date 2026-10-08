@@ -6,12 +6,12 @@ import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:seance_core/seance_core.dart';
 
+import 'atomic_file.dart';
 import 'app_settings.dart';
 import 'assistant_settings_sync.dart';
 import 'command_stats.dart';
 import 'external_file_opener.dart';
 import 'file_stores.dart';
-import 'identity_audit_log.dart';
 import 'identity_bookmarks.dart';
 import 'inbox_stores.dart';
 import 'local_shell_service.dart';
@@ -327,7 +327,10 @@ class AppServices {
       ),
       inboxStatuses: FileInboxStatusStore(File(p('inbox_statuses.json'))),
       inboxCache: FileInboxCacheStore(File(p('inbox_cache.json'))),
-      identityAudit: IdentityAuditLog(File(p('identity_reads.jsonl'))),
+      identityAudit: IdentityAuditLog(
+        File(p('identity_reads.jsonl')),
+        rewriteOwnerOnly: writeOwnerOnlyAtomically,
+      ),
       localShell: LocalShellService(),
       vaultKey: vaultKey,
       settings: settings,

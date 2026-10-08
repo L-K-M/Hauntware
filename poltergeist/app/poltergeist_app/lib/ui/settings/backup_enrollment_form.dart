@@ -12,7 +12,6 @@ import 'package:poltergeist_core/poltergeist_core.dart';
 import '../../l10n/app_localizations.dart';
 import '../../services/settings_models.dart';
 import '../../services/sync_account_gate.dart';
-import '../../services/sync_enrollment_validation.dart';
 import '../../services/uuid.dart';
 
 /// Maps an enrollment failure to the ARB copy the spec names for it:

@@ -49,6 +49,8 @@ export 'package:seance_core/seance_core.dart'
         HostKeyPrompter,
         HostKeyStore,
         HostKeyVerdict,
+        IdentityAuditLog,
+        IdentityReadEvent,
         ImportedHost,
         InMemoryHostKeyStore,
         InMemoryVaultStore,
@@ -113,6 +115,8 @@ export 'package:seance_core/seance_core.dart'
         RecordKind,
         RegisterRequest,
         SyncApi,
+        SyncEnrollmentIssue,
+        SyncEnrollmentMode,
         Lww,
         SshConfigImporter,
         SshConnectException,
@@ -133,9 +137,11 @@ export 'package:seance_core/seance_core.dart'
         remoteBasename,
         remoteJoin,
         remoteParent,
+        restrictFileToOwner,
         secureRandomBytes,
         serverGroupKey,
-        serverSearchHaystack;
+        serverSearchHaystack,
+        validateSyncEnrollment;
 
 export 'src/bookmarks/bookmark_groups.dart'
     show

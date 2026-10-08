@@ -15,6 +15,7 @@ import 'package:poltergeist_core/poltergeist_core.dart';
 import 'app.dart';
 import 'settings_window_app.dart';
 import 'services/app_preferences.dart';
+import 'services/atomic_file.dart';
 import 'services/app_session_lifecycle.dart';
 import 'services/archive_queue_tasks.dart';
 import 'services/appearance_controller.dart';
@@ -33,7 +34,6 @@ import 'services/dynamic_secret_vault.dart';
 import 'services/editor_registry_controller.dart';
 import 'services/engine_session.dart';
 import 'services/file_stores.dart';
-import 'services/identity_audit_log.dart';
 import 'services/identity_file_reader.dart';
 import 'services/macos_toolbar_band_channel.dart';
 import 'services/os_drag_out.dart' show DragOutRouter, platformDragOutBackend;
@@ -514,6 +514,7 @@ Future<void> main(List<String> args) async {
           '${supportDirectory.path}${Platform.pathSeparator}'
           '$kIdentityAuditLogFileName',
         ),
+        rewriteOwnerOnly: writeOwnerOnlyAtomically,
       ),
     ),
     navigatorKey: navigatorKey,

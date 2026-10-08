@@ -561,15 +561,6 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   // The recorded Séance release tag — a machine fact interpolated into
   // ARB copy at the render site, never authored text.
   'lib/services/sync_account_gate.dart': {"'v0.9.0'"},
-  // The URL-scheme whitelist of the ported validator — grammar literals,
-  // not copy.
-  'lib/services/sync_enrollment_validation.dart': {
-    "'http'",
-    "'https'",
-    // The confirmation field's empty default — a missing-argument value,
-    // not rendered copy.
-    "''",
-  },
   // The settings.json keys behind the §3.2 verdict stores — machine
   // identifiers, never rendered UI copy.
   'lib/services/sync_verdict_stores.dart': {
@@ -615,21 +606,6 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'Consolas'",
     "'DejaVu Sans Mono'",
     "'monospace'",
-  },
-  // Ported Séance JSONL record shape (see docs/PORTS.md): the field names
-  // and separators are the frozen on-disk format, not UI copy.
-  'lib/services/identity_audit_log.dart': {
-    "'at'",
-    "'serverId'",
-    "'serverLabel'",
-    "'path'",
-    "'viaBookmark'",
-    "'ok'",
-    "'error'",
-    "''",
-    "'\${jsonEncode(event.toJson())}\\n'",
-    "'\${kept.join('\\n')}\\n'",
-    "'\\n'",
   },
   // Exception texts and audit-record fields — machine-facing data the
   // dialog renders inside an ARB-authored sentence, never standalone UI
@@ -2436,23 +2412,9 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'$menu ▸ $submenu'",
     r"'${identity.username}@${identity.host}'",
   },
-  // The Séance editor port (see docs/PORTS.md): image format sniffing,
-  // font families, controller seeds, regex machinery, and diagnostics —
-  // upstream literals, not user-facing copy.
-  'lib/services/badge_image.dart': {
-    "'png'",
-    "'jpg'",
-    "'jpeg'",
-    "'gif'",
-    "'webp'",
-    "'bmp'",
-    "'svg'",
-    "'heic'",
-    "'heif'",
-    r"'\uFEFF'",
-    "'<'",
-    "'<svg'",
-  },
+  // The Séance editor port (see docs/PORTS.md): font families,
+  // controller seeds, regex machinery, and diagnostics — upstream
+  // literals, not user-facing copy.
   'lib/services/server_duplication.dart': {
     // SourceServerChanged's message — upstream-authored English surfaced
     // verbatim in the failure toast, the same posture as

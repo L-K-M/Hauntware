@@ -2,8 +2,9 @@
 import 'dart:io';
 
 import 'package:path/path.dart' as p;
+import 'package:poltergeist_core/poltergeist_core.dart'
+    show restrictFileToOwner;
 
-import 'file_permissions.dart';
 import 'uuid.dart';
 
 enum AtomicFilePrivacy { processDefault, ownerOnly }
@@ -39,3 +40,8 @@ Future<void> writeStringAtomically(
     rethrow;
   }
 }
+
+/// [writeStringAtomically] with owner-only privacy: the rewrite the
+/// identity audit log rotates through.
+Future<void> writeOwnerOnlyAtomically(File file, String contents) =>
+    writeStringAtomically(file, contents, privacy: AtomicFilePrivacy.ownerOnly);
