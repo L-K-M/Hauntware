@@ -44,7 +44,8 @@ Future<bool> uploadEditorCheckout({
       ),
     );
     if (overwrite != true) return false;
-    return session.uploadLocalCopy(copy, overwriteRemoteChanges: true);
+    // Awaited so the finally below keeps the key until the retry lands.
+    return await session.uploadLocalCopy(copy, overwriteRemoteChanges: true);
   } finally {
     if (ownsKey) prompts.uploading.remove(key);
   }
