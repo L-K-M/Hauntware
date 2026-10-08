@@ -375,6 +375,25 @@ void main() {
   });
 
   group('double-click action propagation (02 §2.6)', () {
+    test('the other-pane transfer seam lands on every tab', () async {
+      OtherPaneTransferOutcome transfer(PaneController _, RemoteFileEntry _) =>
+          OtherPaneTransferOutcome.queued;
+      final controller = PaneTabsController(
+        paneId: PaneTabsController.leftPaneId,
+        lanes: lanes,
+        otherPaneTransfer: transfer,
+      );
+      addTearDown(controller.dispose);
+      final first = controller.newTab(target: NewTabTarget.launcher);
+      await settle();
+      final second = controller.newTab(target: NewTabTarget.launcher);
+      await settle();
+
+      // Tear-offs of one local function in one scope are equal.
+      expect(first.controller.otherPaneTransfer, transfer);
+      expect(second.controller.otherPaneTransfer, transfer);
+    });
+
     test('the seed lands on every tab', () async {
       final controller = tabs(doubleClickAction: DoubleClickAction.edit);
       final first = controller.newTab(target: NewTabTarget.launcher);

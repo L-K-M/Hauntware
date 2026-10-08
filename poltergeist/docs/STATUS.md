@@ -4,6 +4,26 @@ Living snapshot of where Poltergeist is, what's proven, and what to pick up
 next. Read [AGENTS.md](../AGENTS.md) for build/test commands and
 [09-PLAYBOOK.md](plan/09-PLAYBOOK.md) for the PR process.
 
+## Double-click Transfer to other pane (2026-10-08)
+
+"Double-click action: Transfer to other pane" now does what it names. An
+activated file goes to the pane opposite the one it was opened in (not
+the workspace's active pane) as a one-root copy through the panes' drop
+seam, under F5's rules (`paneDropAllowed`, the conflict policy). The
+shell supplies it as `PaneController.otherPaneTransfer`, stamped by the
+strips like the editor seams; `services/other_pane_transfer.dart` holds
+the resolution, and F5's other-pane lookup now uses it too. With the
+second pane hidden or showing no folder the pane posts
+`transferNeedsOtherPane`; without a queue, a bound folder or a live
+connection it posts `transferUnavailable`. The old "later milestone"
+notice is gone.
+
+Validation: controller (seam call, both notices, unwired seam), strip
+stamping, the helper's branches (A to B, B to A whichever pane is
+active, one folder in both, hidden or empty other pane, no queue, a
+stray pane) and the compact shell end to end (a tap queues the copy;
+a hidden second pane shows the notice).
+
 ## Double-click action setting (2026-10-08)
 
 Settings → Editing (Settings window and the Configure Editors… dialog)

@@ -992,9 +992,13 @@
   "@paneNoticeEditLater": {
     "description": "Transient notice strip (02 §10): the Double-click action preference resolved to Edit in Poltergeist, whose editor arrives in a later milestone."
   },
-  "paneNoticeTransferLater": "Transferring to the other pane isn't available yet — the transfer queue arrives in a later milestone.",
-  "@paneNoticeTransferLater": {
-    "description": "Transient notice strip (02 §10): the Double-click action preference resolved to Transfer to other pane, whose queue arrives in a later milestone."
+  "paneNoticeTransferNeedsOtherPane": "To transfer files, show the other pane and open a folder in it.",
+  "@paneNoticeTransferNeedsOtherPane": {
+    "description": "Transient notice strip (02 §10): the Double-click action preference resolved to Transfer to other pane, but the second pane is hidden or shows no folder."
+  },
+  "paneNoticeTransferUnavailable": "This file can't be transferred to the other pane.",
+  "@paneNoticeTransferUnavailable": {
+    "description": "Transient notice strip (02 §10): the Double-click action preference resolved to Transfer to other pane, but the copy could not be queued (no transfer queue, this pane lost its folder or connection, or the drop rules refuse it)."
   },
   "paneNoticeDragOutRemote": "Remote items can't be dragged out of Poltergeist here yet. Use Download To… instead.",
   "@paneNoticeDragOutRemote": {
@@ -6179,7 +6183,7 @@
   },
   "doubleClickActionTransfer": "Transfer to other pane",
   "@doubleClickActionTransfer": {
-    "description": "Double-click action option: transfer the file to the other pane (not available yet; opening a file shows a notice)."
+    "description": "Double-click action option: copy the file into the folder the other pane shows."
   },
   "doubleClickActionNothing": "Do nothing",
   "@doubleClickActionNothing": {

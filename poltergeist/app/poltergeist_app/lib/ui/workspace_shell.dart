@@ -33,6 +33,7 @@ import '../services/external_file_opener.dart';
 import '../services/in_app_quick_look.dart';
 import '../services/os_drag_out.dart' show DragOutBackend, NoDragOutBackend;
 import '../services/local_volumes.dart' show LocalVolumeSource;
+import '../services/other_pane_transfer.dart';
 import '../services/pane_controller.dart';
 import '../services/pane_drop.dart';
 import '../services/pane_file_ops.dart';
@@ -1480,6 +1481,7 @@ class _WorkspaceShellState extends State<WorkspaceShell>
         // resolution and every Open With ▸ choice.
         builtInEditorOpen: _openBuiltInEditor,
         externalEditorOpen: _openWithExternal,
+        otherPaneTransfer: _transferToOtherPane,
         onLocationCommitted: widget.recentLocations?.recordLocation,
         serverConfigLookup: _serverConfigById,
         confirmClose: _confirmTabClose,
@@ -2849,6 +2851,29 @@ class _WorkspaceShellState extends State<WorkspaceShell>
   /// per key, so a second open focuses the existing route instead of
   /// stacking a duplicate editor on shared state (06 §3.1).
   final _editorRoutes = <String, Route<void>>{};
+
+  /// "Double-click action: Transfer to other pane" (02 §2.6): a copy into
+  /// the pane opposite [pane], through the same queue seam as the panes'
+  /// drops and Transfer to Other Pane.
+  OtherPaneTransferOutcome _transferToOtherPane(
+    PaneController pane,
+    RemoteFileEntry entry,
+  ) {
+    final workspace = _workspace;
+    if (workspace == null) return OtherPaneTransferOutcome.unavailable;
+    final queue = widget.transferQueue;
+    return transferEntryToOtherPane(
+      workspace: workspace,
+      dropDelegate: queue == null
+          ? null
+          : PaneDropDelegate(
+              queue: queue,
+              conflictPolicy: widget.conflictPolicy,
+            ),
+      source: pane,
+      entry: entry,
+    );
+  }
 
   /// The strip's `builtInEditorOpen` seam (06 §4.2): resolves the target
   /// — a plain local file opens directly (a symlink resolves once at

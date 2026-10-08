@@ -19,8 +19,9 @@ enum DoubleClickAction {
   /// and on a remote file through its capped checkout (06 §4.2).
   edit,
 
-  /// Transfer to other pane — offered and persisted, but a file open
-  /// still answers the not-yet notice: nothing queues the transfer.
+  /// Transfer to other pane — a copy into the folder the opposite pane
+  /// shows, queued like Transfer to Other Pane (F5) but for the opened
+  /// file alone; with no such pane the activation says what it needs.
   transfer,
 
   /// Do nothing — a file activation is exactly that: inert.

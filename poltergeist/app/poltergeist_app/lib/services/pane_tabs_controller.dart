@@ -187,6 +187,7 @@ class PaneTabsController extends ChangeNotifier {
     DirectoryGrouping directoryGrouping = DirectoryGrouping.first,
     this.builtInEditorOpen,
     this.externalEditorOpen,
+    this.otherPaneTransfer,
     this.onLocationCommitted,
     this.serverConfigLookup,
     this.confirmClose,
@@ -273,6 +274,10 @@ class PaneTabsController extends ChangeNotifier {
   /// [builtInEditorOpen] — the remote Open verb and every Open With ▸
   /// choice resolve through it.
   final ExternalEditorOpen? externalEditorOpen;
+
+  /// The other-pane transfer seam (02 §2.6), wired once by the shell and
+  /// stamped on every arriving tab like [externalEditorOpen].
+  final OtherPaneTransfer? otherPaneTransfer;
 
   /// The recents feed (02 §8.4): the shell's location-commit callback,
   /// stamped on every arriving tab in [_appendTab] like
@@ -896,6 +901,7 @@ class PaneTabsController extends ChangeNotifier {
     controller.directoryGrouping = _directoryGrouping;
     controller.builtInEditorOpen = builtInEditorOpen;
     controller.externalEditorOpen = externalEditorOpen;
+    controller.otherPaneTransfer = otherPaneTransfer;
     controller.onLocationCommitted = onLocationCommitted;
     controller.serverConfigLookup = serverConfigLookup;
     final tab = PaneTab(

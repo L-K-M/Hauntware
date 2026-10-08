@@ -3184,7 +3184,51 @@ void main() {
       controller.dispose();
     });
 
-    test('Transfer posts its deferred-milestone notice without launching',
+    test('Transfer hands the file to the other-pane seam without launching',
+        () async {
+      final lanes = FakePaneLanes();
+      final (controller, channel) = await localFilePane(lanes);
+      controller.doubleClickAction = DoubleClickAction.transfer;
+      final handed = <(PaneController, String)>[];
+      controller.otherPaneTransfer = (pane, entry) {
+        handed.add((pane, entry.path));
+        return OtherPaneTransferOutcome.queued;
+      };
+
+      await controller.openEntry(controller.entries.single);
+
+      expect(handed, [(controller, '/parent/file.txt')]);
+      // Queued: the transfer queue reports from here, so no notice.
+      expect(controller.notice, isNull);
+      expect(channel.openCalls, isEmpty);
+      expect(controller.error, isNull);
+      controller.dispose();
+    });
+
+    test('Transfer says why it could not send the file', () async {
+      final lanes = FakePaneLanes();
+      final (controller, channel) = await localFilePane(lanes);
+      controller.doubleClickAction = DoubleClickAction.transfer;
+
+      for (final (outcome, notice) in [
+        (
+          OtherPaneTransferOutcome.needsOtherPane,
+          PaneNotice.transferNeedsOtherPane,
+        ),
+        (
+          OtherPaneTransferOutcome.unavailable,
+          PaneNotice.transferUnavailable,
+        ),
+      ]) {
+        controller.otherPaneTransfer = (_, _) => outcome;
+        await controller.openEntry(controller.entries.single);
+        expect(controller.notice, notice, reason: outcome.name);
+      }
+      expect(channel.openCalls, isEmpty);
+      controller.dispose();
+    });
+
+    test('Transfer with no seam wired posts its notice, never fails silent',
         () async {
       final lanes = FakePaneLanes();
       final (controller, channel) = await localFilePane(lanes);
@@ -3192,9 +3236,8 @@ void main() {
 
       await controller.openEntry(controller.entries.single);
 
-      expect(controller.notice, PaneNotice.transferLater);
+      expect(controller.notice, PaneNotice.transferUnavailable);
       expect(channel.openCalls, isEmpty);
-      expect(controller.error, isNull);
       controller.dispose();
     });
 

@@ -721,8 +721,12 @@ class AppLocalizationsEn extends AppLocalizations {
       'Editing files in Poltergeist isn\'t available yet — the editor arrives in a later milestone.';
 
   @override
-  String get paneNoticeTransferLater =>
-      'Transferring to the other pane isn\'t available yet — the transfer queue arrives in a later milestone.';
+  String get paneNoticeTransferNeedsOtherPane =>
+      'To transfer files, show the other pane and open a folder in it.';
+
+  @override
+  String get paneNoticeTransferUnavailable =>
+      'This file can\'t be transferred to the other pane.';
 
   @override
   String get paneNoticeDragOutRemote =>
