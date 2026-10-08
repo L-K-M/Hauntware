@@ -226,11 +226,19 @@ class _FakeBackend extends ChangeNotifier implements SettingsBackend {
   @override
   Future<bool> recoveryConfigured() async => recoveryOn;
 
+  String? savedCode;
+
   @override
-  Future<String> setUpRecovery() async {
-    await _write('setUpRecovery');
-    recoveryOn = true;
+  Future<String> newRecoveryCode() async {
+    await _write('newRecoveryCode');
     return recoveryCode;
+  }
+
+  @override
+  Future<void> saveRecoveryCode(String code) async {
+    await _write('saveRecoveryCode');
+    savedCode = code;
+    recoveryOn = true;
   }
 
   @override
@@ -1069,7 +1077,7 @@ void main() {
       find.byKey(const ValueKey('recovery.code.done')),
     );
 
-    testWidgets('the code shows once and closes only after its last group', (
+    testWidgets('the code shows once and is kept only after its first group', (
       tester,
     ) async {
       await pumpScreen(tester, tab: SettingsTab.sync);
@@ -1088,22 +1096,24 @@ void main() {
       );
 
       await tap(tester, 'recovery.setUp');
-      expect(backend.calls, ['setUpRecovery']);
+      expect(backend.calls, ['newRecoveryCode']);
       expect(find.text('AAAA-BBBB-CCCC'), findsOneWidget);
       expect(done(tester).onPressed, isNull);
 
+      // The last group is only the checksum; the first is the key itself.
       await tester.enterText(
         find.byKey(const ValueKey('recovery.code.confirm')),
-        'BBBB',
+        'CCCC',
       );
       await tester.pump();
       expect(done(tester).onPressed, isNull);
       await tester.enterText(
         find.byKey(const ValueKey('recovery.code.confirm')),
-        ' cccc ',
+        ' aaaa ',
       );
       await tester.pump();
       await tap(tester, 'recovery.code.done');
+      expect(backend.savedCode, 'AAAA-BBBB-CCCC');
 
       expect(find.text('AAAA-BBBB-CCCC'), findsNothing);
       expect(find.text('This device has a recovery code.'), findsOneWidget);
@@ -1121,8 +1131,14 @@ void main() {
 
       await tap(tester, 'recovery.setUp');
       await tap(tester, 'recovery.replace.confirm');
-      expect(backend.calls, ['setUpRecovery']);
+      expect(backend.calls, ['newRecoveryCode']);
       expect(find.text('AAAA-BBBB-CCCC'), findsOneWidget);
+
+      // Cancelling the new code keeps the earlier one.
+      await tap(tester, 'recovery.code.cancel');
+      expect(backend.calls, ['newRecoveryCode']);
+      expect(backend.savedCode, isNull);
+      expect(find.text('Replace recovery code…'), findsOneWidget);
     });
 
     testWidgets('export says where it went; a cancel says nothing', (

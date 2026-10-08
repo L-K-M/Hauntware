@@ -2659,8 +2659,14 @@ class AppState extends ChangeNotifier {
   /// Whether this device has a recovery code (CRED-05).
   Future<bool> recoveryConfigured() => services.recoveryConfigured();
 
-  /// Makes a new recovery code and returns it, to be shown once.
-  Future<String> setUpRecovery() => _mutate(services.setUpRecovery);
+  /// A new recovery code to show once; nothing is stored until
+  /// [saveRecoveryCode].
+  String newRecoveryCode() => services.newRecoveryCode();
+
+  /// Keeps [code] as this device's recovery code, once the user confirmed
+  /// writing it down.
+  Future<void> saveRecoveryCode(String code) =>
+      _mutate(() => services.saveRecoveryCode(code));
 
   /// The vault as an encrypted export the recovery code opens. In the
   /// mutation queue, so a save cannot land halfway through the snapshot.

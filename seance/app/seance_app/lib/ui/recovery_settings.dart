@@ -93,13 +93,14 @@ class _RecoverySettingsState extends State<RecoverySettings> {
       );
       if (replace != true || !mounted) return;
     }
-    final code = await _run(widget.backend.setUpRecovery);
+    final code = await _run(widget.backend.newRecoveryCode);
     if (code == null || !mounted) return;
-    await showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => _RecoveryCodeDialog(code: code),
+    await showRecoveryCodeDialog(
+      context,
+      code,
+      save: () => widget.backend.saveRecoveryCode(code),
     );
+    await _reload();
   }
 
   Future<void> _export() async {
@@ -204,12 +205,28 @@ class _RecoverySettingsState extends State<RecoverySettings> {
   }
 }
 
-/// Shows a new recovery code once, and closes only after the user retypes
-/// its last group: proof it was written down before it is gone.
+/// Shows a new recovery code once and keeps it, through [save], only after
+/// the user retypes its first group: a check they wrote it down before it is
+/// gone. The first group is part of the key itself, unlike the last, which
+/// is the checksum. Cancelling keeps nothing, so an earlier code stays.
+/// True when the code was kept.
+Future<bool> showRecoveryCodeDialog(
+  BuildContext context,
+  String code, {
+  required Future<void> Function() save,
+}) async =>
+    await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => _RecoveryCodeDialog(code: code, save: save),
+    ) ??
+    false;
+
 class _RecoveryCodeDialog extends StatefulWidget {
-  const _RecoveryCodeDialog({required this.code});
+  const _RecoveryCodeDialog({required this.code, required this.save});
 
   final String code;
+  final Future<void> Function() save;
 
   @override
   State<_RecoveryCodeDialog> createState() => _RecoveryCodeDialogState();
@@ -218,11 +235,31 @@ class _RecoveryCodeDialog extends StatefulWidget {
 class _RecoveryCodeDialogState extends State<_RecoveryCodeDialog> {
   final _confirmation = TextEditingController();
   bool _copied = false;
+  bool _saving = false;
+  String? _error;
 
-  String get _lastGroup => widget.code.split('-').last;
+  String get _firstGroup => widget.code.split('-').first;
 
   bool get _confirmed =>
-      _confirmation.text.trim().toUpperCase() == _lastGroup.toUpperCase();
+      _confirmation.text.trim().toUpperCase() == _firstGroup.toUpperCase();
+
+  Future<void> _keep() async {
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    try {
+      await widget.save();
+      if (mounted) Navigator.pop(context, true);
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _saving = false;
+          _error = '$e';
+        });
+      }
+    }
+  }
 
   @override
   void dispose() {
@@ -249,7 +286,8 @@ class _RecoveryCodeDialogState extends State<_RecoveryCodeDialog> {
               const Text(
                 'Write this code down and keep it somewhere safe, away from '
                 'this device. It is shown only now. With it, an export of '
-                'this device\'s secrets opens anywhere; without it, nowhere.',
+                'this device\'s secrets opens anywhere; without it, nowhere. '
+                'Nothing changes until you confirm.',
               ),
               const SizedBox(height: 12),
               SelectableText(
@@ -270,18 +308,36 @@ class _RecoveryCodeDialogState extends State<_RecoveryCodeDialog> {
                 enableSuggestions: false,
                 style: _mono,
                 decoration: const InputDecoration(
-                  labelText: 'Type the code\'s last group to confirm',
+                  labelText: 'Type the code\'s first four characters',
                 ),
                 onChanged: (_) => setState(() {}),
               ),
+              if (_error != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Semantics(
+                    liveRegion: true,
+                    child: Text(
+                      _error!,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                    ),
+                  ),
+                ),
             ],
           ),
         ),
       ),
       actions: [
+        TextButton(
+          key: const ValueKey('recovery.code.cancel'),
+          onPressed: _saving ? null : () => Navigator.pop(context, false),
+          child: const Text('Cancel'),
+        ),
         FilledButton(
           key: const ValueKey('recovery.code.done'),
-          onPressed: _confirmed ? () => Navigator.pop(context) : null,
+          onPressed: _confirmed && !_saving ? _keep : null,
           child: const Text('I saved it'),
         ),
       ],

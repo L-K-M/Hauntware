@@ -119,9 +119,13 @@ abstract class SettingsBackend implements Listenable {
   /// Whether this device has a recovery code (CRED-05).
   Future<bool> recoveryConfigured();
 
-  /// Makes a new recovery code, replacing any earlier one, and returns it
-  /// formatted, for the screen to show once.
-  Future<String> setUpRecovery();
+  /// A new recovery code, formatted, for the screen to show once. Nothing is
+  /// stored until [saveRecoveryCode].
+  Future<String> newRecoveryCode();
+
+  /// Keeps [code] as this device's recovery code, replacing any earlier one,
+  /// once the user has confirmed writing it down.
+  Future<void> saveRecoveryCode(String code);
 
   /// Saves the vault, encrypted, where the user chooses; the save panel runs
   /// in the app's engine. Where it went, or null when the user cancelled.

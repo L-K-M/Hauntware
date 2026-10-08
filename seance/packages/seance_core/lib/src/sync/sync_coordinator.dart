@@ -685,6 +685,17 @@ class SyncCoordinator {
               );
               continue;
             }
+            // A config naming one of the app's own vault entries as its
+            // credential would aim edits and deletes of that server at it.
+            final secretRef = pulled.secretRef;
+            if (secretRef != null && isReservedVaultId(secretRef)) {
+              skip(
+                dec.id,
+                StateError('config credential $secretRef is reserved'),
+                StackTrace.current,
+              );
+              continue;
+            }
             await configStore.putServer(pulled);
           case RecordKind.hostKey:
             final pin = HostKey.fromJson(dec.data);

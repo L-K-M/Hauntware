@@ -373,7 +373,9 @@ void main() {
     ]);
 
     expect(await window.recoveryConfigured(), isFalse);
-    final code = await window.setUpRecovery();
+    final code = await window.newRecoveryCode();
+    expect(await window.recoveryConfigured(), isFalse);
+    await window.saveRecoveryCode(code);
     expect(await window.recoveryConfigured(), isTrue);
 
     final destination = await window.exportSecrets();
@@ -402,7 +404,7 @@ void main() {
   test('a wrong recovery code crosses as the sentence to show', () async {
     final window = await openWindow(SettingsTab.sync);
     addTearDown(window.dispose);
-    await window.setUpRecovery();
+    await window.saveRecoveryCode(await window.newRecoveryCode());
     await window.exportSecrets();
     exportFiles.picked = exportFiles.saved;
 

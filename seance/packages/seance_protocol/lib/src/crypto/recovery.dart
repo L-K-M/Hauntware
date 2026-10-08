@@ -197,7 +197,8 @@ abstract final class SecretsExport {
 
   /// The export of [sealedEntries], a vault's entries sealed under
   /// [vaultKey] (reserved ids are left out), openable with the code
-  /// [recovery] derives from.
+  /// [recovery] derives from. Throws [SecretsExportException] (tooLarge)
+  /// for a vault past [maxEntries] or [maxBytes].
   static Future<Uint8List> build({
     required RecoveryWrapKey recovery,
     required List<int> vaultKey,
@@ -209,7 +210,8 @@ abstract final class SecretsExport {
         if (!isReservedVaultId(id)) id,
     ]..sort();
     if (ids.length > maxEntries) {
-      throw StateError(
+      throw SecretsExportException(
+        SecretsExportFailure.tooLarge,
         'A vault of ${ids.length} entries is too large to export',
       );
     }
@@ -238,7 +240,10 @@ abstract final class SecretsExport {
       }),
     );
     if (bytes.length > maxBytes) {
-      throw StateError('The export would exceed $maxBytes bytes');
+      throw const SecretsExportException(
+        SecretsExportFailure.tooLarge,
+        'The export would exceed the size limit',
+      );
     }
     return bytes;
   }

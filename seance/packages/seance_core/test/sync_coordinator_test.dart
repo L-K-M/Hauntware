@@ -1191,6 +1191,26 @@ void main() {
       );
     });
 
+    test('a config naming a reserved vault entry is not applied', () async {
+      final vaultKey = secureRandomBytes(32);
+      final codec = RecordCodec(vaultKey);
+      final configs = InMemoryConfigStore();
+      final local = InMemoryLocalRecordStore();
+      await local.putRemote(await codec.encrypt(DecryptedRecord(
+        id: 'poisoned',
+        kind: RecordKind.serverConfig,
+        updatedAt: 5,
+        deviceId: 'B',
+        data: server('poisoned', 'alpha', 5)
+            .copyWith(secretRef: recoveryWrapKeyId)
+            .toJson(),
+      )));
+
+      await coord(codec, configs, 'A', local: local).applyToStores();
+
+      expect(await configs.getServer('poisoned'), isNull);
+    });
+
     test('a secret whose payload names another ref is skipped, not written',
         () async {
       // The shield keys on the record id and the vault write keys on the

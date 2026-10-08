@@ -73,7 +73,8 @@ enum SettingsLinkMethod {
   updateInboxApp,
   removeInboxApp,
   recoveryConfigured,
-  setUpRecovery,
+  newRecoveryCode,
+  saveRecoveryCode,
   exportSecrets,
   restoreSecrets,
 }
@@ -203,8 +204,10 @@ class SettingsWindowHost {
         await _backend.removeInboxApp(argument! as String);
       case SettingsLinkMethod.recoveryConfigured:
         return await _backend.recoveryConfigured();
-      case SettingsLinkMethod.setUpRecovery:
-        return await _backend.setUpRecovery();
+      case SettingsLinkMethod.newRecoveryCode:
+        return await _backend.newRecoveryCode();
+      case SettingsLinkMethod.saveRecoveryCode:
+        await _backend.saveRecoveryCode(argument! as String);
       case SettingsLinkMethod.exportSecrets:
         return await _backend.exportSecrets();
       case SettingsLinkMethod.restoreSecrets:
@@ -410,8 +413,13 @@ class RemoteSettingsBackend extends GhostSettingsWindowClient<SettingsTab>
 
   /// The code crosses to this isolate in memory only, to be shown once.
   @override
-  Future<String> setUpRecovery() async =>
-      (await _call(SettingsLinkMethod.setUpRecovery))! as String;
+  Future<String> newRecoveryCode() async =>
+      (await _call(SettingsLinkMethod.newRecoveryCode))! as String;
+
+  /// And back, in memory only, once the user confirmed writing it down.
+  @override
+  Future<void> saveRecoveryCode(String code) =>
+      _call(SettingsLinkMethod.saveRecoveryCode, code);
 
   @override
   Future<String?> exportSecrets() async =>

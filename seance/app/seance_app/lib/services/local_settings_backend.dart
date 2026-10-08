@@ -492,11 +492,20 @@ class LocalSettingsBackend implements SettingsBackend {
   Future<bool> recoveryConfigured() => _state.recoveryConfigured();
 
   @override
-  Future<String> setUpRecovery() => _state.setUpRecovery();
+  Future<String> newRecoveryCode() async => _state.newRecoveryCode();
+
+  @override
+  Future<void> saveRecoveryCode(String code) => _state.saveRecoveryCode(code);
 
   @override
   Future<String?> exportSecrets() async {
-    final export = await _state.exportSecrets();
+    final Uint8List export;
+    try {
+      export = await _state.exportSecrets();
+    } on SecretsExportException {
+      // The only failure building an export has: a vault past the caps.
+      throw const SettingsBackendException(secretsExportTooLargeMessage);
+    }
     return _exportFiles.save(export, secretsExportFileName(DateTime.now()));
   }
 

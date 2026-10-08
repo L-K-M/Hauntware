@@ -164,6 +164,10 @@ abstract class VaultStore {
 /// The application-facing secret store. Wraps a [VaultStore] with the vault key
 /// so callers work in terms of [Secret]s while only encrypted blobs are
 /// persisted.
+///
+/// The app's own entries ([isReservedVaultId]) are not credentials, whatever
+/// id a config or a record names: a read of one finds nothing, and a write or
+/// delete is refused, so no credential path can replace or remove them.
 class SecretVault {
   final VaultStore store;
   final List<int> vaultKey;
@@ -172,6 +176,7 @@ class SecretVault {
 
   /// Store an imported or re-encrypted credential without changing its version.
   Future<void> putSecret(Secret secret) async {
+    _refuseReserved(secret.id);
     final blob = await VaultCrypto.sealJson(vaultKey, secret.toJson());
     await store.putSecretBlob(secret.id, blob);
   }
@@ -184,6 +189,7 @@ class SecretVault {
   Future<void> putSecrets(Iterable<Secret> secrets) async {
     final blobs = <String, Uint8List>{};
     for (final secret in secrets) {
+      _refuseReserved(secret.id);
       blobs[secret.id] = await VaultCrypto.sealJson(vaultKey, secret.toJson());
     }
     await store.putSecretBlobs(blobs);
@@ -194,6 +200,7 @@ class SecretVault {
   /// [updatedAt] is the caller's edit time; a clock behind an adopted secret
   /// still advances past that secret. Callers must serialize edits with sync.
   Future<void> putLocalSecret(Secret secret, {required int updatedAt}) async {
+    _refuseReserved(secret.id);
     if (updatedAt <= 0) {
       throw ArgumentError.value(updatedAt, 'updatedAt', 'must be positive');
     }
@@ -211,6 +218,7 @@ class SecretVault {
   }
 
   Future<Secret?> getSecret(String id) async {
+    if (isReservedVaultId(id)) return null;
     final blob = await store.getSecretBlob(id);
     if (blob == null) return null;
     final json = await VaultCrypto.openJson(vaultKey, blob);
@@ -240,6 +248,7 @@ class SecretVault {
   /// that, because it answers "I could not look" and this method has no way to
   /// tell that from an entry nobody can open.
   Future<Secret?> readableSecret(String id) async {
+    if (isReservedVaultId(id)) return null;
     final blob = await store.getSecretBlob(id);
     if (blob == null) return null;
     try {
@@ -262,7 +271,16 @@ class SecretVault {
     }
   }
 
-  Future<void> deleteSecret(String id) => store.deleteSecret(id);
+  Future<void> deleteSecret(String id) async {
+    _refuseReserved(id);
+    await store.deleteSecret(id);
+  }
+
+  static void _refuseReserved(String id) {
+    if (isReservedVaultId(id)) {
+      throw ArgumentError.value(id, 'id', 'is the app\'s own vault entry');
+    }
+  }
 }
 
 class InMemoryConfigStore implements ConfigStore {

@@ -75,6 +75,18 @@ class RecoveryDamagedException implements Exception {
       'export again.';
 }
 
+/// What the Settings screen says when this vault is too large to export.
+const secretsExportTooLargeMessage =
+    'This device has too many saved secrets to export in one file.';
+
+/// The picked file could not be read at all.
+class SecretsExportUnreadableException implements Exception {
+  const SecretsExportUnreadableException();
+
+  @override
+  String toString() => 'That file could not be read.';
+}
+
 /// What the Settings screen says when an export will not open.
 String secretsExportFailureMessage(SecretsExportFailure failure) =>
     switch (failure) {
@@ -163,18 +175,23 @@ class PlatformSecretsExportFiles implements SecretsExportFiles {
     }
   }
 
+  /// `withData`, because an Android document provider may hand over the
+  /// bytes with no path at all; the size is known before either is read.
   @override
   Future<Uint8List?> open() async {
-    final result = await FilePicker.pickFiles();
-    final path = result?.files.single.path;
-    if (path == null) return null;
-    final file = File(path);
-    if (await file.length() > SecretsExport.maxBytes) {
+    final result = await FilePicker.pickFiles(withData: true);
+    if (result == null || result.files.isEmpty) return null;
+    final file = result.files.single;
+    if (file.size > SecretsExport.maxBytes) {
       throw const SecretsExportException(
         SecretsExportFailure.tooLarge,
         'The file exceeds the export size limit',
       );
     }
-    return file.readAsBytes();
+    final bytes = file.bytes;
+    if (bytes != null) return bytes;
+    final path = file.path;
+    if (path == null) throw const SecretsExportUnreadableException();
+    return File(path).readAsBytes();
   }
 }

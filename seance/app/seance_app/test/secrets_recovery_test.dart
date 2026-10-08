@@ -55,6 +55,13 @@ class _Keystore extends FlutterSecureStorage {
   }
 }
 
+/// Sets up a recovery code on [services], as the confirmed dialog does.
+Future<String> _setUpRecovery(AppServices services) async {
+  final code = services.newRecoveryCode();
+  await services.saveRecoveryCode(code);
+  return code;
+}
+
 Secret _secret(String id, [String? value]) =>
     Secret(id: id, kind: SecretKind.password, value: value ?? 'value-$id');
 
@@ -105,7 +112,7 @@ void main() {
   Future<(AppServices, String, Uint8List)> exported() async {
     final a = await freshDevice();
     await a.vault.putSecrets([_secret('pw-web'), _secret('pw-db')]);
-    final code = await a.setUpRecovery();
+    final code = await _setUpRecovery(a);
     return (a, code, await a.exportSecrets());
   }
 
@@ -130,7 +137,7 @@ void main() {
   test('the code survives a re-key of the vault', () async {
     final a = await freshDevice();
     await a.vault.putSecrets([_secret('pw-web')]);
-    final code = await a.setUpRecovery();
+    final code = await _setUpRecovery(a);
 
     // Sync enrolment re-keys the vault to the account's key.
     await a.rekeyVaultForTesting(Uint8List.fromList(List.filled(32, 7)));
@@ -238,7 +245,7 @@ void main() {
     final locked = await device(await newDirectory(), keystore);
     expect(locked.vaultKey, isNull);
     await expectLater(
-      locked.setUpRecovery(),
+      locked.saveRecoveryCode(locked.newRecoveryCode()),
       throwsA(isA<VaultLockedException>()),
     );
     await expectLater(
@@ -262,7 +269,7 @@ void main() {
     () async {
       final directory = await newDirectory();
       final first = await device(directory, _Keystore());
-      await first.setUpRecovery();
+      await _setUpRecovery(first);
       expect(await first.recoveryConfigured(), isTrue);
 
       // The keystore entry is gone; with no credential to strand, a fresh key
@@ -277,11 +284,32 @@ void main() {
     final directory = await newDirectory();
     final first = await device(directory, _Keystore());
     await first.vault.putSecrets([_secret('pw')]);
-    await first.setUpRecovery();
+    await _setUpRecovery(first);
 
     await expectLater(
       device(directory, _Keystore()),
       throwsA(isA<MasterKeyUnavailableException>()),
     );
+  });
+
+  test('a new code is kept only once saved', () async {
+    final a = await freshDevice();
+    final code = a.newRecoveryCode();
+    expect(await a.recoveryConfigured(), isFalse);
+
+    await a.saveRecoveryCode(code);
+    expect(await a.recoveryConfigured(), isTrue);
+
+    // A second code not saved leaves the first in force.
+    a.newRecoveryCode();
+    await a.vault.putSecrets([_secret('pw')]);
+    final export = await a.exportSecrets();
+    final b = await freshDevice();
+    final summary = await b.restoreSecrets(
+      export,
+      code,
+      policy: RestoreConflictPolicy.keepExisting,
+    );
+    expect(summary.added, 1);
   });
 }

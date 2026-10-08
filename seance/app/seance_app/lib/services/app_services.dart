@@ -496,25 +496,41 @@ class AppServices {
   @visibleForTesting
   Future<void> rekeyVaultForTesting(List<int> newKey) => _rekeyVault(newKey);
 
-  /// Whether this device has a recovery code (CRED-05). Readable with the
-  /// vault locked: it asks only whether the entry exists.
-  Future<bool> recoveryConfigured() async =>
-      await vault.store.getSecretBlob(recoveryWrapKeyId) != null;
+  /// Whether this device has a recovery code an export can use (CRED-05).
+  ///
+  /// With the vault locked, whether the entry exists, which is all anyone
+  /// can tell. Unlocked, whether it also opens: an entry sealed under a key
+  /// the vault no longer holds (a lost keystore healed with a fresh key)
+  /// belongs to a code that exports nothing any more.
+  Future<bool> recoveryConfigured() async {
+    final sealed = await vault.store.getSecretBlob(recoveryWrapKeyId);
+    if (sealed == null) return false;
+    final key = vaultKey;
+    if (key == null) return true;
+    try {
+      RecoveryWrapKey.fromJson(await VaultCrypto.openJson(key, sealed));
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
 
-  /// Makes a new recovery code, keeps what an export needs of it, and
-  /// returns the code, formatted, to be shown once: it is never stored.
-  /// Replaces an earlier code; exports made with that one still open with
-  /// it. Serialized with enrolment, whose re-key re-seals the entry.
-  Future<String> setUpRecovery() => _serializeSyncOperation(() async {
+  /// A new recovery code, formatted, to be shown once. Nothing is stored
+  /// until [saveRecoveryCode]: a code the user never confirmed writing down
+  /// must not replace one they did.
+  String newRecoveryCode() => RecoveryKey.encode(secureRandomBytes(32));
+
+  /// Keeps what an export needs of [code] (never the code itself), replacing
+  /// an earlier one; exports made with that one still open with it.
+  /// Serialized with enrolment, whose re-key re-seals the entry.
+  Future<void> saveRecoveryCode(String code) => _serializeSyncOperation(() async {
     final key = vaultKey;
     if (key == null) throw const VaultLockedException();
-    final recoveryKey = secureRandomBytes(32);
-    final wrap = await RecoveryWrapKey.derive(recoveryKey);
+    final wrap = await RecoveryWrapKey.derive(RecoveryKey.decode(code));
     await vault.store.putSecretBlob(
       recoveryWrapKeyId,
       await VaultCrypto.sealJson(key, wrap.toJson()),
     );
-    return RecoveryKey.encode(recoveryKey);
   });
 
   /// The vault, encrypted, as an export the recovery code opens anywhere.

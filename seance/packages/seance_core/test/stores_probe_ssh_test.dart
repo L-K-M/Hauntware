@@ -75,6 +75,30 @@ void main() {
       expect(loaded.kind, SecretKind.password);
     });
 
+    test('the app\'s own entries are not credentials', () async {
+      final key = secureRandomBytes(32);
+      final store = InMemoryVaultStore();
+      final vault = SecretVault(store, key);
+      final wrap = await VaultCrypto.sealJson(key, {'version': 1});
+      await store.putSecretBlob(recoveryWrapKeyId, wrap);
+      const reserved = Secret(
+        id: recoveryWrapKeyId,
+        kind: SecretKind.password,
+        value: 'x',
+      );
+
+      expect(await vault.getSecret(recoveryWrapKeyId), isNull);
+      expect(await vault.readableSecret(recoveryWrapKeyId), isNull);
+      expect(() => vault.putSecret(reserved), throwsArgumentError);
+      expect(() => vault.putSecrets([reserved]), throwsArgumentError);
+      expect(
+        () => vault.putLocalSecret(reserved, updatedAt: 1),
+        throwsArgumentError,
+      );
+      expect(() => vault.deleteSecret(recoveryWrapKeyId), throwsArgumentError);
+      expect(await store.getSecretBlob(recoveryWrapKeyId), wrap);
+    });
+
     test('cannot open a secret with the wrong vault key', () async {
       final store = InMemoryVaultStore();
       await SecretVault(store, secureRandomBytes(32))
