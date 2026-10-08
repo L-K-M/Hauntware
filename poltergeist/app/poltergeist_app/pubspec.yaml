@@ -50,7 +50,6 @@ dependencies:
     path: ../../packages/poltergeist_core
   poltergeist_sync:
     path: ../../packages/poltergeist_sync
-  screen_retriever: 0.2.2
   # The update banner's "View release" link — hands the releases URL to
   # the OS browser; the app never downloads release assets (00 D23).
   url_launcher: 6.3.2
