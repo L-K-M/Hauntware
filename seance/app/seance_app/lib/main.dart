@@ -189,6 +189,7 @@ class _BootstrapState extends State<_Bootstrap> with WidgetsBindingObserver {
     try {
       await state.services.appLock.requireUnlocked();
       await state.onVaultUnlocked();
+      _warnIfAppLocked(state);
     } on AppLockException catch (error) {
       state.credentialAccessError = error.message;
       _warnIfAppLocked(state);
@@ -230,6 +231,10 @@ class _BootstrapState extends State<_Bootstrap> with WidgetsBindingObserver {
     }
     if (unlocked) {
       await state.onVaultUnlocked();
+      if (state.credentialAccessError != null) {
+        _warnIfAppLocked(state);
+        return;
+      }
       final context = navigatorKey.currentContext;
       if (context == null) return;
       showTopToast(

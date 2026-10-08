@@ -1788,7 +1788,13 @@ class AppState extends ChangeNotifier {
   /// bootstrap): re-evaluate what depended on it — the assistant key check and
   /// the sync round that couldn't run.
   Future<void> onVaultUnlocked() async {
-    await refreshLlmConfigured();
+    try {
+      await refreshLlmConfigured();
+    } on AppLockException catch (error) {
+      credentialAccessError = error.message;
+      notifyListeners();
+      return;
+    }
     credentialAccessError = null;
     await _loadInbox();
     _ensureInboxTimer();

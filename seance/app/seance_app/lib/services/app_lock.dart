@@ -177,6 +177,7 @@ class AppLock {
       );
     }
     _checkAuthentication(generation);
+    _requireForeground();
     _unlocked = true;
   }
 

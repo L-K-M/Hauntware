@@ -194,6 +194,31 @@ void main() {
     expect(await gate.read(() async => 'secret'), 'secret');
   });
 
+  test(
+    'auth success while backgrounded releases nothing and can retry',
+    () async {
+      final answer = Completer<void>();
+      device.onAuthenticate = () => answer.future;
+      final gate = lock();
+      var reads = 0;
+      final failure = expectLater(
+        gate.read(() async => ++reads),
+        throwsA(isA<AppLockException>()),
+      );
+      await Future<void>.delayed(Duration.zero);
+      gate.onLifecycle(AppLockLifecycle.background);
+      answer.complete();
+      await failure;
+      expect(reads, 0);
+      expect(gate.requiresAuthentication, isTrue);
+
+      gate.onLifecycle(AppLockLifecycle.foreground);
+      device.onAuthenticate = null;
+      expect(await gate.read(() async => ++reads), 1);
+      expect(device.prompts, 2);
+    },
+  );
+
   for (final resumed in [false, true]) {
     test('a delayed availability check cannot prompt after leaving, '
         'resumed: $resumed', () async {

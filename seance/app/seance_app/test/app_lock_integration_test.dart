@@ -457,6 +457,27 @@ void main() {
   });
 
   test(
+    'post-unlock refresh reports relocking without escaping its retry',
+    () async {
+      final state = await launch(AppLockMode.on);
+      state.services.settings.llmApiKeyRef = 'anthropic';
+      keystore.values['seance.apikey.anthropic'] = 'api-key';
+      await state.services.appLock.requireUnlocked();
+      timeout(state);
+      device.reject();
+
+      await state.onVaultUnlocked();
+      expect(state.credentialAccessError, 'Auth cancelled');
+      expect(state.llmConfigured, isFalse);
+
+      device.onAuthenticate = null;
+      await state.onVaultUnlocked();
+      expect(state.credentialAccessError, isNull);
+      expect(state.llmConfigured, isTrue);
+    },
+  );
+
+  test(
     'local backend authenticates both transitions and rejects atomically',
     () async {
       final state = await launch();
