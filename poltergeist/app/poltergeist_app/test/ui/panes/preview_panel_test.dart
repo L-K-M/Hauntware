@@ -233,6 +233,29 @@ void main() {
     });
   });
 
+  // The PDF row's page cap shows the same bar; its document needs pdfium,
+  // which widget tests lack, so the bar is pumped as the PDF row builds it.
+  testWidgets('the PDF truncation bar opens the file externally', (
+    tester,
+  ) async {
+    var opened = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: PreviewTruncationBar(
+            label: 'Preview truncated',
+            actionLabel: 'Open',
+            actionKey: const ValueKey('preview.pdf.open'),
+            onAction: () => opened++,
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('preview.pdf.open')));
+    expect(opened, 1);
+  });
+
   testWidgets('metadata refusal card carries Open/Open With', (
     tester,
   ) async {
