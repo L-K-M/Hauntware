@@ -27,15 +27,6 @@ void main() {
 
   tearDown(() => messenger.setMockMethodCallHandler(channel, null));
 
-  /// Delivers a runner-to-Dart call on [channel], as the Swift side would.
-  Future<void> fromRunner(MethodCall call) async {
-    await messenger.handlePlatformMessage(
-      channel.name,
-      const StandardMethodCodec().encodeMethodCall(call),
-      (_) {},
-    );
-  }
-
   group('install', () {
     test('an installed titlebar reports its band', () async {
       messenger.setMockMethodCallHandler(channel, (call) async {
@@ -45,7 +36,7 @@ void main() {
       final adapter = _FakeTitlebar();
       final band = await MacosTitlebar.install(
         adapter: adapter,
-        channel: channel,
+        channelName: channel.name,
       );
       addTearDown(() => band?.dispose());
       expect(adapter.installs, 1);
@@ -63,7 +54,7 @@ void main() {
         });
         final band = await MacosTitlebar.install(
           adapter: _FakeTitlebar(),
-          channel: channel,
+          channelName: channel.name,
         );
         addTearDown(() => band?.dispose());
         expect(band!.value, isFalse);
@@ -81,7 +72,7 @@ void main() {
         final adapter = _FakeTitlebar();
         final band = await MacosTitlebar.install(
           adapter: adapter,
-          channel: channel,
+          channelName: channel.name,
         );
         addTearDown(() => band?.dispose());
         // The titlebar is installed, so the band stays reserved in the
@@ -96,45 +87,11 @@ void main() {
       final adapter = _FakeTitlebar(failInstall: true);
       final band = await MacosTitlebar.install(
         adapter: adapter,
-        channel: channel,
+        channelName: channel.name,
       );
       // No band: nothing in the app reserves one or draws the header.
       expect(band, isNull);
       expect(adapter.resets, 1);
-    });
-  });
-
-  group('band channel', () {
-    test('follows the runner across full screen', () async {
-      final band = MacosToolbarBandChannel(channel: channel);
-      addTearDown(band.dispose);
-      expect(band.value, isTrue);
-
-      await fromRunner(const MethodCall('toolbarBandChanged', false));
-      expect(band.value, isFalse);
-      await fromRunner(const MethodCall('toolbarBandChanged', true));
-      expect(band.value, isTrue);
-    });
-
-    test('no runner side keeps the windowed layout', () async {
-      final band = MacosToolbarBandChannel(channel: channel);
-      addTearDown(band.dispose);
-      await band.start();
-      expect(band.value, isTrue);
-    });
-
-    test('a malformed report changes nothing', () async {
-      final band = MacosToolbarBandChannel(channel: channel);
-      addTearDown(band.dispose);
-      await fromRunner(const MethodCall('toolbarBandChanged', 'no'));
-      expect(band.value, isTrue);
-    });
-
-    test('dispose detaches the handler', () async {
-      final band = MacosToolbarBandChannel(channel: channel);
-      band.dispose();
-      await fromRunner(const MethodCall('toolbarBandChanged', false));
-      expect(band.value, isTrue);
     });
   });
 }

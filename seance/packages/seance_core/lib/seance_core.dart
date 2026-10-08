@@ -18,6 +18,7 @@ export 'src/terminal/shell_command.dart';
 
 export 'src/ssh/executable_launch.dart';
 export 'src/ssh/home_path.dart';
+export 'src/ssh/identity_audit_log.dart';
 export 'src/ssh/remote_command.dart';
 export 'src/ssh/remote_git.dart';
 export 'src/ssh/ssh_session.dart';
@@ -40,6 +41,7 @@ export 'src/ssh/remote_file_system.dart'
 
 export 'src/probe/probe_service.dart';
 
+export 'src/store/file_permissions.dart';
 export 'src/store/stores.dart';
 
 export 'src/inbox/inbox_api.dart';
@@ -50,6 +52,7 @@ export 'src/inbox/inbox_stores.dart';
 export 'src/sync/local_record_store.dart';
 export 'src/sync/sync_engine.dart';
 export 'src/sync/sync_coordinator.dart';
+export 'src/sync/sync_enrollment_validation.dart';
 export 'src/sync/http_sync_client.dart';
 
 export 'src/update/version.dart';

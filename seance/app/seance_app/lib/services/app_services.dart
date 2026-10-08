@@ -6,12 +6,12 @@ import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:seance_core/seance_core.dart';
 
+import 'atomic_file.dart';
 import 'app_settings.dart';
 import 'assistant_settings_sync.dart';
 import 'command_stats.dart';
 import 'external_file_opener.dart';
 import 'file_stores.dart';
-import 'identity_audit_log.dart';
 import 'identity_bookmarks.dart';
 import 'inbox_stores.dart';
 import 'local_shell_service.dart';
@@ -63,6 +63,34 @@ class IdentityFileException implements Exception {
               'referencing a file.'
         : '';
     return 'Could not read identity file $path — $detail.$sandboxHint';
+  }
+}
+
+/// A server names a vault entry this device does not have: its config was
+/// saved on another device, which kept the password or key local. Connecting
+/// with an empty credential instead would only fail later with a misleading
+/// authentication error, so resolving refuses up front (CRED-05).
+class CredentialMissingException implements Exception {
+  const CredentialMissingException({
+    required this.serverId,
+    required this.serverLabel,
+    required this.authMethod,
+  });
+
+  /// The server whose credential is missing: the one connecting, or a jump
+  /// host on its path.
+  final String serverId;
+  final String serverLabel;
+  final AuthMethod authMethod;
+
+  @override
+  String toString() {
+    final what = authMethod == AuthMethod.privateKey
+        ? 'private key'
+        : 'password';
+    return 'Credential required on this device: the $what for '
+        '"$serverLabel" was saved on another device and is not here. Enter '
+        'it in Edit Server, or switch the server to the SSH agent.';
   }
 }
 
@@ -299,7 +327,10 @@ class AppServices {
       ),
       inboxStatuses: FileInboxStatusStore(File(p('inbox_statuses.json'))),
       inboxCache: FileInboxCacheStore(File(p('inbox_cache.json'))),
-      identityAudit: IdentityAuditLog(File(p('identity_reads.jsonl'))),
+      identityAudit: IdentityAuditLog(
+        File(p('identity_reads.jsonl')),
+        rewriteOwnerOnly: writeOwnerOnlyAtomically,
+      ),
       localShell: LocalShellService(),
       vaultKey: vaultKey,
       settings: settings,
@@ -896,9 +927,7 @@ class AppServices {
       case AuthMethod.password:
         final typed = draft(draftPassword);
         if (typed != null) return SshCredentials.password(typed);
-        final secret = config.secretRef == null
-            ? null
-            : await vault.getSecret(config.secretRef!);
+        final secret = await _savedSecret(config);
         return SshCredentials.password(secret?.value ?? '');
       case AuthMethod.privateKey:
         // "Reference, don't store": read the key from disk at connect time.
@@ -931,14 +960,28 @@ class AppServices {
             keyPassphrase: draft(draftKeyPassphrase),
           );
         }
-        final secret = config.secretRef == null
-            ? null
-            : await vault.getSecret(config.secretRef!);
+        final secret = await _savedSecret(config);
         return SshCredentials.privateKey(
           secret?.value ?? '',
           keyPassphrase: draft(draftKeyPassphrase) ?? secret?.keyPassphrase,
         );
     }
+  }
+
+  /// The vault entry [config] names, or null when it names none. A named
+  /// entry this device does not have throws [CredentialMissingException]
+  /// rather than resolving to an empty credential.
+  Future<Secret?> _savedSecret(ServerConfig config) async {
+    final ref = config.secretRef;
+    if (ref == null) return null;
+
+    final secret = await vault.getSecret(ref);
+    if (secret != null) return secret;
+    throw CredentialMissingException(
+      serverId: config.id,
+      serverLabel: config.label,
+      authMethod: config.authMethod,
+    );
   }
 
   /// Resolves a saved jump host at connection time, including its credential.

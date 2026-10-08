@@ -1,7 +1,5 @@
-// Partly ported from Séance app/seance_app/test/server_grouping_test.dart @ 8326f41f574fabce11986ea16137917626f67958: only the existingServerGroups cases are carried; see docs/PORTS.md.
-import 'package:flutter_test/flutter_test.dart';
-import 'package:poltergeist_app/ui/server_grouping.dart';
-import 'package:poltergeist_core/poltergeist_core.dart';
+import 'package:seance_protocol/seance_protocol.dart';
+import 'package:test/test.dart';
 
 ServerConfig _server(String label, {String? group}) => ServerConfig(
   id: label,
@@ -29,5 +27,16 @@ void main() {
     test('is empty when nothing is grouped', () {
       expect(existingServerGroups([_server('a'), _server('b')]), isEmpty);
     });
+  });
+
+  test('serverSearchHaystack spells label, login, port and group', () {
+    expect(
+      serverSearchHaystack(_server('Web', group: 'Prod')),
+      'web ops@web.example.com:22 prod',
+    );
+    expect(
+      serverSearchHaystack(_server('db')),
+      'db ops@db.example.com:22 ',
+    );
   });
 }

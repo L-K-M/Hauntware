@@ -1,15 +1,10 @@
-// Ported from Séance app/seance_app/lib/ui/sync_enrollment_validation.dart
-// @ 2e6d1f1; see docs/PORTS.md. Recorded divergence: the issue is reported
-// as a typed value the render site maps to ARB copy (D20), never an
-// embedded English string — the validation RULES are byte-identical.
-
-/// Which enrollment shape the validator checks: Séance's
-/// `SyncEnrollmentMode` pair — register carries the passphrase
-/// confirmation requirement, login does not.
+/// Which enrollment shape the validator checks: register carries the
+/// passphrase confirmation requirement, login does not.
 enum SyncEnrollmentMode { register, login }
 
-/// The failure [validateSyncEnrollment] reports, mapped to ARB copy at
-/// the render site.
+/// The failure [validateSyncEnrollment] reports. Each host words it
+/// itself: Séance in its settings sentences, Poltergeist through its
+/// localizations.
 enum SyncEnrollmentIssue {
   invalidServerUrl,
   credentialsInUrl,
@@ -21,8 +16,7 @@ enum SyncEnrollmentIssue {
 }
 
 /// Returns the issue blocking enrollment from contacting the server, or
-/// null when the request is ready to run — the ported
-/// `validateSyncEnrollment`, rule-for-rule.
+/// null when the request is ready to run.
 SyncEnrollmentIssue? validateSyncEnrollment({
   required SyncEnrollmentMode mode,
   required String baseUrl,

@@ -2,7 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb;
 import 'package:flutter/material.dart';
-import 'package:planchette_editor/planchette_editor.dart' show EditorTextSize;
+import 'package:planchette_editor/planchette_editor.dart'
+    show EditorTextSize, normalizeEditorExtensions, validateEditorDisplayName;
 import 'package:seance_core/seance_core.dart';
 
 import '../family_hues.dart';
@@ -1409,7 +1410,7 @@ class _SettingsScreenState extends State<SettingsScreen>
 
   Future<void> _sync({required SyncEnrollmentMode mode}) async {
     final register = mode == SyncEnrollmentMode.register;
-    final validationError = validateSyncEnrollment(
+    final issue = validateSyncEnrollment(
       mode: mode,
       baseUrl: _syncUrl.text,
       username: _syncUser.text,
@@ -1417,8 +1418,8 @@ class _SettingsScreenState extends State<SettingsScreen>
       encryptionPassphrase: _syncEncryptionPassphrase.text,
       confirmationPassphrase: _syncEncryptionPassphraseConfirm.text,
     );
-    if (validationError != null) {
-      setState(() => _syncStatus = validationError);
+    if (issue != null) {
+      setState(() => _syncStatus = syncEnrollmentIssueMessage(issue));
       return;
     }
 

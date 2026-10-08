@@ -158,16 +158,8 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     // Every call names the workspace window it comes from (00 D39).
     "'viewId'",
   },
-  // The macOS toolbar band's `poltergeist/window` channel: method names
-  // and a wiring-fault diagnostic that only reaches the runner's reply,
-  // never a rendered surface.
-  'lib/services/macos_toolbar_band_channel.dart': {
-    "'poltergeist/window'",
-    "'isToolbarBandVisible'",
-    "'toolbarBandChanged'",
-    "'BAD_ARGS'",
-    "'toolbarBandChanged needs a bool argument'",
-  },
+  // The macOS toolbar band's `poltergeist/window` channel name.
+  'lib/services/macos_toolbar_band_channel.dart': {"'poltergeist/window'"},
   // The D15 trash channel server (03 §7.1): Platform.operatingSystem ids
   // and wiring-fault diagnostics that only reach the error reporter,
   // never a rendered surface.
@@ -419,6 +411,10 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   'lib/ui/settings/editor_text_size_settings.dart': {"'editor.textSize'"},
   // The folders switch's key.
   'lib/ui/settings/directory_grouping_settings.dart': {"'view.foldersOnTop'"},
+  // The double-click action dropdown's key.
+  'lib/ui/settings/double_click_action_settings.dart': {
+    "'editing.doubleClickAction'",
+  },
   // The Settings command id (D21 plumbing) — registered, never rendered.
   // Its construction assert is a programmer diagnostic.
   'lib/ui/settings/app_settings_command.dart': {
@@ -565,15 +561,6 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   // The recorded Séance release tag — a machine fact interpolated into
   // ARB copy at the render site, never authored text.
   'lib/services/sync_account_gate.dart': {"'v0.9.0'"},
-  // The URL-scheme whitelist of the ported validator — grammar literals,
-  // not copy.
-  'lib/services/sync_enrollment_validation.dart': {
-    "'http'",
-    "'https'",
-    // The confirmation field's empty default — a missing-argument value,
-    // not rendered copy.
-    "''",
-  },
   // The settings.json keys behind the §3.2 verdict stores — machine
   // identifiers, never rendered UI copy.
   'lib/services/sync_verdict_stores.dart': {
@@ -619,21 +606,6 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'Consolas'",
     "'DejaVu Sans Mono'",
     "'monospace'",
-  },
-  // Ported Séance JSONL record shape (see docs/PORTS.md): the field names
-  // and separators are the frozen on-disk format, not UI copy.
-  'lib/services/identity_audit_log.dart': {
-    "'at'",
-    "'serverId'",
-    "'serverLabel'",
-    "'path'",
-    "'viaBookmark'",
-    "'ok'",
-    "'error'",
-    "''",
-    "'\${jsonEncode(event.toJson())}\\n'",
-    "'\${kept.join('\\n')}\\n'",
-    "'\\n'",
   },
   // Exception texts and audit-record fields — machine-facing data the
   // dialog renders inside an ARB-authored sentence, never standalone UI
@@ -2134,11 +2106,6 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'file.$extension'",
     r"'\\'",
     "'/'",
-    "'.'",
-    "'*'",
-    r"r'[/\\*?\x00-\x1f\x7f]'",
-    r"'Invalid file extension: $value'",
-    "'At most 64 extensions can be configured.'",
     "'openWithApplication'",
     "'path'",
     "'bundleIdentifier'",
@@ -2160,8 +2127,6 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'exe'",
     r"r'^[A-Za-z0-9._-]{1,64}$'",
     "'Invalid editor id'",
-    r"r'[\x00-\x1f\x7f]'",
-    "'Invalid editor name'",
     r"'\u0000'",
     "'Invalid editor target'",
     "'Editor executable paths must be absolute'",
@@ -2447,23 +2412,9 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'$menu ▸ $submenu'",
     r"'${identity.username}@${identity.host}'",
   },
-  // The Séance editor port (see docs/PORTS.md): image format sniffing,
-  // font families, controller seeds, regex machinery, and diagnostics —
-  // upstream literals, not user-facing copy.
-  'lib/services/badge_image.dart': {
-    "'png'",
-    "'jpg'",
-    "'jpeg'",
-    "'gif'",
-    "'webp'",
-    "'bmp'",
-    "'svg'",
-    "'heic'",
-    "'heif'",
-    r"'\uFEFF'",
-    "'<'",
-    "'<svg'",
-  },
+  // The Séance editor port (see docs/PORTS.md): font families,
+  // controller seeds, regex machinery, and diagnostics — upstream
+  // literals, not user-facing copy.
   'lib/services/server_duplication.dart': {
     // SourceServerChanged's message — upstream-authored English surfaced
     // verbatim in the failure toast, the same posture as
@@ -2543,16 +2494,9 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'Marks'",
     ..._portedServerIconVocabulary,
   },
-  'lib/ui/server_filter.dart': {
-    // The match haystack — corpus machinery.
-    r"'${server.label} ${server.username}@${server.host}:${server.port} '",
-    r"'${server.group ?? ''}'",
-    "''",
-  },
   // D32 §11's platform integration: Dock progress diagnostics and the
   // file-manager reveal's process arguments (never user-facing copy).
   'lib/services/dock_progress.dart': {
-    r"'$live'",
     r"'Dock progress disabled: $error\n$stack'",
     r"'Dock progress unavailable: $error\n$stack'",
   },

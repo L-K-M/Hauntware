@@ -13,6 +13,8 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  # Rasterizes SVG badge images (badge_image.dart).
+  flutter_svg: ^2.3.0
   intl: ^0.20.3
 
 dev_dependencies:

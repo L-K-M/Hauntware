@@ -498,6 +498,41 @@ void main() {
     },
   );
 
+  testWidgets('typed filter text narrows rows, ignoring case and edge '
+      'spaces', (tester) async {
+    final scratch = Directory.systemTemp.createTempSync('pg-view-');
+    addTearDown(() => scratch.deleteSync(recursive: true));
+    final pair = testSyncPair();
+    final plan = testPlan(pair, [
+      testItem(
+        'Alpha.txt',
+        left: testFile(size: 10),
+        suggested: SyncActionType.copyLeftToRight,
+        reason: SyncReason.onlyOnLeft,
+      ),
+      testItem(
+        'beta.txt',
+        left: testFile(size: 10),
+        suggested: SyncActionType.copyLeftToRight,
+        reason: SyncReason.onlyOnLeft,
+      ),
+    ]);
+    final controller = fakeController(scratch, pair: pair, plan: plan);
+    addTearDown(controller.dispose);
+    await pumpSyncPlanView(tester, controller);
+    await pumpToReady(tester, controller);
+
+    await tester.enterText(find.byType(TextField).first, '  ALPHA ');
+    await tester.pump();
+    expect(find.text('Alpha.txt'), findsOneWidget);
+    expect(find.text('beta.txt'), findsNothing);
+
+    await tester.enterText(find.byType(TextField).first, '');
+    await tester.pump();
+    expect(find.text('Alpha.txt'), findsOneWidget);
+    expect(find.text('beta.txt'), findsOneWidget);
+  });
+
   testWidgets('secondary tap opens the per-row override menu; Skip applies', (
     tester,
   ) async {

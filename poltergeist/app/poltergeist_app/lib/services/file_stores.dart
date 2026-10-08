@@ -7,7 +7,6 @@ import 'package:crypto/crypto.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
 
 import 'atomic_file.dart';
-import 'file_permissions.dart';
 
 /// Moves a corrupt store file aside so a bad file cannot wedge startup.
 /// UTC-stamped per this repo's atomic-file port (a repeated corruption never

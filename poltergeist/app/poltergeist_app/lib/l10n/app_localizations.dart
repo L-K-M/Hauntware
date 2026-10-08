@@ -1240,11 +1240,17 @@ abstract class AppLocalizations {
   /// **'Editing files in Poltergeist isn\'t available yet — the editor arrives in a later milestone.'**
   String get paneNoticeEditLater;
 
-  /// Transient notice strip (02 §10): the Double-click action preference resolved to Transfer to other pane, whose queue arrives in a later milestone.
+  /// Transient notice strip (02 §10): the Double-click action preference resolved to Transfer to other pane, but the second pane is hidden or shows no folder.
   ///
   /// In en, this message translates to:
-  /// **'Transferring to the other pane isn\'t available yet — the transfer queue arrives in a later milestone.'**
-  String get paneNoticeTransferLater;
+  /// **'To transfer files, show the other pane and open a folder in it.'**
+  String get paneNoticeTransferNeedsOtherPane;
+
+  /// Transient notice strip (02 §10): the Double-click action preference resolved to Transfer to other pane, but the copy could not be queued (no transfer queue, this pane lost its folder or connection, or the drop rules refuse it).
+  ///
+  /// In en, this message translates to:
+  /// **'This file can\'t be transferred to the other pane.'**
+  String get paneNoticeTransferUnavailable;
 
   /// Transient notice strip (02 §10): a drag of remote rows left the window on a platform without file promises (Linux, Windows); the drag continues in-app.
   ///
@@ -6801,6 +6807,48 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Close'**
   String get editorSettingsClose;
+
+  /// Heading of the Settings → Editing row about what opening a file does (06 §8).
+  ///
+  /// In en, this message translates to:
+  /// **'Opening files'**
+  String get settingsOpeningFilesSection;
+
+  /// Label of the Settings → Editing dropdown choosing what opening a file does (02 §2.6).
+  ///
+  /// In en, this message translates to:
+  /// **'Double-click action'**
+  String get doubleClickActionLabel;
+
+  /// Explainer under the Double-click action dropdown: the open shortcut follows it too, and folders always navigate.
+  ///
+  /// In en, this message translates to:
+  /// **'Also applies to opening a file from the keyboard. Folders always open.'**
+  String get doubleClickActionSubtitle;
+
+  /// Double-click action option: open the file with its default application (02 §2.6's default).
+  ///
+  /// In en, this message translates to:
+  /// **'Open'**
+  String get doubleClickActionOpen;
+
+  /// Double-click action option: open the file in the built-in editor.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit in Poltergeist'**
+  String get doubleClickActionEdit;
+
+  /// Double-click action option: copy the file into the folder the other pane shows.
+  ///
+  /// In en, this message translates to:
+  /// **'Transfer to other pane'**
+  String get doubleClickActionTransfer;
+
+  /// Double-click action option: opening a file does nothing.
+  ///
+  /// In en, this message translates to:
+  /// **'Do nothing'**
+  String get doubleClickActionNothing;
 
   /// Label of the §8 Default-editor dropdown — the registry's global defaultEditorId.
   ///

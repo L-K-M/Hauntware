@@ -1,6 +1,5 @@
 // Ported from Séance app/seance_app/test/server_filter_test.dart @ ded9228; see docs/PORTS.md.
 import 'package:flutter_test/flutter_test.dart';
-import 'package:poltergeist_app/ui/server_filter.dart';
 import 'package:poltergeist_app/ui/sidebar/sidebar_facts.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
 

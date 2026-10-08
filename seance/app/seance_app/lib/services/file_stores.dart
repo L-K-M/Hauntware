@@ -7,7 +7,6 @@ import 'package:crypto/crypto.dart';
 import 'package:seance_core/seance_core.dart';
 
 import 'atomic_file.dart';
-import 'file_permissions.dart';
 
 /// Simple JSON-file [ConfigStore]. For a single-user personal tool this is
 /// plenty; the proposal's SQLite/drift backend is a drop-in future swap behind

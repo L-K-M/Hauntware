@@ -4,7 +4,6 @@ import 'dart:io';
 
 import 'package:poltergeist_core/poltergeist_core.dart';
 
-import 'identity_audit_log.dart';
 
 const _defaultAuditTimeout = Duration(seconds: 2);
 

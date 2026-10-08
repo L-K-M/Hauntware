@@ -529,6 +529,11 @@ port candidates.
 - Port-back candidates: none — the read-side repair gate's mirror and
   its procfs regressions close the last recorded divergence; both
   sides now behave identically.
+- Shared: 2026-10-08. `IdentityAuditLog` and the owner-only file helpers
+  moved into `seance_core` (with `posix`), reached here through the core
+  barrel; this file and `file_permissions.dart` are removed. Rotation
+  writes through the host's atomic writer, which each app passes in
+  (`writeOwnerOnlyAtomically`), so both keep their own.
 
 ## app/poltergeist_app/test/services/identity_audit_log_test.dart
 
@@ -547,6 +552,9 @@ port candidates.
   `readAll` closed with that errno pinned), mirroring the lib entry's
   read-side repair gate. Temp prefix and home paths carry Poltergeist
   names (`poltergeist-audit-`, `/home/...`) per the 08 §2 rename rule.
+- Shared: 2026-10-08. The cases moved to `seance_core`'s
+  `identity_audit_log_test.dart` and `file_permissions_test.dart`; this
+  file and the local permissions test are removed.
 - Port-back candidates: none — the procfs regressions landed upstream in
   [Séance #81](https://github.com/L-K-M/Seance/pull/81) (merge
   `2e6d1f138f1704e683870f75e11262bf50e37379`) and are now ported here
@@ -759,6 +767,9 @@ counterpart is ported here.
   carried. The section keys and labels, `groupServers`, the row model,
   `sectionsHoldingLive` and `hiddenByHeader` are removed; a diff against
   the source is now partial.
+- Shared: 2026-10-08. `existingServerGroups` moved into `seance_protocol`
+  beside `ServerConfig` and reaches the server editor through the core
+  barrel; this file is removed.
 - Port-back candidates: none — Séance owns the source.
 
 ## app/poltergeist_app/lib/ui/server_filter.dart
@@ -772,6 +783,9 @@ counterpart is ported here.
 - Pruned: 2026-10-07. Only `serverSearchHaystack` is carried; the sidebar
   matches it with `sidebarQueryMatches`, Séance's term rule over any row.
   `serverMatchesQuery` and `filterServers` had no caller here.
+- Shared: 2026-10-08. `serverSearchHaystack` moved into `seance_protocol`
+  beside `ServerConfig` and reaches the sidebar through the core barrel;
+  this file is removed.
 - Port-back candidates: none — Séance owns the source.
 
 ## app/poltergeist_app/test/ui/server_grouping_test.dart
@@ -785,6 +799,8 @@ counterpart is ported here.
   regressions re-synced 2026-09-29.
 - Pruned: 2026-10-04, with the library above: only the
   `existingServerGroups` group and its `_server` fixture are carried.
+- Shared: 2026-10-08. The group moved with its function to
+  `seance_protocol`'s `server_search_test.dart`; this file is removed.
 - Port-back candidates: none.
 
 ## app/poltergeist_app/test/ui/server_filter_test.dart
@@ -794,7 +810,8 @@ counterpart is ported here.
 - Ported: 2026-09-24
 - Divergences: since 2026-10-07 the matching cases run through
   `sidebarQueryMatches` over `serverSearchHaystack`, the pair the sidebar
-  uses; the order case went with the pruned `filterServers`.
+  uses; the order case went with the pruned `filterServers`. Since
+  2026-10-08 `serverSearchHaystack` comes from the core barrel.
 - Port-back candidates: none.
 
 ## app/poltergeist_app/lib/ui/middle_ellipsis_text.dart
@@ -922,6 +939,11 @@ counterpart is ported here.
 - Divergences: none — carried verbatim (imports re-pointed). SVG
   rasterization adds the `flutter_svg` direct dependency, the same use
   upstream makes of it.
+- Shared: 2026-10-08. The encoder moved to `ghost_ui`
+  (`lib/src/badge_image.dart`), which both apps import; this file is
+  removed. The shared copy keeps this one's render-phase catch, broader
+  than upstream's `on Exception` because `toImage`/`toByteData` can fail
+  with an `Error`.
 - Port-back candidates: none — Séance owns the source.
 
 ## app/poltergeist_app/lib/services/server_duplication.dart
@@ -1141,6 +1163,9 @@ could ride a future Séance PR if Séance adopts §2.5 ordering.
   enum carries no "vault" wording either.
 - Port-back candidates: none — the typed-issue reporting is D20-local;
   the rules did not change.
+- Shared: 2026-10-08. The typed form moved into `seance_core`, which both
+  apps use: Séance maps each issue to its sentences, Poltergeist to ARB
+  copy through the core barrel. This file is removed.
 
 ## packages/poltergeist_core/lib/src/checkout/managed_remote_file.dart
 
@@ -1389,6 +1414,10 @@ could ride a future Séance PR if Séance adopts §2.5 ordering.
   wait for an unrelated repaint. `openSystemDefault` refuses names the
   host would run as programs (`ExecutableLaunchRefused`, 06 §5.3), and
   `launchWouldExecute` exposes the same check to the shell.
+- Shared: 2026-10-08. `normalizeEditorExtensions` and
+  `validateEditorDisplayName` moved into `planchette_editor`, which both
+  apps import; their pure cases moved to its
+  `external_editor_fields_test.dart`.
 - Port-back candidates: the platform-aware launch-target validation —
   Séance's `File.isAbsolute` decode fails the same synced-Windows case
   upstream. The executable-launch refusal, if Séance's remote edit

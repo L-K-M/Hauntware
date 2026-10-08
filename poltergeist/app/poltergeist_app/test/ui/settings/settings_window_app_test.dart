@@ -5,6 +5,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:poltergeist_app/services/appearance_controller.dart';
 import 'package:poltergeist_app/services/directory_grouping_controller.dart';
+import 'package:poltergeist_app/services/double_click_action.dart';
+import 'package:poltergeist_app/services/double_click_action_controller.dart';
 import 'package:poltergeist_app/services/editor_text_size_controller.dart';
 import 'package:poltergeist_app/services/settings_window/remote_settings.dart';
 import 'package:poltergeist_app/services/settings_window/settings_window_host.dart';
@@ -14,6 +16,7 @@ import 'package:poltergeist_app/theme/app_appearance.dart';
 import 'package:poltergeist_app/theme/theme_presets.dart';
 import 'package:poltergeist_app/ui/settings/appearance_settings.dart';
 import 'package:poltergeist_app/ui/settings/directory_grouping_settings.dart';
+import 'package:poltergeist_app/ui/settings/double_click_action_settings.dart';
 import 'package:poltergeist_app/ui/settings/editor_text_size_settings.dart';
 import 'package:poltergeist_app/ui/settings/general_settings.dart';
 import 'package:poltergeist_app/ui/settings/preview_settings.dart';
@@ -34,6 +37,7 @@ void main() {
   late AppearanceController appearance;
   late EditorTextSizeController editorTextSize;
   late DirectoryGroupingController directoryGrouping;
+  late DoubleClickActionController doubleClickAction;
   late bool checkForUpdates;
   final updates = ChangeNotifier();
 
@@ -61,6 +65,8 @@ void main() {
     addTearDown(editorTextSize.dispose);
     directoryGrouping = DirectoryGroupingController();
     addTearDown(directoryGrouping.dispose);
+    doubleClickAction = DoubleClickActionController();
+    addTearDown(doubleClickAction.dispose);
     host = SettingsWindowHost(control: _control, link: _appLink)
       ..attach(
         SettingsWindowSources(
@@ -71,6 +77,7 @@ void main() {
           appearance: appearance,
           editorTextSize: editorTextSize,
           directoryGrouping: directoryGrouping,
+          doubleClickAction: doubleClickAction,
           changes: [updates],
           previewDownloads: () => PreviewDownloadsSettings(
             available: true,
@@ -125,6 +132,40 @@ void main() {
     // No backup service in this app, so no Sync tab.
     expect(find.widgetWithText(Tab, 'Sync'), findsNothing);
     expect(find.text('Preview cache limit'), findsOneWidget);
+  });
+
+  testWidgets('the Editing tab opens with the double-click action, which '
+      'the app follows', (tester) async {
+    await pumpWindow(tester, SettingsWindowTab.editing);
+    Finder dropdown() =>
+        find.byKey(const ValueKey('editing.doubleClickAction'));
+
+    expect(
+      tester.getRect(find.byType(DoubleClickActionSection)).top,
+      lessThan(tester.getRect(find.byType(PreviewDownloadsSection)).top),
+    );
+    expect(
+      tester.widget<DropdownButton<DoubleClickAction>>(dropdown()).value,
+      DoubleClickAction.open,
+    );
+
+    await tester.tap(dropdown());
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Edit in Poltergeist').last);
+    // The dropdown shows the choice at once, before the app answers.
+    await tester.pump();
+    expect(
+      tester.widget<DropdownButton<DoubleClickAction>>(dropdown()).value,
+      DoubleClickAction.edit,
+    );
+    await tester.runAsync(pumpEventQueue);
+    await tester.pumpAndSettle();
+
+    expect(doubleClickAction.value, DoubleClickAction.edit);
+    expect(
+      tester.widget<DropdownButton<DoubleClickAction>>(dropdown()).value,
+      DoubleClickAction.edit,
+    );
   });
 
   testWidgets('a tab request switches the showing window', (tester) async {

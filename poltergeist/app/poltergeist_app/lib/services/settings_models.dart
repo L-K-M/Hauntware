@@ -15,6 +15,7 @@ import '../theme/app_appearance.dart';
 import '../theme/theme_palette.dart';
 import 'bookmark_backup_service.dart'
     show BackupSwitchOutcome, RetainedBackupAccount;
+import 'double_click_action.dart';
 import 'external_file_opener.dart';
 
 /// The Settings → Appearance section's model: [AppearanceController] in the
@@ -52,6 +53,17 @@ abstract interface class DirectoryGroupingModel
   /// Throws when the write fails, after the panes have taken the change:
   /// the next write carries it.
   Future<void> setGrouping(DirectoryGrouping grouping);
+}
+
+/// What opening a file does (02 §2.6): [DoubleClickActionController] in
+/// the app. Settings → Editing writes it, and every pane's next file open
+/// follows it.
+abstract interface class DoubleClickActionModel
+    implements ValueListenable<DoubleClickAction> {
+  /// Hands every pane the new action, then persists; an unchanged value is
+  /// a no-op. Throws when the write fails, after the panes have taken the
+  /// change: the next write carries it.
+  Future<void> setAction(DoubleClickAction action);
 }
 
 /// View › Zoom on an [EditorTextSizeModel].

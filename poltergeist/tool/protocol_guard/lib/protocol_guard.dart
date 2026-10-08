@@ -9,6 +9,11 @@ import 'package:analyzer/dart/element/type.dart';
 import 'package:analyzer/diagnostic/diagnostic.dart';
 import 'package:path/path.dart' as p;
 
+// The guards are tool directories, not packages, so the shared walk is
+// imported by path.
+// ignore: avoid_relative_lib_imports
+import '../../import_guard/lib/source_walker.dart';
+
 const _engineDirectory = 'packages/poltergeist_core/lib/src/engine';
 const _protocolBases = {'EngineRequest', 'EngineEvent'};
 
@@ -18,14 +23,6 @@ const _callbackOwners = {
   '$_engineDirectory/connect_log_coalescer.dart': {'ConnectLogCoalescer'},
   '$_engineDirectory/engine_probes.dart': {'EngineProbes'},
 };
-const _generatedDirectories = {
-  '.dart_tool',
-  '.git',
-  '.symlinks',
-  'build',
-  'ephemeral',
-};
-const _nativePlatforms = {'android', 'ios', 'linux', 'macos', 'windows'};
 
 /// Enforces 08 §3.3 using resolved types, including typedefs and inference.
 Future<List<String>> checkProtocol(String rootPath) async {
@@ -38,7 +35,7 @@ Future<List<String>> checkProtocol(String rootPath) async {
   for (final area in areas) {
     final directory = Directory(area);
     await _requireDirectory(directory);
-    files.addAll(await _sources(directory, root).toList());
+    files.addAll(await dartSources(directory, root).toList());
   }
   if (!files.any((file) => p.isWithin(engine.path, file.path))) {
     throw const FormatException('No engine sources found');
@@ -61,7 +58,7 @@ Future<List<String>> _checkSource(
   String root,
   AnalysisContextCollection contexts,
 ) async {
-  final relative = _relative(file.path, root);
+  final relative = relativeSourcePath(file.path, root);
   // Parsing separately fails closed even when Flutter imports cannot resolve
   // in the pure-Dart CI job. Engine field types must resolve completely.
   parseString(content: await file.readAsString(), path: file.path);
@@ -176,33 +173,3 @@ Future<void> _requireDirectory(Directory directory) async {
     throw FileSystemException('Missing or linked scan root', directory.path);
   }
 }
-
-Stream<File> _sources(Directory directory, String root) async* {
-  await for (final entity in directory.list(followLinks: false)) {
-    if (_isGenerated(entity.path, root)) continue;
-    if (entity is Link) {
-      throw FileSystemException('Linked scan input', entity.path);
-    }
-    if (entity is Directory) {
-      yield* _sources(entity, root);
-      continue;
-    }
-    if (entity is File && p.extension(entity.path) == '.dart') yield entity;
-  }
-}
-
-// Exclude build outputs only at package/platform boundaries, never under lib/.
-bool _isGenerated(String path, String root) => switch (p.split(
-  p.relative(path, from: root),
-)) {
-  ['packages' || 'app', _, final name] => _generatedDirectories.contains(name),
-  ['app', _, 'ios' || 'macos', 'Pods' || '.symlinks'] => true,
-  ['app', _, final platform, 'build'] => _nativePlatforms.contains(platform),
-  ['app', _, 'android', 'app', 'build'] => true,
-  ['app', _, 'ios' || 'macos', 'Flutter', 'ephemeral'] => true,
-  ['app', _, 'linux' || 'windows', 'flutter', 'ephemeral'] => true,
-  _ => false,
-};
-
-String _relative(String path, String root) =>
-    p.posix.joinAll(p.split(p.relative(path, from: root)));

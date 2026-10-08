@@ -10,6 +10,8 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
+import 'package:planchette_editor/planchette_editor.dart'
+    show normalizeEditorExtensions;
 import 'package:poltergeist_app/services/editor_registry_controller.dart';
 import 'package:poltergeist_app/services/external_file_opener.dart';
 import 'package:poltergeist_app/services/settings_store.dart';
@@ -96,13 +98,6 @@ void main() {
 
       expect(registry.editors.single.id, 'valid.editor');
       expect(registry.defaultEditorId, 'valid.editor');
-    });
-
-    test('invalid extension syntax is rejected', () {
-      expect(
-        () => normalizeEditorExtensions(['txt', '../sh']),
-        throwsFormatException,
-      );
     });
 
     test('registry rejects editor values that cannot round-trip', () {
@@ -318,15 +313,6 @@ void main() {
       // Replacing an existing id is not an add — still allowed at cap.
       registry.put(_editor(id: 'editor.0', displayName: 'Renamed'));
       expect(registry.editors, hasLength(64));
-    });
-
-    test('at most 64 extensions normalize', () {
-      expect(
-        () => normalizeEditorExtensions([
-          for (var i = 0; i < 65; i++) 'e$i',
-        ]),
-        throwsFormatException,
-      );
     });
   });
 

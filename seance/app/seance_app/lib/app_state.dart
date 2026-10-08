@@ -152,6 +152,11 @@ class TerminalSession extends PaneTab {
   /// it with the same host-key error.
   bool hostKeyBlocked = false;
 
+  /// The server whose saved credential the attempt that failed with [error]
+  /// could not find on this device (CRED-05): this tab's own server, or a
+  /// jump host on its path. Null for every other failure.
+  String? missingCredentialServerId;
+
   /// Live transcript of the current/last connection attempt, shown in the
   /// "connection log" details when a connection fails. Owned by the session so
   /// its trace lines drive [logNotifier] rather than the whole app.
@@ -1575,6 +1580,9 @@ class AppState extends ChangeNotifier {
       // [_HostKeyAttempt]). A changed verdict needs a pinned key, so no
       // lookup of the pin is needed either.
       tab.hostKeyBlocked = hostKey.refusedChangedKey;
+      tab.missingCredentialServerId = e is CredentialMissingException
+          ? e.serverId
+          : null;
     }
     notifyListeners();
     _refreshKeepAlive();
@@ -2387,6 +2395,7 @@ class AppState extends ChangeNotifier {
     tab.connecting = false;
     tab.error = null;
     tab.hostKeyBlocked = false;
+    tab.missingCredentialServerId = null;
     notifyListeners();
     _refreshKeepAlive();
   }

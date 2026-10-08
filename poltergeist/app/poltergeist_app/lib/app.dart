@@ -20,7 +20,6 @@ import 'services/checkout_prompt_ledger.dart';
 import 'services/checkout_session.dart';
 import 'services/connection_state_bridge.dart';
 import 'services/content_size_reporter.dart';
-import 'services/double_click_action.dart';
 import 'services/deep_links.dart';
 import 'services/drag_out_producer.dart' show DragOutProducer;
 import 'services/editor_registry_controller.dart';
@@ -35,7 +34,11 @@ import 'services/seance_links.dart';
 import 'services/session_persistence.dart';
 import 'services/session_state.dart';
 import 'services/settings_models.dart'
-    show AppearanceSettingsModel, DirectoryGroupingModel, EditorTextSizeModel;
+    show
+        AppearanceSettingsModel,
+        DirectoryGroupingModel,
+        DoubleClickActionModel,
+        EditorTextSizeModel;
 import 'services/settings_window/settings_window_host.dart';
 import 'services/sidebar_controller.dart'
     show CollapsedSectionWriter, PinnedServerWriter, SidebarDensity;
@@ -61,7 +64,7 @@ class PoltergeistApp extends StatefulWidget {
     super.key,
     this.initialPaneRatio = 0.5,
     this.newTabTarget = NewTabTarget.duplicate,
-    this.doubleClickAction = DoubleClickAction.open,
+    this.doubleClickAction,
     this.reconnectRestoredTabs = true,
     this.restoredSession,
     this.sessionPersistence,
@@ -137,9 +140,9 @@ class PoltergeistApp extends StatefulWidget {
   /// startup and seeded onto each pane's tab strip.
   final NewTabTarget newTabTarget;
 
-  /// The persisted "Double-click action" preference (02 §2.6), loaded
-  /// at startup and seeded onto each pane's tab strip.
-  final DoubleClickAction doubleClickAction;
+  /// The "Double-click action" preference (02 §2.6) every pane's file
+  /// open follows; Settings → Editing writes it. Null opens files.
+  final DoubleClickActionModel? doubleClickAction;
 
   /// The persisted "Reconnect restored tabs automatically" setting
   /// (02 §3), loaded at startup and seeded onto each pane's tab strip.

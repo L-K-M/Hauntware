@@ -20,6 +20,8 @@ dependencies:
   crypto: ^3.0.0
   ffi: ^2.1.0
   meta: ^1.15.0
+  # Owner-only modes for private files (file_permissions.dart).
+  posix: ^6.5.0
 
 dev_dependencies:
   fake_async: ^1.3.3

@@ -4,9 +4,9 @@ import 'dart:developer' as developer;
 import 'dart:io';
 
 import 'package:crypto/crypto.dart';
+import 'package:seance_core/seance_core.dart' show restrictDirectoryToOwner;
 
 import 'atomic_file.dart';
-import 'file_permissions.dart';
 import 'managed_remote_file.dart';
 
 const _indexVersion = 1;

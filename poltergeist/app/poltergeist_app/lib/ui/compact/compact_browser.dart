@@ -67,15 +67,8 @@ String compactSelectionTitle(
   TargetPlatform platform,
 ) {
   final count = l10n.compactSelectionCount(pane.selectedCount);
-  var bytes = 0;
-  var files = 0;
-  for (final entry in pane.selectedEntries) {
-    final size = entry.size;
-    if (entry.type != RemoteFileType.file || size == null) continue;
-    bytes += size;
-    files++;
-  }
-  if (files == 0) return count;
+  final bytes = selectedFileBytes(pane.selectedEntries);
+  if (bytes == null) return count;
   return l10n.paneSelectionSummaryWithSize(
     count,
     formatPaneSize(bytes, platform: platform),

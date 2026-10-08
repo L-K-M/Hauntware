@@ -721,8 +721,12 @@ class AppLocalizationsEn extends AppLocalizations {
       'Editing files in Poltergeist isn\'t available yet — the editor arrives in a later milestone.';
 
   @override
-  String get paneNoticeTransferLater =>
-      'Transferring to the other pane isn\'t available yet — the transfer queue arrives in a later milestone.';
+  String get paneNoticeTransferNeedsOtherPane =>
+      'To transfer files, show the other pane and open a folder in it.';
+
+  @override
+  String get paneNoticeTransferUnavailable =>
+      'This file can\'t be transferred to the other pane.';
 
   @override
   String get paneNoticeDragOutRemote =>
@@ -4860,6 +4864,28 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get editorSettingsClose => 'Close';
+
+  @override
+  String get settingsOpeningFilesSection => 'Opening files';
+
+  @override
+  String get doubleClickActionLabel => 'Double-click action';
+
+  @override
+  String get doubleClickActionSubtitle =>
+      'Also applies to opening a file from the keyboard. Folders always open.';
+
+  @override
+  String get doubleClickActionOpen => 'Open';
+
+  @override
+  String get doubleClickActionEdit => 'Edit in Poltergeist';
+
+  @override
+  String get doubleClickActionTransfer => 'Transfer to other pane';
+
+  @override
+  String get doubleClickActionNothing => 'Do nothing';
 
   @override
   String get editorDefaultLabel => 'Default editor';

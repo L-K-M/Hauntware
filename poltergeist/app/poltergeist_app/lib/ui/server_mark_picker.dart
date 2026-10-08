@@ -7,10 +7,16 @@ import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:ghost_ui/ghost_ui.dart'
+    show
+        BadgeImageFailure,
+        encodeBadgeImage,
+        kBadgeImageAppleExtensions,
+        kBadgeImageExtensions,
+        kBadgeImageSide;
 import 'package:poltergeist_core/poltergeist_core.dart';
 
 import '../l10n/app_localizations.dart';
-import '../services/badge_image.dart';
 import 'selected_tab_view.dart';
 import 'server_appearance.dart';
 

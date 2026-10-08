@@ -24,7 +24,6 @@ import '../panes/pane_format.dart' show formatPaneSize;
 import '../place_glyphs.dart';
 import '../save_to_servers.dart';
 import '../server_appearance.dart';
-import '../server_filter.dart' show serverSearchHaystack;
 import '../server_state_indicator.dart';
 import 'sidebar_facts.dart';
 import 'sidebar_kit.dart';

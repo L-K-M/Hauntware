@@ -24,6 +24,7 @@ import 'files_pane.dart';
 import 'keyboard_shortcuts_dialog.dart';
 import 'middle_ellipsis_text.dart';
 import 'server_appearance.dart';
+import 'server_editor.dart' show showServerEditor;
 import 'server_list_pane.dart';
 import 'session_label.dart';
 import 'sidebar_panel.dart';
@@ -1495,13 +1496,24 @@ class _SessionViewState extends State<_SessionView> {
 
 /// Shown when a connection attempt failed. Surfaces the one-line summary and an
 /// expandable connection log so the user can see exactly what happened.
+///
+/// A credential this device does not have (CRED-05) is a setup step, not a
+/// network failure: the pane says so and offers the server's editor, where
+/// the password or key can be entered or the agent chosen.
 class _ConnectionError extends StatelessWidget {
   final TerminalSession tab;
   final AppState state;
   const _ConnectionError({required this.tab, required this.state});
 
+  ServerConfig? get _missingCredentialServer {
+    final id = tab.missingCredentialServerId;
+    if (id == null) return null;
+    return state.servers.where((server) => server.id == id).firstOrNull;
+  }
+
   @override
   Widget build(BuildContext context) {
+    final missingCredential = _missingCredentialServer;
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 560),
@@ -1516,17 +1528,46 @@ class _ConnectionError extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               Text(
-                tab.isLocal ? 'Could not start a shell' : 'Connection failed',
+                tab.isLocal
+                    ? 'Could not start a shell'
+                    // The failure's own fact, not the lookup: a server
+                    // removed meanwhile still failed for this reason.
+                    : tab.missingCredentialServerId != null
+                    ? 'Credential required on this device'
+                    : 'Connection failed',
                 style: Theme.of(context).textTheme.titleMedium,
               ),
               const SizedBox(height: 8),
               Text(tab.error!, textAlign: TextAlign.center),
               const SizedBox(height: 16),
-              FilledButton.icon(
-                onPressed: () => state.reconnect(tab.id),
-                icon: const Icon(Icons.refresh),
-                label: const Text('Retry'),
-              ),
+              if (missingCredential == null)
+                FilledButton.icon(
+                  onPressed: () => state.reconnect(tab.id),
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Retry'),
+                )
+              else
+                // Editing is the way forward; Retry stays for a credential
+                // that has since arrived (a sync round, another window).
+                Wrap(
+                  alignment: WrapAlignment.center,
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    FilledButton.icon(
+                      key: const ValueKey('connection.editServer'),
+                      onPressed: () =>
+                          showServerEditor(context, state, missingCredential),
+                      icon: const Icon(Icons.edit_outlined),
+                      label: Text('Edit ${missingCredential.label}'),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: () => state.reconnect(tab.id),
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('Retry'),
+                    ),
+                  ],
+                ),
               // Nothing produced a handshake transcript for a local shell —
               // its one-line failure is the whole story.
               if (!tab.isLocal) ...[

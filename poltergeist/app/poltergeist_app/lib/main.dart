@@ -6,6 +6,7 @@ import 'package:app_links/app_links.dart';
 import 'package:flutter/material.dart' show GlobalKey, ScaffoldMessengerState;
 import 'package:flutter/services.dart' show ServicesBinding;
 import 'package:flutter/widgets.dart';
+import 'package:ghost_desktop/ghost_desktop.dart' show MacosToolbarBandChannel;
 import 'package:ghost_ui/ghost_ui.dart' show CheckedPlatformMenuDelegate;
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
@@ -14,10 +15,12 @@ import 'package:poltergeist_core/poltergeist_core.dart';
 import 'app.dart';
 import 'settings_window_app.dart';
 import 'services/app_preferences.dart';
+import 'services/atomic_file.dart';
 import 'services/app_session_lifecycle.dart';
 import 'services/archive_queue_tasks.dart';
 import 'services/appearance_controller.dart';
 import 'services/directory_grouping_controller.dart';
+import 'services/double_click_action_controller.dart';
 import 'services/editor_text_size_controller.dart';
 import 'services/application_error_reporter.dart';
 import 'services/bookmark_backup_service.dart';
@@ -31,7 +34,6 @@ import 'services/dynamic_secret_vault.dart';
 import 'services/editor_registry_controller.dart';
 import 'services/engine_session.dart';
 import 'services/file_stores.dart';
-import 'services/identity_audit_log.dart';
 import 'services/identity_file_reader.dart';
 import 'services/macos_toolbar_band_channel.dart';
 import 'services/os_drag_out.dart' show DragOutRouter, platformDragOutBackend;
@@ -172,7 +174,11 @@ Future<void> main(List<String> args) async {
   }
   final paneRatio = await preferences.loadPaneRatio();
   final newTabTarget = await preferences.loadNewTabTarget();
-  final doubleClickAction = await preferences.loadDoubleClickAction();
+  // What opening a file does (02 §2.6), shared by every window's panes.
+  final doubleClickAction = DoubleClickActionController(
+    initial: await preferences.loadDoubleClickAction(),
+    save: preferences.saveDoubleClickAction,
+  );
   final reconnectRestoredTabs =
       await preferences.loadReconnectRestoredTabs();
   // The activity panel's persisted chrome state (02 §1/§6): height,
@@ -508,6 +514,7 @@ Future<void> main(List<String> args) async {
           '${supportDirectory.path}${Platform.pathSeparator}'
           '$kIdentityAuditLogFileName',
         ),
+        rewriteOwnerOnly: writeOwnerOnlyAtomically,
       ),
     ),
     navigatorKey: navigatorKey,
@@ -526,8 +533,13 @@ Future<void> main(List<String> args) async {
   // macOS full screen hides the unified toolbar band the shell header
   // draws under (D32 §3); the runner reports the switch so the layout
   // follows it.
-  final toolbarBand = Platform.isMacOS ? MacosToolbarBandChannel() : null;
-  if (toolbarBand != null) errorReporter.observe(toolbarBand.start());
+  final toolbarBand = Platform.isMacOS
+      ? MacosToolbarBandChannel(
+          channelName: windowChannelName,
+          onStartError: errorReporter.report,
+        )
+      : null;
+  if (toolbarBand != null) unawaited(toolbarBand.start());
 
   // This device's theme (Settings → Appearance): read before the first
   // frame, so the app opens in it rather than fading into it.

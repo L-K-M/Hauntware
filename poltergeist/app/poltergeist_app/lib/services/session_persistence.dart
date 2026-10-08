@@ -59,7 +59,6 @@ final class SessionPersistence {
   /// windows opened: the first is persisted as the v1 document, the rest
   /// beside it (00 D39).
   final _workspaces = <WorkspaceController>[];
-  final _listened = <WorkspaceController, List<Listenable>>{};
   void Function()? _cancelScheduled;
   Future<void> _tail = Future<void>.value();
   // JSON of the last write attempt — notifications that leave the
@@ -67,17 +66,23 @@ final class SessionPersistence {
   // no write.
   String? _lastEncoded;
 
+  /// What a workspace's persisted state changes through: the workspace
+  /// and its two pane strips (both fixed for the workspace's lifetime).
+  List<Listenable> _listenablesOf(WorkspaceController workspace) => [
+    workspace,
+    workspace.left,
+    workspace.right,
+  ];
+
   /// Starts persisting [workspace]'s state beside any already attached.
   /// Attaching also schedules a write so the freshly restored (or default)
   /// session is on disk before the user changes anything.
   void attach(WorkspaceController workspace) {
     if (_workspaces.contains(workspace)) return;
     _workspaces.add(workspace);
-    final listened = [workspace, workspace.left, workspace.right];
-    for (final listenable in listened) {
+    for (final listenable in _listenablesOf(workspace)) {
       listenable.addListener(_scheduleWrite);
     }
-    _listened[workspace] = listened;
     // The dedupe key attests what is on disk for the previous set — an
     // attach must not inherit it and skip the first capture.
     _lastEncoded = null;
@@ -91,7 +96,7 @@ final class SessionPersistence {
   /// legitimately arrive mid-rebuild.
   void detach(WorkspaceController workspace) {
     if (!_workspaces.remove(workspace)) return;
-    for (final listenable in _listened.remove(workspace) ?? const []) {
+    for (final listenable in _listenablesOf(workspace)) {
       listenable.removeListener(_scheduleWrite);
     }
     if (_workspaces.isNotEmpty) {

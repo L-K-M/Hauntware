@@ -45,53 +45,11 @@ if [[ -z "$DEB" ]]; then
 fi
 [ -f "$DEB" ] || die ".deb not found: $DEB"
 
-# Debian /usr -> flatpak /app.
-rm -rf "$WORK/debroot" "$WORK/stage" "$WORK/build" "$WORK/repo"
-mkdir -p "$WORK"   # dpkg-deb creates the target dir but not its parents
-dpkg-deb -x "$DEB" "$WORK/debroot"
-mkdir -p "$WORK/stage"
-cp -a "$WORK/debroot/usr/." "$WORK/stage/"
-
-# Shipped text files (wrappers, launchers, python) hardcode /usr; inside flatpak the prefix is /app.
-while IFS= read -r f; do
-  sed -i '/^#!/!s|/usr/|/app/|g' "$f"
-done < <(grep -rIl '/usr/' "$WORK/stage" 2>/dev/null || true)
-while IFS= read -r f; do
-  sed -i -e 's|Exec=/usr/bin/|Exec=|g' -e 's|Exec=/opt/[^/]*/bin/|Exec=|g' -e 's|Exec=/app/bin/|Exec=|g' -e '/^TryExec=/d' "$f"
-done < <(find "$WORK/stage/share/applications" -type f -name '*.desktop' 2>/dev/null)
-
-# flatpak exports the desktop file and icons only when they are named after
-# the app id; the bundler names them after the binary instead.
-DESKTOP="$(find "$WORK/stage/share/applications" -type f -name '*.desktop' -print -quit 2>/dev/null || true)"
-[ -n "$DESKTOP" ] || die "no .desktop file inside $DEB"
-[ "$(basename "$DESKTOP")" = "$APP_ID.desktop" ] ||
-  mv "$DESKTOP" "$WORK/stage/share/applications/$APP_ID.desktop"
-DESKTOP="$WORK/stage/share/applications/$APP_ID.desktop"
-# The launcher resolves Icon= through flatpak's exported name.
-sed -i "s|^Icon=.*|Icon=$APP_ID|" "$DESKTOP"
-if ! find "$WORK/stage/share/icons" "$WORK/stage/share/pixmaps" -name "$APP_ID.*" -print -quit 2>/dev/null | grep -q .; then
-  ICON="$(find "$WORK/stage/share/icons" "$WORK/stage/share/pixmaps" -name '*.png' -printf '%s\t%p\n' 2>/dev/null | sort -rn | head -n1 | cut -f2- || true)"
-  [ -n "$ICON" ] || ICON="$(find "$WORK/stage/share/icons" "$WORK/stage/share/pixmaps" \( -name '*.svg' -o -name '*.png' \) -print -quit 2>/dev/null || true)"
-  [ -n "$ICON" ] || die "no icon inside $DEB"
-  mkdir -p "$WORK/stage/share/icons/hicolor/256x256/apps"
-  cp "$ICON" "$WORK/stage/share/icons/hicolor/256x256/apps/$APP_ID.${ICON##*.}"
-fi
-
-flatpak remote-add --user --if-not-exists flathub "$FLATHUB_REPO"
-# --disable-rofiles-fuse: containers (CI) have no FUSE, and a copy-only build
-# gains nothing from it.
-flatpak-builder --user --install-deps-from=flathub --force-clean \
-  --disable-rofiles-fuse \
-  --state-dir="$WORK/state" --repo="$WORK/repo" \
-  "$WORK/build" "$MANIFEST"
-
-# Smoke check: the staged tree must leave an executable under
-# /app/bin — catches a failed /usr->/app remap before the bundle
-# ships.
-COMMAND_NAME="$(sed -n '/^command:[[:space:]]*/{s///;p;q}' "$MANIFEST")"
-[ -n "$COMMAND_NAME" ] || die "no command: key in $MANIFEST"
-flatpak-builder --run "$WORK/build" "$MANIFEST" \
-  sh -c 'bin="/app/bin/$1"; test -x "$bin" || { echo "missing $bin" >&2; ls -l /app/bin >&2; exit 1; }; bad="$(ldd "$bin" 2>/dev/null | grep "not found" || true)"; [ -z "$bad" ] || { printf "unresolved libraries:\n%s\n" "$bad" >&2; exit 1; }' _ "$COMMAND_NAME"
+# The repack and build are shared with the other products' Flatpaks.
+# shellcheck source=../../scripts/flatpak-repack.sh
+source "$ROOT/../scripts/flatpak-repack.sh"
+flatpak_stage_deb "$DEB" "$WORK" "$APP_ID"
+flatpak_build "$WORK" "$MANIFEST" "$FLATHUB_REPO"
 
 BUNDLE="$ROOT/dist/planchette-linux-x64.flatpak"
 flatpak build-bundle --runtime-repo="$FLATHUB_REPO" \

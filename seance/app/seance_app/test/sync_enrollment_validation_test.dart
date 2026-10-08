@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:seance_app/ui/sync_enrollment_validation.dart';
+import 'package:seance_core/seance_core.dart';
 
 void main() {
   const validUrl = 'https://sync.example.com';
@@ -14,14 +15,18 @@ void main() {
     String accountPassword = password,
     String vaultPassphrase = encryptionPassphrase,
     String confirmation = encryptionPassphrase,
-  }) => validateSyncEnrollment(
-    mode: mode,
-    baseUrl: baseUrl,
-    username: user,
-    password: accountPassword,
-    encryptionPassphrase: vaultPassphrase,
-    confirmationPassphrase: confirmation,
-  );
+  }) {
+    // The rules are seance_core's; the sentences are Séance's.
+    final issue = validateSyncEnrollment(
+      mode: mode,
+      baseUrl: baseUrl,
+      username: user,
+      password: accountPassword,
+      encryptionPassphrase: vaultPassphrase,
+      confirmationPassphrase: confirmation,
+    );
+    return issue == null ? null : syncEnrollmentIssueMessage(issue);
+  }
 
   test('rejects blank and non-HTTP(S) server URLs', () {
     expect(validate(baseUrl: '   '), 'Enter a valid HTTP or HTTPS server URL.');

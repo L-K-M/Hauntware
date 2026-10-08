@@ -3,11 +3,13 @@
 /// runs, and run the intercepted close path. Hosts own their persistence
 /// format and their product-specific hooks through the adapter interfaces.
 /// Hosts with extra windows also route misaddressed accessibility actions
-/// to their views through [semanticsActionView].
+/// to their views through [semanticsActionView]. On macOS,
+/// [MacosToolbarBandChannel] reports the toolbar band a header draws under.
 library;
 
 export 'src/adapters.dart';
 export 'src/geometry.dart';
 export 'src/lifecycle.dart';
+export 'src/macos_toolbar_band.dart';
 export 'src/semantics_routing.dart';
 export 'src/snapshot.dart';

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:seance_app/ui/settings_screen.dart';
-import 'package:seance_app/ui/sync_enrollment_validation.dart';
+import 'package:seance_core/seance_core.dart' show SyncEnrollmentMode;
 
 void main() {
   late TextEditingController password;

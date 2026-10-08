@@ -16,6 +16,7 @@ import '../../ui/settings/general_settings.dart';
 import '../../ui/settings/preview_settings.dart';
 import '../bookmark_backup_service.dart'
     show BackupSwitchOutcome, RetainedBackupAccount;
+import '../double_click_action.dart';
 import '../external_file_opener.dart';
 import '../settings_models.dart';
 import '../sync_account_gate.dart';
@@ -136,6 +137,9 @@ class RemoteSettings extends ChangeNotifier {
   late final RemoteDirectoryGrouping _directoryGrouping =
       RemoteDirectoryGrouping._(_link);
   bool _hasDirectoryGrouping = false;
+  late final RemoteDoubleClickAction _doubleClickAction =
+      RemoteDoubleClickAction._(_link);
+  bool _hasDoubleClickAction = false;
   SyncAccountGate _gate = const SyncAccountGate.production();
 
   /// The General rows, or null when the app has none.
@@ -185,6 +189,10 @@ class RemoteSettings extends ChangeNotifier {
   /// The General tab's file-list row, or null when the app has none.
   DirectoryGroupingModel? get directoryGrouping =>
       _hasDirectoryGrouping ? _directoryGrouping : null;
+
+  /// The Editing tab's file-open row, or null when the app has none.
+  DoubleClickActionModel? get doubleClickAction =>
+      _hasDoubleClickAction ? _doubleClickAction : null;
 
   /// The theme the window draws itself in: the app's, from the latest
   /// snapshot, or the default theme when the app has no theme seam. One
@@ -260,6 +268,12 @@ class RemoteSettings extends ChangeNotifier {
       _directoryGrouping._apply(DirectoryGrouping.values.byName(grouping));
     }
 
+    final action = snapshot[SettingsLinkKey.doubleClickAction.name] as String?;
+    _hasDoubleClickAction = action != null;
+    if (action != null) {
+      _doubleClickAction._apply(DoubleClickAction.values.byName(action));
+    }
+
     final gate = (snapshot[SettingsLinkKey.gate.name]! as Map)
         .cast<String, Object?>();
     _gate = SyncAccountGate(
@@ -312,6 +326,7 @@ class RemoteSettings extends ChangeNotifier {
     page.dispose();
     _appearance.dispose();
     _directoryGrouping.dispose();
+    _doubleClickAction.dispose();
     _editorTextSize.dispose();
     super.dispose();
   }
@@ -392,6 +407,29 @@ final class RemoteDirectoryGrouping extends ChangeNotifier
   @override
   Future<void> setGrouping(DirectoryGrouping grouping) =>
       _link.call(SettingsLinkMethod.setDirectoryGrouping, grouping.name);
+}
+
+/// [DoubleClickActionModel] over the link: the app's value as the latest
+/// snapshot carries it, and writes that run in the app's isolate.
+final class RemoteDoubleClickAction extends ChangeNotifier
+    implements DoubleClickActionModel {
+  RemoteDoubleClickAction._(this._link);
+
+  final _Link _link;
+  DoubleClickAction _value = DoubleClickAction.open;
+
+  void _apply(DoubleClickAction action) {
+    if (action == _value) return;
+    _value = action;
+    notifyListeners();
+  }
+
+  @override
+  DoubleClickAction get value => _value;
+
+  @override
+  Future<void> setAction(DoubleClickAction action) =>
+      _link.call(SettingsLinkMethod.setDoubleClickAction, action.name);
 }
 
 /// [EditorRegistryModel] over the link.

@@ -4,6 +4,51 @@ Living snapshot of where Poltergeist is, what's proven, and what to pick up
 next. Read [AGENTS.md](../AGENTS.md) for build/test commands and
 [09-PLAYBOOK.md](plan/09-PLAYBOOK.md) for the PR process.
 
+## Double-click Transfer to other pane (2026-10-08)
+
+"Double-click action: Transfer to other pane" now does what it names. An
+activated file goes to the pane opposite the one it was opened in (not
+the workspace's active pane) as a one-root copy through the panes' drop
+seam, under F5's rules (`paneDropAllowed`, the conflict policy). The
+shell supplies it as `PaneController.otherPaneTransfer`, stamped by the
+strips like the editor seams; `services/other_pane_transfer.dart` holds
+the resolution, and F5's other-pane lookup now uses it too. With the
+second pane hidden or showing no folder the pane posts
+`transferNeedsOtherPane`; without a queue, or when the source fails
+F5's `verbsEnabled` for any reason other than a directory watch's
+background re-list (`activatedRowVerbsEnabled`), it posts
+`transferUnavailable`. The old "later milestone" notice is gone.
+
+The preview's Open (metadata card, PDF truncation bar) used to follow
+the setting too, so Transfer would have queued a copy from a button
+named Open. It now passes `openEntry(action: DoubleClickAction.open)`,
+the external open 06 §5.2 specifies.
+
+Validation: controller (seam call, both notices, unwired seam, the
+explicit Open under every setting), strip stamping, the helper's
+branches (A to B, B to A whichever pane is active, one folder in both,
+hidden or empty other pane, no queue, a stray pane, a failed listing,
+a watch re-list in flight) and the compact shell end to end (a tap
+queues the copy; a hidden second pane shows the notice). The preview
+button's shell wiring has no widget test: no shell harness composes a
+preview cache.
+
+## Double-click action setting (2026-10-08)
+
+Settings → Editing (Settings window and the Configure Editors… dialog)
+opens with 06 §8's Opening files row: the 02 §2.6 Double-click action
+dropdown. The preference and its `AppPreferences` key already existed and
+the panes already honoured it, but nothing could change it.
+`DoubleClickActionController` now carries it in the app's isolate; the
+Settings window drives it over the link like Keep folders on top, and the
+shell hands each change to both strips, which stamp their tabs. Transfer
+to other pane is offered as the list names it but still posts the
+not-yet notice.
+
+Validation: controller, Settings window link, Settings window tab,
+dialog and shell tests (`double_click_action_shell_test.dart` checks
+both strips and the active tab follow a change).
+
 ## Command sessions counted, not flagged (2026-10-08)
 
 The shell's one-session guard (`_runCommand`) was a single bool. An

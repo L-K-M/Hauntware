@@ -32,21 +32,18 @@ enum NewTabTarget {
 
 /// The close-guard trigger kinds — 02 §3's exact set, spelled as a
 /// registry ([PaneTabsController._closeGuards]). Each entry's probe
-/// reports whether the tab carries that in-flight state at close time.
-/// Folder-size, apply-to-enclosed, and Sync anchor are declared now so
-/// their slices add a probe line — never a reshape of the close
-/// operation or of the confirm dialog's `List<TabCloseTrigger>`.
+/// reports whether the tab carries that in-flight state at close time;
+/// a new kind adds a probe line, never a reshape of the close operation
+/// or of the confirm dialog's `List<TabCloseTrigger>`.
 enum TabCloseTrigger {
   /// A listing navigation is outstanding on the tab (02 §3).
   navigation,
 
-  /// The tab's inline-rename session is open. Nothing opens one this
-  /// slice — the row-interactions slice writes [PaneController]'s flag;
-  /// the probe already guards it.
+  /// The tab's inline-rename session is open.
   inlineRename,
 
-  /// A recursive folder-size computation is running (02 §3). Declared
-  /// for its slice; nothing produces it yet.
+  /// A recursive folder-size computation is running (02 §3), started
+  /// from the inspector.
   folderSize,
 
   /// An apply-to-enclosed-items permissions change is running (02 §2.6,
@@ -54,8 +51,7 @@ enum TabCloseTrigger {
   /// walk.
   applyToEnclosed,
 
-  /// The tab anchors a Sync Browsing pair (02 §7). Declared for its
-  /// slice; nothing produces it yet.
+  /// The tab anchors a Sync Browsing pair (02 §7).
   syncAnchor,
 }
 
@@ -63,12 +59,11 @@ enum TabCloseTrigger {
 /// the controller — evaluated at close time, never cached.
 typedef _CloseGuard = (TabCloseTrigger, bool Function(PaneController));
 
-/// The active registry (02 §3's trigger set): the two v1 probes, the
-/// Sync Browsing anchor probe (02 §7 — closing an anchored tab takes the
-/// link down, so the guard asks first), then the declared-for-later
-/// kinds. A later slice adds one line — a probe that reports its
-/// trigger — and the guard, the dialog, and every close route pick it
-/// up unchanged. (Not const: closures cannot be.)
+/// The active registry (02 §3's trigger set), one probe per kind; closing
+/// an anchored Sync Browsing tab takes the link down (02 §7), so the
+/// guard asks first. A new trigger adds one line — a probe that reports
+/// it — and the guard, the dialog, and every close route pick it up
+/// unchanged. (Not const: closures cannot be.)
 final _closeGuards = <_CloseGuard>[
   (TabCloseTrigger.navigation, (c) => c.navigationInFlight),
   (TabCloseTrigger.inlineRename, (c) => c.inlineRenameActive),
@@ -192,6 +187,7 @@ class PaneTabsController extends ChangeNotifier {
     DirectoryGrouping directoryGrouping = DirectoryGrouping.first,
     this.builtInEditorOpen,
     this.externalEditorOpen,
+    this.otherPaneTransfer,
     this.onLocationCommitted,
     this.serverConfigLookup,
     this.confirmClose,
@@ -279,6 +275,10 @@ class PaneTabsController extends ChangeNotifier {
   /// choice resolve through it.
   final ExternalEditorOpen? externalEditorOpen;
 
+  /// The other-pane transfer seam (02 §2.6), wired once by the shell and
+  /// stamped on every arriving tab like [externalEditorOpen].
+  final OtherPaneTransfer? otherPaneTransfer;
+
   /// The recents feed (02 §8.4): the shell's location-commit callback,
   /// stamped on every arriving tab in [_appendTab] like
   /// [builtInEditorOpen] — adopted, new, and ghost-reopened tabs all
@@ -344,22 +344,16 @@ class PaneTabsController extends ChangeNotifier {
     // Capture the duplicate source BEFORE the new tab activates —
     // "current location" means the tab that was active when ⌘T fired.
     final source = activeTab;
-    final tab = _appendTab(
-      PaneController(
-        paneTabId: '$paneId.tab${_nextTabOrdinal++}',
-        lanes: _lanes,
-        onError: _onError,
-      ),
-    );
+    final tab = _appendTab(_newController());
     activateTab(tab);
     _bindNewTab(tab, source, target ?? newTabTarget);
     return tab;
   }
 
-  /// Adopts a caller-built controller as a tab — the tab-set seeding
-  /// seam a workspace restore (02 §3's snapshots, a later slice) and the
-  /// test surface both drive. The adopted tab activates when it is the
-  /// pane's first.
+  /// Adopts a caller-built controller as a tab — the seeding seam the
+  /// pane widget tests use (workspace restore goes through
+  /// [restoreSession] and [replaceTabs]). The adopted tab activates when
+  /// it is the pane's first.
   PaneTab addTab(PaneController controller) {
     assert(!_disposed, 'addTab on a disposed PaneTabsController');
     final tab = _appendTab(controller);
@@ -374,20 +368,7 @@ class PaneTabsController extends ChangeNotifier {
   /// close-guard plumbing — it never lists.
   PaneTab openSyncPlanTab(SyncPlanController session) {
     assert(!_disposed, 'openSyncPlanTab on a disposed PaneTabsController');
-    final controller = PaneController(
-      paneTabId: '$paneId.tab${_nextTabOrdinal++}',
-      lanes: _lanes,
-      onError: _onError,
-    );
-    controller.doubleClickAction = _doubleClickAction;
-    controller.directoryGrouping = _directoryGrouping;
-    controller.addListener(_forwardTabChange);
-    final tab = PaneTab(
-      id: controller.paneTabId,
-      controller: controller,
-      syncSession: session,
-    );
-    _tabs.add(tab);
+    final tab = _appendTab(_newController(), syncSession: session);
     activateTab(tab);
     return tab;
   }
@@ -449,13 +430,7 @@ class PaneTabsController extends ChangeNotifier {
   void restoreSession(SessionPaneState state) {
     assert(!_disposed, 'restoreSession on a disposed PaneTabsController');
     for (final tabState in state.tabs) {
-      final controller = PaneController(
-        paneTabId: '$paneId.tab${_nextTabOrdinal++}',
-        lanes: _lanes,
-        onError: _onError,
-      );
-      controller.markRestored(tabState);
-      _appendTab(controller);
+      _appendTab(_newController()..markRestored(tabState));
     }
     if (state.nextTabOrdinal > _nextTabOrdinal) {
       _nextTabOrdinal = state.nextTabOrdinal;
@@ -621,12 +596,7 @@ class PaneTabsController extends ChangeNotifier {
     // after them, and the saved active index counts from there.
     final offset = _tabs.length;
     for (final tabState in state.tabs) {
-      final controller = PaneController(
-        paneTabId: '$paneId.tab${_nextTabOrdinal++}',
-        lanes: _lanes,
-        onError: _onError,
-      );
-      controller.markRestored(tabState.session);
+      final controller = _newController()..markRestored(tabState.session);
       // The lenses apply unconditionally — restoreTransientState is the
       // ghost ring's seam, and a workspace restores the view the user
       // saved rather than the keystrokes that produced it.
@@ -768,15 +738,7 @@ class PaneTabsController extends ChangeNotifier {
     if (tab.syncSession == null) _pushGhost(_ghostOf(tab));
     tab.syncSession?.dispose();
     _tabs.removeAt(index);
-    if (_activeIndex == index) {
-      // The neighbor at the closed tab's slot slides in; closing the
-      // strip's last tab keeps the new last one, and closing the pane's
-      // last tab leaves the pane on the launcher — never blank, never
-      // an auto-opened replacement (02 §3).
-      _activeIndex = _tabs.isEmpty ? -1 : index.clamp(0, _tabs.length - 1);
-    } else if (_activeIndex > index) {
-      _activeIndex--;
-    }
+    _settleActiveAfterRemoval(index);
     _applyTabActivity();
     notifyListeners();
 
@@ -814,13 +776,7 @@ class PaneTabsController extends ChangeNotifier {
   Future<PaneTab?> reopenClosedTab() async {
     if (_disposed || _ghosts.isEmpty) return null;
     final ghost = _ghosts.removeLast();
-    final tab = _appendTab(
-      PaneController(
-        paneTabId: '$paneId.tab${_nextTabOrdinal++}',
-        lanes: _lanes,
-        onError: _onError,
-      ),
-    );
+    final tab = _appendTab(_newController());
     activateTab(tab);
 
     final controller = tab.controller;
@@ -866,11 +822,7 @@ class PaneTabsController extends ChangeNotifier {
     // In transit the tab is nobody's visible tab; the destination's
     // activation re-lists it.
     tab.controller.setTabActive(false);
-    if (_activeIndex == index) {
-      _activeIndex = _tabs.isEmpty ? -1 : index.clamp(0, _tabs.length - 1);
-    } else if (_activeIndex > index) {
-      _activeIndex--;
-    }
+    _settleActiveAfterRemoval(index);
     _applyTabActivity();
     notifyListeners();
   }
@@ -917,16 +869,46 @@ class PaneTabsController extends ChangeNotifier {
     }
   }
 
-  PaneTab _appendTab(PaneController controller) {
+  /// A fresh tab controller under the strip's next tab id.
+  PaneController _newController() => PaneController(
+    paneTabId: '$paneId.tab${_nextTabOrdinal++}',
+    lanes: _lanes,
+    onError: _onError,
+  );
+
+  /// Moves the active pointer after the tab at [index] left the strip:
+  /// the neighbor at its slot slides in, removing the strip's last tab
+  /// keeps the new last one, and removing the pane's last tab leaves the
+  /// pane on the launcher — never blank, never an auto-opened replacement
+  /// (02 §3).
+  void _settleActiveAfterRemoval(int index) {
+    if (_activeIndex == index) {
+      _activeIndex = _tabs.isEmpty ? -1 : index.clamp(0, _tabs.length - 1);
+    } else if (_activeIndex > index) {
+      _activeIndex--;
+    }
+  }
+
+  /// Adds [controller] as the strip's last tab, stamped with the strip's
+  /// settings; [syncSession] makes it a sync plan-view tab.
+  PaneTab _appendTab(
+    PaneController controller, {
+    SyncPlanController? syncSession,
+  }) {
     // Every arrival opens files under the strip's current setting —
     // adopted, new, and ghost-reopened controllers alike.
     controller.doubleClickAction = _doubleClickAction;
     controller.directoryGrouping = _directoryGrouping;
     controller.builtInEditorOpen = builtInEditorOpen;
     controller.externalEditorOpen = externalEditorOpen;
+    controller.otherPaneTransfer = otherPaneTransfer;
     controller.onLocationCommitted = onLocationCommitted;
     controller.serverConfigLookup = serverConfigLookup;
-    final tab = PaneTab(id: controller.paneTabId, controller: controller);
+    final tab = PaneTab(
+      id: controller.paneTabId,
+      controller: controller,
+      syncSession: syncSession,
+    );
     // Strip surfaces (title, connection dot) follow the tab's own
     // browsing state — forward its changes as strip changes.
     controller.addListener(_forwardTabChange);
