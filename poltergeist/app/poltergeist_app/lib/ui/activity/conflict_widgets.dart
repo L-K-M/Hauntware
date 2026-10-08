@@ -163,7 +163,9 @@ class _ConflictDialogState extends State<_ConflictDialog> {
           ),
           const SizedBox(height: 4),
           Text(
-            l10n.conflictReplacingLine(_entrySummary(conflict.source)),
+            l10n.conflictReplacingLine(
+              _statSummary(DestinationStat.fromEntry(conflict.source)),
+            ),
           ),
           const SizedBox(height: 12),
           for (final verb in conflict.availableVerbs)
@@ -224,18 +226,6 @@ class _ConflictDialogState extends State<_ConflictDialog> {
         : DateFormat.yMd(localeName)
             .add_jm()
             .format(stat.modifiedAt!.toLocal());
-    return '$size · $modified';
-  }
-
-  String _entrySummary(RemoteFileEntry entry) {
-    final platform = Theme.of(context).platform;
-    final localeName = Localizations.localeOf(context).toString();
-    final size = formatPaneSize(entry.size, platform: platform);
-    final modified = entry.modifiedAt == null
-        ? paneUnevaluated
-        : DateFormat.yMd(localeName)
-            .add_jm()
-            .format(entry.modifiedAt!.toLocal());
     return '$size · $modified';
   }
 

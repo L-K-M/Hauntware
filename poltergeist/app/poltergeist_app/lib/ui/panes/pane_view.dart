@@ -26,7 +26,6 @@ import '../../services/pane_location.dart';
 import '../../services/pane_permissions.dart' show nameIsFlagged;
 import '../../services/pane_tabs_controller.dart';
 import '../../services/preview_session.dart';
-import '../../services/quick_connect_address.dart';
 import '../../services/quick_select_state.dart';
 import '../../services/registered_command.dart';
 import '../../services/selection_state.dart';
@@ -59,17 +58,6 @@ const _antiFlashGrace = Duration(milliseconds: 150);
 bool _pendingRemoteConnect(PaneController controller) =>
     controller.phase == PanePhase.connectingRemote &&
     controller.remoteBookmark != null;
-
-/// The adhoc bookmark qualifying for 02 §2.7's "Save as favorite…"
-/// bar: a live adhoc session past a successful connect — null while
-/// connecting, failed, local, or bound to a stored favorite.
-Bookmark? _saveBarBookmark(PaneController controller) {
-  final bookmark = controller.remoteBookmark;
-  if (bookmark == null) return null;
-  if (!bookmark.id.startsWith(quickConnectAdhocIdPrefix)) return null;
-  if (controller.phase != PanePhase.browsing) return null;
-  return bookmark;
-}
 
 /// 02 §2.5's type-ahead input filter: the pane's printable text for a
 /// key event, or null when the key produces none. Space never
@@ -1752,7 +1740,7 @@ class _PaneSurface extends StatelessWidget {
       // 02 §2.7's "Not saved" banner: a live adhoc session past a
       // successful connect, until a stored server carries its endpoint
       // or the user dismisses it in this tab.
-      if (_saveBarBookmark(controller) case final adhoc?
+      if (saveFavoriteBookmarkFor(controller) case final adhoc?
           when !controller.unsavedBannerDismissed)
         Offstage(
           offstage: banner != null,
@@ -2779,16 +2767,9 @@ class _LocationTitle extends StatelessWidget {
     final total = controller.entries.length;
     final selected = controller.selectedCount;
     if (selected == 0) return l10n.paneItemCount(total);
-    var bytes = 0;
-    var files = 0;
-    for (final entry in controller.selectedEntries) {
-      final size = entry.size;
-      if (entry.type != RemoteFileType.file || size == null) continue;
-      bytes += size;
-      files++;
-    }
+    final bytes = selectedFileBytes(controller.selectedEntries);
     final summary = l10n.paneSelectionSummary(selected, total);
-    if (files == 0) return summary;
+    if (bytes == null) return summary;
     return l10n.paneSelectionSummaryWithSize(
       summary,
       formatPaneSize(bytes, platform: Theme.of(context).platform),

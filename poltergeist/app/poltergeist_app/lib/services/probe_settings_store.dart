@@ -6,8 +6,8 @@ import 'settings_store.dart';
 /// settings.json, keyed by serverId (03 §6). Probe *results* are never
 /// persisted here (D19); only eligibility and device-local facts are.
 ///
-/// The demo session is the only M2 caller; M5's bookmark store supplies
-/// the same seam with durable bookmark ids.
+/// The sidebar's probe owner (SidebarProbeOwner) reads it for the
+/// catalog's servers, keyed by their durable ids.
 abstract interface class ProbeSettings {
   /// The global `Probe server reachability` setting; only a persisted
   /// `false` disables (02 §4: default on, opt-out).

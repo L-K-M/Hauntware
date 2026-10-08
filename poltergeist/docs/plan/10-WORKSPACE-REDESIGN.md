@@ -475,7 +475,8 @@ Poltergeist and Séance are one product family. The contract:
 - **macOS:**
   - native menus with the standard items (§8)
   - Reveal in Finder (`NSWorkspace.activateFileViewerSelecting`)
-  - Dock badge and progress while transfers run (`window_manager`)
+  - Dock progress while transfers run (`window_manager`); no count
+    badge, which macOS shows only for apps with notification permission
   - the accessibility-safe Flutter view controller ported from Séance
 - **Linux:**
   - Reveal via `org.freedesktop.FileManager1.ShowItems`, falling back to

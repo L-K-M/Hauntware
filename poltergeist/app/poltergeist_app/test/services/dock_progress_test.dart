@@ -9,13 +9,9 @@ import '../support/fake_app_transfer_queue.dart';
 
 final class _RecordingSurface implements DockProgressSurface {
   final progress = <double?>[];
-  final badges = <String?>[];
 
   @override
   Future<void> setProgress(double? fraction) async => progress.add(fraction);
-
-  @override
-  Future<void> setBadge(String? label) async => badges.add(label);
 }
 
 final class _ThrowingSurface implements DockProgressSurface {
@@ -26,9 +22,6 @@ final class _ThrowingSurface implements DockProgressSurface {
     calls++;
     throw StateError('no taskbar');
   }
-
-  @override
-  Future<void> setBadge(String? label) async {}
 }
 
 void main() {
@@ -45,7 +38,6 @@ void main() {
       queue.emitRefresh();
       async.elapse(const Duration(seconds: 1));
       expect(surface.progress, isEmpty, reason: 'nothing to show or clear');
-      expect(surface.badges, isEmpty);
     });
   });
 
@@ -69,12 +61,10 @@ void main() {
       );
       async.elapse(const Duration(seconds: 5));
       expect(surface.progress, isEmpty);
-      expect(surface.badges, isEmpty);
 
       ready.complete();
       async.elapse(const Duration(seconds: 1));
       expect(surface.progress, [closeTo(0.25, 1e-9)]);
-      expect(surface.badges, ['1']);
     });
   });
 
@@ -114,7 +104,7 @@ void main() {
     });
   });
 
-  test('live tasks publish aggregate byte progress and a count badge', () {
+  test('live tasks publish their aggregate byte progress', () {
     fakeAsync((async) {
       final queue = FakeAppTransferQueue();
       final surface = _RecordingSurface();
@@ -135,7 +125,6 @@ void main() {
       );
       async.elapse(const Duration(seconds: 1));
       expect(surface.progress.last, closeTo(0.25, 1e-9));
-      expect(surface.badges.last, '2');
     });
   });
 
@@ -183,7 +172,6 @@ void main() {
       queue.emitRefresh();
       async.elapse(const Duration(seconds: 1));
       expect(surface.progress.last, isNull);
-      expect(surface.badges.last, isNull);
     });
   });
 }

@@ -1283,15 +1283,20 @@ class PaneController extends ChangeNotifier {
     if (index < 0) return;
     _expansionRenameSelect = null;
     setCursorIndex(index);
-    if (pending.rename &&
-        _renameSession == null &&
-        !_renameInFlight &&
-        !nameIsFlagged(_entries[index].name)) {
-      _renameSession = _RenameSession(
-        entry: _entries[index],
-        rowKey: _rowKeys[index],
-      );
-    }
+    if (pending.rename) _openRenameAt(index);
+  }
+
+  /// Opens the inline rename on row [index] for an entry the pane just
+  /// created or placed — unless a rename is already open or in flight,
+  /// or the row's name is flagged (it cannot be edited in place).
+  void _openRenameAt(int index) {
+    if (index < 0 || index >= _entries.length) return;
+    if (_renameSession != null || _renameInFlight) return;
+    if (nameIsFlagged(_entries[index].name)) return;
+    _renameSession = _RenameSession(
+      entry: _entries[index],
+      rowKey: _rowKeys[index],
+    );
   }
 
   /// The folder whose expand failed and why, for
@@ -1314,22 +1319,18 @@ class PaneController extends ChangeNotifier {
   /// boundary cannot drift as new entry points appear.
   bool get _rowsInteractive => !_disposed && !_staleRows && _entries.isNotEmpty;
 
-  /// Binds the pane to a remote bookmark: closes any previous channel,
-  /// subscribes to the server's state lane BEFORE connecting (live
-  /// streams keep no replay, 03 §5), opens the browse channel, and
-  /// navigates to the bookmark's path ('/' meaning the canonical home).
-  /// Binds the pane to a remote bookmark: closes any previous channel,
-  /// subscribes to the server's state lane BEFORE connecting (live
-  /// streams keep no replay, 03 §5), opens the browse channel, and
-  /// navigates to the bookmark's path ('/' meaning the canonical home).
-  /// [initialPath] overrides the landing directory — retry after a
-  /// severed transport uses it to return the user where they were.
   /// The intended landing directory for the pending remote bind: set
   /// by every remote bind, consumed on the first SUCCESSFUL navigation,
   /// and cleared on unbind — so a reconnect that fails and is retried
   /// still returns the user where they were, not the bookmark root.
   String? _pendingRemotePath;
 
+  /// Binds the pane to a remote bookmark: closes any previous channel,
+  /// subscribes to the server's state lane BEFORE connecting (live
+  /// streams keep no replay, 03 §5), opens the browse channel, and
+  /// navigates to the bookmark's path ('/' meaning the canonical home).
+  /// [initialPath] overrides the landing directory — retry after a
+  /// severed transport uses it to return the user where they were.
   Future<void> connectRemote(
     Bookmark bookmark, {
     String? initialPath,
@@ -2379,6 +2380,25 @@ class PaneController extends ChangeNotifier {
   /// pathological case worth a typed refusal, not an unbounded probe.
   static const int _maxCreateAttempts = 100;
 
+  /// A mutating operation's ownership token, taken at submit time from
+  /// [channel] (the bound channel) and [location]: channel identity,
+  /// bind attempt, browsing-session revision and location. A rebind —
+  /// even one landing on the same path spelling — or an away-and-back
+  /// navigation retires it, so a late answer can never mutate a binding
+  /// or session the operation no longer owns.
+  bool Function() _ownershipToken(
+    AppBrowseChannel channel,
+    PaneLocation? location,
+  ) {
+    final attempt = _bindAttempt;
+    final revision = _locationRevision;
+    return () =>
+        identical(channel, _channel) &&
+        attempt == _bindAttempt &&
+        revision == _locationRevision &&
+        location == _location;
+  }
+
   Future<String?> _createEntry(
     String baseName, {
     required bool directory,
@@ -2404,17 +2424,10 @@ class PaneController extends ChangeNotifier {
       }, operation: operation);
     }
 
-    // The same ownership token submitRename uses: a rebind or a
-    // navigation retires it, so a late create never drives a listing
-    // the pane no longer shows.
-    final attempt = _bindAttempt;
-    final revision = _locationRevision;
-    bool ownsPresentation() =>
-        !_disposed &&
-        identical(channel, _channel) &&
-        attempt == _bindAttempt &&
-        revision == _locationRevision &&
-        location == _location;
+    // A rebind or a navigation retires the token, so a late create
+    // never drives a listing the pane no longer shows.
+    final owns = _ownershipToken(channel, location);
+    bool ownsPresentation() => !_disposed && owns();
 
     final taken = {for (final entry in _sortedListing) entry.name};
     final separator = paneSeparator(location.path);
@@ -2621,18 +2634,7 @@ class PaneController extends ChangeNotifier {
     _renameInFlight = true;
     notifyListeners();
 
-    // The operation's ownership token: channel identity, bind attempt,
-    // and the browsing-session revision at submit time. A rebind — even
-    // one landing on the same path spelling — or an away-and-back
-    // navigation retires the token, so a late answer can never mutate
-    // a binding or session the operation no longer owns.
-    final attempt = _bindAttempt;
-    final revision = _locationRevision;
-    bool ownsPresentation() =>
-        identical(channel, _channel) &&
-        attempt == _bindAttempt &&
-        revision == _locationRevision &&
-        location == _location;
+    final ownsPresentation = _ownershipToken(channel, location);
 
     try {
       await channel.rename(entry.path, newPath);
@@ -2924,18 +2926,9 @@ class PaneController extends ChangeNotifier {
     session.applyError = null;
     notifyListeners();
 
-    // The operation's ownership token: channel identity, bind attempt,
-    // and the browsing-session revision at submit time — a rebind or an
-    // away-and-back navigation retires the write, so a late answer can
-    // never mutate a session it no longer owns (the rename commit's
-    // rule).
-    final attempt = _bindAttempt;
-    final revision = _locationRevision;
+    final owns = _ownershipToken(channel, _location);
     bool ownsPresentation() =>
-        identical(channel, _channel) &&
-        attempt == _bindAttempt &&
-        revision == _locationRevision &&
-        location == _location &&
+        owns() &&
         // An inspector retarget re-mints the edit session — a write
         // answering after it owns nothing and reports through the
         // pane's error path rather than stamping a dead session.
@@ -4274,16 +4267,7 @@ class PaneController extends ChangeNotifier {
       _error = null;
       // A created row opens its inline rename once the listing is live
       // (the session needs an owned, answered listing to anchor on).
-      if (openRenameAt >= 0 &&
-          openRenameAt < _entries.length &&
-          _renameSession == null &&
-          !_renameInFlight &&
-          !nameIsFlagged(_entries[openRenameAt].name)) {
-        _renameSession = _RenameSession(
-          entry: _entries[openRenameAt],
-          rowKey: _rowKeys[openRenameAt],
-        );
-      }
+      _openRenameAt(openRenameAt);
       notifyListeners();
       // A change signalled while this listing was in flight may
       // postdate it.

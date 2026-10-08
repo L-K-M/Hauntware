@@ -27,7 +27,6 @@ class ActivityHistoryView extends StatefulWidget {
 
 class _ActivityHistoryViewState extends State<ActivityHistoryView> {
   final _filter = TextEditingController();
-  String _query = '';
 
   @override
   void dispose() {
@@ -62,7 +61,7 @@ class _ActivityHistoryViewState extends State<ActivityHistoryView> {
     // label reads at (labelLarge and bodyMedium are both 13 px on desktop).
     final fieldText = theme.textTheme.bodyMedium;
     final history = widget.controller.history;
-    final query = _query;
+    final query = _filter.text.toLowerCase();
     final rows = [
       for (final entry in history.reversed)
         if (_matches(entry, query)) entry,
@@ -110,8 +109,8 @@ class _ActivityHistoryViewState extends State<ActivityHistoryView> {
                         borderSide: BorderSide.none,
                       ),
                     ),
-                    onChanged: (value) =>
-                        setState(() => _query = value.toLowerCase()),
+                    // The rows below read the field's text on rebuild.
+                    onChanged: (_) => setState(() {}),
                   ),
                 ),
               ),

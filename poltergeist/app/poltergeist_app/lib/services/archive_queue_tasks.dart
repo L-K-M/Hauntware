@@ -269,7 +269,6 @@ final class ArchiveQueueTasks {
       // error prevents a duplicate unhandled failure while that future settles.
       onError: (Object _, StackTrace _) {},
     );
-    binding.progressSubscription = subscription;
     final settling = _settle(binding, job, generation, subscription);
     binding.settling = settling;
   }
@@ -398,10 +397,6 @@ final class ArchiveQueueTasks {
       );
     } finally {
       await subscription.cancel();
-      if (_isCurrent(binding, job, generation) &&
-          identical(binding.progressSubscription, subscription)) {
-        binding.progressSubscription = null;
-      }
     }
   }
 
@@ -533,7 +528,6 @@ final class _ArchiveTaskBinding {
   final String requestedOutputPath;
   String outputPath;
   LocalArchiveJob? job;
-  StreamSubscription<LocalArchiveProgress>? progressSubscription;
   Future<void>? settling;
   int generation = 0;
   bool hasPrepared = false;

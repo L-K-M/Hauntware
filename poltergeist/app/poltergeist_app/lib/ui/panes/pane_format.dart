@@ -61,6 +61,20 @@ GhostFileRowStrings paneRowStrings(AppLocalizations l10n) =>
       actionsTooltip: l10n.compactRowActions,
     );
 
+/// The bytes of the regular files among [entries] — what a selection
+/// summary shows, since a folder's listed size is not its contents. Null
+/// when no file has a known size, so "nothing to sum" stays distinct
+/// from a real 0 B.
+int? selectedFileBytes(Iterable<RemoteFileEntry> entries) {
+  int? bytes;
+  for (final entry in entries) {
+    final size = entry.size;
+    if (entry.type != RemoteFileType.file || size == null) continue;
+    bytes = (bytes ?? 0) + size;
+  }
+  return bytes;
+}
+
 /// Decimal size for macOS/Linux, binary for Windows — the platform file
 /// managers' convention (02 §2.3). The Linux decimal/binary preference
 /// setting lands with the settings slice.
