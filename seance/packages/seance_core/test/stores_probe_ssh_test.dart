@@ -42,6 +42,9 @@ class _CountingVaultStore implements VaultStore {
 
   @override
   Future<void> deleteSecret(String id) async => _blobs.remove(id);
+
+  @override
+  Future<Map<String, Uint8List>> allSecretBlobs() async => Map.of(_blobs);
 }
 
 ServerConfig server(String id, String host) => ServerConfig(

@@ -4,6 +4,8 @@ import 'dart:typed_data';
 import 'package:cryptography/cryptography.dart';
 import 'package:crypto/crypto.dart' as classic;
 
+import 'hkdf.dart';
+
 /// Argon2id work factors. Defaults are the OWASP minimum for interactive use;
 /// `memory` is counted in 1 KiB blocks, so 19456 == 19 MiB.
 ///
@@ -112,9 +114,7 @@ class VaultKeys {
   });
 }
 
-/// HKDF salts used purely as domain separators. `cryptography` 2.9's `Hkdf`
-/// exposes the salt but not the RFC 5869 `info` field, so distinct salts —
-/// which yield independent output key material — are how we separate domains.
+/// HKDF domains (see [hkdfSubkey] for why they are salts).
 const String _kVaultKeyDomain = 'seance/v1/vault-encryption-key';
 const String _kAuthVerifierDomain = 'seance/v1/auth-verifier';
 
@@ -151,22 +151,13 @@ class VaultCrypto {
           .extractBytes(),
     );
 
-    final vaultKey = await _hkdf(master, _kVaultKeyDomain);
-    final authVerifier = await _hkdf(master, _kAuthVerifierDomain);
+    final vaultKey = await hkdfSubkey(master, _kVaultKeyDomain);
+    final authVerifier = await hkdfSubkey(master, _kAuthVerifierDomain);
     return VaultKeys(
       masterKey: master,
       vaultKey: vaultKey,
       authVerifier: authVerifier,
     );
-  }
-
-  static Future<Uint8List> _hkdf(List<int> key, String domain) async {
-    final hkdf = Hkdf(hmac: Hmac.sha256(), outputLength: 32);
-    final derived = await hkdf.deriveKey(
-      secretKey: SecretKey(key),
-      nonce: utf8.encode(domain),
-    );
-    return Uint8List.fromList(await derived.extractBytes());
   }
 
   /// Seal [plaintext] under [key], returning `nonce || ciphertext || mac`.

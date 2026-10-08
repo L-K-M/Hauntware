@@ -431,6 +431,16 @@ class FileVaultStore implements VaultStore, VaultRekeyJournal {
   @override
   Future<void> deleteSecret(String id) => _mutate(() => _blobs.remove(id));
 
+  /// One snapshot taken in the queue, so no mutation lands halfway through
+  /// it. A pending re-key journal does not block it, for the reason it does
+  /// not block [getSecretBlob]: the cache holds the generation the session's
+  /// key still opens.
+  @override
+  Future<Map<String, Uint8List>> allSecretBlobs() => _serialize(() async => {
+        for (final MapEntry(:key, :value) in _blobs.entries)
+          key: base64.decode(value),
+      });
+
   /// A staged re-key owns the vault until it is settled: a mutation now would
   /// persist the stored generation, which [settleRekey] may then replace with
   /// the staged one, silently undoing the write. Startup settles before

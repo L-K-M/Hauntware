@@ -10,6 +10,7 @@ export 'src/version.dart';
 
 export 'src/crypto/random.dart';
 export 'src/crypto/vault.dart';
+export 'src/crypto/recovery.dart';
 export 'src/crypto/recovery_key.dart';
 
 export 'src/models/server_config.dart';

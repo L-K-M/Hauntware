@@ -125,6 +125,10 @@ abstract class AssistantSettingsStore {
 
 /// Persists opaque, already-encrypted secret blobs keyed by secret id. It never
 /// sees plaintext — [SecretVault] seals before storing and opens after reading.
+///
+/// Ids in the reserved namespace ([isReservedVaultId], `recovery:`) hold the
+/// app's own entries, not credentials, and do not parse as a [Secret]: code
+/// that walks every entry ([allSecretBlobs]) must skip them.
 abstract class VaultStore {
   Future<void> putSecretBlob(String id, Uint8List blob);
 
@@ -151,6 +155,10 @@ abstract class VaultStore {
 
   Future<Uint8List?> getSecretBlob(String id);
   Future<void> deleteSecret(String id);
+
+  /// Every stored entry, by id, as one consistent snapshot — what an export
+  /// of the vault carries. Reserved ids included; see the class doc.
+  Future<Map<String, Uint8List>> allSecretBlobs();
 }
 
 /// The application-facing secret store. Wraps a [VaultStore] with the vault key
@@ -331,6 +339,9 @@ class InMemoryVaultStore implements VaultStore {
 
   @override
   Future<void> deleteSecret(String id) async => _blobs.remove(id);
+
+  @override
+  Future<Map<String, Uint8List>> allSecretBlobs() async => Map.of(_blobs);
 }
 
 class InMemoryHostKeyStore implements HostKeyStore {

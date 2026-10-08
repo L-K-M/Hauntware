@@ -12,6 +12,7 @@ import 'app_settings.dart';
 import 'external_file_opener.dart';
 import 'local_settings_backend.dart';
 import 'local_shell_service.dart';
+import 'secrets_recovery.dart';
 import 'settings_backend.dart';
 
 /// The desktop Settings window: a native window of its own, on a second
@@ -71,6 +72,10 @@ enum SettingsLinkMethod {
   addInboxApp,
   updateInboxApp,
   removeInboxApp,
+  recoveryConfigured,
+  setUpRecovery,
+  exportSecrets,
+  restoreSecrets,
 }
 
 /// What the window renders from: the settings and the two live values the
@@ -86,12 +91,17 @@ Map<String, dynamic> _snapshotOf(SettingsBackend backend) => {
 /// while it shows; this host answers what it asks through a
 /// [LocalSettingsBackend].
 class SettingsWindowHost {
+  /// [exportFiles] replaces the platform's save and open panels for a
+  /// secrets export, in tests.
   SettingsWindowHost(
     AppState state, {
     MethodChannel control = settingsWindowControlChannel,
     MethodChannel link = settingsWindowLinkChannel,
     @visibleForTesting Future<AppExitResponse> Function()? requestAppExit,
-  }) : _backend = LocalSettingsBackend(state) {
+    @visibleForTesting SecretsExportFiles? exportFiles,
+  }) : _backend = exportFiles == null
+           ? LocalSettingsBackend(state)
+           : LocalSettingsBackend(state, exportFiles: exportFiles) {
     _engine = GhostSettingsWindowHost(
       control: control,
       link: link,
@@ -191,6 +201,18 @@ class SettingsWindowHost {
         );
       case SettingsLinkMethod.removeInboxApp:
         await _backend.removeInboxApp(argument! as String);
+      case SettingsLinkMethod.recoveryConfigured:
+        return await _backend.recoveryConfigured();
+      case SettingsLinkMethod.setUpRecovery:
+        return await _backend.setUpRecovery();
+      case SettingsLinkMethod.exportSecrets:
+        return await _backend.exportSecrets();
+      case SettingsLinkMethod.restoreSecrets:
+        final json = map();
+        return (await _backend.restoreSecrets(
+          code: json['code'] as String,
+          policy: RestoreConflictPolicy.values.byName(json['policy'] as String),
+        ))?.toJson();
     }
     return null;
   }
@@ -381,6 +403,33 @@ class RemoteSettingsBackend extends GhostSettingsWindowClient<SettingsTab>
   @override
   Future<void> removeInboxApp(String appId) =>
       _call(SettingsLinkMethod.removeInboxApp, appId);
+
+  @override
+  Future<bool> recoveryConfigured() async =>
+      (await _call(SettingsLinkMethod.recoveryConfigured))! as bool;
+
+  /// The code crosses to this isolate in memory only, to be shown once.
+  @override
+  Future<String> setUpRecovery() async =>
+      (await _call(SettingsLinkMethod.setUpRecovery))! as String;
+
+  @override
+  Future<String?> exportSecrets() async =>
+      await _call(SettingsLinkMethod.exportSecrets) as String?;
+
+  /// The code crosses to the app's isolate in memory only; the file is read
+  /// there and never crosses.
+  @override
+  Future<SecretsRestoreSummary?> restoreSecrets({
+    required String code,
+    required RestoreConflictPolicy policy,
+  }) async {
+    final json = await _call(SettingsLinkMethod.restoreSecrets, {
+      'code': code,
+      'policy': policy.name,
+    });
+    return json == null ? null : SecretsRestoreSummary.fromJson(_map(json));
+  }
 
   @override
   void dispose() {

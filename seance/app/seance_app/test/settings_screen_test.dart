@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:seance_app/services/app_settings.dart';
 import 'package:seance_app/services/external_file_opener.dart';
+import 'package:seance_app/services/secrets_recovery.dart';
 import 'package:seance_app/services/settings_backend.dart';
 import 'package:seance_app/services/system_fonts.dart';
 import 'package:seance_app/theme.dart';
@@ -208,6 +209,45 @@ class _FakeBackend extends ChangeNotifier implements SettingsBackend {
       ],
       servers: inbox.servers,
     );
+  }
+
+  bool recoveryOn = false;
+  String recoveryCode = 'AAAA-BBBB-CCCC';
+  String? exportedTo = '/home/me/seance-secrets.json';
+  SecretsRestoreSummary? restoreResult = const SecretsRestoreSummary(
+    added: 2,
+    replaced: 0,
+    kept: 1,
+    unreadable: 0,
+  );
+  String? lastRestoreCode;
+  RestoreConflictPolicy? lastRestorePolicy;
+
+  @override
+  Future<bool> recoveryConfigured() async => recoveryOn;
+
+  @override
+  Future<String> setUpRecovery() async {
+    await _write('setUpRecovery');
+    recoveryOn = true;
+    return recoveryCode;
+  }
+
+  @override
+  Future<String?> exportSecrets() async {
+    await _write('exportSecrets');
+    return exportedTo;
+  }
+
+  @override
+  Future<SecretsRestoreSummary?> restoreSecrets({
+    required String code,
+    required RestoreConflictPolicy policy,
+  }) async {
+    await _write('restoreSecrets');
+    lastRestoreCode = code;
+    lastRestorePolicy = policy;
+    return restoreResult;
   }
 }
 
@@ -1009,6 +1049,136 @@ void main() {
       await pumpScreen(tester, tab: SettingsTab.inbox);
       expect(find.textContaining('Set up sync first'), findsOneWidget);
       expect(find.byKey(const ValueKey('inbox.add')), findsNothing);
+    });
+  });
+
+  group('Recovery', () {
+    Future<void> tap(WidgetTester tester, String key) async {
+      final target = find.byKey(ValueKey(key));
+      await tester.ensureVisible(target);
+      await tester.pumpAndSettle();
+      await tester.tap(target);
+      await tester.pumpAndSettle();
+    }
+
+    String message(WidgetTester tester) => tester
+        .widget<Text>(find.byKey(const ValueKey('recovery.message')))
+        .data!;
+
+    FilledButton done(WidgetTester tester) => tester.widget<FilledButton>(
+      find.byKey(const ValueKey('recovery.code.done')),
+    );
+
+    testWidgets('the code shows once and closes only after its last group', (
+      tester,
+    ) async {
+      await pumpScreen(tester, tab: SettingsTab.sync);
+      expect(
+        find.text('This device has no recovery code yet.'),
+        findsOneWidget,
+      );
+      expect(
+        tester
+            .widget<OutlinedButton>(
+              find.byKey(const ValueKey('recovery.export')),
+            )
+            .onPressed,
+        isNull,
+        reason: 'nothing to open an export with yet',
+      );
+
+      await tap(tester, 'recovery.setUp');
+      expect(backend.calls, ['setUpRecovery']);
+      expect(find.text('AAAA-BBBB-CCCC'), findsOneWidget);
+      expect(done(tester).onPressed, isNull);
+
+      await tester.enterText(
+        find.byKey(const ValueKey('recovery.code.confirm')),
+        'BBBB',
+      );
+      await tester.pump();
+      expect(done(tester).onPressed, isNull);
+      await tester.enterText(
+        find.byKey(const ValueKey('recovery.code.confirm')),
+        ' cccc ',
+      );
+      await tester.pump();
+      await tap(tester, 'recovery.code.done');
+
+      expect(find.text('AAAA-BBBB-CCCC'), findsNothing);
+      expect(find.text('This device has a recovery code.'), findsOneWidget);
+      expect(find.text('Replace recovery code…'), findsOneWidget);
+    });
+
+    testWidgets('replacing a code asks first', (tester) async {
+      backend.recoveryOn = true;
+      await pumpScreen(tester, tab: SettingsTab.sync);
+
+      await tap(tester, 'recovery.setUp');
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(backend.calls, isEmpty);
+
+      await tap(tester, 'recovery.setUp');
+      await tap(tester, 'recovery.replace.confirm');
+      expect(backend.calls, ['setUpRecovery']);
+      expect(find.text('AAAA-BBBB-CCCC'), findsOneWidget);
+    });
+
+    testWidgets('export says where it went; a cancel says nothing', (
+      tester,
+    ) async {
+      backend.recoveryOn = true;
+      await pumpScreen(tester, tab: SettingsTab.sync);
+
+      await tap(tester, 'recovery.export');
+      expect(message(tester), contains('/home/me/seance-secrets.json'));
+
+      backend.exportedTo = null;
+      await tap(tester, 'recovery.export');
+      expect(find.byKey(const ValueKey('recovery.message')), findsNothing);
+    });
+
+    testWidgets('restore sends the code and the choice, and reports counts', (
+      tester,
+    ) async {
+      await pumpScreen(tester, tab: SettingsTab.sync);
+
+      await tap(tester, 'recovery.restore');
+      final choose = find.byKey(const ValueKey('recovery.restore.choose'));
+      expect(tester.widget<FilledButton>(choose).onPressed, isNull);
+      await tester.enterText(
+        find.byKey(const ValueKey('recovery.restore.code')),
+        ' AAAA-BBBB ',
+      );
+      await tester.tap(find.text('Use the export\'s'));
+      await tester.pump();
+      await tap(tester, 'recovery.restore.choose');
+
+      expect(backend.lastRestoreCode, 'AAAA-BBBB');
+      expect(backend.lastRestorePolicy, RestoreConflictPolicy.replaceExisting);
+      expect(
+        message(tester),
+        startsWith('Restored: 2 added, 0 replaced, 1 kept.'),
+      );
+    });
+
+    testWidgets('a failed restore shows its sentence', (tester) async {
+      await pumpScreen(tester, tab: SettingsTab.sync);
+      backend.failWrites = const SettingsBackendException(
+        'That recovery code does not open this export.',
+      );
+
+      await tap(tester, 'recovery.restore');
+      await tester.enterText(
+        find.byKey(const ValueKey('recovery.restore.code')),
+        'AAAA',
+      );
+      await tester.pump();
+      await tap(tester, 'recovery.restore.choose');
+
+      expect(message(tester), 'That recovery code does not open this export.');
+      expect(backend.lastRestoreCode, isNull);
     });
   });
 }

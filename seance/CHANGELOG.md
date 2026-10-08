@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Secrets: Settings > Sync > Recovery sets up a recovery code, exports
+  this device's saved passwords and keys to an encrypted file, and
+  restores such a file on any device with the code. Séance shows the
+  code once and cannot show it again. A restore keeps the credentials a
+  device already has unless you choose the export's, and changes nothing
+  if the code is wrong or the file was altered. The export covers the
+  vault only: files opened over SFTP keep their local copies, which it
+  does not include or encrypt.
 - Servers: a server saved on another device without its password or key
   no longer tries to connect with an empty one and fail with a
   misleading login error. Its tab says the credential is required on

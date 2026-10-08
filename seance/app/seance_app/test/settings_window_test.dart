@@ -8,6 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ghost_desktop/ghost_desktop.dart' show GhostSettingsLinkMethod;
 import 'package:seance_app/app_state.dart';
 import 'package:seance_app/services/app_services.dart';
+import 'package:seance_app/services/secrets_recovery.dart';
 import 'package:seance_app/services/settings_backend.dart';
 import 'package:seance_app/services/settings_window.dart';
 import 'package:seance_app/theme/app_appearance.dart';
@@ -23,6 +24,21 @@ const _appLink = MethodChannel('test/settings_link/app');
 const _windowLink = MethodChannel('test/settings_link/window');
 const _control = MethodChannel('test/settings_window');
 
+/// The save and open panels: what was saved, and what the next open picks.
+class _ExportFiles implements SecretsExportFiles {
+  Uint8List? saved;
+  Uint8List? picked;
+
+  @override
+  Future<String?> save(Uint8List bytes, String fileName) async {
+    saved = bytes;
+    return '/exports/$fileName';
+  }
+
+  @override
+  Future<Uint8List?> open() async => picked;
+}
+
 /// The settings window's link, end to end: [SettingsWindowHost] in the app,
 /// [RemoteSettingsBackend] in the window, and the runner's relay between
 /// them.
@@ -34,6 +50,7 @@ void main() {
   late AppServices services;
   late AppState state;
   late SettingsWindowHost host;
+  late _ExportFiles exportFiles;
   late List<String> controlCalls;
 
   /// Deliver what one end sends to the other end's handler, and its reply
@@ -77,7 +94,13 @@ void main() {
       controlCalls.add(call.method);
       return null;
     });
-    host = SettingsWindowHost(state, control: _control, link: _appLink);
+    exportFiles = _ExportFiles();
+    host = SettingsWindowHost(
+      state,
+      control: _control,
+      link: _appLink,
+      exportFiles: exportFiles,
+    );
   });
 
   tearDown(() async {
@@ -339,6 +362,62 @@ void main() {
     expect(
       SettingsLinkMethod.values.where((m) => reserved.contains(m.name)),
       isEmpty,
+    );
+  });
+
+  test('recovery crosses the link: set up, export, restore', () async {
+    final window = await openWindow(SettingsTab.sync);
+    addTearDown(window.dispose);
+    await services.vault.putSecrets([
+      const Secret(id: 'pw', kind: SecretKind.password, value: 'hunter2'),
+    ]);
+
+    expect(await window.recoveryConfigured(), isFalse);
+    final code = await window.setUpRecovery();
+    expect(await window.recoveryConfigured(), isTrue);
+
+    final destination = await window.exportSecrets();
+    expect(destination, startsWith('/exports/seance-secrets-'));
+    expect(destination, endsWith('.json'));
+
+    // Restored onto the device it came from: the copy here is kept.
+    exportFiles.picked = exportFiles.saved;
+    final summary = await window.restoreSecrets(
+      code: code,
+      policy: RestoreConflictPolicy.keepExisting,
+    );
+    expect((summary!.added, summary.kept, summary.replaced), (0, 1, 0));
+
+    // A cancelled file panel restores nothing and is not an error.
+    exportFiles.picked = null;
+    expect(
+      await window.restoreSecrets(
+        code: code,
+        policy: RestoreConflictPolicy.keepExisting,
+      ),
+      isNull,
+    );
+  });
+
+  test('a wrong recovery code crosses as the sentence to show', () async {
+    final window = await openWindow(SettingsTab.sync);
+    addTearDown(window.dispose);
+    await window.setUpRecovery();
+    await window.exportSecrets();
+    exportFiles.picked = exportFiles.saved;
+
+    await expectLater(
+      window.restoreSecrets(
+        code: RecoveryKey.encode(Uint8List(32)),
+        policy: RestoreConflictPolicy.keepExisting,
+      ),
+      throwsA(
+        isA<SettingsBackendException>().having(
+          (e) => e.message,
+          'message',
+          'That recovery code does not open this export.',
+        ),
+      ),
     );
   });
 }
