@@ -6,6 +6,7 @@ import '../../services/application_error_reporter.dart';
 import '../../services/registered_command.dart';
 import '../../services/third_party_bookmark_import_setup.dart';
 import 'bookmark_import_dialog.dart';
+import 'imported_bookmarks_save.dart';
 import 'third_party_bookmark_import_dialog.dart';
 
 const kThirdPartyBookmarkImportCommandId = 'favorite.importThirdParty';
@@ -91,7 +92,7 @@ Future<void> _runSource(
     } on Object catch (error, stackTrace) {
       ApplicationErrorReporter().report(error, stackTrace);
       if (!context.mounted) return;
-      _notify(
+      showImportNotice(
         context,
         AppLocalizations.of(context).sshImportFavoritesLoadFailed,
       );
@@ -113,7 +114,7 @@ Future<void> _runSource(
     if (result.exit == BookmarkImportDialogExit.reselect) continue;
     if (result.exit != BookmarkImportDialogExit.imported) return;
 
-    await _persist(context, setup.bookmarks, result.bookmarks);
+    await saveImportedBookmarks(context, setup.bookmarks, result.bookmarks);
     return;
   }
 }
@@ -136,7 +137,10 @@ Future<List<ThirdPartyBookmarkImportFile>?> _pickFiles(
     } on Object catch (error, stackTrace) {
       ApplicationErrorReporter().report(error, stackTrace);
       if (!context.mounted) return null;
-      _notify(context, AppLocalizations.of(context).bookmarkImportPickFailed);
+      showImportNotice(
+        context,
+        AppLocalizations.of(context).bookmarkImportPickFailed,
+      );
       return null;
     }
   }
@@ -177,38 +181,9 @@ Future<_PickerFailureChoice?> _showPickerFailure(
   );
 }
 
-Future<void> _persist(
-  BuildContext context,
-  BookmarkRepository bookmarks,
-  List<Bookmark> imported,
-) async {
-  if (imported.isEmpty) return;
-
-  try {
-    await bookmarks.upsertAll(imported);
-  } on Object catch (error, stackTrace) {
-    ApplicationErrorReporter().report(error, stackTrace);
-    if (!context.mounted) return;
-    _notify(context, AppLocalizations.of(context).sshImportFavoritesSaveFailed);
-    return;
-  }
-  if (!context.mounted) return;
-
-  _notify(
-    context,
-    AppLocalizations.of(context).sshImportImported(imported.length),
-  );
-}
-
 String _sourceLabel(AppLocalizations l10n, ThirdPartyBookmarkFormat format) =>
     switch (format) {
       ThirdPartyBookmarkFormat.fileZilla => l10n.bookmarkImportFileZilla,
       ThirdPartyBookmarkFormat.winScp => l10n.bookmarkImportWinScp,
       ThirdPartyBookmarkFormat.cyberduck => l10n.bookmarkImportCyberduck,
     };
-
-void _notify(BuildContext context, String message) {
-  ScaffoldMessenger.maybeOf(
-    context,
-  )?.showSnackBar(SnackBar(content: Text(message)));
-}
