@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
@@ -129,6 +130,10 @@ class PlatformSecretsExportFiles implements SecretsExportFiles {
   const PlatformSecretsExportFiles();
 
   static const _mimeType = 'application/json';
+  static const _oversized = SecretsExportException(
+    SecretsExportFailure.tooLarge,
+    'The file exceeds the export size limit',
+  );
 
   @override
   Future<String?> save(Uint8List bytes, String fileName) async {
@@ -175,26 +180,38 @@ class PlatformSecretsExportFiles implements SecretsExportFiles {
     }
   }
 
-  /// `withData`, because an Android document provider may hand over the
-  /// bytes with no path at all. The picker reports the size before its bytes
-  /// are used or the path read, so an oversized file goes no further.
+  /// Stream provider-only files instead of asking the picker to allocate their
+  /// entire contents. Metadata can be missing or stale, so bound the read too.
   @override
   Future<Uint8List?> open() async {
-    final result = await FilePicker.pickFiles(withData: true);
+    final result = await FilePicker.pickFiles(withReadStream: true);
     if (result == null || result.files.isEmpty) return null;
     final file = result.files.single;
-    if (file.size > SecretsExport.maxBytes) {
-      throw const SecretsExportException(
-        SecretsExportFailure.tooLarge,
-        'The file exceeds the export size limit',
-      );
-    }
+    if (file.size > SecretsExport.maxBytes) throw _oversized;
+
     final bytes = file.bytes;
-    if (bytes != null) return bytes;
-    final path = file.path;
-    if (path == null) throw const SecretsExportUnreadableException();
+    if (bytes != null) {
+      if (bytes.length > SecretsExport.maxBytes) throw _oversized;
+      return bytes;
+    }
+
     try {
-      return await File(path).readAsBytes();
+      var source = file.readStream;
+      if (source == null) {
+        final path = file.path;
+        if (path == null) throw const SecretsExportUnreadableException();
+        // macOS provides a path, not a stream. One extra byte detects overflow.
+        source = File(path).openRead(0, SecretsExport.maxBytes + 1);
+      }
+
+      final contents = BytesBuilder(copy: false);
+      await for (final chunk in source) {
+        if (chunk.length > SecretsExport.maxBytes - contents.length) {
+          throw _oversized;
+        }
+        contents.add(chunk);
+      }
+      return contents.takeBytes();
     } on FileSystemException {
       throw const SecretsExportUnreadableException();
     }
