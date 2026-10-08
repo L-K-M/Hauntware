@@ -17,6 +17,10 @@ const _changedMethod = 'toolbarBandChanged';
 ///
 /// The value starts true, the windowed layout, and stays true when no
 /// runner answers the channel (every platform but macOS).
+///
+/// It is the channel's only Dart handler: any other runner-to-Dart method
+/// on it gets a missing-plugin reply, and a second handler on the same
+/// channel would detach this one.
 final class MacosToolbarBandChannel extends ValueNotifier<bool> {
   /// Listens on the app's window method channel, [channelName] (for
   /// example `seance/window`). [onStartError] receives a [start] query the
