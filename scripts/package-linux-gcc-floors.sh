@@ -1,6 +1,6 @@
 # The ABI-tag → GCC mapping the Linux packagers use for their Depends
-# floors. Sourced by planchette/scripts/package-linux.sh and
-# poltergeist/scripts/package-linux.sh; their tests source it directly.
+# floors. Sourced by planchette/, seance/ and poltergeist/
+# scripts/package-linux.sh; their tests source it directly.
 
 # A Depends floor must be a Debian package version: dpkg compares versions
 # by its own lexical rules, and a raw ABI tag (`libstdc++6 (>=

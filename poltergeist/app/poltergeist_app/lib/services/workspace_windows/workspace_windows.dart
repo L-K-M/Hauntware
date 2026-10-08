@@ -183,6 +183,7 @@ final class WorkspaceWindows extends ChangeNotifier
     Future<void> Function()? afterFrame,
     TargetPlatform? platform,
     this._onError,
+    this._onWindowClosed,
   }) : _afterFrame = afterFrame ?? _endOfFrame,
        _platform = platform ?? defaultTargetPlatform;
 
@@ -195,6 +196,10 @@ final class WorkspaceWindows extends ChangeNotifier
   final Future<void> Function() _afterFrame;
   final TargetPlatform _platform;
   final void Function(Object, StackTrace)? _onError;
+
+  /// Hears the view id of each extra window this registry closed, after
+  /// its native window is gone, to release state kept per view.
+  final void Function(int viewId)? _onWindowClosed;
 
   final _windows = <WorkspaceWindow>[];
 
@@ -440,6 +445,7 @@ final class WorkspaceWindows extends ChangeNotifier
       _report(error, stack);
     }
     window._dispose();
+    if (!window.isMain) _onWindowClosed?.call(window.viewId);
     final next = activeWindow;
     if (next != null && !_disposed) await _host.activate(next.viewId);
   }

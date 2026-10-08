@@ -94,8 +94,8 @@ void main() {
       }
     });
 
-    test('both packagers load the shared table', () async {
-      for (final product in ['planchette', 'poltergeist']) {
+    test('every Linux packager loads the shared table', () async {
+      for (final product in _packagerProducts) {
         final packager = File(
           p.join(
             _repositoryRoot.parent.path,
@@ -120,15 +120,79 @@ void main() {
       }
     });
 
-    test('the script maps floors through the table, never the raw tag', () {
-      expect(script, contains(r'no GCC mapping for GLIBCXX_$'));
-      expect(script, contains(r'no GCC mapping for GCC_$'));
-      expect(script, isNot(contains(r'libstdc++6 (>= $GLIBCXX')));
-      expect(script, isNot(contains(r'libgcc-s1 (>= $GCC')));
-      // An empty mapping (pre-3.4.21 tags) must keep the unversioned
-      // dependency, not emit "(>= )" — dpkg-deb rejects an empty version.
-      expect(script, contains(r'[[ -n "$mapped" ]] && dep_version libstdc++6'));
+    test('every packager maps floors through the table, never the raw tag', () {
+      for (final product in _packagerProducts) {
+        final script = File(
+          p.join(
+            _repositoryRoot.parent.path,
+            product,
+            'scripts/package-linux.sh',
+          ),
+        ).readAsStringSync();
+        expect(script, contains(r'no GCC mapping for GLIBCXX_$'), reason: product);
+        expect(script, contains(r'no GCC mapping for GCC_$'), reason: product);
+        expect(script, isNot(contains(r'(>= $GLIBCXX')), reason: product);
+        expect(script, isNot(contains(r'(>= $GCC')), reason: product);
+        // An empty mapping (pre-3.4.21 tags) must keep the unversioned
+        // dependency, not emit "(>= )" — dpkg-deb rejects an empty version.
+        expect(
+          script,
+          contains(r'[[ -n "$mapped" ]] && dep_version libstdc++6'),
+          reason: product,
+        );
+      }
     });
+  });
+
+  // Each real packager, run with --print-deps against a stub bundle whose
+  // readelf and objdump answers are scripted: the floors it computes, and
+  // what it does when objdump cannot read an ELF.
+  group('dependency floors, end to end', () {
+    for (final MapEntry(key: product, value: executable)
+        in _packagerExecutables.entries) {
+      test('$product maps symbol tags to package floors', () async {
+        final result = await _printDeps(product, executable);
+
+        expect(result.exitCode, 0, reason: result.stderr as String);
+        expect(
+          result.stdout,
+          allOf(
+            contains('libc6 (>= 2.34)'),
+            contains('libstdc++6 (>= 12.1)'),
+            contains('libgcc-s1 (>= 12.1)'),
+          ),
+        );
+      });
+
+      test('$product keeps libstdc++6 unversioned below 3.4.21', () async {
+        final result = await _printDeps(
+          product,
+          executable,
+          symbolTags: 'GLIBC_2.34 GLIBCXX_3.4.20 GCC_12.0.0',
+        );
+
+        expect(result.exitCode, 0, reason: result.stderr as String);
+        expect(
+          result.stdout,
+          allOf(
+            contains('libstdc++6'),
+            isNot(contains('libstdc++6 (>=')),
+            contains('libgcc-s1 (>= 12.1)'),
+          ),
+        );
+      });
+
+      test('$product stops when objdump cannot read an ELF', () async {
+        final result = await _printDeps(
+          product,
+          executable,
+          objdumpFails: true,
+        );
+
+        expect(result.exitCode, isNot(0), reason: result.stdout as String);
+        expect(result.stderr, contains('objdump failed'));
+      });
+    }
   });
 
   group('Debian copyright file', () {
@@ -191,6 +255,67 @@ void main() {
     });
   });
 }
+
+/// Runs [product]'s real packager with --print-deps on a stub bundle
+/// (its [executable] plus one library) behind stub readelf/objdump that
+/// report GLIBC_2.34, GLIBCXX_3.4.30 and GCC_12.0.0, or, with
+/// [objdumpFails], an objdump that cannot read the files.
+Future<ProcessResult> _printDeps(
+  String product,
+  String executable, {
+  bool objdumpFails = false,
+  String symbolTags = 'GLIBC_2.34 GLIBCXX_3.4.30 GCC_12.0.0',
+}) async {
+  final sandbox = Directory.systemTemp.createTempSync('package-deps-test-');
+  addTearDown(() => sandbox.deleteSync(recursive: true));
+  final bundle = Directory(p.join(sandbox.path, 'bundle', 'lib'))
+    ..createSync(recursive: true);
+  File(p.join(bundle.parent.path, executable)).writeAsStringSync('ELF');
+  File(p.join(bundle.path, 'libapp.so')).writeAsStringSync('ELF');
+  final bin = Directory(p.join(sandbox.path, 'bin'))..createSync();
+  File(p.join(bin.path, 'readelf')).writeAsStringSync(r'''#!/usr/bin/env bash
+case "$1" in
+  -h) echo '  Machine:                           Advanced Micro Devices X86-64' ;;
+  -d) printf ' 0x1 (NEEDED) Shared library: [%s]\n' \
+        libc.so.6 libstdc++.so.6 libgcc_s.so.1 ;;
+esac
+''');
+  File(p.join(bin.path, 'objdump')).writeAsStringSync(
+    objdumpFails
+        ? '#!/usr/bin/env bash\nexit 1\n'
+        : '#!/usr/bin/env bash\n'
+              "printf '0 DF *UND* 0 %s f\\n' $symbolTags\n",
+  );
+  Process.runSync('chmod', [
+    '+x',
+    p.join(bin.path, 'readelf'),
+    p.join(bin.path, 'objdump'),
+  ]);
+
+  return Process.run(
+    'bash',
+    [
+      p.join(_repositoryRoot.parent.path, product, 'scripts/package-linux.sh'),
+      '--bundle',
+      bundle.parent.path,
+      '--print-deps',
+    ],
+    environment: {
+      ...Platform.environment,
+      'PATH': '${bin.path}:${Platform.environment['PATH']}',
+    },
+  );
+}
+
+/// The products whose Linux packagers take their libstdc++ and libgcc
+/// floors from the shared ABI-tag table, with each bundle's executable.
+const _packagerExecutables = {
+  'planchette': 'planchette',
+  'seance': 'seance_app',
+  'poltergeist': 'poltergeist',
+};
+
+final _packagerProducts = _packagerExecutables.keys;
 
 /// scripts/package-linux.sh delimits the units its tests execute with
 /// `# --- <name> (…)` … `# --- end <name>` comment markers; keep them.

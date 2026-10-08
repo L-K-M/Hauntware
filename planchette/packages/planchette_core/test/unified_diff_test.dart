@@ -197,6 +197,60 @@ void main() {
       expect(result.text, contains('@@ -1,0 +2 @@'));
     });
 
+    test('repeated lines tie toward deleting first', () {
+      // Two longest common subsequences exist; the script deletes before
+      // it adds, so the old leading line goes and a new one is appended.
+      expect(unifiedDiff('a\nb\na\nb\n', 'b\na\nb\na\n').text, '''
+--- old file
++++ new file
+@@ -1,4 +1,4 @@
+-a
+ b
+ a
+ b
++a
+''');
+      expect(unifiedDiff('x\ny\nx\ny\nx\n', 'y\nx\ny\n', context: 1).text, '''
+--- old file
++++ new file
+@@ -1,2 +1 @@
+-x
+ y
+@@ -4,2 +3 @@
+ y
+-x
+''');
+    });
+
+    test('a zero-context deletion mid-file reports the line before it', () {
+      expect(
+        unifiedDiff('a\nb\nc\nd\ne\n', 'a\nc\nd\ne\n', context: 0).text,
+        '''
+--- old file
++++ new file
+@@ -2 +1,0 @@
+-b
+''',
+      );
+      expect(
+        unifiedDiff(
+          '1\n2\n3\n4\n5\n6\n7\n8\n',
+          '1\n2\nX\n4\n5\n6\nY\n8\n',
+          context: 0,
+        ).text,
+        '''
+--- old file
++++ new file
+@@ -3 +3 @@
+-3
++X
+@@ -7 +7 @@
+-7
++Y
+''',
+      );
+    });
+
     test('a negative context is refused', () {
       expect(() => unifiedDiff('a\n', 'b\n', context: -1), throwsRangeError);
     });

@@ -192,7 +192,7 @@ Future<void> _verifyComponent(
     '--verify',
     'HEAD:$componentRel',
   ]);
-  if (!_shaPattern.hasMatch(tree.stdout.trim())) {
+  if (!_shaPattern.hasMatch(tree.trim())) {
     throw _AuditFailure('HEAD does not contain the $componentRel component');
   }
 
@@ -220,7 +220,7 @@ Future<void> _verifyComponent(
     '--',
     componentRel,
   ]);
-  if (status.stdout.trim().isNotEmpty) {
+  if (status.trim().isNotEmpty) {
     throw _AuditFailure('the $componentRel component has uncommitted changes');
   }
 }
@@ -242,7 +242,7 @@ Future<List<String>> _lineageTips(
     '$componentRel/',
   ]);
   final tips = <String>{};
-  for (final merge in _nonEmptyLines(merges.stdout)) {
+  for (final merge in _nonEmptyLines(merges)) {
     final parents = await _runGit(worktree, [
       'rev-list',
       '--parents',
@@ -250,7 +250,7 @@ Future<List<String>> _lineageTips(
       '1',
       merge,
     ]);
-    final fields = parents.stdout.trim().split(RegExp(r'\s+'));
+    final fields = parents.trim().split(RegExp(r'\s+'));
     if (fields.length < 3) continue;
     for (final parent in fields.skip(2)) {
       // A standalone tip predates the monorepo prefix. A merged branch
@@ -261,7 +261,7 @@ Future<List<String>> _lineageTips(
         ['rev-parse', '--verify', '--quiet', '$parent:$componentRel'],
         acceptedExitCodes: {_successExitCode, _noMatchesExitCode},
       );
-      if (prefixed.stdout.trim().isEmpty) tips.add(parent);
+      if (prefixed.trim().isEmpty) tips.add(parent);
     }
   }
 
@@ -272,14 +272,14 @@ Future<List<String>> _lineageTips(
 /// The standalone tips take no pathspec — their trees predate the
 /// monorepo prefix — while post-import commits are selected by the
 /// component path.
-Future<_CommandResult> _lineageLog(
+Future<String> _lineageLog(
   Directory worktree,
   String componentRel,
   List<String> tips,
   List<String> arguments,
 ) async {
   final imported = tips.isEmpty
-      ? const _CommandResult('', '')
+      ? ''
       : await _runGit(worktree, [...arguments, ...tips]);
   final postImport = await _runGit(worktree, [
     ...arguments,
@@ -288,10 +288,7 @@ Future<_CommandResult> _lineageLog(
     '$componentRel/',
   ]);
 
-  return _CommandResult(
-    '${imported.stdout}\n${postImport.stdout}',
-    '${imported.stderr}\n${postImport.stderr}',
-  );
+  return '$imported\n$postImport';
 }
 
 Future<_ComponentEvidence> _auditComponent(
@@ -303,7 +300,7 @@ Future<_ComponentEvidence> _auditComponent(
     'rev-parse',
     '--verify',
     'HEAD:$componentRel',
-  ])).stdout.trim();
+  ])).trim();
 
   final identity = await _identityAudit(worktree, componentRel, tips);
   final companion = await _companionAudit(
@@ -371,8 +368,8 @@ Future<String> _identityAudit(
 
   return _sortUnique(
     [
-      ..._nonEmptyLines(people.stdout),
-      ..._nonEmptyLines(trailers.stdout).where(_isAttribution),
+      ..._nonEmptyLines(people),
+      ..._nonEmptyLines(trailers).where(_isAttribution),
     ].join('\n'),
   );
 }
@@ -403,7 +400,7 @@ Future<_CompanionEvidence> _companionAudit(
       .toSet();
   final orphans = <String>[];
 
-  final summaries = _sortUnique(result.stdout);
+  final summaries = _sortUnique(result);
   for (final summary in _nonEmptyLines(summaries)) {
     final commit = summary.substring(0, _shaLength);
     final message = await _runGit(worktree, [
@@ -416,7 +413,7 @@ Future<_CompanionEvidence> _companionAudit(
       '--format=%B',
       commit,
     ]);
-    for (final line in message.stdout.split('\n')) {
+    for (final line in message.split('\n')) {
       final attribution = line.trimRight();
       if (!_isAttribution(attribution)) continue;
       if (identityAttributions.contains(_normalizeAttribution(attribution))) {
@@ -431,7 +428,7 @@ Future<_CompanionEvidence> _companionAudit(
   }
 
   return _CompanionEvidence(
-    _sortUnique(result.stdout),
+    _sortUnique(result),
     _sortUnique(orphans.join('\n')),
   );
 }
@@ -455,7 +452,7 @@ Future<String> _licenseAudit(Directory worktree, String componentRel) async {
     acceptedExitCodes: {_successExitCode, _noMatchesExitCode},
   );
 
-  return _normalize(result.stdout);
+  return _normalize(result);
 }
 
 Future<String> _treeAudit(Directory worktree, String componentRel) async {
@@ -467,7 +464,7 @@ Future<String> _treeAudit(Directory worktree, String componentRel) async {
     'HEAD:$componentRel',
   ]);
 
-  return _normalize(result.stdout);
+  return _normalize(result);
 }
 
 String _vendoredPaths(String tree) {
@@ -534,7 +531,7 @@ Future<String> _pinpointAudit(
         limiter,
         '--format=%H',
       ]);
-      commits.addAll(_nonEmptyLines(result.stdout));
+      commits.addAll(_nonEmptyLines(result));
     }
 
     for (final commit in _sortUnique(commits.join('\n')).split('\n')) {
@@ -561,7 +558,7 @@ Future<String> _pinpointAudit(
       '--grep=$escaped',
       '--format=%H',
     ]);
-    for (final commit in _nonEmptyLines(result.stdout)) {
+    for (final commit in _nonEmptyLines(result)) {
       lines.add('$attribution\t$commit');
     }
   }
@@ -1043,7 +1040,8 @@ void _writeRecord(Directory root, String record) {
   return (start, end + endMarker.length);
 }
 
-Future<_CommandResult> _runGit(
+/// Runs git in [worktree]; returns its standard output.
+Future<String> _runGit(
   Directory worktree,
   List<String> arguments, {
   Set<int> acceptedExitCodes = const {_successExitCode},
@@ -1054,7 +1052,7 @@ Future<_CommandResult> _runGit(
   ...arguments,
 ], acceptedExitCodes: acceptedExitCodes);
 
-Future<_CommandResult> _run(
+Future<String> _run(
   String executable,
   List<String> arguments, {
   Set<int> acceptedExitCodes = const {_successExitCode},
@@ -1073,7 +1071,7 @@ Future<_CommandResult> _run(
     );
   }
 
-  return _CommandResult(result.stdout as String, result.stderr as String);
+  return result.stdout as String;
 }
 
 String _normalize(String value) {
@@ -1300,13 +1298,6 @@ final class _CompanionEvidence {
   final String orphans;
 
   const _CompanionEvidence(this.output, this.orphans);
-}
-
-final class _CommandResult {
-  final String stdout;
-  final String stderr;
-
-  const _CommandResult(this.stdout, this.stderr);
 }
 
 final class _AuditFailure implements Exception {

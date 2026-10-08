@@ -295,6 +295,16 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
   }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
 
+  testWidgets('an empty Recent submenu shows a disabled placeholder', (
+    tester,
+  ) async {
+    workspace.newDocument();
+    await mount(tester);
+
+    expect(item(tester, 'Text', 'No Recent Runs').onSelected, isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
+
   testWidgets('a run writes its record into the saved settings', (
     tester,
   ) async {

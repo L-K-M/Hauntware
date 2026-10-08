@@ -77,6 +77,30 @@ void main() {
     expect(band.value, isTrue);
   });
 
+  test("a closed window's band is dropped: its reports go nowhere and a "
+      'new window under the same view asks the runner again', () async {
+    final titlebars = WindowTitlebars();
+    final band = titlebars.bandFor(4);
+    await pumpEventQueue();
+    expect(band.value, isFalse);
+
+    titlebars.forget(4);
+    await bandChanged({'viewId': 4, 'visible': true});
+    expect(band.value, isFalse);
+
+    // Still usable: a late reply or listener must not hit a disposed
+    // notifier (adding a listener to one asserts).
+    void listener() {}
+    band.addListener(listener);
+    band.removeListener(listener);
+
+    calls.clear();
+    final reopened = titlebars.bandFor(4);
+    expect(identical(reopened, band), isFalse);
+    await pumpEventQueue();
+    expect(calls.single.method, 'isToolbarBandVisible');
+  });
+
   test('passthrough rectangles cross in logical pixels, and a missing '
       'runner is no error', () async {
     final titlebars = WindowTitlebars();

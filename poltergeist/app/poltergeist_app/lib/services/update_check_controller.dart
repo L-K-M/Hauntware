@@ -40,7 +40,8 @@ class UpdateCheckController extends ChangeNotifier {
   Future<void> checkForUpdate(String currentVersion) async {
     if (!_enabled) return;
     final info = await _checker.check(currentVersion);
-    if (info == null || identical(info, _update)) return;
+    // Opting out while the request was in flight discards its answer.
+    if (!_enabled || info == null || identical(info, _update)) return;
     _update = info;
     notifyListeners();
   }

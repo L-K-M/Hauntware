@@ -27,7 +27,7 @@ static void my_application_activate(GApplication* application) {
   // Shared with the extra windows, which title themselves the same way.
   window_title_apply(window, "Planchette");
 
-  // Match the runtime WindowOptions in desktop_window.dart so a window that
+  // Match the runtime window options in desktop_window.dart so a window that
   // becomes visible before Dart resizes it already has the final geometry.
   gtk_window_set_default_size(window, 1080, 760);
   gtk_window_set_position(window, GTK_WIN_POS_CENTER);

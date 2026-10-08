@@ -257,6 +257,59 @@ fi
     }
   });
 
+  // A step that fails after its build succeeded must still fail the run:
+  // the suite build reads the exit status to decide what it ships.
+  group('a product build fails when a later step fails', () {
+    for (final (product, appDir) in const [
+      ('seance', 'seance_app'),
+      ('poltergeist', 'poltergeist_app'),
+    ]) {
+      test('$product: the app cannot be copied into dist/', () async {
+        final build = _realProductBuild(sandbox, product, appDir, 'Linux');
+        // A file where dist/ belongs makes every copy into it fail.
+        File(p.join(build.root, 'dist')).writeAsStringSync('');
+
+        final result = await build.run(['app']);
+
+        expect(result.exitCode, isNot(0), reason: '${result.stdout}');
+        expect(result.stdout, contains('app: FAILED (copy to dist/)'));
+      });
+
+      test('$product: the APK cannot be copied into dist/', () async {
+        final build = _realProductBuild(sandbox, product, appDir, 'Linux');
+        File(p.join(build.root, 'dist')).writeAsStringSync('');
+
+        final result = await build.run(['apk']);
+
+        expect(result.exitCode, isNot(0), reason: '${result.stdout}');
+        expect(result.stdout, contains('apk: FAILED (copy to dist/)'));
+      });
+
+      test('$product: Linux packaging fails', () async {
+        final build = _realProductBuild(sandbox, product, appDir, 'Linux');
+        final packager = File(p.join(build.root, 'scripts', 'package-linux.sh'))
+          ..writeAsStringSync('#!/usr/bin/env bash\nexit 1\n');
+        Process.runSync('chmod', ['+x', packager.path]);
+
+        final result = await build.run(['app']);
+
+        expect(result.exitCode, isNot(0), reason: '${result.stdout}');
+        expect(result.stdout, contains('packages: FAILED'));
+      });
+    }
+
+    test('seance: the server binary cannot be copied into dist/', () async {
+      final build = _realProductBuild(sandbox, 'seance', 'seance_app', 'Linux');
+      File(p.join(build.root, 'dist')).writeAsStringSync('');
+
+      final result = await build.run(['server']);
+
+      expect(result.exitCode, isNot(0), reason: '${result.stdout}');
+      expect(result.stdout, contains('server: FAILED (copy to dist/)'));
+      expect(result.stdout, isNot(contains('server: built')));
+    });
+  });
+
   test('runs from an arbitrary working directory', () async {
     final elsewhere = Directory(p.join(sandbox.path, 'elsewhere'))
       ..createSync();
@@ -289,6 +342,68 @@ Future<ProcessResult> _runBuild(
       ...environment,
       'HAUNTWARE_BUILD_ROOT': root.path,
     },
+  );
+}
+
+/// A copy of [product]'s real build script in a scratch tree on a fake
+/// [system] host whose tools succeed: `dart` and `flutter` write the
+/// artifact each build step stages, and an Android SDK is present. Tests
+/// break one later step and run the script with [run].
+({String root, Future<ProcessResult> Function(List<String>) run})
+_realProductBuild(
+  Directory sandbox,
+  String product,
+  String appDir,
+  String system,
+) {
+  final root = p.join(sandbox.path, '$product-real');
+  final app = p.join(root, 'app', appDir);
+  for (final platform in ['linux', 'android']) {
+    Directory(p.join(app, platform)).createSync(recursive: true);
+  }
+  final script = File(p.join(root, 'scripts', 'build.sh'))
+    ..parent.createSync(recursive: true);
+  File(
+    p.join(_repositoryRoot().path, product, 'scripts', 'build.sh'),
+  ).copySync(script.path);
+  final packager = File(p.join(root, 'scripts', 'package-linux.sh'))
+    ..writeAsStringSync('#!/usr/bin/env bash\n');
+  final sdk = p.join(sandbox.path, 'android-sdk');
+  Directory(p.join(sdk, 'platforms')).createSync(recursive: true);
+
+  final host = _fakeHost(sandbox, system);
+  final bin = p.join(sandbox.path, 'fake-bin');
+  File(p.join(bin, 'flutter')).writeAsStringSync(r'''#!/usr/bin/env bash
+[[ "$1" == build ]] || exit 0
+case "$2" in
+  linux) mkdir -p build/linux/x64/release/bundle ;;
+  apk) mkdir -p build/app/outputs/flutter-apk
+       touch build/app/outputs/flutter-apk/app-release.apk ;;
+esac
+''');
+  File(p.join(bin, 'dart')).writeAsStringSync(r'''#!/usr/bin/env bash
+[[ "$1" == compile ]] || exit 0
+while [[ $# -gt 0 && "$1" != -o ]]; do shift; done
+touch "$2"
+''');
+  Process.runSync('chmod', [
+    '+x',
+    packager.path,
+    p.join(bin, 'flutter'),
+    p.join(bin, 'dart'),
+  ]);
+
+  return (
+    root: root,
+    run: (arguments) => Process.run(
+      'bash',
+      [script.path, ...arguments],
+      environment: {
+        ...Platform.environment,
+        ...host.environment,
+        'ANDROID_SDK_ROOT': sdk,
+      },
+    ),
   );
 }
 

@@ -639,15 +639,11 @@ base class GhostWindowLifecycle extends GhostWindowListener {
     // reach a window that is about to be destroyed.
     _cancelFlagsBackstop?.call();
     _cancelFlagsBackstop = null;
-    var destroyed = false;
-    try {
-      await _window.destroy();
-      destroyed = true;
-    } finally {
-      // Only a successful destroy detaches us: a failed one left the native
-      // window alive, and its close button must still reach the retry path.
-      if (destroyed) _window.removeListener(this);
-    }
+    await _window.destroy();
+    // Only a successful destroy detaches us: a failed one throws past here,
+    // leaving the native window alive and its close button on the retry
+    // path.
+    _window.removeListener(this);
     return true;
   }
 

@@ -16,6 +16,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:poltergeist_app/l10n/app_localizations.dart';
 import 'package:poltergeist_app/services/app_transfer_queue.dart';
+import 'package:poltergeist_app/services/checkout_prompt_ledger.dart';
 import 'package:poltergeist_app/services/checkout_session.dart';
 import 'package:poltergeist_app/services/editor_registry_controller.dart';
 import 'package:poltergeist_app/services/engine_session.dart';
@@ -117,6 +118,10 @@ final class _RemoteFile {
 final class FakeEditorRemoteFs implements RemoteFileSystem {
   final _files = <String, _RemoteFile>{};
   final uploadCalls = <String>[];
+
+  /// When set, uploads wait for it before writing, so a test can look at
+  /// the app while an upload is in flight.
+  Completer<void>? holdUploads;
   final downloadCalls = <String>[];
   final statCalls = <String>[];
 
@@ -204,6 +209,7 @@ final class FakeEditorRemoteFs implements RemoteFileSystem {
     bool computeHash = true,
   }) async {
     uploadCalls.add(path);
+    await holdUploads?.future;
     cancellation?.throwIfCancelled();
     final expected = expectedTarget;
     if (expected != null) {
@@ -479,6 +485,7 @@ Future<void> mountEditorShell(
   ThemeData? theme,
   EditorRegistryController? editorRegistry,
   ExternalFileOpener? externalOpener,
+  CheckoutPromptLedger? checkoutPrompts,
   List<RemoteFileEntry> extraEntries = const [],
 }) async {
   tester.view.physicalSize = const Size(1400, 900);
@@ -504,6 +511,7 @@ Future<void> mountEditorShell(
       engineSession: harness.engine,
       transferQueue: TransferQueueAdapter(harness.queue),
       checkoutSession: harness.checkout,
+      checkoutPrompts: checkoutPrompts,
       editorRegistry: editorRegistry,
       // Never default to the real opener in widget tests — a missing
       // injection must fail loudly, not spawn a process on the host.
@@ -818,6 +826,48 @@ void main() {
           utf8.decode(harness.fs.bytes(remoteConfigPath)!),
           'local edit\n',
         );
+      });
+    },
+  );
+
+  testWidgets(
+    'an overwrite keeps the upload marked in flight until it lands',
+    (tester) async {
+      await tester.runAsync(() async {
+        final prompts = CheckoutPromptLedger();
+        await mountEditorShell(tester, harness, checkoutPrompts: prompts);
+        await openEditorViaCommand(tester, harness);
+
+        harness.fs.seed(
+          remoteConfigPath,
+          utf8.encode('server rewrite\n'),
+          modifiedAt: DateTime.utc(2026, 3, 3),
+        );
+        await tester.enterText(editorField, 'local edit\n');
+        await tester.pump();
+        await tester.tap(find.byTooltip('Save and upload'));
+        await pollFor(tester, find.text('Remote file changed'));
+
+        final hold = harness.fs.holdUploads = Completer<void>();
+        addTearDown(() {
+          if (!hold.isCompleted) hold.complete();
+        });
+        await tester.tap(
+          find.widgetWithText(FilledButton, 'Overwrite Remote Version'),
+        );
+        for (var i = 0; i < 160 && harness.fs.uploadCalls.isEmpty; i++) {
+          await tester.pump();
+          await Future<void>.delayed(const Duration(milliseconds: 50));
+        }
+        expect(harness.fs.uploadCalls, [remoteConfigPath],
+            reason: 'the overwrite upload never started');
+        // The dirty-file prompt skips keys in this set; while the
+        // overwrite is still uploading it must stay there.
+        expect(prompts.uploading, contains('b1|$remoteConfigPath'));
+
+        hold.complete();
+        await pollFor(tester, find.text('Saved and uploaded.'));
+        expect(prompts.uploading, isEmpty);
       });
     },
   );

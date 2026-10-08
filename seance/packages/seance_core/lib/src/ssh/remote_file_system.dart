@@ -70,20 +70,18 @@ class RemoteFileEntry {
 typedef RemoteTransferProgress = void Function(int transferred, int? total);
 
 class RemoteTransferCancellation {
-  bool _isCancelled = false;
   final Completer<void> _cancelled = Completer<void>();
 
-  bool get isCancelled => _isCancelled;
+  bool get isCancelled => _cancelled.isCompleted;
   Future<void> get whenCancelled => _cancelled.future;
 
   void cancel() {
-    if (_isCancelled) return;
-    _isCancelled = true;
+    if (isCancelled) return;
     _cancelled.complete();
   }
 
   void throwIfCancelled() {
-    if (_isCancelled) throw const _RemoteTransferCancelled();
+    if (isCancelled) throw const _RemoteTransferCancelled();
   }
 }
 

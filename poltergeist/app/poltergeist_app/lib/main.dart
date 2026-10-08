@@ -270,6 +270,8 @@ Future<void> main(List<String> args) async {
           host: MethodChannelWindowHost(),
           quitApplication: _quitApplication,
           onError: errorReporter.report,
+          // A closed extra window's toolbar band goes with it.
+          onWindowClosed: WindowTitlebars.instance.forget,
         )
       : null;
   workspaceWindowsReady.complete(windows);

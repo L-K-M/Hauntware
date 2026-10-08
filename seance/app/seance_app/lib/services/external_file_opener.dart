@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/services.dart';
 import 'package:open_file/open_file.dart';
+import 'package:planchette_core/planchette_core.dart'
+    show TextNormalization, loadTextDocument;
 import 'package:planchette_editor/planchette_editor.dart'
     show normalizeEditorExtensions, validateEditorDisplayName;
 import 'package:seance_core/seance_core.dart';
@@ -270,7 +272,7 @@ Future<bool> _builtInEditorCanOpen(File file) async {
   if (type != FileSystemEntityType.file) return true;
 
   try {
-    await loadBuiltInTextDocumentDetails(file);
+    await loadTextDocument(file, normalization: TextNormalization.preserve);
     return true;
   } on BuiltInEditorException {
     return false;

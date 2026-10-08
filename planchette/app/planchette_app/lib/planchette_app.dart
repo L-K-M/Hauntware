@@ -1156,21 +1156,13 @@ class _DocumentShellState extends State<_DocumentShell>
         case _Submenu():
           // A submenu is one item to its parent; it shares the current
           // group so adjacent submenus are not separated by dividers.
-          // The shared model's submenu items are leaf rows only — a
-          // separator or nested menu inside one would drop silently.
-          assert(
-            entry.items.every((item) => item is _Command),
-            'Submenu "${entry.label}" carries non-command entries the '
-            'shared menu model cannot render',
-          );
           group.add(
             GhostSubmenuRow(
               title: entry.label,
               mnemonic: entry.mnemonic,
               items: [
                 for (final item in entry.items)
-                  if (item case final _Command command)
-                    GhostCommandRow(_commandSpec(command)),
+                  GhostCommandRow(_commandSpec(item)),
               ],
             ),
           );
@@ -1628,7 +1620,10 @@ final class _Separator extends _MenuEntry {
 final class _Submenu extends _MenuEntry {
   const _Submenu(this.label, this.items, {this.mnemonic});
   final String label;
-  final List<_MenuEntry> items;
+
+  /// Commands only: the shared menu model renders a submenu's items as
+  /// leaf rows, with no separators or nested menus.
+  final List<_Command> items;
 
   /// The Alt-access letter on the in-window menu bar, Windows and Linux
   /// only. Null leaves the label unmarked.
