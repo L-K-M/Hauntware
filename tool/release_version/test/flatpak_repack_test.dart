@@ -49,7 +49,7 @@ void main() {
       copyRealBinary();
       writeWrapper(p.join(prefix.path, 'lib/demo/demo_app'));
 
-      final result = await _smokeCheck(sandbox, prefix, 'demo');
+      final result = await _smokeCheck(prefix, 'demo');
 
       expect(result.exitCode, 0, reason: result.stderr as String);
     });
@@ -58,7 +58,7 @@ void main() {
       // A /usr path the remap missed.
       writeWrapper('/usr/lib/demo/demo_app');
 
-      final result = await _smokeCheck(sandbox, prefix, 'demo');
+      final result = await _smokeCheck(prefix, 'demo');
 
       expect(result.exitCode, isNot(0));
       expect(result.stderr, contains('/usr/lib/demo/demo_app'));
@@ -71,18 +71,21 @@ void main() {
       final bin = Directory(p.join(sandbox.path, 'fake-bin'))..createSync();
       // The real ldd for everything but the bundle's binary, which misses
       // a library.
+      // Resolved before the stub shadows it on PATH.
+      final realLdd =
+          (Process.runSync('bash', ['-c', 'command -v ldd']).stdout as String)
+              .trim();
       final ldd = File(p.join(bin.path, 'ldd'))
         ..writeAsStringSync(
           '#!/bin/sh\n'
           'case "\$1" in\n'
           '  */demo_app) printf "\\tlibgtk-3.so.0 => not found\\n" ;;\n'
-          '  *) exec /usr/bin/ldd "\$@" ;;\n'
+          '  *) exec $realLdd "\$@" ;;\n'
           'esac\n',
         );
       Process.runSync('chmod', ['+x', ldd.path]);
 
       final result = await _smokeCheck(
-        sandbox,
         prefix,
         'demo',
         path: '${bin.path}:${Platform.environment['PATH']}',
@@ -96,7 +99,7 @@ void main() {
       writeExecutable('lib/demo/demo_app', '#!/bin/sh\nexit 0\n');
       writeWrapper(p.join(prefix.path, 'lib/demo/demo_app'));
 
-      final result = await _smokeCheck(sandbox, prefix, 'demo');
+      final result = await _smokeCheck(prefix, 'demo');
 
       expect(result.exitCode, isNot(0));
       expect(result.stderr, contains('ldd cannot read'));
@@ -107,7 +110,7 @@ void main() {
         ..parent.createSync(recursive: true);
       File('/bin/true').copySync(binary.path);
 
-      final result = await _smokeCheck(sandbox, prefix, 'demo');
+      final result = await _smokeCheck(prefix, 'demo');
 
       expect(result.exitCode, 0, reason: result.stderr as String);
     });
@@ -115,53 +118,67 @@ void main() {
     test('fails when the command is missing', () async {
       Directory(p.join(prefix.path, 'bin')).createSync();
 
-      final result = await _smokeCheck(sandbox, prefix, 'demo');
+      final result = await _smokeCheck(prefix, 'demo');
 
       expect(result.exitCode, isNot(0));
       expect(result.stderr, contains('missing ${prefix.path}/bin/demo'));
     });
   });
 
-  group('staging a .deb', () {
-    const appId = 'com.example.Demo';
+  final dpkgDeb = Process.runSync('bash', ['-c', 'command -v dpkg-deb']);
+  group(
+    'staging a .deb',
+    skip: dpkgDeb.exitCode == 0 ? false : 'no dpkg-deb',
+    () {
+      const appId = 'com.example.Demo';
 
-    test('remaps /usr to /app and names the launcher after the app', () async {
-      final deb = _buildDeb(sandbox);
-      final work = p.join(sandbox.path, 'work');
+      test(
+        'remaps /usr to /app and names the launcher after the app',
+        () async {
+          final deb = _buildDeb(sandbox);
+          final work = p.join(sandbox.path, 'work');
 
-      final result = await _stage(deb, work, appId);
+          final result = await _stage(deb, work, appId);
 
-      expect(result.exitCode, 0, reason: result.stderr as String);
-      final stage = p.join(work, 'stage');
-      final wrapper = File(p.join(stage, 'bin/demo')).readAsStringSync();
-      expect(wrapper, startsWith('#!/bin/sh\n'));
-      expect(wrapper, contains('exec /app/lib/demo/demo_app'));
+          expect(result.exitCode, 0, reason: result.stderr as String);
+          final stage = p.join(work, 'stage');
+          final wrapperFile = File(p.join(stage, 'bin/demo'));
+          // Still executable: staging copies modes along with the bytes.
+          expect(wrapperFile.statSync().mode & 0x49, isNot(0));
+          final wrapper = wrapperFile.readAsStringSync();
+          expect(wrapper, startsWith('#!/bin/sh\n'));
+          expect(wrapper, contains('exec /app/lib/demo/demo_app'));
 
-      final applications = p.join(stage, 'share/applications');
-      expect(File(p.join(applications, 'demo.desktop')).existsSync(), isFalse);
-      final desktop = File(
-        p.join(applications, '$appId.desktop'),
-      ).readAsStringSync();
-      expect(desktop, contains('Exec=demo %U'));
-      expect(desktop, contains('Icon=$appId'));
-      expect(desktop, isNot(contains('TryExec=')));
-      expect(
-        File(
-          p.join(stage, 'share/icons/hicolor/256x256/apps/$appId.png'),
-        ).existsSync(),
-        isTrue,
+          final applications = p.join(stage, 'share/applications');
+          expect(
+            File(p.join(applications, 'demo.desktop')).existsSync(),
+            isFalse,
+          );
+          final desktop = File(
+            p.join(applications, '$appId.desktop'),
+          ).readAsStringSync();
+          expect(desktop, contains('Exec=demo %U'));
+          expect(desktop, contains('Icon=$appId'));
+          expect(desktop, isNot(contains('TryExec=')));
+          expect(
+            File(
+              p.join(stage, 'share/icons/hicolor/256x256/apps/$appId.png'),
+            ).existsSync(),
+            isTrue,
+          );
+        },
       );
-    });
 
-    test('refuses a .deb that ships paths outside /usr', () async {
-      final deb = _buildDeb(sandbox, extra: 'etc/demo.conf');
+      test('refuses a .deb that ships paths outside /usr', () async {
+        final deb = _buildDeb(sandbox, extra: 'etc/demo.conf');
 
-      final result = await _stage(deb, p.join(sandbox.path, 'work'), appId);
+        final result = await _stage(deb, p.join(sandbox.path, 'work'), appId);
 
-      expect(result.exitCode, isNot(0));
-      expect(result.stderr, contains('ships paths outside /usr'));
-    });
-  });
+        expect(result.exitCode, isNot(0));
+        expect(result.stderr, contains('ships paths outside /usr'));
+      });
+    },
+  );
 }
 
 String get _repackScript =>
@@ -170,7 +187,6 @@ String get _repackScript =>
 /// Runs the smoke check the way flatpak_build does inside the sandbox,
 /// with [prefix] standing in for /app.
 Future<ProcessResult> _smokeCheck(
-  Directory sandbox,
   Directory prefix,
   String command, {
   String? path,
@@ -215,6 +231,11 @@ String _buildDeb(Directory sandbox, {String? extra}) {
   );
   write('usr/bin/demo', '#!/bin/sh\nexec /usr/lib/demo/demo_app "\$@"\n');
   write('usr/lib/demo/demo_app', 'ELF');
+  Process.runSync('chmod', [
+    '+x',
+    p.join(root, 'usr/bin/demo'),
+    p.join(root, 'usr/lib/demo/demo_app'),
+  ]);
   write(
     'usr/share/applications/demo.desktop',
     '[Desktop Entry]\nType=Application\nName=Demo\n'
