@@ -529,6 +529,7 @@ void main() {
 
     await tester.enterText(find.byType(TextField).first, '');
     await tester.pump();
+    expect(find.text('Alpha.txt'), findsOneWidget);
     expect(find.text('beta.txt'), findsOneWidget);
   });
 

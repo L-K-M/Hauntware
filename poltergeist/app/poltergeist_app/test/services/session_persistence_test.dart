@@ -357,6 +357,11 @@ void main() {
       await debounce.fire();
       expect(writeCount, writesBefore);
 
+      // The window still attached keeps scheduling writes.
+      workspace.setSecondPaneHidden(true);
+      await debounce.fire();
+      expect(writeCount, writesBefore + 1);
+
       persistence.attach(other);
       await debounce.fire();
       final afterAttach = writeCount;
