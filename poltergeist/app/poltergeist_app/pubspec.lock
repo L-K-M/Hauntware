@@ -358,6 +358,13 @@ packages:
       relative: true
     source: path
     version: "1.9.0"
+  ghost_marks:
+    dependency: "direct main"
+    description:
+      path: "../../../planchette/packages/ghost_marks"
+      relative: true
+    source: path
+    version: "1.9.0"
   ghost_ui:
     dependency: "direct main"
     description:

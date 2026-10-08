@@ -4,6 +4,7 @@ import 'dart:ui' show AppExitResponse;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ghost_desktop/ghost_desktop.dart' show GhostSettingsLinkMethod;
 import 'package:poltergeist_app/services/appearance_controller.dart';
 import 'package:poltergeist_app/services/directory_grouping_controller.dart';
 import 'package:poltergeist_app/services/double_click_action.dart';
@@ -676,18 +677,6 @@ void main() {
     expect(remote.backup!.syncing, isTrue);
   });
 
-  test('opening a showing window switches its tab', () async {
-    final remote = await openWindow();
-    final tabs = <SettingsWindowTab>[];
-    final subscription = remote.tabRequests.listen(tabs.add);
-    addTearDown(subscription.cancel);
-
-    expect(await host.open(SettingsWindowTab.sync), isTrue);
-    await pumpEventQueue();
-
-    expect(tabs, [SettingsWindowTab.sync]);
-  });
-
   test('a request to quit is the app\'s to answer', () async {
     final remote = await openWindow();
 
@@ -700,25 +689,14 @@ void main() {
     expect(remote.lost, isTrue);
   });
 
-  test(
-    'a runner without the window reports it, for the dialog fallback',
-    () async {
-      messenger.setMockMethodCallHandler(_control, null);
-
-      expect(await host.open(SettingsWindowTab.general), isFalse);
-    },
-  );
-
-  test(
-    'a runner that could not create the window reports it, for the dialog',
-    () async {
-      messenger.setMockMethodCallHandler(_control, (call) async {
-        throw PlatformException(code: 'open_failed');
-      });
-
-      expect(await host.open(SettingsWindowTab.general), isFalse);
-    },
-  );
+  test("Poltergeist's methods never take an engine-reserved name", () {
+    // The engine answers its own names before the product sees a call.
+    final reserved = {for (final m in GhostSettingsLinkMethod.values) m.name};
+    expect(
+      SettingsLinkMethod.values.where((m) => reserved.contains(m.name)),
+      isEmpty,
+    );
+  });
 
   test('a write after the app stops answering fails, and says so', () async {
     final remote = await openWindow();

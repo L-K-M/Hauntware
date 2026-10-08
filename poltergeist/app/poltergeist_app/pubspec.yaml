@@ -46,6 +46,9 @@ dependencies:
     path: ../../../planchette/packages/planchette_editor
   ghost_desktop:
     path: ../../../planchette/packages/ghost_desktop
+  # Server badges and accents, shared with Séance.
+  ghost_marks:
+    path: ../../../planchette/packages/ghost_marks
   poltergeist_core:
     path: ../../packages/poltergeist_core
   poltergeist_sync:
