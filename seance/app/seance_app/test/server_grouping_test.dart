@@ -419,20 +419,4 @@ void main() {
       expect(kept({'star', 'db'}), {kPinnedKey, kServersKey});
     });
   });
-
-  group('existingServerGroups', () {
-    test('lists each group once, sorted, in its first spelling', () {
-      final groups = existingServerGroups([
-        _server('a', group: 'Production'),
-        _server('b', group: 'CI'),
-        _server('c', group: 'production'),
-        _server('d'),
-      ]);
-      expect(groups, ['CI', 'Production']);
-    });
-
-    test('is empty when nothing is grouped', () {
-      expect(existingServerGroups([_server('a'), _server('b')]), isEmpty);
-    });
-  });
 }

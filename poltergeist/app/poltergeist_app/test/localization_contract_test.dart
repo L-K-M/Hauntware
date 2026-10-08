@@ -2543,12 +2543,6 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'Marks'",
     ..._portedServerIconVocabulary,
   },
-  'lib/ui/server_filter.dart': {
-    // The match haystack — corpus machinery.
-    r"'${server.label} ${server.username}@${server.host}:${server.port} '",
-    r"'${server.group ?? ''}'",
-    "''",
-  },
   // D32 §11's platform integration: Dock progress diagnostics and the
   // file-manager reveal's process arguments (never user-facing copy).
   'lib/services/dock_progress.dart': {

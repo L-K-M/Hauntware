@@ -9,17 +9,6 @@ library;
 
 import 'package:seance_core/seance_core.dart';
 
-/// The searchable text of one server: label, user, host, port, and group.
-///
-/// The group is in here so that typing a section's name narrows the list to
-/// that section — the filter and the grouping answer the same question from
-/// two directions, and a `prod` that matched the header but not the rows would
-/// be a strange thing to explain.
-String serverSearchHaystack(ServerConfig server) =>
-    '${server.label} ${server.username}@${server.host}:${server.port} '
-            '${server.group ?? ''}'
-        .toLowerCase();
-
 /// Whether [server] matches [query]. An empty or whitespace-only query matches
 /// everything, so the list is never mysteriously empty.
 bool serverMatchesQuery(ServerConfig server, String query) {
