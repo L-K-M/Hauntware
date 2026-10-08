@@ -9,7 +9,6 @@ import '../../services/checkout_session.dart';
 import '../../services/pane_controller.dart';
 import '../../services/pane_location.dart';
 import '../../services/pane_permissions.dart' show nameIsFlagged;
-import '../../services/quick_connect_address.dart';
 import '../../services/quick_select_state.dart';
 import '../../theme/app_theme.dart';
 import '../local_edits_review.dart';
@@ -331,7 +330,7 @@ class _CompactListingState extends State<CompactListing> {
         ],
       );
     }
-    final adhoc = _saveBarBookmark(controller);
+    final adhoc = saveFavoriteBookmarkFor(controller);
     return [
       // 02 §2.5's Quick Select session drops in above the banner slot,
       // as it does under the desktop header.
@@ -519,16 +518,6 @@ class _CompactListingState extends State<CompactListing> {
       child: scrollable,
     );
   }
-}
-
-/// The adhoc bookmark qualifying for 02 §2.7's "Save as favorite…" bar:
-/// a live Quick Connect session past a successful connect.
-Bookmark? _saveBarBookmark(PaneController controller) {
-  final bookmark = controller.remoteBookmark;
-  if (bookmark == null) return null;
-  if (!bookmark.id.startsWith(quickConnectAdhocIdPrefix)) return null;
-  if (controller.phase != PanePhase.browsing) return null;
-  return bookmark;
 }
 
 /// 02 §2.5's Quick Select at touch size: the match field (a name

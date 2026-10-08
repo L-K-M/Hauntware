@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
 
 import '../../l10n/app_localizations.dart';
+import '../../services/pane_controller.dart';
 import '../../services/quick_connect_address.dart'
     show quickConnectAdhocIdPrefix;
 import '../../services/sidebar_controller.dart' show saveRemoteLocationTo;
@@ -16,6 +17,17 @@ const double _desktopControlExtent = 26;
 /// Below this line width "Save to Favorites…" folds to an icon button, so a
 /// pane at its minimum width keeps the endpoint readable.
 const double _labelledSaveMinWidth = 300;
+
+/// The adhoc bookmark qualifying for the bar below (02 §2.7): a live
+/// Quick Connect session past a successful connect — null while
+/// connecting, failed, local, or bound to a stored favorite.
+Bookmark? saveFavoriteBookmarkFor(PaneController controller) {
+  final bookmark = controller.remoteBookmark;
+  if (bookmark == null) return null;
+  if (!bookmark.id.startsWith(quickConnectAdhocIdPrefix)) return null;
+  if (controller.phase != PanePhase.browsing) return null;
+  return bookmark;
+}
 
 /// The post-connect "Not saved" banner (02 §2.7, D32 §6's banner slot):
 /// one slim line for a live Quick Connect session —
