@@ -155,7 +155,10 @@ build_server() {
   mkdir -p build
   echo "-- dart compile exe → $exe"
   if dart compile exe packages/seance_sync_server/bin/seance_sync_server.dart -o "$exe"; then
-    stage "$exe"
+    if ! stage "$exe"; then
+      echo "!! server: copying the binary into dist/ failed" >&2
+      record "server: FAILED (copy to dist/)"; return 1
+    fi
     record "server: built -> dist/$(basename "$exe")"
   else
     echo "!! server: dart compile exe failed" >&2
@@ -272,7 +275,7 @@ build_app() {
   fi
   local mode_flag=""
   [[ "$PROFILE" == "debug" ]] && mode_flag="--debug"
-  local cfg="Release" out=""
+  local cfg="Release" out="" name=""
   [[ "$PROFILE" == "debug" ]] && cfg="Debug"
   # Xcode re-signs an existing .app only when one of its own inputs
   # changed, but Flutter's embed phase rewrites App.framework and the
@@ -293,23 +296,31 @@ build_app() {
         # Xcode signs the ASCII "Seance.app" (codesign rejects accented file
         # names); the user-facing copy is renamed — safe, the wrapper name
         # isn't part of the signature seal.
-        [[ -n "$out" ]] && stage "$out" "Séance.app"
+        name="Séance.app"
         ;;
       linux)
         out=$(ls -d app/seance_app/build/linux/*/"$PROFILE"/bundle 2>/dev/null | head -1)
-        [[ -n "$out" ]] && stage "$out" "seance-linux"
+        name="seance-linux"
         ;;
       windows)
         out=$(ls -d app/seance_app/build/windows/*/runner/"$cfg" 2>/dev/null | head -1)
-        [[ -n "$out" ]] && stage "$out" "seance-windows"
+        name="seance-windows"
         ;;
     esac
+    if [[ -n "$out" ]] && ! stage "$out" "$name"; then
+      echo "!! app: copying the build into dist/ failed" >&2
+      record "app: FAILED (copy to dist/)"; return 1
+    fi
     if [[ -n "$out" ]]; then
       record "app: built ($HOST, $PROFILE) -> dist/"
     else
       record "app: built ($HOST, $PROFILE) — product not found to stage"
     fi
-    if [[ "$HOST" == "linux" ]]; then package_linux; fi
+    # Propagate packaging failure to the exit status (FAILED is the global the
+    # target loop reads) while still letting a subsequent --install proceed —
+    # installing the freshly built bundle is independent of .deb/AppImage
+    # packaging.
+    if [[ "$HOST" == "linux" ]]; then package_linux || FAILED=1; fi
     if $INSTALL; then
       if [[ -z "$out" ]]; then
         echo "!! app: nothing to install (product not found)" >&2
@@ -404,7 +415,10 @@ build_apk() {
   if ( cd app/seance_app && flutter pub get && flutter build apk $mode_flag ); then
     local apk
     apk="$(ls app/seance_app/build/app/outputs/flutter-apk/*.apk 2>/dev/null | head -1)"
-    [[ -n "$apk" ]] && stage "$apk" "seance.apk"
+    if [[ -n "$apk" ]] && ! stage "$apk" "seance.apk"; then
+      echo "!! apk: copying the APK into dist/ failed" >&2
+      record "apk: FAILED (copy to dist/)"; return 1
+    fi
     record "apk: built ($PROFILE)${apk:+ -> dist/seance.apk}"
   else
     echo "!! apk: flutter build apk failed" >&2
