@@ -1,9 +1,7 @@
-// The band channel is ported from Poltergeist
-// app/poltergeist_app/lib/services/macos_toolbar_band_channel.dart; see
-// docs/POLTERGEIST.md. Divergence: the channel is `seance/window`, and the
-// installer lives here rather than in a window-lifecycle service.
+// The installer follows Poltergeist's titlebar; see docs/POLTERGEIST.md.
+// The band channel itself is ghost_desktop's, shared with Poltergeist.
 import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart';
+import 'package:ghost_desktop/ghost_desktop.dart' show MacosToolbarBandChannel;
 import 'package:macos_window_utils/macos_window_utils.dart';
 
 /// The `seance/window` method channel's name. The Swift side lives in
@@ -29,7 +27,7 @@ abstract final class MacosTitlebar {
   /// case nothing in the app reserves a band. Only call it on macOS.
   static Future<MacosToolbarBandChannel?> install({
     MacosTitlebarAdapter? adapter,
-    MethodChannel? channel,
+    String channelName = windowChannelName,
   }) async {
     adapter ??= _WindowUtilsTitlebar();
     try {
@@ -44,7 +42,13 @@ abstract final class MacosTitlebar {
       } catch (_) {}
       return null;
     }
-    final band = MacosToolbarBandChannel(channel: channel);
+    // The band is only a layout hint and install runs before the hidden
+    // window is shown, so a failed query is logged, not thrown.
+    final band = MacosToolbarBandChannel(
+      channelName: channelName,
+      onStartError: (error, _) =>
+          debugPrint('Toolbar band state unavailable: $error'),
+    );
     await band.start();
     return band;
   }
@@ -85,66 +89,5 @@ final class _WindowUtilsTitlebar implements MacosTitlebarAdapter {
     await WindowManipulator.showTitle();
     await WindowManipulator.makeTitlebarOpaque();
     await WindowManipulator.disableFullSizeContentView();
-  }
-}
-
-/// Whether macOS currently shows the unified toolbar band that the header
-/// draws under, as the runner reports it.
-///
-/// The band exists only while the window is windowed. In full screen
-/// AppKit would keep the toolbar permanently visible in an opaque strip
-/// above the content, covering the header, so the runner hides the toolbar
-/// for the duration and the titlebar only slides in with the menu bar. The
-/// runner reports each switch as the transition *begins* (AppKit's
-/// will-enter and will-exit edges), so the layout changes with the toolbar
-/// instead of snapping after the animation.
-///
-/// The value starts true, the windowed layout, and stays true when no
-/// runner answers the channel.
-final class MacosToolbarBandChannel extends ValueNotifier<bool> {
-  MacosToolbarBandChannel({MethodChannel? channel})
-    : _channel = channel ?? const MethodChannel(windowChannelName),
-      super(true) {
-    _channel.setMethodCallHandler(_handle);
-  }
-
-  final MethodChannel _channel;
-
-  /// Asks the runner for the band's state, which a window restored
-  /// straight into full screen changed before the handler was set.
-  ///
-  /// Never throws: [MacosTitlebar.install] awaits this in `main` before
-  /// the hidden-at-launch window is shown, and the band is only a layout
-  /// hint, so any failure leaves the windowed layout instead.
-  Future<void> start() async {
-    try {
-      final visible = await _channel.invokeMethod<bool>('isToolbarBandVisible');
-      if (visible != null) value = visible;
-    } on MissingPluginException {
-      // No runner side: the windowed layout stands.
-    } catch (error) {
-      // A runner error, or a reply that is not a bool (a cast error).
-      debugPrint('Toolbar band state unavailable: $error');
-    }
-  }
-
-  Future<void> _handle(MethodCall call) async {
-    if (call.method != 'toolbarBandChanged') {
-      throw MissingPluginException();
-    }
-    final visible = call.arguments;
-    if (visible is! bool) {
-      throw PlatformException(
-        code: 'BAD_ARGS',
-        message: 'toolbarBandChanged needs a bool argument',
-      );
-    }
-    value = visible;
-  }
-
-  @override
-  void dispose() {
-    _channel.setMethodCallHandler(null);
-    super.dispose();
   }
 }
