@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/foundation.dart' show defaultTargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -190,7 +188,7 @@ List<RegisteredCommand> buildShellCommands({
   required PaneDropDelegate? Function() dropDelegate,
   // Completes when the Connect dialog closes, so the command's session
   // spans the dialog like every other dialog command's.
-  required FutureOr<void> Function() openConnect,
+  required Future<void> Function() openConnect,
   required List<RegisteredCommand> Function() allCommands,
   required Future<void> Function(Uri url) openUrl,
   required PaneFileOps? Function() fileOps,

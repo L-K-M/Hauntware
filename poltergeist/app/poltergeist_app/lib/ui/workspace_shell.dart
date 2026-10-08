@@ -4554,7 +4554,10 @@ class _WorkspaceShellState extends State<WorkspaceShell>
     } on Object catch (error, stackTrace) {
       ApplicationErrorReporter().report(error, stackTrace);
     } finally {
-      if (mounted) setState(() => _openCommandSessions--);
+      // Balanced on every path, mounted or not; only the rebuild needs
+      // a live state.
+      _openCommandSessions--;
+      if (mounted) setState(() {});
     }
   }
 }

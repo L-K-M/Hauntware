@@ -687,7 +687,7 @@ void main() {
         buildShellCommands(
           workspace: workspace,
           dropDelegate: () => null,
-          openConnect: () {},
+          openConnect: () async {},
           allCommands: () => const [],
           openUrl: (_) async {},
           fileOps: () => null,

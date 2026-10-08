@@ -91,7 +91,7 @@ void main() {
       ...buildShellCommands(
         workspace: workspace,
         dropDelegate: () => null,
-        openConnect: () {},
+        openConnect: () async {},
         allCommands: () => commands,
         openUrl: (_) async {},
         fileOps: () => null,

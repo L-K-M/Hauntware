@@ -9,6 +9,7 @@ import 'package:poltergeist_app/app.dart';
 import 'package:poltergeist_app/services/ssh_config_import_setup.dart';
 import 'package:poltergeist_app/ui/import/ssh_config_import_command.dart';
 import 'package:poltergeist_app/ui/panes/pane_commands.dart';
+import 'package:poltergeist_app/ui/panes/pane_view.dart';
 import 'package:poltergeist_app/ui/shell/shell_commands.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
 
@@ -61,8 +62,11 @@ void main() {
     expect(find.text('Import servers from ssh config'), findsOneWidget);
     expect(shellCommandEnabled(tester, kSshConfigImportCommandId), isFalse);
 
-    // An always-enabled app command starts and finishes meanwhile.
+    // An always-enabled app command starts and finishes meanwhile, and
+    // still runs: the guard counts it rather than refusing it.
+    final panes = find.byType(PaneView).evaluate().length;
     await runShellCommand(tester, kViewToggleSecondPaneCommandId);
+    expect(find.byType(PaneView).evaluate().length, isNot(panes));
     expect(
       shellCommandEnabled(tester, kSshConfigImportCommandId),
       isFalse,
