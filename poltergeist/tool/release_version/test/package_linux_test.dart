@@ -144,6 +144,42 @@ void main() {
     });
   });
 
+  // Each real packager, run with --print-deps against a stub bundle whose
+  // readelf and objdump answers are scripted: the floors it computes, and
+  // what it does when objdump cannot read an ELF.
+  group('dependency floors, end to end', () {
+    for (final (product, executable) in const [
+      ('planchette', 'planchette'),
+      ('seance', 'seance_app'),
+      ('poltergeist', 'poltergeist'),
+    ]) {
+      test('$product maps symbol tags to package floors', () async {
+        final result = await _printDeps(product, executable);
+
+        expect(result.exitCode, 0, reason: result.stderr as String);
+        expect(
+          result.stdout,
+          allOf(
+            contains('libc6 (>= 2.34)'),
+            contains('libstdc++6 (>= 12.1)'),
+            contains('libgcc-s1 (>= 12.1)'),
+          ),
+        );
+      });
+
+      test('$product stops when objdump cannot read an ELF', () async {
+        final result = await _printDeps(
+          product,
+          executable,
+          objdumpFails: true,
+        );
+
+        expect(result.exitCode, isNot(0), reason: result.stdout as String);
+        expect(result.stderr, contains('objdump failed'));
+      });
+    }
+  });
+
   group('Debian copyright file', () {
     final block = _markerBlock(script, 'copyright file writer');
 
@@ -203,6 +239,57 @@ void main() {
       expect(script, contains('LICENSE not found at'));
     });
   });
+}
+
+/// Runs [product]'s real packager with --print-deps on a stub bundle
+/// (its [executable] plus one library) behind stub readelf/objdump that
+/// report GLIBC_2.34, GLIBCXX_3.4.30 and GCC_12.0.0, or, with
+/// [objdumpFails], an objdump that cannot read the files.
+Future<ProcessResult> _printDeps(
+  String product,
+  String executable, {
+  bool objdumpFails = false,
+}) async {
+  final sandbox = Directory.systemTemp.createTempSync('package-deps-test-');
+  addTearDown(() => sandbox.deleteSync(recursive: true));
+  final bundle = Directory(p.join(sandbox.path, 'bundle', 'lib'))
+    ..createSync(recursive: true);
+  File(p.join(bundle.parent.path, executable)).writeAsStringSync('ELF');
+  File(p.join(bundle.path, 'libapp.so')).writeAsStringSync('ELF');
+  final bin = Directory(p.join(sandbox.path, 'bin'))..createSync();
+  File(p.join(bin.path, 'readelf')).writeAsStringSync(r'''#!/usr/bin/env bash
+case "$1" in
+  -h) echo '  Machine:                           Advanced Micro Devices X86-64' ;;
+  -d) printf ' 0x1 (NEEDED) Shared library: [%s]\n' \
+        libc.so.6 libstdc++.so.6 libgcc_s.so.1 ;;
+esac
+''');
+  File(p.join(bin.path, 'objdump')).writeAsStringSync(
+    objdumpFails
+        ? '#!/usr/bin/env bash\nexit 1\n'
+        : r'''#!/usr/bin/env bash
+printf '0 DF *UND* 0 %s f\n' GLIBC_2.34 GLIBCXX_3.4.30 GCC_12.0.0
+''',
+  );
+  Process.runSync('chmod', [
+    '+x',
+    p.join(bin.path, 'readelf'),
+    p.join(bin.path, 'objdump'),
+  ]);
+
+  return Process.run(
+    'bash',
+    [
+      p.join(_repositoryRoot.parent.path, product, 'scripts/package-linux.sh'),
+      '--bundle',
+      bundle.parent.path,
+      '--print-deps',
+    ],
+    environment: {
+      ...Platform.environment,
+      'PATH': '${bin.path}:${Platform.environment['PATH']}',
+    },
+  );
 }
 
 /// The products whose Linux packagers take their libstdc++ and libgcc
