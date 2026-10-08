@@ -249,6 +249,18 @@ class FileVaultStore implements VaultStore, VaultRekeyJournal {
   @override
   Future<void> deleteSecret(String id) => _mutate(() => _blobs.remove(id));
 
+  /// One snapshot taken in the queue, so no mutation lands halfway through
+  /// it; a pending re-key journal does not block it, as it does not block
+  /// [getSecretBlob]. Required by seance_core's [VaultStore]; Poltergeist
+  /// has no export that walks the vault yet.
+  @override
+  Future<Map<String, Uint8List>> allSecretBlobs() => _serialize(
+    () async => {
+      for (final MapEntry(:key, :value) in _blobs.entries)
+        key: base64.decode(value),
+    },
+  );
+
   /// A staged re-key owns the vault until it is settled: a mutation now would
   /// persist the stored generation, which [settleRekey] may then replace with
   /// the staged one, silently undoing the write. Startup settles before

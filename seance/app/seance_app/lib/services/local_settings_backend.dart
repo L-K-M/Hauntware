@@ -8,6 +8,7 @@ import '../ui/terminal_appearance.dart';
 import 'app_settings.dart';
 import 'assistant_settings_sync.dart';
 import 'external_file_opener.dart';
+import 'secrets_recovery.dart';
 import 'settings_backend.dart';
 
 /// Keystore entry name for the Z.AI search key. A constant rather than a typed
@@ -20,9 +21,15 @@ const String _zaiKeyRef = 'zai';
 /// answer what the window forwards. It holds no state of its own — listeners
 /// are the state's — so it needs no disposal and any number can exist.
 class LocalSettingsBackend implements SettingsBackend {
-  LocalSettingsBackend(this._state);
+  /// [exportFiles] is where an export is saved and read from: the platform's
+  /// panels unless a test supplies its own.
+  LocalSettingsBackend(
+    this._state, {
+    this._exportFiles = const PlatformSecretsExportFiles(),
+  });
 
   final AppState _state;
+  final SecretsExportFiles _exportFiles;
 
   AppSettings get _s => _state.services.settings;
 
@@ -480,4 +487,43 @@ class LocalSettingsBackend implements SettingsBackend {
 
   @override
   Future<void> removeInboxApp(String appId) => _state.removeInboxApp(appId);
+
+  @override
+  Future<bool> recoveryConfigured() => _state.recoveryConfigured();
+
+  @override
+  Future<String> newRecoveryCode() async => _state.newRecoveryCode();
+
+  @override
+  Future<void> saveRecoveryCode(String code) => _state.saveRecoveryCode(code);
+
+  @override
+  Future<String?> exportSecrets() async {
+    final Uint8List export;
+    try {
+      export = await _state.exportSecrets();
+    } on SecretsExportException {
+      // The only failure building an export has: a vault past the caps.
+      throw const SettingsBackendException(secretsExportTooLargeMessage);
+    }
+    return _exportFiles.save(export, secretsExportFileName(DateTime.now()));
+  }
+
+  /// A file that is not an export, a wrong code or an altered file throws
+  /// the sentence the screen shows, so both backends print the same thing.
+  @override
+  Future<SecretsRestoreSummary?> restoreSecrets({
+    required String code,
+    required RestoreConflictPolicy policy,
+  }) async {
+    try {
+      final export = await _exportFiles.open();
+      if (export == null) return null;
+      return await _state.restoreSecrets(export, code, policy: policy);
+    } on SecretsExportException catch (error) {
+      throw SettingsBackendException(
+        secretsExportFailureMessage(error.failure),
+      );
+    }
+  }
 }

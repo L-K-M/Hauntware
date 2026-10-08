@@ -18,6 +18,7 @@ import 'local_shell_service.dart';
 import 'macos_sandbox.dart';
 import 'managed_remote_file_store.dart';
 import 'sandbox_migration.dart';
+import 'secrets_recovery.dart';
 import 'secure_master_key.dart';
 
 /// A "reference, don't store" identity file couldn't be read at connect time.
@@ -414,11 +415,19 @@ class AppServices {
   /// reads the same way: only a well-formed object can prove it is empty.
   /// Zero-length or whitespace-only files remain unrecognized. Atomic vault
   /// writes produce valid JSON; do not mint over foreign or corrupt states.
+  ///
+  /// The app's own entries ([isReservedVaultId]) are not secrets: a vault
+  /// holding only the recovery wrap key has nothing a fresh key would
+  /// strand, and counting it would turn a lost keystore entry, which a new
+  /// key heals, into a vault that refuses every key forever.
   static Future<bool> _holdsSecrets(File file) async {
     if (!await file.exists()) return false;
     try {
       final decoded = jsonDecode(await file.readAsString());
-      return decoded is! Map || decoded.isNotEmpty;
+      if (decoded is! Map) return true;
+      return decoded.keys.any(
+        (id) => id is! String || !isReservedVaultId(id),
+      );
     } catch (_) {
       return true;
     }
@@ -486,6 +495,104 @@ class AppServices {
   /// two local stores it changes, which no server is party to.
   @visibleForTesting
   Future<void> rekeyVaultForTesting(List<int> newKey) => _rekeyVault(newKey);
+
+  /// Whether this device has a recovery code an export can use (CRED-05).
+  ///
+  /// With the vault locked, whether the entry exists, which is all anyone
+  /// can tell. Unlocked, whether it also opens: an entry sealed under a key
+  /// the vault no longer holds (a lost keystore healed with a fresh key)
+  /// belongs to a code that exports nothing any more.
+  Future<bool> recoveryConfigured() async {
+    final sealed = await vault.store.getSecretBlob(recoveryWrapKeyId);
+    if (sealed == null) return false;
+    final key = vaultKey;
+    if (key == null) return true;
+    try {
+      RecoveryWrapKey.fromJson(await VaultCrypto.openJson(key, sealed));
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// A new recovery code, formatted, to be shown once. Nothing is stored
+  /// until [saveRecoveryCode]: a code the user never confirmed writing down
+  /// must not replace one they did.
+  String newRecoveryCode() => RecoveryKey.encode(secureRandomBytes(32));
+
+  /// Keeps what an export needs of [code] (never the code itself), replacing
+  /// an earlier one; exports made with that one still open with it.
+  /// Serialized with enrolment, whose re-key re-seals the entry.
+  Future<void> saveRecoveryCode(String code) => _serializeSyncOperation(() async {
+    final key = vaultKey;
+    if (key == null) throw const VaultLockedException();
+    final wrap = await RecoveryWrapKey.derive(RecoveryKey.decode(code));
+    await vault.store.putSecretBlob(
+      recoveryWrapKeyId,
+      await VaultCrypto.sealJson(key, wrap.toJson()),
+    );
+  });
+
+  /// The vault, encrypted, as an export the recovery code opens anywhere.
+  Future<Uint8List> exportSecrets() => _serializeSyncOperation(() async {
+    final key = vaultKey;
+    if (key == null) throw const VaultLockedException();
+    final blobs = await vault.store.allSecretBlobs();
+    final sealedWrap = blobs[recoveryWrapKeyId];
+    if (sealedWrap == null) throw const RecoveryNotSetUpException();
+    final RecoveryWrapKey wrap;
+    try {
+      wrap = RecoveryWrapKey.fromJson(
+        await VaultCrypto.openJson(key, sealedWrap),
+      );
+    } catch (_) {
+      throw const RecoveryDamagedException();
+    }
+    return SecretsExport.build(
+      recovery: wrap,
+      vaultKey: key,
+      sealedEntries: blobs,
+      createdAt: DateTime.now(),
+    );
+  });
+
+  /// Opens [export] with [code] and merges its credentials into this
+  /// device's vault, re-sealed under this device's key, in one write.
+  ///
+  /// Nothing is written unless the export opens: a wrong code or an
+  /// altered file throws [SecretsExportException] with the vault as it
+  /// was. A credential this device holds but cannot read counts as absent
+  /// and is replaced; one it can read follows [policy].
+  Future<SecretsRestoreSummary> restoreSecrets(
+    Uint8List export,
+    String code, {
+    required RestoreConflictPolicy policy,
+  }) => _serializeSyncOperation(() async {
+    if (vaultKey == null) throw const VaultLockedException();
+    final opened = await SecretsExport.open(export, code);
+    final toWrite = <Secret>[];
+    var added = 0;
+    var replaced = 0;
+    var kept = 0;
+    for (final secret in opened.secrets.values) {
+      if (await vault.readableSecret(secret.id) == null) {
+        added++;
+      } else if (policy == RestoreConflictPolicy.keepExisting) {
+        kept++;
+        continue;
+      } else {
+        replaced++;
+      }
+      toWrite.add(secret);
+    }
+    await vault.putSecrets(toWrite);
+    return SecretsRestoreSummary(
+      added: added,
+      replaced: replaced,
+      kept: kept,
+      unreadable: opened.unreadable.length,
+    );
+  });
 
   /// Settle the staged re-key against the key the OS keystore really holds,
   /// and adopt it — after a failed install, and at the head of a retry.

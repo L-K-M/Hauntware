@@ -18,6 +18,7 @@ import 'services/default_snippets.dart';
 import 'services/managed_remote_file.dart';
 import 'services/remote_files_controller.dart';
 import 'services/remote_git_controller.dart';
+import 'services/secrets_recovery.dart';
 import 'services/server_duplication.dart';
 import 'services/xterm_engine.dart';
 import 'theme/app_appearance.dart';
@@ -2654,6 +2655,33 @@ class AppState extends ChangeNotifier {
       }
     }
   }
+
+  /// Whether this device has a recovery code (CRED-05).
+  Future<bool> recoveryConfigured() => services.recoveryConfigured();
+
+  /// A new recovery code to show once; nothing is stored until
+  /// [saveRecoveryCode].
+  String newRecoveryCode() => services.newRecoveryCode();
+
+  /// Keeps [code] as this device's recovery code, once the user confirmed
+  /// writing it down.
+  Future<void> saveRecoveryCode(String code) =>
+      _mutate(() => services.saveRecoveryCode(code));
+
+  /// The vault as an encrypted export the recovery code opens. In the
+  /// mutation queue, so a save cannot land halfway through the snapshot.
+  Future<Uint8List> exportSecrets() => _mutate(services.exportSecrets);
+
+  /// Merges an export into this device's vault. In the mutation queue, so a
+  /// save or a sync round cannot write a credential between the restore's
+  /// read of the vault and its single write.
+  Future<SecretsRestoreSummary> restoreSecrets(
+    Uint8List export,
+    String code, {
+    required RestoreConflictPolicy policy,
+  }) => _mutate(
+    () => services.restoreSecrets(export, code, policy: policy),
+  );
 
   /// Connect a producer. Returns the pairing string, which is shown once.
   Future<String> addInboxApp({

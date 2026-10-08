@@ -121,7 +121,10 @@ class SyncCoordinator {
           for (final server in servers)
             if (!server.excludeFromSync &&
                 server.syncSecret &&
-                server.secretRef != null)
+                server.secretRef != null &&
+                // The app's own vault entries are never a credential, even
+                // under a config that names one.
+                !isReservedVaultId(server.secretRef!))
               server.secretRef!,
       };
 
@@ -682,6 +685,17 @@ class SyncCoordinator {
               );
               continue;
             }
+            // A config naming one of the app's own vault entries as its
+            // credential would aim edits and deletes of that server at it.
+            final secretRef = pulled.secretRef;
+            if (secretRef != null && isReservedVaultId(secretRef)) {
+              skip(
+                dec.id,
+                StateError('config credential $secretRef is reserved'),
+                StackTrace.current,
+              );
+              continue;
+            }
             await configStore.putServer(pulled);
           case RecordKind.hostKey:
             final pin = HostKey.fromJson(dec.data);
@@ -991,6 +1005,17 @@ class SyncCoordinator {
             StateError(
               'secret id ${secret.id} does not match record id ${dec.id}',
             ),
+            StackTrace.current,
+          );
+          continue;
+        }
+        // The app's own vault entries (the recovery wrap key) are never a
+        // credential: a record naming one would replace this device's
+        // recovery and stop the code its user wrote down from working.
+        if (isReservedVaultId(secret.id)) {
+          skip(
+            dec.id,
+            StateError('secret id ${secret.id} is reserved'),
             StackTrace.current,
           );
           continue;

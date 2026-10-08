@@ -13,6 +13,7 @@ import '../services/system_fonts.dart';
 import 'appearance_settings.dart';
 import 'font_picker.dart';
 import 'inbox_settings.dart';
+import 'recovery_settings.dart';
 import 'selected_tab_view.dart';
 import 'settings_layout.dart';
 import 'sync_enrollment_validation.dart';
@@ -980,6 +981,8 @@ class _SettingsScreenState extends State<SettingsScreen>
           builder: (context, _) => _SyncStatusLine(status: _backend.syncStatus),
         ),
       ),
+      const SizedBox(height: 24),
+      RecoverySettings(backend: _backend),
     ],
   );
 
