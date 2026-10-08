@@ -12,8 +12,9 @@ const int maxPrivateKeyFileBytes = 64 * 1024;
 Future<String?> pickPrivateKeyText() async {
   // `withData`: on Android a document provider may have no path at all.
   final result = await FilePicker.pickFiles(withData: true);
-  final file = result?.files.single;
-  if (file == null) return null;
+  // Some platforms answer a cancel with an empty result rather than null.
+  if (result == null || result.files.isEmpty) return null;
+  final file = result.files.single;
   if (file.size > maxPrivateKeyFileBytes) {
     throw const FormatException('That file is too large to be a private key.');
   }
