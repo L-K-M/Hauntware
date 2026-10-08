@@ -126,6 +126,69 @@ void main() {
     expect(services.vaultKey, isNull, reason: 'agent auth must not unlock vault');
   });
 
+  group('a credential saved on another device only', () {
+    // A synced config can name a vault entry this device never received: the
+    // server was saved elsewhere without opting its secret into sync.
+    test('refuses a password it does not have', () async {
+      final server = config(AuthMethod.password).copyWith(secretRef: 'gone');
+
+      await expectLater(
+        services.resolveCredentials(server),
+        throwsA(isA<CredentialMissingException>()
+            .having((e) => e.serverId, 'serverId', 's1')
+            .having((e) => '$e', 'message', contains('"prod"'))),
+      );
+    });
+
+    test('refuses a stored key it does not have', () async {
+      final server = config(AuthMethod.privateKey).copyWith(secretRef: 'gone');
+
+      await expectLater(
+        services.resolveCredentials(server),
+        throwsA(isA<CredentialMissingException>()),
+      );
+    });
+
+    test('a jump host missing its credential names itself', () async {
+      final jump = config(AuthMethod.password, id: 'jump')
+          .copyWith(label: 'bastion', secretRef: 'gone');
+      await services.configStore.putServer(jump);
+
+      await expectLater(
+        services.resolveJumpHost(jump.id),
+        throwsA(isA<CredentialMissingException>()
+            .having((e) => e.serverId, 'serverId', 'jump')),
+      );
+    });
+
+    test('a typed password is still tested', () async {
+      final server = config(AuthMethod.password).copyWith(secretRef: 'gone');
+
+      final credentials = await services.resolveCredentials(
+        server,
+        draftPassword: 'typed',
+      );
+
+      expect(credentials.password, 'typed');
+    });
+
+    test('a saved credential still resolves', () async {
+      await services.vault.putSecret(
+        const Secret(
+          id: 'here',
+          kind: SecretKind.password,
+          value: 'saved',
+          updatedAt: 1,
+        ),
+      );
+      final server = config(AuthMethod.password).copyWith(secretRef: 'here');
+
+      final credentials = await services.resolveCredentials(server);
+
+      expect(credentials.password, 'saved');
+    });
+  });
+
   test('resolves a saved jump host with its credentials', () async {
     final jump = config(AuthMethod.agent, id: 'jump');
     await services.configStore.putServer(jump);
