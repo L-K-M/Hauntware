@@ -461,6 +461,21 @@ void main() {
     expect(field.controller!.text, isNotEmpty);
   });
 
+  testWidgets('applying the pre-filled custom rate keeps the exact limit',
+      (tester) async {
+    // The field shows the stored limit rounded ("2 KB/s" for 2048 B/s);
+    // pressing Set without editing must not rewrite it to 2000.
+    queue.downloadLimiter.bytesPerSecond = 2048;
+    await pumpPanel(tester);
+    await tester.tap(find.byKey(const ValueKey('activity.bandwidth')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('bandwidth.down.set')));
+    await tester.pumpAndSettle();
+
+    expect(queue.downloadLimiter.bytesPerSecond, 2048);
+  });
+
   testWidgets('the popover barrier absorbs taps instead of leaking '
       'them to the panel', (tester) async {
     await pumpPanel(tester);
