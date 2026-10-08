@@ -207,6 +207,7 @@ void main() {
       expect(desktop.windowOptions.size, const Size(1080, 760));
       expect(desktop.windowOptions.minimumSize, const Size(640, 400));
       expect(desktop.windowOptions.title, 'Planchette');
+      expect(desktop.windowOptions.placement, GhostWindowPlacement.centered);
     },
   );
 

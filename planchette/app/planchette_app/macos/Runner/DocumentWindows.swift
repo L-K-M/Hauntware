@@ -19,7 +19,7 @@ import FlutterMacOS
 final class DocumentWindowsHost: NSObject, NSWindowDelegate {
   private static let channelName = "planchette/windows"
 
-  /// The workspace's minimum content size (WindowOptions in
+  /// The workspace's minimum content size (window options in
   /// lib/services/desktop_window.dart), which window_manager applies to
   /// the main window.
   private static let minimumContentSize = NSSize(width: 640, height: 400)
