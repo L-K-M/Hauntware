@@ -85,7 +85,9 @@ class CredentialMissingException implements Exception {
 
   @override
   String toString() {
-    final what = authMethod == AuthMethod.privateKey ? 'private key' : 'password';
+    final what = authMethod == AuthMethod.privateKey
+        ? 'private key'
+        : 'password';
     return 'Credential required on this device: the $what for '
         '"$serverLabel" was saved on another device and is not here. Enter '
         'it in Edit Server, or switch the server to the SSH agent.';

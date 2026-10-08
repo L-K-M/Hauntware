@@ -1530,7 +1530,9 @@ class _ConnectionError extends StatelessWidget {
               Text(
                 tab.isLocal
                     ? 'Could not start a shell'
-                    : missingCredential != null
+                    // The failure's own fact, not the lookup: a server
+                    // removed meanwhile still failed for this reason.
+                    : tab.missingCredentialServerId != null
                     ? 'Credential required on this device'
                     : 'Connection failed',
                 style: Theme.of(context).textTheme.titleMedium,
