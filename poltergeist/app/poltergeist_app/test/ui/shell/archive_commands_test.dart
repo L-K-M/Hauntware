@@ -152,7 +152,7 @@ void main() {
   List<RegisteredCommand> commands() => buildShellCommands(
     workspace: workspace,
     dropDelegate: () => null,
-    openConnect: () {},
+    openConnect: () async {},
     allCommands: () => const [],
     openUrl: (_) async {},
     fileOps: () => fileOps,

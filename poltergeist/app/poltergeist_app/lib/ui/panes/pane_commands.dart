@@ -1257,10 +1257,18 @@ class CommandChordScope extends StatelessWidget {
   const CommandChordScope({
     super.key,
     required this.commands,
+    this.onRun,
     required this.child,
   });
 
   final List<RegisteredCommand> commands;
+
+  /// The host's command runner (the shell's, which holds a session for an
+  /// app command's dialog and reports failures), so a chord runs a command
+  /// exactly as its menu row does. Null runs the command directly, for a
+  /// host with no runner of its own.
+  final Future<void> Function(RegisteredCommand command)? onRun;
+
   final Widget child;
 
   @override
@@ -1281,9 +1289,13 @@ class CommandChordScope extends StatelessWidget {
                   : null,
               onInvoke: () {
                 if (!command.enabled()) return;
-                // Pane commands complete without escaping routes, but a
-                // future app-scope chord must not leak an unhandled zone
-                // error — the guard mirrors _runCommand's.
+                final run = onRun;
+                if (run != null) {
+                  unawaited(run(command));
+                  return;
+                }
+                // Without a runner the chord must still not leak an
+                // unhandled zone error.
                 unawaited(
                   command.run(context).catchError((
                     Object error,

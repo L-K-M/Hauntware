@@ -98,7 +98,7 @@ void main() {
   }) => buildShellCommands(
     workspace: workspace,
     dropDelegate: () => withQueue ? PaneDropDelegate(queue: queue) : null,
-    openConnect: () {},
+    openConnect: () async {},
     allCommands: () => const [],
     openUrl: (_) async {},
     fileOps: () => null,
