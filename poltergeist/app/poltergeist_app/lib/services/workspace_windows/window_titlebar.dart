@@ -79,6 +79,11 @@ final class WindowTitlebars {
     return band;
   }
 
+  /// Drops [viewId]'s band once its window has closed, so a closed window
+  /// leaves nothing behind and a later window under the same view starts
+  /// fresh from the runner's answer.
+  void forget(int viewId) => _bands.remove(viewId)?.dispose();
+
   /// Hands clicks inside [rect] in [viewId]'s window to Flutter.
   Future<void> updatePassthrough(int viewId, String id, Rect rect) =>
       _invoke(WindowTitlebarMethod.updatePassthrough, {

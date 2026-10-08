@@ -287,6 +287,29 @@ void main() {
     expect(quits, 0);
   });
 
+  test('a closed extra window is reported once its view is gone; a hidden '
+      'main window is not', () async {
+    final closed = <int>[];
+    windows.dispose();
+    windows = WorkspaceWindows(
+      host: host,
+      quitApplication: () async => quits++,
+      afterFrame: () async {},
+      platform: TargetPlatform.linux,
+      onWindowClosed: closed.add,
+    );
+    await windows.start();
+    await windows.openWindow();
+    await windows.openWindow();
+
+    await windows.closeWindow(windows.windowForView(1)!);
+    expect(closed, [1]);
+    expect(host.calls, contains('destroy 1'));
+
+    expect(await windows.closeMainWindowInstead(), isTrue);
+    expect(closed, [1]);
+  });
+
   test('closing the last open window quits instead', () async {
     await windows.start();
 
