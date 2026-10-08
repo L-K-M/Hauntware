@@ -1,10 +1,8 @@
 // The Settings → Editing surface's bounded mount (06 §8): the
-// `Open With ▸ Configure Editors…` deep-link destination — the two
-// registry-backed sections (Default editor, External editors) in a
-// dialog until the full five-tab Settings screen lands, mounted exactly
-// like the Backup section's bounded dialog. The tab's remaining
-// sections (double-click action, preview/download thresholds) are
-// settings-backed by other stores and land with that screen.
+// `Open With ▸ Configure Editors…` deep-link destination when there is no
+// Settings window — the Double-click action row, the two registry-backed
+// sections (Default editor, External editors) and Preview & downloads in
+// a dialog, mounted exactly like the Backup section's bounded dialog.
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -14,17 +12,19 @@ import '../../services/application_error_reporter.dart';
 import '../../services/settings_models.dart';
 import '../../services/external_file_opener.dart';
 import '../top_toast.dart';
+import 'double_click_action_settings.dart';
 import 'preview_settings.dart';
 
 /// The `open-with-external` Configure Editors… destination (06 §4.1's
 /// menu tail): the Editing sections that already have a backing store.
-/// [previewSettings] mounts the §8 "Preview & downloads" rows when a
-/// preview cache is wired — null leaves the tab's remaining sections
+/// [doubleClickAction] mounts the Opening files row and [previewSettings]
+/// the §8 "Preview & downloads" rows when wired — null leaves a section
 /// absent rather than rendered-dead.
 Future<void> showEditorsSettingsDialog(
   BuildContext context, {
   required EditorRegistryModel controller,
   ExternalFileOpener opener = const ExternalFileOpener(),
+  DoubleClickActionModel? doubleClickAction,
   PreviewDownloadsSettings? previewSettings,
 }) =>
     showDialog<void>(
@@ -41,6 +41,10 @@ Future<void> showEditorsSettingsDialog(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  if (doubleClickAction != null) ...[
+                    DoubleClickActionSection(model: doubleClickAction),
+                    const SizedBox(height: 20),
+                  ],
                   EditorsSettingsSection(
                     controller: controller,
                     opener: opener,

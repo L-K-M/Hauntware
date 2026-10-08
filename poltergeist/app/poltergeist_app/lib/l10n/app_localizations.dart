@@ -6802,6 +6802,48 @@ abstract class AppLocalizations {
   /// **'Close'**
   String get editorSettingsClose;
 
+  /// Heading of the Settings → Editing row about what opening a file does (06 §8).
+  ///
+  /// In en, this message translates to:
+  /// **'Opening files'**
+  String get settingsOpeningFilesSection;
+
+  /// Label of the Settings → Editing dropdown choosing what opening a file does (02 §2.6).
+  ///
+  /// In en, this message translates to:
+  /// **'Double-click action'**
+  String get doubleClickActionLabel;
+
+  /// Explainer under the Double-click action dropdown: the open shortcut follows it too, and folders always navigate.
+  ///
+  /// In en, this message translates to:
+  /// **'Also applies to opening a file from the keyboard. Folders always open.'**
+  String get doubleClickActionSubtitle;
+
+  /// Double-click action option: open the file with its default application (02 §2.6's default).
+  ///
+  /// In en, this message translates to:
+  /// **'Open'**
+  String get doubleClickActionOpen;
+
+  /// Double-click action option: open the file in the built-in editor.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit in Poltergeist'**
+  String get doubleClickActionEdit;
+
+  /// Double-click action option: transfer the file to the other pane (not available yet; opening a file shows a notice).
+  ///
+  /// In en, this message translates to:
+  /// **'Transfer to other pane'**
+  String get doubleClickActionTransfer;
+
+  /// Double-click action option: opening a file does nothing.
+  ///
+  /// In en, this message translates to:
+  /// **'Do nothing'**
+  String get doubleClickActionNothing;
+
   /// Label of the §8 Default-editor dropdown — the registry's global defaultEditorId.
   ///
   /// In en, this message translates to:

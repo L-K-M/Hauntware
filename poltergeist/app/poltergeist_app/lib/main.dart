@@ -18,6 +18,7 @@ import 'services/app_session_lifecycle.dart';
 import 'services/archive_queue_tasks.dart';
 import 'services/appearance_controller.dart';
 import 'services/directory_grouping_controller.dart';
+import 'services/double_click_action_controller.dart';
 import 'services/editor_text_size_controller.dart';
 import 'services/application_error_reporter.dart';
 import 'services/bookmark_backup_service.dart';
@@ -172,7 +173,11 @@ Future<void> main(List<String> args) async {
   }
   final paneRatio = await preferences.loadPaneRatio();
   final newTabTarget = await preferences.loadNewTabTarget();
-  final doubleClickAction = await preferences.loadDoubleClickAction();
+  // What opening a file does (02 §2.6), shared by every window's panes.
+  final doubleClickAction = DoubleClickActionController(
+    initial: await preferences.loadDoubleClickAction(),
+    save: preferences.saveDoubleClickAction,
+  );
   final reconnectRestoredTabs =
       await preferences.loadReconnectRestoredTabs();
   // The activity panel's persisted chrome state (02 §1/§6): height,

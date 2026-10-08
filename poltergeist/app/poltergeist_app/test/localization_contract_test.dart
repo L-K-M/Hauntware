@@ -419,6 +419,10 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   'lib/ui/settings/editor_text_size_settings.dart': {"'editor.textSize'"},
   // The folders switch's key.
   'lib/ui/settings/directory_grouping_settings.dart': {"'view.foldersOnTop'"},
+  // The double-click action dropdown's key.
+  'lib/ui/settings/double_click_action_settings.dart': {
+    "'editing.doubleClickAction'",
+  },
   // The Settings command id (D21 plumbing) — registered, never rendered.
   // Its construction assert is a programmer diagnostic.
   'lib/ui/settings/app_settings_command.dart': {

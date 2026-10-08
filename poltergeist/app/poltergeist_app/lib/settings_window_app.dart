@@ -17,6 +17,7 @@ import 'ui/selected_tab_view.dart';
 import 'ui/settings/appearance_settings.dart';
 import 'ui/settings/backup_settings.dart';
 import 'ui/settings/directory_grouping_settings.dart';
+import 'ui/settings/double_click_action_settings.dart';
 import 'ui/settings/editor_settings.dart';
 import 'ui/settings/editor_text_size_settings.dart';
 import 'ui/settings/general_settings.dart';
@@ -150,7 +151,9 @@ class _SettingsWindowScreenState extends State<SettingsWindowScreen>
     if (widget.remote.appearance != null ||
         widget.remote.editorTextSize != null)
       SettingsWindowTab.appearance,
-    if (widget.remote.editors != null || widget.remote.previewDownloads != null)
+    if (widget.remote.doubleClickAction != null ||
+        widget.remote.editors != null ||
+        widget.remote.previewDownloads != null)
       SettingsWindowTab.editing,
     if (widget.remote.backup != null) SettingsWindowTab.sync,
   ];
@@ -239,9 +242,14 @@ class _SettingsWindowScreenState extends State<SettingsWindowScreen>
             EditorTextSizeSection(model: editorTextSize),
         ];
       case SettingsWindowTab.editing:
+        final doubleClickAction = remote.doubleClickAction;
         final editors = remote.editors;
         final preview = remote.previewDownloads;
         children = [
+          if (doubleClickAction != null) ...[
+            DoubleClickActionSection(model: doubleClickAction),
+            if (editors != null || preview != null) const SizedBox(height: 20),
+          ],
           if (editors != null)
             EditorsSettingsSection(
               controller: editors,
