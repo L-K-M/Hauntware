@@ -88,6 +88,12 @@ void main() {
     await bandChanged({'viewId': 4, 'visible': true});
     expect(band.value, isFalse);
 
+    // Still usable: a late reply or listener must not hit a disposed
+    // notifier (adding a listener to one asserts).
+    void listener() {}
+    band.addListener(listener);
+    band.removeListener(listener);
+
     calls.clear();
     final reopened = titlebars.bandFor(4);
     expect(identical(reopened, band), isFalse);
