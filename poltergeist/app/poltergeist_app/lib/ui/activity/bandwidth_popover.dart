@@ -35,6 +35,12 @@ class _BandwidthPopoverState extends State<BandwidthPopover> {
   String? _downError;
   String? _upError;
 
+  /// The pre-filled custom text per direction and the exact limit it
+  /// rounds: applying that text unedited keeps the stored value (2048
+  /// B/s reads "2 KB/s", which would otherwise parse back as 2000).
+  ({String text, int bytesPerSecond})? _downPrefill;
+  ({String text, int bytesPerSecond})? _upPrefill;
+
   bool _initialized = false;
 
   @override
@@ -50,8 +56,14 @@ class _BandwidthPopoverState extends State<BandwidthPopover> {
     final up = widget.controller.uploadLimiter?.bytesPerSecond;
     _downCustom = down != null && !_presets.contains(down);
     _upCustom = up != null && !_presets.contains(up);
-    if (_downCustom) _downField.text = _customText(down!);
-    if (_upCustom) _upField.text = _customText(up!);
+    if (_downCustom) {
+      _downPrefill = (text: _customText(down!), bytesPerSecond: down);
+      _downField.text = _downPrefill!.text;
+    }
+    if (_upCustom) {
+      _upPrefill = (text: _customText(up!), bytesPerSecond: up);
+      _upField.text = _upPrefill!.text;
+    }
   }
 
   @override
@@ -69,7 +81,10 @@ class _BandwidthPopoverState extends State<BandwidthPopover> {
   void _applyCustom({required bool download}) {
     final l10n = AppLocalizations.of(context);
     final field = download ? _downField : _upField;
-    final parsed = parseTransferRate(field.text);
+    final prefill = download ? _downPrefill : _upPrefill;
+    final parsed = prefill != null && field.text == prefill.text
+        ? prefill.bytesPerSecond
+        : parseTransferRate(field.text);
     setState(() {
       if (download) {
         _downError =

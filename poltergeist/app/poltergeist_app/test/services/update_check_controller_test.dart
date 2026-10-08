@@ -4,6 +4,7 @@
 // — one plain GET of the static endpoint, no query, no body, no
 // install identifier — because 01 §6's "phones home for exactly one
 // thing" claim is only true while nothing else rides along.
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -130,6 +131,24 @@ void main() {
       );
       await rateLimited.checkForUpdate('0.2.0');
       expect(rateLimited.update, isNull);
+    });
+
+    test('opting out while the launch check runs keeps its answer away',
+        () async {
+      final release = Completer<http.Response>();
+      final controller = UpdateCheckController(
+        checker: UpdateChecker(
+          repo: poltergeistUpdateRepo,
+          client: http_testing.MockClient((request) => release.future),
+        ),
+      );
+
+      final check = controller.checkForUpdate('0.2.0');
+      await controller.setEnabled(false);
+      release.complete(http.Response(jsonEncode(releaseJson('v9.9.9')), 200));
+      await check;
+
+      expect(controller.update, isNull);
     });
 
     test('disabled at boot: no request ever leaves', () async {
