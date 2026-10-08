@@ -25,6 +25,16 @@ format, close guards, and native hooks kept in its own thin adapter.
 - `MacosToolbarBandChannel` — whether macOS shows the unified toolbar band a
   host's header draws under, from the runner's reports on the host's window
   channel (`seance/window`, `poltergeist/window`).
+- `GhostSettingsWindowHost` / `GhostSettingsWindowClient` — the desktop
+  Settings window's link between the app's engine and the window's second
+  engine: the `hello` handshake, coalesced and deduplicated snapshots,
+  hide-not-destroy showings (`hidden`, `show` with a fresh page
+  generation), tab switches, the forwarded quit question, and connection
+  loss. Products keep their sections, method names, error codecs and
+  runners. The runners implement control `open`/`closed` on
+  `<product>/settings_window` and relay `<product>/settings_link` byte for
+  byte between the two engines; the window's engine starts with the
+  product's launch flag.
 
 ## What hosts keep
 
