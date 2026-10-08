@@ -228,10 +228,24 @@ Approximate, from the line counts above:
 |---|---|---|---|
 | Séance `settings_window.dart` | 604 | ~300 (host core, page, remote core, handshake) | ~300 (snapshot, dispatch, `SettingsBackend` forwards) |
 | Poltergeist `settings_window/` | 1326 | ~300 (same core, `_Link`, protocol cases) | ~1000 (keys, codecs, sources, sections, window models) |
-| ghost_desktop |, | +~500 lib, +~400 test |, |
+| ghost_desktop | | +~500 lib, +~400 test | |
 
-Net monorepo delta is roughly neutral in lines (about +900 new, −600 deleted); the gain is not size but single-source correctness for the protocol that encodes three hard-won platform traps (hide-not-destroy second engine, `seance/AGENTS.md:543-560`; macOS exit-handler stealing, `settings_window.dart:578-586`; snapshot dedupe/retry semantics). Poltergeist's copy is already a stamped fork of Séance's (`docs/PORTS.md`), which the family rules say not to create silently.
+Net monorepo delta is small in lines (about +900 new, −600 deleted, so about +300); the gain is not size but single-source correctness for the protocol that encodes three hard-won platform traps (hide-not-destroy second engine, `seance/AGENTS.md:543-560`; macOS exit-handler stealing, `settings_window.dart:578-586`; snapshot dedupe/retry semantics). Poltergeist's copy is already a stamped fork of Séance's (`docs/PORTS.md`), which the family rules say not to create silently.
 
 **Recommendation: do it, staged as the three PRs above**, move only the engine, keep sections/keys/codecs per product. Reasons: two consumers already exist and already diverged in exactly the dimensions this split formalizes (enums vs strings, typed errors, rebindable sources); both already depend on `ghost_desktop`; native sides are untouched; the protocol is the risky part and is currently the duplicated part. The honest counterweight: Planchette, the package's third host, does not need a Settings window, so `ghost_desktop` grows a two-consumer feature, acceptable under its "shared desktop window state" charter, and the fallback (share only the host half) would split the handshake across packages and is not worth it. If the owner prefers minimal churn now, deferring PR 3 (Séance) is safe; PRs 1-2 still delete the larger, cleaner duplication.
 
 Unverified here: nothing was built or tested (read-only checkout, per instructions); all line references were read from source. The two `settings_window_app_test.dart` widget suites were counted but only Poltergeist's by name list; its content was not read line-by-line.
+
+## Resolved during implementation
+
+- The engine reserves `requestAppExit` alongside `hello`, `snapshot`,
+  `selectTab`, `hidden` and `show` (`GhostSettingsLinkMethod`).
+- The client takes `decodeError` and `lostError` as constructor
+  parameters. Séance passes its user-facing "Séance is not responding…"
+  message as `lostError`, so that text survives; both products also gain
+  the `lost` flag.
+- The host adds `snapshotChanged()` for changes no `Listenable` reports
+  (Poltergeist's preview cache capacity and threshold), and `connected`
+  and `visible` are plain getters so product wrappers can forward them to
+  their tests.
+- The client's `page` starts as a null `ValueNotifier` rather than `late`.

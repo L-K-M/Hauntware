@@ -78,13 +78,12 @@ Divergences:
 dependencies:
   flutter: { sdk: flutter }
   ghost_ui:        { path: ../ghost_ui }                    # SelectedTabView, ColorSwatchBox
-  seance_protocol: { path: ../../seance/packages/seance_protocol }
-  flutter_svg: ^2.3.0   # SVG rasterization in badge_image.dart:17
+  seance_protocol: { path: ../../../seance/packages/seance_protocol }
   file_picker: ^11.0.2  # default readImage in server_mark_picker.dart:84
 ```
 
 - `seance_protocol`, not `seance_core`: the cluster only uses models (`ServerMark`, `ServerIcon`, `ServerColor`, `ServerConfig`, `normalizeServerEmoji`, `normalizeServerCustomColor`, `kMaxServerIconImageBytes`), all public from the protocol barrel (`seance_protocol/lib/seance_protocol.dart:15,17`). Depending on `seance_core` would pull `dartssh2` into a package Poltergeist consumes, violating the guard (`import_guard.dart:149-156`).
-- `file_picker`/`flutter_svg` move with the code that uses them (`server_mark_picker.dart:84-94`, `badge_image.dart:17`); both apps already pin compatible versions (`seance_app/pubspec.yaml:49,77` = `^11.0.2`/`^2.3.0`; `poltergeist_app/pubspec.yaml:24,27` = `11.0.3`/`2.3.0`), so no app gains a plugin it lacked. The AGP-9/Kotlin gotcha already applies to both apps today (`poltergeist/AGENTS.md` §4).
+- `file_picker` moves with the code that uses it (`server_mark_picker.dart:84-94`); `flutter_svg` already moved to `ghost_ui` with `badge_image.dart` (#99); both apps already pin compatible versions (`seance_app/pubspec.yaml:49,77` = `^11.0.2`/`^2.3.0`; `poltergeist_app/pubspec.yaml:24,27` = `11.0.3`/`2.3.0`), so no app gains a plugin it lacked. The AGP-9/Kotlin gotcha already applies to both apps today (`poltergeist/AGENTS.md` §4).
 
 **Why this boundary respects the rules:**
 - Root `AGENTS.md`: "shared packages use relative paths" and "shared document/UI packages remain host-neutral", `ghost_marks` gets strings via a bag and theme via ambient `Theme.of(context)` + explicit params, exactly like `SidebarKitStrings`/`_chrome()` (`PORTS.md:834-839`).
@@ -146,3 +145,18 @@ App-side (unchanged): `ServerAvatar`/`_SessionRing` (recommend deletion, dead, s
 - **Net:** ~4,900 duplicated lines collapse to ~2,500 owned once.
 
 **Recommendation: extract, but as the two-layer split above, not all, not none.** The five files are 90-100% identical and every divergence already has a sanctioned seam (string bags, `hexStyle` param, the `readImage` test seam); the protocol-typed parts genuinely cannot diverge without breaking "identical records draw identical badges" (`PORTS.md:712-714`). Exclude: `ServerAvatar`/`_SessionRing` (dead upstream, delete or keep app-side), `place_glyphs.dart` (one borrowed function, `place_glyphs.dart:45,49`), editors/sidebar/chrome/themes (product UI). Open questions for the owner: the `incompressible` wording reconciliation, whether glyph vocabulary ever localizes (today's ledgered answer is no), and `ServerAvatar`'s fate.
+
+## Resolved during implementation
+
+- `ServerAvatar`/`_SessionRing` are deleted (PR 2), as decided; §4's
+  alternative no longer applies.
+- The badge-image surface stays `ghost_ui`'s public API (#99); §4's export
+  list names it only as what `ghost_marks` builds on.
+- PR 1 moves the generic colour picker to `ghost_ui`. Its
+  `theme_palette.dart` import was not dead: it used `formatThemeColor`
+  and `parseThemeColor`, which the shared picker reimplements privately
+  for its six- and eight-digit box.
+- PR 2's `ghost_marks` depends on `flutter` and `seance_protocol` only;
+  `ghost_ui` and `file_picker` join with the pickers in PR 3.
+- Test totals: about 3,060 lines moved or deleted (Séance 2,026 moved,
+  Poltergeist 1,036 deleted), not 2,460.

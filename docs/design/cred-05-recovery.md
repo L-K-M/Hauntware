@@ -65,7 +65,7 @@ leaking it hands over the live vault key itself.
    read, at the same boundary as the vault unlock. Separate PR, off by
    default.
 
-## Decisions needed from you
+## Decisions (approved 2026-10-08)
 
 - **A. Wrapped key (proposed) or code = vault key.** The wrapped key costs
   one extra file and a re-wrap step in the re-key journal; the alternative
@@ -92,3 +92,33 @@ docs.
 
 Roughly 600-900 lines of Dart across `seance_core`/`seance_app` plus tests,
 in three PRs (wrap + export/restore, enrolment + inline prompt, app lock).
+
+## Resolved during implementation
+
+- **Re-wrapping needs the code, which is not stored.** Step 2's
+  `wrappedVaultKey` beside the vault cannot be re-wrapped at a re-key
+  without the recovery key. Instead the device keeps W =
+  HKDF(R, `seance/v1/recovery-wrap`) and the key check as one vault entry,
+  `recovery:wrap-key`, sealed under the vault key like every entry. The
+  re-key journal already re-seals every entry, so the code keeps working
+  across enrolments and an interrupted re-key leaves the entry with
+  whichever generation survives. An export computes `seal(W, K)` when it
+  is made. R is never stored, so the code is shown once only.
+- **Reserved namespace.** `recovery:` ids are never exported, restored,
+  published or applied from sync, and a vault holding only reserved
+  entries still counts as empty when the keystore has lost its key.
+- **Key derivation.** Domain labels are the HKDF salt, the codebase's
+  existing convention (`cryptography`'s `Hkdf` has no `info`). The MAC
+  covers a canonical JSON array of the header strings and the entries
+  sorted by id; the format is specified in `seance_protocol`'s
+  `SecretsExport`.
+- **Restore.** Integrity failures (wrong code, altered file) abort with
+  the vault untouched. After the MAC verifies, an entry that does not
+  open (an orphan the exporting vault itself could not read) is skipped
+  and reported rather than failing every other credential. Entries match
+  by vault id, which is stable per credential (configs reference it).
+  Restore needs this device's vault unlocked; a new device has its own
+  key from first launch.
+- **Rotation.** Settings offers "Replace recovery code": a new code
+  replaces the stored W; exports made earlier still open with the old
+  code.
