@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:seance_app/ui/server_appearance.dart';
-import 'package:seance_app/ui/server_color_picker.dart';
-import 'package:seance_core/seance_core.dart';
+import 'package:ghost_marks/ghost_marks.dart';
+import 'package:seance_protocol/seance_protocol.dart';
 
 /// Choosing a colour of one's own for a server. The dialog holds the colour
 /// two ways — exactly, and as the sliders — and the tests are mostly about the

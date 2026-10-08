@@ -9174,7 +9174,7 @@ abstract class AppLocalizations {
   /// Error shown when the re-encoded image still exceeds the record-size bound.
   ///
   /// In en, this message translates to:
-  /// **'That image would not fit in a server record even at badge size. Try a smaller or simpler one.'**
+  /// **'That image would not fit in a server record even at badge size. Try a simpler picture — a logo rather than a photograph.'**
   String get serverMarkPickerIncompressible;
 
   /// Caption beside the badge on the image tab when no image is set.
