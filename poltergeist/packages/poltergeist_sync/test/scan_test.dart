@@ -73,6 +73,29 @@ final class _CreateTrashAfterCanonicalMissFs extends LocalFileSystem {
   }
 }
 
+/// Reports [modifiedAt] for every listed file: dart:io cannot write a
+/// pre-1970 time to disk.
+final class _FixedMtimeFs extends LocalFileSystem {
+  _FixedMtimeFs(this.modifiedAt);
+
+  final DateTime modifiedAt;
+
+  @override
+  Future<List<RemoteFileEntry>> listDirectory(String path) async => [
+    for (final entry in await super.listDirectory(path))
+      entry.type == RemoteFileType.file
+          ? RemoteFileEntry(
+              path: entry.path,
+              name: entry.name,
+              type: entry.type,
+              size: entry.size,
+              modifiedAt: modifiedAt,
+              mode: entry.mode,
+            )
+          : entry,
+  ];
+}
+
 /// Robust root detection — the `USER` env var is unset in many root
 /// containers, where chmod-based permission tests silently misbehave.
 bool runningAsRoot() {
@@ -496,6 +519,27 @@ void main() {
             (w) =>
                 w.relativePath == 'old.txt' &&
                 w.message.contains('outside the SFTP v3 range'),
+          ),
+          isTrue,
+        );
+      },
+    );
+
+    test(
+      'a fractional pre-1970 mtime floors to the earlier second, as the '
+      'executor does, and warns',
+      () async {
+        touch('old.txt');
+        fs = _FixedMtimeFs(DateTime.fromMillisecondsSinceEpoch(-500));
+
+        final result = await scan();
+
+        expect(result.entries['old.txt']!.mtimeSecs, -1);
+        expect(
+          result.warnings.any(
+            (w) =>
+                w.relativePath == 'old.txt' &&
+                w.kind == ScanWarningKind.mtimeClamped,
           ),
           isTrue,
         );

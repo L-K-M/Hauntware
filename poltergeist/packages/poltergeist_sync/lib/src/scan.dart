@@ -452,9 +452,11 @@ final class TreeScanner {
 
   static EntrySnapshot _snapshot(RemoteFileEntry entry) {
     final modified = entry.modifiedAt;
+    // Floor, not truncate: the executor and journal floor too, so a
+    // pre-1970 fractional time (-500 ms) is second -1 on every side.
     final mtimeSecs = modified == null
         ? null
-        : modified.millisecondsSinceEpoch ~/ 1000;
+        : (modified.millisecondsSinceEpoch / 1000).floor();
     return EntrySnapshot(
       kind: switch (entry.type) {
         RemoteFileType.file => EntryKind.file,

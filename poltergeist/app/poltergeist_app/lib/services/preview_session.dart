@@ -849,7 +849,7 @@ final class PreviewSession extends ChangeNotifier {
   Future<void> _sniffLocal(File file, int generation) async {
     try {
       if (await fileLooksLikeUtf8Text(file)) {
-        if (_disposed) return;
+        if (_disposed || _generation != generation) return;
         _kind = PreviewKind.text;
         await _loadText(file, generation);
         return;
