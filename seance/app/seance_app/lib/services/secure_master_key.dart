@@ -4,6 +4,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:seance_core/seance_core.dart';
 
+import 'app_lock.dart';
+
 /// Thrown when the OS keystore reports no master key but an encrypted vault is
 /// already on disk.
 ///
@@ -69,6 +71,7 @@ enum KeystoreStatus { unknown, available, unavailable }
 ///      or a lost keystore entry — which is also the sync E2E key.
 class MasterKeyManager {
   final FlutterSecureStorage _storage;
+  AppLock? _appLock;
   static const _keyName = 'seance.vault.masterKey.v1';
 
   /// Last observed keystore health. The bootstrap toast keys off this.
@@ -91,6 +94,9 @@ class MasterKeyManager {
             // all (entitlement present but unvalidated).
             mOptions: MacOsOptions(usesDataProtectionKeychain: false),
           );
+
+  /// Installed by the app host. Auth errors stay outside tolerant OS reads.
+  void protectCredentialReads(AppLock appLock) => _appLock = appLock;
 
   void _markAvailable() {
     keystoreStatus = KeystoreStatus.available;
@@ -221,7 +227,13 @@ class MasterKeyManager {
 
   /// Reads never crash the app on a locked/unavailable keystore; they behave
   /// as "not set" (and update [keystoreStatus] for the UI's retry affordance).
-  Future<String?> getApiKey(String name) async {
+  Future<String?> getApiKey(String name) {
+    final lock = _appLock;
+    if (lock == null) return _readApiKey(name);
+    return lock.read(() => _readApiKey(name));
+  }
+
+  Future<String?> _readApiKey(String name) async {
     try {
       final v = await _storage.read(key: 'seance.apikey.$name');
       _markAvailable();

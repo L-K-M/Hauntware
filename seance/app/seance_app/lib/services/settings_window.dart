@@ -9,6 +9,7 @@ import '../theme/app_appearance.dart';
 import '../theme/theme_palette.dart';
 import '../ui/terminal_appearance.dart';
 import 'app_settings.dart';
+import 'app_lock.dart';
 import 'external_file_opener.dart';
 import 'local_settings_backend.dart';
 import 'local_shell_service.dart';
@@ -54,6 +55,7 @@ const String settingsWindowArgument = '--seance-settings-window';
 /// The names of ghost_desktop's `GhostSettingsLinkMethod` are the engine's.
 @visibleForTesting
 enum SettingsLinkMethod {
+  setAppLock,
   setCheckForUpdates,
   setLocalShellEnabled,
   setKeepSessionsAlive,
@@ -85,6 +87,7 @@ Map<String, dynamic> _snapshotOf(SettingsBackend backend) => {
   'settings': backend.settings.toJson(),
   'llmConfigVersion': backend.llmConfigVersion,
   'syncStatus': backend.syncStatus.toJson(),
+  'appLockAvailability': backend.appLockAvailability.name,
 };
 
 /// The app's side of the settings window: ghost_desktop's link engine
@@ -146,6 +149,8 @@ class SettingsWindowHost {
   ) async {
     Map<String, dynamic> map() => (argument! as Map).cast<String, dynamic>();
     switch (method) {
+      case SettingsLinkMethod.setAppLock:
+        await _backend.setAppLock(AppLockMode.values.byName(argument! as String));
       case SettingsLinkMethod.setCheckForUpdates:
         await _backend.setCheckForUpdates(argument! as bool);
       case SettingsLinkMethod.setLocalShellEnabled:
@@ -250,6 +255,7 @@ class RemoteSettingsBackend extends GhostSettingsWindowClient<SettingsTab>
   late AppSettings _settings;
   late int _llmConfigVersion;
   late SyncStatus _syncStatus;
+  AppLockAvailability _appLockAvailability = AppLockAvailability.unavailable;
 
   /// The theme the window draws itself in: the app's, from the latest
   /// snapshot. Its own notifier for the reason [AppState.appearance] is
@@ -282,7 +288,14 @@ class RemoteSettingsBackend extends GhostSettingsWindowClient<SettingsTab>
   SyncStatus get syncStatus => _syncStatus;
 
   @override
+  AppLockAvailability get appLockAvailability => _appLockAvailability;
+
+  @override
   void applySnapshot(Map<String, Object?> snapshot) {
+    _appLockAvailability = snapshot['appLockAvailability'] ==
+            AppLockAvailability.available.name
+        ? AppLockAvailability.available
+        : AppLockAvailability.unavailable;
     _settings = AppSettings.fromJson(
       (snapshot['settings'] as Map).cast<String, dynamic>(),
     );
@@ -305,6 +318,10 @@ class RemoteSettingsBackend extends GhostSettingsWindowClient<SettingsTab>
   @override
   Future<void> setCheckForUpdates(bool enabled) =>
       _call(SettingsLinkMethod.setCheckForUpdates, enabled);
+
+  @override
+  Future<void> setAppLock(AppLockMode mode) =>
+      _call(SettingsLinkMethod.setAppLock, mode.name);
 
   /// This engine shares the app's process — the platform and environment a
   /// local shell reads are identical on both sides, so the answer is

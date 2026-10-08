@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Secrets: Settings > General offers device authentication on Android,
+  iOS, macOS and Windows, off by default. Biometrics or your device
+  passcode protect saved-secret reads on launch and after 5 minutes in
+  the background. Enabling and disabling both require authentication.
+  Cancellation leaves saved data untouched and can be retried; existing
+  SSH sessions stay connected and keep credentials already in memory.
 - Secrets: a tab that needs a credential saved on another device asks for
   the password or private key right there (or switches the server to the
   SSH agent) and connects. Saving the first password or key on a device

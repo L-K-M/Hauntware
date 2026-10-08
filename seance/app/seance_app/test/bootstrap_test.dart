@@ -8,9 +8,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:seance_app/app_state.dart';
 import 'package:seance_app/main.dart';
 import 'package:seance_app/services/app_services.dart';
+import 'package:seance_app/services/app_lock.dart';
 import 'package:seance_app/services/local_settings_backend.dart';
 import 'package:seance_app/theme/app_appearance.dart';
 import 'package:seance_app/theme/theme_presets.dart';
+
+import 'support/device_authenticator.dart';
 
 const _pathChannel = MethodChannel('plugins.flutter.io/path_provider');
 
@@ -24,6 +27,40 @@ const _pathChannel = MethodChannel('plugins.flutter.io/path_provider');
 /// platform-channel futures never complete under fake-async), so the tests
 /// drive the phase transition through SeanceApp's initOverride seam.
 void main() {
+  testWidgets('bootstrap lifecycle drives the saved-credential timeout', (tester) async {
+    late Directory directory;
+    late AppServices services;
+    late AppState state;
+    var elapsed = Duration.zero;
+    await tester.runAsync(() async {
+      directory = await Directory.systemTemp.createTemp('seance-boot-lock-');
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(_pathChannel, (_) async => directory.path);
+      FlutterSecureStorage.setMockInitialValues({});
+      services = await AppServices.initialize(deviceAuthenticator: TestDeviceAuthenticator(), appLockElapsed: () => elapsed);
+      state = AppState(services);
+      await state.setAppLock(AppLockMode.on);
+    });
+    addTearDown(() async {
+      state.dispose();
+      await services.probe.dispose();
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(_pathChannel, null);
+      await directory.delete(recursive: true);
+    });
+    await tester.pumpWidget(SeanceApp(initOverride: () async => state));
+    await tester.pump();
+    await tester.pump();
+    await tester.runAsync(() async {
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      elapsed += appLockBackgroundTimeout;
+      expect(services.appLock.requiresAuthentication, isFalse);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+      elapsed += appLockBackgroundTimeout;
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      expect(services.appLock.requiresAuthentication, isTrue);
+    });
+    await tester.pumpWidget(const SizedBox());
+  });
+
   testWidgets('bootstrap phase changes stay inside one MaterialApp',
       (tester) async {
     await tester.pumpWidget(

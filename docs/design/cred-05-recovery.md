@@ -65,6 +65,53 @@ leaking it hands over the live vault key itself.
    read, at the same boundary as the vault unlock. Separate PR, off by
    default.
 
+## Final app-lock policy (approved 2026-10-08)
+
+- Optional, off by default, persisted only in this device's settings.
+  Settings > General shows the option on Android, iOS, macOS and Windows
+  when device authentication is available. Linux has no option. An enabled
+  lock stays enforced if device authentication later becomes unavailable.
+- Authenticate using device biometrics **or the device's passcode/PIN
+  fallback**, before the first saved-credential read each launch and again
+  after **at least 5 minutes** in the background. Enabling and disabling
+  both require successful device authentication.
+- `hidden`/`paused` start a deadline; `inactive` does not, since
+  native auth and switching to the desktop Settings window cause it.
+  Monotonic elapsed time and wall time cover OS sleep and backwards clock
+  changes; a forward clock correction may conservatively require auth early.
+  Repeated background events preserve the first deadline. While auth is
+  pending, foreground events cannot erase that deadline. A timeout
+  invalidates the pending result; cancelled, rejected or failed auth
+  releases nothing and the next attempt can retry. Concurrent readers
+  share one prompt and one lazy keystore unlock. Async reads also check
+  authorization after I/O before releasing their result.
+- The app service gates vault reads, stored API keys, referenced SSH
+  identity files, recovery exports/restores/code replacement and vault
+  rekey admission. Sync/inbox/assistant paths use those same boundaries.
+  Timers defer while locked; explicit actions can authenticate. Newly
+  typed credentials and the SSH agent need no saved-credential read.
+- Locked launches defer keystore probing and rekey-journal settlement.
+  Refusal leaves the vault, keystore and journal intact. An admitted rekey
+  still settles the installed generation after a keystore write failure;
+  app-lock timeout cannot prevent that recovery work. Existing mutation
+  and sync-operation queues keep their ownership.
+- Auth errors have their own type and visible retry path. They do not
+  mean a missing credential, damaged vault or unavailable OS keystore.
+  The Settings route and separate window share SettingsBackend; only the
+  app engine authenticates and persists changes, using ghost_desktop's
+  existing snapshot/proxy/dispatch link.
+- This gates **future reads**. Existing SSH/assistant sessions keep
+  credentials already in memory. It does not erase them, change vault
+  encryption or keychain names, encrypt referenced identity files, or
+  protect SFTP plaintext copies. Device authentication is an application
+  gate, not an additional encryption format.
+
+`local_auth` uses a FlutterFragmentActivity on Android, the biometric
+permission and AppCompat launch/normal themes. iOS declares why Face ID is
+used. Reviewed identities and native compatibility code are retained.
+Automated policy, adapter and settings-link tests do not replace real-device
+biometric/passcode, desktop-window and OS sleep/resume checks.
+
 ## Decisions (approved 2026-10-08)
 
 - **A. Wrapped key (proposed) or code = vault key.** The wrapped key costs

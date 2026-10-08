@@ -7,9 +7,12 @@ import 'package:path_provider/path_provider.dart';
 import 'package:seance_core/seance_core.dart';
 
 import 'atomic_file.dart';
+import 'app_lock.dart';
+import 'app_lock_vault.dart';
 import 'app_settings.dart';
 import 'assistant_settings_sync.dart';
 import 'command_stats.dart';
+import 'device_authenticator.dart';
 import 'external_file_opener.dart';
 import 'file_stores.dart';
 import 'identity_bookmarks.dart';
@@ -146,6 +149,7 @@ class AppServices {
   final TofuVerifier tofu;
   final ProbeService probe;
   final MasterKeyManager masterKeys;
+  final AppLock appLock;
   final SettingsStore settingsStore;
   final CommandStatsStore commandStatsStore;
   final CommandStats commandStats;
@@ -197,6 +201,7 @@ class AppServices {
     required this.tofu,
     required this.probe,
     required this.masterKeys,
+    required this.appLock,
     required this.settingsStore,
     required this.commandStatsStore,
     required this.commandStats,
@@ -217,6 +222,8 @@ class AppServices {
   /// nothing and gets the real one.
   static Future<AppServices> initialize({
     @visibleForTesting MasterKeyManager? masterKeyManager,
+    @visibleForTesting DeviceAuthenticator? deviceAuthenticator,
+    @visibleForTesting Duration Function()? appLockElapsed,
   }) async {
     final dir = await getApplicationSupportDirectory();
     String p(String name) => '${dir.path}/$name';
@@ -243,7 +250,16 @@ class AppServices {
     }
 
     final vaultFile = File(p('vault.json'));
+    final settingsStore = SettingsStore(File(p('settings.json')));
+    final settings = await settingsStore.load();
+    final appLock = AppLock(
+      authenticator: deviceAuthenticator ?? NativeDeviceAuthenticator(),
+      mode: settings.appLock,
+      elapsed: appLockElapsed,
+    );
+    await appLock.refreshAvailability();
     final masterKeys = masterKeyManager ?? MasterKeyManager();
+    masterKeys.protectCredentialReads(appLock);
     // May be null when the OS keystore is locked or unavailable (locked login
     // keyring on auto-login systems, no Secret Service daemon on minimal
     // desktops): the app then starts with a locked vault — secrets unreadable
@@ -253,22 +269,24 @@ class AppServices {
     // A keystore that *answers* but holds no key while a vault already sits on
     // disk is the other refusal: minting a fresh key over it would strand
     // every saved secret, so probeKeystore throws rather than guess.
-    var vaultKey = await masterKeys.probeKeystore(
-      hasExistingVault: await _holdsSecrets(vaultFile),
-    );
+    // Locked launches defer both keystore access and journal settlement.
+    // Cancelling device auth must leave startup and vault recovery retryable.
+    var vaultKey = settings.appLock == AppLockMode.on
+        ? null
+        : await masterKeys.probeKeystore(
+            hasExistingVault: await _holdsSecrets(vaultFile),
+          );
 
     final configStore = FileConfigStore(File(p('servers.json')));
     final snippetStore = FileSnippetStore(File(p('snippets.json')));
     final tombstoneStore = FileTombstoneStore(File(p('deleted_records.json')));
     final vaultStore = FileVaultStore(vaultFile);
     final hostKeyStore = FileHostKeyStore(File(p('known_hosts.json')));
-    final settingsStore = SettingsStore(File(p('settings.json')));
     final commandStatsStore = CommandStatsStore(File(p('command_stats.json')));
     final managedRemoteFiles = ManagedRemoteFileStore(
       indexFile: File(p('managed_remote_files.json')),
       checkoutRoot: Directory(p('sftp-checkouts')),
     );
-    final settings = await settingsStore.load();
     var settingsChanged = false;
     if (settings.deviceId.isEmpty) {
       settings.deviceId = uuidV4();
@@ -317,6 +335,7 @@ class AppServices {
       tofu: TofuVerifier(hostKeyStore),
       probe: ProbeService(),
       masterKeys: masterKeys,
+      appLock: appLock,
       settingsStore: settingsStore,
       commandStatsStore: commandStatsStore,
       commandStats: await commandStatsStore.load(),
@@ -337,13 +356,69 @@ class AppServices {
       settings: settings,
       rekeyJournal: vaultStore,
     );
+    services.vault = services._credentialVault(
+      AppLockVaultStore(vaultStore, appLock),
+      vaultKey,
+    );
     return services;
   }
+
+  SecretVault _credentialVault(VaultStore store, List<int>? key) {
+    if (key == null && settings.appLock == AppLockMode.off) {
+      return LockedSecretVault(store);
+    }
+    return AppLockSecretVault(
+      store,
+      key ?? const <int>[],
+      appLock,
+      _resolveCredentialVault,
+    );
+  }
+
+  Future<SecretVault> _resolveCredentialVault() async {
+    await appLock.requireUnlocked();
+    if (vaultKey == null) await unlockVaultFromKeystore();
+    final key = vaultKey;
+    if (key == null) throw const VaultLockedException();
+    return SecretVault(vault.store, key);
+  }
+
+  /// The mutation queue owns this transition; a rejected auth writes nothing.
+  Future<void> setAppLock(AppLockMode mode) async {
+    await appLock.changeMode(mode, persist: () async {
+      final previous = settings.appLock;
+      settings.appLock = mode;
+      try {
+        await saveSettings();
+      } catch (_) {
+        settings.appLock = previous;
+        rethrow;
+      }
+    });
+    vault = _credentialVault(vault.store, vaultKey);
+  }
+
+  Future<bool>? _vaultUnlock;
 
   /// Re-probe the OS keystore and, if it's back, unlock the vault in place
   /// (existing references to [vault] keep working — the key is swapped into a
   /// fresh instance). Returns whether the vault has a key afterwards.
   Future<bool> unlockVaultFromKeystore() async {
+    final pending = _vaultUnlock;
+    if (pending != null) return pending;
+
+    // Share the probe too: two first reads must not mint competing keys.
+    final started = _unlockVaultFromKeystore();
+    _vaultUnlock = started;
+    try {
+      return await started;
+    } finally {
+      _vaultUnlock = null;
+    }
+  }
+
+  Future<bool> _unlockVaultFromKeystore() async {
+    await appLock.requireUnlocked();
     if (vaultKey != null) return true;
     // The vault file a retry must not mint a key over, when it is a real
     // file. A keystore that is back but answers "no key" while a vault sits
@@ -366,6 +441,7 @@ class AppServices {
       return false;
     }
     if (key == null) return false;
+    await appLock.requireUnlocked();
     // A keystore that is back is also the first chance to finish a re-key the
     // last run left staged, and it has to happen before the key is adopted:
     // the generation the vault opens with has to be the one this key seals.
@@ -382,7 +458,7 @@ class AppServices {
       );
       return false;
     }
-    vault = SecretVault(vault.store, key);
+    vault = _credentialVault(vault.store, key);
     vaultKey = key;
     return true;
   }
@@ -460,6 +536,8 @@ class AppServices {
   /// whole map anyway, so an orphan credential keeps opening instead of
   /// quietly retiring with the key nothing holds any more.
   Future<void> _rekeyVault(List<int> newKey) async {
+    await appLock.requireUnlocked();
+    if (vaultKey == null) await unlockVaultFromKeystore();
     // An attempt that could not get a verdict out of the keyring left its
     // journal staged rather than guess, and staging a second one over it is
     // refused. This is the retry, and the keyring may be back by now: settle
@@ -471,6 +549,7 @@ class AppServices {
     // Enrolment waits for the keyring rather than stage a generation built
     // from a vault it could not read.
     if (currentKey == null) throw const VaultLockedException();
+    await appLock.requireUnlocked();
     await _rekeyJournal.stageRekey(currentKey: currentKey, newKey: newKey);
     try {
       // The keystore is the only place the new key survives a restart, and it
@@ -484,7 +563,7 @@ class AppServices {
       rethrow;
     }
     await _settleRekey(_rekeyJournal, newKey);
-    vault = SecretVault(vault.store, newKey);
+    vault = _credentialVault(vault.store, newKey);
     vaultKey = newKey;
   }
 
@@ -503,6 +582,8 @@ class AppServices {
   /// the vault no longer holds (a lost keystore healed with a fresh key)
   /// belongs to a code that exports nothing any more.
   Future<bool> recoveryConfigured() async {
+    await appLock.requireUnlocked();
+    if (vaultKey == null) await unlockVaultFromKeystore();
     final sealed = await vault.store.getSecretBlob(recoveryWrapKeyId);
     if (sealed == null) return false;
     final key = vaultKey;
@@ -524,6 +605,7 @@ class AppServices {
   /// an earlier one; exports made with that one still open with it.
   /// Serialized with enrolment, whose re-key re-seals the entry.
   Future<void> saveRecoveryCode(String code) => _serializeSyncOperation(() async {
+    await _resolveCredentialVault();
     final key = vaultKey;
     if (key == null) throw const VaultLockedException();
     final wrap = await RecoveryWrapKey.derive(RecoveryKey.decode(code));
@@ -534,7 +616,11 @@ class AppServices {
   });
 
   /// The vault, encrypted, as an export the recovery code opens anywhere.
-  Future<Uint8List> exportSecrets() => _serializeSyncOperation(() async {
+  Future<Uint8List> exportSecrets() =>
+      _serializeSyncOperation(() => appLock.read(_exportSecrets));
+
+  Future<Uint8List> _exportSecrets() async {
+    await _resolveCredentialVault();
     final key = vaultKey;
     if (key == null) throw const VaultLockedException();
     final blobs = await vault.store.allSecretBlobs();
@@ -554,7 +640,7 @@ class AppServices {
       sealedEntries: blobs,
       createdAt: DateTime.now(),
     );
-  });
+  }
 
   /// Opens [export] with [code] and merges its credentials into this
   /// device's vault, re-sealed under this device's key, in one write.
@@ -568,6 +654,7 @@ class AppServices {
     String code, {
     required RestoreConflictPolicy policy,
   }) => _serializeSyncOperation(() async {
+    await _resolveCredentialVault();
     if (vaultKey == null) throw const VaultLockedException();
     final opened = await SecretsExport.open(export, code);
     final toWrite = <Secret>[];
@@ -631,7 +718,7 @@ class AppServices {
           VaultRekeyOutcome.adopted) {
         return;
       }
-      vault = SecretVault(vault.store, installed);
+      vault = _credentialVault(vault.store, installed);
       vaultKey = installed;
     } catch (error, stackTrace) {
       developer.log(
@@ -1023,11 +1110,6 @@ class AppServices {
             'grant is dropped and the vault credential is tested instead',
       );
     }
-    // Lazily re-probe a keystore that was down at bootstrap, so a keyring that
-    // came back (or just got unlocked) unlocks secrets without an app restart.
-    if (config.secretRef != null && vaultKey == null) {
-      await unlockVaultFromKeystore();
-    }
     switch (config.authMethod) {
       case AuthMethod.agent:
         return const SshCredentials.agent();
@@ -1045,17 +1127,12 @@ class AppServices {
           );
           return SshCredentials.privateKey(
             pem,
-            // Behind the `??`, so a typed passphrase skips the read that was
-            // about to be discarded. Only a read: the vault is `vault.json`
-            // (`FileVaultStore`), and the keyring holds the vault key alone —
-            // already resolved by the time this runs — so there is no unlock
-            // prompt or keychain failure to avoid here, and no behaviour
-            // difference to test. Free, and one less thing happening.
+            // A typed passphrase needs no stored-passphrase read or unlock.
             keyPassphrase:
                 draft(draftKeyPassphrase) ??
                 (config.secretRef == null
                     ? null
-                    : (await vault.getSecret(
+                    : (await _readSavedSecret(
                         config.secretRef!,
                       ))?.keyPassphrase),
           );
@@ -1082,13 +1159,19 @@ class AppServices {
     final ref = config.secretRef;
     if (ref == null) return null;
 
-    final secret = await vault.getSecret(ref);
+    final secret = await _readSavedSecret(ref);
     if (secret != null) return secret;
     throw CredentialMissingException(
       serverId: config.id,
       serverLabel: config.label,
       authMethod: config.authMethod,
     );
+  }
+
+  /// Re-probe only for stored material. Typed drafts need no saved-key read.
+  Future<Secret?> _readSavedSecret(String ref) async {
+    if (vaultKey == null) await unlockVaultFromKeystore();
+    return vault.getSecret(ref);
   }
 
   /// Resolves a saved jump host at connection time, including its credential.
@@ -1105,6 +1188,13 @@ class AppServices {
   /// plain expanded path. Every attempt lands in the audit log; audit failures
   /// never block connecting.
   Future<String> _readIdentityFile(
+    ServerConfig config, {
+    IdentityFileBookmark? bookmarkOverride,
+  }) => appLock.read(
+    () => _readIdentityFileNow(config, bookmarkOverride: bookmarkOverride),
+  );
+
+  Future<String> _readIdentityFileNow(
     ServerConfig config, {
     IdentityFileBookmark? bookmarkOverride,
   }) async {

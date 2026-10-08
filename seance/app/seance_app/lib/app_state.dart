@@ -11,6 +11,7 @@ import 'package:seance_core/seance_core.dart';
 import 'package:xterm/xterm.dart' show TerminalController;
 
 import 'services/app_services.dart';
+import 'services/app_lock.dart';
 import 'services/app_settings.dart';
 import 'services/background_keep_alive.dart';
 import 'services/chat_session.dart';
@@ -745,7 +746,11 @@ class AppState extends ChangeNotifier {
     }
     await _seedDefaultSnippets();
     snippets = await services.snippetStore.listSnippets();
-    await refreshLlmConfigured();
+    try {
+      await refreshLlmConfigured();
+    } on AppLockException catch (error) {
+      credentialAccessError = error.message;
+    }
     // Invariant insurance: if any restore path ever leaves a session
     // connecting or connected, the anchor must reflect it before the app can
     // be backgrounded. (Today's restores insert disconnected placeholders.)
@@ -766,11 +771,11 @@ class AppState extends ChangeNotifier {
     });
     services.probe.start(servers);
     notifyListeners();
-    await _loadInbox();
+    if (credentialAccessError == null) await _loadInbox();
     // Sync at startup (pull others' changes) and keep a periodic timer going.
     ensureAutoSyncTimer();
     _ensureInboxTimer();
-    if (inboxApps.isNotEmpty) unawaited(refreshInbox());
+    if (inboxApps.isNotEmpty) unawaited(_refreshInboxAutomatically());
     if (services.settings.autoSync && services.isSyncConfigured) {
       unawaited(_autoSync());
     }
@@ -1784,6 +1789,9 @@ class AppState extends ChangeNotifier {
   /// the sync round that couldn't run.
   Future<void> onVaultUnlocked() async {
     await refreshLlmConfigured();
+    credentialAccessError = null;
+    await _loadInbox();
+    _ensureInboxTimer();
     if (services.settings.autoSync && services.isSyncConfigured) {
       unawaited(_autoSync());
     }
@@ -1846,7 +1854,7 @@ class AppState extends ChangeNotifier {
       _recomputeSuggestions();
       // Apps and statuses may have arrived: a new app's items can be opened
       // now, and a proposal handled elsewhere should stop being announced.
-      unawaited(refreshInbox());
+      unawaited(_refreshInboxAutomatically());
       return outcome;
     } finally {
       // A pulled assistant configuration changes the provider, the model or
@@ -2082,6 +2090,8 @@ class AppState extends ChangeNotifier {
   /// mid-sync edit is never lost.
   Future<void> _autoSync() async {
     if (!services.isSyncConfigured) return;
+    // Timers defer locked reads; a user action owns the next device prompt.
+    if (services.appLock.requiresAuthentication) return;
     if (syncing) {
       _syncQueued = true;
       return;
@@ -2256,6 +2266,29 @@ class AppState extends ChangeNotifier {
       services.probe.pause();
     }
   }
+
+  /// Inactive includes native auth and a focused desktop Settings window.
+  /// Only hidden/paused time belongs to the app-lock background timeout.
+  void onAppLifecycle(AppLifecycleState lifecycle) {
+    services.appLock.onLifecycle(switch (lifecycle) {
+      AppLifecycleState.resumed => AppLockLifecycle.foreground,
+      AppLifecycleState.inactive => AppLockLifecycle.inactive,
+      AppLifecycleState.hidden ||
+      AppLifecycleState.paused ||
+      AppLifecycleState.detached => AppLockLifecycle.background,
+    });
+  }
+
+  Future<void> setAppLock(AppLockMode mode) => _mutate(() async {
+    try {
+      await services.setAppLock(mode);
+    } finally {
+      notifyListeners();
+    }
+  });
+
+  /// A launch refusal is shown explicitly; it does not mean keys are absent.
+  String? credentialAccessError;
 
   Future<void> _reconcileRetainedLocalCopies() async {
     final reconciled = await services.managedRemoteFiles.reconcileAll();
@@ -2605,6 +2638,9 @@ class AppState extends ChangeNotifier {
       );
       inboxPending = await inbox.pending();
       inboxFailures = await inbox.failures();
+    } on AppLockException catch (error) {
+      inboxError = error.message;
+      credentialAccessError = error.message;
     } catch (error, stackTrace) {
       developer.log(
         'Could not load the command inbox',
@@ -2622,18 +2658,24 @@ class AppState extends ChangeNotifier {
     if (inboxApps.isEmpty || !services.isSyncConfigured) return;
     _inboxTimer = Timer.periodic(
       _inboxPollInterval,
-      (_) => unawaited(refreshInbox()),
+      (_) => unawaited(_refreshInboxAutomatically()),
     );
   }
 
-  /// Fetch new proposals. Errors land in [inboxError] rather than being
-  /// thrown: this runs from timers and after sync rounds.
+  /// Timers defer a locked read; manual refresh can authenticate and retry.
+  Future<void> _refreshInboxAutomatically() async {
+    if (services.appLock.requiresAuthentication) return;
+    await refreshInbox();
+  }
+
+  /// Fetch new proposals. Errors land in [inboxError] rather than being thrown.
   Future<void> refreshInbox() async {
     if (_inboxFetching || _inboxDisposed) return;
     if (!services.isSyncConfigured) return;
     _inboxFetching = true;
     try {
       await _mutate(() async {
+        await services.appLock.requireUnlocked();
         await _loadInbox();
         if (inboxApps.isEmpty) return;
         inboxPending = await services.withInbox((inbox) async {

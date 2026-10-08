@@ -8,6 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ghost_desktop/ghost_desktop.dart' show GhostSettingsLinkMethod;
 import 'package:seance_app/app_state.dart';
 import 'package:seance_app/services/app_services.dart';
+import 'package:seance_app/services/app_lock.dart';
 import 'package:seance_app/services/secrets_recovery.dart';
 import 'package:seance_app/services/settings_backend.dart';
 import 'package:seance_app/services/settings_window.dart';
@@ -15,6 +16,8 @@ import 'package:seance_app/theme/app_appearance.dart';
 import 'package:seance_app/theme/theme_presets.dart';
 import 'package:seance_app/ui/terminal_appearance.dart';
 import 'package:seance_core/seance_core.dart';
+
+import 'support/device_authenticator.dart';
 
 const _pathChannel = MethodChannel('plugins.flutter.io/path_provider');
 
@@ -52,6 +55,7 @@ void main() {
   late SettingsWindowHost host;
   late _ExportFiles exportFiles;
   late List<String> controlCalls;
+  late TestDeviceAuthenticator device;
 
   /// Deliver what one end sends to the other end's handler, and its reply
   /// back — what the runners do between the two engines.
@@ -85,7 +89,8 @@ void main() {
       (call) async => directory.path,
     );
     FlutterSecureStorage.setMockInitialValues({});
-    services = await AppServices.initialize();
+    device = TestDeviceAuthenticator();
+    services = await AppServices.initialize(deviceAuthenticator: device);
     state = AppState(services);
     relay(_appLink, _windowLink);
     relay(_windowLink, _appLink);
@@ -136,6 +141,42 @@ void main() {
     expect(window.page.value?.tab, SettingsTab.sync);
     expect(window.settings.terminalFontSize, 17);
     expect(window.llmConfigVersion, state.llmConfigVersion);
+  });
+
+  test('app-lock snapshot, dispatch and proxy share the host gate', () async {
+    final window = await openWindow();
+    addTearDown(window.dispose);
+    expect(window.appLockAvailability, AppLockAvailability.available);
+    expect(window.settings.appLock, AppLockMode.off);
+    device.reject();
+    await expectLater(window.setAppLock(AppLockMode.on), throwsA(isA<SettingsBackendException>().having((e) => e.message, 'message', 'Auth cancelled')));
+    expect(window.settings.appLock, AppLockMode.off);
+    expect((await services.settingsStore.load()).appLock, AppLockMode.off);
+
+    device.onAuthenticate = null;
+    await window.setAppLock(AppLockMode.on);
+    await Future<void>.delayed(Duration.zero);
+    expect(window.settings.appLock, AppLockMode.on);
+    expect((await services.settingsStore.load()).appLock, AppLockMode.on);
+    device.reject();
+    await expectLater(window.setAppLock(AppLockMode.off), throwsA(isA<SettingsBackendException>().having((e) => e.message, 'message', 'Auth cancelled')));
+    expect(window.settings.appLock, AppLockMode.on);
+    device.onAuthenticate = null;
+    await window.setAppLock(AppLockMode.off);
+    await Future<void>.delayed(Duration.zero);
+    expect(window.settings.appLock, AppLockMode.off);
+    expect(device.prompts, 4);
+  });
+
+  test('unsupported host refuses app-lock calls from the settings window', () async {
+    device.supported = AppLockAvailability.unavailable;
+    await services.appLock.refreshAvailability();
+    final window = await openWindow();
+    addTearDown(window.dispose);
+    expect(window.appLockAvailability, AppLockAvailability.unavailable);
+    await expectLater(window.setAppLock(AppLockMode.on), throwsA(isA<SettingsBackendException>()));
+    expect(services.settings.appLock, AppLockMode.off);
+    expect(device.prompts, 0);
   });
 
   test('a write from the window lands in the app and on disk', () async {

@@ -11,6 +11,7 @@ import '../services/external_file_opener.dart';
 import '../services/settings_backend.dart';
 import '../services/system_fonts.dart';
 import 'appearance_settings.dart';
+import 'app_lock_settings.dart';
 import 'font_picker.dart';
 import 'inbox_settings.dart';
 import 'recovery_settings.dart';
@@ -465,6 +466,7 @@ class _SettingsScreenState extends State<SettingsScreen>
         help:
             'These preferences are local to this device and save immediately.',
       ),
+      AppLockSettings(backend: _backend),
       SwitchListTile(
         contentPadding: EdgeInsets.zero,
         title: const Text('Check for updates'),

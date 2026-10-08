@@ -6,6 +6,7 @@ import '../theme/app_appearance.dart';
 import '../theme/theme_palette.dart';
 import '../ui/terminal_appearance.dart';
 import 'app_settings.dart';
+import 'app_lock.dart';
 import 'assistant_settings_sync.dart';
 import 'external_file_opener.dart';
 import 'secrets_recovery.dart';
@@ -51,6 +52,13 @@ class LocalSettingsBackend implements SettingsBackend {
 
   @override
   void removeListener(VoidCallback listener) => _state.removeListener(listener);
+
+  @override
+  AppLockAvailability get appLockAvailability =>
+      _state.services.appLock.availability;
+
+  @override
+  Future<void> setAppLock(AppLockMode mode) => _state.setAppLock(mode);
 
   /// Turning the update check off also clears any banner already showing
   /// this session.

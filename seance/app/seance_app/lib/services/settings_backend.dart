@@ -5,6 +5,7 @@ import '../theme/app_appearance.dart';
 import '../theme/theme_palette.dart';
 import '../ui/terminal_appearance.dart';
 import 'app_settings.dart';
+import 'app_lock.dart';
 import 'external_file_opener.dart';
 import 'local_shell_service.dart';
 import 'secrets_recovery.dart';
@@ -44,6 +45,11 @@ abstract class SettingsBackend implements Listenable {
   SyncStatus get syncStatus;
 
   Future<void> setCheckForUpdates(bool enabled);
+
+  AppLockAvailability get appLockAvailability;
+
+  /// Both transitions require device authentication on this app's engine.
+  Future<void> setAppLock(AppLockMode mode);
 
   /// What the local-shell section shows: whether this platform can host a
   /// shell, what it would run, or why it cannot — and, inside the macOS App

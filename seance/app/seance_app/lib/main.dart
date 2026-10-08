@@ -7,6 +7,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 
 import 'app_state.dart';
 import 'services/app_services.dart';
+import 'services/app_lock.dart';
 import 'services/macos_titlebar.dart';
 import 'services/secure_master_key.dart';
 import 'services/settings_window.dart';
@@ -98,6 +99,7 @@ class _Bootstrap extends StatefulWidget {
 
 class _BootstrapState extends State<_Bootstrap> with WidgetsBindingObserver {
   AppState? _state;
+  AppState? _loadingState;
   Object? _error;
 
   /// The theme until the state exists to say otherwise: the settings are
@@ -122,6 +124,7 @@ class _BootstrapState extends State<_Bootstrap> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState lifecycle) {
+    (_state ?? _loadingState)?.onAppLifecycle(lifecycle);
     // Pause the reachability probe while the app isn't in the foreground.
     _state?.setForeground(lifecycle == AppLifecycleState.resumed);
   }
@@ -138,6 +141,9 @@ class _BootstrapState extends State<_Bootstrap> with WidgetsBindingObserver {
   Future<AppState> _init() async {
     final services = await AppServices.initialize();
     final state = AppState(services);
+    _loadingState = state;
+    final lifecycle = WidgetsBinding.instance.lifecycleState;
+    if (lifecycle != null) state.onAppLifecycle(lifecycle);
 
     // Wire interactive prompts to real dialogs via the root navigator.
     state.hostKeyPrompter = (decision) async {
@@ -158,9 +164,35 @@ class _BootstrapState extends State<_Bootstrap> with WidgetsBindingObserver {
     }
     _warnIfSettingsWereRecovered(state);
     _warnIfKeystoreUnavailable(state);
+    _warnIfAppLocked(state);
     // Fire-and-forget: don't let a slow/offline update check hold up startup.
     unawaited(_checkForUpdate(state));
     return state;
+  }
+
+  void _warnIfAppLocked(AppState state) {
+    final error = state.credentialAccessError;
+    if (error == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final context = navigatorKey.currentContext;
+      if (context == null) return;
+      showTopToast(
+        Overlay.of(context, rootOverlay: true),
+        message: error,
+        actionLabel: 'Retry',
+        onAction: () => unawaited(_retryAppLock(state)),
+      );
+    });
+  }
+
+  Future<void> _retryAppLock(AppState state) async {
+    try {
+      await state.services.appLock.requireUnlocked();
+      await state.onVaultUnlocked();
+    } on AppLockException catch (error) {
+      state.credentialAccessError = error.message;
+      _warnIfAppLocked(state);
+    }
   }
 
   /// The OS keystore was down at bootstrap (locked login keyring, no Secret
@@ -188,7 +220,15 @@ class _BootstrapState extends State<_Bootstrap> with WidgetsBindingObserver {
   }
 
   Future<void> _retryKeystoreUnlock(AppState state) async {
-    if (await state.services.unlockVaultFromKeystore()) {
+    final bool unlocked;
+    try {
+      unlocked = await state.services.unlockVaultFromKeystore();
+    } on AppLockException catch (error) {
+      state.credentialAccessError = error.message;
+      _warnIfAppLocked(state);
+      return;
+    }
+    if (unlocked) {
       await state.onVaultUnlocked();
       final context = navigatorKey.currentContext;
       if (context == null) return;
