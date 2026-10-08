@@ -203,8 +203,9 @@ final class _SyncTrashTargetState {
   final SyncTrashLocation location;
   final Set<SyncSide> sides = <SyncSide>{};
   Set<String> activeRunIds = const <String>{};
+  /// Set once the side's file system answered; inspection and purge
+  /// obtain verified file systems of their own.
   SyncEndpoint? endpoint;
-  RemoteFileSystem? fileSystem;
   SyncTrashInventory? live;
   TrashCacheEntry? cache;
 }
@@ -720,13 +721,7 @@ final class SyncPlanController extends ChangeNotifier {
     final target = _trashTargets[notice._location];
     final live = target?.live;
     final endpoint = target?.endpoint;
-    final fileSystem = target?.fileSystem;
-    if (target == null ||
-        live == null ||
-        endpoint == null ||
-        fileSystem == null) {
-      return null;
-    }
+    if (target == null || live == null || endpoint == null) return null;
     final active = _activeTrashRunIds(target);
     final selection = live.select(SyncTrashPurgeScope.aged, _now(), active);
     if (selection.runIds.isEmpty) return null;
@@ -747,8 +742,7 @@ final class SyncPlanController extends ChangeNotifier {
     for (final target in _trashTargets.values) {
       final live = target.live;
       final endpoint = target.endpoint;
-      final fileSystem = target.fileSystem;
-      if (live == null || endpoint == null || fileSystem == null) continue;
+      if (live == null || endpoint == null) continue;
       if (_environment.trashActivity.hasPurge(target.location)) return null;
       final active = _activeTrashRunIds(target);
       if (active.isNotEmpty) return null;
@@ -1557,8 +1551,10 @@ final class SyncPlanController extends ChangeNotifier {
       target.sides.add(side);
       if (location.isResolved) {
         try {
-          if (target.fileSystem == null) {
-            target.fileSystem = _environment.fileSystemFor(endpoint);
+          if (target.endpoint == null) {
+            // The probe can throw for an unreachable side, and it
+            // registers the endpoint's configuration.
+            _environment.fileSystemFor(endpoint);
             target.endpoint = endpoint;
           }
         } on RemoteFileException {
@@ -1587,9 +1583,8 @@ final class SyncPlanController extends ChangeNotifier {
     var rightCacheChanged = false;
     final service = SyncTrashPurgeService(_environment.syncRunsDirectory);
     for (final target in targets.values) {
-      final fileSystem = target.fileSystem;
       final endpoint = target.endpoint;
-      if (fileSystem == null || endpoint == null) continue;
+      if (endpoint == null) continue;
       SyncTrashPurgeLease? inventoryLease;
       try {
         // Inspection can release absent journals, so it shares the purge
