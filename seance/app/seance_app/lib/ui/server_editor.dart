@@ -8,6 +8,7 @@ import '../app_state.dart';
 import '../services/app_settings.dart';
 import '../theme.dart';
 import 'connection_test_report.dart';
+import 'recovery_prompt.dart';
 import 'server_appearance.dart';
 import 'server_color_picker.dart';
 import 'server_mark_picker.dart';
@@ -190,9 +191,12 @@ Future<bool> confirmSyncExclusion(BuildContext context) async {
 
 /// Add or edit a server. Password / private-key material is written to the
 /// encrypted vault; the config stores only a reference.
+/// Opens the server editor. A save that wrote a password or key to the
+/// vault is followed by the offer of a recovery code (CRED-05), on a device
+/// that has none and was not told "Not now".
 Future<void> showServerEditor(
-    BuildContext context, AppState state, ServerConfig? existing) {
-  return showDialog<void>(
+    BuildContext context, AppState state, ServerConfig? existing) async {
+  final wroteCredential = await showDialog<bool>(
     context: context,
     builder: (_) => Dialog(
       child: ConstrainedBox(
@@ -201,6 +205,9 @@ Future<void> showServerEditor(
       ),
     ),
   );
+  if (wroteCredential == true && context.mounted) {
+    await offerRecoveryCode(context, state);
+  }
 }
 
 class _ServerEditor extends StatefulWidget {
@@ -1131,7 +1138,7 @@ class _ServerEditorState extends State<_ServerEditor> {
       showTopToastIn(context, message: 'Could not save: $e');
       return;
     }
-    if (mounted) Navigator.of(context).pop();
+    if (mounted) Navigator.of(context).pop(secret != null);
   }
 }
 

@@ -157,6 +157,12 @@ class AppSettings {
   /// shell command from text typed at a no-echo prompt, so the user opts in.
   bool commandSuggestions;
 
+  /// The user answered "Not now" to the offer of a recovery code made after
+  /// the first credential was saved (CRED-05), so it is not made again;
+  /// Settings > Sync > Recovery still offers it. Device-local, like the
+  /// recovery code itself.
+  bool recoveryPromptDeclined;
+
   /// On launch, check GitHub for a newer release and show a notification if
   /// one exists. On by default; only ever offers a link to the releases page —
   /// never downloads or installs anything.
@@ -278,6 +284,7 @@ class AppSettings {
     this.syncAssistant = false,
     this.autoSync = true,
     this.commandSuggestions = false,
+    this.recoveryPromptDeclined = false,
     this.checkForUpdates = true,
     this.localShell = false,
     this.keepSessionsAliveInBackground = true,
@@ -331,6 +338,7 @@ class AppSettings {
     'syncAssistant': syncAssistant,
     'autoSync': autoSync,
     'commandSuggestions': commandSuggestions,
+    'recoveryPromptDeclined': recoveryPromptDeclined,
     'checkForUpdates': checkForUpdates,
     'localShell': localShell,
     'keepSessionsAliveInBackground': keepSessionsAliveInBackground,
@@ -386,6 +394,7 @@ class AppSettings {
     syncAssistant: json['syncAssistant'] as bool? ?? false,
     autoSync: json['autoSync'] as bool? ?? true,
     commandSuggestions: json['commandSuggestions'] as bool? ?? false,
+    recoveryPromptDeclined: json['recoveryPromptDeclined'] as bool? ?? false,
     checkForUpdates: json['checkForUpdates'] as bool? ?? true,
     localShell: json['localShell'] as bool? ?? false,
     keepSessionsAliveInBackground:

@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
@@ -9,6 +8,7 @@ import 'package:seance_core/seance_core.dart';
 
 import 'atomic_file.dart';
 import 'file_export_service.dart';
+import 'picked_file_bytes.dart';
 
 /// What a restore does with a credential this device already holds.
 enum RestoreConflictPolicy {
@@ -130,10 +130,6 @@ class PlatformSecretsExportFiles implements SecretsExportFiles {
   const PlatformSecretsExportFiles();
 
   static const _mimeType = 'application/json';
-  static const _oversized = SecretsExportException(
-    SecretsExportFailure.tooLarge,
-    'The file exceeds the export size limit',
-  );
 
   @override
   Future<String?> save(Uint8List bytes, String fileName) async {
@@ -186,32 +182,16 @@ class PlatformSecretsExportFiles implements SecretsExportFiles {
   Future<Uint8List?> open() async {
     final result = await FilePicker.pickFiles(withReadStream: true);
     if (result == null || result.files.isEmpty) return null;
-    final file = result.files.single;
-    if (file.size > SecretsExport.maxBytes) throw _oversized;
-
-    final bytes = file.bytes;
-    if (bytes != null) {
-      if (bytes.length > SecretsExport.maxBytes) throw _oversized;
-      return bytes;
-    }
-
     try {
-      var source = file.readStream;
-      if (source == null) {
-        final path = file.path;
-        if (path == null) throw const SecretsExportUnreadableException();
-        // macOS provides a path, not a stream. One extra byte detects overflow.
-        source = File(path).openRead(0, SecretsExport.maxBytes + 1);
-      }
-
-      final contents = BytesBuilder(copy: false);
-      await for (final chunk in source) {
-        if (chunk.length > SecretsExport.maxBytes - contents.length) {
-          throw _oversized;
-        }
-        contents.add(chunk);
-      }
-      return contents.takeBytes();
+      return await readPickedFileBytes(
+        result.files.single,
+        maxBytes: SecretsExport.maxBytes,
+      );
+    } on PickedFileTooLargeException {
+      throw const SecretsExportException(
+        SecretsExportFailure.tooLarge,
+        'The file exceeds the export size limit',
+      );
     } on FileSystemException {
       throw const SecretsExportUnreadableException();
     }

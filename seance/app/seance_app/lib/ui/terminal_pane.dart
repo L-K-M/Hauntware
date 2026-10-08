@@ -13,6 +13,7 @@ import 'package:xterm/xterm.dart';
 import '../app_state.dart';
 import '../family_hues.dart';
 import '../main.dart';
+import '../services/missing_credential.dart';
 import '../services/terminal_search.dart';
 import '../services/web_links.dart';
 import '../services/xterm_engine.dart';
@@ -24,6 +25,8 @@ import 'files_pane.dart';
 import 'keyboard_shortcuts_dialog.dart';
 import 'middle_ellipsis_text.dart';
 import 'server_appearance.dart';
+import 'credential_prompt.dart';
+import 'recovery_prompt.dart';
 import 'server_editor.dart' show showServerEditor;
 import 'server_list_pane.dart';
 import 'session_label.dart';
@@ -1498,8 +1501,9 @@ class _SessionViewState extends State<_SessionView> {
 /// expandable connection log so the user can see exactly what happened.
 ///
 /// A credential this device does not have (CRED-05) is a setup step, not a
-/// network failure: the pane says so and offers the server's editor, where
-/// the password or key can be entered or the agent chosen.
+/// network failure: the pane says so and asks for the password or key right
+/// here, offers the SSH agent instead, and keeps the server's editor one tap
+/// away.
 class _ConnectionError extends StatelessWidget {
   final TerminalSession tab;
   final AppState state;
@@ -1509,6 +1513,39 @@ class _ConnectionError extends StatelessWidget {
     final id = tab.missingCredentialServerId;
     if (id == null) return null;
     return state.servers.where((server) => server.id == id).firstOrNull;
+  }
+
+  Future<void> _askForCredential(
+    BuildContext context,
+    ServerConfig server,
+  ) async {
+    final credential = await showMissingCredentialDialog(
+      context,
+      serverLabel: server.label,
+      authMethod: server.authMethod,
+    );
+    if (credential == null || !context.mounted) return;
+    await _provide(context, server, credential);
+  }
+
+  /// Saves [credential] for [server], reconnects, and, when a credential was
+  /// written, offers a recovery code as any first saved credential does.
+  Future<void> _provide(
+    BuildContext context,
+    ServerConfig server,
+    MissingCredential credential,
+  ) async {
+    final bool wrote;
+    try {
+      wrote = await state.provideMissingCredential(server.id, credential);
+    } catch (e) {
+      if (context.mounted) {
+        showTopToastIn(context, message: 'Could not save: $e');
+      }
+      return;
+    }
+    unawaited(state.reconnect(tab.id));
+    if (wrote && context.mounted) await offerRecoveryCode(context, state);
   }
 
   @override
@@ -1547,14 +1584,42 @@ class _ConnectionError extends StatelessWidget {
                   label: const Text('Retry'),
                 )
               else
-                // Editing is the way forward; Retry stays for a credential
-                // that has since arrived (a sync round, another window).
+                // Entering the credential is the way forward; the agent and
+                // the editor are the alternatives, and Retry stays for a
+                // credential that has since arrived (a sync round, another
+                // window).
                 Wrap(
                   alignment: WrapAlignment.center,
                   spacing: 8,
                   runSpacing: 8,
                   children: [
-                    FilledButton.icon(
+                    if (missingCredential.authMethod != AuthMethod.agent)
+                      FilledButton.icon(
+                        key: const ValueKey('connection.provideCredential'),
+                        onPressed: () =>
+                            _askForCredential(context, missingCredential),
+                        icon: Icon(
+                          missingCredential.authMethod == AuthMethod.privateKey
+                              ? Icons.key_outlined
+                              : Icons.password_outlined,
+                        ),
+                        label: Text(
+                          missingCredential.authMethod == AuthMethod.privateKey
+                              ? 'Add private key…'
+                              : 'Enter password…',
+                        ),
+                      ),
+                    OutlinedButton.icon(
+                      key: const ValueKey('connection.useAgent'),
+                      onPressed: () => _provide(
+                        context,
+                        missingCredential,
+                        const UseSshAgent(),
+                      ),
+                      icon: const Icon(Icons.vpn_key_outlined),
+                      label: const Text('Use SSH agent'),
+                    ),
+                    OutlinedButton.icon(
                       key: const ValueKey('connection.editServer'),
                       onPressed: () =>
                           showServerEditor(context, state, missingCredential),
