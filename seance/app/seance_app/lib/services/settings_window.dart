@@ -1,10 +1,8 @@
-import 'dart:async';
-import 'dart:convert';
 import 'dart:ui' show AppExitResponse;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter/widgets.dart' show WidgetsBinding;
+import 'package:ghost_desktop/ghost_desktop.dart';
 
 import '../app_state.dart';
 import '../theme/app_appearance.dart';
@@ -21,14 +19,11 @@ import 'settings_backend.dart';
 /// app.
 ///
 /// Created the first time Settings is opened and kept for the rest of the
-/// app's life: closing it hides it, and opening it again shows it. Tearing a
-/// second engine down is what the runners avoid — on Linux, Flutter 3.47's
-/// embedder terminates the EGL display every engine in the process shares
-/// when one of them is disposed, and the app's window then dies with an X
-/// error. Kept, the window also reopens at once. What a hidden window must
-/// not keep is its screen: the window's Dart side unmounts it on [_Link.hidden]
-/// — dropping anything typed into the key fields — and mounts a fresh one,
-/// loaded from the settings as they are then, on [_Link.show].
+/// app's life: closing it hides it, and opening it again shows a fresh
+/// screen. ghost_desktop's link engine (`GhostSettingsWindowHost`,
+/// `GhostSettingsWindowClient`) owns that lifecycle, the handshake and the
+/// snapshots; what is here is Séance's: the channels, the method table, the
+/// snapshot and [SettingsBackend] on both sides.
 ///
 /// Two channels connect it to the app, both in the runners
 /// (`macos/Runner/SettingsWindow.swift`, `linux/runner/settings_window.cc`,
@@ -41,10 +36,6 @@ import 'settings_backend.dart';
 ///   message one engine sends on it to the other, byte for byte, and the
 ///   reply back. That is the only way two engines can talk — they share
 ///   nothing else — so it carries the whole of [SettingsBackend].
-///
-/// Every payload on the link is a JSON string, in both directions, so each
-/// side decodes exactly what the other encoded rather than whatever shape the
-/// standard codec rebuilds maps into.
 const MethodChannel settingsWindowControlChannel = MethodChannel(
   'seance/settings_window',
 );
@@ -57,36 +48,29 @@ const MethodChannel settingsWindowLinkChannel = MethodChannel(
 /// The argument the runners start the settings window's engine with.
 const String settingsWindowArgument = '--seance-settings-window';
 
-/// The link's methods. Named once, here, because each is spelled on both
-/// sides of an isolate boundary where a typo is a silent `null`.
-abstract final class _Link {
-  // Window → app.
-  static const hello = 'hello';
-  static const setCheckForUpdates = 'setCheckForUpdates';
-  static const setLocalShellEnabled = 'setLocalShellEnabled';
-  static const setKeepSessionsAlive = 'setKeepSessionsAlive';
-  static const setCommandSuggestions = 'setCommandSuggestions';
-  static const setTerminalAppearance = 'setTerminalAppearance';
-  static const setEditorFontSize = 'setEditorFontSize';
-  static const setAppearance = 'setAppearance';
-  static const setEditorRegistry = 'setEditorRegistry';
-  static const pickEditor = 'pickEditor';
-  static const fetchModels = 'fetchModels';
-  static const saveAssistant = 'saveAssistant';
-  static const setSyncPrefs = 'setSyncPrefs';
-  static const enrollSync = 'enrollSync';
-  static const syncNow = 'syncNow';
-  static const inboxApps = 'inboxApps';
-  static const addInboxApp = 'addInboxApp';
-  static const updateInboxApp = 'updateInboxApp';
-  static const removeInboxApp = 'removeInboxApp';
-  static const requestAppExit = 'requestAppExit';
-
-  // App → window.
-  static const snapshot = 'snapshot';
-  static const selectTab = 'selectTab';
-  static const hidden = 'hidden';
-  static const show = 'show';
+/// Séance's link methods, window to app; each crosses as its [name], so a
+/// typo is a compile error rather than a silent `null` on the far side.
+/// The names of ghost_desktop's `GhostSettingsLinkMethod` are the engine's.
+@visibleForTesting
+enum SettingsLinkMethod {
+  setCheckForUpdates,
+  setLocalShellEnabled,
+  setKeepSessionsAlive,
+  setCommandSuggestions,
+  setTerminalAppearance,
+  setEditorFontSize,
+  setAppearance,
+  setEditorRegistry,
+  pickEditor,
+  fetchModels,
+  saveAssistant,
+  setSyncPrefs,
+  enrollSync,
+  syncNow,
+  inboxApps,
+  addInboxApp,
+  updateInboxApp,
+  removeInboxApp,
 }
 
 /// What the window renders from: the settings and the two live values the
@@ -97,248 +81,129 @@ Map<String, dynamic> _snapshotOf(SettingsBackend backend) => {
   'syncStatus': backend.syncStatus.toJson(),
 };
 
-/// The app's side of the settings window: opens it, answers what it asks
-/// through a [LocalSettingsBackend], and sends it a fresh snapshot whenever
-/// the app's state changes while it is open.
+/// The app's side of the settings window: ghost_desktop's link engine
+/// opens it and sends it a fresh snapshot whenever the app's state changes
+/// while it shows; this host answers what it asks through a
+/// [LocalSettingsBackend].
 class SettingsWindowHost {
   SettingsWindowHost(
-    this._state, {
-    this._control = settingsWindowControlChannel,
-    this._link = settingsWindowLinkChannel,
+    AppState state, {
+    MethodChannel control = settingsWindowControlChannel,
+    MethodChannel link = settingsWindowLinkChannel,
     @visibleForTesting Future<AppExitResponse> Function()? requestAppExit,
-  }) : _backend = LocalSettingsBackend(_state),
-       _requestAppExit =
-           requestAppExit ?? WidgetsBinding.instance.handleRequestAppExit {
-    _control.setMethodCallHandler(_handleControl);
-    _link.setMethodCallHandler(_handleLink);
-    _state.addListener(_scheduleSnapshot);
+  }) : _backend = LocalSettingsBackend(state) {
+    _engine = GhostSettingsWindowHost(
+      control: control,
+      link: link,
+      initialTab: SettingsTab.general,
+      sections: GhostSettingsSections(
+        snapshot: () => _snapshotOf(_backend),
+        handleCall: _handleCall,
+        changes: [state],
+      ),
+      requestAppExit: requestAppExit,
+    );
   }
 
-  final AppState _state;
   final LocalSettingsBackend _backend;
-  final MethodChannel _control;
-  final MethodChannel _link;
-
-  /// The app's answer to "may the application quit?": its own observers'.
-  final Future<AppExitResponse> Function() _requestAppExit;
-
-  /// Whether the window's engine has said hello. It is never torn down, so
-  /// this stays true once set, unless the link stops answering.
-  bool _connected = false;
-
-  /// Whether the window is showing, rather than closed and hidden.
-  bool _visible = false;
-
-  /// The tab the next window opens on, or the open one switches to.
-  SettingsTab _tab = SettingsTab.general;
-
-  /// The last snapshot sent, encoded, so a state change that moves nothing
-  /// the window shows costs a comparison rather than a message.
-  String? _lastSnapshot;
-  bool _snapshotScheduled = false;
+  late final GhostSettingsWindowHost<SettingsTab> _engine;
 
   @visibleForTesting
-  bool get connected => _connected;
+  bool get connected => _engine.connected;
 
   @visibleForTesting
-  bool get visible => _visible;
+  bool get visible => _engine.visible;
 
   /// Open the window on [tab], or bring an open one forward and switch it
   /// there. False when the runner has no settings window — a build from
   /// before it existed — so the caller can show the Settings route instead.
-  Future<bool> open(SettingsTab tab) async {
-    _tab = tab;
-    if (_connected) {
-      try {
-        if (_visible) {
-          await _link.invokeMethod<void>(_Link.selectTab, jsonEncode(tab.name));
-        } else {
-          // A fresh screen, from the settings as they are now, before the
-          // window reappears: nothing was sent while it was hidden.
-          final snapshot = _snapshotOf(_backend);
-          _lastSnapshot = jsonEncode(snapshot);
-          await _link.invokeMethod<void>(
-            _Link.show,
-            jsonEncode({'snapshot': snapshot, 'tab': tab.name}),
-          );
-        }
-      } on MissingPluginException {
-        // The engine went away after all; a new one says hello, and opens
-        // on `_tab`.
-        _connected = false;
-      }
+  Future<bool> open(SettingsTab tab) => _engine.open(tab);
+
+  void dispose() => _engine.dispose();
+
+  Future<Object?> _handleCall(String name, Object? argument) async {
+    final method = SettingsLinkMethod.values.asNameMap()[name];
+    if (method == null) {
+      throw MissingPluginException('No settings method $name');
     }
-    try {
-      await _control.invokeMethod<void>('open');
-    } on MissingPluginException {
-      return false;
-    } on PlatformException {
-      // The runner could not create the window: the route instead.
-      return false;
-    }
-    // A first window becomes visible when it says hello, which may already
-    // have happened; one being shown again, here.
-    if (_connected) _visible = true;
-    // A change made while `show` was in flight was not sent, since the
-    // window did not count as showing yet; the dedupe makes this a no-op
-    // when nothing changed.
-    _scheduleSnapshot();
-    return true;
+    return _dispatch(method, argument);
   }
 
-  void dispose() {
-    _state.removeListener(_scheduleSnapshot);
-    _control.setMethodCallHandler(null);
-    _link.setMethodCallHandler(null);
-  }
-
-  Future<Object?> _handleControl(MethodCall call) async {
-    if (call.method == 'closed') {
-      _visible = false;
-      _lastSnapshot = null;
-      if (_connected) {
-        try {
-          await _link.invokeMethod<void>(_Link.hidden);
-        } on MissingPluginException {
-          _connected = false;
-        }
-      }
-    }
-    return null;
-  }
-
-  /// Coalesce a burst of state changes into one snapshot, sent after the
-  /// current event: the app notifies for far more than the window shows,
-  /// and a hidden window shows nothing.
-  void _scheduleSnapshot() {
-    if (!_connected || !_visible || _snapshotScheduled) return;
-    _snapshotScheduled = true;
-    scheduleMicrotask(() {
-      _snapshotScheduled = false;
-      unawaited(_sendSnapshot());
-    });
-  }
-
-  Future<void> _sendSnapshot() async {
-    if (!_connected || !_visible) return;
-    final encoded = jsonEncode(_snapshotOf(_backend));
-    if (encoded == _lastSnapshot) return;
-    _lastSnapshot = encoded;
-    try {
-      await _link.invokeMethod<void>(_Link.snapshot, encoded);
-    } on MissingPluginException {
-      _connected = false;
-      _lastSnapshot = null;
-    } on PlatformException {
-      // The window failed to apply it. Forgotten, so the next change sends
-      // it again rather than the dedupe skipping what never arrived; and
-      // caught, since nothing awaits this.
-      _lastSnapshot = null;
-    }
-  }
-
-  Future<Object?> _handleLink(MethodCall call) async {
-    try {
-      final Object? argument = call.arguments is String
-          ? jsonDecode(call.arguments as String)
-          : null;
-      final result = await _dispatch(call.method, argument);
-      return result == null ? null : jsonEncode(result);
-    } on MissingPluginException {
-      rethrow;
-    } catch (e) {
-      // The window shows the message the error printed here, which is what
-      // the Settings route shows for the same failure.
-      throw PlatformException(code: 'settings-failed', message: '$e');
-    }
-  }
-
-  Future<Object?> _dispatch(String method, Object? argument) async {
+  Future<Object?> _dispatch(
+    SettingsLinkMethod method,
+    Object? argument,
+  ) async {
     Map<String, dynamic> map() => (argument! as Map).cast<String, dynamic>();
     switch (method) {
-      case _Link.hello:
-        // Built first: a window whose hello failed is not connected.
-        final snapshot = _snapshotOf(_backend);
-        _lastSnapshot = jsonEncode(snapshot);
-        _connected = true;
-        _visible = true;
-        return {'snapshot': snapshot, 'tab': _tab.name};
-      case _Link.setCheckForUpdates:
+      case SettingsLinkMethod.setCheckForUpdates:
         await _backend.setCheckForUpdates(argument! as bool);
-      case _Link.setLocalShellEnabled:
+      case SettingsLinkMethod.setLocalShellEnabled:
         await _backend.setLocalShellEnabled(argument! as bool);
-      case _Link.setKeepSessionsAlive:
+      case SettingsLinkMethod.setKeepSessionsAlive:
         await _backend.setKeepSessionsAlive(argument! as bool);
-      case _Link.setCommandSuggestions:
+      case SettingsLinkMethod.setCommandSuggestions:
         await _backend.setCommandSuggestions(argument! as bool);
-      case _Link.setTerminalAppearance:
+      case SettingsLinkMethod.setTerminalAppearance:
         final json = map();
         await _backend.setTerminalAppearance(
           fontSize: (json['fontSize'] as num).toDouble(),
           fontFamily: json['fontFamily'] as String,
           palette: TerminalPalette.values.byName(json['palette'] as String),
         );
-      case _Link.setEditorFontSize:
+      case SettingsLinkMethod.setEditorFontSize:
         await _backend.setEditorFontSize(argument! as int);
-      case _Link.setAppearance:
+      case SettingsLinkMethod.setAppearance:
         final json = map();
         await _backend.setAppearance(
           ThemePalette.decodeStored(json['palette']),
           ThemeModePreference.values.byName(json['mode'] as String),
         );
-      case _Link.setEditorRegistry:
+      case SettingsLinkMethod.setEditorRegistry:
         await _backend.setEditorRegistry(EditorRegistry.fromJson(argument));
-      case _Link.pickEditor:
+      case SettingsLinkMethod.pickEditor:
         return (await _backend.pickEditor())?.toJson();
-      case _Link.fetchModels:
+      case SettingsLinkMethod.fetchModels:
         return await _backend.fetchModels(ModelQuery.fromJson(map()));
-      case _Link.saveAssistant:
+      case SettingsLinkMethod.saveAssistant:
         return (await _backend.saveAssistant(
           AssistantDraft.fromJson(map()),
         )).toJson();
-      case _Link.setSyncPrefs:
+      case SettingsLinkMethod.setSyncPrefs:
         final json = map();
         return (await _backend.setSyncPrefs(
           autoSync: json['autoSync'] as bool,
           syncSecrets: json['syncSecrets'] as bool,
           syncAssistant: json['syncAssistant'] as bool,
         )).toJson();
-      case _Link.enrollSync:
+      case SettingsLinkMethod.enrollSync:
         await _backend.enrollSync(SyncEnrollment.fromJson(map()));
-      case _Link.syncNow:
+      case SettingsLinkMethod.syncNow:
         return (await _backend.syncNow()).toJson();
-      case _Link.inboxApps:
+      case SettingsLinkMethod.inboxApps:
         return (await _backend.inboxApps()).toJson();
-      case _Link.addInboxApp:
+      case SettingsLinkMethod.addInboxApp:
         return await _backend.addInboxApp(InboxAppDraft.fromJson(map()));
-      case _Link.updateInboxApp:
+      case SettingsLinkMethod.updateInboxApp:
         final json = map();
         await _backend.updateInboxApp(
           json['app'] as String,
           InboxAppDraft.fromJson((json['draft'] as Map).cast()),
         );
-      case _Link.removeInboxApp:
+      case SettingsLinkMethod.removeInboxApp:
         await _backend.removeInboxApp(argument! as String);
-      case _Link.requestAppExit:
-        return (await _requestAppExit()).name;
-      default:
-        throw MissingPluginException('No settings method $method');
     }
     return null;
   }
 }
 
 /// What the settings window shows: nothing while it is hidden, or a Settings
-/// screen opened on [tab]. [generation] changes every time the window is
-/// shown, so each showing is a fresh screen rather than the last one's
-/// fields and half-typed keys.
-@immutable
-class SettingsWindowPage {
-  const SettingsWindowPage({required this.tab, required this.generation});
+/// screen opened on a tab, fresh at each showing (its fields and half-typed
+/// keys are not the last showing's).
+typedef SettingsWindowPage = GhostSettingsPage<SettingsTab>;
 
-  final SettingsTab tab;
-  final int generation;
-}
+/// What a call throws when no app answers it.
+const _notResponding =
+    'Séance is not responding. Close this window and open Settings again.';
 
 /// The settings window's side: a [SettingsBackend] whose every call runs in
 /// the app's isolate, through [SettingsWindowHost].
@@ -346,20 +211,20 @@ class SettingsWindowPage {
 /// [settings] is a copy, replaced by each snapshot the host sends; the screen
 /// loads its fields from it once and otherwise only watches the sync status
 /// and the configuration version, as it does in the route.
-class RemoteSettingsBackend extends ChangeNotifier implements SettingsBackend {
-  RemoteSettingsBackend._(this._link);
-
-  final MethodChannel _link;
-  final StreamController<SettingsTab> _tabRequests =
-      StreamController<SettingsTab>.broadcast();
+class RemoteSettingsBackend extends GhostSettingsWindowClient<SettingsTab>
+    implements SettingsBackend {
+  RemoteSettingsBackend._(MethodChannel link)
+    : super(
+        link: link,
+        tabs: SettingsTab.values,
+        decodeError: (error) =>
+            SettingsBackendException(error.message ?? error.code),
+        lostError: () => const SettingsBackendException(_notResponding),
+      );
 
   late AppSettings _settings;
   late int _llmConfigVersion;
   late SyncStatus _syncStatus;
-  int _generation = 1;
-
-  /// What the window shows; see [SettingsWindowPage].
-  late final ValueNotifier<SettingsWindowPage?> page;
 
   /// The theme the window draws itself in: the app's, from the latest
   /// snapshot. Its own notifier for the reason [AppState.appearance] is
@@ -371,10 +236,6 @@ class RemoteSettingsBackend extends ChangeNotifier implements SettingsBackend {
     AppAppearance.initial,
   );
 
-  /// Tabs the app asks a showing window to switch to (Settings chosen again
-  /// from a menu, or "Sync off" pressed while the window is behind).
-  Stream<SettingsTab> get tabRequests => _tabRequests.stream;
-
   /// Say hello to the app and take its first snapshot. Throws a
   /// [SettingsBackendException] when there is no app to answer — the window
   /// was started by hand rather than by the app.
@@ -382,21 +243,7 @@ class RemoteSettingsBackend extends ChangeNotifier implements SettingsBackend {
     MethodChannel link = settingsWindowLinkChannel,
   }) async {
     final backend = RemoteSettingsBackend._(link);
-    link.setMethodCallHandler(backend._handle);
-    try {
-      final hello = (await backend._call(_Link.hello))! as Map;
-      backend._apply((hello['snapshot'] as Map).cast<String, dynamic>());
-      backend.page = ValueNotifier(
-        SettingsWindowPage(
-          tab: SettingsTab.values.byName(hello['tab'] as String),
-          generation: 0,
-        ),
-      );
-    } catch (_) {
-      // Nothing may reach a backend that never got its page.
-      link.setMethodCallHandler(null);
-      rethrow;
-    }
+    await backend.connectToApp();
     return backend;
   }
 
@@ -409,7 +256,8 @@ class RemoteSettingsBackend extends ChangeNotifier implements SettingsBackend {
   @override
   SyncStatus get syncStatus => _syncStatus;
 
-  void _apply(Map<String, dynamic> snapshot) {
+  @override
+  void applySnapshot(Map<String, Object?> snapshot) {
     _settings = AppSettings.fromJson(
       (snapshot['settings'] as Map).cast<String, dynamic>(),
     );
@@ -423,56 +271,15 @@ class RemoteSettingsBackend extends ChangeNotifier implements SettingsBackend {
     );
   }
 
-  Future<Object?> _handle(MethodCall call) async {
-    final Object? argument = call.arguments is String
-        ? jsonDecode(call.arguments as String)
-        : null;
-    switch (call.method) {
-      case _Link.snapshot:
-        _apply((argument! as Map).cast<String, dynamic>());
-        notifyListeners();
-      case _Link.selectTab:
-        _tabRequests.add(SettingsTab.values.byName(argument! as String));
-      case _Link.hidden:
-        page.value = null;
-      case _Link.show:
-        final json = (argument! as Map).cast<String, dynamic>();
-        _apply((json['snapshot'] as Map).cast<String, dynamic>());
-        notifyListeners();
-        page.value = SettingsWindowPage(
-          tab: SettingsTab.values.byName(json['tab'] as String),
-          generation: _generation++,
-        );
-      default:
-        throw MissingPluginException(
-          'No settings window method ${call.method}',
-        );
-    }
-    return null;
-  }
-
-  Future<Object?> _call(String method, [Object? argument]) async {
-    try {
-      final reply = await _link.invokeMethod<String>(
-        method,
-        argument == null ? null : jsonEncode(argument),
-      );
-      return reply == null ? null : jsonDecode(reply);
-    } on PlatformException catch (e) {
-      throw SettingsBackendException(e.message ?? e.code);
-    } on MissingPluginException {
-      throw const SettingsBackendException(
-        'Séance is not responding. Close this window and open Settings again.',
-      );
-    }
-  }
+  Future<Object?> _call(SettingsLinkMethod method, [Object? argument]) =>
+      invoke(method.name, argument);
 
   Map<String, dynamic> _map(Object? value) =>
       (value! as Map).cast<String, dynamic>();
 
   @override
   Future<void> setCheckForUpdates(bool enabled) =>
-      _call(_Link.setCheckForUpdates, enabled);
+      _call(SettingsLinkMethod.setCheckForUpdates, enabled);
 
   /// This engine shares the app's process — the platform and environment a
   /// local shell reads are identical on both sides, so the answer is
@@ -483,22 +290,22 @@ class RemoteSettingsBackend extends ChangeNotifier implements SettingsBackend {
 
   @override
   Future<void> setLocalShellEnabled(bool enabled) =>
-      _call(_Link.setLocalShellEnabled, enabled);
+      _call(SettingsLinkMethod.setLocalShellEnabled, enabled);
 
   @override
   Future<void> setKeepSessionsAlive(bool enabled) =>
-      _call(_Link.setKeepSessionsAlive, enabled);
+      _call(SettingsLinkMethod.setKeepSessionsAlive, enabled);
 
   @override
   Future<void> setCommandSuggestions(bool enabled) =>
-      _call(_Link.setCommandSuggestions, enabled);
+      _call(SettingsLinkMethod.setCommandSuggestions, enabled);
 
   @override
   Future<void> setTerminalAppearance({
     required double fontSize,
     required String fontFamily,
     required TerminalPalette palette,
-  }) => _call(_Link.setTerminalAppearance, {
+  }) => _call(SettingsLinkMethod.setTerminalAppearance, {
     'fontSize': fontSize,
     'fontFamily': fontFamily,
     'palette': palette.name,
@@ -506,34 +313,34 @@ class RemoteSettingsBackend extends ChangeNotifier implements SettingsBackend {
 
   @override
   Future<void> setEditorFontSize(int size) =>
-      _call(_Link.setEditorFontSize, size);
+      _call(SettingsLinkMethod.setEditorFontSize, size);
 
   @override
   Future<void> setAppearance(ThemePalette palette, ThemeModePreference mode) =>
-      _call(_Link.setAppearance, {
+      _call(SettingsLinkMethod.setAppearance, {
         'palette': palette.toJson(),
         'mode': mode.name,
       });
 
   @override
   Future<void> setEditorRegistry(EditorRegistry registry) =>
-      _call(_Link.setEditorRegistry, registry.toJson());
+      _call(SettingsLinkMethod.setEditorRegistry, registry.toJson());
 
   @override
   Future<ExternalEditorDefinition?> pickEditor() async {
-    final json = await _call(_Link.pickEditor);
+    final json = await _call(SettingsLinkMethod.pickEditor);
     return json == null ? null : ExternalEditorDefinition.fromJson(_map(json));
   }
 
   @override
   Future<List<String>> fetchModels(ModelQuery query) async =>
-      ((await _call(_Link.fetchModels, query.toJson()))! as List)
+      ((await _call(SettingsLinkMethod.fetchModels, query.toJson()))! as List)
           .cast<String>();
 
   @override
   Future<AssistantSaveResult> saveAssistant(AssistantDraft draft) async =>
       AssistantSaveResult.fromJson(
-        _map(await _call(_Link.saveAssistant, draft.toJson())),
+        _map(await _call(SettingsLinkMethod.saveAssistant, draft.toJson())),
       );
 
   @override
@@ -543,7 +350,7 @@ class RemoteSettingsBackend extends ChangeNotifier implements SettingsBackend {
     required bool syncAssistant,
   }) async => SyncPrefsResult.fromJson(
     _map(
-      await _call(_Link.setSyncPrefs, {
+      await _call(SettingsLinkMethod.setSyncPrefs, {
         'autoSync': autoSync,
         'syncSecrets': syncSecrets,
         'syncAssistant': syncAssistant,
@@ -553,51 +360,30 @@ class RemoteSettingsBackend extends ChangeNotifier implements SettingsBackend {
 
   @override
   Future<void> enrollSync(SyncEnrollment enrollment) =>
-      _call(_Link.enrollSync, enrollment.toJson());
+      _call(SettingsLinkMethod.enrollSync, enrollment.toJson());
 
   @override
   Future<SyncCounts> syncNow() async =>
-      SyncCounts.fromJson(_map(await _call(_Link.syncNow)));
+      SyncCounts.fromJson(_map(await _call(SettingsLinkMethod.syncNow)));
 
   @override
   Future<InboxAppsView> inboxApps() async =>
-      InboxAppsView.fromJson(_map(await _call(_Link.inboxApps)));
+      InboxAppsView.fromJson(_map(await _call(SettingsLinkMethod.inboxApps)));
 
   @override
   Future<String> addInboxApp(InboxAppDraft draft) async =>
-      (await _call(_Link.addInboxApp, draft.toJson()))! as String;
+      (await _call(SettingsLinkMethod.addInboxApp, draft.toJson()))! as String;
 
   @override
   Future<void> updateInboxApp(String appId, InboxAppDraft draft) =>
-      _call(_Link.updateInboxApp, {'app': appId, 'draft': draft.toJson()});
+      _call(SettingsLinkMethod.updateInboxApp, {'app': appId, 'draft': draft.toJson()});
 
   @override
   Future<void> removeInboxApp(String appId) =>
-      _call(_Link.removeInboxApp, appId);
-
-  /// Whether the application may quit, as the app's isolate decides it.
-  ///
-  /// The window's engine can be the one asked. On macOS every engine makes
-  /// itself the app delegate's termination handler when it starts, so once
-  /// this window exists ⌘Q — and the app's own quit, which goes through
-  /// `NSApp.terminate` — asks this isolate, whose framework answers "exit"
-  /// for want of any observer; the app's exit handling would never run.
-  /// Forwarded, the app's observers decide, as they did before the window.
-  /// With no app left to ask, quitting is not held up.
-  Future<AppExitResponse> requestAppExit() async {
-    try {
-      final name = await _call(_Link.requestAppExit);
-      return AppExitResponse.values.byName(name! as String);
-    } on SettingsBackendException {
-      return AppExitResponse.exit;
-    }
-  }
+      _call(SettingsLinkMethod.removeInboxApp, appId);
 
   @override
   void dispose() {
-    _link.setMethodCallHandler(null);
-    unawaited(_tabRequests.close());
-    page.dispose();
     _appearance.dispose();
     super.dispose();
   }

@@ -5,6 +5,7 @@ import 'dart:ui' show AppExitResponse;
 import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ghost_desktop/ghost_desktop.dart' show GhostSettingsLinkMethod;
 import 'package:seance_app/app_state.dart';
 import 'package:seance_app/services/app_services.dart';
 import 'package:seance_app/services/settings_backend.dart';
@@ -300,20 +301,6 @@ void main() {
     expect(window.settings.terminalFontSize, 9);
   });
 
-  test('opening a showing window switches its tab', () async {
-    final window = await openWindow();
-    addTearDown(window.dispose);
-    final tabs = <SettingsTab>[];
-    final subscription = window.tabRequests.listen(tabs.add);
-    addTearDown(subscription.cancel);
-
-    expect(await host.open(SettingsTab.assistant), isTrue);
-    await pumpEventQueue();
-
-    expect(tabs, [SettingsTab.assistant]);
-    expect(window.page.value?.generation, 0);
-  });
-
   test('a request to quit is the app\'s to answer', () async {
     host.dispose();
     var asked = 0;
@@ -346,23 +333,12 @@ void main() {
     );
   });
 
-  test(
-    'a runner without the window reports it, for the route fallback',
-    () async {
-      messenger.setMockMethodCallHandler(_control, null);
-
-      expect(await host.open(SettingsTab.general), isFalse);
-    },
-  );
-
-  test(
-    'a runner that could not create the window reports it, for the route',
-    () async {
-      messenger.setMockMethodCallHandler(_control, (call) async {
-        throw PlatformException(code: 'open_failed');
-      });
-
-      expect(await host.open(SettingsTab.general), isFalse);
-    },
-  );
+  test("Séance's methods never take an engine-reserved name", () {
+    // The engine answers its own names before the product sees a call.
+    final reserved = {for (final m in GhostSettingsLinkMethod.values) m.name};
+    expect(
+      SettingsLinkMethod.values.where((m) => reserved.contains(m.name)),
+      isEmpty,
+    );
+  });
 }
