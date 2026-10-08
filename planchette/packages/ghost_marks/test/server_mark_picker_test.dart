@@ -5,9 +5,8 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:seance_app/ui/server_appearance.dart';
-import 'package:seance_app/ui/server_mark_picker.dart';
-import 'package:seance_core/seance_core.dart';
+import 'package:ghost_marks/ghost_marks.dart';
+import 'package:seance_protocol/seance_protocol.dart';
 
 /// Choosing what a server is marked with. The image tab reads its bytes
 /// through an injected function, because the platform file picker cannot be
@@ -24,6 +23,7 @@ void main() {
     ServerMark current = const ServerGlyphMark(null),
     ServerTint accent = ServerTint.none,
     Future<Uint8List?> Function()? readImage,
+
     /// False when a mark in force holds a live [Image]: its resolution never
     /// completes here, so settling would spin forever (see AGENTS.md §5).
     bool settle = true,
@@ -167,14 +167,18 @@ void main() {
       await tester.tap(find.text('Emoji'));
       await tester.pumpAndSettle();
 
-      await tester.enterText(find.widgetWithText(TextField, 'Any emoji'),
-          '\u{1F433}');
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Any emoji'),
+        '\u{1F433}',
+      );
       await tester.pumpAndSettle();
       await tester.tap(find.widgetWithText(FilledButton, 'Use'));
       await tester.pumpAndSettle();
       // The glyph rides along so a build that predates emoji marks — or a
       // device with no emoji font — still draws something that was chosen.
-      expect(picked, [ServerEmojiMark('\u{1F433}', fallback: ServerIcon.cloud)]);
+      expect(picked, [
+        ServerEmojiMark('\u{1F433}', fallback: ServerIcon.cloud),
+      ]);
     });
 
     testWidgets('a joined emoji counts as the one character it looks like', (
@@ -210,7 +214,8 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('One emoji, please.'), findsOneWidget);
       expect(
-        tester.widget<FilledButton>(find.widgetWithText(FilledButton, 'Use'))
+        tester
+            .widget<FilledButton>(find.widgetWithText(FilledButton, 'Use'))
             .onPressed,
         isNull,
       );
@@ -423,9 +428,7 @@ void main() {
     }
   });
 
-  testWidgets('the previews are the badges the list will draw', (
-    tester,
-  ) async {
+  testWidgets('the previews are the badges the list will draw', (tester) async {
     // The server's colour is the fill under the mark, so which candidate
     // reads well depends on it: a grid drawn on a neutral tile would preview
     // a badge no row ever shows. The bar is the row's own carrier and has no
@@ -466,6 +469,36 @@ void main() {
     await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
     await tester.pumpAndSettle();
     expect(picked, [null]);
+  });
+
+  testWidgets('previews use the server accent', (tester) async {
+    // From Poltergeist's suite: every candidate is drawn on the fill the
+    // server will actually use, never a bare accent bar.
+    const accent = ServerTint(named: ServerColor.red);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => Scaffold(
+            body: TextButton(
+              onPressed: () => showServerMarkPicker(
+                context,
+                current: const ServerGlyphMark(null),
+                accent: accent,
+                readImage: () async => null,
+              ),
+              child: const Text('open'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+
+    final badges = tester.widgetList<ServerBadge>(find.byType(ServerBadge));
+    expect(badges, isNotEmpty);
+    expect(badges.map((badge) => badge.tint), everyElement(accent));
+    expect(find.byType(ServerAccentBar), findsNothing);
   });
 }
 
