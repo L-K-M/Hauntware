@@ -2,9 +2,12 @@
 
 Scope: `ServerBadge`/`ServerAccentBar`/tint+glyph tables, the mark picker, the two color pickers, and the badge-image pipeline, duplicated between `seance/app/seance_app` and `poltergeist/app/poltergeist_app`. Read-only design; no code changed.
 
-Status: proposal for owner approval. Prepared from a read-only research pass (devin swe-2-max) over main at 7b41780a; sizes and the `ServerAvatar` and Poltergeist badge-test claims spot-checked.
+Status: approved by the owner on 2026-10-08 as recommended. Open questions
+settled by the recommendations: Séance's incompressible-image wording
+replaces Poltergeist's, glyph and colour vocabulary stays English data, and
+Séance's unused `ServerAvatar` is deleted. Prepared from a read-only research pass (devin swe-2-max) over main at 7b41780a; sizes and the `ServerAvatar` and Poltergeist badge-test claims spot-checked.
 
-**Update since the research:** the badge-image encoder (`badge_image.dart`) is already moving to `ghost_ui` in the PR that carries the approved cross-product shares, with flutter_svg and Séance's tests. Read every mention of `badge_image.dart` in `ghost_marks` below as "imported from `ghost_ui`"; `ghost_marks` then needs `ghost_ui` but not flutter_svg directly.
+**Update since the research:** the badge-image encoder (`badge_image.dart`) moved to `ghost_ui` in #99, with flutter_svg and Séance's tests. Read every mention of `badge_image.dart` in `ghost_marks` below as "imported from `ghost_ui`"; `ghost_marks` then needs `ghost_ui` but not flutter_svg directly.
 
 ## 1. Inventory
 

@@ -1,6 +1,7 @@
 # Design: move the desktop Settings-window link engine into `ghost_desktop`
 
-Status: proposal for owner approval. No code changed. Prepared from a read-only research pass (GLM 5.3) over main at 7b41780a; file sizes spot-checked. All paths relative to the repo root; line numbers verified against this checkout of main.
+Status: approved by the owner on 2026-10-08 as recommended: all three PRs
+in §5's order, including Séance's `_Link` enum conversion. Prepared from a read-only research pass (GLM 5.3) over main at 7b41780a; file sizes spot-checked. All paths relative to the repo root; line numbers verified against this checkout of main.
 
 ---
 

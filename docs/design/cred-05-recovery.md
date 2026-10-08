@@ -1,6 +1,9 @@
 # Design: Séance credential recovery (CRED-05, remaining slices)
 
-Status: proposal for owner approval. No code until approved.
+Status: approved by the owner on 2026-10-08. Decisions: A wrapped key,
+B one standing code, C keep existing entries on restore, D three PRs
+(wrap + export/restore, then enrolment + inline prompt, then app lock),
+E the app lock is built as the last PR, off by default.
 Landed first: the credential-required state (#97): `resolveCredentials`
 throws `CredentialMissingException` and the failed tab offers the server's
 editor.
