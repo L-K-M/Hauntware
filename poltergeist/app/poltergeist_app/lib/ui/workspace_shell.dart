@@ -2076,7 +2076,10 @@ class _WorkspaceShellState extends State<WorkspaceShell>
       pdfRenderer: pdfPreviewBuilder,
       // Every launch verb routes onto the focused ENTRY — never the
       // `preview-cache/` path (06 §5.3's open-boundary rule).
-      onOpen: (pane, entry) => unawaited(pane.openEntry(entry)),
+      // The preview's Open opens, whatever the Double-click action.
+      onOpen: (pane, entry) => unawaited(
+        pane.openEntry(entry, action: DoubleClickAction.open),
+      ),
       onOpenWith: (context, pane, entry) =>
           unawaited(_chooseEditorFor(pane, entry)),
       onOpenInEditor: (pane, entry) =>

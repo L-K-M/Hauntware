@@ -3241,6 +3241,28 @@ void main() {
       controller.dispose();
     });
 
+    test('an explicit Open opens whatever the Double-click action says',
+        () async {
+      // The preview's Open (06 §5.2) is a verb, not a double-click.
+      final lanes = FakePaneLanes();
+      final (controller, channel) = await localFilePane(lanes);
+      controller.otherPaneTransfer = (_, _) => fail('Transfer ran');
+
+      for (final preference in DoubleClickAction.values) {
+        controller.doubleClickAction = preference;
+        await controller.openEntry(
+          controller.entries.single,
+          action: DoubleClickAction.open,
+        );
+        expect(controller.notice, isNull, reason: preference.name);
+      }
+
+      expect(channel.openCalls, [
+        for (final _ in DoubleClickAction.values) '/parent/file.txt',
+      ]);
+      controller.dispose();
+    });
+
     test('Do nothing is exactly inert', () async {
       final lanes = FakePaneLanes();
       final (controller, channel) = await localFilePane(lanes);

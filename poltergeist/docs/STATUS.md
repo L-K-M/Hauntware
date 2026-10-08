@@ -14,15 +14,24 @@ shell supplies it as `PaneController.otherPaneTransfer`, stamped by the
 strips like the editor seams; `services/other_pane_transfer.dart` holds
 the resolution, and F5's other-pane lookup now uses it too. With the
 second pane hidden or showing no folder the pane posts
-`transferNeedsOtherPane`; without a queue, a bound folder or a live
-connection it posts `transferUnavailable`. The old "later milestone"
-notice is gone.
+`transferNeedsOtherPane`; without a queue, or when the source fails
+F5's `verbsEnabled` for any reason other than a directory watch's
+background re-list (`activatedRowVerbsEnabled`), it posts
+`transferUnavailable`. The old "later milestone" notice is gone.
 
-Validation: controller (seam call, both notices, unwired seam), strip
-stamping, the helper's branches (A to B, B to A whichever pane is
-active, one folder in both, hidden or empty other pane, no queue, a
-stray pane) and the compact shell end to end (a tap queues the copy;
-a hidden second pane shows the notice).
+The preview's Open (metadata card, PDF truncation bar) used to follow
+the setting too, so Transfer would have queued a copy from a button
+named Open. It now passes `openEntry(action: DoubleClickAction.open)`,
+the external open 06 §5.2 specifies.
+
+Validation: controller (seam call, both notices, unwired seam, the
+explicit Open under every setting), strip stamping, the helper's
+branches (A to B, B to A whichever pane is active, one folder in both,
+hidden or empty other pane, no queue, a stray pane, a failed listing,
+a watch re-list in flight) and the compact shell end to end (a tap
+queues the copy; a hidden second pane shows the notice). The preview
+button's shell wiring has no widget test: no shell harness composes a
+preview cache.
 
 ## Double-click action setting (2026-10-08)
 

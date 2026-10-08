@@ -6,7 +6,8 @@
   set to Transfer to other pane, opening a file copies it into the
   folder the other pane shows, like Copy to Other Pane does for a
   selection. If the other pane is hidden or has no folder open, the
-  pane says so instead.
+  pane says so instead. The preview's Open button now always opens the
+  file, whatever this setting says.
 - **Choose what opening a file does.** Settings → Editing has a
   Double-click action setting: Open (the default), Edit in Poltergeist,
   Transfer to other pane or Do nothing. It also applies to opening a file

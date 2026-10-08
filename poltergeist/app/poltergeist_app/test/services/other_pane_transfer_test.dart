@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:poltergeist_app/services/other_pane_transfer.dart';
 import 'package:poltergeist_app/services/pane_controller.dart';
@@ -16,10 +18,12 @@ import 'pane_controller_test.dart' as controller_test;
 void main() {
   late controller_test.FakePaneLanes lanes;
   late FakeAppTransferQueue queue;
+  late Map<PaneController, FakePaneChannel> channels;
 
   setUp(() {
     lanes = controller_test.FakePaneLanes();
     queue = FakeAppTransferQueue();
+    channels = {};
   });
 
   RemoteFileEntry file(String path) => RemoteFileEntry(
@@ -42,6 +46,7 @@ void main() {
     await pane.openLocalHome();
     await Future<void>.delayed(Duration.zero);
     addTearDown(pane.dispose);
+    channels[pane] = channel;
     return pane;
   }
 
@@ -122,6 +127,50 @@ void main() {
       OtherPaneTransferOutcome.queued,
     );
     expect(queue.enqueuedSpecs.single.destinationDir, '/home/tester');
+  });
+
+  test('a source whose listing failed sends nothing, as F5 refuses', () async {
+    final left = await localPane(
+      'pane.left.tab1',
+      '/home/tester',
+      names: ['notes.txt'],
+    );
+    final right = await localPane('pane.right.tab1', '/srv/backups');
+    final workspace = workspaceOf(left, right);
+    // A re-list of the same folder fails: its rows stay up and clickable.
+    channels[left]!.listingFailure = StateError('disk gone');
+    left.refresh();
+    await Future<void>.delayed(Duration.zero);
+    expect(left.error, isNotNull);
+    expect(left.entries, isNotEmpty);
+
+    expect(
+      transfer(workspace, left, '/home/tester/notes.txt'),
+      OtherPaneTransferOutcome.unavailable,
+    );
+    expect(queue.enqueuedSpecs, isEmpty);
+  });
+
+  test('a directory watch re-list in flight still sends', () async {
+    final left = await localPane(
+      'pane.left.tab1',
+      '/home/tester',
+      names: ['notes.txt'],
+    );
+    final right = await localPane('pane.right.tab1', '/srv/backups');
+    final workspace = workspaceOf(left, right);
+    final hold = Completer<void>();
+    addTearDown(hold.complete);
+    channels[left]!
+      ..holdNext = hold
+      ..emitWatch(DirectoryWatchSignal.changed);
+    // F5 waits out every listing; a double-click does not wait on this one.
+    expect(left.verbsEnabled, isFalse);
+
+    expect(
+      transfer(workspace, left, '/home/tester/notes.txt'),
+      OtherPaneTransferOutcome.queued,
+    );
   });
 
   test('a hidden second pane has nowhere to receive it', () async {

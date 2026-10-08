@@ -26,8 +26,9 @@ PaneController? otherPaneTarget(
 /// from [source] as a copy into the opposite pane's folder, under the rules
 /// of Transfer to Other Pane (F5). The opposite pane is found from the pane
 /// the file was opened in, not from the workspace's active pane, so an
-/// activation in either pane sends across. [dropDelegate] is the queue
-/// seam; null when no queue is wired.
+/// activation in either pane sends across. The source gate is F5's, except
+/// that a directory watch's background re-list does not refuse it.
+/// [dropDelegate] is the queue seam; null when no queue is wired.
 OtherPaneTransferOutcome transferEntryToOtherPane({
   required WorkspaceController workspace,
   required PaneDropDelegate? dropDelegate,
@@ -43,7 +44,7 @@ OtherPaneTransferOutcome transferEntryToOtherPane({
   final sourceLocation = source.location;
   if (dropDelegate == null ||
       sourceLocation == null ||
-      source.connectionLost) {
+      !source.activatedRowVerbsEnabled) {
     return OtherPaneTransferOutcome.unavailable;
   }
 

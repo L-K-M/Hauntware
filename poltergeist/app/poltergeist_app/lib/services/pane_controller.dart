@@ -857,15 +857,23 @@ class PaneController extends ChangeNotifier {
   /// listing of a live binding (02 §2.8): unbound and mid-open phases
   /// carry nothing to act on, and neither does the post-first-cancel
   /// state (browsing phase, snapshot restored, no location).
-  bool get verbsEnabled =>
+  bool get verbsEnabled => _listingActionable && !loading;
+
+  /// [verbsEnabled] for a row the user just activated (the double-click
+  /// Transfer): a directory watch's own re-list (03 §7.5) does not hold
+  /// it back, since the rows stay current; a navigation still does.
+  bool get activatedRowVerbsEnabled =>
+      _listingActionable && !navigationInFlight;
+
+  /// [verbsEnabled]'s terms other than an in-flight listing.
+  bool get _listingActionable =>
       _phase == PanePhase.browsing &&
       _location != null &&
       // A failed file Open is about that one file: the listing is
       // intact, so it never locks the folder's verbs (02 §2.6's inline
       // error stays up for its Retry until the selection moves on).
       (_error == null || _error is OpenEntryError) &&
-      !connectionLost &&
-      !loading;
+      !connectionLost;
 
   /// The remote binding's live connection truth (current value first from
   /// the engine's watch); null for local panes and unbound panes.
@@ -1518,8 +1526,13 @@ class PaneController extends ChangeNotifier {
   /// and a remote one through the managed checkout; Edit opens the
   /// built-in editor; Transfer queues a copy into the other pane's
   /// folder; Do nothing is inert. An unwired seam posts its notice.
-  /// Any fresh activation clears a lingering notice first.
-  Future<void> openEntry(RemoteFileEntry entry) async {
+  /// [action] overrides the setting for an explicit verb: the preview's
+  /// Open always opens (06 §5.2). Any fresh activation clears a
+  /// lingering notice first.
+  Future<void> openEntry(
+    RemoteFileEntry entry, {
+    DoubleClickAction? action,
+  }) async {
     // A stale row activation is fully inert — not even a notice clear:
     // the row is disowned presentation, and navigating into it would
     // supersede the pending navigation with the old directory's data.
@@ -1529,7 +1542,7 @@ class PaneController extends ChangeNotifier {
       navigate(entry.path);
       return;
     }
-    switch (doubleClickAction) {
+    switch (action ?? doubleClickAction) {
       case DoubleClickAction.nothing:
         return;
       case DoubleClickAction.edit:
