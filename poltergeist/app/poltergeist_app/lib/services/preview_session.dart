@@ -1308,18 +1308,12 @@ final class PreviewSession extends ChangeNotifier {
     }
 
     _quickLookNames[file.path] = entry.name;
-    if (_quickLookActive) {
-      await _quickLook.updatePreview([file.path], 0);
-    } else {
-      await _quickLook.showPreview([file.path], 0);
-    }
-    if (!_quickLookRequested || !_isCurrentProduction(key, generation)) {
-      return;
-    }
-    if (!_quickLookActive) {
-      _quickLookActive = true;
-      _quickLookListenClose();
-    }
+    final delivered = await _showInQuickLook(
+      [file.path],
+      0,
+      () => _quickLookRequested && _isCurrentProduction(key, generation),
+    );
+    if (!delivered) return;
     _setQuickLookCard(QuickLookCardKind.none);
     notifyListeners();
   }
@@ -1421,17 +1415,10 @@ final class PreviewSession extends ChangeNotifier {
     int index,
     int generation,
   ) async {
-    if (_disposed || !_quickLookRequested || generation != _generation) return;
-    if (_quickLookActive) {
-      await _quickLook.updatePreview(paths, index);
-    } else {
-      await _quickLook.showPreview(paths, index);
-    }
-    if (_disposed || !_quickLookRequested || generation != _generation) return;
-    if (!_quickLookActive) {
-      _quickLookActive = true;
-      _quickLookListenClose();
-    }
+    bool current() =>
+        !_disposed && _quickLookRequested && generation == _generation;
+    if (!current()) return;
+    if (!await _showInQuickLook(paths, index, current)) return;
     notifyListeners();
   }
 
@@ -1500,18 +1487,12 @@ final class PreviewSession extends ChangeNotifier {
     }
     if (cached != null) {
       _quickLookNames[cached.path] = entry.name;
-      if (_quickLookActive) {
-        await _quickLook.updatePreview([cached.path], 0);
-      } else {
-        await _quickLook.showPreview([cached.path], 0);
-      }
-      if (!_quickLookRequested || !_isCurrentProduction(key, generation)) {
-        return;
-      }
-      if (!_quickLookActive) {
-        _quickLookActive = true;
-        _quickLookListenClose();
-      }
+      final delivered = await _showInQuickLook(
+        [cached.path],
+        0,
+        () => _quickLookRequested && _isCurrentProduction(key, generation),
+      );
+      if (!delivered) return;
       _setQuickLookCard(QuickLookCardKind.none);
       notifyListeners();
       return;
@@ -1614,28 +1595,37 @@ final class PreviewSession extends ChangeNotifier {
   /// first remote Space opens the panel here; a mid-session completion
   /// updates it.
   Future<void> _quickLookDeliver(_Production production, File file) async {
-    if (_disposed ||
-        !_quickLookRequested ||
-        production.generation != _generation) {
-      return;
-    }
+    bool current() =>
+        !_disposed &&
+        _quickLookRequested &&
+        production.generation == _generation;
+    if (!current()) return;
     _quickLookNames[file.path] = production.entry.name;
+    if (!await _showInQuickLook([file.path], 0, current)) return;
+    _setQuickLookCard(QuickLookCardKind.none);
+    notifyListeners();
+  }
+
+  /// Hands [paths] to the native panel — opening it on the first
+  /// delivery, updating it after — then marks it active and listens for
+  /// its close. False, with nothing marked, when [current] says the
+  /// request went stale while the panel call was in flight.
+  Future<bool> _showInQuickLook(
+    List<String> paths,
+    int index,
+    bool Function() current,
+  ) async {
     if (_quickLookActive) {
-      await _quickLook.updatePreview([file.path], 0);
+      await _quickLook.updatePreview(paths, index);
     } else {
-      await _quickLook.showPreview([file.path], 0);
+      await _quickLook.showPreview(paths, index);
     }
-    if (_disposed ||
-        !_quickLookRequested ||
-        production.generation != _generation) {
-      return;
-    }
+    if (!current()) return false;
     if (!_quickLookActive) {
       _quickLookActive = true;
       _quickLookListenClose();
     }
-    _setQuickLookCard(QuickLookCardKind.none);
-    notifyListeners();
+    return true;
   }
 
   void _quickLookListenClose() {
