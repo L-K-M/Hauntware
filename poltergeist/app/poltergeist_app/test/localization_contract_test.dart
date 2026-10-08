@@ -2436,23 +2436,9 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'$menu ▸ $submenu'",
     r"'${identity.username}@${identity.host}'",
   },
-  // The Séance editor port (see docs/PORTS.md): image format sniffing,
-  // font families, controller seeds, regex machinery, and diagnostics —
-  // upstream literals, not user-facing copy.
-  'lib/services/badge_image.dart': {
-    "'png'",
-    "'jpg'",
-    "'jpeg'",
-    "'gif'",
-    "'webp'",
-    "'bmp'",
-    "'svg'",
-    "'heic'",
-    "'heif'",
-    r"'\uFEFF'",
-    "'<'",
-    "'<svg'",
-  },
+  // The Séance editor port (see docs/PORTS.md): font families,
+  // controller seeds, regex machinery, and diagnostics — upstream
+  // literals, not user-facing copy.
   'lib/services/server_duplication.dart': {
     // SourceServerChanged's message — upstream-authored English surfaced
     // verbatim in the failure toast, the same posture as

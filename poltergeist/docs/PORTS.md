@@ -931,6 +931,11 @@ counterpart is ported here.
 - Divergences: none — carried verbatim (imports re-pointed). SVG
   rasterization adds the `flutter_svg` direct dependency, the same use
   upstream makes of it.
+- Shared: 2026-10-08. The encoder moved to `ghost_ui`
+  (`lib/src/badge_image.dart`), which both apps import; this file is
+  removed. The shared copy keeps this one's render-phase catch, broader
+  than upstream's `on Exception` because `toImage`/`toByteData` can fail
+  with an `Error`.
 - Port-back candidates: none — Séance owns the source.
 
 ## app/poltergeist_app/lib/services/server_duplication.dart
