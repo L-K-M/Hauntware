@@ -1398,6 +1398,10 @@ could ride a future Séance PR if Séance adopts §2.5 ordering.
   wait for an unrelated repaint. `openSystemDefault` refuses names the
   host would run as programs (`ExecutableLaunchRefused`, 06 §5.3), and
   `launchWouldExecute` exposes the same check to the shell.
+- Shared: 2026-10-08. `normalizeEditorExtensions` and
+  `validateEditorDisplayName` moved into `planchette_editor`, which both
+  apps import; their pure cases moved to its
+  `external_editor_fields_test.dart`.
 - Port-back candidates: the platform-aware launch-target validation —
   Séance's `File.isAbsolute` decode fails the same synced-Windows case
   upstream. The executable-launch refusal, if Séance's remote edit

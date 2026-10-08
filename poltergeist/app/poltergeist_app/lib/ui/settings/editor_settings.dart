@@ -8,6 +8,8 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:planchette_editor/planchette_editor.dart'
+    show normalizeEditorExtensions, validateEditorDisplayName;
 
 import '../../l10n/app_localizations.dart';
 import '../../services/application_error_reporter.dart';

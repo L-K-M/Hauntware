@@ -1,6 +1,8 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:planchette_editor/planchette_editor.dart'
+    show normalizeEditorExtensions;
 import 'package:seance_app/services/editor_document.dart';
 import 'package:seance_app/services/external_file_opener.dart';
 
@@ -210,13 +212,6 @@ void main() {
 
     expect(registry.defaultEditorId, EditorRegistry.migratedBbeditId);
     expect(registry.editors.single.launchTarget, 'com.barebones.bbedit');
-  });
-
-  test('invalid extension syntax is rejected', () {
-    expect(
-      () => normalizeEditorExtensions(['txt', '../sh']),
-      throwsFormatException,
-    );
   });
 
   test('registry rejects editor values that cannot round-trip', () {
