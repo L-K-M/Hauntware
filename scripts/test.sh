@@ -139,16 +139,17 @@ if [[ "$scope" != dart ]]; then
     # planchette_core is pure Dart; the rest resolve through Flutter.
     (cd packages/planchette_core && run dart pub get)
     for dir in packages/ghost_ui packages/planchette_editor \
-               packages/ghost_desktop app/planchette_app; do
+               packages/ghost_desktop packages/ghost_marks app/planchette_app; do
       (cd "$dir" && run flutter pub get)
     done
     for dir in packages/ghost_ui packages/planchette_editor \
-               packages/ghost_desktop app/planchette_app; do
+               packages/ghost_desktop packages/ghost_marks app/planchette_app; do
       (cd "$dir" && run flutter analyze && run flutter test)
     done
     run dart format --set-exit-if-changed --output=none \
       packages/planchette_core packages/planchette_editor \
-      packages/ghost_ui packages/ghost_desktop app/planchette_app
+      packages/ghost_ui packages/ghost_desktop packages/ghost_marks \
+      app/planchette_app
   )
 
   # ---- Séance: app plus the vendored xterm fork (its tests are not

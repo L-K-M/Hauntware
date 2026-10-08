@@ -99,6 +99,7 @@ exit 1
         'pubspec.yaml',
         'planchette/app/planchette_app/pubspec.yaml',
         'planchette/packages/ghost_desktop/pubspec.yaml',
+        'planchette/packages/ghost_marks/pubspec.yaml',
         'planchette/packages/ghost_ui/pubspec.yaml',
         'planchette/packages/planchette_core/pubspec.yaml',
         'planchette/packages/planchette_editor/pubspec.yaml',

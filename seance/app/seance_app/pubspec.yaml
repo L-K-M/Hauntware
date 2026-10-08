@@ -16,6 +16,8 @@ dependencies:
     path: ../../../planchette/packages/planchette_editor
   ghost_desktop:
     path: ../../../planchette/packages/ghost_desktop
+  ghost_marks:
+    path: ../../../planchette/packages/ghost_marks
   characters: ^1.4.0
   flutter:
     sdk: flutter
