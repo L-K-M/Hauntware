@@ -179,6 +179,83 @@ void main() {
     expect(find.byKey(const ValueKey('preview.text')), findsOneWidget);
   });
 
+  group('a truncated text preview', () {
+    // Past the 1 MiB window the text row shows the truncation bar.
+    Future<PreviewHarness> renderTruncated(WidgetTester tester) async {
+      final h = (await tester.runAsync(
+        () => PreviewHarness.create(cacheCapacityBytes: 4 << 20),
+      ))!;
+      await drive(tester, () async {
+        await h.connectRemote([previewEntry('big.txt', size: 5)]);
+        h.session.previewFocused();
+        await untilPhase(h.session, PreviewPhase.prompt);
+        h.session.previewFocused();
+        await untilPhase(h.session, PreviewPhase.producing);
+        await untilTrue(() => h.producer.specs.isNotEmpty);
+        // Short lines keep laying out the 1 MiB window cheap.
+        final line = utf8.encode('${'a' * 63}\n');
+        await h.producer.complete(0, [
+          for (var i = 0; i <= previewTextMaximumBytes ~/ line.length; i++)
+            ...line,
+        ]);
+        await untilPhase(h.session, PreviewPhase.rendered);
+      });
+      return h;
+    }
+
+    testWidgets('opens the file in the editor from its bar', (tester) async {
+      final h = await renderTruncated(tester);
+      final opened = <String>[];
+      await pumpPanel(
+        tester,
+        h.session,
+        onOpenInEditor: (_, entry) => opened.add(entry.path),
+      );
+      await tester.pump();
+
+      expect(find.text('Preview truncated'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('preview.truncated.open')));
+      expect(opened, ['/srv/home/big.txt']);
+    });
+
+    testWidgets('shows its bar without Open when no editor is wired', (
+      tester,
+    ) async {
+      final h = await renderTruncated(tester);
+      await pumpPanel(tester, h.session);
+      await tester.pump();
+
+      expect(find.text('Preview truncated'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('preview.truncated.open')),
+        findsNothing,
+      );
+    });
+  });
+
+  // The PDF row's page cap shows the same bar; its document needs pdfium,
+  // which widget tests lack, so the bar is pumped as the PDF row builds it.
+  testWidgets('the PDF truncation bar opens the file externally', (
+    tester,
+  ) async {
+    var opened = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: PreviewTruncationBar(
+            label: 'Preview truncated',
+            actionLabel: 'Open',
+            actionKey: const ValueKey('preview.pdf.open'),
+            onAction: () => opened++,
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('preview.pdf.open')));
+    expect(opened, 1);
+  });
+
   testWidgets('metadata refusal card carries Open/Open With', (
     tester,
   ) async {

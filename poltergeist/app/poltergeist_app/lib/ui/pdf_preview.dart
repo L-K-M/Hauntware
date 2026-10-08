@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:pdfrx/pdfrx.dart';
 
 import '../l10n/app_localizations.dart';
-import 'preview_panel.dart' show PreviewPdfBuilder;
+import 'preview_panel.dart' show PreviewPdfBuilder, PreviewTruncationBar;
 
 /// 06 §5.2's PDF row cap: the panel renders the first
 /// `min(20, M)` pages, headed `Page 1–N of M`, and the truncation bar
@@ -75,9 +75,10 @@ class PdfPreviewView extends StatelessWidget {
               ),
             ),
             if (total > previewPdfPageLimit)
-              _PdfTruncationBar(
+              PreviewTruncationBar(
                 label: l10n.previewTruncatedLabel,
                 actionLabel: l10n.previewOpenLabel,
+                actionKey: const ValueKey('preview.pdf.open'),
                 onAction: onOpenExternal,
               ),
             Expanded(
@@ -129,48 +130,4 @@ class PdfPreviewView extends StatelessWidget {
     );
   }
 
-}
-
-class _PdfTruncationBar extends StatelessWidget {
-  const _PdfTruncationBar({
-    required this.label,
-    required this.actionLabel,
-    required this.onAction,
-  });
-
-  final String label;
-  final String actionLabel;
-  final VoidCallback? onAction;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    return Container(
-      color: colors.surfaceContainerHighest,
-      padding: const EdgeInsetsDirectional.only(
-        start: 14,
-        end: 8,
-        top: 6,
-        bottom: 6,
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              label,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: colors.onSurfaceVariant,
-              ),
-            ),
-          ),
-          if (onAction != null)
-            TextButton(
-              key: const ValueKey('preview.pdf.open'),
-              onPressed: onAction,
-              child: Text(actionLabel),
-            ),
-        ],
-      ),
-    );
-  }
 }

@@ -5,6 +5,7 @@ import '../../l10n/app_localizations.dart';
 import '../../services/application_error_reporter.dart';
 import '../../services/registered_command.dart';
 import '../../services/ssh_config_import_setup.dart';
+import 'imported_bookmarks_save.dart';
 import 'ssh_config_import_dialog.dart';
 
 /// The registered id of the ssh_config import command (02 §8.1's
@@ -48,7 +49,7 @@ Future<void> _runSshConfigImport(
   } on Object catch (error, stackTrace) {
     ApplicationErrorReporter().report(error, stackTrace);
     if (!context.mounted) return;
-    _notify(
+    showImportNotice(
       context,
       AppLocalizations.of(context).sshImportFavoritesLoadFailed,
     );
@@ -62,29 +63,10 @@ Future<void> _runSshConfigImport(
     configPath: setup.configPath,
     existingBookmarks: existing,
   );
-  if (imported == null || imported.isEmpty) return;
+  if (imported == null) return;
 
-  try {
-    await setup.bookmarks.upsertAll(imported);
-  } on Object catch (error, stackTrace) {
-    ApplicationErrorReporter().report(error, stackTrace);
-    if (!context.mounted) return;
-    _notify(
-      context,
-      AppLocalizations.of(context).sshImportFavoritesSaveFailed,
-    );
-    return;
-  }
-  if (!context.mounted) return;
-
-  _notify(
-    context,
-    AppLocalizations.of(context).sshImportImported(imported.length),
-  );
-}
-
-void _notify(BuildContext context, String message) {
-  ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-    SnackBar(content: Text(message)),
-  );
+  // The save must not depend on the window outliving the dialog; the
+  // helper checks mounted before each notice.
+  // ignore: use_build_context_synchronously
+  await saveImportedBookmarks(context, setup.bookmarks, imported);
 }

@@ -538,9 +538,10 @@ class _PreviewBody extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (content.truncated) ...[
-          _TruncationBar(
+          PreviewTruncationBar(
             label: l10n.previewTruncatedLabel,
             actionLabel: l10n.previewOpenInEditorLabel,
+            actionKey: const ValueKey('preview.truncated.open'),
             onAction: entry != null &&
                     pane != null &&
                     onOpenInEditor != null
@@ -796,15 +797,21 @@ class _ImageDimensionsCaptionState extends State<_ImageDimensionsCaption> {
 /// The `Preview truncated` bar — the §5.2 truncation affordance (text
 /// gets "Open in editor", the PDF row's page cap gets the external
 /// "Open" — §5.2's PDF truncation mirrors the metadata card's Open).
-class _TruncationBar extends StatelessWidget {
-  const _TruncationBar({
+/// Without [onAction] the bar only states the truncation.
+class PreviewTruncationBar extends StatelessWidget {
+  const PreviewTruncationBar({
+    super.key,
     required this.label,
     required this.actionLabel,
+    required this.actionKey,
     required this.onAction,
   });
 
   final String label;
   final String actionLabel;
+
+  /// Identifies the action button, per surface.
+  final Key actionKey;
   final VoidCallback? onAction;
 
   @override
@@ -830,7 +837,7 @@ class _TruncationBar extends StatelessWidget {
           ),
           if (onAction != null)
             TextButton(
-              key: const ValueKey('preview.truncated.open'),
+              key: actionKey,
               onPressed: onAction,
               child: Text(actionLabel),
             ),
