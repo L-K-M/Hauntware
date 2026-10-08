@@ -91,7 +91,7 @@ class CredentialMissingException implements Exception {
         : 'password';
     return 'Credential required on this device: the $what for '
         '"$serverLabel" was saved on another device and is not here. Enter '
-        'it in Edit Server, or switch the server to the SSH agent.';
+        'it on this device, or switch the server to the SSH agent.';
   }
 }
 

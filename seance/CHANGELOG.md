@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Secrets: a tab that needs a credential saved on another device asks for
+  the password or private key right there (or switches the server to the
+  SSH agent) and connects. Saving the first password or key on a device
+  without a recovery code offers to set one up; "Not now" is remembered,
+  and Settings > Sync > Recovery still offers it.
 - Secrets: Settings > Sync > Recovery sets up a recovery code, exports
   this device's saved passwords and keys to an encrypted file, and
   restores such a file on any device with the code. Séance shows the

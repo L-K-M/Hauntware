@@ -360,4 +360,61 @@ void main() {
       expect(saved.customColor, isNull);
     });
   });
+
+  group('Recovery offer', () {
+    /// Picks [method] in the authentication dropdown.
+    Future<void> chooseAuth(WidgetTester tester, String method) async {
+      final dropdown = find.byType(DropdownButtonFormField<AuthMethod>);
+      await scrollTo(tester, dropdown);
+      await tester.tap(dropdown);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(method).last);
+      await tester.pumpAndSettle();
+    }
+
+    /// Saves through Return, then gives the offer, which reads the vault
+    /// once the editor has closed, real time to appear (bounded).
+    Future<void> saveAndSettle(WidgetTester tester) async {
+      await tester.runAsync(() async {
+        await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+        await waitUntil(() => state!.servers.isNotEmpty);
+      });
+      for (var i = 0; i < 100; i++) {
+        await tester.pumpAndSettle();
+        if (find.text('Set up a recovery code?').evaluate().isNotEmpty) return;
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 20)),
+        );
+      }
+    }
+
+    testWidgets('saving a password offers a recovery code', (tester) async {
+      await boot(tester);
+      await openEditor(tester);
+      await fillRequired(tester);
+      await chooseAuth(tester, 'Password');
+      await tester.enterText(field('Password'), 'hunter2');
+      await tester.tap(field('Label'));
+      await tester.pump();
+
+      await saveAndSettle(tester);
+
+      expect(find.text('Add server'), findsNothing);
+      expect(find.text('Set up a recovery code?'), findsOneWidget);
+    });
+
+    testWidgets('a save that wrote no credential offers nothing', (
+      tester,
+    ) async {
+      await boot(tester);
+      await openEditor(tester);
+      // A new server's default is the SSH agent: nothing to recover.
+      await fillRequired(tester);
+
+      await saveAndSettle(tester);
+
+      expect(find.text('Add server'), findsNothing);
+      expect(find.text('Set up a recovery code?'), findsNothing);
+    });
+  });
 }
