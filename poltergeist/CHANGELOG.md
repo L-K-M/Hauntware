@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **Dialogs stay one at a time.** Using a menu command such as Show/Hide
+  Second Pane while Settings or an import is open no longer makes
+  Settings, the imports and the other dialog commands available again
+  before that dialog closes.
 - **Keep folders on top, or mix them in.** Settings → General has a Keep
   folders on top switch, also in the View menu as Keep Folders on Top.
   Turn it off and folders sort in among files by the same column, in

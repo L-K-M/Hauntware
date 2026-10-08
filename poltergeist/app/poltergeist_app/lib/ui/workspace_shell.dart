@@ -516,7 +516,13 @@ class WorkspaceShell extends StatefulWidget {
 
 class _WorkspaceShellState extends State<WorkspaceShell>
     implements WorkspaceWindowContent, DeepLinkHandler {
-  bool _commandSessionActive = false;
+  /// App commands running through [_runCommand] right now. A count, not
+  /// a flag: an always-enabled command (the macOS menu bar stays live under
+  /// an in-app dialog) can start and finish inside another command's
+  /// session, and must not end that session's guard when it returns.
+  int _openCommandSessions = 0;
+
+  bool get _commandSessionActive => _openCommandSessions > 0;
 
   /// The latest assembled registry — the Quick Open palette reads it at
   /// open time rather than re-deriving (02 §8.4: the palette is a
@@ -4541,13 +4547,13 @@ class _WorkspaceShellState extends State<WorkspaceShell>
       }
       return;
     }
-    setState(() => _commandSessionActive = true);
+    setState(() => _openCommandSessions++);
     try {
       await command.run(context);
     } on Object catch (error, stackTrace) {
       ApplicationErrorReporter().report(error, stackTrace);
     } finally {
-      if (mounted) setState(() => _commandSessionActive = false);
+      if (mounted) setState(() => _openCommandSessions--);
     }
   }
 }

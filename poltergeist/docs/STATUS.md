@@ -4,6 +4,21 @@ Living snapshot of where Poltergeist is, what's proven, and what to pick up
 next. Read [AGENTS.md](../AGENTS.md) for build/test commands and
 [09-PLAYBOOK.md](plan/09-PLAYBOOK.md) for the PR process.
 
+## Command sessions counted, not flagged (2026-10-08)
+
+The shell's one-session guard (`_runCommand`) was a single bool. An
+always-enabled app command (Show/Hide Second Pane, Keep Folders on Top,
+sidebar density, ...) run while another command's dialog was open, which
+the macOS menu bar allows, cleared it on return, so Settings, the
+imports and the workspace and sync verbs came back enabled under the
+open dialog and could stack a second one. The shell now counts open
+sessions; gated commands stay disabled until the last one ends.
+
+Validation: `test/ui/shell/command_session_test.dart` opens the ssh
+config import, runs Show/Hide Second Pane through the shell's runner,
+and checks the import stays disabled until its preview closes. It
+failed before the change ("the preview is still open") and passes after.
+
 ## D12 runner-image baseline refresh (2026-10-07)
 
 Main run 37509970591 exposed `ubuntu-latest` rotating from
