@@ -2,7 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb;
 import 'package:flutter/material.dart';
-import 'package:planchette_editor/planchette_editor.dart' show EditorTextSize;
+import 'package:planchette_editor/planchette_editor.dart'
+    show EditorTextSize, normalizeEditorExtensions, validateEditorDisplayName;
 import 'package:seance_core/seance_core.dart';
 
 import '../family_hues.dart';

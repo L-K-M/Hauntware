@@ -5,6 +5,8 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:planchette_editor/planchette_editor.dart'
+    show normalizeEditorExtensions, validateEditorDisplayName;
 import 'package:poltergeist_core/poltergeist_core.dart';
 
 import 'uuid.dart';
@@ -354,29 +356,6 @@ EditorHostPlatform? get currentEditorHostPlatform {
 @visibleForTesting
 EditorHostPlatform? Function()? debugEditorHostPlatform;
 
-List<String> normalizeEditorExtensions(Iterable<String> values) {
-  final result = <String>{};
-  for (var value in values) {
-    value = value.trim().toLowerCase();
-    while (value.startsWith('.')) {
-      value = value.substring(1);
-    }
-    if (value.startsWith('*')) value = value.substring(1);
-    while (value.startsWith('.')) {
-      value = value.substring(1);
-    }
-    if (value.isEmpty) continue;
-    if (value.length > 32 || RegExp(r'[/\\*?\x00-\x1f\x7f]').hasMatch(value)) {
-      throw FormatException('Invalid file extension: $value');
-    }
-    result.add(value);
-    if (result.length > 64) {
-      throw const FormatException('At most 64 extensions can be configured.');
-    }
-  }
-  return result.toList()..sort();
-}
-
 /// An OS default-handler launch [ExternalFileOpener.openSystemDefault]
 /// declined because the handler would run the file as a program (06
 /// §5.3's "never executed" open boundary). Typed so the shell answers
@@ -565,17 +544,6 @@ String _validatedId(Object? value) {
     throw const FormatException('Invalid editor id');
   }
   return value;
-}
-
-String validateEditorDisplayName(Object? value) {
-  if (value is! String) throw const FormatException('Invalid editor name');
-  final name = value.trim();
-  if (name.isEmpty ||
-      name.length > 100 ||
-      RegExp(r'[\x00-\x1f\x7f]').hasMatch(name)) {
-    throw const FormatException('Invalid editor name');
-  }
-  return name;
 }
 
 String _validatedTarget(Object? value, EditorHostPlatform platform) {

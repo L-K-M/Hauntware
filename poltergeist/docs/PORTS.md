@@ -759,6 +759,9 @@ counterpart is ported here.
   carried. The section keys and labels, `groupServers`, the row model,
   `sectionsHoldingLive` and `hiddenByHeader` are removed; a diff against
   the source is now partial.
+- Shared: 2026-10-08. `existingServerGroups` moved into `seance_protocol`
+  beside `ServerConfig` and reaches the server editor through the core
+  barrel; this file is removed.
 - Port-back candidates: none — Séance owns the source.
 
 ## app/poltergeist_app/lib/ui/server_filter.dart
@@ -772,6 +775,9 @@ counterpart is ported here.
 - Pruned: 2026-10-07. Only `serverSearchHaystack` is carried; the sidebar
   matches it with `sidebarQueryMatches`, Séance's term rule over any row.
   `serverMatchesQuery` and `filterServers` had no caller here.
+- Shared: 2026-10-08. `serverSearchHaystack` moved into `seance_protocol`
+  beside `ServerConfig` and reaches the sidebar through the core barrel;
+  this file is removed.
 - Port-back candidates: none — Séance owns the source.
 
 ## app/poltergeist_app/test/ui/server_grouping_test.dart
@@ -785,6 +791,8 @@ counterpart is ported here.
   regressions re-synced 2026-09-29.
 - Pruned: 2026-10-04, with the library above: only the
   `existingServerGroups` group and its `_server` fixture are carried.
+- Shared: 2026-10-08. The group moved with its function to
+  `seance_protocol`'s `server_search_test.dart`; this file is removed.
 - Port-back candidates: none.
 
 ## app/poltergeist_app/test/ui/server_filter_test.dart
@@ -794,7 +802,8 @@ counterpart is ported here.
 - Ported: 2026-09-24
 - Divergences: since 2026-10-07 the matching cases run through
   `sidebarQueryMatches` over `serverSearchHaystack`, the pair the sidebar
-  uses; the order case went with the pruned `filterServers`.
+  uses; the order case went with the pruned `filterServers`. Since
+  2026-10-08 `serverSearchHaystack` comes from the core barrel.
 - Port-back candidates: none.
 
 ## app/poltergeist_app/lib/ui/middle_ellipsis_text.dart
@@ -1389,6 +1398,10 @@ could ride a future Séance PR if Séance adopts §2.5 ordering.
   wait for an unrelated repaint. `openSystemDefault` refuses names the
   host would run as programs (`ExecutableLaunchRefused`, 06 §5.3), and
   `launchWouldExecute` exposes the same check to the shell.
+- Shared: 2026-10-08. `normalizeEditorExtensions` and
+  `validateEditorDisplayName` moved into `planchette_editor`, which both
+  apps import; their pure cases moved to its
+  `external_editor_fields_test.dart`.
 - Port-back candidates: the platform-aware launch-target validation —
   Séance's `File.isAbsolute` decode fails the same synced-Windows case
   upstream. The executable-launch refusal, if Séance's remote edit

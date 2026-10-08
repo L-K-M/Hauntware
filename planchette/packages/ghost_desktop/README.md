@@ -22,6 +22,9 @@ format, close guards, and native hooks kept in its own thin adapter.
 - `semanticsActionView` — the view whose semantics tree holds a node, so a
   host binding with extra windows can return a VoiceOver action that macOS
   addressed to the main view to the window it belongs to.
+- `MacosToolbarBandChannel` — whether macOS shows the unified toolbar band a
+  host's header draws under, from the runner's reports on the host's window
+  channel (`seance/window`, `poltergeist/window`).
 
 ## What hosts keep
 

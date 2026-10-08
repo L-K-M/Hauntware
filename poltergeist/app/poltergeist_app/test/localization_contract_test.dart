@@ -158,16 +158,8 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     // Every call names the workspace window it comes from (00 D39).
     "'viewId'",
   },
-  // The macOS toolbar band's `poltergeist/window` channel: method names
-  // and a wiring-fault diagnostic that only reaches the runner's reply,
-  // never a rendered surface.
-  'lib/services/macos_toolbar_band_channel.dart': {
-    "'poltergeist/window'",
-    "'isToolbarBandVisible'",
-    "'toolbarBandChanged'",
-    "'BAD_ARGS'",
-    "'toolbarBandChanged needs a bool argument'",
-  },
+  // The macOS toolbar band's `poltergeist/window` channel name.
+  'lib/services/macos_toolbar_band_channel.dart': {"'poltergeist/window'"},
   // The D15 trash channel server (03 §7.1): Platform.operatingSystem ids
   // and wiring-fault diagnostics that only reach the error reporter,
   // never a rendered surface.
@@ -2138,11 +2130,6 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'file.$extension'",
     r"'\\'",
     "'/'",
-    "'.'",
-    "'*'",
-    r"r'[/\\*?\x00-\x1f\x7f]'",
-    r"'Invalid file extension: $value'",
-    "'At most 64 extensions can be configured.'",
     "'openWithApplication'",
     "'path'",
     "'bundleIdentifier'",
@@ -2164,8 +2151,6 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'exe'",
     r"r'^[A-Za-z0-9._-]{1,64}$'",
     "'Invalid editor id'",
-    r"r'[\x00-\x1f\x7f]'",
-    "'Invalid editor name'",
     r"'\u0000'",
     "'Invalid editor target'",
     "'Editor executable paths must be absolute'",
@@ -2546,12 +2531,6 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'Places'",
     "'Marks'",
     ..._portedServerIconVocabulary,
-  },
-  'lib/ui/server_filter.dart': {
-    // The match haystack — corpus machinery.
-    r"'${server.label} ${server.username}@${server.host}:${server.port} '",
-    r"'${server.group ?? ''}'",
-    "''",
   },
   // D32 §11's platform integration: Dock progress diagnostics and the
   // file-manager reveal's process arguments (never user-facing copy).

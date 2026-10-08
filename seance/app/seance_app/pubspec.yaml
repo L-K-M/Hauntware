@@ -61,9 +61,6 @@ dependencies:
   # Persists/restores the desktop window's frame, monitor, and maximized/
   # full-screen state across launches (lib/services/window_state.dart).
   window_manager: ^0.5.2
-  # Enumerates connected displays so a frame saved on a now-disconnected
-  # monitor falls back to the default placement instead of opening off-screen.
-  screen_retriever: ^0.2.2
   # The macOS integrated titlebar: a transparent titlebar over full-size
   # content with an empty unified toolbar, and click passthrough for the
   # header's buttons inside it (lib/services/macos_titlebar.dart). Pinned to

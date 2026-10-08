@@ -6,6 +6,7 @@ import 'package:app_links/app_links.dart';
 import 'package:flutter/material.dart' show GlobalKey, ScaffoldMessengerState;
 import 'package:flutter/services.dart' show ServicesBinding;
 import 'package:flutter/widgets.dart';
+import 'package:ghost_desktop/ghost_desktop.dart' show MacosToolbarBandChannel;
 import 'package:ghost_ui/ghost_ui.dart' show CheckedPlatformMenuDelegate;
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
@@ -531,8 +532,13 @@ Future<void> main(List<String> args) async {
   // macOS full screen hides the unified toolbar band the shell header
   // draws under (D32 §3); the runner reports the switch so the layout
   // follows it.
-  final toolbarBand = Platform.isMacOS ? MacosToolbarBandChannel() : null;
-  if (toolbarBand != null) errorReporter.observe(toolbarBand.start());
+  final toolbarBand = Platform.isMacOS
+      ? MacosToolbarBandChannel(
+          channelName: windowChannelName,
+          onStartError: errorReporter.report,
+        )
+      : null;
+  if (toolbarBand != null) unawaited(toolbarBand.start());
 
   // This device's theme (Settings → Appearance): read before the first
   // frame, so the app opens in it rather than fading into it.

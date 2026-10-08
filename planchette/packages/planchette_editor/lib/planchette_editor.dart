@@ -11,6 +11,7 @@ export 'src/editor_problem_status.dart';
 export 'src/editor_strings.dart';
 export 'src/editor_text_size.dart';
 export 'src/editor_view.dart';
+export 'src/external_editor_fields.dart';
 export 'src/ghost_menus.dart';
 export 'src/search_history.dart';
 export 'src/text_tool_history.dart';

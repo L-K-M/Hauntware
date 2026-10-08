@@ -505,3 +505,26 @@ bool _isControlCharacter(int codeUnit) =>
 /// `Prod` and `prod` are one group rather than two adjacent near-identical
 /// sections. The displayed spelling is whichever member is listed first.
 String serverGroupKey(String group) => group.toLowerCase();
+
+/// The distinct group names in [servers], sorted, for offering existing groups
+/// in the editor instead of making the user retype (and misspell) one.
+List<String> existingServerGroups(List<ServerConfig> servers) {
+  final names = <String, String>{};
+  for (final server in servers) {
+    final group = normalizeServerGroup(server.group);
+    if (group != null) names.putIfAbsent(serverGroupKey(group), () => group);
+  }
+  final keys = names.keys.toList()..sort();
+  return [for (final key in keys) names[key]!];
+}
+
+/// The searchable text of one server: label, user, host, port, and group.
+///
+/// The group is in here so that typing a section's name narrows the list to
+/// that section — the filter and the grouping answer the same question from
+/// two directions, and a `prod` that matched the header but not the rows would
+/// be a strange thing to explain.
+String serverSearchHaystack(ServerConfig server) =>
+    '${server.label} ${server.username}@${server.host}:${server.port} '
+            '${server.group ?? ''}'
+        .toLowerCase();

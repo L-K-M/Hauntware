@@ -5,6 +5,8 @@ import 'package:flutter/services.dart';
 import 'package:open_file/open_file.dart';
 import 'package:planchette_core/planchette_core.dart'
     show TextNormalization, loadTextDocument;
+import 'package:planchette_editor/planchette_editor.dart'
+    show normalizeEditorExtensions, validateEditorDisplayName;
 import 'package:seance_core/seance_core.dart';
 
 import 'editor_document.dart';
@@ -287,29 +289,6 @@ EditorHostPlatform? get currentEditorHostPlatform {
   return null;
 }
 
-List<String> normalizeEditorExtensions(Iterable<String> values) {
-  final result = <String>{};
-  for (var value in values) {
-    value = value.trim().toLowerCase();
-    while (value.startsWith('.')) {
-      value = value.substring(1);
-    }
-    if (value.startsWith('*')) value = value.substring(1);
-    while (value.startsWith('.')) {
-      value = value.substring(1);
-    }
-    if (value.isEmpty) continue;
-    if (value.length > 32 || RegExp(r'[/\\*?\x00-\x1f\x7f]').hasMatch(value)) {
-      throw FormatException('Invalid file extension: $value');
-    }
-    result.add(value);
-    if (result.length > 64) {
-      throw const FormatException('At most 64 extensions can be configured.');
-    }
-  }
-  return result.toList()..sort();
-}
-
 /// A file the system's default app would run as a program, refused before
 /// the OS saw it: `payload.exe` on Windows, `run.command` on macOS.
 final class ExecutableLaunchRefused implements Exception {
@@ -456,17 +435,6 @@ String _validatedId(Object? value) {
     throw const FormatException('Invalid editor id');
   }
   return value;
-}
-
-String validateEditorDisplayName(Object? value) {
-  if (value is! String) throw const FormatException('Invalid editor name');
-  final name = value.trim();
-  if (name.isEmpty ||
-      name.length > 100 ||
-      RegExp(r'[\x00-\x1f\x7f]').hasMatch(name)) {
-    throw const FormatException('Invalid editor name');
-  }
-  return name;
 }
 
 String _validatedTarget(Object? value, EditorHostPlatform platform) {
