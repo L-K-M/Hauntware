@@ -1030,6 +1030,12 @@ counterpart is ported here.
   been ported, is now (below), and passed against the picker before the
   refactor as well as after it.
 - Port-back candidates: none.
+- Moved (2026-10-08): the picker is `ghost_marks`' `showServerColorPicker`,
+  shared with Séance; this file is a wrapper passing the ARB strings
+  (`PoltergeistServerAppearanceStrings`, `PoltergeistColorPickerStrings` in
+  `lib/ui/server_appearance_strings.dart`) and `poltergeistMonoTextStyle`
+  ([design](../../docs/design/server-appearance-package.md)). Its suite
+  moved with it; this app keeps the wrapper's cases.
 
 ## app/poltergeist_app/lib/ui/server_mark_picker.dart
 
@@ -1046,6 +1052,12 @@ counterpart is ported here.
   (`lib/ui/selected_tab_view.dart`, byte-identical in both apps) so a
   tab switches in place; the same one-line swap here.
 - Port-back candidates: none.
+- Moved (2026-10-08): the picker and `kCuratedServerEmoji` are
+  `ghost_marks`', shared with Séance, with the dialog's words in a
+  `ServerAppearanceStrings` bag; this file is a wrapper passing the ARB
+  strings. The incompressible-image message now reads as Séance's ("Try a
+  simpler picture — a logo rather than a photograph."), as the design
+  decided.
 
 ## app/poltergeist_app/test/ui/server_mark_picker_test.dart
 
@@ -1056,6 +1068,9 @@ counterpart is ported here.
 - Divergences: adapts only the source's accent-preview regression, wrapped in
   `AppLocalizations`; the broader upstream picker suite is not copied here.
 - Port-back candidates: none.
+- 2026-10-08: the upstream suite and this regression now live in
+  `ghost_marks`; this file checks the wrapper opens the picker in ARB words
+  on the server's accent.
 
 ## SelectedTabView production and test pair
 

@@ -1,5 +1,7 @@
 // Adapted from Seance app/seance_app/test/server_mark_picker_test.dart @
-// 66411c1; re-diffed at d811309; see docs/PORTS.md.
+// 66411c1; re-diffed at d811309; see docs/PORTS.md. Since 2026-10-08 the
+// picker is ghost_marks' and its suite lives there; this keeps the wrapper
+// opening it in this app's words on the server's accent.
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:poltergeist_app/l10n/app_localizations.dart';
@@ -22,7 +24,6 @@ void main() {
                 context,
                 current: const ServerGlyphMark(null),
                 accent: accent,
-                readImage: () async => null,
               ),
               child: const Text('open'),
             ),
@@ -38,5 +39,8 @@ void main() {
     expect(badges, isNotEmpty);
     expect(badges.map((badge) => badge.tint), everyElement(accent));
     expect(find.byType(ServerAccentBar), findsNothing);
+    final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+    expect(find.text(l10n.serverMarkPickerTitle), findsOneWidget);
+    expect(find.text(l10n.serverMarkPickerIconsTab), findsOneWidget);
   });
 }

@@ -77,7 +77,7 @@ export 'package:seance_core/seance_core.dart'
         ServerIcon,
         // The resolved mark a config's icon/emoji/image fields become (04
         // §7.2): the sidebar's catalog rows draw `server.mark` through the
-        // ported appearance module.
+        // shared ghost_marks package.
         ServerMark,
         ServerGlyphMark,
         ServerEmojiMark,

@@ -1,8 +1,9 @@
 name: ghost_marks
 description: >-
   Shared server appearance for Seance and Poltergeist: server accents and
-  tints, badges and accent bars, and the glyph and colour tables that let
-  identical server records draw identical marks in both apps.
+  tints, badges and accent bars, the glyph and colour tables, and the mark
+  and colour pickers, so identical server records draw identical marks in
+  both apps.
 version: 1.9.0
 publish_to: none
 
@@ -13,6 +14,11 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  # The mark picker's default image reader.
+  file_picker: ^11.0.2
+  # SelectedTabView, the colour picker and the badge image encoder.
+  ghost_ui:
+    path: ../ghost_ui
   # The server record types (ServerConfig, ServerMark, ServerIcon,
   # ServerColor). The protocol package, never seance_core: Poltergeist
   # consumes this package and must not inherit dartssh2.
