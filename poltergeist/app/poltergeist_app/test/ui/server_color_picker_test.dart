@@ -69,9 +69,11 @@ void main() {
     final l10n = await AppLocalizations.delegate.load(const Locale('en'));
     expect(find.text(l10n.serverColorPickerTitle), findsOneWidget);
     expect(find.text(l10n.serverColorPickerHint), findsOneWidget);
+    final hexStyle = tester.widget<TextField>(find.byType(TextField)).style;
+    expect(hexStyle?.fontFamily, poltergeistMonoTextStyle.fontFamily);
     expect(
-      tester.widget<TextField>(find.byType(TextField)).style?.fontFamily,
-      poltergeistMonoTextStyle.fontFamily,
+      hexStyle?.fontFamilyFallback,
+      poltergeistMonoTextStyle.fontFamilyFallback,
     );
     await use(tester);
     // Exactly, not after a trip through the sliders' floating point.

@@ -4,7 +4,7 @@ import 'package:ghost_ui/ghost_ui.dart' show BadgeImageFailure;
 /// A host with localized copy subclasses it and overrides every member.
 ///
 /// Glyph and colour names are not here: they are vocabulary
-/// ([serverIconLabel], [serverColorLabel]), the same in every language a
+/// (`serverIconLabel`, `serverColorLabel`), the same in every language a
 /// host ships.
 class ServerAppearanceStrings {
   const ServerAppearanceStrings();

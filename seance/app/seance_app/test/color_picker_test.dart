@@ -59,7 +59,17 @@ void main() {
 
     expect(find.text('Custom colour'), findsOneWidget);
     expect(find.byType(ServerBadge), findsOneWidget);
+    expect(find.text('336699'), findsOneWidget);
+    expect(
+      find.text(
+        'Drawn as picked, with the mark kept legible on it in both themes. '
+        'Devices running an older version show the nearest of the named colours '
+        'instead.',
+      ),
+      findsOneWidget,
+    );
     final style = tester.widget<TextField>(find.byType(TextField)).style!;
     expect(style.fontFamily, SeanceTheme.monoFallback.first);
+    expect(style.fontFamilyFallback, SeanceTheme.monoFallback);
   });
 }
