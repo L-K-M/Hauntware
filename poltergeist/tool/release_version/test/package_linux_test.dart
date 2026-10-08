@@ -148,11 +148,8 @@ void main() {
   // readelf and objdump answers are scripted: the floors it computes, and
   // what it does when objdump cannot read an ELF.
   group('dependency floors, end to end', () {
-    for (final (product, executable) in const [
-      ('planchette', 'planchette'),
-      ('seance', 'seance_app'),
-      ('poltergeist', 'poltergeist'),
-    ]) {
+    for (final MapEntry(key: product, value: executable)
+        in _packagerExecutables.entries) {
       test('$product maps symbol tags to package floors', () async {
         final result = await _printDeps(product, executable);
 
@@ -162,6 +159,24 @@ void main() {
           allOf(
             contains('libc6 (>= 2.34)'),
             contains('libstdc++6 (>= 12.1)'),
+            contains('libgcc-s1 (>= 12.1)'),
+          ),
+        );
+      });
+
+      test('$product keeps libstdc++6 unversioned below 3.4.21', () async {
+        final result = await _printDeps(
+          product,
+          executable,
+          symbolTags: 'GLIBC_2.34 GLIBCXX_3.4.20 GCC_12.0.0',
+        );
+
+        expect(result.exitCode, 0, reason: result.stderr as String);
+        expect(
+          result.stdout,
+          allOf(
+            contains('libstdc++6'),
+            isNot(contains('libstdc++6 (>=')),
             contains('libgcc-s1 (>= 12.1)'),
           ),
         );
@@ -249,6 +264,7 @@ Future<ProcessResult> _printDeps(
   String product,
   String executable, {
   bool objdumpFails = false,
+  String symbolTags = 'GLIBC_2.34 GLIBCXX_3.4.30 GCC_12.0.0',
 }) async {
   final sandbox = Directory.systemTemp.createTempSync('package-deps-test-');
   addTearDown(() => sandbox.deleteSync(recursive: true));
@@ -267,9 +283,8 @@ esac
   File(p.join(bin.path, 'objdump')).writeAsStringSync(
     objdumpFails
         ? '#!/usr/bin/env bash\nexit 1\n'
-        : r'''#!/usr/bin/env bash
-printf '0 DF *UND* 0 %s f\n' GLIBC_2.34 GLIBCXX_3.4.30 GCC_12.0.0
-''',
+        : '#!/usr/bin/env bash\n'
+              "printf '0 DF *UND* 0 %s f\\n' $symbolTags\n",
   );
   Process.runSync('chmod', [
     '+x',
@@ -293,8 +308,14 @@ printf '0 DF *UND* 0 %s f\n' GLIBC_2.34 GLIBCXX_3.4.30 GCC_12.0.0
 }
 
 /// The products whose Linux packagers take their libstdc++ and libgcc
-/// floors from the shared ABI-tag table.
-const _packagerProducts = ['planchette', 'seance', 'poltergeist'];
+/// floors from the shared ABI-tag table, with each bundle's executable.
+const _packagerExecutables = {
+  'planchette': 'planchette',
+  'seance': 'seance_app',
+  'poltergeist': 'poltergeist',
+};
+
+final _packagerProducts = _packagerExecutables.keys;
 
 /// scripts/package-linux.sh delimits the units its tests execute with
 /// `# --- <name> (…)` … `# --- end <name>` comment markers; keep them.
