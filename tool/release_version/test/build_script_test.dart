@@ -272,7 +272,7 @@ fi
         final result = await build.run(['app']);
 
         expect(result.exitCode, isNot(0), reason: '${result.stdout}');
-        expect(result.stdout, contains('app: FAILED'));
+        expect(result.stdout, contains('app: FAILED (copy to dist/)'));
       });
 
       test('$product: the APK cannot be copied into dist/', () async {
@@ -282,14 +282,13 @@ fi
         final result = await build.run(['apk']);
 
         expect(result.exitCode, isNot(0), reason: '${result.stdout}');
-        expect(result.stdout, contains('apk: FAILED'));
+        expect(result.stdout, contains('apk: FAILED (copy to dist/)'));
       });
 
       test('$product: Linux packaging fails', () async {
         final build = _realProductBuild(sandbox, product, appDir, 'Linux');
-        final packager = File(
-          p.join(build.root, 'scripts', 'package-linux.sh'),
-        )..writeAsStringSync('#!/usr/bin/env bash\nexit 1\n');
+        final packager = File(p.join(build.root, 'scripts', 'package-linux.sh'))
+          ..writeAsStringSync('#!/usr/bin/env bash\nexit 1\n');
         Process.runSync('chmod', ['+x', packager.path]);
 
         final result = await build.run(['app']);
@@ -306,7 +305,7 @@ fi
       final result = await build.run(['server']);
 
       expect(result.exitCode, isNot(0), reason: '${result.stdout}');
-      expect(result.stdout, contains('server: FAILED'));
+      expect(result.stdout, contains('server: FAILED (copy to dist/)'));
       expect(result.stdout, isNot(contains('server: built')));
     });
   });
