@@ -1134,6 +1134,11 @@ void main() {
       expect(backend.calls, ['newRecoveryCode']);
       expect(find.text('AAAA-BBBB-CCCC'), findsOneWidget);
 
+      // Escape does not close it: only Cancel or "I saved it" do.
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pumpAndSettle();
+      expect(find.text('AAAA-BBBB-CCCC'), findsOneWidget);
+
       // Cancelling the new code keeps the earlier one.
       await tap(tester, 'recovery.code.cancel');
       expect(backend.calls, ['newRecoveryCode']);
