@@ -2375,6 +2375,25 @@ class PaneController extends ChangeNotifier {
   /// pathological case worth a typed refusal, not an unbounded probe.
   static const int _maxCreateAttempts = 100;
 
+  /// A mutating operation's ownership token, taken at submit time from
+  /// [channel] (the bound channel) and [location]: channel identity,
+  /// bind attempt, browsing-session revision and location. A rebind —
+  /// even one landing on the same path spelling — or an away-and-back
+  /// navigation retires it, so a late answer can never mutate a binding
+  /// or session the operation no longer owns.
+  bool Function() _ownershipToken(
+    AppBrowseChannel channel,
+    PaneLocation? location,
+  ) {
+    final attempt = _bindAttempt;
+    final revision = _locationRevision;
+    return () =>
+        identical(channel, _channel) &&
+        attempt == _bindAttempt &&
+        revision == _locationRevision &&
+        location == _location;
+  }
+
   Future<String?> _createEntry(
     String baseName, {
     required bool directory,
@@ -2400,17 +2419,10 @@ class PaneController extends ChangeNotifier {
       }, operation: operation);
     }
 
-    // The same ownership token submitRename uses: a rebind or a
-    // navigation retires it, so a late create never drives a listing
-    // the pane no longer shows.
-    final attempt = _bindAttempt;
-    final revision = _locationRevision;
-    bool ownsPresentation() =>
-        !_disposed &&
-        identical(channel, _channel) &&
-        attempt == _bindAttempt &&
-        revision == _locationRevision &&
-        location == _location;
+    // A rebind or a navigation retires the token, so a late create
+    // never drives a listing the pane no longer shows.
+    final owns = _ownershipToken(channel, location);
+    bool ownsPresentation() => !_disposed && owns();
 
     final taken = {for (final entry in _sortedListing) entry.name};
     final separator = paneSeparator(location.path);
@@ -2617,18 +2629,7 @@ class PaneController extends ChangeNotifier {
     _renameInFlight = true;
     notifyListeners();
 
-    // The operation's ownership token: channel identity, bind attempt,
-    // and the browsing-session revision at submit time. A rebind — even
-    // one landing on the same path spelling — or an away-and-back
-    // navigation retires the token, so a late answer can never mutate
-    // a binding or session the operation no longer owns.
-    final attempt = _bindAttempt;
-    final revision = _locationRevision;
-    bool ownsPresentation() =>
-        identical(channel, _channel) &&
-        attempt == _bindAttempt &&
-        revision == _locationRevision &&
-        location == _location;
+    final ownsPresentation = _ownershipToken(channel, location);
 
     try {
       await channel.rename(entry.path, newPath);
@@ -2920,18 +2921,9 @@ class PaneController extends ChangeNotifier {
     session.applyError = null;
     notifyListeners();
 
-    // The operation's ownership token: channel identity, bind attempt,
-    // and the browsing-session revision at submit time — a rebind or an
-    // away-and-back navigation retires the write, so a late answer can
-    // never mutate a session it no longer owns (the rename commit's
-    // rule).
-    final attempt = _bindAttempt;
-    final revision = _locationRevision;
+    final owns = _ownershipToken(channel, _location);
     bool ownsPresentation() =>
-        identical(channel, _channel) &&
-        attempt == _bindAttempt &&
-        revision == _locationRevision &&
-        location == _location &&
+        owns() &&
         // An inspector retarget re-mints the edit session — a write
         // answering after it owns nothing and reports through the
         // pane's error path rather than stamping a dead session.
