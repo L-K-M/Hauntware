@@ -75,7 +75,6 @@ final class SyncPlanView extends StatefulWidget {
 
 class _SyncPlanViewState extends State<SyncPlanView> {
   SyncFilter _filter = SyncFilter.all;
-  String _filterText = '';
   bool _onlyActions = true; // §7: default enabled
   final _filterField = TextEditingController();
   final _selected = <SyncItem>{};
@@ -165,16 +164,12 @@ class _SyncPlanViewState extends State<SyncPlanView> {
                 filterField: _filterField,
                 onlyActions: _onlyActions,
                 onFilterChanged: (filter) => setState(() => _filter = filter),
-                onFilterTextChanged: (text) =>
-                    setState(() => _filterText = text),
+                // The rows read the field's text on rebuild.
+                onFilterTextChanged: (_) => setState(() {}),
                 onOnlyActionsChanged: (value) =>
                     setState(() => _onlyActions = value),
               ),
-              _ConflictBar(
-                controller: _controller,
-                l10n: l10n,
-                onResolved: () => setState(() {}),
-              ),
+              _ConflictBar(controller: _controller, l10n: l10n),
             ],
             Expanded(child: _buildBody(context, l10n)),
             _ActionBar(
@@ -394,7 +389,7 @@ class _SyncPlanViewState extends State<SyncPlanView> {
       SyncFilter.conflicts => item.effective == SyncActionType.conflict,
       SyncFilter.skipped => item.effective == SyncActionType.skip,
     };
-    final query = _filterText.trim().toLowerCase();
+    final query = _filterField.text.trim().toLowerCase();
     return items.where((item) {
       if (_onlyActions &&
           item.effective == SyncActionType.skip &&
@@ -1330,12 +1325,10 @@ class _ConflictBar extends StatelessWidget {
   const _ConflictBar({
     required this.controller,
     required this.l10n,
-    required this.onResolved,
   });
 
   final SyncPlanController controller;
   final AppLocalizations l10n;
-  final VoidCallback onResolved;
 
   @override
   Widget build(BuildContext context) {
@@ -1361,28 +1354,24 @@ class _ConflictBar extends StatelessWidget {
                 label: Text(l10n.syncResolveNewerWins),
                 onPressed: () {
                   controller.resolveConflicts(SyncConflictChoice.newerWins);
-                  onResolved();
                 },
               ),
             ActionChip(
               label: Text(l10n.syncResolveKeepLeft),
               onPressed: () {
                 controller.resolveConflicts(SyncConflictChoice.keepLeft);
-                onResolved();
               },
             ),
             ActionChip(
               label: Text(l10n.syncResolveKeepRight),
               onPressed: () {
                 controller.resolveConflicts(SyncConflictChoice.keepRight);
-                onResolved();
               },
             ),
             ActionChip(
               label: Text(l10n.syncResolveSkipAll),
               onPressed: () {
                 controller.resolveConflicts(SyncConflictChoice.skip);
-                onResolved();
               },
             ),
           ],
