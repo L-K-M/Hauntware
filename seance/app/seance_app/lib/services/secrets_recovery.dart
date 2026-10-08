@@ -176,7 +176,8 @@ class PlatformSecretsExportFiles implements SecretsExportFiles {
   }
 
   /// `withData`, because an Android document provider may hand over the
-  /// bytes with no path at all; the size is known before either is read.
+  /// bytes with no path at all. The picker reports the size before its bytes
+  /// are used or the path read, so an oversized file goes no further.
   @override
   Future<Uint8List?> open() async {
     final result = await FilePicker.pickFiles(withData: true);
@@ -192,6 +193,10 @@ class PlatformSecretsExportFiles implements SecretsExportFiles {
     if (bytes != null) return bytes;
     final path = file.path;
     if (path == null) throw const SecretsExportUnreadableException();
-    return File(path).readAsBytes();
+    try {
+      return await File(path).readAsBytes();
+    } on FileSystemException {
+      throw const SecretsExportUnreadableException();
+    }
   }
 }

@@ -5,9 +5,15 @@ import 'package:flutter/services.dart';
 
 import '../services/secrets_recovery.dart';
 import '../services/settings_backend.dart';
+import '../theme.dart' show SeanceTheme;
 import 'settings_layout.dart';
 
-const _mono = TextStyle(fontFamily: 'monospace');
+/// The code in Séance's monospace stack; a bare 'monospace' resolves on
+/// Android only.
+final _mono = TextStyle(
+  fontFamily: SeanceTheme.monoFallback.first,
+  fontFamilyFallback: SeanceTheme.monoFallback,
+);
 
 /// Settings > Sync > Recovery (CRED-05): a code the user writes down, an
 /// encrypted export of this device's passwords and keys, and restoring one
@@ -274,73 +280,78 @@ class _RecoveryCodeDialogState extends State<_RecoveryCodeDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Your recovery code'),
-      content: SizedBox(
-        width: 520,
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Write this code down and keep it somewhere safe, away from '
-                'this device. It is shown only now. With it, an export of '
-                'this device\'s secrets opens anywhere; without it, nowhere. '
-                'Nothing changes until you confirm.',
-              ),
-              const SizedBox(height: 12),
-              SelectableText(
-                widget.code,
-                key: const ValueKey('recovery.code'),
-                style: _mono,
-              ),
-              TextButton.icon(
-                onPressed: _copy,
-                icon: const Icon(Icons.copy, size: 16),
-                label: Text(_copied ? 'Copied' : 'Copy code'),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                key: const ValueKey('recovery.code.confirm'),
-                controller: _confirmation,
-                autocorrect: false,
-                enableSuggestions: false,
-                style: _mono,
-                decoration: const InputDecoration(
-                  labelText: 'Type the code\'s first four characters',
+    // Only Cancel or "I saved it" close it: Esc or back would drop a code
+    // the user may not have written down yet.
+    return PopScope(
+      canPop: false,
+      child: AlertDialog(
+        title: const Text('Your recovery code'),
+        content: SizedBox(
+          width: 520,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Write this code down and keep it somewhere safe, away from '
+                  'this device. It is shown only now. With it, an export of '
+                  'this device\'s secrets opens anywhere; without it, nowhere. '
+                  'Nothing changes until you confirm.',
                 ),
-                onChanged: (_) => setState(() {}),
-              ),
-              if (_error != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: Semantics(
-                    liveRegion: true,
-                    child: Text(
-                      _error!,
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.error,
+                const SizedBox(height: 12),
+                SelectableText(
+                  widget.code,
+                  key: const ValueKey('recovery.code'),
+                  style: _mono,
+                ),
+                TextButton.icon(
+                  onPressed: _copy,
+                  icon: const Icon(Icons.copy, size: 16),
+                  label: Text(_copied ? 'Copied' : 'Copy code'),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  key: const ValueKey('recovery.code.confirm'),
+                  controller: _confirmation,
+                  autocorrect: false,
+                  enableSuggestions: false,
+                  style: _mono,
+                  decoration: const InputDecoration(
+                    labelText: 'Type the code\'s first four characters',
+                  ),
+                  onChanged: (_) => setState(() {}),
+                ),
+                if (_error != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Semantics(
+                      liveRegion: true,
+                      child: Text(
+                        _error!,
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.error,
+                        ),
                       ),
                     ),
                   ),
-                ),
-            ],
+              ],
+            ),
           ),
         ),
+        actions: [
+          TextButton(
+            key: const ValueKey('recovery.code.cancel'),
+            onPressed: _saving ? null : () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            key: const ValueKey('recovery.code.done'),
+            onPressed: _confirmed && !_saving ? _keep : null,
+            child: const Text('I saved it'),
+          ),
+        ],
       ),
-      actions: [
-        TextButton(
-          key: const ValueKey('recovery.code.cancel'),
-          onPressed: _saving ? null : () => Navigator.pop(context, false),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          key: const ValueKey('recovery.code.done'),
-          onPressed: _confirmed && !_saving ? _keep : null,
-          child: const Text('I saved it'),
-        ),
-      ],
     );
   }
 }
