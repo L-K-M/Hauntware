@@ -2434,12 +2434,6 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'Menlo'",
     "'Courier New'",
   },
-  'lib/ui/color_picker.dart': {
-    // The hex field's filter regex, preview '#' and seed — input machinery.
-    "'[0-9a-fA-F]'",
-    "'#'",
-    "''",
-  },
   'lib/ui/server_editor.dart': {
     // Controller seeds and fallbacks (empty strings and the loaded port),
     // the mono font on the PEM and login-script fields, and error
