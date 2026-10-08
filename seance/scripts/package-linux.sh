@@ -204,19 +204,45 @@ fi
 floor_of() {  # $1 = objdump tag prefix (e.g. GLIBC_), max across all ELFs
   # sort -Vu is version-aware (2.14 > 2.9); trust it instead of re-comparing.
   # `|| true`: grep exits 1 when a file references none of the tags, and
-  # pipefail would turn that into a failure of the whole function.
-  local tag="$1" f
+  # `set -e` would turn that into an abort mid-loop. A failed
+  # or empty objdump run instead means a bad ELF — die rather than let the
+  # floor silently drop. The loop must accumulate, not pipe: inside a
+  # pipeline it runs in a subshell whose exit cannot abort the script.
+  local tag="$1" f symbols versions=""
   for f in "${ELFS[@]}"; do
-    objdump -T "$f" 2>/dev/null | grep -o "${tag}[0-9.]*" || true
-  done | sed "s/^$tag//" | sort -Vu | tail -1
+    symbols="$(objdump -T "$f")" \
+      || die "objdump failed on $(basename "$f") — cannot compute $tag floor"
+    [[ -n $symbols ]] \
+      || die "no dynamic symbols in $(basename "$f") — cannot compute $tag floor"
+    versions+="$(grep -o "${tag}[0-9.]*" <<<"$symbols" || true)"$'\n'
+  done
+  sed "s/^$tag//" <<<"$versions" | sort -Vu | tail -1
 }
 GLIBC_FLOOR="$(floor_of GLIBC_)"
-GLIBCXX_FLOOR="$(floor_of GLIBCXX_)"
-GCC_FLOOR="$(floor_of GCC_)"
+GLIBCXX_TAG="$(floor_of GLIBCXX_)"
+GCC_TAG="$(floor_of GCC_)"
 
-if [[ -n "$GLIBC_FLOOR"  ]]; then dep_version libc6      "libc6 (>= $GLIBC_FLOOR)"; fi
-if [[ -n "$GLIBCXX_FLOOR" ]]; then dep_version libstdc++6 "libstdc++6 (>= $GLIBCXX_FLOOR)"; fi
-if [[ -n "$GCC_FLOOR"    ]]; then dep_version libgcc-s1   "libgcc-s1 (>= $GCC_FLOOR)"; fi
+# glibc's symbol tags already are package versions (GLIBC_2.34 -> libc6
+# 2.34). libstdc++ and libgcc tags are not: GLIBCXX_3.4.30 shipped with GCC
+# 12.1, and Debian versions those packages by GCC release, so a raw tag
+# would be a floor every installed package passes. The ABI-tag -> GCC
+# mapping is shared with the other Linux packagers.
+# shellcheck source=../../scripts/package-linux-gcc-floors.sh
+source "$(dirname "$SELF")/../../scripts/package-linux-gcc-floors.sh"
+
+[[ -z "$GLIBC_FLOOR" ]] || dep_version libc6 "libc6 (>= $GLIBC_FLOOR)"
+if [[ -n "$GLIBCXX_TAG" ]]; then
+  mapped="$(glibcxx_gcc "$GLIBCXX_TAG")" \
+    || die "no GCC mapping for GLIBCXX_$GLIBCXX_TAG — extend glibcxx_gcc in scripts/package-linux-gcc-floors.sh (source: GCC's ABI policy table)"
+  # An empty mapping keeps the soname map's unversioned dependency —
+  # "libstdc++6 (>= )" would not parse.
+  [[ -n "$mapped" ]] && dep_version libstdc++6 "libstdc++6 (>= $mapped)"
+fi
+if [[ -n "$GCC_TAG" ]]; then
+  mapped="$(gcc_gcc "$GCC_TAG")" \
+    || die "no GCC mapping for GCC_$GCC_TAG — extend gcc_gcc in scripts/package-linux-gcc-floors.sh"
+  [[ -n "$mapped" ]] && dep_version libgcc-s1 "libgcc-s1 (>= $mapped)"
+fi
 
 # dpkg control wants ", " separators, in a stable order (alternatives keep
 # their internal "|" order; sort only whole entries).

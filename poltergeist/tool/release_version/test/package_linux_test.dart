@@ -94,8 +94,8 @@ void main() {
       }
     });
 
-    test('both packagers load the shared table', () async {
-      for (final product in ['planchette', 'poltergeist']) {
+    test('every Linux packager loads the shared table', () async {
+      for (final product in _packagerProducts) {
         final packager = File(
           p.join(
             _repositoryRoot.parent.path,
@@ -120,14 +120,27 @@ void main() {
       }
     });
 
-    test('the script maps floors through the table, never the raw tag', () {
-      expect(script, contains(r'no GCC mapping for GLIBCXX_$'));
-      expect(script, contains(r'no GCC mapping for GCC_$'));
-      expect(script, isNot(contains(r'libstdc++6 (>= $GLIBCXX')));
-      expect(script, isNot(contains(r'libgcc-s1 (>= $GCC')));
-      // An empty mapping (pre-3.4.21 tags) must keep the unversioned
-      // dependency, not emit "(>= )" — dpkg-deb rejects an empty version.
-      expect(script, contains(r'[[ -n "$mapped" ]] && dep_version libstdc++6'));
+    test('every packager maps floors through the table, never the raw tag', () {
+      for (final product in _packagerProducts) {
+        final script = File(
+          p.join(
+            _repositoryRoot.parent.path,
+            product,
+            'scripts/package-linux.sh',
+          ),
+        ).readAsStringSync();
+        expect(script, contains(r'no GCC mapping for GLIBCXX_$'), reason: product);
+        expect(script, contains(r'no GCC mapping for GCC_$'), reason: product);
+        expect(script, isNot(contains(r'(>= $GLIBCXX')), reason: product);
+        expect(script, isNot(contains(r'(>= $GCC')), reason: product);
+        // An empty mapping (pre-3.4.21 tags) must keep the unversioned
+        // dependency, not emit "(>= )" — dpkg-deb rejects an empty version.
+        expect(
+          script,
+          contains(r'[[ -n "$mapped" ]] && dep_version libstdc++6'),
+          reason: product,
+        );
+      }
     });
   });
 
@@ -191,6 +204,10 @@ void main() {
     });
   });
 }
+
+/// The products whose Linux packagers take their libstdc++ and libgcc
+/// floors from the shared ABI-tag table.
+const _packagerProducts = ['planchette', 'seance', 'poltergeist'];
 
 /// scripts/package-linux.sh delimits the units its tests execute with
 /// `# --- <name> (…)` … `# --- end <name>` comment markers; keep them.
