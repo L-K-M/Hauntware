@@ -9,6 +9,7 @@ library;
 
 export 'src/appearance.dart';
 export 'src/badge_image.dart';
+export 'src/color_picker.dart';
 export 'src/contrast.dart';
 export 'src/family_hues.dart';
 export 'src/ghost_chords.dart';

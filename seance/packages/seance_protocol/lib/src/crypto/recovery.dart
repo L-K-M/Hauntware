@@ -205,6 +205,13 @@ abstract final class SecretsExport {
     required Map<String, Uint8List> sealedEntries,
     required DateTime createdAt,
   }) async {
+    if (vaultKey.length != _kKeyLength) {
+      throw ArgumentError.value(
+        vaultKey.length,
+        'vaultKey',
+        'Vault keys are $_kKeyLength bytes',
+      );
+    }
     final ids = [
       for (final id in sealedEntries.keys)
         if (!isReservedVaultId(id)) id,

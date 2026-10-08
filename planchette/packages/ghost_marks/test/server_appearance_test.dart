@@ -1,16 +1,10 @@
-// Ported from Séance app/seance_app/test/server_appearance_test.dart @
-// ded9228; see docs/PORTS.md. The ServerAvatar group is not ported — its
-// subject (TerminalStatus-keyed avatar) is not; the tab strip composes
-// ServerBadge with ServerStateGlyph instead. The two tests that used the
-// avatar as the badge's host ('a config draws the mark its fields resolve
-// to', 'a server's colour fills its badge') are adapted to ServerBadge.
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:poltergeist_app/ui/server_appearance.dart';
-import 'package:poltergeist_core/poltergeist_core.dart';
+import 'package:ghost_marks/ghost_marks.dart';
+import 'package:seance_protocol/seance_protocol.dart';
 
 ServerConfig _server({ServerColor? color, ServerIcon? icon}) => ServerConfig(
   id: 's1',
@@ -246,9 +240,7 @@ void main() {
         _wrap(
           const ServerBadge(
             tint: ServerTint.none,
-            mark: ServerEmojiMark(
-              '👨‍👩‍👧‍👦',
-            ),
+            mark: ServerEmojiMark('👨‍👩‍👧‍👦'),
           ),
         ),
       );
@@ -279,10 +271,7 @@ void main() {
           ServerBadge.glyph(tint: ServerTint.none, icon: ServerIcon.database),
         ),
       );
-      expect(
-        tester.widget<Icon>(find.byType(Icon)).semanticLabel,
-        'Database',
-      );
+      expect(tester.widget<Icon>(find.byType(Icon)).semanticLabel, 'Database');
     });
 
     testWidgets('an image mark is drawn from its bytes', (tester) async {
@@ -324,7 +313,14 @@ void main() {
               // this shape, so a record really can carry it, and the badge is
               // the last thing standing between that and an exception.
               Uint8List.fromList(const [
-                0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
+                0x89,
+                0x50,
+                0x4E,
+                0x47,
+                0x0D,
+                0x0A,
+                0x1A,
+                0x0A,
               ]),
               fallback: ServerIcon.cluster,
             ),
@@ -358,18 +354,13 @@ void main() {
       // asks for it rather than reading `icon` directly. Adapted from the
       // avatar host to the badge itself — the resolution under test is the
       // same `server.mark`.
-      final server = _server(
-        icon: ServerIcon.rocket,
-      ).copyWith(iconEmoji: '🐧');
+      final server = _server(icon: ServerIcon.rocket).copyWith(iconEmoji: '🐧');
       await tester.pumpWidget(
-        _wrap(
-          ServerBadge(tint: ServerTint.of(server), mark: server.mark),
-        ),
+        _wrap(ServerBadge(tint: ServerTint.of(server), mark: server.mark)),
       );
       expect(
         find.byWidgetPredicate(
-          (widget) =>
-              widget is Semantics && widget.properties.label == '🐧',
+          (widget) => widget is Semantics && widget.properties.label == '🐧',
         ),
         findsOneWidget,
       );
@@ -463,8 +454,10 @@ void main() {
       // Outranks, not blends: the named accent contributes nothing.
       expect(
         custom.container,
-        serverAccent(ctx, const ServerTint(custom: Color(0xFF123456)))!
-            .container,
+        serverAccent(
+          ctx,
+          const ServerTint(custom: Color(0xFF123456)),
+        )!.container,
       );
     });
 
@@ -540,9 +533,7 @@ void main() {
       for (final color in ServerColor.values) {
         final server = _server(color: color);
         await tester.pumpWidget(
-          _wrap(
-            ServerBadge(tint: ServerTint.of(server), mark: server.mark),
-          ),
+          _wrap(ServerBadge(tint: ServerTint.of(server), mark: server.mark)),
         );
         expect(
           _badgeFill(tester),
@@ -561,9 +552,7 @@ void main() {
       // depend on which mark is drawn.
       final bytes = await tester.runAsync(_pngBytes);
       const tint = ServerTint(named: ServerColor.red);
-      await tester.pumpWidget(
-        _wrap(ServerBadge.glyph(tint: tint, icon: null)),
-      );
+      await tester.pumpWidget(_wrap(ServerBadge.glyph(tint: tint, icon: null)));
       final tinted = _badgeFill(tester);
 
       await tester.pumpWidget(
@@ -575,9 +564,7 @@ void main() {
 
       // The third kind of mark, on the same fill.
       await tester.pumpWidget(
-        _wrap(
-          const ServerBadge(tint: tint, mark: ServerEmojiMark('🚀')),
-        ),
+        _wrap(const ServerBadge(tint: tint, mark: ServerEmojiMark('🚀'))),
       );
       expect(_badgeFill(tester), tinted);
       expect(frameOf(tester), isNull);
@@ -604,8 +591,10 @@ void main() {
       );
       expect(
         tester.widget<Icon>(find.byType(Icon)).color,
-        serverAccent(captured, const ServerTint(named: ServerColor.red))!
-            .onContainer,
+        serverAccent(
+          captured,
+          const ServerTint(named: ServerColor.red),
+        )!.onContainer,
       );
     });
   });
@@ -651,8 +640,14 @@ void main() {
     test('search matches every term, in any order and any case', () {
       // Two words is how people search an icon grid; as one contiguous
       // substring neither label nor keywords ever contains the phrase.
-      expect(serverIconMatches(ServerIcon.container, 'docker container'), isTrue);
-      expect(serverIconMatches(ServerIcon.container, 'container docker'), isTrue);
+      expect(
+        serverIconMatches(ServerIcon.container, 'docker container'),
+        isTrue,
+      );
+      expect(
+        serverIconMatches(ServerIcon.container, 'container docker'),
+        isTrue,
+      );
       expect(serverIconMatches(ServerIcon.device, 'pi raspberry'), isTrue);
       expect(serverIconMatches(ServerIcon.cluster, 'K8S'), isTrue);
       // Every term still has to land somewhere.
@@ -662,20 +657,22 @@ void main() {
 }
 
 /// Advances real time and frames until the badge's image has decoded.
-Future<void> _untilDecoded(WidgetTester tester) =>
-    _until(tester, 'the image to decode', () {
-      final images = find.byType(RawImage).evaluate();
-      return images.isNotEmpty &&
-          (images.first.widget as RawImage).image != null;
-    });
+Future<void> _untilDecoded(WidgetTester tester) => _until(
+  tester,
+  'the image to decode',
+  () {
+    final images = find.byType(RawImage).evaluate();
+    return images.isNotEmpty && (images.first.widget as RawImage).image != null;
+  },
+);
 
 /// Advances real time and frames until [icon] appears — the fallback glyph a
 /// failed decode swaps in.
 Future<void> _untilFallback(WidgetTester tester, IconData icon) => _until(
-      tester,
-      'the fallback glyph to replace the image',
-      () => find.byIcon(icon).evaluate().isNotEmpty,
-    );
+  tester,
+  'the fallback glyph to replace the image',
+  () => find.byIcon(icon).evaluate().isNotEmpty,
+);
 
 /// Alternates [WidgetTester.runAsync] with a pump until [done] holds.
 ///

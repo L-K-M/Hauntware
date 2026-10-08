@@ -900,6 +900,7 @@ jobs:
           (cd planchette/packages/ghost_ui && flutter pub get)
           (cd planchette/packages/planchette_editor && flutter pub get)
           (cd planchette/packages/ghost_desktop && flutter pub get)
+          (cd planchette/packages/ghost_marks && flutter pub get)
           (cd planchette/app/planchette_app && flutter pub get)
       - name: Shared UI primitives
         working-directory: planchette/packages/ghost_ui
@@ -916,6 +917,11 @@ jobs:
         run: |
           flutter analyze --no-pub
           flutter test --no-pub
+      - name: Shared server appearance
+        working-directory: planchette/packages/ghost_marks
+        run: |
+          flutter analyze --no-pub
+          flutter test --no-pub
       - name: Standalone app
         working-directory: planchette/app/planchette_app
         run: |
@@ -927,7 +933,7 @@ jobs:
           dart format --set-exit-if-changed --output=none
           planchette/packages/planchette_core planchette/packages/planchette_editor
           planchette/packages/ghost_ui planchette/packages/ghost_desktop
-          planchette/app/planchette_app
+          planchette/packages/ghost_marks planchette/app/planchette_app
 
   seance_flutter:
     name: Séance app (analyze + test)

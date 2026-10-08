@@ -1,22 +1,11 @@
-// The app's side of the Settings window: opens it, answers what it asks
-// through the same models the Settings dialogs use, and sends it a fresh
-// snapshot whenever one of them changes while it shows.
-//
-// The window is created the first time Settings opens and kept until the
-// app quits: closing it only hides it. Tearing a second engine down is what
-// the runners avoid — on Linux, Flutter 3.47's embedder terminates the EGL
-// display every engine in the process shares when one is disposed, and the
-// app's window then dies with an X error (measured in Séance, whose window
-// this ports; docs/PORTS.md). What a hidden window must not keep is its
-// screen, so the window drops it on `hidden` and mounts a fresh one, from
-// the settings as they are then, on `show`.
-import 'dart:async';
-import 'dart:convert';
+// The app's side of the Settings window: ghost_desktop's link engine opens
+// it and keeps it in step; this host answers what it asks through the same
+// models the Settings dialogs use, and builds the snapshot it renders.
 import 'dart:ui' show AppExitResponse;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter/widgets.dart' show WidgetsBinding;
+import 'package:ghost_desktop/ghost_desktop.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
 
 import '../../ui/settings/general_settings.dart';
@@ -82,169 +71,60 @@ final class SettingsWindowSources {
 }
 
 class SettingsWindowHost {
+  /// [requestAppExit] answers the window's quit question; by default the
+  /// app's own observers, the quit guard and the exit flush among them.
   SettingsWindowHost({
-    this._control = settingsWindowControlChannel,
-    this._link = settingsWindowLinkChannel,
+    MethodChannel control = settingsWindowControlChannel,
+    MethodChannel link = settingsWindowLinkChannel,
     @visibleForTesting Future<AppExitResponse> Function()? requestAppExit,
-  }) : _requestAppExit =
-           requestAppExit ?? WidgetsBinding.instance.handleRequestAppExit {
-    _control.setMethodCallHandler(_handleControl);
-    _link.setMethodCallHandler(_handleLink);
+  }) {
+    _engine = GhostSettingsWindowHost(
+      control: control,
+      link: link,
+      initialTab: SettingsWindowTab.general,
+      sections: _sectionsOf(_sources),
+      encodeError: encodeLinkError,
+      requestAppExit: requestAppExit,
+    );
   }
 
-  final MethodChannel _control;
-  final MethodChannel _link;
-
-  /// The app's answer to "may the application quit?": its own observers',
-  /// the quit guard and the exit flush among them. The window forwards the
-  /// question here because on macOS every engine makes itself the app
-  /// delegate's termination handler when it starts, so once the window's
-  /// engine exists ⌘Q — and the quit guard's own terminate — asks the
-  /// window's isolate, which would answer "exit" without consulting them.
-  final Future<AppExitResponse> Function() _requestAppExit;
-
+  late final GhostSettingsWindowHost<SettingsWindowTab> _engine;
   SettingsWindowSources _sources = const SettingsWindowSources();
-  List<Listenable> _listening = const [];
-
-  /// Whether the window's engine has said hello. It is never torn down, so
-  /// this stays true once set, unless the link stops answering.
-  bool _connected = false;
-
-  /// Whether the window is showing, rather than closed and hidden.
-  bool _visible = false;
-
-  SettingsWindowTab _tab = SettingsWindowTab.general;
-  String? _lastSnapshot;
-  bool _snapshotScheduled = false;
 
   @visibleForTesting
-  bool get connected => _connected;
+  bool get connected => _engine.connected;
 
   @visibleForTesting
-  bool get visible => _visible;
+  bool get visible => _engine.visible;
 
   /// Bind the sections — the workspace shell's, which owns some of them
   /// (the preview threshold lives in its state). Rebinding replaces them.
   void attach(SettingsWindowSources sources) {
-    for (final listenable in _listening) {
-      listenable.removeListener(_scheduleSnapshot);
-    }
     _sources = sources;
-    _listening = [
-      ?sources.editors,
-      ?sources.backup,
-      ?sources.appearance,
-      ?sources.editorTextSize,
-      ?sources.directoryGrouping,
-      ?sources.doubleClickAction,
-      ...sources.changes,
-    ];
-    for (final listenable in _listening) {
-      listenable.addListener(_scheduleSnapshot);
-    }
-    _scheduleSnapshot();
+    _engine.attach(_sectionsOf(sources));
   }
 
   /// Open the window on [tab], or bring it forward and switch it there.
   /// False when the runner has no Settings window — a build from before it
   /// existed, or a test — so the caller can show the dialog instead.
-  Future<bool> open(SettingsWindowTab tab) async {
-    _tab = tab;
-    if (_connected) {
-      try {
-        if (_visible) {
-          await _link.invokeMethod<void>(
-            SettingsLinkMethod.selectTab.name,
-            jsonEncode(tab.name),
-          );
-        } else {
-          // A fresh screen from the settings as they are now, before the
-          // window reappears: nothing was sent while it was hidden.
-          final snapshot = _snapshot();
-          _lastSnapshot = jsonEncode(snapshot);
-          await _link.invokeMethod<void>(
-            SettingsLinkMethod.show.name,
-            jsonEncode({
-              SettingsLinkKey.snapshot.name: snapshot,
-              SettingsLinkKey.tab.name: tab.name,
-            }),
-          );
-        }
-      } on MissingPluginException {
-        // The engine went away after all; a new one says hello, and opens
-        // on `_tab`.
-        _connected = false;
-      }
-    }
-    try {
-      await _control.invokeMethod<void>(SettingsWindowControl.open.name);
-    } on MissingPluginException {
-      return false;
-    } on PlatformException {
-      // The runner could not create the window: the dialog instead.
-      return false;
-    }
-    // A first window becomes visible when it says hello, which may already
-    // have happened; one being shown again, here.
-    if (_connected) _visible = true;
-    // A change made while `show` was in flight was not sent, since the
-    // window did not count as showing yet; the dedupe makes this a no-op
-    // when nothing changed.
-    _scheduleSnapshot();
-    return true;
-  }
+  Future<bool> open(SettingsWindowTab tab) => _engine.open(tab);
 
-  void dispose() {
-    for (final listenable in _listening) {
-      listenable.removeListener(_scheduleSnapshot);
-    }
-    _listening = const [];
-    _control.setMethodCallHandler(null);
-    _link.setMethodCallHandler(null);
-  }
+  void dispose() => _engine.dispose();
 
-  Future<Object?> _handleControl(MethodCall call) async {
-    if (call.method != SettingsWindowControl.closed.name) return null;
-    _visible = false;
-    _lastSnapshot = null;
-    if (_connected) {
-      try {
-        await _link.invokeMethod<void>(SettingsLinkMethod.hidden.name);
-      } on MissingPluginException {
-        _connected = false;
-      }
-    }
-    return null;
-  }
-
-  /// Coalesce a burst of changes into one snapshot, sent after the current
-  /// event; a hidden window is sent nothing.
-  void _scheduleSnapshot() {
-    if (!_connected || !_visible || _snapshotScheduled) return;
-    _snapshotScheduled = true;
-    scheduleMicrotask(() {
-      _snapshotScheduled = false;
-      unawaited(_sendSnapshot());
-    });
-  }
-
-  Future<void> _sendSnapshot() async {
-    if (!_connected || !_visible) return;
-    final encoded = jsonEncode(_snapshot());
-    if (encoded == _lastSnapshot) return;
-    _lastSnapshot = encoded;
-    try {
-      await _link.invokeMethod<void>(SettingsLinkMethod.snapshot.name, encoded);
-    } on MissingPluginException {
-      _connected = false;
-      _lastSnapshot = null;
-    } on PlatformException {
-      // The window failed to apply it. Forgotten, so the next change sends
-      // it again rather than the dedupe skipping what never arrived; and
-      // caught, since nothing awaits this.
-      _lastSnapshot = null;
-    }
-  }
+  GhostSettingsSections _sectionsOf(SettingsWindowSources sources) =>
+      GhostSettingsSections(
+        snapshot: _snapshot,
+        handleCall: _handleCall,
+        changes: [
+          ?sources.editors,
+          ?sources.backup,
+          ?sources.appearance,
+          ?sources.editorTextSize,
+          ?sources.directoryGrouping,
+          ?sources.doubleClickAction,
+          ...sources.changes,
+        ],
+      );
 
   /// Everything the window renders. Sections the app has no seam for are
   /// null, and the window leaves them out.
@@ -314,29 +194,12 @@ class SettingsWindowHost {
     };
   }
 
-  Future<Object?> _handleLink(MethodCall call) async {
-    final method = SettingsLinkMethod.values
-        .where((value) => value.name == call.method)
-        .firstOrNull;
+  Future<Object?> _handleCall(String name, Object? argument) async {
+    final method = SettingsLinkMethod.values.asNameMap()[name];
     if (method == null) {
-      throw MissingPluginException('No Settings window method ${call.method}');
+      throw MissingPluginException('No Settings window method $name');
     }
-    try {
-      final Object? argument = call.arguments is String
-          ? jsonDecode(call.arguments as String)
-          : null;
-      final result = await _dispatch(method, argument);
-      return result == null ? null : jsonEncode(result);
-    } on MissingPluginException {
-      rethrow;
-    } catch (error, stackTrace) {
-      // The window shows the failure as the dialog would; the app's error
-      // reporter hears about it here, where the stack is.
-      FlutterError.reportError(
-        FlutterErrorDetails(exception: error, stack: stackTrace),
-      );
-      throw encodeLinkError(error);
-    }
+    return _dispatch(method, argument);
   }
 
   Future<Object?> _dispatch(SettingsLinkMethod method, Object? argument) async {
@@ -345,16 +208,6 @@ class SettingsWindowHost {
     final backup = _sources.backup;
     final editors = _sources.editors;
     switch (method) {
-      case SettingsLinkMethod.hello:
-        // Built first: a window whose hello failed is not connected.
-        final snapshot = _snapshot();
-        _lastSnapshot = jsonEncode(snapshot);
-        _connected = true;
-        _visible = true;
-        return {
-          SettingsLinkKey.snapshot.name: snapshot,
-          SettingsLinkKey.tab.name: _tab.name,
-        };
       case SettingsLinkMethod.setCheckForUpdates:
         await _require(
           _sources.general,
@@ -392,12 +245,12 @@ class SettingsWindowHost {
           _sources.previewDownloads?.call(),
         ).onCapacityChanged(argument! as int);
         // The cap lives in the shell's cache, which notifies no one.
-        _scheduleSnapshot();
+        _engine.snapshotChanged();
       case SettingsLinkMethod.setPreviewThreshold:
         await _require(
           _sources.previewDownloads?.call(),
         ).onThresholdChanged(argument! as int);
-        _scheduleSnapshot();
+        _engine.snapshotChanged();
       case SettingsLinkMethod.clearPreviewCache:
         return await _require(_sources.previewDownloads?.call()).onClearCache();
       case SettingsLinkMethod.setSyncSecrets:
@@ -451,13 +304,6 @@ class SettingsWindowHost {
         ).deleteRetainedSeparateAccount(confirmedName: argument! as String);
       case SettingsLinkMethod.declineRetainedDelete:
         await _require(backup).declineRetainedDelete();
-      case SettingsLinkMethod.requestAppExit:
-        return (await _requestAppExit()).name;
-      case SettingsLinkMethod.snapshot:
-      case SettingsLinkMethod.selectTab:
-      case SettingsLinkMethod.hidden:
-      case SettingsLinkMethod.show:
-        throw MissingPluginException('${method.name} goes to the window');
     }
     return null;
   }

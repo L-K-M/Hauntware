@@ -8,6 +8,22 @@ import 'package:test/test.dart';
 
 void main() {
   group('VaultCrypto key derivation', () {
+    test('matches a fixed vector, so existing vaults keep their keys', () async {
+      // Pinned from the derivation before the HKDF step moved into a shared
+      // helper; any change to it would strand every vault on its old key.
+      final keys = await VaultCrypto.deriveKeys(
+          passphrase: 'correct horse battery staple',
+          salt: utf8.encode('seance-kat-salt-0123456789abcdef'),
+          params: const Argon2Params.fast());
+      String hex(List<int> bytes) =>
+          bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+
+      expect(hex(keys.vaultKey),
+          'eb2b830d10b439fb7cfb6a7f5f92042ffef49c48703d3321ff0d75919cc46d16');
+      expect(hex(keys.authVerifier),
+          '33e12ea3abfe49659732c8a4f4e535e0986d4b92893baf7f57628b0cc3e0cae0');
+    });
+
     test('derives independent vault and auth keys, deterministically', () async {
       final salt = secureRandomBytes(16);
       final a = await VaultCrypto.deriveKeys(
