@@ -12,7 +12,6 @@ import '../../l10n/app_localizations.dart';
 import '../../services/bookmark_backup_service.dart';
 import '../../services/settings_models.dart';
 import '../../services/sync_account_gate.dart';
-import '../../services/sync_enrollment_validation.dart';
 import 'backup_enrollment_form.dart';
 
 /// Opens the §4.4 switch flow. Offered only where the gate already

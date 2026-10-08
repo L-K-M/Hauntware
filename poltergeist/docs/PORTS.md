@@ -1163,6 +1163,9 @@ could ride a future Séance PR if Séance adopts §2.5 ordering.
   enum carries no "vault" wording either.
 - Port-back candidates: none — the typed-issue reporting is D20-local;
   the rules did not change.
+- Shared: 2026-10-08. The typed form moved into `seance_core`, which both
+  apps use: Séance maps each issue to its sentences, Poltergeist to ARB
+  copy through the core barrel. This file is removed.
 
 ## packages/poltergeist_core/lib/src/checkout/managed_remote_file.dart
 

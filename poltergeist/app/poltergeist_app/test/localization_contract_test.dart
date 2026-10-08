@@ -561,15 +561,6 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   // The recorded Séance release tag — a machine fact interpolated into
   // ARB copy at the render site, never authored text.
   'lib/services/sync_account_gate.dart': {"'v0.9.0'"},
-  // The URL-scheme whitelist of the ported validator — grammar literals,
-  // not copy.
-  'lib/services/sync_enrollment_validation.dart': {
-    "'http'",
-    "'https'",
-    // The confirmation field's empty default — a missing-argument value,
-    // not rendered copy.
-    "''",
-  },
   // The settings.json keys behind the §3.2 verdict stores — machine
   // identifiers, never rendered UI copy.
   'lib/services/sync_verdict_stores.dart': {

@@ -115,6 +115,8 @@ export 'package:seance_core/seance_core.dart'
         RecordKind,
         RegisterRequest,
         SyncApi,
+        SyncEnrollmentIssue,
+        SyncEnrollmentMode,
         Lww,
         SshConfigImporter,
         SshConnectException,
@@ -138,7 +140,8 @@ export 'package:seance_core/seance_core.dart'
         restrictFileToOwner,
         secureRandomBytes,
         serverGroupKey,
-        serverSearchHaystack;
+        serverSearchHaystack,
+        validateSyncEnrollment;
 
 export 'src/bookmarks/bookmark_groups.dart'
     show
