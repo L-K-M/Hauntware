@@ -1,5 +1,9 @@
 import 'dart:io';
 
+import 'package:file_picker/file_picker.dart';
+// The plugin's static API delegates here; swapping it keeps real open logic.
+// ignore: implementation_imports
+import 'package:file_picker/src/platform/file_picker_platform_interface.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -9,6 +13,32 @@ import 'package:seance_app/services/secure_master_key.dart';
 import 'package:seance_core/seance_core.dart';
 
 const _pathChannel = MethodChannel('plugins.flutter.io/path_provider');
+
+class _ExportPicker extends FilePickerPlatform {
+  FilePickerResult? result;
+  bool requestedData = false;
+  bool requestedStream = false;
+
+  @override
+  Future<FilePickerResult?> pickFiles({
+    String? dialogTitle,
+    String? initialDirectory,
+    FileType type = FileType.any,
+    List<String>? allowedExtensions,
+    Function(FilePickerStatus)? onFileLoading,
+    int compressionQuality = 0,
+    bool allowMultiple = false,
+    bool withData = false,
+    bool withReadStream = false,
+    bool lockParentWindow = false,
+    bool readSequential = false,
+    bool cancelUploadOnWindowBlur = true,
+  }) async {
+    requestedData = withData;
+    requestedStream = withReadStream;
+    return result;
+  }
+}
 
 /// One device's OS keystore: keeps what it is given, or is locked.
 class _Keystore extends FlutterSecureStorage {
@@ -311,5 +341,93 @@ void main() {
       policy: RestoreConflictPolicy.keepExisting,
     );
     expect(summary.added, 1);
+  });
+
+  group('picked export size limit', () {
+    late FilePickerPlatform previousPicker;
+    late _ExportPicker picker;
+    const files = PlatformSecretsExportFiles();
+
+    setUp(() {
+      previousPicker = FilePickerPlatform.instance;
+      FilePickerPlatform.instance = picker = _ExportPicker();
+    });
+
+    tearDown(() => FilePickerPlatform.instance = previousPicker);
+
+    Matcher oversized() => throwsA(
+      isA<SecretsExportException>().having(
+        (error) => error.failure,
+        'failure',
+        SecretsExportFailure.tooLarge,
+      ),
+    );
+
+    test('rejects oversized metadata without loading the contents', () async {
+      var read = false;
+      Stream<List<int>> source() async* {
+        read = true;
+        yield const [1];
+      }
+
+      picker.result = FilePickerResult([
+        PlatformFile(
+          name: 'too-large.json',
+          size: SecretsExport.maxBytes + 1,
+          readStream: source(),
+        ),
+      ]);
+
+      await expectLater(files.open(), oversized());
+      expect(picker.requestedData, isFalse);
+      expect(read, isFalse);
+    });
+
+    test('reads a pathless provider through its stream', () async {
+      const contents = [123, 125]; // {} without a filesystem path.
+      picker.result = FilePickerResult([
+        PlatformFile(
+          name: 'export.json',
+          size: contents.length,
+          readStream: Stream.value(contents),
+        ),
+      ]);
+
+      expect(await files.open(), contents);
+      expect(picker.requestedData, isFalse);
+      expect(picker.requestedStream, isTrue);
+    });
+
+    test('bounds unknown or stale sizes and cancels the stream', () async {
+      var cancelled = false;
+      Stream<List<int>> source() async* {
+        try {
+          yield Uint8List(SecretsExport.maxBytes);
+          yield const [1];
+          fail('read beyond the export limit');
+        } finally {
+          cancelled = true;
+        }
+      }
+
+      picker.result = FilePickerResult([
+        PlatformFile(name: 'export.json', size: 0, readStream: source()),
+      ]);
+
+      await expectLater(files.open(), oversized());
+      expect(cancelled, isTrue);
+    });
+
+    test('bounds a path whose reported size is stale', () async {
+      final file = File('${(await newDirectory()).path}/export.json');
+      final handle = await file.open(mode: FileMode.write);
+      await handle.truncate(SecretsExport.maxBytes + 1);
+      await handle.close();
+      picker.result = FilePickerResult([
+        PlatformFile(name: 'export.json', path: file.path, size: 1),
+      ]);
+
+      await expectLater(files.open(), oversized());
+    });
   });
 }
