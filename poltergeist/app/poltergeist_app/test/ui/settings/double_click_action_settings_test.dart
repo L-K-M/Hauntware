@@ -37,6 +37,7 @@ void main() {
     final registry = EditorRegistryController(
       store: SettingsStore(path: p.join(directory.path, 'settings.json')),
     );
+    addTearDown(registry.dispose);
     await pumpHost(
       tester,
       Builder(
@@ -62,6 +63,26 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(action.value, DoubleClickAction.nothing);
+    expect(shown(tester), DoubleClickAction.nothing);
+  });
+
+  testWidgets('re-picking the current action still follows later changes', (
+    tester,
+  ) async {
+    final action = DoubleClickActionController();
+    addTearDown(action.dispose);
+    await pumpHost(tester, DoubleClickActionSection(model: action));
+
+    // The dropdown reports a re-pick of the shown item; the model, already
+    // there, says nothing back.
+    await tester.tap(dropdown());
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Open').last);
+    await tester.pumpAndSettle();
+    // Another surface (the dialog, the Settings window) changes it.
+    await action.setAction(DoubleClickAction.nothing);
+    await tester.pump();
+
     expect(shown(tester), DoubleClickAction.nothing);
   });
 

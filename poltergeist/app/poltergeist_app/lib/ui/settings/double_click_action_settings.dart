@@ -68,6 +68,15 @@ class _DoubleClickActionSectionState extends State<DoubleClickActionSection> {
       // save, and the next write carries it.
       setState(() => _pending = null);
       showTopToastIn(context, message: error.toString());
+      return;
+    }
+    // A write the model already held changes nothing and so never notifies;
+    // let the model show again, or a later change elsewhere stays hidden. A
+    // Settings window's model may still trail here, and keeps its pending
+    // choice until the snapshot lands.
+    if (!mounted || write != _writes) return;
+    if (_pending == action && widget.model.value == action) {
+      setState(() => _pending = null);
     }
   }
 
