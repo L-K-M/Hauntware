@@ -97,35 +97,27 @@ UnifiedDiffResult unifiedDiff(
   final oldMiddle = oldLines.sublist(start, oldEnd);
   final newMiddle = newLines.sublist(start, newEnd);
 
-  // One op list over the middles: 0 equal, 1 delete, 2 add. Equal ops pair
-  // one old and one new line; the anchors reference them by index.
+  // One op list over the middles: 0 equal, 1 delete, 2 add, in order. An
+  // op's line index on each side is the number of earlier ops that consumed
+  // a line there (equal and delete on the old side, equal and add on the
+  // new), so the list alone places every line.
   final kinds = <int>[];
-  final olds = <int>[];
-  final news = <int>[];
   if (oldMiddle.isEmpty) {
-    for (var j = 0; j < newMiddle.length; j++) {
-      kinds.add(2);
-      olds.add(-1);
-      news.add(j);
-    }
+    kinds.addAll(List.filled(newMiddle.length, 2));
   } else if (newMiddle.isEmpty) {
-    for (var i = 0; i < oldMiddle.length; i++) {
-      kinds.add(1);
-      olds.add(i);
-      news.add(-1);
-    }
+    kinds.addAll(List.filled(oldMiddle.length, 1));
   } else if (oldMiddle.length + newMiddle.length > _minimalDiffLineLimit) {
-    _appendWholeMiddleReplacement(kinds, olds, news, oldMiddle, newMiddle);
+    kinds
+      ..addAll(List.filled(oldMiddle.length, 1))
+      ..addAll(List.filled(newMiddle.length, 2));
   } else {
-    _appendMinimalOps(kinds, olds, news, oldMiddle, newMiddle);
+    _appendMinimalOps(kinds, oldMiddle, newMiddle);
   }
 
   return _format(
     oldLines: oldLines,
     newLines: newLines,
     kinds: kinds,
-    olds: olds,
-    news: news,
     start: start,
     oldLabel: oldLabel,
     newLabel: newLabel,
@@ -149,32 +141,11 @@ List<String> _linesWithEndings(String text) {
   return lines;
 }
 
-void _appendWholeMiddleReplacement(
-  List<int> kinds,
-  List<int> olds,
-  List<int> news,
-  List<String> oldMiddle,
-  List<String> newMiddle,
-) {
-  for (var i = 0; i < oldMiddle.length; i++) {
-    kinds.add(1);
-    olds.add(i);
-    news.add(-1);
-  }
-  for (var j = 0; j < newMiddle.length; j++) {
-    kinds.add(2);
-    olds.add(-1);
-    news.add(j);
-  }
-}
-
 /// Minimal insert/delete script by longest common subsequence. The middles
 /// fit [_minimalDiffLineLimit] lines combined, so the (n+1)×(m+1) table is
 /// bounded whatever the input size.
 void _appendMinimalOps(
   List<int> kinds,
-  List<int> olds,
-  List<int> news,
   List<String> oldMiddle,
   List<String> newMiddle,
 ) {
@@ -198,32 +169,19 @@ void _appendMinimalOps(
   while (i < m && j < n) {
     if (oldMiddle[i] == newMiddle[j]) {
       kinds.add(0);
-      olds.add(i);
-      news.add(j);
       i++;
       j++;
     } else if (table[(i + 1) * width + j] >= table[i * width + j + 1]) {
       kinds.add(1);
-      olds.add(i);
-      news.add(-1);
       i++;
     } else {
       kinds.add(2);
-      olds.add(-1);
-      news.add(j);
       j++;
     }
   }
-  while (i < m) {
-    kinds.add(1);
-    olds.add(i++);
-    news.add(-1);
-  }
-  while (j < n) {
-    kinds.add(2);
-    olds.add(-1);
-    news.add(j++);
-  }
+  kinds
+    ..addAll(List.filled(m - i, 1))
+    ..addAll(List.filled(n - j, 2));
 }
 
 int _max(int a, int b) => a > b ? a : b;
@@ -237,16 +195,14 @@ UnifiedDiffResult _format({
   required List<String> oldLines,
   required List<String> newLines,
   required List<int> kinds,
-  required List<int> olds,
-  required List<int> news,
   required int start,
   required String oldLabel,
   required String newLabel,
   required int context,
   required int outputLimit,
 }) {
-  final oldEnd = start + olds.where((index) => index >= 0).length;
-  final newEnd = start + news.where((index) => index >= 0).length;
+  final oldEnd = start + kinds.where((kind) => kind != 2).length;
+  final newEnd = start + kinds.where((kind) => kind != 1).length;
 
   // The whole document as one annotated line list: equal prefix, the middles'
   // ops, then the equal suffix. Indexes are absolute; a suffix line's new
@@ -255,16 +211,21 @@ UnifiedDiffResult _format({
   for (var i = 0; i < start; i++) {
     annotated.add((0, i, i, oldLines[i]));
   }
-  for (var op = 0; op < kinds.length; op++) {
-    final kind = kinds[op];
-    final oldIndex = olds[op];
-    final newIndex = news[op];
-    annotated.add((
-      kind,
-      oldIndex < 0 ? -1 : start + oldIndex,
-      newIndex < 0 ? -1 : start + newIndex,
-      oldIndex >= 0 ? oldLines[start + oldIndex] : newLines[start + newIndex],
-    ));
+  var oldIndex = start;
+  var newIndex = start;
+  for (final kind in kinds) {
+    switch (kind) {
+      case 0:
+        annotated.add((0, oldIndex, newIndex, oldLines[oldIndex]));
+        oldIndex++;
+        newIndex++;
+      case 1:
+        annotated.add((1, oldIndex, -1, oldLines[oldIndex]));
+        oldIndex++;
+      default:
+        annotated.add((2, -1, newIndex, newLines[newIndex]));
+        newIndex++;
+    }
   }
   for (var i = oldEnd; i < oldLines.length; i++) {
     annotated.add((0, i, newEnd + (i - oldEnd), oldLines[i]));
