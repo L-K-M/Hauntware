@@ -1283,15 +1283,20 @@ class PaneController extends ChangeNotifier {
     if (index < 0) return;
     _expansionRenameSelect = null;
     setCursorIndex(index);
-    if (pending.rename &&
-        _renameSession == null &&
-        !_renameInFlight &&
-        !nameIsFlagged(_entries[index].name)) {
-      _renameSession = _RenameSession(
-        entry: _entries[index],
-        rowKey: _rowKeys[index],
-      );
-    }
+    if (pending.rename) _openRenameAt(index);
+  }
+
+  /// Opens the inline rename on row [index] for an entry the pane just
+  /// created or placed — unless a rename is already open or in flight,
+  /// or the row's name is flagged (it cannot be edited in place).
+  void _openRenameAt(int index) {
+    if (index < 0 || index >= _entries.length) return;
+    if (_renameSession != null || _renameInFlight) return;
+    if (nameIsFlagged(_entries[index].name)) return;
+    _renameSession = _RenameSession(
+      entry: _entries[index],
+      rowKey: _rowKeys[index],
+    );
   }
 
   /// The folder whose expand failed and why, for
@@ -4262,16 +4267,7 @@ class PaneController extends ChangeNotifier {
       _error = null;
       // A created row opens its inline rename once the listing is live
       // (the session needs an owned, answered listing to anchor on).
-      if (openRenameAt >= 0 &&
-          openRenameAt < _entries.length &&
-          _renameSession == null &&
-          !_renameInFlight &&
-          !nameIsFlagged(_entries[openRenameAt].name)) {
-        _renameSession = _RenameSession(
-          entry: _entries[openRenameAt],
-          rowKey: _rowKeys[openRenameAt],
-        );
-      }
+      _openRenameAt(openRenameAt);
       notifyListeners();
       // A change signalled while this listing was in flight may
       // postdate it.
