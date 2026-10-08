@@ -51,7 +51,11 @@ import '../services/server_duplication.dart';
 import '../services/session_persistence.dart';
 import '../services/session_state.dart';
 import '../services/settings_models.dart'
-    show AppearanceSettingsModel, DirectoryGroupingModel, EditorTextSizeModel;
+    show
+        AppearanceSettingsModel,
+        DirectoryGroupingModel,
+        DoubleClickActionModel,
+        EditorTextSizeModel;
 import '../services/settings_window/settings_window_host.dart';
 import '../services/settings_window/settings_window_link.dart';
 import '../services/sidebar_controller.dart';
@@ -133,7 +137,7 @@ class WorkspaceShell extends StatefulWidget {
     super.key,
     this.initialPaneRatio = 0.5,
     this.newTabTarget = NewTabTarget.duplicate,
-    this.doubleClickAction = DoubleClickAction.open,
+    this.doubleClickAction,
     this.reconnectRestoredTabs = true,
     this.restoredSession,
     this.sessionPersistence,
@@ -210,11 +214,10 @@ class WorkspaceShell extends StatefulWidget {
   /// after construction.
   final NewTabTarget newTabTarget;
 
-  /// The persisted "Double-click action" preference (02 §2.6) seeding
-  /// each strip's live [PaneTabsController.doubleClickAction] — read at
-  /// every file open; the settings slice writes the field (and persists
-  /// it) after construction.
-  final DoubleClickAction doubleClickAction;
+  /// The "Double-click action" preference (02 §2.6): each strip's live
+  /// [PaneTabsController.doubleClickAction] follows it, read at every
+  /// file open, and Settings → Editing writes it. Null opens files.
+  final DoubleClickActionModel? doubleClickAction;
 
   /// The persisted "Reconnect restored tabs automatically" setting
   /// (02 §3) seeding each strip's live
@@ -766,6 +769,7 @@ class _WorkspaceShellState extends State<WorkspaceShell>
     _buildWorkspace();
     widget.workspaces?.addListener(_onWorkspacesChanged);
     widget.directoryGrouping?.addListener(_onDirectoryGroupingChanged);
+    widget.doubleClickAction?.addListener(_onDoubleClickActionChanged);
     widget.quitGuard?.bindQueue(_quitGuardQueue);
     _attachCheckoutSession(widget.checkoutSession);
     _scheduleDeepLinkBinding();
@@ -939,12 +943,6 @@ class _WorkspaceShellState extends State<WorkspaceShell>
       _workspace?.left.newTabTarget = widget.newTabTarget;
       _workspace?.right.newTabTarget = widget.newTabTarget;
     }
-    // Same contract for the file-open preference: a changed seed syncs
-    // both strips' live value without clobbering the settings writer.
-    if (widget.doubleClickAction != oldWidget.doubleClickAction) {
-      _workspace?.left.doubleClickAction = widget.doubleClickAction;
-      _workspace?.right.doubleClickAction = widget.doubleClickAction;
-    }
     // And for the restored-tab reconnect setting (02 §3).
     if (widget.reconnectRestoredTabs != oldWidget.reconnectRestoredTabs) {
       _workspace?.left.reconnectRestoredTabs = widget.reconnectRestoredTabs;
@@ -958,6 +956,11 @@ class _WorkspaceShellState extends State<WorkspaceShell>
       oldWidget.directoryGrouping?.removeListener(_onDirectoryGroupingChanged);
       widget.directoryGrouping?.addListener(_onDirectoryGroupingChanged);
       _onDirectoryGroupingChanged();
+    }
+    if (!identical(oldWidget.doubleClickAction, widget.doubleClickAction)) {
+      oldWidget.doubleClickAction?.removeListener(_onDoubleClickActionChanged);
+      widget.doubleClickAction?.addListener(_onDoubleClickActionChanged);
+      _onDoubleClickActionChanged();
     }
     if (!identical(oldWidget.quitGuard, widget.quitGuard)) {
       oldWidget.quitGuard?.unbindQueue(_quitGuardQueue);
@@ -976,6 +979,7 @@ class _WorkspaceShellState extends State<WorkspaceShell>
     widget.deepLinks?.deactivate(this);
     widget.workspaces?.removeListener(_onWorkspacesChanged);
     widget.directoryGrouping?.removeListener(_onDirectoryGroupingChanged);
+    widget.doubleClickAction?.removeListener(_onDoubleClickActionChanged);
     widget.quitGuard?.unbindQueue(_quitGuardQueue);
     _attachCheckoutSession(null);
     _attachBookmarkBackup(null);
@@ -1451,6 +1455,15 @@ class _WorkspaceShellState extends State<WorkspaceShell>
     _workspace?.right.directoryGrouping = _directoryGrouping;
   }
 
+  DoubleClickAction get _doubleClickAction =>
+      widget.doubleClickAction?.value ?? DoubleClickAction.open;
+
+  /// Hands both strips the setting's new value for their next file open.
+  void _onDoubleClickActionChanged() {
+    _workspace?.left.doubleClickAction = _doubleClickAction;
+    _workspace?.right.doubleClickAction = _doubleClickAction;
+  }
+
   void _buildWorkspace() {
     final lanes = widget.engineSession?.paneLanes;
     PaneTabsController buildStrip(String paneId) {
@@ -1458,7 +1471,7 @@ class _WorkspaceShellState extends State<WorkspaceShell>
         paneId: paneId,
         lanes: lanes,
         newTabTarget: widget.newTabTarget,
-        doubleClickAction: widget.doubleClickAction,
+        doubleClickAction: _doubleClickAction,
         directoryGrouping: _directoryGrouping,
         // 06 §4.2: the built-in editor's open route — wired on every
         // strip so `file.editBuiltIn` and the "Double-click action:
@@ -1677,6 +1690,7 @@ class _WorkspaceShellState extends State<WorkspaceShell>
     appearance: widget.appearance,
     editorTextSize: widget.editorTextSize,
     directoryGrouping: widget.directoryGrouping,
+    doubleClickAction: widget.doubleClickAction,
     changes: [?widget.updateCheck],
   );
 
@@ -1842,6 +1856,7 @@ class _WorkspaceShellState extends State<WorkspaceShell>
               _openWithExternal(pane, entry, editorId),
           pickAndOpen: _pickAndOpenExternal,
           previewSettings: _previewDownloadsSettings,
+          doubleClickAction: widget.doubleClickAction,
           openSettingsWindow: _openSettingsWindow,
         ),
       // 05 §9's sync commands register only while every seam they

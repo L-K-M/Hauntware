@@ -6,6 +6,7 @@ import '../../services/editor_registry_controller.dart';
 import '../../services/external_file_opener.dart';
 import '../../services/pane_controller.dart';
 import '../../services/registered_command.dart';
+import '../../services/settings_models.dart';
 import '../../services/settings_window/settings_window_link.dart';
 import '../../services/workspace_controller.dart';
 import '../settings/editor_settings.dart';
@@ -50,6 +51,10 @@ RegisteredCommand buildOpenWithCommand({
   /// a lookup (not a snapshot) so the dialog reads the live cap and
   /// threshold at open. Null mounts the dialog without the section.
   PreviewDownloadsSettings? Function()? previewSettings,
+
+  /// The §8 Opening files row behind `Configure Editors…`; null mounts
+  /// the dialog without it.
+  DoubleClickActionModel? doubleClickAction,
 
   /// On desktop, `Configure Editors…` opens the Settings window on Editing;
   /// the dialog remains for a runner without one.
@@ -147,6 +152,7 @@ RegisteredCommand buildOpenWithCommand({
             context,
             controller: controller,
             opener: externalOpener,
+            doubleClickAction: doubleClickAction,
             previewSettings: previewSettings?.call(),
           );
         },

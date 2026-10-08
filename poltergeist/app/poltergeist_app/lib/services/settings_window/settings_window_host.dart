@@ -21,6 +21,7 @@ import 'package:poltergeist_core/poltergeist_core.dart';
 
 import '../../ui/settings/general_settings.dart';
 import '../../ui/settings/preview_settings.dart';
+import '../double_click_action.dart';
 import '../external_file_opener.dart';
 import '../settings_models.dart';
 import '../sync_account_gate.dart';
@@ -40,6 +41,7 @@ final class SettingsWindowSources {
     this.appearance,
     this.editorTextSize,
     this.directoryGrouping,
+    this.doubleClickAction,
     this.changes = const [],
   });
 
@@ -69,9 +71,13 @@ final class SettingsWindowSources {
   /// Whether lists keep folders on top: the General tab's file-list row.
   final DirectoryGroupingModel? directoryGrouping;
 
+  /// What opening a file does: the Editing tab's first row.
+  final DoubleClickActionModel? doubleClickAction;
+
   /// What else moves a value the window shows (the update-check
   /// controller behind [general]); [editors], [backup], [appearance],
-  /// [editorTextSize] and [directoryGrouping] are listened to already.
+  /// [editorTextSize], [directoryGrouping] and [doubleClickAction] are
+  /// listened to already.
   final List<Listenable> changes;
 }
 
@@ -130,6 +136,7 @@ class SettingsWindowHost {
       ?sources.appearance,
       ?sources.editorTextSize,
       ?sources.directoryGrouping,
+      ?sources.doubleClickAction,
       ...sources.changes,
     ];
     for (final listenable in _listening) {
@@ -253,6 +260,8 @@ class SettingsWindowHost {
       SettingsLinkKey.editorTextSize.name: editorTextSize?.value,
       SettingsLinkKey.directoryGrouping.name:
           _sources.directoryGrouping?.value.name,
+      SettingsLinkKey.doubleClickAction.name:
+          _sources.doubleClickAction?.value.name,
       SettingsLinkKey.general.name: general == null
           ? null
           : {SettingsLinkKey.checkForUpdates.name: general.checkForUpdates},
@@ -361,6 +370,10 @@ class SettingsWindowHost {
         await _require(
           _sources.directoryGrouping,
         ).setGrouping(DirectoryGrouping.values.byName(argument! as String));
+      case SettingsLinkMethod.setDoubleClickAction:
+        await _require(
+          _sources.doubleClickAction,
+        ).setAction(DoubleClickAction.values.byName(argument! as String));
       case SettingsLinkMethod.registerEditor:
         await _require(editors).register(
           ExternalEditorDefinition.fromJson(map().cast<String, dynamic>()),

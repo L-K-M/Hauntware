@@ -8,6 +8,8 @@ import 'package:poltergeist_app/services/app_transfer_queue.dart';
 import 'package:poltergeist_app/services/engine_session.dart';
 import 'package:poltergeist_app/services/local_volumes.dart';
 import 'package:poltergeist_app/services/pane_controller.dart';
+import 'package:poltergeist_app/services/settings_models.dart'
+    show DoubleClickActionModel;
 import 'package:poltergeist_app/services/ssh_config_import_setup.dart';
 import 'package:poltergeist_app/services/sync_environment.dart';
 import 'package:poltergeist_app/services/sync_queue_facade.dart';
@@ -244,6 +246,7 @@ final class CompactHarness {
     SyncQueueTasks? syncTasks,
     bool serverEditor = false,
     bool sshConfigImport = false,
+    DoubleClickActionModel? doubleClickAction,
   }) async {
     tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1;
@@ -290,6 +293,7 @@ final class CompactHarness {
         syncTasks: syncTasks,
         serverEditor: serverEditor ? InertServerEditor() : null,
         sshConfigImport: sshConfigImport ? emptySshConfigImport(store) : null,
+        doubleClickAction: doubleClickAction,
       ),
     );
     await tester.pumpWidget(wrap == null ? app : wrap(app));

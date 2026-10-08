@@ -4862,6 +4862,28 @@ class AppLocalizationsEn extends AppLocalizations {
   String get editorSettingsClose => 'Close';
 
   @override
+  String get settingsOpeningFilesSection => 'Opening files';
+
+  @override
+  String get doubleClickActionLabel => 'Double-click action';
+
+  @override
+  String get doubleClickActionSubtitle =>
+      'Also applies to opening a file from the keyboard. Folders always open.';
+
+  @override
+  String get doubleClickActionOpen => 'Open';
+
+  @override
+  String get doubleClickActionEdit => 'Edit in Poltergeist';
+
+  @override
+  String get doubleClickActionTransfer => 'Transfer to other pane';
+
+  @override
+  String get doubleClickActionNothing => 'Do nothing';
+
+  @override
   String get editorDefaultLabel => 'Default editor';
 
   @override

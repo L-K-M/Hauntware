@@ -6,6 +6,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:poltergeist_app/services/appearance_controller.dart';
 import 'package:poltergeist_app/services/directory_grouping_controller.dart';
+import 'package:poltergeist_app/services/double_click_action.dart';
+import 'package:poltergeist_app/services/double_click_action_controller.dart';
 import 'package:poltergeist_app/services/editor_text_size_controller.dart';
 import 'package:poltergeist_app/services/bookmark_backup_service.dart'
     show BackupSwitchOutcome, RetainedBackupAccount;
@@ -183,6 +185,8 @@ void main() {
   late DirectoryGroupingController directoryGrouping;
   late List<DirectoryGrouping> savedGroupings;
   Object? groupingSaveFailure;
+  late DoubleClickActionController doubleClickAction;
+  late List<DoubleClickAction> savedActions;
   late List<AppAppearance> savedAppearances;
   Object? appearanceSaveFailure;
 
@@ -230,6 +234,7 @@ void main() {
     appearance: appearance,
     editorTextSize: editorTextSize,
     directoryGrouping: directoryGrouping,
+    doubleClickAction: doubleClickAction,
   );
 
   setUp(() {
@@ -243,6 +248,11 @@ void main() {
       },
     );
     addTearDown(directoryGrouping.dispose);
+    savedActions = [];
+    doubleClickAction = DoubleClickActionController(
+      save: (action) async => savedActions.add(action),
+    );
+    addTearDown(doubleClickAction.dispose);
     savedTextSizes = [];
     editorTextSize = EditorTextSizeController(
       save: (size) async => savedTextSizes.add(size),
@@ -334,7 +344,33 @@ void main() {
     expect(remote.appearance, isNull);
     expect(remote.editorTextSize, isNull);
     expect(remote.directoryGrouping, isNull);
+    expect(remote.doubleClickAction, isNull);
     expect(remote.theme.value, AppAppearance.initial);
+  });
+
+  group('double-click action', () {
+    test('crosses in the first snapshot', () async {
+      await doubleClickAction.setAction(DoubleClickAction.edit);
+
+      final remote = await openWindow();
+
+      expect(remote.doubleClickAction?.value, DoubleClickAction.edit);
+    });
+
+    test("set in the window, reaches the app's panes", () async {
+      final remote = await openWindow();
+      var moved = 0;
+      remote.doubleClickAction!.addListener(() => moved++);
+
+      await remote.doubleClickAction!.setAction(DoubleClickAction.nothing);
+
+      expect(doubleClickAction.value, DoubleClickAction.nothing);
+      expect(savedActions, [DoubleClickAction.nothing]);
+      // The window's dropdown follows through the snapshot that write sent.
+      await pumpEventQueue();
+      expect(remote.doubleClickAction!.value, DoubleClickAction.nothing);
+      expect(moved, 1);
+    });
   });
 
   group('keep folders on top', () {

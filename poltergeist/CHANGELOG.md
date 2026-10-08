@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **Choose what opening a file does.** Settings → Editing has a
+  Double-click action setting: Open (the default), Edit in Poltergeist,
+  Transfer to other pane or Do nothing. It also applies to opening a file
+  from the keyboard, in every pane and window at once. Transfer to other
+  pane still only says it is not available yet.
 - **Dialogs from menus and shortcuts stay one at a time.** While
   Settings, an import, Synchronize or Connect is open, the other dialog
   commands stay unavailable until it closes, whether it was opened from

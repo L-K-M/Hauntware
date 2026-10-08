@@ -4,6 +4,22 @@ Living snapshot of where Poltergeist is, what's proven, and what to pick up
 next. Read [AGENTS.md](../AGENTS.md) for build/test commands and
 [09-PLAYBOOK.md](plan/09-PLAYBOOK.md) for the PR process.
 
+## Double-click action setting (2026-10-08)
+
+Settings → Editing (Settings window and the Configure Editors… dialog)
+opens with 06 §8's Opening files row: the 02 §2.6 Double-click action
+dropdown. The preference and its `AppPreferences` key already existed and
+the panes already honoured it, but nothing could change it.
+`DoubleClickActionController` now carries it in the app's isolate; the
+Settings window drives it over the link like Keep folders on top, and the
+shell hands each change to both strips, which stamp their tabs. Transfer
+to other pane is offered as the list names it but still posts the
+not-yet notice.
+
+Validation: controller, Settings window link, Settings window tab,
+dialog and shell tests (`double_click_action_shell_test.dart` checks
+both strips and the active tab follow a change).
+
 ## Command sessions counted, not flagged (2026-10-08)
 
 The shell's one-session guard (`_runCommand`) was a single bool. An

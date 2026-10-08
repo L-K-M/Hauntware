@@ -6157,6 +6157,34 @@
   "@editorSettingsClose": {
     "description": "Dismisses the Editing settings dialog (06 §8's bounded mount)."
   },
+  "settingsOpeningFilesSection": "Opening files",
+  "@settingsOpeningFilesSection": {
+    "description": "Heading of the Settings → Editing row about what opening a file does (06 §8)."
+  },
+  "doubleClickActionLabel": "Double-click action",
+  "@doubleClickActionLabel": {
+    "description": "Label of the Settings → Editing dropdown choosing what opening a file does (02 §2.6)."
+  },
+  "doubleClickActionSubtitle": "Also applies to opening a file from the keyboard. Folders always open.",
+  "@doubleClickActionSubtitle": {
+    "description": "Explainer under the Double-click action dropdown: the open shortcut follows it too, and folders always navigate."
+  },
+  "doubleClickActionOpen": "Open",
+  "@doubleClickActionOpen": {
+    "description": "Double-click action option: open the file with its default application (02 §2.6's default)."
+  },
+  "doubleClickActionEdit": "Edit in Poltergeist",
+  "@doubleClickActionEdit": {
+    "description": "Double-click action option: open the file in the built-in editor."
+  },
+  "doubleClickActionTransfer": "Transfer to other pane",
+  "@doubleClickActionTransfer": {
+    "description": "Double-click action option: transfer the file to the other pane (not available yet; opening a file shows a notice)."
+  },
+  "doubleClickActionNothing": "Do nothing",
+  "@doubleClickActionNothing": {
+    "description": "Double-click action option: opening a file does nothing."
+  },
   "editorDefaultLabel": "Default editor",
   "@editorDefaultLabel": {
     "description": "Label of the §8 Default-editor dropdown — the registry's global defaultEditorId."
