@@ -44,7 +44,7 @@ final class DesktopWindow with WindowListener {
       displays: displays,
       platform: platform,
       scheduleDebounce: scheduleDebounce,
-      windowDefaults: _sharedOptions(windowOptions),
+      windowDefaults: windowOptions,
       // The close button can mean "just this window" while other windows
       // stay up; a programmatic quit (menu, exit request) must never take
       // that branch.
@@ -87,25 +87,15 @@ final class DesktopWindow with WindowListener {
 
   /// Public rather than inline in [initialize] so the geometry and the
   /// pre-paint backdrop can be asserted without the platform channel.
-  WindowOptions get windowOptions => WindowOptions(
+  GhostWindowOptions get windowOptions => GhostWindowOptions(
     // The Linux and Windows runners open the window at this size, centered,
     // so it has its final geometry before this applies. Change them together.
     size: const Size(1080, 760),
     minimumSize: const Size(640, 400),
-    center: true,
+    placement: GhostWindowPlacement.centered,
     title: 'Planchette',
     backgroundColor: windowBackgroundColor,
   );
-
-  static GhostWindowOptions _sharedOptions(WindowOptions options) =>
-      GhostWindowOptions(
-        // windowOptions always sets one; the plugin's field is nullable only
-        // because callers may leave the platform default.
-        size: options.size!,
-        minimumSize: options.minimumSize,
-        title: options.title,
-        backgroundColor: options.backgroundColor,
-      );
 
   Future<void> initialize() async {
     // Focus stays app-side: the disk check on activation is Planchette's,
