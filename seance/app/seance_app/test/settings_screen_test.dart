@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:seance_app/services/app_settings.dart';
+import 'package:seance_app/services/app_lock.dart';
 import 'package:seance_app/services/external_file_opener.dart';
 import 'package:seance_app/services/secrets_recovery.dart';
 import 'package:seance_app/services/settings_backend.dart';
@@ -29,6 +30,16 @@ class _FakeBackend extends ChangeNotifier implements SettingsBackend {
 
   @override
   SyncStatus syncStatus = const SyncStatus();
+
+  @override
+  AppLockAvailability appLockAvailability = AppLockAvailability.unavailable;
+
+  @override
+  Future<void> setAppLock(AppLockMode mode) async {
+    await _write('setAppLock(${mode.name})');
+    settings.appLock = mode;
+    notifyListeners();
+  }
 
   final List<String> calls = [];
   AssistantDraft? lastDraft;
@@ -299,6 +310,34 @@ void main() {
   Finder field(String label) => find.byWidgetPredicate(
     (w) => w is TextField && w.decoration?.labelText == label,
   );
+
+  for (final presentation in SettingsPresentation.values) {
+    testWidgets('app lock ${presentation.name} authenticates through the backend', (tester) async {
+      backend.appLockAvailability = AppLockAvailability.available;
+      await pumpScreen(tester, presentation: presentation);
+      final row = find.widgetWithText(SwitchListTile, 'Require device authentication');
+      expect(tester.widget<SwitchListTile>(row).value, isFalse);
+      await tester.tap(row);
+      await tester.pumpAndSettle();
+      expect(backend.calls, ['setAppLock(on)']);
+      expect(tester.widget<SwitchListTile>(row).value, isTrue);
+
+      backend.failWrites = const AppLockException('Auth cancelled');
+      await tester.tap(row);
+      await tester.pumpAndSettle();
+      expect(tester.widget<SwitchListTile>(row).value, isTrue);
+      expect(find.text('Auth cancelled'), findsOneWidget);
+      backend.failWrites = null;
+      await tester.tap(row);
+      await tester.pumpAndSettle();
+      expect(tester.widget<SwitchListTile>(row).value, isFalse);
+    });
+  }
+
+  testWidgets('app lock is hidden when device authentication is unavailable', (tester) async {
+    await pumpScreen(tester);
+    expect(find.text('Require device authentication'), findsNothing);
+  });
 
   testWidgets('the window shows the tabs without the route\'s title bar', (
     tester,

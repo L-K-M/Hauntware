@@ -3,6 +3,7 @@
          INTERNET to the debug/profile manifests, so release builds need it
          declared here explicitly. -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <uses-permission android:name="android.permission.USE_BIOMETRIC"/>
     <!-- Keep SSH sessions alive while the app is backgrounded (Android freezes
          cached processes, killing their sockets). The anchor is a dataSync
          foreground service while any session is connecting/connected. -->

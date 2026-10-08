@@ -9,7 +9,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.provider.DocumentsContract
-import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
@@ -20,7 +20,7 @@ import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.RejectedExecutionException
 
-class MainActivity : FlutterActivity() {
+class MainActivity : FlutterFragmentActivity() {
     companion object {
         private const val CHANNEL = "seance/files"
         private const val KEEP_ALIVE_CHANNEL = "seance/keepalive"
@@ -157,7 +157,7 @@ class MainActivity : FlutterActivity() {
         }
     }
 
-    @Deprecated("Required by ACTION_OPEN_DOCUMENT_TREE on FlutterActivity")
+    @Deprecated("Required by ACTION_OPEN_DOCUMENT_TREE on FlutterFragmentActivity")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         if (requestCode != DIRECTORY_REQUEST) {
             super.onActivityResult(requestCode, resultCode, data)

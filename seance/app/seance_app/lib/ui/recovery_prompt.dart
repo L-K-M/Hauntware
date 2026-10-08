@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../app_state.dart';
+import '../services/app_lock.dart';
 import 'recovery_settings.dart';
 import 'top_toast.dart';
 
@@ -10,7 +13,22 @@ import 'top_toast.dart';
 /// the dialog without answering leaves the offer for the next save.
 Future<void> offerRecoveryCode(BuildContext context, AppState state) async {
   if (state.services.settings.recoveryPromptDeclined) return;
-  if (await state.recoveryConfigured() || !context.mounted) return;
+  try {
+    if (await state.recoveryConfigured() || !context.mounted) return;
+  } on AppLockException catch (error) {
+    if (context.mounted) {
+      showTopToastIn(
+        context,
+        message: error.message,
+        actionLabel: 'Retry',
+        onAction: () {
+          if (context.mounted) unawaited(offerRecoveryCode(context, state));
+        },
+      );
+    }
+    return;
+  }
+
   final setUp = await showDialog<bool>(
     context: context,
     builder: (context) => AlertDialog(

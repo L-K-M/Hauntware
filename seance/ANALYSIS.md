@@ -530,7 +530,8 @@ sandbox, unless SSH-06 decides to drop it).
 **IDs:** SOL-035, workflow backlog · **Priority:** P1 · **Status:** Partial
 (the credential-required state landed: `CredentialMissingException`; so did
 recovery codes with encrypted export and restore, the inline credential prompt
-and the recovery offer after the first saved credential)
+and the recovery offer after the first saved credential; the final app-lock
+slice is implemented locally, awaiting integration and review)
 
 **Problem.** A synced local-only `secretRef` used to become an empty
 credential on a new device with misleading auth errors. Since 2026-10-08
@@ -542,7 +543,7 @@ device" with the server's (or jump host's) editor one tap away. Also since
 wrap key and key check, as the reserved entry `recovery:wrap-key`, which every
 re-key re-seals), exports the vault encrypted (`SecretsExport`) and restores
 an export on any device, keeping or replacing credentials already there
-([design](../docs/design/cred-05-recovery.md)). No app lock. Mitigation
+([design](../docs/design/cred-05-recovery.md)). Mitigation
 since: keyless servers default to agent (#131), which has its own problems
 (SSH-06).
 
@@ -551,13 +552,35 @@ server to the SSH agent), and saving a credential on a device without a
 recovery code offers one once; "Not now" is remembered and Settings still
 offers it.
 
-**Next.** An optional biometric or passcode app lock at the same boundary,
-off by default.
+**App lock (approved 2026-10-08).** Optional, off by default, device-local.
+Android/iOS/macOS/Windows only; hide the setting where device auth is
+unavailable, including Linux. Device biometrics or device passcode/PIN
+fallback authenticate before the first saved-credential read each launch
+and after at least 5 minutes hidden/paused. Inactive events do not start or
+reset the timeout. Concurrent readers share one prompt and one lazy keystore
+unlock; background time during a prompt cannot be erased by its lifecycle
+events. Stale auth and read completions fail explicitly and later attempts
+can retry. Both setting transitions require successful device auth.
+
+`AppLock` owns the policy; `NativeDeviceAuthenticator` adapts `local_auth`.
+Vault plaintext/blob reads, stored API keys, referenced identity files,
+recovery exports/restores/code replacement and rekey admission use the same
+gate. Sync/inbox timers defer while locked; manual credential reads may
+authenticate. Auth refusal is distinct from missing credentials, damaged
+entries and OS-keystore failures. Locked launches defer keystore probing and
+rekey-journal settlement until authentication. Existing SSH and assistant
+sessions may retain credentials already read; the gate does not erase them,
+encrypt identity files, or protect local SFTP copies. The route and separate
+Settings window use SettingsBackend and the existing settings-link engine.
 
 **Gate.** Two devices with and without credential opt-in; locked and missing
 keys; export round-trip and tamper rejection; cancelled recovery; interrupted
 import. Explain local SFTP plaintext retention separately from vault
-guarantees.
+guarantees. App-lock policy/native-adapter, launch/concurrency, cancellation,
+retry, timeout, rejected setting transitions, mutation-queue, journal and
+settings-link tests cover the automated paths. Native authentication and
+passcode fallback on real Android/iOS/macOS/Windows devices, desktop window
+switching and OS sleep/resume remain manual validation.
 
 ### SYNC-06: Hash, expire and revoke bearer tokens
 **IDs:** SOL-048, SEA26-SEC-05 · **Priority:** P0 · **Status:** Open

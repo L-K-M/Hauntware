@@ -12,6 +12,7 @@ import '../theme/theme_presets.dart';
 import '../ui/server_list_density.dart';
 import '../ui/terminal_appearance.dart';
 import 'atomic_file.dart';
+import 'app_lock.dart';
 import 'external_file_opener.dart';
 
 /// A macOS security-scoped bookmark for a Browse…-picked identity file,
@@ -163,6 +164,9 @@ class AppSettings {
   /// recovery code itself.
   bool recoveryPromptDeclined;
 
+  /// Device-local only. A new launch authenticates before saved-secret reads.
+  AppLockMode appLock;
+
   /// On launch, check GitHub for a newer release and show a notification if
   /// one exists. On by default; only ever offers a link to the releases page —
   /// never downloads or installs anything.
@@ -285,6 +289,7 @@ class AppSettings {
     this.autoSync = true,
     this.commandSuggestions = false,
     this.recoveryPromptDeclined = false,
+    this.appLock = AppLockMode.off,
     this.checkForUpdates = true,
     this.localShell = false,
     this.keepSessionsAliveInBackground = true,
@@ -339,6 +344,7 @@ class AppSettings {
     'autoSync': autoSync,
     'commandSuggestions': commandSuggestions,
     'recoveryPromptDeclined': recoveryPromptDeclined,
+    'appLock': appLock.name,
     'checkForUpdates': checkForUpdates,
     'localShell': localShell,
     'keepSessionsAliveInBackground': keepSessionsAliveInBackground,
@@ -395,6 +401,9 @@ class AppSettings {
     autoSync: json['autoSync'] as bool? ?? true,
     commandSuggestions: json['commandSuggestions'] as bool? ?? false,
     recoveryPromptDeclined: json['recoveryPromptDeclined'] as bool? ?? false,
+    appLock: json['appLock'] == AppLockMode.on.name
+        ? AppLockMode.on
+        : AppLockMode.off,
     checkForUpdates: json['checkForUpdates'] as bool? ?? true,
     localShell: json['localShell'] as bool? ?? false,
     keepSessionsAliveInBackground:
