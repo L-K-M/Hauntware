@@ -219,7 +219,7 @@ build_app() {
   fi
   local mode_flag=""
   [[ "$PROFILE" == "debug" ]] && mode_flag="--debug"
-  local cfg="Release" out=""
+  local cfg="Release" out="" name=""
   [[ "$PROFILE" == "debug" ]] && cfg="Debug"
   # Xcode re-signs an existing .app only when one of its own inputs
   # changed, but Flutter's embed phase rewrites App.framework and the
@@ -238,17 +238,21 @@ build_app() {
     case "$HOST" in
       macos)
         out=$(ls -d "$APP_DIR"/build/macos/Build/Products/"$cfg"/*.app 2>/dev/null | head -1)
-        [[ -n "$out" ]] && stage "$out" "Poltergeist.app"
+        name="Poltergeist.app"
         ;;
       linux)
         out=$(ls -d "$APP_DIR"/build/linux/*/"$PROFILE"/bundle 2>/dev/null | head -1)
-        [[ -n "$out" ]] && stage "$out" "poltergeist-linux"
+        name="poltergeist-linux"
         ;;
       windows)
         out=$(ls -d "$APP_DIR"/build/windows/*/runner/"$cfg" 2>/dev/null | head -1)
-        [[ -n "$out" ]] && stage "$out" "poltergeist-windows"
+        name="poltergeist-windows"
         ;;
     esac
+    if [[ -n "$out" ]] && ! stage "$out" "$name"; then
+      echo "!! app: copying the build into dist/ failed" >&2
+      record "app: FAILED (copy to dist/)"; return 1
+    fi
     if [[ -n "$out" ]]; then
       record "app: built ($HOST, $PROFILE) -> dist/"
     else
@@ -257,7 +261,7 @@ build_app() {
     # Propagate packaging failure to the exit status (FAILED is the global the
     # target loop reads) while still letting a subsequent --install proceed —
     # installing the freshly built bundle is independent of .deb/AppImage
-    # packaging. Séance's build.sh drops this status; deliberate fix here.
+    # packaging.
     if [[ "$HOST" == "linux" ]]; then package_linux || FAILED=1; fi
     if $INSTALL; then
       if [[ -z "$out" ]]; then
@@ -355,7 +359,10 @@ build_apk() {
   if ( cd "$APP_DIR" && flutter pub get && flutter build apk $mode_flag ); then
     local apk
     apk="$(ls "$APP_DIR"/build/app/outputs/flutter-apk/*.apk 2>/dev/null | head -1)"
-    [[ -n "$apk" ]] && stage "$apk" "poltergeist.apk"
+    if [[ -n "$apk" ]] && ! stage "$apk" "poltergeist.apk"; then
+      echo "!! apk: copying the APK into dist/ failed" >&2
+      record "apk: FAILED (copy to dist/)"; return 1
+    fi
     record "apk: built ($PROFILE)${apk:+ -> dist/poltergeist.apk}"
   else
     echo "!! apk: flutter build apk failed" >&2
