@@ -14,14 +14,6 @@ import 'top_toast.dart';
 
 export '../services/editor_document.dart';
 
-/// The managed save folds a CRLF-dominant document's breaks to CRLF and
-/// leaves an LF document's alone; the controller's byte preflight must
-/// agree with it, so both read this one policy.
-TextNormalization seanceSaveNormalization(LineEnding ending) =>
-    ending == LineEnding.crlf
-    ? TextNormalization.normalize
-    : TextNormalization.preserve;
-
 class BuiltInTextEditorScreen extends StatefulWidget {
   final File file;
   final String remotePath;
@@ -116,7 +108,7 @@ class BuiltInTextEditorScreenState extends State<BuiltInTextEditorScreen>
           baseline?.file ?? widget.file,
           text,
           hasUtf8Bom: baseline?.hasUtf8Bom ?? false,
-          lineEnding: baseline?.lineEnding == LineEnding.crlf ? '\r\n' : '\n',
+          lineEnding: baseline?.lineEnding ?? LineEnding.lf,
           expectedSha256: baseline?.sha256,
         );
       },

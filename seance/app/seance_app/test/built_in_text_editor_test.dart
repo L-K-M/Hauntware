@@ -25,8 +25,18 @@ void main() {
     if (await directory.exists()) await directory.delete(recursive: true);
   });
 
+  // Managed copies open with raw line endings, as the editor tab opens them.
+  Future<TextDocument> load(
+    File file, {
+    int maximumBytes = builtInEditorMaximumBytes,
+  }) => loadTextDocument(
+    file,
+    maximumBytes: maximumBytes,
+    normalization: TextNormalization.preserve,
+  );
+
   test('loads UTF-8 and atomically saves edited text', () async {
-    expect(await loadBuiltInTextDocument(file), 'one\ntwo\n');
+    expect((await load(file)).text, 'one\ntwo\n');
 
     await saveBuiltInTextDocument(file, 'changed\n');
 
@@ -36,11 +46,11 @@ void main() {
 
   test('preserves a UTF-8 BOM and CRLF line endings', () async {
     await file.writeAsBytes([0xef, 0xbb, 0xbf, ...'one\r\ntwo\r\n'.codeUnits]);
-    final document = await loadBuiltInTextDocumentDetails(file);
+    final document = await load(file);
 
     expect(document.text, 'one\r\ntwo\r\n');
     expect(document.hasUtf8Bom, isTrue);
-    expect(document.lineEnding, '\r\n');
+    expect(document.lineEnding, LineEnding.crlf);
 
     await saveBuiltInTextDocument(
       file,
@@ -59,7 +69,7 @@ void main() {
   });
 
   test('refuses to overwrite an independently changed local copy', () async {
-    final document = await loadBuiltInTextDocumentDetails(file);
+    final document = await load(file);
     await file.writeAsString('external change\n');
 
     await expectLater(
@@ -76,19 +86,19 @@ void main() {
   test('rejects malformed, binary, and oversized content', () async {
     await file.writeAsBytes([0xff]);
     await expectLater(
-      loadBuiltInTextDocument(file),
+      load(file),
       throwsA(isA<BuiltInEditorException>()),
     );
 
     await file.writeAsBytes([0, 1, 2]);
     await expectLater(
-      loadBuiltInTextDocument(file),
+      load(file),
       throwsA(isA<BuiltInEditorException>()),
     );
 
     await file.writeAsBytes([1, 2, 3]);
     await expectLater(
-      loadBuiltInTextDocument(file, maximumBytes: 2),
+      load(file, maximumBytes: 2),
       throwsA(isA<BuiltInEditorException>()),
     );
   });
@@ -99,7 +109,7 @@ void main() {
       await file.writeAsBytes([0xff]);
       Object? error;
       try {
-        await loadBuiltInTextDocument(file);
+        await load(file);
       } catch (caught) {
         error = caught;
       }
@@ -166,7 +176,7 @@ void main() {
 
     test('are refused on open', () async {
       await expectLater(
-        loadBuiltInTextDocumentDetails(File(link.path)),
+        load(File(link.path)),
         throwsA(
           isA<BuiltInEditorException>().having(
             (error) => '$error',
@@ -194,7 +204,7 @@ void main() {
   test('a second BOM is content and survives a round trip', () async {
     const bom = [0xef, 0xbb, 0xbf];
     await file.writeAsBytes([...bom, ...bom, ...utf8.encode('A\n')]);
-    final document = await loadBuiltInTextDocumentDetails(file);
+    final document = await load(file);
 
     expect(document.hasUtf8Bom, isTrue);
     expect(document.text, '\uFEFFA\n');
@@ -211,7 +221,7 @@ void main() {
 
   test('a file that is only a BOM opens empty and keeps the BOM', () async {
     await file.writeAsBytes([0xef, 0xbb, 0xbf]);
-    final document = await loadBuiltInTextDocumentDetails(file);
+    final document = await load(file);
     expect(document.text, isEmpty);
     expect(document.hasUtf8Bom, isTrue);
   });
