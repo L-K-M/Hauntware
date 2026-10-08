@@ -125,6 +125,24 @@ class SyncCoordinator {
               server.secretRef!,
       };
 
+  /// Host-key locators that only excluded servers name.
+  ///
+  /// Host keys are keyed by `host:port`, not by server, so a pin is only
+  /// local-only when *every* server naming that address is excluded. One
+  /// included server on the same box is enough to keep pinning it: the
+  /// address is already published by that server's own record. [collectLocal]
+  /// withholds these pins and [applyToStores] shields them, and the two are
+  /// only correct while they agree.
+  static Set<String> _localOnlyLocators(List<ServerConfig> servers) =>
+      <String>{
+        for (final server in servers)
+          if (server.excludeFromSync) hostKeyLocator(server.host, server.port),
+      }..removeAll(<String>{
+          for (final server in servers)
+            if (!server.excludeFromSync)
+              hostKeyLocator(server.host, server.port),
+        });
+
   /// Encode current local state into the record store (as local edits).
   ///
   /// Local credential edits must use [SecretVault.putLocalSecret] so their
@@ -132,19 +150,12 @@ class SyncCoordinator {
   Future<void> collectLocal() async {
     final servers = await configStore.listServers();
 
-    // Host keys are keyed by `host:port`, not by server, so a pin is only
-    // withheld when *every* server naming that address is excluded. One
-    // included server on the same box is enough to keep pinning it: the
-    // address is already published by that server's own record.
-    final excludedLocators = <String>{};
-    final syncedLocators = <String>{};
+    final localOnlyLocators = _localOnlyLocators(servers);
     // The same rule, for credentials: nothing prevents two configs pointing at
     // one vault entry, and a credential a still-synced server holds must keep
     // reaching the devices that want it.
     final syncedSecretRefs = <String>{};
     for (final s in servers) {
-      (s.excludeFromSync ? excludedLocators : syncedLocators)
-          .add(hostKeyLocator(s.host, s.port));
       final ref = s.secretRef;
       if (ref != null && !s.excludeFromSync) syncedSecretRefs.add(ref);
     }
@@ -222,8 +233,7 @@ class SyncCoordinator {
       await local.putLocal(tombstone);
     }
     for (final hk in await hostKeyStore.all()) {
-      if (excludedLocators.contains(hk.locator) &&
-          !syncedLocators.contains(hk.locator)) {
+      if (localOnlyLocators.contains(hk.locator)) {
         // Withheld, not retracted, and the difference is a real residual: a
         // pin pushed before the exclusion stays on the sync server, carrying
         // the host and port the user asked to keep local. Another device that
@@ -528,14 +538,7 @@ class SyncCoordinator {
     // device pushes would win last-write-wins by default and overwrite a pin
     // this device made locally. Nothing pulled may touch a local-only server,
     // and that includes what this device chose to trust for its address.
-    final excludedLocators = <String>{
-      for (final server in servers)
-        if (server.excludeFromSync) hostKeyLocator(server.host, server.port),
-    }..removeAll(<String>{
-        for (final server in servers)
-          if (!server.excludeFromSync)
-            hostKeyLocator(server.host, server.port),
-      });
+    final localOnlyLocators = _localOnlyLocators(servers);
     // Credentials are decided after the loop rather than inside it: whether one
     // may be applied or withdrawn depends on which servers still reference it,
     // and a config record in the same batch may be about to add or remove the
@@ -697,7 +700,7 @@ class SyncCoordinator {
               );
               continue;
             }
-            if (excludedLocators.contains(pin.locator)) continue;
+            if (localOnlyLocators.contains(pin.locator)) continue;
             await hostKeyStore.put(pin);
           case RecordKind.secret:
             secretRecords.add(dec);
