@@ -51,6 +51,24 @@ void main() {
     expect(result.text.length, greaterThan(previewTextMaximumBytes - 20));
   });
 
+  test('clips a window that ends on the lead byte of a character', () async {
+    // The window's last byte starts a 2-, 3- or 4-byte character whose
+    // continuation bytes lie past the cut, so no continuation byte is
+    // inside the window at all.
+    for (final character in ['é', '€', '🚀']) {
+      final pad = List<int>.filled(previewTextMaximumBytes - 1, 0x61);
+      final file = await writeFile('lead-${character.runes.first}.txt', [
+        ...pad,
+        ...utf8.encode('${character}tail'),
+      ]);
+      final result = await loadPreviewText(file);
+      expect(result.truncated, isTrue, reason: character);
+      expect(result.text, 'a' * (previewTextMaximumBytes - 1),
+          reason: character);
+      expect(await fileLooksLikeUtf8Text(file), isTrue, reason: character);
+    }
+  });
+
   test('strips a leading UTF-8 BOM', () async {
     final file = await writeFile(
       'bom.txt',

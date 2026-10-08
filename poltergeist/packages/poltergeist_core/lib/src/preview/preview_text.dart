@@ -78,15 +78,16 @@ Uint8List _clipToCodepointBoundary(Uint8List bytes) {
   final end = bytes.length;
   // Walk back over continuation bytes (10xxxxxx); if we land on a
   // leading byte whose sequence would extend past `end`, the tail is
-  // incomplete and gets clipped.
+  // incomplete and gets clipped. A window that ends on the lead byte
+  // itself has no continuation bytes and is clipped the same way.
   var continuation = 0;
   while (end - 1 - continuation >= 0 &&
       (bytes[end - 1 - continuation] & 0xC0) == 0x80 &&
       continuation < 3) {
     continuation++;
   }
-  if (continuation == 0) return bytes;
   final leadIndex = end - 1 - continuation;
+  if (leadIndex < 0) return bytes;
   final lead = bytes[leadIndex];
   final expected = _sequenceLength(lead);
   if (expected > 0 && leadIndex + expected > end) {
