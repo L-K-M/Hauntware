@@ -14,10 +14,21 @@ imports and the workspace and sync verbs came back enabled under the
 open dialog and could stack a second one. The shell now counts open
 sessions; gated commands stay disabled until the last one ends.
 
+Two paths held no session at all: keyboard chords ran commands directly
+(`CommandChordScope`), so Synchronize (⌥⌘Y) or the Settings dialog
+fallback (⌘,) opened from the keyboard left everything enabled, and
+Quick Connect's command returned before its dialog closed. Chords now
+run through the shell's runner, as menu rows do, and Connect's command
+awaits its dialog. Quick Open stays deliberately session-free (its
+palette runs commands). Dialogs opened outside a command (close guards,
+the local edits review, rule editors) are still outside the guard.
+
 Validation: `test/ui/shell/command_session_test.dart` opens the ssh
 config import, runs Show/Hide Second Pane through the shell's runner,
-and checks the import stays disabled until its preview closes. It
-failed before the change ("the preview is still open") and passes after.
+and checks the import stays disabled until its preview closes; it also
+opens Connect from its menu row and from Ctrl+K and checks the import
+stays disabled until the dialog closes. Each failed before its fix and
+passes after.
 
 ## D12 runner-image baseline refresh (2026-10-07)
 

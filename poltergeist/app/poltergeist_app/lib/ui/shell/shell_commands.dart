@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart' show defaultTargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -186,7 +188,9 @@ String? _disconnectTarget(WorkspaceController workspace) {
 List<RegisteredCommand> buildShellCommands({
   required WorkspaceController workspace,
   required PaneDropDelegate? Function() dropDelegate,
-  required VoidCallback openConnect,
+  // Completes when the Connect dialog closes, so the command's session
+  // spans the dialog like every other dialog command's.
+  required FutureOr<void> Function() openConnect,
   required List<RegisteredCommand> Function() allCommands,
   required Future<void> Function(Uri url) openUrl,
   required PaneFileOps? Function() fileOps,
@@ -587,7 +591,9 @@ List<RegisteredCommand> buildShellCommands({
         macOS: const [SingleActivator(LogicalKeyboardKey.keyK, meta: true)],
         other: const [SingleActivator(LogicalKeyboardKey.keyK, control: true)],
       ),
-      run: (_) async => openConnect(),
+      run: (_) async {
+        await openConnect();
+      },
       menuPlacement: const CommandMenuPlacement(
         menu: AppMenuId.server,
         order: 10,

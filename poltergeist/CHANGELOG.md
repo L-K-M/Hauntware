@@ -2,10 +2,11 @@
 
 ## Unreleased
 
-- **Dialogs stay one at a time.** Using a menu command such as Show/Hide
-  Second Pane while Settings or an import is open no longer makes
-  Settings, the imports and the other dialog commands available again
-  before that dialog closes.
+- **Dialogs from menus and shortcuts stay one at a time.** While
+  Settings, an import, Synchronize or Connect is open, the other dialog
+  commands stay unavailable until it closes, whether it was opened from
+  a menu or a keyboard shortcut and even if you use another menu command
+  such as Show/Hide Second Pane meanwhile.
 - **Keep folders on top, or mix them in.** Settings → General has a Keep
   folders on top switch, also in the View menu as Keep Folders on Top.
   Turn it off and folders sort in among files by the same column, in

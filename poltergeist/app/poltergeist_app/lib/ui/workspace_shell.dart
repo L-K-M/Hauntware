@@ -1816,7 +1816,7 @@ class _WorkspaceShellState extends State<WorkspaceShell>
         ...buildShellCommands(
           workspace: workspace,
           dropDelegate: () => dropDelegate,
-          openConnect: () => unawaited(_openConnectDialog()),
+          openConnect: _openConnectDialog,
           allCommands: () => _commands,
           openUrl: (url) async {
             await launchUrl(url);
@@ -1943,6 +1943,7 @@ class _WorkspaceShellState extends State<WorkspaceShell>
           resolve: _serverLabel,
           child: CommandChordScope(
             commands: commands,
+            onRun: _runCommand,
             child: ListenableBuilder(
               listenable: enablement,
               builder: (context, child) => AppMenuHost(

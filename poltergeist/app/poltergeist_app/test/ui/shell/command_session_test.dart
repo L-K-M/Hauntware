@@ -3,11 +3,13 @@
 // guard stay disabled for the whole of it — even when another app command
 // runs meanwhile (the macOS menu bar stays live under an in-app dialog).
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:poltergeist_app/app.dart';
 import 'package:poltergeist_app/services/ssh_config_import_setup.dart';
 import 'package:poltergeist_app/ui/import/ssh_config_import_command.dart';
 import 'package:poltergeist_app/ui/panes/pane_commands.dart';
+import 'package:poltergeist_app/ui/shell/shell_commands.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
 
 import '../../support/fake_ssh_config_source.dart';
@@ -72,4 +74,40 @@ void main() {
     expect(find.text('Import servers from ssh config'), findsNothing);
     expect(shellCommandEnabled(tester, kSshConfigImportCommandId), isTrue);
   });
+
+  Future<void> closeDialog(WidgetTester tester) async {
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    expect(find.byType(Dialog), findsNothing);
+  }
+
+  testWidgets('Connect holds its session until its dialog closes', (
+    tester,
+  ) async {
+    await pumpApp(tester);
+
+    await runShellCommand(tester, kConnectQuickConnectCommandId);
+    expect(find.byType(Dialog), findsOneWidget);
+    expect(shellCommandEnabled(tester, kSshConfigImportCommandId), isFalse);
+
+    await closeDialog(tester);
+    expect(shellCommandEnabled(tester, kSshConfigImportCommandId), isTrue);
+  });
+
+  testWidgets('a command run from its chord holds a session too', (
+    tester,
+  ) async {
+    await pumpApp(tester);
+    await runShellCommand(tester, kPaneFocusLeftCommandId);
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyK);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pumpAndSettle();
+    expect(find.byType(Dialog), findsOneWidget);
+    expect(shellCommandEnabled(tester, kSshConfigImportCommandId), isFalse);
+
+    await closeDialog(tester);
+    expect(shellCommandEnabled(tester, kSshConfigImportCommandId), isTrue);
+  }, variant: TargetPlatformVariant.only(TargetPlatform.linux));
 }
