@@ -641,8 +641,9 @@ Do not "simplify" these away — they are load-bearing:
   `icon`/`iconEmoji`/`iconImage` (image, then emoji, then built-in glyph). The
   three are separate fields so an older build ignores the keys it does not know
   and still draws the glyph every mark keeps beside it; `ServerMark.stored` is
-  the inverse, so an editor holds one mark and writes the three. The app maps
-  glyph names to `IconData` in `ui/server_appearance.dart`, and only there.
+  the inverse, so an editor holds one mark and writes the three. Glyph names
+  map to `IconData` in Planchette's `ghost_marks` package (re-exported by
+  `ui/server_appearance.dart`), and only there, for both apps.
 - `FamilyHue` (`lib/family_hues.dart`) is the colour vocabulary shared with
   Poltergeist (its D34): twelve hues, each with one meaning, painted on glyphs
   only. The file is byte-identical to Poltergeist's

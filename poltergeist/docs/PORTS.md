@@ -51,7 +51,9 @@ package. Historical copy entries below remain provenance records; active
 implementations are Git-pinned, with compatibility exports at old paths.
 Host adapters retain ARB strings, resolved chrome, controllers, operations
 and drag payloads. Both apps use the same desktop/touch file-row widgets.
-The in-place tab view, `SelectedTabView`, followed on 2026-10-04.
+The in-place tab view, `SelectedTabView`, followed on 2026-10-04. The
+server badges, accents and glyph tables followed on 2026-10-08 in their
+own package, `ghost_marks`, which also depends on `seance_protocol`.
 
 ## Cross-app deep links (2026-10-02)
 
@@ -736,6 +738,12 @@ counterpart is ported here.
   ARB-wrap it then. Doc references re-pointed from `SeanceTheme` to the
   app theme.
 - Port-back candidates: none — Séance owns the source.
+- Moved (2026-10-08): the module now lives in Planchette's `ghost_marks`
+  package, over `seance_protocol` (never `seance_core`), shared with
+  Séance, whose copy carried the same code plus the unused
+  `ServerAvatar`, which was deleted
+  ([design](../../docs/design/server-appearance-package.md)). This file
+  is a compatibility export; the test below moved with the module.
 
 ## app/poltergeist_app/test/ui/server_appearance_test.dart
 
@@ -749,6 +757,9 @@ counterpart is ported here.
   fills its badge, unframed') are adapted to `ServerBadge` directly —
   the resolution and fill under test are unchanged.
 - Port-back candidates: none.
+- Moved (2026-10-08): this suite is now `ghost_marks`'
+  `test/server_appearance_test.dart`; Séance's copy, whose remaining
+  cases it already held, was removed with `ServerAvatar`.
 
 ## app/poltergeist_app/lib/ui/server_grouping.dart
 
