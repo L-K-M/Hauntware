@@ -527,21 +527,22 @@ encrypted data. Preserve the current keystore migration behaviour (and the
 sandbox, unless SSH-06 decides to drop it).
 
 ### CRED-05: Missing credentials, recovery material and onboarding
-**IDs:** SOL-035, workflow backlog · **Priority:** P1 · **Status:** Open
+**IDs:** SOL-035, workflow backlog · **Priority:** P1 · **Status:** Partial
+(the credential-required state landed: `CredentialMissingException`)
 
-**Problem.** `app_services.dart:689` (@9322f6e) still falls back to
-`SshCredentials.password(secret?.value ?? '')`, and `:723` to
-`secret?.value ?? ''` for keys, so a synced local-only `secretRef` becomes an
-empty credential on a new device with misleading auth errors. `RecoveryKey`
+**Problem.** A synced local-only `secretRef` used to become an empty
+credential on a new device with misleading auth errors. Since 2026-10-08
+`resolveCredentials` throws `CredentialMissingException` for a named entry
+the vault lacks, and the failed tab reads "Credential required on this
+device" with the server's (or jump host's) editor one tap away. `RecoveryKey`
 (`seance_protocol/lib/src/crypto/recovery_key.dart`) is unused by the app. No
 app lock. Mitigation since: keyless servers default to agent (#131), which has
 its own problems (SSH-06).
 
-**Next.** Throw a typed `CredentialMissing` from `resolveCredentials` when
-`secretRef` is set and the vault has no entry; the UI shows "Credential
-required on this device" with unlock, prompt, key selection or agent. Then
-encrypted offline export/import using `RecoveryKey` with canonical recovery
-codes and verified restore, before promoting sync;
+**Next.** An inline prompt for the missing password or key on the failed tab
+(today it opens the editor). Then encrypted offline export/import using
+`RecoveryKey` with canonical recovery codes and verified restore, before
+promoting sync;
 offer recovery enrolment when the first secret is saved; an optional biometric
 or passcode app lock at the same boundary.
 
