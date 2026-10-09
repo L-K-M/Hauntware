@@ -1,0 +1,4 @@
+7d7a70e200703aa73d8636edaf9ca22c29c43dce9208ae65003c6692f919124b  after-focused-editor-light.png
+55c2b19074e2201aea55be3bf512634fe45ba3065532f334878266d248ae67f6  after-plan-light.png
+bccb986b9921eb5d8bdbfc43725cb947a0a6d33bbc304ce784637e4ab72595e3  before-editor-light.png
+a936c29098f6e3eb03b64e39f34160f520bdb0f45d7a053f0a4e5e91ff92cb23  before-plan-light.png

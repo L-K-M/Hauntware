@@ -551,6 +551,44 @@ final class SyncPlanController extends ChangeNotifier {
   // -- Reads the view binds on -------------------------------------------
 
   SyncPair get pair => _pair;
+
+  /// HTTP-docroot hazards, refined with canonical paths after scan.
+  List<SyncDocrootWarning> get docrootWarnings =>
+      syncDocrootWarnings(_pair, resolvedPaths: docrootPathStates);
+
+  /// Immutable scan paths for the rules editor's warning calculations.
+  Map<SyncSide, SyncDocrootPathState> get docrootPathStates {
+    final resolvedPaths = <SyncSide, SyncDocrootPathState>{};
+    for (final side in SyncSide.values) {
+      final root = side == SyncSide.left ? _leftRoot : _rightRoot;
+      if (root == null) continue;
+
+      final endpoint = side == SyncSide.left ? _pair.left : _pair.right;
+      final location = _trashLocations[side];
+      final rootCase =
+          (side == SyncSide.left ? _leftCaseSensitive : _rightCaseSensitive)
+          ? SyncTrashPathCase.sensitive
+          : SyncTrashPathCase.insensitive;
+      final pathStyle =
+          location?.pathStyle ??
+          (endpoint is RemoteEndpoint || p.style != p.Style.windows
+              ? SyncTrashPathStyle.posix
+              : SyncTrashPathStyle.windows);
+      final trashPath = location != null && location.isResolved
+          ? location.trashRoot
+          : null;
+
+      resolvedPaths[side] = SyncDocrootPathState(
+        rootPath: root,
+        trashPath: trashPath,
+        pathStyle: pathStyle,
+        pathCase: rootCase,
+      );
+    }
+
+    return Map.unmodifiable(resolvedPaths);
+  }
+
   SyncPlanPhase get phase => _phase;
   String? get errorMessage => _errorMessage;
   RemoteFileErrorKind? get errorKind => _errorKind;

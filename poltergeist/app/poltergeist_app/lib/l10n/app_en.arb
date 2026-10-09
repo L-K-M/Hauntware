@@ -6985,6 +6985,10 @@
   "@syncPurgeTrash": {
     "description": "Server-menu command (05 §8 rail 5): empties the active plan's live sync-trash roots after confirmation."
   },
+  "syncAdjustDocrootTrash": "Protect Published Sync Trash…",
+  "@syncAdjustDocrootTrash": {
+    "description": "Server-menu command (05 §8 rail 5): saves when needed and opens the active docroot warning's trash-path field."
+  },
   "syncTrashNotice": "{files, plural, =1{{files} trashed file} other{{files} trashed files}} from {runs, plural, =1{{runs} run} other{{runs} runs}} older than 30 days — delete them?",
   "@syncTrashNotice": {
     "description": "Persistent plan notice for aged sync trash. File counts are journal-derived; run counts include unjournaled directories.",
@@ -7316,6 +7320,29 @@
   "@syncEditorTrashRightLabel": {
     "description": "trashPathRight field label (05 §6): out-of-root trash for the right side."
   },
+  "syncDocrootWarningTitle": "Trash may be public",
+  "@syncDocrootWarningTitle": {
+    "description": "Persistent warning when recoverable sync trash sits inside a likely HTTP document root (05 §8 rail 5)."
+  },
+  "syncDocrootWarningBody": "{side} trash is inside {root}. Deleted and replaced files may be downloadable over HTTP.",
+  "@syncDocrootWarningBody": {
+    "description": "Docroot trash warning body. Names the affected side and sync root.",
+    "placeholders": {
+      "side": {"type": "String"},
+      "root": {"type": "String"}
+    }
+  },
+  "syncDocrootWarningUseSaferPath": "Use safer path",
+  "@syncDocrootWarningUseSaferPath": {
+    "description": "Plan and pair-editor action that prefills the affected trash field with the out-of-root suggestion."
+  },
+  "syncDocrootWarningUseSaferPathForSide": "Use safer path for {side}",
+  "@syncDocrootWarningUseSaferPathForSide": {
+    "description": "Accessible name for a docroot warning action. Distinguishes the affected side when both sides warn.",
+    "placeholders": {
+      "side": {"type": "String"}
+    }
+  },
   "syncEditorPathHint": "/path",
   "@syncEditorPathHint": {
     "description": "Placeholder inside the pair editor's path fields (05 §9)."
@@ -7528,6 +7555,10 @@
   "commandDisabledNoSyncTrash": "Requires live sync trash with no active run",
   "@commandDisabledNoSyncTrash": {
     "description": "Palette reason under sync.purgeTrash. Cached listings never authorize purge."
+  },
+  "commandDisabledNoDocrootTrash": "Requires an editable published-root trash warning",
+  "@commandDisabledNoDocrootTrash": {
+    "description": "Palette reason under sync.adjustDocrootTrash when no persisted, mutable HTTP-docroot warning is active."
   },
   "commandDisabledNoComparableItem": "Requires a selected file present on both sides",
   "@commandDisabledNoComparableItem": {

@@ -5571,6 +5571,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get syncPurgeTrash => 'Purge Sync Trash…';
 
   @override
+  String get syncAdjustDocrootTrash => 'Protect Published Sync Trash…';
+
+  @override
   String syncTrashNotice(int files, int runs) {
     String _temp0 = intl.Intl.pluralLogic(
       files,
@@ -5930,6 +5933,22 @@ class AppLocalizationsEn extends AppLocalizations {
   String get syncEditorTrashRightLabel => 'Right trash path';
 
   @override
+  String get syncDocrootWarningTitle => 'Trash may be public';
+
+  @override
+  String syncDocrootWarningBody(String side, String root) {
+    return '$side trash is inside $root. Deleted and replaced files may be downloadable over HTTP.';
+  }
+
+  @override
+  String get syncDocrootWarningUseSaferPath => 'Use safer path';
+
+  @override
+  String syncDocrootWarningUseSaferPathForSide(String side) {
+    return 'Use safer path for $side';
+  }
+
+  @override
   String get syncEditorPathHint => '/path';
 
   @override
@@ -6106,6 +6125,10 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get commandDisabledNoSyncTrash =>
       'Requires live sync trash with no active run';
+
+  @override
+  String get commandDisabledNoDocrootTrash =>
+      'Requires an editable published-root trash warning';
 
   @override
   String get commandDisabledNoComparableItem =>

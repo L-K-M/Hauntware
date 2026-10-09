@@ -372,7 +372,7 @@ source.**
 | Edit | Undo, Redo │ Cut, Copy, Paste │ Select All, Invert Selection, Quick Select │ Copy Path │ Filter |
 | View | Show/Hide Sidebar, Use Compact/Comfortable Sidebar Rows (D33: one item naming the density it switches to, since the macOS menu cannot show a check), Inspector, Second Pane │ Info, Transfers, Alerts │ Show Hidden Files, Sort By ▸, Keep Folders on Top │ Refresh │ Enter Full Screen |
 | Go | Back, Forward, Enclosing Folder, Home │ Go to Folder…, Edit Path │ Focus Left/Right Pane, Sync Browsing │ Quick Open… |
-| Server | Connect… ⌘K, Disconnect │ Synchronize… ⌥⌘Y, New Saved Sync…, Copy as rsync Command │ Import from ssh config…, Import from another app ▸, Back up and sync… │ Save Workspace…, Workspaces ▸ │ Pause/Resume Transfers |
+| Server | Connect… ⌘K, Disconnect │ Synchronize… ⌥⌘Y, New Saved Sync…, Copy as rsync Command, Purge Sync Trash…, Protect Published Sync Trash…, Compare Selected Item │ Import from ssh config…, Import from another app ▸, Back up and sync… │ Save Workspace…, Workspaces ▸ │ Pause/Resume Transfers |
 | Window | Minimize, Zoom │ Next/Previous Tab │ Bring All to Front |
 | Help | Keyboard Shortcuts, Release Notes, Report an Issue |
 

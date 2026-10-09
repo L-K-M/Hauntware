@@ -2208,6 +2208,7 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'sync.newSavedSync'",
     "'sync.copyRsyncCommand'",
     "'sync.purgeTrash'",
+    "'sync.adjustDocrootTrash'",
     "'sync.compareSelected'",
   },
   // The pair editor's machine literals: numeric TextField seeds, the
@@ -2221,6 +2222,15 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "r'[0-9.]'",
     r"'$i'",
     "'\\n'",
+    "'sync-editor-unlisted-server'",
+    "'sync.trashPath.left'",
+    "'sync.trashPath.right'",
+    "'sync.maxDelete'",
+    r"'${identity.username}@${identity.host}'",
+    r"'${identity.port == 22 ? '' : ':${identity.port}'}'",
+    r"':${identity.port}'",
+    r"'sync.docrootWarning.${warning.side.name}'",
+    r"'sync.docrootWarningAction.${warning.side.name}'",
   },
   // The plan view's machine literals: widget keys, the §8 typed-DELETE
   // sentinel (input validation, never rendered), the side-label
@@ -2242,6 +2252,14 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'${item.status.name}${item.error != null ? '\t${item.error}' : ''}'",
     r"'\t${item.error}'",
     "'—'",
+    r"'sync.docrootWarning.${warning.side.name}'",
+    r"'sync.docrootWarningAction.${warning.side.name}'",
+  },
+  // Unicode bidi isolates around machine paths; never authored copy.
+  'lib/ui/display_path.dart': {
+    r"'\u2066'",
+    r"'\u2069'",
+    r"'$_leftToRightIsolate$path$_popDirectionalIsolate'",
   },
   // The Sync sheet's machine literals (D32 §7): widget keys, the
   // compare sentence's split marker (U+FFFC, never in a translation),

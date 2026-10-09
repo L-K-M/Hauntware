@@ -121,6 +121,7 @@ import 'sync/rsync_copy.dart';
 import 'sync/sync_commands.dart';
 import 'sync/sync_pair_editor.dart';
 import 'sync/sync_plan_format.dart' show syncEndpointLabel;
+import 'sync/sync_rules_edit_request.dart';
 import 'sync/sync_setup_sheet.dart';
 import 'sync/sync_trash_purge_dialog.dart';
 import 'top_toast.dart';
@@ -527,6 +528,8 @@ class _WorkspaceShellState extends State<WorkspaceShell>
   int _openCommandSessions = 0;
 
   bool get _commandSessionActive => _openCommandSessions > 0;
+
+  bool _syncRulesEditActive = false;
 
   /// The latest assembled registry — the Quick Open palette reads it at
   /// open time rather than re-deriving (02 §8.4: the palette is a
@@ -1882,6 +1885,17 @@ class _WorkspaceShellState extends State<WorkspaceShell>
           purgeTrashEnabled: () =>
               !_commandSessionActive &&
               _activeSyncSession?.canPurgeTrash == true,
+          adjustDocrootTrashEnabled: () {
+            if (_commandSessionActive ||
+                _syncRulesEditActive ||
+                widget.bookmarks == null) {
+              return false;
+            }
+            final session = _activeSyncSession;
+            if (session == null || session.planMutationsBlocked) return false;
+
+            return session.docrootWarnings.isNotEmpty;
+          },
           compareEnabled: () =>
               !_commandSessionActive &&
               _activeSyncSession?.canCompareSelection == true,
@@ -1889,6 +1903,7 @@ class _WorkspaceShellState extends State<WorkspaceShell>
           newSavedSync: (context) => _newSavedSync(),
           copyRsync: (context) => _copyRsyncCommand(context),
           purgeTrash: _purgeSyncTrash,
+          adjustDocrootTrash: _adjustDocrootTrash,
           compareSelected: _openSyncComparison,
         ),
       // `queue.togglePause` registers unconditionally (D21): its menu
@@ -2113,8 +2128,10 @@ class _WorkspaceShellState extends State<WorkspaceShell>
           dragOut: _dragOut,
           checkoutSession: widget.checkoutSession,
           onReviewLocalEdits: onReviewLocalEdits,
-          onSyncSaveAsFavorite: _saveSyncAsFavorite,
-          onSyncEditRules: _editSyncRules,
+          onSyncSaveAsFavorite: widget.bookmarks == null
+              ? null
+              : _saveSyncAsFavorite,
+          onSyncEditRules: widget.bookmarks == null ? null : _editSyncRules,
           onImportSshConfig: sshImportCommand == null
               ? null
               : () => unawaited(_runCommand(sshImportCommand)),
@@ -2346,8 +2363,10 @@ class _WorkspaceShellState extends State<WorkspaceShell>
         bookmarks: widget.bookmarks,
         checkoutSession: widget.checkoutSession,
         onReviewLocalEdits: onReviewLocalEdits,
-        onSyncSaveAsFavorite: _saveSyncAsFavorite,
-        onSyncEditRules: _editSyncRules,
+        onSyncSaveAsFavorite: widget.bookmarks == null
+            ? null
+            : _saveSyncAsFavorite,
+        onSyncEditRules: widget.bookmarks == null ? null : _editSyncRules,
         onImportSshConfig: sshImportCommand == null
             ? null
             : () => unawaited(_runCommand(sshImportCommand)),
@@ -4116,6 +4135,20 @@ class _WorkspaceShellState extends State<WorkspaceShell>
     await confirmSyncTrashPurge(context, session, request);
   }
 
+  /// Opens the first active HTTP-docroot warning from menus or the palette.
+  Future<void> _adjustDocrootTrash(BuildContext _) async {
+    final session = _activeSyncSession;
+    if (widget.bookmarks == null ||
+        session == null ||
+        session.planMutationsBlocked) {
+      return;
+    }
+    final warnings = session.docrootWarnings;
+    if (warnings.isEmpty) return;
+
+    await _editSyncRules(session, SyncRulesEditRequest.docroot(warnings.first));
+  }
+
   /// Opens 06 §6 from the focused row resolved by the active plan.
   void _openSyncComparison(BuildContext context) {
     final comparison = _activeSyncSession?.comparisonForSelection();
@@ -4345,15 +4378,66 @@ class _WorkspaceShellState extends State<WorkspaceShell>
   }
 
   /// The plan view's rules edit (05 §7's options affordance): the
-  /// same pair editor, seeded from the live pair. Saving updates the
-  /// session (rules + case overrides → rescan) and re-saves the
-  /// bookmark when the pair is a persisted favorite.
-  Future<void> _editSyncRules(SyncPlanController session) async {
+  /// same pair editor, seeded from the live pair. Rail 4/5 first saves
+  /// an ad-hoc pair; saving the editor then updates the session,
+  /// rescans, and persists the edited favorite.
+  Future<void> _editSyncRules(
+    SyncPlanController session,
+    SyncRulesEditRequest request,
+  ) async {
+    if (_syncRulesEditActive) return;
+    _syncRulesEditActive = true;
+    try {
+      await _editSyncRulesOnce(session, request);
+    } finally {
+      _syncRulesEditActive = false;
+    }
+  }
+
+  Future<void> _editSyncRulesOnce(
+    SyncPlanController session,
+    SyncRulesEditRequest request,
+  ) async {
+    if (session.planMutationsBlocked || !_ownsSyncSession(session)) return;
     final store = widget.bookmarks;
-    final servers = store == null
-        ? const <Bookmark>[]
-        : await _syncServerChoices(store);
-    if (!mounted) return;
+    if (store == null) {
+      _showSidebarNotice(AppLocalizations.of(context).sidebarActionFailed);
+      return;
+    }
+
+    Bookmark? existing;
+    try {
+      existing = await store.byId(session.pair.id);
+    } on Object catch (error, stackTrace) {
+      ApplicationErrorReporter().report(error, stackTrace);
+      if (mounted) {
+        _showSidebarNotice(AppLocalizations.of(context).sidebarActionFailed);
+      }
+      return;
+    }
+    if (!mounted ||
+        !_ownsSyncSession(session) ||
+        session.planMutationsBlocked) {
+      return;
+    }
+    if (existing?.kind != BookmarkKind.savedSync &&
+        !await _saveSyncPairFromSheet(session.pair)) {
+      return;
+    }
+    if (!mounted ||
+        !_ownsSyncSession(session) ||
+        session.planMutationsBlocked) {
+      return;
+    }
+
+    final servers = await _syncServerChoices(store);
+    if (!mounted ||
+        !_ownsSyncSession(session) ||
+        session.planMutationsBlocked) {
+      return;
+    }
+    final currentRequest = _currentSyncRulesEditRequest(session, request);
+    if (currentRequest == null) return;
     final l10n = AppLocalizations.of(context);
     final result = await showDialog<SyncPairEditorResult>(
       context: context,
@@ -4365,24 +4449,63 @@ class _WorkspaceShellState extends State<WorkspaceShell>
           left: session.pairState.caseSensitiveOverrideLeft,
           right: session.pairState.caseSensitiveOverrideRight,
         ),
+        initialDocrootWarning: currentRequest.docrootWarning,
+        initialDocrootPaths: session.docrootPathStates,
+        initialEditTarget: currentRequest.target,
         servers: servers,
         saveLabel: l10n.syncEditorSaveAndRescan,
       ),
     );
-    if (result == null || !mounted) return;
+    if (result == null ||
+        !mounted ||
+        !_ownsSyncSession(session) ||
+        session.planMutationsBlocked) {
+      return;
+    }
     final accepted = await session.updatePairDefinition(
       result.pair,
       caseOverrides: result.caseOverrides,
     );
-    if (!accepted || !mounted) return;
-    final existing = store == null ? null : await store.byId(result.pair.id);
-    if (existing?.kind == BookmarkKind.savedSync) {
-      try {
-        await _persistSyncPair(result.pair);
-      } on Object catch (error, stackTrace) {
-        ApplicationErrorReporter().report(error, stackTrace);
+    if (!accepted) {
+      if (mounted && _ownsSyncSession(session)) {
+        _showSidebarNotice(AppLocalizations.of(context).sidebarActionFailed);
+      }
+      return;
+    }
+    if (!mounted || !_ownsSyncSession(session)) return;
+    try {
+      await _persistSyncPair(result.pair);
+    } on Object catch (error, stackTrace) {
+      ApplicationErrorReporter().report(error, stackTrace);
+      if (mounted) {
+        _showSidebarNotice(AppLocalizations.of(context).sidebarActionFailed);
       }
     }
+  }
+
+  SyncRulesEditRequest? _currentSyncRulesEditRequest(
+    SyncPlanController session,
+    SyncRulesEditRequest request,
+  ) {
+    if (request.target != SyncRulesEditTarget.docrootTrash) return request;
+
+    final side = request.docrootWarning?.side;
+    if (side == null) return null;
+    for (final warning in session.docrootWarnings) {
+      if (warning.side == side) return SyncRulesEditRequest.docroot(warning);
+    }
+
+    return null;
+  }
+
+  bool _ownsSyncSession(SyncPlanController session) {
+    final workspace = _workspace;
+    if (workspace == null) return false;
+
+    return [
+      ...workspace.left.tabs,
+      ...workspace.right.tabs,
+    ].any((tab) => identical(tab.syncSession, session));
   }
 
   /// Every sync open lands here: one SyncPlanController per tab on

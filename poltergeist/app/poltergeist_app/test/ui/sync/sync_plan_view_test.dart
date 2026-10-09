@@ -29,6 +29,7 @@ import 'package:poltergeist_app/theme/app_theme.dart';
 import 'package:poltergeist_app/ui/compare_view.dart';
 import 'package:poltergeist_app/ui/sync/sync_commands.dart';
 import 'package:poltergeist_app/ui/sync/sync_plan_view.dart';
+import 'package:poltergeist_app/ui/sync/sync_rules_edit_request.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
 import 'package:poltergeist_sync/poltergeist_sync.dart';
 
@@ -96,7 +97,7 @@ Future<void> pumpSyncPlanView(
   WidgetTester tester,
   SyncPlanController controller, {
   VoidCallback? onSaveAsFavorite,
-  VoidCallback? onEditRules,
+  ValueChanged<SyncRulesEditRequest>? onEditRules,
   Future<void> Function(RegisteredCommand command)? onRunCommand,
   DateTime Function()? clock,
   Size size = const Size(1200, 720),
@@ -114,7 +115,7 @@ Future<void> _pumpSyncPlanView(
   WidgetTester tester,
   SyncPlanController controller, {
   VoidCallback? onSaveAsFavorite,
-  VoidCallback? onEditRules,
+  ValueChanged<SyncRulesEditRequest>? onEditRules,
   Future<void> Function(RegisteredCommand command)? onRunCommand,
   DateTime Function()? clock,
   Size size = const Size(1200, 720),
@@ -970,8 +971,13 @@ void main() {
       plan: testPlan(pair, items),
     );
     addTearDown(controller.dispose);
+    SyncRulesEditRequest? request;
 
-    await pumpSyncPlanView(tester, controller);
+    await pumpSyncPlanView(
+      tester,
+      controller,
+      onEditRules: (value) => request = value,
+    );
     await pumpToReady(tester, controller);
 
     expect(find.text('Too many deletions'), findsOneWidget);
@@ -984,6 +990,83 @@ void main() {
       find.widgetWithText(FilledButton, 'Delete 3'),
     );
     expect(runButton.onPressed, isNull);
+
+    await tester.tap(find.text('Save as Favorite & Adjust Rules…'));
+    expect(request?.target, SyncRulesEditTarget.maxDelete);
+  });
+
+  testWidgets('docroot warning persists and targets the affected side', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    final scratch = Directory.systemTemp.createTempSync('pg-view-');
+    addTearDown(() => scratch.deleteSync(recursive: true));
+    const rightPath = '/var/www/\u05d0';
+    final pair = testSyncPair(right: rightPath);
+    final controller = fakeController(
+      scratch,
+      pair: pair,
+      plan: testPlan(pair, const []),
+    );
+    addTearDown(controller.dispose);
+    SyncRulesEditRequest? request;
+
+    await pumpSyncPlanView(
+      tester,
+      controller,
+      onEditRules: (value) => request = value,
+    );
+    await pumpToReady(tester, controller);
+
+    expect(
+      find.byKey(const ValueKey('sync.docrootWarning.right')),
+      findsOneWidget,
+    );
+    expect(find.text('Trash may be public'), findsOneWidget);
+    expect(find.textContaining('\u2066$rightPath\u2069'), findsOneWidget);
+    expect(find.text('Use safer path'), findsOneWidget);
+    final warningAction = tester.widget<TextButton>(
+      find.byKey(const ValueKey('sync.docrootWarningAction.right')),
+    );
+    expect(
+      warningAction.style?.foregroundColor?.resolve(const <WidgetState>{}),
+      Theme.of(
+        tester.element(find.byType(SyncPlanView)),
+      ).colorScheme.onErrorContainer,
+    );
+    await tester.pump();
+    expect(
+      find.byKey(const ValueKey('sync.docrootWarning.right')),
+      findsOneWidget,
+    );
+
+    final action = tester.getSemantics(
+      find.byKey(const ValueKey('sync.docrootWarningAction.right')),
+    );
+    expect(action.getSemanticsData().hasAction(ui.SemanticsAction.tap), isTrue);
+    action.owner!.performAction(action.id, ui.SemanticsAction.tap);
+    expect(request?.target, SyncRulesEditTarget.docrootTrash);
+    expect(request?.docrootWarning?.side, SyncSide.right);
+    expect(
+      request?.docrootWarning?.suggestedTrashPath,
+      startsWith('~/.poltergeist-trash/root-'),
+    );
+    expect(
+      tester
+          .getSemantics(find.byKey(const ValueKey('sync.docrootWarning.right')))
+          .flagsCollection
+          .isLiveRegion,
+      isTrue,
+    );
+    expect(
+      tester
+          .getSemantics(
+            find.byKey(const ValueKey('sync.docrootWarningAction.right')),
+          )
+          .label,
+      contains('right'),
+    );
+    semantics.dispose();
   });
 
   testWidgets(

@@ -28,6 +28,7 @@ void main() {
     var newSavedCalls = 0;
     var copyRsyncCalls = 0;
     var purgeTrashCalls = 0;
+    var adjustDocrootTrashCalls = 0;
     var compareCalls = 0;
     var enabled = true;
     final commands = buildSyncCommands(
@@ -36,11 +37,13 @@ void main() {
       savedSyncEnabled: () => enabled,
       copyRsyncEnabled: () => enabled,
       purgeTrashEnabled: () => enabled,
+      adjustDocrootTrashEnabled: () => enabled,
       compareEnabled: () => enabled,
       synchronizePanes: (_) => synchronizeCalls++,
       newSavedSync: (_) => newSavedCalls++,
       copyRsync: (_) => copyRsyncCalls++,
       purgeTrash: (_) => purgeTrashCalls++,
+      adjustDocrootTrash: (_) => adjustDocrootTrashCalls++,
       compareSelected: (_) => compareCalls++,
     );
 
@@ -58,6 +61,9 @@ void main() {
     );
     final compare = commands.firstWhere(
       (c) => c.id == kSyncCompareSelectedCommandId,
+    );
+    final adjustDocrootTrash = commands.firstWhere(
+      (c) => c.id == kSyncAdjustDocrootTrashCommandId,
     );
 
     // ⌥⌘Y on macOS, Ctrl+Alt+Y elsewhere (02 §8.3).
@@ -86,6 +92,7 @@ void main() {
     expect(newSaved.activators, isNull);
     expect(copyRsync.activators, isNull);
     expect(purgeTrash.activators, isNull);
+    expect(adjustDocrootTrash.activators, isNull);
     expect(compare.activators, isNull);
 
     // 02 §9's Commands table: Synchronize sits between the transfer
@@ -98,9 +105,11 @@ void main() {
     expect(copyRsync.menuPlacement?.order, 37);
     expect(purgeTrash.menuPlacement?.menu, AppMenuId.server);
     expect(purgeTrash.menuPlacement?.order, 38);
+    expect(adjustDocrootTrash.menuPlacement?.menu, AppMenuId.server);
+    expect(adjustDocrootTrash.menuPlacement?.order, 39);
     expect(compare.scope, CommandScope.selection);
     expect(compare.menuPlacement?.menu, AppMenuId.server);
-    expect(compare.menuPlacement?.order, 39);
+    expect(compare.menuPlacement?.order, 40);
 
     // Enabled predicates delegate to the shell's checks.
     expect(synchronize.enabled(), isTrue);
@@ -109,6 +118,7 @@ void main() {
     expect(newSaved.enabled(), isFalse);
     expect(copyRsync.enabled(), isFalse);
     expect(purgeTrash.enabled(), isFalse);
+    expect(adjustDocrootTrash.enabled(), isFalse);
     expect(compare.enabled(), isFalse);
     enabled = true;
 
@@ -121,11 +131,13 @@ void main() {
     await newSaved.run(context);
     await copyRsync.run(context);
     await purgeTrash.run(context);
+    await adjustDocrootTrash.run(context);
     await compare.run(context);
     expect(synchronizeCalls, 1);
     expect(newSavedCalls, 1);
     expect(copyRsyncCalls, 1);
     expect(purgeTrashCalls, 1);
+    expect(adjustDocrootTrashCalls, 1);
     expect(compareCalls, 1);
   });
 }

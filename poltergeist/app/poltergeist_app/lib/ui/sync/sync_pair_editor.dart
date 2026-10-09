@@ -14,6 +14,14 @@ import 'package:poltergeist_sync/poltergeist_sync.dart';
 import '../../l10n/app_localizations.dart';
 import '../../services/sync_plan_controller.dart' show SyncCaseOverrides;
 import '../../services/uuid.dart';
+import '../display_path.dart';
+import 'sync_rules_edit_request.dart';
+
+const String _unlistedServerId = 'sync-editor-unlisted-server';
+final DateTime _unlistedServerTimestamp = DateTime.fromMillisecondsSinceEpoch(
+  0,
+  isUtc: true,
+);
 
 /// What the editor produces on save.
 final class SyncPairEditorResult {
@@ -36,6 +44,9 @@ final class SyncPairEditorDialog extends StatefulWidget {
     super.key,
     this.initial,
     this.initialCaseOverrides,
+    this.initialDocrootWarning,
+    this.initialDocrootPaths = const {},
+    this.initialEditTarget = SyncRulesEditTarget.general,
     this.servers = const [],
     this.saveLabel,
   });
@@ -47,6 +58,16 @@ final class SyncPairEditorDialog extends StatefulWidget {
   /// sidebar has not). They seed the two case fields so an unrelated
   /// save never resets a stored override to "auto".
   final SyncCaseOverrides? initialCaseOverrides;
+
+  /// A plan-view warning to resolve immediately. Its suggestion is
+  /// prefilled and the affected trash field receives focus.
+  final SyncDocrootWarning? initialDocrootWarning;
+
+  /// Scan paths for [initial], retained only while endpoints stay unchanged.
+  final Map<SyncSide, SyncDocrootPathState> initialDocrootPaths;
+
+  /// The advanced field a plan refusal asks the editor to reveal.
+  final SyncRulesEditTarget initialEditTarget;
 
   /// Remote candidates — the bookmark store's identity-backed
   /// `remotePath` rows (a missing embedded identity has nothing a
@@ -77,8 +98,12 @@ class _SyncPairEditorDialogState extends State<SyncPairEditorDialog> {
   late final TextEditingController _excludes;
   late final TextEditingController _trashLeft;
   late final TextEditingController _trashRight;
+  late final FocusNode _trashLeftFocus;
+  late final FocusNode _trashRightFocus;
+  late final ExpansibleController _options;
   late final TextEditingController _mtimeTolerance;
   late final TextEditingController _maxDelete;
+  late final FocusNode _maxDeleteFocus;
   late final TextEditingController _fractionWarn;
   late int _concurrency;
   bool? _caseLeft;
@@ -104,16 +129,47 @@ class _SyncPairEditorDialogState extends State<SyncPairEditorDialog> {
     _excludes = TextEditingController(text: rules.excludeGlobs.join('\n'));
     _trashLeft = TextEditingController(text: rules.trashPathLeft ?? '');
     _trashRight = TextEditingController(text: rules.trashPathRight ?? '');
+    _trashLeftFocus = FocusNode(debugLabel: 'sync.trashPath.left');
+    _trashRightFocus = FocusNode(debugLabel: 'sync.trashPath.right');
+    _options = ExpansibleController();
     _mtimeTolerance = TextEditingController(
       text: '${rules.mtimeToleranceSecs}',
     );
     _maxDelete = TextEditingController(text: '${rules.maxDelete}');
+    _maxDeleteFocus = FocusNode(debugLabel: 'sync.maxDelete');
     _fractionWarn = TextEditingController(
       text: '${rules.deleteFractionWarn}',
     );
     _concurrency = rules.transferConcurrency;
     _caseLeft = widget.initialCaseOverrides?.left;
     _caseRight = widget.initialCaseOverrides?.right;
+
+    final warning = _currentTargetedWarning();
+    if (warning != null) {
+      _trashField(warning.side).text = warning.suggestedTrashPath;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _options.expand();
+        _trashFocus(warning.side).requestFocus();
+      });
+    } else if (widget.initialEditTarget == SyncRulesEditTarget.maxDelete) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _options.expand();
+        _maxDeleteFocus.requestFocus();
+      });
+    }
+  }
+
+  SyncDocrootWarning? _currentTargetedWarning() {
+    final requested = widget.initialDocrootWarning;
+    if (requested == null) return null;
+
+    for (final warning in _docrootWarnings()) {
+      if (warning.side == requested.side) return warning;
+    }
+
+    return null;
   }
 
   String _endpointPath(SyncEndpoint? endpoint) => switch (endpoint) {
@@ -131,21 +187,35 @@ class _SyncPairEditorDialogState extends State<SyncPairEditorDialog> {
     for (final bookmark in widget.servers) {
       final candidate = bookmark.server;
       if (candidate == null) continue;
-      if (ref.serverConfigId != null &&
-          candidate.serverConfigId == ref.serverConfigId) {
-        return bookmark;
-      }
-      final a = candidate.identity;
-      final b = ref.identity;
-      if (a != null &&
-          b != null &&
-          a.host == b.host &&
-          a.port == b.port &&
-          a.username == b.username) {
-        return bookmark;
-      }
+      if (_sameServerReference(candidate, ref)) return bookmark;
     }
-    return null;
+
+    // Ad-hoc remote panes need not have a matching remotePath favorite.
+    // Keep their embedded server selectable so a rules edit cannot turn
+    // the endpoint into a local path.
+    final identity = ref.identity;
+    final label = identity == null
+        ? ref.serverConfigId!
+        : '${identity.username}@${identity.host}'
+              '${identity.port == 22 ? '' : ':${identity.port}'}';
+    return Bookmark(
+      id: _unlistedServerId,
+      kind: BookmarkKind.remotePath,
+      label: label,
+      server: ref,
+      remotePath: endpoint.path,
+      sortKey: '',
+      createdAt: _unlistedServerTimestamp,
+      updatedAt: _unlistedServerTimestamp,
+    );
+  }
+
+  List<Bookmark> _serverChoices(Bookmark? selected) {
+    if (selected == null || widget.servers.contains(selected)) {
+      return widget.servers;
+    }
+
+    return [...widget.servers, selected];
   }
 
   @override
@@ -163,6 +233,10 @@ class _SyncPairEditorDialogState extends State<SyncPairEditorDialog> {
     ]) {
       field.dispose();
     }
+    _trashLeftFocus.dispose();
+    _trashRightFocus.dispose();
+    _maxDeleteFocus.dispose();
+    _options.dispose();
     super.dispose();
   }
 
@@ -175,6 +249,79 @@ class _SyncPairEditorDialogState extends State<SyncPairEditorDialog> {
       server == null
           ? LocalEndpoint(path.text.trim())
           : RemoteEndpoint(server: server.server!, path: path.text.trim());
+
+  TextEditingController _trashField(SyncSide side) =>
+      side == SyncSide.left ? _trashLeft : _trashRight;
+
+  FocusNode _trashFocus(SyncSide side) =>
+      side == SyncSide.left ? _trashLeftFocus : _trashRightFocus;
+
+  SyncPair _warningPair() {
+    final deletions = _direction == SyncDirection.bidirectional
+        ? DeletionPolicy.none
+        : _deletions;
+    return SyncPair(
+      id: widget.initial?.id ?? '',
+      name: _name.text,
+      left: _endpointFor(_leftServer, _leftPath),
+      right: _endpointFor(_rightServer, _rightPath),
+      rules: SyncRuleSet(
+        direction: _direction,
+        deletions: deletions,
+        backups: _backups,
+        trashPathLeft: _optionalText(_trashLeft),
+        trashPathRight: _optionalText(_trashRight),
+      ),
+    );
+  }
+
+  List<SyncDocrootWarning> _docrootWarnings() {
+    final pair = _warningPair();
+    final initial = widget.initial;
+    if (initial == null || widget.initialDocrootPaths.isEmpty) {
+      return syncDocrootWarnings(pair);
+    }
+
+    final resolvedPaths = <SyncSide, SyncDocrootPathState>{};
+    for (final entry in widget.initialDocrootPaths.entries) {
+      final side = entry.key;
+      final endpoint = side == SyncSide.left ? pair.left : pair.right;
+      final initialEndpoint = side == SyncSide.left
+          ? initial.left
+          : initial.right;
+      if (canonicalEndpointIdentity(endpoint) !=
+          canonicalEndpointIdentity(initialEndpoint)) {
+        continue;
+      }
+
+      final configured = side == SyncSide.left
+          ? pair.rules.trashPathLeft
+          : pair.rules.trashPathRight;
+      final initialConfigured = side == SyncSide.left
+          ? initial.rules.trashPathLeft
+          : initial.rules.trashPathRight;
+      final resolved = entry.value;
+      // Keep canonical roots for aliases; edited trash needs a fresh scan.
+      resolvedPaths[side] = SyncDocrootPathState(
+        rootPath: resolved.rootPath,
+        trashPath: configured == initialConfigured ? resolved.trashPath : null,
+        pathStyle: resolved.pathStyle,
+        pathCase: resolved.pathCase,
+      );
+    }
+
+    return syncDocrootWarnings(pair, resolvedPaths: resolvedPaths);
+  }
+
+  void _useSuggestedTrashPath(SyncDocrootWarning warning) {
+    _trashField(warning.side).text = warning.suggestedTrashPath;
+    setState(() {});
+    _options.expand();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _trashFocus(warning.side).requestFocus();
+    });
+  }
 
   SyncPairEditorResult _result() {
     final initial = widget.initial;
@@ -249,6 +396,7 @@ class _SyncPairEditorDialogState extends State<SyncPairEditorDialog> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final docrootWarnings = _docrootWarnings();
     return AlertDialog(
       title: Text(l10n.syncEditorTitle),
       scrollable: true,
@@ -267,7 +415,7 @@ class _SyncPairEditorDialogState extends State<SyncPairEditorDialog> {
             const SizedBox(height: 12),
             _EndpointField(
               label: l10n.syncSideLeft,
-              servers: widget.servers,
+              servers: _serverChoices(_leftServer),
               localLabel: l10n.syncPairLocalLabel,
               server: _leftServer,
               path: _leftPath,
@@ -278,7 +426,7 @@ class _SyncPairEditorDialogState extends State<SyncPairEditorDialog> {
             const SizedBox(height: 8),
             _EndpointField(
               label: l10n.syncSideRight,
-              servers: widget.servers,
+              servers: _serverChoices(_rightServer),
               localLabel: l10n.syncPairLocalLabel,
               server: _rightServer,
               path: _rightPath,
@@ -334,7 +482,17 @@ class _SyncPairEditorDialogState extends State<SyncPairEditorDialog> {
               ],
             ),
             const SizedBox(height: 8),
+            for (final warning in docrootWarnings) ...[
+              _DocrootWarning(
+                warning: warning,
+                l10n: l10n,
+                onUseSuggestion: () => _useSuggestedTrashPath(warning),
+              ),
+              const SizedBox(height: 8),
+            ],
             ExpansionTile(
+              controller: _options,
+              initiallyExpanded: widget.initialDocrootWarning != null,
               title: Text(
                 l10n.syncEditorOptionsSection,
                 style: Theme.of(context).textTheme.labelLarge,
@@ -419,19 +577,25 @@ class _SyncPairEditorDialogState extends State<SyncPairEditorDialog> {
                   children: [
                     Expanded(
                       child: TextField(
+                        key: const ValueKey('sync.trashPath.left'),
                         controller: _trashLeft,
+                        focusNode: _trashLeftFocus,
                         decoration: InputDecoration(
                           labelText: l10n.syncEditorTrashLeftLabel,
                         ),
+                        onChanged: (_) => setState(() {}),
                       ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: TextField(
+                        key: const ValueKey('sync.trashPath.right'),
                         controller: _trashRight,
+                        focusNode: _trashRightFocus,
                         decoration: InputDecoration(
                           labelText: l10n.syncEditorTrashRightLabel,
                         ),
+                        onChanged: (_) => setState(() {}),
                       ),
                     ),
                   ],
@@ -448,7 +612,9 @@ class _SyncPairEditorDialogState extends State<SyncPairEditorDialog> {
                     const SizedBox(width: 12),
                     Expanded(
                       child: _IntField(
+                        key: const ValueKey('sync.maxDelete'),
                         controller: _maxDelete,
+                        focusNode: _maxDeleteFocus,
                         label: l10n.syncEditorMaxDeleteLabel,
                       ),
                     ),
@@ -539,6 +705,99 @@ class _SyncPairEditorDialogState extends State<SyncPairEditorDialog> {
   }
 }
 
+final class _DocrootWarning extends StatelessWidget {
+  const _DocrootWarning({
+    required this.warning,
+    required this.l10n,
+    required this.onUseSuggestion,
+  });
+
+  final SyncDocrootWarning warning;
+  final AppLocalizations l10n;
+  final VoidCallback onUseSuggestion;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final side = warning.side == SyncSide.left
+        ? l10n.syncSideLeft
+        : l10n.syncSideRight;
+    final body = l10n.syncDocrootWarningBody(
+      side,
+      isolatePathForDisplay(warning.rootPath),
+    );
+    return Semantics(
+      container: true,
+      explicitChildNodes: true,
+      liveRegion: true,
+      label: body,
+      child: Material(
+        key: ValueKey('sync.docrootWarning.${warning.side.name}'),
+        color: theme.colorScheme.errorContainer,
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              ExcludeSemantics(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      Icons.public_off_outlined,
+                      size: 20,
+                      color: theme.colorScheme.onErrorContainer,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            l10n.syncDocrootWarningTitle,
+                            style: theme.textTheme.labelLarge?.copyWith(
+                              color: theme.colorScheme.onErrorContainer,
+                            ),
+                          ),
+                          Text(
+                            body,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onErrorContainer,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  key: ValueKey(
+                    'sync.docrootWarningAction.${warning.side.name}',
+                  ),
+                  style: TextButton.styleFrom(
+                    foregroundColor: theme.colorScheme.onErrorContainer,
+                  ),
+                  onPressed: onUseSuggestion,
+                  child: Text(
+                    l10n.syncDocrootWarningUseSaferPath,
+                    semanticsLabel: l10n.syncDocrootWarningUseSaferPathForSide(
+                      side,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// One endpoint row: the local/server picker and the path field.
 class _EndpointField extends StatelessWidget {
   const _EndpointField({
@@ -568,6 +827,7 @@ class _EndpointField extends StatelessWidget {
           width: 160,
           child: DropdownButtonFormField<Bookmark?>(
             initialValue: server,
+            isExpanded: true,
             decoration: InputDecoration(labelText: label, isDense: true),
             items: [
               DropdownMenuItem(value: null, child: Text(localLabel)),
@@ -670,18 +930,42 @@ class _Dropdown<T> extends StatelessWidget {
 }
 
 class _IntField extends StatelessWidget {
-  const _IntField({required this.controller, required this.label});
+  const _IntField({
+    super.key,
+    required this.controller,
+    required this.label,
+    this.focusNode,
+  });
 
   final TextEditingController controller;
   final String label;
+  final FocusNode? focusNode;
 
   @override
   Widget build(BuildContext context) {
     return TextField(
       controller: controller,
+      focusNode: focusNode,
       keyboardType: TextInputType.number,
       inputFormatters: [FilteringTextInputFormatter.digitsOnly],
       decoration: InputDecoration(labelText: label, isDense: true),
     );
   }
+}
+
+bool _sameServerReference(BookmarkServerRef first, BookmarkServerRef second) {
+  final firstConfigId = first.serverConfigId;
+  final secondConfigId = second.serverConfigId;
+  if (firstConfigId != null || secondConfigId != null) {
+    return firstConfigId == secondConfigId;
+  }
+
+  final firstIdentity = first.identity!;
+  final secondIdentity = second.identity!;
+  return firstIdentity.host == secondIdentity.host &&
+      firstIdentity.port == secondIdentity.port &&
+      firstIdentity.username == secondIdentity.username &&
+      firstIdentity.authMethod == secondIdentity.authMethod &&
+      firstIdentity.secretRef == secondIdentity.secretRef &&
+      firstIdentity.identityFilePath == secondIdentity.identityFilePath;
 }
