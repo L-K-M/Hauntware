@@ -45,6 +45,7 @@ final class SyncPairEditorDialog extends StatefulWidget {
     this.initial,
     this.initialCaseOverrides,
     this.initialDocrootWarning,
+    this.initialDocrootPaths = const {},
     this.initialEditTarget = SyncRulesEditTarget.general,
     this.servers = const [],
     this.saveLabel,
@@ -61,6 +62,9 @@ final class SyncPairEditorDialog extends StatefulWidget {
   /// A plan-view warning to resolve immediately. Its suggestion is
   /// prefilled and the affected trash field receives focus.
   final SyncDocrootWarning? initialDocrootWarning;
+
+  /// Scan paths for [initial], retained only while endpoints stay unchanged.
+  final Map<SyncSide, SyncDocrootPathState> initialDocrootPaths;
 
   /// The advanced field a plan refusal asks the editor to reveal.
   final SyncRulesEditTarget initialEditTarget;
@@ -161,7 +165,7 @@ class _SyncPairEditorDialogState extends State<SyncPairEditorDialog> {
     final requested = widget.initialDocrootWarning;
     if (requested == null) return null;
 
-    for (final warning in syncDocrootWarnings(_warningPair())) {
+    for (final warning in _docrootWarnings()) {
       if (warning.side == requested.side) return warning;
     }
 
@@ -271,6 +275,44 @@ class _SyncPairEditorDialogState extends State<SyncPairEditorDialog> {
     );
   }
 
+  List<SyncDocrootWarning> _docrootWarnings() {
+    final pair = _warningPair();
+    final initial = widget.initial;
+    if (initial == null || widget.initialDocrootPaths.isEmpty) {
+      return syncDocrootWarnings(pair);
+    }
+
+    final resolvedPaths = <SyncSide, SyncDocrootPathState>{};
+    for (final entry in widget.initialDocrootPaths.entries) {
+      final side = entry.key;
+      final endpoint = side == SyncSide.left ? pair.left : pair.right;
+      final initialEndpoint = side == SyncSide.left
+          ? initial.left
+          : initial.right;
+      if (canonicalEndpointIdentity(endpoint) !=
+          canonicalEndpointIdentity(initialEndpoint)) {
+        continue;
+      }
+
+      final configured = side == SyncSide.left
+          ? pair.rules.trashPathLeft
+          : pair.rules.trashPathRight;
+      final initialConfigured = side == SyncSide.left
+          ? initial.rules.trashPathLeft
+          : initial.rules.trashPathRight;
+      final resolved = entry.value;
+      // Keep canonical roots for aliases; edited trash needs a fresh scan.
+      resolvedPaths[side] = SyncDocrootPathState(
+        rootPath: resolved.rootPath,
+        trashPath: configured == initialConfigured ? resolved.trashPath : null,
+        pathStyle: resolved.pathStyle,
+        pathCase: resolved.pathCase,
+      );
+    }
+
+    return syncDocrootWarnings(pair, resolvedPaths: resolvedPaths);
+  }
+
   void _useSuggestedTrashPath(SyncDocrootWarning warning) {
     _trashField(warning.side).text = warning.suggestedTrashPath;
     setState(() {});
@@ -354,7 +396,7 @@ class _SyncPairEditorDialogState extends State<SyncPairEditorDialog> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final docrootWarnings = syncDocrootWarnings(_warningPair());
+    final docrootWarnings = _docrootWarnings();
     return AlertDialog(
       title: Text(l10n.syncEditorTitle),
       scrollable: true,

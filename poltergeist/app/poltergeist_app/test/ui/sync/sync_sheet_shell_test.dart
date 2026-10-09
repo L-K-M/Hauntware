@@ -23,7 +23,7 @@ import 'package:poltergeist_app/ui/sync/sync_plan_view.dart';
 import 'package:poltergeist_app/ui/workspace_shell.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
 import 'package:poltergeist_sync/poltergeist_sync.dart'
-    show SyncPair, SyncSide, syncPairFromBookmark;
+    show LocalEndpoint, SyncPair, SyncSide, syncPairFromBookmark;
 
 import '../../services/engine_session_test.dart' as session_test;
 import '../../support/fake_bookmark_store.dart';
@@ -304,6 +304,56 @@ void main() {
       find.byKey(const ValueKey('sync.docrootWarning.right')),
       findsNothing,
     );
+  });
+
+  testWidgets('canonical docroot action prefills and focuses the safer path', (
+    tester,
+  ) async {
+    final fixture = await _pumpShell(
+      tester,
+      rightName: 'public_html',
+      seed: (f) => File('${f.left.path}/a.txt').writeAsStringSync('alpha'),
+    );
+    await runShellCommand(tester, kSyncSynchronizePanesCommandId);
+    await _tapAndWait(
+      tester,
+      'sync.sheet.simulate',
+      () => _session(tester)?.phase == SyncPlanPhase.ready,
+    );
+    final session = _session(tester)!;
+    final alias = Link('${fixture.scratch.path}/published')
+      ..createSync(fixture.right.path);
+    final pair = session.pair;
+    await tester.runAsync(() async {
+      expect(
+        await session.updatePairDefinition(
+          SyncPair(
+            id: pair.id,
+            name: pair.name,
+            left: pair.left,
+            right: LocalEndpoint(alias.path),
+            rules: pair.rules,
+          ),
+        ),
+        isTrue,
+      );
+    });
+    await tester.pumpAndSettle();
+
+    final warning = session.docrootWarnings.single;
+    expect(warning.rootPath, fixture.right.resolveSymbolicLinksSync());
+    await _tapAndWait(
+      tester,
+      'sync.docrootWarningAction.right',
+      () => find.byType(SyncPairEditorDialog).evaluate().isNotEmpty,
+    );
+    await tester.pumpAndSettle();
+
+    final field = tester.widget<TextField>(
+      find.byKey(const ValueKey('sync.trashPath.right')),
+    );
+    expect(field.controller!.text, warning.suggestedTrashPath);
+    expect(field.focusNode!.hasFocus, isTrue);
   });
 
   testWidgets('docroot action ignores a second invocation while opening', (

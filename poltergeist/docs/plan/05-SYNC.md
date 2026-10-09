@@ -1164,7 +1164,10 @@ heavy set (`node_modules`, `.git`, `build`, `target`, `__pycache__`):
    lexical containment and case-folds conservatively because path case is
    not known; the plan view refines it with canonical root and trash paths
    under the detected root case rule. A mixed absolute/`~` relationship is
-   unknown before home expansion, so it remains warned until scan. A side
+   unknown before home expansion, so it remains warned until scan. An
+   editor opened from a scanned plan inherits those canonical paths.
+   Endpoint edits discard that side's scan paths; trash-path edits discard
+   its resolved trash path. A side
    participates whenever an allowed plan action can write or delete there:
    conflict and kind-change overrides can target either side regardless of
    the default direction, and Mirror offers explicit deletes on either

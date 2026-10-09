@@ -553,7 +553,11 @@ final class SyncPlanController extends ChangeNotifier {
   SyncPair get pair => _pair;
 
   /// HTTP-docroot hazards, refined with canonical paths after scan.
-  List<SyncDocrootWarning> get docrootWarnings {
+  List<SyncDocrootWarning> get docrootWarnings =>
+      syncDocrootWarnings(_pair, resolvedPaths: docrootPathStates);
+
+  /// Immutable scan paths for the rules editor's warning calculations.
+  Map<SyncSide, SyncDocrootPathState> get docrootPathStates {
     final resolvedPaths = <SyncSide, SyncDocrootPathState>{};
     for (final side in SyncSide.values) {
       final root = side == SyncSide.left ? _leftRoot : _rightRoot;
@@ -582,7 +586,7 @@ final class SyncPlanController extends ChangeNotifier {
       );
     }
 
-    return syncDocrootWarnings(_pair, resolvedPaths: resolvedPaths);
+    return Map.unmodifiable(resolvedPaths);
   }
 
   SyncPlanPhase get phase => _phase;

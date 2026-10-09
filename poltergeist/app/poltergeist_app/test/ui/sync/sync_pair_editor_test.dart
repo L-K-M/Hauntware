@@ -15,12 +15,22 @@ import 'package:poltergeist_sync/poltergeist_sync.dart';
 
 import '../../support/sync_harness.dart';
 
+const _canonicalDocrootPaths = {
+  SyncSide.right: SyncDocrootPathState(
+    rootPath: '/var/www/site',
+    trashPath: '/var/www/site/.poltergeist-trash',
+    pathStyle: SyncTrashPathStyle.posix,
+    pathCase: SyncTrashPathCase.sensitive,
+  ),
+};
+
 /// Mounts a launcher that opens the editor and records what it pops.
 Future<List<SyncPairEditorResult?>> _pumpEditor(
   WidgetTester tester, {
   SyncPair? initial,
   SyncCaseOverrides? initialCaseOverrides,
   SyncDocrootWarning? initialDocrootWarning,
+  Map<SyncSide, SyncDocrootPathState> initialDocrootPaths = const {},
   SyncRulesEditTarget initialEditTarget = SyncRulesEditTarget.general,
   List<Bookmark> servers = const [],
 }) async {
@@ -43,6 +53,7 @@ Future<List<SyncPairEditorResult?>> _pumpEditor(
                     initial: initial,
                     initialCaseOverrides: initialCaseOverrides,
                     initialDocrootWarning: initialDocrootWarning,
+                    initialDocrootPaths: initialDocrootPaths,
                     initialEditTarget: initialEditTarget,
                     servers: servers,
                   ),
@@ -240,6 +251,76 @@ void main() {
     );
     expect(field.controller!.text, currentWarning.suggestedTrashPath);
     expect(field.controller!.text, isNot(oldWarning.suggestedTrashPath));
+  });
+
+  testWidgets('a canonical trash alias keeps the targeted suggestion', (
+    tester,
+  ) async {
+    final pair = testSyncPair(
+      right: '/published',
+      rules: const SyncRuleSet(trashPathRight: '/srv/private/trash'),
+    );
+    final warning = syncDocrootWarnings(
+      pair,
+      resolvedPaths: _canonicalDocrootPaths,
+    ).single;
+    await _pumpEditor(
+      tester,
+      initial: pair,
+      initialDocrootWarning: warning,
+      initialDocrootPaths: _canonicalDocrootPaths,
+    );
+
+    final field = tester.widget<TextField>(
+      find.byKey(const ValueKey('sync.trashPath.right')),
+    );
+    expect(field.controller!.text, warning.suggestedTrashPath);
+    expect(field.focusNode!.hasFocus, isTrue);
+  });
+
+  testWidgets('edited trash paths discard the scanned trash location', (
+    tester,
+  ) async {
+    await _pumpEditor(
+      tester,
+      initial: testSyncPair(right: '/published'),
+      initialDocrootPaths: _canonicalDocrootPaths,
+    );
+    expect(find.text('Trash may be public'), findsOneWidget);
+    await tester.tap(find.text('Options'));
+    await tester.pumpAndSettle();
+
+    final field = find.byKey(const ValueKey('sync.trashPath.right'));
+    await tester.enterText(field, '/srv/private/trash');
+    await tester.pump();
+    expect(find.text('Trash may be public'), findsNothing);
+
+    await tester.enterText(field, 'private/trash');
+    await tester.pump();
+    expect(find.text('Trash may be public'), findsOneWidget);
+  });
+
+  testWidgets('endpoint edits discard the scanned warning context', (
+    tester,
+  ) async {
+    await _pumpEditor(
+      tester,
+      initial: testSyncPair(right: '/published'),
+      initialDocrootPaths: _canonicalDocrootPaths,
+    );
+    expect(find.text('Trash may be public'), findsOneWidget);
+
+    final field = find.widgetWithText(TextField, '/published');
+    await tester.enterText(field, '/home/me/data');
+    await tester.pump();
+    expect(find.text('Trash may be public'), findsNothing);
+
+    await tester.enterText(
+      find.widgetWithText(TextField, '/home/me/data'),
+      '/var/www/other',
+    );
+    await tester.pump();
+    expect(find.textContaining('\u2066/var/www/other\u2069'), findsOneWidget);
   });
 
   testWidgets('a max-delete target expands and focuses its field', (

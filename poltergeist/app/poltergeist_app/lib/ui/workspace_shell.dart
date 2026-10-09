@@ -4450,6 +4450,7 @@ class _WorkspaceShellState extends State<WorkspaceShell>
           right: session.pairState.caseSensitiveOverrideRight,
         ),
         initialDocrootWarning: currentRequest.docrootWarning,
+        initialDocrootPaths: session.docrootPathStates,
         initialEditTarget: currentRequest.target,
         servers: servers,
         saveLabel: l10n.syncEditorSaveAndRescan,
