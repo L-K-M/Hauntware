@@ -60,12 +60,13 @@ void main() {
 
   testWidgets('macOS: settings rebuild preserves native menus', (tester) async {
     final settings = testSettings();
-    workspace.newDocument();
+    expect(workspace.newDocument(), isNotNull);
+    workspace.toolHistory.record('sortLines', {'order': 'descending'});
     await tester.pumpWidget(
       PlanchetteApp(workspace: workspace, settings: settings),
     );
     await tester.pumpAndSettle();
-    // Warm the platform bar's first didUpdateWidget before measuring.
+    // Changing size enables Actual Size before the theme-only rebuild.
     await settings.update(settings.value.copyWith(fontSize: 16));
     await tester.pumpAndSettle();
     final updates = delegate.updates;

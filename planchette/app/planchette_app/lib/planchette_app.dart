@@ -1272,8 +1272,9 @@ class _DocumentShellState extends State<_DocumentShell>
       return cached;
     }
 
+    final rebuilt = _nativeMenus(menus);
     _nativeMenuSignature = signature;
-    return _cachedNativeMenus = _nativeMenus(menus);
+    return _cachedNativeMenus = rebuilt;
   }
 
   Widget _nativeMenu(List<_ShellMenu> menus, Widget child) =>

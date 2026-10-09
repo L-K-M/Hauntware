@@ -216,7 +216,9 @@ void main() {
       WidgetsBinding.instance.platformMenuDelegate = original;
     });
     await startWindows(tester);
-    final tab = windows.activeWindow!.workspace.newDocument()!;
+    final workspace = windows.activeWindow!.workspace;
+    final tab = workspace.newDocument()!;
+    workspace.toolHistory.record('sortLines', {'order': 'descending'});
     tab.editor.text.text = 'one\ntwo';
 
     await tester.pumpWidget(root(), wrapWithView: false);
