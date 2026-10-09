@@ -17,6 +17,7 @@ import 'package:ghost_ui/ghost_ui.dart'
         GhostSubmenuRow,
         formatShortcutActivator,
         ghostMenuBarChildren,
+        ghostMenuSignature,
         ghostPlatformMenuGroups;
 import 'package:planchette_editor/planchette_editor.dart'
     hide GhostMenuDivider, GhostMenuItem;
@@ -1252,8 +1253,31 @@ class _DocumentShellState extends State<_DocumentShell>
       ),
   ];
 
+  /// Reusing items keeps unrelated rebuilds from replacing an open AppKit
+  /// menu. Captured document, history and window targets must stay current.
+  List<Object?>? _nativeMenuSignature;
+  List<PlatformMenuItem>? _cachedNativeMenus;
+
+  List<PlatformMenuItem> _syncedNativeMenus(List<_ShellMenu> menus) {
+    final signature = <Object?>[
+      workspace.active,
+      workspace.interactionLocked,
+      widget.onQuit != null,
+      ...workspace.toolHistory.recent,
+      ...?window?.owner.windows,
+      ...ghostMenuSignature([for (final menu in menus) _ghostMenu(menu)]),
+    ];
+    final cached = _cachedNativeMenus;
+    if (cached != null && listEquals(signature, _nativeMenuSignature)) {
+      return cached;
+    }
+
+    _nativeMenuSignature = signature;
+    return _cachedNativeMenus = _nativeMenus(menus);
+  }
+
   Widget _nativeMenu(List<_ShellMenu> menus, Widget child) =>
-      PlatformMenuBar(menus: _nativeMenus(menus), child: child);
+      PlatformMenuBar(menus: _syncedNativeMenus(menus), child: child);
 
   /// The latest native menu tree this build made: the post-frame publish
   /// checks identity so a newer build's items win over a stale callback.
@@ -1491,7 +1515,7 @@ class _DocumentShellState extends State<_DocumentShell>
       if (slot != null && window != null) {
         // The root renders the one native menu bar; this window's items go
         // there while it is the active one.
-        _publishMenu(slot, _nativeMenus(menus));
+        _publishMenu(slot, _syncedNativeMenus(menus));
       } else {
         body = _nativeMenu(menus, body);
       }

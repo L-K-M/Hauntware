@@ -38,12 +38,16 @@ final class _FakeView extends TestFlutterView {
 /// asserts the real platform for provided items).
 final class _RecordingMenuDelegate extends PlatformMenuDelegate {
   List<PlatformMenuItem> menus = const [];
+  int updates = 0;
 
   @override
   void clearMenus() => menus = const [];
 
   @override
-  void setMenus(List<PlatformMenuItem> topLevelMenus) => menus = topLevelMenus;
+  void setMenus(List<PlatformMenuItem> topLevelMenus) {
+    menus = topLevelMenus;
+    updates++;
+  }
 
   @override
   bool debugLockDelegate(BuildContext context) => true;
@@ -200,5 +204,33 @@ void main() {
       _itemLabels(delegate.menus).where((label) => label.startsWith('✓ ')),
       [startsWith('✓ ')],
     );
+  }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
+
+  testWidgets('macOS: caret and metrics updates preserve native menus', (
+    tester,
+  ) async {
+    final delegate = _RecordingMenuDelegate();
+    final original = WidgetsBinding.instance.platformMenuDelegate;
+    WidgetsBinding.instance.platformMenuDelegate = delegate;
+    addTearDown(() {
+      WidgetsBinding.instance.platformMenuDelegate = original;
+    });
+    await startWindows(tester);
+    final tab = windows.activeWindow!.workspace.newDocument()!;
+    tab.editor.text.text = 'one\ntwo';
+
+    await tester.pumpWidget(root(), wrapWithView: false);
+    await tester.pumpAndSettle();
+    final updates = delegate.updates;
+
+    // Moving a collapsed caret changes editor state, not menu contents.
+    tab.editor.text.selection = const TextSelection.collapsed(offset: 5);
+    await tester.pumpAndSettle();
+    expect(delegate.updates, updates);
+
+    tester.binding.handleMetricsChanged();
+    await tester.pumpAndSettle();
+    expect(delegate.updates, updates);
+    expect(tester.takeException(), isNull);
   }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
 }
