@@ -1,0 +1,3027 @@
+import 'dart:async';
+import 'dart:collection';
+import 'dart:convert';
+import 'dart:developer' as developer;
+
+import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
+import 'package:planchette_editor/planchette_editor.dart'
+    show EditorTextSize, EditorZoom;
+import 'package:seance_core/seance_core.dart';
+import 'package:xterm/xterm.dart' show TerminalController;
+
+import 'services/app_services.dart';
+import 'services/app_lock.dart';
+import 'services/app_settings.dart';
+import 'services/background_keep_alive.dart';
+import 'services/chat_session.dart';
+import 'services/default_snippets.dart';
+import 'services/managed_remote_file.dart';
+import 'services/missing_credential.dart';
+import 'services/remote_files_controller.dart';
+import 'services/remote_git_controller.dart';
+import 'services/secrets_recovery.dart';
+import 'services/server_duplication.dart';
+import 'services/xterm_engine.dart';
+import 'theme/app_appearance.dart';
+import 'ui/built_in_text_editor.dart';
+import 'ui/server_list_density.dart';
+import 'ui/session_label.dart';
+import 'ui/terminal_appearance.dart';
+
+/// Connection state of a server's terminal, mirrored by the status dot in the
+/// server list (green / grey / red, with a spinner while connecting).
+enum TerminalStatus { connecting, connected, disconnected, error }
+
+/// What the remote shell has told us about a session: the OSC 7 working
+/// directory, the OSC 0/2 terminal title, and the command it is running right
+/// now. Used to name the session's tab.
+@immutable
+class SessionMetadata {
+  final String? workingDirectory;
+  final String? terminalTitle;
+
+  /// The command the session has been running for a while (already redacted),
+  /// or null at a prompt. Unlike the fields above this is *not* kept-last:
+  /// it names what the tab is doing, and a finished command must fall back
+  /// to where the tab is.
+  final String? runningCommand;
+
+  const SessionMetadata({
+    this.workingDirectory,
+    this.terminalTitle,
+    this.runningCommand,
+  });
+
+  /// This metadata with the transient command dropped — what a reconnect
+  /// carries over: the command died with the connection, the place did not.
+  SessionMetadata get withoutRunningCommand => SessionMetadata(
+    workingDirectory: workingDirectory,
+    terminalTitle: terminalTitle,
+  );
+
+  @override
+  bool operator ==(Object other) =>
+      other is SessionMetadata &&
+      other.workingDirectory == workingDirectory &&
+      other.terminalTitle == terminalTitle &&
+      other.runningCommand == runningCommand;
+
+  @override
+  int get hashCode =>
+      Object.hash(workingDirectory, terminalTitle, runningCommand);
+}
+
+/// Repaint signal for one session's connection log.
+///
+/// dartssh2 calls `printTrace` per packet, so a handshake appends hundreds of
+/// lines. Routing those into [AppState.notifyListeners] rebuilt the server
+/// list, every mounted terminal, and the utility panel once per trace line —
+/// a burst of full-tree rebuilds during exactly the moment the user is already
+/// waiting on a connection. Giving the log its own notifier means only the
+/// widget that displays it repaints, and while the pane is showing the
+/// connecting spinner there is no listener at all.
+class ConnectionLogNotifier extends ChangeNotifier {
+  void bump() => notifyListeners();
+}
+
+/// The [TerminalSession.serverId] every local shell tab shares.
+///
+/// A reserved, deliberately non-UUID value: real server ids come from
+/// [uuidV4], so this cannot collide with one, and it is never written to the
+/// config store — a local shell has nothing to configure and nothing to sync.
+/// Sharing one id is what makes local shells group into a tab strip and take
+/// the same "focus the row's last tab" path as any server.
+const String kLocalShellServerId = 'local-shell';
+
+/// One tab in a server's strip — a terminal session or a file editor.
+/// Sealed so the pane can switch exhaustively on the kind.
+sealed class PaneTab {
+  /// Unique tab identity (not per server) — selection and ordering key.
+  final String id;
+
+  /// The server this tab belongs to. Its tabs stay contiguous in
+  /// [AppState.tabs], so a per-server strip is an order-preserving filter.
+  /// [kLocalShellServerId] groups the local shells, which own no server.
+  final String serverId;
+
+  /// The config captured when the tab was opened; display reads prefer
+  /// [AppState.configFor] so an edit made mid-session is reflected.
+  ///
+  /// Null for a local shell — deliberately, rather than a stand-in
+  /// [ServerConfig]: a synthetic config would render as `@:0` wherever
+  /// someone forgot a branch, and no compiler would object. Every display
+  /// site goes through [TerminalSession.displayLabel] and
+  /// [TerminalSession.displayTarget] so the null is handled once, not ten
+  /// times.
+  final ServerConfig? config;
+
+  PaneTab({required this.id, required this.serverId, this.config});
+
+  /// Release what the tab owns. Overridden where there is something to free.
+  void dispose() {}
+}
+
+/// One terminal session — a single SSH connection, or a shell on this machine.
+/// A server can have several (shown as tabs inside its terminal pane), so a
+/// session has its own [id] distinct from its [serverId]; many sessions can
+/// share one [serverId].
+class TerminalSession extends PaneTab {
+  /// Stable ownership identity for durable local edit checkouts. Unlike [id],
+  /// this survives reconnects that replace the terminal engine and widget.
+  final String editSessionId;
+
+  /// The shell a local session is running (`zsh`, `bash`), for its label.
+  /// Null for an SSH session, whose identity is its server.
+  final String? shellName;
+
+  XtermTerminalEngine engine;
+  SessionTransport? session;
+  RemoteFilesController? files;
+
+  /// Git status/actions for the shell's reported directory, driven by the
+  /// Git sidebar tab. Lives only while connected, like [files].
+  RemoteGitController? git;
+  final Map<String, ManagedRemoteFile> retainedLocalCopies = {};
+  bool connecting;
+  String? error;
+
+  /// The attempt that failed with [error] had its host-key prompt refuse a
+  /// key other than the one this device pinned for the host: the user
+  /// declined the changed key, or the prompt, not wired yet, refused it. The
+  /// server is blocked until its key is reviewed at the next attempt, which
+  /// the list shows apart from an ordinary failure. A key-exchange signature
+  /// that fails to verify is an ordinary failure, although dartssh2 reports
+  /// it with the same host-key error.
+  bool hostKeyBlocked = false;
+
+  /// The server whose saved credential the attempt that failed with [error]
+  /// could not find on this device (CRED-05): this tab's own server, or a
+  /// jump host on its path. Null for every other failure.
+  String? missingCredentialServerId;
+
+  /// Live transcript of the current/last connection attempt, shown in the
+  /// "connection log" details when a connection fails. Owned by the session so
+  /// its trace lines drive [logNotifier] rather than the whole app.
+  late final SshConnectionLog log;
+
+  /// Repaints the connection-log view as lines arrive. See
+  /// [ConnectionLogNotifier].
+  final ConnectionLogNotifier logNotifier = ConnectionLogNotifier();
+
+  /// The xterm selection controller for this session's terminal. Set by the
+  /// live [_SessionView] widget while it's mounted (and cleared on dispose), so
+  /// the native macOS Edit menu can copy from the active session.
+  TerminalController? controller;
+
+  /// The session's shell-reported identity, mirrored off the engine.
+  ///
+  /// Owned by the session rather than read from the engine directly, because
+  /// the engine (and its notifiers) is disposed when the connection drops
+  /// while the *tab* lives on — the strip must keep naming a disconnected tab
+  /// by where it last was. Its own notifier also means a new title repaints
+  /// the tab strip alone instead of the whole app.
+  final ValueNotifier<SessionMetadata> metadata;
+
+  /// A name the user gave this tab, or null to follow the shell.
+  ///
+  /// Overrides every automatic source. When you open three tabs to one box
+  /// you have roles in mind — "logs", "deploy" — that no heuristic can guess,
+  /// so the manual name is the top of the naming ladder and nothing the
+  /// remote reports displaces it.
+  ///
+  /// Kept separate from [metadata] deliberately: that is what the *shell*
+  /// reported, and a user-chosen name is not remote data. In memory only,
+  /// like the sessions it names — a relaunch has no session to re-label.
+  final ValueNotifier<String?> customName;
+
+  /// How long a command must keep running before it becomes the tab's name.
+  /// Quick commands (`ls`, `git status`) finish inside this window, so the
+  /// strip doesn't repaint a new label for every enter key.
+  static const Duration commandRevealDelay = Duration(milliseconds: 1500);
+
+  /// Tab labels are chrome: a secret pasted into a command line must never be
+  /// rendered in the strip. Always on — unlike the assistant's redaction
+  /// toggle there is nothing being *sent* here to opt out of, and the engine's
+  /// capture is keystroke-level so it sees passwords typed at flag prompts.
+  static final SecretRedactor _redactor = SecretRedactor();
+
+  Timer? _commandReveal;
+  int _commandGeneration = 0;
+
+  TerminalSession({
+    required super.id,
+    String? editSessionId,
+    required super.serverId,
+    super.config,
+    this.shellName,
+    required this.engine,
+    this.connecting = true,
+    this.error,
+    SessionMetadata initialMetadata = const SessionMetadata(),
+    String? initialCustomName,
+  }) : editSessionId = editSessionId ?? id,
+       metadata = ValueNotifier<SessionMetadata>(initialMetadata),
+       customName = ValueNotifier<String?>(initialCustomName) {
+    log = SshConnectionLog(onUpdate: logNotifier.bump);
+    engine.workingDirectory.addListener(_syncMetadata);
+    engine.terminalTitle.addListener(_syncMetadata);
+    engine.activeCommand.addListener(_syncRunningCommand);
+  }
+
+  void _syncMetadata() {
+    metadata.value = SessionMetadata(
+      // Keep the last known values: a shell that stops reporting — or clears
+      // its title with an empty OSC 2, which is a common way to reset it —
+      // should not blank the tab back to "Session N" mid-session.
+      workingDirectory: _keepLast(
+        engine.workingDirectory.value,
+        metadata.value.workingDirectory,
+      ),
+      terminalTitle: _keepLast(
+        engine.terminalTitle.value,
+        metadata.value.terminalTitle,
+      ),
+      runningCommand: metadata.value.runningCommand,
+    );
+  }
+
+  static String? _keepLast(String? reported, String? previous) =>
+      (reported == null || reported.isEmpty) ? previous : reported;
+
+  /// Mirror the engine's running command into [metadata], but only once it
+  /// has been running for [commandRevealDelay]. Ends are immediate; reveals
+  /// are debounced by generation so a command that finished (or was replaced)
+  /// during the delay never surfaces late. The command text is captured and
+  /// redacted here, up front — the timer must not read the engine, which a
+  /// dropped connection disposes out from under it.
+  void _syncRunningCommand() {
+    final line = engine.activeCommand.value;
+    _commandGeneration++;
+    _commandReveal?.cancel();
+    _commandReveal = null;
+    if (line == null || line.isEmpty) {
+      if (metadata.value.runningCommand != null) {
+        metadata.value = metadata.value.withoutRunningCommand;
+      }
+      return;
+    }
+    final generation = _commandGeneration;
+    final shown = _redactor.redact(line);
+    _commandReveal = Timer(commandRevealDelay, () {
+      if (generation != _commandGeneration) return;
+      metadata.value = SessionMetadata(
+        workingDirectory: metadata.value.workingDirectory,
+        terminalTitle: metadata.value.terminalTitle,
+        runningCommand: shown,
+      );
+    });
+  }
+
+  /// Release what the session owns beyond its engine and SSH connection.
+  ///
+  /// The engine's own disposal already drops these listeners along with the
+  /// notifiers they are attached to, so the explicit removal is belt and
+  /// braces — it makes the ordering invariant local instead of something a
+  /// reader has to infer from `XtermTerminalEngine.dispose`. Removing a
+  /// listener from an already-disposed notifier is explicitly supported.
+  @override
+  void dispose() {
+    _commandReveal?.cancel();
+    engine.workingDirectory.removeListener(_syncMetadata);
+    engine.terminalTitle.removeListener(_syncMetadata);
+    engine.activeCommand.removeListener(_syncRunningCommand);
+    metadata.dispose();
+    customName.dispose();
+  }
+
+  bool get isConnected => session != null && !session!.isClosed;
+
+  /// A shell on this machine rather than a connection to a server.
+  bool get isLocal => config == null;
+
+  /// What names this session in the app bar and the server list.
+  String get displayLabel => config?.label ?? 'Local shell';
+
+  /// Where this session's keystrokes go, in one monospace line: the SSH target
+  /// for a server, the shell and this machine for a local one.
+  String get displayTarget {
+    final server = config;
+    if (server != null) {
+      return '${server.username}@${server.host}:${server.port}';
+    }
+    return '${shellName ?? 'shell'} · this machine';
+  }
+
+  /// The status a finished local shell exited with, once it has. Null while it
+  /// runs, and always null for SSH — a remote shell's exit reaches the user as
+  /// the connection ending, and there is no local process to report on.
+  int? shellExitCode;
+
+  TerminalStatus get status {
+    if (connecting) return TerminalStatus.connecting;
+    if (error != null) return TerminalStatus.error;
+    if (isConnected) return TerminalStatus.connected;
+    return TerminalStatus.disconnected;
+  }
+}
+
+/// A file-editing tab: the built-in text editor on a managed local checkout,
+/// shown in the same strip as the owning server's terminal tabs.
+///
+/// Ownership is keyed on [TerminalSession.editSessionId] — the identity a
+/// reconnect preserves — so the tab follows its session across reconnects
+/// and is closed along with it (closing a session deletes the checkout the
+/// editor writes to).
+class EditorTab extends PaneTab {
+  EditorTab({
+    required super.id,
+    required super.serverId,
+    required ServerConfig config,
+    required this.remotePath,
+    required this.localPath,
+    required this.ownerEditSessionId,
+  }) : super(config: config);
+
+  /// The server whose file this tab edits — [PaneTab.config], narrowed. The
+  /// base's type is wider only because a local shell's tab carries none.
+  ServerConfig get server => config!;
+
+  /// Absolute path on the server — the tab's name and its drift/upload key.
+  final String remotePath;
+
+  /// Checkout-root-relative local path; the view resolves it through
+  /// [ManagedRemoteFileStore.checkoutFile] (see [ManagedRemoteFile.localPath]).
+  final String localPath;
+
+  /// The owning session's durable edit identity — matches
+  /// [ManagedRemoteFile.editSessionId].
+  final String ownerEditSessionId;
+
+  /// The unsaved-buffer flag, written by the mounted editor; the tab chip
+  /// draws its modified marker from it. Deliberately never disposed: the tab
+  /// can be dropped while its editor is still mounted for a frame (a save in
+  /// flight writes the flag from a `finally`), and a write to a disposed
+  /// notifier throws. With no subscribers left it is simply collected.
+  final ValueNotifier<bool> dirty = ValueNotifier(false);
+
+  /// Handle to the mounted editor — closing the tab (`confirmAndCloseTab`)
+  /// asks it whether unsaved changes may be discarded. `currentState` is
+  /// null before the tab's first frame (nothing to lose yet) and while its
+  /// pane is offstage — the close path refuses to drop a dirty buffer it
+  /// cannot ask about.
+  final GlobalKey<BuiltInTextEditorScreenState> editorKey = GlobalKey();
+}
+
+/// Whether the server a duplicate was planned from still is what it was.
+///
+/// Only the credential reference matters: the copy carries its own id, label
+/// and timestamps, and a rename or a colour change on the source between the
+/// plan and the save costs nothing. A missing server or a different ref does,
+/// because the credential the plan holds was read against the old one.
+///
+/// A top-level function so the rule can be asserted directly — no test in this
+/// app can construct an [AppState].
+bool duplicationSourceUnchanged(ServerConfig? latest, ServerConfig source) =>
+    latest != null && latest.secretRef == source.secretRef;
+
+/// The source of a duplicate stopped matching what the copy was planned from.
+///
+/// Its [toString] is a sentence because the list pane shows it verbatim, the
+/// way it shows a locked keyring: a user who is told only "could not
+/// duplicate" has nothing to do next.
+class SourceServerChanged implements Exception {
+  final String label;
+  const SourceServerChanged(this.label);
+
+  @override
+  String toString() =>
+      '"$label" changed while it was being copied — it was '
+      'deleted, or it now holds a different credential. Nothing was created.';
+}
+
+/// Whether any server other than [excludingId] still points at [secretRef].
+///
+/// Deleting a server drops its vault entry, and nothing stops two configs
+/// sharing one — a synced credential record is keyed by the credential rather
+/// than by the server holding it, and the editor can be pointed at an existing
+/// ref by hand. Dropping it out from under a server that still names it is
+/// silent credential loss the survivor only discovers at connect time.
+///
+/// The sync coordinator no longer honours a `secret:` tombstone at all (an
+/// unsealed one is the sync server's to forge), so this is the only place the
+/// rule lives. A top-level function so it can be asserted on its own, apart
+/// from the delete that applies it.
+bool secretStillReferenced(
+  String secretRef,
+  Iterable<ServerConfig> servers, {
+  required String excludingId,
+}) => servers.any((s) => s.id != excludingId && s.secretRef == secretRef);
+
+/// Opens a terminal's SSH session through [manager]. The app connects for
+/// real ([SshSessionManager.connect]); a test replays a handshake instead,
+/// putting the host key to [SshSessionManager.verifyHostKey], the check
+/// dartssh2 calls.
+typedef SshSessionOpener =
+    Future<SshSession> Function(
+      SshSessionManager manager, {
+      required ServerConfig config,
+      required SshCredentials credentials,
+      required TerminalEngine engine,
+      SshConnectionLog? log,
+    });
+
+Future<SshSession> _connectThrough(
+  SshSessionManager manager, {
+  required ServerConfig config,
+  required SshCredentials credentials,
+  required TerminalEngine engine,
+  SshConnectionLog? log,
+}) => manager.connect(
+  config: config,
+  credentials: credentials,
+  engine: engine,
+  log: log,
+);
+
+/// What the host-key prompt decided during one connection attempt: the one
+/// place a refused *changed* key can be told apart. The failure cannot tell
+/// it: dartssh2 fails an attempt with the same host-key error when the
+/// prompt says no and when a key-exchange signature does not verify (RSA,
+/// ECDSA host keys), and it checks the signature before the key reaches the
+/// prompt, so a pinned key that never changed can fail that way too.
+class _HostKeyAttempt {
+  _HostKeyAttempt(this._ask);
+
+  final HostKeyPrompter _ask;
+  HostKeyVerdict? _verdict;
+  bool? _approved;
+
+  /// [_ask], noting the verdict it is shown and the answer it gives.
+  Future<bool> prompt(HostKeyDecision decision) async {
+    _verdict = decision.verdict;
+    _approved = null;
+    final approved = await _ask(decision);
+    _approved = approved;
+    return approved;
+  }
+
+  /// The prompt was shown a key other than the pinned one and said no.
+  /// False while its answer is pending, so an attempt that timed out with
+  /// the prompt still open reads as the timeout it was.
+  bool get refusedChangedKey =>
+      _verdict == HostKeyVerdict.changed && _approved == false;
+}
+
+/// Top-level app state: the server list, live reachability, and the open
+/// terminal sessions. A server may have several sessions (tabs); the UI is a
+/// thin `ListenableBuilder` over this.
+class AppState extends ChangeNotifier {
+  final AppServices services;
+  final SshSessionOpener _openSshSession;
+
+  List<ServerConfig> servers = [];
+  List<Snippet> snippets = [];
+  Map<String, ProbeStatus> statuses = {};
+
+  /// All open tabs — terminal tabs and file editors — in a stable global
+  /// order. Tabs for the same server are kept contiguous (enforced on
+  /// insert), so a per-server tab strip is a simple order-preserving filter
+  /// and adjacent tabs are always same-server.
+  final List<PaneTab> tabs = [];
+
+  /// The id of the tab shown in the right pane (see [activeServerId],
+  /// which is derived from it).
+  String? activeTabId;
+
+  /// The most-recently-focused session per server, so re-selecting a server
+  /// row returns to the tab the user last used there.
+  final Map<String, String> _lastTabForServer = {};
+
+  /// Whether the assistant is configured enough to be usable (drives whether
+  /// the LLM sidebar is shown). Refreshed at load and after settings change.
+  bool llmConfigured = false;
+
+  /// Bumped whenever the LLM provider settings change (key, model, base URL),
+  /// so the chat sidebar rebuilds its provider instead of reusing a stale one.
+  int llmConfigVersion = 0;
+
+  StreamSubscription<Map<String, ProbeStatus>>? _probeSub;
+
+  // --- Sync status / automatic sync ---
+
+  /// True while a sync round is running (drives the header sync indicator).
+  bool syncing = false;
+
+  /// When the last sync round completed successfully, and the last error (if
+  /// the most recent attempt failed). Surfaced in the sync UI.
+  DateTime? lastSyncAt;
+  String? lastSyncError;
+
+  bool _syncQueued = false;
+  Timer? _autoSyncTimer;
+  Timer? _syncDebounce;
+  static const Duration _autoSyncInterval = Duration(minutes: 5);
+  static const Duration _syncDebounceDelay = Duration(seconds: 2);
+
+  // --- Command inbox (docs/INBOX.md) ---
+
+  /// Connected producers, live ones only. Refreshed at load, after each sync
+  /// round and after every inbox edit.
+  List<InboxApp> inboxApps = [];
+
+  /// Proposals waiting for the user, newest first.
+  List<PendingProposal> inboxPending = [];
+
+  /// Items refused per app (could not be opened or validated).
+  Map<String, int> inboxFailures = {};
+
+  /// Why the last fetch failed, if it did.
+  String? inboxError;
+
+  Timer? _inboxTimer;
+  bool _inboxFetching = false;
+
+  /// Set by [dispose]. A fetch runs in the background after every sync
+  /// round, so it can finish after the state is gone, and must then neither
+  /// notify nor re-arm its timer.
+  bool _inboxDisposed = false;
+
+  /// Much shorter than the record sync's interval: fetching the queue is one
+  /// small request, and a proposal is usually waited for.
+  static const Duration _inboxPollInterval = Duration(minutes: 1);
+
+  // --- Command suggestions (opt-in) ---
+
+  /// Frequently-run commands worth saving as snippets, most-used first. Empty
+  /// unless the feature is enabled in settings. Local only.
+  List<String> commandSuggestions = [];
+  final SecretRedactor _redactor = SecretRedactor();
+  Timer? _statsSaveDebounce;
+
+  /// The assistant conversation. Lives here rather than in the sidebar widget
+  /// so it survives the drawer closing on narrow layouts, and the pane being
+  /// rebuilt when the layout crosses the wide/narrow breakpoint.
+  final ChatSession chat = ChatSession();
+
+  /// UI-supplied interaction hooks (wired by the root widget so dialogs can be
+  /// shown). Default to a safe "deny" if the UI hasn't set them yet.
+  HostKeyPrompter? hostKeyPrompter;
+  KeyboardInteractiveResponder? keyboardInteractiveResponder;
+
+  // --- Update check ---
+
+  /// Set when a newer release exists on GitHub; drives the "update available"
+  /// affordance. The app never downloads or installs — it only links out.
+  UpdateInfo? updateInfo;
+  final UpdateChecker _updateChecker;
+
+  /// Keeps the process anchored to the OS while sessions are connecting or
+  /// connected, so backgrounding the app on Android doesn't let the OS freeze
+  /// it and drop every live SSH connection. No-op on other platforms.
+  final BackgroundKeepAlive _keepAlive;
+
+  /// [openSshSession] replaces the SSH handshake, for tests.
+  AppState(
+    this.services, {
+    UpdateChecker? updateChecker,
+    BackgroundKeepAlive? keepAlive,
+    this._openSshSession = _connectThrough,
+  }) : _updateChecker = updateChecker ?? UpdateChecker(),
+       _keepAlive = keepAlive ?? BackgroundKeepAlive();
+
+  /// The host-key prompt as the SSH layer wants it, reading [hostKeyPrompter]
+  /// at call time so the root widget can wire it after this state exists.
+  /// Denies while it is unwired: refusing an unverified key is the safe answer.
+  Future<bool> _promptForHostKey(HostKeyDecision decision) async {
+    final prompt = hostKeyPrompter;
+    return prompt == null ? false : prompt(decision);
+  }
+
+  Future<List<String>> _promptKeyboardInteractive(
+    KeyboardInteractiveChallenge challenge,
+  ) async {
+    final responder = keyboardInteractiveResponder;
+    return responder == null ? const <String>[] : responder(challenge);
+  }
+
+  /// Try [config] the way a real connection would — the same host-key and
+  /// keyboard-interactive prompts, the same failure wording — without opening
+  /// a shell, running the login script, or creating a tab.
+  ///
+  /// [config] may be a draft the editor has not saved, so the `draft…`
+  /// arguments carry what its fields hold; see
+  /// [AppServices.resolveCredentials] for why reading the vault alone would
+  /// test the wrong credential.
+  ///
+  /// A host key approved during the attempt is pinned only for its duration
+  /// (see [UnpinnedHostKeyStore]). A form the user may still cancel, naming a
+  /// host they may still retype, is not where trust-on-first-use should be
+  /// granted for good — the first real connection asks once more.
+  Future<ConnectionTestResult> testServerConnection(
+    ServerConfig config, {
+    String? draftPassword,
+    String? draftPrivateKey,
+    String? draftKeyPassphrase,
+    IdentityFileBookmark? draftIdentityBookmark,
+    SshConnectionLog? log,
+  }) {
+    return runConnectionTest(
+      config: config,
+      credentials: () => services.resolveCredentials(
+        config,
+        draftPassword: draftPassword,
+        draftPrivateKey: draftPrivateKey,
+        draftKeyPassphrase: draftKeyPassphrase,
+        draftIdentityBookmark: draftIdentityBookmark,
+      ),
+      authenticate: liveHostAuthenticator(
+        // Not a verifier: liveHostAuthenticator wraps this in an
+        // UnpinnedHostKeyStore itself, so a trial cannot be wired to pin.
+        hostKeys: services.hostKeyStore,
+        onHostKey: _promptForHostKey,
+        onKeyboardInteractive: _promptKeyboardInteractive,
+        resolveJumpHost: services.resolveJumpHost,
+      ),
+      log: log,
+    );
+  }
+
+  /// The server whose tabs are shown — derived from the active tab, so there
+  /// is a single source of truth. Null when nothing is open.
+  String? get activeServerId => activeTab?.serverId;
+
+  /// The tab shown in the right pane — a terminal session or a file editor.
+  PaneTab? get activeTab => tabById(activeTabId);
+
+  /// The terminal session the UI should act on. When the active tab is an
+  /// editor this is the session that owns its file's checkout (falling back
+  /// to the server's most recent terminal), so the Files/Git/Assistant panes
+  /// and command insertion keep the context the file was opened from.
+  TerminalSession? get activeSession {
+    final tab = activeTab;
+    if (tab is TerminalSession) return tab;
+    if (tab is EditorTab) {
+      final owner = ownerSessionFor(tab);
+      if (owner != null) return owner;
+      final terminals = [
+        for (final t in tabsForServer(tab.serverId))
+          if (t is TerminalSession) t,
+      ];
+      return terminals.isEmpty ? null : terminals.last;
+    }
+    return null;
+  }
+
+  PaneTab? tabById(String? id) {
+    if (id == null) return null;
+    for (final s in tabs) {
+      if (s.id == id) return s;
+    }
+    return null;
+  }
+
+  /// The terminal session a file-editing tab belongs to — the owner of its
+  /// checkout. Keyed on [TerminalSession.editSessionId], the durable identity
+  /// a reconnect preserves, so the editor follows its session across
+  /// reconnects (and a dropped session leaves the tab on the placeholder).
+  TerminalSession? ownerSessionFor(EditorTab tab) {
+    for (final s in tabs) {
+      if (s is TerminalSession && s.editSessionId == tab.ownerEditSessionId) {
+        return s;
+      }
+    }
+    return null;
+  }
+
+  /// The editor tabs whose file checkout belongs to [session]. They die with
+  /// it: closing a session deletes the checkouts the editors write to.
+  List<EditorTab> editorTabsOwnedBy(TerminalSession session) => [
+    for (final t in tabs)
+      if (t is EditorTab && t.ownerEditSessionId == session.editSessionId) t,
+  ];
+
+  /// This server's tabs in strip order (a stable filter of [tabs]).
+  List<PaneTab> tabsForServer(String serverId) =>
+      tabsForServerIn(tabs, serverId);
+
+  /// This server's tabs within an arbitrary ordered [list].
+  @visibleForTesting
+  static List<T> tabsForServerIn<T extends PaneTab>(
+    List<T> list,
+    String serverId,
+  ) => [
+    for (final s in list)
+      if (s.serverId == serverId) s,
+  ];
+
+  /// Insert index that keeps a server's tabs contiguous: just after that
+  /// server's last existing tab, or at the end when it has none.
+  @visibleForTesting
+  static int insertIndexFor<T extends PaneTab>(List<T> list, String serverId) {
+    for (var i = list.length - 1; i >= 0; i--) {
+      if (list[i].serverId == serverId) return i + 1;
+    }
+    return list.length;
+  }
+
+  Future<void> load() async {
+    // Honor the keep-alive setting from the very first session event on; the
+    // app can be backgrounded mid-handshake right after opening a tab.
+    _keepAlive.setEnabled(services.settings.keepSessionsAliveInBackground);
+    servers = await services.configStore.listServers();
+    // Managed edits are a side feature: a checkout folder the store cannot
+    // read costs the restored edit tabs, never startup. The local copies stay
+    // on disk, and the store retries on its next use.
+    try {
+      await _restoreManagedEditSessions();
+    } catch (error, stackTrace) {
+      developer.log(
+        'Could not restore managed edit sessions',
+        name: 'seance.app',
+        level: 1000,
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
+    await _seedDefaultSnippets();
+    snippets = await services.snippetStore.listSnippets();
+    try {
+      await refreshLlmConfigured();
+    } on AppLockException catch (error) {
+      credentialAccessError = error.message;
+    }
+    // Invariant insurance: if any restore path ever leaves a session
+    // connecting or connected, the anchor must reflect it before the app can
+    // be backgrounded. (Today's restores insert disconnected placeholders.)
+    _refreshKeepAlive();
+    _recomputeSuggestions();
+    // Skip hosts that already hold a live session: they are demonstrably
+    // reachable, and probing them only adds an sshd log line every sweep.
+    services.probe.connectedServerIds = () => {
+      for (final session in tabs)
+        if (session is TerminalSession &&
+            session.isConnected &&
+            !session.isLocal)
+          session.serverId,
+    };
+    _probeSub = services.probe.statuses.listen((s) {
+      statuses = s;
+      notifyListeners();
+    });
+    services.probe.start(servers);
+    notifyListeners();
+    if (credentialAccessError == null) await _loadInbox();
+    // Sync at startup (pull others' changes) and keep a periodic timer going.
+    ensureAutoSyncTimer();
+    _ensureInboxTimer();
+    if (inboxApps.isNotEmpty) unawaited(_refreshInboxAutomatically());
+    if (services.settings.autoSync && services.isSyncConfigured) {
+      unawaited(_autoSync());
+    }
+  }
+
+  /// Recompute whether the assistant is usable: a key-based provider needs a
+  /// stored API key; a local OpenAI-compatible endpoint (Ollama, LM Studio)
+  /// works keyless as long as a base URL is set. Keystore errors read as
+  /// "no key" here (the masterKeys layer is tolerant on reads).
+  Future<void> refreshLlmConfigured() async {
+    final s = services.settings;
+    final storedKey = s.llmApiKeyRef.isEmpty
+        ? null
+        : await services.masterKeys.getApiKey(s.llmApiKeyRef);
+    final hasKey = storedKey != null && storedKey.isNotEmpty;
+    final configured = switch (s.llmKind) {
+      LlmProviderKind.anthropic => hasKey,
+      LlmProviderKind.openaiCompatible =>
+        hasKey || s.llmBaseUrl.trim().isNotEmpty,
+    };
+    if (configured != llmConfigured) {
+      llmConfigured = configured;
+      notifyListeners();
+    }
+  }
+
+  /// Called after the LLM provider settings change: invalidate any cached chat
+  /// provider (so a new API key takes effect) and refresh sidebar visibility.
+  Future<void> reloadLlmProvider() async {
+    llmConfigVersion++;
+    await refreshLlmConfigured();
+    notifyListeners();
+  }
+
+  /// [identityFileBookmark] is the final, device-local security-scope grant
+  /// for the server's identity file: a value stores it, null clears any stored
+  /// one (the editor owns the keep-or-drop decision, so this always applies).
+  Future<void> saveServer(
+    ServerConfig config, {
+    Secret? secret,
+    IdentityFileBookmark? identityFileBookmark,
+  }) => _mutate(
+    () => _saveServerNow(
+      config,
+      secret: secret,
+      identityFileBookmark: identityFileBookmark,
+    ),
+  );
+
+  /// [saveServer] without the queue, for callers already holding it.
+  Future<void> _saveServerNow(
+    ServerConfig config, {
+    Secret? secret,
+    IdentityFileBookmark? identityFileBookmark,
+  }) async {
+    if (secret != null) {
+      await services.vault.putLocalSecret(secret, updatedAt: config.updatedAt);
+    }
+    await services.configStore.putServer(config);
+    // Re-saving an id (re-creating one deleted while offline, or an import
+    // restoring it) cancels any pending deletion for it, so a stale tombstone
+    // cannot shadow the live record collectLocal is about to publish. Fail-soft:
+    // the collectLocal shadow guard already blocks the destructive case, so a
+    // failed clear leaves only an inert entry, never a wrong delete.
+    try {
+      await services.tombstoneStore.remove(config.id);
+    } catch (error, stackTrace) {
+      developer.log(
+        'Could not clear a pending deletion tombstone for saved server '
+        '${config.id}',
+        name: 'seance.app',
+        level: 900,
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
+    final bookmarks = services.settings.identityFileBookmarks;
+    if (identityFileBookmark != null) {
+      if (bookmarks[config.id] != identityFileBookmark) {
+        bookmarks[config.id] = identityFileBookmark;
+        await services.saveSettings();
+      }
+    } else if (bookmarks.remove(config.id) != null) {
+      await services.saveSettings();
+    }
+    servers = await services.configStore.listServers();
+    services.probe.updateServers(servers);
+    notifyListeners();
+    _scheduleAutoSync();
+  }
+
+  /// Duplicate [source] as a new server and return the copy.
+  ///
+  /// The credential is copied into a vault entry of the copy's own (see
+  /// [duplicateServerConfig] for why it is never shared), and so is the
+  /// device-local security-scoped grant for a Browse…-picked identity file:
+  /// that grant is keyed by server id, so without copying it the duplicate
+  /// would silently fall back to the raw path and fail to open a key outside
+  /// `~/.ssh`.
+  ///
+  /// Vault failures propagate, as they do from [saveServer]. A duplicate that
+  /// quietly lost its password would look identical in the list and only admit
+  /// it at connect time.
+  Future<ServerConfig> duplicateServer(ServerConfig source) async {
+    return _mutate(() async {
+      // Deletes, saves and sync rounds are all serialized behind this one, so
+      // nothing can move under the plan once it starts. What the queue cannot
+      // make fresh is [source]: the caller captured it before the queue was
+      // entered, so it may describe a server since deleted or re-pointed at
+      // another credential. Planning from a stale snapshot would create the
+      // copy the user asked for without the password they expect it to have —
+      // and resurrect a config another device deleted.
+      final latest = await services.configStore.getServer(source.id);
+      if (!duplicationSourceUnchanged(latest, source)) {
+        // Named as it appears in the list now, not as the caller's snapshot
+        // had it: a rename is one of the edits that can land in between.
+        throw SourceServerChanged(latest?.label ?? source.label);
+      }
+      final plan = await planServerDuplication(
+        // The store's copy, not the caller's: `source` was captured before
+        // the queue was entered, so every field on it can be stale, not only
+        // the label. Copying what the server *is* beats copying what the row
+        // said when it was tapped, and the credential check above is what
+        // makes the two safe to swap.
+        latest!,
+        vault: services.vault,
+        takenLabels: servers.map((s) => s.label),
+        id: uuidV4(),
+        secretId: uuidV4(),
+        now: DateTime.now().millisecondsSinceEpoch,
+        // Keyed by the *source's* id — the planner asks for the grant of the
+        // server being copied; the copy has none yet.
+        bookmarkFor: (sourceId) =>
+            services.settings.identityFileBookmarks[sourceId],
+      );
+      // The non-queuing core: this is already inside the queue, and calling
+      // the public one would wait on itself.
+      await _saveServerNow(
+        plan.config,
+        secret: plan.secret,
+        identityFileBookmark: plan.identityFileBookmark,
+      );
+      return plan.config;
+    });
+  }
+
+  /// The store mutation currently in flight, so the next one waits for it.
+  Future<void> _mutating = Future<void>.value();
+
+  /// Run [action] after every mutation queued before it has finished.
+  ///
+  /// Duplicating reads the vault, and that read can sit behind an OS keychain
+  /// prompt for as long as the user takes to answer it — long enough for a
+  /// second Duplicate to pick a name from a list that does not yet contain the
+  /// first copy, so both land on the same one, which is the outcome the naming
+  /// rule exists to prevent. Deleting shares the queue because it reads the
+  /// server list to decide whether a credential is still referenced: two
+  /// deletes of servers sharing one vault entry, each running that read before
+  /// the other's config removal lands, would each see the other as a live
+  /// referent and both leave the entry behind with nothing able to name it.
+  ///
+  /// Saving and applying a sync round share it for the same reason from the
+  /// other side: both write the config store and the vault, so either landing
+  /// between a delete's reference count and its vault delete, or between a
+  /// duplicate's plan and its save, is the same read-then-write hazard. With
+  /// them on the queue, a credential rewritten in place under an unchanged
+  /// ref — which is what editing a server's password does — can no longer
+  /// happen while a duplicate is reading it.
+  ///
+  /// No timeout, deliberately. A mutation waiting on an OS keychain prompt
+  /// holds everything queued behind it, deletes included, until the prompt is
+  /// answered; the answer to that is to surface the pending prompt, not to
+  /// time out a queue whose whole job is keeping a check and its write
+  /// together.
+  Future<T> _mutate<T>(Future<T> Function() action) async {
+    // A queued action that calls a queued method waits on its own completion,
+    // and since the queue has no timeout the app's mutations simply stop with
+    // no error to find. Detected by zone: an unrelated second caller arriving
+    // while the first action is suspended at an await is the normal case this
+    // queue exists to serialize, and a plain "busy" flag would read as
+    // re-entry for it too. Zone *identity* rather than a marker value: a
+    // marker attaches to every callback registered inside the action —
+    // a listener's microtask, a timer — and outlives the mutation, so such a
+    // callback calling `saveServer` after the queue had gone idle was
+    // refused for a deadlock that could not happen. Walked up the parents so
+    // a nested zone inside the action (a `runZonedGuarded` in a library) is
+    // still seen as inside it.
+    if (_insideRunningMutation) {
+      // A throw, not an assert. What an assert buys is a debug-only warning
+      // for a failure whose release-build symptom is every store mutation in
+      // the app stopping forever with nothing in the logs — which is the one
+      // shape of bug worth crashing on instead.
+      throw StateError(
+        'Re-entrant mutation: an action inside the queue must call the '
+        'non-queuing core (_saveServerNow), not saveServer, deleteServer, '
+        'duplicateServer or a sync round.',
+      );
+    }
+    final queued = _mutating;
+    final finished = Completer<void>();
+    _mutating = finished.future;
+    try {
+      // Inside the try, so `finished` is completed even if awaiting the
+      // predecessor throws. Nothing can make it throw today — `_mutating`
+      // only ever holds a future completed with `complete()` — but this token
+      // is the whole chain's link, and a predecessor that rejected before the
+      // try would have left every later mutation waiting on it forever, which
+      // is the silent wedge the guard above crashes to avoid. Not
+      // `catchError`, which would be a no-op now and swallow a real error
+      // later; the failing caller's own error still propagates from the
+      // action below.
+      await queued;
+      // `runZoned` for the fresh zone alone; nothing is read from it. Set
+      // and cleared around the action, never around the wait above: while
+      // this call is queued behind another, it is that one's zone that is
+      // running.
+      return await runZoned(() async {
+        _activeMutationZone = Zone.current;
+        try {
+          return await action();
+        } finally {
+          _activeMutationZone = null;
+        }
+      });
+    } finally {
+      finished.complete();
+    }
+  }
+
+  /// The zone of the action currently between its start and its end, or
+  /// null while the queue is idle or between actions.
+  Zone? _activeMutationZone;
+
+  bool get _insideRunningMutation {
+    final active = _activeMutationZone;
+    if (active == null) return false;
+    for (Zone? zone = Zone.current; zone != null; zone = zone.parent) {
+      if (identical(zone, active)) return true;
+    }
+    return false;
+  }
+
+  /// The `snippet:` record-id prefix, shared by the delete and save paths so
+  /// the tombstone id always matches what `collectLocal` publishes.
+  static const String _snippetRecordPrefix = 'snippet:';
+
+  /// A deletion stamp that beats every version of the record this device has
+  /// seen — max(now, prior + 1) — so a same-ms tie or a clock behind a peer's
+  /// last edit cannot let the live copy win last-write-wins, while a peer's
+  /// genuinely newer edit still does. [priorUpdatedAt] is the doomed row's
+  /// stamp, or null when the row is already gone (a retry or double-delete),
+  /// where "now" is the honest floor.
+  int _deletionStamp(int? priorUpdatedAt) {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    return (priorUpdatedAt != null && priorUpdatedAt >= now)
+        ? priorUpdatedAt + 1
+        : now;
+  }
+
+  Future<void> deleteServer(String id) async {
+    // Outside the queue: tearing sessions down touches no store, and holding
+    // the queue across a session teardown would stall every other mutation
+    // behind however long the far end takes to hang up.
+    await closeAllTabsForServer(id);
+    await _mutate(() async {
+      final server = await services.configStore.getServer(id);
+      // Record the deletion durably BEFORE dropping the row: a crash between
+      // the two writes must not leave the row gone with no tombstone, or the
+      // next full pull re-adopts it (issue #54). Stamp it to beat the record it
+      // deletes — a bare "now" that ties with, or under clock skew trails, the
+      // live copy on the sync server would lose last-write-wins and resurrect
+      // the row — so use max(now, prior + 1): past every version this device
+      // has seen, still losing to a peer's genuinely newer edit. No vault key
+      // is needed (a tombstone's blob is empty), so a locked keyring never
+      // blocks it. Fail-soft: a failed write is logged, and collectLocal skips
+      // a tombstone whose row still exists, so the delete is retried rather
+      // than wedging the UI on a server the store no longer has.
+      final deletedAt = _deletionStamp(server?.updatedAt);
+      try {
+        await services.tombstoneStore.add(
+          EncryptedRecord.tombstone(
+            id: id,
+            updatedAt: deletedAt,
+            deviceId: services.settings.deviceId,
+          ),
+        );
+      } catch (error, stackTrace) {
+        developer.log(
+          'Could not record the deletion tombstone for server $id; it may '
+          'reappear on the next sync until it is deleted again',
+          name: 'seance.app',
+          level: 900,
+          error: error,
+          stackTrace: stackTrace,
+        );
+      }
+      // The config row next, and the credential after it — the order
+      // `SyncCoordinator` states for the same pair. Dropping the vault entry
+      // first meant a throw from either write below left the server row on
+      // disk naming a credential that was already gone: a dangling reference
+      // the user only meets at connect time. Reversed, the worst a failure
+      // leaves is a vault entry nothing names — invisible rather than broken.
+      await services.configStore.deleteServer(id);
+      // After the config for the same reason the vault delete is: revoked
+      // first, a throw from `deleteServer` left a live server whose
+      // Browse…-picked key had already lost its security-scoped grant — the
+      // failure the reorder was written to prevent, just moved from the vault
+      // to the bookmark. Reversed, the worst it leaves is a grant filed under
+      // an id nothing names.
+      // The pin goes with the grant: both are device-local entries keyed by
+      // this server's id, and one save covers both — writing the settings
+      // file twice for one delete would be waste. Order does not matter for
+      // the pin the way it does for the grant: a lingering pin shows nothing
+      // and grants nothing, it just names a row that no longer exists.
+      final droppedGrant =
+          services.settings.identityFileBookmarks.remove(id) != null;
+      final droppedPin = services.settings.pinnedServerIds.remove(id);
+      if (droppedGrant || droppedPin) {
+        // Fail-soft like the vault delete below, and for the same reason: a
+        // throw here skips the list refresh and leaves the UI showing a
+        // server the store no longer has. The grant is already gone from
+        // memory; what a failed write leaves is a stale entry in a file that
+        // the next successful save rewrites.
+        try {
+          await services.saveSettings();
+        } catch (error, stackTrace) {
+          developer.log(
+            'Could not persist the device-local entries (identity file '
+            'grant, list pin) for the deleted server $id',
+            name: 'seance.app',
+            level: 900,
+            error: error,
+            stackTrace: stackTrace,
+          );
+        }
+      }
+      // Fail-soft like the two writes above it, and for the same reason: the
+      // delete has landed, and a read that throws here would skip the
+      // reference check, the probe and the notify, leaving the UI showing a
+      // server the store no longer has. The fallback is the list this
+      // method started from minus the row it just removed — equivalent for
+      // the reference check, since nothing else can write while the queue is
+      // held.
+      try {
+        servers = await services.configStore.listServers();
+      } catch (error, stackTrace) {
+        developer.log(
+          'Could not refresh the server list after deleting $id',
+          name: 'seance.app',
+          level: 900,
+          error: error,
+          stackTrace: stackTrace,
+        );
+        servers = servers.where((s) => s.id != id).toList();
+      }
+
+      // Against the refreshed list, which no longer holds this server —
+      // `excludingId` is redundant now and kept because the predicate
+      // requires it, and because it stays correct if the read ever moves.
+      final secretRef = server?.secretRef;
+      if (secretRef != null &&
+          !secretStillReferenced(secretRef, servers, excludingId: id)) {
+        // Fail-soft, like the coordinator's own secret deletes: the vault
+        // throws when the OS keyring is locked, and letting that escape now
+        // would skip the list refresh and leave the UI showing a server that
+        // no longer exists.
+        try {
+          await services.vault.deleteSecret(secretRef);
+        } catch (error, stackTrace) {
+          developer.log(
+            'Could not remove the credential for the deleted server $id',
+            name: 'seance.app',
+            level: 900,
+            error: error,
+            stackTrace: stackTrace,
+          );
+        }
+      }
+    });
+    services.probe.updateServers(servers);
+    notifyListeners();
+    _scheduleAutoSync();
+    // A tab opened on this server while the delete waited — behind the
+    // teardown above, or behind an earlier mutation — would outlive it.
+    // Swept again here, outside the queue like the first sweep and for the
+    // same reason.
+    await closeAllTabsForServer(id);
+  }
+
+  /// Server-list group sections currently folded away, keyed by
+  /// [serverGroupKey]. Read straight off settings rather than mirrored here:
+  /// there is one owner of the value, and it is the thing that persists it.
+  ///
+  /// A view rather than a copy — `Set.unmodifiable` would duplicate the
+  /// elements on every read, and the list pane reads this on every build. The
+  /// wrapper is what says [toggleServerGroup] is the only writer: folding a
+  /// section by mutating this set would skip both the repaint and the save.
+  Set<String> get collapsedServerGroups =>
+      UnmodifiableSetView(services.settings.collapsedServerGroups);
+
+  /// Fold a group section away, or open it again.
+  Future<void> toggleServerGroup(String key) async {
+    final collapsed = services.settings.collapsedServerGroups;
+    // remove() reports whether it was there, so this is one lookup, not two.
+    if (!collapsed.remove(key)) collapsed.add(key);
+    notifyListeners();
+    await services.saveSettings();
+  }
+
+  /// Servers pinned to the top of the list, by id — an unmodifiable view over
+  /// the settings for the same reasons as [collapsedServerGroups].
+  ///
+  /// Device-local: see [AppSettings.pinnedServerIds] for why pins never sync.
+  Set<String> get pinnedServerIds =>
+      UnmodifiableSetView(services.settings.pinnedServerIds);
+
+  bool isServerPinned(String id) =>
+      services.settings.pinnedServerIds.contains(id);
+
+  /// Pin a server to the top of the list, or unpin it.
+  ///
+  /// Takes an id rather than a config: the pin outlives any one snapshot of
+  /// the row, and a config pulled from sync mid-tap would pin the same server
+  /// just as well.
+  Future<void> toggleServerPin(String id) async {
+    final pinned = services.settings.pinnedServerIds;
+    if (!pinned.remove(id)) pinned.add(id);
+    notifyListeners();
+    await services.saveSettings();
+  }
+
+  /// How tightly the server list packs its rows.
+  ServerListDensity get serverListDensity =>
+      services.settings.serverListDensity;
+
+  Future<void> setServerListDensity(ServerListDensity density) async {
+    if (services.settings.serverListDensity == density) return;
+    services.settings.serverListDensity = density;
+    notifyListeners();
+    await services.saveSettings();
+  }
+
+  /// Whether assistant requests carry the active session's recent output.
+  /// See [AppSettings.includeTerminalContext].
+  bool get includeTerminalContext => services.settings.includeTerminalContext;
+
+  /// Applied before the write, so a request sent while the save is still in
+  /// flight already honours the choice.
+  Future<void> setIncludeTerminalContext(bool include) async {
+    if (services.settings.includeTerminalContext == include) return;
+    services.settings.includeTerminalContext = include;
+    notifyListeners();
+    await services.saveSettings();
+  }
+
+  /// Persist the tiled panes' widths after a resize drag. No notifyListeners:
+  /// the layout already renders these — the save is only for the next launch.
+  Future<void> setPaneWidths({
+    required double listWidth,
+    required double utilityWidth,
+  }) async {
+    final settings = services.settings;
+    if (settings.paneListWidth == listWidth &&
+        settings.paneUtilityWidth == utilityWidth) {
+      return;
+    }
+    settings.paneListWidth = listWidth;
+    settings.paneUtilityWidth = utilityWidth;
+    await services.saveSettings();
+  }
+
+  /// Import hosts from an OpenSSH config file's text.
+  Future<int> importSshConfig(String text) async {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final hosts = SshConfigImporter.parse(text);
+    for (final h in hosts) {
+      await services.configStore.putServer(
+        h.toServerConfig(id: uuidV4(), now: now),
+      );
+    }
+    servers = await services.configStore.listServers();
+    services.probe.updateServers(servers);
+    notifyListeners();
+    _scheduleAutoSync();
+    return hosts.length;
+  }
+
+  /// Open [config]'s terminal from the server list. If the server already has
+  /// tabs, focus the one last used there — an editor tab is a valid landing
+  /// spot: the user left it open on purpose, and its banner already reports
+  /// the owner session's state. A *terminal* MRU is reconnected in place if
+  /// it had dropped; otherwise open a first tab. This keeps the server row's
+  /// "focus-or-connect" behavior unchanged for the common single-tab case.
+  Future<void> openTerminal(ServerConfig config) async {
+    final existing = tabsForServer(config.id);
+    if (existing.isEmpty) {
+      await newTab(config);
+      return;
+    }
+    final last = tabById(_lastTabForServer[config.id]) ?? existing.last;
+    focusTab(last.id);
+    if (last is TerminalSession &&
+        (last.status == TerminalStatus.disconnected ||
+            last.status == TerminalStatus.error)) {
+      await reconnect(last.id);
+    }
+  }
+
+  /// Open [copy] in a built-in-editor tab beside the owning server's terminal
+  /// tabs. Reopening the same checkout focuses its existing tab; a copy that
+  /// was re-created under a different [ManagedRemoteFile.localPath] replaces
+  /// the stale tab — the checkout it was bound to is already gone, so any
+  /// unsaved edits in the stale tab's buffer are dropped with it (saving was
+  /// already impossible: the file it wrote to no longer exists).
+  void openEditorTab(ManagedRemoteFile copy) {
+    EditorTab? stale;
+    for (final t in tabs) {
+      if (t is! EditorTab ||
+          t.ownerEditSessionId != copy.editSessionId ||
+          t.remotePath != copy.remotePath) {
+        continue;
+      }
+      if (t.localPath == copy.localPath) {
+        focusTab(t.id);
+        return;
+      }
+      stale = t;
+    }
+    final config = _configFor(copy.serverId);
+    if (config == null) {
+      // The checkout a stale tab was bound to is already gone; route through
+      // closeTab so removal, focus fallback, and listeners are all handled.
+      if (stale != null) unawaited(closeTab(stale.id));
+      return;
+    }
+    if (stale != null) {
+      tabs.remove(stale);
+      _dropLastTabFor(stale);
+      stale.dispose();
+    }
+    final tab = EditorTab(
+      id: uuidV4(),
+      serverId: copy.serverId,
+      config: config,
+      remotePath: copy.remotePath,
+      localPath: copy.localPath,
+      ownerEditSessionId: copy.editSessionId,
+    );
+    tabs.insert(insertIndexFor(tabs, copy.serverId), tab);
+    _setActive(tab.id);
+    notifyListeners();
+  }
+
+  /// Open an additional session (tab) for [config], adjacent to that server's
+  /// existing tabs, and connect it.
+  ///
+  /// Dials the server as it is saved now, as [reconnect] does. Most callers
+  /// (⌘T, the tab strip's "+", the macOS New Tab item) pass the config an
+  /// open tab connected with, which predates any edit made since.
+  Future<void> newTab(ServerConfig config) async {
+    config = _configFor(config.id) ?? config;
+    final id = uuidV4();
+    final tab = TerminalSession(
+      id: id,
+      editSessionId: id,
+      serverId: config.id,
+      config: config,
+      engine: XtermTerminalEngine(onCommand: _recordCommand),
+    );
+    tabs.insert(insertIndexFor(tabs, config.id), tab);
+    _setActive(tab.id);
+    notifyListeners();
+    // The tab is `connecting` from here on — the anchor must be up before the
+    // handshake starts, not after it finishes.
+    _refreshKeepAlive();
+    await _connect(tab);
+  }
+
+  /// Open another terminal beside [tab], of whatever kind it is. The
+  /// "New tab" action is offered from the tab strip and the native menu,
+  /// where the tab in hand may be a local shell with no server to open a
+  /// second one against — or an editor tab, whose "another" is a terminal
+  /// on the server it edits.
+  Future<void> duplicateTab(PaneTab tab) {
+    final config = tab.config;
+    return config == null ? newLocalTab() : newTab(config);
+  }
+
+  /// Whether a local shell can be opened here: the user asked for one *and*
+  /// the platform can host it. Both halves are required — a settings file
+  /// carried to a phone must not put a row in the list that cannot open.
+  bool get localShellAvailable => services.localShell.availableWhen(
+    enabledInSettings: services.settings.localShell,
+  );
+
+  /// Open the local shell from the list: focus the last one used (restarting
+  /// it if it has exited), or start the first. Mirrors [openTerminal].
+  Future<void> openLocalShell() async {
+    final existing = tabsForServer(
+      kLocalShellServerId,
+    ).whereType<TerminalSession>().toList();
+    if (existing.isEmpty) {
+      await newLocalTab();
+      return;
+    }
+    final last = existing.firstWhere(
+      (t) => t.id == _lastTabForServer[kLocalShellServerId],
+      orElse: () => existing.last,
+    );
+    focusTab(last.id);
+    if (last.status == TerminalStatus.disconnected ||
+        last.status == TerminalStatus.error) {
+      await reconnect(last.id);
+    }
+  }
+
+  /// Open an additional local shell tab and start it.
+  Future<void> newLocalTab() async {
+    final id = uuidV4();
+    final tab = TerminalSession(
+      id: id,
+      editSessionId: id,
+      serverId: kLocalShellServerId,
+      shellName: services.localShell.shellName,
+      // Commands are captured the same way as a server's: the suggestion
+      // feature is one opt-in about the commands you run, and snippets are
+      // global rather than per-server, so a local command belongs in it too.
+      engine: XtermTerminalEngine(onCommand: _recordCommand),
+    );
+    tabs.insert(insertIndexFor(tabs, kLocalShellServerId), tab);
+    _setActive(tab.id);
+    notifyListeners();
+    await _startLocalShell(tab);
+  }
+
+  /// Spawn the shell for an already-inserted local [tab].
+  Future<void> _startLocalShell(TerminalSession tab) async {
+    final engine = tab.engine;
+    final local = services.localShell;
+    try {
+      // Written before the shell's own first byte so it sits above the prompt,
+      // and into the terminal rather than app chrome: it describes this shell,
+      // and it should still be in the scrollback when `cd ~` surprises you.
+      final notice = local.sandboxNotice;
+      if (notice != null) engine.feed(Uint8List.fromList(utf8.encode(notice)));
+      final session = await LocalShellSession.start(
+        launcher: local.launch,
+        command: local.command,
+        engine: engine,
+      );
+      // The tab may have been closed (or replaced by a restart) while we
+      // awaited; if so, drop the shell we just started.
+      if (!identical(tabById(tab.id), tab)) {
+        await session.close();
+        return;
+      }
+      tab.session = session;
+      tab.connecting = false;
+      tab.shellExitCode = null;
+      session.onClosed = () {
+        // The shell exited: flip to disconnected if this is still the tab, and
+        // keep the status so the pane can say whether it left cleanly.
+        if (identical(tabById(tab.id), tab)) {
+          tab.shellExitCode = session.exitCode;
+          tab.session = null;
+          tab.connecting = false;
+          notifyListeners();
+        }
+      };
+      // The widget drives resize; forward it to the pty.
+      engine.terminal.onResize = (w, h, pw, ph) {
+        if (!session.isClosed) session.resize(TerminalSize(w, h));
+      };
+    } catch (e) {
+      if (!identical(tabById(tab.id), tab)) return;
+      tab.connecting = false;
+      tab.error = e is LocalShellException ? e.message : e.toString();
+    }
+    notifyListeners();
+  }
+
+  /// Turn the local shell on or off, closing any open local tabs on the way
+  /// out — leaving live shells behind a hidden row would strand them with no
+  /// way back to the list. A failed save puts the switch back, unless a
+  /// newer toggle already overwrote this call's value, which then stands.
+  Future<void> setLocalShellEnabled(bool enabled) async {
+    if (services.settings.localShell == enabled) return;
+    services.settings.localShell = enabled;
+    notifyListeners();
+    try {
+      await services.saveSettings();
+    } catch (_) {
+      if (services.settings.localShell != enabled) return;
+      services.settings.localShell = !enabled;
+      notifyListeners();
+      rethrow;
+    }
+    // Tear the shells down only once the setting is durably off; closing
+    // them before the save means a failed save flips the switch back on
+    // while every local tab is already gone. A newer toggle that re-enabled
+    // while this save was in flight keeps its own shells.
+    if (!enabled && services.settings.localShell == enabled) {
+      await closeAllTabsForServer(kLocalShellServerId);
+      notifyListeners();
+    }
+  }
+
+  /// Establish the SSH session for an already-inserted [tab]. Never reached
+  /// for a local shell, whose tab carries no server to connect to.
+  Future<void> _connect(TerminalSession tab) async {
+    final engine = tab.engine;
+    final log = tab.log;
+    final config = tab.config;
+    if (config == null) {
+      // Unreachable: a session with no server is a local shell, and
+      // openLocalShell/newLocalTab/reconnect all route those to
+      // _startLocalShell. Named rather than left to `!` so that if a future
+      // caller does route one here, it says which invariant broke.
+      throw StateError('_connect needs a server; a local shell has none');
+    }
+    // The attempt's own record of the prompt, so two tabs opening one host
+    // at once each keep their own answer.
+    final hostKey = _HostKeyAttempt(_promptForHostKey);
+    try {
+      final credentials = await services.resolveCredentials(config);
+      final session = await _openSshSession(
+        SshSessionManager(
+          tofu: services.tofu,
+          onHostKey: hostKey.prompt,
+          onKeyboardInteractive: _promptKeyboardInteractive,
+          resolveJumpHost: services.resolveJumpHost,
+        ),
+        config: config,
+        credentials: credentials,
+        engine: engine,
+        log: log,
+      );
+      // The tab may have been closed (or replaced by a reconnect) while we
+      // awaited; if so, drop the session we just opened.
+      if (!identical(tabById(tab.id), tab)) {
+        await session.close();
+        return;
+      }
+      tab.session = session;
+      tab.files = RemoteFilesController(
+        session.openRemoteFileSystem,
+        shellDirectory: engine.workingDirectory,
+        managedFileStore: services.managedRemoteFiles,
+        serverId: tab.serverId,
+        editSessionId: tab.editSessionId,
+        initialBookmarks:
+            services.settings.remotePathBookmarks[tab.serverId] ?? const [],
+        saveBookmarks: (paths) async {
+          if (paths.isEmpty) {
+            services.settings.remotePathBookmarks.remove(tab.serverId);
+          } else {
+            services.settings.remotePathBookmarks[tab.serverId] = paths;
+          }
+          await services.saveSettings();
+        },
+        initialShowHidden:
+            services.settings.remoteShowHidden[tab.serverId] ?? true,
+        saveShowHidden: (value) async {
+          services.settings.remoteShowHidden[tab.serverId] = value;
+          await services.saveSettings();
+        },
+        terminalTitle: engine.terminalTitle,
+        activeCommand: engine.activeCommand,
+        initialLocalCopies: tab.retainedLocalCopies,
+      );
+      tab.git = RemoteGitController(
+        session.runCommand,
+        shellDirectory: engine.workingDirectory,
+        terminalTitle: engine.terminalTitle,
+        activeCommand: engine.activeCommand,
+      );
+      tab.retainedLocalCopies.clear();
+      tab.connecting = false;
+      // The connection is up: stop the connection log from capturing dartssh2's
+      // per-packet trace, which would otherwise fire notifyListeners (rebuilding
+      // the whole app) on every packet for the life of the session.
+      log.freeze();
+      session.onClosed = () {
+        // Remote side ended: flip to disconnected if this is still the tab.
+        if (identical(tabById(tab.id), tab)) {
+          final files = tab.files;
+          if (files != null) {
+            tab.retainedLocalCopies.addAll(files.takeLocalCopies());
+            files.dispose();
+            tab.files = null;
+          }
+          tab.git?.dispose();
+          tab.git = null;
+          tab.session = null;
+          tab.connecting = false;
+          notifyListeners();
+          _refreshKeepAlive();
+        }
+      };
+      // The widget drives resize; forward it to the SSH PTY.
+      engine.terminal.onResize = (w, h, pw, ph) {
+        if (!session.isClosed) session.resize(TerminalSize(w, h));
+      };
+    } catch (e) {
+      if (!identical(tabById(tab.id), tab)) return;
+      tab.connecting = false;
+      tab.error = e is SshConnectException ? e.message : e.toString();
+      // From the prompt's answer, not the error's shape (see
+      // [_HostKeyAttempt]). A changed verdict needs a pinned key, so no
+      // lookup of the pin is needed either.
+      tab.hostKeyBlocked = hostKey.refusedChangedKey;
+      tab.missingCredentialServerId = e is CredentialMissingException
+          ? e.serverId
+          : null;
+    }
+    notifyListeners();
+    _refreshKeepAlive();
+  }
+
+  /// Retry a session that failed or dropped: replace it in place with a fresh
+  /// connection (new engine, new id) at the same tab position, disposing the
+  /// old one. A new id means a fresh `_SessionView` mounts cleanly. For a
+  /// local shell this is "run another one" — the exited process cannot be
+  /// resumed, but the tab and its name survive.
+  Future<void> reconnect(String sessionId) async {
+    final index = tabs.indexWhere((s) => s.id == sessionId);
+    if (index < 0) return;
+    final old = tabs[index];
+    if (old is! TerminalSession) return;
+    final config = old.isLocal ? null : _configFor(old.serverId) ?? old.config;
+
+    final replacement = TerminalSession(
+      id: uuidV4(),
+      editSessionId: old.editSessionId,
+      serverId: old.serverId,
+      config: config,
+      shellName: old.isLocal ? services.localShell.shellName : null,
+      engine: XtermTerminalEngine(onCommand: _recordCommand),
+      // Carry the shell-reported identity across the reconnect so the tab
+      // keeps its name instead of flickering back to "Session N". The running
+      // command is deliberately not carried: it belonged to the dead
+      // connection. A name the user chose outlives the connection entirely.
+      initialMetadata: old.metadata.value.withoutRunningCommand,
+      initialCustomName: old.customName.value,
+    );
+    tabs[index] = replacement;
+    if (activeTabId == old.id) _setActive(replacement.id);
+    await _disposeSession(old);
+    replacement.retainedLocalCopies.addAll(old.retainedLocalCopies);
+    old.retainedLocalCopies.clear();
+    notifyListeners();
+    await (replacement.isLocal
+        ? _startLocalShell(replacement)
+        : _connect(replacement));
+  }
+
+  /// The current config for [serverId], preferring the stored list over the
+  /// snapshot a live session captured at connect time — an edit made while a
+  /// session is open should be reflected by anything that reads the config for
+  /// display, not just by the next connection.
+  ServerConfig? configFor(String serverId) => _configFor(serverId);
+
+  ServerConfig? _configFor(String serverId) {
+    for (final s in servers) {
+      if (s.id == serverId) return s;
+    }
+    for (final s in tabs) {
+      if (s.serverId == serverId) return s.config;
+    }
+    return null;
+  }
+
+  /// Close a session's SSH connection AND dispose its engine. For a session
+  /// that never connected (still connecting, or errored) there is no session
+  /// to close the engine for us, so dispose it directly.
+  Future<void> _disposeSession(
+    TerminalSession tab, {
+    bool deleteLocalCopies = false,
+  }) async {
+    final files = tab.files;
+    if (files != null) {
+      if (deleteLocalCopies) {
+        await files.deleteAllLocalCopies();
+      } else {
+        tab.retainedLocalCopies.addAll(files.takeLocalCopies());
+      }
+      files.dispose();
+      tab.files = null;
+    }
+    tab.git?.dispose();
+    tab.git = null;
+    if (deleteLocalCopies && tab.retainedLocalCopies.isNotEmpty) {
+      for (final copy in tab.retainedLocalCopies.values) {
+        await services.managedRemoteFiles.remove(copy.id);
+      }
+      tab.retainedLocalCopies.clear();
+    }
+    // Sever the log's callback before anything async begins: a trace line
+    // arriving during (or after) teardown would otherwise reach a notifier
+    // that is about to be disposed, which asserts. Freezing also stops the
+    // transcript growing while the transport closes.
+    tab.log.freeze();
+    try {
+      if (tab.session != null) {
+        await tab.session!.close(); // SshSession.close disposes the engine
+      } else {
+        await tab.engine.dispose();
+      }
+    } finally {
+      tab.logNotifier.dispose();
+    }
+    // Only here, not in disconnect(): a disconnected tab stays in the strip and
+    // keeps showing where it last was.
+    tab.dispose();
+  }
+
+  /// Seed the built-in snippets on first launch only (guarded by a persisted
+  /// flag so clearing them out doesn't bring them back).
+  Future<void> _seedDefaultSnippets() async {
+    if (services.settings.snippetsSeeded) return;
+    for (final snippet in defaultSnippets()) {
+      await services.snippetStore.putSnippet(snippet);
+    }
+    services.settings.snippetsSeeded = true;
+    await services.saveSettings();
+  }
+
+  /// Save (create or update) a snippet, then refresh the list.
+  Future<void> saveSnippet(Snippet snippet) async {
+    await _mutate(() async {
+      await services.snippetStore.putSnippet(snippet);
+      // See _saveServerNow: re-saving an id cancels its pending deletion so a
+      // stale tombstone cannot shadow the live record. Serialized through the
+      // same queue as deleteSnippet so a save and a delete of one id cannot
+      // interleave into "row gone, tombstone gone".
+      try {
+        await services.tombstoneStore.remove(
+          '$_snippetRecordPrefix${snippet.id}',
+        );
+      } catch (error, stackTrace) {
+        developer.log(
+          'Could not clear a pending deletion tombstone for saved snippet '
+          '${snippet.id}',
+          name: 'seance.app',
+          level: 900,
+          error: error,
+          stackTrace: stackTrace,
+        );
+      }
+      snippets = await services.snippetStore.listSnippets();
+    });
+    notifyListeners();
+    _scheduleAutoSync();
+  }
+
+  Future<void> deleteSnippet(String id) async {
+    await _mutate(() async {
+      // Record the tombstone before dropping the row (see deleteServer),
+      // stamped to beat the record it deletes. A `snippet:` tombstone now
+      // propagates across devices too: applyToStores honours it, because a
+      // snippet is non-secret — unlike the `secret:`/`hostkey:` tombstones it
+      // still refuses. Serialized through the same queue as saveSnippet so the
+      // two cannot interleave into "row gone, tombstone gone".
+      final existing = await services.snippetStore.getSnippet(id);
+      final deletedAt = _deletionStamp(existing?.updatedAt);
+      try {
+        await services.tombstoneStore.add(
+          EncryptedRecord.tombstone(
+            id: '$_snippetRecordPrefix$id',
+            updatedAt: deletedAt,
+            deviceId: services.settings.deviceId,
+          ),
+        );
+      } catch (error, stackTrace) {
+        developer.log(
+          'Could not record the deletion tombstone for snippet $id',
+          name: 'seance.app',
+          level: 900,
+          error: error,
+          stackTrace: stackTrace,
+        );
+      }
+      await services.snippetStore.deleteSnippet(id);
+      snippets = await services.snippetStore.listSnippets();
+    });
+    notifyListeners();
+    _scheduleAutoSync();
+  }
+
+  /// Run one sync round manually (the "Sync now" button). Surfaces errors to
+  /// the caller and updates the shared sync status.
+  Future<SyncOutcome> syncNow() async {
+    syncing = true;
+    notifyListeners();
+    try {
+      final outcome = await _runSyncAndRefresh();
+      lastSyncError = null;
+      lastSyncAt = DateTime.now();
+      return outcome;
+    } catch (e) {
+      lastSyncError = _shortError(e);
+      rethrow;
+    } finally {
+      syncing = false;
+      notifyListeners();
+    }
+  }
+
+  /// The vault just unlocked (the OS keystore came back after being down at
+  /// bootstrap): re-evaluate what depended on it — the assistant key check and
+  /// the sync round that couldn't run.
+  Future<void> onVaultUnlocked() async {
+    try {
+      await refreshLlmConfigured();
+    } on AppLockException catch (error) {
+      credentialAccessError = error.message;
+      notifyListeners();
+      return;
+    }
+    credentialAccessError = null;
+    await _loadInbox();
+    _ensureInboxTimer();
+    if (services.settings.autoSync && services.isSyncConfigured) {
+      unawaited(_autoSync());
+    }
+  }
+
+  /// One sync round + refresh of the domain lists from the (possibly updated)
+  /// stores. Shared by manual and automatic sync.
+  Future<SyncOutcome> _runSyncAndRefresh() async {
+    // On the mutation queue: a round writes the config store and the vault
+    // (tombstones delete both), so it is a mutation like any other and must
+    // not interleave with a delete's reference count or a duplicate's plan.
+    // The re-reads are inside it too — outside, a mutation could land while
+    // `listServers` was still resolving and then have its own assignment
+    // overwritten by this older snapshot.
+    //
+    // That does hold the queue across network I/O, so what bounds it is worth
+    // writing down here rather than leaving to be rediscovered: every request
+    // carries `HttpSyncClient.timeout` (30 s by default), a timeout throws
+    // rather than retrying so the round ends at the first dead request, and
+    // `_mutate` releases in a `finally`. A black-holed network therefore
+    // costs one timeout, not a wedged app. A slow-but-alive one costs more —
+    // `SyncEngine.sync` runs up to five rounds and `SyncCoordinator.run` up
+    // to two passes — and the fix for that is splitting the coordinator's
+    // fetch from its apply so only the apply serializes, which is a change to
+    // `seance_core`, not to this line.
+    var adoptedAssistant = false;
+    try {
+      final outcome = await _mutate(() async {
+        try {
+          final result = await services.runSync();
+          servers = await services.configStore.listServers();
+          snippets = await services.snippetStore.listSnippets();
+          return result;
+        } on SyncRecordsRefused {
+          // The round applied everything else before reporting the records
+          // the server refused as too large, and it will refuse them again on
+          // every round until they shrink. Refreshed only on success, another
+          // device's edits would reach the stores and never the screen.
+          servers = await services.configStore.listServers();
+          snippets = await services.snippetStore.listSnippets();
+          services.probe.updateServers(servers);
+          _recomputeSuggestions();
+          rethrow;
+        } finally {
+          // Sampled while this round still holds the queue, so the answer
+          // cannot depend on what runs between the release and this method's
+          // continuation. `runSync` resets the flag as its first statement,
+          // and a round queued behind this one — a manual sync during an
+          // automatic one, or the reverse — starts as soon as the queue is
+          // released. Today the caller resumes first (an async return reaches
+          // its awaiter a microtask ahead of the completer's release), so a
+          // read in the outer `finally` happens to see this round's answer;
+          // which of the two gets there first is a scheduling detail nothing
+          // here should rest on.
+          adoptedAssistant = services.assistantSettingsChanged;
+          _lastRoundAdoptedAssistant = adoptedAssistant;
+        }
+      });
+      services.probe.updateServers(servers);
+      _recomputeSuggestions();
+      // Apps and statuses may have arrived: a new app's items can be opened
+      // now, and a proposal handled elsewhere should stop being announced.
+      unawaited(_refreshInboxAutomatically());
+      return outcome;
+    } finally {
+      // A pulled assistant configuration changes the provider, the model or
+      // the key, none of which an already-built chat provider notices.
+      //
+      // In a `finally` because `runSync` sets the flag in one too: a round can
+      // adopt the record and *then* fail, the pull running before the push.
+      // Consumed only on success, that adoption would be invisible — the next
+      // successful round finds the settings already adopted, reports nothing
+      // applied, and the chat provider answers with the old model and key
+      // until some unrelated edit rebuilds it. Every caller of this method
+      // swallows or rethrows the failure without looking at the flag, so this
+      // is the one place that can see both halves of the round.
+      //
+      // Caught, because a throw from a `finally` *replaces* the exception
+      // already in flight. This comment used to argue the call was safe
+      // without one, on the grounds that `reloadLlmProvider` bumps a counter
+      // and reads the keystore through the tolerant path
+      // (`refreshLlmConfigured` treats a keystore error as "no key"). That
+      // enumeration was incomplete: it also calls `notifyListeners`, and
+      // `ChangeNotifier` does not catch what a listener throws — a
+      // `setState` on a widget disposed while the round ran is enough. The
+      // round's own failure is the one worth reporting, and a swallowed
+      // rebuild self-corrects, since the next adoption or settings edit
+      // rebuilds the provider anyway.
+      if (adoptedAssistant) {
+        try {
+          await reloadLlmProvider();
+        } catch (_) {
+          // Deliberately swallowed rather than reported: there is no surface
+          // here, and masking the sync round's outcome is the worse of the
+          // two silences.
+        }
+      }
+    }
+  }
+
+  /// Whether the most recent sync round adopted an assistant configuration
+  /// from the account.
+  ///
+  /// Written inside the round, while it holds the mutation queue, which is
+  /// what makes it safe to read straight after awaiting [_runSyncAndRefresh]
+  /// where `services.assistantSettingsChanged` is not: that flag is reset at
+  /// the *start* of the next round, which can already be running by then,
+  /// while this is only written at the *end* of one.
+  ///
+  /// That holds for a round that adopted nothing. One that *did* adopt awaits
+  /// `reloadLlmProvider` in [_runSyncAndRefresh]'s outer `finally`, after
+  /// `_mutate` has released the queue — so a queued round can run to
+  /// completion inside that await and overwrite this before the caller
+  /// resumes. Read it beside the stamp (`assistantUpdatedAt != 0`), which is
+  /// what [assistantSyncSwitchedOn] does: adoption always leaves a nonzero
+  /// stamp, so the pair answers correctly whichever round wrote the flag.
+  bool _lastRoundAdoptedAssistant = false;
+
+  /// The assistant's configuration was just edited here: stamp it so the
+  /// synced record has a timestamp that moved for a real reason, and push it.
+  Future<void> assistantSettingsEdited() async {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    // Never below a record this device already holds. The stamp is the whole
+    // of the last-write-wins comparison, so a clock that runs behind the
+    // device this configuration was pulled from would make a fresh edit lose
+    // to the record it had just adopted — and the next round would re-apply
+    // that record over the edit, silently.
+    services.settings.assistantUpdatedAt =
+        now > services.settings.assistantUpdatedAt
+        ? now
+        : services.settings.assistantUpdatedAt + 1;
+    await services.saveSettings();
+    _scheduleAutoSync();
+  }
+
+  /// The four conditions under which [assistantSyncSwitchedOn] must not
+  /// stamp, asked at both points it has to be asked.
+  ///
+  /// One definition rather than two identical blocks. Each site keeps its own
+  /// comment explaining why the question is re-asked *there* — the answer can
+  /// change across either await — but the question itself is the same one,
+  /// and it was previously written out twice, verbatim. A condition added to
+  /// one copy and not the other silently reopens whichever of the clobber and
+  /// stale-stamp races that copy was guarding, which is precisely the edit
+  /// this shape invites.
+  bool _mustNotStampOnSwitchOn() =>
+      _lastRoundAdoptedAssistant ||
+      services.settings.assistantUpdatedAt != 0 ||
+      !services.settings.syncAssistant ||
+      !services.isSyncConfigured;
+
+  /// Assistant sync was just switched on here: take whatever the account
+  /// already holds, and publish this device's configuration only if it held
+  /// nothing.
+  ///
+  /// Stamping unconditionally would make this device win. `assistantUpdatedAt`
+  /// would be "now", later than any record on the account, so a laptop that
+  /// has never configured the assistant would push its defaults over a phone's
+  /// real provider, model and keys — leaving every device looking configured
+  /// and answering nothing, which is the outcome the zero stamp exists to
+  /// prevent, arriving through the switch instead.
+  ///
+  /// Adopting first cannot cause the mirror of that. A device that never
+  /// edited the assistant still stamps zero and offers nothing; one that did
+  /// offers a real record and wins the round if its edit was genuinely later.
+  /// Only when the round adopts nothing is there an account with no assistant
+  /// configuration, and then publishing this device's is the point of the
+  /// switch.
+  Future<void> assistantSyncSwitchedOn() async {
+    // No account attached: nothing to adopt, and nothing worth publishing
+    // either. Falling through would stamp `now` on this device's
+    // configuration, so it would arrive at the account as the newest write
+    // the moment one is attached — without ever having looked at what the
+    // account already held, which is the single guarantee this method exists
+    // to provide.
+    //
+    // And the toggle itself: with it off, `runSync` builds no assistant store,
+    // so a round can adopt nothing — and falling through would still stamp
+    // `now` on this device's configuration and persist it, an inflated stamp
+    // that outranks whatever the account holds when the switch is genuinely
+    // turned on later. The caller persists the toggle before calling; this is
+    // what holds if one ever does not.
+    if (!services.settings.syncAssistant || !services.isSyncConfigured) return;
+    // Offline, or the server is down: this is the one moment not to publish
+    // on a guess, so the failure ends the method here — and reaches the
+    // caller, which shows it. Swallowed, a toggle that did nothing looked
+    // like one that had adopted. The switch stays on and the next round
+    // settles it: by adopting the account's record, or, once this device is
+    // edited, by publishing that edit.
+    await _runSyncAndRefresh();
+    // The await above spans a network round, and the switch stays live
+    // throughout it. A user who turns it back off in that window has opted
+    // out before anything was adopted — stamping now would leave behind
+    // exactly the inflated stamp the entry guard exists to prevent, and it
+    // would outrank the account's record when the switch is next turned on.
+    // A nonzero stamp after a round that adopted nothing means this device's
+    // record is already the account's — `collectLocal` pushed it in the round
+    // above, or it was already there and nothing outranked it. Stamping again
+    // republishes identical content under a newer date for nothing, and makes
+    // this device the permanent winner of a record it may not have authored.
+    //
+    // It also makes the check above robust rather than merely fast enough:
+    // adoption always leaves the adopted record's stamp behind, which is never
+    // zero, so a round queued behind this one that overwrote
+    // `_lastRoundAdoptedAssistant` during the reload's await cannot turn an
+    // adoption into a republish.
+    // The account half of the entry guard is live across that await too. A
+    // user who signs out inside it — or a detach from anywhere else — leaves a
+    // round that adopted nothing, pushed nothing and kept the toggle on, so
+    // every other condition here reads exactly as it does on a fresh install
+    // with an account attached. Falling through stamps `now` on a
+    // configuration no account was ever consulted about, which is the inflated
+    // stamp the entry guard's own comment describes: it wins the first round
+    // against whatever the next account attached already held.
+    if (_mustNotStampOnSwitchOn()) {
+      return;
+    }
+    // Past here the stamp is zero, which means two different things — and only
+    // one of them is "nothing worth publishing".
+    //
+    // A fresh install has never configured an assistant, and stamping now
+    // would turn its shipped defaults into the account's newest write — the
+    // clobber that beats a phone which configured its assistant while sync
+    // was off and enables the switch afterwards.
+    //
+    // An install that configured its assistant *before this feature existed*
+    // also reads zero: there was nothing to stamp its edits. That one is the
+    // whole upgrade path, and silence here costs it everything — it adopts
+    // nothing from an empty account, publishes nothing, and the switch does
+    // nothing at all until the user happens to edit the settings again.
+    //
+    // What separates them is whether the assistant here is usable at all: a
+    // key stored under the referenced name, or a local endpoint that needs
+    // none. That is `llmConfigured`, re-read rather than trusted, because a
+    // key stored moments ago on the screen this switch lives on is exactly
+    // the case that matters.
+    await refreshLlmConfigured();
+    if (!llmConfigured) return;
+    // The guard above ran before that await, which is a keystore read: a
+    // round queued behind this one can acquire the mutation queue and adopt
+    // the account's record inside it, and adoption always leaves a nonzero
+    // stamp. Stamping now would put this device's pre-feature configuration
+    // over the one it just adopted — the clobber this whole method is a
+    // sequence of guards against.
+    // All of the entry guard, not only the stamp: the toggle and the account
+    // both stay live across that await too. A user who switches assistant
+    // sync back off inside it, or who signs out, would otherwise be stamped
+    // and persisted anyway — leaving the inflated stamp, while opted out or
+    // detached, that can outrank a record another device publishes before the
+    // switch is thrown again.
+    // The flag too, for the reason the entry guard takes it. The stamp check
+    // catches an adoption here only through an invariant that lives in
+    // another file — adoption always leaves a nonzero stamp, which
+    // `AssistantSettingsSync` is what enforces. The two conditions agree
+    // today; not depending on that costs one `||`, and the flag can only be
+    // true here if a round adopted inside the keystore read above, which is
+    // exactly when this device must not stamp.
+    if (_mustNotStampOnSwitchOn()) {
+      return;
+    }
+    await assistantSettingsEdited();
+    // That hands the publish to the auto-sync debounce, which does not run
+    // with auto-sync off — and this switch is an explicit ask to sync, made
+    // by a user who just watched one round run. Published now in that case;
+    // with auto-sync on, the debounce it just scheduled does it.
+    if (!services.settings.autoSync) await _runSyncAndRefresh();
+  }
+
+  /// Start (or restart) the periodic auto-sync timer. Safe to call repeatedly —
+  /// e.g. after enrolling in sync or toggling the setting.
+  void ensureAutoSyncTimer() {
+    _autoSyncTimer?.cancel();
+    _autoSyncTimer = null;
+    if (services.settings.autoSync && services.isSyncConfigured) {
+      _autoSyncTimer = Timer.periodic(_autoSyncInterval, (_) => _autoSync());
+    }
+  }
+
+  /// Queue a debounced background sync after a local edit, so rapid successive
+  /// edits coalesce into one round.
+  void _scheduleAutoSync() {
+    if (!services.settings.autoSync || !services.isSyncConfigured) return;
+    _syncDebounce?.cancel();
+    // Reached from inside `_mutate` (every save schedules one), and a timer's
+    // callback runs in the zone it was created in — which is fine: the guard
+    // in [_mutate] asks whether the *running* action's zone is an ancestor,
+    // and the action that scheduled this is over before it can fire. That is
+    // ordering, not timing: this call is the last statement of every
+    // mutation that makes it, so nothing of that action — a keychain prompt
+    // included — remains to be waited on after the timer exists.
+    _syncDebounce = Timer(_syncDebounceDelay, _autoSync);
+  }
+
+  /// Best-effort background sync. Errors are captured into [lastSyncError]
+  /// rather than thrown. If a round is already running, one more is queued so a
+  /// mid-sync edit is never lost.
+  Future<void> _autoSync() async {
+    if (!services.isSyncConfigured) return;
+    // Timers defer locked reads; a user action owns the next device prompt.
+    if (services.appLock.requiresAuthentication) return;
+    if (syncing) {
+      _syncQueued = true;
+      return;
+    }
+    syncing = true;
+    notifyListeners();
+    try {
+      do {
+        _syncQueued = false;
+        await _runSyncAndRefresh();
+        lastSyncError = null;
+        lastSyncAt = DateTime.now();
+      } while (_syncQueued);
+    } catch (e) {
+      lastSyncError = _shortError(e);
+    } finally {
+      syncing = false;
+      notifyListeners();
+    }
+  }
+
+  static String _shortError(Object e) {
+    final s = e.toString();
+    return s.length > 200 ? '${s.substring(0, 200)}…' : s;
+  }
+
+  // --- Command suggestions ---
+
+  /// Fold a submitted command into the local frequency stats and refresh the
+  /// suggestions if they changed. No-op unless the feature is enabled.
+  void _recordCommand(String command) {
+    if (!services.settings.commandSuggestions) return;
+    if (!services.commandStats.record(command)) return;
+    _scheduleStatsSave();
+    _recomputeSuggestions();
+  }
+
+  void _scheduleStatsSave() {
+    _statsSaveDebounce?.cancel();
+    _statsSaveDebounce = Timer(
+      const Duration(seconds: 3),
+      services.saveCommandStats,
+    );
+  }
+
+  /// Recompute [commandSuggestions] from the local stats: frequently-run
+  /// commands that aren't already snippets and don't look like they contain a
+  /// secret (belt-and-suspenders — capture is opt-in and local).
+  void _recomputeSuggestions() {
+    List<String> next = const [];
+    if (services.settings.commandSuggestions) {
+      final bodies = {for (final s in snippets) s.body.trim()};
+      next = services.commandStats
+          .suggestions(isExisting: (c) => bodies.contains(c.trim()), limit: 12)
+          .where((c) => !_redactor.wouldRedact(c))
+          .take(6)
+          .toList();
+    }
+    if (!listEquals(next, commandSuggestions)) {
+      commandSuggestions = next;
+      notifyListeners();
+    }
+  }
+
+  /// Re-evaluate suggestions after a settings change (e.g. the feature toggle).
+  void refreshSuggestions() => _recomputeSuggestions();
+
+  /// Promote a suggested command to a real (syncable) snippet.
+  Future<void> addSuggestionAsSnippet(String command) async {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    await saveSnippet(
+      Snippet(
+        id: uuidV4(),
+        title: _snippetTitle(command),
+        body: command,
+        createdAt: now,
+        updatedAt: now,
+      ),
+    );
+    _recomputeSuggestions(); // it's now an existing snippet, so it drops off
+  }
+
+  /// Permanently hide a suggestion.
+  Future<void> dismissSuggestion(String command) async {
+    services.commandStats.dismiss(command);
+    await services.saveCommandStats();
+    _recomputeSuggestions();
+  }
+
+  static String _snippetTitle(String command) {
+    final firstLine = command.split('\n').first.trim();
+    return firstLine.length <= 40
+        ? firstLine
+        : '${firstLine.substring(0, 39)}…';
+  }
+
+  /// Focus a server's most-recently-used tab (or its last tab).
+  void focusServer(String serverId) {
+    final tabs = tabsForServer(serverId);
+    if (tabs.isEmpty) return;
+    final last = tabById(_lastTabForServer[serverId]) ?? tabs.last;
+    focusTab(last.id);
+  }
+
+  /// Make [tabId] the active tab (the one shown in the pane).
+  void focusTab(String tabId) {
+    if (tabById(tabId) == null) return;
+    _setActive(tabId);
+    notifyListeners();
+  }
+
+  /// Name a tab explicitly, or clear the name (null or blank) to return it to
+  /// shell-derived naming. Editor tabs are named by what they edit — a custom
+  /// name would say less than the path does — so this is terminal-only.
+  ///
+  /// The name is collapsed to one line the same way remote labels are — not
+  /// because the user is untrusted, but because a tab chip is one line of
+  /// chrome and a pasted newline would break the strip either way.
+  void renameSession(String sessionId, String? name) {
+    final session = tabById(sessionId);
+    if (session is! TerminalSession) return;
+    final cleaned = name == null ? '' : sanitizeRemoteLabel(name);
+    // Only the chip repaints: the name lives on the session's own notifier,
+    // so renaming a tab does not rebuild the app the way notifyListeners
+    // would.
+    session.customName.value = cleaned.isEmpty ? null : cleaned;
+  }
+
+  /// Set the active tab and remember it as its server's most-recent tab.
+  /// Does not notify — callers do, so multiple state changes coalesce.
+  void _setActive(String? tabId) {
+    activeTabId = tabId;
+    final tab = tabById(tabId);
+    if (tab != null) {
+      _lastTabForServer[tab.serverId] = tab.id;
+    }
+  }
+
+  /// Apply a change of the "keep sessions alive in the background" setting:
+  /// re-anchor or drop the OS-level keep-alive for the currently live sessions.
+  void setKeepSessionsAliveEnabled(bool enabled) {
+    _keepAlive.setEnabled(enabled);
+    _refreshKeepAlive();
+  }
+
+  /// Recompute how many sessions are connecting or connected and tell the
+  /// keep-alive — that count, not the session identities, is all it needs.
+  /// Called after every mutation of a session's connection state.
+  void _refreshKeepAlive() {
+    _keepAlive.refresh(
+      tabs
+          .whereType<TerminalSession>()
+          .where((s) => s.connecting || s.session != null)
+          .length,
+    );
+  }
+
+  /// React to the app moving in/out of the foreground (wired to the app
+  /// lifecycle in `main`). While backgrounded, pause the reachability probe so
+  /// it stops opening a TCP connection to every server every ~45s — which would
+  /// otherwise drain battery/data on mobile and spam remote sshd/auth logs
+  /// (fail2ban) even when the app isn't visible.
+  void setForeground(bool foreground) {
+    if (foreground) {
+      services.probe.resume();
+      unawaited(_reconcileRetainedLocalCopies());
+      for (final tab in tabs.whereType<TerminalSession>()) {
+        final files = tab.files;
+        if (files != null) unawaited(files.reconcileLocalCopies());
+      }
+    } else {
+      services.probe.pause();
+    }
+  }
+
+  /// Inactive includes native auth and a focused desktop Settings window.
+  /// Only hidden/paused time belongs to the app-lock background timeout.
+  void onAppLifecycle(AppLifecycleState lifecycle) {
+    services.appLock.onLifecycle(switch (lifecycle) {
+      AppLifecycleState.resumed => AppLockLifecycle.foreground,
+      AppLifecycleState.inactive => AppLockLifecycle.inactive,
+      AppLifecycleState.hidden ||
+      AppLifecycleState.paused ||
+      AppLifecycleState.detached => AppLockLifecycle.background,
+    });
+  }
+
+  Future<void> setAppLock(AppLockMode mode) => _mutate(() async {
+    try {
+      await services.setAppLock(mode);
+    } finally {
+      notifyListeners();
+    }
+  });
+
+  /// A launch refusal is shown explicitly; it does not mean keys are absent.
+  String? credentialAccessError;
+
+  Future<void> _reconcileRetainedLocalCopies() async {
+    final reconciled = await services.managedRemoteFiles.reconcileAll();
+    final byId = {for (final copy in reconciled) copy.id: copy};
+    var changed = false;
+    for (final tab in tabs.whereType<TerminalSession>()) {
+      for (final entry in tab.retainedLocalCopies.entries.toList()) {
+        final updated = byId[entry.value.id];
+        if (updated != null && !identical(updated, entry.value)) {
+          tab.retainedLocalCopies[entry.key] = updated;
+          changed = true;
+        }
+      }
+    }
+    if (changed) notifyListeners();
+  }
+
+  /// Best-effort check for a newer GitHub release than [currentVersion]. If one
+  /// exists (and the user hasn't opted out), [updateInfo] is set so the UI can
+  /// offer a link to the releases page. Never downloads or installs; any error
+  /// (offline, rate-limited) is swallowed silently.
+  Future<void> checkForUpdate(String currentVersion) async {
+    if (!services.settings.checkForUpdates) return;
+    final info = await _updateChecker.check(currentVersion);
+    if (info != null) {
+      updateInfo = info;
+      notifyListeners();
+    }
+  }
+
+  // --- Terminal appearance ---
+
+  /// Change the terminal font size by [delta] points (the ⌘+ / ⌘− shortcuts),
+  /// or reset it to the default when [delta] is null (⌘0). Clamped to the
+  /// supported range; a no-op change neither notifies nor writes to disk.
+  /// The size applies at once; see [_saveZoom] for when a failed save throws.
+  Future<void> zoomTerminal(double? delta) async {
+    final settings = services.settings;
+    final next = clampTerminalFontSize(
+      delta == null
+          ? kDefaultTerminalFontSize
+          : settings.terminalFontSize + delta,
+    );
+    if (next == settings.terminalFontSize) return;
+    settings.terminalFontSize = next;
+    notifyListeners();
+    await _saveZoom();
+  }
+
+  /// Resize every built-in editor: View › Zoom's steps (⌘ or Ctrl with +,
+  /// − and 0 in an editor tab), shared with Planchette and Poltergeist.
+  Future<void> zoomEditor(EditorZoom zoom) => setEditorFontSize(
+    EditorTextSize.zoomed(services.settings.editorFontSize, zoom),
+  );
+
+  /// Sets the built-in editor's text size, clamped to the shared range. A
+  /// no-op change neither notifies nor writes to disk. The size applies at
+  /// once; see [_saveZoom] for when a failed save throws.
+  Future<void> setEditorFontSize(int size) async {
+    final settings = services.settings;
+    final next = EditorTextSize.clamp(size);
+    if (next == settings.editorFontSize) return;
+    settings.editorFontSize = next;
+    notifyListeners();
+    await _saveZoom();
+  }
+
+  /// Counts [_saveZoom] calls.
+  int _zoomSaves = 0;
+
+  /// Persists a text size change. Settings saves are whole snapshots written
+  /// in order, so a newer zoom's save carries this one: a failure throws
+  /// only while no newer zoom has started saving, which reports for itself.
+  /// Steps whose saves queue behind a slow one thus report a failure once.
+  Future<void> _saveZoom() async {
+    final save = ++_zoomSaves;
+    try {
+      await services.saveSettings();
+    } catch (error, stackTrace) {
+      if (save == _zoomSaves) rethrow;
+      developer.log(
+        'A text size save failed; a newer zoom is saving the size again',
+        name: 'seance.app',
+        level: 900,
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
+  }
+
+  /// Repaint live terminals after the appearance settings changed in place
+  /// (the settings screen owns the write; this only refreshes the views).
+  void terminalAppearanceChanged() => notifyListeners();
+
+  /// The theme the app is drawn in, as the settings hold it.
+  ///
+  /// A notifier of its own, not a field read on every [notifyListeners]:
+  /// the MaterialApp listens to this alone, so the whole app is re-themed
+  /// when the theme changes and never merely because a session connected or
+  /// a probe came back — which is most of what this state notifies for.
+  ValueListenable<AppAppearance> get appearance => _appearance;
+  late final ValueNotifier<AppAppearance> _appearance = ValueNotifier(
+    _appearanceOf(services.settings),
+  );
+
+  static AppAppearance _appearanceOf(AppSettings settings) =>
+      AppAppearance(palette: settings.themePalette, mode: settings.themeMode);
+
+  /// Re-theme the app after the theme settings changed in place (the
+  /// settings backend owns the write). Notifies too, which is what sends an
+  /// open settings window its snapshot — and with it the new theme.
+  void appearanceChanged() {
+    _appearance.value = _appearanceOf(services.settings);
+    notifyListeners();
+  }
+
+  /// Dismiss the update affordance for this session (a fresh launch re-checks).
+  void dismissUpdateNotice() {
+    if (updateInfo == null) return;
+    updateInfo = null;
+    notifyListeners();
+  }
+
+  /// Close a session's SSH connection but keep the tab: its dot goes grey
+  /// (disconnected) and the pane offers a reconnect.
+  Future<void> disconnect(String sessionId) async {
+    final tab = tabById(sessionId);
+    if (tab is! TerminalSession) return;
+    final files = tab.files;
+    if (files != null) {
+      tab.retainedLocalCopies.addAll(files.takeLocalCopies());
+      files.dispose();
+      tab.files = null;
+    }
+    tab.git?.dispose();
+    tab.git = null;
+    await tab.session?.close();
+    tab.session = null;
+    tab.connecting = false;
+    tab.error = null;
+    tab.hostKeyBlocked = false;
+    tab.missingCredentialServerId = null;
+    notifyListeners();
+    _refreshKeepAlive();
+  }
+
+  Future<void> discardRetainedLocalCopy(
+    String sessionId,
+    ManagedRemoteFile copy,
+  ) async {
+    final tab = tabById(sessionId);
+    if (tab is! TerminalSession ||
+        tab.retainedLocalCopies[copy.remotePath]?.id != copy.id) {
+      return;
+    }
+    await services.managedRemoteFiles.remove(copy.id);
+    tab.retainedLocalCopies.remove(copy.remotePath);
+    notifyListeners();
+  }
+
+  Future<void> reconcileRetainedLocalCopy(
+    String sessionId,
+    ManagedRemoteFile copy,
+  ) async {
+    final tab = tabById(sessionId);
+    if (tab is! TerminalSession) return;
+    final updated = await services.managedRemoteFiles.reconcile(copy.id);
+    if (updated == null ||
+        tab.retainedLocalCopies[copy.remotePath]?.id != copy.id) {
+      return;
+    }
+    tab.retainedLocalCopies[copy.remotePath] = updated;
+    notifyListeners();
+  }
+
+  /// Close a single tab and drop it. The active tab falls back to the next
+  /// tab of the same server, then the previous, then any other server's
+  /// most-recent tab, then null (which returns the UI to the server list).
+  ///
+  /// Closing a terminal also closes the editor tabs on its checkouts — the
+  /// teardown deletes the local copies they write to. (The UI asks about
+  /// unsaved editor buffers before calling this; a programmatic close is
+  /// allowed to drop them.)
+  Future<void> closeTab(String tabId) async {
+    final tab = tabById(tabId);
+    if (tab == null) return;
+    if (tab is TerminalSession) {
+      for (final editor in editorTabsOwnedBy(tab)) {
+        tabs.remove(editor);
+        _dropLastTabFor(editor);
+        editor.dispose();
+      }
+    }
+    final siblingsBefore = tabsForServer(tab.serverId);
+    tabs.remove(tab);
+    _dropLastTabFor(tab);
+    if (tab is TerminalSession) {
+      await _disposeSession(tab, deleteLocalCopies: true);
+    } else {
+      tab.dispose();
+    }
+
+    // The fallback is needed whenever the tab the pane was showing is gone —
+    // the closed tab itself, or an editor cascaded away with its session.
+    if (tabById(activeTabId) == null) {
+      _setActive(
+        fallbackAfterClosing(
+          closed: tab,
+          siblingsBefore: siblingsBefore,
+          remaining: tabs,
+          lastTabForServer: _lastTabForServer,
+        )?.id,
+      );
+    }
+    notifyListeners();
+    _refreshKeepAlive();
+  }
+
+  /// Forget [tab] as its server's most-recent tab, if it still is.
+  void _dropLastTabFor(PaneTab tab) {
+    if (_lastTabForServer[tab.serverId] == tab.id) {
+      _lastTabForServer.remove(tab.serverId);
+    }
+  }
+
+  /// Pick the session to focus after [closed] is removed: the next tab of the
+  /// same server (else the previous), then any other server's most-recent tab,
+  /// then the last remaining session, then null.
+  @visibleForTesting
+  static T? fallbackAfterClosing<T extends PaneTab>({
+    required T closed,
+    required List<T> siblingsBefore,
+    required List<T> remaining,
+    required Map<String, String> lastTabForServer,
+  }) {
+    final sameServer = tabsForServerIn(remaining, closed.serverId);
+    if (sameServer.isNotEmpty) {
+      // The removed tab's old position now holds its successor; clamp to the
+      // last when it was the final tab.
+      final closedPos = siblingsBefore.indexWhere((s) => s.id == closed.id);
+      if (closedPos >= 0 && closedPos < sameServer.length) {
+        return sameServer[closedPos];
+      }
+      return sameServer.last;
+    }
+    // No tabs left for this server: prefer another server's most-recent tab.
+    for (final id in lastTabForServer.values) {
+      for (final s in remaining) {
+        if (s.id == id) return s;
+      }
+    }
+    return remaining.isNotEmpty ? remaining.last : null;
+  }
+
+  /// Close every tab of a server (used when the server is deleted).
+  Future<void> closeAllTabsForServer(String serverId) async {
+    final ids = [for (final s in tabsForServer(serverId)) s.id];
+    for (final id in ids) {
+      await closeTab(id);
+    }
+  }
+
+  /// Recreate disconnected placeholder tabs for durable managed edits. The
+  /// user explicitly reconnects before upload, while Open/Discard remain tied
+  /// to the same logical tab instead of being attached to an arbitrary session.
+  Future<void> _restoreManagedEditSessions() async {
+    final copies = await services.managedRemoteFiles.reconcileAll();
+    final configs = {for (final server in servers) server.id: server};
+    final groups = <(String, String), List<ManagedRemoteFile>>{};
+    for (final copy in copies) {
+      if (!configs.containsKey(copy.serverId)) continue;
+      groups
+          .putIfAbsent((copy.serverId, copy.editSessionId), () => [])
+          .add(copy);
+    }
+    for (final group in groups.entries) {
+      final config = configs[group.key.$1]!;
+      final tab = TerminalSession(
+        id: uuidV4(),
+        editSessionId: group.key.$2,
+        serverId: config.id,
+        config: config,
+        engine: XtermTerminalEngine(onCommand: _recordCommand),
+        connecting: false,
+      );
+      tab.retainedLocalCopies.addEntries(
+        group.value.map((copy) => MapEntry(copy.remotePath, copy)),
+      );
+      tabs.add(tab);
+      _lastTabForServer[config.id] = tab.id;
+    }
+  }
+
+  @override
+  void dispose() {
+    _probeSub?.cancel();
+    _autoSyncTimer?.cancel();
+    _syncDebounce?.cancel();
+    _inboxDisposed = true;
+    _inboxTimer?.cancel();
+    _statsSaveDebounce?.cancel();
+    // Nothing anchors a dying app: drop the OS keep-alive before the sessions
+    // it was holding open go.
+    _keepAlive.stop();
+    chat.dispose();
+    // Drop the callback before the service goes: it closes over `sessions`,
+    // so a probe service that outlived this state would keep reading a list
+    // that is no longer maintained (and keep this object alive).
+    services.probe.connectedServerIds = null;
+    services.probe.dispose();
+    for (final t in tabs) {
+      if (t is TerminalSession) {
+        // Teardown is asynchronous but nothing can await it here: swallow the
+        // failure explicitly rather than leaving an unhandled async error to
+        // surface long after the state object is gone.
+        unawaited(
+          _disposeSession(t).catchError((Object error, StackTrace stack) {
+            debugPrint('Session teardown failed: $error\n$stack');
+          }),
+        );
+      } else {
+        t.dispose();
+      }
+    }
+    // Teardown is in flight and does not read this list; clearing it makes the
+    // contract explicit — nothing may reach a session after this point.
+    tabs.clear();
+    _appearance.dispose();
+    super.dispose();
+  }
+
+  // --- Command inbox ---
+
+  /// Local state only: which apps exist and what is already fetched. Never
+  /// throws; a locked vault reads as no apps until it unlocks.
+  Future<void> _loadInbox() async {
+    try {
+      inboxApps = [
+        for (final app in await services.inboxApps.listApps())
+          if (!app.removed) app,
+      ];
+      final inbox = InboxService(
+        api: const _OfflineInboxApi(),
+        apps: services.inboxApps,
+        statuses: services.inboxStatuses,
+        cache: services.inboxCache,
+      );
+      inboxPending = await inbox.pending();
+      inboxFailures = await inbox.failures();
+    } on AppLockException catch (error) {
+      inboxError = error.message;
+      credentialAccessError = error.message;
+    } catch (error, stackTrace) {
+      developer.log(
+        'Could not load the command inbox',
+        name: 'seance.app',
+        level: 900,
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
+  }
+
+  void _ensureInboxTimer() {
+    _inboxTimer?.cancel();
+    _inboxTimer = null;
+    if (inboxApps.isEmpty || !services.isSyncConfigured) return;
+    _inboxTimer = Timer.periodic(
+      _inboxPollInterval,
+      (_) => unawaited(_refreshInboxAutomatically()),
+    );
+  }
+
+  /// Timers defer a locked read; manual refresh can authenticate and retry.
+  Future<void> _refreshInboxAutomatically() async {
+    if (services.appLock.requiresAuthentication) return;
+    await refreshInbox();
+  }
+
+  /// Fetch new proposals. Errors land in [inboxError] rather than being thrown.
+  Future<void> refreshInbox() async {
+    if (_inboxFetching || _inboxDisposed) return;
+    if (!services.isSyncConfigured) return;
+    _inboxFetching = true;
+    try {
+      await _mutate(() async {
+        await services.appLock.requireUnlocked();
+        await _loadInbox();
+        if (inboxApps.isEmpty) return;
+        inboxPending = await services.withInbox((inbox) async {
+          final pending = await inbox.refresh();
+          await inbox.pruneStatuses();
+          return pending;
+        });
+        inboxFailures = await services.inboxCache.load().then(
+          (cache) => cache.failures,
+        );
+      });
+      inboxError = null;
+    } catch (error) {
+      inboxError = _shortError(error);
+    } finally {
+      _inboxFetching = false;
+      if (!_inboxDisposed) {
+        _ensureInboxTimer();
+        notifyListeners();
+      }
+    }
+  }
+
+  /// Whether this device has a recovery code (CRED-05).
+  Future<bool> recoveryConfigured() => services.recoveryConfigured();
+
+  /// A new recovery code to show once; nothing is stored until
+  /// [saveRecoveryCode].
+  String newRecoveryCode() => services.newRecoveryCode();
+
+  /// Keeps [code] as this device's recovery code, once the user confirmed
+  /// writing it down.
+  Future<void> saveRecoveryCode(String code) =>
+      _mutate(() => services.saveRecoveryCode(code));
+
+  /// Remembers "Not now" to the offer of a recovery code, so it is not made
+  /// again; Settings still offers it.
+  Future<void> declineRecoveryPrompt() async {
+    services.settings.recoveryPromptDeclined = true;
+    try {
+      await services.saveSettings();
+    } catch (_) {
+      // Not remembered on disk, so not in memory either: the next launch
+      // would offer it again anyway.
+      services.settings.recoveryPromptDeclined = false;
+      rethrow;
+    }
+  }
+
+  /// Answers a credential-required tab (CRED-05): stores [credential] as
+  /// [serverId]'s password or key, under the entry its config already names,
+  /// or switches the server to the SSH agent. Saved as an edit would be, so
+  /// the new credential is the newest copy anywhere it syncs. The caller
+  /// reconnects. Returns whether a credential was written to the vault.
+  Future<bool> provideMissingCredential(
+    String serverId,
+    MissingCredential credential,
+  ) => _mutate(() async {
+    final server = await services.configStore.getServer(serverId);
+    if (server == null) throw StateError('This server was deleted.');
+    // The editor's rule (`nextUpdatedAt`): past both the clock and the
+    // record, so this edit outranks the copy this device pulled.
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final updatedAt = now > server.updatedAt ? now : server.updatedAt + 1;
+    // A config naming one of the app's own vault entries gets an entry of
+    // its own instead: the vault refuses credentials under a reserved id.
+    final existingRef = server.secretRef;
+    final ref = existingRef == null || isReservedVaultId(existingRef)
+        ? uuidV4()
+        : existingRef;
+    switch (credential) {
+      case UseSshAgent():
+        await _saveServerNow(
+          server.copyWith(authMethod: AuthMethod.agent, updatedAt: updatedAt),
+        );
+        return false;
+      case MissingPassword(:final password):
+        await _saveServerNow(
+          server.copyWith(
+            authMethod: AuthMethod.password,
+            secretRef: ref,
+            clearIdentityFilePath: true,
+            updatedAt: updatedAt,
+          ),
+          secret: Secret(id: ref, kind: SecretKind.password, value: password),
+        );
+        return true;
+      case MissingPrivateKey(:final pem, :final passphrase):
+        // A stored key, as the editor saves a pasted one: a key-file path
+        // left on the config would be read instead of this key.
+        await _saveServerNow(
+          server.copyWith(
+            authMethod: AuthMethod.privateKey,
+            secretRef: ref,
+            clearIdentityFilePath: true,
+            updatedAt: updatedAt,
+          ),
+          secret: Secret(
+            id: ref,
+            kind: SecretKind.privateKey,
+            value: pem,
+            keyPassphrase: passphrase,
+          ),
+        );
+        return true;
+    }
+  });
+
+  /// The vault as an encrypted export the recovery code opens. In the
+  /// mutation queue, so a save cannot land halfway through the snapshot.
+  Future<Uint8List> exportSecrets() => _mutate(services.exportSecrets);
+
+  /// Merges an export into this device's vault. In the mutation queue, so a
+  /// save or a sync round cannot write a credential between the restore's
+  /// read of the vault and its single write.
+  Future<SecretsRestoreSummary> restoreSecrets(
+    Uint8List export,
+    String code, {
+    required RestoreConflictPolicy policy,
+  }) => _mutate(
+    () => services.restoreSecrets(export, code, policy: policy),
+  );
+
+  /// Connect a producer. Returns the pairing string, which is shown once.
+  Future<String> addInboxApp({
+    required String name,
+    List<String> allowedServerIds = const [],
+  }) async {
+    final baseUrl = services.settings.syncBaseUrl;
+    if (baseUrl == null || baseUrl.isEmpty) {
+      throw StateError('Set up sync first: the inbox uses the sync server.');
+    }
+    final pairing = await _mutate(() async {
+      final pairing = await services.withInbox(
+        (inbox) => inbox.addApp(
+          name: name,
+          serverUrl: baseUrl,
+          allowedServerIds: allowedServerIds,
+        ),
+      );
+      await _loadInbox();
+      return pairing;
+    });
+    _ensureInboxTimer();
+    notifyListeners();
+    // The app record carries the key, and the user's other devices need it
+    // to open anything this producer sends.
+    _scheduleAutoSync();
+    return pairing.encode();
+  }
+
+  Future<void> updateInboxApp(
+    String appId, {
+    required String name,
+    required List<String> allowedServerIds,
+  }) async {
+    await _mutate(() async {
+      await services.withInbox(
+        (inbox) => inbox.updateApp(
+          appId,
+          name: name,
+          allowedServerIds: allowedServerIds,
+        ),
+      );
+      await _loadInbox();
+    });
+    notifyListeners();
+    _scheduleAutoSync();
+  }
+
+  Future<void> removeInboxApp(String appId) async {
+    await _mutate(() async {
+      await services.withInbox((inbox) => inbox.removeApp(appId));
+      await _loadInbox();
+    });
+    _ensureInboxTimer();
+    notifyListeners();
+    _scheduleAutoSync();
+  }
+
+  /// Returns [InboxClaim.handledElsewhere] when another device ran or
+  /// dismissed it first, in which case nothing is recorded here.
+  Future<InboxClaim> dismissProposal(PendingProposal proposal) async {
+    final result = await _mutate(() async {
+      final result = await services.withInbox(
+        (inbox) => inbox.dismiss(proposal),
+      );
+      await _loadInbox();
+      return result;
+    });
+    notifyListeners();
+    _scheduleAutoSync();
+    return result;
+  }
+
+  /// Stage [proposal] on [server] and place the line that runs it in the
+  /// prompt. Nothing runs until the user presses Enter.
+  ///
+  /// In this order, each step for a reason: a sync round first, so a status
+  /// another device wrote is seen before anything happens (best effort, since
+  /// the claim below is what decides); the upload before the claim, so a
+  /// failed upload leaves the proposal pending instead of marked as run; the
+  /// claim before the paste, so two devices cannot both stage it.
+  Future<ProposalRunResult> runProposal(
+    PendingProposal proposal,
+    ServerConfig server,
+  ) async {
+    // The review screen only offers servers the resolver allows, but this is
+    // the point that acts, so it checks again rather than trusting callers:
+    // the app's server list may have changed since the screen was built.
+    final target = resolveInboxTarget(
+      proposal.proposal.host,
+      proposal.app,
+      servers,
+    );
+    if (target.server?.id != server.id) {
+      return const ProposalRunResult.failed(
+        'This app may not run commands on that server.',
+      );
+    }
+    if (services.isSyncConfigured) {
+      try {
+        await _runSyncAndRefresh();
+      } catch (_) {
+        // The claim is authoritative; a round that failed only makes a
+        // "handled elsewhere" answer come from the server instead.
+      }
+    }
+    final session = await _connectedSessionFor(server);
+    // Proposals only run against a configured server, whose transport is
+    // always SSH — a local shell can never reach this point.
+    final ssh = session?.session;
+    if (session == null || ssh is! SshSession) {
+      return const ProposalRunResult.failed('Could not connect to the server.');
+    }
+    final String line;
+    final RemoteFileSystem fs;
+    final StagedScript staged;
+    try {
+      fs = await ssh.openRemoteFileSystem();
+      staged = await stageProposalScript(fs, proposal.proposal);
+    } catch (error) {
+      return ProposalRunResult.failed('Could not upload the script: $error');
+    }
+    try {
+      // Built from a quoted path, so it never holds a line break; it goes
+      // through the same gate as every paste regardless, and before the
+      // claim, so a refusal leaves the proposal pending. The script is on
+      // the server by now, so a refusal removes it again.
+      line = PasteSanitizer.sanitize(staged.commandLine);
+    } on UnsafePasteException catch (error) {
+      await _unstage(fs, staged);
+      return ProposalRunResult.failed(error.reason);
+    }
+    final InboxClaim claim;
+    try {
+      claim = await _mutate(() async {
+        final claim = await services.withInbox(
+          (inbox) => inbox.claim(proposal),
+        );
+        await _loadInbox();
+        return claim;
+      });
+    } catch (error) {
+      await _unstage(fs, staged);
+      return ProposalRunResult.failed('Could not claim the proposal: $error');
+    }
+    notifyListeners();
+    _scheduleAutoSync();
+    switch (claim) {
+      case InboxClaim.handledElsewhere:
+        await _unstage(fs, staged);
+        return const ProposalRunResult.failed(
+          'Another device already ran or dismissed this proposal.',
+        );
+      case InboxClaim.unavailable:
+        await _unstage(fs, staged);
+        return const ProposalRunResult.failed(
+          'This proposal expired or its app was removed.',
+        );
+      case InboxClaim.claimed:
+        break;
+    }
+    session.engine.injectInput(line);
+    focusTab(session.id);
+    return ProposalRunResult.staged(line);
+  }
+
+  /// Remove a script staged for a proposal that will not run here, so
+  /// `~/.seance/inbox/` does not collect files nothing will run. Best effort:
+  /// a leftover is inert (nothing runs it without the user typing its path).
+  Future<void> _unstage(RemoteFileSystem fs, StagedScript staged) async {
+    try {
+      await fs.delete(await fs.stat(staged.path, followLinks: false));
+    } catch (error) {
+      developer.log(
+        'Could not remove staged inbox script: ${error.runtimeType}',
+        name: 'seance.app',
+        level: 900,
+      );
+    }
+  }
+
+  /// A connected terminal on [server]: the last one used there if it is up,
+  /// otherwise a new tab.
+  Future<TerminalSession?> _connectedSessionFor(ServerConfig server) async {
+    final existing = [
+      for (final tab in tabsForServer(server.id))
+        if (tab is TerminalSession && tab.isConnected) tab,
+    ];
+    final last = tabById(_lastTabForServer[server.id]);
+    if (last is TerminalSession && last.isConnected) return last;
+    if (existing.isNotEmpty) return existing.last;
+    await newTab(server);
+    final opened = activeSession;
+    if (opened == null || opened.serverId != server.id || !opened.isConnected) {
+      return null;
+    }
+    return opened;
+  }
+}
+
+/// What [AppState.runProposal] did.
+class ProposalRunResult {
+  /// The line placed in the prompt, when [ok].
+  final String? commandLine;
+  final String? error;
+
+  const ProposalRunResult.staged(String this.commandLine) : error = null;
+  const ProposalRunResult.failed(String this.error) : commandLine = null;
+
+  bool get ok => error == null;
+}
+
+/// The inbox read from local state only, for [AppState._loadInbox]: pending
+/// and failures never reach the network, and anything that would is a bug.
+class _OfflineInboxApi implements InboxApi {
+  const _OfflineInboxApi();
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) =>
+      throw StateError('The offline inbox view reached the network');
+}

@@ -1,0 +1,1365 @@
+import 'dart:async';
+import 'dart:collection';
+import 'dart:convert';
+import 'dart:typed_data';
+
+import 'package:crypto/crypto.dart';
+import 'package:dartssh2/dartssh2.dart';
+import 'package:meta/meta.dart';
+import 'package:seance_protocol/seance_protocol.dart';
+
+import '../hostkey/tofu.dart';
+import '../terminal/session_transport.dart';
+import '../terminal/terminal_engine.dart';
+import 'remote_command.dart';
+import 'remote_file_system.dart';
+import 'sequential_cleanup.dart';
+import 'ssh_agent.dart';
+
+const _cleanupActionTimeout = Duration(seconds: 5);
+const _sshAuthenticationTimeout = Duration(minutes: 5);
+const _defaultSshKeepAliveInterval = Duration(seconds: 10);
+const _maxJumpHosts = 16;
+
+Future<void> _discardCleanup(CleanupAction action) => runSequentialCleanup(
+      [action],
+      actionTimeout: _cleanupActionTimeout,
+      failureMode: CleanupFailureMode.ignore,
+    );
+
+/// Resolved credentials for one connection. The vault produces these just
+/// before connect; nothing here is persisted.
+class SshCredentials {
+  final AuthMethod method;
+  final String? password;
+  final String? privateKeyPem;
+  final String? keyPassphrase;
+
+  const SshCredentials.password(this.password)
+      : method = AuthMethod.password,
+        privateKeyPem = null,
+        keyPassphrase = null;
+
+  const SshCredentials.privateKey(this.privateKeyPem, {this.keyPassphrase})
+      : method = AuthMethod.privateKey,
+        password = null;
+
+  const SshCredentials.agent()
+      : method = AuthMethod.agent,
+        password = null,
+        privateKeyPem = null,
+        keyPassphrase = null;
+}
+
+/// A saved jump host paired with credentials resolved immediately before use.
+final class ResolvedSshHost {
+  final ServerConfig config;
+  final SshCredentials credentials;
+
+  const ResolvedSshHost(this.config, this.credentials);
+}
+
+/// Resolves a saved jump host without exposing storage to the SSH layer.
+typedef SshJumpHostResolver = Future<ResolvedSshHost?> Function(String id);
+
+/// Opens a direct-tcpip channel through an authenticated jump client.
+typedef SshForwardConnector = Future<SSHSocket> Function(
+  SSHClient client,
+  String host,
+  int port,
+  Duration timeout,
+);
+
+/// Loads identities from the native agent at connection time.
+typedef SshAgentIdentityLoader = Future<List<SSHIdentity>> Function();
+
+/// How an authenticated SSH client completed user authentication.
+enum AuthKind {
+  key,
+  agent,
+  storedPassword,
+  keyboardInteractive,
+  promptedPassword,
+}
+
+/// Asks the user to approve a host key on first use or after a change. Returns
+/// true to trust (and pin) the presented key. The app wires this to a dialog
+/// (a plain confirm on first use, a hard "HOST KEY CHANGED" block otherwise).
+typedef HostKeyPrompter = Future<bool> Function(HostKeyDecision decision);
+
+/// One keyboard-interactive request with its trusted connection target.
+///
+/// [name], [instruction], and [prompts] come from the remote peer. UI must
+/// present [server] separately so a jump host cannot impersonate its target.
+final class KeyboardInteractiveChallenge {
+  final ServerConfig server;
+  final List<String> prompts;
+  final String name;
+  final String instruction;
+
+  KeyboardInteractiveChallenge({
+    required this.server,
+    required List<String> prompts,
+    required this.name,
+    required this.instruction,
+  }) : prompts = List<String>.unmodifiable(prompts);
+}
+
+/// Answers a keyboard-interactive challenge (e.g. a 2FA/TOTP code).
+typedef KeyboardInteractiveResponder = Future<List<String>> Function(
+  KeyboardInteractiveChallenge challenge,
+);
+
+Future<bool> _verifyHostKey({
+  required TofuVerifier tofu,
+  required HostKeyPrompter onHostKey,
+  required String host,
+  required int port,
+  required String type,
+  required Uint8List fingerprintBytes,
+}) async {
+  final presented = HostKey(
+    host: host,
+    port: port,
+    type: type,
+    fingerprintSha256: utf8.decode(fingerprintBytes),
+    pinnedAt: DateTime.now().millisecondsSinceEpoch,
+  );
+  final decision = await tofu.check(presented);
+  if (decision.isTrusted) return true;
+
+  // First use or changed key: the user must explicitly approve.
+  final approved = await onHostKey(decision);
+  if (approved) await tofu.pin(presented);
+  return approved;
+}
+
+/// A running transcript of one connection attempt: the human-readable steps we
+/// log plus dartssh2's own debug/trace output. The UI shows this so a failed
+/// connection explains *what happened* — which auth methods were tried and
+/// which the server actually accepts — instead of a bare
+/// `SSHAuthFailError(All authentication methods failed)`.
+class SshConnectionLog {
+  final List<String> _lines = [];
+
+  /// The transcript so far. A view, not a copy: every line has to come through
+  /// [add], which is where credentials are redacted out, and a publicly
+  /// mutable list is a one-character way past that.
+  ///
+  /// `UnmodifiableListView` rather than `List.unmodifiable`, which allocates a
+  /// fresh copy per read — this is read on every repaint of a live connection
+  /// log, and a copy also silently freezes for any caller that holds on to it.
+  /// Read-only by *type*, not only at runtime: declared `List<String>`, a
+  /// `log.lines.add(...)` compiled cleanly and threw mid-handshake, which is
+  /// the failure the unmodifiable view was introduced to close off. Nothing
+  /// indexes the transcript, so `Iterable` costs no caller anything.
+  Iterable<String> get lines => _linesView;
+  late final List<String> _linesView = UnmodifiableListView(_lines);
+
+  /// Called after every [add] so a live view can repaint. Cleared by [freeze].
+  void Function()? onUpdate;
+
+  bool _frozen = false;
+
+  /// Bound the transcript: dartssh2's `printTrace` fires per packet, so an
+  /// unfrozen log on a busy session would grow without limit.
+  static const int _maxLines = 400;
+
+  SshConnectionLog({this.onUpdate});
+
+  /// Whole records only. [redactConnectionTrace] scrubs to the end of what it
+  /// is handed, so a producer that split a message on newlines before calling
+  /// this would store the tail past the redaction as a line of its own — and
+  /// nothing here can tell an already-split chunk from a whole one.
+  void add(String record) {
+    if (_frozen) return;
+    _lines.add(redactConnectionTrace(record));
+    if (_lines.length > _maxLines) {
+      _lines.removeRange(0, _lines.length - _maxLines);
+    }
+    onUpdate?.call();
+  }
+
+  /// Stop recording and notifying. Call this once a connection is established:
+  /// the log only exists to diagnose connection *failures* (which happen during
+  /// connect), but dartssh2 keeps calling `printTrace` for the whole session —
+  /// left live, every packet would fire [onUpdate] (rebuilding the app) and
+  /// append a line forever. A failed attempt never freezes, so its full
+  /// transcript is preserved for the error view.
+  void freeze() {
+    _frozen = true;
+    onUpdate = null;
+  }
+
+  @override
+  String toString() => _lines.join('\n');
+}
+
+/// The one shape in dartssh2's packet trace that carries a secret.
+///
+/// Audited against the pinned 3.0.2 rather than assumed: of every
+/// `toString()` in `message/`, `SSH_Message_Userauth_InfoResponse`'s
+/// `'\$runtimeType(responses: \$responses)'` is the only one that
+/// interpolates credential material. `SSH_Message_Userauth_Request` prints
+/// `user`, `serviceName` and `methodName` and deliberately not the password,
+/// which is the premise the whole mechanism rests on. Re-run that audit on a
+/// `pub upgrade`: a new printing site is the one drift the fail-closed branch
+/// below cannot catch, because it keys on this shape.
+///
+/// What makes that one message the whole problem: for a host that does
+/// password login over keyboard-interactive — the OpenSSH default on many
+/// distributions — the `responses: [...]` list *is* the password, in
+/// plaintext.
+///
+/// The transcript is shown in the UI with a Copy button beside it and is meant
+/// to be pasted into a bug report, so this is neutralised where it is
+/// captured — one place every producer passes through — rather than wherever
+/// it happens to be displayed.
+/// Matched greedily to the end of what it is handed, rather than to a closing
+/// bracket or a line break: a Dart list's `toString` does not escape its
+/// elements, so a password containing `]` prints as `responses: [pas]sword])`
+/// and a bracket-bounded match would stop after `[pas]`; one containing a
+/// newline — a value pasted from a password manager with a trailing return —
+/// would end a `.`-bounded match the same way and leave its tail behind.
+/// Hence `dotAll`. Over-redacting costs nothing here: the responses list is
+/// the last thing the message prints, so there is nothing after it to
+/// preserve, and every producer hands [SshConnectionLog.add] a whole record
+/// (dartssh2's `printDebug`/`printTrace` and `note` all pass one message
+/// through) rather than splitting it on newlines first, which would put a
+/// tail past this regex's reach entirely.
+/// The class name is *optional* so a renamed message is still caught. The
+/// fail-closed branch below keys off the name, and a `pub upgrade` that
+/// renamed the class — `SSH_Message_Userauth_InfoResponse` to anything not
+/// containing `Userauth_InfoResponse` — would defeat both the name check and a
+/// name-anchored pattern, and print the password with nothing red anywhere.
+/// Anchoring on `(responses: [` instead catches it, and catches the same
+/// shape arriving in a chunk that did not carry the name. In an SSH packet
+/// trace that substring belongs to this message alone, so the over-redaction
+/// this admits costs nothing by the standard the paragraph above sets.
+///
+/// The spacing around the colon is loose for the same reason. A named line
+/// whose spacing drifted would at least hit the fail-closed branch below, so
+/// there the cost is only a whole record withheld instead of one field
+/// redacted — but a chunk arriving *without* the name cannot reach that
+/// branch at all, and a `(responses : [pw])` would then match nothing and
+/// print the credential.
+///
+/// One cell of that matrix stays open, and deliberately: a chunk carrying
+/// *neither* the class name nor the `responses` field — both drifted at once,
+/// in a message some producer split — matches no anchor and reaches no
+/// withhold. Closing it would mean redacting any bracketed list after any
+/// `name:`, which eats `methodsLeft: [ … ]` — the line the failure summary
+/// parses to tell the user which methods the host accepts. What holds the
+/// cell shut instead is that every producer hands [SshConnectionLog.add] a
+/// whole record, so a chunk without the name does not exist today; that
+/// invariant is the one to keep, not the pattern to widen.
+// Derived from the token rather than spelled beside it. The mechanism is
+// only coherent while the name the pattern accepts contains the name the
+// withhold branch keys on, and an edit that renamed one after a dartssh2
+// rename and not the other would leave the fail-closed branch keying off a
+// name the pattern no longer matches — this file's own drift, of the kind it
+// exists to survive from the dependency. The value is byte-identical.
+const String _userauthMessage = 'Userauth_$_infoResponseToken';
+
+/// What the fail-closed branch keys on: the part of the name a rename is
+/// least likely to touch. Keying on the whole name left one combination of
+/// the rename matrix open — class *and* field renamed at once, so neither
+/// the shape anchor nor the exact name matched and the credential printed.
+/// `Userauth_InfoRequest` does not contain it, so request lines stay legible.
+const String _infoResponseToken = 'InfoResponse';
+
+/// Built from [_userauthMessage] rather than repeating it. The fail-closed
+/// branch below is only coherent while the name it checks for and the name
+/// the pattern accepts are the same string — widening one after a dartssh2
+/// rename and not the other would leave the withhold keying off a name the
+/// pattern no longer matches, which is the drift this whole mechanism exists
+/// to survive.
+/// Escaped, though today's name needs none: everything around this pattern is
+/// built to survive drift in dartssh2's spelling, and a name edited to contain
+/// a metacharacter would change the pattern's meaning silently — the one drift
+/// this file would fail open on.
+final RegExp _userauthResponses = RegExp(
+  '(${RegExp.escape(_userauthMessage)})?\\(responses\\s*:\\s*\\[.*',
+  dotAll: true,
+);
+
+/// [line] with any credential dartssh2's trace would otherwise print replaced.
+/// Public so the redaction can be asserted directly rather than only through a
+/// live handshake, which no test performs.
+///
+/// `replaceAllMapped`, not `replaceAll`: Dart's plain replacement takes the
+/// string literally, so a `$1` in it lands in the output as the characters
+/// `$1` and takes the matched prefix with it.
+String redactConnectionTrace(String line) {
+  // Fail closed on drift. The pattern matches the exact text dartssh2 prints
+  // today (`'$runtimeType(responses: $responses)'`), and every test of it is
+  // written against that same reading — so they pin the regex to itself, not
+  // to the dependency. A `pub upgrade` that renamed the field, quoted the
+  // elements, or printed a count first would make the pattern miss, and the
+  // password would flow into a transcript with a Copy button on it, with
+  // nothing red anywhere. An InfoResponse this does not recognize is
+  // therefore replaced whole: a transcript line lost to caution costs a
+  // diagnosis, and the alternative costs the credential.
+  //
+  // Positional, not just "does the pattern match somewhere": the leftmost
+  // match has to belong to the named message. A record carrying a drifted
+  // field name followed by an unrelated `responses: [` — two messages joined
+  // into one chunk — matched on the later one, skipped the withhold, and had
+  // only that occurrence replaced, leaving the credential ahead of it
+  // verbatim.
+  //
+  // "Belongs to it" is `start <= tokenEnd`, which admits both shapes that are
+  // recognized today: the canonical line, where the pattern's optional name
+  // group makes the match start at `Userauth_…` *before* the token, and a
+  // renamed class whose field is still `responses:`, where the match starts
+  // immediately *after* it. Anything further along is another message.
+  final firstResponses = _userauthResponses.firstMatch(line);
+  final tokenAt = line.indexOf(_infoResponseToken);
+  final tokenEnd = tokenAt + _infoResponseToken.length;
+  if (tokenAt >= 0 &&
+      (firstResponses == null || firstResponses.start > tokenEnd)) {
+    return '$_userauthMessage(redacted: this build does not recognize the '
+        'shape of this message, so all of it is withheld)';
+  }
+  // The name is put back from the match rather than restated, because the
+  // match only includes one when the class still has today's name. Canonical
+  // lines come out byte-identical to before; a renamed class keeps its own
+  // name (which the match did not consume) instead of gaining a second one.
+  return line.replaceAllMapped(
+    _userauthResponses,
+    (match) => '${match[1] ?? ''}(responses: [redacted])',
+  );
+}
+
+
+/// Thrown when a connection attempt fails. [message] is a one-line,
+/// user-facing summary; [log] carries the full transcript for a details view;
+/// [cause] is the original error.
+class SshConnectException implements Exception {
+  final String message;
+  final Object cause;
+  final SshConnectionLog log;
+
+  SshConnectException(this.message, this.cause, this.log);
+
+  /// The connection stopped at host-key verification: the user (or the
+  /// unwired prompt's safe default) declined the key the server presented,
+  /// or, as below, its key-exchange signature did not verify.
+  ///
+  /// dartssh2 never throws the [SSHHostkeyError] itself: it closes the
+  /// transport with it, and the client reports that as an
+  /// [SSHAuthAbortError] whose `reason` is the host-key error. The bare form
+  /// is accepted too, for a dartssh2 that stops wrapping it.
+  ///
+  /// A key-exchange signature that fails to verify lands here too for RSA
+  /// and ECDSA host keys, which dartssh2 reports with the same host-key
+  /// error, having checked the signature before the key reaches the
+  /// [HostKeyPrompter] (its ed25519 verifier throws a plain exception
+  /// instead, which reaches this layer as an internal error). So this
+  /// getter alone does not prove the user declined a key, changed or not;
+  /// only the prompt's verdict and answer do. The app records those per
+  /// attempt to mark a refused changed key blocked.
+  bool get isHostKeyRefusal {
+    final cause = this.cause;
+    final reason = cause is SSHAuthAbortError ? cause.reason : cause;
+    return reason is SSHHostkeyError;
+  }
+
+  @override
+  String toString() => message;
+}
+
+/// A live SSH shell session wired to a [TerminalEngine].
+class SshSession implements SessionTransport {
+  final SSHClient client;
+  final SSHSession shell;
+  final TerminalEngine engine;
+  final List<StreamSubscription<dynamic>> _subs = [];
+  final Completer<void> _stdoutDone = Completer<void>();
+  final Completer<void> _stderrDone = Completer<void>();
+  final SingleFlightCleanup _cleanup = SingleFlightCleanup();
+  bool _closed = false;
+  SftpClient? _sftpClient;
+  Future<RemoteFileSystem>? _remoteFileSystem;
+  bool _endedRemotely = false;
+  bool _closedNotified = false;
+  void Function()? _onClosed;
+
+  /// Fired once when the remote shell ends (server-side exit, dropped
+  /// connection). Lets the app flip the session's status dot to "disconnected".
+  @override
+  set onClosed(void Function()? callback) {
+    _onClosed = callback;
+    if (_endedRemotely && callback != null) scheduleMicrotask(_notifyClosed);
+  }
+
+  @override
+  void Function()? get onClosed => _onClosed;
+
+  SshSession._(this.client, this.shell, this.engine);
+
+  /// Pipe SSH stdout/stderr into the engine and the engine's user input back
+  /// into the shell; forward resize events.
+  void _wire() {
+    _subs.add(
+      shell.stdout.listen(
+        engine.feed,
+        onDone: () => _complete(_stdoutDone),
+        onError: (_) => _complete(_stdoutDone),
+      ),
+    );
+    _subs.add(
+      shell.stderr.listen(
+        engine.feed,
+        onDone: () => _complete(_stderrDone),
+        onError: (_) => _complete(_stderrDone),
+      ),
+    );
+    _subs.add(
+      engine.userInput.listen((data) {
+        if (!_closed) shell.write(Uint8List.fromList(data));
+      }),
+    );
+    // The remote side closing the channel (logout, kill, network drop) should
+    // mark the session disconnected in the UI.
+    shell.done.then((_) => _remoteClosed()).catchError((_) => _remoteClosed());
+  }
+
+  /// Opens one SFTP subsystem beside this session's shell and reuses it for the
+  /// life of the authenticated transport.
+  Future<RemoteFileSystem> openRemoteFileSystem({
+    Duration timeout = const Duration(seconds: 15),
+  }) {
+    if (_closed || client.isClosed) {
+      throw const RemoteFileException(
+        kind: RemoteFileErrorKind.disconnected,
+        operation: 'open SFTP',
+        message: 'The SSH session is disconnected.',
+      );
+    }
+    return _remoteFileSystem ??= _openRemoteFileSystem(timeout);
+  }
+
+  Future<RemoteFileSystem> _openRemoteFileSystem(Duration timeout) async {
+    SftpClient? opening;
+    try {
+      opening = await client.sftp().timeout(timeout);
+      final sftp = opening;
+      await sftp.handshake.timeout(timeout);
+      if (_closed || client.isClosed) {
+        throw const RemoteFileException(
+          kind: RemoteFileErrorKind.disconnected,
+          operation: 'open SFTP',
+          message: 'The SSH session disconnected while SFTP was opening.',
+        );
+      }
+      _sftpClient = sftp;
+      return DartSshRemoteFileSystem(sftp);
+    } on RemoteFileException {
+      _remoteFileSystem = null;
+      if (opening != null) await _discardCleanup(opening.close);
+      rethrow;
+    } catch (e) {
+      _remoteFileSystem = null;
+      if (opening != null) await _discardCleanup(opening.close);
+      throw RemoteFileException(
+        kind: RemoteFileErrorKind.unsupported,
+        operation: 'open SFTP',
+        message: 'Could not open SFTP on this server: $e',
+        cause: e,
+      );
+    }
+  }
+
+  /// Runs [command] on a fresh non-PTY exec channel over this session's
+  /// authenticated transport — beside the interactive shell, never through
+  /// it: the remote prompt, scrollback, and shell cwd are untouched and both
+  /// output streams are captured.
+  ///
+  /// Each stream is bounded at [maxOutputBytes]; excess is discarded and
+  /// [RemoteCommandResult.truncated] reports it, so a command that prints
+  /// without limit cannot exhaust app memory. Reading continues past the cap
+  /// because a channel whose output is never drained stalls on window.
+  ///
+  /// Throws [RemoteCommandException] when the transport is down, the channel
+  /// cannot be opened, a stream errors, or [timeout] elapses — the channel is
+  /// closed either way. A remote command that merely *fails* is not thrown:
+  /// it comes back as a result with a non-zero exit code.
+  Future<RemoteCommandResult> runCommand(
+    String command, {
+    Duration? timeout,
+    int maxOutputBytes = 256 * 1024,
+  }) async {
+    final effectiveTimeout = timeout ?? const Duration(seconds: 30);
+    if (_closed || client.isClosed) {
+      throw const RemoteCommandException('The SSH session is disconnected.');
+    }
+    final SSHSession channel;
+    try {
+      channel = await client.execute(command);
+    } catch (e) {
+      if (_closed || client.isClosed) {
+        throw const RemoteCommandException('The SSH session is disconnected.');
+      }
+      throw RemoteCommandException('Could not open a command channel: $e');
+    }
+
+    final stdout = BytesBuilder(copy: false);
+    final stderr = BytesBuilder(copy: false);
+    var truncated = false;
+    final stdoutDone = Completer<void>();
+    final stderrDone = Completer<void>();
+
+    void collect(Uint8List data, BytesBuilder into) {
+      final remaining = maxOutputBytes - into.length;
+      if (data.length <= remaining) {
+        into.add(data);
+      } else {
+        if (remaining > 0) {
+          into.add(Uint8List.sublistView(data, 0, remaining));
+        }
+        truncated = true;
+      }
+    }
+
+    final subscriptions = <StreamSubscription<Uint8List>>[
+      channel.stdout.listen(
+        (data) => collect(data, stdout),
+        onDone: stdoutDone.complete,
+        onError: stdoutDone.completeError,
+        cancelOnError: true,
+      ),
+      channel.stderr.listen(
+        (data) => collect(data, stderr),
+        onDone: stderrDone.complete,
+        onError: stderrDone.completeError,
+        cancelOnError: true,
+      ),
+    ];
+
+    Future<void> abort() async {
+      for (final subscription in subscriptions) {
+        await subscription.cancel();
+      }
+      channel.done.ignore();
+      channel.close();
+    }
+
+    // One deadline across both waits: two independent effectiveTimeout
+    // windows could otherwise hold the caller for twice the configured time.
+    // A stopwatch keeps the arithmetic monotonic where DateTime would
+    // inherit wall-clock adjustments.
+    final stopwatch = Stopwatch()..start();
+    try {
+      // Both stream completions are awaited together: awaiting them one after
+      // the other would leave the second without an error handler until the
+      // first finished.
+      await Future.wait([
+        stdoutDone.future,
+        stderrDone.future,
+      ], eagerError: true).timeout(effectiveTimeout);
+      final remaining = effectiveTimeout - stopwatch.elapsed;
+      await channel.done.timeout(
+        remaining.isNegative ? Duration.zero : remaining,
+      );
+      for (final subscription in subscriptions) {
+        await subscription.cancel();
+      }
+      return RemoteCommandResult(
+        stdout: utf8.decode(stdout.takeBytes(), allowMalformed: true),
+        stderr: utf8.decode(stderr.takeBytes(), allowMalformed: true),
+        exitCode: channel.exitCode,
+        truncated: truncated,
+      );
+    } on TimeoutException {
+      await abort();
+      throw RemoteCommandException(
+        'The command did not finish within ${effectiveTimeout.inSeconds}s.',
+      );
+    } catch (e) {
+      await abort();
+      if (_closed || client.isClosed) {
+        throw const RemoteCommandException('The SSH session is disconnected.');
+      }
+      throw RemoteCommandException('The command channel failed: $e', cause: e);
+    }
+  }
+
+  @override
+  void resize(TerminalSize size) {
+    engine.resize(size);
+    shell.resizeTerminal(size.cols, size.rows);
+  }
+
+  Future<void> _remoteClosed() async {
+    if (_closed) return;
+    _endedRemotely = true;
+    // dartssh2 can complete SSHSession.done before the final stdout/stderr
+    // packets have drained. Give those streams a short window before teardown.
+    try {
+      await Future.wait([
+        _stdoutDone.future,
+        _stderrDone.future,
+      ]).timeout(const Duration(seconds: 2));
+    } on TimeoutException {
+      // A dropped transport may never deliver stream-done; teardown must still
+      // complete and mark the session disconnected.
+    }
+    try {
+      await _finish();
+    } catch (_) {
+      // A remote drop has no caller to receive teardown failures.
+    } finally {
+      _notifyClosed();
+    }
+  }
+
+  static void _complete(Completer<void> completer) {
+    if (!completer.isCompleted) completer.complete();
+  }
+
+  void _notifyClosed() {
+    if (_closedNotified) return;
+    final callback = _onClosed;
+    if (callback == null) return;
+    _closedNotified = true;
+    callback();
+  }
+
+  @override
+  Future<void> close() => _finish();
+
+  Future<void> _finish() => _cleanup.run(_finishOnce);
+
+  Future<void> _finishOnce() async {
+    _closed = true;
+    final subscriptions = List<StreamSubscription<dynamic>>.of(_subs);
+    final sftpClient = _sftpClient;
+    _subs.clear();
+    _sftpClient = null;
+    _remoteFileSystem = null;
+
+    await runSequentialCleanup(
+      [
+        for (final subscription in subscriptions) subscription.cancel,
+        if (sftpClient != null) sftpClient.close,
+        shell.close,
+        client.close,
+        engine.dispose,
+      ],
+      actionTimeout: _cleanupActionTimeout,
+    );
+  }
+
+  @override
+  bool get isClosed => _closed || client.isClosed;
+}
+
+SSHUserInfoRequestHandler? _keyboardInteractiveHandler({
+  required KeyboardInteractiveResponder? responder,
+  required ServerConfig config,
+  required void Function(AuthKind kind) onAuthKind,
+}) {
+  if (responder == null) return null;
+  // Parameter type is inferred from SSHUserInfoRequestHandler so we needn't
+  // import dartssh2's (unexported) SSHUserInfoRequest class directly.
+  return (request) async {
+    final prompts = request.prompts.map((p) => p.promptText).toList();
+    // This is a prompt-text heuristic; it may not reflect whether the UI
+    // actually asked the user for a password.
+    final promptedPassword = prompts.any(
+        (prompt) => prompt.toLowerCase().contains('password'));
+    onAuthKind(promptedPassword
+        ? AuthKind.promptedPassword
+        : AuthKind.keyboardInteractive);
+    return responder(
+      KeyboardInteractiveChallenge(
+        server: config,
+        prompts: prompts,
+        name: request.name,
+        instruction: request.instruction,
+      ),
+    );
+  };
+}
+
+/// Opens and authenticates an SSH transport without opening a shell channel.
+/// The returned client can open SFTP or other channels directly.
+///
+/// The caller owns the returned [SSHClient] and must close it when finished.
+/// On any error the client is closed before the exception is thrown.
+///
+/// [keepAliveInterval] preserves dartssh2's default. Pass null when a pool
+/// owns keepalive scheduling; non-null intervals must be positive.
+Future<(SSHClient, AuthKind)> openAuthenticatedClient({
+  required ServerConfig config,
+  required SshCredentials credentials,
+  required TofuVerifier tofu,
+  required HostKeyPrompter onHostKey,
+  KeyboardInteractiveResponder? onKeyboardInteractive,
+  Future<SSHSocket> Function(String, int, Duration)? connect,
+  SshJumpHostResolver? resolveJumpHost,
+  SshForwardConnector? forward,
+  SshAgentIdentityLoader? loadAgentIdentities,
+  Duration timeout = const Duration(seconds: 15),
+  Duration? keepAliveInterval = _defaultSshKeepAliveInterval,
+  SshConnectionLog? log,
+}) async {
+  // Reject a busy-loop timer before acquiring a socket.
+  if (keepAliveInterval != null && keepAliveInterval <= Duration.zero) {
+    throw ArgumentError.value(
+      keepAliveInterval,
+      'keepAliveInterval',
+      'must be positive or null',
+    );
+  }
+
+  void note(String message) => log?.add(message);
+  final route = await _resolveSshRoute(
+    config: config,
+    credentials: credentials,
+    resolveJumpHost: resolveJumpHost,
+    log: log,
+  );
+
+  Future<List<SSHIdentity>>? sharedAgentIdentities;
+  Future<List<SSHIdentity>> agentIdentities() =>
+      sharedAgentIdentities ??= (loadAgentIdentities ??
+              () => SshAgentClient().identities())
+          .call();
+
+  // Prepare every credential before the first network side effect.
+  final preparedRoute = <_PreparedSshHost>[];
+  for (final host in route) {
+    preparedRoute.add(
+      await _prepareSshHost(
+        host,
+        loadAgentIdentities: agentIdentities,
+        log: log,
+      ),
+    );
+  }
+
+  final socketConnector = connect ??
+      ((host, port, socketTimeout) =>
+          SSHSocket.connect(host, port, timeout: socketTimeout));
+  final forwardConnector = forward ??
+      ((client, host, port, channelTimeout) =>
+          client.forwardLocal(host, port).timeout(channelTimeout));
+
+  SSHClient? parent;
+  AuthKind? authKind;
+  for (final host in preparedRoute.reversed) {
+    final currentTarget = _target(host.config);
+    note(
+      'Auth method: '
+      '${SshSessionManager._methodLabel(host.credentials.method)}',
+    );
+    // Keep offered-key diagnostics scoped to the hop authenticated next.
+    for (final identity in host.identities ?? const <SSHIdentity>[]) {
+      final label = identity.comment == null
+          ? identity.type
+          : '${identity.type} (${identity.comment})';
+      note('Offering key: $label '
+          '${SshSessionManager._fingerprint(identity.toPublicKey().encode())}');
+    }
+
+    SSHSocket socket;
+    if (parent == null) {
+      try {
+        note('Connecting to $currentTarget …');
+        socket = await socketConnector(
+          host.config.host,
+          host.config.port,
+          timeout,
+        );
+      } catch (error) {
+        note('Could not open a TCP connection: $error');
+        throw SshConnectException(
+          'Could not reach ${host.config.host}:${host.config.port}: $error',
+          error,
+          log ?? SshConnectionLog(),
+        );
+      }
+      note('TCP connection established; starting SSH handshake.');
+    } else {
+      final jumpClient = parent;
+      try {
+        note('Forwarding through the jump route to $currentTarget …');
+        final forwarded = await forwardConnector(
+          jumpClient,
+          host.config.host,
+          host.config.port,
+          timeout,
+        );
+        socket = _OwnedJumpSocket(forwarded, jumpClient);
+      } catch (error) {
+        note('Could not open the forwarded connection: $error');
+        await _discardCleanup(jumpClient.close);
+        throw SshConnectException(
+          'Could not reach ${host.config.host}:${host.config.port} through '
+          'the jump route: $error',
+          error,
+          log ?? SshConnectionLog(),
+        );
+      }
+      note('Forwarded connection established; starting SSH handshake.');
+    }
+
+    final authenticated = await _authenticateSshHost(
+      host: host,
+      socket: socket,
+      tofu: tofu,
+      onHostKey: onHostKey,
+      onKeyboardInteractive: onKeyboardInteractive,
+      keepAliveInterval: keepAliveInterval,
+      log: log,
+    );
+    parent = authenticated.$1;
+    authKind = authenticated.$2;
+  }
+
+  return (parent!, authKind!);
+}
+
+final class _PreparedSshHost {
+  final ServerConfig config;
+  final SshCredentials credentials;
+  final List<SSHIdentity>? identities;
+
+  const _PreparedSshHost(this.config, this.credentials, this.identities);
+}
+
+Future<List<ResolvedSshHost>> _resolveSshRoute({
+  required ServerConfig config,
+  required SshCredentials credentials,
+  required SshJumpHostResolver? resolveJumpHost,
+  required SshConnectionLog? log,
+}) async {
+  final route = <ResolvedSshHost>[ResolvedSshHost(config, credentials)];
+  final visited = <String>{config.id};
+  var current = config;
+
+  while (current.jumpHostId != null) {
+    final jumpHostId = current.jumpHostId!;
+    if (!visited.add(jumpHostId)) {
+      final cause = StateError('ProxyJump cycle at $jumpHostId');
+      throw SshConnectException(
+        'The jump-host route contains a cycle at "$jumpHostId".',
+        cause,
+        log ?? SshConnectionLog(),
+      );
+    }
+    if (route.length > _maxJumpHosts) {
+      final cause = StateError('ProxyJump route exceeds $_maxJumpHosts hops');
+      throw SshConnectException(
+        'The jump-host route exceeds $_maxJumpHosts hops.',
+        cause,
+        log ?? SshConnectionLog(),
+      );
+    }
+    if (resolveJumpHost == null) {
+      final cause = StateError('No jump-host resolver was provided');
+      throw SshConnectException(
+        'Jump host "$jumpHostId" cannot be resolved.',
+        cause,
+        log ?? SshConnectionLog(),
+      );
+    }
+
+    ResolvedSshHost? resolved;
+    try {
+      resolved = await resolveJumpHost(jumpHostId);
+    } catch (error) {
+      throw SshConnectException(
+        'Could not resolve jump host "$jumpHostId": $error',
+        error,
+        log ?? SshConnectionLog(),
+      );
+    }
+    if (resolved == null) {
+      final cause = StateError('Missing jump host $jumpHostId');
+      throw SshConnectException(
+        'Jump host "$jumpHostId" is missing.',
+        cause,
+        log ?? SshConnectionLog(),
+      );
+    }
+    if (resolved.config.id != jumpHostId) {
+      final cause = StateError(
+        'Resolved ${resolved.config.id} for requested jump host $jumpHostId',
+      );
+      throw SshConnectException(
+        'Jump host "$jumpHostId" resolved to a different server.',
+        cause,
+        log ?? SshConnectionLog(),
+      );
+    }
+
+    route.add(resolved);
+    current = resolved.config;
+  }
+
+  return List<ResolvedSshHost>.unmodifiable(route);
+}
+
+Future<_PreparedSshHost> _prepareSshHost(
+  ResolvedSshHost host, {
+  required SshAgentIdentityLoader loadAgentIdentities,
+  required SshConnectionLog? log,
+}) async {
+  final config = host.config;
+  final credentials = host.credentials;
+  final target = _target(config);
+  void note(String message) => log?.add(message);
+
+  List<SSHIdentity>? identities;
+  if (credentials.method == AuthMethod.privateKey) {
+    try {
+      identities = List<SSHIdentity>.unmodifiable(
+        SSHKeyPair.fromPem(
+          credentials.privateKeyPem ?? '',
+          credentials.keyPassphrase,
+        ),
+      );
+    } catch (error) {
+      note('Auth method: ${SshSessionManager._methodLabel(credentials.method)}');
+      note('Could not load the private key: $error');
+      final hint = credentials.keyPassphrase == null
+          ? ' (is it passphrase-protected? add the passphrase to this server)'
+          : ' (wrong key passphrase?)';
+      throw SshConnectException(
+        'Could not load the private key for $target: $error$hint',
+        error,
+        log ?? SshConnectionLog(),
+      );
+    }
+    if (identities.isEmpty) {
+      note('The configured identity contained no usable key.');
+    }
+  } else if (credentials.method == AuthMethod.agent) {
+    try {
+      identities = await loadAgentIdentities();
+      if (identities.isEmpty) {
+        throw const SshAgentException(
+          'The ssh-agent has no keys loaded. Add a key and retry.',
+        );
+      }
+    } catch (error) {
+      note('Auth method: ${SshSessionManager._methodLabel(credentials.method)}');
+      note('Could not load keys from the ssh-agent: $error');
+      throw SshConnectException(
+        'Could not load ssh-agent keys for $target: $error',
+        error,
+        log ?? SshConnectionLog(),
+      );
+    }
+  }
+
+  return _PreparedSshHost(config, credentials, identities);
+}
+
+Future<(SSHClient, AuthKind)> _authenticateSshHost({
+  required _PreparedSshHost host,
+  required SSHSocket socket,
+  required TofuVerifier tofu,
+  required HostKeyPrompter onHostKey,
+  required KeyboardInteractiveResponder? onKeyboardInteractive,
+  required Duration? keepAliveInterval,
+  required SshConnectionLog? log,
+}) async {
+  final config = host.config;
+  final credentials = host.credentials;
+  final target = _target(config);
+  void note(String message) => log?.add(message);
+
+  var authKind = switch (credentials.method) {
+    AuthMethod.privateKey => AuthKind.key,
+    AuthMethod.agent => AuthKind.agent,
+    AuthMethod.password => AuthKind.storedPassword,
+  };
+
+  SSHClient? client;
+  try {
+    client = SSHClient(
+      socket,
+      username: config.username,
+      keepAliveInterval: keepAliveInterval,
+      onVerifyHostKey: (type, fingerprint) => _verifyHostKey(
+        tofu: tofu,
+        onHostKey: onHostKey,
+        host: config.host,
+        port: config.port,
+        type: type,
+        fingerprintBytes: fingerprint,
+      ),
+      identities: host.identities,
+      onPasswordRequest: credentials.method == AuthMethod.password
+          ? () {
+              authKind = AuthKind.storedPassword;
+              return credentials.password;
+            }
+          : null,
+      onUserInfoRequest: _keyboardInteractiveHandler(
+        responder: onKeyboardInteractive,
+        config: config,
+        onAuthKind: (kind) => authKind = kind,
+      ),
+      // dartssh2's trace carries the server's accepted-methods detail.
+      printDebug: log == null ? null : (m) => log.add('· ${m ?? ''}'),
+      printTrace: log == null ? null : (m) => log.add('  ${m ?? ''}'),
+    );
+
+    // Leave room for host-key approval and slow keyboard-interactive replies.
+    await client.authenticated.timeout(
+      _sshAuthenticationTimeout,
+      onTimeout: () => throw TimeoutException(
+        'SSH handshake/authentication with $target timed out',
+      ),
+    );
+    return (client, authKind);
+  } catch (error) {
+    final summary = SshSessionManager._summarizeFailure(
+        error, config, target, credentials, log);
+    note('');
+    note(summary);
+    final openedClient = client;
+    await _discardCleanup(
+      openedClient == null ? socket.close : openedClient.close,
+    );
+    throw SshConnectException(summary, error, log ?? SshConnectionLog());
+  }
+}
+
+String _target(ServerConfig config) =>
+    '${config.username}@${config.host}:${config.port}';
+
+/// Owns the authenticated parent for one forwarded connection.
+final class _OwnedJumpSocket implements SSHSocket {
+  final SSHSocket _forwarded;
+  final SSHClient _parent;
+  final SingleFlightCleanup _cleanup = SingleFlightCleanup();
+
+  _OwnedJumpSocket(this._forwarded, this._parent);
+
+  @override
+  Stream<Uint8List> get stream => _forwarded.stream;
+
+  @override
+  StreamSink<List<int>> get sink => _forwarded.sink;
+
+  @override
+  Future<void> get done => _forwarded.done;
+
+  @override
+  Future<void> flush() => _forwarded.flush();
+
+  @override
+  Future<void> close() => _cleanup.run(
+        () => runSequentialCleanup(
+          // A forwarded channel may never finish a graceful close. Abort it so
+          // the parent chain is released without one timeout per hop.
+          [_forwarded.destroy, _parent.close],
+          actionTimeout: _cleanupActionTimeout,
+        ),
+      );
+
+  @override
+  void destroy() {
+    unawaited(
+      _cleanup.run(
+        () => runSequentialCleanup(
+          [_forwarded.destroy, _parent.close],
+          actionTimeout: _cleanupActionTimeout,
+          failureMode: CleanupFailureMode.ignore,
+        ),
+      ),
+    );
+  }
+}
+
+final class _SshRouteDependencies {
+  final SshJumpHostResolver? resolveJumpHost;
+  final SshForwardConnector? forward;
+  final SshAgentIdentityLoader? loadAgentIdentities;
+
+  const _SshRouteDependencies(
+    this.resolveJumpHost,
+    this.forward,
+    this.loadAgentIdentities,
+  );
+}
+
+/// Opens SSH connections for [ServerConfig]s, enforcing trust-on-first-use host
+/// key verification and wiring the byte streams to a terminal engine.
+class SshSessionManager {
+  final TofuVerifier tofu;
+  final HostKeyPrompter onHostKey;
+  final KeyboardInteractiveResponder? onKeyboardInteractive;
+
+  /// Injectable connector, so tests can substitute a fake transport. Defaults
+  /// to a real TCP socket.
+  final Future<SSHSocket> Function(String host, int port, Duration timeout)
+      _connect;
+  final _SshRouteDependencies _routeDependencies;
+
+  SshSessionManager({
+    required this.tofu,
+    required this.onHostKey,
+    this.onKeyboardInteractive,
+    Future<SSHSocket> Function(String host, int port, Duration timeout)?
+        connect,
+    SshJumpHostResolver? resolveJumpHost,
+    SshForwardConnector? forward,
+    SshAgentIdentityLoader? loadAgentIdentities,
+  }) : _connect = connect ??
+            ((host, port, timeout) =>
+                SSHSocket.connect(host, port, timeout: timeout)),
+       _routeDependencies = _SshRouteDependencies(
+         resolveJumpHost,
+         forward,
+         loadAgentIdentities,
+       );
+
+  /// The host-key callback dartssh2 invokes. Extracted as a public method so it
+  /// can be unit-tested without a live connection. dartssh2 hands us the key
+  /// [type] and the `SHA256:…` fingerprint bytes.
+  Future<bool> verifyHostKey({
+    required String host,
+    required int port,
+    required String type,
+    required Uint8List fingerprintBytes,
+  }) async {
+    return _verifyHostKey(
+      tofu: tofu,
+      onHostKey: onHostKey,
+      host: host,
+      port: port,
+      type: type,
+      fingerprintBytes: fingerprintBytes,
+    );
+  }
+
+  /// What running [script] at a prompt looks like on the wire: its bytes
+  /// (edges trimmed) plus one Enter, i.e. exactly the keystrokes of the user
+  /// having typed it themselves. Throws for blank input — there is nothing to
+  /// type.
+  ///
+  /// Written into the interactive shell rather than executed on a separate
+  /// channel, so `cd`, aliases, and `tmux attach` affect *this* session and
+  /// the script's output lands in scrollback. No wait-for-prompt handshake
+  /// precedes it: a PTY buffers input until the remote shell reads, so a
+  /// script sent during login banner/init simply runs once the prompt is up.
+  @visibleForTesting
+  static Uint8List loginScriptKeystrokes(String script) {
+    final normalized = normalizeLoginScript(script);
+    if (normalized == null) {
+      throw ArgumentError.value(script, 'script', 'must be non-blank');
+    }
+    return utf8.encode('$normalized\n');
+  }
+
+  /// The keystrokes [config]'s optional login script contributes, or null when
+  /// there is nothing to run. The seam between "does this config want a login
+  /// script" and the live shell, so both halves are testable without an SSH
+  /// handshake (see [loginScriptKeystrokes]).
+  @visibleForTesting
+  static Uint8List? loginScriptKeystrokesFor(ServerConfig config) =>
+      normalizeLoginScript(config.loginScript) == null
+          ? null
+          : loginScriptKeystrokes(config.loginScript!);
+
+  /// Send [config]'s optional login script into the freshly opened [shell].
+  void _runLoginScript(
+      SSHSession shell, ServerConfig config, void Function(String) note) {
+    final keystrokes = loginScriptKeystrokesFor(config);
+    if (keystrokes == null) return;
+    note('Running login script.');
+    try {
+      shell.write(keystrokes);
+    } catch (_) {
+      // Best-effort by design: the channel died between open and write. The
+      // session teardown reports that fault; letting it escape here would
+      // resurface as a connect failure for a session that authenticated fine.
+    }
+  }
+
+  Future<SshSession> connect({
+    required ServerConfig config,
+    required SshCredentials credentials,
+    required TerminalEngine engine,
+    Duration timeout = const Duration(seconds: 15),
+    SshConnectionLog? log,
+  }) async {
+    final (client, _) = await openAuthenticatedClient(
+      config: config,
+      credentials: credentials,
+      tofu: tofu,
+      onHostKey: onHostKey,
+      onKeyboardInteractive: onKeyboardInteractive,
+      connect: _connect,
+      resolveJumpHost: _routeDependencies.resolveJumpHost,
+      forward: _routeDependencies.forward,
+      loadAgentIdentities: _routeDependencies.loadAgentIdentities,
+      timeout: timeout,
+      log: log,
+    );
+    final target = '${config.username}@${config.host}:${config.port}';
+    void note(String message) => log?.add(message);
+
+    try {
+      final shell = await client.shell(
+        pty: SSHPtyConfig(width: engine.size.cols, height: engine.size.rows),
+      );
+      note('Authenticated. Shell session opened.');
+      final session = SshSession._(client, shell, engine).._wire();
+      // After _wire(), so the script's echo and output are captured by the
+      // engine from its very first bytes.
+      _runLoginScript(shell, config, note);
+      return session;
+    } catch (e) {
+      final summary = _summarizeFailure(e, config, target, credentials, log);
+      note('');
+      note(summary);
+      await _discardCleanup(client.close);
+      throw SshConnectException(summary, e, log ?? SshConnectionLog());
+    }
+  }
+
+  static String _methodLabel(AuthMethod method) => switch (method) {
+        AuthMethod.password => 'password',
+        AuthMethod.privateKey => 'public key',
+        AuthMethod.agent => 'ssh-agent',
+      };
+
+  /// Test seam for [_summarizeFailure], which is otherwise reachable only via a
+  /// live handshake.
+  @visibleForTesting
+  static String summarizeFailureForTest(Object e, ServerConfig config,
+          SshCredentials credentials, SshConnectionLog log) =>
+      _summarizeFailure(e, config,
+          '${config.username}@${config.host}:${config.port}', credentials, log);
+
+  /// Turn dartssh2's terse errors into an actionable one-liner, mining the
+  /// captured trace for the server's accepted-methods list when auth failed.
+  static String _summarizeFailure(Object e, ServerConfig config, String target,
+      SshCredentials credentials, SshConnectionLog? log) {
+    final agentFailure = _sshAgentFailure(e);
+    if (credentials.method == AuthMethod.agent && agentFailure != null) {
+      return 'ssh-agent failed for $target: $agentFailure';
+    }
+
+    if (e is SSHAuthFailError) {
+      final accepted = _acceptedMethodsFromLog(log);
+      final tried = _methodLabel(credentials.method);
+      final buffer = StringBuffer(
+          'Authentication failed for $target (tried $tried).');
+      if (accepted != null && accepted.isNotEmpty) {
+        buffer.write(' The server accepts: ${accepted.join(', ')}.');
+        if (!accepted.contains(_sshMethodName(credentials.method))) {
+          buffer.write(
+              ' Switch this server to a method the host allows.');
+        } else if (credentials.method == AuthMethod.privateKey) {
+          // The key was presented (publickey is accepted) but the server said
+          // no: almost always the key isn't in the target user's
+          // authorized_keys, or a different key than expected was configured.
+          final key = _offeredKeyFromLog(log);
+          buffer.write(' The key Séance offered'
+              '${key != null ? ' ($key)' : ''} was rejected. Add its public '
+              "half to ${config.username}@${config.host}'s "
+              '~/.ssh/authorized_keys, or configure the key that host already '
+              'trusts.');
+        } else if (credentials.method == AuthMethod.agent) {
+          buffer.write(' The ssh-agent keys Séance offered were rejected. '
+              'Load a key trusted by this host, or add one of the loaded '
+              "public keys to ${config.username}@${config.host}'s "
+              '~/.ssh/authorized_keys.');
+        } else if (config.username == 'root') {
+          // The host advertises password but rejected it for root: on stock
+          // Debian/Ubuntu this is PermitRootLogin prohibit-password, which
+          // blocks password login for root even with the correct password.
+          buffer.write(' The host advertises password auth but rejected it for '
+              'root — many servers set PermitRootLogin prohibit-password, which '
+              'blocks password login for root. Use a key, or log in as a '
+              'non-root user and escalate.');
+        } else {
+          buffer.write(' Check the credential (wrong password or key).');
+        }
+      } else {
+        buffer.write(' Check the username, password, or key.');
+      }
+      return buffer.toString();
+    }
+    if (e is SSHError) {
+      return 'SSH error connecting to $target: $e';
+    }
+    return 'Failed to connect to $target: $e';
+  }
+
+  /// dartssh2 wraps signer exceptions while closing the failed transport.
+  static SshAgentException? _sshAgentFailure(Object error) {
+    final seen = Set<Object>.identity();
+    Object? current = error;
+    while (current != null && seen.add(current)) {
+      if (current is SshAgentException) return current;
+      if (current is SSHAuthAbortError) {
+        current = current.reason;
+        continue;
+      }
+      if (current is SSHInternalError) {
+        current = current.error;
+        continue;
+      }
+      return null;
+    }
+    return null;
+  }
+
+  /// dartssh2's SSH-protocol name for our credential's method.
+  static String _sshMethodName(AuthMethod method) => switch (method) {
+        AuthMethod.password => 'password',
+        AuthMethod.privateKey => 'publickey',
+        AuthMethod.agent => 'publickey',
+      };
+
+  /// The OpenSSH-style SHA256 fingerprint of a public-key blob (matches
+  /// `ssh-keygen -lf`), so a user can eyeball it against `authorized_keys`.
+  static String _fingerprint(List<int> keyBlob) =>
+      'SHA256:${base64.encode(sha256.convert(keyBlob).bytes).replaceAll('=', '')}';
+
+  /// Recover the "Offering key: …" line we logged, so the failure summary can
+  /// name the exact key the server rejected.
+  static String? _offeredKeyFromLog(SshConnectionLog? log) {
+    if (log == null) return null;
+    const marker = 'Offering key: ';
+    // Forward, keeping the last match, rather than iterating a reversed
+    // view: `reversed` is a `List` member and `lines` is an `Iterable`, so
+    // `log.lines.reversed` does not compile. Same answer, one pass. (Not a
+    // saved copy: `List.reversed` is a lazy view too — what is unavailable
+    // here is the member, not a cheap reversal.)
+    String? offered;
+    for (final line in log.lines) {
+      final i = line.indexOf(marker);
+      if (i >= 0) offered = line.substring(i + marker.length).trim();
+    }
+    return offered;
+  }
+
+  /// Scan the trace for the last `methodsLeft: [ … ]` the server sent.
+  static List<String>? _acceptedMethodsFromLog(SshConnectionLog? log) {
+    if (log == null) return null;
+    final re = RegExp(r'methodsLeft: \[([^\]]*)\]');
+    String? last;
+    for (final line in log.lines) {
+      final m = re.firstMatch(line);
+      if (m != null) last = m.group(1);
+    }
+    if (last == null) return null;
+    return last
+        .split(',')
+        .map((s) => s.trim())
+        .where((s) => s.isNotEmpty)
+        .toList();
+  }
+
+}

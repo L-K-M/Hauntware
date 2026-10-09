@@ -1,0 +1,24 @@
+# Historical documentation prose; neither location contains a credential.
+108ccea5605f92f6591fa1e7a3242fe86af0080a:tmp.md:generic-api-key:362
+94b82e54e0b51e49d9d3617fe6676e572c8f010b:tmp.md:generic-api-key:362
+# Explicit synthetic tokens in the original redaction tests.
+a4473d69aaa3316fd23ef5dd1f393e6fb694bd9f:packages/seance_core/test/llm_test.dart:github-pat:262
+a4473d69aaa3316fd23ef5dd1f393e6fb694bd9f:packages/seance_core/test/pure_logic_test.dart:github-pat:153
+0829194d51a75aa5b3a97eae76b626a0ce0cceaf:packages/seance_core/test/pure_logic_test.dart:github-pat:175
+fe90dc33ea50172ed9a0dd4a085efac7c120fec1:packages/seance_core/test/pure_logic_test.dart:generic-api-key:179
+fe90dc33ea50172ed9a0dd4a085efac7c120fec1:packages/seance_core/test/pure_logic_test.dart:gitlab-pat:186
+# Public loopback-only SSH fixture host keys; scope is separately gated.
+4af1787bfcb73896d5344f8de13a884447b186ae:test/integration/keys/ssh_host_ed25519_key:private-key:1
+4af1787bfcb73896d5344f8de13a884447b186ae:test/integration/keys/ssh_host_ed25519_key_swap:private-key:1
+4af1787bfcb73896d5344f8de13a884447b186ae:test/integration/keys/ssh_host_rsa_key:private-key:1
+# Actual Git object IDs recorded in the source-ref preservation manifest.
+f481cb997726e0a19f42eb89182517f692487917:docs/history/source-refs.json:generic-api-key:19
+f481cb997726e0a19f42eb89182517f692487917:docs/history/source-refs.json:generic-api-key:32
+f481cb997726e0a19f42eb89182517f692487917:docs/history/source-refs.json:generic-api-key:96
+f481cb997726e0a19f42eb89182517f692487917:docs/history/source-refs.json:generic-api-key:141
+f481cb997726e0a19f42eb89182517f692487917:docs/history/source-refs.json:generic-api-key:170
+f481cb997726e0a19f42eb89182517f692487917:docs/history/source-refs.json:generic-api-key:210
+f481cb997726e0a19f42eb89182517f692487917:docs/history/source-refs.json:generic-api-key:221
+f481cb997726e0a19f42eb89182517f692487917:docs/history/source-refs.json:generic-api-key:233
+f481cb997726e0a19f42eb89182517f692487917:docs/history/source-refs.json:generic-api-key:299
+f481cb997726e0a19f42eb89182517f692487917:docs/history/source-refs.json:generic-api-key:415

@@ -1,0 +1,614 @@
+import 'dart:io';
+
+import 'package:planchette_core/planchette_core.dart';
+import 'package:planchette_core/src/native_file_operations.dart'
+    show isVanishedPathError;
+import 'package:test/test.dart';
+
+void main() {
+  late Directory directory;
+  late File file;
+
+  setUp(() async {
+    directory = await Directory.systemTemp.createTemp(
+      'poltergeist-editor-test-',
+    );
+    // The safety layer refuses to walk pre-existing symlinked ancestors
+    // (macOS temp dirs begin at one) — resolve once here like callers do.
+    directory = Directory(await directory.resolveSymbolicLinks());
+    file = File('${directory.path}/config.txt');
+    await file.writeAsString('one\ntwo\n');
+  });
+
+  tearDown(() async {
+    if (await directory.exists()) await directory.delete(recursive: true);
+  });
+
+  test('loads UTF-8 and atomically saves edited text', () async {
+    expect(await _loadText(file), 'one\ntwo\n');
+
+    await _save(file, 'changed\n');
+
+    expect(await file.readAsString(), 'changed\n');
+    expect(await directory.list().length, 1);
+  });
+
+  test(
+    'the dominant line ending wins, a tie is LF, and lone CRs are not counted',
+    () async {
+      Future<LineEnding> endingOf(String text) async {
+        await file.writeAsString(text);
+        return (await loadTextDocument(file)).lineEnding;
+      }
+
+      expect(await endingOf('a\r\nb\r\nc\n'), LineEnding.crlf);
+      expect(await endingOf('a\r\nb\nc\n'), LineEnding.lf);
+      expect(await endingOf('a\r\nb\n'), LineEnding.lf, reason: 'a tie');
+      expect(await endingOf('\r\n\r\n'), LineEnding.crlf);
+      expect(await endingOf('\n\r\n'), LineEnding.lf, reason: 'a tie');
+      expect(await endingOf('a\rb\r\n'), LineEnding.crlf);
+      expect(await endingOf('a\rb'), LineEnding.lf, reason: 'nothing counted');
+      expect(await endingOf('single line'), LineEnding.lf);
+    },
+  );
+
+  test('preserves a UTF-8 BOM and CRLF line endings byte-for-byte', () async {
+    await file.writeAsBytes([0xef, 0xbb, 0xbf, ...'one\r\ntwo\r\n'.codeUnits]);
+    final document = await loadTextDocument(file);
+
+    // The in-memory invariant: LF, no BOM (06 §2.1).
+    expect(document.text, 'one\ntwo\n');
+    expect(document.hasUtf8Bom, isTrue);
+    expect(document.lineEnding, LineEnding.crlf);
+
+    await _save(
+      file,
+      '${document.text}three\n',
+      hasUtf8Bom: document.hasUtf8Bom,
+      lineEnding: document.lineEnding,
+      expectedSha256: document.sha256,
+    );
+
+    expect(await file.readAsBytes(), [
+      0xef,
+      0xbb,
+      0xbf,
+      ...'one\r\ntwo\r\nthree\r\n'.codeUnits,
+    ]);
+  });
+
+  test('a second leading BOM is content and survives the round trip', () async {
+    // Utf8Decoder drops a BOM at the start of whatever it is handed, so
+    // stripping one BOM and decoding the rest would also swallow the
+    // U+FEFF right behind it (ported from Séance's fix).
+    const bom = [0xef, 0xbb, 0xbf];
+    await file.writeAsBytes([...bom, ...bom, ...bom, ...'a\n'.codeUnits]);
+    final document = await loadTextDocument(file);
+
+    expect(document.hasUtf8Bom, isTrue);
+    expect(document.text, '﻿﻿a\n');
+
+    await _save(
+      file,
+      document.text,
+      hasUtf8Bom: document.hasUtf8Bom,
+      lineEnding: document.lineEnding,
+      expectedSha256: document.sha256,
+    );
+
+    expect(await file.readAsBytes(), [
+      ...bom,
+      ...bom,
+      ...bom,
+      ...'a\n'.codeUnits,
+    ]);
+  });
+
+  test('a BOM-less LF file round-trips byte-for-byte', () async {
+    await file.writeAsBytes('one\ntwo\n'.codeUnits);
+    final document = await loadTextDocument(file);
+
+    expect(document.text, 'one\ntwo\n');
+    expect(document.hasUtf8Bom, isFalse);
+    expect(document.lineEnding, LineEnding.lf);
+
+    await _save(
+      file,
+      document.text,
+      hasUtf8Bom: document.hasUtf8Bom,
+      lineEnding: document.lineEnding,
+      expectedSha256: document.sha256,
+    );
+
+    expect(await file.readAsBytes(), 'one\ntwo\n'.codeUnits);
+  });
+
+  test('mixed line endings normalize on first save by majority vote', () async {
+    // 2 CRLF vs 1 lone LF — the vote is crlf, and the lone LF folds into
+    // the family on save (06 §2.1's pinned normalization).
+    await file.writeAsBytes('a\r\nb\nc\r\n'.codeUnits);
+    final document = await loadTextDocument(file);
+
+    expect(document.text, 'a\nb\nc\n');
+    expect(document.lineEnding, LineEnding.crlf);
+
+    await _save(
+      file,
+      document.text,
+      hasUtf8Bom: document.hasUtf8Bom,
+      lineEnding: document.lineEnding,
+      expectedSha256: document.sha256,
+    );
+
+    expect(await file.readAsBytes(), 'a\r\nb\r\nc\r\n'.codeUnits);
+  });
+
+  test('a lone-CR file votes LF and normalizes to LF on save', () async {
+    // A lone \r never votes: a CR-only file saves back all-LF (06 §2.1).
+    await file.writeAsBytes('a\rb\rc'.codeUnits);
+    final document = await loadTextDocument(file);
+
+    expect(document.text, 'a\nb\nc');
+    expect(document.lineEnding, LineEnding.lf);
+
+    await _save(
+      file,
+      document.text,
+      hasUtf8Bom: document.hasUtf8Bom,
+      lineEnding: document.lineEnding,
+      expectedSha256: document.sha256,
+    );
+
+    expect(await file.readAsBytes(), 'a\nb\nc'.codeUnits);
+  });
+
+  test('a single-line file never grows CRLF', () async {
+    await file.writeAsString('single line, no breaks');
+    final document = await loadTextDocument(file);
+
+    expect(document.lineEnding, LineEnding.lf);
+
+    await _save(
+      file,
+      document.text,
+      hasUtf8Bom: document.hasUtf8Bom,
+      lineEnding: document.lineEnding,
+      expectedSha256: document.sha256,
+    );
+
+    expect(await file.readAsBytes(), 'single line, no breaks'.codeUnits);
+  });
+
+  test('refuses to overwrite an independently changed local copy', () async {
+    final document = await loadTextDocument(file);
+    await file.writeAsString('external change\n');
+
+    await expectLater(
+      _save(file, 'built-in change\n', expectedSha256: document.sha256),
+      throwsA(
+        isA<TextDocumentException>().having(
+          (error) => error.message,
+          'message',
+          'The local copy changed in another editor. Reopen it before '
+              'saving to avoid losing those changes.',
+        ),
+      ),
+    );
+    // The external change survives untouched.
+    expect(await file.readAsString(), 'external change\n');
+  });
+
+  test('rejects malformed, binary, and oversized content', () async {
+    await file.writeAsBytes([0xff]);
+    await expectLater(
+      _loadText(file),
+      throwsA(
+        isA<TextDocumentException>().having(
+          (error) => error.message,
+          'message',
+          'This file is not valid UTF-8 text.',
+        ),
+      ),
+    );
+
+    await file.writeAsBytes([0, 1, 2]);
+    await expectLater(
+      _loadText(file),
+      throwsA(
+        isA<TextDocumentException>().having(
+          (error) => error.message,
+          'message',
+          'This file appears to be binary, not editable text.',
+        ),
+      ),
+    );
+
+    await file.writeAsBytes([1, 2, 3]);
+    await expectLater(
+      _loadText(file, maximumBytes: 2),
+      throwsA(
+        isA<TextDocumentException>().having(
+          (error) => error.message,
+          'message',
+          'The built-in editor supports text files up to 0 MB.',
+        ),
+      ),
+    );
+  });
+
+  test('refuses a file that changed while it was being opened', () async {
+    var reads = 0;
+    Future<String> tamperingSha256(File target) async {
+      final digest = await textDocumentSha256(target);
+      if (++reads == 1) {
+        // Mutate between the pre-read and post-read digests — the
+        // TOCTOU check must catch a file edited mid-open.
+        await target.writeAsString('raced change\n');
+      }
+      return digest;
+    }
+
+    await expectLater(
+      loadTextDocument(file, sha256Of: tamperingSha256),
+      throwsA(
+        isA<TextDocumentException>().having(
+          (error) => error.message,
+          'message',
+          'The local copy changed while it was being opened.',
+        ),
+      ),
+    );
+  });
+
+  test('error messages surface bare — no Exception prefix', () async {
+    await file.writeAsBytes([0xff]);
+    try {
+      await _loadText(file);
+      fail('expected the load to refuse');
+    } on TextDocumentException catch (error) {
+      // §2.4's toast contract: error.toString() IS the message.
+      expect(error.toString(), 'This file is not valid UTF-8 text.');
+    }
+  });
+
+  test('the save refuses when the target vanished mid-save', () async {
+    final document = await loadTextDocument(file);
+    await file.delete();
+    await expectLater(
+      _save(file, 'edit\n', expectedSha256: document.sha256),
+      throwsA(
+        isA<TextDocumentException>().having(
+          (error) => error.message,
+          'message',
+          'The local copy is missing or no longer a regular file.',
+        ),
+      ),
+    );
+  });
+
+  test('a symlinked local target resolves at open and saves through the '
+      'link, leaving it intact', () async {
+    if (Platform.isWindows) return; // symlink creation needs privileges
+    final real = File('${directory.path}/real.conf');
+    await real.writeAsString('one\n');
+    final link = Link('${directory.path}/alias.conf');
+    await link.create(real.path);
+
+    final resolved = await resolveTextDocumentTarget(
+      File(link.path),
+      symlinkPolicy: SymlinkPolicy.resolveOnce,
+    );
+    expect(resolved.path, real.path);
+
+    final document = await loadTextDocument(resolved);
+    await _save(
+      resolved,
+      'edited\n',
+      hasUtf8Bom: document.hasUtf8Bom,
+      lineEnding: document.lineEnding,
+      expectedSha256: document.sha256,
+    );
+
+    // The link still points at the real file — never replaced by a
+    // regular file (06 §2.1 step 2).
+    expect(
+      await FileSystemEntity.type(link.path, followLinks: false),
+      FileSystemEntityType.link,
+    );
+    expect(await real.readAsString(), 'edited\n');
+  });
+
+  test('the save refuses when the target became a symlink', () async {
+    if (Platform.isWindows) return;
+    final document = await loadTextDocument(file);
+    // Swap the target for a symlink after load — the save must refuse
+    // rather than replace the link with a regular file.
+    await file.delete();
+    await Link(file.path).create('${directory.path}/elsewhere.conf');
+
+    await expectLater(
+      _save(file, 'edit\n', expectedSha256: document.sha256),
+      throwsA(
+        isA<TextDocumentException>().having(
+          (error) => error.message,
+          'message',
+          'The local copy is a symbolic link, not a regular file.',
+        ),
+      ),
+    );
+    expect(
+      await FileSystemEntity.type(file.path, followLinks: false),
+      FileSystemEntityType.link,
+    );
+  });
+
+  test('the temp sibling is owner-only before the first write', () async {
+    if (!Platform.isLinux && !Platform.isMacOS) return;
+    // 0644 original: the only window the temp can sit at 0600 is between
+    // step 1's chmod and step 4's mode restore (06 §2.1/§2.5).
+    await Process.run('chmod', ['644', file.path]);
+    File? temp;
+    await _save(
+      file,
+      'edit\n',
+      observeTemporary: (temporary) async {
+        temp = temporary;
+        final stat = await temporary.stat();
+        expect(stat.mode & 0x1ff, 0x180); // 0600
+      },
+    );
+    expect(temp, isNotNull);
+    expect(await temp!.exists(), isFalse);
+    // Step 4 restored the ORIGINAL mode — a 644 original saves back 644.
+    final saved = await file.stat();
+    expect(saved.mode & 0x1ff, 0x1a4);
+  });
+
+  test('a 0600 checkout stays 0600 after a save', () async {
+    if (!Platform.isLinux && !Platform.isMacOS) return;
+    await Process.run('chmod', ['600', file.path]);
+    final document = await loadTextDocument(file);
+    await _save(
+      file,
+      'edit\n',
+      hasUtf8Bom: document.hasUtf8Bom,
+      lineEnding: document.lineEnding,
+      expectedSha256: document.sha256,
+    );
+    final saved = await file.stat();
+    expect(saved.mode & 0x1ff, 0x180);
+  });
+
+  test('reports a read-only file, which a save still replaces', () async {
+    expect(await isTextDocumentWriteProtected(file), isFalse);
+    await _setReadOnly(file, true);
+    try {
+      expect(await isTextDocumentWriteProtected(file), isTrue);
+      // Replacement renames a sibling into place, so only the directory's
+      // permission is checked; this is why hosts must ask first. The file
+      // stays read-only, and no backup is left behind, on every platform.
+      final document = await loadTextDocument(file);
+      await _save(file, 'edit\n', expectedSha256: document.sha256);
+      expect(await file.readAsString(), 'edit\n');
+      expect(await isTextDocumentWriteProtected(file), isTrue);
+      expect(directory.listSync().map((entry) => entry.uri.pathSegments.last), [
+        'config.txt',
+      ]);
+    } finally {
+      await _setReadOnly(file, false);
+    }
+    expect(await isTextDocumentWriteProtected(file), isFalse);
+  });
+
+  test('a missing file or a directory is not write-protected', () async {
+    expect(
+      await isTextDocumentWriteProtected(File('${file.path}.gone')),
+      isFalse,
+    );
+    expect(await isTextDocumentWriteProtected(File(directory.path)), isFalse);
+  });
+
+  test('the encoded output is size-checked too', () async {
+    await expectLater(
+      _save(file, 'x' * (textDocumentMaximumBytes + 1)),
+      throwsA(
+        isA<TextDocumentException>().having(
+          (error) => error.message,
+          'message',
+          'The edited file exceeds the 4 MB built-in editor limit.',
+        ),
+      ),
+    );
+  });
+
+  test('a save containing NUL refuses before touching the original', () async {
+    const expected = 'binary \u0000 content\n';
+    // The CRLF folds under default normalization, so 'code unit 6' pins the
+    // reported offset to the caller's input text, not the normalized bytes.
+    await expectLater(
+      _save(file, 'safe\r\n\u0000 edit\n', expectedSha256: 'ignored'),
+      throwsA(
+        isA<TextDocumentException>().having(
+          (error) => error.message,
+          'message',
+          allOf(contains('NUL'), contains('code unit 6')),
+        ),
+      ),
+    );
+    // The original is untouched and no save sibling escaped cleanup.
+    expect(await file.readAsString(), 'one\ntwo\n');
+    expect(await directory.list().length, 1);
+    // The refusal protects the loader's contract: the file still opens.
+    expect(await _loadText(file), 'one\ntwo\n');
+
+    // A create would publish a file the loader rejects as binary; refuse
+    // that too — also under `preserve` normalization, which skips folding.
+    final created = File('${directory.path}/new.bin');
+    for (final normalization in TextNormalization.values) {
+      await expectLater(
+        createTextDocument(created, expected, normalization: normalization),
+        throwsA(
+          isA<TextDocumentException>().having(
+            (error) => error.message,
+            'message',
+            contains('NUL'),
+          ),
+        ),
+      );
+    }
+    expect(await created.exists(), isFalse);
+    expect(await directory.list().length, 1);
+  });
+
+  test(
+    'an unwritable folder fails the save with an actionable error',
+    () async {
+      final originalMode = (await directory.stat()).mode & 0x1ff;
+      final restrict = await Process.run('chmod', ['555', directory.path]);
+      if (restrict.exitCode != 0) {
+        fail('chmod 555 failed: ${restrict.stderr}');
+      }
+      addTearDown(() async {
+        final restore = await Process.run('chmod', [
+          originalMode.toRadixString(8),
+          directory.path,
+        ]);
+        expect(
+          restore.exitCode,
+          0,
+          reason: 'chmod restore failed: ${restore.stderr}',
+        );
+      });
+
+      await expectLater(
+        _save(file, 'edit\n'),
+        throwsA(
+          isA<TextDocumentException>().having(
+            (error) => error.message,
+            'message',
+            startsWith(
+              'A temporary file could not be created beside the document.',
+            ),
+          ),
+        ),
+      );
+      // The guarded path refuses before renaming: the original stays intact.
+      expect(await file.readAsString(), 'one\ntwo\n');
+      expect(await directory.list().length, 1);
+    },
+    skip: _directoryModesUnenforced,
+  );
+
+  test('a vanished folder is reported as missing, not unwritable', () async {
+    final gone = Directory('${directory.path}/gone');
+    await gone.create();
+    final orphan = File('${gone.path}/doc.txt');
+    await orphan.writeAsString('one\n');
+    final digest = await textDocumentSha256(orphan);
+    await gone.delete(recursive: true);
+
+    await expectLater(
+      saveTextDocument(orphan, 'edit\n', expectedSha256: digest),
+      throwsA(
+        isA<TextDocumentException>().having(
+          (error) => error.message,
+          'message',
+          startsWith('The folder containing the document no longer exists.'),
+        ),
+      ),
+    );
+  });
+
+  test('vanished-path classification is platform-aware', () {
+    FileSystemException withCode(int code) =>
+        FileSystemException('rename', 'doc.txt', OSError('failed', code));
+    expect(isVanishedPathError(withCode(2)), isTrue);
+    // ERROR_PATH_NOT_FOUND counts only on Windows; POSIX code 3 is ESRCH.
+    // Both sides of the gate are pinned regardless of the host running this.
+    expect(isVanishedPathError(withCode(3), isWindows: true), isTrue);
+    expect(isVanishedPathError(withCode(3), isWindows: false), isFalse);
+    expect(isVanishedPathError(withCode(3)), Platform.isWindows);
+    // EACCES stays a real failure, not a concurrent-modification signal.
+    expect(isVanishedPathError(withCode(13)), isFalse);
+  });
+
+  // From #21: opening resolves the path first, and dart:io's failure there
+  // names the call and the errno instead of what happened.
+  test('opening a missing file says it no longer exists', () async {
+    await expectLater(
+      loadTextDocument(
+        File('${directory.path}/absent.txt'),
+        symlinkPolicy: SymlinkPolicy.resolveOnce,
+      ),
+      throwsA(
+        isA<TextDocumentException>().having(
+          (error) => error.message,
+          'message',
+          'The file no longer exists.',
+        ),
+      ),
+    );
+  });
+
+  test(
+    'an unresolvable path keeps its OS error but not the raw call',
+    () async {
+      // A path through a regular file cannot be resolved.
+      Object? thrown;
+      try {
+        await loadTextDocument(
+          File('${file.path}/nested.txt'),
+          symlinkPolicy: SymlinkPolicy.resolveOnce,
+        );
+      } catch (error) {
+        thrown = error;
+      }
+      expect(thrown, isA<TextDocumentException>());
+      expect('$thrown', isNot(contains('errno')));
+      expect('$thrown', isNot(contains('Exception')));
+    },
+  );
+}
+
+Future<String> _loadText(
+  File file, {
+  int maximumBytes = textDocumentMaximumBytes,
+}) async => (await loadTextDocument(file, maximumBytes: maximumBytes)).text;
+
+Future<String> _save(
+  File file,
+  String text, {
+  String? expectedSha256,
+  bool hasUtf8Bom = false,
+  LineEnding lineEnding = LineEnding.lf,
+  Future<void> Function(File)? observeTemporary,
+}) async => saveTextDocument(
+  file,
+  text,
+  expectedSha256: expectedSha256 ?? await textDocumentSha256(file),
+  hasUtf8Bom: hasUtf8Bom,
+  lineEnding: lineEnding,
+  observeTemporary: observeTemporary,
+);
+
+/// Directory mode bits bind only on POSIX hosts and only for non-root users,
+/// so the unwritable-folder precondition cannot be arranged elsewhere. A
+/// reason string reports the test as skipped rather than silently passing.
+final Object _directoryModesUnenforced = () {
+  if (!Platform.isLinux && !Platform.isMacOS) {
+    return 'directory mode bits are POSIX-only';
+  }
+  final uid = Process.runSync('id', ['-u']).stdout.toString().trim();
+  return uid == '0' ? 'root bypasses directory mode bits' : false;
+}();
+
+/// Marks [file] read-only the way a user would: `chmod a-w`, or the
+/// read-only attribute on Windows.
+Future<void> _setReadOnly(File file, bool readOnly) async {
+  final result = Platform.isWindows
+      ? await Process.run('attrib', [readOnly ? '+r' : '-r', file.path])
+      : await Process.run('chmod', [readOnly ? 'a-w' : 'u+w', file.path]);
+  if (result.exitCode != 0) {
+    throw StateError('Could not change ${file.path}: ${result.stderr}');
+  }
+}

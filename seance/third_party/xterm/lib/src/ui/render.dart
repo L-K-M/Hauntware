@@ -1,0 +1,864 @@
+import 'dart:math' show max, min;
+import 'dart:ui';
+
+import 'package:flutter/rendering.dart';
+import 'package:flutter/widgets.dart';
+import 'package:xterm/src/core/buffer/cell_offset.dart';
+import 'package:xterm/src/core/buffer/line.dart';
+import 'package:xterm/src/core/buffer/range.dart';
+import 'package:xterm/src/core/buffer/range_line.dart';
+import 'package:xterm/src/core/buffer/segment.dart';
+import 'package:xterm/src/core/mouse/button.dart';
+import 'package:xterm/src/core/mouse/button_state.dart';
+import 'package:xterm/src/terminal.dart';
+import 'package:xterm/src/ui/controller.dart';
+import 'package:xterm/src/ui/cursor_type.dart';
+import 'package:xterm/src/ui/painter.dart';
+import 'package:xterm/src/ui/selection_mode.dart';
+import 'package:xterm/src/ui/terminal_size.dart';
+import 'package:xterm/src/ui/terminal_text_style.dart';
+import 'package:xterm/src/ui/terminal_theme.dart';
+
+typedef EditableRectCallback = void Function(Rect rect, Rect caretRect);
+
+class RenderTerminal extends RenderBox with RelayoutWhenSystemFontsChangeMixin {
+  RenderTerminal({
+    required Terminal terminal,
+    required TerminalController controller,
+    required ViewportOffset offset,
+    required EdgeInsets padding,
+    required bool autoResize,
+    required TerminalStyle textStyle,
+    required TextScaler textScaler,
+    required TerminalTheme theme,
+    required FocusNode focusNode,
+    required TerminalCursorType cursorType,
+    required bool alwaysShowCursor,
+    EditableRectCallback? onEditableRect,
+    String? composingText,
+  })  : _terminal = terminal,
+        _controller = controller,
+        _offset = offset,
+        _padding = padding,
+        _autoResize = autoResize,
+        _focusNode = focusNode,
+        _cursorType = cursorType,
+        _alwaysShowCursor = alwaysShowCursor,
+        _onEditableRect = onEditableRect,
+        _composingText = composingText,
+        _painter = TerminalPainter(
+          theme: theme,
+          textStyle: textStyle,
+          textScaler: textScaler,
+        );
+
+  Terminal _terminal;
+  set terminal(Terminal terminal) {
+    if (_terminal == terminal) return;
+    if (attached) _terminal.removeListener(_onTerminalChange);
+    _terminal = terminal;
+    if (attached) _terminal.addListener(_onTerminalChange);
+    _resizeTerminalIfNeeded();
+    markNeedsLayout();
+  }
+
+  TerminalController _controller;
+  set controller(TerminalController controller) {
+    if (_controller == controller) return;
+    if (attached) _controller.removeListener(_onControllerUpdate);
+    _controller = controller;
+    if (attached) _controller.addListener(_onControllerUpdate);
+    markNeedsLayout();
+  }
+
+  ViewportOffset _offset;
+  set offset(ViewportOffset value) {
+    if (value == _offset) return;
+    if (attached) _offset.removeListener(_onScroll);
+    _offset = value;
+    if (attached) _offset.addListener(_onScroll);
+    markNeedsLayout();
+  }
+
+  EdgeInsets _padding;
+  set padding(EdgeInsets value) {
+    if (value == _padding) return;
+    _padding = value;
+    markNeedsLayout();
+  }
+
+  bool _autoResize;
+  set autoResize(bool value) {
+    if (value == _autoResize) return;
+    _autoResize = value;
+    markNeedsLayout();
+  }
+
+  set textStyle(TerminalStyle value) {
+    if (value == _painter.textStyle) return;
+    _painter.textStyle = value;
+    markNeedsLayout();
+  }
+
+  set textScaler(TextScaler value) {
+    if (value == _painter.textScaler) return;
+    _painter.textScaler = value;
+    markNeedsLayout();
+  }
+
+  set theme(TerminalTheme value) {
+    if (value == _painter.theme) return;
+    _painter.theme = value;
+    markNeedsPaint();
+  }
+
+  FocusNode _focusNode;
+  set focusNode(FocusNode value) {
+    if (value == _focusNode) return;
+    if (attached) _focusNode.removeListener(_onFocusChange);
+    _focusNode = value;
+    if (attached) _focusNode.addListener(_onFocusChange);
+    markNeedsPaint();
+  }
+
+  TerminalCursorType _cursorType;
+  set cursorType(TerminalCursorType value) {
+    if (value == _cursorType) return;
+    _cursorType = value;
+    markNeedsPaint();
+  }
+
+  bool _alwaysShowCursor;
+  set alwaysShowCursor(bool value) {
+    if (value == _alwaysShowCursor) return;
+    _alwaysShowCursor = value;
+    markNeedsPaint();
+  }
+
+  EditableRectCallback? _onEditableRect;
+  set onEditableRect(EditableRectCallback? value) {
+    if (value == _onEditableRect) return;
+    _onEditableRect = value;
+    markNeedsLayout();
+  }
+
+  String? _composingText;
+  set composingText(String? value) {
+    if (value == _composingText) return;
+    _composingText = value;
+    markNeedsPaint();
+  }
+
+  TerminalSize? _viewportSize;
+
+  final TerminalPainter _painter;
+
+  var _stickToBottom = true;
+
+  /// [seance fork] Whether the viewport is pinned to the bottom of the
+  /// scrollback. Exposed so the view can avoid yanking a scrolled-up viewport
+  /// back down (e.g. when the soft keyboard appears mid-selection).
+  bool get stickToBottom => _stickToBottom;
+
+  /// [seance fork] Trim tracking for scroll anchoring: the lines object and
+  /// its absolute start index as of the previous layout pass.
+  Object? _lastLines;
+  int _lastAbsoluteStartIndex = 0;
+
+  void _onScroll() {
+    _stickToBottom = _scrollOffset >= _maxScrollExtent;
+    markNeedsLayout();
+    _notifyEditableRect();
+  }
+
+  void _onFocusChange() {
+    markNeedsPaint();
+  }
+
+  void _onTerminalChange() {
+    markNeedsLayout();
+    _notifyEditableRect();
+  }
+
+  void _onControllerUpdate() {
+    markNeedsLayout();
+  }
+
+  @override
+  final isRepaintBoundary = true;
+
+  @override
+  void attach(PipelineOwner owner) {
+    super.attach(owner);
+    _offset.addListener(_onScroll);
+    _terminal.addListener(_onTerminalChange);
+    _controller.addListener(_onControllerUpdate);
+    _focusNode.addListener(_onFocusChange);
+  }
+
+  @override
+  void detach() {
+    super.detach();
+    _offset.removeListener(_onScroll);
+    _terminal.removeListener(_onTerminalChange);
+    _controller.removeListener(_onControllerUpdate);
+    _focusNode.removeListener(_onFocusChange);
+  }
+
+  @override
+  bool hitTestSelf(Offset position) {
+    return true;
+  }
+
+  @override
+  void systemFontsDidChange() {
+    _painter.clearFontCache();
+    super.systemFontsDidChange();
+  }
+
+  @override
+  void performLayout() {
+    size = constraints.biggest;
+
+    _updateViewportSize();
+
+    _correctForTrimmedLines();
+
+    _updateScrollOffset();
+
+    if (_stickToBottom) {
+      _offset.correctBy(_maxScrollExtent - _scrollOffset);
+    }
+  }
+
+  /// [seance fork] While scrolled up (not stick-to-bottom), a full scrollback
+  /// trims its oldest line for every new one — decrementing every retained
+  /// line's index while the pixel offset stays put, so content used to crawl
+  /// up under a stationary viewport (and under an in-progress selection).
+  /// Shift the offset by the trimmed amount to keep the viewport glued to
+  /// content. Tracking is per lines-object so a main/alt buffer swap never
+  /// produces a bogus correction.
+  void _correctForTrimmedLines() {
+    final lines = _terminal.buffer.lines;
+    final start = lines.absoluteStartIndex;
+    if (identical(lines, _lastLines)) {
+      final trimmed = start - _lastAbsoluteStartIndex;
+      // _scrollOffset > 0: don't fight BouncingScrollPhysics' overscroll
+      // region (offset < 0 while rubber-banding at the top).
+      if (trimmed > 0 && !_stickToBottom && _scrollOffset > 0) {
+        final delta = trimmed * _painter.cellSize.height;
+        final target = max(_scrollOffset - delta, 0.0);
+        _offset.correctBy(target - _scrollOffset);
+      }
+    }
+    _lastLines = lines;
+    _lastAbsoluteStartIndex = start;
+  }
+
+  /// Total height of the terminal in pixels. Includes scrollback buffer.
+  double get _terminalHeight =>
+      _terminal.buffer.lines.length * _painter.cellSize.height;
+
+  /// The distance from the top of the terminal to the top of the viewport.
+  // double get _scrollOffset => _offset.pixels;
+  double get _scrollOffset {
+    // return _offset.pixels ~/ _painter.cellSize.height * _painter.cellSize.height;
+    return _offset.pixels;
+  }
+
+  /// The height of a terminal line in pixels. This includes the line spacing.
+  /// Height of the entire terminal is expected to be a multiple of this value.
+  double get lineHeight => _painter.cellSize.height;
+
+  /// Get the top-left corner of the cell at [cellOffset] in pixels.
+  Offset getOffset(CellOffset cellOffset) {
+    final row = cellOffset.y;
+    final col = cellOffset.x;
+    final x = col * _painter.cellSize.width;
+    final y = row * _painter.cellSize.height;
+    return Offset(x + _padding.left, y + _padding.top - _scrollOffset);
+  }
+
+  /// Get the [CellOffset] of the cell that [offset] is in.
+  CellOffset getCellOffset(Offset offset) {
+    final x = offset.dx - _padding.left;
+    final y = offset.dy - _padding.top + _scrollOffset;
+    final row = y ~/ _painter.cellSize.height;
+    final col = x ~/ _painter.cellSize.width;
+    return CellOffset(
+      col.clamp(0, _terminal.viewWidth - 1),
+      row.clamp(0, _terminal.buffer.lines.length - 1),
+    );
+  }
+
+  /// [seance fork] The cell a *selection* gesture at pixel [offset] resolves
+  /// to: [getCellOffset] clamped to the buffer's content.
+  ///
+  /// Deliberately not folded into [getCellOffset] itself, which mouse
+  /// reporting ([mouseEvent]), link hit-testing and the secondary-tap
+  /// callbacks also go through — a remote app that owns the mouse has to be
+  /// told the row the pointer is really on, void or not.
+  CellOffset _selectionCellOffset(Offset offset) =>
+      _clampToContent(getCellOffset(offset));
+
+  /// [seance fork] Pulls [position] back to the end of the buffer's content.
+  ///
+  /// Rows past the last row holding anything collapse onto
+  /// [Buffer.contentEnd], and on that last row the column stops there too. So
+  /// a drag that never leaves the void below the prompt starts and ends on the
+  /// same cell — an empty selection, painting nothing and copying nothing —
+  /// while a drag that begins in real output and runs off the bottom simply
+  /// ends where the output does.
+  ///
+  /// Scope is the void *past* the content: a blank row between two rows of
+  /// output is inside it and stays selectable, because its newline is part of
+  /// what the user is copying. Trailing blanks to the right of a short line
+  /// mid-selection are left alone as well — every terminal paints those, and
+  /// `BufferLine.getText` already drops them from the copy.
+  CellOffset _clampToContent(CellOffset position) {
+    final end = _terminal.buffer.contentEnd;
+    // Nothing has been written at all: every gesture collapses to the origin.
+    if (end == null) return const CellOffset(0, 0);
+    if (position.y > end.y) return end;
+    if (position.y == end.y && position.x > end.x) return end;
+    return position;
+  }
+
+  /// Selects entire words in the terminal that contains [from] and [to].
+  void selectWord(Offset from, [Offset? to]) {
+    final fromOffset = _selectionCellOffset(from);
+    final fromBoundary = _terminal.buffer.getWordBoundary(fromOffset);
+    if (fromBoundary == null) return;
+    if (to == null) {
+      _controller.setSelection(
+        _terminal.buffer.createAnchorFromOffset(fromBoundary.begin),
+        _terminal.buffer.createAnchorFromOffset(fromBoundary.end),
+        mode: SelectionMode.line,
+      );
+    } else {
+      final toOffset = _selectionCellOffset(to);
+      final toBoundary = _terminal.buffer.getWordBoundary(toOffset);
+      if (toBoundary == null) return;
+      final range = fromBoundary.merge(toBoundary);
+      _controller.setSelection(
+        _terminal.buffer.createAnchorFromOffset(range.begin),
+        _terminal.buffer.createAnchorFromOffset(range.end),
+        mode: SelectionMode.line,
+      );
+    }
+  }
+
+  /// Selects characters in the terminal that starts from [from] to [to]. At
+  /// least one cell is selected even if [from] and [to] are the same — unless
+  /// both land past the end of the content, where the selection collapses to
+  /// nothing rather than painting over the void (see [_clampToContent]).
+  void selectCharacters(Offset from, [Offset? to]) {
+    final fromPosition = _selectionCellOffset(from);
+    if (to == null) {
+      _controller.setSelection(
+        _terminal.buffer.createAnchorFromOffset(fromPosition),
+        _terminal.buffer.createAnchorFromOffset(fromPosition),
+      );
+    } else {
+      var toPosition = _selectionCellOffset(to);
+      // [seance fork] End-inclusive bump for forward drags. Upstream compared
+      // x alone (ignoring y), so an up-and-left drag got a spurious +1. The
+      // bump is re-clamped: without that it would reach one cell past the
+      // content it was just pulled back to.
+      if (!toPosition.isBefore(fromPosition)) {
+        toPosition = _clampToContent(
+          CellOffset(toPosition.x + 1, toPosition.y),
+        );
+      }
+      _controller.setSelection(
+        _terminal.buffer.createAnchorFromOffset(fromPosition),
+        _terminal.buffer.createAnchorFromOffset(toPosition),
+      );
+    }
+  }
+
+  /// [seance fork] Extends a character selection from [start] — an anchor
+  /// captured once at drag start, so it stays glued to its text through
+  /// scrolling and scrollback trimming — to the cell at pixel [to]. Upstream
+  /// re-converted the start PIXEL on every drag update, which made the
+  /// selection start slide through content whenever the viewport moved
+  /// mid-drag (streaming output, wheel scroll, stick-to-bottom re-pin).
+  void selectCharactersTo(CellAnchor start, Offset to) {
+    // Ownership, not just attachment: a mid-gesture main/alt buffer switch
+    // leaves [start] attached to the OTHER buffer, whose rows can exceed this
+    // buffer's height — resolving it here would throw (or select nonsense).
+    if (!_terminal.buffer.ownsAnchor(start)) return;
+    final fromPosition = start.offset;
+    var toPosition = _selectionCellOffset(to);
+    if (!toPosition.isBefore(fromPosition)) {
+      toPosition = _clampToContent(CellOffset(toPosition.x + 1, toPosition.y));
+    }
+    _controller.setSelection(
+      _terminal.buffer.createAnchorFromOffset(fromPosition),
+      _terminal.buffer.createAnchorFromOffset(toPosition),
+    );
+  }
+
+  /// [seance fork] Extends a word selection whose initial word is pinned by
+  /// [wordBegin]/[wordEnd] (anchors captured at gesture start) to include the
+  /// word under pixel [to]. Same anchoring rationale as [selectCharactersTo].
+  void selectWordTo(CellAnchor wordBegin, CellAnchor wordEnd, Offset to) {
+    // Same ownership rationale as [selectCharactersTo].
+    if (!_terminal.buffer.ownsAnchor(wordBegin) ||
+        !_terminal.buffer.ownsAnchor(wordEnd)) {
+      return;
+    }
+    final toBoundary =
+        _terminal.buffer.getWordBoundary(_selectionCellOffset(to));
+    if (toBoundary == null) return;
+    final range =
+        BufferRangeLine(wordBegin.offset, wordEnd.offset).merge(toBoundary);
+    _controller.setSelection(
+      _terminal.buffer.createAnchorFromOffset(range.begin),
+      _terminal.buffer.createAnchorFromOffset(range.end),
+      mode: SelectionMode.line,
+    );
+  }
+
+  /// [seance fork] The full logical line containing buffer row [row],
+  /// following soft-wrap continuations in both directions. Returns the
+  /// (firstRow, lastRow) pair.
+  (int, int) _logicalLineRows(int row) {
+    final lines = _terminal.buffer.lines;
+    var first = row;
+    while (first > 0 && lines[first].isWrapped) {
+      first--;
+    }
+    var last = row;
+    while (last + 1 < lines.length && lines[last + 1].isWrapped) {
+      last++;
+    }
+    return (first, last);
+  }
+
+  /// [seance fork] The logical-line rows a selection gesture at pixel
+  /// [offset] resolves to, or null when the buffer holds nothing to select.
+  ///
+  /// One source of truth for [selectLine], [dragLineSelection] and
+  /// [createLineAnchorsAt]. They have to agree: the gesture handler decides
+  /// whether to fall back to a character drag from `createLineAnchorsAt`'s
+  /// null, so a condition added to one and not the others would leave the
+  /// gesture path falling back while a direct `selectLine` still painted a
+  /// full-width band over the void.
+  (int, int)? _clampedLineRows(Offset offset) {
+    // Nothing written yet: [_clampToContent] collapses every gesture to the
+    // origin, and expanding that into a full-width row band is exactly the
+    // band over the void this clamping exists to remove.
+    if (_terminal.buffer.contentEnd == null) return null;
+    return _logicalLineRows(_selectionCellOffset(offset).y);
+  }
+
+  /// [seance fork] Selects the full logical line at pixel [from], following
+  /// soft-wrap continuations in both directions — the triple-click gesture.
+  void selectLine(Offset from) {
+    final rows = _clampedLineRows(from);
+    if (rows == null) return;
+    final (first, last) = rows;
+    _controller.setSelection(
+      _terminal.buffer.createAnchor(0, first),
+      _terminal.buffer.createAnchor(_terminal.viewWidth, last),
+      mode: SelectionMode.line,
+    );
+  }
+
+  /// [seance fork] Extends a line selection whose origin logical line is
+  /// pinned by [lineBegin]/[lineEnd] (anchors captured at gesture start) to
+  /// cover the logical line under pixel [to] — the triple-click-drag gesture.
+  /// Same anchoring rationale as [selectCharactersTo].
+  void selectLineTo(CellAnchor lineBegin, CellAnchor lineEnd, Offset to) {
+    // Same ownership rationale as [selectCharactersTo].
+    if (!_terminal.buffer.ownsAnchor(lineBegin) ||
+        !_terminal.buffer.ownsAnchor(lineEnd)) {
+      return;
+    }
+    final rows = _clampedLineRows(to);
+    if (rows == null) return;
+    final (first, last) = rows;
+    final toRange = BufferRangeLine(
+      CellOffset(0, first),
+      CellOffset(_terminal.viewWidth, last),
+    );
+    final range = BufferRangeLine(lineBegin.offset, lineEnd.offset)
+        .merge(toRange);
+    _controller.setSelection(
+      _terminal.buffer.createAnchorFromOffset(range.begin),
+      _terminal.buffer.createAnchorFromOffset(range.end),
+      mode: SelectionMode.line,
+    );
+  }
+
+  /// [seance fork] Creates a buffer anchor for the cell at pixel [offset].
+  /// The caller owns the anchor and must dispose it.
+  CellAnchor createAnchorAt(Offset offset) {
+    return _terminal.buffer.createAnchorFromOffset(
+      _selectionCellOffset(offset),
+    );
+  }
+
+  /// [seance fork] Creates owned anchors pinning the word at pixel [offset],
+  /// or null when there is no word there. The caller must dispose them.
+  (CellAnchor, CellAnchor)? createWordAnchorsAt(Offset offset) {
+    final boundary =
+        _terminal.buffer.getWordBoundary(_selectionCellOffset(offset));
+    if (boundary == null) return null;
+    return (
+      _terminal.buffer.createAnchorFromOffset(boundary.begin),
+      _terminal.buffer.createAnchorFromOffset(boundary.end),
+    );
+  }
+
+  /// [seance fork] Creates owned anchors pinning the logical line at pixel
+  /// [offset] (soft-wrap continuations included), or null when the buffer
+  /// holds nothing to pin — the same shape as [createWordAnchorsAt], so the
+  /// caller falls back to a character drag rather than anchoring a band over
+  /// the void. The caller must dispose them.
+  (CellAnchor, CellAnchor)? createLineAnchorsAt(Offset offset) {
+    final rows = _clampedLineRows(offset);
+    if (rows == null) return null;
+    final (first, last) = rows;
+    return (
+      _terminal.buffer.createAnchor(0, first),
+      _terminal.buffer.createAnchor(_terminal.viewWidth, last),
+    );
+  }
+
+  /// Send a mouse event at [offset] with [button] being currently in [buttonState].
+  bool mouseEvent(
+    TerminalMouseButton button,
+    TerminalMouseButtonState buttonState,
+    Offset offset,
+  ) {
+    final position = getCellOffset(offset);
+    // [seance fork] Mouse reports are viewport-relative (row 0 = top of the
+    // visible screen), but getCellOffset yields buffer-absolute rows —
+    // upstream reported rows off by the scrollback length. Convert, and let
+    // clicks landing in the scrollback above the viewport fall through to
+    // local handling instead of reporting nonsense to the remote app.
+    final viewportTop = _terminal.buffer.height - _terminal.viewHeight;
+    final row = position.y - viewportTop;
+    if (row < 0) return false;
+    return _terminal.mouseInput(
+      button,
+      buttonState,
+      CellOffset(position.x, row),
+    );
+  }
+
+  void _notifyEditableRect() {
+    final cursor = localToGlobal(cursorOffset);
+
+    final rect = Rect.fromLTRB(
+      cursor.dx,
+      cursor.dy,
+      size.width,
+      cursor.dy + _painter.cellSize.height,
+    );
+
+    final caretRect = cursor & _painter.cellSize;
+
+    _onEditableRect?.call(rect, caretRect);
+  }
+
+  /// Update the viewport size in cells based on the current widget size in
+  /// pixels.
+  void _updateViewportSize() {
+    if (size <= _painter.cellSize) {
+      return;
+    }
+
+    final viewportSize = TerminalSize(
+      _viewportWidth ~/ _painter.cellSize.width,
+      _viewportHeight ~/ _painter.cellSize.height,
+    );
+
+    if (_viewportSize != viewportSize) {
+      _viewportSize = viewportSize;
+      _resizeTerminalIfNeeded();
+    }
+  }
+
+  /// Notify the underlying terminal that the viewport size has changed.
+  void _resizeTerminalIfNeeded() {
+    if (_autoResize && _viewportSize != null) {
+      _terminal.resize(
+        _viewportSize!.width,
+        _viewportSize!.height,
+        _painter.cellSize.width.round(),
+        _painter.cellSize.height.round(),
+      );
+    }
+  }
+
+  /// Update the scroll offset based on the current terminal state. This should
+  /// be called in [performLayout] after the viewport size has been updated.
+  void _updateScrollOffset() {
+    _offset.applyViewportDimension(_viewportHeight);
+    _offset.applyContentDimensions(0, _maxScrollExtent);
+  }
+
+  bool get _isComposingText {
+    return _composingText != null && _composingText!.isNotEmpty;
+  }
+
+  bool get _shouldShowCursor {
+    return _terminal.cursorVisibleMode || _alwaysShowCursor || _isComposingText;
+  }
+
+  double get _viewportHeight {
+    return size.height - _padding.vertical;
+  }
+
+  // [seance fork] The side insets are honoured like the top and bottom ones:
+  // the grid fits between them and is drawn from the left one. Upstream only
+  // mapped pointer positions through the left inset (see [getCellOffset]),
+  // so with a notch or a side navigation bar every tap landed one inset to
+  // the left of the text it was on, and the text sat under the inset.
+  double get _viewportWidth {
+    return size.width - _padding.horizontal;
+  }
+
+  double get _maxScrollExtent {
+    return max(_terminalHeight - _viewportHeight, 0.0);
+  }
+
+  double get _lineOffset {
+    return -_scrollOffset + _padding.top;
+  }
+
+  /// The offset of the cursor from the top left corner of this render object.
+  Offset get cursorOffset {
+    return Offset(
+      _terminal.buffer.cursorX * _painter.cellSize.width + _padding.left,
+      _terminal.buffer.absoluteCursorY * _painter.cellSize.height + _lineOffset,
+    );
+  }
+
+  Size get cellSize {
+    return _painter.cellSize;
+  }
+
+  @override
+  void paint(PaintingContext context, Offset offset) {
+    // [seance fork] Clipped to the view. Rows land wherever the scroll offset
+    // puts them, so a view that is not a whole number of rows tall has one
+    // partly outside it: the top row when pinned to the bottom, the last when
+    // scrolled up. Upstream painted that row over the widgets beside the
+    // view. A canvas clip, not a clip layer: everything here is drawn on the
+    // one canvas.
+    final canvas = context.canvas;
+    canvas.save();
+    canvas.clipRect(offset & size);
+    _paint(context, offset);
+    canvas.restore();
+    context.setWillChangeHint();
+  }
+
+  void _paint(PaintingContext context, Offset offset) {
+    final canvas = context.canvas;
+
+    final lines = _terminal.buffer.lines;
+    final charHeight = _painter.cellSize.height;
+
+    final firstLineOffset = _scrollOffset - _padding.top;
+    final lastLineOffset = _scrollOffset + size.height + _padding.bottom;
+
+    final firstLine = firstLineOffset ~/ charHeight;
+    final lastLine = lastLineOffset ~/ charHeight;
+
+    final effectFirstLine = firstLine.clamp(0, lines.length - 1);
+    final effectLastLine = lastLine.clamp(0, lines.length - 1);
+
+    final recolor = _collectRecolors(effectFirstLine, effectLastLine);
+
+    for (var i = effectFirstLine; i <= effectLastLine; i++) {
+      _painter.paintLine(
+        canvas,
+        offset.translate(
+          _padding.left,
+          (i * charHeight + _lineOffset).truncateToDouble(),
+        ),
+        lines[i],
+        recolor?[i - effectFirstLine],
+      );
+    }
+
+    if (_terminal.buffer.absoluteCursorY >= effectFirstLine &&
+        _terminal.buffer.absoluteCursorY <= effectLastLine) {
+      if (_isComposingText) {
+        _paintComposingText(canvas, offset + cursorOffset);
+      }
+
+      if (_shouldShowCursor) {
+        _painter.paintCursor(
+          canvas,
+          offset + cursorOffset,
+          cursorType: _cursorType,
+          hasFocus: _focusNode.hasFocus,
+        );
+      }
+    }
+
+    _paintHighlights(
+      canvas,
+      _controller.highlights,
+      effectFirstLine,
+      effectLastLine,
+    );
+
+    if (_controller.selection != null) {
+      _paintSelection(
+        canvas,
+        _controller.selection!,
+        effectFirstLine,
+        effectLastLine,
+      );
+    }
+  }
+
+  /// Paints the text that is currently being composed in IME to [canvas] at
+  /// [offset]. [offset] is usually the cursor position.
+  void _paintComposingText(Canvas canvas, Offset offset) {
+    final composingText = _composingText;
+    if (composingText == null) {
+      return;
+    }
+
+    final style = _painter.textStyle.toTextStyle(
+      color: _painter.resolveForegroundColor(_terminal.cursor.foreground),
+      backgroundColor: _painter.theme.background,
+      underline: true,
+    );
+
+    // [seance fork] Laid out across the grid, between the side insets: the
+    // placeholder runs from the grid's left edge to the cursor, and wrapped
+    // lines start at that edge rather than under the left inset.
+    final builder = ParagraphBuilder(style.getParagraphStyle());
+    builder.addPlaceholder(
+      offset.dx - _padding.left,
+      _painter.cellSize.height,
+      PlaceholderAlignment.middle,
+    );
+    builder.pushStyle(
+      style.getTextStyle(textScaler: _painter.textScaler),
+    );
+    builder.addText(composingText);
+
+    final paragraph = builder.build();
+    paragraph.layout(ParagraphConstraints(width: _viewportWidth));
+
+    canvas.drawParagraph(paragraph, Offset(_padding.left, offset.dy));
+  }
+
+  void _paintSelection(
+    Canvas canvas,
+    BufferRange selection,
+    int firstLine,
+    int lastLine,
+  ) {
+    for (final segment in selection.toSegments()) {
+      if (segment.line >= _terminal.buffer.lines.length) {
+        break;
+      }
+
+      if (segment.line < firstLine) {
+        continue;
+      }
+
+      if (segment.line > lastLine) {
+        break;
+      }
+
+      _paintSegment(canvas, segment, _painter.theme.selection);
+    }
+  }
+
+  /// [seance fork] The whole range of [highlight] when any of it is on
+  /// screen, or null when none is; callers clip it to the viewport. A highlight anchored in the other buffer (the main one
+  /// while vim holds the alternate screen, or the reverse) is never visible:
+  /// its rows index a different set of lines.
+  BufferRange? _visibleRange(
+    TerminalHighlight highlight,
+    int firstLine,
+    int lastLine,
+  ) {
+    if (!_terminal.buffer.ownsAnchor(highlight.p1) ||
+        !_terminal.buffer.ownsAnchor(highlight.p2)) {
+      return null;
+    }
+    final range = highlight.range?.normalized;
+    if (range == null || range.begin.y > lastLine || range.end.y < firstLine) {
+      return null;
+    }
+    return range;
+  }
+
+  /// [seance fork] The spans of the highlights that recolour cells
+  /// ([TerminalHighlight.foreground]), per visible line — index 0 is
+  /// [firstLine] — or null when there are none. Only on-screen rows are
+  /// visited, however far a highlight reaches into the scrollback.
+  List<List<CellRecolor>?>? _collectRecolors(int firstLine, int lastLine) {
+    List<List<CellRecolor>?>? byLine;
+    for (final highlight in _controller.highlights) {
+      final foreground = highlight.foreground;
+      if (foreground == null) continue;
+      final range = _visibleRange(highlight, firstLine, lastLine);
+      if (range == null) continue;
+      byLine ??= List.filled(lastLine - firstLine + 1, null);
+      final last = min(range.end.y, lastLine);
+      for (var y = max(range.begin.y, firstLine); y <= last; y++) {
+        (byLine[y - firstLine] ??= []).add(CellRecolor(
+          y == range.begin.y ? range.begin.x : 0,
+          y == range.end.y ? range.end.x : _terminal.viewWidth,
+          highlight.color.toARGB32(),
+          foreground.toARGB32(),
+        ));
+      }
+    }
+    return byLine;
+  }
+
+  void _paintHighlights(
+    Canvas canvas,
+    List<TerminalHighlight> highlights,
+    int firstLine,
+    int lastLine,
+  ) {
+    for (var highlight in _controller.highlights) {
+      // [seance fork] Recolouring highlights were painted with their lines.
+      if (highlight.foreground != null) continue;
+
+      final range = _visibleRange(highlight, firstLine, lastLine);
+      if (range == null) continue;
+
+      for (var segment in range.toSegments()) {
+        if (segment.line < firstLine) {
+          continue;
+        }
+
+        if (segment.line > lastLine) {
+          break;
+        }
+
+        _paintSegment(canvas, segment, highlight.color);
+      }
+    }
+  }
+
+  @pragma('vm:prefer-inline')
+  void _paintSegment(Canvas canvas, BufferSegment segment, Color color) {
+    final start = segment.start ?? 0;
+    final end = segment.end ?? _terminal.viewWidth;
+
+    final startOffset = Offset(
+      start * _painter.cellSize.width + _padding.left,
+      segment.line * _painter.cellSize.height + _lineOffset,
+    );
+
+    _painter.paintHighlight(canvas, startOffset, end - start, color);
+  }
+}

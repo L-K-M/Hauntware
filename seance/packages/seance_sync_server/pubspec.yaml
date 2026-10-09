@@ -1,0 +1,30 @@
+name: seance_sync_server
+description: >-
+  Séance sync server: a single static binary that stores end-to-end encrypted
+  record blobs and resolves conflicts by last-write-wins. Knows nothing it can
+  decrypt. Ships as a scratch Docker image.
+version: 1.9.0
+publish_to: none
+resolution: workspace
+
+environment:
+  sdk: ^3.12.0
+
+dependencies:
+  seance_protocol:
+    path: ../seance_protocol
+  shelf: ^1.4.0
+  shelf_router: ^1.1.0
+  sqlite3: ^2.4.0
+  args: ^2.5.0
+
+dev_dependencies:
+  # Pins the reference client's hash (kInboxReferenceClientSha256).
+  crypto: ^3.0.0
+  lints: ^5.0.0
+  test: ^1.25.0
+  http: ^1.2.0
+  # Dev-only: exercises the real client (HttpSyncClient + SyncEngine) against a
+  # running server in the integration test. Not a runtime dependency.
+  seance_core:
+    path: ../seance_core

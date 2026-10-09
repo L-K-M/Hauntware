@@ -8,13 +8,14 @@ const int _successExitCode = 0;
 const int _failureExitCode = 1;
 const int _usageExitCode = 64;
 const String _usage =
-    'usage: release_version <validate|sync|check|check-tag|check-order> '
-    '[--version VERSION] [--pubspec PATH] [--tag TAG] '
-    '[--prior-tag TAG]... [--root PATH]';
+    'usage: release_version <validate|sync|check|check-tag|check-order'
+    '|pubspecs|preflight|post-bump> '
+    '[--version VERSION] [--tag TAG] [--prior-tag TAG]... [--root PATH]';
 
 typedef ReleaseVersionLineWriter = void Function(String line);
 
-/// Runs the deterministic release-version command without exiting the process.
+/// Runs the deterministic suite release-version command without exiting
+/// the process.
 int runReleaseVersionCommand(
   List<String> arguments, {
   Directory? workingDirectory,
@@ -39,27 +40,37 @@ int runReleaseVersionCommand(
         output(version.appVersion);
       case _ReleaseVersionCommand.sync:
         final version = ReleaseVersion.parse(parsed.version!);
-        ReleaseVersionWorkspace(
-          root,
-        ).syncAppMetadata(version: version, pubspecPath: parsed.pubspec!);
-        output('Synced app metadata to ${version.appVersion}');
+        SuiteReleaseWorkspace(root).syncAppMetadata(version: version);
+        output('Synced suite app metadata to ${version.appVersion}');
       case _ReleaseVersionCommand.check:
         final expected = parsed.version == null
             ? null
             : ReleaseVersion.parse(parsed.version!);
-        final report = ReleaseVersionWorkspace(root).check(expected: expected);
+        final report = SuiteReleaseWorkspace(root).check(expected: expected);
         output(_renderReport(report));
       case _ReleaseVersionCommand.checkTag:
-        final report = ReleaseVersionWorkspace(root).checkTag(parsed.tag!);
+        final report = SuiteReleaseWorkspace(root).checkTag(parsed.tag!);
         output('${parsed.tag}: ${_renderReport(report)}');
       case _ReleaseVersionCommand.checkOrder:
         final target = parsed.version == null
             ? null
             : ReleaseVersion.parse(parsed.version!);
-        final checked = ReleaseVersionWorkspace(
+        final checked = SuiteReleaseWorkspace(
           root,
         ).checkReleaseOrder(target: target, priorTags: parsed.priorTags);
         output('${checked.appVersion} preserves release order');
+      case _ReleaseVersionCommand.pubspecs:
+        output(SuiteReleaseWorkspace(root).bumpPubspecPaths().join(' '));
+      case _ReleaseVersionCommand.preflight:
+        final target = parsed.version == null
+            ? null
+            : ReleaseVersion.parse(parsed.version!);
+        final checked = SuiteReleaseWorkspace(root).preflight(target: target);
+        output('${checked.appVersion} preserves release order');
+      case _ReleaseVersionCommand.postBump:
+        final version = ReleaseVersion.parse(parsed.version!);
+        SuiteReleaseWorkspace(root).postBump(version);
+        output('Synchronized suite release metadata to ${version.appVersion}');
     }
 
     return _successExitCode;
@@ -87,12 +98,20 @@ Directory _resolveDirectory(Directory base, String path) {
   return Directory(p.normalize(p.join(base.path, path)));
 }
 
-enum _ReleaseVersionCommand { validate, sync, check, checkTag, checkOrder }
+enum _ReleaseVersionCommand {
+  validate,
+  sync,
+  check,
+  checkTag,
+  checkOrder,
+  pubspecs,
+  preflight,
+  postBump,
+}
 
 final class _CommandArguments {
   final _ReleaseVersionCommand command;
   final String? version;
-  final String? pubspec;
   final String? tag;
   final List<String> priorTags;
   final String? root;
@@ -100,7 +119,6 @@ final class _CommandArguments {
   const _CommandArguments({
     required this.command,
     required this.version,
-    required this.pubspec,
     required this.tag,
     required this.priorTags,
     required this.root,
@@ -115,6 +133,9 @@ final class _CommandArguments {
       'check' => _ReleaseVersionCommand.check,
       'check-tag' => _ReleaseVersionCommand.checkTag,
       'check-order' => _ReleaseVersionCommand.checkOrder,
+      'pubspecs' => _ReleaseVersionCommand.pubspecs,
+      'preflight' => _ReleaseVersionCommand.preflight,
+      'post-bump' => _ReleaseVersionCommand.postBump,
       _ => null,
     };
     if (command == null) return null;
@@ -127,7 +148,6 @@ final class _CommandArguments {
       final option = arguments[index];
       if (!const {
         '--version',
-        '--pubspec',
         '--tag',
         '--prior-tag',
         '--root',
@@ -148,7 +168,6 @@ final class _CommandArguments {
     final parsed = _CommandArguments(
       command: command,
       version: values['--version'],
-      pubspec: values['--pubspec'],
       tag: values['--tag'],
       priorTags: List.unmodifiable(priorTags),
       root: values['--root'],
@@ -159,7 +178,6 @@ final class _CommandArguments {
   bool get _hasValidShape {
     final present = <String>{
       if (version != null) '--version',
-      if (pubspec != null) '--pubspec',
       if (tag != null) '--tag',
       if (priorTags.isNotEmpty) '--prior-tag',
       if (root != null) '--root',
@@ -171,12 +189,7 @@ final class _CommandArguments {
             present.difference(const {'--version', '--root'}).isEmpty,
       _ReleaseVersionCommand.sync =>
         version != null &&
-            pubspec != null &&
-            present.difference(const {
-              '--version',
-              '--pubspec',
-              '--root',
-            }).isEmpty,
+            present.difference(const {'--version', '--root'}).isEmpty,
       _ReleaseVersionCommand.check => present.difference(const {
         '--version',
         '--root',
@@ -188,6 +201,16 @@ final class _CommandArguments {
         '--prior-tag',
         '--root',
       }).isEmpty,
+      _ReleaseVersionCommand.pubspecs => present.difference(const {
+        '--root',
+      }).isEmpty,
+      _ReleaseVersionCommand.preflight => present.difference(const {
+        '--version',
+        '--root',
+      }).isEmpty,
+      _ReleaseVersionCommand.postBump =>
+        version != null &&
+            present.difference(const {'--version', '--root'}).isEmpty,
     };
   }
 }

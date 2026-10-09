@@ -1,49 +1,29 @@
+# Root build + tool artifacts. The projects keep their own .gitignore per
+# subtree; pubspec.lock is intentionally NOT ignored — the root lock pins
+# the release_version tool's resolution and is committed like the
+# projects' locks.
+
 # Dart / Pub
 .dart_tool/
 .packages
-build/
-
-# scripts/build.sh stages final artifacts here
-dist/
 .pub-cache/
 .pub/
 pubspec_overrides.yaml
 
-# The bench job's per-scenario documents and merged output land at the
-# repo root (CI uploads them as artifacts; locally they are run output).
-/bench-results*.json
-/bench-drift-state.json
-/evaluate.log
-/.bench-results-*.json.saved
-packages/poltergeist_bench/bench-results.json
-packages/poltergeist_bench/bench-shard.json
-packages/poltergeist_bench/bench-results.json.attempts.json
-packages/poltergeist_bench/shards/
-packages/poltergeist_bench/evidence/
+# Root build + dist
+build/
+/dist/
 
-# Generated SFTP integration payloads and ephemeral user credentials.
-test/integration/runtime/
+# Nested worktrees
+.worktrees/
 
-# Flutter (app lives at app/poltergeist_app once scaffolded)
-app/poltergeist_app/.flutter-plugins
-app/poltergeist_app/.flutter-plugins-dependencies
-app/poltergeist_app/.dart_tool/
-app/poltergeist_app/build/
-app/poltergeist_app/ios/Pods/
-app/poltergeist_app/android/.gradle/
-app/poltergeist_app/**/GeneratedPluginRegistrant.*
-
-# The Kotlin Gradle plugin's session and error logs, which the Android
-# folder's own ignores miss.
-app/poltergeist_app/android/.kotlin/
-
-# `dart test --coverage` / `flutter test --coverage` output, and the Flutter
-# tool's crash logs, which land in whatever directory it ran from.
-coverage/
-flutter_*.log
-
-# Editors / OS
+# IDE
 .idea/
-.vscode/
 *.iml
+.vscode/
+
+# Flutter host-local config
+local.properties
+**/android/local.properties
+
 .DS_Store

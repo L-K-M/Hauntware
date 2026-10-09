@@ -1,0 +1,530 @@
+import 'server_mark.dart';
+
+/// How a server authenticates. `agent` means "don't store anything — sign via
+/// an ssh-agent", which is the lowest-risk mode and the encouraged default.
+enum AuthMethod { password, privateKey, agent }
+
+AuthMethod _authFromName(String name) =>
+    AuthMethod.values.firstWhere((m) => m.name == name,
+        orElse: () => AuthMethod.password);
+
+/// A server's accent color, as a *name* rather than an ARGB value.
+///
+/// Two reasons it is a closed set. A raw color would have to be picked once and
+/// then read on every theme: a hand-chosen `0xFF2E2E2E` that looks sober in
+/// light mode disappears in dark mode, and this list is rendered against both.
+/// A name lets the app derive a matching container/foreground pair per
+/// brightness instead (see the app's `ServerAppearance`). And because the value
+/// syncs, a closed set is also what keeps a future device from being handed a
+/// color it has no sensible way to render.
+///
+/// The hues are the app's own, not the terminal palette's: this tags *which
+/// box you are on*, which must stay legible whatever colors the remote shell
+/// is painting with.
+enum ServerColor {
+  violet,
+  blue,
+  cyan,
+  teal,
+  green,
+  amber,
+  orange,
+  red,
+  pink,
+  slate,
+}
+
+/// Decode a [ServerColor] name, or null when absent *or unrecognized*.
+///
+/// Unlike [_authFromName] this deliberately has no fallback value: a newer
+/// device may have tagged a server with a color this build has never heard of,
+/// and showing the wrong color is worse than showing none. Round-tripping is
+/// still lossy for that record (see [ServerConfig.color]) — this only decides
+/// what gets drawn meanwhile.
+ServerColor? _colorFromName(String? name) {
+  if (name == null) return null;
+  for (final c in ServerColor.values) {
+    if (c.name == name) return c;
+  }
+  return null;
+}
+
+/// A configured SSH server. This is non-secret metadata: the actual password or
+/// private key lives in the encrypted vault and is referenced here by [secretRef].
+class ServerConfig {
+  final String id;
+  final String label;
+  final String host;
+  final int port;
+  final String username;
+  final AuthMethod authMethod;
+
+  /// Vault entry id holding the password or private key, when [authMethod]
+  /// stores a secret. Null for `agent` or for [identityFilePath] references.
+  final String? secretRef;
+
+  /// "Reference, don't store": path to an on-disk OpenSSH private key. The
+  /// passphrase (if any) is prompted at connect time or cached in the vault.
+  final String? identityFilePath;
+
+  /// Optional ProxyJump: the id of another [ServerConfig] to tunnel through.
+  final String? jumpHostId;
+
+  /// Whether the referenced secret is allowed to sync (opt-in per item).
+  final bool syncSecret;
+
+  /// The group this server is filed under in the list, or null for none.
+  ///
+  /// A plain name carried by the member, not a reference to a group *record*.
+  /// Records sync last-writer-wins and independently, so a first-class group
+  /// entity would let one device delete a group while another files a server
+  /// into it — leaving a config pointing at nothing, with no round to repair it.
+  /// A name cannot dangle: the group exists exactly as long as a server says it
+  /// does. The cost is that renaming a group rewrites its members, which for a
+  /// few dozen rarely-edited servers is not a cost worth designing around.
+  ///
+  /// Grouping is case-insensitive but the spelling is preserved, so a server
+  /// typed into `prod` joins `Prod` rather than starting a near-identical
+  /// second group.
+  final String? group;
+
+  /// An accent color for this server, or null to stay neutral. Non-functional
+  /// by design: it distinguishes rows at a glance and tints the terminal's tab
+  /// strip so "which box am I on" is answerable without reading.
+  ///
+  /// Null also covers *unrecognized*: a color added in a later version decodes
+  /// here as null, and this device re-pushing the record will drop it. That is
+  /// the same lossy-downgrade the record layer already has for any added field,
+  /// and it costs a color rather than a credential.
+  final ServerColor? color;
+
+  /// A colour of the user's own to draw instead of [color], as `#RRGGBB`, or
+  /// null to use the named accent.
+  ///
+  /// The reasons [color] is a closed set still hold, and this is not a way
+  /// around them. Whatever is stored here is a *seed*: the app derives the
+  /// fill and a legible foreground per theme brightness from it, the same as
+  /// it does for a named accent, so a colour picked in light mode is not
+  /// drawn raw in dark mode. And a build that predates this field ignores the
+  /// key and draws [color], which the editor keeps set to the nearest of the
+  /// named accents whenever a custom colour is chosen — the same arrangement
+  /// [icon] has with [iconEmoji] and [iconImage]. A value that is not six hex
+  /// digits is dropped on read rather than drawn or re-published, like every
+  /// other presentation field.
+  final String? customColor;
+
+  /// A built-in glyph for this server, or null for the default. See [color]
+  /// for the unrecognized-value behavior, which is identical.
+  ///
+  /// Also the stand-in for the two richer marks below: a server marked with an
+  /// emoji or an image keeps a glyph here, so a build that predates those
+  /// fields — or a device that cannot render what it was given — draws
+  /// something chosen rather than the default. [mark] resolves the three.
+  final ServerIcon? icon;
+
+  /// A single emoji to draw instead of [icon], or null.
+  ///
+  /// Text, so it needs no asset and costs a record a handful of bytes. What it
+  /// costs instead is certainty: an emoji renders through whatever the host's
+  /// system font covers, and a Linux install without a colour emoji font
+  /// shows a box — which is why [icon] is kept alongside it.
+  final String? iconEmoji;
+
+  /// A PNG to draw instead of [iconEmoji] or [icon], base64-encoded, or null.
+  ///
+  /// The bytes live in this record rather than in one of their own. That keeps
+  /// them impossible to orphan (an image cannot outlive, or arrive without,
+  /// the server it marks), needs no new `RecordKind` and no collection step,
+  /// and means a device either has the whole appearance of a server or none of
+  /// it. The cost is a bigger config record, bounded by
+  /// [kMaxServerIconImageBytes] — the app re-encodes every import to badge
+  /// size, and a value from elsewhere that fails that bound is dropped on
+  /// read rather than drawn or re-published.
+  final String? iconImage;
+
+  /// A command to run on the remote host once the shell opens, or null for
+  /// none.
+  ///
+  /// It is sent as keyboard input into the interactive session — not executed
+  /// on a separate channel — so "set up *this* shell" scripts behave as
+  /// expected: `cd`, `tmux attach`, exporting aliases all land in the session
+  /// you are looking at, and anything the script prints appears in the
+  /// scrollback like typed output would. The trade-offs of that choice: the
+  /// keystrokes are queued before the shell exists, so on servers where login
+  /// itself reads stdin (a passphrase prompt, a forced menu) the script's
+  /// first lines feed that prompt instead of running; and like anything typed,
+  /// both the script and its output are echoed into scrollback — this field
+  /// is no place for secrets.
+  final String? loginScript;
+
+  /// The remote folder a file browser opens when it connects to this server,
+  /// or null for the login's home folder.
+  ///
+  /// Either absolute (`/var/www`) or relative to the login's home: `~`,
+  /// `~/sites`, or a bare `sites/blog`, which SFTP itself resolves against the
+  /// home. Kept relative rather than resolved on save, so one record means the
+  /// same folder on every device even where the home is spelled differently.
+  /// Poltergeist opens it; Séance only carries it, so a save there keeps it.
+  final String? startDirectory;
+
+  /// Keep this server on this device only: its configuration is never pushed
+  /// to the sync server, and a copy pushed before the flag went on is
+  /// retracted with a tombstone — which also removes it from the other devices
+  /// that had pulled it. The local copy is untouched.
+  ///
+  /// The tombstone is a last-write-wins record like any other, so a device
+  /// still holding a copy from before the flag went on can push that copy
+  /// dated past it and put the config back on the server — until this device
+  /// syncs again, sees a copy that outranks its retraction, and re-dates the
+  /// retraction past it. And a copy of the credential already sitting in
+  /// another device's vault stays there as an orphan: tombstones for
+  /// credentials are pushed but never honoured (see the sync coordinator).
+  ///
+  /// The flag rides on the config rather than in device-local settings because
+  /// it is only ever read next to the config it governs, and it costs nothing
+  /// to carry: the one record that could publish it is exactly the record it
+  /// suppresses. Clearing it pushes the config again, with the flag false.
+  ///
+  /// Scope is this server's own record and its stored credential. A pinned
+  /// host key is *not* retracted: it is keyed by `host:port` rather than by
+  /// server, another device may have pinned the same host on its own, and
+  /// deleting it there would drop that device back to trust-on-first-use — a
+  /// weaker position than the one the user asked for. Going forward, a pin for
+  /// a `host:port` that is named only by excluded servers is simply not
+  /// pushed.
+  ///
+  /// Any write that *changes* this must carry a strictly later [updatedAt].
+  /// The retraction tombstone is dated from it, so a stale one — or the
+  /// current one, which ties — loses the tie-break to the copy already on the
+  /// server, and the UI would report the server as excluded while its record
+  /// sat there untouched. [copyWith] throws on that rather than leaving it to
+  /// be discovered in a sync log.
+  final bool excludeFromSync;
+
+  final int createdAt;
+  final int updatedAt;
+
+  /// What to draw on this server's badge, resolved from [iconImage],
+  /// [iconEmoji] and [icon] in that order of preference. Callers draw this
+  /// rather than reading the three fields, which is what keeps the precedence
+  /// in one place.
+  ServerMark get mark => ServerMark.resolve(
+        icon: icon,
+        emoji: iconEmoji,
+        image: iconImage,
+      );
+
+  const ServerConfig({
+    required this.id,
+    required this.label,
+    required this.host,
+    this.port = 22,
+    required this.username,
+    this.authMethod = AuthMethod.agent,
+    this.secretRef,
+    this.identityFilePath,
+    this.jumpHostId,
+    this.syncSecret = false,
+    this.group,
+    this.color,
+    this.customColor,
+    this.icon,
+    this.iconEmoji,
+    this.iconImage,
+    this.loginScript,
+    this.startDirectory,
+    this.excludeFromSync = false,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  ServerConfig copyWith({
+    String? label,
+    String? host,
+    int? port,
+    String? username,
+    AuthMethod? authMethod,
+    String? secretRef,
+    bool clearSecretRef = false,
+    String? identityFilePath,
+    bool clearIdentityFilePath = false,
+    String? jumpHostId,
+    bool clearJumpHostId = false,
+    bool? syncSecret,
+    String? group,
+    bool clearGroup = false,
+    ServerColor? color,
+    bool clearColor = false,
+    String? customColor,
+    bool clearCustomColor = false,
+    ServerIcon? icon,
+    bool clearIcon = false,
+    String? iconEmoji,
+    bool clearIconEmoji = false,
+    String? iconImage,
+    bool clearIconImage = false,
+    String? loginScript,
+    bool clearLoginScript = false,
+    String? startDirectory,
+    bool clearStartDirectory = false,
+    bool? excludeFromSync,
+    int? updatedAt,
+  }) {
+    // A throw rather than an assert, which profile and release builds strip:
+    // the mistake this catches is a record that keeps syncing while the UI
+    // says it does not, and a privacy setting failing silently in the only
+    // build users run is not a trade worth making. `RecordCodec.encrypt`
+    // rejects an impossible kind the same way.
+    if (excludeFromSync != null &&
+        excludeFromSync != this.excludeFromSync &&
+        (updatedAt == null || updatedAt <= this.updatedAt)) {
+      throw ArgumentError.value(
+        updatedAt,
+        'updatedAt',
+        'Changing excludeFromSync needs an updatedAt later than the current '
+            'one: the retraction tombstone is dated from it, and a date that '
+            'ties with the copy already on the sync server loses to it',
+      );
+    }
+    return ServerConfig(
+      id: id,
+      label: label ?? this.label,
+      host: host ?? this.host,
+      port: port ?? this.port,
+      username: username ?? this.username,
+      authMethod: authMethod ?? this.authMethod,
+      secretRef: clearSecretRef ? null : (secretRef ?? this.secretRef),
+      identityFilePath: clearIdentityFilePath
+          ? null
+          : (identityFilePath ?? this.identityFilePath),
+      jumpHostId: clearJumpHostId ? null : (jumpHostId ?? this.jumpHostId),
+      syncSecret: syncSecret ?? this.syncSecret,
+      // Normalized here as well as in fromJson, so the two ways a group name
+      // can be replaced agree. The const constructor cannot do the same, which
+      // is why every caller-facing path — the editor, this — normalizes.
+      group: clearGroup ? null : normalizeServerGroup(group ?? this.group),
+      color: clearColor ? null : (color ?? this.color),
+      // Normalized like the group and the emoji: the const constructor
+      // cannot, so every other way in does.
+      customColor: clearCustomColor
+          ? null
+          : normalizeServerCustomColor(customColor ?? this.customColor),
+      icon: clearIcon ? null : (icon ?? this.icon),
+      // Normalized here as well as in fromJson, for the same reason the group
+      // is: the two ways a value can be replaced have to agree, and a const
+      // constructor cannot normalize.
+      iconEmoji: clearIconEmoji
+          ? null
+          : normalizeServerEmoji(iconEmoji ?? this.iconEmoji),
+      // Only a *new* image is re-validated. What this config already holds is
+      // *assumed* normalized — true for anything from `fromJson` or an earlier
+      // `copyWith`, but the const constructor is a third entry point that
+      // cannot normalize, so this is a convention rather than an invariant.
+      // Re-checking on every edit would decode base64 again for a rename, a
+      // colour or a sync toggle; `toJson` is the re-validating backstop, and
+      // `ServerMark.resolve` validates what is drawn.
+      iconImage: clearIconImage
+          ? null
+          : (iconImage != null
+              ? normalizeServerIconImage(iconImage)
+              : this.iconImage),
+      loginScript: clearLoginScript
+          ? null
+          : normalizeLoginScript(loginScript ?? this.loginScript),
+      startDirectory: clearStartDirectory
+          ? null
+          : normalizeServerStartDirectory(
+              startDirectory ?? this.startDirectory),
+      excludeFromSync: excludeFromSync ?? this.excludeFromSync,
+      createdAt: createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    // Validated once and reused: the image check decodes base64, and this runs
+    // on every save and every sync round.
+    final emoji = normalizeServerEmoji(iconEmoji);
+    final image = normalizeServerIconImage(iconImage);
+    final custom = normalizeServerCustomColor(customColor);
+    final start = normalizeServerStartDirectory(startDirectory);
+    return {
+        'id': id,
+        'label': label,
+        'host': host,
+        'port': port,
+        'username': username,
+        'authMethod': authMethod.name,
+        if (secretRef != null) 'secretRef': secretRef,
+        if (identityFilePath != null) 'identityFilePath': identityFilePath,
+        if (jumpHostId != null) 'jumpHostId': jumpHostId,
+        'syncSecret': syncSecret,
+        if (group != null) 'group': group,
+        if (color != null) 'color': color!.name,
+        if (custom != null) 'customColor': custom,
+        if (icon != null) 'icon': icon!.name,
+        // Written only when they survive validation, so a value this build
+        // refuses to draw is never re-published as though it had been
+        // accepted. `fromJson` applies the same rule on the way in.
+        if (emoji != null) 'iconEmoji': emoji,
+        if (image != null) 'iconImage': image,
+        if (loginScript != null) 'loginScript': loginScript,
+        if (start != null) 'startDirectory': start,
+        // Written unconditionally, like `syncSecret` and unlike the optional
+        // presentation fields above: the two sync-policy booleans are a pair
+        // and should read the same way round, and "no, I want this synced" is
+        // an answer the user gave rather than an attribute left unset.
+        'excludeFromSync': excludeFromSync,
+        'createdAt': createdAt,
+        'updatedAt': updatedAt,
+      };
+  }
+
+  factory ServerConfig.fromJson(Map<String, dynamic> json) => ServerConfig(
+        id: json['id'] as String,
+        label: json['label'] as String,
+        host: json['host'] as String,
+        port: (json['port'] as num?)?.toInt() ?? 22,
+        username: json['username'] as String,
+        authMethod: _authFromName(json['authMethod'] as String? ?? 'agent'),
+        secretRef: json['secretRef'] as String?,
+        identityFilePath: json['identityFilePath'] as String?,
+        jumpHostId: json['jumpHostId'] as String?,
+        syncSecret: json['syncSecret'] as bool? ?? false,
+        // Normalized on the way in as well as on the way out: a group that is
+        // blank or all whitespace is "no group", and letting one through would
+        // put a nameless section in the list on the device that read it.
+        group: normalizeServerGroup(json['group'] as String?),
+        color: _colorFromName(json['color'] as String?),
+        // Type-tested for the same reason the mark fields below are: a
+        // record carrying a number here must cost the colour, not the server.
+        customColor: json['customColor'] is String
+            ? normalizeServerCustomColor(json['customColor'] as String)
+            : null,
+        // Type-tested like the two fields below rather than cast: a record
+        // carrying a number here would otherwise throw out of fromJson and
+        // take the whole server entry with it, which is the degradation the
+        // sibling fields exist to avoid.
+        icon: json['icon'] is String
+            ? serverIconFromName(json['icon'] as String)
+            : null,
+        // A mark from a newer build, or from a device whose idea of an emoji
+        // this one does not share, degrades to the glyph beside it rather
+        // than poisoning the whole record. Tested for type rather than cast:
+        // a record carrying a number or a list here would otherwise throw out
+        // of `fromJson` and take the whole server entry with it, which is
+        // exactly the failure the degradation is meant to rule out.
+        iconEmoji: json['iconEmoji'] is String
+            ? normalizeServerEmoji(json['iconEmoji'] as String)
+            : null,
+        iconImage: json['iconImage'] is String
+            ? normalizeServerIconImage(json['iconImage'] as String)
+            : null,
+        loginScript: normalizeLoginScript(json['loginScript'] as String?),
+        // Type-tested like the mark fields: a malformed folder costs the
+        // folder, not the server.
+        startDirectory: json['startDirectory'] is String
+            ? normalizeServerStartDirectory(json['startDirectory'] as String)
+            : null,
+        excludeFromSync: json['excludeFromSync'] as bool? ?? false,
+        createdAt: (json['createdAt'] as num?)?.toInt() ?? 0,
+        updatedAt: (json['updatedAt'] as num?)?.toInt() ?? 0,
+      );
+}
+
+/// The stored form of a group name: trimmed, with blank meaning "no group".
+///
+/// Interior whitespace is left alone — `web servers` is a name someone meant to
+/// type — but the edges are not, so `prod ` and `prod` are never two groups.
+String? normalizeServerGroup(String? group) {
+  if (group == null) return null;
+  final trimmed = group.trim();
+  return trimmed.isEmpty ? null : trimmed;
+}
+
+/// The stored form of a custom colour: `#RRGGBB`, upper-case, or null when
+/// [value] is not exactly six hex digits with or without the `#`.
+///
+/// No alpha and no short form. What is drawn from this — the line down a row,
+/// the fill of a swatch — is opaque, and `#RGB` would double the number of
+/// spellings every device has to agree on for the sake of a form nobody
+/// stores. Whitespace at the edges is
+/// forgiven, like a group name's; anything else is the caller's mistake and
+/// reads as "no custom colour" rather than as some other colour.
+String? normalizeServerCustomColor(String? value) {
+  if (value == null) return null;
+  var hex = value.trim();
+  if (hex.startsWith('#')) hex = hex.substring(1);
+  if (!_sixHexDigits.hasMatch(hex)) return null;
+  return '#${hex.toUpperCase()}';
+}
+
+final RegExp _sixHexDigits = RegExp(r'^[0-9a-fA-F]{6}$');
+
+/// The stored form of a login script: CR family line endings canonicalized to
+/// LF and outer edges trimmed (so an editor's trailing newline doesn't survive
+/// as a stray Enter keystroke), with blank meaning "none". Interior newlines
+/// are the point of a multi-line script and are kept verbatim — after
+/// canonicalization, because a `\r` inside a line reaches a PTY's line
+/// discipline as an Enter of its own, turning one stored line into two.
+String? normalizeLoginScript(String? script) {
+  if (script == null) return null;
+  final trimmed = script
+      .replaceAll('\r\n', '\n')
+      .replaceAll('\r', '\n')
+      .trim();
+  return trimmed.isEmpty ? null : trimmed;
+}
+
+/// The stored form of a start directory: trimmed, with blank meaning "the
+/// home folder", or null when [value] cannot name a folder.
+///
+/// Refused: control characters, which no path typed into the editor carries
+/// and which would reach the SFTP server verbatim, and `~name`, which names
+/// another user's home that SFTP has no way to look up. Everything else is a
+/// path some server may hold, so it is kept rather than second-guessed: a
+/// folder that does not exist fails when it is opened, where it can be fixed.
+String? normalizeServerStartDirectory(String? value) {
+  if (value == null) return null;
+  final trimmed = value.trim();
+  if (trimmed.isEmpty) return null;
+  if (trimmed.codeUnits.any(_isControlCharacter)) return null;
+  if (trimmed.startsWith('~') && trimmed != '~' && !trimmed.startsWith('~/')) {
+    return null;
+  }
+  return trimmed;
+}
+
+const _firstPrintableCodeUnit = 0x20;
+const _deleteCodeUnit = 0x7f;
+
+bool _isControlCharacter(int codeUnit) =>
+    codeUnit < _firstPrintableCodeUnit || codeUnit == _deleteCodeUnit;
+
+/// The key two group names are considered the same under: case-insensitive, so
+/// `Prod` and `prod` are one group rather than two adjacent near-identical
+/// sections. The displayed spelling is whichever member is listed first.
+String serverGroupKey(String group) => group.toLowerCase();
+
+/// The distinct group names in [servers], sorted, for offering existing groups
+/// in the editor instead of making the user retype (and misspell) one.
+List<String> existingServerGroups(List<ServerConfig> servers) {
+  final names = <String, String>{};
+  for (final server in servers) {
+    final group = normalizeServerGroup(server.group);
+    if (group != null) names.putIfAbsent(serverGroupKey(group), () => group);
+  }
+  final keys = names.keys.toList()..sort();
+  return [for (final key in keys) names[key]!];
+}
+
+/// The searchable text of one server: label, user, host, port, and group.
+///
+/// The group is in here so that typing a section's name narrows the list to
+/// that section — the filter and the grouping answer the same question from
+/// two directions, and a `prod` that matched the header but not the rows would
+/// be a strange thing to explain.
+String serverSearchHaystack(ServerConfig server) =>
+    '${server.label} ${server.username}@${server.host}:${server.port} '
+            '${server.group ?? ''}'
+        .toLowerCase();

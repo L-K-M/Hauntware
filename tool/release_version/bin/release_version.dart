@@ -1,4 +1,4 @@
-// This executable and its library stay outside the shipped application.
+// This executable and its library stay outside the shipped applications.
 // ignore_for_file: avoid_relative_lib_imports
 
 import 'dart:io';

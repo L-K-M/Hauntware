@@ -1,0 +1,393 @@
+import 'dart:developer' as developer;
+import 'dart:typed_data';
+
+import 'package:seance_protocol/seance_protocol.dart';
+
+import '../hostkey/tofu.dart';
+
+const int _warningLogLevel = 900;
+const String _vaultLoggerName = 'seance.vault';
+
+/// Persists non-secret server configuration. Backed by SQLite in the app.
+abstract class ConfigStore {
+  Future<List<ServerConfig>> listServers();
+  Future<ServerConfig?> getServer(String id);
+  Future<void> putServer(ServerConfig config);
+  Future<void> deleteServer(String id);
+}
+
+/// Persists reusable command snippets (non-secret). Synced across devices.
+abstract class SnippetStore {
+  Future<List<Snippet>> listSnippets();
+  Future<Snippet?> getSnippet(String id);
+  Future<void> putSnippet(Snippet snippet);
+  Future<void> deleteSnippet(String id);
+}
+
+/// Durable list of deletion tombstones awaiting propagation to the sync server.
+///
+/// [SyncCoordinator] rebuilds its record mirror from a full pull each round, so
+/// a deleted domain object leaves nothing for the next round to notice — its
+/// still-live record simply returns from the server and is re-adopted, which is
+/// the "deleted servers reappear" bug. An entry recorded here (an
+/// [EncryptedRecord] with `deleted: true` and an empty blob) is republished as a
+/// dirty record each round so the delete is pushed and last-write-wins carries
+/// it to every device, then dropped once the server holds it. Keyed by record
+/// id.
+///
+/// [add] is monotonic: re-adding an id keeps whichever tombstone has the higher
+/// `updatedAt`, so a retry or double-delete that recomputes an older stamp
+/// (the doomed row is already gone, so its date can no longer be read) cannot
+/// regress a pending skew-beating tombstone into one the live record outranks.
+abstract class TombstoneStore {
+  Future<List<EncryptedRecord>> all();
+  Future<void> add(EncryptedRecord tombstone);
+  Future<void> remove(String id);
+}
+
+/// Holds the assistant's configuration as a single synced value.
+///
+/// Read/write rather than list/delete: there is exactly one of these, and the
+/// app keeps it inside its own settings file rather than in a store of its
+/// own. The interface exists so [SyncCoordinator] can reach it without knowing
+/// that, and so the sync path is testable without an app.
+///
+/// [getAssistantSettings] returns null only while this device has nothing to
+/// publish — which is what keeps two freshly-installed devices from pushing
+/// rival defaults at each other before either has configured anything. It is
+/// not how a configuration is withdrawn: clearing one is an edit like any
+/// other, so it still returns a record, with the fields the user cleared
+/// cleared and a fresh `updatedAt`. Returning null for that would read as
+/// "nothing to publish", and the next pull would re-apply the configuration
+/// this device just removed.
+///
+/// The provider name is not one of the fields a clear can empty — it is
+/// written from an enum, which always has a value — and the apply path in
+/// `SyncCoordinator` relies on that: a record with an empty one is a payload
+/// this build could not read, not a configuration, and is skipped rather than
+/// adopted over a working assistant.
+///
+/// What it returns is the *publishable* value: any keystore references it
+/// holds are resolved to key material first, because it is this value's
+/// `toJson()` that is sealed and pushed. An implementation that returned the
+/// references alone would sync a configuration that looks set up everywhere
+/// and answers nowhere.
+abstract class AssistantSettingsStore {
+  /// The publishable configuration, or null when there is nothing to publish.
+  ///
+  /// Null is reserved for "this device has never configured one" and for
+  /// "the key material cannot be vouched for right now" — the coordinator
+  /// treats both as a round to sit out, and the second is why a locked
+  /// keyring must not publish a keyless copy over a keyed one.
+  Future<AssistantSettings?> getAssistantSettings();
+
+  /// When this device's stored configuration was last edited — and nothing
+  /// else.
+  ///
+  /// Separate from [getAssistantSettings] because that one resolves key
+  /// references into key material, which means reaching into the OS keystore
+  /// and holding secrets in memory. The apply path needs only a timestamp, to
+  /// avoid writing a pulled record over a local edit newer than anything the
+  /// synced mirror has seen yet, and paying for key material to read a number
+  /// would put secrets on a path that has no use for them.
+  ///
+  /// Zero while this device holds nothing — no local edit and nothing adopted
+  /// from sync, since an adopted record keeps its own stamp — matching the
+  /// stamp [getAssistantSettings] treats as "nothing to publish".
+  Future<int> assistantSettingsUpdatedAt();
+
+  /// Store a configuration: a local edit, or a record adopted from sync.
+  ///
+  /// Two contracts an implementer cannot infer from the signature. The record
+  /// is stored *as given*, `updatedAt` included — dating it belongs to the
+  /// caller, and re-stamping a pulled record here would corrupt the
+  /// comparison the whole adopt/publish path is ordered by. And a record that
+  /// arrived over the wire carries key *material* inline, which has to be
+  /// moved into the OS keystore with only references kept: keys travel inside
+  /// the sealed record and must not land in the file the settings persist to.
+  ///
+  /// An absent key means "look locally", never "forget the entry you have":
+  /// a configuration that stops naming a key is not an instruction to delete
+  /// it, and another configuration this record does not describe may still
+  /// use it.
+  ///
+  /// Third contract, for the keystore write failing — a locked keyring, say.
+  /// Keep the configuration and its stamp and retry the key on a later round:
+  /// the record is delivered again every round, and throwing here would only
+  /// abandon the rest of the round's records. What an implementation must not
+  /// then do is publish the configuration back without that key, because the
+  /// stamp it kept ties with the keyed record it came from and a tie is broken
+  /// by device id — so the keyless copy can evict the keyed one. Remembering
+  /// which names were dropped, durably enough to survive a restart, is what
+  /// makes that distinguishable from a key that was simply never stored.
+  Future<void> putAssistantSettings(AssistantSettings settings);
+}
+
+/// Persists opaque, already-encrypted secret blobs keyed by secret id. It never
+/// sees plaintext — [SecretVault] seals before storing and opens after reading.
+///
+/// Ids in the reserved namespace ([isReservedVaultId], `recovery:`) hold the
+/// app's own entries, not credentials, and do not parse as a [Secret]: code
+/// that walks every entry ([allSecretBlobs]) must skip them.
+abstract class VaultStore {
+  Future<void> putSecretBlob(String id, Uint8List blob);
+
+  /// Store every entry of [blobs] in one durable step, or none of them.
+  ///
+  /// Re-keying seals each referenced credential under a new key, and a
+  /// per-entry loop over [putSecretBlob] is not equivalent: an implementation
+  /// that persists the whole vault per call (the JSON-file one does) leaves it
+  /// holding a mix of two keys when a write partway through fails, and the key
+  /// the later entries were sealed with is one no caller has installed yet.
+  /// Implementations must leave the stored state untouched when this throws.
+  ///
+  /// Entries not named in [blobs] are left alone rather than dropped: a vault
+  /// may hold a credential no current config references, and a batch write is
+  /// not the place to decide such an entry is garbage. Left alone is not the
+  /// same as left working, and re-keying inherits the difference: an entry no
+  /// batch names keeps the retired key and stops opening once the keystore
+  /// holds the new one. That predates batching — the loop this replaced
+  /// re-sealed exactly the same referenced set — and re-sealing every stored
+  /// id instead needs a decision this interface should not make, about an
+  /// orphan that no longer decrypts at all. Dropping them here would only
+  /// turn an unreadable credential into a deleted one.
+  Future<void> putSecretBlobs(Map<String, Uint8List> blobs);
+
+  Future<Uint8List?> getSecretBlob(String id);
+  Future<void> deleteSecret(String id);
+
+  /// Every stored entry, by id, as one consistent snapshot — what an export
+  /// of the vault carries. Reserved ids included; see the class doc.
+  Future<Map<String, Uint8List>> allSecretBlobs();
+}
+
+/// The application-facing secret store. Wraps a [VaultStore] with the vault key
+/// so callers work in terms of [Secret]s while only encrypted blobs are
+/// persisted.
+///
+/// The app's own entries ([isReservedVaultId]) are not credentials, whatever
+/// id a config or a record names: a read of one finds nothing, and a write or
+/// delete is refused, so no credential path can replace or remove them.
+class SecretVault {
+  final VaultStore store;
+  final List<int> vaultKey;
+
+  const SecretVault(this.store, this.vaultKey);
+
+  /// Store an imported or re-encrypted credential without changing its version.
+  Future<void> putSecret(Secret secret) async {
+    _refuseReserved(secret.id);
+    final blob = await VaultCrypto.sealJson(vaultKey, secret.toJson());
+    await store.putSecretBlob(secret.id, blob);
+  }
+
+  /// Seal [secrets] under this vault's key and store them in one step.
+  ///
+  /// Sealing happens before anything is written, so a failure to seal cannot
+  /// leave a partial batch behind either. See [VaultStore.putSecretBlobs] for
+  /// why re-keying needs this rather than a loop over [putSecret].
+  Future<void> putSecrets(Iterable<Secret> secrets) async {
+    final blobs = <String, Uint8List>{};
+    for (final secret in secrets) {
+      _refuseReserved(secret.id);
+      blobs[secret.id] = await VaultCrypto.sealJson(vaultKey, secret.toJson());
+    }
+    await store.putSecretBlobs(blobs);
+  }
+
+  /// Save locally edited material with its own monotonic version. Re-saving
+  /// unchanged material preserves its stamp even when its server was edited.
+  /// [updatedAt] is the caller's edit time; a clock behind an adopted secret
+  /// still advances past that secret. Callers must serialize edits with sync.
+  Future<void> putLocalSecret(Secret secret, {required int updatedAt}) async {
+    _refuseReserved(secret.id);
+    if (updatedAt <= 0) {
+      throw ArgumentError.value(updatedAt, 'updatedAt', 'must be positive');
+    }
+    final existing = await getSecret(secret.id);
+    if (existing != null &&
+        existing.kind == secret.kind &&
+        existing.value == secret.value &&
+        existing.keyPassphrase == secret.keyPassphrase) {
+      return;
+    }
+    final stamp = existing != null && existing.updatedAt >= updatedAt
+        ? existing.updatedAt + 1
+        : updatedAt;
+    await putSecret(secret.copyWith(updatedAt: stamp));
+  }
+
+  Future<Secret?> getSecret(String id) async {
+    if (isReservedVaultId(id)) return null;
+    final blob = await store.getSecretBlob(id);
+    if (blob == null) return null;
+    final json = await VaultCrypto.openJson(vaultKey, blob);
+    return Secret.fromJson(json);
+  }
+
+  /// [getSecret], except that an entry which is present but cannot be opened
+  /// reads as absent instead of throwing.
+  ///
+  /// For callers whose next move on "nothing here" is to write the entry, so a
+  /// damaged one is repaired rather than made permanent. [getSecret] is still
+  /// the right call for anyone who would *use* the credential: silently
+  /// reporting none is only safe when the answer leads to a write.
+  ///
+  /// Only the opening is forgiven, and the store read is deliberately outside
+  /// the guard. "This entry is damaged" and "I could not look" are different
+  /// answers, and collapsing the second into "nothing there" is how a
+  /// transient read failure turns into an overwrite of material that was never
+  /// unreadable — with the vault the only copy, that is worse than the
+  /// stranding this exists to prevent.
+  ///
+  /// What the guard can forgive is bounded by what is inside it: opening a
+  /// blob already in hand, which fails only for a MAC that will not verify or
+  /// a payload that will not parse. [vaultKey] is non-nullable, so there is no
+  /// "no key yet" state for it to mistake for damage. A subclass that has no
+  /// key — the app's locked vault — must override this rather than rely on
+  /// that, because it answers "I could not look" and this method has no way to
+  /// tell that from an entry nobody can open.
+  Future<Secret?> readableSecret(String id) async {
+    if (isReservedVaultId(id)) return null;
+    final blob = await store.getSecretBlob(id);
+    if (blob == null) return null;
+    try {
+      return Secret.fromJson(await VaultCrypto.openJson(vaultKey, blob));
+    } on Exception catch (error, stackTrace) {
+      // The one place that knows an entry is damaged, and damage rarely stops
+      // at one: whatever the caller does next, a reader chasing "why is this
+      // credential different now" should not have to infer this from silence.
+      developer.log(
+        'Vault entry $id could not be opened and reads as absent',
+        name: _vaultLoggerName,
+        level: _warningLogLevel,
+        error: error,
+        // Which caller hit it, which is the part that is not fixed: the same
+        // damaged entry reads very differently from a publish than from the
+        // apply pass that is about to repair it.
+        stackTrace: stackTrace,
+      );
+      return null;
+    }
+  }
+
+  Future<void> deleteSecret(String id) async {
+    _refuseReserved(id);
+    await store.deleteSecret(id);
+  }
+
+  static void _refuseReserved(String id) {
+    if (isReservedVaultId(id)) {
+      throw ArgumentError.value(id, 'id', 'is the app\'s own vault entry');
+    }
+  }
+}
+
+class InMemoryConfigStore implements ConfigStore {
+  final Map<String, ServerConfig> _servers = {};
+
+  @override
+  Future<List<ServerConfig>> listServers() async {
+    final list = _servers.values.toList()
+      ..sort((a, b) => a.label.toLowerCase().compareTo(b.label.toLowerCase()));
+    return list;
+  }
+
+  @override
+  Future<ServerConfig?> getServer(String id) async => _servers[id];
+
+  @override
+  Future<void> putServer(ServerConfig config) async =>
+      _servers[config.id] = config;
+
+  @override
+  Future<void> deleteServer(String id) async => _servers.remove(id);
+}
+
+class InMemoryAssistantSettingsStore implements AssistantSettingsStore {
+  AssistantSettings? settings;
+
+  InMemoryAssistantSettingsStore([this.settings]);
+
+  @override
+  Future<AssistantSettings?> getAssistantSettings() async => settings;
+
+  @override
+  Future<int> assistantSettingsUpdatedAt() async => settings?.updatedAt ?? 0;
+
+  @override
+  Future<void> putAssistantSettings(AssistantSettings value) async =>
+      settings = value;
+}
+
+class InMemorySnippetStore implements SnippetStore {
+  final Map<String, Snippet> _snippets = {};
+
+  @override
+  Future<List<Snippet>> listSnippets() async {
+    final list = _snippets.values.toList()
+      ..sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
+    return list;
+  }
+
+  @override
+  Future<Snippet?> getSnippet(String id) async => _snippets[id];
+
+  @override
+  Future<void> putSnippet(Snippet snippet) async =>
+      _snippets[snippet.id] = snippet;
+
+  @override
+  Future<void> deleteSnippet(String id) async => _snippets.remove(id);
+}
+
+class InMemoryVaultStore implements VaultStore {
+  final Map<String, Uint8List> _blobs = {};
+
+  @override
+  Future<Uint8List?> getSecretBlob(String id) async => _blobs[id];
+
+  @override
+  Future<void> putSecretBlob(String id, Uint8List blob) async =>
+      _blobs[id] = blob;
+
+  @override
+  Future<void> putSecretBlobs(Map<String, Uint8List> blobs) async =>
+      _blobs.addAll(blobs);
+
+  @override
+  Future<void> deleteSecret(String id) async => _blobs.remove(id);
+
+  @override
+  Future<Map<String, Uint8List>> allSecretBlobs() async => Map.of(_blobs);
+}
+
+class InMemoryHostKeyStore implements HostKeyStore {
+  final Map<String, HostKey> _keys = {};
+
+  @override
+  Future<List<HostKey>> all() async => _keys.values.toList();
+
+  @override
+  Future<HostKey?> get(String host, int port) async => _keys['$host:$port'];
+
+  @override
+  Future<void> put(HostKey key) async => _keys[key.locator] = key;
+}
+
+class InMemoryTombstoneStore implements TombstoneStore {
+  final Map<String, EncryptedRecord> _tombstones = {};
+
+  @override
+  Future<List<EncryptedRecord>> all() async => _tombstones.values.toList();
+
+  @override
+  Future<void> add(EncryptedRecord tombstone) async {
+    final existing = _tombstones[tombstone.id];
+    if (existing != null && existing.updatedAt > tombstone.updatedAt) return;
+    _tombstones[tombstone.id] = tombstone;
+  }
+
+  @override
+  Future<void> remove(String id) async => _tombstones.remove(id);
+}

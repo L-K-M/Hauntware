@@ -1,0 +1,1993 @@
+# Séance ports and pin audits
+
+## Hauntware local-source integration (2026-10-04)
+
+Live shared packages now resolve by local path from the reviewed source
+mains recorded in `../../docs/history/README.md`. No implementation is
+copied. Versions follow the suite; historical measurements and the
+standalone pin/copy records below retain their original meaning.
+
+The current deterministic audit binds the committed `seance/` tree and
+imported lineage. Dirty, shallow, outside-component and gitlink sources
+remain refused. The live legacy benchmark entrypoint forwards to the
+current harness; only historical evidence stays frozen.
+
+## Current-core compatibility audit (2026-10-03)
+
+Both live declarations, all four lockfiles and the benchmark identity move
+from `4c0a960289c919379d016507fa7ebae6b14b2e7c` to
+`76e466fbcbfe5dc90b4fa399e5dfac990b23c30d` (Séance main, #171).
+No release tag contains this revision; D2's revision bridge continues.
+
+- SSH authentication, agent, ProxyJump, TOFU, stores, vault crypto and
+  record-codec implementations are unchanged. Package manifests and
+  `dartssh2` 3.0.2 are unchanged; no data migration is required.
+- Uploads refuse non-regular replacement targets, mask permission bits,
+  and restrict the open temporary file before streaming protected content.
+  Poltergeist's SFTP fake now implements handle `setStat`; contracts cover
+  early permission refusal, intact originals, streaming mode and symlinks.
+  The three old fake-backed failures were observed before updating it.
+- Inbox kinds and HTTP methods are additive. Poltergeist skips inbox ids
+  before decryption; both new kinds survive backup and reopen byte-identical.
+  Its coordinator remains separate from Séance's oversized-record handling.
+- Shell quoting and redaction fixes introduce no consumed API break.
+
+Local proof: 797 upstream core/protocol tests, 2,177 Poltergeist core/sync
+tests, 86 benchmark tests, 3,212 app tests and three real HTTP convergence
+tests pass; analysis is clean. Environment-gated skips: 6 upstream, 32
+core/sync and one benchmark. Docker SSH fixtures remain CI-gated.
+Frozen M0 evidence validates at its original measured revisions. Rollback
+is a revert of this pin-update commit; existing vault/store encodings stand.
+
+The regenerated ancestor/tree audit retains the Unlicense and vendored
+xterm MIT notices, with no gitlinks. Its two orphan attribution lines are
+OpenCode automation metadata, not additional human contributors.
+
+## Shared Ghost UI ownership (2026-10-02)
+
+The sidebar kit, family hues, contrast/brightness helpers, ellipsis, top
+notices and file-list presentation now belong to Planchette's `ghost_ui`
+package. Historical copy entries below remain provenance records; active
+implementations are Git-pinned, with compatibility exports at old paths.
+Host adapters retain ARB strings, resolved chrome, controllers, operations
+and drag payloads. Both apps use the same desktop/touch file-row widgets.
+The in-place tab view, `SelectedTabView`, followed on 2026-10-04. The
+server badges, accents and glyph tables followed on 2026-10-08 in their
+own package, `ghost_marks`, which also depends on `seance_protocol`.
+
+## Cross-app deep links (2026-10-02)
+
+Original Poltergeist implementation; no Séance source was copied and no
+Séance pin changed. `poltergeist://browse` accepts only an exact catalog
+id/path form or host/port/username/path form. Catalog misses stop; host forms
+always show the endpoint review before any connection or credential prompt.
+Queue ownership follows the active workspace, coalesces exact endpoints,
+serializes distinct endpoints, and limits bulk discard to the endpoint list
+the user reviewed. Native runners register and forward the scheme; the
+sidebar exposes `seance://connect` only when the OS reports a handler.
+
+Port-back candidate: the reciprocal Séance handler and “Browse Files in
+Poltergeist” command are proposed in
+[Séance #168](https://github.com/L-K-M/Seance/issues/168). That proposal must
+retain §7.1's safety contract: every embedded-host link gets an interstitial,
+and a missing `serverId` is a dead end with no host or connection fallback.
+
+## Sync-pair side-by-side compare (2026-10-02)
+
+Original Poltergeist composition over its existing shared Planchette editor
+and preview-production APIs. No Séance source was copied and no Séance pin
+changed. The Poltergeist compatibility adapter maps Planchette's stable load
+errors to typed failure kinds so the compare view selects ARB copy. Document
+I/O behavior is unchanged. Séance has no sync-plan surface to receive this
+behavior.
+
+Port-back candidates: Planchette could expose typed load failures directly;
+Séance has no sync-pair compare behavior to port.
+
+## D22 third-party bookmark importers (2026-10-01)
+
+Original Poltergeist implementation; no Séance source was copied and no
+Séance pin changed. FileZilla, WinSCP, and Cyberduck parsing remains in
+`poltergeist_core`; the app adds bounded file streaming, cancellable isolate
+ownership, and the shared preview used by the existing ssh_config importer.
+The only shared local change is one dedupe helper for both Poltergeist import
+paths.
+
+Séance has no corresponding third-party bookmark-import surface.
+Port-back candidates: none.
+
+## Local ZIP archives (2026-09-30)
+
+Original Poltergeist implementation; no Séance source was copied and no
+Séance pin changed. The core owns a retained, cancellable archive worker,
+bounded ZIP preflight and decoding, hidden sibling staging, and Keep Both
+commit. The app projects those jobs into Activity without adding archive
+operations to the shared transfer protocol. `package:archive` is pinned
+exactly at 4.3.0 because the driver audits and uses its low-level ZIP framing
+and streaming APIs.
+
+Séance has no archive feature to receive. Its reusable local relative-path
+validator remains a possible shared safety port recorded below.
+
+## PR-S4 exact-revision bridge and full re-diff (2026-09-29)
+
+The D10 consumption moves every live Séance declaration, lockfile and the
+benchmark identity from `v0.9.1` (`035b0d8`) to the exact Séance PR-S4 merge
+`4c0a960289c919379d016507fa7ebae6b14b2e7c`
+([Séance #131](https://github.com/L-K-M/Seance/pull/131)). The published
+`v0.9.2` tag (`6e59f99`) is an ancestor, but no tag contains PR-S4, so this is
+the temporary commit-revision bridge D2 permits. STATUS owns the next-tag
+re-pin. `dartssh2` remains exactly 3.0.2.
+
+Every recorded source was re-diffed at that revision. Dispositions for the
+changed source set are:
+
+- PR-S4's agent and ProxyJump implementation stays in the pinned packages.
+  Poltergeist consumes the high-level APIs rather than copying the SSH agent,
+  channel forwarding or transport mechanics. The keyboard-interactive,
+  editor/backend and test adaptations are recorded in their entries below.
+- `server_grouping` and its test take the filtered-live-section repair at
+  `8326f41`; `server_mark_picker` takes the in-place tab switch at `d811309`,
+  with its test re-diffed from `66411c1`; and the resulting
+  `SelectedTabView` pair is recorded below.
+- `remote_files_controller` and its test remain superseded by the
+  `CheckoutManager` rails recorded in their entries. Later
+  `server_appearance` changes affect the omitted `ServerAvatar`/session ring.
+  `terminal_pane` and `server_list_pane` changes are terminal/list chrome not
+  ported here. `server_color_picker` and the theme sources match the D38
+  dispositions below. The CSS/Ruby/Perl/Lua and Perl `$#` syntax fixes are
+  already present in the local editor syntax port.
+- The shared sidebar kit's production file re-diffs at `8ab3f77` with only
+  the documented provenance, theme import and `_chrome()` adapter different.
+  Its test re-diffs at `3a9fd8c` with those theme/import changes plus
+  Poltergeist's touch-affordance and `SidebarKitLayout.list` cases. Those
+  cases remain a port-back candidate.
+  (Superseded 2026-10-04: the kit test lives only in `ghost_ui`, which
+  carries those cases; both app copies are removed.)
+- Séance #126's Settings runners are contained by merge `86455d7`. The
+  exact-pin re-diff confirms the Open-failure and negative-monitor review
+  fixes already match locally; only the recorded product names, channels,
+  entrypoint, controller and Linux background differ. The Séance #128 theme
+  set is unchanged after merge `8f15eeb`; the existing D38 divergences stand.
+- Séance has adopted the hardened editor document I/O, including BOM,
+  dominant line-ending, conflict-digest and permission behavior. Both apps
+  normalize mixed endings to the dominant family; the earlier claim that
+  Poltergeist reconstructed each mixed ending was false, and that candidate
+  is closed. Séance's later line-number gutter and richer status row are
+  deliberately deferred as unrelated UI work (STATUS open item 36).
+  Both now come from the shared editor; the status row since 2026-10-06
+  (STATUS item 36, closed).
+
+The refreshed history adds only repository-owner and automation identities.
+The license scan still finds Séance's Unlicense and the recorded xterm.dart
+MIT fork; there are no gitlinks.
+
+## Shared Planchette editor (2026-09-27)
+
+The owner approved replacing the copied editor implementation with the
+`planchette_core` and `planchette_editor` packages from
+[Planchette](https://github.com/L-K-M/Planchette). Their initial extraction
+uses Poltergeist `c43b5411` and Séance `6a1a3301`.
+
+Syntax and dotenv scanning, search, guarded document I/O, editing state,
+find/replace, gutter, and status are now shared package responsibilities.
+The old editor entries below are historical provenance, superseded by this
+package boundary. Package revisions are pinned in the dependency manifests
+and lockfiles; both applications adopt the same reviewed package revision.
+
+Poltergeist retains localized strings and theme injection, native editor
+windows and menus, checkout caps and recovery, uploads/conflict dialogs, and
+its `.poltergeist-*` temporary-file prefix. `built_in_text_document.dart`
+keeps compatibility names and the checkout byte sink but delegates document
+mechanics. User-local links resolve once before the regular-file loader;
+managed copies retain rejection. No SSH dependency enters Planchette.
+
+Pin audit (2026-09-29): both packages move from `5b75f9dc` to
+`ff4873947c93ac4e259338b7f80dac93947259e6` (Planchette main, merge of its
+#104), in both pubspecs and both lockfiles. Séance moves to the same
+revision in its own PR, so the two hosts stay on one reviewed revision.
+
+Pin audit (2026-10-02): both packages move from `ff487394` to
+`53153c8e0829f6c131de2d8beb219d16f70c0914` (Planchette main, merges of its
+#119–#124: the Unicode/JSON, Edit/File, browser, search-extras,
+wrap-columns, and compare/mnemonics text-tools slices), in both pubspecs
+and both lockfiles. Séance adopts the same reviewed revision in its own
+PR. The editor package surface gains the text-tools catalog browser,
+options bar, post-run notice, and find-bar extras; every string those
+surfaces render in Poltergeist comes from the app's ARB catalog through
+`PoltergeistEditorStrings`, per the English-only host policy — the
+adapter's id-keyed switches and list joiners are the only new technical
+literals, inventoried in the localization contract. The controller keeps
+its default `TextNormalization.normalize`, matching
+`loadBuiltInTextDocumentDetails` and `saveBuiltInTextDocument`.
+
+Retired (2026-10-04): the text-only `loadBuiltInTextDocument`
+compatibility wrapper had no caller outside core's own test; app code
+loads through `loadBuiltInTextDocumentDetails`. The ported
+`built_in_text_document_test.dart` now calls that function where
+upstream's `built_in_text_editor_test.dart` calls the wrapper.
+
+## Destination collision ownership (2026-09-27)
+
+Original Poltergeist implementation; no Séance source was copied and no pin
+changed. Séance `main` at `2571118` has a one-shot download planner that
+refuses duplicate planned local paths on Windows. It has no persistent
+transfer queue, retry journal, Keep Both policy, or destructive move path, so
+D40's task-lifetime ownership and crash-recovery rules have no direct upstream
+surface. The filesystem-trait probe is part of that ownership contract rather
+than a behavior-preserving port to Séance's downloader.
+
+Port-back candidates: none.
+
+## M2 probe lifecycle prerequisite (2026-09-08)
+
+The periodic `ProbeService` repair merged in
+[Séance #79](https://github.com/L-K-M/Seance/pull/79) (D2).
+No source copy or local scheduler is introduced. STATUS item 3 records the
+required containing pin before wiring and optional upstream test follow-ups.
+The containing pin (`2e6d1f1`, 2026-09-08) is now in place — see the pin
+findings below. Engine-side consumption landed on 2026-09-09: the pinned
+service owns scheduling and sockets; Poltergeist adds target grouping,
+activity control, and port events. No source copy or pin change. The
+remainder landed 2026-09-10: persisted eligibility/settings, lifecycle
+forwarding, the interim list dots, and the coordinator composition in
+[PR #62](https://github.com/L-K-M/Poltergeist/pull/62), then the live
+connection-state composition (the Connections surface and the composed
+indicator) in [PR #67](https://github.com/L-K-M/Poltergeist/pull/67).
+The startup composition rode item 6's engine spawn: its incident/pin
+bridging landed in
+[PR #66](https://github.com/L-K-M/Poltergeist/pull/66) (task 6, merge
+`d853aa8`), and the composition itself landed in
+[PR #69](https://github.com/L-K-M/Poltergeist/pull/69) (merge `43396c5`,
+2026-09-10): the production engine spawns at app startup seeded from both
+stores.
+
+The app-side eligibility controller (2026-09-09) consumes the engine's
+`ProbeBridge`; scheduling and sockets remain in the pinned service. Its
+device-local policy and isolate orchestration are new Poltergeist code,
+with no copied source or upstream port candidate. Persistence, lifecycle
+forwarding, and the rendered status composition landed 2026-09-10 in
+[PR #62](https://github.com/L-K-M/Poltergeist/pull/62); the composed
+indicator landed in
+[PR #67](https://github.com/L-K-M/Poltergeist/pull/67).
+
+## M2 real-sshd pool and TOFU coverage (2026-09-08)
+
+Exercises the existing pinned opener, VFS, and TCP prober through Poltergeist's
+pool. TOFU tests also exercise first-use decisions and same-port key swaps
+through the pinned verifier. No copied sources, pin changes, or upstream
+port candidates.
+
+## app/poltergeist_app/lib/services/atomic_file.dart
+
+- Source: app/seance_app/lib/services/atomic_file.dart
+- Séance commit: e11206a94b5672225432fcd9990750a2ab1002c2 (tag v0.3.0); re-diffed unchanged at a9add158015fc15d805cecd2754ac40bc7860a23 (2026-09-07); source moved at 2e6d1f138f1704e683870f75e11262bf50e37379 with Séance #80's optional `privacy` parameter (2026-09-08) — see divergences
+- Ported: 2026-09-02
+- Divergences: unique `.poltergeist-<uuid>.tmp` siblings prevent collisions
+  and basename overflow; failed writes remove their temporary sibling without
+  masking the original failure; optional owner-only writes restrict an empty
+  temporary before sensitive content; the source's delete-target Windows
+  fallback is omitted per 09 §3.6; corrupt quarantine is store-owned,
+  UTC-stamped, and reports move failures. Séance #80's re-diff at the new
+  pin: the source gained `AtomicFilePrivacy` (create-empty-then-restrict via
+  the new `file_permissions.dart`) while keeping its fixed `.tmp` name and
+  no failure cleanup — the recorded divergences stand unchanged; no port
+  edit is required.
+- Port-back candidates: unique bounded temp names, best-effort cleanup,
+  and timestamped quarantine. Owner-only writes landed upstream in
+  [Séance #80](https://github.com/L-K-M/Seance/pull/80) as an optional
+  `privacy` parameter whose default preserves ordinary callers; upstream
+  keeps its fixed `.tmp` name and no failure cleanup.
+
+## app/poltergeist_app/test/atomic_file_test.dart
+
+- Source: app/seance_app/test/atomic_file_test.dart
+- Séance commit: e11206a94b5672225432fcd9990750a2ab1002c2 (tag v0.3.0); re-diffed unchanged at a9add158015fc15d805cecd2754ac40bc7860a23 (2026-09-07) and at 2e6d1f138f1704e683870f75e11262bf50e37379 (2026-09-08)
+- Ported: 2026-09-02
+- Divergences: uses the Poltergeist temp-file contract, adds failed-rename
+  cleanup, and maps source store round-trip/quarantine cases to
+  `settings_store_test.dart`.
+- Port-back candidates: none.
+
+## Connection cleanup dependency
+
+- Consumes `packages/seance_core/lib/src/ssh/sequential_cleanup.dart` at the
+  then-current `2f99f4e` pin; no source copy or pin change (2026-09-05).
+- 2026-09-10 re-diff sweep: the pin moved to `a9add15`
+  ([PR #35](https://github.com/L-K-M/Poltergeist/pull/35)) and then
+  `2e6d1f1` ([PR #53](https://github.com/L-K-M/Poltergeist/pull/53)); the
+  consumed file is byte-identical between `2f99f4e` and `2e6d1f1`, so the
+  consumption note stands unchanged at the current pin.
+- `ssh_cleanup.dart` selects the session's five-second grace period and
+  best-effort failure mode. Pool regressions cover stalled and late-error
+  cleanup. No port-back change: Séance already uses this primitive.
+
+## app/poltergeist_app/lib/services/secure_master_key.dart
+
+- Source: app/seance_app/lib/services/secure_master_key.dart
+- Séance commit: 30963c0c31f55e649b4b29487cf4c07b706b3056 (re-diffed unchanged at a9add15, 2026-09-07)
+- Ported: 2026-09-07
+- Divergences: keystore entry renamed `poltergeist.vault.masterKey.v1`
+  (07 §3.3) so the two apps never share an entry;
+  `putApiKey`/`getApiKey` restored 2026-09-19 for the sync bearer token
+  (04 §4.5: `poltergeist.apikey.sync.token`) — still no provider API keys
+  (D19 scope) — plus `deleteApiKey` for sign-out (no Séance counterpart;
+  tolerant like the reads, the orphaned entry is harmless); Séance types
+  imported via the poltergeist_core barrel, never seance_core directly.
+  Since 2026-10-07 `hasKeystoreKey` is dropped: nothing here called it.
+  The ported exception messages are frozen port text allowlisted in the
+  localization contract; the D20 ARB rule applies where the UI renders
+  them (prompt-UI slice).
+- Port-back candidates: corrupt-entry misreport — a stored entry that is
+  not valid base64 is conflated with keystore unavailability (review round
+  1, PR #32); and concurrent probes can race the create-on-first-run
+  read-check-write (review round 1). Both are source defects; upstream
+  first per 04 §6, not local divergences.
+
+## app/poltergeist_app/lib/services/file_stores.dart
+
+- Source: app/seance_app/lib/services/file_stores.dart
+- Séance commit: e11206a94b5672225432fcd9990750a2ab1002c2 (tag v0.3.0; re-diffed unchanged at a9add15, 2026-09-07)
+- Ported: 2026-09-07
+- 2026-09-21 at the `v0.9.1` pin (`035b0d8`): upstream reworked the file
+  around a vault re-key journal (`VaultRekeyJournal`) and a serialized
+  mutation queue — none of that architecture is consumed here — and added
+  `putSecretBlobs` to the `VaultStore` interface the port implements. The
+  port gained `putSecretBlobs` only: load once, encode every blob, one
+  atomic flush (the interface's all-or-none batch contract). The journal
+  and queue stay upstream; adopting them is their own decision, not pin
+  fallout. Semantics verified against upstream at `035b0d8`
+  (`file_stores.dart:426-430`): upstream MERGES the batch into the
+  existing map — ids absent from the batch survive — so the port's merge
+  matches; it is not a wholesale replace. The accepted divergence is the
+  missing serialized mutation queue: a `putSecret`/`deleteSecret`
+  racing the batch can interleave flushes (the port-back candidate
+  below already records that gap).
+- 2026-09-24: the re-key journal IS adopted — bidirectional server sync
+  (04 §4.2 amendment) makes `SecureSyncCredentialStore.writeVaultKey` a
+  real re-key path, and swapping the OS-keystore key without the
+  two-generation journal would orphan every credential on any crash or
+  refusal between the vault rewrite and the keystore write. `FileVaultStore`
+  now implements `VaultRekeyJournal` verbatim from upstream: staged
+  old/new encrypted snapshots in `vault.json.rekey`, settle-on-next-open,
+  keystore-probe-driven generation choice on failure, mutation lockout
+  while staged. The serialized mutation queue still stays upstream — the
+  journal serializes against itself and the vault has no concurrent
+  writers beyond it yet. `LockedSecretVault` also picked up upstream's
+  `readableSecret`/`putSecrets` overrides in the same pass (still
+  throw-on-touch; the pulled-`secret` apply path calls `readableSecret`).
+- 2026-10-03: Séance
+  [#172](https://github.com/L-K-M/Seance/pull/172), merge `ad2f3b4`,
+  serialized `FileHostKeyStore` loads and mutations and commits cache state
+  only after its atomic snapshot lands. Poltergeist adopts that ordering and
+  adds conflict-aware conditional installs for sync-versus-engine pin races.
+- Divergences: only `FileVaultStore` and `FileHostKeyStore` are ported —
+  `FileConfigStore`/`FileSnippetStore` have no Poltergeist counterpart
+  (bookmark identities carry connections per 04 §2.1–2.2; the synced record
+  store lands in M6 per 04 §3.1); corrupt quarantine is store-owned and
+  UTC-stamped per this repo's atomic-file port instead of the source's
+  shared `.corrupt` helper; types imported via the poltergeist_core barrel;
+  `ConflictAwareHostKeyStore.putIfNoConflict` and `replaceIfCurrent` are
+  Poltergeist's sync contracts;
+  the optional `atomicWriter` constructor seam makes failed commits
+  deterministic in tests without changing production writes.
+- Port-back candidates: UTC-stamped quarantine names (shared with the
+  atomic_file entry). Upstream #172 closes the serialized host-key
+  load/flush candidate from review round 1 of PR #32.
+
+## app/poltergeist_app/lib/services/locked_secret_vault.dart
+
+- Source: app/seance_app/lib/services/app_services.dart (LockedSecretVault)
+- Séance commit: 99a35850a59e741b3e542447508dda2ef9424252 (ported class re-diffed unchanged at a9add15, 2026-09-07; re-diffed unchanged as a class at 2e6d1f1, 2026-09-08 — the surrounding `app_services.dart` moved with assistant/sync work outside the ported block)
+- Ported: 2026-09-07
+- Divergences: extracted into its own file — Poltergeist has no AppServices
+  composition yet (it lands with the engine/prompt slices that consume the
+  vault); behavior identical.
+- Port-back candidates: none.
+- Retired: 2026-10-04. Never wired: `main.dart` builds the vault as
+  `DynamicSecretVault`, whose null key provider is the production locked
+  vault. The file and its keystore_resilience case are removed; Séance's
+  class is unaffected.
+
+## app/poltergeist_app/test/keystore_resilience_test.dart
+
+- Source: app/seance_app/test/keystore_resilience_test.dart
+- Séance commit: 30963c0c31f55e649b4b29487cf4c07b706b3056 (re-diffed unchanged at a9add15, 2026-09-07)
+- Ported: 2026-09-07
+- Divergences: the dropped API-key methods' tests map to `setKeystoreKey`
+  write-failure coverage plus a master-key entry-name assertion; imports via
+  the poltergeist_core barrel. Since 2026-10-04 the `LockedSecretVault`
+  read/write/delete case is dropped with that class; the locked-message
+  case is kept.
+- Port-back candidates: none.
+
+## app/poltergeist_app/test/vault_rekey_journal_test.dart
+
+- Source: app/seance_app/test/vault_rekey_journal_test.dart
+- Séance commit: 035b0d880b47639e390af8cbbd6d316cb5edc86d (tag v0.9.1)
+- Ported: 2026-09-24
+- Divergences: the `AppServices`-driven groups are replaced by
+  `SecureSyncCredentialStore.writeVaultKey` coverage over a fake keystore
+  (Poltergeist has no AppServices — the re-key path lives in the sync
+  credential store per 04 §4.5); quarantine assertions match this repo's
+  UTC-stamped `.corrupt-<stamp>` names instead of upstream's `.corrupt`;
+  a `failWrite` keystore mode covers refusal-without-storing, which
+  upstream's file-level fakes did not exercise.
+- Port-back candidates: none.
+
+## app/poltergeist_app/lib/ui/prompts/host_key_dialog.dart
+
+- Source: app/seance_app/lib/ui/host_key_dialog.dart
+- Séance commit: 27552b2 (re-diffed unchanged at a9add15, 2026-09-07;
+  re-diffed at 5cadb18, 2026-09-09 — upstream gained the route-guard
+  port-back below, nothing else changed; re-diffed at b8fc111, 2026-09-09
+  — upstream gained the scrollable-content port-back below, nothing else
+  changed)
+- Ported: 2026-09-07
+- Divergences: strings localize through ARB (D20); the decision payload is
+  the engine protocol's `HostKeyPromptData` (plain data crossing the
+  isolate, 03 §5) instead of seance_core's `HostKeyDecision`; a `changed`
+  verdict still renders the alarming two-fingerprint review with the
+  destructive-styled trust button (D18 hard block, never auto-repin).
+  Coordinator-owned route identity prevents a withdrawal from popping
+  another route. The current-route action guards were ported back to
+  Séance as [Séance #82](https://github.com/L-K-M/Seance/pull/82) (head
+  `5d9da5195a3a9a4d8110d0b2425d55e5cb3fddde`, merge
+  `5cadb18e823ca1ae089b9fdd940432876e93fd9c`, 2026-09-09) with the same
+  `ModalRoute.isCurrent` semantics, and the scrollable content was
+  ported back as
+  [Séance #83](https://github.com/L-K-M/Seance/pull/83) (head
+  `2f6c49ce6a4af424003261dae3ec116eeb80fa74`, merge
+  `b8fc1111119cd6c0744b9de9bc35d16c07ae3e9d`, 2026-09-09) — upstream now
+  sets `AlertDialog.scrollable` with its own reachability regressions, so
+  both divergences are closed.
+- Port-back candidates: none.
+
+## app/poltergeist_app/test/ui/prompts/host_key_dialog_test.dart
+
+- Source: app/seance_app/test/host_key_dialog_test.dart
+- Séance commit: 27552b2 (re-diffed unchanged at a9add15, 2026-09-07;
+  re-diffed at 5cadb18, 2026-09-09 — upstream gained the three
+  route-guard regressions from Séance #82, nothing else changed;
+  re-diffed at b8fc111, 2026-09-09 — upstream gained the two
+  constrained-layout reachability regressions from Séance #83, nothing
+  else changed)
+- Ported: 2026-09-07
+- Divergences: adapted to the protocol payload; adds ARB-string and
+  non-dismissible coverage beyond the source's cases; the async test
+  harness checks `mounted` before rebuilding. The scrollable coverage
+  diverged in form only: upstream's #83 regressions assert reachability
+  behavior (constrained layout, viewport-clipped visibility, scroll into
+  view, pinned buttons); this port retains its property-level check
+  (`AlertDialog.scrollable`) that the behavior assertions subsume, so the
+  candidate is closed, not merged back.
+- Port-back candidates: mounted harness guard.
+
+## app/poltergeist_app/lib/ui/prompts/keyboard_interactive_dialog.dart
+
+- Source: app/seance_app/lib/ui/keyboard_interactive_dialog.dart
+- Séance commit: 3321a1f (PR-S4 review head; exact-pin re-diff,
+  2026-09-29)
+- Ported: 2026-09-07
+- Divergences: strings localize through ARB (D20); the payload is the
+  engine protocol's `KeyboardInteractivePromptData` (03 §5);
+  coordinator-owned route identity and Enter focus navigation/final
+  submission are local. The connection's trusted `user@host:port` is
+  separated from the server-supplied name/instruction, with bare IPv6
+  bracketed; those PR-S4 security semantics are ported. Masked-by-default
+  fields with explicit per-field reveal, scrollable content, first-field
+  autofocus, and the controller-dispose-in-State lifecycle (with its IME
+  use-after-dispose lesson) all exist upstream at the recorded commits and
+  are ported behavior, not local additions. The current-route action guards
+  were ported back to Séance as
+  [Séance #82](https://github.com/L-K-M/Seance/pull/82) (head
+  `5d9da5195a3a9a4d8110d0b2425d55e5cb3fddde`, merge
+  `5cadb18e823ca1ae089b9fdd940432876e93fd9c`, 2026-09-09) with the same
+  `ModalRoute.isCurrent` semantics, so that divergence is closed.
+- Port-back candidates: Enter focus navigation/final submission; preserve
+  RFC 4256's per-prompt echo bit once the upstream responder exposes it.
+
+## app/poltergeist_app/test/ui/prompts/keyboard_interactive_dialog_test.dart
+
+- Source: app/seance_app/test/keyboard_interactive_dialog_test.dart
+- Séance commit: 3321a1f (PR-S4 review head; exact-pin re-diff,
+  2026-09-29)
+- Ported: 2026-09-07
+- Divergences: adapted to the protocol payload; carries the trusted-endpoint,
+  server-message separation, empty-message spacing and IPv6 cases from
+  PR-S4; adds Enter-navigation, autofocus, and IME/regression-harness
+  coverage beyond the source's cases. Reveal-toggle and submit/cancel
+  coverage exist upstream at the recorded commit; the earlier
+  "adds reveal-toggle" wording was corrected against that re-diff
+  (2026-09-09); the original dated port provenance stands.
+- Port-back candidates: Enter-navigation and autofocus tests (upstream has
+  no autofocus test); the repeated-submit route-safety regression went
+  upstream with Séance #82 in its double-activation form.
+
+## app/poltergeist_app/lib/services/identity_audit_log.dart
+
+- Source: app/seance_app/lib/services/identity_audit_log.dart
+- Séance commit: 82507ec (re-diffed unchanged at a9add15, 2026-09-07;
+  re-diffed with the Séance #80/#81 changes at cb4b010, 2026-09-08;
+  identical between cb4b010 and the 2e6d1f1 pin, 2026-09-08)
+- Ported: 2026-09-07
+- Divergences: `viaBookmark` docs note Poltergeist is unsandboxed at v1
+  (D23). The PR #38 security/reliability repairs (wrong-typed optional
+  JSON fields skip as malformed; desktop POSIX logs repaired/created
+  mode 0600, including atomic rotation, because they contain
+  private-key paths) landed upstream in
+  [Séance #80](https://github.com/L-K-M/Seance/pull/80) (merge
+  `bc534136fa427ca9605babd47e44555e5dbfd4d1`, 2026-09-08), so the
+  behaviors now match. Upstream's review also gates `readAll`'s repair
+  on group/other bits (`_groupOtherBits`) — an already-private log
+  skips the chmod and stays readable on chmod-incapable mounts, while
+  a permissive log that cannot be restricted still fails the read
+  closed — mirrored here 2026-09-08 from
+  [Séance #81](https://github.com/L-K-M/Seance/pull/81) head
+  `cb4b010075bd0519914de27bc0a2231c449e204d` (merge
+  `2e6d1f138f1704e683870f75e11262bf50e37379`), whose durable rootless
+  Linux procfs regressions are ported alongside it. The record shape
+  stays frozen identical.
+- Port-back candidates: none — the read-side repair gate's mirror and
+  its procfs regressions close the last recorded divergence; both
+  sides now behave identically.
+- Shared: 2026-10-08. `IdentityAuditLog` and the owner-only file helpers
+  moved into `seance_core` (with `posix`), reached here through the core
+  barrel; this file and `file_permissions.dart` are removed. Rotation
+  writes through the host's atomic writer, which each app passes in
+  (`writeOwnerOnlyAtomically`), so both keep their own.
+
+## app/poltergeist_app/test/services/identity_audit_log_test.dart
+
+- Source: app/seance_app/test/identity_audit_log_test.dart
+- Séance commit: 82507ec (re-diffed unchanged at a9add15, 2026-09-07;
+  refreshed with the Séance #80/#81 coverage at cb4b010, 2026-09-08;
+  identical between cb4b010 and the 2e6d1f1 pin, 2026-09-08)
+- Ported: 2026-09-07
+- Divergences: adds wrong-typed-field and owner-only-mode regressions for
+  the local hardening; record/rotate/serialize behavior remains identical.
+  2026-09-08: ported Séance #81's audit coverage — fresh-file mode,
+  existing-file write repair, read repair, absent-field defaults, and
+  both rootless Linux procfs regressions (owner-only `/proc/self/io`
+  reads without a repair chmod and with its mode untouched; a
+  world-readable `/proc/self/status` whose chmod fails EPERM fails
+  `readAll` closed with that errno pinned), mirroring the lib entry's
+  read-side repair gate. Temp prefix and home paths carry Poltergeist
+  names (`poltergeist-audit-`, `/home/...`) per the 08 §2 rename rule.
+- Shared: 2026-10-08. The cases moved to `seance_core`'s
+  `identity_audit_log_test.dart` and `file_permissions_test.dart`; this
+  file and the local permissions test are removed.
+- Port-back candidates: none — the procfs regressions landed upstream in
+  [Séance #81](https://github.com/L-K-M/Seance/pull/81) (merge
+  `2e6d1f138f1704e683870f75e11262bf50e37379`) and are now ported here
+  with the gate, closing the recorded candidate.
+
+## app/poltergeist_app/lib/services/identity_file_reader.dart
+
+- Source: app/seance_app/lib/services/app_services.dart
+  (`_readIdentityFile`/`_auditIdentityRead`) plus `IdentityFileException`
+- Séance commit: 99a3585 (re-diffed unchanged at a9add15, 2026-09-07; re-diffed at 2e6d1f1, 2026-09-08 — upstream's `_readIdentityFile` gained an optional `bookmarkOverride` parameter for Séance's sandboxed draft-connection-test grants, a path this port dropped wholesale per D23, so the change does not apply; `_auditIdentityRead` is unchanged)
+- Ported: 2026-09-07
+- Divergences: extracted as a standalone service; no security-scoped-bookmark
+  grant path (Poltergeist is unsandboxed at v1, D23 — plain expanded reads
+  only); `IdentityFileReadException` drops Séance's macOS EPERM sandbox
+  hint; non-filesystem read failures are normalized and audited locally so
+  arbitrary exception text cannot reach the prompt (D18/D20); audit writes
+  stop delaying a connect after two seconds. `~` expansion and semantic key
+  validation downstream of a successful text read remain source-identical.
+- Port-back candidates: normalize non-filesystem read failures and bound audit
+  writes; the grant path remains Séance-specific.
+
+## app/poltergeist_app/test/services/identity_file_reader_test.dart
+
+- Source: app/seance_app/test/identity_file_exception_test.dart
+  (exception cases)
+- Séance commit: ffac90f (re-diffed unchanged at a9add15, 2026-09-07)
+- Ported: 2026-09-07
+- Divergences: sandbox-hint cases dropped (no hint exists here); adds the
+  reader's success, failed-read, throwing-audit, and stalled-audit coverage.
+- Port-back candidates: none.
+
+## app/poltergeist_app/lib/ui/connection_status_panel.dart
+
+- Source: app/seance_app/lib/ui/terminal_pane.dart (the connecting view,
+  `_ConnectionError`, and `_ConnectionLogView`)
+- Séance commit: d18f1ac (re-diffed unchanged at a9add15, 2026-09-07; source moved at 2e6d1f1, 2026-09-08 — upstream extracted `_ConnectionLogView`'s body into a shared `connection_log_view.dart` while keeping the session-notifier wiring and behavior, so the ported block's semantics are unchanged)
+- Ported: 2026-09-07
+- Divergences: driven by the engine protocol's streams (03 §5) instead of
+  an app-side session object; strings localize through ARB (D20); states
+  cover the pool's full lifecycle (reconnecting, blocked) beyond the
+  source's terminal states; replacement streams resubscribe and reset stale
+  server state/transcript; the transcript starts collapsed exactly as the
+  source's does and anchors expanded live output to its newest lines.
+- Port-back candidates: anchor live transcript output to its newest lines.
+
+## app/poltergeist_app/test/ui/connection_status_panel_test.dart
+
+- Source: none (no Séance test file covers these views directly)
+- Séance commit: n/a
+- Ported: 2026-09-07 (new coverage for the stream-driven panel)
+- Divergences: per-state rendering, live/bounded transcript, copy via a
+  mocked clipboard channel, per-server filtering, retry wiring, initial
+  pending state, and stream/server replacement lifecycle.
+- Port-back candidates: none.
+
+## packages/poltergeist_core/lib/src/fs/local_fs_safety.dart
+
+- Source: app/seance_app/lib/services/remote_files_controller.dart (the
+  four private statics `_validatePathComponent`, `_validateLocalName`,
+  `_ensureSafeLocalDirectory`, `_replaceLocalFile`)
+- Séance commit: 2e6d1f138f1704e683870f75e11262bf50e37379 (rev pin, no
+  tag — open item 2's bridge)
+- Ported: 2026-09-11
+- Divergences: public top-level functions split out of the controller
+  (03 §2.3); they throw raw `FormatException`/`FileSystemException` and
+  each caller funnels them through its own guard instead of the
+  controller's transfer-failure path. `ensureSafeLocalDirectory` takes
+  one absolute path (the plan's signature) instead of Séance's
+  `(Directory root, String relativePath)` pair: the walk shape-checks
+  every component (lexical `.`/`..`/separators refused), validates only
+  the components it creates, and collapses Séance's two root messages
+  ('Download destination is not a directory' plus the traversal
+  refusal) into the one 'Refusing to follow a non-directory or symbolic
+  link' refusal. Backup siblings rename `.seance-<uuid4>.backup` →
+  `.poltergeist-<8 hex>.backup` (08 §2's sanctioned prefix rename; the 8-hex
+  shape is 03 §2.3's documented pattern, matching the pinned adapter's
+  temp suffixes). The NAME_MAX-255 backup-name guard (fail the replace
+  rather than truncate into a collision), the crash-recovery sweep
+  (`restoreOrphanedLocalBackups`, run by `replaceLocalFile` before its
+  dance and callable as a startup sweep — Séance strands crashed
+  replaces with no repair), `validatePathComponent`'s backslash
+  rejection (09 §3.5: `\` is the Win32 separator; a `..\..\x`
+  component must not become traversal once joined on Windows), and the
+  extended reserved-name set (CLOCK$, CONIN$/CONOUT$, superscript
+  COM¹–³/LPT¹–³, base-segment trailing dot/space stripping — 09 §3.5's
+  full list) are plan-mandated additions Séance lacks. Fixed the
+  pre-port original's dead regex branches: `\$` in the non-raw pattern
+  string decoded to a bare `$` anchor, so `CLOCK$`/`CONIN$`/
+  `CONOUT$` were never rejected; the raw-string pattern now matches
+  them (regressions failed before, pass after). Review rounds 2–7
+  added (per-round records in STATUS and the PR description):
+  the commit point validates the target's basename (`validateLocalName`,
+  09 §3.5's every-materialized-name rule — Séance validates only in
+  the controller's scan), the pre-dance repair is scoped to the
+  replace's own target (a directory-wide repair could consume a
+  concurrent dance's live backup and fail its transfer on Windows;
+  Séance has no sweep at all), the backup pattern is derived from
+  the same constants that build backup names, the validators
+  reject components over NAME_MAX bytes (255 UTF-8 bytes; Séance
+  relies on the OS's ENAMETOOLONG mid-transfer instead of the clean
+  boundary error 09 §3.5 specifies), the dance refuses a non-regular
+  part symmetrically with its target refusal (rename moves a
+  swapped-in symlink without following it), and `validateLocalName`
+  refuses names matching the reserved
+  `<name>.poltergeist-<8 hex>.backup` shape (Séance has no sweep to
+  collide with, so no reservation exists there). D27 (2026-09-30) adds
+  `validateRelativeLocalPath`: the archive boundary strips directory-entry
+  slashes, enforces a caller-supplied depth cap, rejects line/bidi controls,
+  and applies `validateLocalName` to every materialized component.
+- Port-back candidates: the raw-string reserved-name fix, the NAME_MAX
+  guard (and its validator-side twin), the orphaned-backup sweep, backslash
+  rejection in the component validator, the extended reserved list
+  (09 §3.5), and the commit-point leaf validation — all applicable to
+  Séance's own statics.
+
+## M3 native contract repairs (2026-09-12)
+
+PR #81's native matrix exposed local source cleanup returning before the
+file handle closed. `LocalFileSystem` now awaits iterator cancellation;
+a held-cleanup regression pins completion ownership. This changes only
+the local VFS, not the pinned remote adapter. No source copy or pin change.
+The incident store's orphan sweep now matches basenames within its listed
+parent, accepting Windows paths with mixed separators. No upstream store
+counterpart is ported here.
+
+## packages/poltergeist_core/test/fs/local_fs_safety_test.dart
+
+- Source: app/seance_app/test/remote_files_controller_test.dart (the
+  download half of 'recursively uploads and downloads directories with
+  aggregate transfer' — the only upstream coverage of the statics:
+  Séance has no dedicated unit tests for them)
+- Séance commit: 2e6d1f138f1704e683870f75e11262bf50e37379 (rev pin, no
+  tag — open item 2's bridge)
+- Ported: 2026-09-11
+- Divergences: re-homed per 08 §2 to the public helpers that now own
+  the behavior (the controller-level aggregate-transfer bookkeeping
+  rides M4's transfer queue); the remaining suites are new local
+  coverage (validators, containment walk, dance refusals/restore,
+  NAME_MAX, and the sweep — Séance tests none of these directly).
+  2026-09-12: native Windows execution replaces the library-wide skip;
+  only POSIX-mode and unavailable-link fixtures skip. Cleanup precedes
+  setup writes; device-name assertions inspect directory entries. D27 adds
+  relative-path shape, depth, local-name, line-control, and bidi-control
+  regressions for archive materialization.
+- Port-back candidates: the validator and sweep suites, once Séance
+  exposes the statics for testing.
+
+## app/poltergeist_app/lib/ui/server_appearance.dart
+
+- Source: app/seance_app/lib/ui/server_appearance.dart
+- Séance commit: ded9228aaf8aa45fe2a5fb7df9559db8c820ec4d (main, ahead of
+  the `v0.9.1` pin — the file's mark/tint rework landed upstream after
+  the tag; the protocol types it consumes are all in the pin)
+- Ported: 2026-09-15; re-diffed and expanded 2026-09-24 for the synced
+  Séance-server catalog surface
+- 2026-09-24: the port now carries the full module — `ServerTint`
+  (named + custom colour), the memoized custom-accent derivation,
+  `ServerBadge` over the protocol's resolved `ServerMark` (glyph, emoji,
+  image), `ServerAccentBar`, the glyph table with labels/keywords, and
+  the picker helpers (`serverIconLabel`, `serverIconMatches`,
+  `serverIconGroups`, `serverColorSeed`, `serverColorLabel`,
+  `formatServerCustomColor`, `parseServerCustomColor`,
+  `nearestServerColor`). Identical records draw identical badges in
+  both apps, which is the point of carrying the whole mapping rather
+  than the earlier subset.
+- 2026-09-21 at the `v0.9.1` pin (`035b0d8`): upstream reworked the file
+  for custom colours/SVG marks and row accents (#101/#102) and widened
+  the `ServerIcon` enum to ~45 values. The port's `serverIconData`
+  switch was extended exhaustively over the widened enum using the
+  upstream glyph choices; the rest of the rework stayed unported until
+  the 2026-09-24 expansion above.
+- Divergences: `ServerAvatar`/`_SessionRing` (badge + connected-session
+  ring keyed on Séance's `TerminalStatus`/`StatusColors`) is not ported
+  — Poltergeist's surfaces compose `ServerBadge` with their own
+  connection indicators per 02 §3–4, and the catalog rows keep that
+  contract. Label vocabulary (`serverIconLabel`, `serverColorLabel`,
+  the group headings) stays upstream English: it is glyph vocabulary,
+  not product copy; any picker that lands with the server editor can
+  ARB-wrap it then. Doc references re-pointed from `SeanceTheme` to the
+  app theme.
+- Port-back candidates: none — Séance owns the source.
+- Moved (2026-10-08): the module now lives in Planchette's `ghost_marks`
+  package, over `seance_protocol` (never `seance_core`), shared with
+  Séance, whose copy carried the same code plus the unused
+  `ServerAvatar`, which was deleted
+  ([design](../../docs/design/server-appearance-package.md)). This file
+  is a compatibility export; the test below moved with the module.
+
+## app/poltergeist_app/test/ui/server_appearance_test.dart
+
+- Source: app/seance_app/test/server_appearance_test.dart
+- Séance commit: ded9228aaf8aa45fe2a5fb7df9559db8c820ec4d
+- Ported: 2026-09-15; expanded 2026-09-24 to the full file minus the
+  `ServerAvatar` group
+- Divergences: the `ServerAvatar` group is dropped with the widget it
+  covers; the two cases that used the avatar as the badge's host ('a
+  config draws the mark its fields resolve to', 'a server's colour
+  fills its badge, unframed') are adapted to `ServerBadge` directly —
+  the resolution and fill under test are unchanged.
+- Port-back candidates: none.
+- Moved (2026-10-08): this suite is now `ghost_marks`'
+  `test/server_appearance_test.dart`; Séance's copy, whose remaining
+  cases it already held, was removed with `ServerAvatar`.
+
+## app/poltergeist_app/lib/ui/server_grouping.dart
+
+- Source: app/seance_app/lib/ui/server_grouping.dart
+- Séance commit: 8326f41f574fabce11986ea16137917626f67958
+- Ported: 2026-09-24
+- Divergences: since 2026-10-04 only `existingServerGroups` is carried
+  (see Pruned below). Until then the file was carried verbatim (imports
+  re-pointed); it is deliberately Flutter-free upstream. Re-synced
+  2026-09-29 so a filter keeps an otherwise-empty top-level section when
+  it contains a hidden live server; the header remains the place that
+  connection's status is exposed.
+- Pruned: 2026-10-04. The catalog stopped using this sectioning on
+  2026-09-24 (`477be0a4`) and groups its servers inline, so only
+  `existingServerGroups`, behind the server editor's group chips, is
+  carried. The section keys and labels, `groupServers`, the row model,
+  `sectionsHoldingLive` and `hiddenByHeader` are removed; a diff against
+  the source is now partial.
+- Shared: 2026-10-08. `existingServerGroups` moved into `seance_protocol`
+  beside `ServerConfig` and reaches the server editor through the core
+  barrel; this file is removed.
+- Port-back candidates: none — Séance owns the source.
+
+## app/poltergeist_app/lib/ui/server_filter.dart
+
+- Source: app/seance_app/lib/ui/server_filter.dart
+- Séance commit: ded9228aaf8aa45fe2a5fb7df9559db8c820ec4d
+- Ported: 2026-09-24
+- Divergences: none — carried verbatim (imports re-pointed). Operates on
+  `ServerConfig`, so the catalog's filter matches Séance's haystack
+  term-for-term.
+- Pruned: 2026-10-07. Only `serverSearchHaystack` is carried; the sidebar
+  matches it with `sidebarQueryMatches`, Séance's term rule over any row.
+  `serverMatchesQuery` and `filterServers` had no caller here.
+- Shared: 2026-10-08. `serverSearchHaystack` moved into `seance_protocol`
+  beside `ServerConfig` and reaches the sidebar through the core barrel;
+  this file is removed.
+- Port-back candidates: none — Séance owns the source.
+
+## app/poltergeist_app/test/ui/server_grouping_test.dart
+
+- Source: app/seance_app/test/server_grouping_test.dart
+- Séance commit: 8326f41f574fabce11986ea16137917626f67958
+- Ported: 2026-09-24
+- Divergences: since 2026-10-04 only the `existingServerGroups` group is
+  carried (see Pruned below). Until then it was carried verbatim (imports
+  re-pointed), including the kept-section and `sectionsHoldingLive`
+  regressions re-synced 2026-09-29.
+- Pruned: 2026-10-04, with the library above: only the
+  `existingServerGroups` group and its `_server` fixture are carried.
+- Shared: 2026-10-08. The group moved with its function to
+  `seance_protocol`'s `server_search_test.dart`; this file is removed.
+- Port-back candidates: none.
+
+## app/poltergeist_app/test/ui/server_filter_test.dart
+
+- Source: app/seance_app/test/server_filter_test.dart
+- Séance commit: ded9228aaf8aa45fe2a5fb7df9559db8c820ec4d
+- Ported: 2026-09-24
+- Divergences: since 2026-10-07 the matching cases run through
+  `sidebarQueryMatches` over `serverSearchHaystack`, the pair the sidebar
+  uses; the order case went with the pruned `filterServers`. Since
+  2026-10-08 `serverSearchHaystack` comes from the core barrel.
+- Port-back candidates: none.
+
+## app/poltergeist_app/lib/ui/middle_ellipsis_text.dart
+
+- Source: app/seance_app/lib/ui/middle_ellipsis_text.dart
+- Séance commit: 15d0fdddccde6507156ce84ed31a254d0b9d5b13 (the file is
+  byte-identical at Séance `367e4ea`, 2026-09-24)
+- Ported: 2026-09-24
+- Divergences: `Characters` comes through `package:flutter/widgets.dart`'s
+  re-export instead of a direct `package:characters` import (Poltergeist
+  does not list `characters` as a direct dependency, and adding one for a
+  re-exported type would be a second version constraint on the same
+  package). Behavior is unchanged. The widget sits at the same relative
+  path in both apps so the shared sidebar kit
+  (`lib/ui/sidebar/sidebar_kit.dart`, D32 §10) imports it verbatim.
+- Port-back candidates: none — Séance owns the source.
+
+## app/poltergeist_app/test/ui/middle_ellipsis_text_test.dart
+
+- Source: app/seance_app/test/middle_ellipsis_text_test.dart
+- Séance commit: 15d0fdddccde6507156ce84ed31a254d0b9d5b13
+- Ported: 2026-09-24
+- Divergences: the same `Characters` import re-point as the widget;
+  otherwise verbatim (imports re-pointed).
+- Port-back candidates: none.
+- Retired: 2026-10-04. The app copy re-tested ghost_ui's
+  `MiddleEllipsisText` through the compatibility export; coverage lives in
+  `planchette/packages/ghost_ui/test/middle_ellipsis_text_test.dart` (a
+  superset). The export stays.
+
+## app/poltergeist_app/lib/ui/sidebar/sidebar_kit.dart (port-out)
+
+- Direction: Poltergeist → Séance (D32 §10's shared sidebar anatomy). New
+  Poltergeist code written to be copied into Séance verbatim; no Séance
+  source was copied in.
+- Written: 2026-09-24
+- Contract: imports only Flutter, the chrome tokens (through the file's
+  one `_chrome()` function — Séance points it at its own ThemeExtension
+  with the same token names), and `../middle_ellipsis_text.dart` (above,
+  same path in both apps). Every string arrives through
+  `SidebarKitStrings`; every behavior through callbacks. No store,
+  service, or model type is referenced.
+- Port-back candidates: the whole file, when Séance adopts the D32 rail.
+- Port-back from Séance: 2026-09-24, from Séance
+  `153fd657dda8d98908e08d53108c81742f390046` (branch
+  `claude/poltergeist-ui-redesign-albp0m`; rationale in Séance's
+  docs/POLTERGEIST.md, "The sidebar kit"). Séance adopted the kit from
+  `58605fa` and improved it, and Poltergeist takes its copy back so the
+  two files differ only in the chrome import, `_chrome()`, and Séance's
+  provenance header. Taken over:
+  - Bug: Shift+F10 or the Menu key opened a row menu, but the row's key
+    handler still took the arrows and Enter. The row now ignores keys
+    unless it has primary focus, the menu gets `childFocusNode`, a
+    keyboard-opened menu focuses its first enabled verb, and Esc closes
+    and an arrow steps into a right-clicked menu.
+  - Bug: the touch verb sheet was capped at 9/16 of the screen. It is
+    now `isScrollControlled` with `useSafeArea`.
+  - Bug: the focus ring was a decoration border that shifted content
+    2 px. It is a `foregroundDecoration` now.
+  - The touch posture: chevrons and "+" stay drawn, and headers, the
+    filter, icon buttons, the bottom bar, the mark and the dot take
+    touch sizes (`sidebarMarkExtent()`).
+  - `SidebarKitScope.background` for rows on a non-rail surface.
+  - Row `subtitle`, `trailingIcon` and `showMenuButton`, with the new
+    required `SidebarKitStrings.rowMenu` (Poltergeist's
+    `sidebarRowMenu`, "More actions").
+  - The kit test's additions, with the theme and chrome re-pointed.
+- Divergence kept, to port back to Séance: the status dot is one value,
+  `SidebarRow.status: SidebarStatusDot?` (colour plus
+  `SidebarDotStyle`), where Séance passes `statusColor` and
+  `statusStyle` separately. A style without a colour cannot be
+  expressed this way. The ring's rendering, `_hollowStroke`, and the
+  enum are Séance's.
+- D33 extension, 2026-09-25: written once and committed to both repos
+  on the same day (Poltergeist `4c166a8`, `60b2b63` and `396b568`;
+  Séance `663ceae`, `ec6439f` and `183b24f`), so the two files still
+  differ only in the
+  header comment, the chrome import and `_chrome()`. Added:
+  - `SidebarKitDensity {compact, comfortable}` on `SidebarKitScope`
+    (`densityOf`, comfortable by default), `sidebarHomeLayout()`,
+    density-aware `sidebarMarkExtent()` and the new
+    `sidebarGlyphSize()`: compact keeps D32's 26 px rail, comfortable
+    is 52 px (56 dp touch) with a 32 px mark.
+  - `SidebarRow.subtitle` drawn only when comfortable (the host always
+    passes it; the long-press sheet shows it under its title in either
+    density), `showMenuButton` defaulting to comfortable-or-touch,
+    `accent` (the 4 px colour line) and `markRing` (the connected ring).
+  - `SidebarDotStyle.blocked`, `SidebarSectionHeader.status` for a
+    header's live dot, comfortable headers keeping chevron, count and
+    "+" in view, and ← / → swallowed on headers and rows so focus stays
+    in the sidebar.
+  - `SidebarDensitySwitch`, `SidebarBottomBar.onDensityChanged`, and
+    the `compactRows` / `comfortableRows` strings. The filter's count
+    reads on a line under the field.
+- Header dot words, 2026-09-25: `SidebarSectionHeader.statusLabel`,
+  given with `status` (asserted together), which the header's merged
+  label carries on a line after its title and count, so a screen
+  reader hears the dot. Written once and committed to both repos the
+  same day; the files still differ only in the header comment, the
+  chrome import and `_chrome()`.
+- Themed corners (D38), 2026-09-25: Séance's device themes ([Séance
+  #128](https://github.com/L-K-M/Seance/pull/128), `f4d2f71`) route the kit's pill corner (`_radius`,
+  which the focus ring shares) and its other desktop pill corners
+  (`_pill`: the icon buttons, the filter field, the sync chip) through
+  `_chrome(context).corner(...)`. Mirrored here once
+  `PoltergeistChrome` gained `cornerScale` and `corner()`, so the two
+  files again differ only in the header comment, the chrome import and
+  `_chrome()` (checked with `diff`). Séance's docs/POLTERGEIST.md
+  still says the two files differ in these functions until this lands.
+- Exact-pin re-diff, 2026-09-29: at `4c0a960`, the production kit's last
+  change is `8ab3f77` and it differs only in the provenance header, theme
+  import and `_chrome()` adapter. The upstream test's last change is
+  `3a9fd8c`; its corresponding differences are the theme/import adapter plus
+  Poltergeist-only cases for always-visible touch controls and
+  `SidebarKitLayout.list`. Those local cases are the remaining port-back
+  candidate.
+  (Superseded 2026-10-04: the kit test lives only in `ghost_ui`, which
+  carries those cases; both app copies are removed.)
+
+## app/poltergeist_app/lib/services/badge_image.dart
+
+- Source: app/seance_app/lib/services/badge_image.dart
+- Séance commit: 035b0d880b47639e390af8cbbd6d316cb5edc86d (v0.9.1 pin)
+- Ported: 2026-09-24
+- Divergences: none — carried verbatim (imports re-pointed). SVG
+  rasterization adds the `flutter_svg` direct dependency, the same use
+  upstream makes of it.
+- Shared: 2026-10-08. The encoder moved to `ghost_ui`
+  (`lib/src/badge_image.dart`), which both apps import; this file is
+  removed. The shared copy keeps this one's render-phase catch, broader
+  than upstream's `on Exception` because `toImage`/`toByteData` can fail
+  with an `Error`.
+- Port-back candidates: none — Séance owns the source.
+
+## app/poltergeist_app/lib/services/server_duplication.dart
+
+- Source: app/seance_app/lib/services/server_duplication.dart
+- Séance commit: 035b0d880b47639e390af8cbbd6d316cb5edc86d (v0.9.1 pin)
+- Ported: 2026-09-24
+- Divergences: the macOS security-scoped bookmark machinery is dropped —
+  Poltergeist is not sandboxed, so identity files travel as plain paths
+  and the duplicate simply carries `identityFilePath` over. The label
+  grammar, stale-source check (`SourceServerChanged`), and credential
+  copy shape are upstream's.
+- 2026-10-07: both copies carry the new `startDirectory`, changed in the
+  same commit upstream; no divergence.
+- Shared: 2026-10-07. `duplicateServerLabel` and `duplicateServerConfig`
+  moved into `seance_protocol` beside `ServerConfig` and reach this file
+  through the core barrel, so a new field is carried in one place. The
+  planner, the stale-source check and `ServerDuplication` stay here.
+- Port-back candidates: none — the omission is sandbox-specific.
+
+## app/poltergeist_app/lib/services/server_editor_backend.dart
+
+- Source: adapted from app/seance_app (the `AppState.testServerConnection`
+  composition and the editor's credential-resolution rules)
+- Séance commit: 5d578b9 (Séance PR-S4 implementation; re-diffed at the
+  exact `4c0a960` pin)
+- Ported: 2026-09-24
+- Divergences: this is the production implementation of the ported
+  editor's `ServerEditorDelegate` seam, not a file-for-file port —
+  upstream's editor reaches into `AppState` directly. Credential
+  precedence (draft over vault over identity-file), trial-only host-key
+  approval, and the no-login-script test posture mirror upstream. The
+  2026-09-29 re-sync returns agent credentials without touching the vault
+  and resolves each saved jump host, with that hop's own credential, through
+  the authenticator's `resolveJumpHost` seam. Poltergeist first validates one
+  immutable catalog snapshot, so a bad route reads no credential and sync
+  cannot switch hops between asynchronous reads.
+- Port-back candidates: the route snapshot belongs upstream in
+  `testServerConnection`; the delegate seam itself, if Séance ever wants the
+  editor testable without a full `AppState`.
+
+## app/poltergeist_app/lib/ui/connection_log_view.dart
+
+- Source: app/seance_app/lib/ui/connection_log_view.dart
+- Séance commit: 035b0d880b47639e390af8cbbd6d316cb5edc86d (v0.9.1 pin)
+- Ported: 2026-09-24
+- Divergences: user-facing strings moved to ARB (Poltergeist's
+  localization contract); layout and log rendering verbatim.
+- Port-back candidates: none.
+
+## app/poltergeist_app/lib/ui/connection_test_report.dart
+
+- Source: app/seance_app/lib/ui/connection_test_report.dart
+- Séance commit: 035b0d880b47639e390af8cbbd6d316cb5edc86d (v0.9.1 pin)
+- Ported: 2026-09-24
+- Divergences: user-facing strings moved to ARB; report structure and
+  the connection-log embedding verbatim.
+- Port-back candidates: none.
+
+## app/poltergeist_app/lib/ui/server_color_picker.dart
+
+- Source: app/seance_app/lib/ui/server_color_picker.dart
+- Séance commit: 035b0d880b47639e390af8cbbd6d316cb5edc86d (v0.9.1 pin)
+- Ported: 2026-09-24
+- Divergences: strings moved to ARB; preview badges pass the picked
+  `ServerTint` because Poltergeist's `ServerBadge` requires one
+  (upstream's defaults to a neutral badge).
+- Device themes (D38), 2026-09-25: reduced to a wrapper over
+  `lib/ui/color_picker.dart`, as Séance's is at `f4d2f71` (see "Device
+  themes (D38)" below). The picker's generic strings moved from
+  `serverColorPicker*` to `colorPicker*`; the title and the hint keep
+  their keys. Séance's `server_color_picker_test.dart`, which had not
+  been ported, is now (below), and passed against the picker before the
+  refactor as well as after it.
+- Port-back candidates: none.
+- Moved (2026-10-08): the picker is `ghost_marks`' `showServerColorPicker`,
+  shared with Séance; this file is a wrapper passing the ARB strings
+  (`PoltergeistServerAppearanceStrings`, `PoltergeistColorPickerStrings` in
+  `lib/ui/server_appearance_strings.dart`) and `poltergeistMonoTextStyle`
+  ([design](../../docs/design/server-appearance-package.md)). Its suite
+  moved with it; this app keeps the wrapper's cases.
+
+## app/poltergeist_app/lib/ui/server_mark_picker.dart
+
+- Source: app/seance_app/lib/ui/server_mark_picker.dart
+- Séance commit: d811309 (re-diffed at the exact `4c0a960` pin)
+- Ported: 2026-09-24
+- Divergences: strings moved to ARB; the curated emoji table keeps
+  upstream's `\u{...}` escapes for re-diffability; imports use the
+  poltergeist_core barrel. The selected server accent now reaches every badge
+  preview, matching upstream's `66411c1` repair rather than remaining a local
+  tint adaptation.
+- Re-synced 2026-09-25: [Séance #130](https://github.com/L-K-M/Seance/pull/130)
+  swapped the tabs' `TabBarView` for `SelectedTabView`
+  (`lib/ui/selected_tab_view.dart`, byte-identical in both apps) so a
+  tab switches in place; the same one-line swap here.
+- Port-back candidates: none.
+- Moved (2026-10-08): the picker and `kCuratedServerEmoji` are
+  `ghost_marks`', shared with Séance, with the dialog's words in a
+  `ServerAppearanceStrings` bag; this file is a wrapper passing the ARB
+  strings. The incompressible-image message now reads as Séance's ("Try a
+  simpler picture — a logo rather than a photograph."), as the design
+  decided.
+
+## app/poltergeist_app/test/ui/server_mark_picker_test.dart
+
+- Source: app/seance_app/test/server_mark_picker_test.dart
+- Séance commit: 66411c1 (accent-preview regression; re-diffed at the exact
+  `4c0a960` pin)
+- Ported: 2026-09-29
+- Divergences: adapts only the source's accent-preview regression, wrapped in
+  `AppLocalizations`; the broader upstream picker suite is not copied here.
+- Port-back candidates: none.
+- 2026-10-08: the upstream suite and this regression now live in
+  `ghost_marks`; this file checks the wrapper opens the picker in ARB words
+  on the server's accent.
+
+## SelectedTabView production and test pair
+
+- Local files: `app/poltergeist_app/lib/ui/selected_tab_view.dart` and
+  `app/poltergeist_app/test/ui/selected_tab_view_test.dart`
+- Sources: `app/seance_app/lib/ui/selected_tab_view.dart` and
+  `app/seance_app/test/selected_tab_view_test.dart`
+- Séance commits: faed3b1 (production file and its final scroll-direction
+  regression); d80cf92 (final test-only hidden-focus regression)
+- Ported: 2026-09-25
+- Divergences: the production file is byte-identical. The test changes only
+  the package import. Pages switch in place, stay alive after first use, copy
+  the primary scroll direction unchanged, and a hidden page cannot retain
+  focus.
+- Port-back candidates: none; Séance owns the source.
+- Moved: 2026-10-04. The widget and its test now live in Planchette's
+  `ghost_ui` (`lib/src/selected_tab_view.dart`,
+  `test/selected_tab_view_test.dart`). In both apps,
+  `lib/ui/selected_tab_view.dart` is a compatibility export, and both app
+  test copies are removed.
+
+## app/poltergeist_app/lib/ui/server_editor.dart
+
+- Source: app/seance_app/lib/ui/server_editor.dart
+- Séance commit: 5d578b9 (Séance PR-S4 implementation; re-diffed at the
+  exact `4c0a960` pin)
+- Ported: 2026-09-24
+- Divergences: `AppState` is replaced by the narrow `ServerEditorDelegate`
+  seam (servers, syncConfigured, themeSeed, pickIdentityFile, readSecret,
+  save, testConnection) — Poltergeist composes services rather than a
+  monolithic state. Strings moved to ARB. The macOS security-scoped
+  identity bookmark becomes a plain path field (not sandboxed). Field
+  set, credential planning, exclusion confirmation, monotonic
+  `updatedAt`, and the vault-first save order are upstream's.
+- Agent and jump routes (D10/X-02/X-05), re-synced 2026-09-29: new
+  connections default to `AuthMethod.agent`, the obsolete unsupported
+  warning is gone, and `_formConfig` carries `jumpHostId` over from the saved
+  config. The route-preservation fix first landed locally ahead of this pin
+  from [Séance #131](https://github.com/L-K-M/Seance/pull/131). Without it,
+  every save pushed the server without its route, which
+  wins last-write-wins on Séance's devices too. Test connection now passes
+  the preserved route to the delegate, whose backend executes it through the
+  PR-S4 resolver; the temporary fail-closed guard is retired.
+- Start folder (2026-10-07): Poltergeist adds a Start folder field for
+  `startDirectory`, which Séance carries over from the saved config
+  without showing it (changed in the same commit upstream, like
+  `jumpHostId`).
+- Port-back candidates: the delegate seam (see the backend entry). The
+  agent and jump-route behavior is upstream already.
+
+## app/poltergeist_app/test/services/server_duplication_test.dart
+
+- Source: app/seance_app/test/server_duplication_test.dart
+- Séance commit: 035b0d880b47639e390af8cbbd6d316cb5edc86d (v0.9.1 pin)
+- Ported: 2026-09-24
+- Divergences: the security-bookmark and `ServerTile` cases are dropped
+  with the machinery they exercise; label grammar and stale-source
+  coverage carried verbatim. Since 2026-10-04 the two locked-vault cases
+  use `DynamicSecretVault` with a null key provider, the production
+  locked shape, instead of upstream's `LockedSecretVault`.
+- Shared: 2026-10-07. The label grammar and config-copy groups moved with
+  their functions to `seance_protocol`'s `server_duplication_test.dart`;
+  the planner and stale-source cases stay here.
+- Port-back candidates: none.
+
+## app/poltergeist_app/test/ui/server_editor_test.dart
+
+- Source: adapted from app/seance_app/test/server_editor_test.dart
+- Séance commit: 5d578b9 (Séance PR-S4 implementation; re-diffed at the
+  exact `4c0a960` pin)
+- Ported: 2026-09-24
+- Divergences: upstream boots real services around `AppState`; the port
+  drives the same editor surface through a fake `ServerEditorDelegate`,
+  so cases about vault plumbing collapse into delegate assertions.
+  The 2026-09-29 re-sync covers the agent default and absent warning, route
+  preservation, and Test connection forwarding that route to the delegate.
+- Port-back candidates: none.
+
+## app/poltergeist_app/lib/ui/top_toast.dart
+
+- Source: app/seance_app/lib/ui/top_toast.dart
+- Séance commit: 2e6d1f138f1704e683870f75e11262bf50e37379 (rev pin, no
+  tag — the live pin this task shipped against)
+- Ported: 2026-09-16
+- Divergences: none — carried verbatim (02 §3's workspace-open toast:
+  top-center card, 12 s duration for the Undo affordance). String
+  arguments stay caller-supplied so labels come from ARB.
+- Port-back candidates: none — Séance already owns the source.
+
+## M5 bookmark store (2026-09-19)
+
+03 §6's `BookmarkStore` landed in `poltergeist_core` (`src/bookmarks/`).
+No Séance source was copied: the `Bookmark` model is consumed through the
+`2e6d1f1` pin (PR-S1 is in its ancestry, so 04 §2.1's temporary-copy
+clause does not apply), `sortKeyBetween` is new code — the pinned rev
+carries no fractional-index helper — and `groupBookmarks` is a fresh
+implementation of `server_grouping.dart`'s rules for the `Bookmark`
+shape, not a port (02 §4 names it the pattern to mirror; the Séance
+source's collapse-state side stays a UI concern and was not carried).
+The app's interim `FileBookmarkStore` was Poltergeist-authored, so its
+move to core is a relocation, not a port. Port-back candidate: the
+sortKey/grouping pair is written to the upstream `Bookmark` struct and
+could ride a future Séance PR if Séance adopts §2.5 ordering.
+
+## app/poltergeist_app/lib/services/sync_enrollment_validation.dart
+
+- Source: app/seance_app/lib/ui/sync_enrollment_validation.dart
+- Séance commit: 2e6d1f138f1704e683870f75e11262bf50e37379 (the live pin)
+- Ported: 2026-09-20
+- Divergences: the validator reports a typed `SyncEnrollmentIssue` enum
+  the render site maps to ARB copy (D20 — no user-facing English in Dart)
+  instead of returning the source's English strings; the rules themselves
+  (URL shape, embedded-credentials refusal, required fields, the
+  register-only confirmation pair) are byte-identical. Poltergeist's
+  field labels say "encryption passphrase" per 04 §4.3, so the issue
+  enum carries no "vault" wording either.
+- Port-back candidates: none — the typed-issue reporting is D20-local;
+  the rules did not change.
+- Shared: 2026-10-08. The typed form moved into `seance_core`, which both
+  apps use: Séance maps each issue to its sentences, Poltergeist to ARB
+  copy through the core barrel. This file is removed.
+
+## packages/poltergeist_core/lib/src/checkout/managed_remote_file.dart
+
+- Source: app/seance_app/lib/services/managed_remote_file.dart
+- Séance commit: 2e6d1f138f1704e683870f75e11262bf50e37379 (the live pin)
+- Ported: 2026-09-20
+- Divergences: two persisted fields Séance's record lacks —
+  `needsReconcile` (06 §3.4's degraded-snapshot mark: a post-upload
+  remote re-stat failure synthesizes size+digest and must not be
+  laundered into an authoritative snapshot across a restart) and
+  `displaced` (06 §3.5: a rename arrival onto a record's remotePath
+  displaces the standing record instead of overwriting it — the
+  record keeps its original path as the CAS-guarded upload target).
+  Both decode as absent → false so a Séance-shaped index stays
+  readable. The strict codec (required-field types, digest shape,
+  remotePath==snapshot.path, no dirty+missing) is ported semantics.
+- Port-back candidates: the two marks, if Séance adopts the
+  synthesized-snapshot repair and rename-displacement rails.
+
+## packages/poltergeist_core/lib/src/checkout/managed_remote_file_store.dart
+
+- Source: app/seance_app/lib/services/managed_remote_file_store.dart
+- Séance commit: 2e6d1f138f1704e683870f75e11262bf50e37379 (the live pin)
+- Ported: 2026-09-20
+- Divergences: the Poltergeist lifecycle rails 06 §3.2/§3.7 add —
+  generation epoch markers, the `.poltergeist-abandoned` in-flight
+  marker dropped at checkout creation and cleared at commit (a
+  marker-bearing unindexed dir is swept wholesale; a payload-bearing
+  unindexed dir is preserved), the recovered-payload listing
+  (`listRecovered`) with explicit-only `deleteRecovered` plus the §3.7
+  per-row `deleteRecoveredFile` (drops one payload file, never a
+  record-owned dir, deletes the dir when its last payload goes), the
+  cross-process `fcntl` lock plus a same-process held-paths guard
+  (POSIX fcntl locks are per-process — Séance's OS lock alone cannot
+  stop a second in-process store), symlink-safe create/delete, the
+  frozen `.poltergeist-<uuid>.upload` sibling snapshot, and streamed
+  SHA-256 hashing. Sanitizer divergences per 06 §3.1's pinned
+  contract: a Windows reserved device name keeps its extension under
+  a `file-` prefix (`nul.conf` → `file-nul.conf`, stem matched
+  case-insensitively against the full 09 §3.5 reserved list —
+  CONIN$/CONOUT$/CLOCK$/superscripts included) instead of Séance's
+  fixed `remote-file` replacement, and overlong names truncate to the
+  255-byte NAME_MAX floor on a codepoint boundary rather than failing
+  at the OS. Owner-only modes extend Séance's Linux-only helper: the
+  index, its atomic-write temp, quarantine destinations, checkout
+  dirs/files, and `.upload` snapshots are chmod 600/700 on Linux and
+  macOS (Windows relies on the per-user app-support ACLs).
+- Port-back candidates: the device-name prefix contract, the
+  NAME_MAX truncation, the epoch/abandoned markers, the
+  recovered-payload surface, and the in-process lock guard.
+
+## packages/poltergeist_core/lib/src/checkout/checkout_manager.dart
+
+- Source: app/seance_app/lib/services/remote_files_controller.dart (the
+  managed-checkout pipeline extracted from the controller per 03 §6:
+  `checkoutRemoteFile`/`uploadLocalCopy`, the checkout watcher and
+  debounce, `_restoreLocalCopies`, renameEntry's local-copy re-keying,
+  `_sameSnapshot`)
+- Séance commit: 2e6d1f138f1704e683870f75e11262bf50e37379 (the live pin)
+- Ported: 2026-09-20
+- Divergences: extracted from the per-pane controller into an
+  app-wide core manager — `editSessionId` is the per-server constant
+  (D17: checkout ownership is per server, never per pane/tab — Séance
+  keyed checkouts per tab). Every byte rides the composed
+  `TransferQueue` through `enqueueManagedCheckout` (journaled,
+  panel-visible, priority-dispatched) instead of the controller's
+  direct adapter calls; the upload carries the record snapshot as
+  `expectedTarget` so the destination adapter's mandatory
+  contentSha256 CAS is the conflict authority (D7) — Séance relied on
+  the preflight stat alone for the same-size/same-mtime case.
+  Post-upload re-stat failure degrades to a synthesized snapshot plus
+  `needsReconcile` rather than failing the committed save. Directory
+  renames re-key descendants prefix-wise (06 §3.5) and an arrival onto
+  an occupied path displaces the occupant rather than dropping it.
+  Watch events filter only the exact generated temp shapes and
+  lifecycle markers — never the record's own basename, so a checkout
+  named `.poltergeist-<hex>.upload` keeps dirty detection. The §3.7
+  review surface adds `forgetRecoveredFile`/`recoveredFile` (per-row
+  discard/open for preserved recordless payloads — Séance's surface
+  deletes whole dirs).
+- Port-back candidates: the CAS-carrying upload spec, the
+  synthesized-snapshot repair, and prefix-wise rename migration.
+
+## packages/poltergeist_core/test/checkout/
+
+- Source: app/seance_app/test/managed_remote_file_store_test.dart
+- Séance commit: 2e6d1f138f1704e683870f75e11262bf50e37379 (the live pin)
+- Ported: 2026-09-20
+- Divergences: the store suite keeps the ported cases (sanitizing,
+  validation, persisted round-trips, quarantine, serialization) and
+  adds the Poltergeist rails (epoch sweep, abandoned markers, the lock,
+  recovered listings, needsReconcile/displaced persistence, the
+  device-name prefix and NAME_MAX truncation). `checkout_manager_test`
+  is new: round-trip through a scripted remote, per-server
+  editSessionId stability, watch debounce and the exact-temp-shape
+  filter, reconcile-on-resume and relaunch recovery, the
+  remote-change/deletion/tamper conflict blocks, explicit overwrite,
+  rename migration, and queue-visibility of both directions.
+- Port-back candidates: none — the new suites cover Poltergeist
+  semantics upstream lacks.
+
+## app/poltergeist_app/lib/services/checkout_session.dart
+
+- Source: none — new Poltergeist composition (03 §6's app seam).
+- Ported: 2026-09-20
+- Notes: the `ChangeNotifier` session wraps the core
+  `CheckoutManager`, exposes the record surface and verbs to the
+  future editor UI, drives uploads through the composed
+  `TransferQueue` (the activity panel's instance), and reconciles on
+  `AppLifecycleState.resumed`. It shares the queue's
+  `LocalOnlyConnectionManager`, so remote verbs fail with the typed
+  `unsupported` error until STATUS item 23 (engine transfer verbs)
+  lands — honest refusal, never a simulated success.
+
+## packages/poltergeist_core/lib/src/editor/built_in_text_document.dart
+
+- Source: app/seance_app/lib/ui/built_in_text_editor.dart (the pure
+  document-I/O layer — load, the atomic temp+rename save, and the size
+  cap — extracted per 06 §2.1)
+- Séance commit: 2e6d1f138f1704e683870f75e11262bf50e37379
+  (original port; re-diffed at the exact `4c0a960` pin)
+- Ported: 2026-09-20
+- Divergences: the I/O layer is extracted into pure Dart and represents the
+  dominant ending as a `LineEnding` enum rather than the source's string. Its
+  LF/no-BOM memory form preserves a leading BOM and detects CRLF versus lone
+  LF by majority vote; saving rewrites the whole document to that family.
+  Uniform LF and CRLF inputs round-trip byte-identical, while mixed endings
+  normalize on first save. The local atomic siblings use the Poltergeist
+  prefix. At the exact pin Séance has adopted the same owner-only temporary,
+  mode carry-over, expected-digest guard, BOM and dominant-ending behavior.
+- Port-back candidates: none. The earlier per-line mixed-EOL claim was
+  incorrect; both implementations normalize mixed endings by majority.
+
+## app/poltergeist_app/lib/ui/editor_syntax.dart
+
+- Source: app/seance_app/lib/ui/editor_syntax.dart
+- Séance commit: 2e6d1f138f1704e683870f75e11262bf50e37379 (the live pin)
+- Ported: 2026-09-20
+- Divergences: the generic tokenizer and controller retain their source
+  semantics; the `EditorSyntaxTheme` values are Poltergeist's teal-seed
+  palette (06 §2.2), and §7's data-only additions extend the language
+  table (css, ruby, perl, lua, the Apache dot-config mappings,
+  env-aware shebangs). The owner's 2026-09-27 dotenv request adds a private
+  assignment-aware scanner in `dotenv_syntax.dart` and `.env`/`.env.*`/`*.env`
+  detection. This is first proven in Poltergeist with dedicated regression
+  fixtures; the token API, controller and size cap are unchanged. Windows
+  basename separation follows Séance's current implementation at
+  `6a1a3301512a6593208062be389e7414929a0649`.
+  Dark-theme comments are brighter to meet the editor's 4.5:1 text contrast
+  threshold; the palette remains app-specific.
+- Port-back candidates: dotenv detection, scanner and regression fixtures
+  apply to Séance. Palette differences remain app-specific. Shared editor
+  package extraction and a possible Planchette app are under discussion;
+  no shared dependency or standalone app is introduced by this change.
+
+## app/poltergeist_app/lib/ui/built_in_text_editor.dart
+
+- Source: app/seance_app/lib/ui/built_in_text_editor.dart
+- Séance commit: 2e6d1f138f1704e683870f75e11262bf50e37379 (the live pin)
+- Ported: 2026-09-20
+- Divergences per 06 §2.3/§2.5: document I/O lives in
+  `poltergeist_core` (`BuiltInTextDocument`); the toast presenter,
+  mono-font stack, and basename resolver are injected seams instead of
+  `SeanceTheme`/`remoteBasename` hardcodes; all user-visible copy
+  resolves through `AppLocalizations` (D20). The save callback returns
+  the new baseline digest so the next save's `expectedSha256` stays
+  armed. `onSaved`/`onUpload` carry the checkout session's reconcile
+  and upload verbs — save-and-upload on a managed checkout rides the
+  composed queue and surfaces the typed `conflict` as 06 §3.4's
+  overwrite dialog; cancel keeps the local save and uploads nothing.
+  Since 2026-09-26, optional close/quit callbacks host the same editor in a
+  D39 native window. The editor registers its dirty-buffer guard with the
+  window manager and owns its document menus; mobile retains the route.
+  Native close refuses an in-flight save/upload and concurrent close
+  attempts share the discard question. Quit freezes the open buffers until
+  exit or cancellation so earlier confirmations remain valid.
+- Port-back candidates: separate editor windows and native close guards
+  apply to Séance too, but require its own window ownership and checkout
+  integration. This task changes Poltergeist; the shared document I/O,
+  syntax, and conflict rules remain unchanged.
+- Exact-pin disposition, 2026-09-29: Séance's editor now has a line-number
+  gutter and a richer status row (caret line/column, EOL, BOM, language and
+  remote state). Poltergeist keeps its current lines/bytes/dirty row. The
+  unrelated UI adoption is deferred under STATUS open item 36.
+
+## Editor tests and captures (M7)
+
+- Sources: app/seance_app/test/built_in_text_editor_test.dart and
+  app/seance_app/test/editor_syntax_test.dart
+- Séance commit: 2e6d1f138f1704e683870f75e11262bf50e37379 (the live pin)
+- Ported: 2026-09-20
+- Divergences: the Séance suite splits along the seam —
+  `packages/poltergeist_core/test/editor/built_in_text_document_test.dart`
+  takes the document half (BOM-present/BOM-less uniform round-trips,
+  mixed-EOL majority normalization, size cap, atomic-temp window) and
+  `app/poltergeist_app/test/ui/built_in_text_editor_test.dart` keeps
+  the widget half plus §2.5 production-path saves through the real
+  document saver. New Poltergeist-only suites:
+  `test/ui/workspace/built_in_editor_checkout_test.dart` drives the
+  shell-level path — `file.editBuiltIn` → checkout → edit →
+  save-and-upload through the composed queue, the conflict-blocked
+  save that never uploads, and overwrite — and
+  `test/ui/built_in_editor_capture_test.dart` produces the §-required
+  PNGs (find bar, conflict dialog) under `POLTERGEIST_CAPTURE=1`.
+- Port-back candidates: none.
+
+## External editors (M7)
+
+- Sources: app/seance_app/lib/services/external_file_opener.dart,
+  the `seance/files` channel block in
+  app/seance_app/macos/Runner/MainFlutterWindow.swift, and
+  app/seance_app/test/external_editor_test.dart
+- Séance commit: bb3fa4bfa4e1c0345afbd95093f2cb02eff11e3f (in the live
+  pin's ancestry — the channel block postdates nothing in the pin)
+- Ported: 2026-09-20
+- Local files:
+  `app/poltergeist_app/lib/services/external_file_opener.dart` (the
+  registry, opener, and picker seams) and
+  `app/poltergeist_app/test/services/external_editor_test.dart` (the
+  registry/persistence port). The `poltergeist/files` channel block in
+  `macos/Runner/MainFlutterWindow.swift` mirrors the Séance handler
+  under the renamed channel. New Poltergeist compositions:
+  `lib/services/editor_registry_controller.dart` (SettingsStore
+  persistence — Séance persists through its own prefs path),
+  `lib/ui/panes/open_with_commands.dart` (D21's `open-with-external`
+  command, the chooser, and the remember-choice dialog),
+  `lib/ui/settings/editor_settings.dart` (the §8 bounded mount),
+  `test/ui/workspace/external_editor_checkout_test.dart` (the
+  shell-level drive), and `test/ui/workspace/external_editor_capture_test.dart`
+  (the §-required PNGs under `POLTERGEIST_CAPTURE=1`, in
+  `tasks/run3-task85/`).
+- Divergences: the reserved selector prefix is `poltergeist.` (the
+  whole prefix, not just the two sentinels, so synced definitions can
+  never shadow `poltergeist.system`/`poltergeist.builtin`). Launch-target
+  validation is platform-aware rather than host-aware — Séance's
+  `File.isAbsolute` check fails to DECODE a Windows definition on a
+  Linux/macOS host, yet §8 requires other-platform rows to render
+  disabled, so Poltergeist validates the target against the definition's
+  own `platform` field. `Other…` carries §4.1's remember-choice prompt
+  (the per-extension binding write) — Séance has no such flow.
+  User-visible copy resolves through `AppLocalizations` (D20); the
+  dirty→toast→upload loop rides `CheckoutSession`'s watcher and the
+  composed `TransferQueue` rather than Séance's files-pane plumbing,
+  and `WorkspaceShell` schedules a frame beside its post-frame re-check
+  because a watcher-driven prompt on an idle window would otherwise
+  wait for an unrelated repaint. `openSystemDefault` refuses names the
+  host would run as programs (`ExecutableLaunchRefused`, 06 §5.3), and
+  `launchWouldExecute` exposes the same check to the shell.
+- Shared: 2026-10-08. `normalizeEditorExtensions` and
+  `validateEditorDisplayName` moved into `planchette_editor`, which both
+  apps import; their pure cases moved to its
+  `external_editor_fields_test.dart`.
+- Port-back candidates: the platform-aware launch-target validation —
+  Séance's `File.isAbsolute` decode fails the same synced-Windows case
+  upstream. The executable-launch refusal, if Séance's remote edit
+  also OS-opens downloaded copies.
+
+## Preview and Quick Look (M7)
+
+- Sources: none — 06 §5.2 names `preview_panel.dart` new code, and
+  Séance ships no preview cache, Quick Look channel, or produce-task
+  plumbing to port.
+- Ported: nothing; recorded 2026-09-21.
+- Local files (all new Poltergeist compositions):
+  `packages/poltergeist_core/lib/src/preview/` (kind classifier, cache,
+  produce spec/byte gate, queue producer),
+  `app/poltergeist_app/lib/services/preview_session.dart`,
+  `lib/services/quick_look_channel.dart`, `lib/ui/preview_panel.dart`,
+  `lib/ui/pdf_preview.dart`, `lib/ui/settings/preview_settings.dart`,
+  the `poltergeist/quicklook` channel block in
+  `macos/Runner/MainFlutterWindow.swift`, and the suites under
+  `test/` (`services/preview_session_test.dart`,
+  `ui/panes/preview_panel_test.dart`,
+  `ui/panes/preview_panel_capture_test.dart` — the §-required PNGs under
+  `POLTERGEIST_CAPTURE=1`, in `tasks/run3-task86/` —
+  `ui/settings/preview_settings_test.dart`).
+- Divergences: produce tasks get the queue-side exemption set the spec
+  requires (head insertion; pause/cap/throttle bypass; two-task in-flight
+  cap; never journaled), but the connection-pool reservation 03 §4.6
+  contemplates is not landed — it needs a `ConnectionManager` surface
+  change and is recorded as a bounded follow-up rather than hacked in.
+  The PDF row rasterizes through `pdfrx` (new dependency) behind the
+  `PreviewPdfBuilder` seam.
+- Port-back candidates: none.
+
+## app/poltergeist_app/lib/ui/update_banner.dart
+
+- Source: app/seance_app/lib/ui/server_list_pane.dart (`_UpdateBanner`)
+- Séance commit: 035b0d880b47639e390af8cbbd6d316cb5edc86d (`v0.9.1`, the
+  live pin)
+- Ported: 2026-09-22 (M9 polish pass 2, PR #185; PORTS entry added by the
+  M9 closure audit — the entry was missed in the landing PR)
+- Divergences: mounts inside the workspace shell between toolbar and
+  panes rather than Séance's server list; strings are ARB (D20); the
+  release-page hand-off goes through an injectable `launch` seam
+  (url_launcher `LaunchMode.externalApplication` by default) so tests
+  observe it without the platform channel, and a failed launch routes to
+  `ApplicationErrorReporter`. The checker's repo constant lives in
+  `poltergeist_core`'s `src/update/update_check.dart`
+  (`poltergeistUpdateRepo`); `UpdateChecker`/`UpdateInfo` themselves are
+  consumed from the pin, not ported (D2).
+- Port-back candidates: none — the divergences are Poltergeist-local
+  (shell mount point, D20 localization, test seam).
+- Retired: 2026-09-24. D32 moved update availability into the
+  inspector's Alerts tab, and nothing mounted the banner after that.
+  The widget, its test and its three ARB keys (`updateBannerText`,
+  `updateViewRelease`, `updateDismissTooltip`) are removed. The checker
+  and `UpdateInfo` stay, feeding the alert.
+
+## M10 milestone-close sweep (2026-09-22)
+
+The 07 §3.12 close sweep re-verified every entry against the `v0.9.1`
+pin (`035b0d8`) and re-diffed the recorded sources against upstream HEAD
+(`15d0fdd`, 2026-09-22). The pin does not move: v0.9.1 remains the
+containing tag, and the drift below is upstream-HEAD churn for the next
+pin-bump window, not pin fallout. `dartssh2` stays exactly 3.0.2.
+
+Upstream drift since the pin touches six recorded sources. Dispositions:
+
+- `remote_files_controller.dart` — upstream grew managed-checkout
+  freshness tracking (#105: `latestRemoteSnapshots`, refresh-on-reopen).
+  Complementary to the ported `CheckoutManager` rails; no port edit. The
+  four safety statics are unchanged — the recorded `local_fs_safety`
+  candidates below still apply at HEAD.
+- `built_in_text_editor.dart` — upstream gained the `expectedSha256`
+  save guard (returns the new baseline digest, same shape as the port's)
+  plus BOM tracking and dominant-ending CRLF normalization. A later audit
+  corrected this ledger: Poltergeist also normalizes a mixed file to the
+  dominant family. There was no per-line reconstruction divergence to port.
+- `server_list_pane.dart`, `server_appearance.dart`,
+  `terminal_pane.dart`, `connection_log_view.dart` — tab/session and
+  appearance churn in surface area Poltergeist does not port (list rows,
+  tab chrome); the `connection_status_panel` transcript-anchor candidate
+  is still upstream-absent at HEAD.
+- `seance_core`/`seance_protocol` — additive only (remote-git surface);
+  nothing consumed here changes shape.
+
+Port-back issues filed this sweep (all on `L-K-M/Seance`):
+
+- [#114](https://github.com/L-K-M/Seance/issues/114) — sync-token
+  revocation endpoint (04 §7.3's urgent item: self-revocation plus a
+  password-authenticated revoke-all; leaked tokens currently have no
+  remediation short of account deletion).
+- [#115](https://github.com/L-K-M/Seance/issues/115) — the
+  `local_fs_safety` validator batch: extended reserved names, backslash
+  rejection, NAME_MAX guards, orphaned-backup sweep, commit-point leaf
+  validation.
+- [#116](https://github.com/L-K-M/Seance/issues/116) —
+  `secure_master_key`: corrupt-entry misreport and the create-on-first-run
+  race.
+- [#117](https://github.com/L-K-M/Seance/issues/117) — identity-file
+  read: normalize non-filesystem failures, bound audit writes.
+- [#118](https://github.com/L-K-M/Seance/issues/118) — `seance_core` VFS
+  additions Poltergeist needs: `pathTypeChanged` kind, cancellable
+  `listDirectory`, raw-name metadata (STATUS items 10/12/13).
+- [#119](https://github.com/L-K-M/Seance/issues/119) — managed-checkout
+  lifecycle hardening: prefix-wise rename migration, displaced-on-arrival,
+  synthesized snapshot + `needsReconcile`, epoch/abandoned markers,
+  recovered-payload surface, in-process lock guard, sanitizer contract,
+  CAS-carrying upload.
+- [#120](https://github.com/L-K-M/Seance/issues/120) — 04 §6 priority 2,
+  now proven: `PersistentLocalRecordStore` with durable tombstones (fixes
+  delete-resurrection and the wholesale re-push habit).
+- [#121](https://github.com/L-K-M/Seance/issues/121) — UX patterns per
+  04 §6 priority 3: theme-aware status colors (SEA-019), ssh_config
+  import preview + dedupe (SEA-007/027), two-stage collapse, persisted
+  pane ratios.
+- [#122](https://github.com/L-K-M/Seance/issues/122) — small polish
+  batch: transcript newest-line anchoring, the RFC 4256 echo bit (plus
+  Enter-navigation/autofocus), platform-aware launch-target validation,
+  UTC-stamped quarantine names, the mounted-harness test nit.
+
+Candidates left open without an issue: the M5 `sortKey`/`groupBookmarks`
+pair (conditional on Séance adopting 02 §5 ordering), the
+`local_fs_safety_test` suites (conditional on upstream exposing the
+statics — noted in #115). The mixed-EOL candidate is closed because both
+apps normalize to the dominant family. `file_stores`' serialized-flush
+candidate is closed: v0.9.1 carries the vault mutation queue and Séance
+#172 carries the host-key mutation queue.
+
+## Pin findings
+
+The 2026-09-21 tag re-pin (M8's first slice) moves both live declarations
+from rev `2e6d1f138f1704e683870f75e11262bf50e37379` to tag `v0.9.1`
+(`035b0d880b47639e390af8cbbd6d316cb5edc86d`), the D2 steady state open
+item 2 waited for: the tag contains the rev pin by ancestry and
+therefore the PR-S3 merge `2f99f4e` (the M8 gate), PR-S1's `599ff936`,
+and #79's probe repair. All four lockfiles resolve to `035b0d8`; the
+bench harness's `pinnedSeanceRevision` follows; `dartssh2` stays exactly
+3.0.2. Upstream changes in the consumed surface at the tag:
+`VaultStore.putSecretBlobs` (batched vault write — port fix recorded in
+the `file_stores` entry), the `ServerIcon` enum widening (port fix in
+the `server_appearance` entry), plus unconsumed additions (the
+`VaultRekeyJournal` interface, the serialized vault mutation queue,
+custom server colours/SVG marks, the re-key flow) that stay upstream
+like the assistant surfaces before them. `flutter analyze` and the full
+app suite verify at the tag; the regenerated audit block below verifies
+with `tool/seance_pin_audit`.
+
+The 2026-09-08 pin bump moves both live declarations and all three locks from
+upstream `a9add15` to `2e6d1f138f1704e683870f75e11262bf50e37379` (Séance
+#81's merge; a commit-rev bridge per D2 — no Séance tag contains #79's
+probe repair, checked by ancestry against all eleven published tags). The
+pin brings Séance #79's serialized probe sweeps, #80/#81's audit work
+(already mirrored in PR #52), SSH trace redaction inside
+`SshConnectionLog.add` with the `Iterable<String>` lines view, the
+typed `AgentAuthUnsupportedError`, `HostKey.recordId`/`hostKeyLocator`,
+`Secret.copyWith`, the additive `assistantSettings` record kind, and new
+first-party sources (`test_connection`, `zai_search`, `assistant_settings`)
+plus `fake_async` as a seance_core dev dependency. The newly available
+assistant/sync surfaces are not consumed (D19 scope; no Poltergeist account).
+`dartssh2` stays exactly 3.0.2 (sha-identical in all three locks).
+
+Every PORTS entry was re-diffed at the target against its recorded source
+block (2026-09-08): `secure_master_key`, `file_stores`, both dialogs and
+their tests, `keystore_resilience`, `atomic_file_test`, and
+`identity_file_reader_test` re-diff clean — their source files are unchanged
+since the recorded revisions, which predate the pin. The four sources that
+moved carry dated dispositions in their entries above (`atomic_file`'s #80
+privacy parameter; `app_services`' assistant/sync churn outside the ported
+`LockedSecretVault` and identity blocks, plus the inapplicable sandbox-grant
+override; `terminal_pane`'s behavior-identical `_ConnectionLogView`
+extraction; `identity_audit_log` identical since cb4b010). Attribution
+headers in ported files keep their original source revisions — provenance,
+not a live-pin claim.
+
+The 2026-09-10 full re-diff sweep (run 3 task 8; per-entry diffs saved
+under `tasks/run3-task8-*`, not committed) re-verified every entry above
+against the `2e6d1f1` pinned tree. All sixteen file entries re-diff as
+recorded: every recorded Séance revision exists with the claimed content
+identity, every recorded divergence is still present in the local port,
+the four recorded source moves (`atomic_file`, `app_services`,
+`terminal_pane`, `identity_audit_log`) verify, and no ported file changed
+locally since the 2026-09-08 refresh except through the already-recorded
+PR #52 gate mirror. Two stale records are corrected in place above, each
+with its citing PR: the probe prerequisite's open-item tail (#62/#67) and
+the cleanup dependency's pin reference (#35/#53). The open port-back
+candidates were re-verified against the pin and against upstream HEAD
+(`b8fc111`, 2026-09-09 — only the #82/#83 dialog changes sit between
+them) and stay open: the responder still drops RFC 4256's per-prompt
+echo bit, the identity read still catches only `FileSystemException`
+with an unbounded audit write, the log view still has no newest-line
+anchoring, and the mounted-harness, Enter-navigation, and autofocus-test
+candidates remain upstream-absent. Local `file_permissions.dart` and
+`uuid.dart` are Poltergeist originals (the helper went upstream in
+Séance #80's port-back, not the reverse), so they carry no entries.
+Four ported files still lack the 09 §4 attribution header
+(`identity_file_reader.dart`, `identity_file_reader_test.dart`, and both
+prompt-dialog test files) — recorded as a follow-up, not fixed in this
+docs-only sweep. The pin audit block below was
+re-verified with `tool/seance_pin_audit` (verify mode matches). This is
+close-prep, not the 07 §3.12 milestone-close chore: that sweep runs
+after startup wiring lands (task 6's engine bridging merged as PR #66
+while this sweep was in review).
+
+The 2026-09-11 addendum (run 3 task 10) re-verifies the entries the sweep
+marked task-6/9-adjacent against current main (`43396c5`): PR #66's merge
+stat touched only `poltergeist_core` and docs — no ported app source and
+no PORTS entry — and PR #69's merge diff over all sixteen ported files is
+empty, so no entry drifted from either PR and no pin or lock moved (no
+pubspec/lock change in either range; `tool/seance_pin_audit` verify mode
+re-run on 2026-09-11 still matches the recorded block). The probe
+prerequisite's stale tail
+(startup composition open) is corrected above with its citing PR (#69).
+The sweep's recorded follow-up is closed: the four ported files it named
+(`identity_file_reader.dart`, `identity_file_reader_test.dart`, and both
+prompt-dialog test files) now carry the 09 §4 attribution header. The
+`TODO(pin)` grep finds no remaining markers in code or docs — only the
+plan's and STATUS's own references to the rule — so nothing is obsoleted
+at the unchanged `2e6d1f1` pin (no Séance tag contains #79; STATUS item 2
+owns the next-tag re-pin). This addendum is close-prep too: the milestone
+closes only with the v0.2.0 tag and release rehearsal.
+
+The consumer fix riding the same pin bump: the pool's transcript bridge
+forwarded the raw `add()` argument past upstream's new redaction to the live
+`connectLog` fan-out. It now forwards the record exactly as upstream stored
+it (`lines.last` after `super.add`), so the live stream and the stored
+transcript carry identical redacted text. Regressions in
+`pool_diagnostics_test.dart` failed at runtime on both the old pin (no
+redaction anywhere) and the new pin with the bridge unfixed (storage
+redacted, stream raw), and pass after the fix. No redaction logic is copied
+or forked; `dartssh2` 3.0.2 stays pinned (upstream's trace audit is
+version-bound).
+
+The 2026-09-07 recovery diagnostics change Poltergeist's pool and engine
+protocol only. No source copy, pin change, or upstream port is required.
+
+The 2026-09-07 stale-home recovery repair changes Poltergeist's pool only.
+No source copy, pin change, or upstream port is required; Séance does not own
+this background recovery loop.
+
+The 2026-09-07 prompt-UI and diagnostics slice ports the nine Séance-sourced
+files above — five production sources plus four test files — at the existing
+`a9add15` pin (no pin change; no Séance tag contains it yet — STATUS item 2
+owns the next-tag bump). The engine-side additions (`ServerStatus.detail`,
+`ConnectLogLine`, the port coalescer, protocol v4) and the prompt
+coordinator, credential dialog, and vault-first resolution are
+Poltergeist-only. Current-route dialog guards, malformed audit-line handling,
+and owner-only audit storage are port-back candidates recorded above.
+
+The 2026-09-07 engine progress coalescer uses the M0 harness's rate and item
+caps, with shared flush windows for the aggregate stream. It adds no Séance
+source copy, dependency change, or port-back candidate.
+
+The 2026-09-07 keepalive prerequisite re-pins both declarations to upstream
+`a9add15` ([Séance #77](https://github.com/L-K-M/Seance/pull/77)). All ported
+sources re-diff unchanged from `2f99f4e`; the `app_services.dart` changes are
+outside the ported `LockedSecretVault` class. No port edits, new copies or
+new port-back candidates. Existing candidates remain tracked above. No tag
+contains the new pin yet; STATUS item 2 owns the next-tag bump. M0's measured
+pins and evidence are unchanged.
+
+The 2026-09-07 reconnect slice uses the existing `Prober`/`TcpBannerProber`
+and SSH authentication APIs. No Séance source copy, pin change, or port is
+required. Its upstream keepalive gap is closed by the prerequisite above;
+pool wiring remains STATUS item 3.
+
+The 2026-09-07 vault/store ports copy app-layer sources whose last-touch
+revisions all predate the current pin; each re-diffs clean at `2f99f4e`, and
+no pin or port-back change is required. The bookmark model is consumed
+through the existing `seance_protocol` pin (no copy: PR-S1 is in the pin's
+ancestry, retiring 07 §3.3's temporary-copy clause).
+
+The 2026-09-06 dependency-contract tests consume the existing pins through
+their APIs. No Séance source or tests were copied; no pin or port-back change
+is required. Independent crypto vectors and a signed in-memory SSH peer pin
+the assumptions required by 09 §5.
+
+The 2026-09-06 credential repair changes Poltergeist's pool ownership only.
+No copied source, pin change, or upstream port is required; the resolver
+carries prompt provenance that the pinned SSH opener cannot infer.
+
+The 2026-09-06 dependency-guard repair adds no copied source or pin changes.
+Its rules are specific to Poltergeist's package boundaries; no port-back is
+required.
+
+The human identity aliases resolve to the repository owner. Other recorded
+identities are local automation or bot metadata; no external human
+contribution appears in the pin's ancestry. Three stranded assistant
+attribution lines in `522c9aaea8a8fcdb81932180aa4bd5e3aa6eaf73`,
+`82ba43a64e88f5fb2647b41c82f3f607cedaba58`, and
+`c2d60a6f45a4f34828a596a492003822d43ed47c` are automation metadata,
+not separate rights holders.
+
+The original PR-S3 vendored-path scan found 80 first-party files under
+`packages/` and the
+112-file `third_party/xterm` fork. The latter retains upstream xterm.dart
+4.0.0's MIT license and patch ledger; it entered at
+`82ba43a64e88f5fb2647b41c82f3f607cedaba58` and is app-only, outside the
+pinned `seance_core` and `seance_protocol` package trees. No gitlinks exist. The
+license scan found only those notices, first-party license/config references,
+and Séance's root Unlicense.
+
+## app/poltergeist_app/macos/Runner/PoltergeistFlutterViewController.{h,m}
+
+- Source: app/seance_app/macos/Runner/SeanceFlutterViewController.{h,m}
+  (with Runner-Bridging-Header.h and the AppInfo.xcconfig
+  `SWIFT_OBJC_BRIDGING_HEADER` setting)
+- Séance commit: 15d0fdd (main, 2026-09-24)
+- Ported: 2026-09-24 (D32 §11)
+- Divergences: class and category names only; the controller is injected
+  into `MacOSWindowUtilsViewController(flutterViewController:)` instead of
+  becoming the window's content controller directly. Séance's native
+  regression script (`scripts/test-macos-accessibility.sh`) is not ported
+  yet — its CI gate is the follow-up; until then the workaround is
+  verified only by Séance's gate against the same Flutter line.
+- Why: Flutter 3.47 destroys `AccessibilityBridge::tree_` before
+  detaching native `FlutterTextField`s; with any accessibility client
+  active a text-input callback can read the freed tree (Séance's
+  docs/macos-accessibility-crash.md). Remove when the engine fixes the
+  destruction order.
+- Keyboard compatibility (2026-09-26): key-down/up ingress supplies a
+  left Command bit only when an injected event carries aggregate Command
+  without either side. Existing physical events retain identity, and cloned
+  events retain Flutter's key-equivalent marker. The native keyboard fixture
+  exercises this boundary against the real bundled responders. The same
+  correction is proposed in [Séance #144](https://github.com/L-K-M/Seance/pull/144);
+  its accessibility lifecycle remains unchanged.
+
+## Settings window runners (D36)
+
+Files: `app/poltergeist_app/macos/Runner/SettingsWindow.swift`,
+`app/poltergeist_app/linux/runner/settings_window.{h,cc}`,
+`app/poltergeist_app/windows/runner/settings_window.{h,cpp}`
+
+- Source: the same paths under `app/seance_app/`, from
+  [Séance #126](https://github.com/L-K-M/Seance/pull/126)
+- Séance commit: 38b7a42 (port source), contained by merge 86455d7 and
+  re-diffed at the exact `4c0a960` pin
+- Ported: 2026-09-25 (D36)
+- Divergences: channel names, the entrypoint argument, window titles
+  and the view controller class (`PoltergeistFlutterViewController`)
+  only. The Linux view is given a transparent background like the app's
+  own. The Dart side is not a port: Séance's `SettingsBackend` fronts one
+  screen over `AppState`, while Poltergeist's host and proxies front the
+  existing sections' seams (`BackupSettingsModel`,
+  `EditorRegistryModel`, `GeneralSettings`, `PreviewDownloadsSettings`).
+  Since 2026-10-08 the link engine under both Dart sides (the handshake,
+  snapshots, hide-not-destroy showings, the quit question) is shared:
+  `GhostSettingsWindowHost`/`GhostSettingsWindowClient` in
+  `planchette/packages/ghost_desktop`
+  ([design](../../docs/design/settings-window-link.md)). Poltergeist keeps
+  its sections, method table, error codec and runners.
+  `window_title.{h,cc}` is Poltergeist's own title code moved out of
+  `my_application.cc` so both windows share it, not a copy.
+- Exact-pin disposition: Séance's post-port fixes for a window-creation
+  failure and negative monitor coordinates already match Poltergeist's
+  corresponding fixes. No unrecorded runner divergence remains.
+- Port-back candidates: none yet; the two sets were written together.
+- Close shortcut (2026-09-30): both macOS hosts claim ⌘W and ⇧⌘W with a
+  local key-down monitor and close the window, written together with
+  Séance commit 7df8fa1
+  ([Séance #162](https://github.com/L-K-M/Seance/pull/162)). The code is
+  identical; only the comment differs, naming each app's route to the
+  chord (Séance's close-tab shortcut in the main window's Dart;
+  Poltergeist's File ▸ Close Tab and Close Window menu items).
+
+## Device themes (D38)
+
+Every file below comes from Séance's device themes,
+[Séance #128](https://github.com/L-K-M/Seance/pull/128) at `f4d2f71`
+(code; `d9a642d` holds its docs), not merged upstream when ported; it
+merged as `8f15eeb`, with these files as synced (`8714859`). The
+2026-09-29 exact-pin re-diff confirms the theme set did not change after that
+merge; the dispositions below stand at `4c0a960`. Ported 2026-09-25. In every
+file the comments are reworded without em dashes; that is prose, not
+behaviour, and is not repeated below.
+
+### app/poltergeist_app/lib/theme/contrast.dart
+
+- Source: app/seance_app/lib/theme/contrast.dart
+- Séance commit: f4d2f71 (Séance #128, merged as 8f15eeb)
+- Ported: 2026-09-25
+- Divergences: none.
+- Port-back candidates: none.
+
+### app/poltergeist_app/lib/theme/app_appearance.dart
+
+- Source: app/seance_app/lib/theme/app_appearance.dart
+- Séance commit: 8714859 (Séance #128, merged as 8f15eeb; synced from f4d2f71)
+- Ported: 2026-09-25
+- Divergences: none.
+- Port-back candidates: none.
+
+### app/poltergeist_app/lib/theme/theme_palette.dart
+
+- Source: app/seance_app/lib/theme/theme_palette.dart
+- Séance commit: f4d2f71 (Séance #128, merged as 8f15eeb)
+- Ported: 2026-09-25
+- Divergences: no terminal block (`ThemeTerminalColors`, the `terminal`
+  field and `withTerminal` are dropped), because Poltergeist has no
+  terminal. `fromJson` reads past Séance's `terminal` key and `toJson`
+  never writes one, so a Séance theme pastes whole except for its
+  terminal colours, and `tryParse` does not count `terminal` as a theme
+  key (an object holding only that would change nothing). The JSON keys,
+  hex forms, lenient decode, name rules and `matchingPreset` are
+  upstream's, so a theme copied in either app pastes into the other. The
+  slot docs name Poltergeist's regions and what each status colour
+  paints here. `fontFamily` is written with a null-aware map element,
+  which this app's lints ask for.
+- Port-back candidates: none.
+
+### app/poltergeist_app/lib/theme/theme_presets.dart
+
+- Source: app/seance_app/lib/theme/theme_presets.dart
+- Séance commit: f4d2f71 (Séance #128, merged as 8f15eeb)
+- Ported: 2026-09-25
+- Divergences: the first preset is `ThemePresets.poltergeist` (stored
+  name `Poltergeist`, accent `poltergeistSeedColor`) in place of
+  Séance's violet `seance`; `ThemePresets.initial` is Vapor where
+  Séance's is Terminal (D38 amendment, 2026-09-26); no preset carries a
+  terminal block. The other nine
+  keep Séance's values, Bubblegum's deeper `#E63A91` accent included, so
+  a shared preset looks the same and matches itself in both apps.
+- Port-back candidates: none.
+
+### app/poltergeist_app/lib/theme/app_theme.dart (applied, not copied)
+
+- Source: the `app/seance_app/lib/theme.dart` changes in f4d2f71,
+  applied to Poltergeist's own twin of that file (the tables were
+  already shared, D32 §10).
+- Ported: 2026-09-25
+- Divergences:
+  - The four status colours are `PoltergeistChrome` fields: the existing
+    `statusConnected` and `statusConnecting`, and new `statusFailed` and
+    `statusUnknown`, where Séance adds a `SeanceStatusColors` extension.
+    Poltergeist's chrome already carried two of them, and its failed and
+    unknown dots painted the scheme's `error` and `outline`. Those stay
+    the tables' (Automatic `offline` is the table's error red, Automatic
+    `unknown` the resolved outline), so a palette's red dot cannot
+    restyle error text and banners, which have a 4.5:1 floor a status
+    colour does not. The error colours are the tables' in every palette.
+  - `onSelection` is chosen against the fill as it shows over the
+    listing (where Poltergeist paints its active selection), Séance's
+    over the rail; the tables' own selection keeps the tables' label.
+  - The dialog radius the corner scale multiplies is Poltergeist's 12,
+    not Material's 28, since that is the shape the app already drew;
+    the scale also reaches the floating button (the phone sidebar's add
+    button), which Séance does not use; the tooltip's text style names
+    the interface font, because this theme's tooltip style replaces the
+    text theme's.
+  - API: top-level `buildPoltergeistThemeFor`, `poltergeistThemesFor` and
+    `resolvedThemeSlots` for Séance's `SeanceTheme.build`,
+    `forAppearance` and `resolvedSlots`; `buildPoltergeistTheme` is the
+    default palette, as `SeanceTheme.light()`/`dark()` are.
+- Port-back candidates: none.
+
+### app/poltergeist_app/lib/ui/color_picker.dart
+
+- Source: app/seance_app/lib/ui/color_picker.dart
+- Séance commit: 8714859 (Séance #128, merged as 8f15eeb; synced from f4d2f71)
+- Ported: 2026-09-25
+- Divergences: strings through ARB, so `title` is required rather than
+  defaulting to copy; the hex field is set in `poltergeistMonoTextStyle`,
+  this app's monospace stack, where Séance's names
+  `SeanceTheme.monoFallback`.
+- Port-back candidates: none (Séance took `scrollable: true` in
+  8714859).
+- Moved (2026-10-08): the dialog and `ColorSwatchBox` now live in
+  `planchette/packages/ghost_ui` (`showColorPicker` with a
+  `ColorPickerStrings` bag and a `hexStyle`), shared with Séance
+  ([design](../../docs/design/server-appearance-package.md)). This file
+  is a wrapper passing the ARB strings and `poltergeistMonoTextStyle`;
+  the mechanics tests moved with the dialog.
+
+### app/poltergeist_app/lib/ui/settings/appearance_settings.dart
+
+- Source: app/seance_app/lib/ui/appearance_settings.dart
+- Séance commit: 8714859 (Séance #128, merged as 8f15eeb; synced from f4d2f71)
+- Ported: 2026-09-25
+- Divergences: strings through ARB, preset names too (`presetLabels`;
+  the stored names stay English); no Terminal colours part; the
+  interface font is a text field only, as Poltergeist has no
+  installed-font picker; a column the Settings window's tab and the
+  Settings dialog both scroll, with a heading of its own in place of
+  Séance's `SettingsPage`/`SettingsSectionHeader`, written against
+  `AppearanceSettingsModel` rather than Séance's `SettingsBackend`; the
+  status rows are named for what they paint here ("Connected or
+  online", "Failed or offline", "Unknown or idle"). The write
+  coalescing, the set-aside Automatic colours, the presets' tiles, the
+  mode, Share and Start over are upstream's.
+- Port-back candidates: none.
+
+### Tests
+
+- `test/theme/theme_palette_test.dart` from `test/theme_palette_test.dart`:
+  the terminal-block cases become the cross-app cases (Séance's own
+  Copy output for its Solarized, verbatim, terminal block and all,
+  pastes as this Solarized; a terminal block alone is not a theme).
+- `test/theme/theme_presets_test.dart` from `test/theme_presets_test.dart`:
+  no terminal colours; the selection's label is measured over the
+  listing; adds the contrast matrix's sidebar row states for every
+  preset's dots, with one recorded exception (Solarized's red on its own
+  selected pill, 2.80:1; STATUS "Device themes"), and shows a preset
+  with its own surface drawing the same at either system brightness.
+- `test/theme/theme_build_test.dart` from `test/theme_build_test.dart`:
+  the default is compared with the whole pre-theme `ThemeData` and its
+  chrome, frozen in `test/theme/legacy_theme.dart` (Poltergeist's own
+  `app_theme.dart` at `c4d4512` with main's 40 dp compact touch rows
+  since, #204; not a port), on five platforms; adds the status dots
+  painting a palette's colours.
+- `test/ui/color_picker_test.dart` from `test/color_picker_test.dart`, and
+  `test/ui/server_color_picker_test.dart` from
+  `test/server_color_picker_test.dart`: wrapped in `AppLocalizations`.
+  Since 2026-10-08 the former keeps only the ARB labels and the mono
+  stack; the dialog's mechanics are tested in ghost_ui.
+- `test/ui/settings/appearance_settings_test.dart`, adapted from the
+  Appearance group of `test/settings_screen_test.dart` over a fake
+  `AppearanceSettingsModel`, plus Poltergeist's own cases (a Séance
+  theme with a terminal block, coalesced writes, localized preset names,
+  the font field, the phone-sized Settings dialog).
+- Port-back candidates: the frozen whole-`ThemeData` comparison, which
+  would catch a component theme Séance's key-colour list does not name.
+
+<!-- SEANCE_PIN_AUDIT_V3:START -->
+## Séance source audit
+
+Deterministic local-source audit. Séance packages resolve
+by path inside this worktree. The record binds provenance
+over the component's full lineage (imported standalone
+ancestry included): the people named as authors, committers
+or attribution trailers, attributions that match none of
+them, license and copyright lines, vendored paths and
+gitlinks. Ordinary changes by known contributors leave it
+unchanged; when it changes, provenance changed and needs
+review. Sections are content-addressed by SHA-256; line
+counts aid review. Use `--print-findings` to see them, with
+the commit-level detail, without adding names to docs.
+
+- Source: `seance_core` at `seance/packages/seance_core` (path dependency)
+- Source: `seance_protocol` at `seance/packages/seance_protocol` (path dependency)
+- Component: `seance/` at `HEAD`
+- Lineage: `75b1e84bf231d149d64c295430a9dda9dc7f4ffb`, `76e466fbcbfe5dc90b4fa399e5dfac990b23c30d`
+- Identity: 32 lines; `sha256:2e10b1bab6544e2c08709838075d83be92605d33beb72ed328cb15b1579ce232`
+- Unmatched attributions: 1 lines; `sha256:41240f7bf814a29257ba1dcf6ca3af20d744a98f374fdd6781eef8d4950b4bab`
+- License scan: 63 lines; `sha256:8b61e1556adb906492d2257b3911df631ff45815e7f47304401e645f7470242f`
+- Vendored paths: 152 lines; `sha256:e7745f2f0331e95079ba6bfb63eebfc142fa7654f34869805c6957e0e8bad11c`
+- Gitlinks: 0 lines; `sha256:8c9771035e10619d9c2e084cc0f914772bfff45bd0b0a37c831f98bdf4a94839`
+<!-- SEANCE_PIN_AUDIT_V3:END -->

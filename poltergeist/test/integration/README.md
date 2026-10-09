@@ -1,0 +1,107 @@
+# SFTP integration fixture
+
+The fixture exposes test-only OpenSSH servers on IPv4 loopback. It creates
+sparse, zero-filled benchmark payloads at runtime, so no large blobs enter Git.
+
+```bash
+test/integration/run.sh
+```
+
+`run.sh` regenerates the user key, builds the modern image on its frozen
+OpenSSH 10.6p1 base, pulls the frozen legacy image by digest, checks every
+rendered Compose profile for unsafe publishing, waits for real SSH banners,
+runs the OpenSSH smoke checks, then runs tagged Dart integration tests
+serially. Its exit trap removes all services, including the profiled keyswap
+service.
+
+The core pool suite covers transport growth, real keepalive round trips, and
+browse recovery after an sshd restart. Restart tests restore the service and
+wait for its SSH banner. CI runs this lifecycle for source, test, fixture, and
+workflow PRs, plus every main push and manual dispatch.
+
+The auth/TOFU suite covers keyboard-interactive auth, silent reconnect/growth,
+and changed-key rejection. The Linux shared-TOFU suite adds pending decisions
+across bookmarks, first-use rejection, and explicit changed-key approval.
+Each TOFU test owns its pins. Per-test teardown in the shared suite stops
+keyswap, waits for the port to clear, and restores modern with an SSH-banner
+readiness check; a subsequent test verifies the original key is served.
+`restore-modern` stops both swap services before reclaiming their fixed
+shared port, so cleanup can retry after partial startup or readiness failures.
+
+Ordinary package tests skip these cases unless `POLTERGEIST_SSHD` and the
+suite's service-port variable are set; `run.sh` exports the complete fixture
+environment. Use Docker Compose and the Dart SDK to run the command above.
+
+The bookmark-sync convergence suite
+(`packages/poltergeist_core/test/integration/sync_server_convergence_test.dart`)
+is a second, independent leg: it speaks the real sync protocol through the
+pinned `HttpSyncClient` to a running `seance_sync_server` and skips unless
+`POLTERGEIST_SYNC_SERVER` names its base URL. CI's `sync_integration` job
+builds the pinned server through its own Dockerfile and exports the variable;
+locally, compile the pinned checkout's server binary and launch it with open
+registration — the test file's header has the recipe.
+
+`sshd-legacy/Dockerfile` records how the public GHCR artifact was built. CI
+never rebuilds it, so an archive or package-index change cannot alter M0.
+
+`sshd-modern-base/Dockerfile` is the modern fixture's frozen base: Alpine plus
+the pinned OpenSSH and iproute2 packages. Alpine serves only the newest build
+of each package, so the integration jobs never build it;
+`sshd-modern/Dockerfile` layers the fixture's own files on the published image
+by digest. To move to a newer OpenSSH, change the pins there and the matching
+constants in `check_config_test.dart` (the pull request builds the base for
+both platforms), merge, run the **Fixture images** workflow on main, and pin
+the digest from its summary in `sshd-modern/Dockerfile`.
+
+Run a benchmark inside the same lifecycle owner (the harness lives at
+`packages/poltergeist_bench`; the old `tool/bench/run.sh` still works and
+forwards to it):
+
+```bash
+test/integration/run.sh --lifecycle-only -- packages/poltergeist_bench/run.sh
+```
+
+Benchmark defaults:
+
+| Endpoint | Port | Purpose |
+|---|---:|---|
+| `sshd-modern` | 2201 | OpenSSH 10.6p1 LAN baseline |
+| `sshd-modern` | 2201 | ~100 ms RTT after `network-profile.sh rtt100` |
+| `sshd-legacy` | 2202 | OpenSSH 8.4 defaults |
+| `sshd-chroot` | 2203 | chrooted `internal-sftp` only |
+| `sshd-restricted` | 2204 | rejects `setstat` and `fsetstat` |
+| `sshd-authmatrix` | 2205 | authentication failures |
+| `sshd-rsa` | 2211 | RSA-SHA2 host signatures only |
+| `sshd-chacha` | 2212 | chacha20 with PQ/curve25519 KEX |
+| `sshd-ed25519` | 2213 | Ed25519 host key only |
+
+The user is `poltergeist`; its test-only password is
+`poltergeist-test-only`. The fresh private key is
+`test/integration/runtime/id_ed25519`. Modern benchmark data is rooted at
+`/home/poltergeist/bench`: read-only inputs are under `fixtures/`, and uploads
+that must be visible to the host go under `uploads/host/`. The host source is
+`test/integration/runtime/uploads`; `generate-data.sh` replaces and empties it
+before Compose starts. Its test-only mode is `0777` so fixture UID 1000 can
+write through rootless or user-namespace mappings.
+
+Generated inputs are `payload-1mb.bin`, `payload-100mb.bin`,
+`payload-1gb.bin`, `entries-10000/`, and eight `readdir-00` through
+`readdir-07` directories with 100 path-prefixed entries each.
+
+Toggle latency without restarting sshd:
+
+```bash
+test/integration/network-profile.sh rtt100
+test/integration/network-profile.sh measure-rtt-ms
+test/integration/network-profile.sh measure-rtt-json
+test/integration/network-profile.sh lan
+```
+
+The RTT profile applies 50 ms delay with 25 ms jitter to both ingress and
+egress. `measure-rtt-ms` prints the rounded median SSH version-to-KEX RTT
+integer. `measure-rtt-json` emits the seven positive microsecond samples in
+capture order, the derived rounded `medianMs`, and the probe UTC. Record the
+measurement; configured delay is not evidence.
+
+Host private keys in `keys/` are fake, loopback-only fixtures. They are stable
+so TOFU tests are repeatable. The user key is deliberately ephemeral.

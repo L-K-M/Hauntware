@@ -1,0 +1,309 @@
+// The Settings → General surface's first section (02 §10's tab list,
+// D19): the update-check opt-out toggle. Follows the settings idiom —
+// immediate persist, revert the field and toast on a failed write.
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:poltergeist_app/l10n/app_localizations.dart';
+import 'package:poltergeist_app/services/appearance_controller.dart';
+import 'package:poltergeist_app/services/directory_grouping_controller.dart';
+import 'package:poltergeist_app/services/editor_text_size_controller.dart';
+import 'package:poltergeist_app/services/registered_command.dart';
+import 'package:poltergeist_app/services/settings_window/settings_window_link.dart';
+import 'package:poltergeist_app/ui/settings/app_settings_command.dart';
+import 'package:poltergeist_app/ui/settings/appearance_settings.dart';
+import 'package:poltergeist_app/ui/settings/directory_grouping_settings.dart';
+import 'package:poltergeist_app/ui/settings/editor_text_size_settings.dart';
+import 'package:poltergeist_app/ui/settings/general_settings.dart';
+import 'package:poltergeist_core/poltergeist_core.dart' show DirectoryGrouping;
+
+void main() {
+  Widget wrap(GeneralSettings settings) => MaterialApp(
+    localizationsDelegates: AppLocalizations.localizationsDelegates,
+    supportedLocales: AppLocalizations.supportedLocales,
+    home: Scaffold(
+      body: SingleChildScrollView(child: GeneralSection(settings: settings)),
+    ),
+  );
+
+  GeneralSettings settings({
+    bool checkForUpdates = true,
+    Future<void> Function(bool)? onCheckForUpdatesChanged,
+  }) => GeneralSettings(
+    checkForUpdates: checkForUpdates,
+    onCheckForUpdatesChanged: onCheckForUpdatesChanged ?? (_) async {},
+  );
+
+  testWidgets('the toggle commits the opt-out through its sink', (
+    tester,
+  ) async {
+    final committed = <bool>[];
+    await tester.pumpWidget(
+      wrap(
+        settings(
+          onCheckForUpdatesChanged: (value) async => committed.add(value),
+        ),
+      ),
+    );
+
+    final toggle = find.byKey(const ValueKey('updates.checkEnabled'));
+    expect(tester.widget<SwitchListTile>(toggle).value, isTrue);
+    await tester.tap(toggle);
+    await tester.pumpAndSettle();
+
+    expect(committed, [false]);
+    expect(tester.widget<SwitchListTile>(toggle).value, isFalse);
+  });
+
+  testWidgets('a failed persist reverts the switch', (tester) async {
+    await tester.pumpWidget(
+      wrap(
+        settings(
+          onCheckForUpdatesChanged: (_) async => throw StateError('disk full'),
+        ),
+      ),
+    );
+
+    final toggle = find.byKey(const ValueKey('updates.checkEnabled'));
+    await tester.tap(toggle);
+    await tester.pumpAndSettle();
+    expect(tester.widget<SwitchListTile>(toggle).value, isTrue);
+    // The failed write was reported through the app's error reporter —
+    // drain it so the framework doesn't flag it as unexpected.
+    expect(tester.takeException(), isA<StateError>());
+  });
+
+  group('keep folders on top', () {
+    Widget section(DirectoryGroupingController model) => MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: Scaffold(body: DirectoryGroupingSection(model: model)),
+    );
+    Finder toggle() => find.byKey(const ValueKey('view.foldersOnTop'));
+
+    testWidgets('the switch writes the grouping both ways', (tester) async {
+      final saved = <DirectoryGrouping>[];
+      final model = DirectoryGroupingController(
+        save: (grouping) async => saved.add(grouping),
+      );
+      addTearDown(model.dispose);
+      await tester.pumpWidget(section(model));
+      expect(tester.widget<SwitchListTile>(toggle()).value, isTrue);
+
+      await tester.tap(toggle());
+      await tester.pumpAndSettle();
+      expect(model.value, DirectoryGrouping.mixed);
+      expect(tester.widget<SwitchListTile>(toggle()).value, isFalse);
+
+      await tester.tap(toggle());
+      await tester.pumpAndSettle();
+      expect(model.value, DirectoryGrouping.first);
+      expect(tester.widget<SwitchListTile>(toggle()).value, isTrue);
+      expect(saved, [DirectoryGrouping.mixed, DirectoryGrouping.first]);
+    });
+
+    testWidgets('opens on the stored grouping', (tester) async {
+      final model = DirectoryGroupingController(
+        initial: DirectoryGrouping.mixed,
+      );
+      addTearDown(model.dispose);
+      await tester.pumpWidget(section(model));
+
+      expect(tester.widget<SwitchListTile>(toggle()).value, isFalse);
+    });
+
+    testWidgets('a failed write shows what the panes sort by and says so', (
+      tester,
+    ) async {
+      final model = DirectoryGroupingController(
+        save: (_) async => throw StateError('disk full'),
+      );
+      addTearDown(model.dispose);
+      await tester.pumpWidget(section(model));
+
+      await tester.tap(toggle());
+      await tester.pumpAndSettle();
+
+      // The panes took the change; the next write carries it.
+      expect(model.value, DirectoryGrouping.mixed);
+      expect(tester.widget<SwitchListTile>(toggle()).value, isFalse);
+      expect(find.textContaining('disk full'), findsOneWidget);
+      expect(tester.takeException(), isA<StateError>());
+    });
+  });
+
+  group('app.settings command', () {
+    final command = buildAppSettingsCommand(
+      settings: () => settings(),
+      enabled: () => true,
+    );
+
+    test('is the 02 §9 row: app scope, ⌘,/Ctrl+,, File-menu reachable', () {
+      expect(command.id, 'app.settings');
+      expect(command.scope, CommandScope.app);
+      expect(command.menuPlacement?.menu, AppMenuId.file);
+
+      final mac = command.activators!(TargetPlatform.macOS);
+      final linux = command.activators!(TargetPlatform.linux);
+      expect(mac, hasLength(1));
+      expect(linux, hasLength(1));
+    });
+
+    Future<void> run(WidgetTester tester, RegisteredCommand command) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Builder(
+            builder: (context) => TextButton(
+              onPressed: () => command.run(context),
+              child: const Text('run'),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('run'));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('opens the Settings window on General when there is one', (
+      tester,
+    ) async {
+      final opened = <SettingsWindowTab>[];
+      await run(
+        tester,
+        buildAppSettingsCommand(
+          settings: () => settings(),
+          enabled: () => true,
+          openWindow: (tab) async {
+            opened.add(tab);
+            return true;
+          },
+        ),
+      );
+
+      expect(opened, [SettingsWindowTab.general]);
+      expect(
+        find.byKey(const ValueKey('general.settings.dialog')),
+        findsNothing,
+      );
+    });
+
+    testWidgets('the dialog carries the folders switch under General', (
+      tester,
+    ) async {
+      final grouping = DirectoryGroupingController();
+      addTearDown(grouping.dispose);
+      await run(
+        tester,
+        buildAppSettingsCommand(
+          settings: () => settings(),
+          directoryGrouping: grouping,
+          enabled: () => true,
+        ),
+      );
+
+      expect(
+        tester.getRect(find.byKey(const ValueKey('view.foldersOnTop'))).top,
+        greaterThan(
+          tester
+              .getRect(find.byKey(const ValueKey('updates.checkEnabled')))
+              .top,
+        ),
+      );
+    });
+
+    testWidgets('the dialog carries Appearance after General', (tester) async {
+      await run(
+        tester,
+        buildAppSettingsCommand(
+          settings: () => settings(),
+          appearance: AppearanceController(),
+          enabled: () => true,
+        ),
+      );
+
+      expect(
+        find.byKey(const ValueKey('updates.checkEnabled')),
+        findsOneWidget,
+      );
+      expect(find.byType(AppearanceSection), findsOneWidget);
+      expect(
+        tester.getRect(find.byType(AppearanceSection)).top,
+        greaterThan(
+          tester
+              .getRect(find.byKey(const ValueKey('updates.checkEnabled')))
+              .top,
+        ),
+      );
+    });
+
+    testWidgets('the dialog ends with the editor text size, which writes '
+        'through as the slider moves', (tester) async {
+      final textSize = EditorTextSizeController();
+      addTearDown(textSize.dispose);
+      final appearance = AppearanceController();
+      addTearDown(appearance.dispose);
+      await run(
+        tester,
+        buildAppSettingsCommand(
+          appearance: appearance,
+          editorTextSize: textSize,
+          enabled: () => true,
+        ),
+      );
+
+      final section = find.byType(EditorTextSizeSection);
+      await tester.ensureVisible(section);
+      await tester.pumpAndSettle();
+      expect(
+        tester.getRect(section).top,
+        greaterThan(tester.getRect(find.byType(AppearanceSection)).top),
+      );
+      expect(find.text('14 pt'), findsOneWidget);
+
+      tester
+          .widget<Slider>(find.byKey(const ValueKey('editor.textSize')))
+          .onChanged!(20);
+      await tester.pump();
+      expect(textSize.value, 20);
+      expect(find.text('20 pt'), findsOneWidget);
+    });
+
+    testWidgets('with only a theme to set, it is Appearance alone', (
+      tester,
+    ) async {
+      await run(
+        tester,
+        buildAppSettingsCommand(
+          appearance: AppearanceController(),
+          enabled: () => true,
+        ),
+      );
+
+      expect(
+        find.byKey(const ValueKey('general.settings.dialog')),
+        findsOneWidget,
+      );
+      expect(find.byKey(const ValueKey('updates.checkEnabled')), findsNothing);
+      expect(find.byType(AppearanceSection), findsOneWidget);
+    });
+
+    testWidgets('falls back to the dialog when the window cannot open', (
+      tester,
+    ) async {
+      await run(
+        tester,
+        buildAppSettingsCommand(
+          settings: () => settings(),
+          enabled: () => true,
+          openWindow: (_) async => false,
+        ),
+      );
+
+      expect(
+        find.byKey(const ValueKey('general.settings.dialog')),
+        findsOneWidget,
+      );
+    });
+  });
+}

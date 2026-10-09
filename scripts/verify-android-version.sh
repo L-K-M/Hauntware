@@ -1,11 +1,18 @@
 #!/usr/bin/env bash
+# Proves Gradle consumed the synchronized pubspec version code: the
+# built release APK's versionCode must equal the build number in the
+# app's pubspec.yaml (1.9.0+1090099 -> 1090099).
+#
+#   scripts/verify-android-version.sh [app-dir]
+#
+# app-dir defaults to the current directory (the release and CI legs
+# run it from seance/app/seance_app or poltergeist/app/poltergeist_app)
+# and must hold pubspec.yaml plus the built
+# build/app/outputs/flutter-apk/app-release.apk. Needs apkanalyzer from
+# the Android command-line tools ($ANDROID_HOME or PATH).
 set -euo pipefail
 
-readonly repository_root="$(
-  cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.."
-  pwd
-)"
-readonly app_root="$repository_root/app/poltergeist_app"
+readonly app_root="$(cd -- "${1:-.}" && pwd)"
 readonly pubspec="$app_root/pubspec.yaml"
 readonly apk="$app_root/build/app/outputs/flutter-apk/app-release.apk"
 readonly version_code_sed='s/^version:[[:blank:]]*[^+[:blank:]]+\+([0-9]+)[[:blank:]]*(#.*)?$/\1/p'

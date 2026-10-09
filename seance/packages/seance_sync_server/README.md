@@ -1,0 +1,213 @@
+# seance_sync_server
+
+A tiny, self-hostable sync server for Séance. It stores **end-to-end encrypted**
+record blobs and resolves conflicts by last-write-wins. It can decrypt nothing:
+a full database compromise leaks only opaque ciphertext.
+
+## Run with Docker
+
+```bash
+# from the seance/ directory of a Hauntware clone
+docker compose -f packages/seance_sync_server/docker-compose.yml up -d --build
+```
+
+Or build the image directly (build context must be `seance/` so the pub
+workspace resolves):
+
+```bash
+docker build -f packages/seance_sync_server/Dockerfile -t seance-sync .
+docker run -p 127.0.0.1:8787:8787 -v seance-data:/data \
+  -e SEANCE_OPEN_REGISTRATION=true seance-sync
+```
+
+Flip `SEANCE_OPEN_REGISTRATION=true` only long enough to enrol your devices,
+then set it back to `false` and restart. Put a TLS-terminating reverse proxy
+(Caddy, nginx, Traefik) in front — the server speaks plain HTTP by design.
+The compose file and `docker run` example bind the host port to loopback only;
+publish it more broadly only behind TLS or on a trusted private network.
+
+To update a running deployment (pull the latest code, rebuild the image,
+recreate the container in one step), run `./update.sh` from `seance/`. It
+probes the published `/healthz` after the recreate and fails with the
+container's logs when the server doesn't answer.
+
+### Moving from a standalone Séance clone
+
+The standalone `L-K-M/Seance` repository is archived, and its `./update.sh`
+now only prints these instructions. Deploy from a Hauntware clone instead. The
+compose project name comes from the compose file's directory, so the new clone
+reuses the existing container and its `seance-data` volume. Run this from the
+directory that contains your `Seance` clone:
+
+```bash
+git clone https://github.com/L-K-M/Hauntware.git
+if [ -f Seance/packages/seance_sync_server/.env ]; then
+  cp Seance/packages/seance_sync_server/.env \
+    Hauntware/seance/packages/seance_sync_server/.env
+else
+  echo "No Seance/packages/seance_sync_server/.env here; continuing without overrides." >&2
+fi
+cd Hauntware/seance && ./update.sh
+```
+
+### Reverse proxy in a container (Nginx Proxy Manager, Traefik, …)
+
+The default `127.0.0.1:8787` publish is only reachable from processes on the
+host itself — inside a proxy *container*, `127.0.0.1` is that container, so it
+gets connection-refused and serves **502 Bad Gateway**. Publish on the Docker
+bridge gateway instead, which only the host and its containers can reach, and
+point the proxy at that same address:
+
+```bash
+cp packages/seance_sync_server/.env.example packages/seance_sync_server/.env
+echo 'SEANCE_PUBLISH_ADDR=172.17.0.1' >> packages/seance_sync_server/.env
+./update.sh   # or: docker compose --env-file packages/seance_sync_server/.env \
+              #     -f packages/seance_sync_server/docker-compose.yml up -d
+```
+
+The `.env` file is gitignored, so updates keep the setting. Use
+`SEANCE_PUBLISH_ADDR=0.0.0.0` for every interface (firewall it), or attach the
+proxy and this service to a shared Docker network and skip publishing entirely.
+
+### Troubleshooting: the app reports a 502
+
+A 502 is never produced by this server — it comes from whatever sits in front
+(reverse proxy or CDN) when the sync container doesn't answer. On the host:
+
+```bash
+docker compose -f packages/seance_sync_server/docker-compose.yml ps    # running? healthy?
+docker compose -f packages/seance_sync_server/docker-compose.yml logs --tail=40
+curl -i "http://$(docker compose -f packages/seance_sync_server/docker-compose.yml \
+  port seance-sync 8787)/healthz"                                      # expect: ok
+```
+
+If `/healthz` answers on the host but the proxy still serves 502, the proxy is
+pointing somewhere the port isn't published (see the section above).
+
+## Run without Docker
+
+```bash
+dart pub get
+dart run packages/seance_sync_server/bin/seance_sync_server.dart \
+  --port 8787 --db ./seance.sqlite --open-registration
+# or compile a native binary:
+dart compile exe packages/seance_sync_server/bin/seance_sync_server.dart -o seance-sync
+./seance-sync --help
+```
+
+SQLite mode needs `libsqlite3` at runtime (`libsqlite3-0` on Debian/Ubuntu).
+Omit `--db` for an ephemeral in-memory store.
+
+## Configuration
+
+| Env var | CLI flag | Default | Meaning |
+|---|---|---|---|
+| `SEANCE_BIND` | `--bind` | `0.0.0.0` | Bind address |
+| `SEANCE_PORT` | `--port` | `8787` | Listen port |
+| `SEANCE_DB_PATH` | `--db` | *(in-memory)* | SQLite file path |
+| `SEANCE_OPEN_REGISTRATION` | `--open-registration` | `false` | Allow `/v1/register` |
+| `SEANCE_LOGIN_MAX_ATTEMPTS` | — | `10` | Login attempts per window |
+| `SEANCE_LOGIN_WINDOW_SECONDS` | — | `60` | Rate-limit window |
+
+## API (protocol v1)
+
+All request/response bodies are JSON; every request carries a `protocolVersion`
+so an old client and new server detect a mismatch instead of corrupting data.
+
+| Method & path | Auth | Purpose |
+|---|---|---|
+| `GET /healthz` | — | Liveness check |
+| `POST /v1/register` | — | Create an account, returns a bearer token |
+| `POST /v1/prelogin` | — | Return the KDF salt/params for a username |
+| `POST /v1/login` | — | Exchange the auth verifier for a token |
+| `GET /v1/sync?since=<seq>` | Bearer | Pull records newer than a sequence number |
+| `PUT /v1/records` | Bearer | Push a batch of encrypted records (LWW) |
+| `DELETE /v1/account` | Bearer | Delete the account and all its data |
+
+Register, prelogin and login run before any authentication, so they read at
+most 16 KiB of request body (less if `SEANCE_MAX_BODY_BYTES` is lower) and
+answer a larger one with 413 `payload_too_large`; only a push gets the full
+body cap. A username is 1 to 256
+bytes of UTF-8 on every route, and registration also refuses control
+characters (C0, DEL, C1) and invisible format characters (zero-width and bidi
+marks, soft hyphen, byte-order mark); either failure is a 400 `bad_username`.
+Login and prelogin skip the character check, so an account registered before
+it existed keeps working as long as its name is 1 to 256 bytes. Registration also requires a 32-byte auth verifier and
+an Argon2 salt of at least 16 bytes.
+
+### Sync transaction semantics
+
+A push resolves LWW, allocates sequences and commits all accepted records in one
+storage transaction. Entries run in list order, including repeated ids; empty
+batches return the current watermark. An LWW rejection is a per-record result,
+not a batch failure. Existing request limits apply before storage: by default,
+1,000 records, 1 MiB per blob and 8 MiB per request body. All three are
+env-tunable, so every pull response advertises them under `limits`
+(`maxBodyBytes`, `maxRecordsPerPush`, `maxBlobBytes`) and a client can split a
+large push into requests this deployment accepts instead of having one
+oversized request rejected whole, every round. The blob cap is advertised for
+a different reason than the other two: a record past it cannot be batched into
+compliance at all, and it is refused with a 413 for the *whole* push — so a
+client that does not know the cap batches such a record beside records the
+server would have taken and loses all of them, identically every round. Knowing
+it, the client sends that record alone and last, and the failure stays with the
+one record that caused it. Falling back has two shapes, and the second is the
+easy one to miss: a client that sees no `limits` at all is talking to a server
+older than the field, but a client whose server advertises only `maxBodyBytes`
+and `maxRecordsPerPush` — every deployment predating `maxBlobBytes` — falls
+back for the blob cap alone, since an absent field takes its default. Either
+way the defaults match that server only if it also ran with them. So a
+deployment with `SEANCE_MAX_BLOB_BYTES` tuned below 1 MiB keeps losing whole
+pushes until the *server* is upgraded too: a new client cannot learn a cap the
+old one never sends, and upgrading only the clients does not unstick it.
+Invalid values for these three caps — unlike this server's other settings —
+abort startup with an error naming the variable, rather than silently falling
+back to the default; an unset or empty variable still means "use the default".
+A database failure rolls back the batch and its sequence changes. A lost HTTP
+reply can still follow a successful commit; clients must reconcile by pulling.
+
+Pull records and `latestSeq` come from one snapshot: every returned sequence is
+`since < seq <= latestSeq`. Later writes belong to the next pull. This does not
+yet provide pagination, client-side durable revisions or authenticated metadata.
+
+SQLite uses `BEGIN IMMEDIATE` for writes and a read transaction for snapshots.
+Transaction lock contention returns `503 storage_busy` without committing the
+batch; retry later. There is no synchronous wait or non-atomic fallback.
+If transaction cleanup itself fails, SQLite storage fails closed and returns
+`503 storage_unavailable` for the triggering and subsequent storage requests.
+Diagnostics retain the original cause and log only exception types/SQLite numeric
+codes—not messages, SQL, parameters or blobs. Restart after investigating the
+database failure; automatic reopen could
+silently replace an injected or in-memory database. `/healthz` remains liveness,
+not storage readiness. Closing the disabled connection is safe to repeat.
+The memory backend stages batches without yielding, then swaps state together.
+
+Custom server `Storage` implementations must implement `pushRecords` and
+`pullSnapshot` with these guarantees. The older primitives remain for source
+compatibility with callers, but must not be composed into sync operations. Wire
+DTOs and the database schema are unchanged; this is not an account migration.
+
+## Security model
+
+- The client derives a vault key and an **independent** auth verifier from the
+  passphrase (Argon2id + HKDF domain separation). Only the verifier reaches the
+  server, and it is stored as a salted SHA-256 hash — a DB leak does not allow
+  login (the raw verifier is needed and cannot be recovered from the hash).
+- Record payloads are sealed client-side with XChaCha20-Poly1305. The server
+  stores `nonce ‖ ciphertext ‖ mac` and never holds a key.
+- Login is rate-limited to blunt online guessing.
+- Conflict resolution is deterministic last-write-wins keyed by
+  `(updatedAt, deviceId)`, identical to the client, so both sides agree.
+
+## Tests
+
+```bash
+dart test packages/seance_sync_server
+```
+
+Covers the endpoints (register/prelogin/login/push/pull/delete, auth, rate
+limiting, protocol-version and open-registration gating), the SQLite backend
+(round-trips + durability across reopen), and a full end-to-end run of the real
+client against a live server with two devices converging. Atomic-sync regressions
+force stale-write and watermark races over HTTP, a separate-connection SQLite
+commit during a pull, and a late batch-write failure followed by reopen/retry.

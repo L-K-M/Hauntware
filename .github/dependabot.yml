@@ -1,12 +1,38 @@
+# GitHub reads only this root file; the product subtrees' former
+# .github/dependabot.yml files were never applied in the monorepo.
 version: 2
 updates:
+  # Workflow actions (the root workflows are the only ones GitHub runs).
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+  # Android Gradle builds (AGP, Kotlin, wrapper). The standalone repos
+  # pointed this at their roots, where no Gradle files exist (X-14).
   - package-ecosystem: gradle
-    directory: /
+    directory: /seance/app/seance_app/android
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+  - package-ecosystem: gradle
+    directory: /poltergeist/app/poltergeist_app/android
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+  # Planchette's pub workspace, editor and app, as in its standalone repo.
+  - package-ecosystem: pub
+    directory: /planchette
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+  - package-ecosystem: pub
+    directory: /planchette/packages/planchette_editor
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+  - package-ecosystem: pub
+    directory: /planchette/app/planchette_app
     schedule:
       interval: weekly
     open-pull-requests-limit: 5

@@ -1,0 +1,759 @@
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:planchette_editor/planchette_editor.dart';
+
+const _undoHistoryDelay = Duration(milliseconds: 600);
+
+enum _EditingAccess { editable, locked }
+
+class _LongStrings extends EditorStrings {
+  const _LongStrings();
+
+  @override
+  String get replace => 'Diese Übereinstimmung ersetzen';
+
+  @override
+  String get replaceAll => 'Alle Übereinstimmungen ersetzen';
+
+  @override
+  String matchCount(int current, int total, {bool capped = false}) =>
+      'Übereinstimmung $current von insgesamt $total';
+}
+
+Widget _app(
+  EditorController controller, {
+  double textScale = 1,
+  EditorStrings strings = const EditorStrings(),
+  _EditingAccess access = _EditingAccess.editable,
+}) => MaterialApp(
+  builder: (context, child) => MediaQuery(
+    data: MediaQuery.of(
+      context,
+    ).copyWith(textScaler: TextScaler.linear(textScale)),
+    child: child!,
+  ),
+  home: Scaffold(
+    body: PlanchetteEditor(
+      controller: controller,
+      strings: strings,
+      editingLocked: access == _EditingAccess.locked,
+    ),
+  ),
+);
+
+Finder _field(TextEditingController controller) => find.byWidgetPredicate(
+  (widget) => widget is TextField && widget.controller == controller,
+);
+
+/// Backtracks catastrophically: each extra `a` doubles the time, and this
+/// many take minutes, far past any budget used here.
+const _catastrophic = r'(a+)+$';
+final _catastrophicText = '${'a' * 28}!';
+
+/// Long enough for the regular-expression search's settle delay to pass.
+const _settleDelay = Duration(milliseconds: 200);
+
+EditorController _editor(String text, {Duration? budget}) {
+  final editor = EditorController(
+    displayPath: 'test.txt',
+    initialText: text,
+    patternSearchBudget: budget,
+  );
+  addTearDown(editor.dispose);
+  return editor;
+}
+
+/// The same inside a widget test, whose timers are fake: fake time fires the
+/// settle delay and, advanced by [step], a budget; real time lets the worker
+/// answer.
+Future<void> _settledInWidgets(
+  WidgetTester tester,
+  EditorController editor, {
+  Duration step = Duration.zero,
+}) async {
+  await tester.pump(_settleDelay);
+  for (var i = 0; i < 2000 && editor.patternSearchPending; i++) {
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 5)),
+    );
+    await tester.pump(step);
+  }
+  expect(editor.patternSearchPending, isFalse);
+  await tester.pump();
+}
+
+void main() {
+  for (final width in [320.0, 360.0]) {
+    for (final scale in [1.0, 2.0]) {
+      testWidgets('search fits width $width at text scale $scale', (
+        tester,
+      ) async {
+        await tester.binding.setSurfaceSize(Size(width, 900));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+        final controller = EditorController(
+          displayPath: 'test.txt',
+          initialText: 'cat CAT cat',
+        );
+        addTearDown(controller.dispose);
+        await tester.pumpWidget(
+          _app(controller, textScale: scale, strings: const _LongStrings()),
+        );
+        controller.openSearch(replace: true);
+        controller.search.text = 'cat';
+        await tester.pumpAndSettle();
+
+        expect(tester.takeException(), isNull);
+        expect(tester.getSize(_field(controller.search)).width, width - 24);
+        expect(
+          tester.getSize(_field(controller.replacement)).width,
+          width - 24,
+        );
+        expect(
+          find.text(const _LongStrings().replaceAll).hitTestable(),
+          findsOneWidget,
+        );
+      });
+    }
+  }
+
+  testWidgets('desktop keeps fields beside search and replacement controls', (
+    tester,
+  ) async {
+    final controller = EditorController(
+      displayPath: 'test.txt',
+      initialText: 'cat',
+    );
+    addTearDown(controller.dispose);
+    await tester.pumpWidget(_app(controller));
+    controller.openSearch(replace: true);
+    controller.search.text = 'cat';
+    await tester.pumpAndSettle();
+
+    final query = tester.getRect(_field(controller.search));
+    final replace = tester.getRect(_field(controller.replacement));
+    expect(
+      query.contains(tester.getCenter(find.byTooltip('Match case'))),
+      isFalse,
+    );
+    expect(
+      tester.getCenter(find.byTooltip('Match case')).dy,
+      closeTo(query.center.dy, 1),
+    );
+    expect(
+      tester.getCenter(find.text('Replace all')).dy,
+      closeTo(replace.center.dy, 1),
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('keyboard reaches search toggles and replace all with undo', (
+    tester,
+  ) async {
+    final controller = EditorController(
+      displayPath: 'test.txt',
+      initialText: 'cat CAT cat',
+    );
+    addTearDown(controller.dispose);
+    await tester.pumpWidget(_app(controller));
+    await tester.pump(_undoHistoryDelay);
+    controller.openSearch(replace: true);
+    controller.search.text = 'cat';
+    controller.replacement.text = 'dog';
+    await tester.pumpAndSettle();
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    expect(controller.caseSensitive, isTrue);
+    expect(
+      tester.getSemantics(find.byTooltip('Match case')),
+      isSemantics(isSelected: true, isButton: true),
+    );
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    expect(controller.wholeWord, isTrue);
+    expect(
+      tester.getSemantics(find.byTooltip('Whole words')),
+      isSemantics(isSelected: true, isButton: true),
+    );
+
+    // Traverse regular expression, line actions, previous, next, replace
+    // toggle, close, replacement, replace, all.
+    for (var step = 0; step < 9; step++) {
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    }
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pump(_undoHistoryDelay);
+    expect(controller.text.text, 'dog CAT dog');
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    expect(controller.searchOpen, isFalse);
+    expect(controller.editorFocus.hasFocus, isTrue);
+    controller.undoController.undo();
+    await tester.pump();
+    expect(controller.text.text, 'cat CAT cat');
+  });
+
+  testWidgets('locked search keeps navigation but disables replacement', (
+    tester,
+  ) async {
+    final controller = EditorController(
+      displayPath: 'test.txt',
+      initialText: 'cat CAT cat',
+    );
+    addTearDown(controller.dispose);
+    await tester.pumpWidget(_app(controller, access: _EditingAccess.locked));
+    controller.openSearch(replace: true);
+    controller.search.text = 'cat';
+    controller.replacement.text = 'dog';
+    await tester.pumpAndSettle();
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    expect(controller.caseSensitive, isTrue);
+    expect(
+      tester
+          .widget<TextButton>(find.widgetWithText(TextButton, 'Replace'))
+          .onPressed,
+      isNull,
+    );
+    expect(
+      tester
+          .widget<TextButton>(find.widgetWithText(TextButton, 'Replace all'))
+          .onPressed,
+      isNull,
+    );
+    expect(controller.text.text, 'cat CAT cat');
+  });
+
+  testWidgets('keyboard toggles replacement and preserves query selection', (
+    tester,
+  ) async {
+    final controller = EditorController(
+      displayPath: 'test.txt',
+      initialText: 'cat cat',
+    );
+    addTearDown(controller.dispose);
+    await tester.pumpWidget(_app(controller));
+    controller.search.text = 'cat';
+    controller.openSearch();
+    await tester.pumpAndSettle();
+    final selection = controller.search.selection;
+
+    // Match case, whole words, regular expression, line actions, previous,
+    // next, then the replace toggle.
+    for (var step = 0; step < 7; step++) {
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    }
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    expect(controller.replaceOpen, isTrue);
+    expect(controller.search.selection, selection);
+    expect(
+      tester.getSemantics(find.byTooltip('Find and replace')),
+      isSemantics(isSelected: true, isButton: true),
+    );
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    expect(controller.replaceOpen, isFalse);
+    expect(
+      tester.getSemantics(find.byTooltip('Find and replace')),
+      isSemantics(isSelected: false, isButton: true),
+    );
+  });
+
+  testWidgets(
+    'resizing preserves search and replacement focus and composition',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(800, 900));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final controller = EditorController(
+        displayPath: 'test.txt',
+        initialText: 'cat cat',
+      );
+      addTearDown(controller.dispose);
+      await tester.pumpWidget(_app(controller));
+      controller.openSearch(replace: true);
+      await tester.pumpAndSettle();
+
+      const composing = TextEditingValue(
+        text: 'ca',
+        selection: TextSelection.collapsed(offset: 2),
+        composing: TextRange(start: 0, end: 2),
+      );
+      for (final (field, focus) in [
+        (controller.search, controller.searchFocus),
+        (controller.replacement, controller.replacementFocus),
+      ]) {
+        focus.requestFocus();
+        await tester.pump();
+        tester.testTextInput.updateEditingValue(composing);
+        await tester.pump();
+        expect(tester.testTextInput.isVisible, isTrue);
+
+        for (final width in [320.0, 800.0]) {
+          await tester.binding.setSurfaceSize(Size(width, 900));
+          await tester.pumpAndSettle();
+          expect(focus.hasFocus, isTrue);
+          expect(field.value, composing);
+          expect(tester.testTextInput.isVisible, isTrue);
+        }
+      }
+    },
+  );
+
+  testWidgets('the counter numbers a later page within the document', (
+    tester,
+  ) async {
+    final controller = EditorController(
+      displayPath: 'log.txt',
+      initialText: List.filled(searchMatchLimit + 3, 'hit').join('\n'),
+    );
+    addTearDown(controller.dispose);
+    await tester.pumpWidget(_app(controller));
+    controller
+      ..openSearch()
+      ..search.text = 'hit';
+    await tester.pump();
+    expect(find.text('1/1000+'), findsOneWidget);
+
+    for (var i = 0; i < searchMatchLimit; i++) {
+      controller.nextMatch();
+    }
+    await tester.pump();
+    // The second page holds three matches, but they are the document's
+    // 1,001st to 1,003rd, and nothing follows them.
+    expect(find.text('1001/1003'), findsOneWidget);
+  });
+
+  testWidgets('F3 after closing find leaves typing in the document', (
+    tester,
+  ) async {
+    final controller = EditorController(
+      displayPath: 'test.txt',
+      initialText: 'cat dog cat',
+    );
+    addTearDown(controller.dispose);
+    await tester.pumpWidget(_app(controller));
+    controller
+      ..openSearch()
+      ..search.text = 'cat';
+    await tester.pumpAndSettle();
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    expect(controller.searchOpen, isFalse);
+    expect(controller.editorFocus.hasFocus, isTrue);
+
+    // The caret never left the start, so the first match is next.
+    await tester.sendKeyEvent(LogicalKeyboardKey.f3);
+    await tester.pumpAndSettle();
+    expect(controller.searchOpen, isTrue);
+    expect(controller.editorFocus.hasFocus, isTrue);
+    expect(
+      controller.text.selection,
+      const TextSelection(baseOffset: 0, extentOffset: 3),
+    );
+    await tester.sendKeyEvent(LogicalKeyboardKey.f3);
+    await tester.pumpAndSettle();
+    expect(
+      controller.text.selection,
+      const TextSelection(baseOffset: 8, extentOffset: 11),
+    );
+  });
+
+  testWidgets('review fix: Escape on a find bar button closes the find bar', (
+    tester,
+  ) async {
+    // With both bars open, the find bar's controls are part of it too.
+    final controller = EditorController(
+      displayPath: 'test.txt',
+      initialText: 'cat dog cat',
+    );
+    addTearDown(controller.dispose);
+    await tester.pumpWidget(_app(controller));
+    controller.openGoToLine();
+    await tester.pumpAndSettle();
+    controller
+      ..openSearch()
+      ..search.text = 'cat';
+    await tester.pumpAndSettle();
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pumpAndSettle();
+    expect(controller.searchFocus.hasFocus, isFalse);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    expect(controller.searchOpen, isFalse);
+    expect(controller.goToLineOpen, isTrue);
+  });
+
+  testWidgets(
+    'review fix: Find Next with nothing focused types into the text',
+    (tester) async {
+      // The reopened find field autofocused when nothing held focus, such as
+      // after a click outside the document, so typing edited the query.
+      final controller = EditorController(
+        displayPath: 'test.txt',
+        initialText: 'cat dog cat',
+      );
+      addTearDown(controller.dispose);
+      await tester.pumpWidget(_app(controller));
+      controller
+        ..openSearch()
+        ..search.text = 'cat';
+      await tester.pumpAndSettle();
+      controller.closeSearch();
+      await tester.pumpAndSettle();
+      FocusManager.instance.primaryFocus?.unfocus();
+      await tester.pumpAndSettle();
+      expect(controller.editorFocus.hasFocus, isFalse);
+
+      controller.nextMatch();
+      await tester.pumpAndSettle();
+      expect(controller.searchOpen, isTrue);
+      expect(controller.searchFocus.hasFocus, isFalse);
+      expect(controller.editorFocus.hasFocus, isTrue);
+    },
+  );
+
+  group('find in selection', () {
+    // 'cat' sits at 0-3, 8-11 and 16-19.
+    const text = 'cat one cat two cat';
+
+    testWidgets('bounds the search to the stored range', (tester) async {
+      final controller = _editor(text);
+      await tester.pumpWidget(_app(controller));
+      controller.text.selection = const TextSelection(
+        baseOffset: 4,
+        extentOffset: 19,
+      );
+      controller.findInSelection();
+      await tester.pump();
+
+      expect(controller.searchScope, const TextRange(start: 4, end: 19));
+      expect(controller.text.searchScope, const TextRange(start: 4, end: 19));
+      controller.search.text = 'cat';
+      await tester.pump();
+      // The match before the scope never appears, and stepping past the
+      // last in-scope match wraps to its first.
+      expect(controller.matches, [
+        const TextRange(start: 8, end: 11),
+        const TextRange(start: 16, end: 19),
+      ]);
+      // The search anchors at the selection's start, so the first
+      // in-scope match is active; stepping moves on to the second, then
+      // wraps — the match before the scope never appears.
+      controller.nextMatch();
+      expect(
+        controller.text.selection,
+        const TextSelection(baseOffset: 16, extentOffset: 19),
+      );
+      controller.nextMatch();
+      expect(
+        controller.text.selection,
+        const TextSelection(baseOffset: 8, extentOffset: 11),
+        reason: 'Find Next wraps inside the scope',
+      );
+    });
+
+    testWidgets('the chip clears the scope back to the document', (
+      tester,
+    ) async {
+      final controller = _editor(text);
+      await tester.pumpWidget(_app(controller));
+      controller.text.selection = const TextSelection(
+        baseOffset: 4,
+        extentOffset: 19,
+      );
+      controller.findInSelection();
+      controller.search.text = 'cat';
+      await tester.pump();
+      expect(find.text('in selection'), findsOneWidget);
+
+      await tester.tap(
+        find.descendant(
+          of: find.byType(InputChip),
+          matching: find.byType(Icon),
+        ),
+      );
+      await tester.pump();
+      expect(controller.searchScope, isNull);
+      expect(controller.text.searchScope, isNull);
+      expect(controller.matches, hasLength(3));
+      expect(controller.searchOpen, isTrue);
+    });
+
+    testWidgets('closing the find bar retires the scope', (tester) async {
+      final controller = _editor(text);
+      await tester.pumpWidget(_app(controller));
+      controller.text.selection = const TextSelection(
+        baseOffset: 4,
+        extentOffset: 19,
+      );
+      controller.findInSelection();
+      await tester.pump();
+      controller.closeSearch();
+      await tester.pump();
+      expect(controller.searchScope, isNull);
+      expect(controller.text.searchScope, isNull);
+
+      // A plain Find afterwards searches the document again — and the
+      // selection that scoped before does not prefill the field.
+      controller.text.selection = const TextSelection(
+        baseOffset: 0,
+        extentOffset: 3,
+      );
+      controller.openSearch();
+      await tester.pump();
+      expect(controller.search.text, 'cat');
+    });
+
+    testWidgets('an edit maps the scope through it', (tester) async {
+      final controller = _editor('cat one cat two cat');
+      await tester.pumpWidget(_app(controller));
+      controller.text.selection = const TextSelection(
+        baseOffset: 8,
+        extentOffset: 19,
+      );
+      controller.findInSelection();
+      await tester.pump();
+      // Inserting before the scope shifts it; the text and the wash move
+      // together.
+      controller.text.value = const TextEditingValue(
+        text: 'XXcat one cat two cat',
+        selection: TextSelection.collapsed(offset: 0),
+      );
+      await tester.pump();
+      expect(controller.searchScope, const TextRange(start: 10, end: 21));
+      expect(controller.text.searchScope, const TextRange(start: 10, end: 21));
+      controller.search.text = 'cat';
+      await tester.pump();
+      expect(controller.matches, [
+        const TextRange(start: 10, end: 13),
+        const TextRange(start: 18, end: 21),
+      ]);
+    });
+
+    testWidgets('an edit that swallows the scope drops it', (tester) async {
+      final controller = _editor('cat one cat two cat');
+      await tester.pumpWidget(_app(controller));
+      controller.text.selection = const TextSelection(
+        baseOffset: 8,
+        extentOffset: 19,
+      );
+      controller.findInSelection();
+      await tester.pump();
+      controller.text.value = const TextEditingValue(
+        text: 'clean',
+        selection: TextSelection.collapsed(offset: 0),
+      );
+      await tester.pump();
+      expect(controller.searchScope, isNull);
+    });
+
+    testWidgets('a scoped Replace All leaves the rest alone', (tester) async {
+      final controller = _editor(text);
+      await tester.pumpWidget(_app(controller));
+      controller.text.selection = const TextSelection(
+        baseOffset: 4,
+        extentOffset: 19,
+      );
+      controller.findInSelection();
+      controller.search.text = 'cat';
+      controller.replacement.text = 'dog';
+      await tester.pump();
+      expect(await controller.replaceAll(), isTrue);
+      expect(controller.text.text, 'cat one dog two dog');
+      // The scope follows the replaced region: same bounds, new text.
+      expect(controller.searchScope, const TextRange(start: 4, end: 19));
+    });
+
+    testWidgets('a length-changing Replace All remaps the scope', (
+      tester,
+    ) async {
+      final controller = _editor(text);
+      await tester.pumpWidget(_app(controller));
+      controller.text.selection = const TextSelection(
+        baseOffset: 4,
+        extentOffset: 19,
+      );
+      controller.findInSelection();
+      controller.search.text = 'cat';
+      controller.replacement.text = 'cats';
+      await tester.pump();
+      // Same-length results cannot tell a remapped scope from a stale
+      // one — a longer replacement moves the end bound.
+      expect(await controller.replaceAll(), isTrue);
+      expect(controller.text.text, 'cat one cats two cats');
+      expect(controller.searchScope, const TextRange(start: 4, end: 21));
+    });
+
+    testWidgets('a backwards selection scopes the search the same', (
+      tester,
+    ) async {
+      final controller = _editor(text);
+      await tester.pumpWidget(_app(controller));
+      // Dragged backwards: the anchor sits at 19 and the caret at 4.
+      controller.text.selection = const TextSelection(
+        baseOffset: 19,
+        extentOffset: 4,
+      );
+      controller.findInSelection();
+      controller.search.text = 'cat';
+      await tester.pump();
+      expect(controller.searchScope, const TextRange(start: 4, end: 19));
+      expect(controller.matches, [
+        const TextRange(start: 8, end: 11),
+        const TextRange(start: 16, end: 19),
+      ]);
+    });
+
+    testWidgets('a collapsed caret cannot scope the search', (tester) async {
+      final controller = _editor(text);
+      await tester.pumpWidget(_app(controller));
+      controller.text.selection = const TextSelection.collapsed(offset: 4);
+      controller.findInSelection();
+      await tester.pump();
+      expect(controller.searchScope, isNull);
+      expect(controller.searchOpen, isFalse);
+    });
+  });
+
+  group('regular expressions', () {
+    Widget app(EditorController editor, {double width = 800}) => MaterialApp(
+      home: Scaffold(
+        body: Center(
+          child: SizedBox(
+            width: width,
+            child: PlanchetteEditor(controller: editor),
+          ),
+        ),
+      ),
+    );
+
+    testWidgets('the toggle is labelled, reports its state and searches', (
+      tester,
+    ) async {
+      final editor = _editor('a TODO here\nTODO: fix');
+      await tester.pumpWidget(app(editor));
+      editor
+        ..openSearch()
+        ..search.text = r'\bTODO\b';
+      await tester.pump();
+      expect(find.text('No matches'), findsOneWidget);
+      expect(
+        tester.getSemantics(find.byTooltip('Regular expression')),
+        isSemantics(isSelected: false, isButton: true),
+      );
+
+      await tester.tap(find.byTooltip('Regular expression'));
+      await tester.pump();
+      expect(editor.useRegularExpression, isTrue);
+      expect(
+        tester.getSemantics(find.byTooltip('Regular expression')),
+        isSemantics(isSelected: true, isButton: true),
+      );
+      // Nothing is claimed while the matches are on their way.
+      expect(find.text('No matches'), findsNothing);
+      await _settledInWidgets(tester, editor);
+      expect(find.text('1/2'), findsOneWidget);
+    });
+
+    testWidgets('the keyboard reaches the toggle after whole words', (
+      tester,
+    ) async {
+      final editor = _editor('cat');
+      await tester.pumpWidget(app(editor));
+      editor.openSearch();
+      await tester.pumpAndSettle();
+      for (var step = 0; step < 3; step++) {
+        await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      }
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pump();
+      expect(editor.useRegularExpression, isTrue);
+      expect(editor.caseSensitive, isFalse);
+      expect(editor.wholeWord, isFalse);
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pump();
+      expect(editor.searchOpen, isFalse);
+      expect(editor.editorFocus.hasFocus, isTrue);
+    });
+
+    testWidgets('a broken pattern is shown in the error colour, then cleared', (
+      tester,
+    ) async {
+      final editor = _editor('anything at all');
+      await tester.pumpWidget(app(editor, width: 320));
+      editor
+        ..openSearch()
+        ..toggleRegularExpression()
+        ..search.text = '(unclosed';
+      await tester.pump();
+      // The detail is the platform's own RegExp message, not the editor's.
+      final detail = switch (_compileError('(unclosed')) {
+        FormatException(:final message) => message,
+      };
+      final message = find.text('Invalid pattern: $detail');
+      expect(message, findsOneWidget);
+      final context = tester.element(message);
+      expect(
+        tester.widget<Text>(message).style?.color,
+        Theme.of(context).colorScheme.error,
+      );
+      expect(tester.takeException(), isNull);
+
+      editor.search.text = 'any';
+      await tester.pump();
+      expect(message, findsNothing);
+      await _settledInWidgets(tester, editor);
+      expect(find.text('1/1'), findsOneWidget);
+    });
+
+    testWidgets('a pattern that runs too long says so', (tester) async {
+      final editor = _editor(
+        _catastrophicText,
+        budget: const Duration(milliseconds: 50),
+      );
+      await tester.pumpWidget(app(editor));
+      editor
+        ..openSearch()
+        ..toggleRegularExpression()
+        ..search.text = _catastrophic;
+      await _settledInWidgets(
+        tester,
+        editor,
+        step: const Duration(milliseconds: 20),
+      );
+      expect(find.text('Pattern took too long to search'), findsOneWidget);
+      expect(editor.matches, isEmpty);
+    });
+
+    testWidgets('the find field hints at pattern mode', (tester) async {
+      final editor = _editor('text');
+      await tester.pumpWidget(app(editor));
+      editor.openSearch();
+      await tester.pump();
+      expect(find.text('Find in file'), findsOneWidget);
+      editor.toggleRegularExpression();
+      await tester.pump();
+      expect(find.text('Find by regular expression'), findsOneWidget);
+    });
+  });
+}
+
+FormatException _compileError(String pattern) {
+  try {
+    RegExp(pattern);
+  } on FormatException catch (error) {
+    return error;
+  }
+  throw StateError('$pattern compiles');
+}

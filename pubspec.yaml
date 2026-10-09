@@ -1,25 +1,25 @@
-# Poltergeist — Dart pub workspace root.
+# Hauntware suite manifest.
 #
-# Groups the pure-Dart packages that can be built and tested without the
-# Flutter SDK. The Flutter app in `app/poltergeist_app` (once scaffolded) is
-# intentionally NOT a workspace member: it requires the Flutter SDK and is
-# resolved on its own.
-name: _poltergeist_workspace
+# This is the one versioned artifact at the repository root: the shared
+# lkm-release engine reads the suite version from here (it is the first
+# entry in RELEASE_PUBSPECS) and keeps every owned package/app pubspec in
+# lockstep through scripts/release.sh.
+#
+# It is deliberately NOT a pub workspace: each project keeps its own
+# pure-Dart workspace resolved per subtree (planchette/, seance/,
+# poltergeist/), and the Flutter apps stay outside those workspaces.
+# The dev dependencies below exist so tool/release_version can resolve
+# `package:path`, `package:yaml` and `package:test` against this root —
+# run `dart pub get` here before using the tool or its tests.
+name: hauntware
 publish_to: none
+version: 1.9.0
 
 environment:
   sdk: ^3.12.0
 
-workspace:
-  - packages/poltergeist_core
-  - packages/poltergeist_sync
-
 dev_dependencies:
-  # Keep parser/resolver APIs at the versions already present in the lockfile.
-  analyzer: 14.1.0
-  crypto: ^3.0.7
   lints: ^5.0.0
   path: ^1.9.1
-  package_config: 3.0.0
   test: ^1.25.0
   yaml: ^3.1.4

@@ -1,4 +1,4 @@
-// Release tooling stays outside the shipped application.
+// Release tooling stays outside the shipped applications.
 // ignore_for_file: avoid_relative_lib_imports
 
 import 'dart:convert';
@@ -18,7 +18,7 @@ void main() {
 
   setUp(() {
     sandbox = Directory.systemTemp.createTempSync(
-      'poltergeist-release-cli-test-',
+      'hauntware-release-cli-test-',
     );
     root = Directory(p.join(sandbox.path, 'repository'))..createSync();
     _writeFixture(root);
@@ -39,19 +39,25 @@ void main() {
     );
   }
 
-  test('validate prints the Android version code', () {
-    expect(run(['validate', '--version', '0.1.0']), 0);
-    expect(output, ['0.1.0+10099']);
+  test('validate prints the bounded build code', () {
+    expect(run(['validate', '--version', '1.1.0']), 0);
+    expect(output, ['1.1.0+1010099']);
     expect(errors, isEmpty);
   });
 
-  test('validate rejects an unsupported qualifier', () {
-    expect(run(['validate', '--version', '1.0.0-alpha1']), 1);
+  test('validate rejects a qualifier and an out-of-bounds component', () {
+    expect(run(['validate', '--version', '1.1.0-alpha1']), 1);
     expect(errors.single, contains('invalid release version'));
+
+    errors.clear();
+    expect(run(['validate', '--version', '1.100.0']), 1);
+    expect(errors.single, contains('between 0 and 99'));
   });
 
-  test('validate accepts the common root option', () {
-    expect(run(['validate', '--version', '1.0.0', '--root', root.path]), 0);
+  test('check verifies the suite tree', () {
+    expect(run(['check']), 0);
+    expect(output.single, contains('1.1.0+1010099'));
+    expect(output.single, contains('7 pubspecs'));
     expect(errors, isEmpty);
   });
 
@@ -64,27 +70,66 @@ void main() {
     );
 
     expect(result, 0);
-    expect(output.single, contains('3 pubspecs'));
     expect(errors, isEmpty);
   });
 
-  test('missing command arguments return usage failure', () {
-    expect(run(['sync', '--version', '0.1.0']), 64);
-    expect(errors.single, startsWith('usage:'));
+  test('sync rewrites all products without a pubspec argument', () {
+    expect(run(['sync', '--version', '1.1.1']), 0);
+    expect(output.single, contains('1.1.1+1010199'));
+    expect(
+      _pubspecVersion(root, 'seance/app/seance_app/pubspec.yaml'),
+      '1.1.1+1010199',
+    );
   });
 
-  test('options cannot consume another option as their value', () {
-    expect(run(['check', '--root', '--version']), 64);
-    expect(errors.single, startsWith('usage:'));
+  test('check-order verifies target ordering against prior tags', () {
+    expect(
+      run([
+        'check-order',
+        '--version',
+        '1.2.0',
+        '--prior-tag',
+        'v1.1.0',
+        '--prior-tag',
+        'v1.0.9',
+      ]),
+      0,
+    );
+    expect(output.single, contains('preserves release order'));
+  });
 
-    errors.clear();
+  test('check-order refuses a target equal to a prior tag', () {
+    expect(
+      run(['check-order', '--version', '1.1.0', '--prior-tag', 'v1.1.0']),
+      1,
+    );
+    expect(errors.single, contains('must exceed prior tag v1.1.0'));
+  });
 
-    expect(run(['validate', '--version', '--pubspec']), 64);
-    expect(errors.single, startsWith('usage:'));
+  test('validate accepts an explicit root', () {
+    expect(run(['validate', '--version', '1.1.0', '--root', root.path]), 0);
+    expect(output, ['1.1.0+1010099']);
+    expect(errors, isEmpty);
+  });
+
+  test('check accepts the expected tree version', () {
+    expect(run(['check', '--version', '1.1.0']), 0);
+    expect(output.single, contains('1.1.0+1010099'));
+    expect(errors, isEmpty);
+  });
+
+  test('check-tag refuses a tag without the v prefix', () {
+    expect(run(['check-tag', '--tag', '1.1.0']), 1);
+    expect(errors.single, contains('invalid release tag'));
+  });
+
+  test('check-order refuses a target behind the current tree', () {
+    expect(run(['check-order', '--version', '1.0.9']), 1);
+    expect(errors.single, contains('current tree'));
   });
 
   test('file-system failures identify the affected path', () {
-    final readmePath = p.join(root.path, 'README.md');
+    final readmePath = p.join(root.path, 'seance', 'README.md');
     final result = IOOverrides.runZoned(
       () => run(['check']),
       createFile: (path) {
@@ -92,6 +137,8 @@ void main() {
           throw FileSystemException('forced read failure', path);
         }
 
+        // File(path) would call this override again; fromRawPath does not
+        // consult IOOverrides.
         return File.fromRawPath(Uint8List.fromList(utf8.encode(path)));
       },
     );
@@ -100,117 +147,138 @@ void main() {
     expect(errors.single, contains(readmePath));
   });
 
-  test('sync writes deterministic app metadata', () {
+  test('check-tag compares a release tag with the tree', () {
+    expect(run(['check-tag', '--tag', 'v1.1.0']), 0);
+    expect(output.single, contains('v1.1.0'));
+  });
+
+  test('pubspecs lists the bump set, root manifest first', () {
+    expect(run(['pubspecs']), 0);
+    expect(output.single, startsWith('pubspec.yaml '));
+    expect(output.single, contains('seance/app/seance_app/pubspec.yaml'));
     expect(
-      run([
-        'sync',
-        '--version',
-        '1.1.0',
-        '--pubspec',
-        'app/poltergeist_app/pubspec.yaml',
-      ]),
-      0,
+      output.single,
+      contains('poltergeist/packages/poltergeist_core/pubspec.yaml'),
     );
+  });
 
+  test('post-bump syncs app metadata, locks, and README markers', () {
+    expect(run(['post-bump', '--version', '1.1.1']), 0);
+    expect(output.single, contains('1.1.1+1010199'));
     expect(
-      _read(root, 'app/poltergeist_app/pubspec.yaml'),
-      contains('version: 1.1.0+1010099'),
+      _pubspecVersion(root, 'seance/app/seance_app/pubspec.yaml'),
+      '1.1.1+1010199',
     );
-    for (final path in _appleInfoPlistPaths) {
-      expect(_read(root, path), contains('<string>2.1.0</string>'));
-    }
-  });
-
-  test('check verifies repository synchronization', () {
-    expect(run(['check', '--version', '0.1.0']), 0);
-    expect(output.single, contains('3 pubspecs'));
-  });
-
-  test('check-tag verifies tag grammar and repository synchronization', () {
-    expect(run(['check-tag', '--tag', 'v0.1.0']), 0);
-    expect(output.single, contains('v0.1.0'));
-  });
-
-  test('check-tag reports malformed tags without crashing', () {
-    expect(run(['check-tag', '--tag', '0.1.0']), 1);
-    expect(errors.single, contains('invalid release tag'));
-  });
-
-  test('check-order verifies tree and repeated prior tags', () {
     expect(
-      run([
-        'check-order',
-        '--version',
-        '0.2.0',
-        '--prior-tag',
-        'v0.0.1',
-        '--prior-tag',
-        'v0.1.0',
-      ]),
-      0,
+      File(
+        p.join(root.path, 'seance/app/seance_app/pubspec.lock'),
+      ).readAsStringSync(),
+      contains('version: "1.1.1"'),
     );
-    expect(output.single, contains('0.2.0+20099'));
+    expect(
+      File(p.join(root.path, 'seance/README.md')).readAsStringSync(),
+      contains('<!-- version -->1.1.1<!-- /version -->'),
+    );
+    expect(
+      File(
+        p.join(
+          root.path,
+          'poltergeist/app/poltergeist_app/ios/Runner/Info.plist',
+        ),
+      ).readAsStringSync(),
+      contains('<string>2.1.1</string>'),
+    );
   });
 
-  test('check-order rejects a downgrade', () {
-    expect(run(['check-order', '--version', '0.0.1']), 1);
-    expect(errors.single, contains('current tree'));
+  test('post-bump requires a version', () {
+    expect(run(['post-bump']), 64);
+    expect(errors.single, startsWith('usage:'));
+  });
+
+  test('usage failures and option misuse return 64', () {
+    expect(run(const []), 64);
+    expect(errors.single, startsWith('usage:'));
+
+    errors.clear();
+    expect(run(['sync']), 64);
+    expect(errors.single, startsWith('usage:'));
+
+    errors.clear();
+    expect(run(['check', '--pubspec', 'x/pubspec.yaml']), 64);
+    expect(errors.single, startsWith('usage:'));
+
+    errors.clear();
+    expect(run(['check', '--root', '--version']), 64);
+    expect(errors.single, startsWith('usage:'));
   });
 }
 
 void _writeFixture(Directory root) {
-  _write(root, 'pubspec.yaml', 'name: _workspace\n');
-  _write(
-    root,
-    'packages/poltergeist_core/pubspec.yaml',
-    'name: poltergeist_core\nversion: 0.1.0\n',
-  );
-  _write(
-    root,
-    'tool/bench/pubspec.yaml',
-    'name: poltergeist_bench\nversion: 0.1.0\n',
-  );
-  _write(root, 'app/poltergeist_app/pubspec.yaml', '''
-name: poltergeist_app
-version: 0.1.0+10099
-dependencies:
-  poltergeist_core:
-    path: ../../packages/poltergeist_core
-''');
-  _write(root, 'app/poltergeist_app/pubspec.lock', '''
-packages:
-  poltergeist_core:
-    dependency: "direct main"
-    description:
-      path: "../../packages/poltergeist_core"
-      relative: true
-    source: path
-    version: "0.1.0"
-''');
-  for (final path in _appleInfoPlistPaths) {
-    _write(root, path, '''
-<plist>
-<dict>
-  <key>CFBundleVersion</key>
-  <string>1.1.0</string>
-</dict>
-</plist>
-''');
+  void write(String path, String contents) {
+    File(p.join(root.path, path))
+      ..parent.createSync(recursive: true)
+      ..writeAsStringSync(contents);
   }
-  _write(root, 'README.md', '<!-- version -->0.1.0<!-- /version -->\n');
+
+  String pubspec(String name, [String version = '1.1.0']) =>
+      'name: $name\nversion: $version\n';
+  String plist(String bundleVersion) =>
+      '<plist><dict>\n'
+      '\t<key>CFBundleVersion</key>\n'
+      '\t<string>$bundleVersion</string>\n'
+      '</dict></plist>\n';
+  String readme(String version) =>
+      'v<!-- version -->$version<!-- /version -->\n';
+
+  write('pubspec.yaml', 'name: hauntware\nversion: 1.1.0\n');
+  for (final project in ['planchette', 'seance', 'poltergeist']) {
+    write(
+      '$project/packages/${project}_core/pubspec.yaml',
+      pubspec('${project}_core'),
+    );
+    write(
+      '$project/app/${project}_app/pubspec.yaml',
+      pubspec('${project}_app', '1.1.0+1010099'),
+    );
+    write('$project/README.md', readme('1.1.0'));
+  }
+  write(
+    'seance/app/seance_app/pubspec.lock',
+    'packages:\n'
+        '  seance_core:\n'
+        '    dependency: "direct main"\n'
+        '    description:\n'
+        '      path: "../../packages/seance_core"\n'
+        '      relative: true\n'
+        '    source: path\n'
+        '    version: "1.1.0"\n'
+        'sdks:\n  dart: ">=3.12.0 <4.0.0"\n',
+  );
+  write(
+    'planchette/app/planchette_app/macos/Runner/Info.plist',
+    plist(r'$(FLUTTER_BUILD_NUMBER)'),
+  );
+  write(
+    'seance/app/seance_app/ios/Runner/Info.plist',
+    plist(r'$(FLUTTER_BUILD_NUMBER)'),
+  );
+  write(
+    'seance/app/seance_app/macos/Runner/Info.plist',
+    plist(r'$(FLUTTER_BUILD_NUMBER)'),
+  );
+  write(
+    'poltergeist/app/poltergeist_app/ios/Runner/Info.plist',
+    plist('2.1.0'),
+  );
+  write(
+    'poltergeist/app/poltergeist_app/macos/Runner/Info.plist',
+    plist('2.1.0'),
+  );
 }
 
-const _appleInfoPlistPaths = [
-  'app/poltergeist_app/ios/Runner/Info.plist',
-  'app/poltergeist_app/macos/Runner/Info.plist',
-];
-
-String _read(Directory root, String path) {
-  return File(p.join(root.path, path)).readAsStringSync();
-}
-
-void _write(Directory root, String path, String contents) {
-  final file = File(p.join(root.path, path));
-  file.parent.createSync(recursive: true);
-  file.writeAsStringSync(contents);
-}
+String _pubspecVersion(Directory root, String relativePath) =>
+    File(p.join(root.path, relativePath))
+        .readAsLinesSync()
+        .singleWhere((line) => line.startsWith('version:'))
+        .substring('version:'.length)
+        .trim();
