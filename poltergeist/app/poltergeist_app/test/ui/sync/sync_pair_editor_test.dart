@@ -4,6 +4,8 @@
 @TestOn('vm')
 library;
 
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:poltergeist_app/l10n/app_localizations.dart';
@@ -176,9 +178,11 @@ void main() {
       ).colorScheme.onErrorContainer,
     );
 
-    await tester.tap(
+    final action = tester.getSemantics(
       find.byKey(const ValueKey('sync.docrootWarningAction.right')),
     );
+    expect(action.getSemanticsData().hasAction(ui.SemanticsAction.tap), isTrue);
+    action.owner!.performAction(action.id, ui.SemanticsAction.tap);
     await tester.pumpAndSettle();
 
     final rightField = tester.widget<TextField>(

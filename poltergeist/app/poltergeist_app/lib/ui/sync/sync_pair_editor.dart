@@ -772,21 +772,21 @@ final class _DocrootWarning extends StatelessWidget {
                   ],
                 ),
               ),
-              Semantics(
-                label: l10n.syncDocrootWarningUseSaferPathForSide(side),
-                button: true,
-                excludeSemantics: true,
-                child: Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton(
-                    key: ValueKey(
-                      'sync.docrootWarningAction.${warning.side.name}',
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  key: ValueKey(
+                    'sync.docrootWarningAction.${warning.side.name}',
+                  ),
+                  style: TextButton.styleFrom(
+                    foregroundColor: theme.colorScheme.onErrorContainer,
+                  ),
+                  onPressed: onUseSuggestion,
+                  child: Text(
+                    l10n.syncDocrootWarningUseSaferPath,
+                    semanticsLabel: l10n.syncDocrootWarningUseSaferPathForSide(
+                      side,
                     ),
-                    style: TextButton.styleFrom(
-                      foregroundColor: theme.colorScheme.onErrorContainer,
-                    ),
-                    onPressed: onUseSuggestion,
-                    child: Text(l10n.syncDocrootWarningUseSaferPath),
                   ),
                 ),
               ),

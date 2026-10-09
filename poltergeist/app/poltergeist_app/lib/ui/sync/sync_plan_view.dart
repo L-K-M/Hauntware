@@ -1026,30 +1026,28 @@ final class _DocrootNotices extends StatelessWidget {
                       ),
                     ),
                     if (onEditRules != null)
-                      Semantics(
-                        label: l10n.syncDocrootWarningUseSaferPathForSide(
-                          warning.side == SyncSide.left
-                              ? l10n.syncSideLeft
-                              : l10n.syncSideRight,
-                        ),
-                        button: true,
-                        excludeSemantics: true,
-                        child: Align(
-                          alignment: Alignment.centerRight,
-                          child: TextButton(
-                            key: ValueKey(
-                              'sync.docrootWarningAction.${warning.side.name}',
-                            ),
-                            style: TextButton.styleFrom(
-                              foregroundColor:
-                                  theme.colorScheme.onErrorContainer,
-                            ),
-                            onPressed: controller.planMutationsBlocked
-                                ? null
-                                : () => onEditRules!(
-                                    SyncRulesEditRequest.docroot(warning),
-                                  ),
-                            child: Text(l10n.syncDocrootWarningUseSaferPath),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton(
+                          key: ValueKey(
+                            'sync.docrootWarningAction.${warning.side.name}',
+                          ),
+                          style: TextButton.styleFrom(
+                            foregroundColor: theme.colorScheme.onErrorContainer,
+                          ),
+                          onPressed: controller.planMutationsBlocked
+                              ? null
+                              : () => onEditRules!(
+                                  SyncRulesEditRequest.docroot(warning),
+                                ),
+                          child: Text(
+                            l10n.syncDocrootWarningUseSaferPath,
+                            semanticsLabel:
+                                l10n.syncDocrootWarningUseSaferPathForSide(
+                                  warning.side == SyncSide.left
+                                      ? l10n.syncSideLeft
+                                      : l10n.syncSideRight,
+                                ),
                           ),
                         ),
                       ),

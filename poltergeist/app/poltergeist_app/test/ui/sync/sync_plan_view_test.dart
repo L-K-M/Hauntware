@@ -1040,9 +1040,11 @@ void main() {
       findsOneWidget,
     );
 
-    await tester.tap(
+    final action = tester.getSemantics(
       find.byKey(const ValueKey('sync.docrootWarningAction.right')),
     );
+    expect(action.getSemanticsData().hasAction(ui.SemanticsAction.tap), isTrue);
+    action.owner!.performAction(action.id, ui.SemanticsAction.tap);
     expect(request?.target, SyncRulesEditTarget.docrootTrash);
     expect(request?.docrootWarning?.side, SyncSide.right);
     expect(
