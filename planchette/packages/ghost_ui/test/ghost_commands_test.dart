@@ -401,6 +401,52 @@ void main() {
   });
 
   group('ghostMenuSignature', () {
+    List<Object?> signature(MenuSerializableShortcut? shortcut) =>
+        ghostMenuSignature([
+          GhostMenu(
+            title: 'Edit',
+            groups: [
+              [
+                GhostCommandRow(
+                  GhostCommandSpec(
+                    label: 'Copy',
+                    activators: [?shortcut],
+                    onSelected: () {},
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ]);
+
+    test('fresh equivalent chords produce equal signatures', () {
+      for (final makeShortcut in <MenuSerializableShortcut Function()>[
+        () => SingleActivator(LogicalKeyboardKey.keyC, meta: true),
+        () => CharacterActivator('c', meta: true),
+      ]) {
+        final first = makeShortcut();
+        final second = makeShortcut();
+        expect(identical(first, second), isFalse);
+        expect(listEquals(signature(first), signature(second)), isTrue);
+      }
+    });
+
+    test('changed native chords produce different signatures', () {
+      final original = signature(
+        const SingleActivator(LogicalKeyboardKey.keyC, meta: true),
+      );
+      for (final shortcut in const <MenuSerializableShortcut?>[
+        null,
+        SingleActivator(LogicalKeyboardKey.keyV, meta: true),
+        SingleActivator(LogicalKeyboardKey.keyC, control: true),
+        SingleActivator(LogicalKeyboardKey.keyC, meta: true, alt: true),
+        SingleActivator(LogicalKeyboardKey.keyC, meta: true, shift: true),
+        CharacterActivator('c', meta: true),
+      ]) {
+        expect(listEquals(original, signature(shortcut)), isFalse);
+      }
+    });
+
     test('equal menus produce equal signatures; enablement flips differ', () {
       final a = ghostMenuSignature([menu()]);
       final b = ghostMenuSignature([menu()]);

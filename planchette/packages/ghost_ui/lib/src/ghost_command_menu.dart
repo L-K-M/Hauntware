@@ -284,6 +284,20 @@ List<Object?> ghostMenuSignature(
 MenuSerializableShortcut? _defaultShortcut(GhostCommandSpec spec) =>
     ghostNativeShortcut(spec.activators);
 
+/// Activators compare by identity; the native chord compares by value.
+Object? _shortcutSignature(MenuSerializableShortcut? shortcut) {
+  if (shortcut == null) return null;
+  final serialized = shortcut.serializeForMenu();
+  return (
+    serialized.trigger,
+    serialized.character,
+    serialized.alt,
+    serialized.control,
+    serialized.meta,
+    serialized.shift,
+  );
+}
+
 Iterable<Object?> _rowSignature(
   GhostMenuRow row,
   MenuSerializableShortcut? Function(GhostCommandSpec spec) shortcutFor,
@@ -295,7 +309,7 @@ Iterable<Object?> _rowSignature(
         command.label,
         command.enabled,
         command.checked,
-        shortcutFor(command),
+        _shortcutSignature(shortcutFor(command)),
       );
     case GhostSubmenuRow(:final title, :final items):
       yield _rowBoundary;
