@@ -771,6 +771,8 @@ reports agree it cannot be one:
   exchange, `ssh-rsa` and CBC by default, cannot connect to chacha20-only or
   ML-KEM-only servers, and can time out handshakes on memory-constrained
   Android devices. A re-pin is a separate suite-wide task (c2 §3, R12, R13).
+  *Update 2026-10-10:* the suite re-pinned to 4.1.0 (PR #113); 03 D23 and
+  5.10 give the result.
 
 ### 5.3 Suite integration cost
 

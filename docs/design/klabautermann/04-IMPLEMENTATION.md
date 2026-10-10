@@ -248,10 +248,10 @@ Foundations F1 to F4 plus F4b: about 23 to 33 engineer-weeks [E]. MVP
 total (M0 to M4, including F1 to F4 and F4b): about 44 to 60 engineer-weeks
 [E]. With two contributors in parallel tracks (foundations and shared UI;
 spikes and product code against fakes), the preview is roughly 7 to 8
-months out [E]. The dartssh2 4.x re-pin (decision 17) runs in parallel as
-a separate suite-wide task (its own PR across all apps with the full SSH
-test matrix) and is outside these totals; `SshLink`'s workarounds (5.10)
-shrink once it lands.
+months out [E]. The dartssh2 4.x re-pin (decision 17) ran as a separate
+suite-wide task (its own PR across all apps with the full SSH test matrix)
+outside these totals and landed as 4.1.0 (PR #113); 5.10 lists which
+`SshLink` workarounds it made unnecessary.
 
 ### F5: v1 extractions (about 9 to 16, the sum of F5a and F5c to F5f in 03, section 3.5; parallel with M5 and M6)
 
@@ -477,8 +477,8 @@ later; its helper part finishes before M8 and its parity part before M9
 Séance inbox prerequisites and the sync server sender quota land in a
 suite release before the one that ships T1 alert delivery in M8
 (decisions 21 and 22). The suite-wide pin-collision fix runs with
-or after F7. The dartssh2 4.x re-pin (decision 17) is a separate
-suite-wide task in parallel and is not on this path.
+or after F7. The dartssh2 4.x re-pin (decision 17) has landed and is not
+on this path.
 
 ---
 
@@ -488,7 +488,7 @@ suite-wide task in parallel and is not on this path.
 |---|---|---|---|---|
 | R1 | The catalog extraction is larger than estimated or changes Poltergeist behaviour | Medium / high | Design doc first (S9) with the approved resolutions (decision 3); byte-identical goldens; convergence test; pull-only MVP | Ship M2 and M3 on the read side of the library (stores plus `ServerConfigHandler`, no writer); still shared, never copied |
 | R2 | An extraction regresses a shipped app (keychain entry, pixel drift, sync data) | Medium / high | D3; literal entry-name tests; manual macOS keychain check; sibling baselines | Narrow the move; revert is one PR because shims keep call sites |
-| R3 | dartssh2 3.0.2 defects (stall, keepalive, missing algorithms, Android KEX timeouts) | High / medium | Workarounds in `SshLink`; CN-23 errors; the separate suite-wide re-pin task, started in parallel (decision 17) | Hardened hosts documented as unsupported until the re-pin |
+| R3 | dartssh2 defects (keepalive, `env` refusal, close, no ML-KEM; the stall, chacha20 and Android KEX timeouts were fixed by the 4.1.0 re-pin, decision 17) | High / medium | Workarounds in `SshLink` (5.10); CN-23 errors | ML-KEM-only hosts documented as unsupported |
 | R4 | Sampler portability on unusual hosts (ServerBox's top support cost, r4) | High / medium | Tiers, per-platform fixtures, diagnostic bundle, panels that hide with reasons | Tier B after v1 |
 | R5 | Users expect alerts while the app is closed | High / medium | Coverage UI from first run; tray, Android reachability and Android watch mode in v1.x; T1 committed for v1.x, delivering alerts through the sync server to every device at its next launch or sync round (decision 21) | None needed: T1 is the answer; the opt-in Rust companion follows in M9 |
 | R6 | Elevation variance (sudo-rs, `requiretty`, disabled cache, doas, run0) | Medium / medium | S3; fallback ladder; CI test against a real sudo | doas and run0 password modes stay out of v1 |
@@ -543,7 +543,7 @@ catalog IDs point to `02-FEATURES.md`.
 | 14 | Android watch mode? | v1.x: a time-limited opt-in foreground service, off by default, started per session, stopping automatically and saying so | D34, M8, R19 |
 | 15 | Path filter for the client matrix; privileged DinD in CI? | Client matrix builds on every PR, no path filter (deviates; about 30 to 45 extra runner-minutes per PR and longer macOS queues accepted); privileged `docker:dind` on ephemeral GitHub-hosted Linux runners, pinned by digest, loopback-only ports; other platforms use recorded fixtures | D36, D37, 11.3, 11.6, 12.1, R17 |
 | 16 | Ship the MVP in suite releases labelled preview? | Yes, from M4: the release job, manifest entries and workflow contracts land at M4; M1 registers build, check and CI legs and the release gate steps only | 11.7, 12.1, M1, M4 |
-| 17 | Start the dartssh2 4.x re-pin now? | Yes, as a separate suite-wide task in parallel (its own PR across all apps, full SSH test matrix), outside the estimates | D23, 5.10, 13, R3 |
+| 17 | Start the dartssh2 4.x re-pin now? | Yes, as a separate suite-wide task in parallel (its own PR across all apps, full SSH test matrix), outside the estimates. Landed 2026-10-10 as 4.1.0 (PR #113) | D23, 5.10, 13, R3 |
 | 18 | Hand-offs in v1; starting folder for X-10? | Séance link intake (opens a known server, asks before connecting, links only pick a server and a starting folder) and Poltergeist Android and iOS registration (F5d) in v1; starting folder accepted and X-10 moves to v1 | D12, 7.22, X-03, X-10, F5, M5 |
 | 19 | Backup scope; GPL catalogs? | Backups inside Klabautermann after v1.x, built on T1 (until then the BAK-01 dump and BAK-02 backup status, both v1.x); only permissive catalogs (Apache-2.0, MIT); GPL (Runtipi, 1Panel) and unlicensed (umbrel-apps) catalogs are not fetched, so no legal review | 7.18, BAK-03, TPL-04, 13 (Later) |
 | 20 | Helper containers for VOL-03 and CTR-21? | Allowed with explicit confirmation on each use: shows what will start and whether an image must be downloaded, image pinned by digest, an image already present preferred, helper removed afterwards; an engine change, not a host file write | 8.11, VOL-03, CTR-21, M8, 13 (Later) |
@@ -730,7 +730,7 @@ section 12 and decision numbers point to 03.
 | Nonce not in argv; length-prefixed sections | 6.2 |
 | Detached operations: results after unit unload, journal access, `--user` and linger, no `/tmp` | 7.17, D25, S4, A.2 E9 |
 | dartssh2 confinement and a generalized guard with today's exceptions | D4, 3.4 |
-| dartssh2 3.0.2 defects and the re-pin | 5.10, D23 |
+| dartssh2 defects and the 4.1.0 re-pin | 5.10, D23 |
 | `MaxSessions` classification; streamlocal failure codes | 5.2, 5.3, S1 |
 | Catalog home, Poltergeist gates, divergences, Poltergeist first, pull-only test, byte preservation | D6, D14, 4.4, 11.2 |
 | No third copies; native runner policy | D3, D7, D8, D9, D11, D32, 3.5 |

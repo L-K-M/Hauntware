@@ -390,7 +390,7 @@ NAS appliances with per-distro fixtures.
 | CN-03 | Sampler channel | Persistent non-PTY `sh` exec emitting nonce-framed sections; collectors switched per visible screen; fast (1 to 5 s) and slow (30 s to hourly) cadences | ServerBox, Checkmk sections, Cockpit bridge | MVP | T0 | user | POSIX sh (dash, BusyBox ash); `LC_ALL=C.UTF-8` (or `C` when `locale -a` lacks it) and `TZ=UTC` prefixed in the command | No bash or Python dependency. SSH `env` requests are avoided because dartssh2 closes the channel when one is rejected. |
 | CN-04 | Client-side rates | CPU %, throughput and IOPS from counter deltas with wrap and reboot detection | ServerBox | MVP | C | none | raw counters plus `btime` | |
 | CN-05 | Pause, backoff, resume | Stop sampling when a screen is hidden or the app is backgrounded; reconnect with backoff; resume journal `__CURSOR` and Docker `since=` | Séance prober, ServerBox | MVP | C | none | - | Mobile: iOS suspends sessions; reconnect on return. |
-| CN-06 | Dead-peer detection | Notice silently dropped links quickly | Poltergeist connection manager | MVP | T0 | user | `ping()` with a 30 s timeout | dartssh2 3.0.2 keepalive never times out (c2 R3). |
+| CN-06 | Dead-peer detection | Notice silently dropped links quickly | Poltergeist connection manager | MVP | T0 | user | `ping()` with a 30 s timeout | dartssh2's keepalive never times out, in 4.1.0 too (c2 R3). |
 | CN-07 | Docker endpoint discovery | Try streamlocal to a configured `DOCKER_HOST`, `/var/run/docker.sock`, `/run/user/<uid>/docker.sock`, `/run/podman/podman.sock`, `/run/user/<uid>/podman/podman.sock`; fall back to `docker system dial-stdio` (or `sudo -n`) | Docker CLI `ssh://`, VS Code contexts | MVP | T0 | docker | `forwardLocalUnix`, exec | OpenSSH refuses every streamlocal open with the same connect-failed "open failed" [R: openssh-portable `serverloop.c`, reported by review], so an exec `test -S`/`test -w` check decides between a missing socket, no permission, and forwarding disabled (socket present and writable); say which. Generic relays (`socat`, `nc -U`) when no CLI exists (r5 §1.1 option C). Snap Docker is off the non-login PATH (ServerBox #969, c2 R7). |
 | CN-08 | API version negotiation | Read max and min API version; client floor 1.41, baseline 1.44; feature-gate newer fields | r5 §1.4 | MVP | T0 | docker | `GET /_ping` (`Api-Version`), `GET /version` (`MinAPIVersion`) | Docker 29.0 to 29.2 rejected clients below 1.44; Podman compat reports max 1.44. |
 | CN-09 | Runtime per host | Docker or Podman, rootful or rootless, auto-detected with manual override | ServerBox, Podman Desktop | MVP | T0 | docker | socket paths above, `Libpod-API-Version` header | Podman's compat API reports max 1.44, and `podman-docker` may symlink `/run/docker.sock` to Podman (r5 §1.11). Rootless engines are user-equivalent (SAF-08). The enable-socket offer is CN-25. |
@@ -407,7 +407,7 @@ NAS appliances with per-distro fixtures.
 | CN-20 | Transient helper binary | Optional static helper uploaded per session for richer structured data | Cockpit beiboot | Later | T0 | user | per-arch binary over SFTP | Adds per-arch builds and review burden. |
 | CN-21 | Windows hosts | PowerShell-based metrics | ServerBox | Non-goal | - | - | - | Separate parser stack; revisit after v1. |
 | CN-22 | Low-session degradation | Detect a small `MaxSessions` or the `dial-stdio` fallback and degrade: cap concurrent streams, poll stats, merge stack logs through one `docker compose logs -f`, and say which mode is active | OpenSSH `MaxSessions`, Poltergeist pool policy | MVP | T0 | user | classified `SSHChannelOpenError` (c2 G1) | Under `dial-stdio` every Docker stream is an exec session (r5 §1.1 option B, §3.2). |
-| CN-23 | Client-limitation errors | Report failures caused by dartssh2 3.0.2 limits (no chacha20-poly1305, no ML-KEM, handshake timeouts on low-memory Android) as client limitations, not server faults | c2 R12, R13 | MVP | C | none | connect error classification in `seance_core` | Hardened hosts are core users. The fix is the suite-wide dartssh2 re-pin (section 6). |
+| CN-23 | Client-limitation errors | Report failures caused by dartssh2 limits (no ML-KEM in 4.1.0) as client limitations, not server faults | c2 R12, R13 | MVP | C | none | connect error classification in `seance_core` | Hardened hosts are core users. The 4.1.0 re-pin (section 6) fixed the 3.0.2 gaps; ML-KEM needs upstream support. |
 | CN-24 | Access check | Per-server screen: sudo NOPASSWD, journal group, Docker socket rights, streamlocal allowed, compose plugin, systemd version, each with a copyable fix command | Cockpit degradation, r5 §1.1 detection | MVP | T0 | user | view over CN-02, CN-07, LOG-04 | Fix commands are shown, never run implicitly. Docker-group advice carries the SAF-08 notice. |
 | CN-25 | Enable Podman socket | Previewed command when the Podman socket is off | Podman Desktop, r5 §1.11 | v1 | T0 | sudo, user | `systemctl [--user] enable --now podman.socket` | System socket behind admin mode. |
 
@@ -1448,10 +1448,10 @@ catalog:
   and unlicensed catalogs are not fetched, so no legal review is needed (Q19).
 - Backups (BAK-03, BAK-05 to BAK-07, BAK-09): inside the app, after v1.x and
   built on T1 (Q19).
-- The suite-wide dartssh2 re-pin to 4.x (CN-23) starts now as a separate task
-  with its own PR across all apps (Q17). It touches M0 evidence, pin audits
-  and the `redactConnectionTrace` audit and is not folded into the app work
-  (c2 §3.3).
+- The suite-wide dartssh2 re-pin to 4.x (CN-23) ran as a separate task with
+  its own PR across all apps (Q17), because it touches M0 evidence, pin
+  audits and the `redactConnectionTrace` audit (c2 §3.3). It landed on
+  2026-10-10 as 4.1.0 (PR #113, D23).
 - Séance #56 is fixed in F3 before the MVP preview; first-seen pins are
   published from v1 (X-02, Q12). The `host:port` collision behind different
   jump routes stays a known limitation until a suite-wide task after v1.

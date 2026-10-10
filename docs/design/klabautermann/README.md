@@ -142,10 +142,10 @@ the product most:
   stalling extraction is narrowed, never copied
   ([3.5](03-ARCHITECTURE.md#35-prerequisite-extractions)).
 - **[D4](03-ARCHITECTURE.md#code-sharing) No dartssh2 in the product.**
-  `SshLink` in `seance_core` holds every dartssh2 3.0.2 workaround; a root
+  `SshLink` in `seance_core` holds every dartssh2 workaround; a root
   import guard keeps dartssh2 out of `klabautermann/`
-  ([5.1](03-ARCHITECTURE.md#51-sshlink-f2a)). The workarounds shrink once
-  the separate dartssh2 4.x re-pin lands.
+  ([5.1](03-ARCHITECTURE.md#51-sshlink-f2a)). The suite now pins dartssh2
+  4.1.0 (PR #113), which removed some of them (D23).
 - **[D5](03-ARCHITECTURE.md#code-sharing) Four product packages.** Pure-Dart
   `klabautermann_host` and `klabautermann_docker` with no SSH dependency,
   `klabautermann_core` orchestrating over `SshLink`, and the Flutter
@@ -398,9 +398,9 @@ F1 to F4 plus F4b come to about 23 to 33 engineer-weeks [E]. The MVP path
 (M0 to M4, including F1 to F4 and F4b) comes to about 44 to 60
 engineer-weeks [E]; with two contributors in parallel tracks the preview is
 roughly 7 to 8 months out [E]. The v1 increment (F5 plus M5 to M7) adds
-about 27 to 38 engineer-weeks [E]. The separate dartssh2 4.x re-pin is
-outside these totals, and so is S10, whose helper part runs before M8 and
-whose companion parity part runs before M9. M1 registers
+about 27 to 38 engineer-weeks [E]. The dartssh2 4.1.0 re-pin, already
+landed, was outside these totals, and so is S10, whose helper part runs
+before M8 and whose companion parity part runs before M9. M1 registers
 build, check and CI legs and the release gate steps only; the
 `client_klabautermann` release job, manifest entries and workflow contracts
 land at M4, so the first suite release after M4 contains Klabautermann
@@ -450,7 +450,7 @@ create.
 | 14 | Android watch mode | v1.x, a time-limited opt-in foreground service, off by default |
 | 15 | CI (D37) | Client matrix on every PR, no path filter; privileged `docker:dind` on ephemeral GitHub-hosted Linux runners |
 | 16 | Preview releases | MVP ships in suite releases labelled preview from M4 |
-| 17 | dartssh2 4.x re-pin | Start now as a separate suite-wide task |
+| 17 | dartssh2 4.x re-pin | Start now as a separate suite-wide task (landed as 4.1.0, PR #113) |
 | 18 | Hand-offs | Séance link intake and Poltergeist mobile registration (F5d) in v1; starting folder accepted, X-10 moves to v1 |
 | 19 | Backups and templates | Backups inside Klabautermann after v1.x, built on T1; only permissive (Apache-2.0, MIT) template catalogs, so no legal review |
 | 20 | Helper containers | Allowed for VOL-03 and CTR-21 with explicit confirmation, a digest-pinned image and removal afterwards |
@@ -459,10 +459,8 @@ create.
 
 ## Follow-up tasks outside this plan
 
-- **dartssh2 4.x re-pin.** Approved to start now as a separate suite-wide
-  task: its own PR across all apps with the full SSH test matrix. It is
-  outside the estimates above; `SshLink`'s workarounds shrink once it lands
-  (D23).
+- **dartssh2 4.x re-pin.** Done: 4.1.0 landed suite-wide on 2026-10-10
+  (PR #113), outside the estimates above (D23).
 - **`host:port` pin collision.** Identical addresses behind different jump
   routes share one host-key pin. The fix changes the suite's pin locator
   convention and is a dedicated suite-wide task after v1, together with F7;

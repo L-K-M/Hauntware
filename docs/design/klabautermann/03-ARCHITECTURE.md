@@ -84,7 +84,7 @@ value. Path abbreviations: `SC` = `seance/packages/seance_core/lib`, `SP` =
 3. **No dartssh2 in the product.** `seance_core` gains `SshLink`, a neutral
    connection handle (headless and streaming exec, stdin, signals, Unix and
    TCP byte streams, SFTP, a session-channel budget, dead-peer detection,
-   bounded close). Every dartssh2 3.0.2 workaround lives there, and Séance
+   bounded close). Every dartssh2 workaround lives there, and Séance
    gains dead-peer detection and classified channel errors.
 4. **Packages.** `klabautermann_host` (sampler program, parsers, rate maths,
    cron, rules) and `klabautermann_docker` (HTTP/1.1, Engine API, compose
@@ -448,12 +448,15 @@ password · D42 alert delivery through the sync server
   loop on one stdin (fails on dash, which reads ahead from pipes [L]); B's
   restart-on-change sampler with an argv nonce (channel churn; argv is
   readable by other local users).
-- **D23. Stay on dartssh2 3.0.2.** Workarounds live in `SshLink` (5.10).
-  The suite-wide re-pin to 4.x is a separate task because it touches M0
-  evidence, pin audits and the `redactConnectionTrace` audit [R: c2 §3.3].
-  Owner decision 2026-10-10: the re-pin starts now, in parallel, as its own
-  PR across all apps with the full SSH test matrix, outside this plan's
-  estimates; the `SshLink` workarounds shrink once it lands.
+- **D23. dartssh2 4.1.0 with the suite proposal.** The plan was written
+  against 3.0.2, with workarounds in `SshLink` (5.10). The re-pin touches
+  M0 evidence, pin audits and the `redactConnectionTrace` audit [R: c2
+  §3.3], so owner decision 2026-10-10 ran it as its own suite-wide PR,
+  outside this plan's estimates. It landed the same day (PR #113): Séance
+  and Poltergeist propose one shared list, `suiteSshAlgorithms` in
+  `seance_core/lib/src/ssh/ssh_algorithms.dart`, which `SshLink` uses too.
+  4.1.0 removes the forward-channel stall and the Android key exchange
+  timeouts and adds chacha20-poly1305; the other workarounds stay (5.10).
 
 ### Privilege and safety
 
@@ -763,7 +766,7 @@ graph TD
   DOCK["klabautermann_docker (pure Dart, no SSH)"]
   SC["seance_core + catalog.dart"]
   SP["seance_protocol"]
-  DS["dartssh2 3.0.2 (only via seance_core)"]
+  DS["dartssh2 4.1.0 (only via seance_core)"]
   ST["seance_terminal (v1)"]
   XT["seance/third_party/xterm"]
   GS["ghost_servers"]
@@ -1297,7 +1300,7 @@ abstract interface class RemoteProcess {
   seams (16 hops, cycle detection [R: c2 §2.1]) are reused unchanged.
 - **Liveness (CN-06).** Idle ping every 15 s; a ping not answered within
   30 s marks the link lost and closes it (Poltergeist's pattern [R: c2
-  §2.5]). dartssh2 3.0.2's own keepalive never times out (c2 R3).
+  §2.5]). dartssh2's own keepalive never times out, in 4.1.0 too (c2 R3).
 - **Reconnect (CN-05).** Backoff with 1 s base, 30 s cap and downward jitter
   (Poltergeist's constants [R]); journal cursors and Docker `since=` resume.
   Background reconnects never prompt; a server that needs a prompt waits
@@ -1352,7 +1355,7 @@ per connection, not forwarding channels [R: sshd_config(5)].
 |---|---|---|
 | Session-type channel refused, connect-failed "open failed", sessions open below the cap | Host `MaxSessions` below the budget | Low-session mode, named in the header |
 | Streamlocal open refused (OpenSSH answers every streamlocal refusal with `SSH2_OPEN_CONNECT_FAILED` "open failed", whatever the cause [R: openssh-portable `serverloop.c` `server_input_channel_open`, reported by review]) | One exec probe per path: `test -S p` failing means a missing socket, `test -w p` failing means `EACCES`, both passing means forwarding is disabled (`AllowStreamLocalForwarding no` or `remote`, `DisableForwarding yes`, or an `authorized_keys` `restrict` or `no-port-forwarding` option [R: r5 §1.1]) | Missing: next candidate path; `EACCES`: the access check entry with fix options; disabled: switch to the CLI relay and explain the sshd setting (confirmed with `sshd -T -C` in admin mode) |
-| Handshake fails against chacha20-only or ML-KEM-only servers; Android KEX timeout | dartssh2 3.0.2 client limitation (c2 R12, R13) | "This server requires an algorithm Klabautermann does not support yet" (CN-23) |
+| Handshake fails against ML-KEM-only servers | dartssh2 4.1.0 client limitation (c2 R12) | "This server requires an algorithm Klabautermann does not support yet" (CN-23) |
 | Exit 127 or "command not found" | Tool missing | Panel hidden with the reason |
 | `nologin` shell or `ForceCommand` | Restricted account | Read-only reachability; explanation |
 | Link ping timeout | Dead peer | Backoff; stale values turn grey |
@@ -1360,15 +1363,15 @@ per connection, not forwarding channels [R: sshd_config(5)].
 ### 5.4 Docker Engine API over the forwarded socket
 
 - `SshLink.openUnixStream(path)` opens OpenSSH `direct-streamlocal@openssh.com`
-  through dartssh2's `forwardLocalUnix` (present in 3.0.2 [R: c2 §3.2]; no
-  call exists in the repository today [V]). sshd opens the socket as the
-  authenticated user, so normal permissions apply.
-- **Listen before write.** `SSHForwardChannel.stream` is a lazy `map` in
-  3.0.2, so data that arrives before the first listener can stall the
-  channel for good (c2 R2; fixed upstream in 4.0.1). The wrapper subscribes
-  at once into its own bounded buffer (4 MiB [E]) and pauses the SSH
-  subscription when its consumer pauses, which keeps backpressure end to
-  end.
+  through dartssh2's `forwardLocalUnix` (present in 3.0.2 [R: c2 §3.2] and
+  4.1.0 [V]; no call exists in the repository today [V]). sshd opens the
+  socket as the authenticated user, so normal permissions apply.
+- **Listen before write.** `SSHForwardChannel.stream` was a lazy `map` in
+  3.0.2, so data that arrived before the first listener could stall the
+  channel for good (c2 R2; fixed in 4.0.1, so the 4.1.0 pin no longer
+  stalls). The wrapper still subscribes at once into its own bounded buffer
+  (4 MiB [E]) and pauses the SSH subscription when its consumer pauses,
+  which keeps backpressure end to end.
 - **Endpoint discovery (CN-07)**, once per session after the probe: a
   per-server override (device-local), `/var/run/docker.sock`,
   `/run/user/<uid>/docker.sock`, `/run/podman/podman.sock`,
@@ -1455,18 +1458,21 @@ TCP 2375 and 2376 are never offered. A Dropbear host older than 2024.84
 has no Unix stream forwarding and uses rank 2; 2024.84 to 2025.88 get a
 CVE-2025-14282 warning [R: r5 §1.1].
 
-### 5.10 dartssh2 3.0.2 defects and mitigations (D23)
+### 5.10 dartssh2 defects and mitigations (D23)
 
-| Defect (c2) | Mitigation | Where |
-|---|---|---|
-| Data before the first listener stalls a forward channel (R2) | Subscribe at creation, bounded buffer, pause propagation | `ByteDuplex` |
-| Keepalive pings never time out (R3) | Own idle ping with a 30 s timeout | `SshLink` |
-| A refused `env` request closes the channel (R9) | Never send `env` requests; prefix variables in the command | exec core |
-| `SSHClient.close()` can hang (R14) | Bounded close; late channel opens closed after their timeout | `SshLink` |
-| Unread stderr buffers without limit (R17) | Always drain both streams | `RemoteProcess` |
-| One window adjust per data packet (R2) | Accepted; measured in S1 for 1,000 lines/s follows | n/a |
-| No chacha20-poly1305, no ML-KEM; SHA-1 KEX and CBC still proposed; Android KEX isolate timeouts (R12, R13) | Classified as client limitations (CN-23); suite re-pin to 4.x as its own task | connect classification |
-| Rows and columns order (R15) | Boundary tests | `seance_terminal`, exec |
+c2 found these defects in 3.0.2. The last column gives their state on the
+4.1.0 pin, checked against its source and changelog.
+
+| Defect (c2) | Mitigation | Where | On 4.1.0 |
+|---|---|---|---|
+| Data before the first listener stalls a forward channel (R2) | Subscribe at creation, bounded buffer, pause propagation | `ByteDuplex` | Stall fixed; the buffer and pausing stay for backpressure |
+| Keepalive pings never time out (R3) | Own idle ping with a 30 s timeout | `SshLink` | Unchanged |
+| A refused `env` request closes the channel (R9) | Never send `env` requests; prefix variables in the command | exec core | Unchanged unless `pipelineChannelRequests` is set, which the suite does not set |
+| `SSHClient.close()` can hang (R14) | Bounded close; late channel opens closed after their timeout | `SshLink` | Still no public destroy; keep the bound |
+| Unread stderr buffers without limit (R17) | Always drain both streams | `RemoteProcess` | Unchanged |
+| One window adjust per data packet (R2) | Accepted; measured in S1 for 1,000 lines/s follows | n/a | Fixed: granted back at half the window |
+| No chacha20-poly1305, no ML-KEM; SHA-1 KEX and CBC still proposed; Android KEX isolate timeouts (R12, R13) | Classified as client limitations (CN-23) | connect classification | chacha20-poly1305 added and Android timeouts fixed; SHA-1 KEX and CBC only as a last resort in `suiteSshAlgorithms`; ML-KEM still missing (CN-23) |
+| Rows and columns order (R15) | Boundary tests | `seance_terminal`, exec | Unchanged |
 
 ### 5.11 Other streams
 
