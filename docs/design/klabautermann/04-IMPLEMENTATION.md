@@ -9,7 +9,7 @@ section numbers continue from there: sections 1 to 11 are in 03, sections
 markers [V], [L], [R], [U] and [E], the path abbreviations `SC`, `SP`,
 `PC`, `PA` and `SA`, and the report markers r1 to r5 and c1 to c4 are
 defined at the top of 03. "Decision N" cites the owner decisions of
-2026-10-10, numbered 1 to 20 as listed in section 15.
+2026-10-10, numbered 1 to 22 as listed in section 15.
 
 ---
 
@@ -20,7 +20,9 @@ defined at the top of 03. "Decision N" cites the owner decisions of
 Items marked M1 land in the scaffold PR series together. Items marked M4
 land with the MVP preview, which ships in suite releases labelled preview
 (decision 16); until then no suite release publishes Klabautermann
-builds. Items marked M9 belong to the Rust companion. The release tool
+builds. The Rust rows marked M8 serve the `klabautermann-notify` helper
+of T1 alert delivery (decision 21), and the companion reuses them; items
+marked M9 belong to the Rust companion alone. The release tool
 must not register the product before its app pubspec, README marker and
 plists exist, and must not miss it either, because an unregistered directory
 is silently unmanaged (`tool/release_version/lib/release_version.dart:785-794`
@@ -39,18 +41,20 @@ is silently unmanaged (`tool/release_version/lib/release_version.dart:785-794`
 | Release workflow | `test` gate step for the `klabautermann` packages and guards; `flutter` gate step; `client_klabautermann` job copied from `client_poltergeist` (`.github/workflows/release.yml:925` [V]) with SHA-pinned actions, the provenance step and the lock-drift guard; `docker.needs` (`:1168` [V]) and `sums.needs` (`:1247` [V]) gain `client_klabautermann`; asset-count comment (25 to 33); header comment (`:3-9`, "13 client targets (3 Planchette desktop, 5 Séance, 5 Poltergeist)" becomes 18) and a release notes line labelling Klabautermann preview until v1; signing stance (`:18-23`) | M1 for the `test` and `flutter` gate steps; M4 for the `client_klabautermann` job (with its `docker.needs` and `sums.needs` edges), the comments and the notes line (decision 16) |
 | Guards | Root import guard entry, private-key scope list, `.gitleaks.toml` allowlist entries for `klabautermann/app/klabautermann_app/android/(app/ci-release.jks\|key.properties)` and fixture keys (pattern `.gitleaks.toml:11-17` [V]) | F1, M1 |
 | Repository config | `.github/dependabot.yml` gradle entry for `/klabautermann/app/klabautermann_app/android` (pattern `:18-19` [V]); `fixture-images.yml` matrix; `secret-scan.yml` key-scope step; `klabautermann/.gitignore` | M1, M2 |
-| Root docs | `README.md` product table, counts and the "distinct names, IDs, storage locations and keystore namespaces" sentence; root `AGENTS.md` product list, layout, boundaries ("Klabautermann consumes the shared SSH/protocol implementation through its core barrel"), "all 18 clients" (with the `client_klabautermann` release job) and "the companion" (with its release job); root `CHANGELOG.md`; design docs in `docs/design/` for each extraction | F1 onward, M1; client counts at M4; companion at M9 |
+| Root docs | `README.md` product table, counts and the "distinct names, IDs, storage locations and keystore namespaces" sentence; root `AGENTS.md` product list, layout, boundaries ("Klabautermann consumes the shared SSH/protocol implementation through its core barrel"), "all 18 clients" (with the `client_klabautermann` release job), the `klabautermann-notify` helper (with the Rust release job) and "the companion"; root `CHANGELOG.md`; design docs in `docs/design/` for each extraction | F1 onward, M1; client counts at M4; helper at M8; companion at M9 |
 | History checker | Nothing: a greenfield product must not get a `docs/history/source-refs.json` entry (`scripts/check-history.py` iterates recorded sources only [R: c4 §3]) | n/a |
 | Packaging | `klabautermann/scripts/build.sh` (Poltergeist's client-only pattern, `HAUNTWARE_BUILD_ORCHESTRATED`); `package-linux.sh` as a thin wrapper over a new shared root helper extracted from the three ~500-line copies [R: c4 P2]; `build-flatpak.sh` sourcing `scripts/flatpak-repack.sh`; `flatpak/ch.lkmc.klabautermann.yml` with `--share=network`, `--socket=ssh-auth`, `--talk-name=org.freedesktop.secrets`, display sockets, and no `--filesystem=home` (exports through portals); `release.sh` forwarder; macOS keyboard fixture stub; icon master | M1 |
 | Platform identities | Android committed public debug-grade keystore with a pinned certificate digest; unsigned IPA; macOS ASCII `PRODUCT_NAME`, empty `Release.entitlements`, legacy login keychain; Linux binary and WM class; Windows `Runner.rc` with `CompanyName` `ch.lkmc` and semantic-only `VERSION_AS_NUMBER`; Android label (12.3) | M1 |
 | Product docs | `AGENTS.md` with the byte-identical shared-rules block, `CLAUDE.md` (pointer plus the PR babysitting block), `README.md` with exactly one version marker, `CHANGELOG.md` starting with `## Unreleased`, `LICENSE` (Unlicense), `docs/plan/00-OVERVIEW.md` (the decision log of 03, section 2), `docs/plan/07-MILESTONES.md`, `docs/STATUS.md`, `docs/SHARED.md` | M1 |
 | URL scheme | `klabautermann://` on five platforms: `CFBundleURLTypes` (macOS, iOS), Android intent filter, Linux `MimeType=x-scheme-handler/klabautermann;`, Windows registration plus single-instance forwarding (ledgered copy of `deep_link_scheme.cpp`) | v1.x (X-06) |
-| Sibling changes | Séance: pulled-pin conflict check through the catalog library's quarantine handler (#56, F3d); `ghost_theme` switch (F4b); `RecordKind` switch update with the enum value (v1); link intake with the starting-folder parameter for X-10 (F5d); inbox skip of marked companion apps (before M9); adoption of shared packages per extraction. Poltergeist: catalog switch (F3a), stores and keystore (F3b, F3c), `ghost_servers` (F4, F5a), `ghost_theme` follow-up (after F4b), Android and iOS link registration (F5d) | per F phase |
-| Rust toolchain | `klabautermann/companion/` Cargo workspace with a `rust-toolchain.toml` pinning an exact toolchain (rustup, cargo) and a committed `Cargo.lock`; `cargo fmt --check`, `cargo clippy` and `cargo test` in `scripts/test.sh` and a new CI job on every PR; the release tool keeps the crate versions at the suite version; a dependabot `cargo` entry | M9 (policy from S10) |
-| Companion cross builds | Static binaries for Linux x86_64 and aarch64 on musl (`x86_64-unknown-linux-musl`, `aarch64-unknown-linux-musl`), plus glibc targets only if S10 shows a need; built on GitHub-hosted Linux runners | M9 (proven in S10) |
-| Parity CI | One shared fixture corpus run through the Dart collectors, parsers and rules (`klabautermann_host`, `klabautermann_docker`) and the Rust ones; identical parsed results and rule verdicts required; runs on every PR | Harness in S10; enforced from M9 |
-| Licence and advisory checks | `cargo-deny` or an equivalent for licences (AGPL excluded: ServerBox's `sbm_parser` crate is neither used nor copied), advisories, bans and sources; in the companion CI job and the release `test` gate | M9 |
-| Companion release job | `companion_klabautermann` in `release.yml` builds both targets and writes their SHA-256 hashes; `client_klabautermann.needs` gains it so the client build of the same release embeds the hashes; `sums.needs` gains it; two manifest assets (asset-count comment 33 to 35); `check-workflows.sh` asserts the `needs:` edge; no signing key, no new CI secret, no GHCR image (the single `packages: write` job stays untouched) | M9 |
+| Sibling changes | Séance: pulled-pin conflict check through the catalog library's quarantine handler (#56, F3d); `ghost_theme` switch (F4b); `RecordKind` switch update with the enum value (v1); link intake with the starting-folder parameter for X-10 (F5d); inbox skip of marked Klabautermann app ids: `InboxService.refresh` advances its cursor past them and never decrypts or deletes them (`SC/src/inbox/inbox_service.dart:214-222` [V]), in a suite release before T1 alert delivery (M8, owner decision 2026-10-10 (21/22): was before M9); no Settings > Inbox change, because it lists only Séance's local `inboxApp` records, not `GET /v1/apps` (A.1); adoption of shared packages per extraction. Poltergeist: catalog switch (F3a), stores and keystore (F3b, F3c), `ghost_servers` (F4, F5a), `ghost_theme` follow-up (after F4b), Android and iOS link registration (F5d) | per F phase |
+| Rust toolchain | `klabautermann/rust/` Cargo workspace (the shared sealing and posting crate, the `klabautermann-notify` binary, later the companion) with a `rust-toolchain.toml` pinning an exact toolchain (rustup, cargo) and a committed `Cargo.lock`; `cargo fmt --check`, `cargo clippy` and `cargo test` in `scripts/test.sh` and a new `klabautermann_rust` CI job on every PR; the release tool keeps the crate versions at the suite version; a dependabot `cargo` entry | M8 (policy from S10; owner decision 2026-10-10 (21/22): was M9) |
+| Rust cross builds | Static binaries for Linux x86_64 and aarch64 on musl (`x86_64-unknown-linux-musl`, `aarch64-unknown-linux-musl`), plus glibc targets only if S10 shows a need; built on GitHub-hosted Linux runners; `klabautermann-notify` from M8, the companion from M9 | M8 (proven in the helper part of S10; was M9) |
+| Sealing interop CI | Known-answer vectors shared by the Rust sealing crate and the Dart opener: a blob sealed by the crate opens in the client under Klabautermann's associated-data domain (for example `klabautermann/v1/alert/` + appId) and never under Séance's (`seance/v1/inbox/` + appId, `SP/inbox/inbox.dart:39` [V]); alert format v1 validation cases; runs on every PR in `klabautermann_rust` and the Dart test job | M8 |
+| Parity CI | One shared fixture corpus run through the Dart collectors, parsers and rules (`klabautermann_host`, `klabautermann_docker`) and the Rust ones; identical parsed results and rule verdicts required; runs on every PR | Harness in the parity part of S10; enforced from M9 |
+| Licence and advisory checks | `cargo-deny` or an equivalent for licences (AGPL excluded: ServerBox's `sbm_parser` crate is neither used nor copied), advisories, bans and sources; in the `klabautermann_rust` CI job and the release `test` gate | M8 (was M9) |
+| Rust release job | `rust_klabautermann` in `release.yml` builds `klabautermann-notify` for both targets (M8) and adds the companion binaries (M9), and writes their SHA-256 hashes; `client_klabautermann.needs` gains it so the client build of the same release embeds the hashes; `sums.needs` gains it, so `SHA256SUMS` covers the binaries; `scripts/release-manifest.txt` gains a Klabautermann host binaries block: two helper assets at M8 (asset-count comment 33 to 35), two companion assets at M9 (35 to 37; more if glibc builds are needed); `check-workflows.sh` asserts the `needs:` edge and, as for every leg, that the manifest lists the attached globs; release header comment; no signing key, no new CI secret, no GHCR image (the single `packages: write` job stays untouched) | M8 for the helper, M9 for the companion assets (owner decision 2026-10-10 (21/22): the job was M9) |
+| Sync server sender quota | `seance/packages/seance_sync_server/lib/src/inbox_handlers.dart`: today `_inboxMaxAppsPerAccount = 50` (`:12`) counts every app of the account and answers `429 too_many_apps` (`:58-65`) [V]; marked Klabautermann senders get their own per-account quota (for example 500) and stop counting against the shared 50; the marker stays inside the existing app id format so 1.9.0 servers still accept marked senders under the shared 50 (15, new open item 8); server tests for both quotas and, once chosen, for the bound on what one `GET /v1/inbox` returns (15, new open item 7); limits in `seance/docs/INBOX.md` and a Séance changelog line; no envelope change and no `kProtocolVersion` bump (the inbox endpoints are separate from record sync); shipped by the existing `server` and `docker` release jobs, no new release machinery (decision 22) | M8, in a suite release before the one that ships T1 alert delivery |
 
 ### 12.2 Shared-package registration
 
@@ -62,9 +66,11 @@ lines; a `scripts/test.sh` entry; an approved design doc; ledger entries in
 Séance pin-audit record when `seance/` lineage changes. Owned package names
 must not collide with any dependency name in any lockfile, because the
 release tool re-pins lock entries by exact name [R: c4 §2]. `ghost_theme`
-now lands before M1 as F4b (decision 5). The companion's Rust crates (M9)
-are not Dart packages, but their versions also follow the suite version,
-so the release tool gains a `Cargo.toml` target (15, new open items).
+now lands before M1 as F4b (decision 5). The Rust crates (the
+`klabautermann-notify` helper and its shared sealing and posting crate
+from M8, the companion from M9) are not Dart packages, but their versions
+also follow the suite version, so the release tool gains a `Cargo.toml`
+target (15, new open items).
 
 ### 12.3 Identities (fixed by the owner on 2026-10-10, D38)
 
@@ -83,8 +89,9 @@ value below is permanent once anything ships.
 | Settings keys | `klabautermann.sync.deviceId`, `klabautermann.*` |
 | Method channels | `klabautermann/settings_window`, `klabautermann/settings_link`, `klabautermann/window`, `klabautermann/menu_checks`, `klabautermann/keepalive` |
 | URL scheme | `klabautermann://` |
-| Record kind and id prefix | `RecordKind.klabautermann`, `klabautermann:` (distinct from every existing prefix, 4.8); types `pref` and `rule` (v1), `query`, `layout`, `window` and `sudo` (`klabautermann:sudo:<serverConfigId>`, v1.x) |
-| Host artifacts | `klabautermann-op-<id>` units, `logger -t klabautermann`, `~/.local/state/klabautermann/`, `~/.config/klabautermann/`, `~/.local/share/klabautermann/`, `/var/lib/klabautermann/`, `/etc/klabautermann/`, `/usr/local/lib/klabautermann/`, `/etc/sudoers.d/klabautermann-readonly` (v1.x) |
+| Record kind and id prefix | `RecordKind.klabautermann`, `klabautermann:` (distinct from every existing prefix, 4.8); types `pref` and `rule` (v1), `query`, `layout`, `window` and `sudo` (`klabautermann:sudo:<serverConfigId>`, v1.x), `sender` (`klabautermann:sender:<serverConfigId>`, v1.x, decision 22) and `alertstatus` (`klabautermann:alertstatus:<senderAppId>:<alertId>`, bounded, v1.x, decision 21; 4.8) |
+| Host artifacts | `klabautermann-op-<id>` units, `logger -t klabautermann`, `~/.local/state/klabautermann/`, `~/.config/klabautermann/`, `~/.local/share/klabautermann/`, `/var/lib/klabautermann/`, `/etc/klabautermann/`, `/usr/local/lib/klabautermann/`, `/etc/sudoers.d/klabautermann-readonly` (v1.x); the `klabautermann-notify` binary and its 0600 sender file inside the T1 directories of the chosen scope (v1.x, decision 21) |
+| Inbox alert identities (v1.x) | Associated-data domain `klabautermann/v1/alert/` + appId (the owner's example; fixed by the helper part of S10); Klabautermann alert format v1; reserved app id marker (15, new open item 8) |
 | Windows deep-link mutex | `Local\ch.lkmc.klabautermann.deep-link-primary-v1` |
 
 ---
@@ -99,8 +106,11 @@ precede the scaffold.
 
 ### M0: spikes (S1 to S9: 5 to 7 in total, parallel; calendar 3 to 4 weeks)
 
-S10 is listed here but may run later, at any point before M9; it is not
-part of the MVP totals.
+S10 is listed here but may run later; it is not part of the MVP totals.
+It covers the `klabautermann-notify` helper first, which must finish
+before M8, and then the companion parity harness, which must finish
+before M9 (owner decision 2026-10-10 (21/22): S10 was due only before
+M9).
 
 | Spike | Size | Scope | Exit criterion |
 |---|---|---|---|
@@ -113,7 +123,7 @@ part of the MVP totals.
 | S7 Port access | S | In-app web view through an SSH channel without a loopback listener | Before M6 |
 | S8 Update checks | S | Registry `HEAD` against DistributionInspect against the host CLI for private registries; `ratelimit-remaining` | Before M6 |
 | S9 Catalog design doc | S | Design doc recording the five approved divergence resolutions (4.4, decision 3) and Séance's pulled-pin conflict check through the quarantine handler (#56, decision 12) | Owner approval of the design doc; each resolution then lands as its own PR in F3 |
-| S10 Rust companion | M | Cargo workspace with an exact toolchain pin; static musl builds for Linux x86_64 and aarch64 on GitHub-hosted runners (glibc only if needed); binary size and memory on a small VPS and an arm64 board; `cargo-deny` licence and advisory policy; a parity harness running the S2 fixture corpus through `klabautermann_host` and through a Rust port of two collectors, their parsers and one threshold rule; hash embedding through a `needs:` edge in a dry-run workflow | Parity harness green in CI for both targets; size, memory and build time recorded; Rust toolchain policy proposed for owner approval; M9 estimate. Before M9 |
+| S10 Rust helper and companion | M to L | Helper part: Cargo workspace with an exact toolchain pin and the shared sealing and posting crate; `klabautermann-notify` as static musl builds for Linux x86_64 and aarch64 on GitHub-hosted runners (glibc only if needed); a blob sealed by the crate under Klabautermann's associated-data domain opens in the Dart client and fails under Séance's; a deposit to a real 1.9.0 sync server with the token and key read from a 0600 file (never argv or environment); binary size, memory and run time on a small VPS and an arm64 board; `cargo-deny` licence and advisory policy; hash embedding through a `needs:` edge in a dry-run workflow. Parity part: a parity harness running the S2 fixture corpus through `klabautermann_host` and through a Rust port of two collectors, their parsers and one threshold rule | Helper part, before M8: the deposit opens in the Dart client in CI for both targets; size, memory and build time recorded; Rust toolchain policy proposed for owner approval; estimate of the M8 alert delivery increment. Parity part, before M9: parity harness green in CI for both targets; M9 estimate |
 
 ### F1: guards and shared tooling (M to L, 3 to 4)
 
@@ -300,10 +310,13 @@ Cutting the release is a separate explicit task (root `AGENTS.md`).
 v1 increment (F5 plus M5 to M7): about 27 to 38 engineer-weeks after the
 preview [E].
 
-### M8: v1.x (increments, XL in total)
+### M8: v1.x (increments; XL before decisions 21 and 22, plus L to XL for alert delivery)
 
 T1 (9.3) with user scope by default and system scope only in admin mode
-(decision 7), parity tests and an extended inventory test; desktop tray and
+(decision 7), parity tests and an extended inventory test; T1 is plain
+scripts and timers plus the optional hash-pinned `klabautermann-notify`
+helper for sync-server delivery (owner decision 2026-10-10 (21/22): T1
+was "plain files, no binary"); desktop tray and
 Android reachability checks; Android watch mode, a time-limited opt-in
 foreground service that is off by default, started per session, and stops
 automatically with a notice (D34, decision 14); host recorders and "Enable
@@ -323,8 +336,53 @@ detection, deploy preview and host-side deploy history; log explorer and
 unified stream; fleet tables and cross-host search; the remaining v1.x
 SEC, CRT, ACC and HW rows; X-06; `query`, `layout`, `window` and `sudo`
 types; hysteresis; the health file read by Séance and Poltergeist.
+
+Alert delivery through the sync server (decisions 21 and 22, D42; L to
+XL [E] on its own, including the Rust machinery moved from M9, refined
+by S10; ALR-04 to ALR-08, ALR-17 to ALR-19): the `klabautermann-notify`
+helper from the shared Rust crate, installed only with consent as part
+of T1, hash-pinned in the client build of the same release, listed in
+the footprint manifest and removed by the one-action uninstall, with the
+M8 Rust rows of 12.1; sender management with one sender per server
+(`POST /v1/apps`, the sealed `klabautermann:sender:<serverConfigId>`
+sub-record naming the allowed server, revocation through
+`DELETE /v1/apps/{appId}`, host uninstall and a sealed removed record,
+and on `429 too_many_apps` an explanation of the limit and of the server
+version that raises it, with a choice of which servers alert through the
+sync server); check scripts that deposit only on state changes (firing,
+resolved) and send a digest when many fire at once, falling back to the
+host alert spool and history file and to the ntfy, email or webhook
+notifier; Klabautermann alert format v1, validated after decryption,
+shown as untrusted plain text and rejected when it names a server other
+than its sender's; fetching at launch and on every sync round while
+open; the "while you were away" view per server with a device-local
+alert history; acknowledgement and dismissal synced as bounded sealed
+status sub-records (older than 30 days pruned and not published); the
+server item deleted once handled; optional peer reachability checks
+that deposit "B unreachable from A" through A's sender. Prerequisites,
+each in a suite release before the one that ships this increment: the
+Séance inbox changes of 12.1 (marked unknown app ids advance the cursor
+and are never decrypted or deleted; sender keys never stored as Séance
+`inboxApp` records, because Séance deletes items of a known app that
+fail to open (`SC/src/inbox/inbox_service.dart:238-249` [V])) and the
+sync server sender quota (12.1); the Rust toolchain policy approved by
+the owner after the helper part of S10.
+
 Exit per increment: its rows covered by tests and the inventory test
-extended by its 8.11 rows; for the sudo type, tests that Poltergeist
+extended by its 8.11 rows; for alert delivery, an end-to-end test in
+which a T1 check on the sshd fixture host deposits a sealed alert through
+the real sync server image and the app fetches and shows it, while Séance
+on the same account neither stalls its cursor nor deletes the item (the
+convergence test); a modified helper binary refused by the hash check; no
+token or key in argv, environment or unit files (checked on the fixture
+host); an alert naming another server rejected; a burst of firing checks
+sent as a digest within 30 deposits per minute; acknowledgement converging across
+two devices and statuses pruned after 30 days; revocation deleting the
+app, its host files and its sender record, after which deposits fail;
+the quota explanation shown against a 1.9.0 sync server image; the
+fallback to the host spool when the sync server is unreachable;
+`cargo-deny` clean and a release dry run with the helper assets and
+hashes embedded; for the sudo type, tests that Poltergeist
 skips it undecrypted and Séance skips it without applying or storing it,
 that an unsealed tombstone is ignored,
 that it is published only while both opt-ins and the "sync passwords"
@@ -343,15 +401,20 @@ parsers and rules are a second implementation, not built from
 the shared fixture corpus and parity tests; no code from ServerBox's AGPL
 `sbm_parser` crate. The Later rows tagged T2 that `02-FEATURES.md`
 schedules here (ALR-11, ALR-14, ALR-15, HIS-08); the M9 rows of 12.1.
-Prerequisites: Séance's inbox skips marked companion app ids without
-stalling its cursor, shipped in a Séance release first (9.4 item 1);
-companion identity keys pinned on each device on first sight (9.4 item 3);
-bounded records (9.4 item 7); the S10 outcome and the Rust toolchain
-policy approved by the owner.
+It reuses what M8 built (owner decision 2026-10-10 (21/22)): the shared
+sealing and posting crate, Klabautermann alert format v1, the server's
+existing sender, the Rust toolchain, cross builds, `cargo-deny` and the
+`rust_klabautermann` release job, which gains the companion binaries.
+Prerequisites: the Séance inbox change for marked app ids and the sync
+server sender quota, already shipped before M8 (decision 21; 9.4 item 1);
+the companion deposits through its server's existing sender, with no
+first-sight key pinning (9.4 item 3; owner decision 2026-10-10 (21/22));
+bounded records (9.4 item 7); the parity part of S10.
 Exit: the parity suite green in CI for both targets (same inputs, same
-parsed results and rule verdicts in Dart and Rust); hash pinning enforced:
-the client refuses a binary whose SHA-256 differs from the value pinned in
-its own build, tested with a modified binary; install, update and removal
+parsed results and rule verdicts in Dart and Rust); hash pinning enforced
+for the companion as for the helper: the client refuses a binary whose
+SHA-256 differs from the value pinned in its own build, tested with a
+modified binary; install, update and removal
 over SSH covered by integration tests on the sshd fixture, with nothing
 left after removal (inventory test); hardening directives applied and
 checked per systemd version [U]; `cargo-deny` clean; the coverage UI shows
@@ -397,9 +460,9 @@ F1 --+--> F3 (a to d, #56) ---+     F2a --+   F2b, F2d -+
                   +---------------------------------------------------+
                   |                                                   |
                   v                                                   v
-                  M8 (v1.x) --> M9 (Rust companion)                   F7 (Séance migration)
-                                ^                                     |
-                                |                                     v
+Séance inbox ---> M8 (v1.x) --> M9 (Rust companion)                   F7 (Séance migration)
+and server quota  ^             ^                                     |
+                  | helper      | parity                              v
                   S10 ----------+                                     pin-collision fix (suite-wide)
 ```
 
@@ -409,7 +472,11 @@ F2b and F2d only by M4 (03, section 3.5). F3d (Séance #56) must land before
 M4. F4b runs after or in parallel with F4 and preferably finishes before
 M1, so the scaffold builds its themes through `ghost_theme`; at the latest
 it finishes before M4, which ships theme editing. S10 may run with M0 or
-at any later point before M9. The suite-wide pin-collision fix runs with
+later; its helper part finishes before M8 and its parity part before M9
+(owner decision 2026-10-10 (21/22): S10 was due only before M9). The
+Séance inbox prerequisites and the sync server sender quota land in a
+suite release before the one that ships T1 alert delivery in M8
+(decisions 21 and 22). The suite-wide pin-collision fix runs with
 or after F7. The dartssh2 4.x re-pin (decision 17) is a separate
 suite-wide task in parallel and is not on this path.
 
@@ -423,7 +490,7 @@ suite-wide task in parallel and is not on this path.
 | R2 | An extraction regresses a shipped app (keychain entry, pixel drift, sync data) | Medium / high | D3; literal entry-name tests; manual macOS keychain check; sibling baselines | Narrow the move; revert is one PR because shims keep call sites |
 | R3 | dartssh2 3.0.2 defects (stall, keepalive, missing algorithms, Android KEX timeouts) | High / medium | Workarounds in `SshLink`; CN-23 errors; the separate suite-wide re-pin task, started in parallel (decision 17) | Hardened hosts documented as unsupported until the re-pin |
 | R4 | Sampler portability on unusual hosts (ServerBox's top support cost, r4) | High / medium | Tiers, per-platform fixtures, diagnostic bundle, panels that hide with reasons | Tier B after v1 |
-| R5 | Users expect alerts while the app is closed | High / medium | Coverage UI from first run; tray, Android reachability and Android watch mode in v1.x; T1 committed for v1.x | None needed: T1 is the answer; the opt-in Rust companion follows in M9 |
+| R5 | Users expect alerts while the app is closed | High / medium | Coverage UI from first run; tray, Android reachability and Android watch mode in v1.x; T1 committed for v1.x, delivering alerts through the sync server to every device at its next launch or sync round (decision 21) | None needed: T1 is the answer; the opt-in Rust companion follows in M9 |
 | R6 | Elevation variance (sudo-rs, `requiretty`, disabled cache, doas, run0) | Medium / medium | S3; fallback ladder; CI test against a real sudo | doas and run0 password modes stay out of v1 |
 | R7 | Detached operations on hosts without a system manager, without linger, or with `KillUserProcesses=yes` | Medium / medium | Runner table; preview warnings; re-attach by PID and start time | Foreground run with an explicit warning |
 | R8 | Low `MaxSessions` or forwarding disabled | Medium / medium | Low-session mode; transport ladder; header labels | Docker read-only on such hosts |
@@ -433,7 +500,7 @@ suite-wide task in parallel and is not on this path.
 | R12 | Several devices multiply polling, login records and fail2ban risk | Medium / medium | One long-lived connection per device; device-local monitor set; capped, jittered connects; pause when hidden | Lower default cadences |
 | R13 | The unscoped account key; Séance #56 until F3d lands | Known / medium | #56 fixed in F3 before the preview (decision 12); pull-only MVP; first-seen pins published only from v1, after the fix; disclosure at enrollment | Keep publication disabled until the fix has shipped (D15) |
 | R14 | Root-equivalent Docker access makes the device a high-value target | Medium / high | No local bridge; app lock; sudo password in memory only unless the user opts in to remembering it (v1.x); badges | n/a |
-| R15 | Scope creep (491 catalog rows) | High / high | Tiers fixed here; deviations need decision-log entries | Defer whole areas, not half features |
+| R15 | Scope creep (494 catalog rows) | High / high | Tiers fixed here; deviations need decision-log entries | Defer whole areas, not half features |
 | R16 | Foundations delay the product (F1 to F4 plus F4b, about 23 to 33 engineer-weeks [E]) | High / medium | Only MVP-needed extractions before M1; F4 and F4b in parallel with F2 and F3; spikes first | Narrow extractions (D3 cut line) |
 | R17 | CI time growth: the client matrix builds on every PR (about 30 to 45 extra runner-minutes per PR, 9 macOS jobs against a cap of 5, longer macOS queues) | Certain / low | Accepted by the owner (decision 15); measure after M1; main runs stay uncancelled | None pre-authorized: a path filter needs a new owner decision |
 | R18 | Native runner copies drift | Medium / low | Ledger in `docs/SHARED.md` | A shared native plugin later |
@@ -441,16 +508,20 @@ suite-wide task in parallel and is not on this path.
 | R20 | Root-run operation files abused through symlinks | Low / high | Root never writes into user-writable directories (7.17) | n/a |
 | R21 | Account growth from new record types | Low / medium | Per-type caps, 1 MiB prefix budget, SYN-09 view | Stop syncing a type; keep it device-local |
 | R22 | Rust duplication and parser drift: collectors, parsers and rules exist in Dart (app) and Rust (companion) | High / medium | S10 first; one shared fixture corpus; parity CI on every PR comparing parsed results and rule verdicts; a companion row ships only with parity green | Ship the companion with fewer collectors; disable a collector whose parity fails |
-| R23 | Rust toolchain and supply chain (crate advisories, licences such as ServerBox's AGPL `sbm_parser`) | Medium / medium | Exact toolchain pin; committed `Cargo.lock`; `cargo-deny` in CI and in the release gate; no code from `sbm_parser` | Hold the companion release; the T0 and T1 product is unaffected |
+| R23 | Rust toolchain and supply chain (crate advisories, licences such as ServerBox's AGPL `sbm_parser`) | Medium / medium | Exact toolchain pin; committed `Cargo.lock`; `cargo-deny` in CI and in the release gate; no code from `sbm_parser` | Hold the companion release; the T0 product is unaffected and T1 falls back as in R26 |
 | R24 | Synced sudo password exposure: anyone holding the account key, and every device on the account, obtains a password that grants root on that server | Low / high | Two per-server opt-ins plus the device's "sync passwords" switch; sealed sub-record, never a `secret:` record, so Séance and Poltergeist never apply it; sealed removal; disclosure in the switch subtitle and 8.12; admin mode still expires | n/a: the owner accepted the disclosed risk (decision 11) |
 | R25 | Theme extraction on the MVP path (F4b, L, against Séance's real-font PNG baselines) | Medium / medium | D3 move, switch, prove; Séance pixel baselines unchanged; Poltergeist as a follow-up; F4b in parallel with F4 | Finish after M1 (at the latest before M4); narrow the move, never copy |
+| R26 | Rust arrives in v1.x (decision 21): the `klabautermann-notify` helper is a supply-chain surface on every alerting host, and the toolchain, musl builds, `cargo-deny` and the release job cost effort at M8 instead of M9 | Medium / medium | Hash pinning in the client build of the same release (decision 8 scheme); `cargo-deny` in CI and the release gate; a small single-purpose crate with few dependencies, shared with the companion; the helper part of S10 before M8; the helper optional, consented, in the footprint manifest and removed by the one-action uninstall | Ship T1 without the helper: the host alert spool and history file and the ntfy, email or webhook notifier |
+| R27 | Alert flooding: many checks firing at once, a flapping check or a compromised host exhaust a sender's limits (30 deposits per minute, 100 pending items) or bury real alerts; with up to 500 marked senders, one unpaged `GET /v1/inbox` (`seance/packages/seance_sync_server/lib/src/inbox_handlers.dart:104-111` [V]) could return up to about 4.6 GiB (500 senders, 100 pending items each, 96 KiB per blob) [E], against about 470 MiB for today's 50 apps | Medium / medium | Deposits only on state changes, a digest when many fire at once, hysteresis (ALR-16); per-sender server limits; one sender per server confines a compromised host to its own server and is revoked alone; a bound on what one listing returns as part of the quota change (15, new open item 7) | Refused deposits go to the host alert spool and the notifier; the user revokes the sender |
+| R28 | Séance compatibility: a Séance device on the same account stalls its inbox cursor at items of unknown apps (`SC/src/inbox/inbox_service.dart:214-222` [V]), and would delete every alert if sender keys were stored as its `inboxApp` records (`:238-249` [V]); after the change, a not yet updated Séance device still re-fetches such items on every refresh but never deletes them, because their app is unknown to it | Medium / high | The Séance prerequisites land in an earlier suite release (marked app ids skipped without decrypting or deleting; keys only in Klabautermann's record kind); convergence test with Séance and Klabautermann on one account against the real sync server image; Séance's Settings > Inbox lists only local `inboxApp` records (A.1) | Keep sync-server alerting off until that Séance release has shipped; T1 uses the host alert spool and the notifier meanwhile |
 
 ---
 
 ## 15. Owner decisions
 
-The owner answered all 20 open questions of the proposal on 2026-10-10.
-Decisions that deviate from the earlier recommendation are marked
+The owner answered all 20 open questions of the proposal on 2026-10-10
+and later that day added decisions 21 and 22 on alerts while the app is
+not running. Decisions that deviate from the earlier recommendation are marked
 "(deviates)". Section numbers below 12 and decision numbers point to 03;
 catalog IDs point to `02-FEATURES.md`.
 
@@ -462,8 +533,8 @@ catalog IDs point to `02-FEATURES.md`.
 | 4 | Pull-only MVP? | Accepted | D14, M1, M4 |
 | 5 | Fixed brand preset in the MVP? | Theme editing and presets ship in the MVP preview through `ghost_theme`, extracted before the MVP as F4b (formerly F5b; Séance switched, Poltergeist follow-up); paste from a sibling app stays v1 (deviates) | D9, 3.5, 10.9, X-01, F4b, M1, M4, R25 |
 | 6 | Are the host writes acceptable; does "Enable sysstat" fit? | All four accepted (operation records and logs, central backups, the audit syslog line, the footprint manifest); "Enable sysstat" shows the exact commands (package install and timer) and runs them only after explicit confirmation in admin mode | 8.11, D27, HIS-03, M5, M8 |
-| 7 | T1 for v1.x? | Approved: user scope by default, system scope only in admin mode | 9.3, D30, M8 |
-| 8 | T2 companion: wanted, language, signing, install stance? | Yes, milestone M9 after v1.x; Rust (deviates: Dart was recommended); SHA-256 hashes of the companion binaries pinned in the client build of the same release, no signing key, no new CI secret; nothing by default, an explicit opt-in per server; collectors, parsers and rules exist in Dart and Rust with a shared fixture corpus and parity CI; ServerBox's AGPL `sbm_parser` is neither used nor copied | 9.4, D31, 12.1, S10, M9, R22, R23 |
+| 7 | T1 for v1.x? | Approved: user scope by default, system scope only in admin mode | 9.3, D30, M8 (optional `klabautermann-notify` helper added by decision 21) |
+| 8 | T2 companion: wanted, language, signing, install stance? | Yes, milestone M9 after v1.x; Rust (deviates: Dart was recommended); SHA-256 hashes of the companion binaries pinned in the client build of the same release, no signing key, no new CI secret; nothing by default, an explicit opt-in per server; collectors, parsers and rules exist in Dart and Rust with a shared fixture corpus and parity CI; ServerBox's AGPL `sbm_parser` is neither used nor copied | 9.4, D31, 12.1, S10, M9, R22, R23 (Rust toolchain, builds, `cargo-deny` and release job moved to M8 by decision 21) |
 | 9 | One record kind with typed sub-records? | Confirmed, with the 1 MiB budget | D17, 4.8 |
 | 10 | Audit log device-local plus syslog? | Confirmed; never synced | D28, 8.10 |
 | 11 | Saved sudo password device-only or synced? | Optional from v1.x and synced (deviates: device-only was recommended): a per-server opt-in remembers it in the vault; a second opt-in syncs it, only while the device's suite-wide "sync passwords" switch is on, as the sealed sub-record `klabautermann:sudo:<serverConfigId>`, never as a `secret:` record; sealed removal; risk disclosed in the switch subtitle and the threat model; admin mode still expires | D41, 4.5, 4.8, 8.12, SAF-16, 12.3, M8, R24 |
@@ -476,19 +547,25 @@ catalog IDs point to `02-FEATURES.md`.
 | 18 | Hand-offs in v1; starting folder for X-10? | Séance link intake (opens a known server, asks before connecting, links only pick a server and a starting folder) and Poltergeist Android and iOS registration (F5d) in v1; starting folder accepted and X-10 moves to v1 | D12, 7.22, X-03, X-10, F5, M5 |
 | 19 | Backup scope; GPL catalogs? | Backups inside Klabautermann after v1.x, built on T1 (until then the BAK-01 dump and BAK-02 backup status, both v1.x); only permissive catalogs (Apache-2.0, MIT); GPL (Runtipi, 1Panel) and unlicensed (umbrel-apps) catalogs are not fetched, so no legal review | 7.18, BAK-03, TPL-04, 13 (Later) |
 | 20 | Helper containers for VOL-03 and CTR-21? | Allowed with explicit confirmation on each use: shows what will start and whether an image must be downloaded, image pinned by digest, an image already present preferred, helper removed afterwards; an engine change, not a host file write | 8.11, VOL-03, CTR-21, M8, 13 (Later) |
+| 21 | Alerts while the app is not running: delivery path and encryption on the host? | In v1.x through the existing sync server's command inbox (server minimum stays 1.9.0): T1 checks, and later the companion, deposit sealed alerts only on state changes, with a digest when many fire at once; every device fetches pending alerts at launch and on every sync round while open, shows a "while you were away" list per server, keeps a device-local history, syncs acknowledgement and dismissal as a bounded sealed status sub-record of Klabautermann's record kind and deletes the server item once handled; Klabautermann alert format v1, validated after decryption and shown as plain text. A small single-purpose Rust helper, `klabautermann-notify`, seals (inbox blob layout under Klabautermann's own associated-data domain) and posts, reading token and key from a 0600 file; consented, hash-pinned (decision 8 scheme), in the footprint manifest, removed by the one-action uninstall, built from the companion's Rust workspace. This changes the T1 definition "plain files, no binary". The Rust toolchain, musl builds, `cargo-deny` and the release job move from M9 to M8, and S10 moves before M8 (helper first). Fallback without the helper: the host alert spool and history file and the ntfy, email or webhook notifier. Optional peer reachability checks. Séance prerequisites ship in an earlier release. | D42, D29, D30, D31, 8.12, 9.3, 9.4, ALR-04 to ALR-08, ALR-11, ALR-17, ALR-18, 12.1, 12.3, S10, M8, M9, R5, R23, R26 to R28 |
+| 22 | One sender per server; the 50-app limit? | Each monitored server gets its own inbox app (sender) with its own deposit token and key; the app records the sender's allowed server and rejects alerts naming another. Sender keys are sealed `klabautermann:sender:<serverConfigId>` sub-records within the 1 MiB budget, removed with a sealed removed record; removing alerting for a server also calls `DELETE /v1/apps/{appId}` and uninstalls the host files. A small sync server change gives marked senders their own per-account quota (for example 500) beside the shared 50, with no envelope change and no `kProtocolVersion` bump; on older servers the app explains `429 too_many_apps` and lets the user choose which servers alert through the sync server | D42, 4.8, 9.3, ALR-19, 12.1, 12.3, M8, R27 |
 
 New open items created by the decisions:
 
-1. **Rust toolchain policy** (proposed by S10, approved before M9): the
-   exact toolchain pin and its update cadence, the minimum supported Rust
-   version, the `cargo-deny` licence allowlist and advisory policy, crate
-   review rules and the dependabot `cargo` entry.
+1. **Rust toolchain policy** (proposed by the helper part of S10, approved
+   before M8; before M9 until decision 21): the exact toolchain pin and its
+   update cadence, the minimum supported Rust version, the `cargo-deny`
+   licence allowlist and advisory policy, crate review rules and the
+   dependabot `cargo` entry.
 2. **S10 outcome**: musl static builds for both targets, whether glibc
-   builds are needed, binary size and memory, the parity harness design,
-   and the M9 estimate.
+   builds are needed, the helper's binary size, memory and run time, the
+   estimate of the M8 alert delivery increment, the parity harness design,
+   and the M9 estimate; whether the client downloads `klabautermann-notify`
+   from its own release's assets or bundles it (offline install against
+   app size, 03 9.4 item 9).
 3. **Release tool and hash embedding**: a `Cargo.toml` target so the crate
    versions follow the suite version, and how the client build embeds the
-   companion hashes (generated constant or bundled sums file).
+   helper and companion hashes (generated constant or bundled sums file).
 4. **Pin locator convention** for the suite-wide `host:port` collision fix
    (a design doc for the task after v1).
 5. Still open from the catalog: the push relay (ALR-13), the sync server
@@ -497,6 +574,26 @@ New open items created by the decisions:
 6. **Séance release with the #56 fix**: the release number the enrollment
    assertion names, and confirmation of the derived rule that pin
    publication waits for that assertion (02 X-02, 03 D15).
+7. **Sender quota and release numbers** (decisions 21 and 22): the final
+   per-account quota for marked senders (500 is an example); a bound on
+   what one `GET /v1/inbox` returns, which today lists every item since
+   the cursor without paging
+   (`seance/packages/seance_sync_server/lib/src/inbox_handlers.dart:104-111`
+   [V]), for example a per-account pending cap for marked senders or a
+   page limit (R27); the suite release whose sync
+   server carries the quota, which the `429 too_many_apps` explanation
+   names; and the suite release that carries the Séance inbox
+   prerequisites.
+8. **Reserved app id marker** (decision 21): a format that still passes
+   the 1.9.0 server's app id check, exactly 16 bytes as unpadded base64url
+   (`isValidInboxAppId`, `seance/packages/seance_protocol/lib/src/inbox/inbox.dart:34,78`,
+   enforced at registration in
+   `seance/packages/seance_sync_server/lib/src/inbox_handlers.dart:44`
+   [V]), so older servers accept marked senders under the shared 50; for
+   example a fixed leading byte sequence inside the 16 bytes, at the cost
+   of fewer random bits. A prefix that lengthens the id or adds other
+   characters would be refused with 400 by every 1.9.0 server. Fixed with
+   D42 before M8.
 
 ---
 
@@ -576,6 +673,23 @@ New open items created by the decisions:
   with one hard-coded image; `AllowTcpForwarding no` at
   `poltergeist/test/integration/sshd-common/config/sshd_config.common:17`.
 - Poltergeist's localization contract test is 2,803 lines.
+- Added for decisions 21 and 22, read in the working tree on 2026-10-10
+  (not re-checked against `bf1da58`): `InboxService.refresh` marks the
+  run blocked at an item of an unknown app and advances its cursor only
+  while not blocked (`SC/src/inbox/inbox_service.dart:214-222`); an item
+  of a known app that fails to open or validate is deleted (`:238-249`).
+  Séance's Settings > Inbox lists the local `inboxApp` records
+  (`SA/ui/inbox_settings.dart:34`,
+  `SA/services/local_settings_backend.dart:465-468`, loaded at
+  `SA/app_state.dart:2633-2638`); the `GET /v1/apps` client
+  (`SC/src/sync/http_sync_client.dart:187`) has no caller outside tests.
+  App ids are exactly 16 bytes as unpadded base64url
+  (`SP/inbox/inbox.dart:34,78`), checked at registration
+  (`seance/packages/seance_sync_server/lib/src/inbox_handlers.dart:44`);
+  the 50-app check counts every app of the account (`:58-65`);
+  `GET /v1/inbox` returns every item since the cursor without paging
+  (`:104-111`). Séance's associated data is `seance/v1/inbox/` + appId
+  (`SP/inbox/inbox.dart:39`).
 
 ### A.2 Local experiments (Ubuntu 24.04 container; dash 0.5.12-6ubuntu5, bash 5.2.21, sudo 1.9.15p5; no tty)
 
@@ -590,6 +704,7 @@ New open items created by the decisions:
 | E7 | The sketch of 03, section 6.3, with two ticks in the same write, under dash and bash | Correct frames; UTF-8 payload "héllo wörld" reported as 13 bytes |
 | E8 | Temporary user with a password and `ALL` sudoers rule; run through `su` without a tty | Prelude (no `exec`, trailing `exit $?`) succeeds under dash and bash and passes remaining stdin to `cat`; `exec sudo -n` variant fails with "sudo: a password is required"; variant without `exit $?` fails the same way under bash; `sudo -S -v` in one shell does not help `sudo -n` in another; wrong password exits 125 with "Sorry, try again.", "sudo: no password was provided", "sudo: 1 incorrect password attempt"; with `timestamp_timeout=0` the prelude fails with "a password is required"; `sudo -S -p '' -- cat` reads exactly one password line and passes the rest. The user and sudoers files were removed afterwards |
 | E9 | Detached wrapper under `setsid -f dash -c` with a command that prints, sleeps and exits 3 | "running" record with PID and start time, then "done" with `rc: 3`; log captured; directory 0700, files 0600 |
+| E10 | `echo test \| openssl enc -chacha20-poly1305 -K 00 -iv 00` and the same with `-aes-256-gcm` (OpenSSL 3.0.13); `openssl enc -list` | Both print "enc: AEAD ciphers not supported"; the list has no XChaCha20 and no Poly1305 mode, only plain `-chacha20` without a MAC; `-K` would also put the key in argv (D42) |
 
 ### A.3 Not verified
 
@@ -620,7 +735,7 @@ section 12 and decision numbers point to 03.
 | Catalog home, Poltergeist gates, divergences, Poltergeist first, pull-only test, byte preservation | D6, D14, 4.4, 11.2 |
 | No third copies; native runner policy | D3, D7, D8, D9, D11, D32, 3.5 |
 | Record kinds: one kind, Séance switch, v0.9.0 assertion, bounded classes, sealed removal, no new `ServerConfig` fields | D17, 4.3, 4.8 |
-| Inbox prerequisites: release status, Séance cursor stall, 50-app limit, device-local key pinning | 1.4, 9.4, M9 prerequisites, Appendix C |
+| Inbox prerequisites: release status, Séance cursor stall, 50-app limit, device-local key pinning | 1.4, 9.4, D42, 12.1 (Séance inbox skip, sync server sender quota), M8 and M9 prerequisites, Appendix C |
 | Docker API negotiation, fixtures, custom client, no local bridge, re-list after gaps, rows and columns | D20, D21, 5.4 to 5.8 |
 | Compose safety: no `--remove-orphans`, verified sources, owned stacks read-only, detached pull and up | 7.16, 8.6, 8.7 |
 | Destructive defaults: no confirmation-free single keys, typed confirmation for protected targets, preview equals steps, re-validation | 8.5, 8.6, D26 |
@@ -657,7 +772,7 @@ record only. Corrections below section 12 point to 03.
 | B §4.2 | A sessions refusal arrives as "resource shortage" | sshd sends connect-failed "open failed" [R]; classification by channel type and open count (5.2) |
 | B §5.2 | No control channel without `read -t` | A client-clocked request loop needs no timed read (6.2) |
 | B §10.6.9 | The command inbox is unreleased | Released in 1.9.0 (`seance/CHANGELOG.md:86,111`) [V]. Review 1's statement that it is "still under Unreleased" is also incorrect |
-| B threat model | A compromised device cannot forge companion alerts | It can rewrite a synced key pin; keys are pinned device-locally on first sight (9.4) |
+| B threat model | A compromised device cannot forge companion alerts | It can: every device holds the sealed sender keys, so it can rewrite a server's `sender` record and forge alerts for that server; a changed `sender` record is shown with its device and time (9.4 item 3, 8.12; owner decision 2026-10-10 (21/22)) |
 | B §5.2 | Nonce passed in argv | Readable by local users; delivered on stdin (6.2) |
 | Review 2 graft | Move `TcpBannerProber` into `seance_protocol` | Would add the first `dart:io` socket code to a package shared with the sync server; it stays (3.6) |
 | C §5.3 | POSIX shells do not read ahead from stdin, so a `read` loop sees requests | dash reads ahead from pipes [L]; ticks are command lines (6.2) |

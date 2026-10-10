@@ -835,7 +835,7 @@ not mainstream Linux (section 3.9).
 | Sampler control channel | r5 suggested toggling collectors by writing control lines to the sampler's stdin | dash reads ahead from pipes, so a `read` loop can miss requests; each tick is a whole command line instead (04 Appendix A, C) |
 | Detecting `MaxSessions` exhaustion | c2 (G1, R1) proposed classifying the channel-open error | sshd refuses with a generic connect-failed "open failed", so the error alone cannot identify it; the plan classifies by channel type and open count `[R]` (03 §1.4, §5) |
 | Where the sampler lives | r4 favoured ServerBox's uploaded script, r3 a script sent per refresh, r5 a persistent inline sampler that leaves no files | Decided in 03 §6 |
-| Alert evaluation | r3 option B (sync-server watcher with a restricted key), r4 (a watch node posting sealed records), r5 (on-host agent as inbox producer), r2 (host-native timers) | Decided as tiers in 03 §9 |
+| Alert evaluation | r3 option B (sync-server watcher with a restricted key), r4 (a watch node posting sealed records), r5 (on-host agent as inbox producer), r2 (host-native timers) | Decided as tiers in 03 §9; delivery while closed through the inbox with a new sealed alert format and per-server senders (03 D42) |
 | Release manifest lines | c4 placed Poltergeist's manifest block at `scripts/release-manifest.txt:123-155` | The file has 54 lines; the block is at `:46-54` `[V]` (04 Appendix C) |
 | Versions seen | Docker Desktop 4.94.0 (r1) and 4.85.0 "seen" (r4); Podman v6.0.x (r1) and v6.1.3 with v5.8.8 on 2026-09-29 (r5); Dockge 1.5.0 without a year (r1) and 2025-03-30 (r2) | The later, primary readings stand: Docker Desktop 4.94.0, Podman 6.1.3, Dockge 1.5.0 from 2025-03-30 |
 
