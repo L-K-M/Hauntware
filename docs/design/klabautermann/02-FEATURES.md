@@ -1,16 +1,20 @@
 # 02. Feature catalog
 
-Status: proposal for owner review, 2026-10-10.
+Status: plan with owner decisions of 2026-10-10. Nothing here is implemented.
 
-This chapter lists every feature considered for the fourth Hauntware app,
-with its release tier, execution tier, privilege and data source. A critique
-pass reviewed an earlier version of the catalog; this version applies every
-critique item that the research supports, and Appendix A records how each
-item was handled. The product is unnamed here (see [05-NAMES.md](05-NAMES.md)):
-prose says "the app" and identifiers use `<app>`. The architecture built on
-this catalog is in [03-ARCHITECTURE.md](03-ARCHITECTURE.md); its section 1.4
-lists where it deviates from or corrects rows of this catalog. Milestones and
-the owner's open questions are in [04-IMPLEMENTATION.md](04-IMPLEMENTATION.md).
+This chapter lists every feature considered for Klabautermann, the fourth
+Hauntware app, with its release tier, execution tier, privilege and data
+source. A critique pass reviewed an earlier version of the catalog; this
+version applies every critique item that the research supports, and
+Appendix A records how each item was handled. The display name is
+Klabautermann and the ASCII stem in identifiers is `klabautermann`
+([05-NAMES.md](05-NAMES.md)); prose also says "the app". The architecture
+built on this catalog is in [03-ARCHITECTURE.md](03-ARCHITECTURE.md); its
+section 1.4 lists where it deviates from or corrects rows of this catalog.
+Milestones are in [04-IMPLEMENTATION.md](04-IMPLEMENTATION.md), and the
+owner decisions of 2026-10-10 are in its
+[section 15](04-IMPLEMENTATION.md#15-owner-decisions); rows changed by a
+decision cite it as "owner decision Qn".
 
 References such as "r5 §1.1" or "c1 §2.4" point to the research reports r1 to
 r5 and the codebase reports c1 to c4, imported as appendices under
@@ -27,9 +31,9 @@ r5 and the codebase reports c1 to c4, imported as appendices under
 
 ## Product summary
 
-The app is the fourth Hauntware product: a native Flutter client for Linux,
-macOS, Windows, Android and iOS that monitors and manages the user's servers
-and their Docker or Podman workloads over plain SSH. It shows the same
+Klabautermann is the fourth Hauntware product: a native Flutter client for
+Linux, macOS, Windows, Android and iOS that monitors and manages the user's
+servers and their Docker or Podman workloads over plain SSH. It shows the same
 end-to-end encrypted server list as Séance and Poltergeist, installs nothing
 on the host by default and opens no ports: host metrics come from `/proc`,
 `/sys` and standard CLIs over one SSH connection per server, and the Docker
@@ -41,8 +45,9 @@ and Docker containers, images, logs, stats and compose stacks, with actions
 guarded by observe-only defaults, an explicit admin mode, command previews,
 protected targets and typed confirmations. Work that must continue while the
 app is closed (alerts, history, scheduled checks) uses optional host-side
-timer files (T1) or a later opt-in companion (T2), and the UI states what each
-tier can and cannot catch.
+timer files (T1, v1.x) or a Rust companion that is an explicit opt-in per
+server (T2, planned for M9 after v1.x), and the UI states what each tier can
+and cannot catch.
 
 ## What the owner asked for, and where it lands
 
@@ -63,19 +68,19 @@ tier can and cannot catch.
 
 | Tier | Meaning |
 |---|---|
-| MVP | First preview build worth using daily, for users enrolled in a Séance sync account. Reads the shared server list; shows live host health, processes, services, the journal, file tails, scheduled jobs and Docker containers, images, logs, stats and compose stacks. Mutations: single-target lifecycle actions on units, processes and containers, container and image removal, running a timer now, and pull-and-redeploy for unmanaged, verified stacks, all behind confirmations, protected-target guards and admin mode where root is needed. No config-file writes, no new vault secret kinds, no new synced record kinds, and no Séance app changes beyond the prerequisite extractions of 03, section 3.5. |
-| v1 | First public release. Meets every table-stakes item in section 4 (parity with ServerBox and ServerCat on the host side and with Dockge-class compose management on the Docker side) plus the first differentiators that are cheap once the MVP plumbing exists. Adds in-app server editing, container exec shells and config-file editing with diff, backup and validation. |
+| MVP | First preview build worth using daily, for users enrolled in a Séance sync account, shipped in suite releases labelled "preview" from M4 (owner decision Q16). Reads the shared server list and never pushes to the sync account (pull-only, D14, owner decision Q4); shows live host health, processes, services, the journal, file tails, scheduled jobs and Docker containers, images, logs, stats and compose stacks; builds its themes through `ghost_theme`, with theme editing and presets (X-01, owner decision Q5). Mutations: single-target lifecycle actions on units, processes and containers, container and image removal, running a timer now, and pull-and-redeploy for unmanaged, verified stacks, all behind confirmations, protected-target guards and admin mode where root is needed. No config-file writes, no new vault secret kinds, no new synced record kinds, and no Séance app changes beyond the prerequisite work of 03, section 3.5: the extractions and the Séance #56 fix for pulled host-key pins in F3 (owner decision Q12). |
+| v1 | First public release. Meets every table-stakes item in section 4 (parity with ServerBox and ServerCat on the host side and with Dockge-class compose management on the Docker side) plus the first differentiators that are cheap once the MVP plumbing exists. Adds in-app server editing, container exec shells and config-file editing with diff, backup and validation. Catalog writes start here, including publication of first-seen host-key pins (X-02), and so do the hand-offs to Séance and Poltergeist (X-03, X-04, X-10; owner decision Q18). |
 | v1.x | Differentiators and host-side (T1) features: footprint-tracked host checks with notifications, scheduled update checks, coarse history, fleet tables. |
-| Later | Needs the optional T2 companion, a large design decision (push relay, vault kinds, backup scope, legal review), or has low value per effort. |
+| Later | After v1.x. Rows that need the T2 companion are scheduled in milestone M9 (owner decision Q8; see T2 below). Restic-based backups are built into the app after v1.x on top of T1 (owner decision Q19). Other Later rows need a further design decision (for example the push relay, ALR-13) or have low value per effort. |
 | Non-goal | Deliberately out of scope. Rows moved out of scope stay in their area table with this tier; cross-cutting non-goals are in section 3.41. |
 
 ### Execution tiers
 
 | Tier | Meaning |
 |---|---|
-| T0 | Agentless over SSH while the app is open. Uses `/proc`, `/sys`, standard CLIs and the Docker Engine API over an SSH `direct-streamlocal` channel. Writes to the host only what the host write inventory in 03, section 8.11 lists, including explicit user edits (for example a crontab change) and their backups (SAF-12), transient units with operation records and logs for detached operations (SAF-23), the audit syslog line (SAF-13) and the footprint manifest (SAF-14). |
-| T1 | Host-side plain files installed only with explicit consent: systemd timer and service pairs (cron fallback) plus small POSIX scripts and state files, all listed in one footprint manifest (SAF-14) and removable in one action. No daemon, no listening port. System timers run only root-owned scripts from root-owned directories (0755; state files 0640 or 0600); user timers run only user-scope checks; notifier secrets live in 0600 files owned by the timer user; per-file checksums in the manifest are verified on connect. |
-| T2 | Optional always-on companion: an agent on the host or a user-run watch node. Opt-in. No T0 or T1 feature depends on it. |
+| T0 | Agentless over SSH while the app is open. Uses `/proc`, `/sys`, standard CLIs and the Docker Engine API over an SSH `direct-streamlocal` channel. Writes to the host only what the host write inventory in 03, section 8.11 lists, including explicit user edits (for example a crontab change) and their backups (SAF-12), transient units with operation records and logs for detached operations (SAF-23), the audit syslog line (SAF-13) and the footprint manifest (SAF-14), all accepted by owner decision Q6. Helper containers for volume browsing (VOL-03) and the debug shell (CTR-21) are engine changes, not host file writes: each use needs explicit confirmation, and the helper is removed afterwards (owner decision Q20). |
+| T1 | Host-side plain files installed only with explicit consent: systemd timer and service pairs (cron fallback) plus small POSIX scripts and state files, all listed in one footprint manifest (SAF-14) and removable in one action. No daemon, no listening port. System timers run only root-owned scripts from root-owned directories (0755; state files 0640 or 0600); user timers run only user-scope checks; notifier secrets live in 0600 files owned by the timer user; per-file checksums in the manifest are verified on connect. Approved for v1.x with user scope by default and system scope only in admin mode (owner decision Q7). |
+| T2 | Optional always-on companion written in Rust: nothing by default, an explicit opt-in per server (owner decision Q8). An inbox producer on the host with no listener, no inbound control and no SSH or account keys, installed, updated and removed only by the client over SSH, never self-updating; the client build pins the SHA-256 hashes of the companion binaries of the same release (no signing key). No T0 or T1 feature depends on it. T2 rows keep the release tier Later and are scheduled in milestone M9 after v1.x, except where their notes name a further decision (ALR-12, ALR-13, X-09). |
 | C | Client-only. No server access, or only data the app already fetched. |
 | +E | Suffix on any tier: the feature contacts an endpoint outside the user's servers and the suite (registry, code forge, notification service, LLM provider, RDAP, catalog URL). Notes say what data leaves. Device-side lookups of this kind are opt-in, because they disclose the device IP (and image names, for registries) and inherit third-party rate limits (Docker Hub counts pulls per IP, r5 §1.10). |
 
@@ -150,13 +155,13 @@ Rows per area and release tier (counted from section 3):
 | History and trends (HIS) | 0 | 1 | 5 | 4 | 0 | 10 |
 | Automation, runbooks and snippets (AUT) | 0 | 2 | 2 | 3 | 0 | 7 |
 | Web and reverse proxy (WEB) | 0 | 0 | 3 | 2 | 0 | 5 |
-| Cross-app integration (X) | 2 | 3 | 2 | 3 | 0 | 10 |
+| Cross-app integration (X) | 2 | 4 | 1 | 3 | 0 | 10 |
 | Assistant (AI) | 1 | 0 | 5 | 3 | 0 | 9 |
 | Settings, privilege and safety (SAF) | 12 | 6 | 4 | 1 | 0 | 23 |
 | Sync and data (SYN) | 5 | 2 | 1 | 1 | 0 | 9 |
 | Platform specifics (PLT) | 4 | 5 | 3 | 2 | 1 | 15 |
 | Accessibility and localization (A11Y) | 9 | 4 | 2 | 0 | 0 | 15 |
-| **All areas** | **110** | **135** | **147** | **92** | **7** | **491** |
+| **All areas** | **110** | **136** | **146** | **92** | **7** | **491** |
 
 Rows per execution tier and release tier (Non-goal rows excluded):
 
@@ -165,8 +170,8 @@ Rows per execution tier and release tier (Non-goal rows excluded):
 | T0 | 65 | 94 | 100 | 58 | 317 | 3 |
 | T1 | 0 | 0 | 8 | 8 | 16 | 3 |
 | T2 | 0 | 0 | 0 | 7 | 7 | 1 |
-| C | 45 | 41 | 39 | 19 | 144 | 14 |
-| **All** | **110** | **135** | **147** | **92** | **484** | **21** |
+| C | 45 | 42 | 38 | 19 | 144 | 14 |
+| **All** | **110** | **136** | **146** | **92** | **484** | **21** |
 
 ---
 
@@ -294,8 +299,8 @@ Deliberately not in the MVP: container exec shells (need the shared terminal
 engine), in-app server editing (needs the shared server editor), any
 config-file write (crontab, compose, `.env`, unit overrides), `docker compose
 down` and per-service actions, prune, image pull outside a stack, volume and
-network management, package updates, history beyond the session, alerts, and
-anything T1 or T2.
+network management, package updates, history beyond the session, alerts, any
+push to the sync account (pull-only, D14), and anything T1 or T2.
 
 MVP technical prerequisites (not features, listed because they drive the cut):
 
@@ -308,14 +313,20 @@ MVP technical prerequisites (not features, listed because they drive the cut):
 - session-channel budgeting and dead-peer detection (c2 G6, G7);
 - shared UI extractions: TOFU, keyboard-interactive and missing-credential
   dialogs (`ghost_prompts`), the status-dot vocabulary and connection log view
-  (`ghost_servers` part 1) and the theme stack (`ghost_theme`) (c3 §4);
+  (`ghost_servers` part 1) and the theme stack with theme editing and presets
+  (`ghost_theme`, F4b, Séance switched; owner decision Q5) (c3 §4);
+- Séance's conflict check for pulled host-key pins (Séance #56, adopting the
+  quarantine handler, in F3; owner decision Q12), so that pin publication can
+  start with catalog writes in v1 (X-02);
 - a shared `CredentialResolver` for identity files and vault lookups (c2 G9);
 - the dartssh2 import guard generalized to root `tool/` and run per product
   (c2 G12, c4 §5.4);
 - the isolate decision for parsing (CN-19, c2 G14);
 - Docker, systemd, cron and firewall rules in `DangerLinter` (AI-01, c2 §6);
 - small chart and virtualized log-viewer widgets (c3 §5);
-- product registration in scripts, release tool and CI (c4 §1).
+- product registration in scripts, release tool and CI (c4 §1): the client
+  matrix builds on every PR (owner decision Q15), and the release job and
+  manifest entries land at M4 for the preview releases (owner decision Q16).
 
 Where the plan accepts a temporary copy instead of an extraction, it records
 the copy with a follow-up (c4 §5.5).
@@ -349,7 +360,7 @@ cheap once per-host collectors exist, so most of it lands in v1 and v1.x.
 | FL-10 | Attention-first sort and faults-only filter | Sort by problems; one toggle shows only hosts that need action | k9s ctrl-z, Pulse attention queue | v1 | C | none | cached probe results | |
 | FL-11 | Connection tree | Fleet, host, stacks, containers as one navigable tree | XPipe, Lens catalog | v1 | C | none | - | Mobile: drill-down stack instead of a tree. |
 | FL-12 | Bulk host selection | Select hosts to refresh, connect, disconnect or run a snippet | ServerBox bulk bar, NeoServer batch | v1.x | T0 | per action | - | |
-| FL-13 | Tags | Key-value tags for filtering and bulk targeting | ServerBuddy, Dockhand tags | v1.x | C | none | own synced record kind `<app>:pref:<serverId>` | Must not add fields to `ServerConfig`: older builds drop them on re-push (c1 §2.4). |
+| FL-13 | Tags | Key-value tags for filtering and bulk targeting | ServerBuddy, Dockhand tags | v1.x | C | none | own synced record kind `klabautermann:pref:<serverId>` | Must not add fields to `ServerConfig`: older builds drop them on re-push (c1 §2.4). |
 | FL-14 | Fleet compliance tables | Columns across hosts: OS, kernel, pending and security updates, reboot needed, Docker and Compose versions, cert expiry, hardening index, failed units | Checkmk and Zabbix inventories (partial) | v1.x | T0 | user+ | cached slow-tier collectors | Differentiator. |
 | FL-15 | Cross-host search | Find containers, images, ports, units, cron jobs and SSH keys across the fleet | none found (r1 gap) | v1.x | T0 | docker, user | fan-out over cached data | Differentiator. Bounded concurrency (ServerBox caps at 4). |
 | FL-16 | Per-server app settings | Cadence, Docker endpoint override, read-only flag, admin-mode memory, binary path overrides | ServerBox, k9s per-cluster readOnly | v1 | C | none | device-local; selected fields as own synced kind | Endpoint overrides stay device-local. |
@@ -358,7 +369,7 @@ cheap once per-host collectors exist, so most of it lands in v1 and v1.x.
 | FL-19 | Status share card | Share a status image with host and IP hidden by default | ServerGlance | Non-goal | C | none | rendered locally | Non-goal: low value, and every share path would need redaction. |
 | FL-20 | Import Docker contexts | Offer local `docker context` SSH endpoints as servers | Raycast Docker extension | Later | C | none | `docker context ls --format json` on the device | Desktop only. |
 | FL-21 | Fleet monitoring policy | Fleet metrics only for servers the user marks for monitoring that have non-interactive credentials and a confirmed endpoint; other rows show reachability only | ServerBox refresh cap, Séance ProbeService | MVP | C | none | per-server setting, FL-04, SAF-09 | At most 4 concurrent connects with jitter (ServerBox); background refreshes never prompt (c2 §2.5); keyboard-interactive servers connect on demand only (c2 R10, R11). Mobile: paused in background. |
-| FL-22 | First-run enrollment | Explains that the list comes from the shared Séance sync account, asks the user to assert Séance >= v0.9.0 on every device, and discloses that the account key decrypts every app's records and that Séance does not yet check pin conflicts (#56) | Poltergeist shared-mode gate | MVP | C | none | `SyncEnrollment`, fleet assertion (c1 §6) | Without enrollment phones show no servers; desktops can import ssh_config (FL-02). |
+| FL-22 | First-run enrollment | Explains that the list comes from the shared Séance sync account, asks the user to assert Séance >= v0.9.0 on every device, and discloses that the account key decrypts every app's records | Poltergeist shared-mode gate | MVP | C | none | `SyncEnrollment`, fleet assertion (c1 §6) | Without enrollment phones show no servers; desktops can import ssh_config (FL-02). |
 
 ### 3.2 Connection, capability probe and transport (CN)
 
@@ -569,7 +580,7 @@ in v1.x once the log viewer widget is mature.
 | LOG-11 | Faceted explorer | Field values with counts, include and exclude, timeline histogram | Netdata journal explorer | v1.x | T0 | journal | client-side over the loaded window; `journalctl -F <FIELD>` for value lists | Differentiator: Netdata gates parts of this behind its Cloud. |
 | LOG-12 | Unified stream | Journal units, container logs and files merged by timestamp | lazyjournal (TUI only); r1 gap | v1.x | T0 | journal, docker | LOG-01, CTX-01, LOG-08 | Differentiator. |
 | LOG-13 | Structured fields | JSON detection, expandable rows, custom columns | Dozzle, Logdy | v1.x | C | none | - | |
-| LOG-14 | Saved queries | Named filters synced across devices | Docker Desktop presets | v1.x | C | none | own record kind `<app>:query:<uuid>` | No host names or queries in record ids: they are plaintext (c1 §2.4). |
+| LOG-14 | Saved queries | Named filters synced across devices | Docker Desktop presets | v1.x | C | none | own record kind `klabautermann:query:<uuid>` | No host names or queries in record ids: they are plaintext (c1 §2.4). |
 | LOG-15 | Journal size and vacuum | Disk used by the journal; vacuum by size or age | none found as a UI | v1.x | T0 | sudo | `journalctl --disk-usage`, `--vacuum-size=`, `--vacuum-time=` | Also offered by DSK-09. |
 | LOG-16 | Log rate view | Lines and errors per minute | Netdata histogram, Dozzle SQL charts | v1.x | C | none | loaded window | |
 | LOG-17 | Syslog-only hosts | Logs on OpenWrt and Alpine without journald | ServerBox, lazyjournal | v1.x | T0 | user | `logread`, `/var/log/messages` | |
@@ -601,7 +612,7 @@ lines and depend on external services, so they are v1.x.
 | JOB-08 | Run timer now | Start a timer's service immediately and stream its journal output | Cockpit, Webmin | MVP | T0 | sudo, polkit, user | `systemctl start <service>`; `systemctl --user start` for user units | Same mechanism and guards as SVC-03 (SAF-22). |
 | JOB-09 | Managed-crontab detection | Jobs owned by Dokku, Coolify, Dokploy or Runtipi shown read-only | Dokku docs ("reserved") | v1 | T0 | user | crontab owner and markers | |
 | JOB-10 | Timer creator | Calendar UI that writes a `.timer` and `.service` | Cockpit | v1.x | T0 | sudo | unit files, `daemon-reload` | User units need no sudo. |
-| JOB-11 | Output capture | Wrap a job so its output reaches the journal | Cronicle live log, Healthchecks body capture | v1.x | T0 | user, sudo | `cmd 2>&1 \| logger -t <app>-job-<id>` or `systemd-cat` | Visible, reversible edit of the job line. T1 only if a wrapper script is installed. |
+| JOB-11 | Output capture | Wrap a job so its output reaches the journal | Cronicle live log, Healthchecks body capture | v1.x | T0 | user, sudo | `cmd 2>&1 \| logger -t klabautermann-job-<id>` or `systemd-cat` | Visible, reversible edit of the job line. T1 only if a wrapper script is installed. |
 | JOB-12 | Dead-man pings | Start, success and fail pings to the user's Healthchecks or Uptime Kuma push URL | Healthchecks, Uptime Kuma push monitors | v1.x | T1+E | user | `curl` wrapper around the job | Alerting lives in that external service. Sends job timing and status to the chosen service. |
 | JOB-13 | Missed-run detection | Compare expected runs with observed runs | Checkmk freshness, Zabbix `nodata()` | v1.x | T0 | journal | schedule plus journal history | |
 | JOB-14 | Fleet jobs overview | All jobs across servers | none found | v1.x | T0 | user | fan-out | |
@@ -810,7 +821,7 @@ need more UI and are v1.x.
 | CTR-18 | Filesystem changes | Files added, changed or deleted against the image | Docker Desktop | v1.x | T0 | docker | `GET /containers/{id}/changes` | |
 | CTR-19 | Container file browser | Browse, download, upload and edit small files | Docker Desktop, Dockhand, Docker Manager iOS | v1.x | T0 | docker | `GET`, `PUT`, `HEAD /containers/{id}/archive?path=` (tar) | Mobile: download through the share sheet. |
 | CTR-20 | Recreate with changes | Duplicate and edit, applied as a recreate | Portainer | Later | T0 | docker | create plus remove | |
-| CTR-21 | Debug shell | Tool-equipped helper container sharing the target's PID and network namespaces, for distroless images | Docker Debug, OrbStack Debug Shell | Later | T0 | docker | helper created with `PidMode=container:<id>` [U design] | Helper image pinned by digest, preferring one already present; clear failure on air-gapped hosts. |
+| CTR-21 | Debug shell | Tool-equipped helper container sharing the target's PID and network namespaces, for distroless images | Docker Debug, OrbStack Debug Shell | Later | T0 | docker | helper created with `PidMode=container:<id>` [U design] | Explicit confirmation on each use (owner decision Q20): shows what will start and whether an image must be downloaded; helper image pinned by digest, preferring one already present; helper removed afterwards; clear failure on air-gapped hosts. |
 | CTR-22 | App icons | Icons for well-known images | Dockhand (selfh.st icons) | Later | C | none | icon set | Blocked until the icon licence is checked [U]. |
 
 ### 3.22 Container logs, exec and attach (CTX)
@@ -893,7 +904,7 @@ is v1.x.
 |---|---|---|---|---|---|---|---|---|
 | VOL-01 | Volume list | Driver, mountpoint, labels, users, size | Dockhand, Docker Desktop | v1 | T0 | docker | `GET /volumes`; sizes from `GET /system/df?verbose=1` | |
 | VOL-02 | Create and remove | | every tool | v1 | T0 | docker | `POST /volumes/create`, `DELETE /volumes/{name}` | Typed confirmation on remove. |
-| VOL-03 | Browse volume files | SFTP to the mountpoint when readable, else a helper container (read-only while in use) | Dockhand busybox helper, Docker Desktop | v1.x | T0 | docker, sudo | `Mountpoint` read through the privileged path (SAF-12), or a helper container with the volume mounted | Offers "open in Poltergeist". Helper image pinned by digest, preferring one already present; clear failure on air-gapped hosts. |
+| VOL-03 | Browse volume files | SFTP to the mountpoint when readable, else a helper container (read-only while in use) | Dockhand busybox helper, Docker Desktop | v1.x | T0 | docker, sudo | `Mountpoint` read through the privileged path (SAF-12), or a helper container with the volume mounted | Offers "open in Poltergeist". The helper container needs explicit confirmation on each use (owner decision Q20): it shows what will start and whether an image must be downloaded, pins the image by digest, prefers an image already present and removes the helper afterwards; clear failure on air-gapped hosts. |
 | VOL-04 | Clone | | Dockhand, Docker Desktop | Later | T0 | docker | helper container copy | Keep driver, options and labels. |
 | VOL-05 | Export and import | Volume to tar and back | Dockhand, Docker Desktop | Later | T0 | docker | helper container `tar`, streamed | See also BAK-03. |
 
@@ -930,7 +941,7 @@ detection, deploy preview, lint and host-side history are v1.x differentiators.
 | STK-09 | Overrides and profiles | Multiple compose files, overrides, profiles | Komodo, Arcane | v1 | T0 | docker | `config_files` label, `--profile` | |
 | STK-10 | Managed stacks read-only | Stacks owned by other managers shown with a badge, edits off by default | r2 §6.2 | MVP | C | none | DKE-10 | Actions need an explicit "act anyway" step that names the owner. |
 | STK-11 | Drift detection | Running config against the file on disk; running image digest against the current tag | Sencho | v1.x | T0 | docker | `com.docker.compose.config-hash` label against `docker compose config --hash '*'`; `com.docker.compose.image` label | Differentiator. Same source verification as STK-01. |
-| STK-12 | Deploy history and rollback | Host-side append-only history with previous digests and file backups; one-tap rollback | Dockhand deploys tab, Kamal audit and rollback | v1.x | T0 | docker | history file next to the stack or under `~/.local/state/<app>/` [design choice] | On the host so every device sees it. |
+| STK-12 | Deploy history and rollback | Host-side append-only history with previous digests and file backups; one-tap rollback | Dockhand deploys tab, Kamal audit and rollback | v1.x | T0 | docker | history file next to the stack or under `~/.local/state/klabautermann/` [design choice] | On the host so every device sees it. |
 | STK-13 | Deploy preview | What `up` would create, recreate or remove | Komodo sync diff (partial); r1 gap | v1.x | T0 | docker | `docker compose up --dry-run` where supported [U] plus STK-11 | Differentiator. |
 | STK-14 | Compose lint | Duplicate host ports, cross-stack port collisions, hard-coded secrets, socket mounts, privileged, `latest`, missing restart or healthcheck; gutter markers; conservative fixes | Dockhand validate, Cosmos warnings | v1.x | T0 | user | parsed YAML plus `docker compose config` | Never blocks a deploy. |
 | STK-15 | Required variables | Block apply while a `${VAR:?}` is unset | Coolify | v1.x | T0 | user | `docker compose config --variables` | |
@@ -954,7 +965,7 @@ v1. Keeping registry credentials in the vault needs a new record kind in
 | ID | Feature | Description | Inspiration | Rel | Exec | Priv | Data source | Notes |
 |---|---|---|---|---|---|---|---|---|
 | REG-01 | Host credentials | Use the server's own `docker login` and credential helpers | Docker CLI | v1 | T0 | docker | `docker pull`, `docker compose pull` over exec | The daemon does not read `~/.docker/config.json`; only the CLI does. |
-| REG-02 | Vault credentials | Registry credentials in the E2E vault, sent per request | Portainer, Dockhand | v1.x | T0 | docker | `X-Registry-Auth` header | Needs a new `RecordKind` (changes `seance_protocol` and Séance's exhaustive switch; no protocol bump or server change). The secret stays inside the kind's own sealed payload. Never written to the host unless asked. |
+| REG-02 | Vault credentials | Registry credentials in the E2E vault, sent per request | Portainer, Dockhand | v1.x | T0 | docker | `X-Registry-Auth` header | A sealed sub-record type of the product record kind behind an opt-in (D17, owner decision Q9), never a `secret:` record. The secret stays inside the sealed payload. Never written to the host unless asked. |
 | REG-03 | Rate-limit display | Docker Hub pulls remaining | none found | v1.x | C+E | none | `ratelimit-remaining` response header [U behaviour on HEAD] |  |
 | REG-04 | Registry browser | Search, tags, manifests | Dockhand, Arcane 2.15 | Later | C+E | none | registry v2 API |  |
 
@@ -963,15 +974,17 @@ v1. Keeping registry credentials in the vault needs a new record kind in
 A one-click catalog is what home-server users expect from panels, but it brings
 licensing questions (r2 §6.7) and post-install UX work. The run-to-compose
 converter is cheap and lands in v1.x. The catalog is Later and limited to
-sources the user adds (Dockhand reads Portainer v2 JSON catalogs, r1 §3.1);
-curating or hosting an app store is a non-goal (NG-19).
+sources the user adds (Dockhand reads Portainer v2 JSON catalogs, r1 §3.1)
+under permissive licences (Apache-2.0, MIT); GPL and unlicensed catalogs are
+not fetched, so no legal review is needed (owner decision Q19). Curating or
+hosting an app store is a non-goal (NG-19).
 
 | ID | Feature | Description | Inspiration | Rel | Exec | Priv | Data source | Notes |
 |---|---|---|---|---|---|---|---|---|
 | TPL-01 | docker run to compose | Paste a `docker run` command, get a compose service | Dockge | v1.x | C | none | local parser | |
-| TPL-02 | Template catalog | Compose plus `x-<app>` metadata rendered as a form; "view raw compose" always available | CapRover, Runtipi, CasaOS, Coolify, Umbrel | Later | T0+E | docker | catalog fetched by the device; SFTP plus `docker compose up` | User-added sources only, for example Portainer v2 JSON catalogs as Dockhand reads them (r1 §3.1); no curated or hosted store (NG-19). Fetching a catalog discloses the device IP to its host. |
+| TPL-02 | Template catalog | Compose plus `x-klabautermann` metadata rendered as a form; "view raw compose" always available | CapRover, Runtipi, CasaOS, Coolify, Umbrel | Later | T0+E | docker | catalog fetched by the device; SFTP plus `docker compose up` | User-added sources only, for example Portainer v2 JSON catalogs as Dockhand reads them (r1 §3.1); no curated or hosted store (NG-19). Only permissively licensed catalogs are fetched (TPL-04). Fetching a catalog discloses the device IP to its host. |
 | TPL-03 | Generated secrets | Random passwords and keys written to the host `.env` | Coolify magic variables, CapRover `$$cap_gen_random_hex` | Later | C | none | device RNG | |
-| TPL-04 | Third-party catalogs | Portainer v2 JSON; CapRover, CasaOS and Coolify (Apache-2.0); Dokploy (MIT) | Dockhand, Yacht | Later | C+E | none | catalog URLs | GPL catalogs only fetched at runtime by user choice [U legal]; umbrel-apps has no licence. |
+| TPL-04 | Third-party catalogs | Permissively licensed catalogs only: CapRover, CasaOS and Coolify (Apache-2.0), Dokploy (MIT), and Portainer v2 JSON catalogs where their licence permits | Dockhand, Yacht | Later | C+E | none | catalog URLs | Owner decision Q19: GPL catalogs (Runtipi, 1Panel) and unlicensed ones (umbrel-apps) are not fetched, so no legal review is needed. |
 | TPL-05 | Compatibility checks | Architecture, free ports, disk | Runtipi, Umbrel 2.0 | Later | T0 | user | `uname -m`, `ss -ltn`, `df` | |
 | TPL-06 | Post-install card | URL, generated credentials and a health indicator that turns green | Umbrel App Store Standard | Later | T0 | docker | `State.Health` | |
 | TPL-07 | Personal templates | Save a stack as a reusable template, synced | Portainer custom templates, Dockhand config sets | Later | C | none | device-local, or a file on the host | Not synced: whole-account pulls and a 1 MiB blob cap (c1 §2.4). |
@@ -983,37 +996,39 @@ this is where platforms disappoint most: CapRover skips volumes, Dokploy skips
 bind mounts, Coolify skips Redis-family databases. A one-shot database dump is
 cheap T0 and comes first (v1.x). Restic-based backups with a coverage report and
 test restores are Later because they need restic on the host and careful,
-honest UX. Rows marked "Decision: backup scope" need a separate product
-decision before planning; they stay in the catalog because Dockhand, the
-owner's reference, ships restic backups (r1 §3.1).
+honest UX. The owner placed them inside the app, after v1.x and built on T1
+(owner decision Q19); until then the one-shot dump (BAK-01) and the rows'
+existing tiers apply. Dockhand, the owner's reference, ships restic backups
+(r1 §3.1).
 
 | ID | Feature | Description | Inspiration | Rel | Exec | Priv | Data source | Notes |
 |---|---|---|---|---|---|---|---|---|
 | BAK-01 | Database dump | One-shot dump from a database container using its own env credentials; keep on host or download | Coolify, Dokploy | v1.x | T0 | docker | `docker exec <c> pg_dump`, `mysqldump`, `mongodump`, `sqlite3 <db> .backup` | Credentials are read from container env and never displayed. |
 | BAK-02 | Existing backup status | Detect restic, borg or kopia timers and show the last success | Cockpit Hangar plugin (partial) | v1.x | T0 | user, sudo | `systemctl list-timers`, `journalctl -u <unit>`, `restic snapshots --json` when repo credentials are available [U] | |
-| BAK-03 | Volume and bind-mount backup | restic snapshot of chosen paths, with a stop-for-consistency option | Dockhand restic, Cosmos, Dokploy (named volumes only) | Later | T0 | sudo, docker | `restic backup <paths>` | Decision: backup scope. Covers bind mounts too (Dokploy gap). Explain the stop trade-off (Cosmos guidance). |
+| BAK-03 | Volume and bind-mount backup | restic snapshot of chosen paths, with a stop-for-consistency option | Dockhand restic, Cosmos, Dokploy (named volumes only) | Later | T0 | sudo, docker | `restic backup <paths>` | Inside the app after v1.x (owner decision Q19). Covers bind mounts too (Dokploy gap). Explain the stop trade-off (Cosmos guidance). |
 | BAK-04 | Coverage report | Per stack, every mount classified as backed up, excluded or unsupported | none found; Cloudron and TrueNAS honesty | Later | C | none | inspect mounts plus backup configuration | Differentiator. |
-| BAK-05 | Scheduled backups and retention | Timer plus restic retention policy explained in words | Cloudron, Cosmos, Dockhand | Later | T1 | sudo | systemd timer and script; `restic forget --keep-daily N ...` | Decision: backup scope. |
-| BAK-06 | Integrity check |  | Cloudron, Dockhand | Later | T0 | sudo | `restic check` | Decision: backup scope. Scheduled variant is T1. |
-| BAK-07 | Verify by test restore | Restore to a scratch directory or a disposable database container and report | Coolify advice, Cloudron dry-run restore | Later | T0 | sudo, docker | `restic restore --target <tmp>`, temporary container | Decision: backup scope. Differentiator. |
+| BAK-05 | Scheduled backups and retention | Timer plus restic retention policy explained in words | Cloudron, Cosmos, Dockhand | Later | T1 | sudo | systemd timer and script; `restic forget --keep-daily N ...` | Inside the app after v1.x (owner decision Q19). |
+| BAK-06 | Integrity check |  | Cloudron, Dockhand | Later | T0 | sudo | `restic check` | Inside the app after v1.x (owner decision Q19). Scheduled variant is T1. |
+| BAK-07 | Verify by test restore | Restore to a scratch directory or a disposable database container and report | Coolify advice, Cloudron dry-run restore | Later | T0 | sudo, docker | `restic restore --target <tmp>`, temporary container | Inside the app after v1.x (owner decision Q19). Differentiator. |
 | BAK-08 | Pre-update backup | Automatic dump or snapshot before a safe update | Cloudron (kept 3 weeks) | Later | T0 | docker | BAK-01, BAK-03 | Tied to IMG-08. |
-| BAK-09 | Backup targets | Local disk, another server in the list over SFTP, S3-compatible, B2 | Cloudron, Dockhand | Later | T1 | sudo | restic repositories | Decision: backup scope. The SFTP target reuses the shared server list. |
+| BAK-09 | Backup targets | Local disk, another server in the list over SFTP, S3-compatible, B2 | Cloudron, Dockhand | Later | T1 | sudo | restic repositories | Inside the app after v1.x (owner decision Q19). The SFTP target reuses the shared server list. |
 | BAK-10 | Download and upload backups | Move dumps and archives between host and device by handing off to Poltergeist | Docker Manager iOS | Later | T0 | user | Poltergeist deep link and transfer engine (X-04, X-08) | No transfer code in this app. |
 
 ### 3.31 Alerts and notifications (ALR)
 
 An agentless client can only alert while it runs (r1 §5.3, r4 §2.7). In-app
-alerts are v1 and desktop tray monitoring is v1.x. Host-side checks with a
-notifier script (T1) give while-closed alerts without a daemon (v1.x). A host
+alerts with local notifications are v1 and desktop tray monitoring is v1.x.
+Host-side checks with a notifier script (T1) give while-closed alerts without
+a daemon (v1.x), and the opt-in Rust companion (T2) follows in M9. A host
 cannot report its own death, so host-down detection needs a peer or an external
 monitor. Native push needs a publisher-run relay and conflicts with today's
 unsigned iOS distribution, so it is Later and uncertain.
 
 | ID | Feature | Description | Inspiration | Rel | Exec | Priv | Data source | Notes |
 |---|---|---|---|---|---|---|---|---|
-| ALR-01 | In-app threshold alerts | Threshold plus duration rules evaluated on live samples | Beszel, Glances colours | v1 | C | none | sampler data | Labelled "only while the app is open". |
+| ALR-01 | In-app threshold alerts | Threshold plus duration rules evaluated on live samples | Beszel, Glances colours | v1 | C | none | sampler data | Labelled "only while the app is open". System notifications through `flutter_local_notifications` (BSD-3, owner decision Q13). |
 | ALR-02 | Attention badges | Counts on fleet rows and on the app icon where supported | ServerGlance | v1 | C | none | TRI-03 | |
-| ALR-03 | Desktop background monitoring | Tray or menu-bar mode keeps polling while the machine is awake, with local notifications | OrbStack menu bar; r5 §5.4 | v1.x | T0 | per collector | the same sampler | Desktop only. Needs a local-notification plugin (none in the repo today, c3 §5.4). |
+| ALR-03 | Desktop background monitoring | Tray or menu-bar mode keeps polling while the machine is awake, with local notifications | OrbStack menu bar; r5 §5.4 | v1.x | T0 | per collector | the same sampler | Desktop only. Local notifications through `flutter_local_notifications` (BSD-3, owner decision Q13; none in the repo today, c3 §5.4). |
 | ALR-04 | Host-side checks | Timer script for disk, inodes, failed units, dead or restart-looping containers, cert expiry, pending security updates, reboot required | Coolify notification events, Webmin monitors | v1.x | T1 | user, sudo, docker (per check) | systemd timer (cron fallback), POSIX script, JSON state file | Listed in the footprint manifest (SAF-14). |
 | ALR-05 | Notifier script | ntfy, Gotify, Telegram, Discord, Slack, Pushover, email, generic webhook; optional Apprise | Coolify, Dokploy, Dockhand | v1.x | T1+E | user | `curl` from the host | Channel secrets live on the host and the UI says so. ntfy and Gotify have their own mobile apps, which avoids APNs. |
 | ALR-06 | Channel and event matrix | Per channel, per event toggles; failures on and successes off by default; test send | Coolify | v1.x | C | none | configuration written to the host | |
@@ -1021,29 +1036,29 @@ unsigned iOS distribution, so it is Later and uncertain.
 | ALR-08 | Peer watcher | One server in the list checks the reachability of others on a timer | Coolify "unreachable after two consecutive checks" | v1.x | T1 | user | timer on the peer with `nc -z` or `curl` | The peer needs network reach only, no credentials for targets. |
 | ALR-09 | Alert snapshot | Capture an incident snapshot when the user opens an alert | xyOps | v1.x | T0 | user+ | TRI-05 | |
 | ALR-10 | External monitor integration | Create or read Uptime Kuma or Healthchecks checks | Uptime Kuma, Healthchecks | Later | C+E | none | their HTTP APIs | Alerts then leave the suite. |
-| ALR-11 | Agent alerts through the inbox | Optional agent evaluates rules on the host and deposits sealed alerts and heartbeats through the Séance inbox producer pattern | r5 §5.3 recommendation | Later | T2 | docker (container rules) | sync server inbox with a new sealed alert type | Trust model unchanged: the agent holds no SSH keys. Inbox limits: 100 pending items and 30 deposits per minute per app, at most 50 apps per account, so one app per host caps agent fleets at 50 hosts (c1 §2.4). |
-| ALR-12 | Heartbeat dead-man | Sync server flags "agent silent for N minutes" without decrypting anything | r5 §5.3 | Later | T2 | none | inbox deposit timestamps | Needs a sync server change [design decision]. |
-| ALR-13 | Native push | APNs and FCM through a publisher relay with content-free payloads | ServerBox relay, ntfy upstream relay | Later | T2+E | none | relay service | Conflicts with the unsigned IPA; open question. |
-| ALR-14 | Docker event alerts | Real-time die, oom, health_status | Dozzle alerts | Later | T2 | docker | `GET /events` stream in the agent | ALR-04 approximates by polling. |
-| ALR-15 | Log pattern alerts | | Dozzle | Later | T2 | journal, docker | agent | |
+| ALR-11 | Agent alerts through the inbox | Optional agent evaluates rules on the host and deposits sealed alerts and heartbeats through the Séance inbox producer pattern | r5 §5.3 recommendation | Later | T2 | docker (container rules) | sync server inbox with a new sealed alert type | Rust companion in M9 (owner decision Q8). Rules then exist in Dart and in Rust, so parity tests over a shared fixture corpus run in CI. Trust model unchanged: the agent holds no SSH keys. Inbox limits: 100 pending items and 30 deposits per minute per app, at most 50 apps per account, so one app per host caps agent fleets at 50 hosts (c1 §2.4). |
+| ALR-12 | Heartbeat dead-man | Sync server flags "agent silent for N minutes" without decrypting anything | r5 §5.3 | Later | T2 | none | inbox deposit timestamps | Not scheduled by M9: needs a sync server change [design decision]. |
+| ALR-13 | Native push | APNs and FCM through a publisher relay with content-free payloads | ServerBox relay, ntfy upstream relay | Later | T2+E | none | relay service | Not scheduled by M9: conflicts with the unsigned IPA; the push relay remains an open decision. |
+| ALR-14 | Docker event alerts | Real-time die, oom, health_status | Dozzle alerts | Later | T2 | docker | `GET /events` stream in the agent | Companion in M9 (owner decision Q8). ALR-04 approximates by polling. |
+| ALR-15 | Log pattern alerts | | Dozzle | Later | T2 | journal, docker | agent | Companion in M9 (owner decision Q8). |
 | ALR-16 | Hysteresis and flap suppression | Separate raise and clear thresholds, minimum duration and flap damping | Zabbix, Checkmk | v1.x | C | none | rule configuration | Applies to ALR-01 and to host-side checks (ALR-04). |
 
 ### 3.32 History and trends (HIS)
 
 Session history is v1 and lives only on the device. Reading the host's
 existing recorders (sysstat, exporters) and a T1 ring file give longer history
-without a daemon (v1.x). Fine-grained history needs T2.
+without a daemon (v1.x). Fine-grained history needs the T2 companion (M9).
 
 | ID | Feature | Description | Inspiration | Rel | Exec | Priv | Data source | Notes |
 |---|---|---|---|---|---|---|---|---|
 | HIS-01 | Session history | Charts since connect, rolled up in a local cache | Meows, Beszel rollup tiers | v1 | C | none | device-local cache | Never synced (c1 §2.4). |
 | HIS-02 | sysstat history | Read existing `sar` data | Cockpit (via PCP), r3 §6.5 | v1.x | T0 | user | `sadf -j` over `/var/log/sysstat` or `/var/log/sa` | 10-minute samples by default. |
-| HIS-03 | Enable sysstat | Previewed package install and enable | Cockpit "enable PCP metrics collector" | v1.x | T0 | sudo | `apt-get install sysstat` or equivalent | |
+| HIS-03 | Enable sysstat | When sysstat is missing, an "Enable sysstat" action shows the exact commands (package install plus enabling its timer) and runs them only after explicit confirmation in admin mode | Cockpit "enable PCP metrics collector" | v1.x | T0 | sudo | `apt-get install sysstat` or equivalent, then `systemctl enable --now` on the sysstat unit or timer [U: names per distro] | Owner decision Q6: consistent with "nothing installed without your consent". |
 | HIS-04 | Existing exporters | node_exporter, Netdata, Glances as data sources | r3 §3.9, §3.13 | v1.x | T0 | user | `curl -s localhost:9100/metrics`, Netdata local API, `glances --stdout-json` | Read over SSH; opens no ports. |
 | HIS-05 | Host ring file | Coarse 1-minute samples appended to a capped file by a timer; read on connect | r2 Tier 1 | v1.x | T1 | user | timer plus script | Fills gaps without a daemon. |
 | HIS-06 | Forecasts | Disk full and memory growth trends | Netdata, Prometheus | v1.x | C | none | HIS data | |
 | HIS-07 | PCP archives | | Cockpit | Later | T0 | user | `pmrep`, `pmlogdump` [U usage] | |
-| HIS-08 | Agent history | Fine-grained history with rollups | ServerBox Monitor, Beszel | Later | T2 | user | agent ring buffer | |
+| HIS-08 | Agent history | Fine-grained history with rollups | ServerBox Monitor, Beszel | Later | T2 | user | agent ring buffer | Companion in M9 (owner decision Q8). |
 | HIS-09 | Compare and overlay | Servers or periods side by side | Grafana | Later | C | none | - | |
 | HIS-10 | Export CSV | | Glances exporters | Later | C | none | - | |
 
@@ -1079,24 +1094,27 @@ and v1.x; config changes and access-log analytics are Later.
 
 ### 3.35 Cross-app integration (X)
 
-Shared marks and pulled host-key pins come with the catalog package and are
-MVP; publishing new pins waits for Séance #56 (c1 §2.3). The terminal and file
-hand-offs depend on URL schemes (Séance registers none today, c1 §4.7) and the
-editor hand-off on the remote-edit extraction, so they are v1. The app does
-not embed a host terminal: that stays in Séance (r4 §4.3).
+Shared marks, themes built through `ghost_theme` and pulled host-key pins
+are MVP. Séance #56 is fixed before the MVP preview (owner decision Q12), so
+first-seen pins are published from v1, when catalog writes arrive; the MVP
+pushes nothing (D14). The terminal and file hand-offs depend on URL schemes
+(Séance registers none today, c1 §4.7) and the editor hand-off on the
+remote-edit extraction, so they are v1, including "open terminal in this
+directory" (owner decision Q18). The app does not embed a host terminal:
+that stays in Séance (r4 §4.3).
 
 | ID | Feature | Description | Inspiration | Rel | Exec | Priv | Data source | Notes |
 |---|---|---|---|---|---|---|---|---|
-| X-01 | Shared marks and theme | Identical badges, colours, icons and light and dark themes across the suite's apps | ghost_marks, Séance and Poltergeist appearance settings | MVP | C | none | `ghost_marks`, `ghost_ui` | Needs the `ghost_theme` extraction, an MVP prerequisite (c3 §4). |
-| X-02 | Shared host keys | Pull TOFU pins through `hostkey:` records under Poltergeist's quarantine model; publish new pins only after Séance #56 lands or after an explicit user action with a disclosure | Poltergeist quarantine model | MVP | C | none | catalog package | Séance applies pulled pins without a conflict check (#56), so a pushed pin silently replaces trust on Séance devices (c1 §2.3). The pin locator uses `ServerConfig.host` verbatim. Pins are keyed by `host:port` only, so identical addresses behind different jump routes collide (c2 R8). |
-| X-03 | Open terminal | Hand the selected server to Séance | Séance; Poltergeist `seance://connect` precedent | v1 | C | none | `seance://` link | Séance registers no URL scheme today (c1 §4.7): Séance-side work. No embedded host terminal (r4 §4.3). |
-| X-04 | Open files | Open a stack directory, volume mountpoint or log file in Poltergeist | Poltergeist | v1 | C | none | `poltergeist://browse` deep link | Poltergeist validates this intake (`deep_links.dart`) and declares the scheme on macOS; the Android manifest at this checkout has no `poltergeist` intent filter; iOS, Linux and Windows not checked. macOS first. |
+| X-01 | Shared marks and theme | Identical badges, colours, icons and light and dark themes across the suite's apps, with theme editing and presets | ghost_marks, Séance and Poltergeist appearance settings | MVP | C | none | `ghost_marks`, `ghost_theme`, `ghost_ui` | Owner decision Q5: the MVP builds its themes through `ghost_theme` (F4b, extracted before the MVP with Séance switched, c3 §4), including theme editing and presets. Pasting a theme from a sibling app is v1. |
+| X-02 | Shared host keys | Pull TOFU pins through `hostkey:` records under Poltergeist's quarantine model; publish first-seen pins from v1, when catalog writes arrive | Poltergeist quarantine model | MVP | C | none | catalog package | Owner decision Q12: Séance #56 (pulled pins applied without a conflict check, so a pushed pin silently replaced trust on Séance devices, c1 §2.3) is fixed before the MVP preview by Séance adopting the quarantine handler (F3). The pull-only MVP publishes nothing (D14); publication also needs every device to run a Séance release with the fix (an extended FL-22 assertion). The pin locator uses `ServerConfig.host` verbatim. Pins are keyed by `host:port` only, so identical addresses behind different jump routes collide (c2 R8): a known limitation until a suite-wide task after v1. |
+| X-03 | Open terminal | Hand the selected server to Séance | Séance; Poltergeist `seance://connect` precedent | v1 | C | none | `seance://` link | Séance link intake lands in v1 (F5d, owner decision Q18): it opens a known server and asks before connecting; a link never runs a command and only picks a server and a starting folder. Séance registers no URL scheme today (c1 §4.7). No embedded host terminal (r4 §4.3). |
+| X-04 | Open files | Open a stack directory, volume mountpoint or log file in Poltergeist | Poltergeist | v1 | C | none | `poltergeist://browse` deep link | Poltergeist validates this intake (`deep_links.dart`) and declares the scheme on macOS, Linux and Windows (03, D12); Android and iOS registration lands in v1 (F5d, owner decision Q18). |
 | X-05 | Edit in the editor | Edit compose, `.env`, unit overrides, crontab and proxy config with `planchette_editor` and remote conflict detection | Planchette, Poltergeist checkout | v1 | T0 | user, sudo | `planchette_editor` plus SFTP | Remote-edit logic exists twice today (c3 §5.4); extract, do not copy. |
 | X-06 | Open in this app | "Open dashboard" from server menus in Séance and Poltergeist | none | v1.x | C | none | URL scheme in this app | Requires changes in both apps. |
 | X-07 | Metrics strip in Séance | CPU, memory and disk above a terminal session | Termix | Later | T0 | user | shared sampler package | Séance-side work. |
 | X-08 | Transfers through Poltergeist | Volume, backup and image moves between servers | Poltergeist | Later | T0 | user | Poltergeist core | |
-| X-09 | Inbox items | Agent-produced alerts and proposals appear in the Séance inbox | Séance inbox | Later | T2 | none | inbox | |
-| X-10 | Open terminal in this directory | Hand a stack folder or log directory to Séance | r2 §5 item 13 | v1.x | C | none | `seance://` link with a directory | Needs a Séance URL scheme (c1 §4.7). |
+| X-09 | Inbox items | Agent-produced alerts and proposals appear in the Séance inbox | Séance inbox | Later | T2 | none | inbox | Needs a design decision beyond the M9 companion: the planned Séance inbox change makes Séance skip companion items (03, section 9.4). |
+| X-10 | Open terminal in this directory | Hand a stack folder or log directory to Séance | r2 §5 item 13 | v1 | C | none | `seance://` link with a directory | Owner decision Q18: moved to v1 with Séance link intake (F5d, c1 §4.7); the starting-folder (`cwd`) parameter is accepted, never a command parameter. |
 
 ### 3.36 Assistant (AI)
 
@@ -1139,28 +1157,28 @@ so.
 | SAF-08 | Root-equivalence notice | Explain at onboarding that rootful Docker socket access and broad NOPASSWD rules equal root, that rootless engines are user-equivalent, and that Docker behind password-only sudo needs the docker group, a rootless socket or NOPASSWD | Docker documentation | MVP | C | none | - | Do not suggest adding users to the docker group casually. `sudo -S` cannot feed a password to `docker system dial-stdio`, whose stdin is the API stream (c2 R5). |
 | SAF-09 | Endpoint confirmation | Connect and poll only endpoints confirmed on this device; prompt when a synced host or port changes | c1 §4.1 (per-device endpoint pins) | MVP | C | none | device-local pins | Any device can rewrite a server's host through LWW. |
 | SAF-10 | Safe interpolation | One POSIX quoting function for every interpolated name, path and user; unit-name grammar validation | Cockpit CVE-2026-4631 lesson | MVP | C | none | - | A safety property, not a screen. |
-| SAF-11 | Local audit log | Every mutation recorded with device, server, target, command and result | Pulse Pro, Dockhand Enterprise (paid there) | v1 | C | none | device-local store | Syncing it is an open question: Séance pulls whole accounts and records are never garbage-collected (c1). |
+| SAF-11 | Local audit log | Every mutation recorded with device, server, target, command and result | Pulse Pro, Dockhand Enterprise (paid there) | v1 | C | none | device-local store | Never synced (D28, owner decision Q10): Séance pulls whole accounts and records are never garbage-collected (c1). |
 | SAF-12 | Edit safety | Backup, diff, validation and atomic write for every config file | r3 §6.10 | v1 | T0 | per file | SFTP for files the login user owns; otherwise a privileged exec path: `sudo -n cat`, temp file in the same directory via `sudo -n tee`, `chown --reference` and `chmod --reference`, `restorecon` when SELinux is enforcing, content-hash compare before `sudo -n mv`; validators `visudo -c`, `systemd-analyze verify`, `nginx -t`, cron parser, `docker compose config -q` | SFTP cannot elevate (c2 §2.4). Atomic rename creates a new inode, so owner, mode, ACLs and the SELinux label are restored [U relabel details]. Spike: an elevated SFTP channel through `sudo -n` and `sftp-server` over exec [U]. |
-| SAF-13 | Host-side audit trail | One syslog line per mutation | Kamal audit on servers | v1 | T0 | user | `logger -t <app> '<action>'` | Corroborated by Docker events and sudo logs. |
-| SAF-14 | Footprint manifest | List, diff and remove every T1 file the app installed, in one action | r2 Tier 1 | v1 | T0 | per file | manifest under `/etc/<app>/` or `~/.config/<app>/` | Prerequisite for every T1 feature. Tracks app state files on the host (backups, deploy history, locks) from v1. Ownership, mode and checksum rules are in the T1 definition. |
+| SAF-13 | Host-side audit trail | One syslog line per mutation | Kamal audit on servers | v1 | T0 | user | `logger -t klabautermann '<action>'` | Corroborated by Docker events and sudo logs. |
+| SAF-14 | Footprint manifest | List, diff and remove every T1 file the app installed, in one action | r2 Tier 1 | v1 | T0 | per file | manifest under `/etc/klabautermann/` or `~/.config/klabautermann/` | Prerequisite for every T1 feature. Tracks app state files on the host (backups, deploy history, locks) from v1. Ownership, mode and checksum rules are in the T1 definition. |
 | SAF-15 | Multi-device lock | Lock file with owner, device and TTL around deploys and edits | Kamal lock | v1.x | T0 | user | lock file on the host | Five platforms can act on one host at once. |
-| SAF-16 | Saved sudo password | Opt-in storage in the vault | Cockpit cached login password | v1.x | C | none | vault | Needs a new `RecordKind` (changes `seance_protocol` and Séance's exhaustive switch; no protocol bump or server change); the secret stays inside the kind's own sealed payload, never a `secret:` record (c1 §2.4). |
+| SAF-16 | Saved sudo password | Per-server opt-in "remember sudo password" in the vault; a second opt-in syncs it to the user's other devices | Cockpit cached login password | v1.x | C | none | vault behind the device keystore; synced as the sealed sub-record `klabautermann:sudo:<serverId>` | Owner decision Q11. Syncing also needs the device's suite-wide "sync passwords" switch (the existing credential-sync opt-in, SYN-02). It travels as a sub-record of the product record kind (D17), never as a Séance `secret:` record, so Séance and Poltergeist never receive it (c1 §2.4); removal is a sealed `removed` record and unsealed tombstones are ignored. The switch subtitle and the threat model disclose that anyone holding the account key, and every device on the account, obtains a password that grants root on that server. Admin mode still expires; a remembered password only skips the prompt. |
 | SAF-17 | Sudoers drop-in generator | Narrow NOPASSWD rules for read-only collectors, validated before install | r5 §4 | v1.x | T0 | sudo | `visudo -cf <file>` | Prefer group membership (`systemd-journal`) for journal reads. Pin exact argument vectors; never grant pager-capable binaries (`journalctl`, `systemctl`) without `--no-pager` pinned and `env_reset` (known sudo escapes, GTFOBins [U]). Validate with `visudo -cf`. Wildcard rules for `docker` or `systemctl` equal root (r5 §4). |
 | SAF-18 | Privacy mode | Hide host names and IPs in the UI for screenshots and demos | ServerGlance | v1.x | C | none | - | |
 | SAF-19 | Polling budget | Cadence presets, cellular saver, per-server caps | ServerCat configurable refresh | v1 | C | none | settings | |
 | SAF-20 | App lock | Biometric or OS authentication on open | Docker Manager iOS Face ID, NeoServer | v1 | C | none | OS APIs | Séance has an app-local app lock (`seance/app/seance_app/lib/services/app_lock.dart`); extract it to a shared package rather than copy it. |
 | SAF-21 | Restricted monitoring key | Key limited by a forced command, for T2 or watcher use | Checkmk forced-command pattern | Later | T0 | sudo | authorized_keys `command=`, `restrict`, `from=` | `restrict` also blocks streamlocal, so no Docker API with that key. |
 | SAF-22 | Protected targets | Built-in list (sshd and ssh.socket, network managers, firewall units, tailscaled, wg-quick@*, docker, containerd and podman units, PID 1, the sampler's own PIDs), connection-path detection and user-marked targets; typed confirmation with an impact line such as "drops your session" or "stops 23 running containers" | r2 §6.1, c2 §6 danger rules | MVP | T0 | user | `$SSH_CONNECTION`, the sshd parent of the session, containers publishing the SSH or VPN port, AI-01 rules | Guards SVC-03, PRC-02, JOB-08, CTR-02, CTR-05, CTR-06, STK-03 and STK-06. Users mark extra targets such as a self-hosted Séance sync server container or the proxy on a jump route. |
-| SAF-23 | Detached operations | State-changing operations that can exceed a few seconds run as a transient unit on the host, survive app suspension and are re-attached after reconnect; per-server list of running operations | r5 §5.4, r4 §2.7 (mobile limits) | MVP | T0 | per operation | `systemd-run --unit=<app>-op-<id> --collect` (or `--user`), followed with `journalctl -u`; `setsid nohup ... > <log>` fallback without systemd | A transient unit is not an installed file. Used by STK-06 in the MVP and later by PKG-07, IMG-08 (whose rollback logic must run host-side) and STK-23. `systemd-run --user` needs a user manager (session or linger) [U]. |
+| SAF-23 | Detached operations | State-changing operations that can exceed a few seconds run as a transient unit on the host, survive app suspension and are re-attached after reconnect; per-server list of running operations | r5 §5.4, r4 §2.7 (mobile limits) | MVP | T0 | per operation | `systemd-run --unit=klabautermann-op-<id> --collect` (or `--user`), followed with `journalctl -u`; `setsid nohup ... > <log>` fallback without systemd | A transient unit is not an installed file. Used by STK-06 in the MVP and later by PKG-07, IMG-08 (whose rollback logic must run host-side) and STK-23. `systemd-run --user` needs a user manager (session or linger) [U]. |
 
 ### 3.38 Sync and data (SYN)
 
 | ID | Feature | Description | Inspiration | Rel | Exec | Priv | Data source | Notes |
 |---|---|---|---|---|---|---|---|---|
-| SYN-01 | Server list sync | Existing `serverConfig` records with Séance-identical write semantics | Séance, Poltergeist | MVP | C | none | shared catalog package | |
+| SYN-01 | Server list sync | Existing `serverConfig` records with Séance-identical write semantics | Séance, Poltergeist | MVP | C | none | shared catalog package | The MVP pulls only and never pushes (D14, owner decision Q4); writes start in v1 with FL-03 and SYN-04. |
 | SYN-02 | Credential reuse | Honour the device `syncSecrets` switch and per-server `syncSecret`; otherwise prompt and store locally under the same `secretRef` | Poltergeist | MVP | C | none | vault | |
 | SYN-03 | Never-sync rule | Metrics, logs, inspect output, `compose config` output and snapshots never enter sync | c1 §2.4, r5 §6 | MVP | C | none | - | Server caps: 1 MiB per blob, 1000 records and 8 MiB per push. |
-| SYN-04 | Own record kinds | Per-server preferences and tags, dashboard layouts, saved queries, alert rules, maintenance windows | c1 §2.4 | v1 | C | none | new `RecordKind` values with an `<app>:` id prefix | No new `ServerConfig` fields; no bare ids; per-kind count and byte budgets. Per-server records of excluded servers are skipped and retracted; payload id must equal envelope id on apply. Templates and audit logs stay out of sync (c1 §2.4). |
+| SYN-04 | Own record kinds | Per-server preferences and tags, dashboard layouts, saved queries, alert rules, maintenance windows | c1 §2.4 | v1 | C | none | one product `RecordKind` with typed sub-records, ids `klabautermann:<type>:<id>` (D17, owner decision Q9) | No new `ServerConfig` fields; no bare ids; per-type count and byte budgets and at most 1 MiB for the prefix. Per-server records of excluded servers are skipped and retracted; payload id must equal envelope id on apply. Templates and audit logs stay out of sync (c1 §2.4). |
 | SYN-05 | Sealed removal for rules | Safety-relevant records use a sealed `removed` flag, not unsealed tombstones | inbox apps precedent | v1.x | C | none | - | The server can forge unsealed deletes. |
 | SYN-06 | Settings export and import | | none | Later | C | none | file | |
 | SYN-07 | No account deletion in shared mode | The app never exposes `DELETE /v1/account`, which deletes every app's data | c1 §4.1 | MVP | C | none | - | Account deletion stays in Séance. |
@@ -1185,11 +1203,11 @@ phone; both layouts are MVP. Anything that must run while the app is closed
 | PLT-08 | Share sheet | Export logs, snapshots and status cards | none | v1 | C | none | - | |
 | PLT-09 | Flatpak permissions | Product-specific `finish-args`, not copied from Poltergeist | c4 §5.7 | v1 | C | none | - | |
 | PLT-10 | Tray and menu bar | Fleet status and quick actions | OrbStack, ServerBox | v1.x | T0 | user | - | Desktop only; pairs with ALR-03. |
-| PLT-11 | Android foreground service | Keep sessions alive during long operations | Séance keepalive | v1.x | C | none | native channel | `dataSync` is limited to 6 h per 24 h on Android 15+. |
+| PLT-11 | Android foreground service | Opt-in watch mode: a time-limited foreground service keeps sessions alive; off by default, started per session, stops automatically and says so | Séance keepalive | v1.x | C | none | native channel | Owner decision Q14. `dataSync` is limited to 6 h per 24 h on Android 15+. |
 | PLT-12 | Home-screen widgets | Last-known values with timestamps; refreshed when the app runs | ServerCat widgets, ServerBox (agent-backed) | Later | C | none | WidgetKit, Android AppWidget | iOS budget is roughly 40 to 70 reloads per day; Android minimum period 30 min. Fresh data needs T2. Whether widget extensions survive re-signing of the unsigned IPA is [U]. |
 | PLT-13 | Live Activities and ongoing notifications | Bounded operations: compose pull and up, package upgrade, reboot-and-wait | ServerBox, Secure ShellFish | Later | C | none | ActivityKit, Android ongoing notification | iOS limit about 8 h; push updates need a signed build [U]. Whether Live Activity extensions survive re-signing is [U]. |
 | PLT-14 | Watch app | | ServerBox | Non-goal | - | - | - | Low value relative to effort (r4). |
-| PLT-15 | Android background reachability | TCP banner probe every 15 minutes or more with no credentials; local notification on change | r4 §2.7 | v1.x | C | none | `TcpBannerProber` in a WorkManager job | Reachability only. Needs a local-notification plugin (none in the repo, c3 §5.4). Subject to Doze. |
+| PLT-15 | Android background reachability | TCP banner probe every 15 minutes or more with no credentials; local notification on change | r4 §2.7 | v1.x | C | none | `TcpBannerProber` in a WorkManager job | Reachability only. Local notifications through `flutter_local_notifications` (owner decision Q13; none in the repo today, c3 §5.4). Subject to Doze. |
 
 ### 3.40 Accessibility and localization (A11Y)
 
@@ -1325,8 +1343,8 @@ What no surveyed tool does well, and this app can:
     state on the host in standard formats, so uninstalling the app leaves
     everything running (SAF section).
 11. **Honest alerting tiers**: alerts while open (T0), host-side checks without
-    a daemon (T1), optional agent (T2), each labelled in the UI with what it
-    can and cannot catch (ALR section).
+    a daemon (T1), an opt-in Rust companion (T2, M9), each labelled in the UI
+    with what it can and cannot catch (ALR section).
 12. **Keyboard-first desktop and touch-first mobile from one codebase**, with
     portability (BusyBox, OpenWrt, NAS) treated as a feature backed by fixtures
     (PLT-06, CN-11 to CN-13).
@@ -1335,35 +1353,61 @@ What no surveyed tool does well, and this app can:
 
 ## 6. Open questions and unverified items
 
-Decisions the plan must make (the decision log in
-[03-ARCHITECTURE.md](03-ARCHITECTURE.md) section 2 records the design
-decisions, and [04-IMPLEMENTATION.md](04-IMPLEMENTATION.md) section 15 lists
-the questions that remain for the owner):
+The owner decisions of 2026-10-10 answer the questions this section used to
+list. Section 15 of
+[04-IMPLEMENTATION.md](04-IMPLEMENTATION.md#15-owner-decisions) records every
+decision, and the decision log in [03-ARCHITECTURE.md](03-ARCHITECTURE.md)
+section 2 carries the design consequences. Where the decisions land in this
+catalog:
 
-- Whether the local audit log (SAF-11) and attention acknowledgements (TRI-03)
-  sync, given whole-account pulls and no server-side garbage collection (c1).
-- New `RecordKind`s for a saved sudo password (SAF-16) and registry
-  credentials (REG-02). They change `seance_protocol` and Séance's exhaustive
-  switch but need no protocol bump or server change; secrets stay inside each
-  kind's sealed payload (c1 §2.4).
-- T2 agent language and packaging (Dart AOT, with musl support unverified, or
-  another language), and whether it deposits through the existing inbox (50
-  apps per account, 30 deposits per minute, 100 pending items).
-- Whether to operate a push relay (ALR-13) given unsigned iOS distribution.
-- URL schemes: Séance registers none (X-03, X-10); Poltergeist's
-  `poltergeist://browse` is declared on macOS only at this checkout (X-04).
-  Both need work in those apps.
-- T1 install location: system (`/etc/<app>/`, needs sudo) or per user
-  (`~/.config/<app>/`, user timers need linger), or both.
-- Legal review of fetching GPL catalogs at runtime (TPL-04).
-- Backup scope (BAK-03, BAK-05 to BAK-07, BAK-09): in this app, or a separate
-  product.
-- A suite-wide dartssh2 re-pin to 4.x (CN-23). It touches M0 evidence, pin
-  audits and the `redactConnectionTrace` audit and must not be folded into the
-  app work (c2 §3.3).
-- Séance #56 (conflict check for pulled pins) gates publishing pins (X-02).
-- Timing of the shared server editor extraction: the MVP requires enrollment
-  and edits in Séance or Poltergeist; FL-03 needs `ghost_servers` part 2 by v1.
+- Audit log (SAF-11): device-local plus the host syslog line, never synced
+  (Q10). Attention acknowledgements (TRI-03) stay device-local, because no
+  synced record class may grow with events (03, section 4.8).
+- Record kinds (SYN-04): one product `RecordKind` with typed sub-records and
+  a 1 MiB budget (Q9). Registry credentials (REG-02) and the synced sudo
+  password (SAF-16) are sealed sub-records of it, never `secret:` records.
+- Saved sudo password (SAF-16): per-server opt-in in the vault from v1.x,
+  with a second opt-in that syncs it as `klabautermann:sudo:<serverId>` only
+  while the device's "sync passwords" switch is on (Q11).
+- T2 companion (ALR-11, ALR-14, ALR-15, HIS-08): Rust, an explicit opt-in per
+  server, binaries pinned by SHA-256 hashes in the client build of the same
+  release, scheduled as milestone M9 after v1.x (Q8). It deposits through the
+  existing inbox (50 apps per account, 30 deposits per minute, 100 pending
+  items). Collectors, parsers and rules then exist in Dart and in Rust, so CI
+  runs parity tests over a shared fixture corpus; ServerBox's AGPL Rust parser
+  crate (`sbm_parser`) is not used or copied.
+- URL schemes and hand-offs (X-03, X-04, X-10): Séance link intake and
+  Poltergeist Android and iOS registration land in v1 with F5d, and X-10
+  moves to v1 (Q18).
+- T1 install location: user scope (`~/.config/klabautermann/`) by default,
+  system scope (`/etc/klabautermann/`) only in admin mode (Q7).
+- Template catalogs (TPL-02, TPL-04): permissively licensed catalogs only; GPL
+  and unlicensed catalogs are not fetched, so no legal review is needed (Q19).
+- Backups (BAK-03, BAK-05 to BAK-07, BAK-09): inside the app, after v1.x and
+  built on T1 (Q19).
+- The suite-wide dartssh2 re-pin to 4.x (CN-23) starts now as a separate task
+  with its own PR across all apps (Q17). It touches M0 evidence, pin audits
+  and the `redactConnectionTrace` audit and is not folded into the app work
+  (c2 §3.3).
+- Séance #56 is fixed in F3 before the MVP preview; first-seen pins are
+  published from v1 (X-02, Q12). The `host:port` collision behind different
+  jump routes stays a known limitation until a suite-wide task after v1.
+- Server editing: the pull-only MVP points users to Séance or Poltergeist,
+  and FL-03 arrives in v1 with `ghost_servers` part 2 (Q4).
+- Theme editing and presets ship in the MVP through `ghost_theme` (X-01, Q5);
+  local notifications use `flutter_local_notifications` (ALR-01, ALR-03,
+  PLT-15, Q13); Android watch mode is a v1.x opt-in (PLT-11, Q14); helper
+  containers need explicit confirmation (VOL-03, CTR-21, Q20); "Enable
+  sysstat" runs only after confirmation in admin mode (HIS-03, Q6).
+
+Still open in this catalog:
+
+- Whether to operate a push relay (ALR-13) given unsigned iOS distribution,
+  and the sync server change behind the heartbeat dead-man (ALR-12).
+- How companion items could appear in Séance (X-09), given that Séance's
+  planned inbox change skips them (03, section 9.4).
+- The outcome of spike S10 and the Rust toolchain policy for the companion
+  (04, section 15).
 
 Spikes before relying on the design:
 
@@ -1386,6 +1430,9 @@ Spikes before relying on the design:
   and cleanup of the `setsid nohup` fallback.
 - **Port access** (spike G; 04 S7): an in-app web view fed through an SSH
   channel without a loopback listener (NET-11, DKE-09).
+- **Companion** (04 S10): the Rust build of static musl binaries for Linux
+  x86_64 and aarch64, and the parity harness that runs one fixture corpus
+  through the Dart and Rust collectors, parsers and rules (ALR-11, HIS-08).
 
 Facts marked [U] above, to confirm in spikes: systemd version on RHEL 8 and
 JSON keys of `systemctl list-*`; PSI default on enterprise kernels; cgroup v2
@@ -1399,9 +1446,10 @@ PKG-14); a hangup mid-dpkg (PKG-07); wtmpdb and lastlog2 migration (ACC-04);
 restrictions (LOG-03); label conventions for Podman systemd units, Umbrel,
 CasaOS and TrueNAS (DKE-10); linger behaviour over SSH (DKE-11, SVC-09,
 SAF-23); `dockerd --validate` (DKE-12); debug helper design (CTR-21); icon
-licence (CTR-22); containerd image-store digest comparison and offline SBOM
-matching (IMG-05, IMG-15); compose `--dry-run`, `--progress` and `--ansi`
-flags in Compose v5 and active profiles in labels (STK-06, STK-13);
+licence (CTR-22); sysstat unit and timer names per distro (HIS-03);
+containerd image-store digest comparison and offline SBOM matching (IMG-05,
+IMG-15); compose `--dry-run`, `--progress` and `--ansi` flags in Compose v5
+and active profiles in labels (STK-06, STK-13);
 `ratelimit-remaining` on HEAD (REG-03); restic access to existing
 repositories (BAK-02); PCP tooling (HIS-07); sudo `timestamp_type` and run0
 password input (SAF-02); SELinux relabel after replace (SAF-12); GTFOBins
@@ -1461,8 +1509,8 @@ Rejected or partly rejected (C-35):
   user-added sources only) and STK-19 is limited to the T0 button.
 - **Removing BAK-03, BAK-05, BAK-06, BAK-07 and BAK-09 from the catalog:
   rejected.** Dockhand ships restic backups and r1 §5.2 and r2 §6.5 name
-  honest backups as a gap. The rows stay Later, flagged "Decision: backup
-  scope".
+  honest backups as a gap. The rows stay Later; their "Decision: backup
+  scope" flag is resolved by owner decision Q19 (inside the app, after v1.x).
 - **Non-goal for ACC-09, SYS-07, PKG-12, SVC-16, WEB-04, HW-08, SEC-05, CRT-06
   and CTR-22: rejected.** The research classes them as nice to have, as a
   differentiator (CrowdSec, r3 §4.13) or as a UX lesson worth adopting (safe

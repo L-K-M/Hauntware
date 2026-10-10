@@ -20,7 +20,7 @@ How to read it:
   claims. Everything else was read from a primary source by the report cited.
 - `03 §5` means section 5 of [03-ARCHITECTURE.md](03-ARCHITECTURE.md), and
   `04 Appendix A` refers to [04-IMPLEMENTATION.md](04-IMPLEMENTATION.md).
-- `<app>` is the lowercase ASCII stem and `<App>` the display name; the
+- `klabautermann` is the lowercase ASCII stem and `Klabautermann` the display name; the
   product name is undecided ([05-NAMES.md](05-NAMES.md)).
 
 ## 1. Purpose and method
@@ -144,7 +144,7 @@ indicator; multiple hosts; registry credentials; dark mode.
 **Template formats converge on "compose plus metadata"** (r2 §0): CapRover's
 `$$cap_*` variables, CasaOS's `x-casaos`, Runtipi's `x-runtipi`, Umbrel's
 manifest, Coolify's `SERVICE_PASSWORD_*` variables. A standard compose file
-with an `x-<app>` block is the interoperable choice.
+with an `x-klabautermann` block is the interoperable choice.
 
 Easypanel (proprietary, Swarm on a fresh Ubuntu) and Synology Container
 Manager (projects fail when bind-mount sources are missing) complete the set.
@@ -528,7 +528,7 @@ Compose has no Engine API; it is a client that turns YAML into API calls
   and is at most a read-only fallback.
 - **Round-trip rules** from section 3.7: keep comments and key order, never
   drop unknown keys, show a diff before writing, and put app metadata in
-  `x-<app>` keys (r2 §6.3).
+  `x-klabautermann` keys (r2 §6.3).
 
 ### 4.4 Host metrics: sources and versions
 
@@ -738,7 +738,7 @@ reports agree it cannot be one:
   `planchette_core` (syntax for YAML, dotenv, Dockerfile and INI, validation,
   unified diff, search) are consumable unchanged by relative path (c3 §1).
 - **Sync.** A fourth app can add its own record kinds with no server change
-  and no protocol version bump, using a unique `<app>:` id prefix and never a
+  and no protocol version bump, using a unique `klabautermann:` id prefix and never a
   bare id, which Séance treats as a server (c1 §2.4).
 
 ### 5.2 What is missing or must move first

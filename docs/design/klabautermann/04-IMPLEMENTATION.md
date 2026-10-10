@@ -1,14 +1,15 @@
 # 04. Implementation plan
 
-Status: proposal for owner review, 2026-10-10.
+Status: plan with owner decisions of 2026-10-10. Nothing here is implemented.
 
 This chapter continues [03-ARCHITECTURE.md](03-ARCHITECTURE.md), and its
 section numbers continue from there: sections 1 to 11 are in 03, sections
 12 to 15 and Appendices A to C are here. A bare section number below 12
-(for example "8.3") and a decision number D1 to D40 refer to 03. The
+(for example "8.3") and a decision number (D1 onward) refer to 03. The
 markers [V], [L], [R], [U] and [E], the path abbreviations `SC`, `SP`,
 `PC`, `PA` and `SA`, and the report markers r1 to r5 and c1 to c4 are
-defined at the top of 03.
+defined at the top of 03. "Decision N" cites the owner decisions of
+2026-10-10, numbered 1 to 20 as listed in section 15.
 
 ---
 
@@ -16,7 +17,10 @@ defined at the top of 03.
 
 ### 12.1 Registration points
 
-Items marked M1 land in the scaffold PR series together. The release tool
+Items marked M1 land in the scaffold PR series together. Items marked M4
+land with the MVP preview, which ships in suite releases labelled preview
+(decision 16); until then no suite release publishes `Klabautermann`
+builds. Items marked M9 belong to the Rust companion. The release tool
 must not register the product before its app pubspec, README marker and
 plists exist, and must not miss it either, because an unregistered directory
 is silently unmanaged (`tool/release_version/lib/release_version.dart:785-794`
@@ -24,24 +28,29 @@ is silently unmanaged (`tool/release_version/lib/release_version.dart:785-794`
 
 | Area | Item and location | Milestone |
 |---|---|---|
-| Root build | `scripts/build.sh:31` `PRODUCTS="planchette seance poltergeist"` and the argument `case` at `:46` (otherwise `scripts/build.sh <app>` exits 2) [V]; header prose `:2-26` | M1 |
+| Root build | `scripts/build.sh:31` `PRODUCTS="planchette seance poltergeist"` and the argument `case` at `:46` (otherwise `scripts/build.sh klabautermann` exits 2) [V]; header prose `:2-26` | M1 |
 | Root tests | `scripts/test.sh`: header "all three subtrees" (`:5` [V]); a pure-Dart block (pattern of Poltergeist's block at `:77-132` [V]); a Flutter block (pattern `:163-167` [V]); new shared packages in the Planchette loop and `dart format` line | M1 (shared packages in their F PRs) |
 | Root release | `scripts/release.sh:78` `RELEASE_CI_NOTE` names the products [V] | M1 |
-| Release manifest | `scripts/release-manifest.txt`: a "`<App>` clients (5 targets, 8 assets)" block mirroring Poltergeist's at `:46-54` (apk, linux tar.gz, deb, AppImage, flatpak, macos zip, unsigned ipa, windows zip) and the header prose `:11-15` [V] | With the `client_<app>` release job, at the release point chosen in 15, question 16 |
-| Workflow contracts | `scripts/check-workflows.sh:244` loop `for leg in client_seance client_poltergeist` gains `client_<app>` (APK version-code check) [V]; header item 11 | With the `client_<app>` release job (the loop inspects `release.yml` legs) |
+| Release manifest | `scripts/release-manifest.txt`: a "`Klabautermann` clients (5 targets, 8 assets)" block mirroring Poltergeist's at `:46-54` (apk, linux tar.gz, deb, AppImage, flatpak, macos zip, unsigned ipa, windows zip) and the header prose `:11-15` [V] | M4, with the `client_klabautermann` release job (decision 16) |
+| Workflow contracts | `scripts/check-workflows.sh:244` loop `for leg in client_seance client_poltergeist` gains `client_klabautermann` (APK version-code check) [V]; header item 11 | M4, with the `client_klabautermann` release job (the loop inspects `release.yml` legs) |
 | Release tool | `_projectNames` at `tool/release_version/lib/release_version.dart:39` [V]; a `SuiteProduct` in `_defaultProducts` (`:123` [V]) with `flutterVariablePlistPaths` for iOS and macOS `Info.plist` | M1, together with the scaffold |
-| Release tool tests | `release_script_test.dart` owned-pubspec list (add the app and every `<app>/packages/*` pubspec, assert `<app>/pubspec.yaml` is not owned) and the forwarder loop; `release_workspace_test.dart` fixture block and `_syncTargets`; `release_version_cli_test.dart` fixture loop and plists; `windows_version_test.dart` app list; `build_script_test.dart` `--check`, macOS bundle and failure-format expectations [R: c4 R5 to R12] | M1 |
-| CI | Jobs in 03, section 11.6; header and target-count comments (`ci.yml:3-9`, the "3 Planchette desktop + 5 Séance + 5 Poltergeist" comment) | M1; integration job M2 |
-| Release workflow | `test` gate step for the `<app>` packages and guards; `flutter` gate step; `client_<app>` job copied from `client_poltergeist` (`.github/workflows/release.yml:925` [V]) with SHA-pinned actions, the provenance step and the lock-drift guard; `docker.needs` (`:1168` [V]) and `sums.needs` (`:1247` [V]) gain `client_<app>`; asset-count comment (25 to 33); header comment (`:3-9`, "13 client targets (3 Planchette desktop, 5 Séance, 5 Poltergeist)" becomes 18) and release notes line; signing stance (`:18-23`) | M1 for the `test` and `flutter` gate steps; the `client_<app>` job (with its `docker.needs` and `sums.needs` edges), the comments and the notes line at the release point chosen in 15, question 16 |
-| Guards | Root import guard entry, private-key scope list, `.gitleaks.toml` allowlist entries for `<app>/app/<app>_app/android/(app/ci-release.jks\|key.properties)` and fixture keys (pattern `.gitleaks.toml:11-17` [V]) | F1, M1 |
-| Repository config | `.github/dependabot.yml` gradle entry for `/<app>/app/<app>_app/android` (pattern `:18-19` [V]); `fixture-images.yml` matrix; `secret-scan.yml` key-scope step; `<app>/.gitignore` | M1, M2 |
-| Root docs | `README.md` product table, counts and the "distinct names, IDs, storage locations and keystore namespaces" sentence; root `AGENTS.md` product list, layout, boundaries ("`<App>` consumes the shared SSH/protocol implementation through its core barrel"), "all 18 clients" (with the `client_<app>` release job); root `CHANGELOG.md`; design docs in `docs/design/` for each extraction | F1 onward, M1 |
+| Release tool tests | `release_script_test.dart` owned-pubspec list (add the app and every `klabautermann/packages/*` pubspec, assert `klabautermann/pubspec.yaml` is not owned) and the forwarder loop; `release_workspace_test.dart` fixture block and `_syncTargets`; `release_version_cli_test.dart` fixture loop and plists; `windows_version_test.dart` app list; `build_script_test.dart` `--check`, macOS bundle and failure-format expectations [R: c4 R5 to R12] | M1 |
+| CI | Jobs in 03, section 11.6; header and target-count comments (`ci.yml:3-9`, the "3 Planchette desktop + 5 Séance + 5 Poltergeist" comment); the client matrix builds on every PR without a path filter, like the siblings (decision 15); the integration job runs privileged `docker:dind` on ephemeral GitHub-hosted Linux runners, pinned by digest, with loopback-only ports (decision 15) | M1; integration job M2 |
+| Release workflow | `test` gate step for the `klabautermann` packages and guards; `flutter` gate step; `client_klabautermann` job copied from `client_poltergeist` (`.github/workflows/release.yml:925` [V]) with SHA-pinned actions, the provenance step and the lock-drift guard; `docker.needs` (`:1168` [V]) and `sums.needs` (`:1247` [V]) gain `client_klabautermann`; asset-count comment (25 to 33); header comment (`:3-9`, "13 client targets (3 Planchette desktop, 5 Séance, 5 Poltergeist)" becomes 18) and a release notes line labelling `Klabautermann` preview until v1; signing stance (`:18-23`) | M1 for the `test` and `flutter` gate steps; M4 for the `client_klabautermann` job (with its `docker.needs` and `sums.needs` edges), the comments and the notes line (decision 16) |
+| Guards | Root import guard entry, private-key scope list, `.gitleaks.toml` allowlist entries for `klabautermann/app/klabautermann_app/android/(app/ci-release.jks\|key.properties)` and fixture keys (pattern `.gitleaks.toml:11-17` [V]) | F1, M1 |
+| Repository config | `.github/dependabot.yml` gradle entry for `/klabautermann/app/klabautermann_app/android` (pattern `:18-19` [V]); `fixture-images.yml` matrix; `secret-scan.yml` key-scope step; `klabautermann/.gitignore` | M1, M2 |
+| Root docs | `README.md` product table, counts and the "distinct names, IDs, storage locations and keystore namespaces" sentence; root `AGENTS.md` product list, layout, boundaries ("Klabautermann consumes the shared SSH/protocol implementation through its core barrel"), "all 18 clients" (with the `client_klabautermann` release job) and "the companion" (with its release job); root `CHANGELOG.md`; design docs in `docs/design/` for each extraction | F1 onward, M1; client counts at M4; companion at M9 |
 | History checker | Nothing: a greenfield product must not get a `docs/history/source-refs.json` entry (`scripts/check-history.py` iterates recorded sources only [R: c4 §3]) | n/a |
-| Packaging | `<app>/scripts/build.sh` (Poltergeist's client-only pattern, `HAUNTWARE_BUILD_ORCHESTRATED`); `package-linux.sh` as a thin wrapper over a new shared root helper extracted from the three ~500-line copies [R: c4 P2]; `build-flatpak.sh` sourcing `scripts/flatpak-repack.sh`; `flatpak/ch.lkmc.<app>.yml` with `--share=network`, `--socket=ssh-auth`, `--talk-name=org.freedesktop.secrets`, display sockets, and no `--filesystem=home` (exports through portals); `release.sh` forwarder; macOS keyboard fixture stub; icon master | M1 |
-| Platform identities | Android committed public debug-grade keystore with a pinned certificate digest; unsigned IPA; macOS ASCII `PRODUCT_NAME`, empty `Release.entitlements`, legacy login keychain; Linux binary and WM class; Windows `Runner.rc` with semantic-only `VERSION_AS_NUMBER`; Android label (12.3) | M1 |
+| Packaging | `klabautermann/scripts/build.sh` (Poltergeist's client-only pattern, `HAUNTWARE_BUILD_ORCHESTRATED`); `package-linux.sh` as a thin wrapper over a new shared root helper extracted from the three ~500-line copies [R: c4 P2]; `build-flatpak.sh` sourcing `scripts/flatpak-repack.sh`; `flatpak/ch.lkmc.klabautermann.yml` with `--share=network`, `--socket=ssh-auth`, `--talk-name=org.freedesktop.secrets`, display sockets, and no `--filesystem=home` (exports through portals); `release.sh` forwarder; macOS keyboard fixture stub; icon master | M1 |
+| Platform identities | Android committed public debug-grade keystore with a pinned certificate digest; unsigned IPA; macOS ASCII `PRODUCT_NAME`, empty `Release.entitlements`, legacy login keychain; Linux binary and WM class; Windows `Runner.rc` with `CompanyName` `ch.lkmc` and semantic-only `VERSION_AS_NUMBER`; Android label (12.3) | M1 |
 | Product docs | `AGENTS.md` with the byte-identical shared-rules block, `CLAUDE.md` (pointer plus the PR babysitting block), `README.md` with exactly one version marker, `CHANGELOG.md` starting with `## Unreleased`, `LICENSE` (Unlicense), `docs/plan/00-OVERVIEW.md` (the decision log of 03, section 2), `docs/plan/07-MILESTONES.md`, `docs/STATUS.md`, `docs/SHARED.md` | M1 |
-| URL scheme | `<app>://` on five platforms: `CFBundleURLTypes` (macOS, iOS), Android intent filter, Linux `MimeType=x-scheme-handler/<app>;`, Windows registration plus single-instance forwarding (ledgered copy of `deep_link_scheme.cpp`) | v1.x (X-06) |
-| Sibling changes | Séance: `RecordKind` switch update with the enum value (v1); link intake (F5d); adoption of shared packages per extraction. Poltergeist: catalog switch (F3a), stores and keystore (F3b, F3c), `ghost_servers` (F4, F5a), mobile link registration (F5d) | per F phase |
+| URL scheme | `klabautermann://` on five platforms: `CFBundleURLTypes` (macOS, iOS), Android intent filter, Linux `MimeType=x-scheme-handler/klabautermann;`, Windows registration plus single-instance forwarding (ledgered copy of `deep_link_scheme.cpp`) | v1.x (X-06) |
+| Sibling changes | Séance: pulled-pin conflict check through the catalog library's quarantine handler (#56, F3); `ghost_theme` switch (F4b); `RecordKind` switch update with the enum value (v1); link intake with the starting-folder parameter for X-10 (F5d); inbox skip of marked companion apps (before M9); adoption of shared packages per extraction. Poltergeist: catalog switch (F3a), stores and keystore (F3b, F3c), `ghost_servers` (F4, F5a), `ghost_theme` follow-up (after F4b), Android and iOS link registration (F5d) | per F phase |
+| Rust toolchain | `klabautermann/companion/` Cargo workspace with a `rust-toolchain.toml` pinning an exact toolchain (rustup, cargo) and a committed `Cargo.lock`; `cargo fmt --check`, `cargo clippy` and `cargo test` in `scripts/test.sh` and a new CI job on every PR; the release tool keeps the crate versions at the suite version; a dependabot `cargo` entry | M9 (policy from S10) |
+| Companion cross builds | Static binaries for Linux x86_64 and aarch64 on musl (`x86_64-unknown-linux-musl`, `aarch64-unknown-linux-musl`), plus glibc targets only if S10 shows a need; built on GitHub-hosted Linux runners | M9 (proven in S10) |
+| Parity CI | One shared fixture corpus run through the Dart collectors, parsers and rules (`klabautermann_host`, `klabautermann_docker`) and the Rust ones; identical parsed results and rule verdicts required; runs on every PR | Harness in S10; enforced from M9 |
+| Licence and advisory checks | `cargo-deny` or an equivalent for licences (AGPL excluded: ServerBox's `sbm_parser` crate is neither used nor copied), advisories, bans and sources; in the companion CI job and the release `test` gate | M9 |
+| Companion release job | `companion_klabautermann` in `release.yml` builds both targets and writes their SHA-256 hashes; `client_klabautermann.needs` gains it so the client build of the same release embeds the hashes; `sums.needs` gains it; two manifest assets (asset-count comment 33 to 35); `check-workflows.sh` asserts the `needs:` edge; no signing key, no new CI secret, no GHCR image (the single `packages: write` job stays untouched) | M9 |
 
 ### 12.2 Shared-package registration
 
@@ -52,25 +61,31 @@ lines; a `scripts/test.sh` entry; an approved design doc; ledger entries in
 `poltergeist/docs/PORTS.md` where Poltergeist code moves; and a refreshed
 Séance pin-audit record when `seance/` lineage changes. Owned package names
 must not collide with any dependency name in any lockfile, because the
-release tool re-pins lock entries by exact name [R: c4 §2].
+release tool re-pins lock entries by exact name [R: c4 §2]. `ghost_theme`
+now lands before M1 as F4b (decision 5). The companion's Rust crates (M9)
+are not Dart packages, but their versions also follow the suite version,
+so the release tool gains a `Cargo.toml` target (15, new open items).
 
-### 12.3 Identities (placeholders, fixed before M1, D38)
+### 12.3 Identities (fixed by the owner on 2026-10-10, D38)
+
+The owner chose the name and the Windows `CompanyName` (decision 1). Every
+value below is permanent once anything ships.
 
 | Item | Value |
 |---|---|
-| Display name | `<App>` (non-ASCII allowed in display only) |
-| Directory and package stem | `<app>`: `<app>_host`, `<app>_docker`, `<app>_core`, `<app>_app`, workspace `_<app>_workspace` |
-| Android `applicationId`, Linux and Flatpak id | `ch.lkmc.<app>` (frozen after the first release) |
-| Apple bundle id | `ch.lkmc.<app>App`; `PRODUCT_NAME` ASCII |
-| Linux binary, WM class | `<app>`, `Ch.lkmc.<app>` (equals `StartupWMClass`) |
-| Windows | `<app>.exe`; `CompanyName` chosen once, because it fixes the Windows data path (siblings differ: `ch.lkmc` and `L-K-M` [R: c4 G6]); recommendation `L-K-M` |
-| Keystore entries | `<app>.vault.masterKey.v1`, `<app>.apikey.sync.token`, `<app>.apikey.<name>` |
-| Settings keys | `<app>.sync.deviceId`, `<app>.*` |
-| Method channels | `<app>/settings_window`, `<app>/settings_link`, `<app>/window`, `<app>/menu_checks`, `<app>/keepalive` |
-| URL scheme | `<app>://` |
-| Record kind and id prefix | `RecordKind.<app>`, `<app>:` (must not equal an existing prefix) |
-| Host artifacts | `<app>-op-<id>` units, `logger -t <app>`, `~/.local/state/<app>/`, `~/.config/<app>/`, `/var/lib/<app>/`, `/etc/<app>/`, `/usr/local/lib/<app>/` |
-| Windows deep-link mutex | `Local\ch.lkmc.<app>.deep-link-primary-v1` |
+| Display name | `Klabautermann` |
+| Directory and package stem | `klabautermann`: `klabautermann_host`, `klabautermann_docker`, `klabautermann_core`, `klabautermann_app`, workspace `_klabautermann_workspace` |
+| Android `applicationId`, Linux and Flatpak id | `ch.lkmc.klabautermann` (frozen after the first release) |
+| Apple bundle id | `ch.lkmc.klabautermannApp`; `PRODUCT_NAME` ASCII |
+| Linux binary, WM class | `klabautermann`, `Ch.lkmc.klabautermann` (equals `StartupWMClass`) |
+| Windows | `klabautermann.exe`; `CompanyName` `ch.lkmc`, as for Séance and Planchette and matching the `ch.lkmc.*` ids; it fixes the Windows data path (Poltergeist stays the outlier with `L-K-M` [R: c4 G6]) |
+| Keystore entries | `klabautermann.vault.masterKey.v1`, `klabautermann.apikey.sync.token`, `klabautermann.apikey.<name>`; `klabautermann.apikey.elevation.<serverConfigId>` for a remembered sudo password (v1.x, 4.5) |
+| Settings keys | `klabautermann.sync.deviceId`, `klabautermann.*` |
+| Method channels | `klabautermann/settings_window`, `klabautermann/settings_link`, `klabautermann/window`, `klabautermann/menu_checks`, `klabautermann/keepalive` |
+| URL scheme | `klabautermann://` |
+| Record kind and id prefix | `RecordKind.klabautermann`, `klabautermann:` (distinct from every existing prefix, 4.8); types `pref` and `rule` (v1), `query`, `layout`, `window` and `sudo` (`klabautermann:sudo:<serverId>`, v1.x) |
+| Host artifacts | `klabautermann-op-<id>` units, `logger -t klabautermann`, `~/.local/state/klabautermann/`, `~/.config/klabautermann/`, `~/.local/share/klabautermann/`, `/var/lib/klabautermann/`, `/etc/klabautermann/`, `/usr/local/lib/klabautermann/`, `/etc/sudoers.d/klabautermann-readonly` (v1.x) |
+| Windows deep-link mutex | `Local\ch.lkmc.klabautermann.deep-link-primary-v1` |
 
 ---
 
@@ -82,7 +97,10 @@ and demoable, with checkable exit criteria (Poltergeist milestone posture
 [R: c4 §2]). Prerequisites come first; only the extractions the MVP needs
 precede the scaffold.
 
-### M0: spikes (5 to 7 in total, parallel; calendar 3 to 4 weeks)
+### M0: spikes (S1 to S9: 5 to 7 in total, parallel; calendar 3 to 4 weeks)
+
+S10 is listed here but may run later, at any point before M9; it is not
+part of the MVP totals.
 
 | Spike | Size | Scope | Exit criterion |
 |---|---|---|---|
@@ -94,14 +112,16 @@ precede the scaffold.
 | S6 Privileged files | S | Elevated `sftp-server`; owner, mode, ACL and SELinux label after an atomic replace | Before M5 |
 | S7 Port access | S | In-app web view through an SSH channel without a loopback listener | Before M6 |
 | S8 Update checks | S | Registry `HEAD` against DistributionInspect against the host CLI for private registries; `ratelimit-remaining` | Before M6 |
-| S9 Catalog design doc | S | Design doc resolving the five divergences (4.4) | Owner approval |
+| S9 Catalog design doc | S | Design doc recording the five approved divergence resolutions (4.4, decision 3) and Séance's pulled-pin conflict check through the quarantine handler (#56, decision 12) | Owner approval of the design doc; each resolution then lands as its own PR in F3 |
+| S10 Rust companion | M | Cargo workspace with an exact toolchain pin; static musl builds for Linux x86_64 and aarch64 on GitHub-hosted runners (glibc only if needed); binary size and memory on a small VPS and an arm64 board; `cargo-deny` licence and advisory policy; a parity harness running the S2 fixture corpus through `klabautermann_host` and through a Rust port of two collectors, their parsers and one threshold rule; hash embedding through a `needs:` edge in a dry-run workflow | Parity harness green in CI for both targets; size, memory and build time recorded; Rust toolchain policy proposed for owner approval; M9 estimate. Before M9 |
 
 ### F1: guards and shared tooling (M to L, 3 to 4)
 
-Scope: F1a and F1b (03, section 3.5); design docs for F2 to F4 approved.
+Scope: F1a and F1b (03, section 3.5); design docs for F2 to F4 and F4b
+approved.
 Exit: the root import guard reproduces Poltergeist's verdicts exactly and
 passes for Séance (with the listed exceptions), Planchette and an empty
-`<app>` entry; protocol guard, license gate and fixture-key scope run from
+`klabautermann` entry; protocol guard, license gate and fixture-key scope run from
 root; Poltergeist uses the shared localization scanner; no behaviour change
 in any app.
 
@@ -113,30 +133,57 @@ Exit: every existing `seance_core`, Séance and Poltergeist test green;
 `CredentialResolver`; pin-audit record refreshed. Follow-up PR: Séance
 sessions adopt dead-peer detection (own changelog line).
 
-### F3: catalog, stores and keystore (L to XL, 7 to 10)
+### F3: catalog, stores and keystore, Séance #56 fix (L to XL, 8 to 12)
 
-Scope: F3a with the divergence PRs, F3b, F3c.
+Scope: F3a with one PR per approved divergence resolution (decision 3),
+F3b, F3c, and F3d: Séance routes pulled `hostkey:` records through the
+catalog library's quarantine handler, so a pulled pin is installed only
+without conflict and conflicts wait behind a diff (#56, about 1 to 2
+engineer-weeks [E], moved here from F7 by decision 12).
 Exit: Poltergeist on the catalog library with byte-identical file shapes
 (golden files), its sync suites and `sync_integration` green,
 `poltergeist_sync` building; the suite convergence test green; tests assert
 literal keystore entry names; a manual macOS keychain check recorded
-(automated compilation is not a device test, root `AGENTS.md` [V]).
+(automated compilation is not a device test, root `AGENTS.md` [V]); a
+Séance regression test for #56, observed failing before the fix, passes,
+with Séance's sync suites green and its own changelog line. #56 is closed
+before M4.
 
 ### F4: `ghost_servers` part 1 and formatters (M, 3 to 4; parallel with F2 and F3)
 
+Scope: F4, including the IEC byte and rate formatters in `ghost_ui`.
 Exit: both apps on the shared dots, sectioning, prompts and connection
 views; Séance and Poltergeist pixel baselines unchanged; dead localization
 allowlist entries removed in the same PRs.
+
+### F4b: `ghost_theme` (L, 4 to 6; after or parallel with F4, preferably before M1)
+
+Scope: both apps' theme stacks (palettes, presets, theme editing and the
+extensions shared widgets need, such as `SidebarThemeTokens`,
+`FamilyPalette` and the menu theme) move into
+`planchette/packages/ghost_theme` under D3, Séance switched in the same PR
+series; Poltergeist follows in its own PRs. Formerly F5b; moved onto the
+MVP path by decision 5 so the preview ships theme editing and presets.
+Finishing before M1 lets the scaffold build its themes through the
+package; at the latest it finishes before M4.
+Exit: Séance on `ghost_theme` with its real-font PNG pixel baselines
+unchanged; theme editing and presets covered by the package's tests;
+dead localization allowlist entries removed; the Poltergeist follow-up
+planned with its baselines as the gate. Pasting a theme from a sibling app
+stays v1 (X-01).
 
 ### M1: scaffold and suite registration (M, 2 to 3)
 
 Scope: every M1 row of 12.1 in one PR series; engine isolate skeleton with
 the plain-data protocol; pull-only enrollment (FL-22) and local-only import
-(FL-02); read-only rail with reachability dots; settings window; contract
-tests.
+(FL-02); read-only rail with reachability dots; settings window; light and
+dark themes built through `ghost_theme` (if F4b finishes after M1, the
+scaffold starts on its default preset and switches when it lands);
+contract tests.
 Exit: `scripts/build.sh --check` and the release tool's `check` list the
-product; all five client legs build and pass launch checks; the guard
-reports zero dartssh2 imports under `<app>/`; the pull-only test passes.
+product; all five client legs build on every PR and pass launch checks; no
+release leg yet (decision 16); the guard
+reports zero dartssh2 imports under `klabautermann/`; the pull-only test passes.
 
 ### M2: host read MVP (L, 5 to 6)
 
@@ -181,7 +228,7 @@ including the detached compose flow with re-attach under the user and the
 admin runner; the host write inventory test (11.5); the elevation CI test
 (11.1); the manual checklist on one phone per OS and three real hosts. If
 the owner chooses preview releases (15, question 16), the first suite
-release after M4 contains `<App>` labelled preview.
+release after M4 contains `Klabautermann` labelled preview.
 
 MVP total: about 39 to 52 engineer-weeks [E]. With two contributors in
 parallel tracks (foundations and shared UI; spikes and product code against
@@ -196,14 +243,14 @@ Each under D3, each with its switched app's suite and baselines green.
 
 ### M5: v1 part 1, editing, shells and sync writes (L to XL, 7 to 9)
 
-Scope: in-app server editing with catalog writes (FL-03); the `<App>`
+Scope: in-app server editing with catalog writes (FL-03); the `Klabautermann`
 `RecordKind` with `pref` and `rule` (Séance's switch updated in the same
 PR); container exec and one-off exec; the edit pipeline for user-owned and
 privileged files; JOB-04 to JOB-07, JOB-09, JOB-19; STK-07 to STK-09,
 STK-23; SVC-05 to SVC-10; LOG-06 to LOG-10; the host syslog line; the
 footprint manifest and view; X-03 and X-04 where intake exists.
-Exit: two-device convergence tests (Séance plus `<App>`) for server edits
-and `<app>:` records against the real sync server image; unknown-kind skip
+Exit: two-device convergence tests (Séance plus `Klabautermann`) for server edits
+and `klabautermann:` records against the real sync server image; unknown-kind skip
 tests; edit pipeline integration tests including hash conflicts; backups
 listed and removable in the footprint view; manifest checksums verified on
 connect.
@@ -251,7 +298,7 @@ templates; Séance metrics strip (X-07); macOS and FreeBSD hosts.
 
 ### F7: Séance on the catalog library (L, after v1)
 
-Independent of `<App>` milestones: Séance's coordinator replaced by the
+Independent of `Klabautermann` milestones: Séance's coordinator replaced by the
 library with the persistent mirror and quarantine (resolves #56), migration
 of `servers.json` and `deleted_records.json`, `deviceId` preserved, Séance
 sync suites green.
@@ -349,7 +396,7 @@ F2d only by M4 (03, section 3.5).
     task?
 18. **Hand-offs.** Schedule Séance link intake and Poltergeist mobile
     registration for v1 (F5d); accept `cwd=` for X-10.
-19. **Backups and templates.** Backup scope inside `<App>` or a separate
+19. **Backups and templates.** Backup scope inside `Klabautermann` or a separate
     product; legal review of fetching GPL catalogs at runtime (TPL-04).
 20. **Helper containers.** May volume browsing (VOL-03) and the debug shell
     (CTR-21) start containers on a host later?
@@ -507,7 +554,7 @@ record only. Corrections below section 12 point to 03.
 | A §8.2 | `sh -c 'sudo -S -p "" -v && exec sudo -n -- <cmd>'` shares the credential cache | Fails: "a password is required" [L]; replaced by the prelude (8.3) |
 | A §4.9, §8.3; `02-FEATURES.md` SAF-08 | Password sudo cannot drive `docker system dial-stdio` | It can: the builtin `read` consumes one line and leaves the rest of stdin [L] |
 | A §5.2 | The fast sampler runs only builtins | Its sketch forked a subshell per collector; builtin collectors now append to a variable (6.2) |
-| A §7.8 | Fallback log at `${XDG_RUNTIME_DIR:-/tmp}/<app>-op-<id>.log` | Predictable shared path; replaced by user-owned or root-owned operation directories (7.17) |
+| A §7.8 | Fallback log at `${XDG_RUNTIME_DIR:-/tmp}/klabautermann-op-<id>.log` | Predictable shared path; replaced by user-owned or root-owned operation directories (7.17) |
 | B §2.3 | `ghost_terminal` in `planchette/packages` | `xterm_engine.dart:5` imports `seance_core` [V]; `seance_terminal` instead (D11) |
 | B rule 2.4.1 | dartssh2 declared only by four packages | The Séance app declares it as a dev dependency (`pubspec.yaml:85`) [V] |
 | B §4.2 | A sessions refusal arrives as "resource shortage" | sshd sends connect-failed "open failed" [R]; classification by channel type and open count (5.2) |
