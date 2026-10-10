@@ -270,7 +270,10 @@ void main() {
       throwsA(isA<SshConnectException>()),
     );
 
-    final kexInit = await socket.kexInitSent.future;
+    final kexInit = await socket.kexInitSent.future.timeout(
+      const Duration(seconds: 10),
+      onTimeout: () => fail('The client never sent its KEXINIT.'),
+    );
     final expected = suiteSshAlgorithms;
     expect(kexInit.kexAlgorithms, [
       ...expected.kex.toNameList(),

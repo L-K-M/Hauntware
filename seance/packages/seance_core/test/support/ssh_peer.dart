@@ -39,6 +39,8 @@ const _packetHeaderBytes = _uint32Bytes + _paddingLengthBytes;
 const _minimumPaddingBytes = 4;
 const _packetBlockBytes = 8;
 const _lineFeed = 0x0a;
+// RFC 4253 §6.1 requires 35000 bytes; anything far beyond is a framing bug.
+const _maxPacketLength = 1 << 20;
 
 const _kexType = SSHKexType.x25519Rfc;
 const _cipherType = SSHCipherType.chacha20poly1305;
@@ -171,6 +173,9 @@ class SshPeerSocket implements SSHSocket {
     final packetLength = decrypter == null
         ? ByteData.sublistView(header).getUint32(0)
         : decrypter.decryptPacketLength(header, _receiveSequence);
+    if (packetLength > _maxPacketLength) {
+      throw StateError('Unreasonable packet length $packetLength.');
+    }
     final end = decrypter == null
         ? _uint32Bytes + packetLength
         : _uint32Bytes + packetLength + OpenSSHChaCha20Poly1305.tagSize;
@@ -192,6 +197,11 @@ class SshPeerSocket implements SSHSocket {
   void _handle(Uint8List payload) {
     switch (payload.first) {
       case SSH_Message_KexInit.messageId:
+        // One exchange only: a rekey would need the first exchange hash as
+        // the session id, which this peer does not keep apart.
+        if (_clientKexInit != null) {
+          throw StateError('The test peer supports a single key exchange.');
+        }
         _clientKexInit = payload;
         _strictKex = SSH_Message_KexInit.decode(
           payload,

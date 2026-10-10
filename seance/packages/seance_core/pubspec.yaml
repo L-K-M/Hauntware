@@ -14,7 +14,10 @@ environment:
 dependencies:
   seance_protocol:
     path: ../seance_protocol
-  # Pin the pipelined-read cancellation behavior covered by tests.
+  # Exact pin: the pipelined-read cancellation tests, the algorithm lists in
+  # test/ssh_algorithms_test.dart and the trace-redaction audit in
+  # lib/src/ssh/ssh_session.dart are written against this version. Re-check
+  # all three on any bump.
   dartssh2: 4.1.0
   http: ^1.2.0
   crypto: ^3.0.0

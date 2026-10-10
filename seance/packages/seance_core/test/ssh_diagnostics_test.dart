@@ -804,6 +804,10 @@ void main() {
           'A(responses: [hunter2]) '
           'SSH_Message_Userauth_InfoResponse(responses: 1)',
         ),
+        // The scrub runs to the end of what it is handed, so the count
+        // after the list goes with it: fail closed for a joined chunk, the
+        // opposite trade from the count-kept test above. Both are pinned so
+        // a change to either is deliberate.
         'A(responses: [redacted])',
       );
     });

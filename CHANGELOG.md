@@ -8,9 +8,10 @@
   that offer only chacha20-poly1305 connect, strict key exchange is
   negotiated where a server offers it, a host key that changes during a
   rekey ends the connection, and Android handshake timeouts and stalled
-  channels are fixed. Other servers negotiate the same algorithms as
-  before, including those that offer only SHA-1 key exchange, `ssh-rsa`
-  host keys or AES-CBC ciphers. Servers that offer only
+  channels are fixed. Other servers keep the cipher and host key they
+  negotiated before, so transfer speed and pinned host keys are
+  unchanged, and servers that offer only SHA-1 key exchange, `ssh-rsa`
+  host keys or AES-CBC ciphers still connect. Servers that offer only
   `diffie-hellman-group1-sha1`, `hmac-md5` or truncated `hmac-sha2-*-96`
   MACs no longer connect. Each product's changelog has the details.
 

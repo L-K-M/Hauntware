@@ -8,21 +8,28 @@ Read [AGENTS.md](../AGENTS.md) first for how to build/test.
 `seance_core` and the app's dev dependency pin dartssh2 4.1.0 (was 3.0.2),
 with Poltergeist in the same change. The one `SSHClient`, which every
 ProxyJump hop goes through, proposes `suiteSshAlgorithms`, chosen so that
-every server negotiates what it did under 3.0.2 (owner decisions):
+servers keep negotiating what they did under 3.0.2 (owner decisions; the
+exceptions are listed below):
 
-- Ciphers prefer AES-CTR. dartssh2 3.1.0 moved AES-GCM first, but its
-  AES-GCM is pure Dart and measured about 0.7 MB/s against about 12 MB/s
-  for AES-CTR or chacha20-poly1305, which would have made every transfer
-  from a modern server 10 to 25 times slower and stalled the isolate that
-  decrypts. chacha20-poly1305 and AES-GCM follow, then AES-CBC.
-- Host keys keep 3.0.2's order, `ssh-rsa` before ECDSA, so a server that
-  offers its RSA key only as `ssh-rsa` (OpenSSH 5.7 to 7.1) still presents
-  the key its users pinned instead of raising a false "host key changed".
+- Ciphers prefer AES-CTR, as 3.0.2 did. dartssh2 3.1.0 moved AES-GCM
+  first, but its AES-GCM is pure Dart: a 32 MiB SFTP read from the modern
+  fixture ran at 13.7 MiB/s with this list and 0.72 MiB/s with 4.1.0's
+  defaults, so upstream's order would have made every transfer from a
+  modern server about 19 times slower and stalled the isolate that
+  decrypts. chacha20-poly1305 and AES-GCM follow, then AES-CBC. A server
+  without AES-128-CTR now gets the stronger cipher this list ranks first
+  instead of 3.0.2's AES-128-CBC.
+- Host keys keep 3.0.2's order: `ssh-rsa` after `rsa-sha2-512` and
+  `rsa-sha2-256` but before ECDSA, so a server that offers its RSA key only
+  as `ssh-rsa` (OpenSSH 5.7 to 7.1) still presents the key its users pinned
+  instead of raising a false "host key changed", while servers that can
+  sign with SHA-2 still do.
 - Key exchange is 4.1.0's defaults, then `diffie-hellman-group14-sha1` and
   `diffie-hellman-group-exchange-sha1`, which 4.0.0 dropped.
-- MACs stay at the 4.1.0 defaults. The algorithms 3.1.0 removed as broken
-  stay off, so servers that offer only `diffie-hellman-group1-sha1`,
-  `hmac-md5` or truncated MACs no longer connect.
+- MACs stay at the 4.1.0 defaults.
+- What 3.1.0 removed as broken stays off: the key exchange
+  `diffie-hellman-group1-sha1` and the MACs `hmac-md5` and
+  `hmac-sha2-*-96`. Servers that offer only those no longer connect.
 
 Narrowing the list is tracked under SSH-07 in ANALYSIS.md.
 

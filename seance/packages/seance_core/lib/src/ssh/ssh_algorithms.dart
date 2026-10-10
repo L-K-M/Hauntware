@@ -4,10 +4,15 @@ import 'package:dartssh2/dartssh2.dart';
 /// `poltergeist_bench` uses it too, so its measurements describe what the
 /// apps negotiate.
 ///
-/// The goal is that moving from dartssh2 3.0.2 to 4.1.0 changes nothing a
-/// server can tell apart: every server negotiates what it negotiated before,
-/// and servers 3.0.2 could not reach (chacha20-poly1305 only) now connect.
-/// Tightening these defaults is a separate product decision.
+/// The goal is that moving from dartssh2 3.0.2 to 4.1.0 keeps what servers
+/// negotiate: key exchange and host key orders are 3.0.2's (minus what 3.1.0
+/// removed), and any server that offers AES-128-CTR, which is every modern
+/// one, gets it as before. The exceptions are deliberate: servers 3.0.2
+/// could not reach (chacha20-poly1305 or AES-GCM only) now connect, a server
+/// without AES-128-CTR gets the stronger cipher this list ranks first rather
+/// than 3.0.2's AES-128-CBC, and servers that offer only what 3.1.0 removed
+/// no longer connect. Tightening these defaults is a separate product
+/// decision.
 ///
 /// Key exchange and MACs are dartssh2 4.1.0's defaults. The two SHA-1 key
 /// exchanges 4.0.0 dropped are appended as a last resort for old routers,
@@ -25,12 +30,14 @@ import 'package:dartssh2/dartssh2.dart';
 ///
 /// Ciphers prefer AES-CTR, which 3.0.2 negotiated with every modern server.
 /// dartssh2 3.1.0 moved AES-GCM to the front, but its AES-GCM is pure Dart
-/// and roughly 15 times slower than its AES-CTR or chacha20-poly1305 (about
-/// 0.7 against 12 MB/s measured for this re-pin), enough to stall the
-/// isolate that decrypts. AES-CTR is also the safer choice against servers
-/// without strict key exchange (Terrapin, CVE-2023-48795, targets
-/// chacha20-poly1305). AES-GCM stays available behind chacha20-poly1305,
-/// and the two CBC ciphers 4.0.0 dropped come last.
+/// and far slower than its AES-CTR (a 32 MiB SFTP read from the fixture ran
+/// at 13.7 MiB/s with this list against 0.72 MiB/s with 4.1.0's defaults),
+/// enough to stall the isolate that decrypts. AES-CTR is also the safer choice against servers
+/// without strict key exchange: Terrapin (CVE-2023-48795) targets
+/// chacha20-poly1305 and CBC with encrypt-then-MAC. AES-GCM stays available
+/// behind chacha20-poly1305, and the two CBC ciphers 4.0.0 dropped come
+/// last, exposed to Terrapin too and kept only for servers that offer
+/// nothing newer.
 ///
 /// Nothing 3.1.0 removed as broken comes back: `diffie-hellman-group1-sha1`,
 /// `hmac-md5` and the truncated `hmac-sha2-*-96` MACs stay off.

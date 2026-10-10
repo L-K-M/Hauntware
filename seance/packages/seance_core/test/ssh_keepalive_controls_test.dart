@@ -25,6 +25,8 @@ void main() {
         config: _config,
         credentials: const SshCredentials.password('test'),
         tofu: TofuVerifier(InMemoryHostKeyStore()),
+        // The peer runs a real key exchange, so this now decides whether the
+        // handshake continues; host-key trust is not under test here.
         onHostKey: (_) async => true,
         connect: (_, _, _) async => socket,
       ),
@@ -39,6 +41,7 @@ void main() {
           config: _config,
           credentials: const SshCredentials.password('test'),
           tofu: TofuVerifier(InMemoryHostKeyStore()),
+          // As above: the real handshake needs the host key accepted.
           onHostKey: (_) async => true,
           connect: (_, _, _) async => socket,
           keepAliveInterval: interval,

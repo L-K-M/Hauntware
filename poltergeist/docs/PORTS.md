@@ -5,8 +5,12 @@
 dartssh2 moves from 3.0.2 to 4.1.0 in every declaration that pins it
 (`seance_core`, the Séance app's dev dependency, `poltergeist_core` and
 `poltergeist_bench`) and in all six lockfiles, the `tool/bench`
-forwarder's included. The Séance source revision is unchanged, and
-nothing is copied or forked. Older entries below that keep dartssh2 at
+forwarder's included. Séance's own source changes in the same commit
+(its dartssh2 declaration, the new `lib/src/ssh/ssh_algorithms.dart` and
+the trace redaction); Poltergeist resolves it by path from this
+repository under the local-source integration below, and the Séance pin
+audit, which binds the committed `seance/` tree, passes on the change.
+Nothing is copied or forked. Older entries below that keep dartssh2 at
 3.0.2 retain their dated meaning.
 
 - `suiteSshAlgorithms` (new in

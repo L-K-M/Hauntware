@@ -40,10 +40,14 @@ outside SSH. D12 tier A stays within budget (P3 2330 ms, P5 2203 ms, P7
 4166 entries/s), faster than the same collectors on 3.0.2. The live
 `algorithms` audit connects all eight profiles, and three ad hoc
 legacy-only servers connect through the pool but fail on bare 4.1.0
-defaults. Not run: any M0 measurement, `validate_bundle.dart` and
-`audit-seance-pin.sh` (shallow clone), the sync-server image and tier B.
-The AES-GCM figures above come from runs before the cipher order was set;
-open item 40 tracks re-measuring throughput with the final proposal.
+defaults. With the final proposal, a 32 MiB SFTP read from the modern
+fixture ran at 13.7 MiB/s against 0.72 MiB/s with 4.1.0's own defaults.
+The local shallow clone could not run `validate_bundle.dart` or
+`audit-seance-pin.sh`; CI ran both on the PR head and they pass, as do
+the SSH and sync-server integration jobs and D12. Not run: any M0
+measurement, the sync-server image locally and tier B. These gate citing
+D9's throughput figures and the next tag, not this change: open item 40
+tracks re-running the M0 SSH fitness workflow with the final proposal.
 
 ## Double-click Transfer to other pane (2026-10-08)
 
@@ -960,7 +964,7 @@ patch reuses that policy and does not claim to repair it or add remote fsync.
 | Repo infrastructure | CI (`ci.yml`: Dart analyze+test now; Flutter + client-matrix jobs self-activate when `app/poltergeist_app` appears), GLM PR review workflow, release workflow (`v*` tags → per-platform client assets), `scripts/build.sh` / `release.sh` / `package-linux.sh` adapted from Séance, Unlicense, analyzer config, pub workspace. |
 | `poltergeist_core` | Pure-Dart engine packages over the reviewed Séance main revision (`76e466f`). The endpoint-keyed `PooledConnectionManager` implements 03 §3.2's serialized first connect, TOFU hard block, interactive-route cap, prompting-disabled growth, reconnect, refcounted teardown, and bounded ProxyJump routes. Complete secret-free routes resolve before credentials or I/O; target and hop credentials are cached only for the pool lifetime. `scripts/check-imports.sh` guards the dartssh2 boundary. |
 | The plan | Complete in [`docs/plan/`](plan/) — overview + decision log (D1–D31), product, UX spec, architecture, Séance integration, sync, editor, milestones, testing, playbook. Reviewed via the GLM PR workflow, internal consistency passes, and a final whole-plan coherence pass (2026-08-31). |
-| Séance pin | Exact upstream revision `76e466fbcbfe5dc90b4fa399e5dfac990b23c30d`, containing PR-S4 and current core/protocol fixes. No release tag contains it, so D2's revision bridge continues: both declarations, four lockfiles and the live benchmark revision match; dartssh2 is 4.1.0 since 2026-10-10 (D9 amendment). PORTS.md carries the compatibility and ancestor/tree/license/identity audits. Re-pin a containing tag under open item 2. Frozen M0 evidence remains bound to the revisions it measured. |
+| Séance pin | Exact upstream revision `76e466fbcbfe5dc90b4fa399e5dfac990b23c30d`, containing PR-S4 and current core/protocol fixes. No release tag contains it, so D2's revision bridge continues: both declarations, four lockfiles and the live benchmark revision match; dartssh2 was 3.0.2 at that pin. Since the 2026-10-04 local-source integration (PORTS.md) Poltergeist resolves Séance by path from this repository, so the 2026-10-10 re-pin to dartssh2 4.1.0 changed that local `seance/` tree, which the CI pin audit binds. PORTS.md carries the compatibility and ancestor/tree/license/identity audits. Re-pin a containing tag under open item 2. Frozen M0 evidence remains bound to the revisions it measured. |
 | Séance PR-S0 | LICENSE audit and Unlicense grant merged in [Séance #57](https://github.com/L-K-M/Seance/pull/57), merge `4d8ee1e026ce4e5d939d6390d9fd98a78fabcf6e`. |
 | Séance PR-S1 | Record-kind forward compatibility merged in [Séance #58](https://github.com/L-K-M/Seance/pull/58), merge `599ff936b8222e6cd77920495dcdcc4a50643f44`. The release wait ended 2026-09-14 when `v0.9.1` included it; D10 later advanced the pin to the exact PR-S4 merge above. |
 | Séance cancellation cleanup | dartssh2 3.0.2 and bounded asynchronous SSH teardown merged in [Séance #59](https://github.com/L-K-M/Seance/pull/59), merge `da9d45492ac7d25cbc4eefb97a6ec29254de219f`. |

@@ -92,7 +92,10 @@ void main() {
       throwsA(isA<SshConnectException>()),
     );
 
-    final lists = await kexInit.future;
+    final lists = await kexInit.future.timeout(
+      const Duration(seconds: 10),
+      onTimeout: () => fail('The preflight never sent its KEXINIT.'),
+    );
     final expected = suiteSshAlgorithms;
     final kex = [for (final algorithm in expected.kex) algorithm.name];
     final hostkey = [for (final algorithm in expected.hostkey) algorithm.name];
