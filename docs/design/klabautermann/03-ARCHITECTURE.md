@@ -1248,7 +1248,9 @@ grows with time or events without a bound (no audit entries). The sync
 server deletes records only with the whole account
 (`seance/packages/seance_sync_server/lib/src/sqlite_storage.dart:159,293-299`
 [V]), so a per-alert id like Séance's `inboxstatus:<appId>:<proposalId>`
-(`SP/inbox/inbox.dart:484-485` [V]) would stay in every pull for good.
+(`SP/inbox/inbox.dart:484-485` [V]) would stay on the server for good and
+reach every full pull from sequence 0, such as a new device's first sync
+(`sqlite_storage.dart:317-325` [V]).
 The one event-driven type, `alertstatus` (D42), is therefore one record
 per server, rewritten in place: the record count grows with servers,
 never with alerts, each record stays within its cap, and alert ids
@@ -1407,10 +1409,11 @@ per connection, not forwarding channels [R: sshd_config(5)].
   user, so normal permissions apply.
 - **Listen before write.** `SSHForwardChannel.stream` is a lazy `map` over
   the channel stream, unchanged in 4.1.0 [R: dartssh2-4.1.0
-  `lib/src/forward/ssh_forward.dart:62`]. In 3.0.2 a channel granted no
-  window before its first listener, so data that arrived first could stall
-  the channel for good (c2 R2). 4.0.1 fixed this in `SSHChannel`, which
-  now grants window credit when the first listener subscribes [R:
+  `lib/src/forward/ssh_forward.dart:62`]. In 3.0.2 a channel sent no
+  window adjustments before its first listener, so a peer that filled the
+  initial 2 MiB window first could stall the channel for good (c2 R2).
+  4.0.1 fixed this in `SSHChannelController`, which now grants window
+  credit when the first listener subscribes [R:
   dartssh2-4.1.0 `lib/src/ssh_channel.dart:76-79`, `CHANGELOG.md:8`], so
   the 4.1.0 pin no longer stalls. The wrapper still subscribes at once into
   its own bounded buffer (4 MiB [E]) and pauses the SSH subscription when
@@ -1421,10 +1424,13 @@ per connection, not forwarding channels [R: sshd_config(5)].
   `/run/user/<uid>/podman/podman.sock`. `<uid>` and socket presence come from
   the probe. Several engines may coexist; the user picks a default per
   server. Every `docker` or `docker compose` command the app runs for a
-  selected socket names it with an `env DOCKER_HOST=unix://<socket>`
-  prefix inside the command (no SSH `env` request, 5.10), so a context or
-  `DOCKER_HOST` in the login user's or root's environment never picks
-  another engine (7.17).
+  selected socket names it with the CLI's global `--host unix://<socket>`
+  option before the subcommand (`docker --host unix://<socket> compose
+  ...`; no SSH `env` request, 5.10), so a context or `DOCKER_HOST` in the
+  login user's or root's environment never picks another engine (7.17).
+  The command sudo checks stays `docker`, so a NOPASSWD rule for `docker`
+  still matches; an `env DOCKER_HOST=` prefix would make sudo check `env`
+  and fail [R: sudoers(5)].
 - The socket is never exposed on a local TCP port or local Unix socket: it
   is root-equivalent (r5 §1.3).
 
@@ -1773,7 +1779,8 @@ unless the user enables admin mode for that panel.
   shell variables cannot hold, and dash and bash drop them, so `sleep 30`
   reads as `sleep30` [L] (04, Appendix A, E11). Instead one
   `cd /proc && head -n 1000 [0-9]*/cmdline | tr '\000' '\037'` per tick
-  (POSIX `head` and `tr`, both in BusyBox; the line cap is [E]) turns every
+  (POSIX `tr`, and GNU and BusyBox `head`: POSIX defines `head -n` only
+  for text files, which hold no NUL bytes; the line cap is [E]) turns every
   separator into `\037` before the output reaches a shell variable. `head`
   precedes each file with a `==> <pid>/cmdline <==` line, which an argument
   containing newlines can forge. Real headers appear once each and in the
@@ -2124,8 +2131,9 @@ STK-06; later STK-23, PKG-07, IMG-08 and detached IMG-03 pulls (7.14);
 SYS-03 returns at once and is not one) run host-side and are re-attached
 after reconnect.
 
-**Runner selection** (from the probe and the plan's `requiredLevel`, 8.5,
-not from whether admin mode is on). Only an operation that needs root
+**Runner selection** (from the probe, admin mode and the plan's
+`requiredLevel`, 8.5; admin mode alone never makes an operation run as
+root). Only an operation that needs root
 runs as root: PKG-07, a Docker operation whose engine is reachable only
 through the sudo relay (5.9, rank 3), or a stack operation whose compose
 or `.env` files only root can read. Every other operation runs as the
@@ -2136,6 +2144,7 @@ matching row applies:
 | Condition | Runner | Operation directory |
 |---|---|---|
 | Needs root (admin mode on), systemd system manager | `systemd-run --unit=klabautermann-op-<id> --collect --quiet -- /bin/sh -c '<wrapper>' klabautermann-op <dir> <id> <uid> -- <cmd...>` through the elevation prelude | `/var/lib/klabautermann/ops/` (directory root-owned 0755; files 0600 owned by the login user) |
+| Needs root (admin mode on), no systemd system manager | `setsid -f /bin/sh -c '<wrapper>' klabautermann-op <dir> <id> <uid> -- <cmd...>` through the elevation prelude, with all standard streams on `/dev/null` | `/var/lib/klabautermann/ops/` as above |
 | Needs no root, admin mode on, systemd system manager | `systemd-run --uid=<login user> --unit=klabautermann-op-<id> --collect --quiet -- /bin/sh -c '<wrapper>' ...` through the elevation prelude; the service runs as the login user [R: systemd-run(1)] | user directory as below |
 | Needs no root, admin mode off, user manager reachable and `Linger=yes` | `systemd-run --user --unit=klabautermann-op-<id> --collect --quiet -- /bin/sh -c '<wrapper>' ...` | `${XDG_STATE_HOME:-~/.local/state}/klabautermann/ops/` (0700, files 0600) |
 | Otherwise (no systemd, or no linger) | `setsid -f /bin/sh -c '<wrapper>' ...` with all standard streams on `/dev/null` (BusyBox `setsid` applet or `nohup ... &` [U]) | user directory as above |
@@ -2159,16 +2168,16 @@ matching row applies:
   the root-owned directory and `chown` each new file to the login user so it
   can be read without sudo.
 - **Engine and credentials.** Each Docker CLI step carries the
-  `env DOCKER_HOST=unix://<selected socket>` prefix of 5.4 inside the
-  command, because sudo's `env_reset` and a transient unit both drop the
-  caller's environment [R: sudoers(5), systemd-run(1)]; neither root's nor
-  the shell's default context decides the engine. The CLI uses the registry
+  `--host unix://<selected socket>` option of 5.4 in its own argument
+  vector, which survives sudo's `env_reset` and a transient unit's clean
+  environment [R: sudoers(5), systemd-run(1)]; neither root's nor the
+  shell's default context decides the engine. The CLI uses the registry
   credentials of the identity it runs as: the login user's
   `~/.docker/config.json` and credential helpers, or root's for a root-run
   operation, never the user's files read as root. The preview names the
   identity, the engine and whose credentials apply. The config-hash
   re-validation of 8.5 runs as the same identity, with the same
-  `DOCKER_HOST`, as the operation itself.
+  `--host`, as the operation itself.
 - **Re-attach.** On connect, the slow sampler lists both operation
   directories; a running record is checked with `systemctl [--user]
   is-active` or by PID plus start time, and followed with `tail -n +1 -F` on
@@ -2474,7 +2483,9 @@ Each server header carries a badge: "rootful socket: root-equivalent",
 "rootless engine: equals user `<u>`" or "sudo relay: root-equivalent".
 Onboarding of a Docker-capable server explains that rootful socket access
 and broad NOPASSWD rules equal root, that rootless engines equal their user,
-and that a NOPASSWD rule for `dial-stdio` is root-equivalent too. The app
+and that a NOPASSWD rule for `dial-stdio` is root-equivalent too; a rule
+that pins arguments must include the `--host` option of 5.4, and the
+access check shows the exact command line. The app
 never suggests docker-group membership without that notice and offers the
 rootless or admin-mode alternatives.
 
@@ -2701,7 +2712,7 @@ every value quoted by the client):
 | `klabautermann-notify` | The Rust helper: reads one alert on stdin and its credentials from `sender.conf`, seals and posts it, exits (below) | ALR-17 |
 | `sender.conf` | 0600 `key=value` credential file: sync server URL, app id, deposit token, key, optional TLS certificate pin | ALR-17, ALR-19 |
 | `notify.sh` | Transitions to ntfy, Gotify, Telegram, Discord, Slack, Pushover or a generic webhook with `curl --max-time 10`, channel secrets passed through `curl -K`, never in argv (Notifier below); an optional parallel channel next to sync-server delivery and the fallback without it (owner decision 2026-10-10 (21/22)) | ALR-05 |
-| `pingwrap.sh` | Healthchecks-style start, success and fail pings around a job; the ping URL reaches curl through `curl -K`, never argv (Notifier below) | JOB-12 |
+| `pingwrap.sh` | Start, success and fail pings to Healthchecks, or up and down pushes to Uptime Kuma, around a job; the ping URL reaches curl through `curl -K`, never argv (Notifier below) | JOB-12 |
 | Units or crontab block | `Type=oneshot` services with timers (`OnCalendar`, `RandomizedDelaySec`, `Persistent=true`), or a crontab block with begin and end markers | all |
 | `manifest.json` | Every file, unit, crontab block and account with sha256, owner, mode, kind, check id and template version | SAF-14 |
 
@@ -2749,9 +2760,15 @@ but not URLs or headers [R: curl(1), proc(5)]. Webhook URLs, bot tokens,
 access tokens and auth headers sit in a 0600 curl config file per
 channel, written like `sender.conf` (through stdin, never argv) and
 passed with `curl -K <file>`; the message body goes on stdin
-(`--data-binary @-`). `pingwrap.sh` reads its ping URL from its 0600
-config with the strict reader and pipes it, with the `/start` or `/fail`
-suffix, from the `printf` builtin into `curl -K -`. ntfy and Gotify have
+(`--data-binary @-`). `pingwrap.sh` reads its ping URL and service kind
+from its 0600 config with the strict reader and pipes the URL from the
+`printf` builtin into `curl -K -`. For Healthchecks it sends the bare URL
+for success and the URL plus `/start` or `/fail` otherwise. Uptime Kuma
+has no start ping and takes the result from the query string, where
+`status` defaults to `up`, so a suffix would report a failure as up
+[R: uptime-kuma `server/routers/api-router.js`]; for it the script drops
+the stored query and sends `?status=up` or `?status=down` once the job
+ends. ntfy and Gotify have
 their own mobile apps, which avoids APNs for the unsigned IPA [R: r5 §5.3].
 A test send is part of the install. Owner decision 2026-10-10 (21/22): the
 notifier is optional next to sync-server delivery, which is the primary
@@ -2763,8 +2780,9 @@ the only one that does not depend on the sync server.
 
 1. A state change (after hysteresis) is appended to the spool as one file
    holding a complete alert format v1 object (7.19) with a fresh random id,
-   so a retry after a lost response deposits the same id and devices drop
-   the duplicate.
+   so a retry after a lost response deposits the same id; devices do not
+   announce the duplicate and delete every copy when the alert is handled
+   (7.19).
 2. Pending entries go to `klabautermann-notify` on stdin, oldest first, at
    most 5 per run [E]; when more are pending, one digest replaces them.
 3. Exit status 0 (deposited) removes the entry and appends it to
