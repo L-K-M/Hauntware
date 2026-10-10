@@ -1,6 +1,9 @@
 # Historical documentation prose; neither location contains a credential.
 108ccea5605f92f6591fa1e7a3242fe86af0080a:tmp.md:generic-api-key:362
 94b82e54e0b51e49d9d3617fe6676e572c8f010b:tmp.md:generic-api-key:362
+# Klabautermann plan research prose ("vault key and auth verifier,
+# XChaCha20-Poly1305 ..."); no credential.
+2c89bf05ec50848cea1ad84898703458da08bb1d:docs/design/server-app/research/c1-catalog-sync.md:generic-api-key:63
 # Explicit synthetic tokens in the original redaction tests.
 a4473d69aaa3316fd23ef5dd1f393e6fb694bd9f:packages/seance_core/test/llm_test.dart:github-pat:262
 a4473d69aaa3316fd23ef5dd1f393e6fb694bd9f:packages/seance_core/test/pure_logic_test.dart:github-pat:153
