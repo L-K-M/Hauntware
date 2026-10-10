@@ -443,9 +443,14 @@ The app can speak the full Docker Engine API without installing anything:
 - OpenSSH supports Unix-socket forwarding since 6.7 and allows it by default.
   It is blocked by `AllowStreamLocalForwarding no` or `remote`, by
   `DisableForwarding yes`, and, per r5's reading of `serverloop.c`, by an
-  authorized_keys `restrict` or `no-port-forwarding` option. `ForceCommand`
-  does not block it. sshd opens the socket as the authenticated user, so the
-  usual `root:docker 0660` permissions apply (r5 §1.1).
+  authorized_keys `restrict` or `no-port-forwarding` option. sshd also
+  applies its local TCP forwarding permissions to socket paths, so
+  `AllowTcpForwarding no` or `remote`, a `PermitOpen` restriction and an
+  authorized_keys `permitopen=` option block it too (openssh-portable
+  `session.c` and `channels.c`, found and reproduced by review; 03 §5.3).
+  `ForceCommand` does not block it. sshd opens the socket as the
+  authenticated user, so the usual `root:docker 0660` permissions apply
+  (r5 §1.1).
 - Dropbear gained server-side Unix stream forwarding in 2024.84; older
   releases need the exec fallback, and 2024.84 to 2025.88 carry the CVE in
   section 3.8.

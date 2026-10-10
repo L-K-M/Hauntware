@@ -1,5 +1,7 @@
 # Klabautermann plan
 
+<img src="../../../klabautermann/media-sources/klabautermann-icon.png" alt="Klabautermann app icon" width="160">
+
 Status: plan with owner decisions of 2026-10-10. Nothing here is implemented.
 
 This directory plans Klabautermann, the fourth Hauntware product: a server
@@ -256,8 +258,9 @@ the product most:
   state changes and as a digest when many fire at once, so the per-app
   limits hold. Every Klabautermann device fetches them at launch and on
   each sync round, shows a "while you were away" list per server, keeps a
-  local history, syncs acknowledgement as a bounded sealed status
-  sub-record of Klabautermann's own kind and deletes handled items.
+  local history, syncs acknowledgement through one bounded sealed status
+  record per server (a plan design choice awaiting confirmation) and
+  deletes handled items.
   Alerts use a versioned JSON format, are validated after decryption and
   are shown as untrusted plain text. Plain shell cannot produce the
   inbox's XChaCha20-Poly1305 blobs and the `openssl` CLI has no AEAD mode
@@ -323,7 +326,9 @@ Detail: [02 §2](02-FEATURES.md#2-mvp-at-a-glance); deviations:
 - **Appearance:** shared marks, light and dark themes built through
   `ghost_theme` (F4b), theme editing and presets.
 
-The MVP ships in suite releases labelled preview from M4.
+The MVP ships in suite releases labelled preview from M4: until v1 the
+label is in the asset names, the in-app title and about screen and the
+release notes, while application IDs stay unchanged.
 
 Not in the MVP: container exec, in-app server editing, config-file writes,
 `docker compose down`, per-service actions, prune, image pull outside a
@@ -357,9 +362,11 @@ sudo password with its optional sync, a time-limited Android watch mode
 (an opt-in foreground service, off by default, started per session, that
 stops automatically and says so) and volume browsing with a confirmed
 helper container. Backups inside Klabautermann, built on T1, follow after
-v1.x; until then the one-off database dump (BAK-01) and the status of
-existing backup tools (BAK-02) stay v1.x. Alerts raised while the app is
-closed reach every device through the sync server's inbox, one sender per
+v1.x; until then v1.x brings the one-off database dump (BAK-01), "back up
+this volume now" (a one-shot volume archive, the export half of VOL-05,
+moved from Later in 03 §1.4) and the status of existing backup tools
+(BAK-02). Alerts raised while the app is closed reach every device through
+the sync server's inbox, one sender per
 server, and appear at launch in a "while you were away" list per server;
 optional peer reachability checks let one server report another as
 unreachable, though a host still cannot report its own outage; ntfy,
@@ -445,16 +452,16 @@ create.
 | 9 | Record kind (D17) | One kind with typed sub-records, 1 MiB budget |
 | 10 | Audit log (D28) | Device-local plus a host syslog line, never synced |
 | 11 | Saved sudo password | Optional from v1.x and syncable behind a second opt-in, as a sealed sub-record of Klabautermann's kind (not the recommended device-only) |
-| 12 | Host keys (D15) | Séance #56 fixed first, in F3; publication from v1; `host:port` collision fixed suite-wide after v1 |
+| 12 | Host keys (D15) | Séance #56 fixed first, in F3; publication from v1 rather than "from the start" as the chosen option said, because the pull-only MVP (Q4) publishes nothing, and only after the fleet assertion, a plan addition (both to be confirmed, 04 §15 open item 6); `host:port` collision fixed suite-wide after v1, together with F7 |
 | 13 | Dependencies | `flutter_local_notifications` (BSD-3) for v1 alerts; charts stay in-house (D10) |
 | 14 | Android watch mode | v1.x, a time-limited opt-in foreground service, off by default |
 | 15 | CI (D37) | Client matrix on every PR, no path filter; privileged `docker:dind` on ephemeral GitHub-hosted Linux runners |
-| 16 | Preview releases | MVP ships in suite releases labelled preview from M4 |
+| 16 | Preview releases | MVP ships in suite releases labelled preview from M4, in its asset names, in-app title and release notes until v1; identities unchanged |
 | 17 | dartssh2 4.x re-pin | Start now as a separate suite-wide task (landed as 4.1.0, PR #113) |
 | 18 | Hand-offs | Séance link intake and Poltergeist mobile registration (F5d) in v1; starting folder accepted, X-10 moves to v1 |
-| 19 | Backups and templates | Backups inside Klabautermann after v1.x, built on T1; only permissive (Apache-2.0, MIT) template catalogs, so no legal review |
+| 19 | Backups and templates | Backups inside Klabautermann after v1.x, built on T1, and until then one-off database dumps and "back up this volume now" in v1.x; only permissive (Apache-2.0, MIT) template catalogs, so no legal review |
 | 20 | Helper containers | Allowed for VOL-03 and CTR-21 with explicit confirmation, a digest-pinned image and removal afterwards |
-| 21 | Alerts while the app is closed | From v1.x through the sync server's command inbox: T1 checks (later the companion) deposit sealed alerts on state changes, every device lists them at launch and syncs acknowledgement; a consented, hash-pinned Rust helper `klabautermann-notify` seals and posts them, so the Rust toolchain and the helper part of spike S10 move before M8; optional peer reachability checks; Séance inbox prerequisites ship first (D42) |
+| 21 | Alerts while the app is closed | From v1.x through the sync server's command inbox: T1 checks (later the companion) deposit sealed alerts on state changes, every device lists them at launch (synced acknowledgement is a plan design choice awaiting confirmation, 04 §15 open item 9); a consented, hash-pinned Rust helper `klabautermann-notify` seals and posts them, so the Rust toolchain and the helper part of spike S10 move before M8; optional peer reachability checks; Séance inbox prerequisites ship first (D42) |
 | 22 | Alert senders | One sender (deposit token and key) per server; a small sync server change gives Klabautermann senders their own per-account quota beside the shared 50; older servers keep 50 in total and the user chooses which servers alert through the sync server (D42) |
 
 ## Follow-up tasks outside this plan

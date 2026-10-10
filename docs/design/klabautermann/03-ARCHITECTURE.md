@@ -203,12 +203,15 @@ value. Path abbreviations: `SC` = `seance/packages/seance_core/lib`, `SP` =
 | SAF-11 | v1 | MVP | The MVP already mutates; the log is small and builds trust |
 | SAF-02 data source | `sudo -S -p '' -v && sudo -n -- <cmd>` in one shell | Elevation prelude with no `exec` and a trailing `exit $?` | bash execs the last command of `-c` implicitly, which breaks the PPID-keyed credential cache [L] (8.3) |
 | SAF-08 note | `sudo -S` cannot feed a password to `dial-stdio` | It can, through the prelude | The builtin `read` consumes exactly one line and leaves the rest of stdin to the command [L] |
-| SAF-23 | `systemd-run --collect`, followed with `journalctl -u` | Transient unit plus a host status record and log file; runner chosen per host | Collected units lose `Result`; users without journal access cannot follow root units (D25) |
-| SAF-12, X-05 backups | Backup next to the file | Central backup directories | A `.bak` file in a directory read by glob (for example `sites-enabled/*`) is loaded by the service (D27) |
+| SAF-23 | `systemd-run --collect`, followed with `journalctl -u` | Transient unit plus a host status record and log file; runner chosen per host and by whether the operation needs root (7.17) | Collected units lose `Result`; users without journal access cannot follow root units (D25) |
+| STK-12 history location | History file with previous digests and file backups "next to the stack or under `~/.local/state/klabautermann/`" | Deploy history only under `~/.local/state/klabautermann/deploys/`; file backups only in the central backup directories (8.11) | A `.bak` file in a directory read by glob (for example `sites-enabled/*`) is loaded by the service (D27). SAF-12, STK-07 and X-05 leave the backup location open; r2 §6.3, the source behind STK-07, keeps the copy next to the file |
 | CN-03 | Nonce-framed sections | Also length-prefixed; nonce delivered on stdin, never in argv | Other local users can read argv; length prefixes defeat forged markers even if a nonce leaks (D22) |
 | CN-22 | Classified `SSHChannelOpenError` | Classified by channel type plus open count | sshd refuses a session channel with `SSH2_OPEN_CONNECT_FAILED` "open failed", not "resource shortage" [R: openssh-portable `serverloop.c`, reported by review] |
 | §2 prerequisites | `ghost_prompts` and `ghost_theme` before the MVP | Prompts inside `ghost_servers` part 1; `ghost_theme` before the MVP as F4b, as listed | D8; D9 (owner decision 2026-10-10) |
 | ALR-11, §6 | Inbox for agent alerts | Command inbox shipped in suite 1.9.0 (`seance/CHANGELOG.md:86,111` [V]); Séance's inbox cursor stops at unknown-app items (`SC/src/inbox/inbox_service.dart:214-222` [V]) and must change first, now before T1 alert delivery in v1.x (owner decision 2026-10-10 (21/22)) | D31, D42 |
+| ALR-16 | v1.x | Separate raise and clear thresholds and durations ship in v1 with ALR-01 (rule model in 7.19, `rule` record in 4.8); flap damping and host-side use with T1 (ALR-04) stay v1.x | D29 puts in-app alerts with hysteresis in v1, and the synced v1 `rule` format already carries both thresholds, so its clear fields work from the first release |
+| SYN-05 | v1.x | v1, with the first `pref` and `rule` records: every `klabautermann:` type ignores unsealed tombstones and deletes with a sealed `removed` record | A forged tombstone can neither silence a rule nor drop a user-marked protected target (D17, 4.8, 8.6; owner decision 2026-10-10 (9)) |
+| VOL-05 export | Later; helper container `tar` | v1.x as "back up this volume now" (7.18): a one-shot tar of one named volume, read directly or through the elevation prelude (8.3), never through a helper container; import stays Later | Owner decision 2026-10-10 (19) promised one-off database dumps and "back up this volume now" until full backups; D27 allows helper containers only for VOL-03 and CTR-21 |
 
 ---
 
@@ -397,9 +400,14 @@ password · D42 alert delivery through the sync server
   suite-wide task after v1, together with F7 (4.6). Owner
   decision 2026-10-10: fix #56 first, moved from F7 into F3; the proposal had
   kept publication off until #56 landed after v1, apart from an explicit "share
-  this pin" action. *Rejected:* C's first-seen publication while #56 is open (a
-  TOFU accepted on a hostile network would reach every Séance device, which
-  applies pulled pins without a conflict check [R: c1 §2.3]).
+  this pin" action. The chosen option said Klabautermann would share
+  fingerprints "from the start"; with the pull-only MVP (D14, owner
+  decision 4) the fix still precedes the preview, but publication starts at
+  v1, and the fleet assertion above is a plan addition. The owner has yet
+  to confirm both (04, section 15, open item 6). *Rejected:* C's
+  first-seen publication while #56 is open (a TOFU accepted on a hostile
+  network would reach every Séance device, which applies pulled pins
+  without a conflict check [R: c1 §2.3]).
 - **D16. Endpoint pins in the catalog library.** `EndpointPinStore`
   (device-local) records the confirmed endpoint tuple per server. Background
   connections require a match; a mismatch pauses polling, asks the user and
@@ -455,8 +463,15 @@ password · D42 alert delivery through the sync server
   outside this plan's estimates. It landed the same day (PR #113): Séance
   and Poltergeist propose one shared list, `suiteSshAlgorithms` in
   `seance_core/lib/src/ssh/ssh_algorithms.dart`, which `SshLink` uses too.
-  4.1.0 removes the forward-channel stall and the Android key exchange
-  timeouts and adds chacha20-poly1305; the other workarounds stay (5.10).
+  It keeps the SHA-1 key exchanges and CBC ciphers 4.0.0 dropped as a last
+  resort and `ssh-rsa` in its 3.0.2 position (owner decisions 2026-10-10),
+  but nothing 3.1.0 removed as broken: servers that offer only
+  `diffie-hellman-group1-sha1` for key exchange, or only `hmac-md5` or the
+  truncated `hmac-sha2-*-96` MACs, connected on 3.0.2 and no longer do
+  (5.3). 4.1.0 removes the forward-channel stall, fixes the Android key
+  exchange timeouts for curve25519 and NIST ECDH (finite-field DH still
+  runs in `Isolate.run` and can still time out, 5.3) and adds
+  chacha20-poly1305; the other workarounds stay (5.10).
 
 ### Privilege and safety
 
@@ -581,9 +596,11 @@ password · D42 alert delivery through the sync server
   [V]). Every device fetches pending alerts at launch and on every sync
   round while open, shows a "while you were away" list per server, stores
   fetched alerts in its device history, syncs acknowledgement and
-  dismissal as the bounded `alertstatus` sub-record (4.8) and deletes the
-  server item once handled. Plain shell cannot seal XChaCha20-Poly1305,
-  so a small single-purpose Rust program, `klabautermann-notify`, seals
+  dismissal through one bounded `alertstatus` sub-record per server (4.8;
+  a plan design choice beyond the owner's answer, awaiting confirmation)
+  and deletes the server item once handled. Plain shell cannot seal
+  XChaCha20-Poly1305, so a small single-purpose Rust program,
+  `klabautermann-notify`, seals
   and posts: it reads its token and key from a 0600 file (never argv or
   the environment), posts over HTTPS itself, has no daemon and no
   listener, and exits. It is installed only with consent as part of T1,
@@ -751,7 +768,7 @@ klabautermann/
   scripts/               build.sh, release.sh (forwarder), package-linux.sh (thin
                          wrapper), build-flatpak.sh, test-macos-keyboard.{sh,mm}
   flatpak/ch.lkmc.klabautermann.yml
-  media-sources/klabautermann-icon.png
+  media-sources/klabautermann-icon.png   owner-supplied master, committed with this plan
   docs/plan/ (00-OVERVIEW decision log, 07-MILESTONES), docs/STATUS.md,
   docs/SHARED.md (native-runner ledger), docs/INSTALL.md
 ```
@@ -848,7 +865,7 @@ products:
     pure_packages: [packages/*]
     dartssh2_imports: [packages/poltergeist_core/lib/src/connection, packages/poltergeist_bench]
     dartssh2_dependents: [packages/poltergeist_core, packages/poltergeist_bench]
-    seance_core_implementation_imports: [packages/poltergeist_core/lib/src/connection, packages/poltergeist_bench]
+    seance_core_implementation_imports: [packages/poltergeist_core/lib/src/connection, packages/poltergeist_core/test/connection, packages/poltergeist_bench]
     engine_protocol: packages/poltergeist_core/lib/src/engine
     engine_protocol_callback_owners:
       packages/poltergeist_core/lib/src/engine/progress_coalescer.dart: [ProgressCoalescer]
@@ -878,16 +895,19 @@ products:
     engine_protocol: packages/klabautermann_core/lib/src/engine
 ```
 
-1. dartssh2 is imported today in three `seance_core` library files
+1. dartssh2 is imported today in four `seance_core` library files
    (`SC/src/ssh/ssh_agent.dart`, `remote_file_system.dart`,
-   `ssh_session.dart`), eight `seance_core` test files (for example
+   `ssh_session.dart` [V], and `ssh_algorithms.dart` since PR #113), ten
+   `seance_core` test files (eight at `bf1da58` [V], for example
    `seance/packages/seance_core/test/ssh_proxy_jump_test.dart`,
-   `ssh_keepalive_controls_test.dart`) and one Séance app test
+   `ssh_keepalive_controls_test.dart`, plus `ssh_algorithms_test.dart` and
+   `test/support/ssh_peer.dart` since PR #113) and one Séance app test
    (`seance/app/seance_app/test/host_key_blocked_test.dart`) [V]. It is
-   declared by `seance_core` (`pubspec.yaml:18`), `poltergeist_core`
-   (`:24`), `poltergeist_bench` (`:14`) and as a dev dependency of the Séance
-   app (`seance/app/seance_app/pubspec.yaml:85`) [V]. The generalized guard
-   accepts exactly these and nothing under `klabautermann/`.
+   declared by `seance_core` (`pubspec.yaml:18` [V], `:21` since PR #113),
+   `poltergeist_core` (`:24`), `poltergeist_bench` (`:14`) and as a dev
+   dependency of the Séance app (`seance/app/seance_app/pubspec.yaml:85`)
+   [V]. The generalized guard accepts exactly these and nothing under
+   `klabautermann/`.
 2. The first guard PR reproduces Poltergeist's current verdicts exactly
    (import guard `poltergeist/tool/import_guard/lib/import_guard.dart`, 220
    lines, constants at `:10-11,20` [V]), then adds the other products.
@@ -903,11 +923,15 @@ products:
    `catalog.dart`; implementation imports (`package:seance_core/src/...`) are
    forbidden everywhere outside `seance/` except the exceptions listed in the
    guard file. Exporting the sequential-cleanup helpers removes one of
-   `poltergeist_core`'s two `implementation_imports`
-   (`connection/ssh_cleanup.dart:3` [V]). The other
-   (`connection/ssh_transport.dart:10`, the SFTP adapter the barrel hides) and
-   the bench package's four (`poltergeist_bench/lib/ssh_driver.dart:7-8` and two
-   `test/dependency_contracts` files) [V] stay as encoded exceptions.
+   `poltergeist_core`'s three library `implementation_imports`
+   (`connection/ssh_cleanup.dart:3` [V]). The others
+   (`connection/ssh_transport.dart:10`, the SFTP adapter the barrel hides
+   [V], and `:14`, `suiteSshAlgorithms`, which PR #113 keeps out of the
+   barrel), the core test's import of `suiteSshAlgorithms`
+   (`poltergeist_core/test/connection/ssh_transport_test.dart:14`, PR #113)
+   and the bench package's five (`poltergeist_bench/lib/ssh_driver.dart:7-8`
+   and two `test/dependency_contracts` files [V], plus `ssh_driver.dart:9`
+   since PR #113) stay as encoded exceptions.
    `batchForPush` is exported for the catalog library's push batching (4.4,
    divergence 3), not to remove an existing import.
 4. Engine request and event types carry no function-typed fields
@@ -945,7 +969,7 @@ code in the same PR. There is no F6. F5b moved to F4b (owner decision
 | F2b | Elevation (detection, prelude, classification, executor) | new | `SC/src/ssh/elevation.dart` | none (new capability; Séance adopts for snippets later) | M4 | S |
 | F2c | `CredentialResolver` | `SA/services/app_services.dart:1075-1150`, `PA/services/server_editor_backend.dart:210-262` [R] | `seance_core` | Séance and Poltergeist | M1 | S |
 | F2d | Docker, systemd, cron and firewall danger rules | new | `SC/src/llm/danger_linter.dart` | Séance benefits directly | M4 | S |
-| F2e | Exports: `batchForPush`, sequential cleanup | `SC/src/sync/push_batcher.dart`, `SC/src/ssh/sequential_cleanup.dart` | `seance_core` barrel | Poltergeist (drops the `sequential_cleanup.dart` implementation import; the `remote_file_system.dart` import stays a listed exception) | M1 | S |
+| F2e | Exports: `batchForPush`, sequential cleanup | `SC/src/sync/push_batcher.dart`, `SC/src/ssh/sequential_cleanup.dart` | `seance_core` barrel | Poltergeist (drops the `sequential_cleanup.dart` implementation import; the `remote_file_system.dart` and `ssh_algorithms.dart` imports stay listed exceptions) | M1 | S |
 | F3a | Catalog library | `PC/src/sync/*`, `PC/src/bookmarks/bookmark_coordinator.dart` (1,543 lines [R]) | `package:seance_core/catalog.dart` | Poltergeist, byte-identical files | M1 | L |
 | F3b | Pure stores | `SA/services/file_stores.dart`, `PA/services/file_stores.dart` (both pure Dart [R]) | `SC/src/store/` | Poltergeist (Séance follow-up) | M1 | S to M |
 | F3c | `ghost_keystore` | `SA/services/secure_master_key.dart:75`, `PA/services/secure_master_key.dart:45` [V] | `planchette/packages/ghost_keystore` | Poltergeist (Séance follow-up); tests assert literal entry names | M1 | S to M |
@@ -1211,7 +1235,7 @@ server is kind-agnostic (c1 §1.2); kinds match by name, never index
 | `sudo` | `klabautermann:sudo:<serverConfigId>` | remembered sudo password for that server, only behind both opt-ins of D41 | 1 KiB | one per server | v1.x |
 | `registry` | `klabautermann:registry:<uuid>` | registry host, user and secret for `X-Registry-Auth` (REG-02), behind an opt-in | 2 KiB | 50 | v1.x |
 | `sender` | `klabautermann:sender:<serverConfigId>` | alert sender of that server (D42): inbox app id, key, allowed `serverConfigId`, host scope, created time; never the deposit token | 1 KiB | one per server | v1.x |
-| `alertstatus` | `klabautermann:alertstatus:<senderAppId>:<alertId>` | `acknowledged` or `dismissed` and the time (pattern of Séance's `inboxstatus:<appId>:<proposalId>`, `SP/inbox/inbox.dart:484-485` [V]); no alert text | 512 B | 1,000, oldest pruned first; older than 30 days neither published nor applied | v1.x |
+| `alertstatus` | `klabautermann:alertstatus:<serverConfigId>` | alerts of that server's sender acknowledged or dismissed in the last 30 days: per alert its id, `acknowledged` or `dismissed` and the time; no alert text; rewritten in place, every write dropping entries older than 30 days (Séance's status retention, `SC/src/inbox/inbox_service.dart:11-14` [V]) and the oldest above the cap | 12 KiB | one per server, at most 100 entries | v1.x |
 
 Rules for every type: payload id equals envelope id on apply; per-server
 records are neither published nor applied for `excludeFromSync` servers and
@@ -1220,14 +1244,26 @@ absent: pending" is distinct from "server removed"; unknown `type` values
 are kept verbatim and skipped; writes are batched with `batchForPush`.
 Account budget for the prefix: at most 1 MiB in total, warn at 80 %, shown
 in the account size view (SYN-09). There is no record class whose count
-grows with time or events without a bound (no audit entries). The one
-event-driven type, `alertstatus` (owner decision 2026-10-10 (21/22),
-D42), is bounded by its count cap and by 30-day pruning, matching Séance's
-status retention (`SC/src/inbox/inbox_service.dart:11-14` [V]); alert ids
-are random values minted on the host, so the plaintext record id names
-neither a check nor a server. When the prefix budget is full, new
-statuses stay device-local and the alert list says so. The `sender` type
-is removed with a sealed `removed` record when alerting is removed for a
+grows with time or events without a bound (no audit entries). The sync
+server deletes records only with the whole account
+(`seance/packages/seance_sync_server/lib/src/sqlite_storage.dart:159,293-299`
+[V]), so a per-alert id like Séance's `inboxstatus:<appId>:<proposalId>`
+(`SP/inbox/inbox.dart:484-485` [V]) would stay in every pull for good.
+The one event-driven type, `alertstatus` (D42), is therefore one record
+per server, rewritten in place: the record count grows with servers,
+never with alerts, each record stays within its cap, and alert ids
+travel only inside the sealed payload. Its 100 entries cover a full
+inbox of 100 pending items. Several devices write the same record, so
+each rewrite merges the last pulled entries with this device's own (the
+newest state per alert id wins), and a device writes again when a later
+pull lacks one of its live entries, so concurrent acknowledgements
+converge under last-writer-wins. Syncing acknowledgement is a plan design
+choice serving owner decision 2026-10-10 (21/22), not part of the
+owner's answer; it awaits confirmation (04, section 15, new open item
+9), and without it acknowledgement stays device-local like TRI-03. When
+the prefix budget is full, new statuses stay device-local and the alert
+list says so. The `sender` and `alertstatus` records of a server are
+removed with sealed `removed` records when alerting is removed for that
 server.
 
 ### 4.9 What never syncs
@@ -1255,7 +1291,7 @@ platform identities in 04, section 12.3):
 | `capabilities/<serverId>.json` | Cached probe results, 24 h TTL | `klabautermann_core` | MVP |
 | `audit/<serverId>.jsonl` | Audit log, 90-day retention [E] | `klabautermann_core` | MVP |
 | `history/<serverId>/<tier>.ring` | Fixed-size binary rollups (`RandomAccessFile`, no rewrite per sample) | `klabautermann_core` | v1 |
-| `alerts.jsonl` | In-app alert history, 30 days [E]; from v1.x also host alerts fetched from the inbox or read from a host spool, with source tier and status (D42) | `klabautermann_core` | v1 |
+| `alerts.jsonl` | In-app alert history, 30 days [E]; from v1.x also host alerts fetched from the inbox or read from a host spool, with source tier, server item ids and status (D42) | `klabautermann_core` | v1 |
 | `alert_inbox.json` | Inbox cursor, sender metadata (app id, allowed server), per-sender failure counts, pending item deletions; keys stay in `vault.json` | `klabautermann_core` | v1.x |
 
 Configuration stays in JSON files like both siblings (`seance/AGENTS.md` §9
@@ -1354,8 +1390,10 @@ per connection, not forwarding channels [R: sshd_config(5)].
 | Symptom | Classification | UI |
 |---|---|---|
 | Session-type channel refused, connect-failed "open failed", sessions open below the cap | Host `MaxSessions` below the budget | Low-session mode, named in the header |
-| Streamlocal open refused (OpenSSH answers every streamlocal refusal with `SSH2_OPEN_CONNECT_FAILED` "open failed", whatever the cause [R: openssh-portable `serverloop.c` `server_input_channel_open`, reported by review]) | One exec probe per path: `test -S p` failing means a missing socket, `test -w p` failing means `EACCES`, both passing means forwarding is disabled (`AllowStreamLocalForwarding no` or `remote`, `DisableForwarding yes`, or an `authorized_keys` `restrict` or `no-port-forwarding` option [R: r5 §1.1]) | Missing: next candidate path; `EACCES`: the access check entry with fix options; disabled: switch to the CLI relay and explain the sshd setting (confirmed with `sshd -T -C` in admin mode) |
+| Streamlocal open refused (OpenSSH answers every streamlocal refusal with `SSH2_OPEN_CONNECT_FAILED` "open failed", whatever the cause [R: openssh-portable `serverloop.c` `server_input_channel_open`, reported by review]) | One exec probe per path: `test -S p` failing means a missing socket, `test -w p` failing means `EACCES`, both passing means forwarding is disabled (`AllowStreamLocalForwarding no` or `remote`, `AllowTcpForwarding no` or `remote`, a `PermitOpen` restriction, `DisableForwarding yes`, or an `authorized_keys` `restrict`, `no-port-forwarding` or `permitopen=` option [R: r5 §1.1; sshd applies its local TCP forwarding permissions to socket paths too, openssh-portable `session.c` `do_authenticated` and `channels.c` `channel_connect_to_path`, reported and reproduced with OpenSSH 9.6p1 by review]) | Missing: next candidate path; `EACCES`: the access check entry with fix options; disabled: switch to the CLI relay and explain the sshd setting (confirmed with `sshd -T -C` in admin mode, which shows the sshd settings but not `authorized_keys` options) |
 | Handshake fails against ML-KEM-only servers | dartssh2 4.1.0 client limitation (c2 R12) | "This server requires an algorithm Klabautermann does not support yet" (CN-23) |
+| Handshake fails against servers that offer only `diffie-hellman-group1-sha1` for key exchange, or only `hmac-md5` or the truncated `hmac-sha2-*-96` MACs | Refused by the suite proposal (`suiteSshAlgorithms`, D23), not a dartssh2 gap | "This server offers only algorithms Klabautermann refuses as insecure" |
+| On Android, the server closes the connection during key exchange after a finite-field DH method (`diffie-hellman-group-exchange-*`, `diffie-hellman-group14-*`) was negotiated | dartssh2 4.1.0 client limitation: DH still runs in `Isolate.run`, whose spawn delay can outlast the server's timeout on memory-constrained devices (c2 R13) [R: dartssh2-4.1.0 `CHANGELOG.md:47-48`, `lib/src/kex/kex_dh.dart:63,89`] | "Klabautermann could not finish this server's key exchange in time on this device" (CN-23) |
 | Exit 127 or "command not found" | Tool missing | Panel hidden with the reason |
 | `nologin` shell or `ForceCommand` | Restricted account | Read-only reachability; explanation |
 | Link ping timeout | Dead peer | Backoff; stale values turn grey |
@@ -1364,20 +1402,29 @@ per connection, not forwarding channels [R: sshd_config(5)].
 
 - `SshLink.openUnixStream(path)` opens OpenSSH `direct-streamlocal@openssh.com`
   through dartssh2's `forwardLocalUnix` (present in 3.0.2 [R: c2 §3.2] and
-  4.1.0 [V]; no call exists in the repository today [V]). sshd opens the
-  socket as the authenticated user, so normal permissions apply.
-- **Listen before write.** `SSHForwardChannel.stream` was a lazy `map` in
-  3.0.2, so data that arrived before the first listener could stall the
-  channel for good (c2 R2; fixed in 4.0.1, so the 4.1.0 pin no longer
-  stalls). The wrapper still subscribes at once into its own bounded buffer
-  (4 MiB [E]) and pauses the SSH subscription when its consumer pauses,
-  which keeps backpressure end to end.
+  4.1.0 [R: dartssh2-4.1.0 `lib/src/ssh_client.dart:548`]; no call exists
+  in the repository today [V]). sshd opens the socket as the authenticated
+  user, so normal permissions apply.
+- **Listen before write.** `SSHForwardChannel.stream` is a lazy `map` over
+  the channel stream, unchanged in 4.1.0 [R: dartssh2-4.1.0
+  `lib/src/forward/ssh_forward.dart:62`]. In 3.0.2 a channel granted no
+  window before its first listener, so data that arrived first could stall
+  the channel for good (c2 R2). 4.0.1 fixed this in `SSHChannel`, which
+  now grants window credit when the first listener subscribes [R:
+  dartssh2-4.1.0 `lib/src/ssh_channel.dart:76-79`, `CHANGELOG.md:8`], so
+  the 4.1.0 pin no longer stalls. The wrapper still subscribes at once into
+  its own bounded buffer (4 MiB [E]) and pauses the SSH subscription when
+  its consumer pauses, which keeps backpressure end to end.
 - **Endpoint discovery (CN-07)**, once per session after the probe: a
   per-server override (device-local), `/var/run/docker.sock`,
   `/run/user/<uid>/docker.sock`, `/run/podman/podman.sock`,
   `/run/user/<uid>/podman/podman.sock`. `<uid>` and socket presence come from
   the probe. Several engines may coexist; the user picks a default per
-  server.
+  server. Every `docker` or `docker compose` command the app runs for a
+  selected socket names it with an `env DOCKER_HOST=unix://<socket>`
+  prefix inside the command (no SSH `env` request, 5.10), so a context or
+  `DOCKER_HOST` in the login user's or root's environment never picks
+  another engine (7.17).
 - The socket is never exposed on a local TCP port or local Unix socket: it
   is root-equivalent (r5 §1.3).
 
@@ -1406,7 +1453,7 @@ per connection, not forwarding channels [R: sshd_config(5)].
 | Stats, list | `GET /containers/{id}/stats?stream=false&one-shot=true` | One JSON object | n/a | Deltas between polls client-side (one-shot `precpu_stats` not meaningful [U]) |
 | Stats, detail | `GET /containers/{id}/stats?stream=1` | JSON lines | Close | n/a |
 | Events | `GET /events?since=&filters=` | JSON lines; `Type`, `Action`, `Actor` only (1.52 removed the legacy fields), legacy shape accepted below 1.52 | Close | `since=` last event time; full re-list after a gap over 60 s |
-| Pull progress | `POST /images/create?fromImage=&tag=` | JSON values keyed by layer `id`; `progressDetail`, `errorDetail` | Close (the daemon finishes the pull) | n/a |
+| Pull progress | `POST /images/create?fromImage=&tag=` | JSON values keyed by layer `id`; `progressDetail`, `errorDetail` | Close, which cancels the pull on the daemon unless another client is pulling the same image [R: moby `image_routes.go` request context, `xfer/transfer.go` `release`, reported by review]; a pull that must outlive its view runs detached (7.14) | n/a |
 
 Every stream feeds a bounded ring (lines and bytes, a line-length cap); when
 the consumer falls behind, the subscription pauses and the view shows
@@ -1471,7 +1518,7 @@ c2 found these defects in 3.0.2. The last column gives their state on the
 | `SSHClient.close()` can hang (R14) | Bounded close; late channel opens closed after their timeout | `SshLink` | Still no public destroy; keep the bound |
 | Unread stderr buffers without limit (R17) | Always drain both streams | `RemoteProcess` | Unchanged |
 | One window adjust per data packet (R2) | Accepted; measured in S1 for 1,000 lines/s follows | n/a | Fixed: granted back at half the window |
-| No chacha20-poly1305, no ML-KEM; SHA-1 KEX and CBC still proposed; Android KEX isolate timeouts (R12, R13) | Classified as client limitations (CN-23) | connect classification | chacha20-poly1305 added and Android timeouts fixed; SHA-1 KEX and CBC only as a last resort in `suiteSshAlgorithms`; ML-KEM still missing (CN-23) |
+| No chacha20-poly1305, no ML-KEM; SHA-1 KEX and CBC still proposed; Android KEX isolate timeouts (R12, R13) | Classified as client limitations (CN-23) | connect classification | chacha20-poly1305 added; Android timeouts fixed for curve25519 and NIST ECDH, but finite-field DH still runs in `Isolate.run` [R: dartssh2-4.1.0 `CHANGELOG.md:47-48`, `lib/src/kex/kex_dh.dart:63,89`] and `suiteSshAlgorithms` proposes four DH exchanges, so a host that negotiates one can still time out on low-memory Android (5.3, CN-23); SHA-1 KEX and CBC only as a last resort; `diffie-hellman-group1-sha1`, `hmac-md5` and the truncated MACs refused (5.3); ML-KEM still missing (CN-23) |
 | Rows and columns order (R15) | Boundary tests | `seance_terminal`, exec | Unchanged |
 
 ### 5.11 Other streams
@@ -1517,7 +1564,7 @@ the probe returns:
 | Locale | `locale -a` contains `C.UTF-8` |
 | Engine sockets | `test -S` and `test -w` per candidate path (5.4) |
 | Session | `$SSH_CONNECTION`, the sshd parent of the session (protected targets) |
-| Clock | `date +%s`, `date +%z`, `timedatectl show -p Timezone` or `/etc/timezone` |
+| Clock | `date +%s`; `(unset TZ; date +%z)`, because the samplers run under `TZ=UTC` (6.2); `timedatectl show -p Timezone`, `/etc/timezone` or `readlink /etc/localtime` |
 | Detached-operation support | `loginctl show-user "$(id -un)" -p Linger`, logind `KillUserProcesses` [U: readable unprivileged], `XDG_RUNTIME_DIR` |
 
 Each panel declares the capabilities it needs; a panel that cannot work is
@@ -1533,7 +1580,11 @@ shown as unknown, never as zero.
   requests are never used. The sampler shell runs under `LC_ALL=C` so that
   `${#var}` counts bytes; collectors that need UTF-8 rendering prefix
   `LC_ALL=C.UTF-8` on their own command when the probe found that locale
-  (A11Y-08).
+  (A11Y-08). Under `TZ=UTC`, `date +%z` prints `+0000` and
+  `systemd-analyze calendar` evaluates in UTC [L] (04, Appendix A, E12),
+  while cron and PID 1 use the system zone. The clock read of 6.1 and the
+  `OnCalendar` evaluation of 7.7 therefore run as `(unset TZ; ...)`;
+  everything else keeps `TZ=UTC`.
 - **Program.** The client writes the program (function definitions only) to
   stdin. Its first line sets the per-session 128-bit random nonce, so the nonce
   never appears in argv, where other local users could read it through `ps` or
@@ -1630,7 +1681,7 @@ and is the single source for every runner, including the T1 scripts (9.3).
 | `overview` (fleet rows) | fast | `cpu` lines of `/proc/stat`, filtered `/proc/meminfo`, `/proc/loadavg`, `/proc/net/dev` | 5 s | 10 s | 30 s |
 | `core` (focused server) | fast | the above plus per-core lines, `/proc/diskstats`, `/proc/pressure/*`, `/proc/uptime`, `btime` | 2 s | 3 s | 10 s |
 | `fs` | slow | `df -PT -B1`, `df -Pi` under `timeout 10` | 30 s | 60 s | 120 s |
-| `procs` | slow | `/proc/<pid>/stat`, `status`, `cmdline` with builtins; `ps -eo ...` or BusyBox `ps w` fallback | 3 s while visible | 5 s while visible | 10 s |
+| `procs` | slow | `/proc/<pid>/stat` and `status` with builtins; every `/proc/<pid>/cmdline` through one `head` piped into `tr '\000' '\037'` (7.2); `ps -eo ...` or BusyBox `ps w` fallback | 3 s while visible | 5 s while visible | 10 s |
 | `units` | slow | `systemctl list-units --all --output=json` (systemd 246+), else `--plain --no-legend`; `systemctl --failed` | 15 s while visible; 60 s for the health card | same | same |
 | `timers`, `cron` | slow | `systemctl list-timers --all --output=json`; `crontab -l`; `/etc/crontab`; `/etc/cron.d/*`; `cron.{hourly,...}` | 60 s while visible | same | on demand |
 | `identity` | slow | `/etc/os-release`, `uname`, `hostnamectl --json=short` (systemd 249+) | once per session | same | same |
@@ -1657,7 +1708,8 @@ throughput uses 512-byte sectors (CN-04). A filtered core sample is about
   collector) during spike S2 and refreshed from the fixture images. Raw captures
   are redacted and reviewed for host names before commit.
 - Hostile-input tests: markers and the nonce inside process names, unit
-  descriptions and log lines; embedded newlines and NULs; 64 KiB lines;
+  descriptions and log lines; embedded newlines and NULs; forged
+  `==> <pid>/cmdline <==` lines inside arguments (7.2); 64 KiB lines;
   wrapped `df` lines; Swarm task names (ServerBox #1226 [R]).
 - The diagnostic bundle (CN-18, v1) exports the same raw format, redacted
   by `SecretRedactor`, so a user report becomes a fixture.
@@ -1715,15 +1767,31 @@ unless the user enables admin mode for that panel.
 ### 7.2 Processes (PRC)
 
 - **MVP.** The `procs` collector (slow sampler, only while visible) reads
-  `/proc/<pid>/stat`, `status` and `cmdline` with builtins; current CPU from
-  utime plus stime deltas, not lifetime `pcpu`; command lines masked
-  (8.9). Kill and signal (PRC-02): the plan records the PID and its start
+  `/proc/<pid>/stat` and `status` with builtins; current CPU from utime
+  plus stime deltas, not lifetime `pcpu`. Argument vectors cannot use
+  `read`: `/proc/<pid>/cmdline` separates arguments with NUL bytes, which
+  shell variables cannot hold, and dash and bash drop them, so `sleep 30`
+  reads as `sleep30` [L] (04, Appendix A, E11). Instead one
+  `cd /proc && head -n 1000 [0-9]*/cmdline | tr '\000' '\037'` per tick
+  (POSIX `head` and `tr`, both in BusyBox; the line cap is [E]) turns every
+  separator into `\037` before the output reaches a shell variable. `head`
+  precedes each file with a `==> <pid>/cmdline <==` line, which an argument
+  containing newlines can forge. Real headers appear once each and in the
+  byte order in which the `LC_ALL=C` glob sorts them; a header that repeats
+  a PID or breaks that order marks the PID it names and the entry it
+  interrupts "command line unavailable" instead of guessing. Headers for
+  PIDs missing from the tick's `stat` pass (new processes, the collector's
+  own pipeline) are skipped. Command lines are masked per argument (8.9);
+  the `ps` fallback joins arguments with spaces, so masking there works on
+  whitespace tokens. Kill and signal
+  (PRC-02): the plan records the PID and its start
   time (field 22 of `/proc/<pid>/stat`); the executed `sh -c` re-reads the
   start time and runs `kill -s <SIG> <pid>` only if it matches (ServerBox's
   PID-reuse guard [R]). Elevation only for other users' processes. PID 1,
   sshd, dockerd and the sampler's own PIDs are protected targets.
-- **v1.** Tree, detail with masked environment, unit and container
-  attribution from `/proc/<pid>/cgroup`, state highlighting.
+- **v1.** Tree, detail with masked environment (`environ` is
+  NUL-separated like `cmdline` and goes through `tr` the same way), unit
+  and container attribution from `/proc/<pid>/cgroup`, state highlighting.
 - **v1.x.** Renice and ionice, per-process I/O (sudo).
 
 ### 7.3 Disks and storage (DSK)
@@ -1813,8 +1881,10 @@ unless the user enables admin mode for that panel.
   (JOB-02): a Dart cron parser in `klabautermann_host` (5 fields, ranges, steps,
   names, macros, `CRON_TZ`) evaluated in the server's time zone and offset from
   the probe, with DST transitions and `RandomizedDelaySec` annotated;
-  `OnCalendar` expressions use `systemd-analyze calendar --iterations=N` on the
-  host instead of a reimplementation; phrases come from ARB templates. Other
+  `OnCalendar` expressions use `(unset TZ; systemd-analyze calendar
+  --iterations=N '<expr>')` on the host instead of a reimplementation,
+  because PID 1 evaluates zone-less expressions in the system zone [R:
+  systemd.time(7)] (6.2); phrases come from ARB templates. Other
   users' crontabs (JOB-03): `crontab -l -u <user>` through elevation, read-only.
   Run timer now (JOB-08): `systemctl start <service>` with SVC-03's guards,
   output followed from the journal.
@@ -1860,9 +1930,10 @@ unless the user enables admin mode for that panel.
 
 - **v1.** sshd posture from `sshd -T -C user=<u>,host=<h>,addr=<addr>` with
   the address from `$SSH_CONNECTION` (without `-C`, `Match` blocks are
-  ignored [U]); it also explains whether `AllowStreamLocalForwarding` blocks
-  the Docker transport. Endpoint TLS expiry from the device (CRT-01, Dart
-  `SecureSocket`).
+  ignored [U]); it also explains whether `AllowStreamLocalForwarding`,
+  `AllowTcpForwarding`, `PermitOpen` or `DisableForwarding` blocks the
+  Docker transport (all four apply to socket forwarding, 5.3). Endpoint TLS
+  expiry from the device (CRT-01, Dart `SecureSocket`).
 - **v1.x.** Lynis audit and fleet hardening table, fail2ban, SELinux and
   AppArmor, `systemd-analyze security --json=short` (systemd 250+), CPU
   vulnerability status, the root-equivalent access summary, host-key
@@ -1941,7 +2012,14 @@ unless the user enables admin mode for that panel.
 - **v1.** Pull with per-layer progress (`POST /images/create`); private
   registries default to `docker pull` over exec, which uses the host's own
   credential helpers, because the daemon does not read
-  `~/.docker/config.json` (REG-01, r5 §1.10). History and layers with
+  `~/.docker/config.json` (REG-01, r5 §1.10). Both are foreground pulls:
+  closing the connection cancels the pull on the daemon (5.6), and a
+  `docker pull` over exec ends with its channel, which ends the pull [R:
+  Docker `docker image pull` reference, reported by review]. The progress
+  view therefore says that leaving it stops the pull and, when the host
+  has the `docker` CLI, offers to run it detached instead: a `docker pull`
+  operation (7.17) that survives a closed view or a backgrounded phone
+  (D34) and is followed through its log. History and layers with
   `CreatedBy` masked. Digest update detection (IMG-05): local `RepoDigests`
   against the registry digest from a manifest `HEAD`
   (`Docker-Content-Digest`), which does not count against Docker Hub pull
@@ -1979,7 +2057,8 @@ unless the user enables admin mode for that panel.
   air-gapped host fails with a clear message. They are engine changes, not
   host file writes (8.11). Owner decision 2026-10-10: allowed with this
   confirmation. Network create with IPAM, connect and disconnect.
-- **Later.** Volume clone, export and import.
+- **Later.** Volume clone and import; export beyond the one-shot archive
+  of 7.18.
 
 ### 7.16 Compose stacks (STK)
 
@@ -2012,8 +2091,9 @@ unless the user enables admin mode for that panel.
   explicit option with typed confirmation. The preview warns when running
   services may be profile-gated (active profiles are not recorded in labels
   [U]). `config -q` runs first; its interpolated output contains secrets and
-  is never logged, cached or synced. The operation runs detached (7.17) and
-  uses the host's registry credentials.
+  is never logged, cached or synced. The operation runs detached (7.17),
+  as the login user unless it needs root, against the selected engine, and
+  uses the registry credentials of the identity it runs as (7.17).
 - **Ownership (STK-10, MVP).** 8.7.
 - **v1.** Edit compose and `.env` (STK-07) through the edit pipeline (8.5):
   `planchette_editor`, `boundedUnifiedDiff`, `validateText` YAML checks plus
@@ -2040,16 +2120,24 @@ unless the user enables admin mode for that panel.
 ### 7.17 Detached operations (SAF-23, D25)
 
 State-changing operations that can outlast a phone's foreground time (MVP:
-STK-06; later STK-23, PKG-07 and IMG-08; SYS-03 returns at once and is not
-one) run host-side and are re-attached after
-reconnect.
+STK-06; later STK-23, PKG-07, IMG-08 and detached IMG-03 pulls (7.14);
+SYS-03 returns at once and is not one) run host-side and are re-attached
+after reconnect.
 
-**Runner selection** (from the probe):
+**Runner selection** (from the probe and the plan's `requiredLevel`, 8.5,
+not from whether admin mode is on). Only an operation that needs root
+runs as root: PKG-07, a Docker operation whose engine is reachable only
+through the sudo relay (5.9, rank 3), or a stack operation whose compose
+or `.env` files only root can read. Every other operation runs as the
+login user, also in admin mode, where elevation only asks the system
+manager to start it so that it survives logout without linger. The first
+matching row applies:
 
 | Condition | Runner | Operation directory |
 |---|---|---|
-| Admin mode, systemd system manager | `systemd-run --unit=klabautermann-op-<id> --collect --quiet -- /bin/sh -c '<wrapper>' klabautermann-op <dir> <id> <uid> -- <cmd...>` through the elevation prelude | `/var/lib/klabautermann/ops/` (directory root-owned 0755; files 0600 owned by the login user) |
-| No admin, user manager reachable and `Linger=yes` | `systemd-run --user --unit=klabautermann-op-<id> --collect --quiet -- /bin/sh -c '<wrapper>' ...` | `${XDG_STATE_HOME:-~/.local/state}/klabautermann/ops/` (0700, files 0600) |
+| Needs root (admin mode on), systemd system manager | `systemd-run --unit=klabautermann-op-<id> --collect --quiet -- /bin/sh -c '<wrapper>' klabautermann-op <dir> <id> <uid> -- <cmd...>` through the elevation prelude | `/var/lib/klabautermann/ops/` (directory root-owned 0755; files 0600 owned by the login user) |
+| Needs no root, admin mode on, systemd system manager | `systemd-run --uid=<login user> --unit=klabautermann-op-<id> --collect --quiet -- /bin/sh -c '<wrapper>' ...` through the elevation prelude; the service runs as the login user [R: systemd-run(1)] | user directory as below |
+| Needs no root, admin mode off, user manager reachable and `Linger=yes` | `systemd-run --user --unit=klabautermann-op-<id> --collect --quiet -- /bin/sh -c '<wrapper>' ...` | `${XDG_STATE_HOME:-~/.local/state}/klabautermann/ops/` (0700, files 0600) |
 | Otherwise (no systemd, or no linger) | `setsid -f /bin/sh -c '<wrapper>' ...` with all standard streams on `/dev/null` (BusyBox `setsid` applet or `nohup ... &` [U]) | user directory as above |
 
 - A user manager stops shortly after the user's last session ends unless
@@ -2070,6 +2158,17 @@ reconnect.
   swap there would let a non-root process redirect root's writes); they use
   the root-owned directory and `chown` each new file to the login user so it
   can be read without sudo.
+- **Engine and credentials.** Each Docker CLI step carries the
+  `env DOCKER_HOST=unix://<selected socket>` prefix of 5.4 inside the
+  command, because sudo's `env_reset` and a transient unit both drop the
+  caller's environment [R: sudoers(5), systemd-run(1)]; neither root's nor
+  the shell's default context decides the engine. The CLI uses the registry
+  credentials of the identity it runs as: the login user's
+  `~/.docker/config.json` and credential helpers, or root's for a root-run
+  operation, never the user's files read as root. The preview names the
+  identity, the engine and whose credentials apply. The config-hash
+  re-validation of 8.5 runs as the same identity, with the same
+  `DOCKER_HOST`, as the operation itself.
 - **Re-attach.** On connect, the slow sampler lists both operation
   directories; a running record is checked with `systemctl [--user]
   is-active` or by PID plus start time, and followed with `tail -n +1 -F` on
@@ -2077,10 +2176,15 @@ reconnect.
   as the same user can re-attach. Each server shows a list of running
   operations.
 - **Cleanup.** The client deletes an operation's files after the result has
-  been shown and audited; leftovers older than 7 days [E] are pruned on
-  connect (root-owned leftovers by the next root-run wrapper or in admin
-  mode). Never `/tmp`. Both directories are rows in the host write inventory
-  (8.11).
+  been shown and audited. It deletes files in the user directory directly.
+  The login user cannot unlink files in the root-owned 0755
+  `/var/lib/klabautermann/ops/` even though it owns them [R: unlink(2)],
+  so the client deletes those through the elevation prelude: at once while
+  admin mode is on, otherwise the next time admin mode is on for that
+  server (the device remembers which results it has shown). Leftovers
+  older than 7 days [E] are pruned on connect, those in the root directory
+  by the next root-run wrapper or in admin mode. Never `/tmp`. Both
+  directories are rows in the host write inventory (8.11).
 
 ### 7.18 Backups (BAK)
 
@@ -2088,13 +2192,22 @@ reconnect.
   environment credentials, never displayed (`pg_dump`, `mysqldump`,
   `mongodump`, `sqlite3 .backup`), kept in the state directory (manifest
   row) or handed to Poltergeist for download; status of existing restic,
-  borg or kopia timers.
+  borg or kopia timers. "Back up this volume now" (owner decision
+  2026-10-10 (19): one-off dumps and this action until full backups; the
+  export half of VOL-05, moved from Later, 1.4): a one-shot tar of one
+  named volume's `Mountpoint`, read directly when the login user can and
+  otherwise through the elevation prelude in admin mode (8.3), streamed
+  into a file the login user owns; never a helper container, which D27
+  allows only for VOL-03 and CTR-21. The dialog shows the volume size and
+  the free space first and offers to stop the containers that use the
+  volume for a consistent copy, explaining the trade-off; the archive is
+  kept and handed off like the dumps.
 - **Later: inside Klabautermann, after v1.x, built on T1** (owner
   decision 2026-10-10). restic snapshots of volumes and bind mounts,
   coverage report, scheduled backups with retention (T1), integrity checks,
   test restores, pre-update backups, backup targets including another
-  server in the list over SFTP. Until then the one-shot dumps above and the
-  catalog's existing tiers apply.
+  server in the list over SFTP. Until then the one-shot dumps and volume
+  archives above and the catalog's existing tiers apply.
 
 ### 7.19 Alerts and notifications (ALR)
 
@@ -2103,15 +2216,17 @@ reconnect.
   state machine `ok -> pending -> firing -> resolving -> ok`. The grammar is
   deliberately small (comparisons, durations, hysteresis) so T1 can compile a
   subset to POSIX `sh` (9.3). Rules sync as `rule` records (4.8).
-- **v1.** In-app threshold alerts (ALR-01) evaluated in the engine on live
-  samples; attention badges (ALR-02). Sinks: an in-app alert center on the
+- **v1.** In-app threshold alerts (ALR-01) with separate raise and clear
+  thresholds and durations (hysteresis, D29; this part of ALR-16 moves to
+  v1, 1.4), evaluated in the engine on live samples; attention badges
+  (ALR-02). Sinks: an in-app alert center on the
   pattern of Poltergeist's sealed `AppAlert` and `AlertSeverity`
   (`PA/services/alert_center.dart` [V]; pattern, not copied code) and local
   notifications through `flutter_local_notifications` (BSD-3, approved by the
   owner on 2026-10-10, D10; no notification plugin resolves in any lockfile
   today [R: c3 §5.4]). Every rule row and the notification permission prompt say
   "evaluated on this device while Klabautermann is open".
-- **v1.x.** Hysteresis and flap suppression (ALR-16), desktop tray monitoring
+- **v1.x.** Flap damping (the rest of ALR-16), desktop tray monitoring
   (ALR-03, PLT-10), Android watch mode for a session (PLT-11, D34), Android
   credential-free reachability checks every 15 minutes or more (PLT-15), and T1
   host checks with sync-server delivery, the optional notifier, maintenance
@@ -2132,11 +2247,14 @@ reconnect.
     16 to 64 characters `[A-Za-z0-9._-]`, random, minted on the host when the
     transition is spooled and stable across retries; `check` is the check id;
     `server` the `serverConfigId`; `state` is `firing`, `resolved` or
-    `digest`; `severity` is `info`, `warning` or `critical`; `summary` one
-    line of at most 200 characters; `observed` Unix seconds; `details` at
-    most 2,000 characters [E]. A digest lists its transitions in `details`,
-    one `check state severity` line each. The sealed blob is capped at 4 KiB
-    [E], far below the inbox's 96 KiB, so every device's unpaginated
+    `digest`; `severity` is `info`, `warning` or `critical`; `observed`
+    Unix seconds; `summary` one line of at most 200 bytes and `details` at
+    most 2,000 bytes, both counted in UTF-8 after JSON encoding [E]. A
+    digest lists its transitions in `details`, one `check state severity`
+    line each. The encoded plaintext is capped at 4,056 bytes [E], so the
+    sealed blob (plaintext plus the 24-byte nonce and 16-byte tag,
+    `SP/inbox/inbox.dart:35-36,86` [V]) stays within 4 KiB, far below the
+    inbox's 96 KiB, so every device's unpaginated
     `GET /v1/inbox` stays small (the handler returns every item since the
     cursor, `inbox_handlers.dart:104-111` [V]).
   - *Fetching.* Every device calls `GET /v1/inbox?since=<cursor>` at launch
@@ -2167,18 +2285,25 @@ reconnect.
     `firing` alert as resolved; "acknowledge all" handles a server's list in
     one action. Every field is rendered as untrusted plain text (no markup,
     no links opened, control characters shown escaped); the summary is
-    labelled with the server and "evaluated on the server" (9.5). Repeats of
-    an id already in the history or with a status are deleted unannounced
-    (replay filter).
-  - *Acknowledgement and deletion.* Acknowledging or dismissing writes the
-    sealed `alertstatus` record (4.8), then calls
-    `DELETE /v1/inbox/{appId}/{itemId}`; a 404 with error code `not_found`
-    means another device handled it first and is not an error; any other
-    404 is a failure (`seance/docs/INBOX.md:190-192` [V]). Devices
-    that fetched the alert earlier apply the status to their history.
-    Statuses older than 30 days are pruned and not published. Unhandled
-    items stay on the server for other devices until the 7-day retention
-    drops them.
+    labelled with the server and "evaluated on the server" (9.5). Each
+    history entry records the server item ids that carried its alert id.
+    An item whose alert id has a status (handled, or a replay of a handled
+    alert) is deleted unannounced. Otherwise an item id already in the
+    history was fetched again behind a stopped cursor and is skipped, as
+    Séance skips it (`SC/src/inbox/inbox_service.dart:223` [V]); a new
+    item id carrying an alert id already in the history is not announced
+    again, and its item id joins that entry, so handling the alert deletes
+    every copy (replay filter). Within the 7-day window no device deletes
+    an item of a valid, unhandled alert.
+  - *Acknowledgement and deletion.* Acknowledging or dismissing adds an
+    entry to the server's sealed `alertstatus` record (4.8), then calls
+    `DELETE /v1/inbox/{appId}/{itemId}` for each item id of that alert; a
+    404 with error code `not_found` means another device handled it first
+    and is not an error; any other 404 is a failure
+    (`seance/docs/INBOX.md:190-192` [V]). Devices that fetched the alert
+    earlier apply the status to their history. Every write of the record
+    drops entries older than 30 days. Unhandled items stay on the server
+    for other devices until the 7-day retention drops them.
   - *Peer checks.* A T1 check on server A probes server B (TCP connect to
     B's SSH port, or an HTTP check) and deposits "B unreachable from A"
     through A's own sender, with A as `server` and B named in `details` as
@@ -2422,16 +2547,17 @@ and names, image references, user names (`^[a-z_][a-z0-9_-]*[$]?$`), signal
 names (enum), absolute normalized paths without NUL, collector names (enum),
 cron expressions (parsed before writing). Every remote command is wrapped as
 `sh -c <quoted>` with `LC_ALL=C TZ=UTC` inside, so the login shell's syntax
-never matters. Property tests run quoted output through a real `sh` on Linux
+never matters; only the clock and calendar reads of 6.2 unset `TZ` in a
+subshell. Property tests run quoted output through a real `sh` on Linux
 CI.
 
 ### 8.9 Secret masking and redaction (SAF-07, SYN-03)
 
 - Masked with reveal on tap: env and label values whose keys match
   `PASS|PASSWORD|SECRET|TOKEN|KEY|PRIVATE|CREDENTIAL|AUTH|DSN|DATABASE_URL`
-  (case-insensitive), `.env` values, process arguments (`-p<secret>`,
-  `--password=`), URL credentials (`scheme://user:pass@`), image history
-  `CreatedBy`.
+  (case-insensitive), `.env` values, process arguments split at the
+  boundaries 7.2 preserves (`-p<secret>`, `--password=`), URL credentials
+  (`scheme://user:pass@`), image history `CreatedBy`.
 - Every export, share and diagnostic bundle passes `SecretRedactor`
   (`SC/src/llm/redaction.dart`) by default, with an explicit include-secrets
   toggle.
@@ -2461,7 +2587,7 @@ state) before and after a scripted MVP session; only MVP rows may appear.
 | Write | Trigger | Location | Lifetime and cleanup | Release |
 |---|---|---|---|---|
 | Detached-operation records and logs (user) | Detached operation | `${XDG_STATE_HOME:-~/.local/state}/klabautermann/ops/<id>.{json,log}`, 0700 and 0600 | Deleted after the result is shown; pruned after 7 days | MVP |
-| Detached-operation records and logs (root) | Detached operation in admin mode | `/var/lib/klabautermann/ops/`, directory root 0755, files 0600 owned by the login user | Same; root-owned leftovers pruned by the next root-run wrapper or in admin mode | MVP |
+| Detached-operation records and logs (root) | Detached operation that needs root (7.17) | `/var/lib/klabautermann/ops/`, directory root 0755, files 0600 owned by the login user | Deleted through the elevation prelude after the result is shown, at once in admin mode or the next time admin mode is on (the login user cannot unlink there); pruned after 7 days by the next root-run wrapper or in admin mode | MVP |
 | Transient unit `klabautermann-op-<id>` | Detached operation | systemd runtime state | `--collect` | MVP |
 | Engine state changes | Docker actions the user takes | Engine | User-owned | MVP |
 | Login records | Every SSH connection | wtmp, lastlog, auth log, journal | Host retention; one long-lived connection keeps it low | MVP |
@@ -2471,7 +2597,7 @@ state) before and after a scripted MVP session; only MVP rows may appear.
 | Backups (root-owned files) | Every privileged edit | `/var/lib/klabautermann/backups/`, root 0700, with an index | Same, in admin mode | v1 |
 | Audit syslog line | Each mutation | journald or syslog through `logger -t klabautermann` | Host retention | v1 |
 | Footprint manifest | First persistent host write | `~/.config/klabautermann/manifest.json`, `/etc/klabautermann/manifest.json` | Lists every persistent row above with path, sha256, owner, mode, kind, template version | v1 |
-| Database dumps | BAK-01 | `~/.local/state/klabautermann/dumps/` | Manifest row; user deletes | v1.x |
+| Database dumps and volume archives | BAK-01; "back up this volume now" (VOL-05 export, 1.4) | `~/.local/state/klabautermann/dumps/` | Manifest row; user deletes | v1.x |
 | Multi-device lock | Deploys and edits | `~/.local/state/klabautermann/locks/` | TTL | v1.x |
 | Deploy history | Safe update, redeploy | `~/.local/state/klabautermann/deploys/<project>.jsonl`, capped | Manifest row | v1.x |
 | Helper container (VOL-03, CTR-21) | Explicit confirmation on each use, naming what will start and whether an image must be downloaded | Engine: one container from a digest-pinned image (an image already present preferred) | Removed afterwards; a pulled image is named in the confirmation | v1.x (VOL-03), Later (CTR-21) |
@@ -2503,7 +2629,7 @@ removed afterwards (row above, 7.15; owner decision 2026-10-10).
 | Holder of the account key, or any device on the account, when a sudo password is synced (v1.x) | Obtain a password that grants root on that server | Off by default; two per-server opt-ins plus the device's "sync passwords" switch; sealed `klabautermann:sudo:` sub-record, never a `secret:` record, so Séance and Poltergeist never apply it; sealed removal, unsealed tombstones ignored; the risk is stated in the switch subtitle (D41) |
 | Network attacker | MITM a first connection | TOFU with explicit first-seen confirmation; no auto-repin; jump hosts verified per hop [R] |
 | Malicious or compromised host | Fake sections, oversized output, escapes, crafted labels and names | Nonce plus length framing, byte caps per section and stream, parsers that fail closed to "unknown", plain-text rendering, quoting of every value read back |
-| Other local user on a managed host | Read the nonce, the password or operation output; hijack root writes | Nonce and password only on stdin; `printf` builtin; operation files 0600; root never writes into user-writable directories |
+| Other local user on a managed host | Read the nonce, the password, T1 sender, notifier or ping secrets (v1.x) or operation output; hijack root writes | Nonce and password only on stdin; `printf` builtin; T1 secrets only in 0600 files, read by the helper or by curl through `-K`, never in argv or the environment (9.3); operation files 0600; root never writes into user-writable directories |
 | Malicious log or container content | Spoof UI, inject into the assistant, mislead links | SGR colours only, no OSC 52; links open after showing the URL; untrusted-context wrapping; no execution tools in chat |
 | Malicious deep link (v1) | Trigger a connect | Strict parsing, trust review, no command parameters, bounded queue |
 | Local malware on the device | Reach the root-equivalent socket | No local listener for the socket, ever; port forwards loopback-only and explicit; vault behind the OS keystore; app lock (v1) |
@@ -2529,7 +2655,7 @@ the holder of a root-equivalent socket (NG-08).
 | History | session rings (MVP), rollups (v1) | host recorders read over SSH (v1.x) | 1-minute ring file | 10 s tiers for months |
 | Alerts while open | yes | | | |
 | Alerts while closed | desktop tray only (v1.x); fetches pending inbox alerts at launch and on every sync round (v1.x, D42) | | host checks deposit through `klabautermann-notify` and the server's own sender into the sync server's inbox; local spool and optional notifier as fallback | rule engine, deposits through the same sender and format, push (further decision) |
-| Alert history and acknowledgement | device history; acknowledgement synced as bounded `alertstatus` records (v1.x) | spool and history file read on connect (fallback) | spool and history file on the host | same as T1 |
+| Alert history and acknowledgement | device history; acknowledgement synced through one bounded `alertstatus` record per server (v1.x) | spool and history file read on connect (fallback) | spool and history file on the host | same as T1 |
 | Host down while closed | | | peer check on server A deposits "B unreachable from A" through A's sender | peer companions with a self-health quorum |
 | Scheduled update checks | | "check now" | daily timer writes a state file | companion |
 | Docker events and log-pattern alerts | | while open | coarse polling of container state | real time (with grants) |
@@ -2574,8 +2700,8 @@ every value quoted by the client):
 | `deliver.sh` | Spools each transition with a fresh alert id, hands pending spool entries to `klabautermann-notify` on stdin oldest first, builds the digest, and falls back to the spool and `notify.sh` (D42) | ALR-17 |
 | `klabautermann-notify` | The Rust helper: reads one alert on stdin and its credentials from `sender.conf`, seals and posts it, exits (below) | ALR-17 |
 | `sender.conf` | 0600 `key=value` credential file: sync server URL, app id, deposit token, key, optional TLS certificate pin | ALR-17, ALR-19 |
-| `notify.sh` | Transitions to ntfy, Gotify, Telegram, Discord, Slack, Pushover or a generic webhook with `curl --max-time 10`; an optional parallel channel next to sync-server delivery and the fallback without it (owner decision 2026-10-10 (21/22)) | ALR-05 |
-| `pingwrap.sh` | Healthchecks-style start, success and fail pings around a job | JOB-12 |
+| `notify.sh` | Transitions to ntfy, Gotify, Telegram, Discord, Slack, Pushover or a generic webhook with `curl --max-time 10`, channel secrets passed through `curl -K`, never in argv (Notifier below); an optional parallel channel next to sync-server delivery and the fallback without it (owner decision 2026-10-10 (21/22)) | ALR-05 |
+| `pingwrap.sh` | Healthchecks-style start, success and fail pings around a job; the ping URL reaches curl through `curl -K`, never argv (Notifier below) | JOB-12 |
 | Units or crontab block | `Type=oneshot` services with timers (`OnCalendar`, `RandomizedDelaySec`, `Persistent=true`), or a crontab block with begin and end markers | all |
 | `manifest.json` | Every file, unit, crontab block and account with sha256, owner, mode, kind, check id and template version | SAF-14 |
 
@@ -2616,7 +2742,16 @@ POSIX scripts under dash and BusyBox ash and require identical transitions.
 
 **Notifier.** Privacy modes: `content-free` (default: "Alert on <neutral
 label>, open Klabautermann"), `minimal` (label and severity), `full` (summary).
-Channel secrets live on the host and the UI says so. ntfy and Gotify have
+Channel secrets live on the host and the UI says so. They reach curl only
+as curl configuration, never in argv, which other local users read
+through `/proc/<pid>/cmdline`; curl blanks a few credential options there
+but not URLs or headers [R: curl(1), proc(5)]. Webhook URLs, bot tokens,
+access tokens and auth headers sit in a 0600 curl config file per
+channel, written like `sender.conf` (through stdin, never argv) and
+passed with `curl -K <file>`; the message body goes on stdin
+(`--data-binary @-`). `pingwrap.sh` reads its ping URL from its 0600
+config with the strict reader and pipes it, with the `/start` or `/fail`
+suffix, from the `printf` builtin into `curl -K -`. ntfy and Gotify have
 their own mobile apps, which avoids APNs for the unsigned IPA [R: r5 §5.3].
 A test send is part of the install. Owner decision 2026-10-10 (21/22): the
 notifier is optional next to sync-server delivery, which is the primary
@@ -2646,8 +2781,9 @@ the only one that does not depend on the sync server.
 
 **The helper `klabautermann-notify`.** One static musl binary per
 architecture (Linux x86_64 and aarch64), built from
-`klabautermann/rust/` (3.1). It reads one alert from stdin (at most 4 KiB
-[E]) and validates it against format v1; reads `sender.conf` and refuses
+`klabautermann/rust/` (3.1). It reads one alert from stdin (at most the
+4,056-byte plaintext cap of format v1 [E]) and validates it against
+format v1; reads `sender.conf` and refuses
 to run unless the file is a regular file owned by the invoking user with
 mode 0600 or stricter; seals the alert in the inbox blob layout under the
 `klabautermann/v1/alert/` + appId domain [E] with a fresh 24-byte nonce;
@@ -2689,11 +2825,11 @@ size and memory are [U] until S10.
   The helper and delivery scripts stay installed.
 - *Remove.* `DELETE /v1/apps/{appId}` first, which drops the token and
   every pending item and stops the host at once (Séance's order,
-  `SC/src/inbox/inbox_service.dart:172-186` [V]); then the sealed
-  `removed` record; then the helper, `sender.conf` and the delivery
-  scripts are uninstalled over SSH. If the host is unreachable, the token
-  is already revoked; the files are listed as an orphaned footprint on the
-  next connect.
+  `SC/src/inbox/inbox_service.dart:172-186` [V]); then sealed `removed`
+  records for its `sender` and `alertstatus` records; then the helper,
+  `sender.conf` and the delivery scripts are uninstalled over SSH. If the
+  host is unreachable, the token is already revoked; the files are listed
+  as an orphaned footprint on the next connect.
 
 **Host-down detection.** A host cannot report its own death. The peer
 watcher on another server checks chosen targets (`nc -z -w 5` or an
@@ -2842,10 +2978,11 @@ constraints:
    same inputs. ServerBox's Rust parser crate `sbm_parser` is AGPL and is
    neither used nor copied [R: r4 §4.2].
 7. **Bounded records.** No unbounded synced per-incident records.
-   Owner decision 2026-10-10 (21/22): acknowledgement and dismissal sync
-   as `alertstatus` sub-records, capped and pruned after 30 days (4.8);
-   alert payloads stay on the sync server until handled or expired and in
-   each device's history.
+   Acknowledgement and dismissal sync through one `alertstatus` record per
+   server, rewritten in place with the last 30 days (4.8; a plan design
+   choice serving owner decision 2026-10-10 (21/22), awaiting
+   confirmation); alert payloads stay on the sync server until handled or
+   expired and in each device's history.
 8. **Hardening.** A dedicated system user, no capabilities, read-only
    system, memory and CPU limits [U: directive availability per systemd
    version]; the Docker grant is disclosed as root-equivalent.
@@ -3060,7 +3197,7 @@ palette) and presets in the preview. v1: paste from Séance and Poltergeist
 | Contracts | Localization (shared scanner), architecture (composition invariants), platform identity and toolchain (Poltergeist precedent) | app `test/` |
 | Guards | Root import, protocol and license guards for every product | CI guards job |
 | Integration | sshd plus Docker fixture (11.3) | `klabautermann/test/integration`, Ubuntu only |
-| Helper and alert delivery (v1.x, D42) | Rust unit tests of `klabautermann-inbox` and `klabautermann-notify` (format v1 validation, credential-file mode refusal, exit statuses per HTTP answer); cross-language vectors: blobs sealed in Rust open with the Dart sealing under the alert domain and vice versa, and never under `seance/v1/inbox/`; app-side fetch, validation, replay filter, wrong-server rejection, acknowledgement and deletion against a fake inbox; end to end on the fixture host: install with hash check, a real deposit to a sync server, fetch, acknowledge, delete, revoke (exit status 2), spool fallback, uninstall leaving nothing | `klabautermann/rust` tests, `klabautermann_host/test`, `klabautermann_core/test`, integration, CI Rust job |
+| Helper and alert delivery (v1.x, D42) | Rust unit tests of `klabautermann-inbox` and `klabautermann-notify` (format v1 validation, credential-file mode refusal, exit statuses per HTTP answer); cross-language vectors: blobs sealed in Rust open with the Dart sealing under the alert domain and vice versa, and never under `seance/v1/inbox/`; app-side fetch, validation, replay filter, an item fetched again behind a stopped cursor left on the server, two devices merging one status record, wrong-server rejection, acknowledgement and deletion against a fake inbox; end to end on the fixture host: install with hash check, a real deposit to a sync server, fetch, acknowledge, delete, revoke (exit status 2), spool fallback, uninstall leaving nothing | `klabautermann/rust` tests, `klabautermann_host/test`, `klabautermann_core/test`, integration, CI Rust job |
 | Companion parity (M9) | The shared fixture corpus through the Dart parsers and rule evaluator and through the Rust companion; identical parsed results and rule verdicts required (9.4) | `klabautermann_host/test/fixtures`, `klabautermann/rust` companion tests, CI Rust job |
 | Manual checklist | iOS background disclosure and return banner; Android battery and data use; macOS keychain prompts; RHEL 8, Ubuntu 26.04 (sudo-rs) and a Synology host | `klabautermann/docs/` |
 
@@ -3108,11 +3245,15 @@ palette) and presets in the preview. v1: paste from Séance and Poltergeist
   second path for discovery tests; GIDs aligned so the fixture user can reach
   the socket, plus a negative user that cannot.
 - Negative sshd variants: `AllowStreamLocalForwarding no`,
-  `DisableForwarding yes`, `MaxSessions 2`, an `authorized_keys` `restrict`
-  key. The shared common config sets `AllowTcpForwarding no`
+  `DisableForwarding yes`, `AllowTcpForwarding no`, a `PermitOpen`
+  restriction, `MaxSessions 2`, an `authorized_keys` `restrict` key. The
+  shared common config sets `AllowTcpForwarding no`
   (`poltergeist/test/integration/sshd-common/config/sshd_config.common:17`
-  [V]); it does not affect streamlocal, but NET-11 tests need a variant that
-  allows TCP forwarding.
+  [V]), which refuses streamlocal too (5.3). The Docker fixture therefore
+  sets `AllowTcpForwarding local`, which NET-11's `direct-tcpip` tests also
+  need, above its `Include` of the common config (variants include it on
+  their first line, for example `sshd_config.modern:1` [V]), because sshd
+  keeps the first value it reads [R: sshd_config(5)].
 - A new frozen base with the Docker CLI and Compose plugin for
   `dial-stdio`, compose discovery, verification and detached pull and up;
   `fixture-images.yml` hard-codes one image today [V] and becomes a matrix.
@@ -3175,7 +3316,12 @@ S10.
 ### 11.7 Release impact
 
 The MVP ships in suite releases labelled preview from M4 (owner decision
-2026-10-10): the `client_klabautermann` release job, its manifest entries
+2026-10-10): until v1 the label is in the name as well as the release
+notes, as `-preview` in the Klabautermann asset names (the `.deb` keeps
+Debian's versioned file name) and "Klabautermann (preview)" in the in-app
+title and about screen, while application IDs, the display name and the
+other identities stay unchanged (D38; 04, sections 12.1 and 12.3). The
+`client_klabautermann` release job, its manifest entries
 and the workflow contracts land at M4, while M1 registers build, check and
 CI legs and the release gate steps only (04, section 12.1). Clients from 13 to 18 and manifest assets
 from 25 to 33; release macOS legs from 6 to 8; about 115 to 120 job-minutes
