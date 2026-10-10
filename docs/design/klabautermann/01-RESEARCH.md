@@ -2,7 +2,7 @@
 
 This chapter condenses the nine research reports in
 [research/](research/README.md) into one view of the market and of the
-technical ground the server app stands on. The appendices hold the detail:
+technical ground Klabautermann stands on. The appendices hold the detail:
 per-tool profiles, feature matrices and full source lists. The feature
 catalog that grades each capability is [02-FEATURES.md](02-FEATURES.md); the
 decisions built on these findings are in
@@ -20,8 +20,8 @@ How to read it:
   claims. Everything else was read from a primary source by the report cited.
 - `03 §5` means section 5 of [03-ARCHITECTURE.md](03-ARCHITECTURE.md), and
   `04 Appendix A` refers to [04-IMPLEMENTATION.md](04-IMPLEMENTATION.md).
-- `klabautermann` is the lowercase ASCII stem and `Klabautermann` the display name; the
-  product name is undecided ([05-NAMES.md](05-NAMES.md)).
+- Klabautermann is the product's display name and `klabautermann` its
+  lowercase ASCII stem in identifiers ([05-NAMES.md](05-NAMES.md)).
 
 ## 1. Purpose and method
 
@@ -373,7 +373,10 @@ without the app.
   Apache-2.0 and Dokploy's MIT; Runtipi and 1Panel stores are GPL-3.0;
   umbrel-apps has no LICENSE. For public-domain Hauntware, r2 recommends
   bundling only permissive templates with attribution and at most fetching
-  GPL catalogs at runtime, a legal question to confirm (r2 §6.7).
+  GPL catalogs at runtime (r2 §6.7). The owner decided to fetch only
+  permissively licensed catalogs (Apache-2.0, MIT) and never GPL or
+  unlicensed ones, so no legal review is needed
+  ([04 §15](04-IMPLEMENTATION.md#15-owner-decisions), decision 19).
 
 ### 3.8 Security lessons, including 2026 CVEs
 
@@ -738,8 +741,8 @@ reports agree it cannot be one:
   `planchette_core` (syntax for YAML, dotenv, Dockerfile and INI, validation,
   unified diff, search) are consumable unchanged by relative path (c3 §1).
 - **Sync.** A fourth app can add its own record kinds with no server change
-  and no protocol version bump, using a unique `klabautermann:` id prefix and never a
-  bare id, which Séance treats as a server (c1 §2.4).
+  and no protocol version bump, using a unique `klabautermann:` id prefix
+  and never a bare id, which Séance treats as a server (c1 §2.4).
 
 ### 5.2 What is missing or must move first
 

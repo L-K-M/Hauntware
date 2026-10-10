@@ -80,10 +80,10 @@ value. Path abbreviations: `SC` = `seance/packages/seance_core/lib`, `SP` =
    TCP byte streams, SFTP, a session-channel budget, dead-peer detection,
    bounded close). Every dartssh2 3.0.2 workaround lives there, and Séance
    gains dead-peer detection and classified channel errors.
-4. **Packages.** `klabautermann_host` (sampler program, parsers, rate maths, cron,
-   rules) and `klabautermann_docker` (HTTP/1.1, Engine API, compose labels) depend on
-   no SSH package. `klabautermann_core` orchestrates I/O, operations and privilege
-   over `SshLink`. The Flutter app sits on top.
+4. **Packages.** `klabautermann_host` (sampler program, parsers, rate maths,
+   cron, rules) and `klabautermann_docker` (HTTP/1.1, Engine API, compose
+   labels) depend on no SSH package. `klabautermann_core` orchestrates I/O,
+   operations and privilege over `SshLink`. The Flutter app sits on top.
 5. **Server list.** A catalog and sync library,
    `package:seance_core/catalog.dart`, is extracted from Poltergeist's
    coordinator with Poltergeist switched first and byte-identical files. The
@@ -126,10 +126,10 @@ value. Path abbreviations: `SC` = `seance/packages/seance_core/lib`, `SP` =
 12. **Host writes are a tested contract.** Section 8.11 lists every file the
     app can create on a host; an integration test diffs the fixture host's
     filesystem before and after a scripted session.
-13. **Sync records.** One new `RecordKind` with typed sub-records under an
-    `klabautermann:` prefix, per-type budgets, sealed removal for every type, and no
-    unbounded record class. Metrics, logs, inspect output and the audit log
-    never sync.
+13. **Sync records.** One new `RecordKind` with typed sub-records under a
+    `klabautermann:` prefix, per-type budgets, sealed removal for every type,
+    and no unbounded record class. Metrics, logs, inspect output and the audit
+    log never sync.
 14. **Engine isolate** from the first scaffold, with a plain-data protocol
     enforced by the generalized protocol guard.
 15. **Delivery.** Spikes (M0), MVP-path foundations (F1 to F4 and F4b,
@@ -178,14 +178,13 @@ value. Path abbreviations: `SC` = `seance/packages/seance_core/lib`, `SP` =
 |---|---|---|---|
 | MVP (preview, in suite releases labelled preview from M4) | Catalog §2: fleet list, overview, processes, services, journal and file tails, scheduled jobs, containers, images, logs, stats, compose stacks; single-target guarded actions; access check; settings; themes through `ghost_theme` with theme editing and presets | T0 | Pull-only |
 | v1 (first public) | Catalog §4 table stakes; in-app server editing; container exec; config edits with diff, backup and validation; volumes, networks, prune; packages read-only; hardware; triage; in-app alerts with local notifications; session history; hand-offs to Séance and Poltergeist (X-03, X-04, X-10) | T0 | Read-write, own record kind (`pref` and `rule` types); first-seen host-key pins published |
-| v1.x | T1 host checks and notifier, scheduled update checks, host recorders and "Enable sysstat", desktop tray, Android watch mode, remembered and optionally synced sudo password, volume browsing with a confirmed helper container, tier B hosts, update pipeline, drift detection, log explorer, fleet tables | T0 and T1 | Adds query, layout, window and sudo types; `rule` gains `evalScope: host` |
-| Later | M9 after v1.x: the Rust T2 companion (opt-in per server) and the Later rows tagged T2. Not estimated: backups inside the app on T1, permissive template catalogs, push relay (further decision), Séance metrics strip | T1; T2 on servers where the user enables it | Companion records bounded and decided in M9 (9.4) |
+| v1.x | T1 host checks and notifier, scheduled update checks, host recorders and "Enable sysstat", desktop tray, Android watch mode, remembered and optionally synced sudo password, volume browsing with a confirmed helper container, tier B hosts, update pipeline, drift detection, log explorer, fleet tables | T0 and T1 | Adds query, layout, window, sudo and registry types; `rule` gains `evalScope: host` |
+| Later | M9 after v1.x: the Rust T2 companion (opt-in per server) and the Later rows tagged T2 except ALR-12, ALR-13 and X-09, which wait on further decisions (9.4). Not estimated: backups inside the app on T1, permissive template catalogs, push relay (further decision), Séance metrics strip | T1; T2 on servers where the user enables it | Companion records bounded and decided in M9 (9.4) |
 
 ### 1.4 Deviations from and corrections to `02-FEATURES.md`
 
 | Item | Catalog says | This plan | Reason |
 |---|---|---|---|
-| SYN-01 | MVP with Séance-identical writes | MVP pull-only; writes in v1 with FL-03 and SYN-04 | Nothing in the MVP needs to push; a pull-only member cannot corrupt the fleet while the catalog extraction matures (D14) |
 | SAF-11 | v1 | MVP | The MVP already mutates; the log is small and builds trust |
 | SAF-02 data source | `sudo -S -p '' -v && sudo -n -- <cmd>` in one shell | Elevation prelude with no `exec` and a trailing `exit $?` | bash execs the last command of `-c` implicitly, which breaks the PPID-keyed credential cache [L] (8.3) |
 | SAF-08 note | `sudo -S` cannot feed a password to `dial-stdio` | It can, through the prelude | The builtin `read` consumes exactly one line and leaves the rest of stdin to the command [L] |
@@ -193,7 +192,6 @@ value. Path abbreviations: `SC` = `seance/packages/seance_core/lib`, `SP` =
 | SAF-12, X-05 backups | Backup next to the file | Central backup directories | A `.bak` file in a directory read by glob (for example `sites-enabled/*`) is loaded by the service (D27) |
 | CN-03 | Nonce-framed sections | Also length-prefixed; nonce delivered on stdin, never in argv | Other local users can read argv; length prefixes defeat forged markers even if a nonce leaks (D22) |
 | CN-22 | Classified `SSHChannelOpenError` | Classified by channel type plus open count | sshd refuses a session channel with `SSH2_OPEN_CONNECT_FAILED` "open failed", not "resource shortage" [R: openssh-portable `serverloop.c`, reported by review] |
-| X-04 and §6 | `poltergeist://` declared on macOS only | Also Linux (`poltergeist/scripts/package-linux.sh:314`) and Windows (`windows/runner/deep_link_scheme.cpp`); missing on Android and iOS [V] | Repository check |
 | §2 prerequisites | `ghost_prompts` and `ghost_theme` before the MVP | Prompts inside `ghost_servers` part 1; `ghost_theme` before the MVP as F4b, as listed | D8; D9 (owner decision 2026-10-10) |
 | ALR-11, §6 | Inbox for agent alerts | Command inbox shipped in suite 1.9.0 (`seance/CHANGELOG.md:86,111` [V]); Séance's inbox cursor stops at unknown-app items (`SC/src/inbox/inbox_service.dart:216-221` [V]) and must change first | D31 |
 
@@ -223,18 +221,17 @@ password
 
 ### Shape and scope
 
-- **D1. Agentless first, with designed host tiers.** T0 delivers the MVP
-  and v1. T1 is designed in 9.3 and committed for v1.x, because alerts while
-  closed and scheduled update checks are part of the owner's "and so on"
-  and phones cannot poll in the background (iOS about 30 s at system-chosen
-  times; Android WorkManager every 15 min at most; `dataSync` services
-  limited to 6 h per 24 h [R: r5 §5.4]). T2 is planned for M9 after v1.x
-  (D31). Owner decision 2026-10-10: T2 is planned as a milestone instead of
-  "Later, behind an owner decision". *Rejected:* B's
-  companion inside the committed plan (a resident root-equivalent binary,
-  its packaging and signing on the MVP path, and a changed release graph);
-  A's "no T1 design unless the owner asks" (leaves the largest product gap
-  without a plan).
+- **D1. Agentless first, with designed host tiers.** T0 delivers the MVP and v1.
+  T1 is designed in 9.3 and committed for v1.x, because alerts while closed and
+  scheduled update checks are part of the owner's "and so on" and phones cannot
+  poll in the background (iOS about 30 s at system-chosen times; Android
+  WorkManager every 15 min at most; `dataSync` services limited to 6 h per 24 h
+  [R: r5 §5.4]). T2 is planned for M9 after v1.x (D31). Owner decision
+  2026-10-10: T2 is planned as a milestone instead of "Later, behind an owner
+  decision". *Rejected:* B's companion inside the committed plan (a resident
+  root-equivalent binary, its packaging and signing on the MVP path, and a
+  changed release graph); A's "no T1 design unless the owner asks" (leaves the
+  largest product gap without a plan).
 - **D2. The catalog tiers are the scope.** MVP, v1, v1.x and Later follow
   `02-FEATURES.md` §2 to §4 with the deviations in 1.4. Any further
   deviation needs an entry here. *Rejected:* re-cutting scope per architecture.
@@ -258,23 +255,22 @@ password
   app-local copies with ledgers (root `AGENTS.md:5`); C's full foundation
   train before the scaffold (puts the v1 extractions F5a and F5c to F5f,
   about 9 to 16 engineer-weeks [E], ahead of the scaffold).
-- **D4. No dartssh2 in the product.** `SshLink`, `RemoteProcess`,
-  `ByteDuplex`, the channel budget and classification, ping timeout,
-  bounded close and late-open cleanup live in `SC/src/ssh/`.
-  `SshSession.runCommand` (`SC/src/ssh/ssh_session.dart:488` [V]) delegates
-  to the same exec core. A generalized root import guard enforces that no
-  file under `klabautermann/` imports or declares dartssh2; its first PR reproduces
-  Poltergeist's current verdicts exactly and encodes the existing
-  exceptions (D4 rules in 3.4). *Rejected:* A's
-  `klabautermann_core/lib/src/connection/` and B's `klabautermann_remote` (a third
-  confinement zone; Séance gains nothing).
-- **D5. Four product packages.** `klabautermann_host` and `klabautermann_docker` (pure Dart,
-  no SSH, no `seance_*`), `klabautermann_core` (pure Dart orchestration over
-  `SshLink`), `klabautermann_app` (Flutter). RemoteGit's injected runner
-  (`SC/src/ssh/remote_git.dart`) is the precedent. *Rejected:* A's single
-  core (a T1 generator, a T2 agent or Séance's metrics strip would force a
-  later extraction); B's core shared with a companion (couples the MVP to
-  T2 packaging).
+- **D4. No dartssh2 in the product.** `SshLink`, `RemoteProcess`, `ByteDuplex`,
+  the channel budget and classification, ping timeout, bounded close and
+  late-open cleanup live in `SC/src/ssh/`. `SshSession.runCommand`
+  (`SC/src/ssh/ssh_session.dart:488` [V]) delegates to the same exec core. A
+  generalized root import guard enforces that no file under `klabautermann/`
+  imports or declares dartssh2; its first PR reproduces Poltergeist's current
+  verdicts exactly and encodes the existing exceptions (D4 rules in 3.4).
+  *Rejected:* A's `klabautermann_core/lib/src/connection/` and B's
+  `klabautermann_remote` (a third confinement zone; Séance gains nothing).
+- **D5. Four product packages.** `klabautermann_host` and `klabautermann_docker`
+  (pure Dart, no SSH, no `seance_*`), `klabautermann_core` (pure Dart
+  orchestration over `SshLink`), `klabautermann_app` (Flutter). RemoteGit's
+  injected runner (`SC/src/ssh/remote_git.dart`) is the precedent. *Rejected:*
+  A's single core (a T1 generator or Séance's metrics strip would force a
+  later extraction); B's core shared with a companion (couples the MVP
+  to T2 packaging).
 - **D6. Catalog library inside `seance_core`.** A secondary library,
   `package:seance_core/catalog.dart`, holds `RecordCoordinator` with
   per-prefix handlers, the persistent record store, the server store,
@@ -327,14 +323,14 @@ password
 - **D10. Charts and the log viewer start in the app.** Both are new code with
   host-neutral APIs (string bags, theme tokens, no app types) under
   `lib/ui/charts/` and `lib/ui/logs/`, moved to `ghost_ui` or a `ghost_logs`
-  package when a second consumer appears (Séance metrics strip X-07, the
-  shared connection log view). No chart package resolves in any lockfile
-  today [R: c3 §5.1]. Local notifications for v1 alerts use
-  `flutter_local_notifications` (BSD-3). Owner decision 2026-10-10: charts
-  stay in-house (confirmed) and the notification plugin is approved.
-  *Rejected:* `fl_chart` (not needed for sparklines and
-  a 1 to 4 series chart); shared packages with no second consumer
-  (speculative layering, root `AGENTS.md` "Code design").
+  package when a second consumer appears (Séance metrics strip X-07, the shared
+  connection log view). No chart package resolves in any lockfile today
+  [R: c3 §5.1]. Local notifications for v1 alerts use
+  `flutter_local_notifications` (BSD-3). Owner decision 2026-10-10: charts stay
+  in-house (confirmed) and the notification plugin is approved. *Rejected:*
+  `fl_chart` (not needed for sparklines and a 1 to 4 series chart); shared
+  packages with no second consumer (speculative layering, root `AGENTS.md` "Code
+  design").
 - **D11. Terminal.** Container shells (CTX-07, v1) use `XtermTerminalEngine`
   moved into `seance/packages/seance_terminal` (Flutter, outside the
   pure-Dart workspace, Séance switched). Host shells hand off to Séance.
@@ -343,29 +339,29 @@ password
   ghost packages must not, `docs/design/server-appearance-package.md:64,85`
   [V]); an embedded host terminal (r4 §4.3).
 - **D12. Suite links for the v1 hand-offs.** `suite_links` in `seance_core`
-  builds and strictly parses `seance://`, `poltergeist://` and `klabautermann://`.
-  Séance gains link intake with a trust review and no command parameters:
-  today its Android manifest has only the launcher intent filter
-  (`seance/app/seance_app/android/app/src/main/AndroidManifest.xml:39-42`
+  builds and strictly parses `seance://`, `poltergeist://` and
+  `klabautermann://`. Séance gains link intake with a trust review and no
+  command parameters: today its Android manifest has only the launcher intent
+  filter (`seance/app/seance_app/android/app/src/main/AndroidManifest.xml:39-42`
   [V]) and no Apple URL types exist [V]. Poltergeist gains Android and iOS
   registration (macOS `Info.plist:13-20`, the Linux desktop entry and the
   Windows runner already exist [V]). Both land in v1 (F5d): Séance's intake
-  opens a known server and asks before connecting, and a link can only pick
-  a server and a starting folder, never run a command. Until both land, the
-  app does not offer hand-offs on that platform. Owner decision 2026-10-10:
-  hand-offs in v1, and the starting-folder parameter is accepted, so X-10
-  moves from v1.x to v1. *Rejected:* promising X-03 and X-04 without intake
-  (the links would fail).
+  opens a known server and asks before connecting, and a link can only pick a
+  server and a starting folder, never run a command. Until both land, the app
+  does not offer hand-offs on that platform. Owner decision 2026-10-10:
+  hand-offs in v1, and the starting-folder parameter is accepted, so X-10 moves
+  from v1.x to v1. *Rejected:* promising X-03 and X-04 without intake (the links
+  would fail).
 
 ### Server list and sync
 
-- **D13. The shared list comes only through shared-account enrollment.**
-  The app logs into the user's Séance account like Poltergeist's shared
-  mode; the user asserts Séance >= v0.9.0 on every device
-  (`PA/services/sync_account_gate.dart:19` [V]). Desktop local-only mode
-  imports `~/.ssh/config` into a device-local store. *Rejected:* a separate
-  Klabautermann account (cannot see `serverConfig` records); reading another app's
-  files (impossible on mobile, bypasses LWW on desktop).
+- **D13. The shared list comes only through shared-account enrollment.** The app
+  logs into the user's Séance account like Poltergeist's shared mode; the user
+  asserts Séance >= v0.9.0 on every device
+  (`PA/services/sync_account_gate.dart:19` [V]). Desktop local-only mode imports
+  `~/.ssh/config` into a device-local store. *Rejected:* a separate
+  Klabautermann account (cannot see `serverConfig` records); reading another
+  app's files (impossible on mobile, bypasses LWW on desktop).
 - **D14. Pull-only MVP.** The catalog runs with `pushPolicy: none`: it pulls
   and applies `serverConfig`, `secret:` and `hostkey:` records through the
   shared handlers and never seals a dirty record; a test proves it. Writes
@@ -374,34 +370,35 @@ password
   the extraction matures).
 - **D15. Host keys: quarantine; publication once Séance #56 is fixed.**
   `TofuVerifier` never auto-repins. Pulled pins go through the quarantine
-  handler. Séance's missing conflict check for pulled pins (#56) is fixed
-  in F3 (F3d), before the MVP preview, by routing Séance's pulled
-  `hostkey:` records through the same quarantine handler. Publication is
-  enabled once that fix has shipped: the MVP is pull-only and publishes
-  nothing, and from v1, when catalog writes arrive, Klabautermann
-  publishes first-seen pins. The `host:port` collision behind different
+  handler. Séance's missing conflict check for pulled pins (#56) is fixed in F3
+  (F3d), before the MVP preview, by routing Séance's pulled `hostkey:` records
+  through the same quarantine handler. Publication is enabled once that fix has
+  shipped: the MVP is pull-only and publishes nothing, and from v1, when catalog
+  writes arrive, Klabautermann publishes first-seen pins. Publication also
+  requires the enrollment fleet assertion (FL-22) to cover the first Séance
+  release with the #56 fix on every device; until the user asserts it,
+  learned pins stay device-local. The `host:port` collision behind different
   jump routes stays a documented known limitation until a dedicated
-  suite-wide task after v1, together with F7 (4.6). Owner decision
-  2026-10-10: fix #56 first, moved from F7 into F3; the proposal had kept
-  publication off until #56 landed after v1, apart from an explicit "share
-  this pin" action. *Rejected:* C's first-seen publication while #56 is
-  open (a TOFU accepted on a hostile network would reach every Séance
-  device, which applies pulled pins without a conflict check [R: c1
-  §2.3]).
+  suite-wide task after v1, together with F7 (4.6). Owner
+  decision 2026-10-10: fix #56 first, moved from F7 into F3; the proposal had
+  kept publication off until #56 landed after v1, apart from an explicit "share
+  this pin" action. *Rejected:* C's first-seen publication while #56 is open (a
+  TOFU accepted on a hostile network would reach every Séance device, which
+  applies pulled pins without a conflict check [R: c1 §2.3]).
 - **D16. Endpoint pins in the catalog library.** `EndpointPinStore`
   (device-local) records the confirmed endpoint tuple per server. Background
   connections require a match; a mismatch pauses polling, asks the user and
   purges that server's caches. Séance and Poltergeist can adopt the same
   store. *Rejected:* an app-local store (Séance and Poltergeist would stay
   exposed to LWW endpoint rewrites).
-- **D17. One product `RecordKind`, typed sub-records, sealed removal.** One
-  enum value named after the stem; payload `{type, v, ...}`; ids
-  `klabautermann:<type>:<id>`; per-type count and size caps; every `klabautermann:` type
-  ignores unsealed tombstones and deletes with a sealed `removed` record;
-  1 MiB budget for the prefix (4.8). Confirmed by the owner on 2026-10-10.
-  *Rejected:* one kind per entity (every new entity touches
-  `seance_protocol` and Séance's exhaustive switches again); unsealed
-  tombstones (the server can forge them, c1 §4.1).
+- **D17. One product `RecordKind`, typed sub-records, sealed removal.** One enum
+  value named after the stem; payload `{type, v, ...}`; ids
+  `klabautermann:<type>:<id>`; per-type count and size caps; every
+  `klabautermann:` type ignores unsealed tombstones and deletes with a sealed
+  `removed` record; 1 MiB budget for the prefix (4.8). Confirmed by the owner on
+  2026-10-10. *Rejected:* one kind per entity (every new entity touches
+  `seance_protocol` and Séance's exhaustive switches again); unsealed tombstones
+  (the server can forge them, c1 §4.1).
 
 ### Transport and collection
 
@@ -470,27 +467,27 @@ password
   containers for VOL-03 and CTR-21 are allowed as confirmed engine changes,
   removed afterwards; the proposal had listed them as never written,
   pending a decision.
-- **D28. Audit log device-local plus a host syslog line.** Device JSONL from
-  the MVP; `logger -t klabautermann` per mutation from v1 (default on, per-server
+- **D28. Audit log device-local plus a host syslog line.** Device JSONL from the
+  MVP; `logger -t klabautermann` per mutation from v1 (default on, per-server
   toggle). Not synced: records are never garbage-collected server-side and
-  Séance pulls the whole account every 5 minutes
-  (`SA/app_state.dart:524` [V]). Confirmed by the owner on 2026-10-10.
+  Séance pulls the whole account every 5 minutes (`SA/app_state.dart:524` [V]).
+  Confirmed by the owner on 2026-10-10.
 - **D41. Remembered sudo password, optionally synced (v1.x).** A per-server
   opt-in "remember sudo password" stores it in the vault, behind the device
   keystore. A second per-server opt-in syncs it, only while the device's
   suite-wide "sync passwords" switch (`syncSecrets`, the existing
-  credential-sync opt-in, SYN-02) is also on; a receiving device applies it
-  only while its own switch is on. It travels as the sealed sub-record
-  `klabautermann:sudo:<serverConfigId>` of the product record kind (D17,
-  4.8), never as a Séance `secret:` record, so Séance and Poltergeist never
-  receive it. Removal is a sealed `removed` record; unsealed tombstones are
-  ignored. The switch subtitle and the threat model (8.12) disclose that
-  anyone holding the account key, and every device on the account, obtains
-  a password that grants root on that server. Admin mode still expires
-  (8.2); a remembered password only skips the prompt. Owner decision
-  2026-10-10: optional and synced; the proposal had recommended device-local
-  storage only. *Rejected:* a `secret:` record (Séance would adopt an
-  unreferenced secret into its vault as an orphan, c1 §2.4); device-only
+  credential-sync opt-in, SYN-02) is also on; a receiving device applies it only
+  while its own switch is on. It travels as the sealed sub-record
+  `klabautermann:sudo:<serverConfigId>` of the product record kind (D17, 4.8),
+  never as a Séance `secret:` record, so Séance and Poltergeist never apply it
+  (they skip the unknown kind or prefix, 4.8). Removal is a sealed `removed`
+  record; unsealed tombstones are ignored. The switch subtitle and the threat
+  model (8.12) disclose that anyone holding the account key, and every device on
+  the account, obtains a password that grants root on that server. Admin mode
+  still expires (8.2); a remembered password only skips the prompt. Owner
+  decision 2026-10-10: optional and synced; the proposal had recommended
+  device-local storage only. *Rejected:* a `secret:` record (Séance would adopt
+  an unreferenced secret into its vault as an orphan, c1 §2.4); device-only
   storage (the earlier recommendation).
 
 ### Persistence, alerts and tiers
@@ -535,10 +532,10 @@ password
 ### Platform, UI and delivery
 
 - **D32. Native runner code policy.** Settings-window runners, URL scheme
-  registration and the Android keep-alive service cannot be shared through
-  Dart packages. They are copied with a ledger entry in `klabautermann/docs/SHARED.md`
-  (source path and commit, divergences, owner) and reviewed for a shared
-  plugin before a fourth copy appears.
+  registration and the Android keep-alive service (watch mode, D34) cannot be
+  shared through Dart packages. They are copied with a ledger entry in
+  `klabautermann/docs/SHARED.md` (source path and commit, divergences, owner)
+  and reviewed for a shared plugin before a fourth copy appears.
 - **D33. UI composition.** Poltergeist-style composition root with one
   controller per concern and narrow delegate seams; per-series
   `ValueListenable`s; desktop three panes, phone push navigation with
@@ -707,8 +704,8 @@ graph TD
   SEA --> GT
 ```
 
-`klabautermann_app` reaches `seance_core` types only through `klabautermann_core`'s curated
-barrel with explicit `show` lists (precedent
+`klabautermann_app` reaches `seance_core` types only through
+`klabautermann_core`'s curated barrel with explicit `show` lists (precedent
 `PC/poltergeist_core.dart:11-14` [R]). No ghost package depends on
 `seance_core`. Poltergeist's and Séance's edges to the new shared packages
 appear as each extraction switches them (3.5).
@@ -788,15 +785,15 @@ products:
    imports (import guard `:199-201`) and the protocol guard's three callback
    owners (`poltergeist/tool/protocol_guard/lib/protocol_guard.dart:21-25`
    [V]) are existing exceptions.
-3. `klabautermann_core` uses only the public `seance_core` barrel and `catalog.dart`;
-   implementation imports (`package:seance_core/src/...`) are forbidden
-   everywhere outside `seance/` except the exceptions listed in the guard
-   file. Exporting the sequential-cleanup helpers removes one of
+3. `klabautermann_core` uses only the public `seance_core` barrel and
+   `catalog.dart`; implementation imports (`package:seance_core/src/...`) are
+   forbidden everywhere outside `seance/` except the exceptions listed in the
+   guard file. Exporting the sequential-cleanup helpers removes one of
    `poltergeist_core`'s two `implementation_imports`
    (`connection/ssh_cleanup.dart:3` [V]). The other
-   (`connection/ssh_transport.dart:10`, the SFTP adapter the barrel hides)
-   and the bench package's four (`poltergeist_bench/lib/ssh_driver.dart:7-8`
-   and two `test/dependency_contracts` files) [V] stay as encoded exceptions.
+   (`connection/ssh_transport.dart:10`, the SFTP adapter the barrel hides) and
+   the bench package's four (`poltergeist_bench/lib/ssh_driver.dart:7-8` and two
+   `test/dependency_contracts` files) [V] stay as encoded exceptions.
    `batchForPush` is exported for the catalog library's push batching (4.4,
    divergence 3), not to remove an existing import.
 4. Engine request and event types carry no function-typed fields
@@ -830,7 +827,7 @@ code in the same PR. There is no F6. F5b moved to F4b (owner decision
 | F4b | `ghost_theme` (owner decision 2026-10-10, D9) | both apps' theme stacks | `planchette/packages/ghost_theme` | Séance (Poltergeist follow-up) | M1 (after or parallel with F4; at the latest M4) | L |
 | F5a | `ghost_servers` part 2: server editor and delegate | `PA/ui/server_editor.dart` (delegate seam) and Séance's copy | `ghost_servers` | Poltergeist (Séance follow-up with a delegate over `AppState`) | M5 (v1) | M to L |
 | F5c | `seance_terminal` | `SA/services/xterm_engine.dart` and view widgets | `seance/packages/seance_terminal` | Séance | M5 | M |
-| F5d | `suite_links`, Séance intake, Poltergeist mobile registration | `PA/services/seance_links.dart`, `PA/services/deep_links.dart` | `SC/src/links/` | Poltergeist (parser), Séance (intake) | M5 | M |
+| F5d | `suite_links`, Séance intake (a server and a starting folder only), Poltergeist mobile registration | `PA/services/seance_links.dart`, `PA/services/deep_links.dart` | `SC/src/links/` | Poltergeist (parser), Séance (intake) | M5 | M |
 | F5e | Command palette, splitter, column table | Planchette palette, both splitters, `GhostFileColumnHeader` | `ghost_ui` | Planchette, Séance and Poltergeist respectively | M6 | M |
 | F5f | App lock | `SA/services/app_lock.dart` [V] | `ghost_keystore` | Séance | M6 | S |
 | F7 | Séance on the catalog library | `SC/src/sync/sync_coordinator.dart` | catalog library | Séance | after v1 | L |
@@ -848,13 +845,12 @@ code in the same PR. There is no F6. F5b moved to F4b (owner decision
 | `suite_links` | Poltergeist already builds `seance://` links app-side; a strict shared parser serves every intake |
 | `ChatController` parameters (v1.x) | The system prompt and tool set are Séance constants today [R: c2 §6] |
 
-Not in `seance_core`: sampler and parsers (`klabautermann_host`, so Séance does not
-compile a product it does not ship, and Séance can still path-depend on it
-for X-07); Docker client (`klabautermann_docker`); Poltergeist's pool (frozen by M0
-evidence, D19); `TcpBannerProber` stays where it is, because moving it into
-`seance_protocol` would add the first `dart:io` socket code to a package
-shared with the sync server; the Rust companion (M9) implements its own
-probe.
+Not in `seance_core`: sampler and parsers (`klabautermann_host`, so Séance does
+not compile a product it does not ship, and Séance can still path-depend on it
+for X-07); Docker client (`klabautermann_docker`); Poltergeist's pool (frozen by
+M0 evidence, D19); `TcpBannerProber` stays where it is, because moving it into
+`seance_protocol` would add the first `dart:io` socket code to a package shared
+with the sync server; the Rust companion (M9) implements its own probe.
 
 ---
 
@@ -877,8 +873,8 @@ and writes after logging into the user's Séance account.
 | Local only (FL-02) | Hosts imported from `~/.ssh/config` | Desktop only; uses `seance_core`'s ssh_config importer; device-local, never pushed in the MVP; from v1 the user may publish selected entries as new `serverConfig` records, deduplicated by host, port and user |
 | No account | Empty list with an explanation | Phones without an account see nothing, and the first-run card says why |
 
-A separate Klabautermann-only account (Poltergeist's "Design B") is not offered: it
-cannot see `serverConfig` records. `DELETE /v1/account` is never exposed,
+A separate Klabautermann-only account (Poltergeist's "Design B") is not offered:
+it cannot see `serverConfig` records. `DELETE /v1/account` is never exposed,
 because it deletes every app's data (SYN-07).
 
 ### 4.3 First-run enrollment and batch onboarding (FL-22)
@@ -893,9 +889,10 @@ One flow, built for phones with many servers:
 2. **Fleet assertion and disclosures.** The user confirms that every device
    runs Séance v0.9.0 or later (pre-0.9.0 builds decode unknown kinds as
    server configs, c1 §2.4); the sheet discloses that the account key
-   decrypts every app's records, that Séance releases before the #56 fix
-   (F3d) apply pulled host keys without a conflict check, and that the MVP
-   publishes nothing while v1 publishes first-seen pins (D15).
+   decrypts every app's records and that the MVP publishes nothing, and,
+   from v1, asks the user to confirm that every device runs a Séance
+   release with the #56 fix (F3d) before first-seen pins are published
+   (D15).
 3. **Batch endpoint confirmation (SAF-09).** A list of servers with host,
    port, user and jump route; "confirm all shown", per-row toggles and
    search. Unconfirmed servers stay visible with reachability only.
@@ -926,15 +923,14 @@ abstract interface class RecordHandler {
 enum PushPolicy { none, normal } // none: never seal a dirty record (MVP)
 ```
 
-Behaviours kept from Poltergeist's implementation: an apply cursor that
-never advances past a deferred record; dispatch by plaintext prefix before
-decrypting; unknown prefixes skipped undecrypted; `hostkey:`, `secret:` and
-`snippet:` tombstones never honoured; payload id equals envelope id on
-apply; the tripwire store. Built-in handlers: `ServerConfigHandler`,
-`HostKeyHandler` (quarantine, negative pins, kept verdicts),
-`SecretHandler` (shield, strictly-newer freshness floor, device switch).
-Poltergeist registers a `BookmarkHandler`; Klabautermann registers one handler for
-its prefix from v1.
+Behaviours kept from Poltergeist's implementation: an apply cursor that never
+advances past a deferred record; dispatch by plaintext prefix before decrypting;
+unknown prefixes skipped undecrypted; `hostkey:`, `secret:` and `snippet:`
+tombstones never honoured; payload id equals envelope id on apply; the tripwire
+store. Built-in handlers: `ServerConfigHandler`, `HostKeyHandler` (quarantine,
+negative pins, kept verdicts), `SecretHandler` (shield, strictly-newer freshness
+floor, device switch). Poltergeist registers a `BookmarkHandler`; Klabautermann
+registers one handler for its prefix from v1.
 
 **Divergences.** The owner approved the recommended resolution of each of
 the five differences c1 §3.3 found (2026-10-10); the design doc records
@@ -953,11 +949,11 @@ move:
 (`{version, servers, syncTuples}`), `sync_records.json`, settings keys and
 `deviceId` byte-identical (golden files), its core sync suites and the
 `sync_integration` CI job green, and `poltergeist_sync` still building.
-Klabautermann from its first commit. Séance last (F7, after v1), with a migration
-from its JSON list and `deleted_records.json`, `deviceId` preserved. Séance
-#56 is resolved earlier: in F3d its current coordinator routes pulled
-`hostkey:` records through the library's quarantine handler before the MVP
-preview (owner decision 2026-10-10, D15).
+Klabautermann from its first commit. Séance last (F7, after v1), with a
+migration from its JSON list and `deleted_records.json`, `deviceId`
+preserved. Séance #56 is resolved earlier: in F3d its current coordinator
+routes pulled `hostkey:` records through the library's quarantine handler
+before the MVP preview (owner decision 2026-10-10, D15).
 
 **Pull-only mode (MVP).** `PushPolicy.none` disables sealing, catalog
 writes, pin publication and secret publication. Host pins learned on this
@@ -995,21 +991,21 @@ re-push (c1 §2.4).
   credentials resolve without a prompt and whose endpoint is confirmed;
   keyboard-interactive servers connect on explicit open only and get exactly
   one connection (Poltergeist growth rule 2 [R]).
-- **sudo password (D41).** Engine-isolate memory for the admin window only
-  in the MVP and v1. From v1.x a per-server opt-in "remember sudo password"
-  stores it in `vault.json`, behind the device keystore, and the engine
-  loads it when admin mode starts. A second per-server opt-in syncs it as
-  the sealed sub-record `klabautermann:sudo:<serverConfigId>` (4.8), only
-  while the device's `syncSecrets` switch ("sync passwords", SYN-02) is on;
-  a receiving device applies it only while its own switch is on and the
-  server is not excluded. It is never a `secret:` record, because Séance
-  would adopt an unreferenced secret into its vault as an orphan (c1 §2.4),
-  so Séance and Poltergeist never receive it. Turning sync off publishes a
-  sealed `removed` record, which drops the synced copies on other devices
-  (unsealed tombstones are ignored); turning "remember" off also deletes
-  the local copy. The switch subtitle says that anyone holding the
-  account key, and every device on the account, obtains a password that
-  grants root on that server (8.12).
+- **sudo password (D41).** Engine-isolate memory for the admin window only in
+  the MVP and v1. From v1.x a per-server opt-in "remember sudo password" stores
+  it in `vault.json`, behind the device keystore, and the engine loads it when
+  admin mode starts. A second per-server opt-in syncs it as the sealed
+  sub-record `klabautermann:sudo:<serverConfigId>` (4.8), only while the
+  device's `syncSecrets` switch ("sync passwords", SYN-02) is on; a receiving
+  device applies it only while its own switch is on and the server is not
+  excluded. It is never a `secret:` record, because Séance would adopt an
+  unreferenced secret into its vault as an orphan (c1 §2.4); Séance and
+  Poltergeist skip the sub-record and never apply it (4.8). Turning sync off
+  publishes a sealed `removed` record, which drops the synced copies on other
+  devices (unsealed tombstones are ignored); turning "remember" off also deletes
+  the local copy. The switch subtitle says that anyone holding the account key,
+  and every device on the account, obtains a password that grants root on that
+  server (8.12).
 
 ### 4.6 Host keys
 
@@ -1021,9 +1017,10 @@ re-push (c1 §2.4).
   verdicts honoured.
 - Publication (D15): Séance #56 is fixed in F3d, before the MVP preview.
   The MVP is pull-only and publishes nothing; from v1, when catalog writes
-  arrive, first-seen pins are published. Séance devices on a release without
-  the fix still apply pulled pins unchecked, which the enrollment sheet
-  discloses (4.3).
+  arrive, first-seen pins are published once the user confirms that every
+  device runs a Séance release with the fix. Publication waits for that
+  assertion (4.3), because older Séance releases apply pulled pins
+  unchecked.
 - Known limitation: pins are keyed by `host:port`, so identical private
   addresses behind different jump routes collide (c2 R8). The app warns
   when two servers in the list share a locator with different routes. The
@@ -1049,25 +1046,25 @@ Protocol constraints: no envelope, crypto, LWW, blob layout or
 server is kind-agnostic (c1 §1.2); kinds match by name, never index
 (`SP/records/record.dart:13-21` [V]).
 
-- **One kind.** One `RecordKind` value named after the stem, added to the
-  enum at `SP/records/record.dart:22-32` [V]. The same PR updates Séance's
-  apply switch (`SC/src/sync/sync_coordinator.dart:666-855`, which must
-  `continue`) and `RefusedRecord` description (`SC/src/sync/sync_engine.dart:41-48`)
-  [V]. Deployed Séance >= v0.9.0 decodes an unknown kind name as `unknown`
-  and skips it (`sync_coordinator.dart:854-855` [V]); Poltergeist skips
-  unknown prefixes undecrypted (c1 §2.4). The enum value and switch updates
-  therefore ship no later than the release in which Klabautermann first writes the
-  kind; no earlier release is needed, and an unknown-kind skip test against
-  the previous release's Séance and Poltergeist builds proves it (11.2).
-- **Ids.** `klabautermann:<type>:<id>`. Dispatch splits at the first colon, so the
-  stem must not equal an existing prefix (`hostkey`, `secret`, `snippet`,
-  `bookmark`, `assistant`, `inboxapp`, `inboxstatus`, c1 §1.1). Never a bare
-  id (Séance treats a colon-free tombstone as a server delete). No host
-  names, paths or query text in ids: they are plaintext on the server.
-- **Removal.** Every `klabautermann:` type ignores unsealed tombstones; deletion is a
-  sealed record `{type, v, id, removed: true}` (inbox-app precedent). A
-  forged tombstone can therefore neither silence a rule nor drop a
-  user-marked protected target.
+- **One kind.** One `RecordKind` value named after the stem, added to the enum
+  at `SP/records/record.dart:22-32` [V]. The same PR updates Séance's apply
+  switch (`SC/src/sync/sync_coordinator.dart:666-855`, which must `continue`)
+  and `RefusedRecord` description (`SC/src/sync/sync_engine.dart:41-48`) [V].
+  Deployed Séance >= v0.9.0 decodes an unknown kind name as `unknown` and skips
+  it (`sync_coordinator.dart:854-855` [V]); Poltergeist skips unknown prefixes
+  undecrypted (c1 §2.4). The enum value and switch updates therefore ship no
+  later than the release in which Klabautermann first writes the kind; no
+  earlier release is needed, and an unknown-kind skip test against the previous
+  release's Séance and Poltergeist builds proves it (11.2).
+- **Ids.** `klabautermann:<type>:<id>`. Dispatch splits at the first colon, so
+  the stem must not equal an existing prefix (`hostkey`, `secret`, `snippet`,
+  `bookmark`, `assistant`, `inboxapp`, `inboxstatus`, c1 §1.1). Never a bare id
+  (Séance treats a colon-free tombstone as a server delete). No host names,
+  paths or query text in ids: they are plaintext on the server.
+- **Removal.** Every `klabautermann:` type ignores unsealed tombstones; deletion
+  is a sealed record `{type, v, id, removed: true}` (inbox-app precedent). A
+  forged tombstone can therefore neither silence a rule nor drop a user-marked
+  protected target.
 
 | Type | Id | Sealed content | Blob cap [E] | Count cap [E] | Release |
 |---|---|---|---|---|---|
@@ -1077,6 +1074,7 @@ server is kind-agnostic (c1 §1.2); kinds match by name, never index
 | `layout` | `klabautermann:layout:<uuid>` | overview card and fleet column layout, scope | 8 KiB | 20 | v1.x |
 | `window` | `klabautermann:window:<uuid>` | maintenance window: scope, schedule, time zone | 2 KiB | 100 | v1.x |
 | `sudo` | `klabautermann:sudo:<serverConfigId>` | remembered sudo password for that server, only behind both opt-ins of D41 | 1 KiB | one per server | v1.x |
+| `registry` | `klabautermann:registry:<uuid>` | registry host, user and secret for `X-Registry-Auth` (REG-02), behind an opt-in | 2 KiB | 50 | v1.x |
 
 Rules for every type: payload id equals envelope id on apply; per-server
 records are neither published nor applied for `excludeFromSync` servers and
@@ -1386,13 +1384,13 @@ shown as unknown, never as zero.
   `${#var}` counts bytes; collectors that need UTF-8 rendering prefix
   `LC_ALL=C.UTF-8` on their own command when the probe found that locale
   (A11Y-08).
-- **Program.** The client writes the program (function definitions only)
-  to stdin. Its first line sets the per-session 128-bit random nonce, so the
-  nonce never appears in argv, where other local users could read it through
-  `ps` or `/proc/<pid>/cmdline`. The program is a constant assembled in
-  `klabautermann_host` from collector fragments and contains no user-supplied text.
-  It ends by printing a READY marker. The client sends nothing else until it
-  has read READY.
+- **Program.** The client writes the program (function definitions only) to
+  stdin. Its first line sets the per-session 128-bit random nonce, so the nonce
+  never appears in argv, where other local users could read it through `ps` or
+  `/proc/<pid>/cmdline`. The program is a constant assembled in
+  `klabautermann_host` from collector fragments and contains no user-supplied
+  text. It ends by printing a READY marker. The client sends nothing else until
+  it has read READY.
 - **Requests.** Each request is one shell command line:
   `hw_t <seq> <collector>...` for a tick, `hw_o <seq> <collector> <arg>...`
   for an on-demand read (for example one unit's `systemctl show`). Collector
@@ -1503,11 +1501,11 @@ throughput uses 512-byte sectors (CN-04). A filtered core sample is about
   extra fields (`diskstats` field counts vary by kernel), wrapped `df` lines
   and non-UTF-8 bytes; it returns a value plus warnings and never throws.
   Parsing runs in the engine isolate; UI code never parses.
-- Fixtures: `klabautermann_host/test/fixtures/<platform-id>/<collector>.txt` with a
-  JSON golden per fixture, captured by `klabautermann/tool/capture_fixtures.dart`
-  (runs the real program once per collector) during spike S2 and refreshed
-  from the fixture images. Raw captures are redacted and reviewed for host
-  names before commit.
+- Fixtures: `klabautermann_host/test/fixtures/<platform-id>/<collector>.txt`
+  with a JSON golden per fixture, captured by
+  `klabautermann/tool/capture_fixtures.dart` (runs the real program once per
+  collector) during spike S2 and refreshed from the fixture images. Raw captures
+  are redacted and reviewed for host names before commit.
 - Hostile-input tests: markers and the nonce inside process names, unit
   descriptions and log lines; embedded newlines and NULs; 64 KiB lines;
   wrapped `df` lines; Swarm task names (ServerBox #1226 [R]).
@@ -1537,11 +1535,11 @@ Spike S2 runs the sampler with dash, bash, BusyBox ash, mksh and zsh as
 
 ## 7. Feature subsystem designs
 
-Each subsystem is a command builder plus parser in `klabautermann_host` (or an API
-call in `klabautermann_docker`), a planner or service in `klabautermann_core`, and screens in
-the app. Every mutation goes through the operation pipeline (8.5). Release
-tiers are the catalog's; reads never use sudo unless the user enables admin
-mode for that panel.
+Each subsystem is a command builder plus parser in `klabautermann_host` (or an
+API call in `klabautermann_docker`), a planner or service in
+`klabautermann_core`, and screens in the app. Every mutation goes through the
+operation pipeline (8.5). Release tiers are the catalog's; reads never use sudo
+unless the user enables admin mode for that panel.
 
 ### 7.1 Metrics and overview (OV, CPU, MEM, NET-01, SYS, BOOT, FL-07)
 
@@ -1661,15 +1659,15 @@ mode for that panel.
 - **MVP.** Unified list (JOB-01): own `crontab -l` (exit 1 with "no crontab"
   means empty), `/etc/crontab` and `/etc/cron.d/*` (with the user field),
   `cron.{hourly,daily,weekly,monthly}` names, and
-  `systemctl list-timers --all --output=json`. Schedules in words and next
-  runs (JOB-02): a Dart cron parser in `klabautermann_host` (5 fields, ranges, steps,
-  names, macros, `CRON_TZ`) evaluated in the server's time zone and offset
-  from the probe, with DST transitions and `RandomizedDelaySec` annotated;
-  `OnCalendar` expressions use `systemd-analyze calendar --iterations=N` on
-  the host instead of a reimplementation; phrases come from ARB templates.
-  Other users' crontabs (JOB-03): `crontab -l -u <user>` through elevation,
-  read-only. Run timer now (JOB-08): `systemctl start <service>` with
-  SVC-03's guards, output followed from the journal.
+  `systemctl list-timers --all --output=json`. Schedules in words and next runs
+  (JOB-02): a Dart cron parser in `klabautermann_host` (5 fields, ranges, steps,
+  names, macros, `CRON_TZ`) evaluated in the server's time zone and offset from
+  the probe, with DST transitions and `RandomizedDelaySec` annotated;
+  `OnCalendar` expressions use `systemd-analyze calendar --iterations=N` on the
+  host instead of a reimplementation; phrases come from ARB templates. Other
+  users' crontabs (JOB-03): `crontab -l -u <user>` through elevation, read-only.
+  Run timer now (JOB-08): `systemctl start <service>` with SVC-03's guards,
+  output followed from the journal.
 - **v1.** anacron; last run and result (timer `LastTriggerUSec` plus service
   `Result`; cron from `journalctl -t CRON` or `_COMM=cron`, noting that cron
   records no exit status by default); safe crontab edit (JOB-06: parse with
@@ -1950,24 +1948,24 @@ reconnect.
 
 ### 7.19 Alerts and notifications (ALR)
 
-- **Rule model** (`klabautermann_host`): `{metric, scope (server, group, all), op,
-  raise {value, for}, clear {value, for}, severity, evalScope}`, a pure state
-  machine `ok -> pending -> firing -> resolving -> ok`. The grammar is
-  deliberately small (comparisons, durations, hysteresis) so T1 can compile
-  a subset to POSIX `sh` (9.3). Rules sync as `rule` records (4.8).
+- **Rule model** (`klabautermann_host`): `{metric, scope (server, group, all),
+  op, raise {value, for}, clear {value, for}, severity, evalScope}`, a pure
+  state machine `ok -> pending -> firing -> resolving -> ok`. The grammar is
+  deliberately small (comparisons, durations, hysteresis) so T1 can compile a
+  subset to POSIX `sh` (9.3). Rules sync as `rule` records (4.8).
 - **v1.** In-app threshold alerts (ALR-01) evaluated in the engine on live
   samples; attention badges (ALR-02). Sinks: an in-app alert center on the
   pattern of Poltergeist's sealed `AppAlert` and `AlertSeverity`
   (`PA/services/alert_center.dart` [V]; pattern, not copied code) and local
-  notifications through `flutter_local_notifications` (BSD-3, approved by
-  the owner on 2026-10-10, D10; no notification plugin resolves in any
-  lockfile today [R: c3 §5.4]). Every rule row and the notification
-  permission prompt say "evaluated on this device while Klabautermann is open".
-- **v1.x.** Hysteresis and flap suppression (ALR-16), desktop tray
-  monitoring (ALR-03, PLT-10), Android watch mode for a session (PLT-11,
-  D34), Android credential-free reachability checks every 15 minutes or
-  more (PLT-15), and T1 host checks with a notifier,
-  maintenance windows and a peer watcher (ALR-04 to ALR-09, 9.3).
+  notifications through `flutter_local_notifications` (BSD-3, approved by the
+  owner on 2026-10-10, D10; no notification plugin resolves in any lockfile
+  today [R: c3 §5.4]). Every rule row and the notification permission prompt say
+  "evaluated on this device while Klabautermann is open".
+- **v1.x.** Hysteresis and flap suppression (ALR-16), desktop tray monitoring
+  (ALR-03, PLT-10), Android watch mode for a session (PLT-11, D34), Android
+  credential-free reachability checks every 15 minutes or more (PLT-15), and T1
+  host checks with a notifier, maintenance windows and a peer watcher (ALR-04 to
+  ALR-09, 9.3).
 - **Later.** External monitor integration, T2 companion alerts through the
   inbox (M9), heartbeat dead-man, native push (ALR-10 to ALR-15; ALR-12 and
   ALR-13 need further decisions, 9.4).
@@ -1980,7 +1978,7 @@ reconnect.
   10-minute buckets for 30 days (min, max, mean, sample count), roughly
   0.6 MB per server [E]. Raw samples never touch disk. Every point carries
   provenance (`liveSampler`, `sessionRollup`; later `hostRecorder`,
-  `hostRing`, `agent`) and gaps are explicit records, so charts can draw
+  `hostRing`, `companion`) and gaps are explicit records, so charts can draw
   "app closed" bands. Purged on removal, exclusion or endpoint change.
 - **v1.x.** Existing recorders read over SSH (sysstat `sadf -j`,
   node_exporter on `localhost:9100`, Netdata, Glances), the T1 ring file,
@@ -2013,7 +2011,7 @@ reconnect.
 | Feature | Release | Mechanism |
 |---|---|---|
 | X-01 shared marks and theme | MVP marks and themes with editing and presets; v1 paste from a sibling | `ghost_marks`; `ghost_theme` (F4b, D9) |
-| X-02 shared host keys | MVP pull only; first-seen pins published from v1 | Catalog quarantine handler; Séance #56 fixed in F3d (D15) |
+| X-02 shared host keys | MVP pull only; first-seen pins published from v1 | Catalog quarantine handler; Séance #56 fixed in F3d; publication once the FL-22 fleet assertion covers the fix on every device (D15) |
 | X-03 open terminal | v1 | `seance://connect?serverId=<uuid>` after Séance intake (D12) |
 | X-04 open files | v1 (desktop first) | `poltergeist://browse?serverId=<uuid>&path=<abs>` (`PA/services/deep_links.dart` [R]); mobile after Poltergeist registration |
 | X-10 terminal in a directory | v1 | `seance://connect?serverId=<uuid>&cwd=<abs>` after Séance intake, applied through `buildChangeDirectoryCommand`; never a command parameter (owner decision 2026-10-10, D12) |
@@ -2222,10 +2220,11 @@ CI.
 - **Device (MVP).** Append-only JSONL per server with device ID, server,
   target, plan steps (secrets redacted), tier, result (exit code or HTTP
   status) and timestamps; 90-day retention [E]; viewable and exportable.
-- **Host (v1).** `logger -t klabautermann -- '<action> <target> by <device label>'`
-  after each mutation, default on, per-server toggle, an inventory row.
-  Docker events and sudo logs corroborate it, and every device and admin
-  sees the same trail on the host.
+- **Host (v1).**
+  `logger -t klabautermann -- '<action> <target> by <device label>'` after
+  each mutation, default on, per-server toggle, an inventory row. Docker
+  events and sudo logs corroborate it, and every device and admin sees the
+  same trail on the host.
 - **Not synced** (D28).
 
 ### 8.11 Host write inventory (D27)
@@ -2240,7 +2239,6 @@ state) before and after a scripted MVP session; only MVP rows may appear.
 | Detached-operation records and logs (root) | Detached operation in admin mode | `/var/lib/klabautermann/ops/`, directory root 0755, files 0600 owned by the login user | Same; root-owned leftovers pruned by the next root-run wrapper or in admin mode | MVP |
 | Transient unit `klabautermann-op-<id>` | Detached operation | systemd runtime state | `--collect` | MVP |
 | Engine state changes | Docker actions the user takes | Engine | User-owned | MVP |
-| Helper container (VOL-03, CTR-21) | Explicit confirmation on each use, naming what will start and whether an image must be downloaded | Engine: one container from a digest-pinned image (an image already present preferred) | Removed afterwards; a pulled image is named in the confirmation | v1.x (VOL-03), Later (CTR-21) |
 | Login records | Every SSH connection | wtmp, lastlog, auth log, journal | Host retention; one long-lived connection keeps it low | MVP |
 | The edit itself | Explicit edit with diff | Target file | User-owned | v1 |
 | Atomic-replace temp file | During a write | Same directory, `.<name>.klabautermann-tmp-<rand>` | Renamed over the target or removed in a `finally` path | v1 |
@@ -2251,13 +2249,15 @@ state) before and after a scripted MVP session; only MVP rows may appear.
 | Database dumps | BAK-01 | `~/.local/state/klabautermann/dumps/` | Manifest row; user deletes | v1.x |
 | Multi-device lock | Deploys and edits | `~/.local/state/klabautermann/locks/` | TTL | v1.x |
 | Deploy history | Safe update, redeploy | `~/.local/state/klabautermann/deploys/<project>.jsonl`, capped | Manifest row | v1.x |
+| Helper container (VOL-03, CTR-21) | Explicit confirmation on each use, naming what will start and whether an image must be downloaded | Engine: one container from a digest-pinned image (an image already present preferred) | Removed afterwards; a pulled image is named in the confirmation | v1.x (VOL-03), Later (CTR-21) |
 | Sudoers drop-in | SAF-17, explicit admin action after `visudo -cf` | `/etc/sudoers.d/klabautermann-readonly` | Manifest row; one-action removal | v1.x |
 | sysstat package and its enabled timer | "Enable sysstat" (HIS-03): the exact commands shown, run only after explicit confirmation in admin mode | Package manager state and the sysstat unit or timer | Recorded in the manifest as installed on request; the package then belongs to the user, and removal is the user's choice | v1.x |
 | T1 files | Consent per check | 9.3 | Manifest rows; one-action uninstall | v1.x |
 | Companion binary, unit and system user | Explicit opt-in per server | 9.4 | Manifest rows; removed only by the client | M9 |
 
-Never written: probe scripts or binaries outside the opt-in companion
-(M9), SSH keys or `authorized_keys` changes (ACC-07 is Later and
+Never written: the app's own probe scripts or binaries outside the opt-in
+companion (M9) (third-party packages only through the confirmed "Enable
+sysstat" row above), SSH keys or `authorized_keys` changes (ACC-07 is Later and
 Séance-led), `~/.docker/config.json`, anything under `/tmp`. Helper
 containers are not host file writes: they are confirmed engine changes,
 removed afterwards (row above, 7.15; owner decision 2026-10-10).
@@ -2268,7 +2268,7 @@ removed afterwards (row above, 7.15; owner decision 2026-10-10).
 |---|---|---|
 | Breached sync server | Forge unsealed tombstones, replay, withhold | Cannot read or forge sealed records; `klabautermann:` types ignore unsealed tombstones; `secret:` and `hostkey:` tombstones are no-ops; bare-id server deletes stay possible (existing semantics: servers disappear, no data loss); endpoint pins stop redirection; the MVP pushes nothing |
 | Compromised device on the account | Read every record (unscoped account key), rewrite hosts, mint pins, edit rules | Disclosed at enrollment; endpoint pins before background connects; pin quarantine; rules are visible and audited per device; companion keys pinned device-locally (9.4) |
-| Holder of the account key, or any device on the account, when a sudo password is synced (v1.x) | Obtain a password that grants root on that server | Off by default; two per-server opt-ins plus the device's "sync passwords" switch; sealed `klabautermann:sudo:` sub-record, never a `secret:` record, so Séance and Poltergeist never receive it; sealed removal, unsealed tombstones ignored; the risk is stated in the switch subtitle (D41) |
+| Holder of the account key, or any device on the account, when a sudo password is synced (v1.x) | Obtain a password that grants root on that server | Off by default; two per-server opt-ins plus the device's "sync passwords" switch; sealed `klabautermann:sudo:` sub-record, never a `secret:` record, so Séance and Poltergeist never apply it; sealed removal, unsealed tombstones ignored; the risk is stated in the switch subtitle (D41) |
 | Network attacker | MITM a first connection | TOFU with explicit first-seen confirmation; no auto-repin; jump hosts verified per hop [R] |
 | Malicious or compromised host | Fake sections, oversized output, escapes, crafted labels and names | Nonce plus length framing, byte caps per section and stream, parsers that fail closed to "unknown", plain-text rendering, quoting of every value read back |
 | Other local user on a managed host | Read the nonce, the password or operation output; hijack root writes | Nonce and password only on stdin; `printf` builtin; operation files 0600; root never writes into user-writable directories |
@@ -2278,7 +2278,7 @@ removed afterwards (row above, 7.15; owner decision 2026-10-10).
 | Operator error | Stop sshd, prune volumes, overwrite a crontab | Observe-only start, tiers, previews, protected targets, backups, read-only mode |
 | Supply chain on hosts | Malicious scanner, helper image or package | No tool installed implicitly; digest-based checks; helper images pinned by digest and confirmed per use (7.15); sysstat installed only after confirmation in admin mode; scanners Later and pinned |
 | Supply chain of the companion (M9) | Ship a tampered or vulnerable companion binary | SHA-256 hashes of the binaries pinned in the client build of the same release through a release `needs:` edge and checked before every install and update; no self-update; cargo-deny or an equivalent licence and advisory check in CI; per-server opt-in. Without a signing key the hashes prove that a binary matches what the same release built, not who built it, so the release pipeline is the trust root (D31) |
-| Lost device | Credentials | OS keystore vault; app lock (v1); no logs at rest |
+| Lost device | Credentials, including remembered sudo passwords (v1.x) | OS keystore vault; app lock (v1); no logs at rest |
 
 Out of scope: enforced RBAC and tamper-proof audit; a client cannot restrict
 the holder of a root-equivalent socket (NG-08).
@@ -2305,8 +2305,10 @@ the holder of a root-equivalent socket (NG-08).
 ### 9.2 T0
 
 Installs nothing persistent beyond the inventory rows of 8.11 (operation
-records, backups, the syslog line, the manifest from v1), each caused by an
-explicit action and listed in the preview of that action. Trust boundary:
+records, backups, the syslog line, the manifest from v1, and sysstat from
+v1.x when the user enables it), each caused by an explicit action and
+listed in the preview of that action. Helper containers are removed after
+use (7.15). Trust boundary:
 the SSH account and the privileges the user grants per action. Uninstalling
 the app leaves every workload running; the footprint view (v1) lists and
 removes the app's leftovers.
@@ -2319,8 +2321,8 @@ lists every file, unit or crontab block, the scope, the privileges, the
 notifier channel and privacy mode, and the exact commands. Read-only mode
 hides the installer.
 
-**Components** (rendered on the client from `klabautermann_host` templates, every
-value quoted by the client):
+**Components** (rendered on the client from `klabautermann_host` templates,
+every value quoted by the client):
 
 | Component | Purpose | Features |
 |---|---|---|
@@ -2343,17 +2345,18 @@ point it at fixture trees.
 
 - *User scope (default, no sudo):* scheduled through a marked block in the
   user's crontab (works wherever cron runs, including BusyBox crond) or user
-  timers when linger is already enabled; scripts in `~/.local/share/klabautermann/`,
-  config, manifest and notifier secrets (0600) in `~/.config/klabautermann/`, state
-  in `~/.local/state/klabautermann/`. Checks see what the user sees.
+  timers when linger is already enabled; scripts in
+  `~/.local/share/klabautermann/`, config, manifest and notifier secrets (0600)
+  in `~/.config/klabautermann/`, state in `~/.local/state/klabautermann/`.
+  Checks see what the user sees.
 - *System scope (admin mode):* root-owned scripts in root-owned directories
-  (`/usr/local/lib/klabautermann/`, 0755), config and manifest in `/etc/klabautermann/`,
-  notifier secrets 0600 root, detailed state 0600 root in `/var/lib/klabautermann/`
-  (read in admin mode), and a summary `health.json` (statuses and counts, no
-  names or values) at 0644. Units set `NoNewPrivileges=yes`,
-  `ProtectSystem=strict`, `ReadWritePaths=/var/lib/klabautermann`, `PrivateTmp=yes`
-  [U: per systemd version]; checks that need Docker say they run with a
-  root-equivalent grant.
+  (`/usr/local/lib/klabautermann/`, 0755), config and manifest in
+  `/etc/klabautermann/`, notifier secrets 0600 root, detailed state 0600 root in
+  `/var/lib/klabautermann/` (read in admin mode), and a summary `health.json`
+  (statuses and counts, no names or values) at 0644. Units set
+  `NoNewPrivileges=yes`, `ProtectSystem=strict`,
+  `ReadWritePaths=/var/lib/klabautermann`, `PrivateTmp=yes` [U: per systemd
+  version]; checks that need Docker say they run with a root-equivalent grant.
 
 **Rules.** The `rule` records whose `evalScope` is `host` compile to a
 `key=value` file read by the check scripts (threshold and state rules only).
@@ -2376,9 +2379,9 @@ already run (detected by DKE-17).
 
 **Health file (flow-back).** `health.json`
 (`{schema, generatedAt, checks: [{id, status}]}`), model and parser in
-`klabautermann_host`. Séance and Poltergeist can read it with one `cat` on connect
-and show a health overlay on their server dot (`ghost_servers` `HealthMark`,
-optional), without sync and without a protocol change.
+`klabautermann_host`. Séance and Poltergeist can read it with one `cat` on
+connect and show a health overlay on their server dot (`ghost_servers`
+`HealthMark`, optional), without sync and without a protocol change.
 
 **Install, update, uninstall.** Install shows the file list and diffs,
 writes through the edit pipeline, writes the manifest last, runs each check
@@ -2393,9 +2396,9 @@ with a cleanup offer.
 
 Planned as milestone M9 after v1.x (owner decision 2026-10-10): spike S10
 (Rust companion build and parity harness) runs first, and M9 (XL) is
-estimated after it. The suite stance "never install a program on a
-server" becomes "nothing by default; the companion is an explicit opt-in
-per server".
+estimated after it. The stance that the app never installs a program on
+a server becomes: nothing by default; the companion is an explicit opt-in
+per server.
 
 Only one shape is acceptable: an inbox producer with no listener, no
 inbound control, no SSH keys and no account key, written in Rust,
@@ -2452,9 +2455,9 @@ constraints:
 9. **Release graph.** One companion job builds the musl binaries and their
    SHA-256 list; every `client_klabautermann` leg consumes that list
    through a `needs:` edge and embeds it, and `sums.needs` gains the
-   companion job. Two
-   manifest assets (x86_64 and aarch64; more if glibc builds are needed);
-   no GHCR image, so the single `packages: write` job stays untouched
+   companion job. Two manifest assets (x86_64 and aarch64; more if glibc
+   builds are needed); no GHCR image, so the single `packages: write` job
+   stays untouched
    (`scripts/check-workflows.sh` [R: c4 §5.2]).
 
 Not part of M9 and still behind a further decision: the push relay
@@ -2485,7 +2488,8 @@ localization catalog from the first build:
 6. **Mobile return banner:** "Paused 12:01 to 12:14 while in background. No
    data for that period."
 7. **Alerts header and every rule:** "Evaluated on this device while
-   Klabautermann is open" (T0) or "Evaluated on the server every 5 minutes" (T1).
+   Klabautermann is open" (T0) or "Evaluated on the server every 5 minutes"
+   (T1).
 8. **Docker events timeline:** gap markers at reconnect points; "the engine
    keeps only a limited buffer".
 9. **Action previews** list every host write the action causes (8.11).
@@ -2660,13 +2664,13 @@ palette) and presets in the preview. v1: paste from Séance and Poltergeist
 ### 11.2 Cross-app regression tests added by this plan
 
 1. **Suite convergence:** a Séance `SyncCoordinator` device and a shared
-   `RecordCoordinator` device against a fake server converge on server
-   edits, deletes, exclusion toggles, secret publication with the switch on
-   and off, first-seen and changed pins (quarantined), and `klabautermann:` records
-   that Séance ignores. Lands with F3a and stays.
-2. **Unknown-kind skip:** each new `klabautermann:` type pushed by Klabautermann is neither
-   applied nor re-pushed by the current and the previous release's Séance
-   and Poltergeist builds.
+   `RecordCoordinator` device against a fake server converge on server edits,
+   deletes, exclusion toggles, secret publication with the switch on and off,
+   first-seen and changed pins (quarantined), and `klabautermann:` records that
+   Séance ignores. Lands with F3a and stays.
+2. **Unknown-kind skip:** each new `klabautermann:` type pushed by Klabautermann
+   is neither applied nor re-pushed by the current and the previous release's
+   Séance and Poltergeist builds.
 3. **Extraction parity:** each extraction PR runs the switched app's full
    suite and pixel baselines unchanged; intended changes are separate PRs.
 4. **Pull-only:** a full round in `PushPolicy.none` marks nothing dirty and

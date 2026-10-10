@@ -105,16 +105,17 @@ maps every review "must address" item to its resolution.
 | T2 | Execution | Always-on companion written in Rust, opt-in per server, planned for M9 after v1.x; no T0 or T1 feature depends on it | 7 |
 | C | Execution | Client-only: no server access, or only data already fetched | 144 |
 | MVP | Release | First preview worth using daily, shipped in suite releases labelled preview from M4; T0 and client-only rows, no T1 or T2; pull-only server list; theme editing and presets | 110 |
-| v1 | Release | First public release: every table-stakes item, server editing, read-write sync, hand-offs to Séance and Poltergeist | 135 |
-| v1.x | Release | Differentiators and T1: host checks with notifications, scheduled update checks, coarse history, fleet tables | 147 |
-| Later | Release | T2 rows (scheduled in M9) and work after v1.x: push relay, backups inside Klabautermann, permissive template catalogs | 92 |
+| v1 | Release | First public release: every table-stakes item, server editing, read-write sync, hand-offs to Séance and Poltergeist | 136 |
+| v1.x | Release | Differentiators and T1: host checks with notifications, scheduled update checks, coarse history, fleet tables | 146 |
+| Later | Release | T2 rows (four scheduled in M9; ALR-12, ALR-13 and X-09 wait on further decisions) and work after v1.x: push relay, backups inside Klabautermann, permissive template catalogs | 92 |
 
 Rows are catalog rows in 02; execution counts exclude the 7 non-goal rows
 (484 of 491). The counts are those of
 [02 Feature counts](02-FEATURES.md#feature-counts), which wins if they
-differ. T2 rows keep the release tier Later; they are scheduled in M9. A
-`+E` suffix marks an opt-in feature that contacts an endpoint outside the
-user's servers and the suite. Definitions:
+differ. T2 rows keep the release tier Later; ALR-11, ALR-14, ALR-15 and
+HIS-08 are scheduled in M9, and ALR-12, ALR-13 and X-09 wait on further
+decisions. A `+E` suffix marks an opt-in feature that contacts an endpoint
+outside the user's servers and the suite. Definitions:
 [02](02-FEATURES.md#tier-definitions),
 [03 §1.3](03-ARCHITECTURE.md#13-release-scope-at-a-glance),
 [03 §9.1](03-ARCHITECTURE.md#91-what-runs-where).
@@ -175,19 +176,21 @@ the product most:
 - **[D17](03-ARCHITECTURE.md#server-list-and-sync) One product
   `RecordKind`** with typed sub-records, sealed removal and a 1 MiB budget,
   confirmed by the owner.
-- **The saved sudo password decision
-  ([03 §4.5](03-ARCHITECTURE.md#45-credentials)).** From v1.x a per-server
+- **[D41](03-ARCHITECTURE.md#privilege-and-safety) Remembered sudo
+  password, optionally synced**
+  ([4.5](03-ARCHITECTURE.md#45-credentials)). From v1.x a per-server
   opt-in remembers the sudo password in the vault (protected by the device
   keystore). A second opt-in syncs it, only while the device's suite-wide
   "sync passwords" switch is also on, as a sealed sub-record of
-  Klabautermann's own kind (for example `klabautermann:sudo:<serverId>`),
-  never as a Séance `secret:` record, so Séance and Poltergeist never
-  receive it; removal is a sealed `removed` record. Anyone holding the
-  account key, and every device on the account, can obtain a password that
-  grants root on that server; the switch subtitle and the threat model say
-  so. Admin mode still expires; a remembered password only skips the
-  prompt. Owner decision 2026-10-10; the plan had recommended device-only
-  storage.
+  Klabautermann's own kind (for example
+  `klabautermann:sudo:<serverConfigId>`), never as a Séance `secret:`
+  record, so Séance and Poltergeist never apply or store it (they skip the
+  unknown kind or prefix, 03 §4.8); removal is a sealed `removed` record.
+  Anyone holding the account key, and every device on the account, can
+  obtain a password that grants root on that server; the switch subtitle
+  and the threat model say so. Admin mode still expires; a remembered
+  password only skips the prompt. Owner decision 2026-10-10; the plan had
+  recommended device-only storage.
 - **[D20](03-ARCHITECTURE.md#transport-and-collection) Docker over
   streamlocal** with an own pure-Dart HTTP/1.1 client and a fallback ladder;
   never a local TCP or Unix listener
@@ -223,7 +226,7 @@ the product most:
   opt-in per server, an inbox producer with no listener, no inbound control
   and no SSH or account keys, installed, updated and removed only by the
   client over SSH and never self-updating
-  ([9.4](03-ARCHITECTURE.md#94-t2-optional-companion-later-d31)). The
+  ([9.4](03-ARCHITECTURE.md#94-t2-optional-rust-companion-m9-d31)). The
   client build of the same release pins SHA-256 hashes of the companion
   binaries; there is no signing key and no new CI secret. The 9.4
   prerequisites stay. The companion cannot be built from
@@ -247,7 +250,7 @@ the product most:
   under `ch.lkmc.klabautermann`, Windows `CompanyName` `ch.lkmc` (matching
   Séance, Planchette and the `ch.lkmc.*` ids; Poltergeist keeps `L-K-M`),
   keystore prefix, host artifact names
-  ([04 §12.3](04-IMPLEMENTATION.md#123-identities-placeholders-fixed-before-m1-d38)).
+  ([04 §12.3](04-IMPLEMENTATION.md#123-identities-fixed-by-the-owner-on-2026-10-10-d38)).
   Owner decision 2026-10-10; the plan had recommended `L-K-M`.
 
 ## MVP scope at a glance
@@ -309,8 +312,8 @@ sudo password with its optional sync, a time-limited Android watch mode
 (an opt-in foreground service, off by default, started per session, that
 stops automatically and says so) and volume browsing with a confirmed
 helper container. Backups inside Klabautermann, built on T1, follow after
-v1.x; until then one-off database dumps and "back up this volume now" keep
-their catalog tiers. The companion follows in M9.
+v1.x; until then the one-off database dump (BAK-01) and the status of
+existing backup tools (BAK-02) stay v1.x. The companion follows in M9.
 
 ## Milestones
 
@@ -337,7 +340,7 @@ extractions, M steps product milestones. Exit criteria and critical path:
 | M7 | v1 hardening and release readiness | M, 3 | **v1 public** |
 | M8 | v1.x | Increments, XL in total | v1.x |
 | M9 | Companion (Rust), after M8; spike S10 (Rust companion build and parity harness) first | XL, estimated after S10 | After v1.x |
-| Later | Other Later rows: push relay, backups on T1, permissive template catalogs, Séance metrics strip | Not estimated | Later |
+| Later | Other Later rows: push relay, heartbeat dead-man, companion items in Séance, backups on T1, permissive template catalogs, debug shell with a helper container, Séance metrics strip, macOS and FreeBSD hosts | Not estimated | Later |
 | F7 | Séance on the catalog library | L, after v1 | |
 
 F1 to F4 plus F4b come to about 23 to 33 engineer-weeks [E]. The MVP path

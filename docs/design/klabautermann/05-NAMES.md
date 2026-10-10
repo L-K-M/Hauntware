@@ -1,21 +1,57 @@
 # 05. Names
 
-Status: proposal for owner review, 2026-10-10.
+Status: plan with owner decisions of 2026-10-10. Nothing here is implemented.
 
-The product is unnamed. The other chapters use the placeholders `<App>`
-(display name) and `<app>` (lowercase ASCII stem for packages, ids and host
-artifacts). This chapter derives naming rules from the three existing
-products, recommends a name with two alternates, and records the collision
-screen behind the recommendation. The screen ran on 2026-10-10. It is a
-collision screen, not trademark clearance: no EU, German or French register
-query ran (section 8).
+The owner named the product **Klabautermann** (Decision, below). This
+chapter records that decision, the naming rules derived from the three
+existing products, the original recommendation with two alternates, and the
+collision screen behind it. The screen ran on 2026-10-10. It is a collision
+screen, not trademark clearance: no EU, German or French register query ran
+(section 8).
 
 The name feeds every identity in
 [04-IMPLEMENTATION.md](04-IMPLEMENTATION.md), section 12.3, and decision D38
 in [03-ARCHITECTURE.md](03-ARCHITECTURE.md) fixes those identities before
-M1. Choosing it is open question 1 in 04, section 15. Decision numbers refer
+M1. The choice is decision 1 in 04, section 15. Decision numbers refer
 to 03 unless they are marked as Poltergeist's. Report markers such as c4
 refer to the appendices under [research/](research/README.md).
+
+---
+
+## Decision
+
+On 2026-10-10 the owner chose **Klabautermann**, the second alternate in
+the original ranking (section 2), behind Hausgeist and Voyant. The screen
+found no collision for it on any channel it covered (section 5.3). It is
+German, so the suite balance becomes two French and two German names
+(rule 4). The analysis in sections 1 to 7 stays as the record of how the
+name was chosen.
+
+| Identity | Value |
+| --- | --- |
+| Display name | Klabautermann |
+| ASCII stem for packages, ids and host artifacts | `klabautermann` |
+| Android `applicationId`, Linux and Flatpak id | `ch.lkmc.klabautermann` |
+| Windows `CompanyName` | `ch.lkmc`, as for Séance and Planchette and matching the `ch.lkmc.*` ids (the plan had recommended `L-K-M`; Poltergeist stays the outlier) |
+
+The full identity table (Apple bundle id, keystore entries, record kind,
+host artifacts) is in 04, section 12.3 (D38).
+
+Costs to manage:
+
+1. **Length.** 13 letters in launcher labels and window titles. Verify
+   truncation on each platform when M1 sets the labels and again before the
+   first preview release (M4): Android home screen and app drawer, iOS home
+   screen, macOS Dock and menu bar, Windows Start menu and taskbar, Linux
+   desktop launchers. A shortened label on any platform is an owner
+   decision, not a silent fallback.
+2. **Spelling.** Non-German speakers will not know how to spell it. Always
+   offer search by the prefix "klab", so a misspelled ending still finds
+   the app: store keywords where the app is listed, the Linux desktop
+   entry's `Keywords`, and the docs.
+3. **Double "nn".** The final "-mann" is the likeliest typo
+   ("Klabauterman"). Ids, package names, paths and docs always use the
+   double "nn"; review new identifiers for it.
 
 ---
 
@@ -56,7 +92,7 @@ Rules derived from these names and the repository:
    (Android label, macOS `CFBundleName` and `CFBundleDisplayName`;
    `seance/AGENTS.md:250-254`). Poltergeist avoids the issue by being ASCII
    (`poltergeist/AGENTS.md:161-163`). A name with umlauts or accents needs a
-   clean ASCII stem for `<app>`.
+   clean ASCII stem for packages and ids; Klabautermann is ASCII already.
 6. **Owned package names must not collide with dependency names.** The
    release tool rewrites the version pin of every lockfile entry whose name
    matches an owned package, whatever its source (`_rewriteLockPins`,
@@ -76,13 +112,16 @@ Rules derived from these names and the repository:
 8. **No trademarked words** such as Ouija (Hasbro). Section 6 lists the
    names excluded up front.
 9. **Identities are permanent.** The stem becomes Dart packages
-   (`<app>_core`, `<app>_app` and others), the application id
-   `ch.lkmc.<app>`, keystore entries and host artifact paths (04, section
-   12.3). All of them are permanent once anything ships (D38).
+   (`klabautermann_core`, `klabautermann_app` and others), the application
+   id `ch.lkmc.klabautermann`, keystore entries and host artifact paths (04,
+   section 12.3). All of them are permanent once anything ships (D38).
 
 ---
 
-## 2. Recommendation
+## 2. Original recommendation
+
+This is the ranking the proposal put to the owner, kept as the record. The
+owner chose Alternate 2, Klabautermann (Decision, above).
 
 **First choice: Hausgeist.** It is the only finalist that is collision-free
 on every channel the screen covered (pub.dev, USPTO, both app stores, Docker
@@ -106,7 +145,7 @@ found anywhere. It costs length (13 letters) and spelling difficulty for
 non-German speakers.
 
 Only these three cover both watching and managing with a native meaning.
-Before committing to any of them, run the checks in section 8.
+The checks in section 8 still apply to the chosen name.
 
 ---
 
@@ -138,6 +177,8 @@ is crowded.
 ---
 
 ## 4. Ranked shortlist
+
+The ranking is the original one; the owner chose rank 3, Klabautermann.
 
 | Rank | Name | Language | Meaning | Function pun | Pronunciation | Conflict risk |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -229,7 +270,9 @@ is crowded.
 
 ### 5.3 Klabautermann
 
-- **Identifiers:** `klabautermann_core`, `klabautermann_app`.
+- **Status:** chosen by the owner on 2026-10-10 (Decision, above).
+- **Identifiers:** already ASCII: `klabautermann_core`, `klabautermann_app`,
+  `ch.lkmc.klabautermann` (fixed in 04, section 12.3).
 - **Meaning:** a ship spirit from North Sea folklore (German, Frisian,
   Dutch, attested since at least the 1770s). It pumps water from the hold,
   arranges cargo and ballast, hammers at leaks and knocks on the hull to
@@ -251,7 +294,8 @@ is crowded.
   One Piece fans know the Going Merry's Klabautermann. French: no meaning.
 - **Costs:** 13 letters is long for a window title, launcher label or
   Android home screen; the double "nn" will be misspelled. It is a helper
-  spirit more than a séance term.
+  spirit more than a séance term. The Decision section lists how the first
+  two are managed.
 - **Tagline draft:** "The ship's spirit that keeps your containers afloat."
 
 ### 5.4 Spiritoscope
@@ -537,25 +581,34 @@ searched. "Gut" is the pool rating from section 3.
 
 ## 8. Checks still required before committing
 
-The screen is a snapshot from 2026-10-10. Before the owner fixes the name
-(D38), run these for the chosen name:
+The screen is a snapshot from 2026-10-10, the day the owner fixed the name
+(D38). These checks now apply to Klabautermann specifically. Items 1, 2, 4
+and 5 run before the M1 scaffold commits the identities to code, while a
+rename is still cheap; the identities become permanent once anything ships.
+Item 3 runs at publication time.
 
 1. **Trademark registers.** Search EUIPO eSearch (EU), DPMAregister
-   (Germany) and INPI (France) in Nice classes 9 and 42. None of them was
-   queried: TMview refused the connection, DPMA and EUIPO need JavaScript,
-   and the fallback was a web search. The USPTO search covered live US
-   marks only.
-2. **Domains.** No domain was checked for any candidate.
+   (Germany) and INPI (France) for Klabautermann in Nice classes 9 and 42.
+   None of them was queried: TMview refused the connection, DPMA and EUIPO
+   need JavaScript, and the fallback was a web search. The USPTO search
+   covered live US marks only.
+2. **Domains.** No domain was checked for any candidate. Check the common
+   domains for `klabautermann` and record which are taken and by whom; a
+   server-tooling site on one would be an in-category collision (rule 7).
 3. **App-store names at publication time.** The App Store search covered
-   the US store (top candidates also DE) and Google Play the US only. Names
-   can be claimed at any time, so repeat both searches, in every region the
-   app will be listed in, immediately before the first release.
-4. **Every planned package name.** The pub.dev queries covered the suffixes
-   in section 3. 04, section 12.3 also plans `<app>_host` and the workspace
-   `_<app>_workspace`; `_host` was not queried for any candidate, and
-   `_docker` only for the top four. Query each planned name on pub.dev and
-   confirm that no lockfile in the repository has an entry with that name
-   (rule 6).
-5. **Refresh the screen.** Rerun the pub.dev, USPTO, GitHub and Docker Hub
-   checks on the decision date, then record `<App>` and `<app>` in 04,
-   section 12.3.
+   the US and DE stores and Google Play the US only. Names can be claimed at
+   any time, so repeat both searches for Klabautermann, in every region the
+   app will be listed in, immediately before the first preview release (M4)
+   and before any store listing.
+4. **Every planned package name.** Re-query pub.dev for each planned name
+   before the scaffold: `klabautermann`, `klabautermann_core`,
+   `klabautermann_app`, `klabautermann_host`, `klabautermann_docker` and
+   the workspace `_klabautermann_workspace` (04, section 12.3). The screen
+   queried the suffixes in section 3; `_host` and the workspace name were
+   never queried. Confirm that no lockfile in the repository has an entry
+   with any of these names (rule 6).
+5. **Refresh the screen.** Names can be claimed at any time, so rerun the
+   pub.dev, USPTO, GitHub and Docker Hub checks for Klabautermann right
+   before M1 starts. The identities are already recorded in 04, section
+   12.3; a collision found here goes back to the owner before the scaffold
+   lands.
