@@ -486,10 +486,10 @@ The mechanics live in 03 §8; the porting-back flow in 04 §6. Operationally:
      OpenSSH format) — not the raw host key or its raw digest** — which is why
      `HostKey` is identified by `fingerprintSha256` and `publicKeyBase64`
      only exists after a known_hosts import.
-   - dartssh2 3.0.2 **exports `SSHUserInfoRequest`** from its barrel.
-     Inferred keyboard-interactive callback parameters remain valid;
-     explicit annotations are supported at this pin too. The earlier
-     non-export constraint no longer applies.
+   - dartssh2 **exports `SSHUserInfoRequest`** from its barrel (3.0.2 did,
+     and the 4.1.0 pin does). Inferred keyboard-interactive callback
+     parameters remain valid; explicit annotations are supported at this
+     pin too. The earlier non-export constraint no longer applies.
    - Dart `RegExp` has **no inline `(?i)` flag** — use
      `caseSensitive: false`; a pattern ported with an inline flag throws
      `FormatException` at construction (never a quiet case-sensitive

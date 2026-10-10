@@ -270,7 +270,12 @@ class _UploadHandle extends SftpFile {
   Future<void> setStat(SftpFileAttrs attrs) => owner.setStat(path, attrs);
 
   @override
-  Future<void> writeBytes(Uint8List data, {int offset = 0}) async {
+  Future<void> writeBytes(
+    Uint8List data, {
+    int offset = 0,
+    int chunkSize = defaultChunkSize,
+    int maxPendingRequests = defaultMaxPendingRequests,
+  }) async {
     if (owner.denyWrites) owner._deny();
 
     owner.writeModes.add(owner.files[path]!.mode & _permissionBits);

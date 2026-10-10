@@ -1,20 +1,13 @@
 import 'dart:async';
-import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:dartssh2/dartssh2.dart';
-// A completion-only wire fixture tests configuration, not SSH authentication.
-// ignore: implementation_imports
-import 'package:dartssh2/src/message/msg_userauth.dart';
 import 'package:seance_core/seance_core.dart';
 import 'package:test/test.dart';
 
+import 'support/ssh_peer.dart';
+
 const _defaultInterval = Duration(seconds: 10);
 const _customInterval = Duration(seconds: 30);
-const _packetLengthBytes = 4;
-const _paddingLengthBytes = 1;
-const _minimumPaddingBytes = 4;
-const _packetBlockBytes = 8;
 
 final _config = ServerConfig(
   id: 'test',
@@ -32,7 +25,7 @@ void main() {
         config: _config,
         credentials: const SshCredentials.password('test'),
         tofu: TofuVerifier(InMemoryHostKeyStore()),
-        onHostKey: (_) async => false,
+        onHostKey: (_) async => true,
         connect: (_, _, _) async => socket,
       ),
       _defaultInterval,
@@ -46,7 +39,7 @@ void main() {
           config: _config,
           credentials: const SshCredentials.password('test'),
           tofu: TofuVerifier(InMemoryHostKeyStore()),
-          onHostKey: (_) async => false,
+          onHostKey: (_) async => true,
           connect: (_, _, _) async => socket,
           keepAliveInterval: interval,
         ),
@@ -81,7 +74,7 @@ Future<void> _checkTimer(
   Future<(SSHClient, AuthKind)> Function(SSHSocket) open,
   Duration? expectedInterval,
 ) async {
-  final socket = _CompletionSocket();
+  final socket = SshPeerSocket();
   final intervals = <Duration>[];
   final timers = <Timer>[];
   SSHClient? client;
@@ -107,51 +100,4 @@ Future<void> _checkTimer(
     await socket.close();
     expect(timers.every((timer) => !timer.isActive), isTrue);
   }
-}
-
-/// Injects only USERAUTH_SUCCESS to reach the real client's timer setup.
-/// Deliberately skips key exchange: trust/auth correctness is not under test.
-class _CompletionSocket implements SSHSocket {
-  final _incoming = StreamController<Uint8List>();
-  final _outgoing = StreamController<List<int>>();
-  final _done = Completer<void>();
-
-  _CompletionSocket() {
-    unawaited(_outgoing.stream.drain<void>());
-    _incoming.add(Uint8List.fromList(ascii.encode('SSH-2.0-TimerFixture\r\n')));
-
-    final payload = SSH_Message_Userauth_Success().encode();
-    final headerBytes = _packetLengthBytes + _paddingLengthBytes;
-    var padding =
-        _packetBlockBytes - (headerBytes + payload.length) % _packetBlockBytes;
-    if (padding < _minimumPaddingBytes) padding += _packetBlockBytes;
-    final packet = Uint8List(headerBytes + payload.length + padding);
-    ByteData.sublistView(
-      packet,
-    ).setUint32(0, packet.length - _packetLengthBytes);
-    packet[_packetLengthBytes] = padding;
-    packet.setRange(headerBytes, headerBytes + payload.length, payload);
-    _incoming.add(packet);
-  }
-
-  @override
-  Stream<Uint8List> get stream => _incoming.stream;
-  @override
-  StreamSink<List<int>> get sink => _outgoing.sink;
-  @override
-  Future<void> get done => _done.future;
-
-  @override
-  Future<void> close() {
-    if (_done.isCompleted) return done;
-    _done.complete();
-    unawaited(_incoming.close());
-    unawaited(_outgoing.close());
-    return done;
-  }
-
-  @override
-  void destroy() => unawaited(close());
-  @override
-  Future<void> flush() async {}
 }

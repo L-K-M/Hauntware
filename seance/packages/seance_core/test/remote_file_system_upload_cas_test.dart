@@ -775,7 +775,12 @@ class _FakeWritableSftpFile extends SftpFile {
       _owner._handleSetStat(path, stored, attrs);
 
   @override
-  Future<void> writeBytes(Uint8List data, {int offset = 0}) async {
+  Future<void> writeBytes(
+    Uint8List data, {
+    int offset = 0,
+    int chunkSize = defaultChunkSize,
+    int maxPendingRequests = defaultMaxPendingRequests,
+  }) async {
     // The upload protocol writes sequentially; tolerate gaps and
     // overlapping writes that extend the file, defensively.
     final gap = offset - stored.content.length;

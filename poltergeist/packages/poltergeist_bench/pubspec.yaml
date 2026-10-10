@@ -11,7 +11,7 @@ environment:
 dependencies:
   args: ^2.7.0
   crypto: ^3.0.7
-  dartssh2: 3.0.2
+  dartssh2: 4.1.0
   seance_core:
     path: ../../../seance/packages/seance_core
 

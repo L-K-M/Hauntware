@@ -1,5 +1,32 @@
 # Séance ports and pin audits
 
+## dartssh2 4.1.0 re-pin (2026-10-10)
+
+dartssh2 moves from 3.0.2 to 4.1.0 in every declaration that pins it
+(`seance_core`, the Séance app's dev dependency, `poltergeist_core` and
+`poltergeist_bench`) and in all six lockfiles, the `tool/bench`
+forwarder's included. The Séance source revision is unchanged, and
+nothing is copied or forked. Older entries below that keep dartssh2 at
+3.0.2 retain their dated meaning.
+
+- `suiteSshAlgorithms` (new in
+  `seance_core/lib/src/ssh/ssh_algorithms.dart`, not barrel-exported) is
+  the proposal both apps and the bench send, chosen so every server
+  negotiates what it did under 3.0.2: AES-CTR first, `ssh-rsa` before
+  ECDSA, and the SHA-1 key exchanges and AES-CBC 4.0.0 dropped as a last
+  resort (D9 amendment). Poltergeist's host-key preflight and the bench
+  import it the way they already reach `remote_file_system.dart`.
+- `SftpFile.writeBytes` gained `chunkSize` and `maxPendingRequests`; the
+  SFTP fakes in three Séance tests and the bench's upload-permissions
+  contract take them.
+- Upstream's version-bound trace audit is redone for 4.1.0. Its
+  keyboard-interactive message now prints only the answer count, which
+  Séance's `redactConnectionTrace` keeps; any other shape is still
+  withheld whole. Poltergeist's transcript bridge is unchanged.
+- 4.1.0 rejects any non-key-exchange message during the first key
+  exchange, so Séance's keepalive and ProxyJump fixtures now run a real
+  exchange (`seance_core/test/support/ssh_peer.dart`).
+
 ## Hauntware local-source integration (2026-10-04)
 
 Live shared packages now resolve by local path from the reviewed source

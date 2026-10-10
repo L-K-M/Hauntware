@@ -82,7 +82,7 @@ dev_dependencies:
   http: ^1.6.0
   # The errors a real handshake fails with, for tests that replay one at
   # AppState's SSH boundary. Pinned to the version seance_core pins.
-  dartssh2: 3.0.2
+  dartssh2: 4.1.0
   # Deterministic timer control for the termination-watchdog tests —
   # real-time waits race under a loaded CI runner.
   fake_async: ^1.3.3

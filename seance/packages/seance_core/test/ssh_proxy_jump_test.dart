@@ -1,18 +1,11 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:dartssh2/dartssh2.dart';
-// A completion-only wire fixture tests routing and ownership, not SSH auth.
-// ignore: implementation_imports
-import 'package:dartssh2/src/message/msg_userauth.dart';
 import 'package:seance_core/seance_core.dart';
 import 'package:test/test.dart';
 
-const _packetLengthBytes = 4;
-const _paddingLengthBytes = 1;
-const _minimumPaddingBytes = 4;
-const _packetBlockBytes = 8;
+import 'support/ssh_peer.dart';
 
 ServerConfig _server({
   required String id,
@@ -35,7 +28,7 @@ void main() {
   group('openAuthenticatedClient ProxyJump', () {
     test('a direct target uses only its physical connector', () async {
       final target = _server(id: 'target', host: 'target.invalid', port: 2201);
-      final physical = _CompletionSocket();
+      final physical = _HopSocket();
       final connected = <String>[];
       final resolved = <String>[];
       final forwarded = <String>[];
@@ -85,8 +78,8 @@ void main() {
         port: 2203,
         jumpHostId: jump.id,
       );
-      final physical = _CompletionSocket();
-      final targetSocket = _CompletionSocket();
+      final physical = _HopSocket();
+      final targetSocket = _HopSocket();
       final connected = <String>[];
       final resolved = <String>[];
       final forwarded = <String>[];
@@ -150,9 +143,9 @@ void main() {
           port: 2206,
           jumpHostId: outer.id,
         );
-        final physical = _CompletionSocket();
-        final outerSocket = _CompletionSocket();
-        final targetSocket = _CompletionSocket();
+        final physical = _HopSocket();
+        final outerSocket = _HopSocket();
+        final targetSocket = _HopSocket();
         final connected = <String>[];
         final resolved = <String>[];
         final forwarded = <String>[];
@@ -173,7 +166,7 @@ void main() {
           return hosts[id];
         }
 
-        final forwardedSockets = <_CompletionSocket>[
+        final forwardedSockets = <_HopSocket>[
           outerSocket,
           targetSocket,
         ].iterator;
@@ -241,12 +234,12 @@ void main() {
           onHostKey: (_) async => true,
           connect: (host, port, timeout) async {
             connections++;
-            return _CompletionSocket();
+            return _HopSocket();
           },
           resolveJumpHost: (id) async => null,
           forward: (client, host, port, timeout) async {
             forwards++;
-            return _CompletionSocket();
+            return _HopSocket();
           },
           keepAliveInterval: null,
         ),
@@ -283,7 +276,7 @@ void main() {
             onHostKey: (_) async => true,
             connect: (host, port, timeout) async {
               connections++;
-              return _CompletionSocket();
+              return _HopSocket();
             },
             resolveJumpHost: (id) async => ResolvedSshHost(
               target,
@@ -291,7 +284,7 @@ void main() {
             ),
             forward: (client, host, port, timeout) async {
               forwards++;
-              return _CompletionSocket();
+              return _HopSocket();
             },
             keepAliveInterval: null,
           ),
@@ -327,7 +320,7 @@ void main() {
           onHostKey: (_) async => true,
           connect: (host, port, timeout) async {
             connections++;
-            return _CompletionSocket();
+            return _HopSocket();
           },
           resolveJumpHost: (id) async {
             if (id == second.id) {
@@ -346,7 +339,7 @@ void main() {
           },
           forward: (client, host, port, timeout) async {
             forwards++;
-            return _CompletionSocket();
+            return _HopSocket();
           },
           keepAliveInterval: null,
         ),
@@ -365,7 +358,7 @@ void main() {
         port: 2212,
         jumpHostId: jump.id,
       );
-      final physical = _CompletionSocket();
+      final physical = _HopSocket();
 
       await expectLater(
         openAuthenticatedClient(
@@ -382,7 +375,7 @@ void main() {
               throw StateError('forward refused'),
           keepAliveInterval: null,
         ),
-        throwsA(isA<SshConnectException>()),
+        throwsA(_failureCausedBy(_stateError('forward refused'))),
       );
 
       expect(physical.closeCalls, 1);
@@ -396,7 +389,7 @@ void main() {
         port: 2214,
         jumpHostId: jump.id,
       );
-      final physical = _CompletionSocket();
+      final physical = _HopSocket();
       final forwarded = _BrokenSinkSocket();
 
       await expectLater(
@@ -413,7 +406,7 @@ void main() {
           forward: (client, host, port, timeout) async => forwarded,
           keepAliveInterval: null,
         ),
-        throwsA(isA<SshConnectException>()),
+        throwsA(_failureCausedBy(_stateError('sink unavailable'))),
       );
 
       expect(forwarded.closeCalls, 1);
@@ -428,8 +421,8 @@ void main() {
         port: 2216,
         jumpHostId: jump.id,
       );
-      final physical = _CompletionSocket();
-      final rejected = _CompletionSocket(_AuthenticationResult.failure);
+      final physical = _HopSocket();
+      final rejected = _HopSocket(PeerAuthentication.reject);
 
       await expectLater(
         openAuthenticatedClient(
@@ -445,7 +438,7 @@ void main() {
           forward: (client, host, port, timeout) async => rejected,
           keepAliveInterval: null,
         ),
-        throwsA(isA<SshConnectException>()),
+        throwsA(_failureCausedBy(isA<SSHAuthFailError>())),
       );
 
       expect(rejected.closeCalls, 1);
@@ -462,7 +455,7 @@ void main() {
           port: 2218,
           jumpHostId: jump.id,
         );
-        final physical = _CompletionSocket();
+        final physical = _HopSocket();
         final forwarded = _StallingCloseSocket();
         final (client, _) = await openAuthenticatedClient(
           config: target,
@@ -507,67 +500,27 @@ final Matcher _cycleFailure = isA<SshConnectException>().having(
   contains('cycle'),
 );
 
-enum _AuthenticationResult { success, failure }
+// The cause names the step that failed, so a broken handshake before it
+// cannot pass for the failure under test.
+Matcher _failureCausedBy(Matcher cause) =>
+    isA<SshConnectException>().having((error) => error.cause, 'cause', cause);
 
-/// Completes authentication without key exchange; routing is the only subject.
-class _CompletionSocket implements SSHSocket {
-  final _incoming = StreamController<Uint8List>();
-  final _outgoing = StreamController<List<int>>();
-  final _done = Completer<void>();
+Matcher _stateError(String message) =>
+    isA<StateError>().having((error) => error.message, 'message', message);
+
+/// One hop of the route: a real in-memory SSH server whose client hang-ups
+/// are counted, so each test can prove every hop is closed exactly once.
+class _HopSocket extends SshPeerSocket {
+  _HopSocket([PeerAuthentication authentication = PeerAuthentication.accept])
+    : super(authentication: authentication);
 
   int closeCalls = 0;
-
-  _CompletionSocket([
-    _AuthenticationResult authentication = _AuthenticationResult.success,
-  ]) {
-    unawaited(_outgoing.stream.drain<void>());
-    _incoming.add(
-      Uint8List.fromList(ascii.encode('SSH-2.0-ProxyJumpFixture\r\n')),
-    );
-
-    final payload = switch (authentication) {
-      _AuthenticationResult.success => SSH_Message_Userauth_Success().encode(),
-      _AuthenticationResult.failure => SSH_Message_Userauth_Failure(
-        methodsLeft: const [],
-      ).encode(),
-    };
-    final headerBytes = _packetLengthBytes + _paddingLengthBytes;
-    var padding =
-        _packetBlockBytes - (headerBytes + payload.length) % _packetBlockBytes;
-    if (padding < _minimumPaddingBytes) padding += _packetBlockBytes;
-    final packet = Uint8List(headerBytes + payload.length + padding);
-    ByteData.sublistView(
-      packet,
-    ).setUint32(0, packet.length - _packetLengthBytes);
-    packet[_packetLengthBytes] = padding;
-    packet.setRange(headerBytes, headerBytes + payload.length, payload);
-    _incoming.add(packet);
-  }
-
-  @override
-  Stream<Uint8List> get stream => _incoming.stream;
-
-  @override
-  StreamSink<List<int>> get sink => _outgoing.sink;
-
-  @override
-  Future<void> get done => _done.future;
 
   @override
   Future<void> close() {
     closeCalls++;
-    if (_done.isCompleted) return done;
-    _done.complete();
-    unawaited(_incoming.close());
-    unawaited(_outgoing.close());
-    return done;
+    return super.close();
   }
-
-  @override
-  void destroy() => unawaited(close());
-
-  @override
-  Future<void> flush() async {}
 }
 
 final class _BrokenSinkSocket implements SSHSocket {
@@ -597,7 +550,7 @@ final class _BrokenSinkSocket implements SSHSocket {
   Future<void> flush() async {}
 }
 
-final class _StallingCloseSocket extends _CompletionSocket {
+final class _StallingCloseSocket extends _HopSocket {
   final _gracefulClose = Completer<void>();
   int destroyCalls = 0;
 

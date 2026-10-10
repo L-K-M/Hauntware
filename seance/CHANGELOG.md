@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+- SSH: Séance now uses dartssh2 4.1.0 (was 3.0.2). Servers that offer
+  only chacha20-poly1305 connect; servers that require post-quantum
+  ML-KEM key exchange still cannot. Strict key exchange, the Terrapin
+  countermeasure, is negotiated with servers that offer it. If a server's
+  host key changes during a rekey, the connection ends instead of
+  carrying on.
+- SSH: on Android, the key exchange no longer takes long enough for the
+  server to time it out and drop the connection before login. An SSH
+  channel no longer stalls for good when data arrives before Séance
+  starts reading it, and a request on a connection that drops fails
+  instead of waiting forever.
+- SSH: other servers negotiate the same cipher and host key as before, so
+  transfer speed and pinned host keys are unchanged. Servers that offer
+  only SHA-1 key exchange, `ssh-rsa` host keys or AES-CBC ciphers keep
+  connecting; Séance uses those only when a server offers nothing newer.
+  Servers that offer only `diffie-hellman-group1-sha1`, `hmac-md5` or
+  truncated `hmac-sha2-*-96` MACs no longer connect.
 - Secrets: Settings > General offers device authentication on Android,
   iOS, macOS and Windows, off by default. Biometrics or your device
   passcode protect saved-secret reads on launch and after 5 minutes in

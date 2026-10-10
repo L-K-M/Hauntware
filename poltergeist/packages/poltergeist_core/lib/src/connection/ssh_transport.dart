@@ -8,6 +8,10 @@ import 'package:seance_core/seance_core.dart';
 // dartssh2), but the connection module IS its sanctioned consumer.
 // ignore: implementation_imports
 import 'package:seance_core/src/ssh/remote_file_system.dart';
+// The proposal the authenticated connect sends, so the preflight cannot turn
+// away a legacy-only server that the connect it gates would reach.
+// ignore: implementation_imports
+import 'package:seance_core/src/ssh/ssh_algorithms.dart';
 
 import 'ssh_cleanup.dart';
 
@@ -162,6 +166,7 @@ Future<void> preflightDartSshHostKey({
   final client = SSHClient(
     socket,
     username: config.username,
+    algorithms: suiteSshAlgorithms,
     onVerifyHostKey: (type, fingerprint) async {
       try {
         final presented = HostKey(

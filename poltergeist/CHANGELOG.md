@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+- **Servers that offer only chacha20-poly1305 connect.** Poltergeist now
+  uses dartssh2 4.1.0 (was 3.0.2), which adds that cipher. Servers that
+  require post-quantum ML-KEM key exchange still cannot connect.
+- **Steadier, safer connections.** Poltergeist negotiates strict key
+  exchange, the Terrapin countermeasure, with servers that offer it. If a
+  server's host key changes during a rekey, the connection ends instead of
+  carrying on. On Android, the key exchange no longer takes long enough
+  for the server to time it out and drop the connection before login. An
+  SSH channel no longer stalls for good when data arrives before
+  Poltergeist starts reading it, and a request on a connection that drops
+  fails instead of waiting forever.
+- **Older servers still connect.** Other servers negotiate the same
+  cipher and host key as before, so transfer speed and pinned host keys
+  are unchanged. Servers that offer only SHA-1 key exchange, `ssh-rsa`
+  host keys or AES-CBC ciphers keep working; Poltergeist uses those only
+  when a server offers nothing newer. Servers that offer only
+  `diffie-hellman-group1-sha1`, `hmac-md5` or truncated `hmac-sha2-*-96`
+  MACs no longer connect.
 - **Double-click to copy to the other pane.** With Double-click action
   set to Transfer to other pane, opening a file copies it into the
   folder the other pane shows, like Copy to Other Pane does for a
