@@ -713,7 +713,12 @@ class _FakeWritableSftpFile extends SftpFile {
   final List<Uint8List> writes = [];
 
   @override
-  Future<void> writeBytes(Uint8List data, {int offset = 0}) async {
+  Future<void> writeBytes(
+    Uint8List data, {
+    int offset = 0,
+    int chunkSize = defaultChunkSize,
+    int maxPendingRequests = defaultMaxPendingRequests,
+  }) async {
     writes.add(data);
   }
 

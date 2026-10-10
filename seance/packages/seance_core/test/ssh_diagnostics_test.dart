@@ -400,10 +400,11 @@ void main() {
     test('a keyboard-interactive answer never reaches the transcript', () {
       // dartssh2 traces every packet through toString.
       // SSH_Message_Userauth_Request deliberately omits its password;
-      // SSH_Message_Userauth_InfoResponse prints its `responses` list, and for
-      // a host doing password login over keyboard-interactive that list *is*
-      // the password. The transcript is shown with a Copy button beside it and
-      // is meant for bug reports, so it is neutralised at capture.
+      // SSH_Message_Userauth_InfoResponse printed its `responses` list through
+      // 3.x (4.0.0 prints a count, pinned in the shape test), and for a host
+      // doing password login over keyboard-interactive that list *is* the
+      // password. The transcript is shown with a Copy button beside it and is
+      // meant for bug reports, so the list shape stays neutralised at capture.
       final log = SshConnectionLog();
       log.add('-> sock: SSH_Message_Userauth_InfoResponse'
           '(responses: [hunter2, 123456])');
@@ -574,7 +575,7 @@ void main() {
     });
 
     test('an InfoResponse this build cannot parse is withheld whole', () {
-      // Every test above is written against the shape dartssh2 prints today,
+      // Every test above is written against the shape dartssh2 printed,
       // so they pin the pattern to itself rather than to the dependency. A
       // pub upgrade that changed it would make the pattern miss silently —
       // this is what turns that into over-redaction instead of a leak.
@@ -747,6 +748,68 @@ void main() {
       const line = '  <- sock: SSH_Message_Userauth_Failure('
           'methodsLeft: [publickey], partialSuccess: false)';
       expect(redactConnectionTrace(line), line);
+    });
+
+    test('the answer count dartssh2 4.x prints is kept as printed', () {
+      // The count carries nothing, so withholding it would only cost the
+      // transcript a line. Pinned whole, like the canonical list line: a
+      // scrub that rewrote it, or a withhold, would both still pass an
+      // absence check. A renamed class gets the same treatment as a renamed
+      // class printing the list, which the tests above recognize too.
+      for (final line in [
+        '  -> sock: SSH_Message_Userauth_InfoResponse(responses: 2)',
+        '  -> sock: SSH_Message_Userauth_InfoResponse(responses: 0)',
+        '  -> sock: SSHMsgUserauthInfoResponse(responses: 12)',
+      ]) {
+        expect(redactConnectionTrace(line), line);
+        final log = SshConnectionLog()..add(line);
+        expect(log.lines.join('\n'), line);
+      }
+    });
+
+    test('anything beside the answer count is withheld whole', () {
+      // The count is recognized exactly because it decides what passes
+      // untouched: a dartssh2 that printed the answers next to it, in any
+      // spelling, must land in the withhold rather than ride through on the
+      // number. Each of these differs from the 4.x shape in one way.
+      for (final line in [
+        // A second field after the count.
+        '-> sock: SSH_Message_Userauth_InfoResponse'
+            '(responses: 1, values: [hunter2])',
+        // Text after the closing parenthesis.
+        '-> sock: SSH_Message_Userauth_InfoResponse(responses: 1) hunter2',
+        // A line break after it: `$` must mean the end of the record, not of
+        // a line, or the tail would be the credential.
+        '-> sock: SSH_Message_Userauth_InfoResponse(responses: 1)\nhunter2',
+        // Spacing drift, which the list pattern tolerates and this does not.
+        '-> sock: SSH_Message_Userauth_InfoResponse(responses : 1)hunter2',
+        // A count that is not a number.
+        '-> sock: SSH_Message_Userauth_InfoResponse(responses: hunter2)',
+        // The count spelled somewhere other than straight after the name.
+        '-> sock: SSH_Message_Userauth_InfoResponse'
+            '(answers: [hunter2]) (responses: 1)',
+      ]) {
+        final redacted = redactConnectionTrace(line);
+        expect(redacted, isNot(contains('hunter2')), reason: line);
+        expect(redacted, contains('does not recognize'), reason: line);
+      }
+    });
+
+    test('a recognized count does not wave through a list ahead of it', () {
+      // The count only vouches for the withhold decision. Two messages
+      // joined into one chunk, a 3.x-style list first, must still have the
+      // list scrubbed rather than pass because the record ends in a count.
+      expect(
+        redactConnectionTrace(
+          'A(responses: [hunter2]) '
+          'SSH_Message_Userauth_InfoResponse(responses: 1)',
+        ),
+        // The scrub runs to the end of what it is handed, so the count
+        // after the list goes with it: fail closed for a joined chunk, the
+        // opposite trade from the count-kept test above. Both are pinned so
+        // a change to either is deliberate.
+        'A(responses: [redacted])',
+      );
     });
   });
 }

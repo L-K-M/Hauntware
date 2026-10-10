@@ -1,4 +1,4 @@
-// The two tests that build dartssh2's real userauth messages, apart from the
+// The tests that build dartssh2's real userauth messages, apart from the
 // rest of the diagnostics suite: they import a `src/` file of the dependency,
 // so an internal file move in a dartssh2 release stops *this* file compiling
 // and nothing else — the blast radius is exactly the tests that depend on
@@ -17,7 +17,7 @@ import 'package:test/test.dart';
 
 void main() {
   group('connection-log redaction against the real dartssh2 messages', () {
-    test('the real message dartssh2 sends is the shape this scrubs', () {
+    test('the real message dartssh2 sends is the shape this recognizes', () {
       // The one assertion that is not written against my reading of dartssh2:
       // it builds the message the client actually sends and redacts its own
       // toString, so an upgrade that changes the format fails here rather
@@ -27,27 +27,44 @@ void main() {
         'hunter2',
         'second-answer',
       ])}';
-      // The precondition, asserted the way the password-request test below
-      // asserts its own: every check under this one is a *negative*, and a
-      // dartssh2 that stopped printing `responses` would satisfy all of them
-      // without the scrubber being exercised at all — the vacuous pass this
-      // file exists to rule out, arriving through the dependency rather than
-      // through a hand-written fixture.
+      // The precondition, pinned whole. Through 3.x this read `contains
+      // ('hunter2')`: the message printed its answers and the scrubber had
+      // to remove them. dartssh2 4.0.0 (#229) prints only how many there
+      // are, so the scrub is now a recognition, and the exact string is what
+      // keeps this a tripwire rather than a vacuous pass: any change to the
+      // shape, the answers coming back included, fails here. A `contains`
+      // on the count would let `(responses: 2, values: [hunter2])` through.
+      //
+      // The secret is checked first and on its own, so a failure's reason
+      // says which kind of change it is: the answers back, or only the
+      // spelling moved.
       expect(
         raw,
-        contains('hunter2'),
-        reason: 'dartssh2 no longer prints the responses this scrubs. That '
-            'is a dependency change: re-audit the message/ toStrings and '
-            're-base the pattern before upgrading.',
+        allOf(isNot(contains('hunter2')), isNot(contains('second-answer'))),
+        reason: 'dartssh2 prints keyboard-interactive answers again. Scrub '
+            'them at capture in SshConnectionLog before upgrading.',
+      );
+      expect(
+        raw,
+        'SSH_Message_Userauth_InfoResponse(responses: 2)',
+        reason: 'dartssh2 has changed what SSH_Message_Userauth_InfoResponse '
+            'prints. That is a dependency change: re-audit the message/ '
+            'toStrings and re-base redactConnectionTrace before upgrading.',
       );
       log.add('-> sock: $raw');
-      // The framing survives: a scrubber that nuked the whole line would
-      // satisfy every assertion below while destroying the transcript.
-      expect(log.toString(), contains('-> sock:'));
-      expect(log.toString(), isNot(contains('hunter2')));
-      expect(log.toString(), isNot(contains('second-answer')));
-      expect(log.toString(), contains('[redacted])'));
+      // Kept as printed, framing and all: the count carries nothing, and the
+      // fail-closed branch withholding it instead would mean the recognition
+      // no longer matches the real message, which is this test's subject.
+      expect(
+        log.toString(),
+        '-> sock: SSH_Message_Userauth_InfoResponse(responses: 2)',
+      );
       expect(log.toString(), isNot(contains('does not recognize')));
+      // And the view the transcript widget reads, which has to agree.
+      expect(
+        log.lines.join('\n'),
+        '-> sock: SSH_Message_Userauth_InfoResponse(responses: 2)',
+      );
     });
 
     test('the real password request never carries the password either', () {
@@ -82,6 +99,33 @@ void main() {
       final log = SshConnectionLog();
       log.add('-> sock: $raw');
       expect(log.toString(), isNot(contains('hunter2')));
+      expect(log.toString(), contains('deploy'));
+    });
+
+    test('the real password change carries neither password', () {
+      // The third secret-bearing message, and the one 3.1.0 touched: its
+      // decoder had swapped the old and new password (#207). The client
+      // sends it when a server answers a password login with a change
+      // request, and it carries two credentials at once. Asserted on the
+      // message itself for the same reason as the password request above.
+      final raw = '${SSH_Message_Userauth_Request.newPassword(
+        user: 'deploy',
+        oldPassword: 'old-hunter2',
+        newPassword: 'new-hunter3',
+      )}';
+      expect(
+        raw,
+        allOf(isNot(contains('old-hunter2')), isNot(contains('new-hunter3'))),
+        reason: 'dartssh2 has started printing a password in '
+            'SSH_Message_Userauth_Request.toString(). This is a dependency '
+            'change, not a redaction regression: scrub it at capture in '
+            'SshConnectionLog, or hold the previous dartssh2, before '
+            'upgrading.',
+      );
+
+      final log = SshConnectionLog();
+      log.add('-> sock: $raw');
+      expect(log.toString(), isNot(contains('hunter')));
       expect(log.toString(), contains('deploy'));
     });
   });

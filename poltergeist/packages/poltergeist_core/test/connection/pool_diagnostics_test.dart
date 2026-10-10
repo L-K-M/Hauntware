@@ -321,10 +321,13 @@ void main() {
   });
 
   // Synthetic credential material only — never a real secret. The records
-  // below replay the one dartssh2 trace shape that interpolates a
+  // below replay the one dartssh2 trace shape that has interpolated a
   // credential: `SSH_Message_Userauth_InfoResponse`'s
-  // `'$runtimeType(responses: $responses)'`, where the responses list *is*
-  // the password for hosts doing password auth over keyboard-interactive.
+  // `'$runtimeType(responses: $responses)'` through 3.x (4.x prints a count,
+  // which upstream keeps), where the responses list *is* the password for
+  // hosts doing password auth over keyboard-interactive. Upstream still
+  // scrubs the list shape, so it remains the record that tells a redacted
+  // fan-out from a raw one.
   // The live fan-out must carry what upstream's `SshConnectionLog.add`
   // stored (redacted), never its raw argument — and ordinary diagnostic
   // lines must keep flowing verbatim beside them.

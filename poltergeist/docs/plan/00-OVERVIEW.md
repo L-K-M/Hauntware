@@ -409,15 +409,16 @@ ownership
     under the bridge before this is declared final, and moving the queue
     executor engine-side stays the escalation if they fail.
 - **D9 — M0 ends at fallback rung 4: keep dartssh2 3.0.2 and document the
-  ceiling.** Version 3.0.2 is the minimum: earlier releases can abandon
+  ceiling.** (Amended 2026-10-10: the suite now pins 4.1.0; see below.)
+  Version 3.0.2 is the minimum: earlier releases can abandon
   pipelined read futures when a consumer cancels the stream, while 3.0.2 owns
   every issued read completion and retains pipelining. The canonical M0
   evidence established three boundaries:
   - Modern and legacy OpenSSH defaults, rsa-sha2-256/512, ed25519,
-    aes128/256-gcm, and curve25519-sha256 all connected. dartssh2 lacks
-    chacha20-poly1305 and mlkem768x25519-sha256, so a strict server requiring
-    that cipher/KEX pair failed; strict Chacha/PQ-only servers are a documented
-    compatibility ceiling.
+    aes128/256-gcm, and curve25519-sha256 all connected. dartssh2 3.0.2
+    lacked chacha20-poly1305 and mlkem768x25519-sha256, so a strict server
+    requiring that cipher/KEX pair failed; strict Chacha/PQ-only servers were
+    a documented compatibility ceiling (4.1.0 closes the Chacha half).
   - On LAN, hashing-off 1 GB dartssh2 transfers reached 22.79 MB/s download
     and 21.98 MB/s upload, while OpenSSH reached 225.46 and 249.15 MB/s. That
     roughly 10–11× single-large-file gap is a documented throughput ceiling;
@@ -440,6 +441,37 @@ ownership
   a LAN single-file ceiling and support strict Chacha/PQ-only configurations,
   neither of which violates a v1 budget. Keep those limits explicit and
   revisit libssh2 only with user compatibility failures or workload evidence.
+  - **Amendment (2026-10-10): the suite is re-pinned to dartssh2 4.1.0.** On
+    owner request, Séance and Poltergeist (core, bench and the `tool/bench`
+    forwarder) move from 3.0.2 to 4.1.0; 3.0.2 stays the floor named above.
+    The M0 bundle and the rung-4 decision remain the historical evidence,
+    measured on 3.0.2. No M0 measurement was re-run for the re-pin. Against
+    the boundaries above:
+    - Compatibility: 3.2.0 added chacha20-poly1305, so a chacha-only server
+      now connects. The SSH integration suite reaches its chacha fixture
+      through the pool, and the live `algorithms` audit negotiated
+      chacha20-poly1305 with curve25519 on the profile M0 recorded as
+      failed. mlkem768x25519-sha256 is still unsupported, so PQ-only
+      servers remain a documented ceiling.
+    - Algorithm proposal (owner decisions): both apps and the bench propose
+      `suiteSshAlgorithms`, chosen so every server negotiates what it did
+      under 3.0.2. Ciphers prefer AES-CTR: 3.1.0 moved AES-GCM first, but
+      dartssh2's AES-GCM is pure Dart, and ad hoc local 4 MB SFTP reads
+      during the re-pin gave about 0.7 MB/s with aes256-gcm against about
+      12 MB/s with aes128-ctr or chacha20-poly1305 (about 7.7 MB/s on
+      3.0.2); the bench's isolate cancellation test also took 134 to 157 ms
+      against its 100 ms limit under AES-GCM (38 to 45 ms on 3.0.2).
+      chacha20-poly1305, AES-GCM and AES-CBC follow. Host keys keep 3.0.2's
+      order, ssh-rsa before ECDSA, so old servers keep presenting the RSA
+      key users pinned. Key exchange is 4.1.0's defaults, then the two
+      SHA-1 exchanges 4.0.0 dropped. MACs stay at the 4.1.0 defaults, and
+      the algorithms 3.1.0 removed as broken stay off. Narrowing the
+      proposal is a later, separate decision.
+    - Throughput: not re-measured. Re-measure the single-file ceiling and
+      D8's cancellation gate with the M0 SSH fitness workflow: dispatch CI
+      (`workflow_dispatch`, `skip_m0` off) on a branch commit that resolves
+      4.1.0, then compare its `m0-bench-results` bundle with
+      `docs/evidence/m0`, which stays frozen.
 - **D12 — Numeric performance budgets** (tracked as benchmarks in CI, 08):
   first paint of a 10k-entry local directory < 150 ms; 100k entries < 1 s
   (virtualized); remote listing = network time + < 50 ms overhead, always

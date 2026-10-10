@@ -15,6 +15,7 @@ import 'remote_command.dart';
 import 'remote_file_system.dart';
 import 'sequential_cleanup.dart';
 import 'ssh_agent.dart';
+import 'ssh_algorithms.dart';
 
 const _cleanupActionTimeout = Duration(seconds: 5);
 const _sshAuthenticationTimeout = Duration(minutes: 5);
@@ -195,21 +196,29 @@ class SshConnectionLog {
   String toString() => _lines.join('\n');
 }
 
-/// The one shape in dartssh2's packet trace that carries a secret.
+/// The one shape in dartssh2's packet trace that has carried a secret.
 ///
-/// Audited against the pinned 3.0.2 rather than assumed: of every
-/// `toString()` in `message/`, `SSH_Message_Userauth_InfoResponse`'s
-/// `'\$runtimeType(responses: \$responses)'` is the only one that
-/// interpolates credential material. `SSH_Message_Userauth_Request` prints
-/// `user`, `serviceName` and `methodName` and deliberately not the password,
-/// which is the premise the whole mechanism rests on. Re-run that audit on a
-/// `pub upgrade`: a new printing site is the one drift the fail-closed branch
-/// below cannot catch, because it keys on this shape.
+/// Audited against the pinned 4.1.0 rather than assumed: no `toString()` in
+/// `message/` and no `printTrace`/`printDebug` call on the connect path
+/// interpolates credential material. `SSH_Message_Userauth_InfoResponse`
+/// prints only how many answers it carries,
+/// `'\$runtimeType(responses: \${responses.length})'`, since 4.0.0 (#229);
+/// 3.x printed `'\$runtimeType(responses: \$responses)'`, the answers
+/// themselves. `SSH_Message_Userauth_Request` prints `user`, `serviceName`
+/// and `methodName` for every method and deliberately not the password, the
+/// old and new passwords of a change request, or a key or signature, which
+/// is the premise the whole mechanism rests on. Off that path,
+/// `SSH_Message_Channel_Request` prints an `env` value and an `x11-req`
+/// cookie, unchanged since 3.0.2; neither app sends either. Re-run that audit
+/// on every re-pin: a new printing site is the one drift the fail-closed
+/// branch below cannot catch, because it keys on this message.
 ///
-/// What makes that one message the whole problem: for a host that does
-/// password login over keyboard-interactive — the OpenSSH default on many
-/// distributions — the `responses: [...]` list *is* the password, in
-/// plaintext.
+/// The count is recognized and kept (see [_userauthResponseCount]). The list
+/// stays scrubbed, because it is what a dartssh2 that went back to printing
+/// the answers would print, and what makes that the whole problem: for a
+/// host that does password login over keyboard-interactive — the OpenSSH
+/// default on many distributions — the `responses: [...]` list *is* the
+/// password, in plaintext.
 ///
 /// The transcript is shown in the UI with a Copy button beside it and is meant
 /// to be pasted into a bug report, so this is neutralised where it is
@@ -283,6 +292,22 @@ final RegExp _userauthResponses = RegExp(
   dotAll: true,
 );
 
+/// The shape dartssh2 has printed since 4.0.0, which carries no secret:
+/// `(responses: 2)` straight after the [_infoResponseToken], ending the
+/// record. A number of answers is worth keeping in a transcript, and
+/// withholding it would cost a line for nothing.
+///
+/// Exact where [_userauthResponses] is loose, because the two fail in
+/// opposite directions: that pattern decides what gets scrubbed, so it
+/// errs wide, while this one decides what passes untouched, so it errs
+/// narrow. A space before the colon, a second field, a list, or anything
+/// at all after the parenthesis, a newline included (`$` without
+/// `multiLine` is the end of the record only), is not this shape and falls
+/// to the withhold. Ending the record is part of the shape because dartssh2
+/// prints the message last (`'-> \$socket: \$message'`) and every producer
+/// hands [SshConnectionLog.add] a whole record.
+final RegExp _userauthResponseCount = RegExp(r'\(responses: \d+\)$');
+
 /// [line] with any credential dartssh2's trace would otherwise print replaced.
 /// Public so the redaction can be asserted directly rather than only through a
 /// live handshake, which no test performs.
@@ -291,15 +316,18 @@ final RegExp _userauthResponses = RegExp(
 /// string literally, so a `$1` in it lands in the output as the characters
 /// `$1` and takes the matched prefix with it.
 String redactConnectionTrace(String line) {
-  // Fail closed on drift. The pattern matches the exact text dartssh2 prints
-  // today (`'$runtimeType(responses: $responses)'`), and every test of it is
-  // written against that same reading — so they pin the regex to itself, not
-  // to the dependency. A `pub upgrade` that renamed the field, quoted the
-  // elements, or printed a count first would make the pattern miss, and the
-  // password would flow into a transcript with a Copy button on it, with
-  // nothing red anywhere. An InfoResponse this does not recognize is
-  // therefore replaced whole: a transcript line lost to caution costs a
-  // diagnosis, and the alternative costs the credential.
+  // Fail closed on drift. The patterns match the exact text dartssh2 prints
+  // today (`'$runtimeType(responses: ${responses.length})'`) and printed
+  // through 3.x (`'$runtimeType(responses: $responses)'`), and every test of
+  // them is written against that same reading, so they pin the regexes to
+  // themselves, not to the dependency. A re-pin that renamed the field,
+  // quoted the elements, or put the answers back beside the count would make
+  // both miss, and the password would flow into a transcript with a Copy
+  // button on it, with nothing red anywhere. That is not hypothetical: 4.0.0
+  // replaced the list with a count, and this branch withheld the new line
+  // until the count was audited and recognized. An InfoResponse this does
+  // not recognize is therefore replaced whole: a transcript line lost to
+  // caution costs a diagnosis, and the alternative costs the credential.
   //
   // Positional, not just "does the pattern match somewhere": the leftmost
   // match has to belong to the named message. A record carrying a drifted
@@ -313,10 +341,18 @@ String redactConnectionTrace(String line) {
   // group makes the match start at `Userauth_…` *before* the token, and a
   // renamed class whose field is still `responses:`, where the match starts
   // immediately *after* it. Anything further along is another message.
+  //
+  // The count is held to the same position, more strictly: it has to start
+  // exactly at `tokenEnd`. It only vouches for the withhold decision; the
+  // line still goes through the scrub below, so a list ahead of the message
+  // in a joined chunk is redacted rather than waved through with it.
   final firstResponses = _userauthResponses.firstMatch(line);
   final tokenAt = line.indexOf(_infoResponseToken);
   final tokenEnd = tokenAt + _infoResponseToken.length;
+  final countOnly = tokenAt >= 0 &&
+      _userauthResponseCount.matchAsPrefix(line, tokenEnd) != null;
   if (tokenAt >= 0 &&
+      !countOnly &&
       (firstResponses == null || firstResponses.start > tokenEnd)) {
     return '$_userauthMessage(redacted: this build does not recognize the '
         'shape of this message, so all of it is withheld)';
@@ -661,8 +697,8 @@ SSHUserInfoRequestHandler? _keyboardInteractiveHandler({
   required void Function(AuthKind kind) onAuthKind,
 }) {
   if (responder == null) return null;
-  // Parameter type is inferred from SSHUserInfoRequestHandler so we needn't
-  // import dartssh2's (unexported) SSHUserInfoRequest class directly.
+  // Parameter type is inferred from SSHUserInfoRequestHandler; dartssh2
+  // exports SSHUserInfoRequest too, but naming it adds nothing here.
   return (request) async {
     final prompts = request.prompts.map((p) => p.promptText).toList();
     // This is a prompt-text heuristic; it may not reflect whether the UI
@@ -984,6 +1020,9 @@ Future<(SSHClient, AuthKind)> _authenticateSshHost({
     client = SSHClient(
       socket,
       username: config.username,
+      // Every hop of a ProxyJump route is authenticated here, so this one
+      // argument covers the whole chain as well as a direct connection.
+      algorithms: suiteSshAlgorithms,
       keepAliveInterval: keepAliveInterval,
       onVerifyHostKey: (type, fingerprint) => _verifyHostKey(
         tofu: tofu,

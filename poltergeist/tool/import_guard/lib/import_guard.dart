@@ -14,7 +14,7 @@ enum _Area { packages, app }
 
 /// The M0 SSH fitness harness is the sanctioned dartssh2 consumer outside
 /// poltergeist_core (07 §3.4 relocated it from tool/bench into packages/).
-/// It keeps a standalone resolution — dartssh2 3.0.2 and the Séance package
+/// It keeps a standalone resolution — dartssh2 4.1.0 and the Séance package
 /// via a seance/ sibling path, outside the workspace lock — so it resolves
 /// through its own package config, verified like any other scanned package.
 const _benchPackage = 'packages/poltergeist_bench';

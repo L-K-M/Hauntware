@@ -4,6 +4,51 @@ Living snapshot of where Poltergeist is, what's proven, and what to pick up
 next. Read [AGENTS.md](../AGENTS.md) for build/test commands and
 [09-PLAYBOOK.md](plan/09-PLAYBOOK.md) for the PR process.
 
+## dartssh2 4.1.0 re-pin (2026-10-10)
+
+On owner request dartssh2 moves from 3.0.2 to 4.1.0 in `poltergeist_core`,
+`poltergeist_bench` and the `tool/bench` forwarder, with Séance's core and
+app dev dependency; all six lockfiles follow. D9 carries the dated
+amendment. The M0 evidence and its 3.0.2 attribution stay frozen.
+
+Both SSH clients Poltergeist builds, the pool's authenticated connect
+(through Séance's `openAuthenticatedClient`) and the host-key preflight in
+`connection/ssh_transport.dart`, propose `suiteSshAlgorithms`, and so does
+the bench. Every server negotiates what it did under 3.0.2 (owner
+decisions): ciphers prefer AES-CTR, because dartssh2's pure-Dart AES-GCM,
+which 3.1.0 moved first, measured about 0.7 MB/s against about 12 MB/s;
+host keys keep `ssh-rsa` before ECDSA, so old servers keep their pinned RSA
+key; the SHA-1 key exchanges and AES-CBC that 4.0.0 dropped stay as a last
+resort. Other connection changes: chacha20-poly1305 servers connect, strict key exchange is
+negotiated with servers that offer it, a host key that changes during a
+rekey ends the connection, and requests pending on a closed channel or
+transport fail instead of waiting.
+
+Regression coverage: `ssh_transport_test.dart` checks the preflight's
+KEXINIT against the shared list. `chacha_sshd_test.dart` connects through
+the pool to the chacha-only fixture and downloads a file; the same path
+fails on 3.0.2. The bench's algorithm audit test pins the client-support
+rows: chacha20-poly1305 and curve25519 supported, ML-KEM not.
+
+Local validation, not CI: `test/integration/run.sh` passes (core: 17
+passed, 9 skipped; sync: 2 passed, 1 skipped). The bridge-gated
+`engine_transfer` (6/6) and `sync_bridge` (1/1) suites pass by hand
+against `sshd-modern`. The three sync convergence tests pass against an
+in-memory sync server, since Docker Hub rate-limited the image build.
+`poltergeist_core` passes apart from three root-environment failures
+outside SSH. D12 tier A stays within budget (P3 2330 ms, P5 2203 ms, P7
+4166 entries/s), faster than the same collectors on 3.0.2. The live
+`algorithms` audit connects all eight profiles, and three ad hoc
+legacy-only servers connect through the pool but fail on bare 4.1.0
+defaults. With the final proposal, a 32 MiB SFTP read from the modern
+fixture ran at 13.7 MiB/s against 0.72 MiB/s with 4.1.0's own defaults.
+The local shallow clone could not run `validate_bundle.dart` or
+`audit-seance-pin.sh`; CI ran both on the PR head and they pass, as do
+the SSH and sync-server integration jobs and D12. Not run: any M0
+measurement, the sync-server image locally and tier B. These gate citing
+D9's throughput figures and the next tag, not this change: open item 40
+tracks re-running the M0 SSH fitness workflow with the final proposal.
+
 ## Double-click Transfer to other pane (2026-10-08)
 
 "Double-click action: Transfer to other pane" now does what it names. An
@@ -919,7 +964,7 @@ patch reuses that policy and does not claim to repair it or add remote fsync.
 | Repo infrastructure | CI (`ci.yml`: Dart analyze+test now; Flutter + client-matrix jobs self-activate when `app/poltergeist_app` appears), GLM PR review workflow, release workflow (`v*` tags → per-platform client assets), `scripts/build.sh` / `release.sh` / `package-linux.sh` adapted from Séance, Unlicense, analyzer config, pub workspace. |
 | `poltergeist_core` | Pure-Dart engine packages over the reviewed Séance main revision (`76e466f`). The endpoint-keyed `PooledConnectionManager` implements 03 §3.2's serialized first connect, TOFU hard block, interactive-route cap, prompting-disabled growth, reconnect, refcounted teardown, and bounded ProxyJump routes. Complete secret-free routes resolve before credentials or I/O; target and hop credentials are cached only for the pool lifetime. `scripts/check-imports.sh` guards the dartssh2 boundary. |
 | The plan | Complete in [`docs/plan/`](plan/) — overview + decision log (D1–D31), product, UX spec, architecture, Séance integration, sync, editor, milestones, testing, playbook. Reviewed via the GLM PR workflow, internal consistency passes, and a final whole-plan coherence pass (2026-08-31). |
-| Séance pin | Exact upstream revision `76e466fbcbfe5dc90b4fa399e5dfac990b23c30d`, containing PR-S4 and current core/protocol fixes. No release tag contains it, so D2's revision bridge continues: both declarations, four lockfiles and the live benchmark revision match; dartssh2 remains 3.0.2. PORTS.md carries the compatibility and ancestor/tree/license/identity audits. Re-pin a containing tag under open item 2. Frozen M0 evidence remains bound to the revisions it measured. |
+| Séance pin | Exact upstream revision `76e466fbcbfe5dc90b4fa399e5dfac990b23c30d`, containing PR-S4 and current core/protocol fixes. No release tag contains it, so D2's revision bridge continues: both declarations, four lockfiles and the live benchmark revision match; dartssh2 was 3.0.2 at that pin. Since the 2026-10-04 local-source integration (PORTS.md) Poltergeist resolves Séance by path from this repository, so the 2026-10-10 re-pin to dartssh2 4.1.0 changed that local `seance/` tree, which the CI pin audit binds. PORTS.md carries the compatibility and ancestor/tree/license/identity audits. Re-pin a containing tag under open item 2. Frozen M0 evidence remains bound to the revisions it measured. |
 | Séance PR-S0 | LICENSE audit and Unlicense grant merged in [Séance #57](https://github.com/L-K-M/Seance/pull/57), merge `4d8ee1e026ce4e5d939d6390d9fd98a78fabcf6e`. |
 | Séance PR-S1 | Record-kind forward compatibility merged in [Séance #58](https://github.com/L-K-M/Seance/pull/58), merge `599ff936b8222e6cd77920495dcdcc4a50643f44`. The release wait ended 2026-09-14 when `v0.9.1` included it; D10 later advanced the pin to the exact PR-S4 merge above. |
 | Séance cancellation cleanup | dartssh2 3.0.2 and bounded asynchronous SSH teardown merged in [Séance #59](https://github.com/L-K-M/Seance/pull/59), merge `da9d45492ac7d25cbc4eefb97a6ec29254de219f`. |
@@ -11101,6 +11146,16 @@ unverified.
     optional data descriptors in sorted local byte regions, rejects any
     intersection, and retains valid adjacency. The one-byte-overlap regression
     fails before the repair and passes with it.
+40. **2026-10-10: dartssh2 4.1.0 throughput is unmeasured (D9).** With
+    4.1.0's own order, current OpenSSH servers negotiated aes256-gcm,
+    which local ad hoc 4 MB reads measured at about 0.7 MB/s against about
+    12 MB/s for aes128-ctr or chacha20-poly1305; the pool's 4 × 1 MB
+    downloads measured 0.66 to 0.73 MB/s on the GCM fixtures (1.74 MB/s on
+    3.0.2), and the bench's isolate cancellation test missed its 100 ms
+    limit. The owner chose AES-CTR first, as under 3.0.2, so modern
+    servers negotiate aes128-ctr again. No CI job measures bulk
+    throughput: re-run the M0 SSH fitness workflow (D9 amendment) with
+    the final proposal before relying on D9's numbers.
 
 ## Independent audit
 

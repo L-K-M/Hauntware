@@ -272,7 +272,12 @@ class _ActivityFile extends SftpFile {
   @override
   Future<SftpFileAttrs> stat() async => _attrs;
   @override
-  Future<void> writeBytes(Uint8List data, {int offset = 0}) async {}
+  Future<void> writeBytes(
+    Uint8List data, {
+    int offset = 0,
+    int chunkSize = defaultChunkSize,
+    int maxPendingRequests = defaultMaxPendingRequests,
+  }) async {}
   // Owner-only staging before the first write (see `upload`).
   @override
   Future<void> setStat(SftpFileAttrs attrs) async {}

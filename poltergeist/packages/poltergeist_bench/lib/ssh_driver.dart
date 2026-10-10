@@ -6,6 +6,7 @@ import 'package:crypto/crypto.dart';
 import 'package:dartssh2/dartssh2.dart';
 import 'package:seance_core/src/ssh/remote_file_system.dart';
 import 'package:seance_core/src/ssh/sequential_cleanup.dart';
+import 'package:seance_core/src/ssh/ssh_algorithms.dart';
 
 import 'config.dart';
 
@@ -437,7 +438,7 @@ class BenchSshConnection {
 Future<BenchSshConnection> openBenchConnection(
   BenchEndpoint endpoint, {
   List<String>? diagnostics,
-  SSHAlgorithms algorithms = const SSHAlgorithms(),
+  SSHAlgorithms? algorithms,
 }) async {
   final identityFile = endpoint.identityFile;
   final identities = identityFile == null
@@ -454,7 +455,9 @@ Future<BenchSshConnection> openBenchConnection(
     identities: identities,
     onPasswordRequest: () => endpoint.password,
     onVerifyHostKey: (_, _) => true,
-    algorithms: algorithms,
+    // The apps' proposal unless a probe forces one, so measurements describe
+    // what the apps negotiate.
+    algorithms: algorithms ?? suiteSshAlgorithms,
     printDebug: diagnostics == null
         ? null
         : (message) => diagnostics.add('$message'),
@@ -554,7 +557,7 @@ Future<AlgorithmAuditResult> auditAlgorithms(
     final connection = await openBenchConnection(
       endpoint,
       diagnostics: diagnostics,
-      algorithms: algorithms ?? const SSHAlgorithms(),
+      algorithms: algorithms,
     );
     stopwatch.stop();
     await connection.close();

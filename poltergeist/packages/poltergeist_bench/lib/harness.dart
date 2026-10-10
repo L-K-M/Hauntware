@@ -2,7 +2,7 @@ import 'dart:io';
 
 import 'throughput_attempt.dart';
 
-const resolvedDartssh2Version = '3.0.2';
+const resolvedDartssh2Version = '4.1.0';
 
 /// Descriptor prefix for the resolved local Séance source. The live harness
 /// no longer pins an external git revision: `seance@<tree>` names the

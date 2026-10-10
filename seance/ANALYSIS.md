@@ -392,7 +392,8 @@ The old empty-key overwrite was fixed in #7.
 - one passphrase slot serves the pasted PEM and the referenced file
   (`:104-110`, STATUS 19), so switching back can leave the PEM undecryptable;
 - a referenced key's passphrase cannot be cleared (STATUS 17; STATUS documents
-  dartssh2 3.0.2 erroring on some key types and silently accepting PKCS#1);
+  dartssh2 4.1.0, like 3.0.2, erroring on some key types and silently
+  accepting PKCS#1);
 - re-pasting a key with a blank passphrase box drops the stored passphrase
   (STATUS 21);
 - obsolete credentials are not removed transactionally.
@@ -1066,9 +1067,12 @@ known_hosts import/export (`HostKey.fromPublicKey` is unused), no key
 generation or public-key deployment. The Windows agent was never exercised at
 runtime, and real agents including password-manager integrations were not
 validated. Poltergeist's older pin still needs an audited adoption (XAPP-02).
-dartssh2 3.0.2 defaults include dh-group1-sha1, hmac-md5,
-ssh-rsa/SHA-1 and CBC, with no strict-KEX (Terrapin) support (S2-22, table row
-only: re-trace against the pinned source). Dependabot covers github-actions and
+dartssh2 3.0.2 defaults included dh-group1-sha1, hmac-md5,
+ssh-rsa/SHA-1 and CBC, with no strict-KEX (Terrapin) support (S2-22). Since
+2026-10-10 the 4.1.0 pin negotiates strict KEX and drops dh-group1-sha1 and
+hmac-md5; both apps keep SHA-1 key exchange and CBC as a last resort and
+ssh-rsa in its 3.0.2 slot before ECDSA (owner decisions). Dependabot covers
+github-actions and
 gradle only (not pub), and its gradle entry points at `/`, where no Gradle files
 exist (X-14).
 
@@ -1078,9 +1082,9 @@ fingerprint aids; then forwarding UI for local, remote and dynamic tunnels with
 explicit bind addresses; per-device key generation and public-key deployment
 as a separate slice. Validate real agents, including password-manager
 integrations and Windows named pipes. Restrict default
-algorithms to modern sets with an explicit per-host legacy opt-in; track
-strict-KEX upstream. Dependabot: add `pub` for the workspace and the app;
-point gradle at `/app/seance_app/android`.
+algorithms to modern sets with an explicit per-host legacy opt-in (an owner
+decision; the global fallback stays until then). Dependabot: add `pub` for the
+workspace and the app; point gradle at `/app/seance_app/android`.
 
 **Gate.** A real sshd matrix (agent cancellation and unavailability, every-hop
 TOFU, jump failure cleanup, explicit forwarding bind addresses and lifecycle,

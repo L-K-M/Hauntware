@@ -11,7 +11,7 @@ environment:
 
 dependencies:
   # Path dependency: the bench package keeps its own resolution
-  # (dartssh2 3.0.2, seance_core as a seance/ sibling path)
+  # (dartssh2 4.1.0, seance_core as a seance/ sibling path)
   # outside the root workspace.
   # Keep this shim out of any root pub workspace so that resolution is
   # never merged into the root solver.

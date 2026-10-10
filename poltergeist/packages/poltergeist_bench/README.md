@@ -19,6 +19,12 @@ derived from bytes and microseconds. Throughput attempts are checkpointed in
 `bench-results.json.attempts.json` before and after every prime, warmup, and
 timed transfer.
 
+The harness resolves dartssh2 4.1.0 and connects with the apps' algorithm
+proposal (`suiteSshAlgorithms`, D9 amendment), so measurements describe
+what the apps negotiate; the algorithm audit's forced profiles still
+override it. The committed M0 evidence stays attributed to 3.0.2, the
+version it measured.
+
 CI runs one `standard` shard plus twelve isolated shaped-1-GB samples: both
 directions, three variants, and two replicates. Each job creates
 `bench-shard.json` before fixture setup and finalizes it on success or failure.

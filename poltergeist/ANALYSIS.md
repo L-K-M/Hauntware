@@ -699,6 +699,11 @@ consumer of `.terminated` (`app: services/engine_session.dart:41`,
 - **Upstream:** `onError` on `SftpClient`'s listener and
   `allowMalformed: true` for status/language strings, through a Séance or
   dartssh2 PR and a pin bump (rule 9: no fork).
+  **2026-10-10:** the dartssh2 4.1.0 pin has the listener's `onError` and
+  catches packet decode errors, which now fail that SFTP client's
+  requests instead of escaping uncaught (read from source, not re-run).
+  Status strings are still decoded strictly. P1-01a/b are still needed for
+  every other uncaught error.
 - **Gate.** `engine_client_test.dart`: an entrypoint wrapping `engineMain`
 throws from a microtask after boot; a later `openLocalChannel` succeeds
 and one fault event arrives (fails today: isolate exits). App: a fake
@@ -1756,13 +1761,13 @@ re-traced. Do not patch locally (rule 9).
 |---|---|---|---|
 | S2-02 | P1 | Upload "Replace" over a symlink replaced the link with a 0777 regular file; type bits sent | Fixed in Séance #138 (merged); arrives with X-25. Residuals from #138: temp readable before `fsetstat` (dartssh2 open has no attrs), uid/gid not preserved on replace, kept setuid/setgid moves to uploader identity, link planted between second preflight and rename (no SFTP compare-and-rename). |
 | S2-06 | P2 | `_cancelWhenRequested` adds a listener per chunk to a never-completing future | Bulk transfers use the same adapter. |
-| S2-07 | P2 | Exec, shell and channel-open requests have no deadline; dartssh2 never fails them on transport close | SFTP channel opens can hang a lease. |
+| S2-07 | P2 | Exec, shell and channel-open requests have no deadline; dartssh2 never fails them on transport close | SFTP channel opens can hang a lease. 2026-10-10: dartssh2 4.1.0 fails pending requests when the channel or transport ends; the missing deadline remains. |
 | S2-09 | P2 | Upload temp world-readable while staging; replace drops uid/gid | Every upload. |
 | S2-14 | P2 | TOFU pins keyed by bare `host:port` collide across jump routes | Relevant once jump hosts execute (X-25); design with P1-04. |
 | S2-15 | P2 | Upload throughput capped at one local chunk per round trip | Upload throughput; D8 gates. |
 | S2-17 | P3 | Host-key algorithm preference ignores the pinned key type (false "changed") | Same opener. |
 | S2-19 | P3 | SFTP listing does not validate server-supplied names (`/`, `..`, NUL) | Pane listings and the walker; relate to STATUS #13 raw names. |
-| S2-22 | P3 | Weak default algorithms (dh-group1-sha1, hmac-md5, ssh-rsa/SHA-1, CBC); no strict-KEX | Same opener. |
+| S2-22 | P3 | Weak default algorithms (dh-group1-sha1, hmac-md5, ssh-rsa/SHA-1, CBC); no strict-KEX | Same opener. 2026-10-10: dartssh2 4.1.0 negotiates strict KEX and drops dh-group1-sha1 and hmac-md5; both apps keep SHA-1 KEX and CBC as a last resort and ssh-rsa in its 3.0.2 slot before ECDSA (D9 amendment). |
 
 Further upstream Séance tasks named by the sibling review, owned by
 Séance's `ANALYSIS.md` and picked up at a re-pin: synced-pin

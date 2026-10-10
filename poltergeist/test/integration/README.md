@@ -28,6 +28,10 @@ readiness check; a subsequent test verifies the original key is served.
 `restore-modern` stops both swap services before reclaiming their fixed
 shared port, so cleanup can retry after partial startup or readiness failures.
 
+The cipher suite connects through the production pool to `sshd-chacha`,
+whose only cipher is chacha20-poly1305. M0 recorded that server as
+unreachable on dartssh2 3.0.2; 3.2.0 added the cipher.
+
 Ordinary package tests skip these cases unless `POLTERGEIST_SSHD` and the
 suite's service-port variable are set; `run.sh` exports the complete fixture
 environment. Use Docker Compose and the Dart SDK to run the command above.

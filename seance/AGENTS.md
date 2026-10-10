@@ -475,8 +475,24 @@ Do not "simplify" these away — they are load-bearing:
 - **dartssh2 `onVerifyHostKey(type, fingerprint)` gives the SHA-256 fingerprint
   string as bytes, NOT the raw host key.** That's why `HostKey` is identified by
   `fingerprintSha256`; `publicKeyBase64` is only known from a known_hosts import.
-- **dartssh2 does not expose `SSHUserInfoRequest`** from its barrel — the
-  keyboard-interactive handler lets the lambda parameter type be inferred.
+  Since 4.0.0 it is consulted once per connection, and a host key that changes
+  during a rekey ends the connection with `SSHHostkeyError`.
+- **dartssh2 exports `SSHUserInfoRequest`** from its barrel (3.0.2 already did;
+  this note used to say otherwise). The keyboard-interactive handler still
+  lets the lambda parameter type be inferred, which is equally valid.
+- **The `SSHClient` passes `algorithms: suiteSshAlgorithms`**
+  (`ssh/ssh_algorithms.dart`, not barrel-exported; Poltergeist's host-key
+  preflight and the bench pass it too). It keeps what 3.0.2 negotiated:
+  AES-CTR before dartssh2's slow pure-Dart AES-GCM, `ssh-rsa` in its old
+  slot before ECDSA so old servers keep their pinned RSA key, and the SHA-1
+  key exchanges and AES-CBC that 4.0.0 dropped as a last resort (owner
+  decisions). Omitting the argument silently switches every server to
+  AES-GCM and drops the legacy algorithms. `ssh_algorithms_test.dart` pins
+  the lists.
+- **dartssh2 (3.2.0+) rejects any message but key exchange while a key
+  exchange runs**, and the client starts one as soon as it connects. A test
+  socket that injects `USERAUTH_SUCCESS` without a handshake never
+  authenticates; use the real in-memory server in `test/support/ssh_peer.dart`.
 - **dartssh2 has no built-in local ssh-agent path.** `SshAgentClient` speaks
   the OpenSSH agent protocol and exposes each key through
   `SSHIdentity.custom`; Unix uses `$SSH_AUTH_SOCK`, while Windows performs
