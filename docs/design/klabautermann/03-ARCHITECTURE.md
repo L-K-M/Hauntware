@@ -202,7 +202,7 @@ value. Path abbreviations: `SC` = `seance/packages/seance_core/lib`, `SP` =
 |---|---|---|---|
 | SAF-11 | v1 | MVP | The MVP already mutates; the log is small and builds trust |
 | SAF-02 data source | `sudo -S -p '' -v && sudo -n -- <cmd>` in one shell | Elevation prelude with no `exec` and a trailing `exit $?` | bash execs the last command of `-c` implicitly, which breaks the PPID-keyed credential cache [L] (8.3) |
-| SAF-08 note | `sudo -S` cannot feed a password to `dial-stdio` | It can, through the prelude | The builtin `read` consumes exactly one line and leaves the rest of stdin to the command [L] |
+| STK-06, STK-23, IMG-08 | Privilege `docker` | Refused, with the missing sudo right named, when the engine is reachable only through a NOPASSWD rule scoped to `docker`: these detached operations then need root, and such a rule cannot start a root runner (7.17; S4 decides whether a login-user wrapper is added) | sudo checks the runner, not `docker` [R: sudoers(5)] |
 | SAF-23 | `systemd-run --collect`, followed with `journalctl -u` | Transient unit plus a host status record and log file; runner chosen per host and by whether the operation needs root (7.17) | Collected units lose `Result`; users without journal access cannot follow root units (D25) |
 | STK-12 history location | History file with previous digests and file backups "next to the stack or under `~/.local/state/klabautermann/`" | Deploy history only under `~/.local/state/klabautermann/deploys/`; file backups only in the central backup directories (8.11) | A `.bak` file in a directory read by glob (for example `sites-enabled/*`) is loaded by the service (D27). SAF-12, STK-07 and X-05 leave the backup location open; r2 §6.3, the source behind STK-07, keeps the copy next to the file |
 | CN-03 | Nonce-framed sections | Also length-prefixed; nonce delivered on stdin, never in argv | Other local users can read argv; length prefixes defeat forged markers even if a nonce leaks (D22) |
@@ -2156,7 +2156,9 @@ matching row applies:
   disconnects [R: review; logind behaviour]; hence the `Linger=yes`
   condition. With logind `KillUserProcesses=yes`, a `setsid` process in the
   session scope may also be killed at logout [U]; the preview then says so
-  and suggests admin mode or keeping the app open.
+  and suggests admin mode (not on a host whose sudo rights cannot start the
+  system runners, see Docker-scoped sudo rules below), enabling linger or
+  keeping the app open.
 - `--collect` unloads the unit after completion even on failure, and a
   successful transient unit is unloaded anyway [R: systemd-run(1), per
   review], so the unit's `Result` is not the record of truth. The inline

@@ -802,7 +802,7 @@ record only. Corrections below section 12 point to 03.
 | Source | Claim | Correction |
 |---|---|---|
 | A §8.2 | `sh -c 'sudo -S -p "" -v && exec sudo -n -- <cmd>'` shares the credential cache | Fails: "a password is required" [L]; replaced by the prelude (8.3) |
-| A §4.9, §8.3; `02-FEATURES.md` SAF-08 | Password sudo cannot drive `docker system dial-stdio` | It can: the builtin `read` consumes one line and leaves the rest of stdin [L] |
+| A §4.9, §8.3; `02-FEATURES.md` SAF-08 | Password sudo cannot drive `docker system dial-stdio` | It can: the builtin `read` consumes one line and leaves the rest of stdin [L]; 02 SAF-08 now states this |
 | A §5.2 | The fast sampler runs only builtins | Its sketch forked a subshell per collector; builtin collectors now append to a variable (6.2) |
 | A §7.8 | Fallback log at `${XDG_RUNTIME_DIR:-/tmp}/klabautermann-op-<id>.log` | Predictable shared path; replaced by user-owned or root-owned operation directories (7.17) |
 | B §2.3 | `ghost_terminal` in `planchette/packages` | `xterm_engine.dart:5` imports `seance_core` [V]; `seance_terminal` instead (D11) |
