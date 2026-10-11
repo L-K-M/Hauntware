@@ -917,7 +917,6 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     // The rename commit's operation tag and its path arithmetic — the
     // engine's operation label and machine path data, never UI copy.
     "'rename'",
-    r"'$base$baseSeparator'",
     r"'$parent$raw'",
     "'fault:\${fault.name}'",
     // The U+FFFD flagged-name signal Quick Select excludes from matching
@@ -1106,6 +1105,9 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'/'",
     "'.'",
     "' '",
+    // renameParentPrefix's path arithmetic: machine path data.
+    "''",
+    r"'$base$baseSeparator'",
     'r\'[<>:"\\\\|?*]\'',
     r"r'^(?:CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\.|$)'",
   },
@@ -1570,6 +1572,26 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   // Registered command identity, not its localized label.
   'lib/ui/sidebar/seance_commands.dart': {"'connect.openTerminalInSeance'"},
   'lib/ui/panes/compare_files_command.dart': {"'file.compareFiles'"},
+  'lib/ui/panes/batch_rename_command.dart': {"'file.batchRename'"},
+  // The Format start field's numeric seed: machine data, never copy.
+  'lib/ui/panes/batch_rename_dialog.dart': {"'1'"},
+  // Rename Items' filename grammar: extension splits, dot names, the
+  // rules' joins and number padding. Machine path data, never copy.
+  'lib/services/pane_batch_rename.dart': {
+    "''",
+    "'.'",
+    "'..'",
+    "'0'",
+    r"'$newStem$extension'",
+    r"'$text$name'",
+    r"'$stem$text$extension'",
+    r"'$number'",
+    r"'$digits $label$extension'",
+    r"'$label $digits$extension'",
+    r"'$startAt'",
+    r"'$last'",
+    r"'${target.parentPrefix}$newName'",
+  },
   // Widget keys and numeric endpoint formatting; all visible prose is ARB.
   'lib/ui/deep_link_dialogs.dart': {
     "'deepLink.failure'",

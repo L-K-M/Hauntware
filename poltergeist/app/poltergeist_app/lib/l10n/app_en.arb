@@ -8691,7 +8691,7 @@
   "@batchRenameStartAtInvalid": {
     "description": "Error under the Format start field when it is empty or out of range."
   },
-  "batchRenameConfirm": "{count, plural, =1{Rename 1 Item} other{Rename {count} Items}}",
+  "batchRenameConfirm": "{count, plural, =0{Rename} =1{Rename 1 Item} other{Rename {count} Items}}",
   "@batchRenameConfirm": {
     "description": "Rename Items confirm button; count is the number of items that will change.",
     "placeholders": {

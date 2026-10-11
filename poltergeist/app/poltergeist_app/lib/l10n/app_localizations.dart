@@ -9882,7 +9882,7 @@ abstract class AppLocalizations {
   /// Rename Items confirm button; count is the number of items that will change.
   ///
   /// In en, this message translates to:
-  /// **'{count, plural, =1{Rename 1 Item} other{Rename {count} Items}}'**
+  /// **'{count, plural, =0{Rename} =1{Rename 1 Item} other{Rename {count} Items}}'**
   String batchRenameConfirm(int count);
 
   /// Rename Items: closes the dialog without renaming.

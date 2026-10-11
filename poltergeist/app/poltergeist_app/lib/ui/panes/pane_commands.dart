@@ -483,6 +483,8 @@ List<RegisteredCommand> buildPaneCommands({
         final cursor = pane?.cursorIndex;
         return pane != null &&
             pane.verbsEnabled &&
+            // One rename surface at a time: Rename Items owns the rows.
+            !pane.batchRenameActive &&
             cursor != null &&
             cursor >= 0 &&
             cursor < pane.entries.length &&
@@ -493,6 +495,9 @@ List<RegisteredCommand> buildPaneCommands({
       },
       disabledReason: (l10n) {
         final pane = activeTab();
+        if (pane != null && pane.batchRenameActive) {
+          return l10n.commandDisabledRenameBusy;
+        }
         final cursor = pane?.cursorIndex;
         final flagged = pane != null &&
             cursor != null &&

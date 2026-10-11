@@ -87,6 +87,8 @@ bool _canTransfer(
   final source = workspace.activeTabController;
   final target = _otherPaneTarget(workspace);
   if (source == null || target == null || !source.verbsEnabled) return false;
+  // A Rename Items dialog owns the source rows until it closes.
+  if (source.batchRenameActive) return false;
   final sourceLocation = source.location;
   final targetLocation = target.location;
   if (sourceLocation == null || targetLocation == null) return false;
@@ -208,6 +210,9 @@ List<RegisteredCommand> buildShellCommands({
     final pane = workspace.activeTabController;
     return pane != null &&
         pane.verbsEnabled &&
+        // A Rename Items dialog owns these rows until it closes; the
+        // macOS menu bar stays live under in-app dialogs.
+        !pane.batchRenameActive &&
         pane.selectedEntries.isNotEmpty;
   }
 

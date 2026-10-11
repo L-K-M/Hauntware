@@ -6958,6 +6958,7 @@ class AppLocalizationsEn extends AppLocalizations {
       locale: localeName,
       other: 'Rename $count Items',
       one: 'Rename 1 Item',
+      zero: 'Rename',
     );
     return '$_temp0';
   }
