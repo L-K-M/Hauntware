@@ -4,6 +4,49 @@ Living snapshot of where Poltergeist is, what's proven, and what to pick up
 next. Read [AGENTS.md](../AGENTS.md) for build/test commands and
 [09-PLAYBOOK.md](plan/09-PLAYBOOK.md) for the PR process.
 
+## Rename Items (2026-10-11)
+
+File ▸ Rename Items… renames two or more selected rows through one rule
+(02 §2.6): Replace Text (literal, Match case on, stem only unless
+Include extension), Add Text (before the name, or after it and before a
+file's extension) or Format (`Name N` or `N Name`, numbered in listing
+order from Start numbers at and padded to the widest number; an empty
+Name keeps each item's name). It sits in the File menu after Rename, in
+the row context menu and the phone More sheet; there is no shortcut, so
+Return and F2 stay inline on the cursor row. This is the batch rename
+item of the v1.x backlog (07 §3.13).
+
+A live preview names every problem, and any problem blocks the whole
+run: invalid and newly hidden names, duplicates within a folder, a name
+another entry keeps (hidden ones included, compared case- and
+normalization-insensitively), swaps, and an item that left its folder.
+A new name that is another moving item's old name runs after it.
+Rename re-plans against the current listings, then sends one rename at
+a time; the VFS never overwrites. Typed refusals are recorded and the
+run goes on (dependents are skipped); Stop, a lost connection, an
+unexpected error or the tab leaving its folder end it. There is no
+rollback: unless every item renamed, each row's outcome stays until
+Done. The renamed items end up selected, inside open folders too.
+While the dialog is open, inline Rename, Delete, Duplicate and Copy or
+Move to Other Pane wait, and closing the tab asks first.
+
+The planner and executor are pure (`services/pane_batch_rename.dart`,
+40 tests); the pane controller owns the session (17 tests: lifecycle,
+funnels, refusal, reselect); the command, dialog and shell paths have
+6, 8 and 1 tests, and the tab-close trigger one more. Inline rename's
+parent-path derivation moved to `renameParentPrefix` so both renames
+build paths the same way. The design came from three independent
+proposals and a judge; the owner decisions it took defaults for are
+listed in the PR. An independent review then confirmed four defects,
+fixed with regression tests: pending reselects that could join a later
+selection, a dialog that could not close after a covered pop, Esc lost
+to the mode picker mid-run, and a silent refusal while reconnecting.
+
+Local validation: Flutter analysis is clean, the import guard passes,
+and all 3,348 app tests pass. Not run: native menus, a case-insensitive
+APFS or NTFS volume, and a case-insensitive SFTP server; the QA
+checklist's Rename Items section covers them.
+
 ## Compare Files (2026-10-11)
 
 File ▸ Compare Files opens the sync plan's read-only side-by-side view
@@ -8645,7 +8688,8 @@ if risk 8's cut line is ever exercised). None was started in this release-prep
 slice; D10 completed on 2026-09-29 and D27 completed on 2026-09-30 as recorded
 above. Numbered fast-follow items 1–4 and deep links are complete; the text-diff
 view remains demand-dependent. From the v1.x backlog, the Compare entry
-point shipped on 2026-10-11 as Compare Files. Item
+point shipped on 2026-10-11 as Compare Files, and batch rename as Rename
+Items. Item
 23's remote-transfer wiring is the de-facto headline fast-follow even
 though §3.13 predates naming it.
 

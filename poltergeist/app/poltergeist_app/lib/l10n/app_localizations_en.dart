@@ -975,6 +975,9 @@ class AppLocalizationsEn extends AppLocalizations {
       'An apply-to-enclosed-items change is running.';
 
   @override
+  String get tabCloseTriggerBatchRename => 'Rename Items is open or running.';
+
+  @override
   String get tabCloseTriggerSyncAnchor => 'The tab anchors a sync pair.';
 
   @override
@@ -6867,6 +6870,278 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String compareFilesTitle(String left, String right) {
     return 'Compare $left and $right';
+  }
+
+  @override
+  String get fileBatchRenameLabel => 'Rename Items…';
+
+  @override
+  String get commandDisabledSelectTwoOrMore =>
+      'Select two or more items. To rename one item, use Rename.';
+
+  @override
+  String get commandDisabledBatchRenameNested =>
+      'The selection includes items inside a selected folder. Deselect them or the folder.';
+
+  @override
+  String get commandDisabledBatchRenameAllFlagged =>
+      'None of the selected names are valid UTF-8.';
+
+  @override
+  String get commandDisabledRenameBusy =>
+      'Finish the open rename or permissions change first.';
+
+  @override
+  String batchRenameTitle(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Rename $count Items',
+      one: 'Rename 1 Item',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get batchRenameModeLabel => 'Rename mode';
+
+  @override
+  String get batchRenameModeReplaceText => 'Replace Text';
+
+  @override
+  String get batchRenameModeAddText => 'Add Text';
+
+  @override
+  String get batchRenameModeFormat => 'Format';
+
+  @override
+  String get batchRenameFindLabel => 'Find';
+
+  @override
+  String get batchRenameReplaceWithLabel => 'Replace with';
+
+  @override
+  String get batchRenameMatchCase => 'Match case';
+
+  @override
+  String get batchRenameIncludeExtension => 'Include extension';
+
+  @override
+  String get batchRenameAddTextLabel => 'Text to add';
+
+  @override
+  String get batchRenamePlacementLabel => 'Where';
+
+  @override
+  String get batchRenamePlacementAfterName => 'After name';
+
+  @override
+  String get batchRenamePlacementBeforeName => 'Before name';
+
+  @override
+  String get batchRenameFormatNameLabel => 'Name';
+
+  @override
+  String get batchRenameFormatNameHint => 'Leave empty to keep each name';
+
+  @override
+  String get batchRenameStartAtLabel => 'Start numbers at';
+
+  @override
+  String get batchRenameStartAtInvalid =>
+      'Enter a whole number from 0 to 999999.';
+
+  @override
+  String batchRenameConfirm(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Rename $count Items',
+      one: 'Rename 1 Item',
+      zero: 'Rename',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get batchRenameCancel => 'Cancel';
+
+  @override
+  String get batchRenameStop => 'Stop';
+
+  @override
+  String get batchRenameDone => 'Done';
+
+  @override
+  String get batchRenameStopping => 'Stopping after the current item…';
+
+  @override
+  String batchRenameProgress(int done, int total) {
+    return 'Renaming $done of $total…';
+  }
+
+  @override
+  String batchRenameSummaryReady(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count items will be renamed.',
+      one: '1 item will be renamed.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get batchRenameSummaryNothing => 'No names change.';
+
+  @override
+  String batchRenameSummaryBlocked(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count items need attention before you can rename.',
+      one: '1 item needs attention before you can rename.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String batchRenameSummaryUnchanged(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count items unchanged',
+      one: '1 item unchanged',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String batchRenameSummaryLeftOut(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count items left out: their names aren\'t valid UTF-8.',
+      one: '1 item left out: its name isn\'t valid UTF-8.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get batchRenameChanged =>
+      'The folder changed since the preview. Review the updated names.';
+
+  @override
+  String get batchRenameUnavailable =>
+      'The folder isn\'t available right now. Try again once it has reloaded.';
+
+  @override
+  String batchRenameFolderCaption(String folder) {
+    return 'In $folder';
+  }
+
+  @override
+  String get batchRenameRowUnchanged => 'No change';
+
+  @override
+  String get batchRenameRowLeftOut => 'Left out: the name isn\'t valid UTF-8';
+
+  @override
+  String get batchRenameRowNameEmpty => 'The new name would be empty.';
+
+  @override
+  String get batchRenameRowHidden =>
+      'Names starting with “.” are hidden. To hide an item, rename it on its own.';
+
+  @override
+  String get batchRenameRowDuplicate =>
+      'Another selected item here would get the same name.';
+
+  @override
+  String batchRenameRowExists(String name) {
+    return '“$name” already exists in this folder.';
+  }
+
+  @override
+  String get batchRenameRowCycle =>
+      'These items would swap names. Rename them in two steps.';
+
+  @override
+  String get batchRenameRowRenamed => 'Renamed';
+
+  @override
+  String batchRenameRowSkippedBlocked(String name) {
+    return 'Not renamed because “$name” could not be renamed first.';
+  }
+
+  @override
+  String get batchRenameRowNotAttempted => 'Not attempted';
+
+  @override
+  String get batchRenameRowUnknown => 'Outcome unknown. Refresh to check.';
+
+  @override
+  String batchRenameRowSemantics(String oldName, String newName) {
+    return '$oldName to $newName';
+  }
+
+  @override
+  String batchRenameResultSome(int renamed, int total) {
+    String _temp0 = intl.Intl.pluralLogic(
+      total,
+      locale: localeName,
+      other: 'Renamed $renamed of $total items.',
+      one: 'Renamed $renamed of 1 item.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String batchRenameResultStopped(int renamed, int total) {
+    String _temp0 = intl.Intl.pluralLogic(
+      total,
+      locale: localeName,
+      other: 'Stopped after renaming $renamed of $total items.',
+      one: 'Stopped after renaming $renamed of 1 item.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String batchRenameResultConnectionLost(int renamed, int total) {
+    String _temp0 = intl.Intl.pluralLogic(
+      total,
+      locale: localeName,
+      other:
+          'The connection was lost after renaming $renamed of $total items. Refresh to check items marked unknown.',
+      one:
+          'The connection was lost after renaming $renamed of 1 item. Refresh to check items marked unknown.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String batchRenameResultPaneChanged(int renamed, int total) {
+    String _temp0 = intl.Intl.pluralLogic(
+      total,
+      locale: localeName,
+      other:
+          'This tab left the folder or reconnected after renaming $renamed of $total items.',
+      one:
+          'This tab left the folder or reconnected after renaming $renamed of 1 item.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String batchRenameResultFault(int renamed, int total) {
+    String _temp0 = intl.Intl.pluralLogic(
+      total,
+      locale: localeName,
+      other: 'Something went wrong after renaming $renamed of $total items.',
+      one: 'Something went wrong after renaming $renamed of 1 item.',
+    );
+    return '$_temp0';
   }
 
   @override

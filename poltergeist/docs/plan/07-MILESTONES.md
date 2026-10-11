@@ -836,6 +836,9 @@ batch/multi-rename UI; the named skip-rules engine (Transmit-style Rules);
 custom keymap editing UI; the native file icons/thumbnails channel; the
 cross-pane Compare entry point; Quick Look prefetch / preview-cache
 warming. Scheduled opportunistically after the numbered fast-follows.
+Landed: the Compare entry point (Compare Files, 2026-10-11) and batch
+rename (Rename Items, 02 §2.6, 2026-10-11; its remainder stays in 02's
+deferral table).
 
 Everything else on anyone's wishlist is in the D25 parking lot; building
 it early is a plan violation, not initiative.

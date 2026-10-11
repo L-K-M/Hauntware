@@ -1634,6 +1634,12 @@ abstract class AppLocalizations {
   /// **'An apply-to-enclosed-items change is running.'**
   String get tabCloseTriggerApplyToEnclosed;
 
+  /// Tab-close guard item: a Rename Items dialog is open on the tab, editing, running or showing its outcome (02 §2.6, §3).
+  ///
+  /// In en, this message translates to:
+  /// **'Rename Items is open or running.'**
+  String get tabCloseTriggerBatchRename;
+
   /// Tab-close guard item: the tab anchors a Sync Browsing pair (02 §3, §7).
   ///
   /// In en, this message translates to:
@@ -9740,6 +9746,324 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Compare {left} and {right}'**
   String compareFilesTitle(String left, String right);
+
+  /// file.batchRename: opens the Rename Items dialog for two or more selected rows (02 §2.6).
+  ///
+  /// In en, this message translates to:
+  /// **'Rename Items…'**
+  String get fileBatchRenameLabel;
+
+  /// Palette reason under Rename Items while fewer than two rows are selected.
+  ///
+  /// In en, this message translates to:
+  /// **'Select two or more items. To rename one item, use Rename.'**
+  String get commandDisabledSelectTwoOrMore;
+
+  /// Palette reason under Rename Items while a selected row sits inside a selected, expanded folder.
+  ///
+  /// In en, this message translates to:
+  /// **'The selection includes items inside a selected folder. Deselect them or the folder.'**
+  String get commandDisabledBatchRenameNested;
+
+  /// Palette reason under Rename Items while every selected name was decoded with replacement characters (02 §13).
+  ///
+  /// In en, this message translates to:
+  /// **'None of the selected names are valid UTF-8.'**
+  String get commandDisabledBatchRenameAllFlagged;
+
+  /// Palette reason under Rename and Rename Items while another rename or an apply-to-enclosed permissions change is open or running on the tab.
+  ///
+  /// In en, this message translates to:
+  /// **'Finish the open rename or permissions change first.'**
+  String get commandDisabledRenameBusy;
+
+  /// Rename Items dialog title; count is the number of selected items.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Rename 1 Item} other{Rename {count} Items}}'**
+  String batchRenameTitle(int count);
+
+  /// Label of the Rename Items mode picker.
+  ///
+  /// In en, this message translates to:
+  /// **'Rename mode'**
+  String get batchRenameModeLabel;
+
+  /// Rename Items mode: replace literal text in each name.
+  ///
+  /// In en, this message translates to:
+  /// **'Replace Text'**
+  String get batchRenameModeReplaceText;
+
+  /// Rename Items mode: add text before or after each name.
+  ///
+  /// In en, this message translates to:
+  /// **'Add Text'**
+  String get batchRenameModeAddText;
+
+  /// Rename Items mode: give each item a name and a number.
+  ///
+  /// In en, this message translates to:
+  /// **'Format'**
+  String get batchRenameModeFormat;
+
+  /// Replace Text field: the literal text to find.
+  ///
+  /// In en, this message translates to:
+  /// **'Find'**
+  String get batchRenameFindLabel;
+
+  /// Replace Text field: the literal replacement.
+  ///
+  /// In en, this message translates to:
+  /// **'Replace with'**
+  String get batchRenameReplaceWithLabel;
+
+  /// Replace Text option: find matches case exactly.
+  ///
+  /// In en, this message translates to:
+  /// **'Match case'**
+  String get batchRenameMatchCase;
+
+  /// Replace Text option: also search file extensions.
+  ///
+  /// In en, this message translates to:
+  /// **'Include extension'**
+  String get batchRenameIncludeExtension;
+
+  /// Add Text field: the text added to each name.
+  ///
+  /// In en, this message translates to:
+  /// **'Text to add'**
+  String get batchRenameAddTextLabel;
+
+  /// Add Text and Format option: before or after the name.
+  ///
+  /// In en, this message translates to:
+  /// **'Where'**
+  String get batchRenamePlacementLabel;
+
+  /// Placement choice: after the name, before a file extension.
+  ///
+  /// In en, this message translates to:
+  /// **'After name'**
+  String get batchRenamePlacementAfterName;
+
+  /// Placement choice: before the name.
+  ///
+  /// In en, this message translates to:
+  /// **'Before name'**
+  String get batchRenamePlacementBeforeName;
+
+  /// Format field: the name every item gets before or after its number.
+  ///
+  /// In en, this message translates to:
+  /// **'Name'**
+  String get batchRenameFormatNameLabel;
+
+  /// Hint in the Format name field: an empty name keeps each item's own name.
+  ///
+  /// In en, this message translates to:
+  /// **'Leave empty to keep each name'**
+  String get batchRenameFormatNameHint;
+
+  /// Format field: the first number.
+  ///
+  /// In en, this message translates to:
+  /// **'Start numbers at'**
+  String get batchRenameStartAtLabel;
+
+  /// Error under the Format start field when it is empty or out of range.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a whole number from 0 to 999999.'**
+  String get batchRenameStartAtInvalid;
+
+  /// Rename Items confirm button; count is the number of items that will change.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{Rename} =1{Rename 1 Item} other{Rename {count} Items}}'**
+  String batchRenameConfirm(int count);
+
+  /// Rename Items: closes the dialog without renaming.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get batchRenameCancel;
+
+  /// Rename Items: stops a running batch after the current item.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop'**
+  String get batchRenameStop;
+
+  /// Rename Items: closes the dialog after a run.
+  ///
+  /// In en, this message translates to:
+  /// **'Done'**
+  String get batchRenameDone;
+
+  /// Rename Items: shown after Stop while the item in flight settles.
+  ///
+  /// In en, this message translates to:
+  /// **'Stopping after the current item…'**
+  String get batchRenameStopping;
+
+  /// Rename Items progress line while running.
+  ///
+  /// In en, this message translates to:
+  /// **'Renaming {done} of {total}…'**
+  String batchRenameProgress(int done, int total);
+
+  /// Rename Items summary when the plan can run.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 item will be renamed.} other{{count} items will be renamed.}}'**
+  String batchRenameSummaryReady(int count);
+
+  /// Rename Items summary when the rule changes no name.
+  ///
+  /// In en, this message translates to:
+  /// **'No names change.'**
+  String get batchRenameSummaryNothing;
+
+  /// Rename Items summary while rows block the run.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 item needs attention before you can rename.} other{{count} items need attention before you can rename.}}'**
+  String batchRenameSummaryBlocked(int count);
+
+  /// Rename Items summary detail: rows whose name stays the same.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 item unchanged} other{{count} items unchanged}}'**
+  String batchRenameSummaryUnchanged(int count);
+
+  /// Rename Items summary detail: flagged names that are never renamed (02 §13).
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 item left out: its name isn\'t valid UTF-8.} other{{count} items left out: their names aren\'t valid UTF-8.}}'**
+  String batchRenameSummaryLeftOut(int count);
+
+  /// Rename Items banner: the Rename press re-planned against a changed folder and found problems; nothing was renamed.
+  ///
+  /// In en, this message translates to:
+  /// **'The folder changed since the preview. Review the updated names.'**
+  String get batchRenameChanged;
+
+  /// Rename Items banner: Rename was pressed while the pane was reconnecting or its listing had failed; nothing was renamed.
+  ///
+  /// In en, this message translates to:
+  /// **'The folder isn\'t available right now. Try again once it has reloaded.'**
+  String get batchRenameUnavailable;
+
+  /// Rename Items preview: the folder of a row when the selection spans several folders.
+  ///
+  /// In en, this message translates to:
+  /// **'In {folder}'**
+  String batchRenameFolderCaption(String folder);
+
+  /// Rename Items row status: the name stays the same.
+  ///
+  /// In en, this message translates to:
+  /// **'No change'**
+  String get batchRenameRowUnchanged;
+
+  /// Rename Items row status: a flagged name that is never renamed (02 §13).
+  ///
+  /// In en, this message translates to:
+  /// **'Left out: the name isn\'t valid UTF-8'**
+  String get batchRenameRowLeftOut;
+
+  /// Rename Items row status: the rule leaves no name before the extension, or no name at all.
+  ///
+  /// In en, this message translates to:
+  /// **'The new name would be empty.'**
+  String get batchRenameRowNameEmpty;
+
+  /// Rename Items row status: the new name would hide the item.
+  ///
+  /// In en, this message translates to:
+  /// **'Names starting with “.” are hidden. To hide an item, rename it on its own.'**
+  String get batchRenameRowHidden;
+
+  /// Rename Items row status: two selected items in one folder would get the same new name.
+  ///
+  /// In en, this message translates to:
+  /// **'Another selected item here would get the same name.'**
+  String get batchRenameRowDuplicate;
+
+  /// Rename Items row status: the new name is taken by an item that keeps its name.
+  ///
+  /// In en, this message translates to:
+  /// **'“{name}” already exists in this folder.'**
+  String batchRenameRowExists(String name);
+
+  /// Rename Items row status: the new names form a swap or rotation that cannot run in any order.
+  ///
+  /// In en, this message translates to:
+  /// **'These items would swap names. Rename them in two steps.'**
+  String get batchRenameRowCycle;
+
+  /// Rename Items row outcome: the item was renamed.
+  ///
+  /// In en, this message translates to:
+  /// **'Renamed'**
+  String get batchRenameRowRenamed;
+
+  /// Rename Items row outcome: skipped because the item whose name it takes did not rename.
+  ///
+  /// In en, this message translates to:
+  /// **'Not renamed because “{name}” could not be renamed first.'**
+  String batchRenameRowSkippedBlocked(String name);
+
+  /// Rename Items row outcome: the run ended before this item.
+  ///
+  /// In en, this message translates to:
+  /// **'Not attempted'**
+  String get batchRenameRowNotAttempted;
+
+  /// Rename Items row outcome: the request may or may not have applied.
+  ///
+  /// In en, this message translates to:
+  /// **'Outcome unknown. Refresh to check.'**
+  String get batchRenameRowUnknown;
+
+  /// Screen-reader label of a Rename Items preview row.
+  ///
+  /// In en, this message translates to:
+  /// **'{oldName} to {newName}'**
+  String batchRenameRowSemantics(String oldName, String newName);
+
+  /// Rename Items result: the run finished but not every item renamed.
+  ///
+  /// In en, this message translates to:
+  /// **'{total, plural, =1{Renamed {renamed} of 1 item.} other{Renamed {renamed} of {total} items.}}'**
+  String batchRenameResultSome(int renamed, int total);
+
+  /// Rename Items result: Stop ended the run.
+  ///
+  /// In en, this message translates to:
+  /// **'{total, plural, =1{Stopped after renaming {renamed} of 1 item.} other{Stopped after renaming {renamed} of {total} items.}}'**
+  String batchRenameResultStopped(int renamed, int total);
+
+  /// Rename Items result: the connection was lost or a request timed out.
+  ///
+  /// In en, this message translates to:
+  /// **'{total, plural, =1{The connection was lost after renaming {renamed} of 1 item. Refresh to check items marked unknown.} other{The connection was lost after renaming {renamed} of {total} items. Refresh to check items marked unknown.}}'**
+  String batchRenameResultConnectionLost(int renamed, int total);
+
+  /// Rename Items result: the tab navigated away or rebound mid-run.
+  ///
+  /// In en, this message translates to:
+  /// **'{total, plural, =1{This tab left the folder or reconnected after renaming {renamed} of 1 item.} other{This tab left the folder or reconnected after renaming {renamed} of {total} items.}}'**
+  String batchRenameResultPaneChanged(int renamed, int total);
+
+  /// Rename Items result: an unexpected error ended the run.
+  ///
+  /// In en, this message translates to:
+  /// **'{total, plural, =1{Something went wrong after renaming {renamed} of 1 item.} other{Something went wrong after renaming {renamed} of {total} items.}}'**
+  String batchRenameResultFault(int renamed, int total);
 
   /// Disabled archive command shown for a remote pane.
   ///

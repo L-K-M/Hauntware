@@ -51,6 +51,10 @@ enum TabCloseTrigger {
   /// walk.
   applyToEnclosed,
 
+  /// A Rename Items dialog is open on the tab (02 §2.6, §3): editing,
+  /// running its renames, or showing their outcome.
+  batchRename,
+
   /// The tab anchors a Sync Browsing pair (02 §7).
   syncAnchor,
 }
@@ -69,6 +73,7 @@ final _closeGuards = <_CloseGuard>[
   (TabCloseTrigger.inlineRename, (c) => c.inlineRenameActive),
   (TabCloseTrigger.folderSize, (c) => c.folderSizeInFlight),
   (TabCloseTrigger.applyToEnclosed, (c) => c.applyToEnclosedInFlight),
+  (TabCloseTrigger.batchRename, (c) => c.batchRenameActive),
   (TabCloseTrigger.syncAnchor, (c) => c.syncAnchorActive),
 ];
 

@@ -95,6 +95,8 @@ import 'layout/pane_allocation.dart';
 import 'local_edits_review.dart';
 import 'menus/app_menu_commands.dart';
 import 'menus/app_menu_host.dart';
+import 'panes/batch_rename_command.dart';
+import 'panes/batch_rename_dialog.dart';
 import 'panes/compare_files_command.dart';
 import 'panes/drag_out_image.dart';
 import 'panes/open_with_commands.dart';
@@ -1857,6 +1859,12 @@ class _WorkspaceShellState extends State<WorkspaceShell>
           workspace: workspace,
           available: () => !_commandSessionActive,
           open: _openPaneComparison,
+        ),
+      if (workspace != null)
+        buildBatchRenameCommand(
+          workspace: workspace,
+          available: () => !_commandSessionActive,
+          open: (context, pane) => showBatchRenameDialog(context, pane: pane),
         ),
       // `open-with-external` registers whenever a workspace exists
       // (D21): the Open With ▸ submenu renders disabled rows while no

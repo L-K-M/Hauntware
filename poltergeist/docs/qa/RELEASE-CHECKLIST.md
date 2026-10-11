@@ -58,6 +58,24 @@ known-divergent surface.
   verify highlighting never fights composition (the
   `CodeEditingController` IME guard).
 
+## Rename Items
+
+- [ ] OWNER MANUAL QA: on case-insensitive APFS (macOS) and NTFS
+  (Windows), Replace Text with Match case on that only changes case
+  (`readme` to `README`) across three local files: every item renames,
+  and the listing shows the new case.
+- [ ] OWNER MANUAL QA: the same case-only batch against an SFTP server on
+  a case-insensitive volume (macOS or Windows OpenSSH): each row reports
+  the server's conflict, nothing is lost, and the other rows still run.
+- [ ] OWNER MANUAL QA: Stop during a batch of a few hundred items on a
+  slow remote: the item in flight finishes, the rest read Not attempted,
+  and the listing refreshes with the renamed items selected.
+- [ ] OWNER MANUAL QA: macOS menu bar with the dialog open: File ▸ Move
+  to Trash, Duplicate and Copy to Other Pane are disabled.
+- [ ] OWNER MANUAL QA: type Japanese and Korean into Find, Replace with
+  and Name on each desktop platform: composition renders in place and
+  the preview updates once it commits.
+
 ## Screen reader smoke
 
 - [ ] OWNER MANUAL QA: **macOS VoiceOver** and **Windows NVDA** (Narrator

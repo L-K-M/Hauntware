@@ -10,6 +10,7 @@ import 'double_click_action.dart';
 import 'drag_out_controller.dart' show DragOutLeftOut;
 import 'engine_session.dart';
 import 'folder_size.dart';
+import 'pane_batch_rename.dart';
 import 'pane_engine_lanes.dart';
 import 'pane_location.dart';
 import 'pane_path_input.dart';
@@ -214,6 +215,128 @@ class _RenameSession {
   final _RowKey rowKey;
   RemoteFileException? error;
   String? attempted;
+}
+
+/// Whether Rename Items (02 §2.6) can open on the current selection;
+/// the first condition that fails names the command's disabled reason.
+enum BatchRenameAvailability {
+  available,
+
+  /// Off the verb surface (unbound, loading, errored, lost connection).
+  noListing,
+
+  /// An inline rename, another Rename Items or an enclosed permissions
+  /// change is open or running on this tab.
+  busy,
+
+  /// Fewer than two rows are selected; one row renames inline.
+  needsTwo,
+
+  /// A selected row sits inside a selected folder.
+  nested,
+
+  /// No selected name is valid UTF-8 (02 §13), so nothing could change.
+  allFlagged,
+}
+
+/// Where an open Rename Items session stands.
+enum BatchRenameStage {
+  /// The dialog edits a rule against a live preview.
+  editing,
+
+  /// The plan's renames are being sent.
+  running,
+
+  /// The run ended; its outcomes stay on screen until Done.
+  finished,
+
+  /// The session closed (Done, Cancel, or the tab left its folder
+  /// while editing). Nothing reads it any more.
+  ended,
+}
+
+/// One open Rename Items dialog (02 §2.6). The pane controller owns the
+/// state and publishes every change; the dialog listens. It is its own
+/// listenable so per-item progress repaints the dialog, not the pane's
+/// rows. The controller never disposes it: the dialog removes its own
+/// listener when it closes.
+final class BatchRenameSession extends ChangeNotifier {
+  BatchRenameSession._(this._items, this._snapshot, this._owns);
+
+  /// The selection as it was when the dialog opened, listing order.
+  final List<_BatchRenameItem> _items;
+
+  /// The binding and folder the session opened on, for the run's
+  /// precondition.
+  final bool Function() _owns;
+
+  BatchRenameStage _stage = BatchRenameStage.editing;
+  BatchRenameSnapshot _snapshot;
+  BatchRenamePlan? _runPlan;
+  List<BatchRenameOutcome?> _outcomes = const [];
+  int? _currentRow;
+  BatchRenameStop? _stop;
+  bool _stopRequested = false;
+  bool _refusedChanged = false;
+  bool _refusedUnavailable = false;
+
+  BatchRenameStage get stage => _stage;
+
+  /// What the preview plans against: rebuilt whenever the pane's rows
+  /// change while editing.
+  BatchRenameSnapshot get snapshot => _snapshot;
+
+  /// The plan the run sends, frozen when it started.
+  BatchRenamePlan? get runPlan => _runPlan;
+
+  /// Per row of [runPlan]; null for a row with no outcome yet (or one
+  /// the run ended before reaching).
+  List<BatchRenameOutcome?> get outcomes => List.unmodifiable(_outcomes);
+
+  /// The row whose rename is in flight.
+  int? get currentRow => _currentRow;
+
+  /// Why the run ended, once [stage] is [BatchRenameStage.finished].
+  BatchRenameStop? get stop => _stop;
+
+  /// Stop was pressed; the run ends after the request in flight.
+  bool get stopRequested => _stopRequested;
+
+  /// The last Rename press re-planned against a changed folder and
+  /// found the plan no longer runnable; nothing was sent.
+  bool get refusedChanged => _refusedChanged;
+
+  /// The last Rename press found the pane unable to run it (reconnecting,
+  /// or its listing failed); nothing was sent. Cleared when the folder's
+  /// rows next refresh.
+  bool get refusedUnavailable => _refusedUnavailable;
+
+  int get renamedCount => _outcomes.whereType<BatchRenameRenamed>().length;
+
+  /// Rows the run has settled, for the progress line.
+  int get settledCount => _outcomes.whereType<BatchRenameOutcome>().length;
+
+  void _publish() => notifyListeners();
+}
+
+/// One selected item, frozen when Rename Items opens: where it lives
+/// and its place in Format's numbering never change under a refresh.
+final class _BatchRenameItem {
+  const _BatchRenameItem({
+    required this.path,
+    required this.name,
+    required this.folder,
+    required this.parentPrefix,
+    required this.isDirectory,
+    required this.ordinal,
+  });
+
+  final String path;
+  final String name;
+  final String folder;
+  final String parentPrefix;
+  final bool isDirectory;
+  final int ordinal;
 }
 
 /// Which app-side operation failed for a non-VFS fault: the pane view
@@ -722,6 +845,26 @@ class PaneController extends ChangeNotifier {
   /// select path by every invalidation.
   bool _renameAfterSelect = false;
 
+  /// The open Rename Items session (02 §2.6); null while no dialog is
+  /// open. It survives a same-location refresh (the preview re-plans),
+  /// ends at once while editing when the tab leaves the folder or
+  /// rebinds, and lets a running batch settle so its outcome is shown.
+  BatchRenameSession? _batchRename;
+
+  /// Every final path of a finished batch: the next accepted listing
+  /// selects them, so the renamed items stay selected for a follow-up
+  /// action. Cleared with [_pendingRenameSelectPath].
+  Set<String>? _pendingBatchSelectPaths;
+
+  /// The batch's final paths inside open folders, which the top-level
+  /// accept could not place: each folder's re-list selects its own, once.
+  Set<String>? _expansionBatchSelect;
+
+  /// The selection, by path, that [_expansionBatchSelect] extends. A
+  /// folder's re-list adds rows only while the selection is still this
+  /// one: once the user changes it, the pending rows are dropped.
+  Set<String>? _batchSelectedPaths;
+
   /// The row the next accepted listing re-selects (P4-02): the folder
   /// `go.enclosing` climbed out of, or the row a Back/Forward stop
   /// remembers. Set by the location change that wants it and kept by
@@ -1146,6 +1289,7 @@ class PaneController extends ChangeNotifier {
     _expansions.removeWhere(
       (path, _) => path == folder.path || panePathIsUnder(path, folder.path),
     );
+    _spendBatchRowsUnder(folder.path);
     _applyEntries(_filteredListing());
     _applyFold(folder.path, fold);
     notifyListeners();
@@ -1233,6 +1377,7 @@ class PaneController extends ChangeNotifier {
     _expansions.clear();
     _expansionOwner = null;
     _expansionRenameSelect = null;
+    _dropExpansionBatchSelect();
   }
 
   /// Lists one expanded folder on [channel]. A user's expand reports a
@@ -1262,6 +1407,7 @@ class PaneController extends ChangeNotifier {
       if (!current()) return;
       fold = _foldPlan(folder.path);
       _expansions.remove(folder.path);
+      _spendBatchRowsUnder(folder.path);
       if (reportFailure) {
         _expansionFailure = (name: folder.name, error: error);
         _postNotice(PaneNotice.expandFailed);
@@ -1271,6 +1417,7 @@ class PaneController extends ChangeNotifier {
       _report(error, stackTrace);
       fold = _foldPlan(folder.path);
       _expansions.remove(folder.path);
+      _spendBatchRowsUnder(folder.path);
       if (reportFailure) {
         _expansionFailure = (
           name: folder.name,
@@ -1288,6 +1435,7 @@ class PaneController extends ChangeNotifier {
       _applyEntries(_filteredListing());
       _applyFold(folder.path, fold);
       _placeExpansionRenameSelect();
+      _placeExpansionBatchSelect(folder.path);
     } on Object catch (error, stackTrace) {
       _report(error, stackTrace);
     }
@@ -1301,6 +1449,7 @@ class PaneController extends ChangeNotifier {
       final folder = _sortedListingEntryOrRow(entry.key);
       if (folder == null) {
         _expansions.remove(entry.key);
+        _spendBatchRowsUnder(entry.key);
         continue;
       }
       unawaited(
@@ -1338,7 +1487,9 @@ class PaneController extends ChangeNotifier {
   /// or the row's name is flagged (it cannot be edited in place).
   void _openRenameAt(int index) {
     if (index < 0 || index >= _entries.length) return;
-    if (_renameSession != null || _renameInFlight) return;
+    if (_renameSession != null || _renameInFlight || batchRenameActive) {
+      return;
+    }
     if (nameIsFlagged(_entries[index].name)) return;
     _renameSession = _RenameSession(
       entry: _entries[index],
@@ -2572,7 +2723,8 @@ class PaneController extends ChangeNotifier {
     if (_disposed ||
         !verbsEnabled ||
         _renameSession != null ||
-        _renameInFlight) {
+        _renameInFlight ||
+        batchRenameActive) {
       return;
     }
     final cursor = cursorIndex;
@@ -2649,51 +2801,11 @@ class PaneController extends ChangeNotifier {
       return;
     }
 
-    // The parent prefix keeps the entry path's own separators — never a
-    // synthesized join — so the re-anchored path matches the refreshed
-    // listing's normalization. The grammar comes from the path itself:
-    // a remote or POSIX local path separates on '/' only, so a '\' in
-    // a name is a filename byte, never a separator. The exact basename
-    // is removed BEFORE any separator trimming — a POSIX name may end
-    // in '\' and trimming it first would leave a path that no longer
-    // ends with its name — and the prefix counts only when the cut
-    // lands on a separator boundary. The last-separator split is the
-    // fallback for a path that does not end with its name, the
-    // location join the last resort.
-    final separator = paneSeparator(entry.path);
-    var parent = '';
-    if (entry.path.endsWith(entry.name)) {
-      final prefix = entry.path.substring(
-        0,
-        entry.path.length - entry.name.length,
-      );
-      if (prefix.isEmpty || prefix.endsWith(separator)) {
-        parent = prefix;
-      }
-    }
-    if (parent.isEmpty && entry.path != entry.name) {
-      var trimmed = entry.path;
-      while (trimmed.length > 1 && trimmed.endsWith(separator)) {
-        trimmed = trimmed.substring(0, trimmed.length - 1);
-      }
-      if (trimmed.endsWith(entry.name)) {
-        final prefix = trimmed.substring(0, trimmed.length - entry.name.length);
-        if (prefix.endsWith(separator)) parent = prefix;
-      }
-      if (parent.isEmpty) {
-        final lastSep = trimmed.lastIndexOf(separator);
-        if (lastSep >= 0) parent = trimmed.substring(0, lastSep + 1);
-      }
-    }
-    if (parent.isEmpty) {
-      // The last resort still respects the base's own terminator — a
-      // root location ('/', 'C:\', a UNC root) already ends with its
-      // separator, and doubling it would synthesize a spelling the
-      // refreshed listing never matches.
-      final base = location?.path ?? '';
-      final baseSeparator = paneSeparator(base);
-      parent = base.endsWith(baseSeparator) ? base : '$base$baseSeparator';
-    }
+    final parent = renameParentPrefix(
+      path: entry.path,
+      name: entry.name,
+      fallbackDirectory: location?.path,
+    );
     final newPath = '$parent$raw';
 
     // The field closes at submit: the in-flight flag alone holds the
@@ -2769,6 +2881,381 @@ class PaneController extends ChangeNotifier {
   void _endRenameSession() {
     _renameSession = null;
   }
+
+  /// Whether Rename Items (02 §2.6) can open on this tab's selection.
+  /// Only selected rows count, never a bare cursor row — the rule
+  /// Delete and Duplicate follow.
+  BatchRenameAvailability get batchRenameAvailability {
+    if (_disposed || !verbsEnabled) return BatchRenameAvailability.noListing;
+    if (inlineRenameActive || batchRenameActive || applyToEnclosedInFlight) {
+      return BatchRenameAvailability.busy;
+    }
+    if (selectedCount < 2) return BatchRenameAvailability.needsTwo;
+    final selected = selectedEntries;
+    if (selectedRoots.length != selected.length) {
+      return BatchRenameAvailability.nested;
+    }
+    if (selected.every((entry) => nameIsFlagged(entry.name))) {
+      return BatchRenameAvailability.allFlagged;
+    }
+    return BatchRenameAvailability.available;
+  }
+
+  /// The open Rename Items session; null while no dialog is open.
+  BatchRenameSession? get batchRename => _batchRename;
+
+  /// True in every stage until the dialog closes: the tab-close guard,
+  /// the command's availability and the gated file verbs read it.
+  bool get batchRenameActive => _batchRename != null;
+
+  /// Opens a Rename Items session on the selected rows. Returns false
+  /// (and opens nothing) unless [batchRenameAvailability] is
+  /// [BatchRenameAvailability.available].
+  bool startBatchRename() {
+    final channel = _channel;
+    final location = _location;
+    if (batchRenameAvailability != BatchRenameAvailability.available ||
+        channel == null ||
+        location == null) {
+      return false;
+    }
+
+    var ordinal = 0;
+    final items = [
+      for (final entry in selectedEntries)
+        _batchRenameItem(
+          entry,
+          location,
+          ordinal: nameIsFlagged(entry.name) ? -1 : ordinal++,
+        ),
+    ];
+    _batchRename = BatchRenameSession._(
+      items,
+      _batchRenameSnapshot(items),
+      _ownershipToken(channel, location),
+    );
+    notifyListeners();
+    return true;
+  }
+
+  _BatchRenameItem _batchRenameItem(
+    RemoteFileEntry entry,
+    PaneLocation location, {
+    required int ordinal,
+  }) {
+    final folder = _batchRenameFolderOf(entry.path) ?? location.path;
+    return _BatchRenameItem(
+      path: entry.path,
+      name: entry.name,
+      folder: folder,
+      parentPrefix: renameParentPrefix(
+        path: entry.path,
+        name: entry.name,
+        fallbackDirectory: folder,
+      ),
+      isDirectory: entry.isDirectory,
+      ordinal: ordinal,
+    );
+  }
+
+  /// The directory whose listing holds [path]: the location for its own
+  /// entries, else the open folder whose children hold it. Found by
+  /// path, never by row depth, which a name filter can break.
+  String? _batchRenameFolderOf(String path) {
+    final location = _location;
+    if (location != null && _sortedListing.any((e) => e.path == path)) {
+      return location.path;
+    }
+    for (final MapEntry(key: folder, value: expansion) in _expansions.entries) {
+      final children = expansion.children ?? const <RemoteFileEntry>[];
+      if (children.any((entry) => entry.path == path)) return folder;
+    }
+    return null;
+  }
+
+  /// The planner's view of [items] against the folders' current
+  /// listings: unfiltered, so hidden and filtered-out names count. A
+  /// folder whose listing is gone (collapsed, or still loading) holds
+  /// nothing, so its items read as gone.
+  BatchRenameSnapshot _batchRenameSnapshot(List<_BatchRenameItem> items) {
+    final location = _location;
+    final listings = <String, List<RemoteFileEntry>>{};
+    for (final item in items) {
+      listings.putIfAbsent(
+        item.folder,
+        () => location != null && item.folder == location.path
+            ? _sortedListing
+            : (_expansions[item.folder]?.children ?? const []),
+      );
+    }
+    final kinds = {
+      for (final MapEntry(key: folder, value: listing) in listings.entries)
+        folder: {for (final entry in listing) entry.path: entry.isDirectory},
+    };
+    return BatchRenameSnapshot(
+      targets: [
+        for (final item in items)
+          BatchRenameTarget(
+            path: item.path,
+            name: item.name,
+            folder: item.folder,
+            parentPrefix: item.parentPrefix,
+            isDirectory: item.isDirectory,
+            ordinal: item.ordinal,
+            present: kinds[item.folder]![item.path] == item.isDirectory,
+          ),
+      ],
+      folderEntries: {
+        for (final MapEntry(key: folder, value: listing) in listings.entries)
+          folder: [
+            for (final entry in listing) (path: entry.path, name: entry.name),
+          ],
+      },
+      remote: location is RemotePaneLocation,
+      platform: defaultTargetPlatform,
+    );
+  }
+
+  /// Sends [rule]'s renames. The plan is re-made from the pane's current
+  /// listings first: what runs always matches the folder as it is now,
+  /// never a preview the dialog held. A plan that is no longer runnable
+  /// sends nothing and sets [BatchRenameSession.refusedChanged].
+  ///
+  /// Typed refusals are recorded per item and the run goes on; Stop, a
+  /// lost connection, an unexpected error or the tab leaving its folder
+  /// end it after the request in flight settles. Nothing is rolled
+  /// back: the outcome stays on screen, and a run that renamed anything
+  /// refreshes the folder and selects every item at its final path.
+  /// Returns whether the run started.
+  Future<bool> runBatchRename(BatchRenameRule rule) async {
+    final session = _batchRename;
+    final channel = _channel;
+    final location = _location;
+    if (_disposed ||
+        session == null ||
+        session.stage != BatchRenameStage.editing) {
+      return false;
+    }
+    if (channel == null ||
+        connectionLost ||
+        !session._owns() ||
+        // Not verbsEnabled: a watch re-list of this same folder sets
+        // `loading`, and it must not refuse the press.
+        !_listingActionable) {
+      // Said, never silent: the dialog shows why nothing happened.
+      session
+        .._refusedChanged = false
+        .._refusedUnavailable = true
+        .._publish();
+      return false;
+    }
+
+    final snapshot = _batchRenameSnapshot(session._items);
+    final plan = planBatchRename(snapshot, rule);
+    session._snapshot = snapshot;
+    if (!plan.runnable) {
+      session
+        .._refusedUnavailable = false
+        .._refusedChanged = true
+        .._publish();
+      return false;
+    }
+
+    session
+      .._refusedChanged = false
+      .._refusedUnavailable = false
+      .._runPlan = plan
+      .._outcomes = List.filled(plan.rows.length, null)
+      .._stage = BatchRenameStage.running;
+    final owns = _ownershipToken(channel, location);
+    notifyListeners();
+    session._publish();
+
+    final stop = await executeBatchRename(
+      channel,
+      plan,
+      checkpoint: () {
+        if (_disposed || !owns()) return BatchRenameStop.paneChanged;
+        if (connectionLost) return BatchRenameStop.connectionLost;
+        if (session._stopRequested) return BatchRenameStop.stopped;
+        return null;
+      },
+      onStart: (row) {
+        session._currentRow = row;
+        session._publish();
+      },
+      onOutcome: (row, outcome) {
+        session._outcomes[row] = outcome;
+        session._publish();
+      },
+      onFault: _report,
+    );
+    // dispose ended the session; nothing is left to settle into.
+    if (_disposed) return true;
+
+    session
+      .._currentRow = null
+      .._stop = stop
+      .._stage = BatchRenameStage.finished;
+    session._publish();
+
+    final renamedAny = session.renamedCount > 0;
+    if (renamedAny && owns()) {
+      refresh();
+      // Set AFTER refresh() issues: a navigation issue clears pending
+      // selects, and the refresh's own accept consumes this one.
+      _pendingBatchSelectPaths = {
+        for (var index = 0; index < plan.rows.length; index++)
+          session._outcomes[index] is BatchRenameRenamed
+              ? plan.rows[index].newPath
+              : plan.rows[index].target.path,
+      };
+    } else if (renamedAny &&
+        identical(channel, _channel) &&
+        location == _location) {
+      // The tab went away and came back to this folder on the same
+      // channel mid-run: its listing may predate the renames, so it is
+      // re-fetched, but nothing is selected on a visit the run no
+      // longer owns. A rebind brings a new channel that lists afresh.
+      refresh();
+    }
+    notifyListeners();
+    return true;
+  }
+
+  /// Stop: the request in flight settles and the run ends at the next
+  /// item. Inert unless a run is going.
+  void stopBatchRename() {
+    final session = _batchRename;
+    if (session == null || session.stage != BatchRenameStage.running) return;
+    session._stopRequested = true;
+    session._publish();
+  }
+
+  /// Cancel (while editing) or Done (once finished). Refused while a run
+  /// is going: Stop ends it first.
+  void closeBatchRename() {
+    final session = _batchRename;
+    if (session == null || session.stage == BatchRenameStage.running) return;
+    _batchRename = null;
+    session
+      .._stage = BatchRenameStage.ended
+      .._publish();
+    if (!_disposed) notifyListeners();
+  }
+
+  /// The invalidation funnels' end: a session still editing ends (the
+  /// dialog closes itself, nothing was touched); a running batch is left
+  /// to settle, its checkpoint seeing the change, so its outcome is
+  /// shown; a finished one stays until Done. [force] (dispose) ends every
+  /// stage. No notify of the controller: callers notify once for the
+  /// whole transition.
+  void _endBatchRename({bool force = false}) {
+    final session = _batchRename;
+    if (session == null) return;
+    final ends = force || session.stage == BatchRenameStage.editing;
+    if (!ends) return;
+    _batchRename = null;
+    session
+      .._stage = BatchRenameStage.ended
+      .._publish();
+  }
+
+  /// Re-plans the open preview after the pane's rows changed.
+  void _refreshBatchRenameSnapshot() {
+    final session = _batchRename;
+    if (session == null || session.stage != BatchRenameStage.editing) return;
+    session
+      .._snapshot = _batchRenameSnapshot(session._items)
+      .._refusedUnavailable = false
+      .._publish();
+  }
+
+  /// Selects a finished batch's rows at the accepted listing: every
+  /// visible row whose path is in [paths], the cursor on the first.
+  /// Paths inside open folders wait for those folders' re-lists.
+  void _applyBatchSelect(Set<String> paths) {
+    final keys = <_RowKey>[];
+    final placed = <String>{};
+    for (var index = 0; index < _entries.length; index++) {
+      final path = _entries[index].path;
+      if (paths.contains(path)) {
+        keys.add(_rowKeys[index]);
+        placed.add(path);
+      }
+    }
+    final before = _selection;
+    _selection = _selection.withSelectedKeys(keys);
+    if (keys.isNotEmpty) _selection = _selection.withCursor(keys.first);
+    if (!identical(before, _selection) && !quickSelectActive) {
+      _selectionHistory = _selectionHistory.record(before, _selection);
+    }
+    final waiting = {
+      for (final path in paths)
+        if (!placed.contains(path) &&
+            _expansions.containsKey(paneParentPath(path)))
+          path,
+    };
+    _expansionBatchSelect = waiting.isEmpty ? null : waiting;
+    _batchSelectedPaths = waiting.isEmpty ? null : _selectedPaths();
+  }
+
+  /// [folder]'s re-list landed: its rows from a finished batch join the
+  /// selection, unless the user changed the selection since. Either way
+  /// the folder's pending paths are spent: a row its listing does not show
+  /// (filtered out, hidden, gone) is never selected later behind the
+  /// user's back.
+  void _placeExpansionBatchSelect(String folder) {
+    final pending = _expansionBatchSelect;
+    final expected = _batchSelectedPaths;
+    if (pending == null || expected == null) return;
+    if (!setEquals(_selectedPaths(), expected)) {
+      _dropExpansionBatchSelect();
+      return;
+    }
+
+    final keys = <_RowKey>[];
+    for (var index = 0; index < _entries.length; index++) {
+      final path = _entries[index].path;
+      if (pending.contains(path) && paneParentPath(path) == folder) {
+        keys.add(_rowKeys[index]);
+      }
+    }
+    _spendExpansionBatchSelect((path) => paneParentPath(path) == folder);
+    if (keys.isNotEmpty) {
+      final before = _selection;
+      _selection = _selection.withSelectedKeys({
+        ..._selection.selectedKeys,
+        ...keys,
+      });
+      if (!identical(before, _selection) && !quickSelectActive) {
+        _selectionHistory = _selectionHistory.record(before, _selection);
+      }
+    }
+    if (_expansionBatchSelect != null) _batchSelectedPaths = _selectedPaths();
+  }
+
+  /// A folder that closes without its re-list landing (a collapse, a
+  /// folder gone from the listing, a failed list) spends the batch rows
+  /// waiting under it, so a later expand never selects them.
+  void _spendBatchRowsUnder(String folder) =>
+      _spendExpansionBatchSelect((path) => panePathIsUnder(path, folder));
+
+  void _spendExpansionBatchSelect(bool Function(String path) spent) {
+    final pending = _expansionBatchSelect;
+    if (pending == null) return;
+    pending.removeWhere(spent);
+    if (pending.isEmpty) _dropExpansionBatchSelect();
+  }
+
+  void _dropExpansionBatchSelect() {
+    _expansionBatchSelect = null;
+    _batchSelectedPaths = null;
+  }
+
+  Set<String> _selectedPaths() => {
+    for (final key in _selection.selectedKeys) key.path,
+  };
 
   /// The folder-size walk's current snapshot — live progress while
   /// running, the terminal answer once settled. Keyed by
@@ -3758,6 +4245,8 @@ class PaneController extends ChangeNotifier {
     _renameInFlight = false;
     _endFolderSize();
     _endEnclosedApply();
+    _endBatchRename();
+    _pendingBatchSelectPaths = null;
     _phase = PanePhase.unbound;
     _selectionHistory = const SelectionHistory.empty();
     _location = null;
@@ -3806,6 +4295,9 @@ class PaneController extends ChangeNotifier {
     _revealOnAccept = null;
     _endFolderSize();
     _endEnclosedApply();
+    _endBatchRename(force: true);
+    _pendingBatchSelectPaths = null;
+    _dropExpansionBatchSelect();
     _noticeTimer?.cancel();
     _noticeTimer = null;
     _notice = null;
@@ -4010,6 +4502,9 @@ class PaneController extends ChangeNotifier {
     // pending confirmation, and its chmod walk all rode the released
     // channel.
     _endEnclosedApply();
+    // A Rename Items dialog still editing closes: it previewed rows of
+    // the released binding. A running batch settles on its own.
+    _endBatchRename();
     // The notice dies with the browsing session it arose in — a rebind
     // never carries one pane-moment's "not yet" into the next binding.
     _noticeTimer?.cancel();
@@ -4103,6 +4598,8 @@ class PaneController extends ChangeNotifier {
     // or return re-select.
     _pendingRenameSelectPath = null;
     _renameAfterSelect = false;
+    _pendingBatchSelectPaths = null;
+    _dropExpansionBatchSelect();
     _revealOnAccept = null;
   }
 
@@ -4185,6 +4682,7 @@ class PaneController extends ChangeNotifier {
     // issue's answer accepts; any newer issue invalidates it.
     _pendingRenameSelectPath = null;
     _renameAfterSelect = false;
+    _pendingBatchSelectPaths = null;
     // Every navigation issue is newer intent: an in-flight mirror probe
     // taken before it is stale and must be abandoned by the replay.
     _operationIdentity = Object();
@@ -4202,6 +4700,13 @@ class PaneController extends ChangeNotifier {
       // it ends with the location change too, pending confirmation and
       // running walk alike.
       _endEnclosedApply();
+      // Rename Items previewed this folder's rows: an editing dialog
+      // closes, a running batch sees the change at its next item.
+      _endBatchRename();
+      // Rows a finished batch left for open folders belong to this
+      // folder. A same-location refresh keeps them: its expansion
+      // re-lists place them, as for an inline rename's select.
+      _dropExpansionBatchSelect();
       _locationRevision++;
       // A new directory gets a fresh watch-loss budget.
       _watchLosses = 0;
@@ -4318,6 +4823,9 @@ class PaneController extends ChangeNotifier {
           );
         }
       }
+      final batchSelect = _pendingBatchSelectPaths;
+      _pendingBatchSelectPaths = null;
+      if (batchSelect != null) _applyBatchSelect(batchSelect);
       if (_expansions.isNotEmpty) _relistExpansions(channel);
       _recovery = _RecoveryPhase.none;
       _answeredGeneration = generation;
@@ -4423,6 +4931,8 @@ class PaneController extends ChangeNotifier {
       );
       _renameSession = rename;
     }
+    // An open Rename Items preview re-plans against the new rows.
+    _refreshBatchRenameSnapshot();
   }
 
   /// [top] with each open folder's children below it, through the same

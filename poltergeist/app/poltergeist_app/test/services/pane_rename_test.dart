@@ -185,4 +185,26 @@ void main() {
       );
     });
   });
+
+  group('renameParentPrefix (02 §2.6)', () {
+    String prefix(String path, String name, {String? fallback}) =>
+        renameParentPrefix(path: path, name: name, fallbackDirectory: fallback);
+
+    test("keeps the path's own separators", () {
+      expect(prefix('/a/b', 'b'), '/a/');
+      expect(prefix('/x', 'x'), '/');
+      expect(prefix(r'C:\x\y', 'y'), r'C:\x\');
+      expect(prefix(r'\\srv\share\f.txt', 'f.txt'), r'\\srv\share\');
+    });
+
+    test('a POSIX name may end in a backslash', () {
+      expect(prefix(r'/d/na\', r'na\'), '/d/');
+    });
+
+    test('falls back to the directory without doubling its separator', () {
+      expect(prefix('orphan', 'orphan', fallback: '/home'), '/home/');
+      expect(prefix('orphan', 'orphan', fallback: '/'), '/');
+      expect(prefix('orphan', 'orphan', fallback: r'C:\'), r'C:\');
+    });
+  });
 }

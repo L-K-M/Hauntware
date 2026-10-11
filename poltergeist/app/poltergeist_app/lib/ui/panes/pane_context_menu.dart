@@ -17,6 +17,7 @@ import '../shell/shell_commands.dart'
         kFileNewFolderCommandId,
         kSelectionMoveToOtherPaneCommandId,
         kSelectionTransferToOtherPaneCommandId;
+import 'batch_rename_command.dart' show kFileBatchRenameCommandId;
 import 'compare_files_command.dart' show kFileCompareFilesCommandId;
 import 'open_with_commands.dart' show kOpenWithExternalCommandId;
 import 'pane_commands.dart';
@@ -36,6 +37,7 @@ const kPaneRowContextMenu = <List<String>>[
   [
     kFileGetInfoCommandId,
     kFileRenameCommandId,
+    kFileBatchRenameCommandId,
     kFileDuplicateCommandId,
     kFileCreateArchiveCommandId,
     kFileExtractArchiveCommandId,
