@@ -110,7 +110,19 @@ class _BatchRenameDialogState extends State<BatchRenameDialog> {
   BatchRenamePlacement _addPlacement = BatchRenamePlacement.afterName;
   BatchRenamePlacement _formatPlacement = BatchRenamePlacement.afterName;
   final _preview = ScrollController();
+
+  /// The first field of the current mode, focused after a mode change.
+  final _firstField = FocusNode();
+
+  /// Stop while running, Done once finished: focused on each stage change
+  /// so Esc, Return and Space act on the dialog, not on the mode picker
+  /// (whose closed menu would swallow Esc).
+  final _actionFocus = FocusNode();
+  BatchRenameStage? _focusedStage;
+
+  /// This dialog's route has popped (or is popping); nothing pops twice.
   bool _popped = false;
+  bool _popScheduled = false;
 
   BatchRenameSession get _session => widget.session;
 
@@ -130,6 +142,8 @@ class _BatchRenameDialogState extends State<BatchRenameDialog> {
       field.dispose();
     }
     _preview.dispose();
+    _firstField.dispose();
+    _actionFocus.dispose();
     super.dispose();
   }
 
@@ -144,10 +158,18 @@ class _BatchRenameDialogState extends State<BatchRenameDialog> {
       return;
     }
     if (session.stage == BatchRenameStage.ended) {
-      _pop();
+      _schedulePop();
       return;
     }
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    setState(() {});
+    final stage = session.stage;
+    if (stage != BatchRenameStage.editing && stage != _focusedStage) {
+      _focusedStage = stage;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _actionFocus.requestFocus();
+      });
+    }
   }
 
   static bool _allRenamed(BatchRenameSession session) {
@@ -157,19 +179,21 @@ class _BatchRenameDialogState extends State<BatchRenameDialog> {
         session.renamedCount == plan.renameCount;
   }
 
-  /// Pops once, after the current frame: the session can end from inside
-  /// another widget's teardown (a closing tab), where navigating at once
-  /// would rebuild mid-frame.
-  ///
-  /// Only while this dialog's route is still on top: when Esc or Back
-  /// already popped it, the session ends during the exit animation, and
-  /// popping again would close the page underneath.
-  void _pop() {
-    if (_popped) return;
-    _popped = true;
+  /// Pops this dialog after the current frame, once the session ended.
+  /// The session can end from inside another widget's teardown (a closing
+  /// tab), where navigating at once would rebuild mid-frame. While another
+  /// route covers the dialog (the macOS menu bar stays live under it), the
+  /// pop waits: build depends on the route's status and re-arms it when
+  /// the dialog is on top again, so it never closes the wrong route and
+  /// never strands an ended dialog.
+  void _schedulePop() {
+    if (_popped || _popScheduled) return;
+    _popScheduled = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
+      _popScheduled = false;
+      if (!mounted || _popped) return;
       if (ModalRoute.of(context)?.isCurrent != true) return;
+      _popped = true;
       Navigator.of(context).pop();
     });
     WidgetsBinding.instance.scheduleFrame();
@@ -220,30 +244,47 @@ class _BatchRenameDialogState extends State<BatchRenameDialog> {
     await widget.pane.runBatchRename(rule);
   }
 
+  /// Cancel, Stop, Done, Esc and the compact close button: stops a run,
+  /// closes the session otherwise, and pops a dialog whose session
+  /// already ended.
   void _cancel() {
-    if (_session.stage == BatchRenameStage.running) {
-      widget.pane.stopBatchRename();
-      return;
+    switch (_session.stage) {
+      case BatchRenameStage.running:
+        widget.pane.stopBatchRename();
+      case BatchRenameStage.editing:
+      case BatchRenameStage.finished:
+        widget.pane.closeBatchRename();
+      case BatchRenameStage.ended:
+        _schedulePop();
     }
-    widget.pane.closeBatchRename();
   }
 
   void _jumpToFirstProblem(BatchRenamePlan plan) {
     final index = plan.firstBlockedRow;
     if (index == null || !_preview.hasClients) return;
     _preview.animateTo(
-      (index * _rowExtent).clamp(0, _preview.position.maxScrollExtent),
+      (index * _rowExtent(context)).clamp(0, _preview.position.maxScrollExtent),
       duration: const Duration(milliseconds: 200),
       curve: Curves.easeOut,
     );
   }
 
-  double get _rowExtent => widget.fullscreen ? 56 : 48;
+  /// One preview row: two text lines and padding, grown with the text
+  /// scale so a problem line never clips (D20).
+  double _rowExtent(BuildContext context) {
+    final scaler = MediaQuery.textScalerOf(context);
+    final padding = widget.fullscreen ? 20.0 : 12.0;
+    return padding + scaler.scale(20) + scaler.scale(16);
+  }
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final stage = _session.stage;
+    // Depends on the route's status, so the dialog rebuilds (and an
+    // ended session's pop re-arms) when it is on top again.
+    ModalRoute.of(context);
+    if (stage == BatchRenameStage.ended) _schedulePop();
     final editing = stage == BatchRenameStage.editing;
     final plan = editing ? _editingPlan() : _session.runPlan;
     final title = l10n.batchRenameTitle(_session.snapshot.targets.length);
@@ -284,9 +325,28 @@ class _BatchRenameDialogState extends State<BatchRenameDialog> {
             },
           ),
         },
-        child: widget.fullscreen
-            ? _fullscreen(context, title, body, actions)
-            : _card(context, title, body, actions),
+        // Esc as a key, too: a focused descendant that maps Esc to its
+        // own disabled action (the mode picker's closed menu) lets the key
+        // through unhandled, and it reaches this handler. Disabling the
+        // fields mid-run moves focus out of them; the scope keeps it
+        // inside the dialog rather than on the route's scope.
+        child: Focus(
+          canRequestFocus: false,
+          skipTraversal: true,
+          onKeyEvent: (_, event) {
+            if (event is! KeyDownEvent ||
+                event.logicalKey != LogicalKeyboardKey.escape) {
+              return KeyEventResult.ignored;
+            }
+            _cancel();
+            return KeyEventResult.handled;
+          },
+          child: FocusScope(
+            child: widget.fullscreen
+                ? _fullscreen(context, title, body, actions)
+                : _card(context, title, body, actions),
+          ),
+        ),
       ),
     );
     return KeyedSubtree(
@@ -374,7 +434,11 @@ class _BatchRenameDialogState extends State<BatchRenameDialog> {
       expandedInsets: EdgeInsets.zero,
       requestFocusOnTap: false,
       onSelected: (mode) {
-        if (mode != null) setState(() => _mode = mode);
+        if (mode == null) return;
+        setState(() => _mode = mode);
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _firstField.requestFocus();
+        });
       },
       dropdownMenuEntries: [
         DropdownMenuEntry(
@@ -408,8 +472,12 @@ class _BatchRenameDialogState extends State<BatchRenameDialog> {
       controller: controller,
       enabled: enabled,
       autofocus: autofocus,
+      focusNode: autofocus ? _firstField : null,
       keyboardType: keyboardType,
       inputFormatters: formatters,
+      // Return submits but keeps focus in the field: the default would
+      // park focus on the route's scope.
+      onEditingComplete: () {},
       onSubmitted: (_) => _submit(),
       decoration: InputDecoration(
         labelText: label,
@@ -589,6 +657,14 @@ class _BatchRenameDialogState extends State<BatchRenameDialog> {
     }
 
     final lines = <Widget>[];
+    if (session.refusedUnavailable) {
+      lines.add(
+        Text(
+          l10n.batchRenameUnavailable,
+          style: TextStyle(color: theme.colorScheme.error),
+        ),
+      );
+    }
     if (session.refusedChanged) {
       lines.add(
         Text(
@@ -653,7 +729,7 @@ class _BatchRenameDialogState extends State<BatchRenameDialog> {
       child: ListView.builder(
         key: const ValueKey(BatchRenameKey.preview),
         controller: _preview,
-        itemExtent: _rowExtent,
+        itemExtent: _rowExtent(context),
         itemCount: rows.length,
         itemBuilder: (context, index) => _previewRow(
           context,
@@ -814,7 +890,10 @@ class _BatchRenameDialogState extends State<BatchRenameDialog> {
         return [
           TextButton(
             key: const ValueKey(BatchRenameKey.stop),
-            onPressed: session.stopRequested ? null : _cancel,
+            focusNode: _actionFocus,
+            // Stays enabled after a press (Stop is idempotent): a disabled
+            // button would drop focus back onto the mode picker.
+            onPressed: _cancel,
             child: Text(l10n.batchRenameStop),
           ),
         ];
@@ -823,7 +902,8 @@ class _BatchRenameDialogState extends State<BatchRenameDialog> {
         return [
           FilledButton(
             key: const ValueKey(BatchRenameKey.done),
-            onPressed: widget.pane.closeBatchRename,
+            focusNode: _actionFocus,
+            onPressed: _cancel,
             child: Text(l10n.batchRenameDone),
           ),
         ];

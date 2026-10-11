@@ -9930,7 +9930,7 @@ abstract class AppLocalizations {
   /// Rename Items summary while rows block the run.
   ///
   /// In en, this message translates to:
-  /// **'{count, plural, =1{1 name needs a change before you can rename.} other{{count} names need a change before you can rename.}}'**
+  /// **'{count, plural, =1{1 item needs attention before you can rename.} other{{count} items need attention before you can rename.}}'**
   String batchRenameSummaryBlocked(int count);
 
   /// Rename Items summary detail: rows whose name stays the same.
@@ -9950,6 +9950,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The folder changed since the preview. Review the updated names.'**
   String get batchRenameChanged;
+
+  /// Rename Items banner: Rename was pressed while the pane was reconnecting or its listing had failed; nothing was renamed.
+  ///
+  /// In en, this message translates to:
+  /// **'The folder isn\'t available right now. Try again once it has reloaded.'**
+  String get batchRenameUnavailable;
 
   /// Rename Items preview: the folder of a row when the selection spans several folders.
   ///

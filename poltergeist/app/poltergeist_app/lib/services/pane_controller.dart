@@ -278,6 +278,7 @@ final class BatchRenameSession extends ChangeNotifier {
   BatchRenameStop? _stop;
   bool _stopRequested = false;
   bool _refusedChanged = false;
+  bool _refusedUnavailable = false;
 
   BatchRenameStage get stage => _stage;
 
@@ -304,6 +305,11 @@ final class BatchRenameSession extends ChangeNotifier {
   /// The last Rename press re-planned against a changed folder and
   /// found the plan no longer runnable; nothing was sent.
   bool get refusedChanged => _refusedChanged;
+
+  /// The last Rename press found the pane unable to run it (reconnecting,
+  /// or its listing failed); nothing was sent. Cleared when the folder's
+  /// rows next refresh.
+  bool get refusedUnavailable => _refusedUnavailable;
 
   int get renamedCount => _outcomes.whereType<BatchRenameRenamed>().length;
 
@@ -851,8 +857,13 @@ class PaneController extends ChangeNotifier {
   Set<String>? _pendingBatchSelectPaths;
 
   /// The batch's final paths inside open folders, which the top-level
-  /// accept could not place: each folder's re-list selects its own.
+  /// accept could not place: each folder's re-list selects its own, once.
   Set<String>? _expansionBatchSelect;
+
+  /// The selection, by path, that [_expansionBatchSelect] extends. A
+  /// folder's re-list adds rows only while the selection is still this
+  /// one: once the user changes it, the pending rows are dropped.
+  Set<String>? _batchSelectedPaths;
 
   /// The row the next accepted listing re-selects (P4-02): the folder
   /// `go.enclosing` climbed out of, or the row a Back/Forward stop
@@ -1365,7 +1376,7 @@ class PaneController extends ChangeNotifier {
     _expansions.clear();
     _expansionOwner = null;
     _expansionRenameSelect = null;
-    _expansionBatchSelect = null;
+    _dropExpansionBatchSelect();
   }
 
   /// Lists one expanded folder on [channel]. A user's expand reports a
@@ -1421,7 +1432,7 @@ class PaneController extends ChangeNotifier {
       _applyEntries(_filteredListing());
       _applyFold(folder.path, fold);
       _placeExpansionRenameSelect();
-      _placeExpansionBatchSelect();
+      _placeExpansionBatchSelect(folder.path);
     } on Object catch (error, stackTrace) {
       _report(error, stackTrace);
     }
@@ -3018,13 +3029,20 @@ class PaneController extends ChangeNotifier {
     final location = _location;
     if (_disposed ||
         session == null ||
-        session.stage != BatchRenameStage.editing ||
-        channel == null ||
+        session.stage != BatchRenameStage.editing) {
+      return false;
+    }
+    if (channel == null ||
         connectionLost ||
         !session._owns() ||
         // Not verbsEnabled: a watch re-list of this same folder sets
         // `loading`, and it must not refuse the press.
         !_listingActionable) {
+      // Said, never silent: the dialog shows why nothing happened.
+      session
+        .._refusedChanged = false
+        .._refusedUnavailable = true
+        .._publish();
       return false;
     }
 
@@ -3039,6 +3057,7 @@ class PaneController extends ChangeNotifier {
 
     session
       .._refusedChanged = false
+      .._refusedUnavailable = false
       .._runPlan = plan
       .._outcomes = List.filled(plan.rows.length, null)
       .._stage = BatchRenameStage.running;
@@ -3139,8 +3158,10 @@ class PaneController extends ChangeNotifier {
   void _refreshBatchRenameSnapshot() {
     final session = _batchRename;
     if (session == null || session.stage != BatchRenameStage.editing) return;
-    session._snapshot = _batchRenameSnapshot(session._items);
-    session._publish();
+    session
+      .._snapshot = _batchRenameSnapshot(session._items)
+      .._refusedUnavailable = false
+      .._publish();
   }
 
   /// Selects a finished batch's rows at the accepted listing: every
@@ -3165,33 +3186,60 @@ class PaneController extends ChangeNotifier {
     final waiting = {
       for (final path in paths)
         if (!placed.contains(path) &&
-            _expansions.keys.any((folder) => panePathIsUnder(path, folder)))
+            _expansions.containsKey(paneParentPath(path)))
           path,
     };
     _expansionBatchSelect = waiting.isEmpty ? null : waiting;
+    _batchSelectedPaths = waiting.isEmpty ? null : _selectedPaths();
   }
 
-  /// An open folder's re-list landed: its rows from a finished batch
-  /// join the selection.
-  void _placeExpansionBatchSelect() {
+  /// [folder]'s re-list landed: its rows from a finished batch join the
+  /// selection, unless the user changed the selection since. Either way
+  /// the folder's pending paths are spent: a row its listing does not show
+  /// (filtered out, hidden, gone) is never selected later behind the
+  /// user's back.
+  void _placeExpansionBatchSelect(String folder) {
     final pending = _expansionBatchSelect;
-    if (pending == null) return;
+    final expected = _batchSelectedPaths;
+    if (pending == null || expected == null) return;
+    if (!setEquals(_selectedPaths(), expected)) {
+      _dropExpansionBatchSelect();
+      return;
+    }
+
     final keys = <_RowKey>[];
     for (var index = 0; index < _entries.length; index++) {
       final path = _entries[index].path;
-      if (pending.remove(path)) keys.add(_rowKeys[index]);
+      if (pending.contains(path) && paneParentPath(path) == folder) {
+        keys.add(_rowKeys[index]);
+      }
     }
-    if (pending.isEmpty) _expansionBatchSelect = null;
-    if (keys.isEmpty) return;
-    final before = _selection;
-    _selection = _selection.withSelectedKeys({
-      ..._selection.selectedKeys,
-      ...keys,
-    });
-    if (!identical(before, _selection) && !quickSelectActive) {
-      _selectionHistory = _selectionHistory.record(before, _selection);
+    pending.removeWhere((path) => paneParentPath(path) == folder);
+    if (keys.isNotEmpty) {
+      final before = _selection;
+      _selection = _selection.withSelectedKeys({
+        ..._selection.selectedKeys,
+        ...keys,
+      });
+      if (!identical(before, _selection) && !quickSelectActive) {
+        _selectionHistory = _selectionHistory.record(before, _selection);
+      }
+    }
+    if (pending.isEmpty) {
+      _dropExpansionBatchSelect();
+    } else {
+      _batchSelectedPaths = _selectedPaths();
     }
   }
+
+  void _dropExpansionBatchSelect() {
+    _expansionBatchSelect = null;
+    _batchSelectedPaths = null;
+  }
+
+  Set<String> _selectedPaths() => {
+    for (final key in _selection.selectedKeys) key.path,
+  };
 
   /// The folder-size walk's current snapshot — live progress while
   /// running, the terminal answer once settled. Keyed by
@@ -4233,7 +4281,7 @@ class PaneController extends ChangeNotifier {
     _endEnclosedApply();
     _endBatchRename(force: true);
     _pendingBatchSelectPaths = null;
-    _expansionBatchSelect = null;
+    _dropExpansionBatchSelect();
     _noticeTimer?.cancel();
     _noticeTimer = null;
     _notice = null;
@@ -4535,6 +4583,7 @@ class PaneController extends ChangeNotifier {
     _pendingRenameSelectPath = null;
     _renameAfterSelect = false;
     _pendingBatchSelectPaths = null;
+    _dropExpansionBatchSelect();
     _revealOnAccept = null;
   }
 
@@ -4618,6 +4667,7 @@ class PaneController extends ChangeNotifier {
     _pendingRenameSelectPath = null;
     _renameAfterSelect = false;
     _pendingBatchSelectPaths = null;
+    _dropExpansionBatchSelect();
     // Every navigation issue is newer intent: an in-flight mirror probe
     // taken before it is stale and must be abandoned by the replay.
     _operationIdentity = Object();

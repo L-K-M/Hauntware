@@ -6999,8 +6999,8 @@ class AppLocalizationsEn extends AppLocalizations {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
-      other: '$count names need a change before you can rename.',
-      one: '1 name needs a change before you can rename.',
+      other: '$count items need attention before you can rename.',
+      one: '1 item needs attention before you can rename.',
     );
     return '$_temp0';
   }
@@ -7024,6 +7024,10 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get batchRenameChanged =>
       'The folder changed since the preview. Review the updated names.';
+
+  @override
+  String get batchRenameUnavailable =>
+      'The folder isn\'t available right now. Try again once it has reloaded.';
 
   @override
   String batchRenameFolderCaption(String folder) {

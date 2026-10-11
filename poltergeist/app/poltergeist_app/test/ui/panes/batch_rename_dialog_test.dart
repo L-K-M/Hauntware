@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -39,6 +41,7 @@ void main() {
     WidgetTester tester, {
     TargetPlatform platform = TargetPlatform.linux,
     Size size = const Size(1200, 900),
+    GlobalKey<NavigatorState>? navigatorKey,
   }) async {
     await pane.openLocalHome();
     await tester.pump();
@@ -50,6 +53,7 @@ void main() {
     addTearDown(tester.view.reset);
     await tester.pumpWidget(
       MaterialApp(
+        navigatorKey: navigatorKey,
         theme: ThemeData(platform: platform),
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
@@ -92,7 +96,7 @@ void main() {
     // a.txt -> b.txt, but b.txt is selected and stays: the name is taken.
     expect(find.text('“b.txt” already exists in this folder.'), findsOneWidget);
     expect(
-      find.text('1 name needs a change before you can rename.'),
+      find.text('1 item needs attention before you can rename.'),
       findsOneWidget,
     );
     expect(confirm(tester).onPressed, isNull);
@@ -202,5 +206,59 @@ void main() {
     await tester.pumpAndSettle();
     expect(_key(BatchRenameKey.dialog), findsNothing);
     expect(pane.batchRenameActive, isFalse);
+  });
+
+  testWidgets('Escape stops a run, then closes its result', (tester) async {
+    await openDialog(tester);
+    await chooseMode(tester, 'Add Text');
+    await tester.enterText(_key(BatchRenameKey.addText), '-x');
+    await tester.pump();
+    final held = Completer<void>();
+    channel.heldRename = held;
+
+    await tester.tap(_key(BatchRenameKey.confirm));
+    await tester.pump();
+    expect(_key(BatchRenameKey.stop), findsOneWidget);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump();
+    expect(pane.batchRename!.stopRequested, isTrue);
+    expect(find.text('Stopping after the current item…'), findsOneWidget);
+
+    held.complete();
+    await tester.pumpAndSettle();
+    expect(find.text('Stopped after renaming 1 of 2 items.'), findsOneWidget);
+    expect(find.text('Not attempted'), findsOneWidget);
+    expect(channel.renameCalls, hasLength(1));
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    expect(_key(BatchRenameKey.dialog), findsNothing);
+    expect(pane.batchRenameActive, isFalse);
+  });
+
+  testWidgets('a session that ends under another route closes on return', (
+    tester,
+  ) async {
+    final navigator = GlobalKey<NavigatorState>();
+    channel.listings['$_home/docs'] = const [];
+    await openDialog(tester, navigatorKey: navigator);
+
+    unawaited(
+      navigator.currentState!.push(
+        MaterialPageRoute<void>(builder: (_) => const Text('cover')),
+      ),
+    );
+    await tester.pumpAndSettle();
+    // The tab leaves the folder while the dialog is covered.
+    pane.navigate('$_home/docs');
+    await tester.pumpAndSettle();
+    expect(pane.batchRenameActive, isFalse);
+    expect(find.text('cover'), findsOneWidget);
+
+    navigator.currentState!.pop();
+    await tester.pumpAndSettle();
+    expect(_key(BatchRenameKey.dialog), findsNothing);
+    expect(find.text('open'), findsOneWidget);
   });
 }

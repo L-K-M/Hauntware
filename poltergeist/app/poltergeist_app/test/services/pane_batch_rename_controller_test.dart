@@ -211,6 +211,64 @@ void main() {
       );
     });
 
+    test(
+      'a renamed row its folder no longer shows is never selected later',
+      () async {
+        const imgs = '$_home/imgs';
+        channel.listings[imgs] = [_file('img1.txt', folder: imgs)];
+        await open([_dir('imgs'), _file('ia.txt')]);
+        pane.expandAt(row('imgs'));
+        await pumpEventQueue();
+        pane.setFilterQuery('i');
+        select(['ia.txt', 'img1.txt']);
+        pane.startBatchRename();
+        channel.listings[_home] = [_dir('imgs'), _file('xa.txt')];
+        channel.listings[imgs] = [_file('xmg1.txt', folder: imgs)];
+
+        // Both new names fail the filter, so the re-list cannot show them.
+        await pane.runBatchRename(
+          const ReplaceTextRule(find: 'i', replacement: 'x'),
+        );
+        await pumpEventQueue();
+        pane.closeBatchRename();
+        expect(pane.selectedEntries, isEmpty);
+
+        // No navigation in between: only the folder's own loads.
+        pane.clearFilter();
+        pane.collapseAt(row('imgs'));
+        pane.expandAt(row('imgs'));
+        await pumpEventQueue();
+        expect(pane.entries.map((e) => e.name), contains('xmg1.txt'));
+        expect(pane.selectedEntries, isEmpty);
+      },
+    );
+
+    test('Rename says so when the folder cannot be renamed in', () async {
+      await open([_file('a.txt'), _file('b.txt')]);
+      select(['a.txt', 'b.txt']);
+      pane.startBatchRename();
+      final session = pane.batchRename!;
+      channel.listingFailure = const RemoteFileException(
+        kind: RemoteFileErrorKind.permissionDenied,
+        operation: 'list',
+        message: 'denied',
+      );
+      pane.refresh();
+      await pumpEventQueue();
+      expect(pane.batchRenameActive, isTrue);
+
+      expect(await pane.runBatchRename(_addX), isFalse);
+      expect(session.refusedUnavailable, isTrue);
+      expect(session.stage, BatchRenameStage.editing);
+      expect(channel.renameCalls, isEmpty);
+
+      channel.listingFailure = null;
+      pane.refresh();
+      await pumpEventQueue();
+      expect(session.refusedUnavailable, isFalse);
+      expect(await pane.runBatchRename(_addX), isTrue);
+    });
+
     test('re-plans first and sends nothing when the folder changed', () async {
       await open([_file('a.txt'), _file('b.txt')]);
       select(['a.txt', 'b.txt']);
