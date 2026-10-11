@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
 
+import 'pane_location.dart' show paneSeparator;
+
 /// Why a typed inline-rename name was rejected (02 §2.6).
 ///
 /// The three shapes the field checks before the engine call:
@@ -53,3 +55,57 @@ final _windowsReserved = RegExp(
 );
 
 bool _isControl(int unit) => unit < 0x20 || unit == 0x7F;
+
+/// The directory part of an entry's [path], separator included, so the
+/// renamed path is this plus the new name (02 §2.6). [fallbackDirectory]
+/// is joined only when the path itself names no parent.
+///
+/// The parent prefix keeps the entry path's own separators — never a
+/// synthesized join — so the re-anchored path matches the refreshed
+/// listing's normalization. The grammar comes from the path itself:
+/// a remote or POSIX local path separates on '/' only, so a '\' in
+/// a name is a filename byte, never a separator. The exact basename
+/// is removed BEFORE any separator trimming — a POSIX name may end
+/// in '\' and trimming it first would leave a path that no longer
+/// ends with its name — and the prefix counts only when the cut
+/// lands on a separator boundary. The last-separator split is the
+/// fallback for a path that does not end with its name, the
+/// directory join the last resort.
+String renameParentPrefix({
+  required String path,
+  required String name,
+  required String? fallbackDirectory,
+}) {
+  final separator = paneSeparator(path);
+  var parent = '';
+  if (path.endsWith(name)) {
+    final prefix = path.substring(0, path.length - name.length);
+    if (prefix.isEmpty || prefix.endsWith(separator)) {
+      parent = prefix;
+    }
+  }
+  if (parent.isEmpty && path != name) {
+    var trimmed = path;
+    while (trimmed.length > 1 && trimmed.endsWith(separator)) {
+      trimmed = trimmed.substring(0, trimmed.length - 1);
+    }
+    if (trimmed.endsWith(name)) {
+      final prefix = trimmed.substring(0, trimmed.length - name.length);
+      if (prefix.endsWith(separator)) parent = prefix;
+    }
+    if (parent.isEmpty) {
+      final lastSep = trimmed.lastIndexOf(separator);
+      if (lastSep >= 0) parent = trimmed.substring(0, lastSep + 1);
+    }
+  }
+  if (parent.isEmpty) {
+    // The last resort still respects the base's own terminator — a
+    // root location ('/', 'C:\', a UNC root) already ends with its
+    // separator, and doubling it would synthesize a spelling the
+    // refreshed listing never matches.
+    final base = fallbackDirectory ?? '';
+    final baseSeparator = paneSeparator(base);
+    parent = base.endsWith(baseSeparator) ? base : '$base$baseSeparator';
+  }
+  return parent;
+}

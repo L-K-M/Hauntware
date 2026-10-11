@@ -6,6 +6,7 @@ import 'package:poltergeist_app/services/engine_session.dart';
 import 'package:poltergeist_app/services/pane_controller.dart';
 import 'package:poltergeist_app/services/pane_location.dart';
 import 'package:poltergeist_app/services/pane_tabs_controller.dart';
+import 'package:poltergeist_app/services/selection_state.dart';
 import 'package:poltergeist_app/services/view_preferences.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
 
@@ -548,6 +549,31 @@ void main() {
       expect(seen, [TabCloseTrigger.inlineRename]);
 
       tab.controller.cancelRename();
+      expect(await controller.requestCloseTab(tab), TabCloseOutcome.closed);
+    });
+
+    test('an open Rename Items dialog fires its trigger', () async {
+      (lanes.nextLocalChannel as FakePaneChannel).listings['/home/tester'] = [
+        _entry('a.txt'),
+        _entry('b.txt'),
+      ];
+      List<TabCloseTrigger>? seen;
+      final controller = tabs(
+        confirmClose: (_, triggers) async {
+          seen = triggers;
+          return false;
+        },
+      );
+      final tab = controller.newTab(target: NewTabTarget.home);
+      await settle();
+      tab.controller.setCursorIndex(0);
+      tab.controller.setCursorIndex(1, update: SelectionUpdate.toggle);
+      expect(tab.controller.startBatchRename(), isTrue);
+
+      expect(await controller.requestCloseTab(tab), TabCloseOutcome.declined);
+      expect(seen, [TabCloseTrigger.batchRename]);
+
+      tab.controller.closeBatchRename();
       expect(await controller.requestCloseTab(tab), TabCloseOutcome.closed);
     });
 

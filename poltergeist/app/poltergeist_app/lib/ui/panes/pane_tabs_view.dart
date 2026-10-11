@@ -81,6 +81,7 @@ String tabCloseTriggerLabel(
   TabCloseTrigger.inlineRename => l10n.tabCloseTriggerInlineRename,
   TabCloseTrigger.folderSize => l10n.tabCloseTriggerFolderSize,
   TabCloseTrigger.applyToEnclosed => l10n.tabCloseTriggerApplyToEnclosed,
+  TabCloseTrigger.batchRename => l10n.tabCloseTriggerBatchRename,
   TabCloseTrigger.syncAnchor => l10n.tabCloseTriggerSyncAnchor,
 };
 

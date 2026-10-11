@@ -25,10 +25,13 @@ class FakePaneChannel implements AppBrowseChannel {
   /// checked before [listings].
   final listingFailures = <String, Object>{};
 
-  /// Recorded rename calls (oldPath, newPath) and a scripted failure —
-  /// null renames succeed silently.
+  /// Recorded rename calls (oldPath, newPath) and scripted failures —
+  /// [renameFailures] keys a refusal by old path (checked first) while
+  /// [renameFailure] applies to every call; null renames succeed
+  /// silently.
   final renameCalls = <(String, String)>[];
   Object? renameFailure;
+  final renameFailures = <String, Object>{};
   Completer<void>? heldRename;
 
   @override
@@ -39,7 +42,7 @@ class FakePaneChannel implements AppBrowseChannel {
       heldRename = null;
       await held.future;
     }
-    final failure = renameFailure;
+    final failure = renameFailures[oldPath] ?? renameFailure;
     if (failure != null) throw failure;
   }
 

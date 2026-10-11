@@ -1319,6 +1319,10 @@
   "@tabCloseTriggerApplyToEnclosed": {
     "description": "Tab-close guard item: an apply-to-enclosed-items permissions change is running on the tab (02 §3)."
   },
+  "tabCloseTriggerBatchRename": "Rename Items is open or running.",
+  "@tabCloseTriggerBatchRename": {
+    "description": "Tab-close guard item: a Rename Items dialog is open on the tab, editing, running or showing its outcome (02 §2.6, §3)."
+  },
   "tabCloseTriggerSyncAnchor": "The tab anchors a sync pair.",
   "@tabCloseTriggerSyncAnchor": {
     "description": "Tab-close guard item: the tab anchors a Sync Browsing pair (02 §3, §7)."
@@ -8594,6 +8598,269 @@
     "placeholders": {
       "left": {"type": "String"},
       "right": {"type": "String"}
+    }
+  },
+  "fileBatchRenameLabel": "Rename Items…",
+  "@fileBatchRenameLabel": {
+    "description": "file.batchRename: opens the Rename Items dialog for two or more selected rows (02 §2.6)."
+  },
+  "commandDisabledSelectTwoOrMore": "Select two or more items. To rename one item, use Rename.",
+  "@commandDisabledSelectTwoOrMore": {
+    "description": "Palette reason under Rename Items while fewer than two rows are selected."
+  },
+  "commandDisabledBatchRenameNested": "The selection includes items inside a selected folder. Deselect them or the folder.",
+  "@commandDisabledBatchRenameNested": {
+    "description": "Palette reason under Rename Items while a selected row sits inside a selected, expanded folder."
+  },
+  "commandDisabledBatchRenameAllFlagged": "None of the selected names are valid UTF-8.",
+  "@commandDisabledBatchRenameAllFlagged": {
+    "description": "Palette reason under Rename Items while every selected name was decoded with replacement characters (02 §13)."
+  },
+  "commandDisabledRenameBusy": "Finish the open rename or permissions change first.",
+  "@commandDisabledRenameBusy": {
+    "description": "Palette reason under Rename and Rename Items while another rename or an apply-to-enclosed permissions change is open or running on the tab."
+  },
+  "batchRenameTitle": "{count, plural, =1{Rename 1 Item} other{Rename {count} Items}}",
+  "@batchRenameTitle": {
+    "description": "Rename Items dialog title; count is the number of selected items.",
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "batchRenameModeLabel": "Rename mode",
+  "@batchRenameModeLabel": {
+    "description": "Label of the Rename Items mode picker."
+  },
+  "batchRenameModeReplaceText": "Replace Text",
+  "@batchRenameModeReplaceText": {
+    "description": "Rename Items mode: replace literal text in each name."
+  },
+  "batchRenameModeAddText": "Add Text",
+  "@batchRenameModeAddText": {
+    "description": "Rename Items mode: add text before or after each name."
+  },
+  "batchRenameModeFormat": "Format",
+  "@batchRenameModeFormat": {
+    "description": "Rename Items mode: give each item a name and a number."
+  },
+  "batchRenameFindLabel": "Find",
+  "@batchRenameFindLabel": {
+    "description": "Replace Text field: the literal text to find."
+  },
+  "batchRenameReplaceWithLabel": "Replace with",
+  "@batchRenameReplaceWithLabel": {
+    "description": "Replace Text field: the literal replacement."
+  },
+  "batchRenameMatchCase": "Match case",
+  "@batchRenameMatchCase": {
+    "description": "Replace Text option: find matches case exactly."
+  },
+  "batchRenameIncludeExtension": "Include extension",
+  "@batchRenameIncludeExtension": {
+    "description": "Replace Text option: also search file extensions."
+  },
+  "batchRenameAddTextLabel": "Text to add",
+  "@batchRenameAddTextLabel": {
+    "description": "Add Text field: the text added to each name."
+  },
+  "batchRenamePlacementLabel": "Where",
+  "@batchRenamePlacementLabel": {
+    "description": "Add Text and Format option: before or after the name."
+  },
+  "batchRenamePlacementAfterName": "After name",
+  "@batchRenamePlacementAfterName": {
+    "description": "Placement choice: after the name, before a file extension."
+  },
+  "batchRenamePlacementBeforeName": "Before name",
+  "@batchRenamePlacementBeforeName": {
+    "description": "Placement choice: before the name."
+  },
+  "batchRenameFormatNameLabel": "Name",
+  "@batchRenameFormatNameLabel": {
+    "description": "Format field: the name every item gets before or after its number."
+  },
+  "batchRenameFormatNameHint": "Leave empty to keep each name",
+  "@batchRenameFormatNameHint": {
+    "description": "Hint in the Format name field: an empty name keeps each item's own name."
+  },
+  "batchRenameStartAtLabel": "Start numbers at",
+  "@batchRenameStartAtLabel": {
+    "description": "Format field: the first number."
+  },
+  "batchRenameStartAtInvalid": "Enter a whole number from 0 to 999999.",
+  "@batchRenameStartAtInvalid": {
+    "description": "Error under the Format start field when it is empty or out of range."
+  },
+  "batchRenameConfirm": "{count, plural, =1{Rename 1 Item} other{Rename {count} Items}}",
+  "@batchRenameConfirm": {
+    "description": "Rename Items confirm button; count is the number of items that will change.",
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "batchRenameCancel": "Cancel",
+  "@batchRenameCancel": {
+    "description": "Rename Items: closes the dialog without renaming."
+  },
+  "batchRenameStop": "Stop",
+  "@batchRenameStop": {
+    "description": "Rename Items: stops a running batch after the current item."
+  },
+  "batchRenameDone": "Done",
+  "@batchRenameDone": {
+    "description": "Rename Items: closes the dialog after a run."
+  },
+  "batchRenameStopping": "Stopping after the current item…",
+  "@batchRenameStopping": {
+    "description": "Rename Items: shown after Stop while the item in flight settles."
+  },
+  "batchRenameProgress": "Renaming {done} of {total}…",
+  "@batchRenameProgress": {
+    "description": "Rename Items progress line while running.",
+    "placeholders": {
+      "done": {"type": "int"},
+      "total": {"type": "int"}
+    }
+  },
+  "batchRenameSummaryReady": "{count, plural, =1{1 item will be renamed.} other{{count} items will be renamed.}}",
+  "@batchRenameSummaryReady": {
+    "description": "Rename Items summary when the plan can run.",
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "batchRenameSummaryNothing": "No names change.",
+  "@batchRenameSummaryNothing": {
+    "description": "Rename Items summary when the rule changes no name."
+  },
+  "batchRenameSummaryBlocked": "{count, plural, =1{1 name needs a change before you can rename.} other{{count} names need a change before you can rename.}}",
+  "@batchRenameSummaryBlocked": {
+    "description": "Rename Items summary while rows block the run.",
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "batchRenameSummaryUnchanged": "{count} unchanged",
+  "@batchRenameSummaryUnchanged": {
+    "description": "Rename Items summary detail: rows whose name stays the same.",
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "batchRenameSummaryLeftOut": "{count, plural, =1{1 item left out: its name isn't valid UTF-8.} other{{count} items left out: their names aren't valid UTF-8.}}",
+  "@batchRenameSummaryLeftOut": {
+    "description": "Rename Items summary detail: flagged names that are never renamed (02 §13).",
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "batchRenameChanged": "The folder changed since the preview. Review the updated names.",
+  "@batchRenameChanged": {
+    "description": "Rename Items banner: the Rename press re-planned against a changed folder and found problems; nothing was renamed."
+  },
+  "batchRenameFolderCaption": "In {folder}",
+  "@batchRenameFolderCaption": {
+    "description": "Rename Items preview: the folder of a row when the selection spans several folders.",
+    "placeholders": {
+      "folder": {"type": "String"}
+    }
+  },
+  "batchRenameRowUnchanged": "No change",
+  "@batchRenameRowUnchanged": {
+    "description": "Rename Items row status: the name stays the same."
+  },
+  "batchRenameRowLeftOut": "Left out: the name isn't valid UTF-8",
+  "@batchRenameRowLeftOut": {
+    "description": "Rename Items row status: a flagged name that is never renamed (02 §13)."
+  },
+  "batchRenameRowNameEmpty": "The new name would be empty.",
+  "@batchRenameRowNameEmpty": {
+    "description": "Rename Items row status: the rule leaves no name before the extension, or no name at all."
+  },
+  "batchRenameRowHidden": "Names starting with “.” are hidden. To hide an item, rename it on its own.",
+  "@batchRenameRowHidden": {
+    "description": "Rename Items row status: the new name would hide the item."
+  },
+  "batchRenameRowDuplicate": "Another selected item here would get the same name.",
+  "@batchRenameRowDuplicate": {
+    "description": "Rename Items row status: two selected items in one folder would get the same new name."
+  },
+  "batchRenameRowExists": "“{name}” already exists in this folder.",
+  "@batchRenameRowExists": {
+    "description": "Rename Items row status: the new name is taken by an item that keeps its name.",
+    "placeholders": {
+      "name": {"type": "String"}
+    }
+  },
+  "batchRenameRowCycle": "These items would swap names. Rename them in two steps.",
+  "@batchRenameRowCycle": {
+    "description": "Rename Items row status: the new names form a swap or rotation that cannot run in any order."
+  },
+  "batchRenameRowRenamed": "Renamed",
+  "@batchRenameRowRenamed": {
+    "description": "Rename Items row outcome: the item was renamed."
+  },
+  "batchRenameRowSkippedBlocked": "Not renamed because “{name}” could not be renamed first.",
+  "@batchRenameRowSkippedBlocked": {
+    "description": "Rename Items row outcome: skipped because the item whose name it takes did not rename.",
+    "placeholders": {
+      "name": {"type": "String"}
+    }
+  },
+  "batchRenameRowNotAttempted": "Not attempted",
+  "@batchRenameRowNotAttempted": {
+    "description": "Rename Items row outcome: the run ended before this item."
+  },
+  "batchRenameRowUnknown": "Outcome unknown. Refresh to check.",
+  "@batchRenameRowUnknown": {
+    "description": "Rename Items row outcome: the request may or may not have applied."
+  },
+  "batchRenameRowSemantics": "{oldName} to {newName}",
+  "@batchRenameRowSemantics": {
+    "description": "Screen-reader label of a Rename Items preview row.",
+    "placeholders": {
+      "oldName": {"type": "String"},
+      "newName": {"type": "String"}
+    }
+  },
+  "batchRenameResultSome": "{total, plural, =1{Renamed {renamed} of 1 item.} other{Renamed {renamed} of {total} items.}}",
+  "@batchRenameResultSome": {
+    "description": "Rename Items result: the run finished but not every item renamed.",
+    "placeholders": {
+      "renamed": {"type": "int"},
+      "total": {"type": "int"}
+    }
+  },
+  "batchRenameResultStopped": "{total, plural, =1{Stopped after renaming {renamed} of 1 item.} other{Stopped after renaming {renamed} of {total} items.}}",
+  "@batchRenameResultStopped": {
+    "description": "Rename Items result: Stop ended the run.",
+    "placeholders": {
+      "renamed": {"type": "int"},
+      "total": {"type": "int"}
+    }
+  },
+  "batchRenameResultConnectionLost": "{total, plural, =1{The connection was lost after renaming {renamed} of 1 item. Refresh to check items marked unknown.} other{The connection was lost after renaming {renamed} of {total} items. Refresh to check items marked unknown.}}",
+  "@batchRenameResultConnectionLost": {
+    "description": "Rename Items result: the connection was lost or a request timed out.",
+    "placeholders": {
+      "renamed": {"type": "int"},
+      "total": {"type": "int"}
+    }
+  },
+  "batchRenameResultPaneChanged": "{total, plural, =1{This tab left the folder or reconnected after renaming {renamed} of 1 item.} other{This tab left the folder or reconnected after renaming {renamed} of {total} items.}}",
+  "@batchRenameResultPaneChanged": {
+    "description": "Rename Items result: the tab navigated away or rebound mid-run.",
+    "placeholders": {
+      "renamed": {"type": "int"},
+      "total": {"type": "int"}
+    }
+  },
+  "batchRenameResultFault": "{total, plural, =1{Something went wrong after renaming {renamed} of 1 item.} other{Something went wrong after renaming {renamed} of {total} items.}}",
+  "@batchRenameResultFault": {
+    "description": "Rename Items result: an unexpected error ended the run.",
+    "placeholders": {
+      "renamed": {"type": "int"},
+      "total": {"type": "int"}
     }
   },
   "commandDisabledLocalArchive": "Archives are available for local files only.",
