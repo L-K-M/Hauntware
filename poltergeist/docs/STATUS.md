@@ -4,6 +4,41 @@ Living snapshot of where Poltergeist is, what's proven, and what to pick up
 next. Read [AGENTS.md](../AGENTS.md) for build/test commands and
 [09-PLAYBOOK.md](plan/09-PLAYBOOK.md) for the PR process.
 
+## Compare Files (2026-10-11)
+
+File ▸ Compare Files opens the sync plan's read-only side-by-side view
+(06 §6) for two files the panes name: two files in the focused pane,
+ordered by the listing, or one file in each pane, with the left pane's
+file on the left. A pane's files are its selected rows, else its cursor
+row. Only regular files compare; a folder, link, special file or any
+other count disables the command, and the palette says what it needs.
+The row context menu offers it after Quick Look; it has no shortcut.
+This is the cross-pane Compare entry point from the v1.x backlog (07
+§3.13); the computed diff stays demand-dependent.
+
+Remote sides take the sync-pair path unchanged: the preview cache and
+producer, queue-visible and cancellable, the large-download
+confirmation, and the pre-download refusal above the 4 MiB editor limit.
+A remote side is keyed by the listing's size and whole-second mtime, so
+a file the preview panel already cached is not downloaded again. The
+title names both files when their names differ.
+
+The resolver is a pure function over the workspace
+(`services/pane_comparison.dart`) with unit coverage for both rules,
+side assignment from either focused pane, the cursor fallback, every
+disabling shape and the cache-key match; a shell test runs the
+registered command against a live pane and finds the view with each
+path in its column. Adding the File row moved Synchronize below the
+compact command sheet's fold, which exposed a missing pump after
+`scrollUntilVisible` in the compact posture test; the test now pumps
+before tapping.
+
+Local validation: Flutter analysis is clean and the import guard
+passes. The full app run passed 3,271 tests and failed only that compact
+test, which passes with the pump, as do the 84 tests of the affected
+suites rerun on the final code. Not run: native platforms, where the
+menu row and route are the same Flutter code CI compiles.
+
 ## dartssh2 4.1.0 re-pin (2026-10-10)
 
 On owner request dartssh2 moves from 3.0.2 to 4.1.0 in `poltergeist_core`,
@@ -8609,7 +8644,8 @@ native icons, Compare entry point, preview warming — and Sync Browsing
 if risk 8's cut line is ever exercised). None was started in this release-prep
 slice; D10 completed on 2026-09-29 and D27 completed on 2026-09-30 as recorded
 above. Numbered fast-follow items 1–4 and deep links are complete; the text-diff
-view remains demand-dependent. Item
+view remains demand-dependent. From the v1.x backlog, the Compare entry
+point shipped on 2026-10-11 as Compare Files. Item
 23's remote-transfer wiring is the de-facto headline fast-follow even
 though §3.13 predates naming it.
 
