@@ -122,7 +122,7 @@ M9).
 | S1 Transport | M | Streamlocal duplex with listen-before-write, custom HTTP/1.1, stdcopy, exec hijack and resize, `dial-stdio` and elevated `dial-stdio`; Docker 29.9 rootful and rootless, daemons at API 1.41 and 1.44, Podman 6.1 rootful and rootless; sshd reason codes and texts for `MaxSessions` and streamlocal refusals, including `AllowTcpForwarding no` and `PermitOpen` (expected: connect-failed "open failed" for every streamlocal refusal, 03 section 5.3); a 1,000 lines/s follow; the `HttpClient` alternative | Pure-Dart CLI demo passes a scripted scenario on every target; API fixtures recorded; D20 confirmed |
 | S2 Sampler | M | HWS/1 under dash, bash, BusyBox ash, mksh and zsh as `/bin/sh`, with bash, zsh, fish and tcsh login shells; Debian 12, Ubuntu 24.04 and 26.04, RHEL 8 and 9, Alpine 3.22, a BusyBox NAS; `systemctl --output=json` on systemd 239, 245, 252, 257; journal paging flags | No framing or read-ahead failures; budgets of 11.4 met; fixture corpus v0 |
 | S3 Elevation | S | The prelude on sudo 1.9.x with `tty`, `ppid` and `global` timestamp types, `timestamp_timeout=0`, `requiretty`; sudo-rs 0.2.x; doas; run0; `printf` builtin per shell | Strategy table of 03, section 8.3 confirmed or amended; rejection-text fixtures |
-| S4 Detached operations | S | `systemd-run` system and `--user` over non-interactive SSH, linger, `KillUserProcesses`, `setsid` on Alpine and BusyBox, re-attach after reconnect, root-run file ownership and deletion through the prelude, `systemd-run --uid` for non-root operations in admin mode, the `--host` pin inside sudo and the unit, including under a NOPASSWD rule scoped to `docker` | Runner table of 03, section 7.17 confirmed or amended |
+| S4 Detached operations | S | `systemd-run` system and `--user` over non-interactive SSH, linger, `KillUserProcesses`, `setsid` on Alpine and BusyBox, re-attach after reconnect, root-run file ownership and deletion through the prelude, `systemd-run --uid` for non-root operations in admin mode, the `--host` pin inside sudo and the unit, and the login-user wrapper with `sudo -n -- docker` per step under a NOPASSWD rule scoped to `docker` (03, 7.17) | Runner table of 03, section 7.17 confirmed or amended |
 | S5 Engine budgets | S to M | Engine isolate with 10 hosts at 2 s and one 1,000 lines/s follow on a low-end Android phone and an older iPhone | Numbers for 11.4 |
 | S6 Privileged files | S | Elevated `sftp-server`; owner, mode, ACL and SELinux label after an atomic replace | Before M5 |
 | S7 Port access | S | In-app web view through an SSH channel without a loopback listener | Before M6 |
@@ -247,8 +247,9 @@ Exit: every MVP row in `02-FEATURES.md` §2 implemented or recorded as a
 deviation (03, section 1.4); integration tests for each mutation path,
 including the detached compose flow with re-attach under the user
 runners, in admin mode as the login user and as root through the sudo
-relay, each pinned to the selected socket through `--host`, the relay
-also under a NOPASSWD rule scoped to `docker`; the host
+relay, each pinned to the selected socket through `--host`, and under a
+NOPASSWD rule scoped to `docker` both the rank 3 `dial-stdio` relay and
+the login-user wrapper of 03 7.17; the host
 write inventory test (11.5); the elevation CI test
 (11.1); the manual checklist on one phone per OS and three real hosts;
 `check-workflows.sh` green with the `client_klabautermann` leg; a release

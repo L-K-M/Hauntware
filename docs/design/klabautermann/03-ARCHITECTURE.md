@@ -1428,9 +1428,12 @@ per connection, not forwarding channels [R: sshd_config(5)].
   option before the subcommand (`docker --host unix://<socket> compose
   ...`; no SSH `env` request, 5.10), so a context or `DOCKER_HOST` in the
   login user's or root's environment never picks another engine (7.17).
-  The command sudo checks stays `docker`, so a NOPASSWD rule for `docker`
+  For a command sudo runs directly (the rank 3 relay of 5.9, and each
+  Docker step of a detached operation under a NOPASSWD rule scoped to
+  `docker`, 7.17), the command sudo checks stays `docker`, so such a rule
   still matches; an `env DOCKER_HOST=` prefix would make sudo check `env`
-  and fail [R: sudoers(5)].
+  and fail [R: sudoers(5)]. Command templates elsewhere in this plan omit
+  the option for brevity.
 - The socket is never exposed on a local TCP port or local Unix socket: it
   is root-equivalent (r5 §1.3).
 
@@ -1503,7 +1506,7 @@ the consumer falls behind, the subscription pauses and the view shows
 |---|---|---|---|---|
 | 1 | Streamlocal to the engine socket | Forwarding allowed, socket writable | 0 | "Engine API via SSH socket forward" |
 | 2 | `docker system dial-stdio` (or `podman system dial-stdio`) over `SshLink.start` | Forwarding refused or socket unreachable, CLI can reach the daemon | 1 per HTTP connection; low-session mode | "via docker CLI relay (limited streams)" |
-| 3 | Elevated relay: `sudo -n docker system dial-stdio` with NOPASSWD, or the elevation prelude in front of it with the password line first and HTTP bytes after (8.3) | User cannot reach the socket; admin mode on | Same | "via sudo relay (root-equivalent)" |
+| 3 | Elevated relay: `sudo -n docker --host unix://<socket> system dial-stdio` with NOPASSWD, or the elevation prelude in front of it with the password line first and HTTP bytes after (8.3) | User cannot reach the socket; admin mode on | Same | "via sudo relay (root-equivalent)" |
 | 4 | `socat STDIO UNIX-CONNECT:<path>` or `nc -U` | No CLI, relay present (rare [U]) | Same | "via socat relay" |
 | none | | Nothing works | | Docker panels hidden with the exact reason and the CN-24 access check |
 
@@ -2144,7 +2147,7 @@ matching row applies:
 | Condition | Runner | Operation directory |
 |---|---|---|
 | Needs root (admin mode on), systemd system manager | `systemd-run --unit=klabautermann-op-<id> --collect --quiet -- /bin/sh -c '<wrapper>' klabautermann-op <dir> <id> <uid> -- <cmd...>` through the elevation prelude | `/var/lib/klabautermann/ops/` (directory root-owned 0755; files 0600 owned by the login user) |
-| Needs root (admin mode on), no systemd system manager | `setsid -f /bin/sh -c '<wrapper>' klabautermann-op <dir> <id> <uid> -- <cmd...>` through the elevation prelude, with all standard streams on `/dev/null` | `/var/lib/klabautermann/ops/` as above |
+| Needs root (admin mode on), no systemd system manager | `setsid -f /bin/sh -c '<wrapper>' klabautermann-op <dir> <id> <uid> -- <cmd...>` through the elevation prelude, with all standard streams on `/dev/null` (util-linux `setsid -f`; the BusyBox applet has no `-f`, so a backgrounded `setsid` or `nohup ... &` [U], spike S4) | `/var/lib/klabautermann/ops/` as above |
 | Needs no root, admin mode on, systemd system manager | `systemd-run --uid=<login user> --unit=klabautermann-op-<id> --collect --quiet -- /bin/sh -c '<wrapper>' ...` through the elevation prelude; the service runs as the login user [R: systemd-run(1)] | user directory as below |
 | Needs no root, admin mode off, user manager reachable and `Linger=yes` | `systemd-run --user --unit=klabautermann-op-<id> --collect --quiet -- /bin/sh -c '<wrapper>' ...` | `${XDG_STATE_HOME:-~/.local/state}/klabautermann/ops/` (0700, files 0600) |
 | Otherwise (no systemd, or no linger) | `setsid -f /bin/sh -c '<wrapper>' ...` with all standard streams on `/dev/null` (BusyBox `setsid` applet or `nohup ... &` [U]) | user directory as above |
@@ -2163,6 +2166,16 @@ matching row applies:
   `<id>.log`, write a "done" record with the exit code and end time, exit
   with the command's code. It holds no secret, so it can sit in argv.
   Verified with `setsid` on dash [L] (04, Appendix A, E9).
+- **Docker-scoped sudo rules.** The root rows start `systemd-run` or
+  `setsid` through the prelude, so sudo checks the runner, not `docker`,
+  and a NOPASSWD rule scoped to `docker` does not cover them [R:
+  sudoers(5)]; neither does the row that elevates `systemd-run --uid`.
+  When the access check (CN-24) finds only such a rule, a Docker operation
+  that needs root runs its wrapper as the login user without elevation
+  (the `--user` or `setsid` rows, user directory) and elevates each Docker
+  step inside it with `sudo -n -- docker --host unix://<socket> ...`,
+  which needs no cached credential. The preview says so. A password-only
+  sudo setup uses the root rows.
 - Root-run operations never write into a user-writable directory (a symlink
   swap there would let a non-root process redirect root's writes); they use
   the root-owned directory and `chown` each new file to the login user so it
@@ -2764,12 +2777,15 @@ passed with `curl -K <file>`; the message body goes on stdin
 from its 0600 config with the strict reader and pipes the URL from the
 `printf` builtin into `curl -K -`. For Healthchecks it sends the bare URL
 for success and the URL plus `/start` or `/fail` otherwise. Uptime Kuma
-has no start ping and takes the result from the query string, where
-`status` defaults to `up`, so a suffix would report a failure as up
-[R: uptime-kuma `server/routers/api-router.js`]; for it the script drops
-the stored query and sends `?status=up` or `?status=down` once the job
-ends. ntfy and Gotify have
-their own mobile apps, which avoids APNs for the unsigned IPA [R: r5 §5.3].
+has no start ping and takes the result from the query string: a suffix
+lands in the query of the URL its UI shows, which already says
+`status=up`, or misses the push route of a bare URL, so a failure would
+be reported as up or not at all [R: uptime-kuma
+`server/routers/api-router.js`]. For it the script drops the stored query
+and sends `?status=up&msg=<duration>` or `?status=down&msg=<exit status>`
+(URL-encoded; `msg` otherwise defaults to `OK`) once the job ends. ntfy
+and Gotify have their own mobile apps, which avoids APNs for the unsigned
+IPA [R: r5 §5.3].
 A test send is part of the install. Owner decision 2026-10-10 (21/22): the
 notifier is optional next to sync-server delivery, which is the primary
 while-closed path, and remains the fallback without the helper; it is

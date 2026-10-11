@@ -93,7 +93,7 @@ states what each tier can and cannot catch.
 | none | No server access needed. |
 | user | Plain SSH account. |
 | user+ | Works unprivileged with partial results and is complete with sudo (for example process owners of other users in `ss -p`). |
-| docker | Can connect to the Docker or Podman socket: `docker` group, a rootless socket, or `sudo -n docker system dial-stdio`. A rootful socket is root-equivalent per Docker's own documentation; a rootless socket is equivalent to its user. The UI says which applies (SAF-08). |
+| docker | Can connect to the Docker or Podman socket: `docker` group, a rootless socket, or `sudo -n docker --host unix://<socket> system dial-stdio`. A rootful socket is root-equivalent per Docker's own documentation; a rootless socket is equivalent to its user. The UI says which applies (SAF-08). |
 | journal | System journal readable: root or a member of `systemd-journal`, `adm` or `wheel`. Without it `journalctl` silently returns only the user's own entries. |
 | sudo | Admin mode (SAF-02): sudo or sudo-rs with the password on stdin, or doas and run0 when they need no password. |
 | polkit | Non-root `systemctl` action granted by a polkit rule. There is no polkit agent over SSH, so the app passes `--no-ask-password` and fails fast when no rule grants the action (r5 §4). A polkit rule is a narrower grant than sudo. |
@@ -618,7 +618,7 @@ lines and depend on external services, so they are v1.x.
 | JOB-09 | Managed-crontab detection | Jobs owned by Dokku, Coolify, Dokploy or Runtipi shown read-only | Dokku docs ("reserved") | v1 | T0 | user | crontab owner and markers | |
 | JOB-10 | Timer creator | Calendar UI that writes a `.timer` and `.service` | Cockpit | v1.x | T0 | sudo | unit files, `daemon-reload` | User units need no sudo. |
 | JOB-11 | Output capture | Wrap a job so its output reaches the journal | Cronicle live log, Healthchecks body capture | v1.x | T0 | user, sudo | `cmd 2>&1 \| logger -t klabautermann-job-<id>` or `systemd-cat` | Visible, reversible edit of the job line. T1 only if a wrapper script is installed. |
-| JOB-12 | Dead-man pings | Start, success and fail pings to the user's Healthchecks or Uptime Kuma push URL | Healthchecks, Uptime Kuma push monitors | v1.x | T1+E | user | `curl` wrapper around the job | Alerting lives in that external service. Sends job timing and status to the chosen service. The ping URL is a secret: kept in a 0600 file and passed to curl through `-K`, never argv (03, section 9.3). |
+| JOB-12 | Dead-man pings | Start, success and fail pings to the user's Healthchecks URL, or up and down pushes to an Uptime Kuma push URL | Healthchecks, Uptime Kuma push monitors | v1.x | T1+E | user | `curl` wrapper around the job | Alerting lives in that external service. Sends job timing and status to Healthchecks, and the status with the duration as its message to Uptime Kuma. The ping URL is a secret: kept in a 0600 file and passed to curl through `-K`, never argv (03, section 9.3). |
 | JOB-13 | Missed-run detection | Compare expected runs with observed runs | Checkmk freshness, Zabbix `nodata()` | v1.x | T0 | journal | schedule plus journal history | |
 | JOB-14 | Fleet jobs overview | All jobs across servers | none found | v1.x | T0 | user | fan-out | |
 | JOB-15 | Collision heatmap | Jobs per minute across a host or the fleet, to spot pile-ups at the same time | none found | Later | C | none | parsed schedules | |
