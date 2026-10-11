@@ -176,10 +176,30 @@ class _BatchRenameDialogState extends State<BatchRenameDialog> {
         !(route?.isCurrent ?? false)) {
       return;
     }
-    _focusedStage = stage;
+    // Recorded only once focus moves: a route pushed before the frame
+    // ends leaves the move for the rebuild its pop brings.
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && (route?.isCurrent ?? false)) _actionFocus.requestFocus();
+      if (!mounted || !(route?.isCurrent ?? false)) return;
+      _focusedStage = stage;
+      _actionFocus.requestFocus();
     });
+  }
+
+  /// An open input-method composition owns Esc. The desktop engines
+  /// offer a key to the framework first and to the input method only
+  /// when the framework declines it; macOS's text shortcuts decline Esc
+  /// in a field, the other platforms' do not, so the dialog does.
+  static KeyEventResult _yieldEscToComposition(FocusNode _, KeyEvent event) {
+    if (event is KeyUpEvent || event.logicalKey != LogicalKeyboardKey.escape) {
+      return KeyEventResult.ignored;
+    }
+    final editable = FocusManager.instance.primaryFocus?.context
+        ?.findAncestorWidgetOfExactType<EditableText>();
+    final composing = editable?.controller.value.composing;
+    if (composing == null || !composing.isValid || composing.isCollapsed) {
+      return KeyEventResult.ignored;
+    }
+    return KeyEventResult.skipRemainingHandlers;
   }
 
   static bool _allRenamed(BatchRenameSession session) {
@@ -338,10 +358,15 @@ class _BatchRenameDialogState extends State<BatchRenameDialog> {
         // the fields mid-run moves focus out of them; the scope keeps it
         // inside the dialog, below this handler, rather than on the
         // route's scope.
-        child: FocusScope(
-          child: widget.fullscreen
-              ? _fullscreen(context, title, body, actions)
-              : _card(context, title, body, actions),
+        child: Focus(
+          canRequestFocus: false,
+          skipTraversal: true,
+          onKeyEvent: _yieldEscToComposition,
+          child: FocusScope(
+            child: widget.fullscreen
+                ? _fullscreen(context, title, body, actions)
+                : _card(context, title, body, actions),
+          ),
         ),
       ),
     );

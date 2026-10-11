@@ -214,6 +214,37 @@ void main() {
     expect(_key(BatchRenameKey.dialog), findsNothing);
   });
 
+  testWidgets('Esc during an input-method composition stays with it', (
+    tester,
+  ) async {
+    await openDialog(tester);
+    await tester.showKeyboard(_key(BatchRenameKey.find));
+    tester.testTextInput.updateEditingValue(
+      const TextEditingValue(
+        text: 'あ',
+        selection: TextSelection.collapsed(offset: 1),
+        composing: TextRange(start: 0, end: 1),
+      ),
+    );
+    await tester.pump();
+
+    // Declined, so the engine hands the key to the input method.
+    expect(await tester.sendKeyEvent(LogicalKeyboardKey.escape), isFalse);
+    await tester.pumpAndSettle();
+    expect(_key(BatchRenameKey.dialog), findsOneWidget);
+
+    tester.testTextInput.updateEditingValue(
+      const TextEditingValue(
+        text: 'あ',
+        selection: TextSelection.collapsed(offset: 1),
+      ),
+    );
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    expect(_key(BatchRenameKey.dialog), findsNothing);
+  });
+
   testWidgets('Esc closes an open picker, then the dialog from it', (
     tester,
   ) async {
