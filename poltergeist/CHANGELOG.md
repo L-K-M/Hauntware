@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- **Rename several items at once.** Select two or more items and choose
+  File ▸ Rename Items… to replace text in their names, add text before
+  or after them, or give them a name and a number. A preview shows every
+  new name and marks any that would collide with another item, be
+  invalid or hide the item, and nothing is renamed until all of them are
+  fixed. Nothing is ever overwritten. If some items cannot be renamed,
+  the dialog says which and why.
+- **Compare two files side by side.** File ▸ Compare Files opens two
+  selected files, one in each pane or both in one pane, in the same
+  read-only side-by-side view the sync plan uses. Remote files download
+  through the preview cache and ask first when they are large.
 - **Servers that offer only chacha20-poly1305 connect.** Poltergeist now
   uses dartssh2 4.1.0 (was 3.0.2), which adds that cipher. Servers that
   require post-quantum ML-KEM key exchange still cannot connect.

@@ -305,8 +305,8 @@ The header is registry-driven. A command appears only if it declares a
     timestamps, so a click never waits out the double-tap timeout.
 - **Context menu** (rows and empty space), built from the registry:
   - Open, Open With ▸, Edit in Poltergeist, Quick Look, Compare Files
-  - Get Info, Rename, Duplicate, Create ZIP Archive, Extract ZIP Archive,
-    Copy Path
+  - Get Info, Rename, Rename Items…, Duplicate, Create ZIP Archive,
+    Extract ZIP Archive, Copy Path
   - New Folder, New File
   - Copy to Other Pane, Move to Other Pane
   - Move to Trash
@@ -368,7 +368,7 @@ source.**
 | Menu | Contents |
 |---|---|
 | Poltergeist (macOS) | About, Check for Updates…, Settings… ⌘, · Services · Hide, Hide Others, Show All · Quit |
-| File | New Window, New Tab, New Folder, New File │ Open, Open With ▸, Edit in Poltergeist, Quick Look │ Get Info, Rename, Duplicate │ Copy to Other Pane, Move to Other Pane │ Move to Trash │ Reopen Closed Tab, Close Tab, Close Window │ (Linux/Windows: Settings…, Quit) |
+| File | New Window, New Tab, New Folder, New File │ Open, Open With ▸, Edit in Poltergeist, Quick Look │ Get Info, Rename, Rename Items…, Duplicate │ Copy to Other Pane, Move to Other Pane │ Move to Trash │ Reopen Closed Tab, Close Tab, Close Window │ (Linux/Windows: Settings…, Quit) |
 | Edit | Undo, Redo │ Cut, Copy, Paste │ Select All, Invert Selection, Quick Select │ Copy Path │ Filter |
 | View | Show/Hide Sidebar, Use Compact/Comfortable Sidebar Rows (D33: one item naming the density it switches to, since the macOS menu cannot show a check), Inspector, Second Pane │ Info, Transfers, Alerts │ Show Hidden Files, Sort By ▸, Keep Folders on Top │ Refresh │ Enter Full Screen |
 | Go | Back, Forward, Enclosing Folder, Home │ Go to Folder…, Edit Path │ Focus Left/Right Pane, Sync Browsing │ Quick Open… |
