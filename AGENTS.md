@@ -12,6 +12,9 @@ each subtree's `AGENTS.md`; shared library implementations are never copied.
   vendored xterm and PTY implementations.
 - `poltergeist/`: pure-Dart transfer/sync packages, five-platform application,
   live benchmark/tooling and immutable historical M0 evidence.
+- `klabautermann/`: planned fourth application (server management and
+  Docker). Only its icon master exists so far; the plan is in
+  `docs/design/klabautermann/`. Implementation is a separate task.
 - Root `pubspec.yaml`: suite version and release-tool dependencies, not a
   Flutter workspace. Each product keeps its own pure-Dart workspace.
 
@@ -220,9 +223,18 @@ confirmed blockers, unresolved human review requests, or required checks.
 
 ### Reviewer integration failures
 
-After two consecutive reviewer-integration failures, stop and report the
-review gap. Do not treat failures as approval. An explicit user instruction
-may waive review; report that waiver rather than claiming review passed.
+Do not let GLM block a PR. Its run time grows with the diff, so a large
+PR can exhaust its review budget, and each new push cancels the running
+review. When GLM has not finished in time or has failed, pick one:
+
+- Split the change into smaller PRs that GLM can review in time.
+- Run an independent subagent review of the latest commit. Verify its
+  findings against primary evidence, as for GLM findings.
+- Merge when required checks pass and you are reasonably confident in
+  the change.
+
+A missing or failed review is never approval. Report which option you
+took and the review gap rather than claiming review passed.
 
 ## Ending a task
 
