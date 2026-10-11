@@ -9936,7 +9936,7 @@ abstract class AppLocalizations {
   /// Rename Items summary detail: rows whose name stays the same.
   ///
   /// In en, this message translates to:
-  /// **'{count} unchanged'**
+  /// **'{count, plural, =1{1 item unchanged} other{{count} items unchanged}}'**
   String batchRenameSummaryUnchanged(int count);
 
   /// Rename Items summary detail: flagged names that are never renamed (02 §13).

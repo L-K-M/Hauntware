@@ -74,11 +74,17 @@ void main() {
         await tester.tap(find.byKey(const ValueKey(BatchRenameKey.confirm)));
         for (var i = 0; i < 160; i++) {
           await tester.pump();
+          final selected = {
+            for (final entry in pane.selectedEntries) entry.name,
+          };
+          // The pre-run selection is also two items: wait for the
+          // renamed names, not just the count.
           if (find
                   .byKey(const ValueKey(BatchRenameKey.dialog))
                   .evaluate()
                   .isEmpty &&
-              pane.selectedEntries.length == 2) {
+              selected.length == 2 &&
+              selected.containsAll(['c0nfig.txt', 'n0tes.txt'])) {
             break;
           }
           await Future<void>.delayed(const Duration(milliseconds: 50));

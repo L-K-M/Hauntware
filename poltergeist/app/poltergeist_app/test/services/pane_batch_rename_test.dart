@@ -417,6 +417,18 @@ void main() {
       expect(plan.rows.single.nameError, RenameNameError.empty);
     });
 
+    test('a whole name replaced with nothing is an empty name', () {
+      for (final name in ['report.txt', 'Makefile']) {
+        final plan = planBatchRename(
+          _snapshot(_targets([name])),
+          ReplaceTextRule(find: name, replacement: '', includeExtension: true),
+        );
+        expect(plan.rows.single.newName, isEmpty);
+        expect(plan.rows.single.status, BatchRenameStatus.invalidName);
+        expect(plan.rows.single.nameError, RenameNameError.empty);
+      }
+    });
+
     test('a name that would become hidden blocks', () {
       final plan = planBatchRename(
         _snapshot(_targets(['env', '.profile'])),
@@ -434,7 +446,10 @@ void main() {
 
     test('a gone item blocks', () {
       final plan = planBatchRename(
-        _snapshot([_target('a.txt', present: false), _target('b.txt')]),
+        _snapshot([
+          _target('a.txt', present: false),
+          _target('b.txt', ordinal: 1),
+        ]),
         addX,
       );
       expect(plan.rows.first.status, BatchRenameStatus.gone);
@@ -685,6 +700,7 @@ void main() {
       expect(outcomes[1], isA<BatchRenameSkippedBlocked>());
       expect((outcomes[1]! as BatchRenameSkippedBlocked).blocker, 2);
       expect(outcomes[0], isA<BatchRenameSkippedBlocked>());
+      expect((outcomes[0]! as BatchRenameSkippedBlocked).blocker, 1);
     });
 
     test('independent rows go on after a refusal', () async {

@@ -8740,7 +8740,7 @@
       "count": {"type": "int"}
     }
   },
-  "batchRenameSummaryUnchanged": "{count} unchanged",
+  "batchRenameSummaryUnchanged": "{count, plural, =1{1 item unchanged} other{{count} items unchanged}}",
   "@batchRenameSummaryUnchanged": {
     "description": "Rename Items summary detail: rows whose name stays the same.",
     "placeholders": {

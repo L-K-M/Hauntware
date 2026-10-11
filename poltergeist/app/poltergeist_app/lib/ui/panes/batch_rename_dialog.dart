@@ -224,7 +224,7 @@ class _BatchRenameDialogState extends State<BatchRenameDialog> {
 
   int? get _startAtValue {
     final text = _startAt.text;
-    if (text.isEmpty || text.length > 6) return null;
+    if (text.isEmpty) return null;
     final value = int.tryParse(text);
     if (value == null || value < 0 || value > batchRenameMaxStartAt) {
       return null;

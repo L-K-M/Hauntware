@@ -3050,8 +3050,10 @@ class PaneController extends ChangeNotifier {
     final plan = planBatchRename(snapshot, rule);
     session._snapshot = snapshot;
     if (!plan.runnable) {
-      session._refusedChanged = true;
-      session._publish();
+      session
+        .._refusedUnavailable = false
+        .._refusedChanged = true
+        .._publish();
       return false;
     }
 
@@ -3107,9 +3109,10 @@ class PaneController extends ChangeNotifier {
     } else if (renamedAny &&
         identical(channel, _channel) &&
         location == _location) {
-      // The tab rebound onto the same folder mid-run: its listing may
-      // predate the renames, so it is re-fetched, but nothing is
-      // selected on a binding the run no longer owns.
+      // The tab went away and came back to this folder on the same
+      // channel mid-run: its listing may predate the renames, so it is
+      // re-fetched, but nothing is selected on a visit the run no
+      // longer owns. A rebind brings a new channel that lists afresh.
       refresh();
     }
     notifyListeners();
