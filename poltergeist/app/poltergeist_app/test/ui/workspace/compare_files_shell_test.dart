@@ -20,8 +20,13 @@ void main() {
         await mountEditorShell(tester, harness);
         await pollFor(tester, find.text('config.txt'));
         final pane = leftPane(tester);
-        int row(String path) =>
-            pane.entries.indexWhere((entry) => entry.path == path);
+        // setCursorIndex clamps -1 to the first row, so a missing fixture
+        // path must fail here rather than select the wrong file.
+        int row(String path) {
+          final index = pane.entries.indexWhere((entry) => entry.path == path);
+          expect(index, isNonNegative, reason: '$path missing from listing');
+          return index;
+        }
 
         expect(
           shellCommandEnabled(tester, kFileCompareFilesCommandId),

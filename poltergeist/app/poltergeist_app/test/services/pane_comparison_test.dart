@@ -35,9 +35,13 @@ Bookmark _server() {
 }
 
 /// The visible row named [name]: folders sort first, so listing order is
-/// not the order the fake channel lists.
-int _row(PaneController pane, String name) =>
-    pane.entries.indexWhere((entry) => entry.name == name);
+/// not the order the fake channel lists. setCursorIndex clamps -1 to the
+/// first row, so a missing name fails here rather than select another row.
+int _row(PaneController pane, String name) {
+  final index = pane.entries.indexWhere((entry) => entry.name == name);
+  expect(index, isNonNegative, reason: '$name missing from listing');
+  return index;
+}
 
 void main() {
   late controller_test.FakePaneLanes lanes;
