@@ -1289,9 +1289,7 @@ class PaneController extends ChangeNotifier {
     _expansions.removeWhere(
       (path, _) => path == folder.path || panePathIsUnder(path, folder.path),
     );
-    // The folder's re-list, which spends its batch rows, will not land:
-    // they are spent here, so a later expand never selects them.
-    _spendExpansionBatchSelect((path) => panePathIsUnder(path, folder.path));
+    _spendBatchRowsUnder(folder.path);
     _applyEntries(_filteredListing());
     _applyFold(folder.path, fold);
     notifyListeners();
@@ -1409,6 +1407,7 @@ class PaneController extends ChangeNotifier {
       if (!current()) return;
       fold = _foldPlan(folder.path);
       _expansions.remove(folder.path);
+      _spendBatchRowsUnder(folder.path);
       if (reportFailure) {
         _expansionFailure = (name: folder.name, error: error);
         _postNotice(PaneNotice.expandFailed);
@@ -1418,6 +1417,7 @@ class PaneController extends ChangeNotifier {
       _report(error, stackTrace);
       fold = _foldPlan(folder.path);
       _expansions.remove(folder.path);
+      _spendBatchRowsUnder(folder.path);
       if (reportFailure) {
         _expansionFailure = (
           name: folder.name,
@@ -1449,6 +1449,7 @@ class PaneController extends ChangeNotifier {
       final folder = _sortedListingEntryOrRow(entry.key);
       if (folder == null) {
         _expansions.remove(entry.key);
+        _spendBatchRowsUnder(entry.key);
         continue;
       }
       unawaited(
@@ -3233,6 +3234,12 @@ class PaneController extends ChangeNotifier {
     }
     if (_expansionBatchSelect != null) _batchSelectedPaths = _selectedPaths();
   }
+
+  /// A folder that closes without its re-list landing (a collapse, a
+  /// folder gone from the listing, a failed list) spends the batch rows
+  /// waiting under it, so a later expand never selects them.
+  void _spendBatchRowsUnder(String folder) =>
+      _spendExpansionBatchSelect((path) => panePathIsUnder(path, folder));
 
   void _spendExpansionBatchSelect(bool Function(String path) spent) {
     final pending = _expansionBatchSelect;

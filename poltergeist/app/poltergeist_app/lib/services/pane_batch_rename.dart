@@ -464,7 +464,8 @@ void _checkFolders(
         .toList();
     if (blockers.length > 1) {
       // Two moving names fold to this one (`a` and `A` on a
-      // case-sensitive volume): no single order is safe.
+      // case-sensitive volume). Renaming after both would be safe, but
+      // a row waits on one other row, so it is refused instead.
       rows[index] = _withStatus(
         row,
         BatchRenameStatus.exists,

@@ -331,18 +331,8 @@ class _BatchRenameDialogState extends State<BatchRenameDialog> {
           widget.pane.stopBatchRename();
         }
       },
-      // Esc arrives as the app's DismissIntent. The modal route ignores
-      // it because the barrier is not dismissible, so the dialog answers
-      // it: cancel while editing, stop a run, close a result.
       child: Actions(
-        actions: {
-          DismissIntent: CallbackAction<DismissIntent>(
-            onInvoke: (_) {
-              _cancel();
-              return null;
-            },
-          ),
-        },
+        actions: _dismissActions(),
         // Esc arrives as DismissIntent after a focused field's own use
         // of it (closing its context menu, an IME composition). Disabling
         // the fields mid-run moves focus out of them; the scope keeps it
@@ -389,31 +379,54 @@ class _BatchRenameDialogState extends State<BatchRenameDialog> {
     );
   }
 
+  /// Esc arrives as the app's DismissIntent. The modal route ignores
+  /// it because the barrier is not dismissible, so the dialog answers
+  /// it: cancel while editing, stop a run, close a result.
+  Map<Type, Action<Intent>> _dismissActions() => {
+    DismissIntent: CallbackAction<DismissIntent>(
+      onInvoke: (_) {
+        _cancel();
+        return null;
+      },
+    ),
+  };
+
   Widget _fullscreen(
     BuildContext context,
     String title,
     Widget body,
     List<Widget> actions,
   ) {
+    // The Scaffold maps DismissIntent to its drawer, disabled without
+    // one, and the nearest mapping wins whether enabled or not: its
+    // slots carry the dialog's own.
+    Widget dismissible(Widget child) =>
+        Actions(actions: _dismissActions(), child: child);
+    final appBar = AppBar(
+      leading: _session.stage == BatchRenameStage.finished
+          ? null
+          : CloseButton(onPressed: _cancel),
+      automaticallyImplyLeading: false,
+      title: Text(title),
+    );
     return Dialog.fullscreen(
       child: Scaffold(
-        appBar: AppBar(
-          leading: _session.stage == BatchRenameStage.finished
-              ? null
-              : CloseButton(onPressed: _cancel),
-          automaticallyImplyLeading: false,
-          title: Text(title),
+        appBar: PreferredSize(
+          preferredSize: appBar.preferredSize,
+          child: dismissible(appBar),
         ),
-        body: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Expanded(child: body),
-                const SizedBox(height: 8),
-                _actionBar(actions),
-              ],
+        body: dismissible(
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(child: body),
+                  const SizedBox(height: 8),
+                  _actionBar(actions),
+                ],
+              ),
             ),
           ),
         ),

@@ -283,6 +283,28 @@ void main() {
       },
     );
 
+    test('a folder gone at a refresh spends its rows', () async {
+      const docs = '$_home/docs';
+      final held = await runHoldingFolderRelist(docs);
+
+      // The folder moves away before its re-list lands, then returns.
+      channel.listings[_home] = [_file('a-x.txt')];
+      pane.refresh();
+      await pumpEventQueue();
+      held.complete();
+      await pumpEventQueue();
+      channel.listings[_home] = [_dir('docs'), _file('a-x.txt')];
+      pane.refresh();
+      await pumpEventQueue();
+      pane.expandAt(row('docs'));
+      await pumpEventQueue();
+      expect(pane.entries.map((e) => e.path), contains('$docs/c-x.txt'));
+      expect(
+        [for (final entry in pane.selectedEntries) entry.path],
+        ['$_home/a-x.txt'],
+      );
+    });
+
     test('a refresh of the same folder keeps rows for open folders', () async {
       const docs = '$_home/docs';
       final held = await runHoldingFolderRelist(docs);

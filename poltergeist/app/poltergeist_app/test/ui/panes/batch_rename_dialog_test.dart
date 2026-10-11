@@ -331,6 +331,47 @@ void main() {
     expect(pane.batchRenameActive, isFalse);
   });
 
+  testWidgets('Esc stops and closes in the full-screen page too', (
+    tester,
+  ) async {
+    await openDialog(
+      tester,
+      platform: TargetPlatform.android,
+      size: const Size(390, 844),
+    );
+    await chooseMode(tester, 'Add Text');
+    await tester.enterText(_key(BatchRenameKey.addText), '-x');
+    await tester.pump();
+    final held = Completer<void>();
+    channel.heldRename = held;
+
+    await tester.tap(_key(BatchRenameKey.confirm));
+    await tester.pump();
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump();
+    expect(pane.batchRename!.stopRequested, isTrue);
+
+    held.complete();
+    await tester.pumpAndSettle();
+    expect(find.text('Stopped after renaming 1 of 2 items.'), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    expect(_key(BatchRenameKey.dialog), findsNothing);
+  });
+
+  testWidgets('Esc in a full-screen page\'s field cancels', (tester) async {
+    await openDialog(
+      tester,
+      platform: TargetPlatform.android,
+      size: const Size(390, 844),
+    );
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    expect(_key(BatchRenameKey.dialog), findsNothing);
+    expect(pane.batchRenameActive, isFalse);
+  });
+
   testWidgets('Escape stops a run, then closes its result', (tester) async {
     await openDialog(tester);
     await chooseMode(tester, 'Add Text');
