@@ -157,6 +157,30 @@ void main() {
     expect(clockCalls, 1);
   });
 
+  testWidgets('a caller title replaces the relative-path title', (
+    tester,
+  ) async {
+    final left = File('${temporaryDirectory.path}/left.txt')
+      ..writeAsStringSync('left');
+    final right = File('${temporaryDirectory.path}/right.txt')
+      ..writeAsStringSync('right');
+    final controller = _controller(
+      left: _local(SyncSide.left, left),
+      right: _local(SyncSide.right, right),
+    );
+    addTearDown(controller.dispose);
+    await tester.runAsync(controller.start);
+
+    await _pumpView(
+      tester,
+      controller,
+      title: 'Compare left.txt and right.txt',
+    );
+
+    expect(find.text('Compare left.txt and right.txt'), findsOneWidget);
+    expect(find.text('Compare notes.txt'), findsNothing);
+  });
+
   testWidgets('renders a localized text refusal without raw errors', (
     tester,
   ) async {
@@ -325,6 +349,7 @@ Future<void> _pumpView(
   WidgetTester tester,
   SyncCompareController controller, {
   DateTime Function()? clock,
+  String? title,
 }) {
   tester.view.physicalSize = const Size(1200, 720);
   tester.view.devicePixelRatio = 1;
@@ -351,6 +376,7 @@ Future<void> _pumpView(
         supportedLocales: AppLocalizations.supportedLocales,
         home: CompareView(
           controller: controller,
+          title: title,
           clock: clock ?? () => DateTime.utc(2026, 10, 2),
         ),
       ),

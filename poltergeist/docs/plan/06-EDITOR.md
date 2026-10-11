@@ -1418,6 +1418,17 @@ show: `Line endings differ: LF vs CRLF` and `BOM differs` (majority-vote
 normalization would otherwise hide exactly those diffs). Scrolling is
 independent in v1; no change detection is claimed.
 
+**v1.x — Compare Files.** `file.compareFiles` (File menu and row context
+menu, no shortcut) opens the same view for two files the panes name:
+two files in the focused pane (listing order sets left and right), or
+one in each pane (each keeps its pane's side). A pane's files are its
+selected rows, else its cursor row. Only regular files compare; a
+folder, link, special file, or any other count disables the command.
+Remote sides take the same preview-cache path and §8 confirmations as
+sync-pair sides, keyed by the listing's size and whole-second mtime so a
+copy the preview panel cached is reused. The title names both files
+when their names differ.
+
 **v1.x — the minimal diff view** (milestone in 07):
 
 - Line-based Myers diff over the two in-memory texts (already
@@ -1617,7 +1628,7 @@ and steps Planchette and Séance share (`EditorTextSize`).
 | Deferred item | Where it lives |
 |---|---|
 | Computed text diff view (Myers, inline toggle) | v1.x, milestone in 07 (§6 specs it; 05's out-of-scope table defers it here) |
-| Cross-pane "Compare selected items" entry point | v1.x, 07 (reuses §6's view) |
+| Cross-pane "Compare selected items" entry point | Shipped in v1.x as Compare Files (§6) |
 | Richer editor body (line numbers, gutter, multi-cursor, e.g. `re_editor`) | v2 parking (D25 spirit); the §2 layering keeps the swap cheap |
 | Auto-upload-on-external-save option | not planned for v1; revisit only with a real demand signal (§4.4 rationale) |
 | Editing non-UTF-8 or > 4 MiB files in-app | not planned; `Open With ▸` is the answer (§1) |

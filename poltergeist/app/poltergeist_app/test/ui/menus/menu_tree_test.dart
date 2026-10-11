@@ -256,6 +256,7 @@ List<String> _desktopFile(TargetPlatform platform) {
     'Edit in Poltergeist Ctrl+Alt+E',
     'Quick Look Space',
     windows ? 'Show in Explorer' : 'Show in File Manager',
+    'Compare Files',
     _divider,
     'Get Info Alt+Enter',
     'Rename F2',
@@ -381,6 +382,7 @@ const _macMenus = <String, List<String>>{
     // would steal typing, so the pane's own keys carry them.
     'Quick Look',
     'Show in Finder',
+    'Compare Files',
     _divider,
     'Get Info ⌘I',
     'Rename',

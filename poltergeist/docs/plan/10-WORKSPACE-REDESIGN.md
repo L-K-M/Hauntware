@@ -304,7 +304,7 @@ The header is registry-driven. A command appears only if it declares a
   - **Selection happens on pointer-down.** Double-click is detected from
     timestamps, so a click never waits out the double-tap timeout.
 - **Context menu** (rows and empty space), built from the registry:
-  - Open, Open With ▸, Edit in Poltergeist, Quick Look
+  - Open, Open With ▸, Edit in Poltergeist, Quick Look, Compare Files
   - Get Info, Rename, Duplicate, Create ZIP Archive, Extract ZIP Archive,
     Copy Path
   - New Folder, New File

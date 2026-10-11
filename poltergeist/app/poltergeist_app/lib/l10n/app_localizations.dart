@@ -9723,6 +9723,24 @@ abstract class AppLocalizations {
   /// **'Extract ZIP Archive'**
   String get fileExtractArchiveLabel;
 
+  /// file.compareFiles: opens two selected files, one in each pane or both in the focused pane, in the read-only side-by-side comparison (06 §6).
+  ///
+  /// In en, this message translates to:
+  /// **'Compare Files'**
+  String get fileCompareFilesLabel;
+
+  /// Palette reason under Compare Files while the panes' selections do not name exactly two regular files.
+  ///
+  /// In en, this message translates to:
+  /// **'Requires one file selected in each pane, or two in the focused pane'**
+  String get commandDisabledNoComparableFiles;
+
+  /// Title of the read-only comparison opened by Compare Files when the two files have different names.
+  ///
+  /// In en, this message translates to:
+  /// **'Compare {left} and {right}'**
+  String compareFilesTitle(String left, String right);
+
   /// Disabled archive command shown for a remote pane.
   ///
   /// In en, this message translates to:

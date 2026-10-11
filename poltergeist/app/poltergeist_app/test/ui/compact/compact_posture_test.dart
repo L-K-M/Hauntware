@@ -927,6 +927,9 @@ void main() {
           matching: find.byType(Scrollable),
         ),
       );
+      // scrollUntilVisible's final ensureVisible moves the row without a
+      // frame; lay it out before tapping where it now is.
+      await tester.pumpAndSettle();
       await tester.runAsync(() async {
         await tester.tap(row);
         for (var i = 0; i < 100; i++) {
