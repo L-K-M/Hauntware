@@ -1289,6 +1289,9 @@ class PaneController extends ChangeNotifier {
     _expansions.removeWhere(
       (path, _) => path == folder.path || panePathIsUnder(path, folder.path),
     );
+    // The folder's re-list, which spends its batch rows, will not land:
+    // they are spent here, so a later expand never selects them.
+    _spendExpansionBatchSelect((path) => panePathIsUnder(path, folder.path));
     _applyEntries(_filteredListing());
     _applyFold(folder.path, fold);
     notifyListeners();
@@ -3217,7 +3220,7 @@ class PaneController extends ChangeNotifier {
         keys.add(_rowKeys[index]);
       }
     }
-    pending.removeWhere((path) => paneParentPath(path) == folder);
+    _spendExpansionBatchSelect((path) => paneParentPath(path) == folder);
     if (keys.isNotEmpty) {
       final before = _selection;
       _selection = _selection.withSelectedKeys({
@@ -3228,11 +3231,14 @@ class PaneController extends ChangeNotifier {
         _selectionHistory = _selectionHistory.record(before, _selection);
       }
     }
-    if (pending.isEmpty) {
-      _dropExpansionBatchSelect();
-    } else {
-      _batchSelectedPaths = _selectedPaths();
-    }
+    if (_expansionBatchSelect != null) _batchSelectedPaths = _selectedPaths();
+  }
+
+  void _spendExpansionBatchSelect(bool Function(String path) spent) {
+    final pending = _expansionBatchSelect;
+    if (pending == null) return;
+    pending.removeWhere(spent);
+    if (pending.isEmpty) _dropExpansionBatchSelect();
   }
 
   void _dropExpansionBatchSelect() {
@@ -4670,7 +4676,6 @@ class PaneController extends ChangeNotifier {
     _pendingRenameSelectPath = null;
     _renameAfterSelect = false;
     _pendingBatchSelectPaths = null;
-    _dropExpansionBatchSelect();
     // Every navigation issue is newer intent: an in-flight mirror probe
     // taken before it is stale and must be abandoned by the replay.
     _operationIdentity = Object();
@@ -4691,6 +4696,10 @@ class PaneController extends ChangeNotifier {
       // Rename Items previewed this folder's rows: an editing dialog
       // closes, a running batch sees the change at its next item.
       _endBatchRename();
+      // Rows a finished batch left for open folders belong to this
+      // folder. A same-location refresh keeps them: its expansion
+      // re-lists place them, as for an inline rename's select.
+      _dropExpansionBatchSelect();
       _locationRevision++;
       // A new directory gets a fresh watch-loss budget.
       _watchLosses = 0;

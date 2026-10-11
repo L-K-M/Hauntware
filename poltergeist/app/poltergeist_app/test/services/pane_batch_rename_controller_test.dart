@@ -243,6 +243,61 @@ void main() {
       },
     );
 
+    Future<Completer<void>> runHoldingFolderRelist(String docs) async {
+      channel.listings[docs] = [_file('c.txt', folder: docs)];
+      await open([_dir('docs'), _file('a.txt')]);
+      pane.expandAt(row('docs'));
+      await pumpEventQueue();
+      select(['a.txt', 'c.txt']);
+      pane.startBatchRename();
+      channel.listings[_home] = [_dir('docs'), _file('a-x.txt')];
+      channel.listings[docs] = [_file('c-x.txt', folder: docs)];
+      await pane.runBatchRename(_addX);
+      // The refresh is issued; the folder's re-list after it is held.
+      final held = Completer<void>();
+      channel.holdNext = held;
+      await pumpEventQueue();
+      expect(
+        [for (final entry in pane.selectedEntries) entry.path],
+        ['$_home/a-x.txt'],
+      );
+      return held;
+    }
+
+    test(
+      'a folder collapsed before its re-list lands spends its rows',
+      () async {
+        const docs = '$_home/docs';
+        final held = await runHoldingFolderRelist(docs);
+
+        pane.collapseAt(row('docs'));
+        pane.expandAt(row('docs'));
+        await pumpEventQueue();
+        held.complete();
+        await pumpEventQueue();
+        expect(pane.entries.map((e) => e.path), contains('$docs/c-x.txt'));
+        expect(
+          [for (final entry in pane.selectedEntries) entry.path],
+          ['$_home/a-x.txt'],
+        );
+      },
+    );
+
+    test('a refresh of the same folder keeps rows for open folders', () async {
+      const docs = '$_home/docs';
+      final held = await runHoldingFolderRelist(docs);
+
+      // A watch-driven refresh lands before the folder's re-list.
+      pane.refresh();
+      await pumpEventQueue();
+      held.complete();
+      await pumpEventQueue();
+      expect(
+        [for (final entry in pane.selectedEntries) entry.path],
+        ['$docs/c-x.txt', '$_home/a-x.txt'],
+      );
+    });
+
     test('Rename says so when the folder cannot be renamed in', () async {
       await open([_file('a.txt'), _file('b.txt')]);
       select(['a.txt', 'b.txt']);

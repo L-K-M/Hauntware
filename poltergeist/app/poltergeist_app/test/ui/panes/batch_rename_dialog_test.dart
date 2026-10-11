@@ -1,9 +1,11 @@
 import 'dart:async';
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:poltergeist_app/l10n/app_localizations.dart';
+import 'package:poltergeist_app/services/pane_batch_rename.dart';
 import 'package:poltergeist_app/services/pane_controller.dart';
 import 'package:poltergeist_app/services/selection_state.dart';
 import 'package:poltergeist_app/ui/panes/batch_rename_dialog.dart';
@@ -21,6 +23,17 @@ RemoteFileEntry _file(String name) => RemoteFileEntry(
 );
 
 Finder _key(BatchRenameKey key) => find.byKey(ValueKey(key));
+
+/// Android 14's kind of scaling: small sizes grow more than large ones.
+class _NonlinearTextScaler extends TextScaler {
+  const _NonlinearTextScaler();
+
+  @override
+  double scale(double fontSize) => fontSize * (fontSize < 15 ? 1.9 : 1.7);
+
+  @override
+  double get textScaleFactor => 1.9;
+}
 
 void main() {
   late controller_test.FakePaneLanes lanes;
@@ -42,6 +55,7 @@ void main() {
     TargetPlatform platform = TargetPlatform.linux,
     Size size = const Size(1200, 900),
     GlobalKey<NavigatorState>? navigatorKey,
+    TextScaler? textScaler,
   }) async {
     await pane.openLocalHome();
     await tester.pump();
@@ -55,6 +69,12 @@ void main() {
       MaterialApp(
         navigatorKey: navigatorKey,
         theme: ThemeData(platform: platform),
+        builder: textScaler == null
+            ? null
+            : (context, child) => MediaQuery(
+                data: MediaQuery.of(context).copyWith(textScaler: textScaler),
+                child: child!,
+              ),
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         home: Builder(
@@ -169,6 +189,109 @@ void main() {
     expect(channel.renameCalls, isEmpty);
     // The page underneath is still there.
     expect(find.text('open'), findsOneWidget);
+  });
+
+  testWidgets('Esc closes a field\'s context menu before the dialog', (
+    tester,
+  ) async {
+    await openDialog(tester);
+    final gesture = await tester.startGesture(
+      tester.getCenter(_key(BatchRenameKey.find)),
+      kind: PointerDeviceKind.mouse,
+      buttons: kSecondaryMouseButton,
+    );
+    await gesture.up();
+    await tester.pumpAndSettle();
+    expect(find.byType(AdaptiveTextSelectionToolbar), findsOneWidget);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    expect(find.byType(AdaptiveTextSelectionToolbar), findsNothing);
+    expect(_key(BatchRenameKey.dialog), findsOneWidget);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    expect(_key(BatchRenameKey.dialog), findsNothing);
+  });
+
+  testWidgets('Esc closes an open picker, then the dialog from it', (
+    tester,
+  ) async {
+    await openDialog(tester);
+    await tester.tap(_key(BatchRenameKey.mode));
+    await tester.pumpAndSettle();
+    expect(find.text('Format'), findsOneWidget);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    expect(find.text('Format'), findsNothing);
+    expect(_key(BatchRenameKey.dialog), findsOneWidget);
+
+    // Closing the menu leaves focus on the closed picker.
+    final focused = FocusManager.instance.primaryFocus!.context!;
+    expect(
+      focused.findAncestorWidgetOfExactType<DropdownButton<BatchRenameMode>>(),
+      isNotNull,
+    );
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    expect(_key(BatchRenameKey.dialog), findsNothing);
+    expect(pane.batchRenameActive, isFalse);
+  });
+
+  testWidgets('a result under another route leaves that route\'s focus', (
+    tester,
+  ) async {
+    final navigator = GlobalKey<NavigatorState>();
+    await openDialog(tester, navigatorKey: navigator);
+    await chooseMode(tester, 'Add Text');
+    await tester.enterText(_key(BatchRenameKey.addText), '-x');
+    await tester.pump();
+    final held = Completer<void>();
+    channel.heldRename = held;
+    channel.renameFailures['$_home/b.txt'] = const RemoteFileException(
+      kind: RemoteFileErrorKind.permissionDenied,
+      operation: 'rename',
+      message: 'Permission denied',
+    );
+    await tester.tap(_key(BatchRenameKey.confirm));
+    await tester.pump();
+
+    final coverFocus = FocusNode();
+    addTearDown(coverFocus.dispose);
+    unawaited(
+      navigator.currentState!.push(
+        MaterialPageRoute<void>(
+          builder: (_) => Material(
+            child: TextField(focusNode: coverFocus, autofocus: true),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(coverFocus.hasPrimaryFocus, isTrue);
+
+    held.complete();
+    await tester.pumpAndSettle();
+    expect(pane.batchRename!.stage, BatchRenameStage.finished);
+    expect(coverFocus.hasPrimaryFocus, isTrue);
+
+    navigator.currentState!.pop();
+    await tester.pumpAndSettle();
+    // Done takes focus on return: Space presses it.
+    await tester.sendKeyEvent(LogicalKeyboardKey.space);
+    await tester.pumpAndSettle();
+    expect(_key(BatchRenameKey.dialog), findsNothing);
+  });
+
+  testWidgets('preview rows fit nonlinearly scaled text', (tester) async {
+    await openDialog(tester, textScaler: const _NonlinearTextScaler());
+    await tester.enterText(_key(BatchRenameKey.find), 'a');
+    await tester.enterText(_key(BatchRenameKey.replace), 'b');
+    await tester.pump();
+    expect(find.text('“b.txt” already exists in this folder.'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('Format numbers in list order and checks its start', (

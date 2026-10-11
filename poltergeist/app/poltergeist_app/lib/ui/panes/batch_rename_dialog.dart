@@ -163,13 +163,23 @@ class _BatchRenameDialogState extends State<BatchRenameDialog> {
     }
     if (!mounted) return;
     setState(() {});
-    final stage = session.stage;
-    if (stage != BatchRenameStage.editing && stage != _focusedStage) {
-      _focusedStage = stage;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _actionFocus.requestFocus();
-      });
+  }
+
+  /// Mid-run the fields are disabled, so focus moves to Stop, then to
+  /// Done for the result. Only while the dialog is on top: a route
+  /// covering it keeps its focus, and the move waits for the rebuild
+  /// its return brings.
+  void _focusActionFor(BatchRenameStage stage, ModalRoute<Object?>? route) {
+    if (stage == BatchRenameStage.editing ||
+        stage == BatchRenameStage.ended ||
+        stage == _focusedStage ||
+        !(route?.isCurrent ?? false)) {
+      return;
     }
+    _focusedStage = stage;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && (route?.isCurrent ?? false)) _actionFocus.requestFocus();
+    });
   }
 
   static bool _allRenamed(BatchRenameSession session) {
@@ -270,11 +280,17 @@ class _BatchRenameDialogState extends State<BatchRenameDialog> {
   }
 
   /// One preview row: two text lines and padding, grown with the text
-  /// scale so a problem line never clips (D20).
+  /// scale so a problem line never clips (D20). Each line is measured
+  /// from its own style's scaled font size: Android scales large and
+  /// small sizes by different factors.
   double _rowExtent(BuildContext context) {
     final scaler = MediaQuery.textScalerOf(context);
+    final text = Theme.of(context).textTheme;
+    double line(TextStyle? style) =>
+        scaler.scale(style?.fontSize ?? 14) * (style?.height ?? 1.5);
     final padding = widget.fullscreen ? 20.0 : 12.0;
-    return padding + scaler.scale(20) + scaler.scale(16);
+    return (padding + line(text.bodyMedium) + line(text.bodySmall))
+        .ceilToDouble();
   }
 
   @override
@@ -282,9 +298,11 @@ class _BatchRenameDialogState extends State<BatchRenameDialog> {
     final l10n = AppLocalizations.of(context);
     final stage = _session.stage;
     // Depends on the route's status, so the dialog rebuilds (and an
-    // ended session's pop re-arms) when it is on top again.
-    ModalRoute.of(context);
+    // ended session's pop or a stage's focus move re-arms) when it is on
+    // top again.
+    final route = ModalRoute.of(context);
     if (stage == BatchRenameStage.ended) _schedulePop();
+    _focusActionFor(stage, route);
     final editing = stage == BatchRenameStage.editing;
     final plan = editing ? _editingPlan() : _session.runPlan;
     final title = l10n.batchRenameTitle(_session.snapshot.targets.length);
@@ -325,27 +343,15 @@ class _BatchRenameDialogState extends State<BatchRenameDialog> {
             },
           ),
         },
-        // Esc as a key, too: a focused descendant that maps Esc to its
-        // own disabled action (the mode picker's closed menu) lets the key
-        // through unhandled, and it reaches this handler. Disabling the
-        // fields mid-run moves focus out of them; the scope keeps it
-        // inside the dialog rather than on the route's scope.
-        child: Focus(
-          canRequestFocus: false,
-          skipTraversal: true,
-          onKeyEvent: (_, event) {
-            if (event is! KeyDownEvent ||
-                event.logicalKey != LogicalKeyboardKey.escape) {
-              return KeyEventResult.ignored;
-            }
-            _cancel();
-            return KeyEventResult.handled;
-          },
-          child: FocusScope(
-            child: widget.fullscreen
-                ? _fullscreen(context, title, body, actions)
-                : _card(context, title, body, actions),
-          ),
+        // Esc arrives as DismissIntent after a focused field's own use
+        // of it (closing its context menu, an IME composition). Disabling
+        // the fields mid-run moves focus out of them; the scope keeps it
+        // inside the dialog, below this handler, rather than on the
+        // route's scope.
+        child: FocusScope(
+          child: widget.fullscreen
+              ? _fullscreen(context, title, body, actions)
+              : _card(context, title, body, actions),
         ),
       ),
     );
@@ -426,36 +432,45 @@ class _BatchRenameDialogState extends State<BatchRenameDialog> {
   );
 
   Widget _modePicker(AppLocalizations l10n, {required bool enabled}) {
-    return DropdownMenu<BatchRenameMode>(
+    return DropdownButtonFormField<BatchRenameMode>(
       key: const ValueKey(BatchRenameKey.mode),
-      enabled: enabled,
-      initialSelection: _mode,
-      label: Text(l10n.batchRenameModeLabel),
-      expandedInsets: EdgeInsets.zero,
-      requestFocusOnTap: false,
-      onSelected: (mode) {
-        if (mode == null) return;
-        setState(() => _mode = mode);
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) _firstField.requestFocus();
-        });
-      },
-      dropdownMenuEntries: [
-        DropdownMenuEntry(
+      initialValue: _mode,
+      isExpanded: true,
+      decoration: _pickerDecoration(l10n.batchRenameModeLabel),
+      onChanged: enabled
+          ? (mode) {
+              if (mode == null) return;
+              setState(() => _mode = mode);
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted) _firstField.requestFocus();
+              });
+            }
+          : null,
+      items: [
+        DropdownMenuItem(
           value: BatchRenameMode.replaceText,
-          label: l10n.batchRenameModeReplaceText,
+          child: Text(l10n.batchRenameModeReplaceText),
         ),
-        DropdownMenuEntry(
+        DropdownMenuItem(
           value: BatchRenameMode.addText,
-          label: l10n.batchRenameModeAddText,
+          child: Text(l10n.batchRenameModeAddText),
         ),
-        DropdownMenuEntry(
+        DropdownMenuItem(
           value: BatchRenameMode.format,
-          label: l10n.batchRenameModeFormat,
+          child: Text(l10n.batchRenameModeFormat),
         ),
       ],
     );
   }
+
+  /// A picker matches the text fields beside it. A button rather than
+  /// an editable menu: Esc on a closed picker then reaches the dialog's
+  /// DismissIntent instead of the menu's own.
+  static InputDecoration _pickerDecoration(String label) => InputDecoration(
+    labelText: label,
+    border: const OutlineInputBorder(),
+    isDense: true,
+  );
 
   List<Widget> _fields(AppLocalizations l10n, {required bool enabled}) {
     TextField field(
@@ -492,24 +507,24 @@ class _BatchRenameDialogState extends State<BatchRenameDialog> {
       BatchRenameKey key,
       BatchRenamePlacement value,
       ValueChanged<BatchRenamePlacement> onChanged,
-    ) => DropdownMenu<BatchRenamePlacement>(
+    ) => DropdownButtonFormField<BatchRenamePlacement>(
       key: ValueKey(key),
-      enabled: enabled,
-      initialSelection: value,
-      label: Text(l10n.batchRenamePlacementLabel),
-      expandedInsets: EdgeInsets.zero,
-      requestFocusOnTap: false,
-      onSelected: (placement) {
-        if (placement != null) setState(() => onChanged(placement));
-      },
-      dropdownMenuEntries: [
-        DropdownMenuEntry(
+      initialValue: value,
+      isExpanded: true,
+      decoration: _pickerDecoration(l10n.batchRenamePlacementLabel),
+      onChanged: enabled
+          ? (placement) {
+              if (placement != null) setState(() => onChanged(placement));
+            }
+          : null,
+      items: [
+        DropdownMenuItem(
           value: BatchRenamePlacement.afterName,
-          label: l10n.batchRenamePlacementAfterName,
+          child: Text(l10n.batchRenamePlacementAfterName),
         ),
-        DropdownMenuEntry(
+        DropdownMenuItem(
           value: BatchRenamePlacement.beforeName,
-          label: l10n.batchRenamePlacementBeforeName,
+          child: Text(l10n.batchRenamePlacementBeforeName),
         ),
       ],
     );
