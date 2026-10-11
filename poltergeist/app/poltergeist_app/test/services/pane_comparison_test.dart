@@ -221,11 +221,21 @@ void main() {
     // Nothing selected and no cursor anywhere.
     expect(resolvePaneComparison(workspace), isNull);
 
-    // A folder or link in the focused pane's selection is not skipped.
+    // A folder or link beside a file disables the comparison instead of
+    // being skipped: with a file waiting in the other pane, skipping it
+    // would leave one file here and open a cross-pane comparison.
+    right.setCursorIndex(_row(right, 'a.txt'));
     left.setCursorIndex(_row(left, 'a.txt'));
+    expect(resolvePaneComparison(workspace), isNotNull);
     left.setCursorIndex(_row(left, 'docs'), update: SelectionUpdate.toggle);
     expect(resolvePaneComparison(workspace), isNull);
     left.setCursorIndex(_row(left, 'link'));
+    left.setCursorIndex(_row(left, 'b.txt'), update: SelectionUpdate.toggle);
+    expect(resolvePaneComparison(workspace), isNull);
+
+    // The same holds for the other pane's selection.
+    left.setCursorIndex(_row(left, 'a.txt'));
+    right.setCursorIndex(_row(right, 'www'), update: SelectionUpdate.toggle);
     expect(resolvePaneComparison(workspace), isNull);
 
     // Three files.
