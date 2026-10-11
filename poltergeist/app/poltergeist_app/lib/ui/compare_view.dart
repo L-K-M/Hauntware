@@ -10,12 +10,21 @@ import '../theme/app_theme.dart' show poltergeistMonoTextStyle;
 import 'editor_strings.dart';
 import 'panes/pane_format.dart';
 
-/// The sync plan's read-only, side-by-side text comparison (06 §6).
+/// The read-only, side-by-side text comparison (06 §6), opened from a
+/// sync-plan row or by File ▸ Compare Files.
 final class CompareView extends StatefulWidget {
-  const CompareView({super.key, required this.controller, this.clock});
+  const CompareView({
+    super.key,
+    required this.controller,
+    this.title,
+    this.clock,
+  });
 
   /// Owned by this route so teardown cancels both side loads.
   final SyncCompareController controller;
+
+  /// The app bar title; null shows the request's relative path.
+  final String? title;
 
   /// Test seam for the metadata header's relative modified-time labels.
   final DateTime Function()? clock;
@@ -53,7 +62,8 @@ class _CompareViewState extends State<CompareView> {
       key: const ValueKey('sync.compare.view'),
       appBar: AppBar(
         title: Text(
-          l10n.syncCompareTitle(widget.controller.request.relativePath),
+          widget.title ??
+              l10n.syncCompareTitle(widget.controller.request.relativePath),
         ),
       ),
       body: ListenableBuilder(

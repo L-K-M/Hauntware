@@ -34,6 +34,7 @@ import '../services/in_app_quick_look.dart';
 import '../services/os_drag_out.dart' show DragOutBackend, NoDragOutBackend;
 import '../services/local_volumes.dart' show LocalVolumeSource;
 import '../services/other_pane_transfer.dart';
+import '../services/pane_comparison.dart';
 import '../services/pane_controller.dart';
 import '../services/pane_drop.dart';
 import '../services/pane_file_ops.dart';
@@ -62,6 +63,7 @@ import '../services/settings_window/settings_window_link.dart';
 import '../services/sidebar_controller.dart';
 import '../services/sidebar_probe_owner.dart';
 import '../services/ssh_config_import_setup.dart';
+import '../services/sync_compare_controller.dart';
 import '../services/sync_environment.dart';
 import '../services/sync_plan_controller.dart';
 import '../services/sync_queue_facade.dart';
@@ -93,6 +95,7 @@ import 'layout/pane_allocation.dart';
 import 'local_edits_review.dart';
 import 'menus/app_menu_commands.dart';
 import 'menus/app_menu_host.dart';
+import 'panes/compare_files_command.dart';
 import 'panes/drag_out_image.dart';
 import 'panes/open_with_commands.dart';
 import 'panes/pane_commands.dart';
@@ -1848,6 +1851,12 @@ class _WorkspaceShellState extends State<WorkspaceShell>
               : _disconnectServer,
           pickDirectory: widget.pickDirectory ?? _platformDirectoryPicker(),
           fullScreen: widget.window?.fullScreen,
+        ),
+      if (workspace != null)
+        buildCompareFilesCommand(
+          workspace: workspace,
+          available: () => !_commandSessionActive,
+          open: _openPaneComparison,
         ),
       // `open-with-external` registers whenever a workspace exists
       // (D21): the Open With ▸ submenu renders disabled rows while no
@@ -4156,6 +4165,28 @@ class _WorkspaceShellState extends State<WorkspaceShell>
 
     final route = MaterialPageRoute<void>(
       builder: (_) => CompareView(controller: comparison),
+    );
+    unawaited(Navigator.of(context).push(route));
+  }
+
+  /// File ▸ Compare Files: the same view over two files the panes'
+  /// selections name, through the preview seams the sync plan uses, so a
+  /// remote side is queue-visible and honours the download threshold.
+  void _openPaneComparison(BuildContext context, PaneComparison comparison) {
+    final controller = SyncCompareController(
+      request: comparison.request,
+      previewCache: widget.previewCache,
+      previewProducer: widget.previewProducer,
+      largeDownloadThresholdBytes: () => _previewThresholdBytes,
+    );
+    final title = comparison.leftName == comparison.rightName
+        ? null
+        : AppLocalizations.of(
+            context,
+          ).compareFilesTitle(comparison.leftName, comparison.rightName);
+
+    final route = MaterialPageRoute<void>(
+      builder: (_) => CompareView(controller: controller, title: title),
     );
     unawaited(Navigator.of(context).push(route));
   }

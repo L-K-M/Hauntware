@@ -17,6 +17,7 @@ import '../shell/shell_commands.dart'
         kFileNewFolderCommandId,
         kSelectionMoveToOtherPaneCommandId,
         kSelectionTransferToOtherPaneCommandId;
+import 'compare_files_command.dart' show kFileCompareFilesCommandId;
 import 'open_with_commands.dart' show kOpenWithExternalCommandId;
 import 'pane_commands.dart';
 
@@ -30,6 +31,7 @@ const kPaneRowContextMenu = <List<String>>[
     kOpenWithExternalCommandId,
     kFileEditBuiltInCommandId,
     kFilePreviewCommandId,
+    kFileCompareFilesCommandId,
   ],
   [
     kFileGetInfoCommandId,

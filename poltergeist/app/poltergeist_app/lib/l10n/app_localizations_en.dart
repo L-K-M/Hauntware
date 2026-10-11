@@ -6858,6 +6858,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String get fileExtractArchiveLabel => 'Extract ZIP Archive';
 
   @override
+  String get fileCompareFilesLabel => 'Compare Files';
+
+  @override
+  String get commandDisabledNoComparableFiles =>
+      'Requires one file selected in each pane, or two in the focused pane';
+
+  @override
+  String compareFilesTitle(String left, String right) {
+    return 'Compare $left and $right';
+  }
+
+  @override
   String get commandDisabledLocalArchive =>
       'Archives are available for local files only.';
 

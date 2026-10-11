@@ -1569,6 +1569,7 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   },
   // Registered command identity, not its localized label.
   'lib/ui/sidebar/seance_commands.dart': {"'connect.openTerminalInSeance'"},
+  'lib/ui/panes/compare_files_command.dart': {"'file.compareFiles'"},
   // Widget keys and numeric endpoint formatting; all visible prose is ARB.
   'lib/ui/deep_link_dialogs.dart': {
     "'deepLink.failure'",
