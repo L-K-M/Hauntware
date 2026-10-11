@@ -1428,10 +1428,9 @@ per connection, not forwarding channels [R: sshd_config(5)].
   option before the subcommand (`docker --host unix://<socket> compose
   ...`; no SSH `env` request, 5.10), so a context or `DOCKER_HOST` in the
   login user's or root's environment never picks another engine (7.17).
-  For a command sudo runs directly (the rank 3 relay of 5.9, and each
-  Docker step of a detached operation under a NOPASSWD rule scoped to
-  `docker`, 7.17), the command sudo checks stays `docker`, so such a rule
-  still matches; an `env DOCKER_HOST=` prefix would make sudo check `env`
+  For a command sudo runs directly (the rank 3 relay of 5.9), the command
+  sudo checks stays `docker`, so a NOPASSWD rule scoped to `docker` still
+  matches; an `env DOCKER_HOST=` prefix would make sudo check `env`
   and fail [R: sudoers(5)]. Command templates elsewhere in this plan omit
   the option for brevity.
 - The socket is never exposed on a local TCP port or local Unix socket: it
@@ -2150,7 +2149,7 @@ matching row applies:
 | Needs root (admin mode on), no systemd system manager | `setsid -f /bin/sh -c '<wrapper>' klabautermann-op <dir> <id> <uid> -- <cmd...>` through the elevation prelude, with all standard streams on `/dev/null` (util-linux `setsid -f`; the BusyBox applet has no `-f`, so a backgrounded `setsid` or `nohup ... &` [U], spike S4) | `/var/lib/klabautermann/ops/` as above |
 | Needs no root, admin mode on, systemd system manager | `systemd-run --uid=<login user> --unit=klabautermann-op-<id> --collect --quiet -- /bin/sh -c '<wrapper>' ...` through the elevation prelude; the service runs as the login user [R: systemd-run(1)] | user directory as below |
 | Needs no root, admin mode off, user manager reachable and `Linger=yes` | `systemd-run --user --unit=klabautermann-op-<id> --collect --quiet -- /bin/sh -c '<wrapper>' ...` | `${XDG_STATE_HOME:-~/.local/state}/klabautermann/ops/` (0700, files 0600) |
-| Otherwise (no systemd, or no linger) | `setsid -f /bin/sh -c '<wrapper>' ...` with all standard streams on `/dev/null` (BusyBox `setsid` applet or `nohup ... &` [U]) | user directory as above |
+| Otherwise (no systemd, or no linger) | `setsid -f /bin/sh -c '<wrapper>' ...` with all standard streams on `/dev/null` (util-linux `setsid -f`; the BusyBox applet has no `-f`, so a backgrounded `setsid` or `nohup ... &` [U], spike S4) | user directory as above |
 
 - A user manager stops shortly after the user's last session ends unless
   linger is enabled, which would kill a `--user` unit when the phone
@@ -2170,12 +2169,14 @@ matching row applies:
   `setsid` through the prelude, so sudo checks the runner, not `docker`,
   and a NOPASSWD rule scoped to `docker` does not cover them [R:
   sudoers(5)]; neither does the row that elevates `systemd-run --uid`.
-  When the access check (CN-24) finds only such a rule, a Docker operation
-  that needs root runs its wrapper as the login user without elevation
-  (the `--user` or `setsid` rows, user directory) and elevates each Docker
-  step inside it with `sudo -n -- docker --host unix://<socket> ...`,
-  which needs no cached credential. The preview says so. A password-only
-  sudo setup uses the root rows.
+  On a host with only such a rule, a detached operation that needs root
+  does not start and the preview names the missing sudo right; one that
+  needs no root is placed as with admin mode off, and the rank 3 relay
+  (5.9) still works. Spike S4 settles how the app
+  tells this refusal from the `timestamp_timeout=0` case of 8.3 (for
+  example with `sudo -n -l`, which needs no password while any of the
+  user's entries is NOPASSWD [R: sudoers(5)]) and whether a login-user
+  wrapper that elevates each Docker step is worth adding [U].
 - Root-run operations never write into a user-writable directory (a symlink
   swap there would let a non-root process redirect root's writes); they use
   the root-owned directory and `chown` each new file to the login user so it
