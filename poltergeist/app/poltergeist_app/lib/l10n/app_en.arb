@@ -6826,6 +6826,150 @@
   "@syncCompareBomDiffers": {
     "description": "Notice when only one compared text file has a UTF-8 BOM (06 §6)."
   },
+  "syncCompareRegionCount": "{count, plural, =0{No changed regions} =1{1 changed region} other{{count} changed regions}}",
+  "@syncCompareRegionCount": {
+    "description": "Compare view change bar: how many runs of changed lines the diff found (06 §6).",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "syncCompareRegionAnnouncement": "Change {current} of {total}",
+  "@syncCompareRegionAnnouncement": {
+    "description": "Screen-reader label for the compare view's position among changed regions (06 §6).",
+    "placeholders": {
+      "current": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "syncComparePreviousChange": "Previous change ({shortcut})",
+  "@syncComparePreviousChange": {
+    "description": "Tooltip for the compare view's previous-change button, with its key (06 §6).",
+    "placeholders": {
+      "shortcut": {
+        "type": "String"
+      }
+    }
+  },
+  "syncCompareNextChange": "Next change ({shortcut})",
+  "@syncCompareNextChange": {
+    "description": "Tooltip for the compare view's next-change button, with its key (06 §6).",
+    "placeholders": {
+      "shortcut": {
+        "type": "String"
+      }
+    }
+  },
+  "syncCompareLayoutLabel": "Comparison layout",
+  "@syncCompareLayoutLabel": {
+    "description": "Screen-reader label for the compare view's layout switch (06 §6)."
+  },
+  "syncCompareLayoutSideBySide": "Side by side",
+  "@syncCompareLayoutSideBySide": {
+    "description": "Compare view layout: removed and added lines on aligned rows in two columns (06 §6)."
+  },
+  "syncCompareLayoutUnified": "Unified",
+  "@syncCompareLayoutUnified": {
+    "description": "Compare view layout: one column, removed lines above added ones (06 §6)."
+  },
+  "syncCompareLayoutSeparate": "Separate",
+  "@syncCompareLayoutSeparate": {
+    "description": "Compare view layout: each file in its own scrolling editor, without change marks (06 §6)."
+  },
+  "syncCompareLayoutSeparateTooltip": "Each file in its own editor, with Find",
+  "@syncCompareLayoutSeparateTooltip": {
+    "description": "Tooltip for the compare view's Separate layout (06 §6)."
+  },
+  "syncCompareComputing": "Comparing lines…",
+  "@syncCompareComputing": {
+    "description": "Shown while the compare view computes which lines changed (06 §6)."
+  },
+  "syncCompareShowFilesNow": "Show files now",
+  "@syncCompareShowFilesNow": {
+    "description": "Button that skips the running comparison and shows each file in its own editor (06 §6)."
+  },
+  "syncCompareOverLineCap": "Changes aren't marked: comparison is limited to {limit} lines per file (left {left}, right {right}).",
+  "@syncCompareOverLineCap": {
+    "description": "Notice when a compared file is over the diff's line cap, so the files show unmarked (06 §6).",
+    "placeholders": {
+      "limit": {
+        "type": "int",
+        "format": "decimalPattern"
+      },
+      "left": {
+        "type": "int",
+        "format": "decimalPattern"
+      },
+      "right": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "syncCompareDiffFailed": "Changes couldn't be computed.",
+  "@syncCompareDiffFailed": {
+    "description": "Notice when the diff worker failed, so the files show unmarked (06 §6)."
+  },
+  "syncCompareIdenticalFiles": "The files are identical.",
+  "@syncCompareIdenticalFiles": {
+    "description": "Notice when both compared files have the same bytes (06 §6)."
+  },
+  "syncCompareIdenticalText": "The text is identical; the files differ only in line endings or the byte order mark.",
+  "@syncCompareIdenticalText": {
+    "description": "Notice when two different files hold the same text once line endings and the BOM are set aside (06 §6)."
+  },
+  "syncCompareDiffSimplified": "Some changes are shown as larger blocks because the files differ widely.",
+  "@syncCompareDiffSimplified": {
+    "description": "Notice when the diff stopped refining very different files, so some regions are larger than needed (06 §6)."
+  },
+  "syncCompareRowTruncated": "{count, plural, =1{1 more character not shown} other{{count} more characters not shown}}",
+  "@syncCompareRowTruncated": {
+    "description": "Last line of a compare row whose line is too long to draw in full (06 §6).",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "syncCompareRowBoth": "Left line {left}, right line {right}",
+  "@syncCompareRowBoth": {
+    "description": "Screen-reader label for an unchanged compare row (06 §6).",
+    "placeholders": {
+      "left": {
+        "type": "int"
+      },
+      "right": {
+        "type": "int"
+      }
+    }
+  },
+  "syncCompareRowLeftOnly": "Left only, line {line}",
+  "@syncCompareRowLeftOnly": {
+    "description": "Screen-reader label for a compare line only the left file has (06 §6).",
+    "placeholders": {
+      "line": {
+        "type": "int"
+      }
+    }
+  },
+  "syncCompareRowRightOnly": "Right only, line {line}",
+  "@syncCompareRowRightOnly": {
+    "description": "Screen-reader label for a compare line only the right file has (06 §6).",
+    "placeholders": {
+      "line": {
+        "type": "int"
+      }
+    }
+  },
+  "syncCompareRowBlank": "Blank line",
+  "@syncCompareRowBlank": {
+    "description": "Screen-reader value for an empty compare line (06 §6)."
+  },
   "syncSideLeft": "left",
   "@syncSideLeft": {
     "description": "Side label inside sync copy (05 §7) — the pane-A side."

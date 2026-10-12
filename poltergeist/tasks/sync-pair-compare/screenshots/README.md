@@ -7,7 +7,10 @@ Sans Mono from the host plus Flutter's Material Icons.
 - `before-sync-pair-compare.png`: the existing two-file sync-plan row before
   double-click.
 - `after-sync-pair-compare.png`: the resulting locked, independent editors,
-  metadata headers, and BOM/line-ending notices.
+  metadata headers, and BOM/line-ending notices. Since the minimal diff
+  view (2026-10-12) these editors are its Separate layout, under the change
+  bar; the captures here predate it and were not regenerated
+  (`../../compare-diff-view/screenshots/` has the diff layouts).
 
 The fixtures use temporary local files with deterministic contents. Recreate
 the captures from `app/poltergeist_app`:
@@ -23,5 +26,5 @@ POLTERGEIST_CAPTURE=1 \
 POLTERGEIST_CAPTURE_DIR="$PWD/../../tasks/sync-pair-compare/screenshots" \
 FLUTTER_ROOT=/home/paseo/opt/flutter \
 flutter test test/ui/compare_view_test.dart \
-  --plain-name 'shows two locked editors with independent find bars'
+  --plain-name 'shows aligned rows, then separate editors with independent find bars'
 ```

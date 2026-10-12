@@ -1027,7 +1027,7 @@ default on).
 - Overridden rows show a small "manual" dot; overrides are journaled
   (`userOverridden: true`).
 - Double-click a both-sides pair opens the preview seam (06) side by side;
-  a text diff view is 06's v1.x item.
+  06 §6's minimal diff view (v1.x) marks the changed lines.
 
 **Action bar**: `Copy as rsync Command` (§2.1) · `Save as Favorite…` (§9) ·
 the Run button. The Run button always states its consequence (02 §10 verbs,
@@ -1843,4 +1843,4 @@ Testing hooks, elaborated in 08:
 | Symlink `copyAsLink` / `follow` policies | v1.x/v2; enum reserved in §6 |
 | Remote `setTimes` before the Séance pin bump | upstream PR + pin sequencing in 04/07 (03 §2.4) |
 | Named reusable skip-rules engine (Transmit-style Rules) | 07 parking; sync ships its own ignore rules (§3) |
-| Text diff view for double-clicked pairs | 06 (editor/preview), v1.x |
+| Text diff view for double-clicked pairs | Shipped in v1.x as 06 §6's minimal diff view |

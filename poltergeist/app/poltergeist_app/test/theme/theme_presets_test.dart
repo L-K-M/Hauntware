@@ -8,6 +8,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:poltergeist_app/theme/app_theme.dart';
+import 'package:poltergeist_app/theme/compare_diff_colors.dart';
 import 'package:poltergeist_app/theme/family_hues.dart';
 import 'package:poltergeist_app/theme/contrast.dart';
 import 'package:poltergeist_app/theme/theme_palette.dart';
@@ -16,6 +17,10 @@ import 'package:poltergeist_app/theme/theme_presets.dart';
 /// WCAG AA for body text, and for non-text marks (the dots, the accent).
 const _text = 4.5;
 const _mark = 3.0;
+
+/// The least contrast a diff wash keeps against its surface to read as a
+/// tint at all.
+const _visibleWash = 1.1;
 
 /// The shipped themes, held to the thresholds the default neutrals meet.
 /// Each preset is checked as it is drawn, through the built theme, at every
@@ -239,6 +244,47 @@ void main() {
       });
     }
   }
+
+  // The compare view's diff colours (06 §6) are derived per palette: the
+  // washes stay visible on every surface, and the text and marks on them
+  // move only as far as their floors need.
+  test('the compare diff colours read and stay visible on every preset', () {
+    for (final preset in ThemePresets.all) {
+      for (final brightness in Brightness.values) {
+        final theme = buildPoltergeistThemeFor(preset, brightness);
+        final surface = theme.colorScheme.surface;
+        final diff = theme.extension<CompareDiffColors>()!;
+        final label = '${preset.name} ${brightness.name}';
+        for (final (name, foreground, background, floor) in [
+          ('added text', diff.addedText, diff.addedFill, _text),
+          ('removed text', diff.removedText, diff.removedFill, _text),
+          ('added marker', diff.addedMarker, diff.addedFill, _mark),
+          ('removed marker', diff.removedMarker, diff.removedFill, _mark),
+          ('active bar', diff.activeRegion, surface, _mark),
+          ('active bar on added', diff.activeRegion, diff.addedFill, _mark),
+          ('active bar on removed', diff.activeRegion, diff.removedFill, _mark),
+        ]) {
+          expect(
+            contrastRatio(foreground, background),
+            greaterThanOrEqualTo(floor),
+            reason: '$label $name',
+          );
+        }
+        expect(
+          contrastRatio(diff.addedFill, surface),
+          greaterThanOrEqualTo(_visibleWash),
+          reason: '$label added wash',
+        );
+        expect(
+          contrastRatio(diff.removedFill, surface),
+          greaterThanOrEqualTo(_visibleWash),
+          reason: '$label removed wash',
+        );
+        expect(diff.addedFill, isNot(diff.removedFill), reason: label);
+        expect(diff.gapFill, isNot(surface), reason: label);
+      }
+    }
+  });
 
   // The family hues (lib/theme/family_hues.dart, D34) are tuned against
   // the default neutrals; a preset moves the surfaces they sit on, so

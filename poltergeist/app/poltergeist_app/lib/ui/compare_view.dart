@@ -1,14 +1,70 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:ghost_ui/ghost_ui.dart'
+    show
+        GhostChordBinding,
+        GhostChordScope,
+        GhostUnmodifiedChordPolicy,
+        formatShortcutActivator;
 import 'package:planchette_editor/planchette_editor.dart' as pe;
 import 'package:poltergeist_core/poltergeist_core.dart';
 
 import '../l10n/app_localizations.dart';
+import '../services/compare_diff_controller.dart';
 import '../services/sync_compare_controller.dart';
 import '../theme/app_theme.dart' show poltergeistMonoTextStyle;
+import 'compact/compact_posture.dart' show compactPostureApplies;
+import 'compare_diff_rows.dart';
 import 'editor_strings.dart';
 import 'panes/pane_format.dart';
+
+/// The widget keys the compare view exposes to tests. Enum-valued so they
+/// stay plumbing and never drift into copy.
+enum CompareKey {
+  changeBar,
+  regionCount,
+  regionPosition,
+  previousChange,
+  nextChange,
+  layout,
+  rows,
+  computing,
+  showFilesNow,
+  noticeOverLineCap,
+  noticeFailed,
+  noticeIdenticalFiles,
+  noticeIdenticalText,
+  noticeSimplified,
+}
+
+/// What the layout switch offers: the diff's two row layouts, or each file
+/// in its own editor (the v1 view, with Find and independent scrolling).
+enum _CompareLayout { sideBySide, unified, separate }
+
+/// What the body shows below the notices.
+enum _Presentation {
+  /// Each side in its own column: still loading, refused, unmarked, or
+  /// the Separate layout.
+  sides,
+  computing,
+  rows,
+}
+
+/// Whether a side column shows its editor or only its header above the
+/// shared diff rows.
+enum _SideBody { full, header }
+
+/// n / Shift+N step through changed regions, outside text fields only.
+const _nextChange = SingleActivator(LogicalKeyboardKey.keyN);
+const _previousChange = SingleActivator(LogicalKeyboardKey.keyN, shift: true);
+
+const _arrowScrollLines = 3;
+const _pageScrollFraction = 0.9;
+
+/// The find bar's own breakpoint for one row of controls (06 §2.2).
+const double _wideChangeBarWidth = 600;
 
 /// The read-only, side-by-side text comparison (06 §6), opened from a
 /// sync-plan row or by File ▸ Compare Files.
@@ -18,6 +74,7 @@ final class CompareView extends StatefulWidget {
     required this.controller,
     this.title,
     this.clock,
+    @visibleForTesting this.startDiff,
   });
 
   /// Owned by this route so teardown cancels both side loads.
@@ -29,15 +86,40 @@ final class CompareView extends StatefulWidget {
   /// Test seam for the metadata header's relative modified-time labels.
   final DateTime Function()? clock;
 
+  /// Test seam for the diff worker; null runs [startTextComparison].
+  final TextComparisonStarter? startDiff;
+
   @override
   State<CompareView> createState() => _CompareViewState();
 }
 
 class _CompareViewState extends State<CompareView> {
+  late CompareDiffController _diff;
+  late Listenable _listenable;
+
+  /// The layout picked for this route; null follows the posture.
+  _CompareLayout? _chosenLayout;
+
+  /// The region n / Shift+N last moved to.
+  int? _activeRegion;
+  final _rowsController = CompareRowsController();
+  final _bodyFocus = FocusNode();
+
+  // The side columns move between the full and the header-only body, so
+  // each keeps its editor and find state across layout switches.
+  final _leftSideKey = GlobalKey();
+  final _rightSideKey = GlobalKey();
+
+  TextComparisonComputed? _rowsFor;
+  final _rowsCache = <LineDiffLayout, LineDiffRows>{};
+
   @override
   void initState() {
     super.initState();
+    _attach();
     unawaited(widget.controller.start());
+    // Sides are often loaded before the view mounts.
+    _syncDiff();
   }
 
   @override
@@ -45,14 +127,79 @@ class _CompareViewState extends State<CompareView> {
     super.didUpdateWidget(oldWidget);
     if (identical(oldWidget.controller, widget.controller)) return;
 
+    oldWidget.controller.removeListener(_syncDiff);
+    _diff.dispose();
     oldWidget.controller.dispose();
+    _attach();
+    _activeRegion = null;
+    _rowsFor = null;
+    _rowsCache.clear();
     unawaited(widget.controller.start());
+    _syncDiff();
   }
 
   @override
   void dispose() {
+    widget.controller.removeListener(_syncDiff);
+    _diff.dispose();
     widget.controller.dispose();
+    _rowsController.dispose();
+    _bodyFocus.dispose();
     super.dispose();
+  }
+
+  void _attach() {
+    _diff = CompareDiffController(
+      start: widget.startDiff ?? startTextComparison,
+    );
+    _listenable = Listenable.merge([widget.controller, _diff]);
+    widget.controller.addListener(_syncDiff);
+  }
+
+  /// Hands the diff both documents once both sides have loaded.
+  void _syncDiff() {
+    final left = widget.controller.left;
+    final right = widget.controller.right;
+    final ready =
+        left.phase == SyncComparePhase.ready &&
+        right.phase == SyncComparePhase.ready;
+    _diff.compare(ready ? left.document : null, ready ? right.document : null);
+  }
+
+  _CompareLayout _layout(BuildContext context) =>
+      _chosenLayout ??
+      (compactPostureApplies(
+            width: MediaQuery.sizeOf(context).width,
+            platform: Theme.of(context).platform,
+          )
+          ? _CompareLayout.unified
+          : _CompareLayout.sideBySide);
+
+  _Presentation _presentation(_CompareLayout layout) {
+    if (layout == _CompareLayout.separate) return _Presentation.sides;
+    return switch (_diff.phase) {
+      CompareDiffPhase.computing => _Presentation.computing,
+      CompareDiffPhase.ready => _Presentation.rows,
+      CompareDiffPhase.waiting ||
+      CompareDiffPhase.overLineCap ||
+      CompareDiffPhase.failed => _Presentation.sides,
+    };
+  }
+
+  static LineDiffLayout _lineLayout(_CompareLayout layout) =>
+      layout == _CompareLayout.unified
+      ? LineDiffLayout.unified
+      : LineDiffLayout.sideBySide;
+
+  LineDiffRows _rowsOf(TextComparisonComputed result, LineDiffLayout layout) {
+    if (!identical(result, _rowsFor)) {
+      _rowsCache.clear();
+      _rowsFor = result;
+    }
+    return _rowsCache.putIfAbsent(
+      layout,
+      () => alignLineDiff(result.diff, layout),
+    );
   }
 
   @override
@@ -67,51 +214,493 @@ class _CompareViewState extends State<CompareView> {
         ),
       ),
       body: ListenableBuilder(
-        listenable: widget.controller,
+        listenable: _listenable,
         builder: (context, _) {
           final left = widget.controller.left;
           final right = widget.controller.right;
           final notices = _differenceNotices(l10n, left, right);
           final now = widget.clock?.call() ?? DateTime.now();
-          return Column(
+          final layout = _layout(context);
+          final presentation = _presentation(layout);
+          final result = _diff.result;
+          final rows = presentation == _Presentation.rows && result != null
+              ? _rowsOf(result, _lineLayout(layout))
+              : null;
+          final navigable = rows != null && rows.regionCount > 0;
+          return GhostChordScope(
+            unmodifiedPolicy: GhostUnmodifiedChordPolicy.allow,
+            suspendWhileEditing: true,
+            bindings: navigable
+                ? [
+                    GhostChordBinding(
+                      activator: _nextChange,
+                      onInvoke: () => _step(rows, 1),
+                    ),
+                    GhostChordBinding(
+                      activator: _previousChange,
+                      onInvoke: () => _step(rows, -1),
+                    ),
+                  ]
+                : const [],
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (notices.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+                    child: Wrap(spacing: 8, runSpacing: 4, children: notices),
+                  ),
+                ..._diffNotices(context, l10n),
+                if (result != null) ...[
+                  _changeBar(context, l10n, layout, rows, result),
+                  const Divider(height: 1),
+                ],
+                Expanded(
+                  child: switch (presentation) {
+                    _Presentation.sides => _sides(left, right, now),
+                    _Presentation.computing || _Presentation.rows => _diffBody(
+                      context,
+                      l10n,
+                      left,
+                      right,
+                      now,
+                      result: result,
+                      rows: rows,
+                      layout: layout,
+                    ),
+                  },
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _side(
+    GlobalKey key,
+    SyncCompareSideState state,
+    String label,
+    DateTime now,
+    _SideBody body,
+  ) {
+    return _CompareSide(
+      key: key,
+      controller: widget.controller,
+      state: state,
+      label: label,
+      now: now,
+      body: body,
+      onFindInSeparate: _openSeparate,
+    );
+  }
+
+  /// Each file in its own column: the v1 view, and every state the diff
+  /// cannot cover.
+  Widget _sides(
+    SyncCompareSideState left,
+    SyncCompareSideState right,
+    DateTime now,
+  ) {
+    final l10n = AppLocalizations.of(context);
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Expanded(
+          child: KeyedSubtree(
+            key: const ValueKey('sync.compare.left'),
+            child: _side(
+              _leftSideKey,
+              left,
+              l10n.syncCompareSideLeft,
+              now,
+              _SideBody.full,
+            ),
+          ),
+        ),
+        const VerticalDivider(width: 1),
+        Expanded(
+          child: KeyedSubtree(
+            key: const ValueKey('sync.compare.right'),
+            child: _side(
+              _rightSideKey,
+              right,
+              l10n.syncCompareSideRight,
+              now,
+              _SideBody.full,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Both headers above one shared body: the computing card or the rows.
+  Widget _diffBody(
+    BuildContext context,
+    AppLocalizations l10n,
+    SyncCompareSideState left,
+    SyncCompareSideState right,
+    DateTime now, {
+    required TextComparisonComputed? result,
+    required LineDiffRows? rows,
+    required _CompareLayout layout,
+  }) {
+    final leftDocument = _diff.left;
+    final rightDocument = _diff.right;
+    final body =
+        result != null &&
+            rows != null &&
+            leftDocument != null &&
+            rightDocument != null
+        ? CompareDiffRows(
+            key: const ValueKey(CompareKey.rows),
+            result: result,
+            leftText: leftDocument.text,
+            rightText: rightDocument.text,
+            rows: rows,
+            layout: _lineLayout(layout),
+            activeRegion: _activeRegion,
+            controller: _rowsController,
+          )
+        : _computingCard(context, l10n);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        IntrinsicHeight(
+          child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              if (notices.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-                  child: Wrap(spacing: 8, runSpacing: 4, children: notices),
-                ),
               Expanded(
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Expanded(
-                      child: _CompareSide(
-                        key: const ValueKey('sync.compare.left'),
-                        controller: widget.controller,
-                        state: left,
-                        label: l10n.syncCompareSideLeft,
-                        now: now,
-                      ),
-                    ),
-                    const VerticalDivider(width: 1),
-                    Expanded(
-                      child: _CompareSide(
-                        key: const ValueKey('sync.compare.right'),
-                        controller: widget.controller,
-                        state: right,
-                        label: l10n.syncCompareSideRight,
-                        now: now,
-                      ),
-                    ),
-                  ],
+                child: KeyedSubtree(
+                  key: const ValueKey('sync.compare.left'),
+                  child: _side(
+                    _leftSideKey,
+                    left,
+                    l10n.syncCompareSideLeft,
+                    now,
+                    _SideBody.header,
+                  ),
                 ),
+              ),
+              const VerticalDivider(width: 1),
+              Expanded(
+                child: KeyedSubtree(
+                  key: const ValueKey('sync.compare.right'),
+                  child: _side(
+                    _rightSideKey,
+                    right,
+                    l10n.syncCompareSideRight,
+                    now,
+                    _SideBody.header,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const Divider(height: 1),
+        Expanded(
+          child: Listener(
+            onPointerDown: (_) => _bodyFocus.requestFocus(),
+            child: Focus(
+              focusNode: _bodyFocus,
+              autofocus: true,
+              onKeyEvent: _onBodyKey,
+              child: body,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _computingCard(BuildContext context, AppLocalizations l10n) => _card(
+    context,
+    key: const ValueKey(CompareKey.computing),
+    children: [
+      const Center(child: CircularProgressIndicator()),
+      const SizedBox(height: 12),
+      Semantics(
+        liveRegion: true,
+        child: Text(l10n.syncCompareComputing, textAlign: TextAlign.center),
+      ),
+      const SizedBox(height: 8),
+      Center(
+        child: TextButton(
+          key: const ValueKey(CompareKey.showFilesNow),
+          onPressed: _openSeparate,
+          child: Text(l10n.syncCompareShowFilesNow),
+        ),
+      ),
+    ],
+  );
+
+  /// The diff's count, position, step buttons and layout switch, styled
+  /// like the find bar's controls.
+  Widget _changeBar(
+    BuildContext context,
+    AppLocalizations l10n,
+    _CompareLayout layout,
+    LineDiffRows? rows,
+    TextComparisonComputed result,
+  ) {
+    final theme = Theme.of(context);
+    final count = result.diff.regions.length;
+    final navigable = rows != null && count > 0;
+    final active = navigable ? _activeRegion : null;
+    final countLabel = Semantics(
+      liveRegion: true,
+      child: Text(
+        l10n.syncCompareRegionCount(count),
+        key: const ValueKey(CompareKey.regionCount),
+        style: theme.textTheme.labelLarge,
+      ),
+    );
+    final position = active == null
+        ? null
+        : Semantics(
+            liveRegion: true,
+            label: l10n.syncCompareRegionAnnouncement(active + 1, count),
+            child: ExcludeSemantics(
+              child: Text(
+                l10n.editorMatchCount(active + 1, count),
+                key: const ValueKey(CompareKey.regionPosition),
+                style: theme.textTheme.labelSmall,
+              ),
+            ),
+          );
+    final previous = IconButton(
+      key: const ValueKey(CompareKey.previousChange),
+      visualDensity: VisualDensity.compact,
+      tooltip: l10n.syncComparePreviousChange(
+        formatShortcutActivator(_previousChange, theme.platform)!,
+      ),
+      onPressed: navigable ? () => _step(rows, -1) : null,
+      icon: const Icon(Icons.keyboard_arrow_up),
+    );
+    final next = IconButton(
+      key: const ValueKey(CompareKey.nextChange),
+      visualDensity: VisualDensity.compact,
+      tooltip: l10n.syncCompareNextChange(
+        formatShortcutActivator(_nextChange, theme.platform)!,
+      ),
+      onPressed: navigable ? () => _step(rows, 1) : null,
+      icon: const Icon(Icons.keyboard_arrow_down),
+    );
+    return Padding(
+      key: const ValueKey(CompareKey.changeBar),
+      padding: const EdgeInsetsDirectional.fromSTEB(16, 4, 8, 4),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final wide =
+              constraints.maxWidth >=
+              MediaQuery.textScalerOf(context).scale(_wideChangeBarWidth);
+          final toggle = _layoutToggle(l10n, layout, iconsOnly: !wide);
+          if (wide) {
+            return Row(
+              children: [
+                countLabel,
+                const Spacer(),
+                ?position,
+                previous,
+                next,
+                const SizedBox(width: 8),
+                toggle,
+              ],
+            );
+          }
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              countLabel,
+              Row(
+                children: [?position, const Spacer(), previous, next, toggle],
               ),
             ],
           );
         },
       ),
     );
+  }
+
+  Widget _layoutToggle(
+    AppLocalizations l10n,
+    _CompareLayout layout, {
+    required bool iconsOnly,
+  }) {
+    ButtonSegment<_CompareLayout> segment(
+      _CompareLayout value,
+      IconData icon,
+      String label, {
+      String? tooltip,
+    }) => ButtonSegment(
+      value: value,
+      icon: Icon(icon),
+      label: iconsOnly ? null : Text(label),
+      tooltip: iconsOnly ? label : tooltip,
+    );
+
+    return Semantics(
+      label: l10n.syncCompareLayoutLabel,
+      child: SegmentedButton<_CompareLayout>(
+        key: const ValueKey(CompareKey.layout),
+        showSelectedIcon: false,
+        segments: [
+          segment(
+            _CompareLayout.sideBySide,
+            Icons.vertical_split,
+            l10n.syncCompareLayoutSideBySide,
+          ),
+          segment(
+            _CompareLayout.unified,
+            Icons.view_agenda,
+            l10n.syncCompareLayoutUnified,
+          ),
+          segment(
+            _CompareLayout.separate,
+            Icons.find_in_page,
+            l10n.syncCompareLayoutSeparate,
+            tooltip: l10n.syncCompareLayoutSeparateTooltip,
+          ),
+        ],
+        selected: {layout},
+        onSelectionChanged: (selection) => _selectLayout(selection.single),
+      ),
+    );
+  }
+
+  /// Moves to the next or previous changed region, wrapping around. The
+  /// first step starts from the top of the viewport rather than the file.
+  void _step(LineDiffRows rows, int delta) {
+    final count = rows.regionCount;
+    if (count == 0) return;
+
+    final active = _activeRegion;
+    final int target;
+    if (active != null && active < count) {
+      target = (active + delta) % count;
+    } else {
+      final top = _rowsController.topVisibleRow;
+      var region = delta > 0 ? 0 : count - 1;
+      for (var r = 0; r < count; r++) {
+        final first = rows.regionFirstRow(r);
+        if (delta > 0 && first >= top) {
+          region = r;
+          break;
+        }
+        if (delta < 0 && first < top) region = r;
+      }
+      target = region;
+    }
+    setState(() => _activeRegion = target);
+    _rowsController.reveal(rows.regionFirstRow(target));
+  }
+
+  /// Switches layout, keeping the active region, or else the line at the
+  /// top, in view.
+  void _selectLayout(_CompareLayout next) {
+    final result = _diff.result;
+    final previous = _layout(context);
+    var anchorLeft = -1;
+    var anchorRight = -1;
+    if (result != null && _presentation(previous) == _Presentation.rows) {
+      final rows = _rowsOf(result, _lineLayout(previous));
+      final top = _rowsController.topVisibleRow;
+      if (top < rows.length) {
+        anchorLeft = rows.leftLineAt(top);
+        anchorRight = rows.rightLineAt(top);
+      }
+    }
+
+    setState(() => _chosenLayout = next);
+    if (next == _CompareLayout.separate || result == null) return;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !identical(_diff.result, result)) return;
+      final rows = _rowsOf(result, _lineLayout(next));
+      final active = _activeRegion;
+      if (active != null && active < rows.regionCount) {
+        _rowsController.reveal(rows.regionFirstRow(active));
+      } else if (anchorLeft >= 0) {
+        _rowsController.jumpToRow(rows.rowOfLeftLine(anchorLeft));
+      } else if (anchorRight >= 0) {
+        _rowsController.jumpToRow(rows.rowOfRightLine(anchorRight));
+      }
+    });
+  }
+
+  void _openSeparate() =>
+      setState(() => _chosenLayout = _CompareLayout.separate);
+
+  KeyEventResult _onBodyKey(FocusNode node, KeyEvent event) {
+    if (event is KeyUpEvent || !node.hasPrimaryFocus) {
+      return KeyEventResult.ignored;
+    }
+
+    final rows = _rowsController;
+    switch (event.logicalKey) {
+      case LogicalKeyboardKey.arrowUp:
+        rows.scrollByLines(-_arrowScrollLines);
+      case LogicalKeyboardKey.arrowDown:
+        rows.scrollByLines(_arrowScrollLines);
+      case LogicalKeyboardKey.pageUp:
+        rows.scrollByPages(-_pageScrollFraction);
+      case LogicalKeyboardKey.pageDown:
+        rows.scrollByPages(_pageScrollFraction);
+      case LogicalKeyboardKey.home:
+        rows.scrollToEdge(end: false);
+      case LogicalKeyboardKey.end:
+        rows.scrollToEdge(end: true);
+      default:
+        return KeyEventResult.ignored;
+    }
+    return KeyEventResult.handled;
+  }
+
+  /// Why changes are not marked, or what an empty or coarse diff means.
+  List<Widget> _diffNotices(BuildContext context, AppLocalizations l10n) {
+    final outcome = _diff.outcome;
+    final left = _diff.left;
+    final right = _diff.right;
+    return switch (outcome) {
+      TextComparisonOverLineCap() => [
+        _DiffNotice(
+          key: const ValueKey(CompareKey.noticeOverLineCap),
+          message: l10n.syncCompareOverLineCap(
+            outcome.maximumLines,
+            outcome.leftLines,
+            outcome.rightLines,
+          ),
+        ),
+      ],
+      TextComparisonFailed() => [
+        _DiffNotice(
+          key: const ValueKey(CompareKey.noticeFailed),
+          message: l10n.syncCompareDiffFailed,
+          error: true,
+        ),
+      ],
+      TextComparisonComputed(:final diff) => [
+        if (diff.regions.isEmpty)
+          left != null && right != null && left.sha256 == right.sha256
+              ? _DiffNotice(
+                  key: const ValueKey(CompareKey.noticeIdenticalFiles),
+                  message: l10n.syncCompareIdenticalFiles,
+                )
+              : _DiffNotice(
+                  key: const ValueKey(CompareKey.noticeIdenticalText),
+                  message: l10n.syncCompareIdenticalText,
+                ),
+        if (!diff.minimal)
+          _DiffNotice(
+            key: const ValueKey(CompareKey.noticeSimplified),
+            message: l10n.syncCompareDiffSimplified,
+          ),
+      ],
+      null => const [],
+    };
   }
 
   List<Widget> _differenceNotices(
@@ -155,12 +744,18 @@ class _CompareSide extends StatefulWidget {
     required this.state,
     required this.label,
     required this.now,
+    required this.body,
+    required this.onFindInSeparate,
   });
 
   final SyncCompareController controller;
   final SyncCompareSideState state;
   final String label;
   final DateTime now;
+  final _SideBody body;
+
+  /// Switches to the Separate layout, from a header-only Find.
+  final VoidCallback onFindInSeparate;
 
   @override
   State<_CompareSide> createState() => _CompareSideState();
@@ -189,10 +784,13 @@ class _CompareSideState extends State<_CompareSide> {
         ? state.document
         : null;
     final path = state.source.fullPath;
-    if (identical(document, _editorDocument) && path == _editorPath) return;
+    final current = identical(document, _editorDocument) && path == _editorPath;
+    // A header-only side builds no editor until Find or Separate needs it.
+    final headerOnly = widget.body == _SideBody.header;
+    if (current && (_editor != null || headerOnly)) return;
 
     _editor?.dispose();
-    _editor = document == null
+    _editor = document == null || headerOnly
         ? null
         : pe.EditorController(displayPath: path, initialText: document.text);
     _editorDocument = document;
@@ -205,9 +803,20 @@ class _CompareSideState extends State<_CompareSide> {
     super.dispose();
   }
 
+  /// Find from a header above the diff rows: the editor and its find bar
+  /// live in the Separate layout, so switch there and open it once built.
+  void _findInSeparate() {
+    widget.onFindInSeparate();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _editor?.openSearch();
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    if (widget.body == _SideBody.header) return _header(context, l10n);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -271,7 +880,13 @@ class _CompareSideState extends State<_CompareSide> {
           ),
           IconButton(
             tooltip: l10n.editorFindTooltip,
-            onPressed: _editor?.openSearch,
+            onPressed: switch (widget.body) {
+              _SideBody.full => _editor?.openSearch,
+              _SideBody.header =>
+                widget.state.phase == SyncComparePhase.ready
+                    ? _findInSeparate
+                    : null,
+            },
             icon: const Icon(Icons.search),
           ),
         ],
@@ -447,34 +1062,81 @@ class _CompareSideState extends State<_CompareSide> {
         SyncCompareRefusal.producerUnavailable ||
         null => l10n.syncCompareRemoteUnavailable,
       };
+}
 
-  Widget _message(
-    BuildContext context,
-    String message, {
-    bool progress = false,
-  }) => _card(
-    context,
-    children: [
-      if (progress) ...[
-        const Center(child: CircularProgressIndicator()),
-        const SizedBox(height: 12),
-      ],
-      Text(message, textAlign: TextAlign.center),
+Widget _message(
+  BuildContext context,
+  String message, {
+  bool progress = false,
+}) => _card(
+  context,
+  children: [
+    if (progress) ...[
+      const Center(child: CircularProgressIndicator()),
+      const SizedBox(height: 12),
     ],
-  );
+    Text(message, textAlign: TextAlign.center),
+  ],
+);
 
-  Widget _card(BuildContext context, {required List<Widget> children}) =>
-      Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 360),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              mainAxisSize: MainAxisSize.min,
-              children: children,
+Widget _card(
+  BuildContext context, {
+  Key? key,
+  required List<Widget> children,
+}) => Center(
+  key: key,
+  child: SingleChildScrollView(
+    padding: const EdgeInsets.all(24),
+    child: ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 360),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: children,
+      ),
+    ),
+  ),
+);
+
+/// One line under the line-ending and BOM chips saying what the diff did
+/// or could not do.
+class _DiffNotice extends StatelessWidget {
+  const _DiffNotice({super.key, required this.message, this.error = false});
+
+  final String message;
+  final bool error;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final color = error
+        ? theme.colorScheme.error
+        : theme.colorScheme.onSurfaceVariant;
+    return Semantics(
+      container: true,
+      liveRegion: true,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(
+              error ? Icons.error_outline : Icons.info_outline,
+              size: 18,
+              color: color,
             ),
-          ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                message,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: error ? color : null,
+                ),
+              ),
+            ),
+          ],
         ),
-      );
+      ),
+    );
+  }
 }

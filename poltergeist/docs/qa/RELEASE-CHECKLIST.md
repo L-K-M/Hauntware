@@ -76,6 +76,31 @@ known-divergent surface.
   and Name on each desktop platform: composition renders in place and
   the preview updates once it commits.
 
+## Compare and diff view
+
+- [ ] OWNER MANUAL QA: VoiceOver (macOS, iOS), NVDA (Windows) and
+  TalkBack (Android) on a compare with changes: rows read "Left only,
+  line N" or "Right only, line N" with the line's text, unchanged rows
+  read both line numbers, n announces "Change 3 of 12", and the notices
+  are read when they appear.
+- [ ] OWNER MANUAL QA: n and Shift+N step through changes with hardware
+  keyboards on macOS, Windows, Linux, iPad and Android, and type into
+  Find instead while a find field has focus in Separate. On a non-Latin
+  layout the arrow buttons still step.
+- [ ] OWNER MANUAL QA: two 20,000-line files with scattered changes on a
+  mid-range Android phone and on each desktop, in a profile build: the
+  diff appears within a second or two, and dragging the scrollbar thumb
+  and pressing n stay smooth.
+- [ ] OWNER MANUAL QA: CJK, emoji, Arabic and Devanagari lines wrap with
+  no clipped glyphs, and paired rows stay aligned.
+- [ ] OWNER MANUAL QA: switch theme and preset (Vapor, Solarized, High
+  contrast, light and dark) with the view open: washes stay visible and
+  the text on them stays readable.
+- [ ] OWNER MANUAL QA: phone posture opens in Unified, the change bar
+  wraps onto two lines, and the layout buttons show icons with tooltips.
+- [ ] OWNER MANUAL QA: macOS ⌘F in Separate opens the editor's find bar
+  rather than Edit ▸ Filter.
+
 ## Screen reader smoke
 
 - [ ] OWNER MANUAL QA: **macOS VoiceOver** and **Windows NVDA** (Narrator

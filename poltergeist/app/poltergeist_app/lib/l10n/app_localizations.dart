@@ -7594,6 +7594,132 @@ abstract class AppLocalizations {
   /// **'BOM differs'**
   String get syncCompareBomDiffers;
 
+  /// Compare view change bar: how many runs of changed lines the diff found (06 §6).
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{No changed regions} =1{1 changed region} other{{count} changed regions}}'**
+  String syncCompareRegionCount(int count);
+
+  /// Screen-reader label for the compare view's position among changed regions (06 §6).
+  ///
+  /// In en, this message translates to:
+  /// **'Change {current} of {total}'**
+  String syncCompareRegionAnnouncement(int current, int total);
+
+  /// Tooltip for the compare view's previous-change button, with its key (06 §6).
+  ///
+  /// In en, this message translates to:
+  /// **'Previous change ({shortcut})'**
+  String syncComparePreviousChange(String shortcut);
+
+  /// Tooltip for the compare view's next-change button, with its key (06 §6).
+  ///
+  /// In en, this message translates to:
+  /// **'Next change ({shortcut})'**
+  String syncCompareNextChange(String shortcut);
+
+  /// Screen-reader label for the compare view's layout switch (06 §6).
+  ///
+  /// In en, this message translates to:
+  /// **'Comparison layout'**
+  String get syncCompareLayoutLabel;
+
+  /// Compare view layout: removed and added lines on aligned rows in two columns (06 §6).
+  ///
+  /// In en, this message translates to:
+  /// **'Side by side'**
+  String get syncCompareLayoutSideBySide;
+
+  /// Compare view layout: one column, removed lines above added ones (06 §6).
+  ///
+  /// In en, this message translates to:
+  /// **'Unified'**
+  String get syncCompareLayoutUnified;
+
+  /// Compare view layout: each file in its own scrolling editor, without change marks (06 §6).
+  ///
+  /// In en, this message translates to:
+  /// **'Separate'**
+  String get syncCompareLayoutSeparate;
+
+  /// Tooltip for the compare view's Separate layout (06 §6).
+  ///
+  /// In en, this message translates to:
+  /// **'Each file in its own editor, with Find'**
+  String get syncCompareLayoutSeparateTooltip;
+
+  /// Shown while the compare view computes which lines changed (06 §6).
+  ///
+  /// In en, this message translates to:
+  /// **'Comparing lines…'**
+  String get syncCompareComputing;
+
+  /// Button that skips the running comparison and shows each file in its own editor (06 §6).
+  ///
+  /// In en, this message translates to:
+  /// **'Show files now'**
+  String get syncCompareShowFilesNow;
+
+  /// Notice when a compared file is over the diff's line cap, so the files show unmarked (06 §6).
+  ///
+  /// In en, this message translates to:
+  /// **'Changes aren\'t marked: comparison is limited to {limit} lines per file (left {left}, right {right}).'**
+  String syncCompareOverLineCap(int limit, int left, int right);
+
+  /// Notice when the diff worker failed, so the files show unmarked (06 §6).
+  ///
+  /// In en, this message translates to:
+  /// **'Changes couldn\'t be computed.'**
+  String get syncCompareDiffFailed;
+
+  /// Notice when both compared files have the same bytes (06 §6).
+  ///
+  /// In en, this message translates to:
+  /// **'The files are identical.'**
+  String get syncCompareIdenticalFiles;
+
+  /// Notice when two different files hold the same text once line endings and the BOM are set aside (06 §6).
+  ///
+  /// In en, this message translates to:
+  /// **'The text is identical; the files differ only in line endings or the byte order mark.'**
+  String get syncCompareIdenticalText;
+
+  /// Notice when the diff stopped refining very different files, so some regions are larger than needed (06 §6).
+  ///
+  /// In en, this message translates to:
+  /// **'Some changes are shown as larger blocks because the files differ widely.'**
+  String get syncCompareDiffSimplified;
+
+  /// Last line of a compare row whose line is too long to draw in full (06 §6).
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 more character not shown} other{{count} more characters not shown}}'**
+  String syncCompareRowTruncated(int count);
+
+  /// Screen-reader label for an unchanged compare row (06 §6).
+  ///
+  /// In en, this message translates to:
+  /// **'Left line {left}, right line {right}'**
+  String syncCompareRowBoth(int left, int right);
+
+  /// Screen-reader label for a compare line only the left file has (06 §6).
+  ///
+  /// In en, this message translates to:
+  /// **'Left only, line {line}'**
+  String syncCompareRowLeftOnly(int line);
+
+  /// Screen-reader label for a compare line only the right file has (06 §6).
+  ///
+  /// In en, this message translates to:
+  /// **'Right only, line {line}'**
+  String syncCompareRowRightOnly(int line);
+
+  /// Screen-reader value for an empty compare line (06 §6).
+  ///
+  /// In en, this message translates to:
+  /// **'Blank line'**
+  String get syncCompareRowBlank;
+
   /// Side label inside sync copy (05 §7) — the pane-A side.
   ///
   /// In en, this message translates to:

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:ghost_ui/ghost_ui.dart' show SidebarThemeTokens, GhostFileTheme;
 import 'package:planchette_editor/planchette_editor.dart' show GhostMenuTheme;
 
+import 'compare_diff_colors.dart';
 import 'family_hues.dart';
 import 'app_appearance.dart';
 import 'contrast.dart';
@@ -861,6 +862,12 @@ ThemeData buildPoltergeistThemeFor(
     extensions: [
       chrome,
       FamilyPalette.forBrightness(drawnAt),
+      CompareDiffColors.derive(
+        brightness: drawnAt,
+        surface: n.surface,
+        onSurface: n.onSurface,
+        accent: n.primary,
+      ),
       SidebarThemeTokens(
         sidebarBackground: chrome.sidebarBackground,
         separator: chrome.separator,
