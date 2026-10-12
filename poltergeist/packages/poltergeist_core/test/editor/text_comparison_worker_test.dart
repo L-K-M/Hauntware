@@ -26,14 +26,22 @@ void main() {
       final outcome = await startTextComparison(over, 'a').result;
 
       expect(outcome, isA<TextComparisonOverLineCap>());
-      expect((outcome as TextComparisonOverLineCap).leftLines, 20001);
+      expect(
+        (outcome as TextComparisonOverLineCap).leftLines,
+        compareMaximumLines + 1,
+      );
     });
 
     test('cancel leaves the result pending and is idempotent', () async {
-      final left = [for (var i = 0; i < 20000; i++) 'l${i % 13}'].join('\n');
-      final right = [for (var i = 0; i < 20000; i++) 'l${i % 17}'].join('\n');
-      final task = startTextComparison(left, right);
+      // The same small comparison finishes well inside the window when it
+      // is left alone, so a pending result proves the cancel.
+      final control = await Future.any([
+        startTextComparison('a\n', 'b\n').result.then((_) => true),
+        Future<bool>.delayed(const Duration(seconds: 5), () => false),
+      ]);
+      expect(control, isTrue);
 
+      final task = startTextComparison('a\n', 'b\n');
       task
         ..cancel()
         ..cancel();

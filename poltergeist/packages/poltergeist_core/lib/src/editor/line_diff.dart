@@ -74,7 +74,9 @@ LineDiff diffLines(
   List<String> right, {
   int costLimit = lineDiffCostLimit,
 }) {
-  if (costLimit < 1) throw ArgumentError.value(costLimit, 'costLimit');
+  if (costLimit < 1) {
+    throw ArgumentError.value(costLimit, 'costLimit', 'must be at least 1');
+  }
 
   final ids = HashMap<String, int>();
   int intern(String line) => ids.putIfAbsent(line, () => ids.length);

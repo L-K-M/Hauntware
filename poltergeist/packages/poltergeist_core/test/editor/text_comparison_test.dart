@@ -117,7 +117,8 @@ void main() {
         'tab', () {
       final measured = ComparedText.measure(
         'plain ascii\ncaf\u00e9\ne\u0301\n\u0416\n\u{1F600}\n'
-        'a\tb\nform\u000cfeed\nvertical\u000btab\nline\u2028sep\n',
+        'a\tb\nform\u000cfeed\nvertical\u000btab\nline\u2028sep\n'
+        'del\u007f\nnext\u0085line\n',
       );
 
       expect(
@@ -125,7 +126,10 @@ void main() {
           for (var line = 0; line < measured.lineCount; line++)
             measured.mayUseFallbackGlyphs(line),
         ],
-        [false, false, true, true, true, false, true, true, true, false],
+        [
+          ...[false, false, true, true, true, false],
+          ...[true, true, true, true, true, false],
+        ],
       );
     });
   });

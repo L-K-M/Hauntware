@@ -80,12 +80,17 @@ final class ComparedText {
 /// U+0300, the first combining mark, ends the Latin and IPA blocks.
 const _firstNonLatinCodeUnit = 0x0300;
 
+/// DEL and the C1 controls count with the C0 ones: a font draws none of
+/// them with a dependable advance.
 bool _mayFallBack(int unit) =>
     unit >= _firstNonLatinCodeUnit ||
-    unit < _firstPrintableCodeUnit && unit != _tab;
+    (unit < _firstPrintableCodeUnit && unit != _tab) ||
+    (unit >= _delete && unit <= _lastC1Control);
 
 const _firstPrintableCodeUnit = 0x20;
 const _tab = 0x09;
+const _delete = 0x7f;
+const _lastC1Control = 0x9f;
 
 /// What comparing two texts produced.
 sealed class TextComparison {
@@ -130,6 +135,10 @@ TextComparison compareTexts(
   int maximumLines = compareMaximumLines,
   int costLimit = lineDiffCostLimit,
 }) {
+  assert(
+    !left.contains('\r') && !right.contains('\r'),
+    'compareTexts expects LF-normalized text',
+  );
   final leftLines = countComparedLines(left);
   final rightLines = countComparedLines(right);
   if (leftLines > maximumLines || rightLines > maximumLines) {

@@ -106,6 +106,7 @@ void main() {
           left.length + right.length - 2 * _lcsLength(left, right),
           reason: 'round $round',
         );
+        expect(diff.minimal, isTrue, reason: 'round $round');
         _expectValid(left, right, diff, reason: 'round $round');
       }
     });
@@ -149,7 +150,7 @@ void main() {
           expect(diff.regions, hasLength(2), reason: 'block of $size');
         }
       }
-    });
+    }, timeout: _heavyTimeout);
 
     test('a block moved among repeated lines keeps to its anchors', () {
       // Source-like text: every fifth line blank, many closing braces.
@@ -188,11 +189,11 @@ void main() {
         expect(_editCount(diff), 2 * ys.length);
       }
 
-      final as = List.filled(10000, 'a');
-      final bs = List.filled(10000, 'b');
-      final swapped = diffLines([...as, ...bs], [...bs, ...as]);
+      final aLines = List.filled(10000, 'a');
+      final bLines = List.filled(10000, 'b');
+      final swapped = diffLines([...aLines, ...bLines], [...bLines, ...aLines]);
       expect(_editCount(swapped), 20000);
-    });
+    }, timeout: _heavyTimeout);
 
     test('a cost limit below 1 is refused', () {
       expect(() => diffLines(['a'], ['b'], costLimit: 0), throwsArgumentError);
@@ -205,7 +206,7 @@ void main() {
 
       expect(diff.regions, [_region(0, 20000, 0, 20000)]);
       expect(diff.minimal, isTrue);
-    });
+    }, timeout: _heavyTimeout);
 
     test('adversarial inputs at the cap finish and stay valid', () {
       final ascending = [for (var i = 0; i < 20000; i++) 'line $i'];
@@ -323,6 +324,9 @@ void main() {
   });
 }
 
+/// Room for the tests that diff inputs at the 20,000-line cap.
+const _heavyTimeout = Timeout(Duration(seconds: 60));
+
 LineDiffRegion _region(int ls, int lc, int rs, int rc) => LineDiffRegion(
   leftStart: ls,
   leftCount: lc,
@@ -366,8 +370,13 @@ void _expectValid(
   var r = 0;
   LineDiffRegion? previous;
   for (final region in diff.regions) {
-    expect(region.leftCount + region.rightCount, greaterThan(0));
+    expect(
+      region.leftCount + region.rightCount,
+      greaterThan(0),
+      reason: reason,
+    );
     final gap = region.leftStart - l;
+    expect(gap, greaterThanOrEqualTo(0), reason: reason);
     expect(region.rightStart - r, gap, reason: reason);
     if (previous != null) expect(gap, greaterThan(0), reason: reason);
     for (var k = 0; k < gap; k++) {
@@ -382,6 +391,9 @@ void _expectValid(
     previous = region;
   }
   expect(left.length - l, right.length - r, reason: reason);
+  for (var k = 0; k < left.length - l; k++) {
+    expect(left[l + k], right[r + k], reason: reason);
+  }
   rebuilt.addAll(left.sublist(l));
   expect(rebuilt, right, reason: reason);
 }
