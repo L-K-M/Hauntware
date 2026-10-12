@@ -113,14 +113,19 @@ void main() {
       expect(measured.columnsOf(4), 0);
     });
 
-    test('non-Latin marks lines with code units at or above U+0300', () {
+    test('fallback glyphs mark non-Latin lines and controls other than '
+        'tab', () {
       final measured = ComparedText.measure(
-        'plain ascii\ncafé\né\nЖ\n\u{1F600}\n',
+        'plain ascii\ncaf\u00e9\ne\u0301\n\u0416\n\u{1F600}\n'
+        'a\tb\nform\u000cfeed\nvertical\u000btab\nline\u2028sep\n',
       );
 
       expect(
-        [for (var line = 0; line < 6; line++) measured.isNonLatin(line)],
-        [false, false, true, true, true, false],
+        [
+          for (var line = 0; line < measured.lineCount; line++)
+            measured.mayUseFallbackGlyphs(line),
+        ],
+        [false, false, true, true, true, false, true, true, true, false],
       );
     });
   });

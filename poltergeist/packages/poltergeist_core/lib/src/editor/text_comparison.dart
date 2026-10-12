@@ -27,19 +27,19 @@ int countComparedLines(String text) {
 /// newline leaves an empty last line, so a final-newline difference shows
 /// as one changed line.
 final class ComparedText {
-  ComparedText._(this._starts, this._columns, this._nonLatin, this._length);
+  ComparedText._(this._starts, this._columns, this._fallback, this._length);
 
   factory ComparedText.measure(String text) {
     final starts = shared.lineStartOffsets(text);
     final columns = Int32List(starts.length);
-    final nonLatin = Uint8List(starts.length);
+    final fallback = Uint8List(starts.length);
     for (var line = 0; line < starts.length; line++) {
       final start = starts[line];
       final end = line + 1 < starts.length ? starts[line + 1] - 1 : text.length;
       columns[line] = shared.displayColumnFor(text, start, end) - 1;
       for (var i = start; i < end; i++) {
-        if (text.codeUnitAt(i) >= _firstNonLatinCodeUnit) {
-          nonLatin[line] = 1;
+        if (_mayFallBack(text.codeUnitAt(i))) {
+          fallback[line] = 1;
           break;
         }
       }
@@ -47,14 +47,14 @@ final class ComparedText {
     return ComparedText._(
       Int32List.fromList(starts),
       columns,
-      nonLatin,
+      fallback,
       text.length,
     );
   }
 
   final Int32List _starts;
   final Int32List _columns;
-  final Uint8List _nonLatin;
+  final Uint8List _fallback;
   final int _length;
 
   int get lineCount => _starts.length;
@@ -69,14 +69,23 @@ final class ComparedText {
   /// at 2 (planchette_core's `displayColumnFor`).
   int columnsOf(int line) => _columns[line];
 
-  /// Whether [line] has a code unit past the Latin and IPA blocks, where a
-  /// monospace font may fall back to glyphs whose advance differs from the
-  /// counted columns.
-  bool isNonLatin(int line) => _nonLatin[line] == 1;
+  /// Whether [line] may draw with glyphs whose advance differs from the
+  /// counted columns: it has a code unit past the Latin and IPA blocks,
+  /// where a monospace font falls back to others, or a control character
+  /// other than tab, which a renderer must draw as a visible symbol (a
+  /// vertical tab or form feed would otherwise break the line).
+  bool mayUseFallbackGlyphs(int line) => _fallback[line] == 1;
 }
 
 /// U+0300, the first combining mark, ends the Latin and IPA blocks.
 const _firstNonLatinCodeUnit = 0x0300;
+
+bool _mayFallBack(int unit) =>
+    unit >= _firstNonLatinCodeUnit ||
+    unit < _firstPrintableCodeUnit && unit != _tab;
+
+const _firstPrintableCodeUnit = 0x20;
+const _tab = 0x09;
 
 /// What comparing two texts produced.
 sealed class TextComparison {

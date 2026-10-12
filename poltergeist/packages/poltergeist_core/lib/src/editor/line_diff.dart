@@ -2,10 +2,11 @@ import 'dart:collection';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
-/// The edit distance one box of the search may explore before it splits at
-/// its furthest point instead (06 §6). It bounds the worst case of two
-/// 20 000-line inputs at a fraction of a second; a result that needed the
-/// split reports itself as not [LineDiff.minimal].
+/// The edit distance one box of the search may explore before it splits by
+/// heuristic instead (06 §6): at an anchor line both sides share, else at
+/// its furthest point. It bounds the worst case of two 20 000-line inputs
+/// at a fraction of a second; a result that needed the heuristic reports
+/// itself as not [LineDiff.minimal].
 const int lineDiffCostLimit = 1024;
 
 /// One maximal run of changed lines: [leftCount] lines from [leftStart] on
@@ -55,9 +56,9 @@ final class LineDiff {
   final int leftLineCount;
   final int rightLineCount;
 
-  /// False when a box hit the cost limit and split at its furthest point:
-  /// every region is still a real difference, but some may be larger than
-  /// the smallest possible edit.
+  /// False when a box hit the cost limit and split by heuristic: every
+  /// region is still a real difference, but some may be larger than the
+  /// smallest possible edit.
   final bool minimal;
 }
 
@@ -157,6 +158,7 @@ bool _markChanges(
     Int32List.fromList([for (final i in keptLeft) a[i]]),
     Int32List.fromList([for (final j in keptRight) b[j]]),
     costLimit: costLimit,
+    idCount: idCount,
   )..run();
   for (var i = 0; i < keptLeft.length; i++) {
     leftChanged[keptLeft[i]] = search.leftChanged[i];
@@ -177,10 +179,14 @@ bool _markChanges(
 /// r meets forward diagonal `n - m - r`. A box splits where the two
 /// frontiers first overlap; that point lies on a shortest edit path.
 final class _MyersSearch {
-  _MyersSearch(this._a, this._b, {required this._costLimit})
-    : leftChanged = Uint8List(_a.length),
-      rightChanged = Uint8List(_b.length),
-      _offset = ((_a.length + _b.length + 1) >> 1) + 1 {
+  _MyersSearch(
+    this._a,
+    this._b, {
+    required this._costLimit,
+    required this._idCount,
+  }) : leftChanged = Uint8List(_a.length),
+       rightChanged = Uint8List(_b.length),
+       _offset = ((_a.length + _b.length + 1) >> 1) + 1 {
     _forward = Int32List(2 * _offset + 1);
     _backward = Int32List(2 * _offset + 1);
   }
@@ -188,6 +194,7 @@ final class _MyersSearch {
   final Int32List _a;
   final Int32List _b;
   final int _costLimit;
+  final int _idCount;
   final Uint8List leftChanged;
   final Uint8List rightChanged;
   final int _offset;
@@ -197,6 +204,11 @@ final class _MyersSearch {
   bool minimal = true;
   int _splitX = 0;
   int _splitY = 0;
+
+  // Per-line counts for the anchor split, allocated on its first use.
+  Int32List? _leftCounts;
+  Int32List? _rightCounts;
+  Int32List? _rightAt;
 
   void run() {
     final boxes = <int>[0, _a.length, 0, _b.length];
@@ -233,8 +245,9 @@ final class _MyersSearch {
 
   /// Finds a split strictly inside the box (which starts and ends on
   /// different lines on each side), leaving it in [_splitX] and [_splitY].
-  /// Past the cost limit the split is the frontier point that got furthest
-  /// from either end, and the result stops being minimal.
+  /// Past the cost limit the split is an anchor line, or else the frontier
+  /// point that got furthest from either end, and the result stops being
+  /// minimal.
   bool _split(int aLo, int aHi, int bLo, int bHi) {
     final n = aHi - aLo;
     final m = bHi - bLo;
@@ -303,7 +316,78 @@ final class _MyersSearch {
     // A shortest path always overlaps by maxD, so only the cost limit gets
     // here.
     assert(limit < maxD, 'the middle-snake search missed an overlap');
-    return _splitAtFrontier(aLo, aHi, bLo, bHi, limit);
+    return _splitAtAnchor(aLo, aHi, bLo, bHi) ||
+        _splitAtFrontier(aLo, aHi, bLo, bHi, limit);
+  }
+
+  /// Splits at the middle of the longest chain of anchors: lines that occur
+  /// exactly once in the box on each side, taken in the same order on both
+  /// (patience diff's anchors). A block moved past the cost limit leaves
+  /// the rest of the box as one such chain, so the split lands inside text
+  /// both sides share instead of committing to a run of insertions.
+  bool _splitAtAnchor(int aLo, int aHi, int bLo, int bHi) {
+    final leftCounts = _leftCounts ??= Int32List(_idCount);
+    final rightCounts = _rightCounts ??= Int32List(_idCount);
+    final rightAt = _rightAt ??= Int32List(_idCount);
+    for (var i = aLo; i < aHi; i++) {
+      leftCounts[_a[i]]++;
+    }
+    for (var j = bLo; j < bHi; j++) {
+      rightCounts[_b[j]]++;
+      rightAt[_b[j]] = j;
+    }
+    final anchorLeft = <int>[];
+    final anchorRight = <int>[];
+    for (var i = aLo; i < aHi; i++) {
+      final id = _a[i];
+      if (leftCounts[id] == 1 && rightCounts[id] == 1) {
+        anchorLeft.add(i);
+        anchorRight.add(rightAt[id]);
+      }
+    }
+    for (var i = aLo; i < aHi; i++) {
+      leftCounts[_a[i]] = 0;
+    }
+    for (var j = bLo; j < bHi; j++) {
+      rightCounts[_b[j]] = 0;
+    }
+    if (anchorLeft.isEmpty) return false;
+
+    // The longest run of anchors whose right positions rise with their
+    // left ones, by patience sorting: tails[l] ends the best run of length
+    // l + 1, and each anchor remembers the one before it in its run.
+    final tails = <int>[];
+    final previous = Int32List(anchorLeft.length);
+    for (var p = 0; p < anchorLeft.length; p++) {
+      final right = anchorRight[p];
+      var lo = 0;
+      var hi = tails.length;
+      while (lo < hi) {
+        final mid = (lo + hi) >> 1;
+        if (anchorRight[tails[mid]] < right) {
+          lo = mid + 1;
+        } else {
+          hi = mid;
+        }
+      }
+      previous[p] = lo > 0 ? tails[lo - 1] : -1;
+      if (lo == tails.length) {
+        tails.add(p);
+      } else {
+        tails[lo] = p;
+      }
+    }
+    var middle = tails.last;
+    for (var step = 0; step < (tails.length - 1) ~/ 2; step++) {
+      middle = previous[middle];
+    }
+
+    // The anchor is the same line on both sides and the box starts on
+    // different lines, so the split always makes progress.
+    _splitX = anchorLeft[middle];
+    _splitY = anchorRight[middle];
+    minimal = false;
+    return true;
   }
 
   /// The furthest x a d-edit path reaches on diagonal [k] before its final
@@ -324,12 +408,26 @@ final class _MyersSearch {
     return x;
   }
 
+  /// Splits at the frontier point that got furthest from either end. With
+  /// no snake in reach every point ties, and the shortest path must run
+  /// along an edge of the box to its first match: ties go to the edge whose
+  /// first match is nearer, inserting (lower diagonals) or deleting (higher
+  /// ones), judged separately from each end.
   bool _splitAtFrontier(int aLo, int aHi, int bLo, int bHi, int d) {
     final n = aHi - aLo;
     final m = bHi - bLo;
     final o = _offset;
     final kLo = d <= m ? -d : -m + ((d - m) & 1);
     final kHi = d <= n ? d : n - ((d - n) & 1);
+
+    final forwardInserts =
+        _runTo(_b, bLo, 1, bHi, _a[aLo]) <= _runTo(_a, aLo, 1, aHi, _b[bLo]);
+    final backwardInserts =
+        _runTo(_b, bHi - 1, -1, bLo - 1, _a[aHi - 1]) <=
+        _runTo(_a, aHi - 1, -1, aLo - 1, _b[bHi - 1]);
+    bool wins(int progress, int k, int best, int bestK, bool inserts) =>
+        progress > best ||
+        (progress == best && (inserts ? k < bestK : k > bestK));
 
     var forwardProgress = -1;
     var forwardX = 0;
@@ -339,13 +437,15 @@ final class _MyersSearch {
     var backwardK = 0;
     for (var k = kLo; k <= kHi; k += 2) {
       final fx = _forward[o + k];
-      if (fx >= 0 && 2 * fx - k > forwardProgress) {
+      if (fx >= 0 &&
+          wins(2 * fx - k, k, forwardProgress, forwardK, forwardInserts)) {
         forwardProgress = 2 * fx - k;
         forwardX = fx;
         forwardK = k;
       }
       final bx = _backward[o + k];
-      if (bx >= 0 && 2 * bx - k > backwardProgress) {
+      if (bx >= 0 &&
+          wins(2 * bx - k, k, backwardProgress, backwardK, backwardInserts)) {
         backwardProgress = 2 * bx - k;
         backwardX = bx;
         backwardK = k;
@@ -363,6 +463,16 @@ final class _MyersSearch {
     final inside =
         _splitX + _splitY > aLo + bLo && _splitX + _splitY < aHi + bHi;
     return inside;
+  }
+
+  /// Steps from [from] by [step] until [end] or a copy of [line]: the
+  /// length of the run of insertions or deletions that reaches a match.
+  int _runTo(Int32List lines, int from, int step, int end, int line) {
+    var run = 0;
+    for (var i = from; i != end && lines[i] != line; i += step) {
+      run++;
+    }
+    return run;
   }
 }
 

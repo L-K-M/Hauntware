@@ -133,6 +133,67 @@ void main() {
       expect(sawSimplified, isTrue);
     });
 
+    test('a block moved past the cost limit stays one move either way', () {
+      final lines = [for (var i = 0; i < 20000; i++) 'line $i'];
+      for (final size in [1025, 2000, 5000]) {
+        final block = lines.sublist(0, size);
+        final rest = lines.sublist(size);
+        for (final (left, right) in [
+          ([...block, ...rest], [...rest, ...block]),
+          ([...rest, ...block], [...block, ...rest]),
+        ]) {
+          final diff = diffLines(left, right);
+
+          _expectValid(left, right, diff);
+          expect(_editCount(diff), 2 * size, reason: 'block of $size');
+          expect(diff.regions, hasLength(2), reason: 'block of $size');
+        }
+      }
+    });
+
+    test('a block moved among repeated lines keeps to its anchors', () {
+      // Source-like text: every fifth line blank, many closing braces.
+      final lines = [
+        for (var i = 0; i < 9500; i++)
+          i % 5 == 4 ? '' : (i % 7 == 3 ? '}' : 'statement $i;'),
+      ];
+      final block = lines.sublist(2000, 3500);
+      final moved = [
+        ...lines.sublist(0, 2000),
+        ...lines.sublist(3500),
+        ...block,
+      ];
+      for (final (left, right) in [(lines, moved), (moved, lines)]) {
+        final diff = diffLines(left, right);
+
+        _expectValid(left, right, diff);
+        expect(_editCount(diff), lessThanOrEqualTo(2 * block.length));
+      }
+    });
+
+    test('a block of repeated lines moved past the cost limit takes the '
+        'nearer edge', () {
+      // No line is unique, so there are no anchors: the frontier split has
+      // to cross the moved block along the edge whose first match is
+      // nearer, from either end.
+      final ys = List.filled(1500, 'y');
+      final xs = List.filled(3000, 'x');
+      for (final (left, right) in [
+        ([...ys, ...xs], [...xs, ...ys]),
+        ([...xs, ...ys], [...ys, ...xs]),
+      ]) {
+        final diff = diffLines(left, right);
+
+        _expectValid(left, right, diff);
+        expect(_editCount(diff), 2 * ys.length);
+      }
+
+      final as = List.filled(10000, 'a');
+      final bs = List.filled(10000, 'b');
+      final swapped = diffLines([...as, ...bs], [...bs, ...as]);
+      expect(_editCount(swapped), 20000);
+    });
+
     test('a cost limit below 1 is refused', () {
       expect(() => diffLines(['a'], ['b'], costLimit: 0), throwsArgumentError);
     });
