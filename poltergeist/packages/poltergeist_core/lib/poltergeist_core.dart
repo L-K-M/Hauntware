@@ -323,6 +323,28 @@ export 'src/editor/built_in_text_document.dart'
         loadBuiltInTextDocumentDetails,
         resolveBuiltInEditorTarget,
         saveBuiltInTextDocument;
+export 'src/editor/line_diff.dart'
+    show
+        LineDiff,
+        LineDiffLayout,
+        LineDiffRegion,
+        LineDiffRowKind,
+        LineDiffRows,
+        alignLineDiff,
+        diffLines,
+        lineDiffCostLimit;
+export 'src/editor/text_comparison.dart'
+    show
+        ComparedText,
+        TextComparison,
+        TextComparisonComputed,
+        TextComparisonFailed,
+        TextComparisonOverLineCap,
+        compareMaximumLines,
+        compareTexts,
+        countComparedLines;
+export 'src/editor/text_comparison_worker.dart'
+    show TextComparisonStarter, TextComparisonTask, startTextComparison;
 export 'src/fs/file_system_name_traits.dart'
     show
         FileSystemNameJoin,
