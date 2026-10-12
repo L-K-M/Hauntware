@@ -856,7 +856,14 @@ void main() {
       await _pumpView(tester, controller, startDiff: _syncDiff);
       await tester.pump();
 
-      expect(find.text('2000 more characters not shown'), findsOneWidget);
+      final note = find.text('2000 more characters not shown');
+      expect(note, findsOneWidget);
+      // The note sits on the removed wash, where only the row's own text
+      // colour is held to 4.5:1 on every preset.
+      expect(
+        tester.widget<Text>(note).style!.color,
+        CompareDiffColors.of(tester.element(note)).removedText,
+      );
       expect(tester.takeException(), isNull);
     });
 

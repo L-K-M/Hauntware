@@ -29,13 +29,17 @@ void main() {
       ..compare(left, right);
 
     expect(starter.inputs, [('a\n', 'b\n')]);
+    expect(notifications, 1);
     expect(controller.phase, CompareDiffPhase.computing);
     expect(controller.left, same(left));
     expect(controller.right, same(right));
   });
 
   test('waits while either document is missing', () {
-    controller.compare(_document('a'), null);
+    controller
+      ..compare(_document('a'), null)
+      ..compare(null, _document('b'))
+      ..compare(null, null);
 
     expect(controller.phase, CompareDiffPhase.waiting);
     expect(starter.inputs, isEmpty);

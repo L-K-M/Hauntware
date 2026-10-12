@@ -23,7 +23,10 @@ for name in 'shows aligned rows' 'unified lists left-only' \
   FLUTTER_ROOT=/opt/flutter \
   flutter test test/ui/compare_view_test.dart --plain-name "$name"
 done
+mv -f "$PWD/../../tasks/compare-diff-view/screenshots/after-sync-pair-compare.png" \
+  "$PWD/../../tasks/sync-pair-compare/screenshots/"
 ```
 
 The first test also writes `after-sync-pair-compare.png`, the Separate
-layout; that capture belongs to `../../sync-pair-compare/screenshots/`.
+layout; the last command moves it to `../../sync-pair-compare/screenshots/`,
+where it belongs.

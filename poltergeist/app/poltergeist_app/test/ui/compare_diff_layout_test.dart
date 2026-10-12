@@ -42,7 +42,7 @@ void main() {
 
   test('non-Latin lines keep slack and stay within their bound', () {
     final random = Random(6);
-    const alphabet = ['a', '\t', '日', 'é', 'Ж', '\u{1F600}'];
+    const alphabet = ['a', '\t', '日', 'e\u0301', 'Ж', '\u{1F600}'];
     for (var round = 0; round < 500; round++) {
       final line = [
         for (var i = 0; i < random.nextInt(80); i++)
@@ -53,19 +53,16 @@ void main() {
       final fallback = measured.mayUseFallbackGlyphs(0);
       final wrapped = wrap(line, perRow);
       final width = compareWrapWidth(perRow, fallbackGlyphs: fallback);
+      final reason = 'round $round, perRow $perRow, ${line.runes.toList()}';
 
       expect(
         wrapped.lineCount,
         lessThanOrEqualTo(visualLines(line, perRow)),
-        reason: 'round $round',
+        reason: reason,
       );
       for (final chunk in wrapped.text.split('\n')) {
         final columns = ComparedText.measure(chunk).columnsOf(0);
-        expect(
-          columns,
-          lessThanOrEqualTo(max(width, 2)),
-          reason: 'round $round',
-        );
+        expect(columns, lessThanOrEqualTo(max(width, 2)), reason: reason);
       }
     }
     expect(compareWrapWidth(80, fallbackGlyphs: true), 70);
@@ -88,7 +85,7 @@ void main() {
   });
 
   test('zero-width marks stay with the character before them', () {
-    final line = '${'x' * 9}éy';
+    final line = '${'x' * 9}e\u0301y';
     final wrapped = wrapCompareLine(
       line,
       0,
@@ -97,7 +94,7 @@ void main() {
       fallbackGlyphs: false,
     );
 
-    expect(wrapped.text, '${'x' * 9}é\ny');
+    expect(wrapped.text, '${'x' * 9}e\u0301\ny');
   });
 
   test('lines past 10,000 columns report the hidden characters', () {
@@ -106,6 +103,7 @@ void main() {
 
     expect(wrapped.hiddenCharacters, 2000);
     expect(wrapped.text.replaceAll('\n', '').length, 10000);
+    // 100 lines draw the shown 10,000 columns; one more says what is cut.
     expect(visualLines(line, 100), 101);
     expect(wrapped.lineCount, 100);
   });

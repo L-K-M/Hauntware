@@ -33,9 +33,10 @@ int compareWrapWidth(int perRow, {required bool fallbackGlyphs}) =>
     fallbackGlyphs ? math.max(1, perRow - (perRow + 7) ~/ 8) : perRow;
 
 /// The visual lines a line of [columns] takes, never fewer than
-/// [wrapCompareLine] draws. Lines without fallback glyphs are exact. Other
-/// chunks may end one column short before a wide character, so their count
-/// is an upper bound and a row can keep a blank last line. A line cut at
+/// [wrapCompareLine] draws. Lines without fallback glyphs are exact: every
+/// wide character lies past U+0300 and so counts as one. Other chunks may
+/// end one column short before a wide character, so their count is an
+/// upper bound and a row can keep a blank last line. A line cut at
 /// [compareMaximumDisplayColumns] adds one line saying how much is hidden.
 int compareVisualLines(
   int columns,
@@ -74,10 +75,11 @@ final class CompareWrappedLine {
 /// Breaks the line `text[start, end)` into chunks of at most
 /// [compareWrapWidth] columns. Tabs expand to the next multiple of four
 /// from the line's start, a wide character never splits across chunks,
-/// and a zero-width mark stays with the character before it. Control
-/// characters and the Unicode line and paragraph separators draw as
+/// and a zero-width mark stays with the character before it. C0 control
+/// characters, DEL and the Unicode line and paragraph separators draw as
 /// visible symbols of one column: a paragraph would break the line at a
 /// vertical tab, form feed or separator, and draw nothing for the rest.
+/// C1 controls break nothing and draw as the font has them.
 CompareWrappedLine wrapCompareLine(
   String text,
   int start,

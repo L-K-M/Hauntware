@@ -635,9 +635,11 @@ class _CompareDiffRowsState extends State<CompareDiffRows> {
                   softWrap: false,
                   overflow: TextOverflow.ellipsis,
                   strutStyle: _rowStrut,
+                  // On a wash only the row's text colour is held to 4.5:1;
+                  // the muted caption colour falls to 2.4:1 on some presets.
                   style: style.copyWith(
                     fontStyle: FontStyle.italic,
-                    color: scheme.onSurfaceVariant,
+                    color: fill == null ? scheme.onSurfaceVariant : color,
                   ),
                 ),
             ],

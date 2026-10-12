@@ -293,7 +293,7 @@ class _CompareViewState extends State<CompareView> {
                     padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
                     child: Wrap(spacing: 8, runSpacing: 4, children: notices),
                   ),
-                ..._diffNotices(context, l10n),
+                ..._diffNotices(l10n),
                 if (result != null) ...[
                   _changeBar(context, l10n, layout, rows, result),
                   const Divider(height: 1),
@@ -743,7 +743,7 @@ class _CompareViewState extends State<CompareView> {
   }
 
   /// Why changes are not marked, or what an empty or coarse diff means.
-  List<Widget> _diffNotices(BuildContext context, AppLocalizations l10n) {
+  List<Widget> _diffNotices(AppLocalizations l10n) {
     final outcome = _diff.outcome;
     final left = _diff.left;
     final right = _diff.right;
