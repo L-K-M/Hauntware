@@ -1479,8 +1479,16 @@ specifics:
   so colour is never the only cue.
 - Rows wrap at display-column boundaries (tabs at 4, wide characters at
   2) so every row's height is known before it is built, and show at most
-  10 000 columns of a line with a count of the rest. Rows have no syntax
-  highlighting and no selection.
+  10 000 columns of a line with a count of the rest. A custom sliver reads
+  every row offset from those heights, so a jump to a far change lands
+  exactly. Control characters and the Unicode line and paragraph
+  separators draw as visible symbols, since a paragraph would otherwise
+  break the row at them. Rows have no syntax highlighting and no
+  selection.
+- A change of layout, by the switch or by the posture after a rotation,
+  keeps the active region, or else the line at the top, in view. A side
+  whose find bar or editor has focus when the other side finishes
+  loading stays in Separate, so the rows never replace it mid-use.
 - Byte-identical files and texts that differ only in line endings or the
   BOM each get their own notice.
 

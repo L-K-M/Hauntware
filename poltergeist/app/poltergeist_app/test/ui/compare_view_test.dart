@@ -789,9 +789,15 @@ void main() {
     testWidgets('long lines wrap at column boundaries and paired rows stay '
         'aligned', (tester) async {
       final long = List.filled(120, 'a').join();
-      for (final scale in [1.0, 2.0]) {
+      // At 1200 px the side-by-side text area has half a pixel to spare,
+      // so any spacing the measurement misses clips each chunk's end.
+      for (final (width, scale) in [
+        (600.0, 1.0),
+        (600.0, 2.0),
+        (1200.0, 1.0),
+      ]) {
         // The view owns its controller and disposes it with the route.
-        final directory = Directory('${temporaryDirectory.path}/$scale')
+        final directory = Directory('${temporaryDirectory.path}/$width-$scale')
           ..createSync();
         final controller = await _startedPair(
           tester,
@@ -803,7 +809,7 @@ void main() {
           tester,
           controller,
           startDiff: _syncDiff,
-          size: const Size(600, 1600),
+          size: Size(width, 1600),
           textScale: scale,
         );
         await tester.pump();
@@ -823,6 +829,11 @@ void main() {
         expect(
           tester.getTopLeft(wrapped).dy,
           moreOrLessEquals(tester.getTopLeft(find.text('short')).dy),
+        );
+        // Every chunk fits across its box: nothing at a line's end is cut.
+        expect(
+          paragraph.getMaxIntrinsicWidth(double.infinity),
+          lessThanOrEqualTo(paragraph.size.width + 0.01),
         );
         expect(find.text('end'), findsNWidgets(2));
         expect(
@@ -962,6 +973,339 @@ void main() {
       await tester.pump();
 
       expect(find.text('1 changed region'), findsOneWidget);
+    });
+
+    testWidgets('n and End reach rows far below wrapped rows', (tester) async {
+      final long = List.filled(200, 'w').join();
+      String file(String changed) => [
+        for (var i = 1; i <= 3000; i++)
+          i == 2501 ? changed : (i <= 200 ? 'short $i' : '$long $i'),
+      ].join('\n');
+      final controller = await _startedPair(
+        tester,
+        temporaryDirectory,
+        '${file('$long 2501')}\n',
+        '${file('changed 2501')}\n',
+      );
+      await _pumpView(tester, controller, startDiff: _syncDiff);
+      await tester.pump();
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyN);
+      await tester.pumpAndSettle();
+      expect(find.text('1/1'), findsOneWidget);
+      expect(find.textContaining('changed 2501'), findsOneWidget);
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.end);
+      await tester.pump();
+      final position = _rowsPosition(tester);
+      expect(position.pixels, position.maxScrollExtent);
+      // The last row is the empty line after the final newline.
+      expect(find.text('3001'), findsNWidgets(2));
+    });
+
+    testWidgets('squeezed columns neither clip a chunk nor overflow the row', (
+      tester,
+    ) async {
+      final long = List.filled(60, 'x').join();
+      final rest = [for (var i = 2; i <= 10001; i++) 'line $i'].join('\n');
+      final controller = await _startedPair(
+        tester,
+        temporaryDirectory,
+        '$long\n$rest\n',
+        'short\n$rest\n',
+      );
+      await _pumpView(
+        tester,
+        controller,
+        startDiff: _syncDiff,
+        size: const Size(320, 900),
+        platform: TargetPlatform.android,
+        textScale: 2,
+      );
+      await tester.pump();
+      await tester.tap(find.byTooltip('Side by side'));
+      await tester.pump();
+
+      expect(tester.takeException(), isNull);
+      final paragraph = tester.renderObject<RenderParagraph>(
+        find.textContaining('xx'),
+      );
+      expect(
+        paragraph.getMaxIntrinsicWidth(double.infinity),
+        lessThanOrEqualTo(paragraph.size.width + 0.01),
+      );
+    });
+
+    testWidgets('controls and separators show as symbols on one line', (
+      tester,
+    ) async {
+      final controller = await _startedPair(
+        tester,
+        temporaryDirectory,
+        'top\nab\u000ccd ef\u000bgh\nend\n',
+        'top\nshort\nend\n',
+      );
+      await _pumpView(tester, controller, startDiff: _syncDiff);
+      await tester.pump();
+
+      final symbols = find.text('ab␌cd␤ef␋gh');
+      expect(symbols, findsOneWidget);
+      expect(
+        tester.getSize(symbols).height,
+        tester.getSize(find.text('short')).height,
+      );
+    });
+
+    testWidgets('a rotation across the posture keeps the active region', (
+      tester,
+    ) async {
+      final edits = {for (var i = 11; i <= 110; i++) i: 'early edit $i'};
+      final controller = await _startedPair(
+        tester,
+        temporaryDirectory,
+        _numberedLines(400),
+        _numberedLines(400, {...edits, 300: 'edit 300'}),
+      );
+      await _pumpView(
+        tester,
+        controller,
+        startDiff: _syncDiff,
+        size: const Size(500, 900),
+        platform: TargetPlatform.android,
+      );
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyN);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyN);
+      await tester.pumpAndSettle();
+      expect(find.text('2/2'), findsOneWidget);
+      expect(find.text('edit 300'), findsOneWidget);
+
+      tester.view.physicalSize = const Size(900, 900);
+      await tester.pumpAndSettle();
+
+      expect(find.byTooltip('Side by side'), findsNothing);
+      expect(find.text('Side by side'), findsOneWidget);
+      expect(find.text('2/2'), findsOneWidget);
+      expect(find.text('edit 300'), findsOneWidget);
+    });
+
+    testWidgets('a resize that keeps the wrap keeps the scroll offset', (
+      tester,
+    ) async {
+      final long = List.filled(400, 'q').join();
+      final controller = await _startedPair(
+        tester,
+        temporaryDirectory,
+        'top\n$long\n${_numberedLines(100)}',
+        'changed\n$long\n${_numberedLines(100)}',
+      );
+      await _pumpView(tester, controller, startDiff: _syncDiff);
+      await tester.pump();
+      _rowsPosition(tester).jumpTo(200);
+      await tester.pump();
+
+      tester.view.physicalSize = const Size(1201, 720);
+      await tester.pump();
+      await tester.pump();
+
+      expect(_rowsPosition(tester).pixels, 200);
+    });
+
+    testWidgets('a resize that rewraps keeps the place inside a tall row', (
+      tester,
+    ) async {
+      final long = List.filled(400, 'q').join();
+      final controller = await _startedPair(
+        tester,
+        temporaryDirectory,
+        'top\n$long\n${_numberedLines(100)}',
+        'changed\n$long\n${_numberedLines(100)}',
+      );
+      await _pumpView(tester, controller, startDiff: _syncDiff);
+      await tester.pump();
+      final line = tester.getSize(find.text('top')).height;
+      // Five lines into the tall second row.
+      _rowsPosition(tester).jumpTo(line * 6);
+      await tester.pump();
+
+      tester.view.physicalSize = const Size(800, 720);
+      await tester.pump();
+      await tester.pump();
+
+      // The row grew taller; the offset keeps its share of the row
+      // instead of snapping back to the row's start.
+      final rowTop = line;
+      final rowHeight = tester
+          .getSize(find.textContaining('qqqq').first)
+          .height;
+      final pixels = _rowsPosition(tester).pixels;
+      expect(pixels, greaterThan(rowTop + line * 5));
+      expect(pixels, lessThan(rowTop + rowHeight));
+    });
+
+    testWidgets('the count, position and layout switch each read on their '
+        'own', (tester) async {
+      final controller = await _startedPair(
+        tester,
+        temporaryDirectory,
+        _numberedLines(30),
+        _numberedLines(30, {5: 'edit 5', 20: 'edit 20'}),
+      );
+      final semantics = tester.ensureSemantics();
+      await _pumpView(tester, controller, startDiff: _syncDiff);
+      await tester.pump();
+
+      expect(
+        tester.getSemantics(find.byKey(const ValueKey(CompareKey.regionCount))),
+        matchesSemantics(label: '2 changed regions', isLiveRegion: true),
+      );
+      expect(find.bySemanticsLabel('Comparison layout'), findsOneWidget);
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyN);
+      await tester.pumpAndSettle();
+      expect(find.bySemanticsLabel('Change 1 of 2'), findsOneWidget);
+      semantics.dispose();
+    });
+
+    testWidgets('typing in a find bar while the other side loads keeps the '
+        'editors', (tester) async {
+      final cache = await tester.runAsync(() => _cache(temporaryDirectory));
+      final producer = FakePreviewProducer();
+      final right = File('${temporaryDirectory.path}/local.txt')
+        ..writeAsStringSync('one\ntwo\n');
+      final controller = _controller(
+        left: _remote(SyncSide.left, size: 12),
+        right: _local(SyncSide.right, right),
+        previewCache: cache,
+        previewProducer: producer,
+      );
+      addTearDown(controller.dispose);
+      await tester.runAsync(() async {
+        unawaited(controller.start());
+        await _until(
+          () =>
+              producer.specs.isNotEmpty &&
+              controller.right.phase == SyncComparePhase.ready,
+        );
+      });
+      await _pumpView(tester, controller, startDiff: _syncDiff);
+      await tester.pump();
+      await tester.tap(_inSide('sync.compare.right', find.byTooltip('Find')));
+      await tester.pump();
+      expect(_findFields(), findsOneWidget);
+
+      await tester.runAsync(() async {
+        await producer.complete(0, utf8.encode('one\nfour\n'));
+        await _until(() => controller.left.phase == SyncComparePhase.ready);
+      });
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.byType(PlanchetteEditor), findsNWidgets(2));
+      expect(_findFields(), findsOneWidget);
+      expect(find.text('1 changed region'), findsOneWidget);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyN);
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey(CompareKey.regionPosition)),
+        findsNothing,
+      );
+    });
+
+    testWidgets('a cut line is read with how much it leaves out', (
+      tester,
+    ) async {
+      final long = List.filled(12000, 'x').join();
+      final controller = await _startedPair(
+        tester,
+        temporaryDirectory,
+        '$long\n',
+        'short\n',
+      );
+      final semantics = tester.ensureSemantics();
+      await _pumpView(tester, controller, startDiff: _syncDiff);
+      await tester.pump();
+
+      final node = tester.getSemantics(
+        find.bySemanticsLabel('Left only, line 1'),
+      );
+      expect(node.value, endsWith(' 2000 more characters not shown'));
+      expect(node.value, startsWith('x' * 10000));
+      semantics.dispose();
+    });
+
+    testWidgets('the change bar never overflows', (tester) async {
+      final edits = {for (var i = 1; i <= 300; i++) i * 3: 'edit ${i * 3}'};
+      for (final (width, scale) in [
+        (320.0, 1.0),
+        (640.0, 1.0),
+        (776.0, 1.0),
+        (1200.0, 2.0),
+      ]) {
+        final directory = Directory('${temporaryDirectory.path}/$width-$scale')
+          ..createSync();
+        final controller = await _startedPair(
+          tester,
+          directory,
+          _numberedLines(900),
+          _numberedLines(900, edits),
+        );
+        await _pumpView(
+          tester,
+          controller,
+          startDiff: _syncDiff,
+          size: Size(width, 900),
+          textScale: scale,
+        );
+        await tester.pump();
+        await _pressShifted(tester, LogicalKeyboardKey.keyN);
+        await tester.pumpAndSettle();
+
+        expect(find.text('300/300'), findsOneWidget, reason: '$width');
+        expect(tester.takeException(), isNull, reason: '$width x $scale');
+        await tester.pumpWidget(const SizedBox.shrink());
+      }
+    });
+
+    testWidgets('n works from the app bar of a pushed compare route', (
+      tester,
+    ) async {
+      final controller = await _startedPair(
+        tester,
+        temporaryDirectory,
+        _numberedLines(30),
+        _numberedLines(30, {5: 'edit 5'}),
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: buildPoltergeistTheme(Brightness.dark),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Builder(
+            builder: (context) => TextButton(
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) =>
+                      CompareView(controller: controller, startDiff: _syncDiff),
+                ),
+              ),
+              child: const Text('open'),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+
+      final back = find.byType(BackButton);
+      Focus.of(
+        tester.element(find.descendant(of: back, matching: find.byType(Icon))),
+      ).requestFocus();
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyN);
+      await tester.pumpAndSettle();
+
+      expect(find.text('1/1'), findsOneWidget);
     });
   });
 }

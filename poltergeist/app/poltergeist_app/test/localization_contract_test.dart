@@ -879,9 +879,11 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'sync.compare.bom'",
   },
   // The diff rows wrap long lines at '\n' and expand tabs into spaces;
-  // two lines of '0' measure the monospace advance and line height.
+  // two lines of '0' measure the monospace advance and line height, and a
+  // space joins a cut line's text to its truncation note for screen
+  // readers.
   'lib/ui/compare_diff_layout.dart': {r"'\n'", "' '"},
-  'lib/ui/compare_diff_rows.dart': {"'0'", r"'\n'"},
+  'lib/ui/compare_diff_rows.dart': {"'0'", r"'\n'", "' '"},
   // The workspace controller's debug assert message — a dev-facing
   // invariant, never rendered.
   'lib/services/workspace_controller.dart': {

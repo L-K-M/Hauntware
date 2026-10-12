@@ -27,21 +27,38 @@ show as larger blocks. This is the text-diff half of fast-follow item 5
 in 07 §3.13 (05 → 06 deferral).
 
 The engine landed first (#122): Myers' linear-space diff in
-`poltergeist_core`, run in a one-shot isolate the view kills when it
-closes. The app adds a view-owned `CompareDiffController`, pure wrap
-arithmetic (`ui/compare_diff_layout.dart`), the row renderer
-(`ui/compare_diff_rows.dart`) and the `CompareDiffColors` theme
-extension, derived per palette and held to 4.5:1 text and 3:1 markers on
-every preset. The design came from three independent proposals and a
-judge; the owner-decision defaults are in the PR.
+`poltergeist_core`, which past its cost limit splits at patience-style
+anchors so a moved block stays one move, run in a one-shot isolate the
+view kills when it closes. The app adds a view-owned
+`CompareDiffController`, pure wrap arithmetic
+(`ui/compare_diff_layout.dart`), the row renderer
+(`ui/compare_diff_rows.dart`, with a sliver that reads every row offset
+from the wrapped heights) and the `CompareDiffColors` theme extension,
+derived per palette and held to 4.5:1 text and 3:1 markers on every
+preset. The design came from three independent proposals and a judge;
+the owner-decision defaults are in the PR.
 
-Tests: the compare view suite grows from 8 to 30 widget tests (layouts,
-n/N with wrap-around and the top-visible start, layout switches keeping
-the active region, each notice, theme colours in both brightnesses,
-wrapping at text scale 2, compact posture, controller swap, unmount and
-the real worker end to end). The controller has 6 unit tests, the colours
-6, the wrap arithmetic 9, and the contrast matrix and every-preset check
-gain a row each. The first compare test now opens on the diff and taps
+An independent review of the view, each finding verified, led to these
+fixes, each with a regression test that failed first: chunk ends clipped
+by the ambient letter spacing; far jumps landing short of their row
+against Flutter's estimated scroll extent, with frame cost growing with
+depth; vertical tabs, form feeds and line separators breaking a row and
+hiding its rest; an 8-column floor clipping narrow columns; a rotation
+or resize losing the reader's place; the region count merged into the
+body's screen-reader node; a find bar torn down when the other side
+finished loading; the change bar overflowing between 600 and 700 px; and
+n ignored while the back button had focus.
+
+Tests: the compare view suite grows from 8 to 41 widget tests (layouts,
+n/N with wrap-around and the top-visible start, layout switches and
+rotations keeping the active region, each notice, theme colours in both
+brightnesses, wrapping at text scale 2 and at half a pixel of slack,
+squeezed columns, control symbols, far jumps and End, resizes, the
+change bar at four widths, screen-reader nodes, the find bar during a
+late load, compact posture, controller swap, unmount and the real worker
+end to end). The controller has 6 unit tests, the colours 6, the wrap
+arithmetic 11, and the contrast matrix and every-preset check gain a row
+each. The first compare test now opens on the diff and taps
 Separate before checking the two locked editors and their find bars.
 Mutation checks (no identity key, no cancel on a new pair, the first n
 ignoring the viewport, a computed instead of measured line height, a
@@ -49,7 +66,7 @@ failed diff shown as computing) each fail a test. Captures are in
 `tasks/compare-diff-view/screenshots/`.
 
 Local validation: Flutter analysis is clean, the localization contract
-passes, and all 3,405 app tests pass. Not run: native platforms, screen
+passes, and all 3,418 app tests pass. Not run: native platforms, screen
 readers, hardware keyboards on iPad and Android, profile-mode scrolling
 at the 20,000-line cap, and non-Latin scripts on real fonts; the QA
 checklist's Compare and diff view section covers them.

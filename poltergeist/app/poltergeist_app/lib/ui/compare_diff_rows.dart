@@ -1,7 +1,9 @@
 import 'dart:math' as math;
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart' show precisionErrorTolerance;
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
 
 import '../l10n/app_localizations.dart';
@@ -10,11 +12,21 @@ import '../theme/compare_diff_colors.dart';
 import 'compare_diff_layout.dart';
 
 /// The diff rows' text: the compare view's editor face, unhighlighted.
-final _rowStyle = poltergeistMonoTextStyle.copyWith(fontSize: 14, height: 1.35);
+/// Spacing is pinned so an ambient text theme cannot widen the columns the
+/// wrap counts.
+final _rowStyle = poltergeistMonoTextStyle.copyWith(
+  fontSize: 14,
+  height: 1.35,
+  letterSpacing: 0,
+  wordSpacing: 0,
+);
 final _rowStrut = StrutStyle.fromTextStyle(_rowStyle, forceStrutHeight: true);
 
 /// A digit run long enough to average the face's advance.
 final _measureSample = '0' * 10;
+
+/// The fewest columns a text area keeps: one wide character.
+const int _minimumTextColumns = 2;
 
 const double _activeBarWidth = 3;
 const double _markerWidth = 16;
@@ -109,16 +121,41 @@ final class _RowMetrics {
       scaler == this.scaler &&
       identical(rows, this.rows);
 
+  int get rowCount => offsets.length - 1;
+
+  double get totalExtent => offsets.last * lineHeight;
+
   double extentOf(int row) => (offsets[row + 1] - offsets[row]) * lineHeight;
 
   double offsetOf(int row) => offsets[row] * lineHeight;
+
+  /// The row holding [scrollOffset]; an offset on a row boundary belongs to
+  /// the row it starts.
+  int rowAt(double scrollOffset) =>
+      compareRowAtVisualLine(offsets, _visualLine(scrollOffset).floor());
+
+  /// The last row that starts before [scrollOffset].
+  int rowBefore(double scrollOffset) => compareRowAtVisualLine(
+    offsets,
+    math.max(0, _visualLine(scrollOffset).ceil() - 1),
+  );
+
+  /// [scrollOffset] in visual lines, snapped to a whole line within the
+  /// framework's precision so boundaries do not drift by one.
+  double _visualLine(double scrollOffset) {
+    final lines = scrollOffset / lineHeight;
+    final whole = lines.roundToDouble();
+    return (lines - whole).abs() * lineHeight < precisionErrorTolerance
+        ? whole
+        : lines;
+  }
 }
 
 enum _Tone { unchanged, removed, added }
 
 class _CompareDiffRowsState extends State<CompareDiffRows> {
   _RowMetrics? _metrics;
-  (TextScaler, ({double charWidth, double lineHeight}))? _measured;
+  (TextScaler, TextStyle, ({double charWidth, double lineHeight}))? _measured;
 
   @override
   void initState() {
@@ -147,17 +184,23 @@ class _CompareDiffRowsState extends State<CompareDiffRows> {
 
   ScrollController get _scroll => widget.controller.scroll;
 
-  /// The face's advance and line height at [scaler], measured rather than
+  /// The face's advance and line height at [scaler], measured in [style],
+  /// the row style as the ambient text style completes it, rather than
   /// computed: the engine may round each strut line to whole pixels, and a
   /// row sized from the unrounded height would clip its last lines.
-  ({double charWidth, double lineHeight}) _measure(TextScaler scaler) {
+  ({double charWidth, double lineHeight}) _measure(
+    TextScaler scaler,
+    TextStyle style,
+  ) {
     final cached = _measured;
-    if (cached != null && cached.$1 == scaler) return cached.$2;
+    if (cached != null && cached.$1 == scaler && cached.$2 == style) {
+      return cached.$3;
+    }
 
     final painter = TextPainter(
       text: TextSpan(
         text: [_measureSample, _measureSample].join('\n'),
-        style: _rowStyle,
+        style: style,
       ),
       strutStyle: _rowStrut,
       textDirection: TextDirection.ltr,
@@ -168,34 +211,47 @@ class _CompareDiffRowsState extends State<CompareDiffRows> {
       lineHeight: painter.height / 2,
     );
     painter.dispose();
-    _measured = (scaler, measured);
+    _measured = (scaler, style, measured);
     return measured;
   }
 
-  _RowMetrics _metricsFor(double width, TextScaler scaler) {
+  _RowMetrics _metricsFor(double width, TextScaler scaler, TextStyle style) {
     final rows = widget.rows;
     final current = _metrics;
     if (current != null && current.fits(width, scaler, rows)) return current;
 
-    final (:charWidth, :lineHeight) = _measure(scaler);
+    final (:charWidth, :lineHeight) = _measure(scaler, style);
     final lineCount = math.max(
       widget.result.left.lineCount,
       widget.result.right.lineCount,
     );
-    final gutter =
-        lineCount.toString().length * charWidth +
-        _gutterStartPadding +
-        _gutterEndPadding;
-    final chrome = _activeBarWidth + _markerWidth + _textEndPadding;
-    final textWidth = switch (widget.layout) {
-      LineDiffLayout.sideBySide =>
-        (width - _dividerWidth) / 2 - gutter - chrome,
-      LineDiffLayout.unified => width - 2 * gutter - chrome,
+    final gutters = widget.layout == LineDiffLayout.unified ? 2 : 1;
+    final area = switch (widget.layout) {
+      LineDiffLayout.sideBySide => (width - _dividerWidth) / 2,
+      LineDiffLayout.unified => width,
     };
+    final chrome = _activeBarWidth + _markerWidth + _textEndPadding;
+    // The gutter gives way before the text does, so a squeezed column
+    // still holds a wide character and the row's fixed parts never
+    // overflow it.
+    final gutter = math.max(
+      0.0,
+      math.min(
+        lineCount.toString().length * charWidth +
+            _gutterStartPadding +
+            _gutterEndPadding,
+        (area - chrome - _minimumTextColumns * charWidth) / gutters,
+      ),
+    );
     final perRow = compareColumnsPerRow(
-      textWidth: textWidth,
+      textWidth: area - gutters * gutter - chrome,
       charWidth: charWidth,
     );
+    final rewrapped =
+        current == null ||
+        !identical(current.rows, rows) ||
+        current.perRow != perRow ||
+        current.lineHeight != lineHeight;
     final next = _RowMetrics(
       width: width,
       scaler: scaler,
@@ -203,26 +259,31 @@ class _CompareDiffRowsState extends State<CompareDiffRows> {
       lineHeight: lineHeight,
       gutter: gutter,
       perRow: perRow,
-      offsets: compareRowOffsets(
-        rows,
-        widget.result.left,
-        widget.result.right,
-        perRow,
-      ),
+      offsets: rewrapped
+          ? compareRowOffsets(
+              rows,
+              widget.result.left,
+              widget.result.right,
+              perRow,
+            )
+          : current.offsets,
     );
 
-    // Keep the row at the top in view when a resize, a text-scale change
-    // or a layout switch rewraps everything above it. A layout switch
-    // brings its own target, so only same-rows changes re-anchor here.
+    // A resize or text-scale change that rewraps the rows keeps the reader
+    // at the same place in the row at the top. A layout switch brings its
+    // own target from the view.
     if (current != null &&
+        rewrapped &&
         identical(current.rows, rows) &&
         _scroll.hasClients) {
-      final top = compareRowAtVisualLine(
-        current.offsets,
-        (_scroll.offset / current.lineHeight).floor(),
-      );
+      final offset = _scroll.offset;
+      final top = current.rowAt(offset);
+      final within = current.extentOf(top) == 0
+          ? 0.0
+          : (offset - current.offsetOf(top)) / current.extentOf(top);
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && _scroll.hasClients) _jumpTo(next.offsetOf(top));
+        if (!mounted || !_scroll.hasClients) return;
+        _jumpTo(next.offsetOf(top) + within * next.extentOf(top));
       });
     }
     _metrics = next;
@@ -232,10 +293,7 @@ class _CompareDiffRowsState extends State<CompareDiffRows> {
   int _topVisibleRow() {
     final metrics = _metrics;
     if (metrics == null || !_scroll.hasClients) return 0;
-    return compareRowAtVisualLine(
-      metrics.offsets,
-      (_scroll.offset / metrics.lineHeight).floor(),
-    );
+    return metrics.rowAt(_scroll.offset);
   }
 
   void _jumpTo(double offset) {
@@ -290,10 +348,10 @@ class _CompareDiffRowsState extends State<CompareDiffRows> {
   @override
   Widget build(BuildContext context) {
     final scaler = MediaQuery.textScalerOf(context);
+    final style = DefaultTextStyle.of(context).style.merge(_rowStyle);
     return LayoutBuilder(
       builder: (context, constraints) {
-        final metrics = _metricsFor(constraints.maxWidth, scaler);
-        final uniform = metrics.offsets.last == widget.rows.length;
+        final metrics = _metricsFor(constraints.maxWidth, scaler, style);
         return Directionality(
           textDirection: TextDirection.ltr,
           child: ScrollConfiguration(
@@ -303,17 +361,18 @@ class _CompareDiffRowsState extends State<CompareDiffRows> {
             child: Scrollbar(
               controller: _scroll,
               interactive: true,
-              child: ListView.builder(
+              child: CustomScrollView(
                 controller: _scroll,
-                itemCount: widget.rows.length,
-                addAutomaticKeepAlives: false,
-                itemExtent: uniform ? metrics.lineHeight : null,
-                itemExtentBuilder: uniform
-                    ? null
-                    : (index, _) => index < widget.rows.length
-                          ? metrics.extentOf(index)
-                          : null,
-                itemBuilder: (context, row) => _row(context, metrics, row),
+                slivers: [
+                  _CompareRowsSliver(
+                    metrics: metrics,
+                    delegate: SliverChildBuilderDelegate(
+                      (context, row) => _row(context, metrics, row),
+                      childCount: widget.rows.length,
+                      addAutomaticKeepAlives: false,
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -326,8 +385,8 @@ class _CompareDiffRowsState extends State<CompareDiffRows> {
     final rows = widget.rows;
     final region = rows.regionAt(row);
     final active = region >= 0 && region == widget.activeRegion;
-    final left = rows.leftLineAt(row);
-    final right = rows.rightLineAt(row);
+    final left = _line(metrics, isLeft: true, rows.leftLineAt(row));
+    final right = _line(metrics, isLeft: false, rows.rightLineAt(row));
     final kind = rows.kindAt(row);
     return switch (widget.layout) {
       LineDiffLayout.sideBySide => _sideBySideRow(
@@ -349,12 +408,35 @@ class _CompareDiffRowsState extends State<CompareDiffRows> {
     };
   }
 
+  /// One side's line of a row, wrapped once for both drawing and speech;
+  /// null for a gap.
+  _RowLine? _line(_RowMetrics metrics, int line, {required bool isLeft}) {
+    if (line < 0) return null;
+    final source = isLeft ? widget.leftText : widget.rightText;
+    final measured = isLeft ? widget.result.left : widget.result.right;
+    final start = measured.lineStart(line);
+    final end = measured.lineEnd(line);
+    return (
+      line: line,
+      source: source,
+      start: start,
+      end: end,
+      wrapped: wrapCompareLine(
+        source,
+        start,
+        end,
+        metrics.perRow,
+        fallbackGlyphs: measured.mayUseFallbackGlyphs(line),
+      ),
+    );
+  }
+
   Widget _sideBySideRow(
     BuildContext context,
     _RowMetrics metrics,
     LineDiffRowKind kind,
-    int left,
-    int right,
+    _RowLine? left,
+    _RowLine? right,
     bool active,
   ) {
     final l10n = AppLocalizations.of(context);
@@ -365,8 +447,8 @@ class _CompareDiffRowsState extends State<CompareDiffRows> {
     if (kind == LineDiffRowKind.unchanged) {
       return Semantics(
         container: true,
-        label: l10n.syncCompareRowBoth(left + 1, right + 1),
-        value: _spoken(l10n, widget.leftText, widget.result.left, left),
+        label: l10n.syncCompareRowBoth(left!.line + 1, right!.line + 1),
+        value: _spoken(l10n, left),
         excludeSemantics: true,
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -393,35 +475,25 @@ class _CompareDiffRowsState extends State<CompareDiffRows> {
     );
   }
 
-  /// One side's half of a side-by-side row: a gap when [line] is -1.
+  /// One side's half of a side-by-side row: a gap when [line] is null.
   Widget _half(
     BuildContext context,
     _RowMetrics metrics,
     _Tone tone,
-    int line,
+    _RowLine? line,
     bool active,
   ) {
     final colors = CompareDiffColors.of(context);
-    if (line < 0) {
+    if (line == null) {
       return ExcludeSemantics(child: ColoredBox(color: colors.gapFill));
     }
 
-    final isLeft = tone != _Tone.added;
     final content = Row(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _gutter(context, metrics, line),
+        _gutter(context, metrics, line.line),
         _activeBar(colors, active),
-        Expanded(
-          child: _text(
-            context,
-            metrics,
-            tone,
-            isLeft ? widget.leftText : widget.rightText,
-            isLeft ? widget.result.left : widget.result.right,
-            line,
-          ),
-        ),
+        Expanded(child: _text(context, metrics, tone, line.wrapped)),
       ],
     );
     if (tone == _Tone.unchanged) return content;
@@ -429,15 +501,10 @@ class _CompareDiffRowsState extends State<CompareDiffRows> {
     final l10n = AppLocalizations.of(context);
     return Semantics(
       container: true,
-      label: isLeft
-          ? l10n.syncCompareRowLeftOnly(line + 1)
-          : l10n.syncCompareRowRightOnly(line + 1),
-      value: _spoken(
-        l10n,
-        isLeft ? widget.leftText : widget.rightText,
-        isLeft ? widget.result.left : widget.result.right,
-        line,
-      ),
+      label: tone == _Tone.removed
+          ? l10n.syncCompareRowLeftOnly(line.line + 1)
+          : l10n.syncCompareRowRightOnly(line.line + 1),
+      value: _spoken(l10n, line),
       excludeSemantics: true,
       child: content,
     );
@@ -447,8 +514,8 @@ class _CompareDiffRowsState extends State<CompareDiffRows> {
     BuildContext context,
     _RowMetrics metrics,
     LineDiffRowKind kind,
-    int left,
-    int right,
+    _RowLine? left,
+    _RowLine? right,
     bool active,
   ) {
     final l10n = AppLocalizations.of(context);
@@ -458,26 +525,26 @@ class _CompareDiffRowsState extends State<CompareDiffRows> {
       LineDiffRowKind.rightOnly => _Tone.added,
       LineDiffRowKind.unchanged || LineDiffRowKind.changed => _Tone.unchanged,
     };
-    final fromLeft = left >= 0;
-    final text = fromLeft ? widget.leftText : widget.rightText;
-    final measured = fromLeft ? widget.result.left : widget.result.right;
-    final line = fromLeft ? left : right;
+    final shown = (left ?? right)!;
     return Semantics(
       container: true,
       label: switch (tone) {
-        _Tone.unchanged => l10n.syncCompareRowBoth(left + 1, right + 1),
-        _Tone.removed => l10n.syncCompareRowLeftOnly(left + 1),
-        _Tone.added => l10n.syncCompareRowRightOnly(right + 1),
+        _Tone.unchanged => l10n.syncCompareRowBoth(
+          left!.line + 1,
+          right!.line + 1,
+        ),
+        _Tone.removed => l10n.syncCompareRowLeftOnly(left!.line + 1),
+        _Tone.added => l10n.syncCompareRowRightOnly(right!.line + 1),
       },
-      value: _spoken(l10n, text, measured, line),
+      value: _spoken(l10n, shown),
       excludeSemantics: true,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _gutter(context, metrics, left),
-          _gutter(context, metrics, right),
+          _gutter(context, metrics, left?.line ?? -1),
+          _gutter(context, metrics, right?.line ?? -1),
           _activeBar(colors, active),
-          Expanded(child: _text(context, metrics, tone, text, measured, line)),
+          Expanded(child: _text(context, metrics, tone, shown.wrapped)),
         ],
       ),
     );
@@ -518,9 +585,7 @@ class _CompareDiffRowsState extends State<CompareDiffRows> {
     BuildContext context,
     _RowMetrics metrics,
     _Tone tone,
-    String source,
-    ComparedText measured,
-    int line,
+    CompareWrappedLine wrapped,
   ) {
     final colors = CompareDiffColors.of(context);
     final scheme = Theme.of(context).colorScheme;
@@ -539,13 +604,6 @@ class _CompareDiffRowsState extends State<CompareDiffRows> {
         Icons.add,
       ),
     };
-    final wrapped = wrapCompareLine(
-      source,
-      measured.lineStart(line),
-      measured.lineEnd(line),
-      metrics.perRow,
-      nonLatin: measured.isNonLatin(line),
-    );
     final style = _rowStyle.copyWith(color: color);
     // The row's extent already holds every wrapped line; the overflow box
     // only keeps a sub-pixel rounding difference from reading as an
@@ -603,20 +661,99 @@ class _CompareDiffRowsState extends State<CompareDiffRows> {
     return fill == null ? row : ColoredBox(color: fill, child: row);
   }
 
-  /// A line's text as a screen reader hears it, cut where the row is.
-  String? _spoken(
-    AppLocalizations l10n,
-    String source,
-    ComparedText measured,
-    int line,
-  ) {
-    if (line < 0) return null;
-    final start = measured.lineStart(line);
-    final end = math.min(
-      measured.lineEnd(line),
-      start + compareMaximumDisplayColumns,
-    );
-    if (start == end) return l10n.syncCompareRowBlank;
-    return source.substring(start, end);
+  /// A line's text as a screen reader hears it: what the row draws, and how
+  /// much it leaves out.
+  String _spoken(AppLocalizations l10n, _RowLine line) {
+    if (line.start == line.end) return l10n.syncCompareRowBlank;
+    final wrapped = line.wrapped;
+    final shown = line.source.substring(line.start, wrapped.shownEnd);
+    if (wrapped.hiddenCharacters == 0) return shown;
+    return [
+      shown,
+      l10n.syncCompareRowTruncated(wrapped.hiddenCharacters),
+    ].join(' ');
   }
+}
+
+/// One side's line in a row: where it sits in its text, and how it wraps.
+typedef _RowLine = ({
+  int line,
+  String source,
+  int start,
+  int end,
+  CompareWrappedLine wrapped,
+});
+
+/// A fixed-extent sliver that answers every offset question from the rows'
+/// prefix sums. Flutter's builder-backed list walks every earlier row for
+/// each child it lays out and estimates the scroll extent from the rows it
+/// has built, so far jumps landed short and frames slowed with depth; here
+/// each lookup is an index or a binary search and the extent is exact.
+class _CompareRowsSliver extends SliverMultiBoxAdaptorWidget {
+  const _CompareRowsSliver({required super.delegate, required this.metrics});
+
+  final _RowMetrics metrics;
+
+  @override
+  _RenderCompareRows createRenderObject(BuildContext context) =>
+      _RenderCompareRows(
+        childManager: context as SliverMultiBoxAdaptorElement,
+        metrics: metrics,
+      );
+
+  @override
+  void updateRenderObject(
+    BuildContext context,
+    _RenderCompareRows renderObject,
+  ) {
+    renderObject.metrics = metrics;
+  }
+}
+
+class _RenderCompareRows extends RenderSliverFixedExtentBoxAdaptor {
+  _RenderCompareRows({required super.childManager, required this._metrics});
+
+  _RowMetrics _metrics;
+
+  set metrics(_RowMetrics value) {
+    if (identical(value, _metrics)) return;
+    _metrics = value;
+    markNeedsLayout();
+  }
+
+  @override
+  double? get itemExtent => null;
+
+  @override
+  ItemExtentBuilder get itemExtentBuilder => _extentOf;
+
+  double? _extentOf(int row, SliverLayoutDimensions dimensions) =>
+      row < _metrics.rowCount ? _metrics.extentOf(row) : null;
+
+  @override
+  double indexToLayoutOffset(double itemExtent, int index) =>
+      _metrics.offsetOf(math.min(index, _metrics.rowCount));
+
+  @override
+  int getMinChildIndexForScrollOffset(double scrollOffset, double itemExtent) =>
+      _metrics.rowAt(scrollOffset);
+
+  @override
+  int getMaxChildIndexForScrollOffset(double scrollOffset, double itemExtent) =>
+      _metrics.rowBefore(scrollOffset);
+
+  @override
+  double computeMaxScrollOffset(
+    SliverConstraints constraints,
+    double itemExtent,
+  ) => _metrics.totalExtent;
+
+  @override
+  double estimateMaxScrollOffset(
+    SliverConstraints constraints, {
+    int? firstIndex,
+    int? lastIndex,
+    double? leadingScrollOffset,
+    double? trailingScrollOffset,
+  }) => _metrics.totalExtent;
 }

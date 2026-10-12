@@ -13,8 +13,9 @@ import 'package:poltergeist_core/poltergeist_core.dart';
 /// not drawn, so one minified line cannot build a 4 MiB row.
 const int compareMaximumDisplayColumns = 10000;
 
-/// The narrowest wrap, so a squeezed column still shows readable chunks.
-const int _minimumColumnsPerRow = 8;
+/// The narrowest wrap: room for one wide character. A column narrower than
+/// its text area would clip every chunk.
+const int _minimumColumnsPerRow = 2;
 
 /// The compare view's tab stops, matching [ComparedText.columnsOf].
 const int _tabWidth = 4;
@@ -25,49 +26,66 @@ int compareColumnsPerRow({
   required double charWidth,
 }) => math.max(_minimumColumnsPerRow, (textWidth / charWidth).floor());
 
-/// Columns one wrapped chunk may fill. A non-Latin line keeps an eighth
-/// spare, because a fallback glyph may advance wider than the columns it
-/// counts for.
-int compareWrapWidth(int perRow, {required bool nonLatin}) =>
-    nonLatin ? math.max(1, perRow - (perRow + 7) ~/ 8) : perRow;
+/// Columns one wrapped chunk may fill. A line that may use fallback glyphs
+/// ([ComparedText.mayUseFallbackGlyphs]) keeps an eighth spare, because
+/// such a glyph may advance wider than the columns it counts for.
+int compareWrapWidth(int perRow, {required bool fallbackGlyphs}) =>
+    fallbackGlyphs ? math.max(1, perRow - (perRow + 7) ~/ 8) : perRow;
 
 /// The visual lines a line of [columns] takes, never fewer than
-/// [wrapCompareLine] draws. Latin lines are exact. A non-Latin chunk may
-/// end one column short before a wide character, so its count is an upper
-/// bound and a row can keep a blank last line. A line cut at
+/// [wrapCompareLine] draws. Lines without fallback glyphs are exact. Other
+/// chunks may end one column short before a wide character, so their count
+/// is an upper bound and a row can keep a blank last line. A line cut at
 /// [compareMaximumDisplayColumns] adds one line saying how much is hidden.
-int compareVisualLines(int columns, int perRow, {required bool nonLatin}) {
+int compareVisualLines(
+  int columns,
+  int perRow, {
+  required bool fallbackGlyphs,
+}) {
   final shown = math.min(columns, compareMaximumDisplayColumns);
-  final width = compareWrapWidth(perRow, nonLatin: nonLatin);
-  final perLine = nonLatin ? math.max(1, width - 1) : width;
+  final width = compareWrapWidth(perRow, fallbackGlyphs: fallbackGlyphs);
+  final perLine = fallbackGlyphs ? math.max(1, width - 1) : width;
   final lines = math.max(1, (shown + perLine - 1) ~/ perLine);
   return columns > compareMaximumDisplayColumns ? lines + 1 : lines;
 }
 
 /// One line of a compared text broken into chunks for display.
 final class CompareWrappedLine {
-  const CompareWrappedLine(this.text, this.lineCount, this.hiddenCharacters);
+  const CompareWrappedLine(
+    this.text,
+    this.lineCount,
+    this.hiddenCharacters,
+    this.shownEnd,
+  );
 
-  /// The chunks joined with `\n`, tabs expanded to spaces.
+  /// The chunks joined with `\n`, tabs expanded to spaces and controls
+  /// drawn as their symbols.
   final String text;
   final int lineCount;
 
   /// Characters past [compareMaximumDisplayColumns], not drawn.
   final int hiddenCharacters;
+
+  /// The offset in the source where drawing stopped: the line's end unless
+  /// characters were hidden.
+  final int shownEnd;
 }
 
 /// Breaks the line `text[start, end)` into chunks of at most
 /// [compareWrapWidth] columns. Tabs expand to the next multiple of four
 /// from the line's start, a wide character never splits across chunks,
-/// and a zero-width mark stays with the character before it.
+/// and a zero-width mark stays with the character before it. Control
+/// characters and the Unicode line and paragraph separators draw as
+/// visible symbols of one column: a paragraph would break the line at a
+/// vertical tab, form feed or separator, and draw nothing for the rest.
 CompareWrappedLine wrapCompareLine(
   String text,
   int start,
   int end,
   int perRow, {
-  required bool nonLatin,
+  required bool fallbackGlyphs,
 }) {
-  final width = compareWrapWidth(perRow, nonLatin: nonLatin);
+  final width = compareWrapWidth(perRow, fallbackGlyphs: fallbackGlyphs);
   final out = StringBuffer();
   var lines = 1;
   var chunk = 0;
@@ -103,14 +121,40 @@ CompareWrappedLine wrapCompareLine(
     } else {
       final columns = displayColumnFor(text, i, next) - 1;
       if (column + columns > compareMaximumDisplayColumns) break;
-      place(text.substring(i, next), columns);
+      place(_symbolFor(unit) ?? text.substring(i, next), columns);
     }
     i = next;
   }
 
   final hidden = i < end ? text.substring(i, end).runes.length : 0;
-  return CompareWrappedLine(out.toString(), lines, hidden);
+  return CompareWrappedLine(out.toString(), lines, hidden, i);
 }
+
+/// The visible symbol a control character or separator draws as, or null
+/// for a character that draws itself.
+String? _symbolFor(int unit) {
+  if (unit < _firstPrintable) {
+    return String.fromCharCode(_controlPictures + unit);
+  }
+  return switch (unit) {
+    _delete => String.fromCharCode(_deletePicture),
+    _lineSeparator => String.fromCharCode(_newlinePicture),
+    _paragraphSeparator => String.fromCharCode(_pilcrow),
+    _ => null,
+  };
+}
+
+const int _firstPrintable = 0x20;
+const int _delete = 0x7f;
+const int _lineSeparator = 0x2028;
+const int _paragraphSeparator = 0x2029;
+
+/// U+2400, where the Control Pictures block's symbols for U+0000 to U+001F
+/// begin.
+const int _controlPictures = 0x2400;
+const int _deletePicture = 0x2421;
+const int _newlinePicture = 0x2424;
+const int _pilcrow = 0x00b6;
 
 bool _isLeadSurrogate(int unit) => unit >= 0xd800 && unit <= 0xdbff;
 
@@ -122,7 +166,7 @@ int _lineVisualLines(ComparedText text, int line, int perRow) => line < 0
     : compareVisualLines(
         text.columnsOf(line),
         perRow,
-        nonLatin: text.isNonLatin(line),
+        fallbackGlyphs: text.mayUseFallbackGlyphs(line),
       );
 
 /// Each row's first visual line, as prefix sums: row r spans

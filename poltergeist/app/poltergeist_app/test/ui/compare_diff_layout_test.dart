@@ -10,7 +10,7 @@ void main() {
     0,
     line.length,
     perRow,
-    nonLatin: ComparedText.measure(line).isNonLatin(0),
+    fallbackGlyphs: ComparedText.measure(line).mayUseFallbackGlyphs(0),
   );
 
   int visualLines(String line, int perRow) {
@@ -18,14 +18,15 @@ void main() {
     return compareVisualLines(
       measured.columnsOf(0),
       perRow,
-      nonLatin: measured.isNonLatin(0),
+      fallbackGlyphs: measured.mayUseFallbackGlyphs(0),
     );
   }
 
   test('columns per row never drop below the minimum', () {
     expect(compareColumnsPerRow(textWidth: 800, charWidth: 10), 80);
-    expect(compareColumnsPerRow(textWidth: 30, charWidth: 10), 8);
-    expect(compareColumnsPerRow(textWidth: -5, charWidth: 10), 8);
+    expect(compareColumnsPerRow(textWidth: 30, charWidth: 10), 3);
+    expect(compareColumnsPerRow(textWidth: 10, charWidth: 10), 2);
+    expect(compareColumnsPerRow(textWidth: -5, charWidth: 10), 2);
   });
 
   test('Latin lines take exactly ceil(columns / perRow) visual lines', () {
@@ -49,9 +50,9 @@ void main() {
       ].join();
       final perRow = 8 + random.nextInt(40);
       final measured = ComparedText.measure(line);
-      final nonLatin = measured.isNonLatin(0);
+      final fallback = measured.mayUseFallbackGlyphs(0);
       final wrapped = wrap(line, perRow);
-      final width = compareWrapWidth(perRow, nonLatin: nonLatin);
+      final width = compareWrapWidth(perRow, fallbackGlyphs: fallback);
 
       expect(
         wrapped.lineCount,
@@ -67,8 +68,8 @@ void main() {
         );
       }
     }
-    expect(compareWrapWidth(80, nonLatin: true), 70);
-    expect(compareWrapWidth(80, nonLatin: false), 80);
+    expect(compareWrapWidth(80, fallbackGlyphs: true), 70);
+    expect(compareWrapWidth(80, fallbackGlyphs: false), 80);
   });
 
   test('tabs expand to the next multiple of four from the line start', () {
@@ -82,13 +83,19 @@ void main() {
     final wrapped = wrap('ab日本', 8);
     expect(wrapped.text, 'ab日本');
 
-    final narrow = wrapCompareLine('abc日', 0, 4, 4, nonLatin: false);
+    final narrow = wrapCompareLine('abc日', 0, 4, 4, fallbackGlyphs: false);
     expect(narrow.text, 'abc\n日');
   });
 
   test('zero-width marks stay with the character before them', () {
     final line = '${'x' * 9}éy';
-    final wrapped = wrapCompareLine(line, 0, line.length, 10, nonLatin: false);
+    final wrapped = wrapCompareLine(
+      line,
+      0,
+      line.length,
+      10,
+      fallbackGlyphs: false,
+    );
 
     expect(wrapped.text, '${'x' * 9}é\ny');
   });
@@ -101,6 +108,25 @@ void main() {
     expect(wrapped.text.replaceAll('\n', '').length, 10000);
     expect(visualLines(line, 100), 101);
     expect(wrapped.lineCount, 100);
+  });
+
+  test('controls and separators draw as one-column symbols', () {
+    const line = 'a\u000bb\u000cc\u2028d\u2029e\u007ff\u001bg';
+    final wrapped = wrap(line, 40);
+
+    expect(wrapped.text, 'a\u240bb\u240cc\u2424d\u00b6e\u2421f\u241bg');
+    expect(wrapped.lineCount, 1);
+    expect(wrapped.text, isNot(contains('\n')));
+    expect(ComparedText.measure(line).columnsOf(0), wrapped.text.length);
+  });
+
+  test('drawing stops where hidden characters begin', () {
+    final line = '${'x' * 10000}\u{1F600}rest';
+    final wrapped = wrap(line, 100);
+
+    expect(wrapped.shownEnd, 10000);
+    expect(wrapped.hiddenCharacters, 5);
+    expect(wrap('short', 100).shownEnd, 5);
   });
 
   test('an empty line is one visual line', () {

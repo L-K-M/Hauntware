@@ -63,8 +63,12 @@ const _previousChange = SingleActivator(LogicalKeyboardKey.keyN, shift: true);
 const _arrowScrollLines = 3;
 const _pageScrollFraction = 0.9;
 
-/// The find bar's own breakpoint for one row of controls (06 §2.2).
-const double _wideChangeBarWidth = 600;
+/// The width the change bar needs for one row with labelled layout
+/// buttons; narrower, it takes two rows and icon-only buttons.
+const double _wideChangeBarWidth = 760;
+
+/// The most of a one-row change bar the region count may take.
+const double _countShare = 0.4;
 
 /// The read-only, side-by-side text comparison (06 §6), opened from a
 /// sync-plan row or by File ▸ Compare Files.
@@ -113,6 +117,11 @@ class _CompareViewState extends State<CompareView> {
   TextComparisonComputed? _rowsFor;
   final _rowsCache = <LineDiffLayout, LineDiffRows>{};
 
+  /// The row layout the body last showed, null outside the rows: a change
+  /// of layout, by the switch or by the posture after a rotation, keeps the
+  /// reader's place from it.
+  _CompareLayout? _shownLayout;
+
   @override
   void initState() {
     super.initState();
@@ -132,6 +141,7 @@ class _CompareViewState extends State<CompareView> {
     oldWidget.controller.dispose();
     _attach();
     _activeRegion = null;
+    _shownLayout = null;
     _rowsFor = null;
     _rowsCache.clear();
     unawaited(widget.controller.start());
@@ -163,8 +173,24 @@ class _CompareViewState extends State<CompareView> {
     final ready =
         left.phase == SyncComparePhase.ready &&
         right.phase == SyncComparePhase.ready;
+    // Someone typing in one side's find bar, or reading in its editor, while
+    // the other side finished loading keeps that editor: the rows would
+    // replace it under their input.
+    if (ready &&
+        _chosenLayout == null &&
+        _diff.phase == CompareDiffPhase.waiting &&
+        _editingInView()) {
+      _chosenLayout = _CompareLayout.separate;
+    }
     _diff.compare(ready ? left.document : null, ready ? right.document : null);
   }
+
+  /// Whether focus is in a text field: here, only the side editors and
+  /// their find bars have one.
+  static bool _editingInView() =>
+      FocusManager.instance.primaryFocus?.context
+          ?.findAncestorWidgetOfExactType<EditableText>() !=
+      null;
 
   _CompareLayout _layout(BuildContext context) =>
       _chosenLayout ??
@@ -202,47 +228,64 @@ class _CompareViewState extends State<CompareView> {
     );
   }
 
+  /// The rows the body shows, or null when it shows anything else.
+  LineDiffRows? _shownRows(BuildContext context) {
+    final layout = _layout(context);
+    final result = _diff.result;
+    if (result == null || _presentation(layout) != _Presentation.rows) {
+      return null;
+    }
+    return _rowsOf(result, _lineLayout(layout));
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    return Scaffold(
-      key: const ValueKey('sync.compare.view'),
-      appBar: AppBar(
-        title: Text(
-          widget.title ??
-              l10n.syncCompareTitle(widget.controller.request.relativePath),
+    // The chord scope wraps the whole route, app bar included, so n and
+    // Shift+N step wherever focus sits outside a text field.
+    return ListenableBuilder(
+      listenable: _listenable,
+      builder: (context, child) {
+        final rows = _shownRows(context);
+        return GhostChordScope(
+          unmodifiedPolicy: GhostUnmodifiedChordPolicy.allow,
+          suspendWhileEditing: true,
+          bindings: rows != null && rows.regionCount > 0
+              ? [
+                  GhostChordBinding(
+                    activator: _nextChange,
+                    onInvoke: () => _step(rows, 1),
+                  ),
+                  GhostChordBinding(
+                    activator: _previousChange,
+                    onInvoke: () => _step(rows, -1),
+                  ),
+                ]
+              : const [],
+          child: child!,
+        );
+      },
+      child: Scaffold(
+        key: const ValueKey('sync.compare.view'),
+        appBar: AppBar(
+          title: Text(
+            widget.title ??
+                l10n.syncCompareTitle(widget.controller.request.relativePath),
+          ),
         ),
-      ),
-      body: ListenableBuilder(
-        listenable: _listenable,
-        builder: (context, _) {
-          final left = widget.controller.left;
-          final right = widget.controller.right;
-          final notices = _differenceNotices(l10n, left, right);
-          final now = widget.clock?.call() ?? DateTime.now();
-          final layout = _layout(context);
-          final presentation = _presentation(layout);
-          final result = _diff.result;
-          final rows = presentation == _Presentation.rows && result != null
-              ? _rowsOf(result, _lineLayout(layout))
-              : null;
-          final navigable = rows != null && rows.regionCount > 0;
-          return GhostChordScope(
-            unmodifiedPolicy: GhostUnmodifiedChordPolicy.allow,
-            suspendWhileEditing: true,
-            bindings: navigable
-                ? [
-                    GhostChordBinding(
-                      activator: _nextChange,
-                      onInvoke: () => _step(rows, 1),
-                    ),
-                    GhostChordBinding(
-                      activator: _previousChange,
-                      onInvoke: () => _step(rows, -1),
-                    ),
-                  ]
-                : const [],
-            child: Column(
+        body: ListenableBuilder(
+          listenable: _listenable,
+          builder: (context, _) {
+            final left = widget.controller.left;
+            final right = widget.controller.right;
+            final notices = _differenceNotices(l10n, left, right);
+            final now = widget.clock?.call() ?? DateTime.now();
+            final layout = _layout(context);
+            final presentation = _presentation(layout);
+            final result = _diff.result;
+            final rows = _shownRows(context);
+            _keepPlaceAcrossLayouts(layout, presentation, result);
+            return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 if (notices.isNotEmpty)
@@ -271,11 +314,50 @@ class _CompareViewState extends State<CompareView> {
                   },
                 ),
               ],
-            ),
-          );
-        },
+            );
+          },
+        ),
       ),
     );
+  }
+
+  /// Keeps the active region, or else the line at the top, in view when the
+  /// rows change layout: by the switch, or by the posture after a rotation
+  /// or resize.
+  void _keepPlaceAcrossLayouts(
+    _CompareLayout layout,
+    _Presentation presentation,
+    TextComparisonComputed? result,
+  ) {
+    final previous = _shownLayout;
+    final showsRows = result != null && presentation == _Presentation.rows;
+    _shownLayout = showsRows ? layout : null;
+    if (!showsRows || previous == layout) return;
+
+    var anchorLeft = -1;
+    var anchorRight = -1;
+    if (previous != null) {
+      final shown = _rowsOf(result, _lineLayout(previous));
+      final top = _rowsController.topVisibleRow;
+      if (top < shown.length) {
+        anchorLeft = shown.leftLineAt(top);
+        anchorRight = shown.rightLineAt(top);
+      }
+    }
+    final active = _activeRegion;
+    if (active == null && anchorLeft < 0 && anchorRight < 0) return;
+
+    final rows = _rowsOf(result, _lineLayout(layout));
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !identical(_diff.result, result)) return;
+      if (active != null && active < rows.regionCount) {
+        _rowsController.reveal(rows.regionFirstRow(active));
+      } else if (anchorLeft >= 0) {
+        _rowsController.jumpToRow(rows.rowOfLeftLine(anchorLeft));
+      } else if (anchorRight >= 0) {
+        _rowsController.jumpToRow(rows.rowOfRightLine(anchorRight));
+      }
+    });
   }
 
   Widget _side(
@@ -450,17 +532,23 @@ class _CompareViewState extends State<CompareView> {
     final count = result.diff.regions.length;
     final navigable = rows != null && count > 0;
     final active = navigable ? _activeRegion : null;
+    // Each announcement is a node of its own; merged into the body, the
+    // count would be read with both headers and the layout label.
     final countLabel = Semantics(
+      container: true,
       liveRegion: true,
       child: Text(
         l10n.syncCompareRegionCount(count),
         key: const ValueKey(CompareKey.regionCount),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
         style: theme.textTheme.labelLarge,
       ),
     );
     final position = active == null
         ? null
         : Semantics(
+            container: true,
             liveRegion: true,
             label: l10n.syncCompareRegionAnnouncement(active + 1, count),
             child: ExcludeSemantics(
@@ -498,16 +586,34 @@ class _CompareViewState extends State<CompareView> {
               constraints.maxWidth >=
               MediaQuery.textScalerOf(context).scale(_wideChangeBarWidth);
           final toggle = _layoutToggle(l10n, layout, iconsOnly: !wide);
+          // The controls scroll sideways rather than overflow when a font
+          // or text scale makes them wider than the bar.
+          Widget controls(List<Widget> children) => Align(
+            alignment: AlignmentDirectional.centerEnd,
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(mainAxisSize: MainAxisSize.min, children: children),
+            ),
+          );
           if (wide) {
             return Row(
               children: [
-                countLabel,
-                const Spacer(),
-                ?position,
-                previous,
-                next,
-                const SizedBox(width: 8),
-                toggle,
+                ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxWidth: constraints.maxWidth * _countShare,
+                  ),
+                  child: countLabel,
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: controls([
+                    ?position,
+                    previous,
+                    next,
+                    const SizedBox(width: 8),
+                    toggle,
+                  ]),
+                ),
               ],
             );
           }
@@ -516,7 +622,10 @@ class _CompareViewState extends State<CompareView> {
             children: [
               countLabel,
               Row(
-                children: [?position, const Spacer(), previous, next, toggle],
+                children: [
+                  ?position,
+                  Expanded(child: controls([previous, next, toggle])),
+                ],
               ),
             ],
           );
@@ -543,6 +652,8 @@ class _CompareViewState extends State<CompareView> {
     );
 
     return Semantics(
+      container: true,
+      explicitChildNodes: true,
       label: l10n.syncCompareLayoutLabel,
       child: SegmentedButton<_CompareLayout>(
         key: const ValueKey(CompareKey.layout),
@@ -598,38 +709,10 @@ class _CompareViewState extends State<CompareView> {
     _rowsController.reveal(rows.regionFirstRow(target));
   }
 
-  /// Switches layout, keeping the active region, or else the line at the
-  /// top, in view.
-  void _selectLayout(_CompareLayout next) {
-    final result = _diff.result;
-    final previous = _layout(context);
-    var anchorLeft = -1;
-    var anchorRight = -1;
-    if (result != null && _presentation(previous) == _Presentation.rows) {
-      final rows = _rowsOf(result, _lineLayout(previous));
-      final top = _rowsController.topVisibleRow;
-      if (top < rows.length) {
-        anchorLeft = rows.leftLineAt(top);
-        anchorRight = rows.rightLineAt(top);
-      }
-    }
-
-    setState(() => _chosenLayout = next);
-    if (next == _CompareLayout.separate || result == null) return;
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || !identical(_diff.result, result)) return;
-      final rows = _rowsOf(result, _lineLayout(next));
-      final active = _activeRegion;
-      if (active != null && active < rows.regionCount) {
-        _rowsController.reveal(rows.regionFirstRow(active));
-      } else if (anchorLeft >= 0) {
-        _rowsController.jumpToRow(rows.rowOfLeftLine(anchorLeft));
-      } else if (anchorRight >= 0) {
-        _rowsController.jumpToRow(rows.rowOfRightLine(anchorRight));
-      }
-    });
-  }
+  /// Switches layout; the body keeps the reader's place
+  /// ([_keepPlaceAcrossLayouts]).
+  void _selectLayout(_CompareLayout next) =>
+      setState(() => _chosenLayout = next);
 
   void _openSeparate() =>
       setState(() => _chosenLayout = _CompareLayout.separate);
