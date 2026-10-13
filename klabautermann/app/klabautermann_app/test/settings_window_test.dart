@@ -155,6 +155,21 @@ void main() {
       expect(find.byType(SettingsPage), findsOneWidget);
     });
 
+    testWidgets('a window that fails with an error, not an exception, '
+        'still falls back to the route', (tester) async {
+      await pumpApp(
+        tester,
+        openSettingsWindow: (_) async => throw StateError('host disposed'),
+      );
+
+      await tester.tap(find.byTooltip('Settings'));
+      await tester.pumpAndSettle();
+
+      // Reported, and Settings is still reachable.
+      expect(tester.takeException(), isA<StateError>());
+      expect(find.byType(SettingsPage), findsOneWidget);
+    });
+
     test('only the desktops get a settings window host', () {
       final appearance = AppearanceController();
       addTearDown(appearance.dispose);

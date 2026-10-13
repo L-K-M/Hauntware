@@ -37,13 +37,14 @@ class KlabautermannApp extends StatelessWidget {
   final OpenSettingsWindow? openSettingsWindow;
 
   /// The settings window where there is one, otherwise the route. A window
-  /// that cannot open falls back to the route, so Settings stays reachable.
+  /// that cannot open falls back to the route, so Settings stays reachable,
+  /// whatever it fails with (an error too, as Séance's fallback does).
   Future<void> _openSettings(BuildContext context) async {
     final openWindow = openSettingsWindow;
     if (openWindow != null) {
       try {
         if (await openWindow(SettingsTab.general)) return;
-      } on Exception catch (error, stackTrace) {
+      } on Object catch (error, stackTrace) {
         FlutterError.reportError(
           FlutterErrorDetails(
             exception: error,
