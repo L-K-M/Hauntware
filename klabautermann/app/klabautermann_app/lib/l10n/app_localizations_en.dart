@@ -83,16 +83,23 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String sshConfigSkipped(int count) {
+  String sshConfigImportedWithSkips(int importedCount, int skippedCount) {
     String _temp0 = intl.Intl.pluralLogic(
-      count,
+      importedCount,
+      locale: localeName,
+      other: 'Imported $importedCount servers from ~/.ssh/config.',
+      one: 'Imported 1 server from ~/.ssh/config.',
+      zero: 'No hosts were imported from ~/.ssh/config.',
+    );
+    String _temp1 = intl.Intl.pluralLogic(
+      skippedCount,
       locale: localeName,
       other:
-          '$count hosts were skipped because their port is invalid or their name repeats an earlier host.',
+          '$skippedCount hosts were skipped because their port is invalid or their name repeats an earlier host.',
       one:
           '1 host was skipped because its port is invalid or its name repeats an earlier host.',
     );
-    return '$_temp0';
+    return '$_temp0 $_temp1';
   }
 
   @override

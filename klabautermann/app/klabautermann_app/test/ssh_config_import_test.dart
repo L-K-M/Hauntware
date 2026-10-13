@@ -170,6 +170,32 @@ void main() {
     );
   });
 
+  testWidgets('an import that skips every host does not contradict itself', (
+    tester,
+  ) async {
+    final harness = await pumpApp(
+      tester,
+      size: _desktop,
+      sshConfig: FakeSshConfigSource.text(_config),
+    );
+
+    await _chooseImportFromRail(tester);
+    harness.engine.emit(
+      const SshConfigImported(importedCount: 0, skippedCount: 2),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text(
+        'No hosts were imported from ~/.ssh/config. 2 hosts were skipped '
+        'because their port is invalid or their name repeats an earlier '
+        'host.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.textContaining('names no hosts'), findsNothing);
+  });
+
   const failureMessages = {
     SshConfigReadFailure.missing: 'There is no ~/.ssh/config on this computer.',
     SshConfigReadFailure.unreadable:

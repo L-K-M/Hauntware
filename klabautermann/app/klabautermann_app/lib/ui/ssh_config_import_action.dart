@@ -32,9 +32,10 @@ String sshConfigImportMessage(
   return switch (outcome) {
     SshConfigImportSucceeded(:final importedCount, skippedCount: 0) =>
       l10n.sshConfigImported(importedCount),
+    // One message for both counts: "names no hosts" would contradict the
+    // skipped hosts, and the translation owns how the sentences join.
     SshConfigImportSucceeded(:final importedCount, :final skippedCount) =>
-      '${l10n.sshConfigImported(importedCount)} '
-          '${l10n.sshConfigSkipped(skippedCount)}',
+      l10n.sshConfigImportedWithSkips(importedCount, skippedCount),
     SshConfigImportUnreadable(failure: SshConfigReadFailure.missing) =>
       l10n.sshConfigMissing,
     SshConfigImportUnreadable(failure: SshConfigReadFailure.unreadable) =>
