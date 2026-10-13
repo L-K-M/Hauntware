@@ -1,7 +1,8 @@
 // The production [ServerEditorDelegate]: what the editor's seams resolve to
-// when the catalog drives it. Written to the shape Séance's AppState +
-// AppServices answered (testServerConnection/resolveCredentials @ 5d578b9),
-// recomposed over Poltergeist's services — see docs/PORTS.md.
+// when the catalog drives it. Written to the shape Séance's AppState
+// answered (testServerConnection @ 5d578b9), recomposed over Poltergeist's
+// services. Credentials resolve through seance_core's CredentialResolver.
+// See docs/PORTS.md.
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
