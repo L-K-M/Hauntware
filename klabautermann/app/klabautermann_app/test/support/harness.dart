@@ -4,6 +4,7 @@ import 'package:klabautermann_app/app.dart';
 import 'package:klabautermann_app/controllers/appearance_controller.dart';
 import 'package:klabautermann_app/controllers/fleet_controller.dart';
 import 'package:klabautermann_app/controllers/monitoring_controller.dart';
+import 'package:klabautermann_app/services/ssh_config_source.dart';
 
 import 'fake_engine.dart';
 
@@ -31,10 +32,13 @@ final class AppHarness {
 
 /// Pumps the real [KlabautermannApp] over a [FakeEngineClient] at [size],
 /// which is what decides the shell (03 §10.2 desktop, §10.5 phone).
+/// [sshConfig] stands in for the platform's ssh_config source: a fake for a
+/// desktop, null (the default) for a phone, as `sshConfigSourceFor` picks.
 Future<AppHarness> pumpApp(
   WidgetTester tester, {
   Size size = const Size(1280, 800),
   List<FleetServer> servers = const [],
+  SshConfigSource? sshConfig,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -43,7 +47,7 @@ Future<AppHarness> pumpApp(
   final engine = FakeEngineClient();
   final harness = AppHarness(
     engine: engine,
-    fleet: FleetController(engine, servers: servers),
+    fleet: FleetController(engine, servers: servers, sshConfig: sshConfig),
     monitoring: MonitoringController(engine),
     appearance: AppearanceController(),
   );

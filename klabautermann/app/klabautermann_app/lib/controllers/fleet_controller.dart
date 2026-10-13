@@ -3,8 +3,10 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 
-/// One fleet entry as the rail renders it. The sync catalog (F3) replaces
-/// this seed model with record-driven rows; keeping it tiny is the point.
+import '../services/ssh_config_source.dart';
+
+/// One fleet entry as the rail renders it: the engine's [FleetEntry]
+/// reduced to what a row shows (03 §10.3).
 final class FleetServer {
   const FleetServer({
     required this.id,
@@ -12,30 +14,105 @@ final class FleetServer {
     this.address,
   });
 
+  /// The row for [entry]; its address leaves out the default port.
+  factory FleetServer.fromEntry(FleetEntry entry) {
+    return FleetServer(
+      id: entry.serverId,
+      displayName: entry.label,
+      address: _address(entry),
+    );
+  }
+
   /// The catalog/server id every engine request uses.
   final String id;
 
   final String displayName;
 
-  /// Host or `user@host` for the row's subtitle (03 §10.3).
+  /// Host or `user@host` for the row's subtitle (03 §10.3), with `:port`
+  /// when the port is not 22.
   final String? address;
+
+  static String _address(FleetEntry entry) {
+    final login = entry.user == null ? '' : '${entry.user}@';
+    if (entry.port == kSshDefaultPort) return '$login${entry.host}';
+
+    // An IPv6 literal is bracketed so the port suffix stays unambiguous.
+    final host = entry.host.contains(':') ? '[${entry.host}]' : entry.host;
+    return '$login$host:${entry.port}';
+  }
 }
 
-/// The fleet concern (03 §10.1): the server list, per-server link phases
-/// from [LinkState] events, and the workspace's selection. Pull-only by
-/// construction (D14): it never sends a mutating request.
+/// How one FL-02 import ended, for the surface that started it.
+@immutable
+sealed class SshConfigImportOutcome {
+  const SshConfigImportOutcome();
+}
+
+/// The engine imported the config; the fleet already lists the entries.
+final class SshConfigImportSucceeded extends SshConfigImportOutcome {
+  const SshConfigImportSucceeded({
+    required this.importedCount,
+    required this.skippedCount,
+  });
+
+  /// See [SshConfigImported.importedCount].
+  final int importedCount;
+
+  /// See [SshConfigImported.skippedCount].
+  final int skippedCount;
+}
+
+/// The app could not read the config, so nothing reached the engine.
+final class SshConfigImportUnreadable extends SshConfigImportOutcome {
+  const SshConfigImportUnreadable(this.failure);
+
+  final SshConfigReadFailure failure;
+}
+
+/// The engine refused the import or stopped before answering. [reason] is
+/// a diagnostic for developers; surfaces show their own localized text.
+final class SshConfigImportRejected extends SshConfigImportOutcome {
+  const SshConfigImportRejected(this.reason);
+
+  final String reason;
+}
+
+/// The fleet concern (03 §10.1): the server list from [CatalogReplaced]
+/// snapshots, per-server link phases from [LinkState] events, the
+/// workspace's selection, and the desktop ssh_config import (FL-02).
+/// Pull-only by construction (D14): the one request it sends,
+/// [ImportSshConfig], changes the engine's device-local import list and
+/// never a catalog record.
 final class FleetController extends ChangeNotifier {
-  FleetController(this._engine, {List<FleetServer> servers = const []})
-    : _servers = List.unmodifiable(servers) {
-    _events = _engine.events.listen(_onEngineEvent);
+  /// [servers] seeds the list until the engine's first [CatalogReplaced].
+  /// [sshConfig] is null on platforms without an ssh_config, which hides
+  /// the import (see [sshConfigSourceFor]).
+  FleetController(
+    this._engine, {
+    List<FleetServer> servers = const [],
+    this._sshConfig,
+  }) : _servers = List.unmodifiable(servers) {
+    _events = _engine.events.listen(_onEngineEvent, onDone: _onEngineDone);
   }
 
   final EngineClient _engine;
+  final SshConfigSource? _sshConfig;
   late final StreamSubscription<EngineEvent> _events;
 
-  final List<FleetServer> _servers;
+  List<FleetServer> _servers;
   final Map<String, LinkPhase> _linkPhases = {};
   String? _selectedServerId;
+
+  /// The running import, from reading the file to the engine's answer.
+  Future<SshConfigImportOutcome>? _import;
+
+  /// Completed by the engine's answer to the [ImportSshConfig] in flight.
+  /// The engine answers requests in order and [_import] allows one at a
+  /// time, so the next answer always belongs to this completer.
+  Completer<SshConfigImportOutcome>? _importAnswer;
+
+  bool _engineStopped = false;
+  bool _disposed = false;
 
   List<FleetServer> get servers => _servers;
 
@@ -55,10 +132,69 @@ final class FleetController extends ChangeNotifier {
   LinkPhase linkPhaseFor(String serverId) =>
       _linkPhases[serverId] ?? LinkPhase.disconnected;
 
+  /// Whether this device offers the ssh_config import: desktops do, phones
+  /// have no ssh_config (FL-02).
+  bool get canImportSshConfig => _sshConfig != null;
+
+  /// Whether an import is running; surfaces disable their entry meanwhile.
+  bool get isImportingSshConfig => _import != null;
+
   void select(String? serverId) {
     if (serverId == _selectedServerId) return;
     _selectedServerId = serverId;
     notifyListeners();
+  }
+
+  /// Reads the ssh_config through the app's source and has the engine
+  /// import its hosts (FL-02). Completes once the engine has answered, when
+  /// [servers] already shows the result; a call while one runs joins it.
+  ///
+  /// Throws [StateError] when [canImportSshConfig] is false.
+  Future<SshConfigImportOutcome> importSshConfig() {
+    final source = _sshConfig;
+    if (source == null) {
+      throw StateError('this platform has no ssh_config to import');
+    }
+    final running = _import;
+    if (running != null) return running;
+
+    final started = _import = _runImport(source);
+    notifyListeners();
+    return started;
+  }
+
+  Future<SshConfigImportOutcome> _runImport(SshConfigSource source) async {
+    try {
+      final read = await source.read();
+      final String text;
+      switch (read) {
+        case SshConfigUnavailable(:final failure):
+          return SshConfigImportUnreadable(failure);
+        case SshConfigText():
+          text = read.text;
+      }
+
+      if (_disposed || _engineStopped) {
+        return const SshConfigImportRejected('the engine is not running');
+      }
+      final answer = _importAnswer = Completer<SshConfigImportOutcome>();
+      try {
+        _engine.send(ImportSshConfig(text));
+      } on StateError catch (error) {
+        return SshConfigImportRejected(error.message);
+      }
+      return await answer.future;
+    } finally {
+      _import = null;
+      _importAnswer = null;
+      if (!_disposed) notifyListeners();
+    }
+  }
+
+  void _completeImport(SshConfigImportOutcome outcome) {
+    final answer = _importAnswer;
+    if (answer == null || answer.isCompleted) return;
+    answer.complete(outcome);
   }
 
   void _onEngineEvent(EngineEvent event) {
@@ -67,17 +203,48 @@ final class FleetController extends ChangeNotifier {
         if (_linkPhases[serverId] == phase) return;
         _linkPhases[serverId] = phase;
         notifyListeners();
-      // CatalogReplaced/EndpointChanged populate the fleet once F3's
-      // catalog lands; everything else belongs to other concerns.
-      case CatalogReplaced():
+      case CatalogReplaced(:final entries):
+        _replaceFleet(entries);
+      case SshConfigImported(:final importedCount, :final skippedCount):
+        _completeImport(
+          SshConfigImportSucceeded(
+            importedCount: importedCount,
+            skippedCount: skippedCount,
+          ),
+        );
+      case RequestRejected(:final requestName, :final reason)
+          when requestName == '$ImportSshConfig':
+        _completeImport(SshConfigImportRejected(reason));
+      // EndpointChanged refreshes one entry once F3's catalog lands;
+      // everything else belongs to other concerns.
       case EndpointChanged():
       case EngineEvent():
         break;
     }
   }
 
+  void _replaceFleet(List<FleetEntry> entries) {
+    _servers = List.unmodifiable(entries.map(FleetServer.fromEntry));
+    // A selection the new fleet no longer lists would leave the workspace
+    // titled after a server that is gone.
+    if (_selectedServerId != null &&
+        !_servers.any((server) => server.id == _selectedServerId)) {
+      _selectedServerId = null;
+    }
+    notifyListeners();
+  }
+
+  void _onEngineDone() {
+    _engineStopped = true;
+    _completeImport(const SshConfigImportRejected('the engine stopped'));
+  }
+
   @override
   void dispose() {
+    _disposed = true;
+    _completeImport(
+      const SshConfigImportRejected('the fleet controller was disposed'),
+    );
     unawaited(_events.cancel());
     super.dispose();
   }
