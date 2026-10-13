@@ -173,6 +173,18 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   // normalizes on `/`). The bookmark store it writes is the caller's now:
   // one instance serves the import command and the Connections surface.
   'lib/services/ssh_config_import_setup.dart': {r"'$home/.ssh/config'", "'~'"},
+  // A skip rule set's settings.json fields, the line separator its
+  // patterns join and split on, and the gitignore comment marker (05 §3):
+  // data, never rendered. The quick picks' excludes lines show verbatim
+  // as chip labels: gitignore syntax, never translated.
+  'lib/services/skip_rule_sets.dart': {
+    "'name'",
+    "'patterns'",
+    "'\\n'",
+    "'#'",
+    "'.git/'",
+    "'node_modules/'",
+  },
   // The composed queue's honest-absence connection seam: the refusal's
   // `operation` label is diagnostic metadata (the exception renders
   // `message`, which is ARB copy) — never authored UI text.
@@ -224,6 +236,8 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     // The device theme and its mode (Device themes): settings.json keys.
     "'theme.palette'",
     "'theme.mode'",
+    // Sync's named skip rule sets (05 §3): a settings.json key.
+    "'sync.skipRuleSets'",
   },
   'lib/services/atomic_file.dart': {r"'.poltergeist-${uuidV4()}.tmp'"},
   // The session-state document's on-disk schema (02 §3): settings.json
@@ -2347,6 +2361,8 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'local'",
     "' '",
   },
+  // A rule set's patterns join into the editor field one per line.
+  'lib/ui/sync/sync_rule_sets.dart': {"'\\n'"},
   // The sheet dialogs' widget keys, the rules field's line split/join,
   // and the tolerance field's numeric seed — plumbing, never copy.
   'lib/ui/sync/sync_sheet_dialogs.dart': {

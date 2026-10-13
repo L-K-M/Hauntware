@@ -7689,6 +7689,81 @@ class AppLocalizationsEn extends AppLocalizations {
   String get syncRulesDone => 'Done';
 
   @override
+  String get syncRuleSetsAdd => 'Add Rule Set';
+
+  @override
+  String get syncRuleSetsNone => 'No saved rule sets';
+
+  @override
+  String get syncRuleSetsSaveAs => 'Save as Rule Set…';
+
+  @override
+  String get syncRuleSetsManage => 'Manage Rule Sets…';
+
+  @override
+  String get syncRuleSetsTitle => 'Rule Sets';
+
+  @override
+  String get syncRuleSetsEmpty =>
+      'Save a sync\'s skip rules as a rule set, then add them to other syncs in one step. Adding a set copies its patterns, so later changes to the set don\'t change those syncs.';
+
+  @override
+  String get syncRuleSetsNew => 'New Rule Set…';
+
+  @override
+  String syncRuleSetsEditTooltip(String name) {
+    return 'Edit $name';
+  }
+
+  @override
+  String syncRuleSetsDeleteTooltip(String name) {
+    return 'Delete $name';
+  }
+
+  @override
+  String get syncRuleSetNewTitle => 'New Rule Set';
+
+  @override
+  String get syncRuleSetEditTitle => 'Edit Rule Set';
+
+  @override
+  String get syncRuleSetName => 'Name';
+
+  @override
+  String get syncRuleSetNameEmpty => 'Enter a name.';
+
+  @override
+  String syncRuleSetNameTaken(String name) {
+    return 'A rule set named “$name” already exists.';
+  }
+
+  @override
+  String get syncRuleSetNoPatterns => 'Add at least one pattern.';
+
+  @override
+  String get syncRuleSetSave => 'Save';
+
+  @override
+  String get syncRuleSetSaveFailed =>
+      'The rule set could not be saved. Try again.';
+
+  @override
+  String syncRuleSetDeleteTitle(String name) {
+    return 'Delete “$name”?';
+  }
+
+  @override
+  String get syncRuleSetDeleteBody =>
+      'Syncs that already use its patterns keep them.';
+
+  @override
+  String get syncRuleSetDelete => 'Delete';
+
+  @override
+  String get syncRuleSetDeleteFailed =>
+      'The rule set could not be deleted. Try again.';
+
+  @override
   String get syncTimeOffsetTitle => 'Time Offset';
 
   @override

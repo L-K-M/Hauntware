@@ -838,8 +838,9 @@ cross-pane Compare entry point; Quick Look prefetch / preview-cache
 warming. Scheduled opportunistically after the numbered fast-follows.
 Landed: the Compare entry point (Compare Files, 2026-10-11), batch
 rename (Rename Items, 02 §2.6, 2026-10-11; its remainder stays in 02's
-deferral table), and fast-follow 5's text-diff view (06 §6's minimal
-diff view, 2026-10-12).
+deferral table), fast-follow 5's text-diff view (06 §6's minimal diff
+view, 2026-10-12), and the named skip-rules engine (rule sets, 05 §3,
+2026-10-13; its remainder stays in 02's deferral table).
 
 Everything else on anyone's wishlist is in the D25 parking lot; building
 it early is a plan violation, not initiative.

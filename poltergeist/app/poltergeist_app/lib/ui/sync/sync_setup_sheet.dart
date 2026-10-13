@@ -20,6 +20,7 @@ import 'package:poltergeist_sync/poltergeist_sync.dart';
 
 import '../../l10n/app_localizations.dart';
 import '../../services/rsync_endpoints.dart';
+import '../../services/skip_rule_sets_controller.dart';
 import '../../services/sync_plan_controller.dart' show SyncCaseOverrides;
 import '../../services/uuid.dart';
 import '../../theme/app_theme.dart';
@@ -92,6 +93,7 @@ Future<SyncSheetResult?> showSyncSetupSheet(
   RsyncEndpointResolver? rsyncEndpoints,
   Future<bool> Function(SyncPair pair)? onSaveFavorite,
   SyncServerLookup? serverFor,
+  SkipRuleSetsController? skipRuleSets,
 }) => showDialog<SyncSheetResult>(
   context: context,
   builder: (_) => SyncSetupSheet(
@@ -103,6 +105,7 @@ Future<SyncSheetResult?> showSyncSetupSheet(
     rsyncEndpoints: rsyncEndpoints,
     onSaveFavorite: onSaveFavorite,
     serverFor: serverFor,
+    skipRuleSets: skipRuleSets,
   ),
 );
 
@@ -118,6 +121,7 @@ final class SyncSetupSheet extends StatefulWidget {
     this.rsyncEndpoints,
     this.onSaveFavorite,
     this.serverFor,
+    this.skipRuleSets,
   });
 
   final SyncSheetMode mode;
@@ -148,6 +152,10 @@ final class SyncSetupSheet extends StatefulWidget {
   final Future<bool> Function(SyncPair pair)? onSaveFavorite;
 
   final SyncServerLookup? serverFor;
+
+  /// This device's named skip rule sets (05 §3) for the Skip Rules
+  /// dialog and the Advanced editor; null leaves their controls out.
+  final SkipRuleSetsController? skipRuleSets;
 
   @override
   State<SyncSetupSheet> createState() => _SyncSetupSheetState();
@@ -279,7 +287,11 @@ class _SyncSetupSheetState extends State<SyncSetupSheet> {
   }
 
   Future<void> _editRules() async {
-    final globs = await showSyncRulesDialog(context, globs: _globs);
+    final globs = await showSyncRulesDialog(
+      context,
+      globs: _globs,
+      skipRuleSets: widget.skipRuleSets,
+    );
     if (globs == null || !mounted) return;
     setState(() {
       _globs = globs;
@@ -366,6 +378,7 @@ class _SyncSetupSheetState extends State<SyncSetupSheet> {
                   )),
         servers: widget.servers,
         saveLabel: l10n.syncRulesDone,
+        skipRuleSets: widget.skipRuleSets,
       ),
     );
     if (result == null || !mounted) return;

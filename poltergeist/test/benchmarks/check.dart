@@ -244,7 +244,7 @@ Future<void> checkMain(
 }
 
 /// Parsed command line. Argument parsing stays manual and dependency-free
-/// like the other root-level tools (e.g. tool/protocol_guard).
+/// like the other root-level tools (e.g. tool/release_version).
 class CliArguments {
   final bool help;
   final String? results;

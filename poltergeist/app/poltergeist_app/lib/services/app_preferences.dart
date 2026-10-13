@@ -15,6 +15,7 @@ import 'double_click_action.dart';
 import 'pane_tabs_controller.dart' show NewTabTarget;
 import 'settings_store.dart';
 import 'sidebar_controller.dart' show SidebarCollapseKeys, SidebarDensity;
+import 'skip_rule_sets.dart';
 
 const _defaultPaneRatio = 0.5;
 const _paneRatioKey = 'layout.paneRatio';
@@ -42,6 +43,7 @@ const _updateChecksEnabledKey = 'updates.checkEnabled';
 const _themePaletteKey = 'theme.palette';
 const _themeModeKey = 'theme.mode';
 const _editorTextSizeKey = 'editor.textSize';
+const _skipRuleSetsKey = 'sync.skipRuleSets';
 
 /// How a server's own Automatic is spelled in the stored overrides; a
 /// fixed cap is stored as its number.
@@ -488,6 +490,50 @@ class AppPreferences {
 
   Future<void> saveEditorTextSize(int size) =>
       _store.set(_editorTextSizeKey, EditorTextSize.clamp(size));
+
+  /// This device's skip rule sets (05 §3), in the order they were made:
+  /// local templates, never synced. A damaged stored value keeps every
+  /// set that still decodes ([decodeSkipRuleSets]). An unreadable store
+  /// reads as no sets for this launch, which is safe because no change
+  /// writes this list back: see [putSkipRuleSet].
+  Future<List<SkipRuleSet>> loadSkipRuleSets() async {
+    Object? stored;
+    try {
+      stored = await _store.get<Object>(_skipRuleSetsKey);
+    } catch (_) {
+      return const [];
+    }
+    return decodeSkipRuleSets(stored);
+  }
+
+  /// Saves [set] into the sets as stored when the write runs, in place
+  /// of the set named [replacing] or as a new set, and completes with
+  /// the sets now stored. Fails, writing nothing, while the store cannot
+  /// be read or when another stored set holds the name
+  /// ([SkipRuleSetNameTaken]).
+  Future<List<SkipRuleSet>> putSkipRuleSet(
+    SkipRuleSet set, {
+    String? replacing,
+  }) => _updateSkipRuleSets(
+    (stored) => putSkipRuleSetInto(stored, set, replacing: replacing),
+  );
+
+  /// Deletes the set named [name] from the sets as stored, and completes
+  /// with the sets now stored.
+  Future<List<SkipRuleSet>> removeSkipRuleSet(String name) =>
+      _updateSkipRuleSets((stored) => removeSkipRuleSetFrom(stored, name));
+
+  Future<List<SkipRuleSet>> _updateSkipRuleSets(
+    List<SkipRuleSet> Function(List<SkipRuleSet> stored) edit,
+  ) async {
+    final written = await _store.update(
+      _skipRuleSetsKey,
+      (stored) => [
+        for (final set in edit(decodeSkipRuleSets(stored))) set.toJson(),
+      ],
+    );
+    return decodeSkipRuleSets(written);
+  }
 
   /// The §8 "Preview & downloads" cache cap (06 §8): bytes, default
   /// 512 MiB. A missing or corrupt value decodes to the default.

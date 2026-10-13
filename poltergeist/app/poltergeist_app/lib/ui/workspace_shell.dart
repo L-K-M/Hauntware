@@ -62,6 +62,7 @@ import '../services/settings_window/settings_window_host.dart';
 import '../services/settings_window/settings_window_link.dart';
 import '../services/sidebar_controller.dart';
 import '../services/sidebar_probe_owner.dart';
+import '../services/skip_rule_sets_controller.dart';
 import '../services/ssh_config_import_setup.dart';
 import '../services/sync_compare_controller.dart';
 import '../services/sync_environment.dart';
@@ -209,6 +210,7 @@ class WorkspaceShell extends StatefulWidget {
     this.appearance,
     this.editorTextSize,
     this.directoryGrouping,
+    this.skipRuleSets,
     this.deepLinks,
     this.seanceLauncher,
   });
@@ -514,6 +516,11 @@ class WorkspaceShell extends StatefulWidget {
   /// Whether lists keep folders on top: every pane sorts by it, and
   /// Settings → General shows it. Null keeps folders on top.
   final DirectoryGroupingModel? directoryGrouping;
+
+  /// Sync's named skip rule sets on this device (05 §3), for the Sync
+  /// sheet's Skip Rules dialog and the pair editor. Null leaves their
+  /// rule-set controls out.
+  final SkipRuleSetsController? skipRuleSets;
 
   /// App-wide deep-link intake and the probed sibling-app handoff. Both are
   /// composition seams so tests and unsupported platforms remain inert.
@@ -4313,6 +4320,7 @@ class _WorkspaceShellState extends State<WorkspaceShell>
         final String id => _serverConfigById(id),
         null => null,
       },
+      skipRuleSets: widget.skipRuleSets,
     );
     if (result == null || !mounted) return;
     if (mode == SyncSheetMode.newSaved) {
@@ -4500,6 +4508,7 @@ class _WorkspaceShellState extends State<WorkspaceShell>
         initialEditTarget: currentRequest.target,
         servers: servers,
         saveLabel: l10n.syncEditorSaveAndRescan,
+        skipRuleSets: widget.skipRuleSets,
       ),
     );
     if (result == null ||
