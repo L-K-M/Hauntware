@@ -532,7 +532,7 @@ warning for scoped data loss and lockout-class commands (`iptables -F`
 
 | # | Pattern | Severity | Explanation |
 |---|---|---|---|
-| 15 | `\bdocker\s+system\s+prune\b(?=[^\n]*(--volumes\b\|--all\b\|\s-{1,2}a\b))` | critical | `docker system prune` sweeping images and volumes destroys all unused data |
+| 15 | `\bdocker\s+system\s+prune\b(?=[^\n]*(--volumes\b\|--all\b\|\s-\w*a))` (also `-af`, `-fa`) | critical | `docker system prune` sweeping images and volumes destroys all unused data |
 | 16 | `\bdocker\s+volume\s+prune\b` | critical | Removes every unused volume, taking attached data with it |
 | 17 | `\bdocker\s+volume\s+rm\b` | warning | Deletes a named volume and its data |
 | 18 | `\b(?:docker\s+compose\|docker-compose)\b[^\n]*\sdown\b(?=[^\n]*(--volumes\b\|\s-\w*v))` (also `compose -f f.yaml down -v`) | critical | `compose down -v` drops the stack's volumes |
