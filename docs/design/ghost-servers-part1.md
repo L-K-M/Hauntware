@@ -495,9 +495,12 @@ class GhostConnectionLogView extends StatelessWidget {
   const GhostConnectionLogView({required this.text,
       this.strings = const GhostConnectionLogStrings(),
       this.reverse = false, this.followTail = false,
-      this.onCopy, this.onCopyError});
+      this.onCopy, this.onCopyError})
+      : assert(!reverse || !followTail,
+            'reverse (newest first) and followTail are exclusive');
   /// Poltergeist's panel renders newest-first (`reverse: true`,
-  /// `connection_status_panel.dart:283`); followTail does not apply there.
+  /// `connection_status_panel.dart:283`) and never passes followTail;
+  /// Séance's views follow the tail with reverse left false.
   final bool reverse;
 }
 
@@ -559,7 +562,7 @@ flips in a follow-up with its own test).
 | 4. Host-key + keyboard prompts | VMs, dialogs, bags; `dialogKey` for both; Séance `main.dart:148-158` and `terminal_pane` wiring call adapters; Poltergeist `prompt_coordinator:241,262` maps `*PromptData` -> VM; Séance passes `submitOnEnter: false` | Both | Séance suite (dialog tests move to package; `host_key_blocked_test`/`credential_required_test` unchanged); Poltergeist suite (prompt tests keep adapter+ARB coverage); allowlist :20-25 and :649 removed in this PR |
 | 5. Log view + test report | `GhostConnectionLogView`/`GhostConnectionTestReport` + bags; panel `_ConnectionLogView` delegates with `reverse: true` + silent `onCopy`; dedupe the duplicate `connectionLog*` ARB block (:233-243, keep :8388-8404); allowlist :2476-2480 removed, :621 shrunk | Both | Séance suite (`connection_test_report_test` moves); Poltergeist suite (`connection_status_panel_test` unchanged); PORTS entries updated to the "now live in ghost_servers" wording |
 | 6. Credential prompt | Parameterized dialog + bags + reply; Séance adapter (`pastedPem`, `pickKeyText` injected, reply -> `MissingCredential`); Poltergeist adapter (`filePath`, `readKeyFile`, `vaultUnavailable`, `saveToVault`, reply -> `CredentialDialogResult`); allowlist :622 removed | Both | Séance suite (`credential_prompt_test` moves, `credential_required_test` unchanged); Poltergeist suite (`credential_dialog_test` adapts to the shim signature; `prompt_coordinator_test`/`identity_file_reader_test` untouched); no vault/audit/file code moves |
-| 7. Audit | `PORTS.md` ledger updates; record `ghost_servers` as a new path consumer of `seance_protocol`; `scripts/test.sh` lists verified (:141-151); boundary check: no `seance_core`/`poltergeist_core`/`dartssh2` import under `planchette/packages/ghost_servers/` | none | Both full suites; contract test green; Séance pin-audit not required (no `seance/` lineage change) |
+| 7. Audit | `PORTS.md` ledger updates; record `ghost_servers` as a new path consumer of `seance_protocol`; `scripts/test.sh` lists verified (:141-151); boundary check as an allowlist: the only package imports under `planchette/packages/ghost_servers/` are `ghost_ui` and `seance_protocol` besides the Flutter and Dart SDKs, which also excludes `seance_core`, `poltergeist_core` and `dartssh2` | none | Both full suites; contract test green; Séance pin-audit not required (no `seance/` lineage change) |
 
 Poltergeist switches per surface inside PRs 2-6 rather than in one big PR,
 because its adapters are per-surface and the capture suites then bisect
