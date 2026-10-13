@@ -9,3 +9,8 @@
   yet.
 - Desktop import from `~/.ssh/config` (FL-02): the hosts appear in the
   fleet rail for the current session; they are not saved yet.
+- The theme you pick in Settings is kept across restarts, in this
+  device's `settings.json`, which also records the device's sync id.
+  A damaged settings file is kept aside as `settings.json.corrupt-<time>`
+  and you are told at startup; a file Klabautermann cannot read, or one
+  from a newer version, is left as it is.

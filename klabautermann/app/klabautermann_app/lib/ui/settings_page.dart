@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:ghost_theme/ghost_theme.dart' show ThemeModePreference;
+import 'package:ghost_ui/ghost_ui.dart' show showTopToast;
 
 import '../controllers/appearance_controller.dart';
 import '../l10n/app_localizations.dart';
@@ -59,6 +62,20 @@ class AppearanceTab extends StatelessWidget {
 
   final AppearanceController appearance;
 
+  /// The theme changes at once; a save that fails says so in a top toast
+  /// (the suite keeps the bottom edge clear), since the change then lasts
+  /// only until the app restarts.
+  Future<void> _setMode(BuildContext context, ThemeModePreference mode) async {
+    final overlay = Overlay.of(context, rootOverlay: true);
+    final notSaved = AppLocalizations.of(context).themeNotSaved;
+    try {
+      await appearance.setMode(mode);
+    } on Exception catch (error) {
+      debugPrint('The theme was not saved: $error');
+      if (overlay.mounted) showTopToast(overlay, message: notSaved);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -89,7 +106,8 @@ class AppearanceTab extends StatelessWidget {
                 ),
               ],
               selected: {appearance.mode},
-              onSelectionChanged: (modes) => appearance.mode = modes.first,
+              onSelectionChanged: (modes) =>
+                  unawaited(_setMode(context, modes.first)),
             ),
           ],
         );

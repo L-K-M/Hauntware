@@ -346,6 +346,36 @@ abstract class AppLocalizations {
   /// **'Dark'**
   String get themeDark;
 
+  /// Top toast after a theme pick that applied but could not be written to the settings file.
+  ///
+  /// In en, this message translates to:
+  /// **'The theme changed, but it could not be saved, so it will not be kept after a restart.'**
+  String get themeNotSaved;
+
+  /// Startup notice: the settings file was damaged, set aside under a new name, and replaced with the defaults.
+  ///
+  /// In en, this message translates to:
+  /// **'Your settings file could not be read and was reset. The old file is kept as {fileName}.'**
+  String settingsFileRecovered(String fileName);
+
+  /// Startup notice: the settings file could not be read or set aside, so the app does not write it this session.
+  ///
+  /// In en, this message translates to:
+  /// **'Your settings file could not be read, so it was left as it is. Changes you make now are not saved.'**
+  String get settingsFileLeftAsIs;
+
+  /// Startup notice: a newer app version wrote the settings file, so this version does not write it.
+  ///
+  /// In en, this message translates to:
+  /// **'Your settings were saved by a newer version of Klabautermann. Changes you make now are not saved.'**
+  String get settingsFileNewer;
+
+  /// Startup notice: writing the settings file failed while the app started.
+  ///
+  /// In en, this message translates to:
+  /// **'Your settings could not be saved. Changes you make now may be lost when Klabautermann restarts.'**
+  String get settingsFileNotSaved;
+
   /// No description provided for @workspaceEmptyTitle.
   ///
   /// In en, this message translates to:

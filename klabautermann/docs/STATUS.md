@@ -29,8 +29,31 @@ slice:
   master-detail stack below 600 dp, the settings route with its seven
   planned tabs (Appearance's theme switch works), light and dark themes
   built through `ghost_theme` from the Klabautermann brand preset (D9;
-  the appearance is held in memory), and the English ARB catalogue (D35,
-  A11Y-05).
+  the appearance persists in `settings.json`, below), and the English
+  ARB catalogue (D35, A11Y-05).
+- Device settings (03 §4.10): `settings.json` under the app's
+  `getApplicationSupportDirectory()`, through `klabautermann_core`'s
+  `DeviceSettingsStore`, which the composition root opens before the
+  engine isolate starts. It holds `klabautermann.settings.version` (1),
+  `klabautermann.sync.deviceId` and `klabautermann.appearance`; keys it
+  does not know are kept on every write. The device id is a UUID v4
+  (`seance_core`'s `uuidV4`, as the catalog library's enrollment
+  expects), minted and saved on the first launch and never regenerated;
+  nothing reads it yet. The theme is restored at startup and saved on
+  every change; the desktop settings window (D32) will reach the same
+  `AppearanceController`, so its changes are saved by the app, not by
+  the window. Writes are atomic (temp file, flush, rename, directory
+  sync). A damaged file is copied aside as
+  `settings.json.corrupt-<UTC time>` before the defaults replace it,
+  keeping its device id when the text still shows one (Séance's
+  recovery, Poltergeist's copy name); an unreadable file, one whose copy
+  fails, or one from a newer schema is left untouched and nothing is
+  saved that session. Each case is told once in a top toast at startup;
+  a theme change that cannot be saved stays for the session and says
+  so. The monitor set and per-server device preferences have no
+  consumers yet and are not stored. No real build has run it yet: the
+  tests restart against a temporary folder, not the platform's support
+  directory (a sandboxed macOS container, the Flatpak's `~/.var/app`).
 - Local-only import (FL-02, first part): desktops offer "Import from
   ~/.ssh/config" in the rail's add menu (in the app bar when the window
   is narrower than the desktop breakpoint); phones have no ssh_config and
@@ -55,9 +78,9 @@ push or write catalog records, and a widget test guards it.
 Not in yet (later PRs): pull-only enrollment and the catalog (F3),
 persistence for imported ssh_config entries (with the catalog library),
 reachability dots and the `ghost_servers` rail (F4), theme editing and
-presets (F4b's editor), persisting the appearance (the device settings
-store), the desktop settings window and its native runners (D32), and the
-five client CI legs and release job.
+presets (F4b's editor), the monitor set and per-server device preferences
+in `settings.json`, the desktop settings window and its native runners
+(D32), and the five client CI legs and release job.
 
 ## Open manual gates
 

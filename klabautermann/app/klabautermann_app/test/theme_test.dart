@@ -1,3 +1,5 @@
+import 'dart:io' show FileSystemException;
+
 import 'package:flutter/foundation.dart' show defaultTargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -190,21 +192,52 @@ void main() {
   });
 
   group('AppearanceController', () {
-    test('a mode change keeps the palette and notifies once', () {
+    test('a mode change keeps the palette and notifies once', () async {
       final controller = AppearanceController();
       addTearDown(controller.dispose);
       var notifications = 0;
       controller.addListener(() => notifications++);
       final palette = controller.value.palette;
 
-      controller.mode = ThemeModePreference.dark;
+      await controller.setMode(ThemeModePreference.dark);
       expect(controller.value.mode, ThemeModePreference.dark);
       expect(controller.value.palette, palette);
       expect(notifications, 1);
 
       // Picking the mode already in force is not a change.
-      controller.mode = ThemeModePreference.dark;
+      await controller.setMode(ThemeModePreference.dark);
       expect(notifications, 1);
+    });
+
+    test('starts in the stored appearance and saves each change', () async {
+      final saved = <AppAppearance>[];
+      final controller = AppearanceController(
+        initial: AppAppearance(
+          palette: klabautermannThemePresets.initial,
+          mode: ThemeModePreference.light,
+        ),
+        save: (appearance) async => saved.add(appearance),
+      );
+      addTearDown(controller.dispose);
+      expect(controller.mode, ThemeModePreference.light);
+
+      await controller.setMode(ThemeModePreference.dark);
+      await controller.setMode(ThemeModePreference.dark);
+
+      expect(saved, [controller.value], reason: 'a no-op saves nothing');
+    });
+
+    test('a failed save keeps the change and throws', () async {
+      final controller = AppearanceController(
+        save: (_) async => throw const FileSystemException('disk full'),
+      );
+      addTearDown(controller.dispose);
+
+      await expectLater(
+        controller.setMode(ThemeModePreference.dark),
+        throwsA(isA<FileSystemException>()),
+      );
+      expect(controller.mode, ThemeModePreference.dark);
     });
   });
 }
