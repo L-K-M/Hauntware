@@ -77,3 +77,28 @@ products:
       ghost_ui: [ghost_theme]
     engine_protocol: null
     engine_protocol_callback_owners: {}
+  # Klabautermann declares no exceptions: its pure packages take no dartssh2
+  # or Flutter dependency, and the engine protocol is the one the app and
+  # the isolate share (03 §3.4, 03 D18).
+  klabautermann:
+    scan: [packages, app]
+    pure_packages:
+      - packages/klabautermann_host
+      - packages/klabautermann_docker
+      - packages/klabautermann_core
+    dartssh2_imports: []
+    dartssh2_dependents: []
+    forbidden_dependencies:
+      klabautermann_host:
+        - "seance_*"
+        - dartssh2
+        - flutter
+      klabautermann_docker:
+        - "seance_*"
+        - dartssh2
+        - flutter
+    no_dart_io:
+      - packages/klabautermann_host/lib
+      - packages/klabautermann_docker/lib
+    engine_protocol: packages/klabautermann_core/lib/src/engine
+    engine_protocol_callback_owners: {}

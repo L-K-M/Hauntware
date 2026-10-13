@@ -271,6 +271,9 @@ jobs:
       - name: Resolve Planchette workspace
         working-directory: planchette
         run: dart pub get
+      - name: Resolve Klabautermann workspace
+        working-directory: klabautermann
+        run: dart pub get
       - name: Resolve M0 benchmark harness
         working-directory: poltergeist/packages/poltergeist_bench
         run: dart pub get
