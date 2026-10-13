@@ -51,7 +51,8 @@ results, changed only in wiring and in the renamed write calls below.
   with the one secret-switch test whose proof record is a bookmark.
   `push_revision_test.dart`, `enrollment_test.dart` and the convergence
   test stay, since bookmarks are their vehicle. `fake_sync_api.dart` is
-  copied to the moved tests.
+  copied to the moved tests. `record_handler_test.dart` covers the
+  registration rules, the derived trial rule and `SyncTuple.outranks`.
 - Stays in `poltergeist_core/lib/src/bookmarks/`: `bookmark_store.dart`,
   `bookmark_groups.dart`, `sort_key.dart` and the new
   `bookmark_handler.dart`.
