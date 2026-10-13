@@ -41,6 +41,13 @@ slice:
   the catalog library. `Include` is not followed (`SshConfigImporter`
   drops it), and `ProxyJump` and `IdentityFile` are not carried yet: the
   rail needs neither until links land (M2).
+- Packaging: `scripts/build.sh`, `scripts/package-linux.sh` (.deb and
+  AppImage through the shared `scripts/package-linux-common.sh`) and
+  `scripts/build-flatpak.sh` with `flatpak/ch.lkmc.klabautermann.yml`.
+  The flatpak grants read-only `~/.ssh` for the FL-02 import, which
+  04 §12.1 does not plan yet. The scripts have only run on stub bundles
+  so far; a real Flutter bundle, appimagetool and flatpak-builder first
+  run in the client CI legs.
 
 Pull-only from the start (D14): no surface sends a request that could
 push or write catalog records, and a widget test guards it.
@@ -49,11 +56,8 @@ Not in yet (later PRs): pull-only enrollment and the catalog (F3),
 persistence for imported ssh_config entries (with the catalog library),
 reachability dots and the `ghost_servers` rail (F4), theme editing and
 presets (F4b's editor), persisting the appearance (the device settings
-store), the desktop settings window and its native runners (D32), the
-five client CI legs and release job, packaging scripts and flatpak. The
-flatpak needs a way to reach `~/.ssh/config` for FL-02, such as a
-read-only `--filesystem=~/.ssh:ro` grant: 04 §12.1 plans no home access,
-and a sandbox-hidden file reads as missing.
+store), the desktop settings window and its native runners (D32), and the
+five client CI legs and release job.
 
 ## Open manual gates
 

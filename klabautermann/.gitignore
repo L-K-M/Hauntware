@@ -6,3 +6,6 @@
 pubspec_overrides.yaml
 
 build/
+
+# scripts/build.sh, package-linux.sh and build-flatpak.sh stage artifacts here
+dist/
