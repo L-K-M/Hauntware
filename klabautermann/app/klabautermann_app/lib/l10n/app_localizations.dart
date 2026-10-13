@@ -190,6 +190,48 @@ abstract class AppLocalizations {
   /// **'Add server'**
   String get addServer;
 
+  /// Desktop-only menu entry and button that imports the hosts of the user's OpenSSH client config file into the fleet (FL-02). The path stays literal.
+  ///
+  /// In en, this message translates to:
+  /// **'Import from ~/.ssh/config'**
+  String get importSshConfig;
+
+  /// Shown after an ssh_config import finished; count is the number of servers it added.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{Your ~/.ssh/config names no hosts to import.} =1{Imported 1 server from ~/.ssh/config.} other{Imported {count} servers from ~/.ssh/config.}}'**
+  String sshConfigImported(int count);
+
+  /// Follows sshConfigImported when the import left host blocks out.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 host was skipped because its port is invalid or its name repeats an earlier host.} other{{count} hosts were skipped because their port is invalid or their name repeats an earlier host.}}'**
+  String sshConfigSkipped(int count);
+
+  /// No description provided for @sshConfigMissing.
+  ///
+  /// In en, this message translates to:
+  /// **'There is no ~/.ssh/config on this computer.'**
+  String get sshConfigMissing;
+
+  /// No description provided for @sshConfigUnreadable.
+  ///
+  /// In en, this message translates to:
+  /// **'Your ~/.ssh/config could not be read. Check that it is a regular file you can open.'**
+  String get sshConfigUnreadable;
+
+  /// No description provided for @sshConfigTooLarge.
+  ///
+  /// In en, this message translates to:
+  /// **'Your ~/.ssh/config is too large to import.'**
+  String get sshConfigTooLarge;
+
+  /// No description provided for @sshConfigImportFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The import from ~/.ssh/config failed. Try again, and restart the app if it keeps failing.'**
+  String get sshConfigImportFailed;
+
   /// No description provided for @syncFleet.
   ///
   /// In en, this message translates to:

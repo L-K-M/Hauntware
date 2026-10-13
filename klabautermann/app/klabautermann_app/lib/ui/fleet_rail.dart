@@ -5,6 +5,7 @@ import '../controllers/fleet_controller.dart';
 import '../l10n/app_localizations.dart';
 import '../theme/app_theme.dart';
 import 'sidebar_kit.dart';
+import 'ssh_config_import_action.dart';
 
 /// The desktop rail of 03 §10.2: a section header over the fleet rows and
 /// the kit's bottom bar with the add menu, sync chip and settings gear.
@@ -73,6 +74,17 @@ class _FleetRailState extends State<FleetRail> {
                       label: l10n.addServer,
                       onSelected: widget.onAddServer,
                     ),
+                    // FL-02: desktops only; phones have no ssh_config.
+                    if (widget.fleet.canImportSshConfig)
+                      SidebarMenuAction(
+                        label: l10n.importSshConfig,
+                        onSelected: widget.fleet.isImportingSshConfig
+                            ? null
+                            : () => importSshConfigWithFeedback(
+                                context,
+                                widget.fleet,
+                              ),
+                      ),
                   ],
                   sync: SidebarSyncChipData(
                     label: l10n.syncFleet,

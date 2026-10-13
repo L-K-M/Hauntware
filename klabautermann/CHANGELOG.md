@@ -7,3 +7,5 @@
   three-pane layout, phone master-detail stack, settings route), light
   and dark themes, and suite registration. Nothing connects to a host
   yet.
+- Desktop import from `~/.ssh/config` (FL-02): the hosts appear in the
+  fleet rail for the current session; they are not saved yet.
