@@ -47,7 +47,10 @@ Not in yet (later PRs): pull-only enrollment and the catalog (F3),
 persistence for imported ssh_config entries (with the catalog library),
 reachability dots and the `ghost_servers` rail (F4), theme editing (F4b),
 the desktop settings window and its native runners (D32), the five client
-CI legs and release job, packaging scripts and flatpak.
+CI legs and release job, packaging scripts and flatpak. The flatpak
+needs a way to reach `~/.ssh/config` for FL-02, such as a read-only
+`--filesystem=~/.ssh:ro` grant: 04 §12.1 plans no home access, and a
+sandbox-hidden file reads as missing.
 
 ## Open manual gates
 
