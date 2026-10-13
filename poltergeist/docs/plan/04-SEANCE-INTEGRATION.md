@@ -450,6 +450,7 @@ Device-local (in Poltergeist's settings/aux files, **never** in records):
 | per-device endpoint pins for bookmarked servers (§2.2 — keyed by bookmark record id + location slot, single slot each, written only by a local user act) | the pin's entire value is that no synced record can write it: a synced pin would be LWW-rewritable by the compromised device it guards against |
 | the local TOFU store §3.2's quarantine diffs against | same — the quarantine baseline must be state only local connects wrote, or the warning is cosmetic |
 | sync `deviceId`, bearer token, keystore entries | identity/credentials, per-install by design |
+| named skip rule sets (`settings.json`, 05 §3) | owner decision: a set is a local template; the lines it adds to a pair sync with that pair |
 
 Scoped-access lifecycle: a security-scoped blob grants a *path*, not a
 bookmark — re-validate it against the current synced `localPath` at open

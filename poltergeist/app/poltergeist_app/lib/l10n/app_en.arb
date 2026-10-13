@@ -9573,6 +9573,110 @@
   "@syncRulesDone": {
     "description": "Confirms the rules or time-offset dialog."
   },
+  "syncRuleSetsAdd": "Add Rule Set",
+  "@syncRuleSetsAdd": {
+    "description": "05 §3 named rule sets: menu button beside a sync pair's skip rules that lists this device's rule sets; picking one appends its patterns the pair lacks."
+  },
+  "syncRuleSetsNone": "No saved rule sets",
+  "@syncRuleSetsNone": {
+    "description": "05 §3: the disabled item the Add Rule Set menu shows when this device has no rule sets."
+  },
+  "syncRuleSetsSaveAs": "Save as Rule Set…",
+  "@syncRuleSetsSaveAs": {
+    "description": "05 §3: Skip Rules dialog button that saves the patterns in the field as a new named rule set."
+  },
+  "syncRuleSetsManage": "Manage Rule Sets…",
+  "@syncRuleSetsManage": {
+    "description": "05 §3: Skip Rules dialog button that opens the list of this device's rule sets."
+  },
+  "syncRuleSetsTitle": "Rule Sets",
+  "@syncRuleSetsTitle": {
+    "description": "05 §3: title of the dialog listing this device's rule sets."
+  },
+  "syncRuleSetsEmpty": "Save a sync's skip rules as a rule set, then add them to other syncs in one step. Adding a set copies its patterns, so later changes to the set don't change those syncs.",
+  "@syncRuleSetsEmpty": {
+    "description": "05 §3: what the Rule Sets dialog shows before any set exists."
+  },
+  "syncRuleSetsNew": "New Rule Set…",
+  "@syncRuleSetsNew": {
+    "description": "05 §3: Rule Sets dialog action that starts a new rule set."
+  },
+  "syncRuleSetsEditTooltip": "Edit {name}",
+  "@syncRuleSetsEditTooltip": {
+    "description": "05 §3: tooltip and screen-reader label of a rule set's edit button in the Rule Sets dialog.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "syncRuleSetsDeleteTooltip": "Delete {name}",
+  "@syncRuleSetsDeleteTooltip": {
+    "description": "05 §3: tooltip and screen-reader label of a rule set's delete button in the Rule Sets dialog.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "syncRuleSetNewTitle": "New Rule Set",
+  "@syncRuleSetNewTitle": {
+    "description": "05 §3: title of the editor for a new rule set."
+  },
+  "syncRuleSetEditTitle": "Edit Rule Set",
+  "@syncRuleSetEditTitle": {
+    "description": "05 §3: title of the editor for an existing rule set."
+  },
+  "syncRuleSetName": "Name",
+  "@syncRuleSetName": {
+    "description": "05 §3: label of a rule set's name field."
+  },
+  "syncRuleSetNameEmpty": "Enter a name.",
+  "@syncRuleSetNameEmpty": {
+    "description": "05 §3: shown under the name field when Save is pressed with no name."
+  },
+  "syncRuleSetNameTaken": "A rule set named “{name}” already exists.",
+  "@syncRuleSetNameTaken": {
+    "description": "05 §3: shown under the name field when another set already has this name (names ignore case).",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "syncRuleSetNoPatterns": "Add at least one pattern.",
+  "@syncRuleSetNoPatterns": {
+    "description": "05 §3: shown under the patterns field when Save is pressed with no pattern (comment lines alone do not count)."
+  },
+  "syncRuleSetSave": "Save",
+  "@syncRuleSetSave": {
+    "description": "05 §3: saves the rule set being edited."
+  },
+  "syncRuleSetSaveFailed": "The rule set could not be saved. Try again.",
+  "@syncRuleSetSaveFailed": {
+    "description": "05 §3: shown in the editor when writing the settings file failed; the set is not saved."
+  },
+  "syncRuleSetDeleteTitle": "Delete “{name}”?",
+  "@syncRuleSetDeleteTitle": {
+    "description": "05 §3: title of the confirmation before a rule set is deleted.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "syncRuleSetDeleteBody": "Syncs that already use its patterns keep them.",
+  "@syncRuleSetDeleteBody": {
+    "description": "05 §3: body of the delete confirmation; pairs hold a copy of the set's patterns."
+  },
+  "syncRuleSetDelete": "Delete",
+  "@syncRuleSetDelete": {
+    "description": "05 §3: confirms deleting a rule set."
+  },
+  "syncRuleSetDeleteFailed": "The rule set could not be deleted. Try again.",
+  "@syncRuleSetDeleteFailed": {
+    "description": "05 §3: shown in the Rule Sets dialog when writing the settings file failed; the set is still listed."
+  },
   "syncTimeOffsetTitle": "Time Offset",
   "@syncTimeOffsetTitle": {
     "description": "Title of the time-tolerance dialog."

@@ -9,33 +9,39 @@ import 'package:analyzer/dart/element/type.dart';
 import 'package:analyzer/diagnostic/diagnostic.dart';
 import 'package:path/path.dart' as p;
 
-// The guards are tool directories, not packages, so the shared walk is
-// imported by path.
+// The guards are tool directories, not packages, so the shared walk and
+// the guards.yaml loader are imported by path.
+// ignore: avoid_relative_lib_imports
+import '../../import_guard/lib/guards_config.dart';
 // ignore: avoid_relative_lib_imports
 import '../../import_guard/lib/source_walker.dart';
 
-const _engineDirectory = 'packages/poltergeist_core/lib/src/engine';
 const _protocolBases = {'EngineRequest', 'EngineEvent'};
 
-// These owners run inside the engine; their callbacks are never payloads.
-const _callbackOwners = {
-  '$_engineDirectory/progress_coalescer.dart': {'ProgressCoalescer'},
-  '$_engineDirectory/connect_log_coalescer.dart': {'ConnectLogCoalescer'},
-  '$_engineDirectory/engine_probes.dart': {'EngineProbes'},
-};
-
-/// Enforces 08 §3.3 using resolved types, including typedefs and inference.
-Future<List<String>> checkProtocol(String rootPath) async {
-  final root = p.normalize(p.absolute(rootPath));
-  final engine = Directory(p.join(root, _engineDirectory));
+/// Enforces 08 §3.3 using resolved types, including typedefs and inference,
+/// over the scan areas and engine directory the product's `tool/guards.yaml`
+/// entry declares. Reported paths are relative to the repository root.
+Future<List<String>> checkProtocol(
+  String repositoryRoot,
+  ProductGuard product,
+) async {
+  final root = p.normalize(p.absolute(repositoryRoot));
+  final productRoot = p.join(root, product.name);
+  final engineRel = product.engineProtocol;
+  if (engineRel == null) {
+    throw FormatException('${product.name}: engine_protocol is not configured');
+  }
+  final engine = Directory(p.join(productRoot, engineRel));
   await _requireDirectory(engine);
 
   final files = <File>[];
-  final areas = ['packages', 'app'].map((area) => p.join(root, area)).toList();
+  final areas = [for (final area in product.scan) p.join(productRoot, area)];
   for (final area in areas) {
     final directory = Directory(area);
     await _requireDirectory(directory);
-    files.addAll(await dartSources(directory, root).toList());
+    files.addAll(
+      await dartSources(directory, productRoot, product.scanAreas).toList(),
+    );
   }
   if (!files.any((file) => p.isWithin(engine.path, file.path))) {
     throw const FormatException('No engine sources found');
@@ -45,7 +51,9 @@ Future<List<String>> checkProtocol(String rootPath) async {
   final violations = <String>[];
   try {
     for (final file in files) {
-      violations.addAll(await _checkSource(file, root, contexts));
+      violations.addAll(
+        await _checkSource(file, productRoot, product, contexts),
+      );
     }
   } finally {
     await contexts.dispose();
@@ -55,25 +63,27 @@ Future<List<String>> checkProtocol(String rootPath) async {
 
 Future<List<String>> _checkSource(
   File file,
-  String root,
+  String productRoot,
+  ProductGuard product,
   AnalysisContextCollection contexts,
 ) async {
-  final relative = relativeSourcePath(file.path, root);
+  final relative = relativeSourcePath(file.path, productRoot);
+  final reported = '${product.name}/$relative';
   // Parsing separately fails closed even when Flutter imports cannot resolve
   // in the pure-Dart CI job. Engine field types must resolve completely.
   parseString(content: await file.readAsString(), path: file.path);
   final session = contexts.contextFor(file.path).currentSession;
   final result = await session.getResolvedUnit(file.path);
   if (result is! ResolvedUnitResult) {
-    throw StateError('Could not resolve $relative: $result');
+    throw StateError('Could not resolve $reported: $result');
   }
-  final inEngine = p.posix.isWithin(_engineDirectory, relative);
+  final inEngine = p.posix.isWithin(product.engineProtocol!, relative);
   if (inEngine) {
     final errors = result.diagnostics.where(
       (error) => error.severity == Severity.error,
     );
     if (errors.isNotEmpty) {
-      throw FormatException('Could not resolve $relative: ${errors.first}');
+      throw FormatException('Could not resolve $reported: ${errors.first}');
     }
   }
 
@@ -96,17 +106,21 @@ Future<List<String>> _checkSource(
         );
     if (!inEngine) {
       if (isPayload) {
-        violations.add('$relative: ${element.name} is outside engine/');
+        violations.add('$reported: ${element.name} is outside engine/');
       }
       continue;
     }
 
     // An allowed internal helper cannot later become a protocol subtype.
-    final allowed = _callbackOwners[relative]?.contains(element.name) ?? false;
+    final allowed =
+        product.engineProtocolCallbackOwners[relative]?.contains(
+          element.name,
+        ) ??
+        false;
     if (allowed && !isPayload) continue;
     for (final field in _callbackFields(element)) {
       violations.add(
-        '$relative: ${element.name}.$field has a function-typed field',
+        '$reported: ${element.name}.$field has a function-typed field',
       );
     }
   }
