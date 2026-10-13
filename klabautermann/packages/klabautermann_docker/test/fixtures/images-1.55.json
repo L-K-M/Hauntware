@@ -1,0 +1,26 @@
+[
+  {
+    "Id": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+    "ParentId": "",
+    "RepoTags": ["alpine:3.21"],
+    "RepoDigests": ["alpine@sha256:abcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcd"],
+    "Created": 1779000000,
+    "Size": 8200000,
+    "VirtualSize": 8200000,
+    "SharedSize": -1,
+    "Containers": 3,
+    "Labels": { "org.opencontainers.image.title": "alpine" }
+  },
+  {
+    "Id": "sha256:7777777777777777777777777777777777777777777777777777777777777777",
+    "ParentId": "",
+    "RepoTags": ["<none>:<none>"],
+    "RepoDigests": [],
+    "Created": 1779000100,
+    "Size": 4100000,
+    "VirtualSize": 4100000,
+    "SharedSize": -1,
+    "Containers": 0,
+    "Labels": {}
+  }
+]

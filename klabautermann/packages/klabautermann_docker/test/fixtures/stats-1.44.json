@@ -1,0 +1,58 @@
+{
+  "read": "2026-05-01T10:30:02.000000000Z",
+  "preread": "2026-05-01T10:30:01.000000000Z",
+  "pids_stats": { "current": 6 },
+  "blkio_stats": {
+    "io_service_bytes_recursive": [
+      { "major": 8, "minor": 0, "op": "Read", "value": 150 },
+      { "major": 8, "minor": 0, "op": "Write", "value": 300 },
+      { "major": 8, "minor": 0, "op": "Sync", "value": 0 }
+    ]
+  },
+  "num_procs": 6,
+  "storage_stats": {},
+  "cpu_stats": {
+    "cpu_usage": {
+      "total_usage": 1500000000,
+      "percpu_usage": [375000000, 375000000, 375000000, 375000000],
+      "usage_in_kernelmode": 200000000,
+      "usage_in_usermode": 1300000000
+    },
+    "system_cpu_usage": 12000000000,
+    "online_cpus": 4,
+    "throttling_data": { "periods": 0, "throttled_periods": 0, "throttled_time": 0 }
+  },
+  "precpu_stats": {
+    "cpu_usage": {
+      "total_usage": 1000000000,
+      "percpu_usage": [250000000, 250000000, 250000000, 250000000],
+      "usage_in_kernelmode": 150000000,
+      "usage_in_usermode": 850000000
+    },
+    "system_cpu_usage": 10000000000,
+    "online_cpus": 4,
+    "throttling_data": { "periods": 0, "throttled_periods": 0, "throttled_time": 0 }
+  },
+  "memory_stats": {
+    "usage": 250000000,
+    "max_usage": 260000000,
+    "stats": {
+      "cache": 0,
+      "inactive_file": 60000000,
+      "total_inactive_file": 60000000
+    },
+    "limit": 1073741824
+  },
+  "name": "/web-1",
+  "id": "9f8e7d6c5b4a39281706f5e4d3c2b1a09f8e7d6c5b4a39281706f5e4d3c2b1a0",
+  "networks": {
+    "eth0": {
+      "rx_bytes": 3000,
+      "rx_packets": 30,
+      "rx_errors": 0,
+      "tx_bytes": 5000,
+      "tx_packets": 50,
+      "tx_errors": 0
+    }
+  }
+}

@@ -1,0 +1,26 @@
+[
+  {
+    "Id": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "Names": ["/podman-web-1"],
+    "Image": "docker.io/library/nginx:1.27",
+    "ImageID": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+    "Command": "nginx -g 'daemon off;'",
+    "Created": 1780001000,
+    "Ports": [
+      { "IP": "0.0.0.0", "PrivatePort": 80, "PublicPort": 9090, "Type": "tcp" }
+    ],
+    "Labels": {
+      "com.docker.compose.project": "podweb",
+      "com.docker.compose.service": "web",
+      "com.docker.compose.oneoff": "False",
+      "io.podman.systemd_unit": "podweb.service"
+    },
+    "State": "running",
+    "Status": "Up 1 hour (healthy)",
+    "HostConfig": { "NetworkMode": "podweb_default" },
+    "NetworkSettings": {
+      "Networks": { "podweb_default": { "IPAddress": "10.89.0.5" } }
+    },
+    "Mounts": []
+  }
+]

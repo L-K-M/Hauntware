@@ -1,0 +1,35 @@
+{
+  "ID": "KLBT:ST4U:REPL:ACEM:ENTF:IXTU:RESX:ONLY:HAND:WRIT:TENF:XTUR",
+  "Containers": 4,
+  "ContainersRunning": 3,
+  "ContainersPaused": 0,
+  "ContainersStopped": 1,
+  "Images": 7,
+  "Driver": "overlay2",
+  "DriverStatus": [
+    ["Backing Filesystem", "extfs"],
+    ["Supports d_type", "true"]
+  ],
+  "Plugins": {
+    "Volume": ["local"],
+    "Network": ["bridge", "host", "ipvlan", "macvlan", "null", "overlay"],
+    "Log": ["json-file", "journald", "local", "syslog"]
+  },
+  "MemoryLimit": true,
+  "LoggingDriver": "json-file",
+  "CgroupDriver": "systemd",
+  "CgroupVersion": "2",
+  "NEventsListener": 1,
+  "KernelVersion": "6.14.0-21-generic",
+  "OperatingSystem": "Ubuntu 24.04.2 LTS",
+  "OSVersion": "24.04",
+  "OSType": "linux",
+  "Architecture": "x86_64",
+  "NCPU": 8,
+  "MemTotal": 16772243456,
+  "DockerRootDir": "/var/lib/docker",
+  "Name": "fixture-host",
+  "ServerVersion": "29.3.1",
+  "SecurityOptions": ["name=apparmor", "name=seccomp,profile=builtin", "name=cgroupns"],
+  "Warnings": ["bridge-nf-call-iptables is disabled"]
+}
