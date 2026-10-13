@@ -1499,10 +1499,6 @@ jobs:
             -e 's/CODE_SIGN_STYLE = Automatic;/CODE_SIGN_STYLE = Manual;/' \
             -e 's/DEVELOPMENT_TEAM = [^;]*;/DEVELOPMENT_TEAM = "";/' \
             klabautermann/app/klabautermann_app/macos/Runner.xcodeproj/project.pbxproj
-      # The workspace first, then the app that path-depends on its members.
-      - name: Resolve workspace
-        working-directory: klabautermann
-        run: dart pub get
       - name: Resolve app dependencies
         working-directory: klabautermann/app/klabautermann_app
         run: flutter pub get
