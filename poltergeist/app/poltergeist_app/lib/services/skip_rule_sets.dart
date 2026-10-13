@@ -91,6 +91,27 @@ List<String> appendSkipRules(List<String> existing, Iterable<String> patterns) {
   return lines;
 }
 
+/// [lines] as [skipRuleLines] reads them, without any line equal to
+/// [pattern]. A near miss (`.git` for `.git/`, `!.git/`) is a different
+/// rule and stays.
+List<String> removeSkipRule(List<String> lines, String pattern) => [
+  for (final line in skipRuleLines(lines.join('\n')))
+    if (line != pattern.trim()) line,
+];
+
+/// The heavy directories the pair editor offers as one-click excludes
+/// (05 §3). A pick counts as chosen only while its exact line is present.
+enum SkipRuleQuickPick {
+  git('.git/'),
+  nodeModules('node_modules/');
+
+  const SkipRuleQuickPick(this.pattern);
+
+  /// The excludes line, shown verbatim as the chip label: gitignore
+  /// syntax, not copy, so it is never translated.
+  final String pattern;
+}
+
 /// Whether [lines] hold at least one pattern rather than only comments.
 bool hasSkipPattern(Iterable<String> lines) =>
     lines.any((line) => line.trim().isNotEmpty && !line.trim().startsWith('#'));

@@ -175,8 +175,16 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   'lib/services/ssh_config_import_setup.dart': {r"'$home/.ssh/config'", "'~'"},
   // A skip rule set's settings.json fields, the line separator its
   // patterns join and split on, and the gitignore comment marker (05 §3):
-  // data, never rendered.
-  'lib/services/skip_rule_sets.dart': {"'name'", "'patterns'", "'\\n'", "'#'"},
+  // data, never rendered. The quick picks' excludes lines show verbatim
+  // as chip labels: gitignore syntax, never translated.
+  'lib/services/skip_rule_sets.dart': {
+    "'name'",
+    "'patterns'",
+    "'\\n'",
+    "'#'",
+    "'.git/'",
+    "'node_modules/'",
+  },
   // The composed queue's honest-absence connection seam: the refusal's
   // `operation` label is diagnostic metadata (the exception renders
   // `message`, which is ARB copy) — never authored UI text.

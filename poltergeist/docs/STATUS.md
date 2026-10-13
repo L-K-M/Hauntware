@@ -4,6 +4,39 @@ Living snapshot of where Poltergeist is, what's proven, and what to pick up
 next. Read [AGENTS.md](../AGENTS.md) for build/test commands and
 [09-PLAYBOOK.md](plan/09-PLAYBOOK.md) for the PR process.
 
+## Pair-editor quick picks (2026-10-13)
+
+The advanced pair editor's exclude rules now offer `.git/` and
+`node_modules/` as chips, as 05 §3 specified. A chip shows as chosen
+while the excludes hold its exact line, whether typed or added.
+Choosing it appends the line after the pair's own, as Add Rule Set
+does, so a pair's earlier lines keep their place. Clearing it removes
+that line only: near misses such as `.git` or `!.git/` are different
+rules and stay. The chips sit before Add Rule Set and need no saved
+sets. Their labels are the patterns themselves, gitignore syntax rather
+than copy, so they have no translations. The Skip Rules dialog does not
+get them, since the spec names only the pair editor.
+
+Code: `SkipRuleQuickPick` and the pure `removeSkipRule` in
+`services/skip_rule_sets.dart`, and the chip row in
+`ui/sync/sync_pair_editor.dart`.
+
+Tests: 5 new. `removeSkipRule` (1) and the pair editor (4): choosing a
+chip appends after a `!` line, clearing one keeps its near misses,
+typing the line chooses it, and the row starts under the field. Two
+existing tests gain checks: without saved sets the chips still show,
+and adding a set with `node_modules/` chooses that chip. The first
+render with real fonts showed the row centred under the field; the
+alignment test failed against that before the fix. An independent
+review found nothing important. Declined: a chip stays chosen when a
+later `!.git/` re-includes the directory, since it tracks the line and
+the plan view shows the effect; and the labels gain no tooltip, since
+the labelled field sits directly above them.
+
+Local validation: Flutter analysis is clean, the localization contract
+passes, and all 3,468 app tests pass. Not run: native platforms and
+screen readers; the QA checklist's Skip rule sets section covers them.
+
 ## Skip rule sets (2026-10-13)
 
 Sync's skip rules can now be saved as named rule sets and added to

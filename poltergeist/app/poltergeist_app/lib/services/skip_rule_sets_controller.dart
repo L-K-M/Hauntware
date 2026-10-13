@@ -39,19 +39,21 @@ final class SkipRuleSetsController extends ChangeNotifier
   /// the name: callers check [value] first, but the stored list can hold
   /// sets this copy missed after a launch whose read failed.
   Future<void> put(SkipRuleSet set, {String? replacing}) async {
-    final put = _put;
+    final persist = _put;
     _publish(
-      put == null
+      persist == null
           ? putSkipRuleSetInto(_value, set, replacing: replacing)
-          : await put(set, replacing: replacing),
+          : await persist(set, replacing: replacing),
     );
   }
 
   /// Deletes the set named [name]. Pairs that copied its lines keep them.
   Future<void> remove(String name) async {
-    final remove = _remove;
+    final persist = _remove;
     _publish(
-      remove == null ? removeSkipRuleSetFrom(_value, name) : await remove(name),
+      persist == null
+          ? removeSkipRuleSetFrom(_value, name)
+          : await persist(name),
     );
   }
 

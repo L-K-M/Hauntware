@@ -98,6 +98,21 @@ void main() {
     });
   });
 
+  test('removing a rule drops only its exact line', () {
+    expect(
+      removeSkipRule([
+        ' .git/ ',
+        '*.log',
+        '.git',
+        '!.git/',
+        '',
+        '.git/',
+      ], '.git/'),
+      ['*.log', '.git', '!.git/'],
+    );
+    expect(removeSkipRule(['*.log'], 'node_modules/'), ['*.log']);
+  });
+
   test('lines read as the dialogs save them', () {
     expect(skipRuleLines(' a \n\n  \nb\n'), ['a', 'b']);
   });

@@ -124,6 +124,10 @@ known-divergent surface.
   place.
 - [ ] OWNER MANUAL QA: phone posture: Manage Rule Sets and its editor fit
   without clipping, and the keyboard does not hide the pattern field.
+- [ ] OWNER MANUAL QA: VoiceOver, NVDA and TalkBack read the pair
+  editor's `.git/` and `node_modules/` chips with their selected state,
+  and on a phone the chips wrap under the exclude rules without
+  clipping.
 
 ## Screen reader smoke
 

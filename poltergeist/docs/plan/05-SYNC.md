@@ -354,7 +354,11 @@ concurrently in the engine isolate (D8).
   `*.poltergeist-*` (together the last two cover `.poltergeist-trash/`,
   `.poltergeist-*.tmp` temps, the editor's `<name>.poltergeist-<uuid>.edit`
   / `.backup` siblings, and any future app droppings — D15). The pair
-  editor offers quick-pick chips for `.git/` and `node_modules/`.
+  editor offers quick-pick chips for `.git/` and `node_modules/`
+  (shipped 2026-10-13): a chip shows as chosen while the excludes hold
+  its exact line, choosing it appends the line as a rule set would, and
+  clearing it removes that line only, so a near miss such as `.git` or
+  `!.git/` stays.
 - **Named rule sets** (v1.x, 2026-10-13): a rule set is a name and a
   list of `excludeGlobs` lines, kept on this device in `settings.json`
   (03 §6) and never synced. Names are trimmed and unique ignoring case,

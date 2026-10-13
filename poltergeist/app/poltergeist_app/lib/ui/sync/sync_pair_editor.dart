@@ -404,10 +404,22 @@ class _SyncPairEditorDialogState extends State<SyncPairEditorDialog> {
   /// Appends a named set's lines the excludes lack (05 §3); the pair
   /// keeps the copy.
   void _addRuleSet(SkipRuleSet set) {
-    final text = appendSkipRules(
-      skipRuleLines(_excludes.text),
-      set.patterns,
-    ).join('\n');
+    _setExcludes(appendSkipRules(skipRuleLines(_excludes.text), set.patterns));
+  }
+
+  /// Adds or removes a quick pick's exact line (05 §3). Every other line
+  /// keeps its order; blank lines go, as a save would drop them.
+  void _toggleQuickPick(SkipRuleQuickPick pick, bool selected) {
+    final lines = skipRuleLines(_excludes.text);
+    _setExcludes(
+      selected
+          ? appendSkipRules(lines, [pick.pattern])
+          : removeSkipRule(lines, pick.pattern),
+    );
+  }
+
+  void _setExcludes(List<String> lines) {
+    final text = lines.join('\n');
     _excludes.value = TextEditingValue(
       text: text,
       selection: TextSelection.collapsed(offset: text.length),
@@ -593,11 +605,31 @@ class _SyncPairEditorDialogState extends State<SyncPairEditorDialog> {
                     alignLabelWithHint: true,
                   ),
                 ),
-                if (widget.skipRuleSets case final sets?)
-                  Align(
-                    alignment: AlignmentDirectional.centerStart,
-                    child: SkipRuleSetMenu(sets: sets, onAdd: _addRuleSet),
+                Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: ListenableBuilder(
+                    listenable: _excludes,
+                    builder: (context, _) {
+                      final lines = skipRuleLines(_excludes.text);
+                      return Wrap(
+                        spacing: 8,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          for (final pick in SkipRuleQuickPick.values)
+                            FilterChip(
+                              key: ValueKey(pick),
+                              label: Text(pick.pattern),
+                              selected: lines.contains(pick.pattern),
+                              onSelected: (selected) =>
+                                  _toggleQuickPick(pick, selected),
+                            ),
+                          if (widget.skipRuleSets case final sets?)
+                            SkipRuleSetMenu(sets: sets, onAdd: _addRuleSet),
+                        ],
+                      );
+                    },
                   ),
+                ),
                 const SizedBox(height: 8),
                 Row(
                   children: [

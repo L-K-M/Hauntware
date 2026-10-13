@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- **Skip `.git/` and `node_modules/` in one click.** The advanced pair
+  editor offers both as chips under the exclude rules. Clear a chip to
+  remove its rule again.
 - **Reuse skip rules across syncs.** Save a sync's skip rules as a named
   rule set, then add the set to another sync from Edit Rules… or the
   advanced pair editor. Adding a set copies its patterns after the rules
