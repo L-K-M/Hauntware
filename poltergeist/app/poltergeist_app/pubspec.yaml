@@ -68,7 +68,6 @@ dependency_overrides:
     path: ../../third_party/pdfium_dart
 
 dev_dependencies:
-  analyzer: 14.1.0
   # The shared localization contract scanner that replaced this app's local
   # copy (03 §3.5 F1b); test-only, nothing shipped.
   l10n_contract:
