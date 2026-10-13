@@ -1,10 +1,10 @@
 # shellcheck shell=bash
 # Repacks a product's release .deb under flatpak's /app prefix and builds
 # it, so the bundle ships byte-for-byte what the .deb installs. Sourced by
-# planchette/, seance/ and poltergeist/scripts/build-flatpak.sh, which keep
-# their arguments, the .deb build and the bundle name; callers define
-# die(). tool/release_version/test/flatpak_repack_test.dart sources it
-# directly.
+# planchette/, seance/, poltergeist/ and klabautermann/
+# scripts/build-flatpak.sh, which keep their arguments, the .deb build and
+# the bundle name; callers define die().
+# tool/release_version/test/flatpak_repack_test.dart sources it directly.
 #
 #   .deb  usr/bin/<command>     wrapper: exec /usr/lib/<app>/<binary>
 #         usr/lib/<app>/...     the Flutter bundle

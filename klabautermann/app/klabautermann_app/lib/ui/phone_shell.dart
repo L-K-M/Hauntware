@@ -6,6 +6,7 @@ import '../l10n/app_localizations.dart';
 import 'fleet_rail.dart';
 import 'server_detail_page.dart';
 import 'sidebar_kit.dart';
+import 'ssh_config_import_action.dart';
 
 /// The phone home of 03 §10.5: the fleet list is home, a server opens a
 /// pushed screen. Tablet two-pane is v1; widths under the desktop
@@ -36,6 +37,20 @@ class PhoneShell extends StatelessWidget {
             tooltip: l10n.addServer,
             onPressed: onAddServer,
           ),
+          // FL-02: only where the platform has an ssh_config, which is a
+          // desktop window narrower than the desktop breakpoint, never a
+          // phone.
+          if (fleet.canImportSshConfig)
+            ListenableBuilder(
+              listenable: fleet,
+              builder: (context, _) => IconButton(
+                icon: const Icon(Icons.download_outlined),
+                tooltip: l10n.importSshConfig,
+                onPressed: fleet.isImportingSshConfig
+                    ? null
+                    : () => importSshConfigWithFeedback(context, fleet),
+              ),
+            ),
           IconButton(
             icon: const Icon(Icons.settings_outlined),
             tooltip: l10n.openSettings,

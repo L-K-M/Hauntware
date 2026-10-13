@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:ghost_theme/ghost_theme.dart' show GhostChrome;
 import 'package:klabautermann_core/klabautermann_core.dart' show LinkPhase;
 
 import '../controllers/fleet_controller.dart';
 import '../l10n/app_localizations.dart';
 import '../theme/app_theme.dart';
 import 'sidebar_kit.dart';
+import 'ssh_config_import_action.dart';
 
 /// The desktop rail of 03 §10.2: a section header over the fleet rows and
 /// the kit's bottom bar with the add menu, sync chip and settings gear.
@@ -73,6 +75,17 @@ class _FleetRailState extends State<FleetRail> {
                       label: l10n.addServer,
                       onSelected: widget.onAddServer,
                     ),
+                    // FL-02: desktops only; phones have no ssh_config.
+                    if (widget.fleet.canImportSshConfig)
+                      SidebarMenuAction(
+                        label: l10n.importSshConfig,
+                        onSelected: widget.fleet.isImportingSshConfig
+                            ? null
+                            : () => importSshConfigWithFeedback(
+                                context,
+                                widget.fleet,
+                              ),
+                      ),
                   ],
                   sync: SidebarSyncChipData(
                     label: l10n.syncFleet,
@@ -114,13 +127,15 @@ class FleetServerRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final status = KlabautermannStatusColors.of(context);
+    // The status colours live on ghost_theme's chrome beside the tokens
+    // they are held to the same contrast floor with.
+    final chrome = GhostChrome.of(context, klabautermannThemeStyle);
     final phase = fleet.linkPhaseFor(server.id);
     final statusWord = linkPhaseWord(l10n, phase);
     final dot = switch (phase) {
-      LinkPhase.connected => SidebarStatusDot(status.connected),
-      LinkPhase.connecting => SidebarStatusDot(status.connecting),
-      LinkPhase.failed => SidebarStatusDot(status.failed),
+      LinkPhase.connected => SidebarStatusDot(chrome.statusConnected),
+      LinkPhase.connecting => SidebarStatusDot(chrome.statusConnecting),
+      LinkPhase.failed => SidebarStatusDot(chrome.statusFailed),
       // Nothing observed yet paints no dot; the label still says the word.
       LinkPhase.disconnected => null,
     };

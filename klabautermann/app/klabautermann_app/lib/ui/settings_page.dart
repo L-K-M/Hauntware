@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:ghost_theme/ghost_theme.dart' show ThemeModePreference;
 
 import '../controllers/appearance_controller.dart';
 import '../l10n/app_localizations.dart';
@@ -72,23 +73,23 @@ class AppearanceTab extends StatelessWidget {
               style: Theme.of(context).textTheme.titleSmall,
             ),
             const SizedBox(height: 12),
-            SegmentedButton<ThemeMode>(
+            SegmentedButton<ThemeModePreference>(
               segments: [
                 ButtonSegment(
-                  value: ThemeMode.system,
+                  value: ThemeModePreference.system,
                   label: Text(l10n.themeSystem),
                 ),
                 ButtonSegment(
-                  value: ThemeMode.light,
+                  value: ThemeModePreference.light,
                   label: Text(l10n.themeLight),
                 ),
                 ButtonSegment(
-                  value: ThemeMode.dark,
+                  value: ThemeModePreference.dark,
                   label: Text(l10n.themeDark),
                 ),
               ],
-              selected: {appearance.themeMode},
-              onSelectionChanged: (modes) => appearance.themeMode = modes.first,
+              selected: {appearance.mode},
+              onSelectionChanged: (modes) => appearance.mode = modes.first,
             ),
           ],
         );
