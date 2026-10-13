@@ -73,9 +73,12 @@ void main() {
           access: SyncTrashRootAccess.createOrClaim,
         );
 
-    Directory stage(String? identity) {
+    Directory stage(String? identity, {String suffix = ''}) {
       final candidate = Directory(
-        _context.join(root.path, '$syncTrashRootMarkerName.init-${'a' * 32}'),
+        _context.join(
+          root.path,
+          '$syncTrashRootMarkerName.init-${suffix.isEmpty ? 'a' * 32 : suffix}',
+        ),
       )..createSync();
       if (identity != null) {
         File(
@@ -116,16 +119,7 @@ void main() {
     test('holding anything but a marker, it still fails closed', () async {
       stage('poltergeist-sync-trash-v1:not-hex');
 
-      await expectLater(
-        claim(),
-        throwsA(
-          isA<RemoteFileException>().having(
-            (error) => error.kind,
-            'kind',
-            RemoteFileErrorKind.conflict,
-          ),
-        ),
-      );
+      await expectLater(claim(), throwsA(_conflict));
       expect(
         Directory(
           _context.join(root.path, syncTrashRootMarkerName),
@@ -133,8 +127,24 @@ void main() {
         isFalse,
       );
     });
+
+    test('named unlike a claim would name it, it fails closed', () async {
+      for (final suffix in ['tmp', 'A' * 32, '${'a' * 32}0']) {
+        final candidate = stage(null, suffix: suffix);
+
+        await expectLater(claim(), throwsA(_conflict), reason: suffix);
+
+        candidate.deleteSync(recursive: true);
+      }
+    });
   });
 }
+
+final _conflict = isA<RemoteFileException>().having(
+  (error) => error.kind,
+  'kind',
+  RemoteFileErrorKind.conflict,
+);
 
 final _style = Platform.isWindows
     ? SyncTrashPathStyle.windows
@@ -160,7 +170,7 @@ final class _StalledClaimFs extends LocalFileSystem {
     RemoteTransferCancellation? cancellation,
     bool computeHash = true,
   }) async {
-    if (!staged.isCompleted) {
+    if (_context.basename(path) == 'identity' && !staged.isCompleted) {
       staged.complete();
       await release.future;
     }

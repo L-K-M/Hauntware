@@ -25,6 +25,13 @@ const int _markerRandomBytes = 16;
 const int _maxMarkerBytes = 128;
 const int _privateDirectoryMode = 0x1C0; // 0700
 
+/// The name [_claimMarker] gives its candidate, and nothing looser: a
+/// staged marker is adopted even before its identity exists, so only a
+/// directory a claim could have made may pass for one.
+final RegExp _stagedMarkerNamePattern = RegExp(
+  '^${RegExp.escape('$syncTrashRootMarkerName$_markerCandidateSeparator')}'
+  '[0-9a-f]{${_markerRandomBytes * 2}}\$',
+);
 final RegExp _markerPrefixPattern = RegExp(
   '^${RegExp.escape(_markerPrefix)}[0-9a-f]{0,32}\$',
 );
@@ -229,10 +236,7 @@ Future<void> _validateLegacyRoot(
 ) async {
   final children = await fileSystem.listDirectory(trashRoot);
   for (final child in children) {
-    if (!child.isDirectory) throw _unsafeRoot(trashRoot);
-    if (!child.name.startsWith(
-      '$syncTrashRootMarkerName$_markerCandidateSeparator',
-    )) {
+    if (!child.isDirectory || !_stagedMarkerNamePattern.hasMatch(child.name)) {
       throw _unsafeRoot(trashRoot);
     }
 

@@ -19,19 +19,23 @@ Adoption now accepts a staged marker whose identity is absent, is a
 prefix of a marker (a remote write still in progress), or vanishes
 because its claim renamed it into place mid-read. Staged content that
 could never become a marker still fails closed, as do all other
-occupants. Reading the root's own marker is unchanged.
+occupants. Because a staged marker can now pass before its identity
+exists, only the exact name a claim gives it (`.init-` plus 32 hex
+digits) qualifies; the old prefix check accepted any suffix. Reading
+the root's own marker is unchanged.
 
 Code: `_checkStagedMarker` in `poltergeist_sync/lib/src/trash_root.dart`,
 sharing its identity read with `_readMarker`.
 
-Tests: 3 new in `trash_root_test.dart`. A claim held after staging its
-candidate lets a second claim run against the half-written root; both
-agree on one root id and only the marker remains. Absent, empty and
-partial identities are adopted, and staged non-hex content still fails
-closed. The first two failed with the CI's error before the fix. The
-original concurrency test then passed five runs in a row.
+Tests: 4 new in `trash_root_test.dart`. A claim held at its identity
+write lets a second claim run against the half-written root; both agree
+on one root id and only the marker remains. Absent, empty and partial
+identities are adopted; staged non-hex content and names a claim would
+not make still fail closed. The first two failed with the CI's error
+before the fix, and the name test failed against the old prefix check.
+The original concurrency test then passed five runs in a row.
 
-Local validation: `dart analyze` is clean and all 409 poltergeist_sync
+Local validation: `dart analyze` is clean and all 410 poltergeist_sync
 tests pass on Linux. Not run: Windows, where the race surfaced; CI
 covers it.
 
