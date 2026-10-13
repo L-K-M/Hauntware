@@ -64,6 +64,55 @@ Host bastion db
       expect(h.user, 'root');
     });
 
+    test('accepts one = with whitespace around it, as ssh does', () {
+      const text =
+          'Host = x\n'
+          '  HostName = "x.example.com"\n'
+          '  User =deploy\n'
+          '  Port= 2222\n'
+          '  IdentityFile  =  ~/.ssh/id\n';
+      final h = SshConfigImporter.parse(text).single;
+      expect(h.alias, 'x');
+      expect(h.hostName, 'x.example.com');
+      expect(h.user, 'deploy');
+      expect(h.port, 2222);
+      expect(h.identityFile, '~/.ssh/id');
+    });
+
+    test('splits and unquotes arguments as ssh does', () {
+      const text =
+          'Host x\n'
+          // Quotes keep spaces and `#` in one argument.
+          '  IdentityFile "~/My Keys/#1"\n'
+          // Single quotes count too, as in ssh's argv_split().
+          "  User 'ops'\n"
+          // A `#` starts a comment only where an argument would start.
+          '  HostName x.example.com # comment\n'
+          '  ProxyJump jump#2\n';
+      final h = SshConfigImporter.parse(text).single;
+      expect(h.identityFile, '~/My Keys/#1');
+      expect(h.user, 'ops');
+      expect(h.hostName, 'x.example.com');
+      expect(h.proxyJump, 'jump#2');
+
+      // A backslash escapes a space or a quote; any other one is kept.
+      final escaped = SshConfigImporter.parse(r'''
+Host y
+  IdentityFile ~/My\ Keys/\"id\"\x
+''').single;
+      expect(escaped.identityFile, r'~/My Keys/"id"\x');
+
+      // ssh rejects an unterminated quote; the importer reads it to the end
+      // of the line rather than dropping the value.
+      final open = SshConfigImporter.parse('Host z\n  User "ops\n').single;
+      expect(open.user, 'ops');
+
+      // A directive with no value is absent, so the alias is the address.
+      final blank = SshConfigImporter.parse('Host b\n  HostName=\n').single;
+      expect(blank.hostName, isNull);
+      expect(blank.effectiveHost, 'b');
+    });
+
     test('converts to a ServerConfig with reference-not-store key auth', () {
       final h = SshConfigImporter.parse(
         'Host x\n HostName h\n IdentityFile ~/.ssh/id\n',

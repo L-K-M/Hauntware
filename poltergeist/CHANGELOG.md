@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **ssh_config import reads lines as ssh does.** `HostName = example.com`
+  imports `example.com`, not `= example.com`, and `Include = extra.conf`
+  reads `extra.conf`. Single and double quotes and backslash escapes are
+  removed, and a `#` inside quotes or inside a value no longer cuts it
+  short.
 - **Two syncs can claim a new trash folder at once.** When two syncs
   started together on the same new trash folder, one could fail with
   "The sync-trash ownership marker is invalid". A sync interrupted while

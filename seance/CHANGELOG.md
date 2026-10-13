@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Import SSH config reads lines as ssh does. `HostName = example.com`
+  imports `example.com`, not `= example.com`. Single and double quotes
+  and backslash escapes are removed, and a `#` inside quotes or inside a
+  value no longer cuts the value short. A directive with no value, such
+  as `HostName=`, counts as absent instead of importing an empty host.
 - Assistant: the danger check on suggested commands and Command inbox
   scripts covers Docker, systemd, cron, firewall and user commands.
   `docker system prune` with `--all` or `--volumes`,

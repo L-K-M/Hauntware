@@ -430,6 +430,25 @@ Include work.conf "my configs/main.conf" other.conf
     );
   });
 
+  test('Include arguments split as the pin splits every line', () async {
+    // `Include = x` names x, as ssh reads one `=` with whitespace around
+    // it; a quoted `#` is part of the path, not a comment.
+    final source = _FakeSource(
+      files: {
+        _configPath: '''
+Include = work.conf
+Include "#ops.conf" # a trailing comment
+''',
+        '$_home/.ssh/work.conf': 'Host work\n',
+        '$_home/.ssh/#ops.conf': 'Host ops\n',
+      },
+    );
+
+    final preview = await _service(source).loadPreview(configPath: _configPath);
+    expect(preview.rows.map((r) => r.host.alias).toList(), ['work', 'ops']);
+    expect(preview.notices, isEmpty);
+  });
+
   test('Include with ~ expansion and nesting', () async {
     final source = _FakeSource(files: {
       _configPath: 'Include ~/.ssh/outer.conf\n',
@@ -949,18 +968,19 @@ Host alpha beta
 
   test('Host pattern separators agree with the pin for every whitespace kind',
       () async {
-    // The pin tokenizes Host patterns with split(RegExp(r'\s+')); the
-    // scan must key its per-host badges by exactly that alias, or a
-    // control-character separator (carriage return, vertical tab, form
-    // feed) silently drops the badge. Regression: `Host alpha\rbeta`
-    // keyed the ProxyCommand badge under a token the pin never made.
+    // The pin splits Host patterns on spaces and tabs only, as ssh's
+    // argv_split() does, so `Host alpha\rbeta` is one pattern there. The
+    // scan reads lines through the pin's own SshConfigLine, so its
+    // per-host badges key by exactly the alias the pin minted.
+    // Regression: `Host alpha\rbeta` once keyed the ProxyCommand badge
+    // under a token the pin never made.
     const separators = {
       'space': ' ',
       'tab': '\t',
       'carriage-return': '\r',
       'vertical-tab': '\u000b',
       'form-feed': '\u000c',
-      // NBSP rides the same \s class in both Regexps (ECMAScript set).
+      // Not a separator for ssh or the pin either.
       'unicode-space': '\u00a0',
     };
 
@@ -997,10 +1017,9 @@ Host alpha beta
   });
 
   test('quoted Host patterns keep alias parity with the pin', () async {
-    // Quote stripping happens in _directiveValue before tokenization,
-    // exactly as the pin strips quotes before splitting — pin that
-    // order so the quote rule cannot drift and key badges under a
-    // token the pin never minted.
+    // The scan unquotes Host patterns through the pin's SshConfigLine,
+    // so the quote rule cannot drift and key badges under a token the
+    // pin never minted.
     final text = 'Host "alpha" "beta"\n'
         '  ProxyCommand nc %h %p\n';
     final pinnedAlias = SshConfigImporter.parse(text).single.alias;

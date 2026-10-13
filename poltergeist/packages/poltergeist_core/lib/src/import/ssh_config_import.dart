@@ -1,8 +1,10 @@
 /// ssh_config import with preview + dedupe (D22; 07 §3.3).
 ///
 /// Séance's `SshConfigImporter` — consumed through the git pin, never a
-/// local copy — parses host blocks. What the pinned importer silently
-/// discards is exactly what this module makes loud instead:
+/// local copy — parses host blocks, and its `SshConfigLine` splits every
+/// line this module scans, so both read each line the same way. What the
+/// pinned importer silently discards is exactly what this module makes
+/// loud instead:
 ///
 /// - a plain, top-level `Include` is resolved read-only at import time
 ///   (the same local-file trust already granted to `~/.ssh/config`
@@ -382,7 +384,7 @@ class _Resolver {
     // block-less directives scoped to that host by ssh, so they must not
     // promote to global limitations (the hostInclude badge covers the
     // loss); Match blocks inside it still apply globally, as in ssh.
-    final deferredIncludes = <(String args, bool deferredContext)>[];
+    final deferredIncludes = <(List<String> args, bool deferredContext)>[];
     final chunks = _splitAtTopLevelIncludes(text, deferredIncludes);
 
     for (final chunk in chunks) {
@@ -418,20 +420,18 @@ class _Resolver {
   /// map) and its arguments land in [deferredIncludes] instead.
   List<_Chunk> _splitAtTopLevelIncludes(
     String text,
-    List<(String, bool)> deferredIncludes,
+    List<(List<String>, bool)> deferredIncludes,
   ) {
     final chunks = <_Chunk>[];
     var lines = <String>[];
     _BlockContext context = const _BlockContextTop();
 
     for (final raw in text.split('\n')) {
-      final line = _stripComment(raw).trim();
-      final key = _directiveKey(line)?.toLowerCase();
+      final line = SshConfigLine.tryParse(raw);
 
-      if (key == 'include') {
-        // Raw value: the include tokenizer is itself quote-aware, so a
-        // quoted path with spaces must survive to it unstripped.
-        final args = _rawDirectiveValue(line);
+      if (line?.keyword == 'include') {
+        // Each argument is one path or glob, unquoted as ssh reads it.
+        final args = line!.arguments;
         if (context is _BlockContextTop) {
           chunks.add(_Chunk(List.of(lines), [args]));
           lines = [];
@@ -456,7 +456,7 @@ class _Resolver {
         // case, already covered by the matchBlock limitation on every row.
       } else {
         lines.add(raw);
-        context = _advanceContext(context, key, line);
+        context = _advanceContext(context, line);
       }
     }
     chunks.add(_Chunk(lines, const []));
@@ -468,19 +468,18 @@ class _Resolver {
     _BlockContext context = const _BlockContextTop();
 
     for (final raw in chunk.lines) {
-      final line = _stripComment(raw).trim();
-      if (line.isEmpty) continue;
-      final key = _directiveKey(line)?.toLowerCase();
-      if (key == null) continue;
+      final line = SshConfigLine.tryParse(raw);
+      if (line == null) continue;
+      final key = line.keyword;
 
       switch (key) {
         case 'host':
-          context = _advanceContext(context, key, line);
+          context = _advanceContext(context, line);
         case 'match':
           // Match criteria evaluation is out of scope (that would
           // reimplement ssh semantics); any Match block badges every row.
           globalLimitations.add(SshConfigImportLimitation.matchBlock);
-          context = _advanceContext(context, key, line);
+          context = _advanceContext(context, line);
         case 'proxycommand':
         case 'proxyjump':
           final limitation = key == 'proxycommand'
@@ -548,19 +547,22 @@ class _Resolver {
       hostLimitations.putIfAbsent(alias, () => {});
 
   Future<void> _resolveInclude({
-    required String args,
+    required List<String> args,
     required int depth,
     required Set<String> ancestors,
     required bool promoteTopLevelDefaults,
   }) async {
     if (depth >= _maximumIncludeDepth) {
       notices.add(
-        SshConfigUnresolvedInclude(SshConfigIncludeNote.depthExceeded, args),
+        SshConfigUnresolvedInclude(
+          SshConfigIncludeNote.depthExceeded,
+          args.join(' '),
+        ),
       );
       return;
     }
 
-    for (final token in _tokenizeWhitespace(args)) {
+    for (final token in args) {
       final targets = await _expandToken(token);
       for (final target in targets) {
         if (ancestors.contains(target)) {
@@ -750,7 +752,7 @@ String _normalizeAbsolutePath(String path) {
 
 class _Chunk {
   final List<String> lines;
-  final List<String> includeArgsAfter;
+  final List<List<String>> includeArgsAfter;
 
   const _Chunk(this.lines, this.includeArgsAfter);
 
@@ -762,9 +764,8 @@ class _Chunk {
 sealed class _BlockContext {
   const _BlockContext();
 
-  factory _BlockContext.fromHostLine(String value) {
-    final alias = _tokenizeHostPatterns(value)
-        .firstWhere(_isConcretePattern, orElse: () => '');
+  factory _BlockContext.fromHostPatterns(List<String> patterns) {
+    final alias = patterns.firstWhere(_isConcretePattern, orElse: () => '');
     return alias.isEmpty
         ? const _BlockContextWildcard()
         : _BlockContextHost(alias);
@@ -789,103 +790,16 @@ class _BlockContextMatch extends _BlockContext {
   const _BlockContextMatch();
 }
 
-/// The context after a `host`/`match` line; every other key keeps it.
-_BlockContext _advanceContext(
-  _BlockContext context,
-  String? key,
-  String line,
-) {
-  switch (key?.toLowerCase()) {
+/// The context after a `host`/`match` line; every other line keeps it.
+_BlockContext _advanceContext(_BlockContext context, SshConfigLine? line) {
+  switch (line?.keyword) {
     case 'host':
-      return _BlockContext.fromHostLine(_directiveValue(line));
+      return _BlockContext.fromHostPatterns(line!.arguments);
     case 'match':
       return const _BlockContextMatch();
     default:
       return context;
   }
-}
-
-// ─── Line-level helpers ────────────────────────────────────────────────
-//
-// These mirror (deliberately, and only for line shape) the pinned
-// importer's own rules — comment-at-`#`, `Key value` or `Key=value`,
-// quote stripping — so a line the pin drops is dropped here too. No host
-// parsing lives in this file; hosts only ever come from
-// `SshConfigImporter.parse`.
-
-/// Strips from the first `#`, matching the pinned importer's comment rule.
-String _stripComment(String line) {
-  final idx = line.indexOf('#');
-  return idx >= 0 ? line.substring(0, idx) : line;
-}
-
-/// The directive key of a `Key value` / `Key=value` line; null when the
-/// line has no key (or is empty).
-String? _directiveKey(String line) {
-  final eq = line.indexOf('=');
-  final sp = line.indexOf(RegExp(r'\s'));
-  int cut;
-  if (eq >= 0 && (sp < 0 || eq < sp)) {
-    cut = eq;
-  } else if (sp >= 0) {
-    cut = sp;
-  } else {
-    return line.isEmpty ? null : line;
-  }
-  final key = line.substring(0, cut).trim();
-  return key.isEmpty ? null : key;
-}
-
-/// The value side of a directive line (quotes stripped, like the pin).
-String _directiveValue(String line) =>
-    _rawDirectiveValue(line).replaceAll('"', '');
-
-/// The value side of a directive line with quotes intact.
-String _rawDirectiveValue(String line) {
-  final eq = line.indexOf('=');
-  final sp = line.indexOf(RegExp(r'\s'));
-  int cut;
-  if (eq >= 0 && (sp < 0 || eq < sp)) {
-    cut = eq;
-  } else if (sp >= 0) {
-    cut = sp;
-  } else {
-    return '';
-  }
-  return line.substring(cut + 1).trim();
-}
-
-/// Host patterns split on every whitespace run, mirroring the pinned
-/// importer's own `split(RegExp(r'\s+'))` rule: a carriage return,
-/// vertical tab, or form feed between patterns separates them there, so
-/// the scan must key per-host badges by the same tokens or the badge is
-/// silently dropped. Quote stripping already happened in
-/// [_directiveValue], exactly as the pin strips quotes before
-/// tokenizing.
-List<String> _tokenizeHostPatterns(String value) =>
-    value.split(RegExp(r'\s+')).where((s) => s.isNotEmpty).toList();
-
-/// Whitespace-separated tokens for include arguments, double-quote
-/// aware (paths may carry spaces). Only space and tab separate — the
-/// include tokenizer owns its own quote rule, deliberately distinct
-/// from the pin-mirroring [_tokenizeHostPatterns].
-List<String> _tokenizeWhitespace(String value) {
-  final tokens = <String>[];
-  final current = StringBuffer();
-  var inQuotes = false;
-
-  for (final c in value.split('')) {
-    if (c == '"') {
-      inQuotes = !inQuotes;
-    } else if ((c == ' ' || c == '\t') && !inQuotes) {
-      if (current.isNotEmpty) tokens.add(current.toString());
-      current.clear();
-    } else {
-      current.write(c);
-    }
-  }
-  if (current.isNotEmpty) tokens.add(current.toString());
-  return tokens;
 }
 
 /// Mirrors the pinned importer's wildcard test so an alias exists here
