@@ -66,9 +66,13 @@ slice:
   `screen_retriever` plugins, which the main window registers but nothing
   uses until the window lifecycle moves onto `ghost_desktop`; meanwhile
   `window_manager`'s Linux and Windows code reports window events nobody
-  listens to, which debug builds log as discarded channel messages. The
-  macOS menu's "Preferences…" item is not wired to Settings yet; the
-  menus come from the command registry (03 §10.2).
+  listens to, which debug builds log as discarded channel messages. On
+  Linux its registration also replaces the main view's delete-event hook,
+  so closing the main window no longer asks Dart whether to quit; a later
+  exit hook must use `window_manager`'s prevent-close path, which
+  `ghost_desktop`'s window lifecycle wraps. The macOS menu's
+  "Preferences…" item is not wired to Settings yet; the menus come from
+  the command registry (03 §10.2).
 
 Pull-only from the start (D14): no surface sends a request that could
 push or write catalog records, and a widget test guards it.

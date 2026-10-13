@@ -41,9 +41,6 @@ Not copied, because Klabautermann does not need them yet:
 
 - Séance's terminal Edit-menu routing in `MainFlutterWindow.swift`; the
   app has no terminal.
-- The controller's use in Séance's `SettingsWindow.swift`; the settings
-  window section below copies that file, which creates this class and
-  adds no controller copy.
 - Poltergeist's multi-view semantics routing in
   `PoltergeistFlutterViewController.m`; Klabautermann shows one Flutter
   view per engine.
@@ -112,7 +109,7 @@ Séance's.
 |---|---|---|
 | `klabautermann/app/klabautermann_app/macos/Runner/SettingsWindow.swift` | `seance/app/seance_app/macos/Runner/SettingsWindow.swift` (`f9bd1e1`) | Channels `klabautermann/settings_window` and `klabautermann/settings_link`, argument `--klabautermann-settings-window`, `KlabautermannFlutterViewController` (Séance's controller, copied in the section above), provenance note. Comments point at Klabautermann's and ghost_desktop's Dart files, and the ⌘W comment names no terminal tabs, since the app's window binds no ⌘W yet. |
 | `klabautermann/app/klabautermann_app/linux/runner/settings_window.{h,cc}` | `seance/app/seance_app/linux/runner/settings_window.{h,cc}` (`f9bd1e1`) | Channels, argument, title `Klabautermann Settings`, the main window's data key `klabautermann-settings-window`, provenance note. Template background, as Séance's. |
-| `klabautermann/app/klabautermann_app/linux/runner/window_title.{h,cc}` | `seance/app/seance_app/linux/runner/window_title.{h,cc}` (`f9bd1e1`) | Provenance note. It is the `flutter create` title code that `my_application.cc` carried inline; both windows now call it. |
+| `klabautermann/app/klabautermann_app/linux/runner/window_title.{h,cc}` | `seance/app/seance_app/linux/runner/window_title.{h,cc}` (`f9bd1e1`) | Provenance note in the header; the `.cc` is byte-identical. It is the `flutter create` title code that `my_application.cc` carried inline; both windows now call it. |
 | `klabautermann/app/klabautermann_app/windows/runner/settings_window.{h,cpp}` | `seance/app/seance_app/windows/runner/settings_window.{h,cpp}` (`f9bd1e1`) | Channels, argument, title `Klabautermann Settings`, provenance note spelled ASCII for MSVC. |
 | Wiring: `MainFlutterWindow.swift` (the `settingsWindow` property, the host's creation and the `close()` override), `my_application.cc` (`settings_window_install` after the plugins, `window_title_apply`), `flutter_window.{h,cpp}` (the `settings_window_` member, created after the plugins and reset first in `OnDestroy`), both runner `CMakeLists.txt` | The same lines in Séance's files (`f9bd1e1`) | `flutter_window.{h,cpp}` now equal Séance's. The Linux main window keeps its 1280 by 720 size and the macOS window its `flutter create` frame. |
 | `klabautermann/app/klabautermann_app/macos/Runner.xcodeproj/project.pbxproj` (one file reference, the Runner group entry, one Sources build file) | Séance's wiring of `SettingsWindow.swift` (`f9bd1e1`) | Own object ids `D7A6C0DE2F8E4A1B00000005` and `D7A6C0DE2F8E4A1B00000006`. |
