@@ -19,8 +19,10 @@ abstract interface class CredentialSource {
 
 /// Credential material a server editor holds before saving, so a connection
 /// test uses what was typed rather than what is stored. A null or empty field
-/// means "not typed" and falls back to storage. Each field is read only under
-/// its own auth method.
+/// means "not typed"; see [CredentialResolver.resolve] for when that falls
+/// back to storage (a blank passphrase beside a typed PEM means none) and
+/// when a configured key file wins over a typed PEM. Each field is read only
+/// under its own auth method.
 final class CredentialDraft {
   const CredentialDraft({
     this.password,
