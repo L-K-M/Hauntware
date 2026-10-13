@@ -72,9 +72,9 @@ jobs:
     name: Test (release gate)
     runs-on: ubuntu-latest
     # The v1.9.0 gate took 10 min for three subtrees (30 was 3x). The
-    # fourth adds under 1 min today but grows with every milestone to v1,
-    # and the guards now scan four products: 40 still leaves 2.5x once
-    # Klabautermann's suite is as large as Poltergeist's (about 5 min).
+    # fourth adds under 1 min today but grows with every milestone to v1:
+    # 40 still leaves 2.5x once Klabautermann's suite is as large as
+    # Poltergeist's (about 5 min).
     timeout-minutes: 40
     permissions:
       # Deliberately NOT scoped down to contents: read: the guard below
