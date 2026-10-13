@@ -1,0 +1,25 @@
+== crontab_meta ==
+rc=1
+== crontab ==
+no crontab for root
+== etc_crontab ==
+SHELL=/bin/bash
+PATH=/sbin:/bin:/usr/sbin:/usr/bin
+MAILTO=root
+# For details see man 4 crontabs
+01 * * * * root run-parts /etc/cron.hourly
+02 4 * * * root run-parts /etc/cron.daily
+22 4 * * 0 root run-parts /etc/cron.weekly
+42 4 1 * * root run-parts /etc/cron.monthly
+== cron_d ==
+0hourly	# Run the hourly jobs
+0hourly	SHELL=/bin/bash
+0hourly	PATH=/sbin:/bin:/usr/sbin:/usr/bin
+0hourly	01 * * * * root run-parts /etc/cron.hourly
+raid-check	# Run system maintenance
+raid-check	# 0 1 * * Sun root /usr/sbin/raid-check
+== cron_dirs ==
+hourly 0anacron
+hourly 0yum-hourly.cron
+daily 0yum-daily.cron
+weekly 0yum-weekly.cron

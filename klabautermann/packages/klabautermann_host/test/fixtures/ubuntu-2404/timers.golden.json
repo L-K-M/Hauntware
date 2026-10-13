@@ -1,0 +1,29 @@
+{
+  "result": {
+    "timers": [
+      {
+        "unit": "logrotate.timer",
+        "activates": "logrotate.service",
+        "nextUs": 1750001800000000,
+        "leftUs": 1200000000,
+        "lastUs": 1749990000000000,
+        "passedUs": 13000000000,
+        "nextText": null,
+        "lastText": null
+      },
+      {
+        "unit": "motd-news.timer",
+        "activates": "motd-news.service",
+        "nextUs": 1751000000000000,
+        "leftUs": 1000000000000,
+        "lastUs": null,
+        "passedUs": null,
+        "nextText": null,
+        "lastText": null
+      }
+    ],
+    "format": "json",
+    "timeoutAbsent": false
+  },
+  "warnings": []
+}

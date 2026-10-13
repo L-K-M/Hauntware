@@ -1,0 +1,151 @@
+/// Parser for `systemd-analyze calendar` output (03 §7.7): the
+/// `Original form`, `Normalized form` and one elapse per `Next elapse`
+/// or `Iteration #N` row, each optionally followed by `(in UTC)` and
+/// `From now` detail lines.
+library;
+
+import 'package:meta/meta.dart';
+
+import 'parse_result.dart';
+
+/// One predicted elapse of `systemd-analyze calendar` (03 §7.7).
+@immutable
+final class OnCalendarElapse {
+  const OnCalendarElapse({this.text, this.atUtc, this.fromNow});
+
+  /// The timestamp text exactly as printed (`Tue 2026-10-13 21:45:00
+  /// UTC` or a zone abbreviation we cannot resolve).
+  final String? text;
+
+  /// The `(in UTC)` line decoded, when systemd-analyze printed it (it is
+  /// omitted when the server zone is already UTC).
+  final DateTime? atUtc;
+
+  /// The `From now` detail (`9h left`).
+  final String? fromNow;
+
+  Map<String, Object?> toJson() => {
+    'text': text,
+    'atUtc': atUtc?.toIso8601String(),
+    'fromNow': fromNow,
+  };
+}
+
+/// The result of `systemd-analyze calendar [--iterations=N]` (03 §7.7).
+@immutable
+final class OnCalendarResult {
+  OnCalendarResult({
+    this.originalForm,
+    this.normalizedForm,
+    List<OnCalendarElapse>? elapses,
+  }) : elapses = List.unmodifiable(elapses ?? []);
+
+  /// The expression echo (`Original form:`).
+  final String? originalForm;
+
+  /// The canonical systemd spelling (`Normalized form:`), what the
+  /// jobs view offers to write back.
+  final String? normalizedForm;
+
+  /// `Next elapse` plus every `Iteration #N`, in order.
+  final List<OnCalendarElapse> elapses;
+
+  Map<String, Object?> toJson() => {
+    'originalForm': originalForm,
+    'normalizedForm': normalizedForm,
+    'elapses': elapses.map((e) => e.toJson()).toList(),
+  };
+}
+
+/// Parses `systemd-analyze calendar` output; never throws. Lines the
+/// parser does not know (error text systemd-analyze prints before dying)
+/// collect as warnings.
+ParseResult<OnCalendarResult> parseOnCalendar(String raw) {
+  final warnings = <String>[];
+  String? original, normalized;
+  final elapses = <OnCalendarElapse>[];
+  var text = <String>[];
+  DateTime? utc;
+  String? fromNow;
+  var open = false;
+
+  void flush() {
+    if (!open) return;
+    elapses.add(
+      OnCalendarElapse(
+        text: text.isEmpty ? null : text.join('\n'),
+        atUtc: utc,
+        fromNow: fromNow,
+      ),
+    );
+    text = [];
+    utc = null;
+    fromNow = null;
+    open = false;
+  }
+
+  final iter = RegExp(r'^Iteration #\d+:');
+  for (final line in raw.split('\n')) {
+    final t = line.trim();
+    if (t.isEmpty) continue;
+    if (t.startsWith('Original form:')) {
+      original = t.substring(14).trim();
+      continue;
+    }
+    if (t.startsWith('Normalized form:')) {
+      normalized = t.substring(16).trim();
+      continue;
+    }
+    if (t.startsWith('Next elapse:')) {
+      flush();
+      open = true;
+      text = [t.substring(12).trim()];
+      continue;
+    }
+    if (iter.hasMatch(t)) {
+      flush();
+      open = true;
+      // The timestamp may follow the colon or sit on the next line.
+      final rest = t.substring(t.indexOf(':') + 1).trim();
+      text = rest.isEmpty ? <String>[] : [rest];
+      continue;
+    }
+    if (t.startsWith('(in UTC):')) {
+      utc ??= _utcStamp(t.substring(9).trim());
+      continue;
+    }
+    if (t.startsWith('From now:')) {
+      fromNow ??= t.substring(9).trim();
+      continue;
+    }
+    // An unrecognised line inside an elapse is extra timestamp text
+    // (`when` lines); outside it is noise worth a warning.
+    if (open) {
+      text.add(t);
+    } else {
+      warnings.add('oncalendar: unexpected line "$t"');
+    }
+  }
+  flush();
+  if (elapses.isEmpty && normalized == null) {
+    warnings.add('oncalendar: no elapse rows');
+  }
+  return ParseResult(
+    OnCalendarResult(
+      originalForm: original,
+      normalizedForm: normalized,
+      elapses: elapses,
+    ),
+    warnings,
+  );
+}
+
+/// `Wed 2026-10-15 14:45:00 UTC` to a UTC instant; other zone
+/// abbreviations are ambiguous and stay null (the row text survives in
+/// [OnCalendarElapse.text]).
+DateTime? _utcStamp(String s) {
+  if (!s.endsWith(' UTC')) return null;
+  final sp = s.indexOf(' ');
+  if (sp < 0) return null;
+  return DateTime.tryParse('${s.substring(sp + 1, s.length - 4).trim()}Z');
+}

@@ -17,7 +17,8 @@ const kProtocolTag = 'HWS/1';
 
 /// Collector-set version carried by the READY marker (03 §6.3 "the program
 /// text is versioned"). Bumped whenever the shipped fragment set changes.
-const kCollectorSetVersion = '1';
+/// Version 2 adds `procs`, `units`, `timers` and `cron` to the slow sampler.
+const kCollectorSetVersion = '2';
 
 /// The `timeout` guard applied to forking collectors (03 §6.2).
 const kCollectorTimeoutSeconds = 10;
@@ -72,7 +73,7 @@ String generateNonce(Random random) {
   return b.toString();
 }
 
-/// The shell fragment defining `c_<collector>` for each part-1 collector
+/// The shell fragment defining `c_<collector>` for each collector
 /// (03 §6.4). Values are constants assembled verbatim into the program.
 const collectorFragments = <Collector, String>{
   Collector.overview: _kOverviewFragment,
@@ -80,6 +81,10 @@ const collectorFragments = <Collector, String>{
   Collector.fs: _kFsFragment,
   Collector.identity: _kIdentityFragment,
   Collector.probe: _kProbeFragment,
+  Collector.procs: _kProcsFragment,
+  Collector.units: _kUnitsFragment,
+  Collector.timers: _kTimersFragment,
+  Collector.cron: _kCronFragment,
 };
 
 /// Assembles the program text for [kind]: the nonce line first, then the
@@ -137,6 +142,21 @@ hw_qrun() {
   else
     "$@"
   fi
+}
+
+# Prints 'json' when systemctl speaks --output=json for list-units and
+# list-timers (systemd >= 246, 03 §6.4), else 'text'; fails without
+# systemctl. Used by the units and timers fragments.
+hw_sdfmt() {
+  command -v systemctl >/dev/null 2>&1 || return 1
+  _v=$(systemctl --version </dev/null 2>&1) || return 1
+  _v=${_v%%"$NL"*}; _v=${_v#systemd }; _v=${_v%%[!0-9]*}
+  case $_v in
+    '' | *[!0-9]*)
+      printf text
+      return 0 ;;
+  esac
+  if [ "$_v" -ge 246 ]; then printf json; else printf text; fi
 }
 
 # Maps an exit status plus captured stderr to a section status
@@ -549,6 +569,133 @@ psec() {
   else
     hw_sec "probe_$1" "$2" "hw_timeout=absent$NL$3"
   fi
+}
+""";
+
+/// `procs` (03 §7.2): `/proc/<pid>/stat` and the needed `status` fields
+/// with builtins, every `/proc/<pid>/cmdline` through one `head -n 1000`
+/// piped into `tr '\000' '\037'` (shell variables cannot hold NULs; 04
+/// App. A, E11). When head or tr is absent the fallbacks are
+/// `ps -eo pid,ppid,user,stat,rss,args` then BusyBox `ps w`. The `==> `
+/// headers head prints and the forgery they enable are the parser's
+/// problem (03 §7.2), so the bytes go into the `cmdline` block verbatim.
+const _kProcsFragment = r"""
+c_procs() {
+  st=ok
+  o='== stat =='
+  for _f in /proc/[0-9]*/stat; do
+    _p=${_f#/proc/}; _p=${_p%/stat}
+    if IFS= read -r _l <"$_f"; then o="$o$NL$_p $_l"; fi
+  done
+  o="$o$NL== status =="
+  for _f in /proc/[0-9]*/status; do
+    _p=${_f#/proc/}; _p=${_p%/status}
+    [ -r "$_f" ] || continue
+    while IFS= read -r _l; do
+      case $_l in
+        Name:* | Uid:* | Gid:* | VmRSS:* | Threads:*)
+          o="$o$NL$_p $_l" ;;
+      esac
+    done <"$_f"
+  done
+  o="$o$NL== cmdline =="
+  if command -v head >/dev/null 2>&1 && command -v tr >/dev/null 2>&1; then
+    _c=$(cd /proc 2>/dev/null && hw_run head -n 1000 [0-9]*/cmdline 2>/dev/null </dev/null | tr '\000' '\037')
+    o="$o$NL$_c"
+  elif command -v ps >/dev/null 2>&1; then
+    _c=$(hw_run ps -eo pid,ppid,user,stat,rss,args </dev/null 2>&1)
+    if [ $? -eq 0 ]; then
+      o="$o$NL== ps ==$NL$_c"
+    else
+      _c=$(hw_run ps w </dev/null 2>&1)
+      o="$o$NL== ps_w ==$NL$_c"
+    fi
+  fi
+}
+""";
+
+/// `units` (03 §6.4, §7.5): `systemctl list-units --all` plus
+/// `systemctl --failed`, JSON on systemd 246+ and `--plain --no-legend`
+/// text below. The block names record which shape the payload holds.
+const _kUnitsFragment = r"""
+c_units() {
+  st=ok; o=''
+  if ! command -v systemctl >/dev/null 2>&1; then st=missing; return 0; fi
+  if [ "$(hw_sdfmt)" = json ]; then
+    _u=$(hw_run systemctl list-units --all --output=json </dev/null 2>&1); _ru=$?
+    _f=$(hw_run systemctl --failed --output=json </dev/null 2>&1); _rf=$?
+    o="== units_json ==$NL$_u$NL== failed_json ==$NL$_f"
+  else
+    _u=$(hw_run systemctl list-units --all --plain --no-legend </dev/null 2>&1); _ru=$?
+    _f=$(hw_run systemctl --failed --plain --no-legend </dev/null 2>&1); _rf=$?
+    o="== units_text ==$NL$_u$NL== failed_text ==$NL$_f"
+  fi
+  _su=$(hw_st "$_ru" "$_u"); _sf=$(hw_st "$_rf" "$_f")
+  case $_su:$_sf in
+    ok:ok)
+      st=ok ;;
+    *:timeout | timeout:*)
+      st=timeout ;;
+    *:denied | denied:*)
+      st=denied ;;
+    *)
+      st=error ;;
+  esac
+}
+""";
+
+/// `timers` (03 §6.4, §7.7): `systemctl list-timers --all`, JSON on
+/// systemd 246+ and the columnar text table below. The text table keeps
+/// its header row: the parser slices rows at the header's column offsets.
+const _kTimersFragment = r"""
+c_timers() {
+  st=ok; o=''
+  if ! command -v systemctl >/dev/null 2>&1; then st=missing; return 0; fi
+  if [ "$(hw_sdfmt)" = json ]; then
+    _t=$(hw_run systemctl list-timers --all --output=json </dev/null 2>&1); _rt=$?
+    o="== timers_json ==$NL$_t"
+  else
+    _t=$(hw_run systemctl list-timers --all </dev/null 2>&1); _rt=$?
+    o="== timers_text ==$NL$_t"
+  fi
+  st=$(hw_st "$_rt" "$_t")
+}
+""";
+
+/// `cron` (03 §6.4, §7.7): own `crontab -l` (exit 1 with "no crontab" is
+/// empty, not an error; the meta block carries the exit code so the
+/// parser can tell), `/etc/crontab`, `/etc/cron.d/*` as name-prefixed
+/// lines, and the entry names of `cron.{hourly,daily,weekly,monthly}`.
+const _kCronFragment = r"""
+c_cron() {
+  st=ok; o=''
+  if command -v crontab >/dev/null 2>&1; then
+    _c=$(hw_qrun crontab -l </dev/null 2>&1); _rc=$?
+    o="== crontab_meta ==${NL}rc=$_rc$NL== crontab ==$NL$_c"
+  else
+    o="== crontab_meta ==${NL}tool=missing$NL== crontab =="
+  fi
+  o="$o$NL== etc_crontab =="
+  if [ -r /etc/crontab ]; then
+    while IFS= read -r _l; do o="$o$NL$_l"; done </etc/crontab
+  elif [ -e /etc/crontab ]; then
+    st=denied
+  fi
+  o="$o$NL== cron_d =="
+  for _f in /etc/cron.d/*; do
+    [ -f "$_f" ] && [ -r "$_f" ] || continue
+    _n=${_f##*/}
+    while IFS= read -r _l; do
+      o="$o$NL$_n	$_l"
+    done <"$_f"
+  done
+  o="$o$NL== cron_dirs =="
+  for _d in hourly daily weekly monthly; do
+    for _f in "/etc/cron.$_d"/*; do
+      [ -e "$_f" ] || continue
+      o="$o$NL$_d ${_f##*/}"
+    done
+  done
 }
 """;
 

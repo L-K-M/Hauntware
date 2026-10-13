@@ -1,0 +1,85 @@
+{
+  "result": {
+    "processes": [
+      {
+        "pid": 1,
+        "ppid": 0,
+        "comm": "systemd",
+        "state": "S",
+        "uid": 0,
+        "gid": 0,
+        "name": "systemd",
+        "threads": 1,
+        "rssKb": 17500,
+        "userName": null,
+        "utime": 180,
+        "stime": 90,
+        "startTicks": 51000,
+        "argv": [
+          "/usr/lib/systemd/systemd",
+          "--switched-root",
+          "--system"
+        ],
+        "argsJoined": null
+      },
+      {
+        "pid": 2,
+        "ppid": 0,
+        "comm": "kthreadd",
+        "state": "S",
+        "uid": 0,
+        "gid": 0,
+        "name": "kthreadd",
+        "threads": 1,
+        "rssKb": 0,
+        "userName": null,
+        "utime": 0,
+        "stime": 0,
+        "startTicks": 7,
+        "argv": [],
+        "argsJoined": null
+      },
+      {
+        "pid": 900,
+        "ppid": 1,
+        "comm": "sshd",
+        "state": "S",
+        "uid": 0,
+        "gid": 0,
+        "name": "sshd",
+        "threads": 1,
+        "rssKb": 4000,
+        "userName": null,
+        "utime": 200,
+        "stime": 25,
+        "startTicks": 120000,
+        "argv": null,
+        "argsJoined": null
+      },
+      {
+        "pid": 1000,
+        "ppid": 1,
+        "comm": "crond",
+        "state": "S",
+        "uid": 0,
+        "gid": 0,
+        "name": "crond",
+        "threads": 1,
+        "rssKb": 600,
+        "userName": null,
+        "utime": 30,
+        "stime": 6,
+        "startTicks": 240000,
+        "argv": null,
+        "argsJoined": null
+      }
+    ],
+    "argvSource": "cmdline",
+    "forgedHeaders": 1,
+    "skippedPids": 0,
+    "timeoutAbsent": false
+  },
+  "warnings": [
+    "cmdline: 1 forged head header(s)"
+  ]
+}

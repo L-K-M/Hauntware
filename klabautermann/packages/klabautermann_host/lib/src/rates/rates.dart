@@ -11,6 +11,7 @@ import 'package:meta/meta.dart';
 import '../parse/metrics.dart' show CoreSnapshot;
 import '../parse/models.dart';
 import '../parse/parse_result.dart';
+import '../parse/procs.dart' show ProcsSnapshot;
 
 /// The delta of one monotonically increasing counter (03 §6.4, CN-04).
 ///
@@ -272,4 +273,36 @@ CoreDelta diffCoreSnapshots(
     net: netRates(previous.netdev, next.netdev, elapsed, width: width),
     disk: diskRates(previous.diskstats, next.diskstats, elapsed, width: width),
   );
+}
+
+/// Per-pid CPU occupancy between two `procs` snapshots in percent of one
+/// CPU (03 §7.2, PRC-03): the `(utime + stime)` jiffy delta over
+/// [elapsedSeconds] at [ticksPerSecond] jiffies per second (100 on
+/// Linux). A pid absent on either side, a changed `startTicks` (a PID
+/// reuse, PRC-02) or a jiffy decrease yields no entry; values may exceed
+/// 100 on multithreaded processes.
+Map<int, double> procCpuPercent(
+  ProcsSnapshot previous,
+  ProcsSnapshot next,
+  double elapsedSeconds, {
+  int ticksPerSecond = 100,
+}) {
+  final out = <int, double>{};
+  if (elapsedSeconds <= 0 || ticksPerSecond <= 0) return out;
+  final prev = {for (final p in previous.processes) p.pid: p};
+  for (final n in next.processes) {
+    final p = prev[n.pid];
+    if (p == null) continue;
+    // PRC-02: a reused pid is a different process; startTicks differs.
+    if (p.startTicks != null &&
+        n.startTicks != null &&
+        p.startTicks != n.startTicks) {
+      continue;
+    }
+    final pj = p.jiffies;
+    final nj = n.jiffies;
+    if (pj == null || nj == null || nj < pj) continue;
+    out[n.pid] = (nj - pj) * 100.0 / (ticksPerSecond * elapsedSeconds);
+  }
+  return out;
 }

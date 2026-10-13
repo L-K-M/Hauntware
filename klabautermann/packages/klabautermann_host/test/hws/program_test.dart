@@ -32,17 +32,8 @@ void main() {
       expect(Collector.byName('nope'), isNull);
     });
 
-    test('the fragments cover every part-1 collector', () {
-      expect(
-        collectorFragments.keys,
-        containsAll(<Collector>[
-          Collector.probe,
-          Collector.overview,
-          Collector.core,
-          Collector.fs,
-          Collector.identity,
-        ]),
-      );
+    test('the fragments cover every collector', () {
+      expect(collectorFragments.keys, containsAll(Collector.values));
     });
   });
 
@@ -73,16 +64,32 @@ void main() {
       final program = buildSamplerProgram(kind: SamplerKind.fast, nonce: nonce);
       expect(program, contains('c_overview()'));
       expect(program, contains('c_core()'));
-      expect(program, isNot(contains('c_fs()')));
-      expect(program, isNot(contains('c_identity()')));
-      expect(program, isNot(contains('c_probe()')));
+      for (final c in [
+        'fs',
+        'identity',
+        'probe',
+        'procs',
+        'units',
+        'timers',
+        'cron',
+      ]) {
+        expect(program, isNot(contains('c_$c()')), reason: c);
+      }
     });
 
     test('the slow program carries only forking collectors', () {
       final program = buildSamplerProgram(kind: SamplerKind.slow, nonce: nonce);
-      expect(program, contains('c_fs()'));
-      expect(program, contains('c_identity()'));
-      expect(program, contains('c_probe()'));
+      for (final c in [
+        'fs',
+        'identity',
+        'probe',
+        'procs',
+        'units',
+        'timers',
+        'cron',
+      ]) {
+        expect(program, contains('c_$c()'), reason: c);
+      }
       expect(program, isNot(contains('c_overview()')));
       expect(program, isNot(contains('c_core()')));
     });
@@ -91,7 +98,12 @@ void main() {
       for (final kind in SamplerKind.values) {
         final program = buildSamplerProgram(kind: kind, nonce: nonce);
         final trimmed = program.trimRight();
-        expect(trimmed, endsWith(r'''printf '\036%s READY HWS/1 1\n' "$N"'''));
+        expect(
+          trimmed,
+          endsWith(
+            'printf \'\\036%s READY HWS/1 $kCollectorSetVersion\\n\' "\$N"',
+          ),
+        );
         expect(program, contains('READY HWS/1 $kCollectorSetVersion'));
       }
     });

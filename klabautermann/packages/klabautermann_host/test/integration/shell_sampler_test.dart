@@ -298,6 +298,67 @@ void main() {
           expect(profile.kernelRelease, osrelease.readAsStringSync().trim());
         }
       });
+
+      test('slow program: procs, units, timers and cron', () async {
+        final r = await _run(path, SamplerKind.slow, [
+          Collector.procs,
+          Collector.units,
+          Collector.timers,
+          Collector.cron,
+        ], Collector.procs);
+        expect(r.ready, kCollectorSetVersion);
+        expect(r.ticks.keys, containsAll(<int>[1, 2, 3]));
+        _expectAllStatusesOkOrMissing(r);
+        for (final seq in [1, 2]) {
+          final names = r.ticks[seq]!.map((s) => s.collector).toSet();
+          expect(
+            names,
+            containsAll(<String>['procs', 'units', 'timers', 'cron']),
+          );
+        }
+        _expectDeclaredByteCounts(r.raw, r.nonce);
+
+        // The local /proc exists, so procs must parse into the process
+        // table with pid 1 present and no fabricated framing.
+        final procs = r.ticks[1]!.firstWhere((s) => s.collector == 'procs');
+        expect(procs.status, SectionStatus.ok);
+        final parsed = parseProcs(
+          utf8.decode(procs.payload),
+          ParseContext.standard,
+        );
+        expect(parsed.value.processes, isNotEmpty);
+        if (File('/proc/1/stat').existsSync()) {
+          expect(parsed.value.processes.any((p) => p.pid == 1), isTrue);
+        }
+
+        // units and timers are `missing` where systemd is absent; when
+        // present their payload parses into a snapshot.
+        final units = r.ticks[1]!.firstWhere((s) => s.collector == 'units');
+        if (units.status == SectionStatus.ok) {
+          final u = parseUnits(
+            utf8.decode(units.payload),
+            ParseContext.standard,
+          );
+          expect(u.value.format, isNot(UnitListFormat.none));
+        }
+        final timers = r.ticks[1]!.firstWhere((s) => s.collector == 'timers');
+        if (timers.status == SectionStatus.ok) {
+          final t = parseTimers(
+            utf8.decode(timers.payload),
+            ParseContext.standard,
+          );
+          expect(t.value.format, isNot(TimerListFormat.none));
+        }
+
+        // cron succeeds without a personal crontab; ownCrontabPresent is
+        // unknown when the `crontab` tool is absent (03 §7.7).
+        final cron = r.ticks[1]!.firstWhere((s) => s.collector == 'cron');
+        expect(cron.status, SectionStatus.ok);
+        expect(
+          () => parseCron(utf8.decode(cron.payload), ParseContext.standard),
+          returnsNormally,
+        );
+      });
     });
   }
 

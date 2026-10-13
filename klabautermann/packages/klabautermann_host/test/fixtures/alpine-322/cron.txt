@@ -1,0 +1,18 @@
+== crontab_meta ==
+rc=1
+== crontab ==
+no crontab for root
+== etc_crontab ==
+# do daily/weekly/monthly maintenance
+# min	hour	day	month	weekday	command
+*/15	*	*	*	*	run-parts /etc/periodic/15min
+0	*	*	*	*	run-parts /etc/periodic/hourly
+0	2	*	*	*	run-parts /etc/periodic/daily
+0	3	*	*	6	run-parts /etc/periodic/weekly
+0	5	1	*	*	run-parts /etc/periodic/monthly
+== cron_d ==
+== cron_dirs ==
+hourly 0anacron
+daily 0anacron
+weekly 0anacron
+monthly 0anacron

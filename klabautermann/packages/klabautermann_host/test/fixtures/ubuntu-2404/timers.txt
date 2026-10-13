@@ -1,0 +1,2 @@
+== timers_json ==
+[{"next":1750001800000000,"left":1200000000,"last":1749990000000000,"passed":13000000000,"unit":"logrotate.timer","activates":"logrotate.service"},{"next":1751000000000000,"left":1000000000000,"last":null,"passed":null,"unit":"motd-news.timer","activates":"motd-news.service"}]
