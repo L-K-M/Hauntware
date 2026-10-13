@@ -25,14 +25,21 @@ slice:
   master-detail stack below 600 dp, the settings route with its seven
   planned tabs (Appearance's theme switch works), light and dark themes
   over `ghost_ui` tokens, and the English ARB catalogue (D35, A11Y-05).
+- Packaging: `scripts/build.sh`, `scripts/package-linux.sh` (.deb and
+  AppImage through the shared `scripts/package-linux-common.sh`) and
+  `scripts/build-flatpak.sh` with `flatpak/ch.lkmc.klabautermann.yml`.
+  The flatpak grants read-only `~/.ssh` for the FL-02 import, which
+  04 §12.1 does not plan yet. The scripts have only run on stub bundles
+  so far; a real Flutter bundle, appimagetool and flatpak-builder first
+  run in the client CI legs.
 
 Pull-only from the start (D14): no surface sends a request that could
 push or write catalog records, and a widget test guards it.
 
 Not in yet (later PRs): pull-only enrollment and the catalog (F3),
 reachability dots and the `ghost_servers` rail (F4), theme editing (F4b),
-the desktop settings window and its native runners (D32), the five client
-CI legs and release job, packaging scripts and flatpak.
+the desktop settings window and its native runners (D32), and the five
+client CI legs and release job.
 
 ## Open manual gates
 
