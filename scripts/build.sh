@@ -15,10 +15,14 @@
 # Each product keeps its own build (planchette/scripts/build.sh and
 # siblings) — this orchestrator runs them in sequence and unions their
 # product-prefixed artifacts into dist/ (the same names
-# scripts/release-manifest.txt expects on a release). A product whose
-# build script is absent is skipped on a default run and fails when named
-# explicitly; tool/toolchain feasibility inside a product stays that
-# product's own decision (see each <product>/scripts/build.sh).
+# scripts/release-manifest.txt expects on a release). The products are
+# Planchette, Séance, Poltergeist and Klabautermann; Klabautermann's
+# names carry the preview label, and the manifest lists them only once
+# its release job lands at M4 (docs/design/klabautermann, decision 16).
+# A product whose build script is absent is skipped on a default run and
+# fails when named explicitly; tool/toolchain feasibility inside a
+# product stays that product's own decision (see each
+# <product>/scripts/build.sh).
 #
 # Environment: HAUNTWARE_BUILD_ROOT overrides the repository root (used by
 # the contract tests). Product builds run with HAUNTWARE_BUILD_ORCHESTRATED=1,
@@ -28,7 +32,7 @@ set -uo pipefail
 
 SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="${HAUNTWARE_BUILD_ROOT:-$(cd "$SELF_DIR/.." && pwd)}"
-PRODUCTS="planchette seance poltergeist"
+PRODUCTS="planchette seance poltergeist klabautermann"
 DIST="$ROOT/dist"
 MODE=release
 CHECK=false
@@ -43,7 +47,7 @@ for argument in "$@"; do
     --help|-h)
       sed -n '2,/^set -uo/p' "$SELF_DIR/build.sh" | sed 's/^# \?//;/^set -uo/d'
       exit 0 ;;
-    planchette|seance|poltergeist) SELECTED="${SELECTED:+$SELECTED }$argument" ;;
+    planchette|seance|poltergeist|klabautermann) SELECTED="${SELECTED:+$SELECTED }$argument" ;;
     *)
       echo "Unknown argument: $argument" >&2
       echo "Try 'scripts/build.sh --help'." >&2
