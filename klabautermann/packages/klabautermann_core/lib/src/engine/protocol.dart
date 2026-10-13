@@ -60,7 +60,6 @@ final class RunSyncRound extends EngineRequest {
 /// Not a catalog write under D14: imported entries never become records and
 /// are never pushed. Until the catalog library brings D13's device-local
 /// store, they live in the engine's memory and are gone when it stops.
-/// FL-02 has no 03 §10.1 row yet.
 final class ImportSshConfig extends EngineRequest {
   const ImportSshConfig(this.text);
 
