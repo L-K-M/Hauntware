@@ -35,8 +35,13 @@ const String _temporarySuffix = '.tmp';
 const String _rootPubspecPath = 'pubspec.yaml';
 const String _rootReadmePath = 'README.md';
 
-// The suite's three projects ship one coordinated release.
-const List<String> _projectNames = ['planchette', 'seance', 'poltergeist'];
+// The suite's projects ship one coordinated release.
+const List<String> _projectNames = [
+  'planchette',
+  'seance',
+  'poltergeist',
+  'klabautermann',
+];
 
 // Versioned trees the suite release does not own.
 //

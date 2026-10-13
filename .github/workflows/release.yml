@@ -235,6 +235,18 @@ jobs:
             packages/seance_protocol packages/seance_core packages/seance_sync_server
           dart test \
             packages/seance_protocol packages/seance_core packages/seance_sync_server
+      - name: Klabautermann — resolve, analyze, test pure-Dart packages
+        working-directory: klabautermann
+        run: |
+          set -euo pipefail
+          dart pub get
+          dirs=()
+          for package in packages/*; do
+            [[ -d "$package" ]] || continue
+            dart analyze --fatal-infos "$package"
+            [[ -d "$package/test" ]] && dirs+=("$package")
+          done
+          dart test "${dirs[@]}"
       - name: Poltergeist — resolve, analyze, test packages and tools
         working-directory: poltergeist
         run: |

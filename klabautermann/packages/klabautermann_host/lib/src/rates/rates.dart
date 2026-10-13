@@ -1,0 +1,275 @@
+/// Counter-to-rate maths over two snapshots (03 §6.4, CN-04).
+///
+/// All functions are pure: they take the previous and next readings plus
+/// the elapsed seconds between them (derived from the ticks' uptimes) and
+/// return rates, or null/absent entries when a counter reset or a zero
+/// interval makes a rate meaningless.
+library;
+
+import 'package:meta/meta.dart';
+
+import '../parse/metrics.dart' show CoreSnapshot;
+import '../parse/models.dart';
+import '../parse/parse_result.dart';
+
+/// The delta of one monotonically increasing counter (03 §6.4, CN-04).
+///
+/// A decrease means a wrap on a 32-bit counter (continued modulo 2^32)
+/// and a reset on a 64-bit one, which cannot wrap in practice: a reset
+/// yields `null` so the caller starts a new series instead of reporting a
+/// huge bogus rate.
+int? counterDelta(
+  int previous,
+  int next, {
+  CounterWidth width = CounterWidth.bits64,
+}) {
+  if (previous < 0 || next < 0) return null;
+  if (next >= previous) return next - previous;
+  if (width == CounterWidth.bits32) {
+    return (1 << 32) - previous + next;
+  }
+  return null;
+}
+
+/// Whether the host rebooted between two readings (03 §6.4): a changed
+/// `btime` starts a new series. Unknown on either side stays false —
+/// without both boot times a reboot cannot be told from a plain gap.
+bool seriesReset(int? previousBtime, int? nextBtime) =>
+    previousBtime != null && nextBtime != null && previousBtime != nextBtime;
+
+/// Per-field CPU occupancy in percent of the jiffy delta between two
+/// `/proc/stat` readings (03 §6.4, §7.1). Percentages of the fields sum
+/// to 100.
+@immutable
+final class CpuPercentages {
+  const CpuPercentages(this.perField, this.busy);
+
+  /// user, nice, system, idle, iowait, irq, softirq, steal in the order
+  /// of [CpuTimes] field constants; indexes beyond the shorter line read
+  /// as 0.
+  final List<double> perField;
+
+  /// `100 - idle - iowait`: what the overview gauges show (03 §7.1).
+  final double busy;
+
+  double get user => _f(CpuTimes.user);
+  double get nice => _f(CpuTimes.nice);
+  double get system => _f(CpuTimes.system);
+  double get idle => _f(CpuTimes.idle);
+  double get iowait => _f(CpuTimes.iowait);
+  double get irq => _f(CpuTimes.irq);
+  double get softirq => _f(CpuTimes.softirq);
+  double get steal => _f(CpuTimes.steal);
+
+  double _f(int i) => i < perField.length ? perField[i] : 0;
+
+  Map<String, Object?> toJson() => {
+    'user': user,
+    'nice': nice,
+    'system': system,
+    'idle': idle,
+    'iowait': iowait,
+    'irq': irq,
+    'softirq': softirq,
+    'steal': steal,
+    'busy': busy,
+  };
+}
+
+/// CPU occupancy between [previous] and [next] (03 §6.4). `null` when the
+/// total jiffy delta is zero or negative, or when any primary field
+/// decreased (a reset starts a new series, CN-04). The guest fields are
+/// excluded from the total because the kernel already accounts them in
+/// user and nice (proc_stat(5)); a guest decrease is tolerated rather
+/// than treated as a reset.
+CpuPercentages? cpuDeltaPercent(CpuTimes previous, CpuTimes next) {
+  const primary = CpuTimes.guest; // fields below guest form the total
+  final len = previous.jiffies.length > next.jiffies.length
+      ? previous.jiffies.length
+      : next.jiffies.length;
+  final deltas = List<int>.filled(len, 0);
+  var total = 0;
+  for (var i = 0; i < len; i++) {
+    final p = i < previous.jiffies.length ? previous.jiffies[i] : 0;
+    final n = i < next.jiffies.length ? next.jiffies[i] : 0;
+    if (n < p) {
+      if (i < primary) return null;
+      continue;
+    }
+    deltas[i] = n - p;
+    if (i < primary) total += n - p;
+  }
+  if (total <= 0) return null;
+  final perField = deltas.map((d) => d * 100.0 / total).toList();
+  var idleD = 0;
+  if (len > CpuTimes.idle) idleD += deltas[CpuTimes.idle];
+  if (len > CpuTimes.iowait) idleD += deltas[CpuTimes.iowait];
+  return CpuPercentages(perField, 100 - idleD * 100.0 / total);
+}
+
+/// CPU occupancy per `cpuN` name present in both maps (03 §6.4).
+Map<String, CpuPercentages> perCpuDeltaPercent(
+  Map<String, CpuTimes> previous,
+  Map<String, CpuTimes> next,
+) {
+  final out = <String, CpuPercentages>{};
+  for (final e in next.entries) {
+    final p = previous[e.key];
+    if (p == null) continue;
+    final pct = cpuDeltaPercent(p, e.value);
+    if (pct != null) out[e.key] = pct;
+  }
+  return out;
+}
+
+/// Throughput of one interface between two readings (03 §6.4).
+@immutable
+final class NetRate {
+  const NetRate({
+    required this.rxBytesPerSecond,
+    required this.txBytesPerSecond,
+  });
+
+  final double rxBytesPerSecond, txBytesPerSecond;
+
+  Map<String, Object?> toJson() => {
+    'rxBytesPerSecond': rxBytesPerSecond,
+    'txBytesPerSecond': txBytesPerSecond,
+  };
+}
+
+/// Per-interface byte rates from /proc/net/dev counters (03 §6.4).
+/// Interfaces missing from either side, reset 64-bit counters and a
+/// zero-or-negative interval yield no entry.
+Map<String, NetRate> netRates(
+  List<NetDevEntry> previous,
+  List<NetDevEntry> next,
+  double elapsedSeconds, {
+  CounterWidth width = CounterWidth.bits64,
+}) {
+  final out = <String, NetRate>{};
+  if (elapsedSeconds <= 0) return out;
+  final prev = {for (final e in previous) e.name: e};
+  for (final n in next) {
+    final p = prev[n.name];
+    if (p == null) continue;
+    final rx = counterDelta(p.rxBytes, n.rxBytes, width: width);
+    final tx = counterDelta(p.txBytes, n.txBytes, width: width);
+    if (rx == null || tx == null) continue;
+    out[n.name] = NetRate(
+      rxBytesPerSecond: rx / elapsedSeconds,
+      txBytesPerSecond: tx / elapsedSeconds,
+    );
+  }
+  return out;
+}
+
+/// Throughput of one block device between two readings (03 §6.4, CN-04).
+@immutable
+final class DiskRate {
+  const DiskRate({
+    required this.readBytesPerSecond,
+    required this.writeBytesPerSecond,
+  });
+
+  /// Sectors converted at 512 bytes each (CN-04).
+  final double readBytesPerSecond, writeBytesPerSecond;
+
+  Map<String, Object?> toJson() => {
+    'readBytesPerSecond': readBytesPerSecond,
+    'writeBytesPerSecond': writeBytesPerSecond,
+  };
+}
+
+/// Per-device byte rates from /proc/diskstats sector counters (03 §6.4).
+/// Devices missing from either side, reset counters and a zero interval
+/// yield no entry.
+Map<String, DiskRate> diskRates(
+  List<DiskStatEntry> previous,
+  List<DiskStatEntry> next,
+  double elapsedSeconds, {
+  CounterWidth width = CounterWidth.bits64,
+}) {
+  final out = <String, DiskRate>{};
+  if (elapsedSeconds <= 0) return out;
+  final prev = {for (final e in previous) e.name: e};
+  for (final n in next) {
+    final p = prev[n.name];
+    if (p == null) continue;
+    final rd = counterDelta(p.sectorsRead, n.sectorsRead, width: width);
+    final wr = counterDelta(p.sectorsWritten, n.sectorsWritten, width: width);
+    if (rd == null || wr == null) continue;
+    out[n.name] = DiskRate(
+      readBytesPerSecond: rd * DiskStatEntry.sectorBytes / elapsedSeconds,
+      writeBytesPerSecond: wr * DiskStatEntry.sectorBytes / elapsedSeconds,
+    );
+  }
+  return out;
+}
+
+/// All rates between two `core` snapshots (03 §6.4), or the pieces that
+/// are computable: a changed `btime` or a zero/negative uptime delta
+/// yields empty rate maps (the tick is a gap, not a stale value).
+@immutable
+final class CoreDelta {
+  const CoreDelta({
+    required this.rebooted,
+    required this.elapsedSeconds,
+    this.cpu,
+    required this.perCpu,
+    required this.net,
+    required this.disk,
+  });
+
+  /// `btime` changed: the host rebooted and every counter restarted.
+  final bool rebooted;
+
+  /// Uptime delta between the two ticks, null when either side lacks it.
+  final double? elapsedSeconds;
+
+  /// Aggregate CPU occupancy.
+  final CpuPercentages? cpu;
+
+  /// Per-core occupancy.
+  final Map<String, CpuPercentages> perCpu;
+
+  /// Per-interface byte rates.
+  final Map<String, NetRate> net;
+
+  /// Per-device byte rates.
+  final Map<String, DiskRate> disk;
+}
+
+/// Diffs two `core` snapshots against each other and their uptimes
+/// (03 §6.4).
+CoreDelta diffCoreSnapshots(
+  CoreSnapshot previous,
+  CoreSnapshot next, {
+  CounterWidth width = CounterWidth.bits64,
+}) {
+  final rebooted = seriesReset(previous.btime, next.btime);
+  final prevUp = previous.uptimeSeconds;
+  final nextUp = next.uptimeSeconds;
+  final elapsed = prevUp != null && nextUp != null ? nextUp - prevUp : null;
+  if (rebooted || elapsed == null || elapsed <= 0) {
+    return CoreDelta(
+      rebooted: rebooted,
+      elapsedSeconds: elapsed,
+      perCpu: const {},
+      net: const {},
+      disk: const {},
+    );
+  }
+  final prevCpu = previous.cpu;
+  final nextCpu = next.cpu;
+  return CoreDelta(
+    rebooted: false,
+    elapsedSeconds: elapsed,
+    cpu: prevCpu != null && nextCpu != null
+        ? cpuDeltaPercent(prevCpu, nextCpu)
+        : null,
+    perCpu: perCpuDeltaPercent(previous.perCpu, next.perCpu),
+    net: netRates(previous.netdev, next.netdev, elapsed, width: width),
+    disk: diskRates(previous.diskstats, next.diskstats, elapsed, width: width),
+  );
+}

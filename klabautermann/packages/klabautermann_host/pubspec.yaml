@@ -1,0 +1,24 @@
+name: klabautermann_host
+description: >-
+  Pure-Dart host data collection for Klabautermann: the HWS/1 sampler
+  program and its frame parser, per-collector payload parsers, the
+  capability probe model, and counter-to-rate maths (docs/design/
+  klabautermann 03, section 6).
+version: 1.9.0
+publish_to: none
+resolution: workspace
+
+environment:
+  sdk: ^3.12.0
+
+dependencies:
+  # 03 §3.1: klabautermann_host depends on meta and collection only.
+  # Immutable-model annotations shared with the sibling packages.
+  meta: ^1.15.0
+  # UnmodifiableListView/UnmodifiableMapView behind the immutable snapshot
+  # fields.
+  collection: ^1.19.0
+
+dev_dependencies:
+  lints: ^5.0.0
+  test: ^1.25.0

@@ -1,0 +1,20 @@
+{
+  "result": {
+    "osRelease": {
+      "fields": {
+        "NAME": "Alpine Linux",
+        "ID": "alpine",
+        "VERSION_ID": "3.22.0",
+        "PRETTY_NAME": "Alpine Linux v3.22",
+        "HOME_URL": "https://alpinelinux.org/",
+        "BUG_REPORT_URL": "https://gitlab.alpinelinux.org/alpine/aports/-/issues"
+      }
+    },
+    "kernelName": "Linux",
+    "kernelRelease": "6.6.32-0-lts",
+    "kernelArch": "x86_64",
+    "hostnamectl": {},
+    "timeoutAbsent": false
+  },
+  "warnings": []
+}

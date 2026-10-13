@@ -114,6 +114,7 @@ exit 1
         'poltergeist/packages/poltergeist_sync/pubspec.yaml',
         // The live bench compat shim bumps in lockstep with the suite.
         'poltergeist/tool/bench/pubspec.yaml',
+        'klabautermann/packages/klabautermann_host/pubspec.yaml',
       ]),
     );
     // Not owned: vendored forks and the unversioned workspace roots.
@@ -122,6 +123,7 @@ exit 1
     expect(pubspecs, isNot(contains('planchette/pubspec.yaml')));
     expect(pubspecs, isNot(contains('seance/pubspec.yaml')));
     expect(pubspecs, isNot(contains('poltergeist/pubspec.yaml')));
+    expect(pubspecs, isNot(contains('klabautermann/pubspec.yaml')));
 
     // The post-bump hook delegates to the version tool — no sed inline.
     expect(result.stdout, contains('post-bump --version'));
