@@ -77,6 +77,105 @@ void main() {
       product.allowsDartssh2Import('packages/poltergeist_core/lib/other.dart'),
       isFalse,
     );
+    // Matching is per path segment, not by string prefix.
+    expect(
+      product.allowsDartssh2Import('packages/poltergeist_bench2/lib/ssh.dart'),
+      isFalse,
+    );
+    expect(
+      product.allowsDartssh2Import(
+        'packages/poltergeist_core/lib/src/connection_extra/ssh.dart',
+      ),
+      isFalse,
+    );
+    expect(product.isPurePackage('packages2/poltergeist_core'), isFalse);
+  });
+
+  for (final entry in ['packages/*/lib', 'pack*', 'packages/poltergeist_*']) {
+    test('rejects the wildcard $entry', () {
+      expect(
+        () => _parse(_valid.replaceFirst('[packages/*]', '[$entry]')),
+        throwsA(
+          isA<FormatException>().having(
+            (e) => e.message,
+            'message',
+            contains('invalid relative path'),
+          ),
+        ),
+      );
+    });
+  }
+
+  test('rejects a wildcard engine protocol directory', () {
+    expect(
+      () => _parse(
+        _valid.replaceFirst(
+          'engine_protocol: packages/poltergeist_core/lib/src/engine',
+          'engine_protocol: packages/poltergeist_core/lib/src/*',
+        ),
+      ),
+      throwsA(isA<FormatException>()),
+    );
+  });
+
+  for (final key in [
+    'pure_packages',
+    'dartssh2_imports',
+    'dartssh2_dependents',
+    'engine_protocol_callback_owners',
+  ]) {
+    test('rejects a null $key', () {
+      final yaml = _valid.replaceFirstMapped(
+        RegExp('^    $key:.*\$', multiLine: true),
+        (_) => '    $key: null',
+      );
+      expect(
+        () => _parse(_withoutDanglingEntries(yaml, key)),
+        throwsA(
+          isA<FormatException>().having(
+            (e) => e.message,
+            'message',
+            contains('$key must not be null'),
+          ),
+        ),
+      );
+    });
+  }
+
+  test('rejects a callback owner outside the engine protocol', () {
+    expect(
+      () => _parse(
+        _valid.replaceFirst(
+          'packages/poltergeist_core/lib/src/engine/engine_probes.dart:',
+          'packages/poltergeist_core/lib/src/other/engine_probes.dart:',
+        ),
+      ),
+      throwsA(
+        isA<FormatException>().having(
+          (e) => e.message,
+          'message',
+          contains('outside engine_protocol'),
+        ),
+      ),
+    );
+  });
+
+  test('rejects callback owners without an engine protocol', () {
+    expect(
+      () => _parse(
+        _valid.replaceFirst(
+          'engine_protocol: packages/poltergeist_core/lib/src/engine',
+          'engine_protocol: null',
+        ),
+      ),
+      throwsA(
+        isA<FormatException>().having(
+          (e) => e.message,
+          'message',
+          contains('must be empty when engine_protocol is null'),
+        ),
+      ),
+    );
   });
 
   for (final yaml in [
@@ -189,4 +288,23 @@ products:
     expect(product.engineProtocol, isNull);
     expect(product.scanAreas, {'packages'});
   });
+}
+
+/// Drops the indented list or map lines that followed [key] once its value
+/// is replaced by `null`, so the YAML stays well-formed.
+String _withoutDanglingEntries(String yaml, String key) {
+  final lines = yaml.split('\n');
+  final out = <String>[];
+  var skipping = false;
+  for (final line in lines) {
+    if (line == '    $key: null') {
+      skipping = true;
+      out.add(line);
+      continue;
+    }
+    if (skipping && line.startsWith('      ')) continue;
+    skipping = false;
+    out.add(line);
+  }
+  return out.join('\n');
 }

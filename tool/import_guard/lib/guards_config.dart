@@ -142,12 +142,27 @@ ProductGuard _parseProduct(String name, Object? value, String source) {
     if (!map.containsKey(key)) {
       throw FormatException('$label: missing required key $key');
     }
+    // A null list would read as "nothing allowed" or "nothing scanned";
+    // only engine_protocol has a meaningful null.
+    if (map[key] == null && key != 'engine_protocol') {
+      throw FormatException('$label: $key must not be null');
+    }
   }
 
   final scan = _stringList(map['scan'], '$label.scan', required: true);
   if (scan.any((area) => !_isPathSegment(area))) {
     throw FormatException('$label.scan: entries must be single path segments');
   }
+
+  final engineProtocol = _optionalPath(
+    map['engine_protocol'],
+    '$label.engine_protocol',
+  );
+  final callbackOwners = _callbackOwners(
+    map['engine_protocol_callback_owners'],
+    '$label.engine_protocol_callback_owners',
+  );
+  _checkCallbackOwners(engineProtocol, callbackOwners, label);
 
   return ProductGuard(
     name: name,
@@ -165,15 +180,34 @@ ProductGuard _parseProduct(String name, Object? value, String source) {
       map['standalone_resolutions'],
       '$label.standalone_resolutions',
     ),
-    engineProtocol: _optionalPath(
-      map['engine_protocol'],
-      '$label.engine_protocol',
-    ),
-    engineProtocolCallbackOwners: _callbackOwners(
-      map['engine_protocol_callback_owners'],
-      '$label.engine_protocol_callback_owners',
-    ),
+    engineProtocol: engineProtocol,
+    engineProtocolCallbackOwners: callbackOwners,
   );
+}
+
+/// Callback owners are exceptions inside the engine protocol directory;
+/// one outside it, or without a directory, would exempt nothing.
+void _checkCallbackOwners(
+  String? engineProtocol,
+  Map<String, List<String>> owners,
+  String label,
+) {
+  final ownersLabel = '$label.engine_protocol_callback_owners';
+  if (engineProtocol == null) {
+    if (owners.isNotEmpty) {
+      throw FormatException(
+        '$ownersLabel: must be empty when engine_protocol is null',
+      );
+    }
+    return;
+  }
+  for (final file in owners.keys) {
+    if (!p.posix.isWithin(engineProtocol, file)) {
+      throw FormatException(
+        '$ownersLabel: "$file" is outside engine_protocol "$engineProtocol"',
+      );
+    }
+  }
 }
 
 void _rejectUnknownKeys(
@@ -239,8 +273,12 @@ String? _optionalPath(Object? value, String label) {
   return value;
 }
 
+/// The only wildcard is a trailing `/*`, which [_pathList] strips before
+/// calling this; any other `*` would match nothing and silently weaken a
+/// rule, so it fails closed.
 void _checkPath(String path, String label) {
   if (path.isEmpty ||
+      path.contains('*') ||
       path.startsWith('/') ||
       path.endsWith('/') ||
       path.contains('//') ||
