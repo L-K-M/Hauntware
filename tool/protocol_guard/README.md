@@ -1,12 +1,18 @@
 # Engine protocol guard
 
+Run from the repository root after `dart pub get` here and in each
+configured product:
+
 ```sh
 dart analyze tool/protocol_guard
 dart test tool/protocol_guard/test
-dart run tool/protocol_guard/bin/check.dart .
+dart run tool/protocol_guard/bin/check.dart [--product <name>]
 ```
 
-Enforces 08 §3.3: engine declarations cannot store function-typed fields;
+Without `--product` it checks every `tool/guards.yaml` entry.
+
+Enforces 08 §3.3 for each product: engine declarations cannot store
+function-typed fields;
 `EngineRequest`/`EngineEvent` subtypes must stay under core's `src/engine/`.
 Resolution catches typedefs, inferred callbacks, type-parameter bounds,
 and callbacks inside generic or record fields. Checks include extension-type

@@ -204,7 +204,7 @@ jobs:
 
   # These guards use POSIX tools, Docker, or GNU timeout, not native contracts.
   dart_tools:
-    name: Poltergeist Dart tooling (Ubuntu)
+    name: Suite guards and Poltergeist tooling (Ubuntu)
     runs-on: ubuntu-latest
     timeout-minutes: 15
     defaults:
@@ -217,6 +217,11 @@ jobs:
       - uses: dart-lang/setup-dart@v1
         with:
           sdk: stable
+      # The moved guards resolve through the root manifest; each product
+      # still resolves its own workspace.
+      - name: Resolve suite root
+        working-directory: .
+        run: dart pub get
       - name: Resolve workspace
         run: dart pub get
       - name: Resolve M0 benchmark harness
@@ -226,21 +231,28 @@ jobs:
         working-directory: poltergeist/tool/bench
         run: dart pub get
       - name: Analyze dependency guard
+        working-directory: .
         run: dart analyze tool/import_guard
       - name: Test dependency guard
+        working-directory: .
         run: dart test tool/import_guard/test
-      # Contract: the script must exit non-zero on any 03 §1 violation —
+      # Contract: the guard must exit non-zero on any 03 §1 violation —
       # including scan errors and a missing scan root — so this gate fails
       # closed.
       - name: Check dependency boundaries (03 §1)
-        run: bash scripts/check-imports.sh
+        working-directory: .
+        run: dart run tool/import_guard/bin/check.dart
       - name: Analyze engine protocol guard
+        working-directory: .
         run: dart analyze tool/protocol_guard
       - name: Test engine protocol guard
+        working-directory: .
         run: dart test tool/protocol_guard/test
       - name: Check engine protocol boundaries (08 §3.3)
-        run: dart run tool/protocol_guard/bin/check.dart .
+        working-directory: .
+        run: dart run tool/protocol_guard/bin/check.dart
       - name: Analyze release gate
+        working-directory: .
         run: dart analyze tool/license_gate
       - name: Analyze release version tool
         run: dart analyze tool/release_version
@@ -254,6 +266,7 @@ jobs:
       - name: Analyze integration fixture tools
         run: dart analyze test/integration
       - name: Test release gate
+        working-directory: .
         run: dart test tool/license_gate/test
       - name: Test release version tool
         run: dart test tool/release_version/test
@@ -281,6 +294,7 @@ jobs:
       # D30 allows pre-license pins in development, so PR CI checks the
       # fail-closed release wiring without requiring the upstream license yet.
       - name: Guard Séance release gate
+        working-directory: .
         run: dart run tool/license_gate/bin/check.dart --marker-only
 
   seance_pin_audit:
