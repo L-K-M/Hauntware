@@ -6938,6 +6938,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get helpShortcutsOtherGroup => 'Other';
 
   @override
+  String get helpShortcutsCompareGroup => 'Compare';
+
+  @override
+  String get helpShortcutsNextChange => 'Next change';
+
+  @override
+  String get helpShortcutsPreviousChange => 'Previous change';
+
+  @override
   String get paneNewFolderName => 'untitled folder';
 
   @override

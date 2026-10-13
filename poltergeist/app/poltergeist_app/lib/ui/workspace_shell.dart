@@ -4172,7 +4172,10 @@ class _WorkspaceShellState extends State<WorkspaceShell>
     if (comparison == null) return;
 
     final route = MaterialPageRoute<void>(
-      builder: (_) => CompareView(controller: comparison),
+      builder: (_) => CompareView(
+        controller: comparison,
+        textSize: widget.editorTextSize,
+      ),
     );
     unawaited(Navigator.of(context).push(route));
   }
@@ -4194,7 +4197,11 @@ class _WorkspaceShellState extends State<WorkspaceShell>
           ).compareFilesTitle(comparison.leftName, comparison.rightName);
 
     final route = MaterialPageRoute<void>(
-      builder: (_) => CompareView(controller: controller, title: title),
+      builder: (_) => CompareView(
+        controller: controller,
+        title: title,
+        textSize: widget.editorTextSize,
+      ),
     );
     unawaited(Navigator.of(context).push(route));
   }

@@ -8680,6 +8680,18 @@
   "@helpShortcutsOtherGroup": {
     "description": "Keyboard Shortcuts sheet: group for commands that live in no menu."
   },
+  "helpShortcutsCompareGroup": "Compare",
+  "@helpShortcutsCompareGroup": {
+    "description": "Keyboard Shortcuts sheet: group for the keys the compare view (06 §6) binds for itself, outside the menus."
+  },
+  "helpShortcutsNextChange": "Next change",
+  "@helpShortcutsNextChange": {
+    "description": "Keyboard Shortcuts sheet, Compare group: n moves to the next changed region."
+  },
+  "helpShortcutsPreviousChange": "Previous change",
+  "@helpShortcutsPreviousChange": {
+    "description": "Keyboard Shortcuts sheet, Compare group: Shift+N moves to the previous changed region."
+  },
   "paneNewFolderName": "untitled folder",
   "@paneNewFolderName": {
     "description": "Default name of a folder created by New Folder (file.newFolder); numbered like 'untitled folder (2)' when the name is taken. The inline rename opens on it right away."

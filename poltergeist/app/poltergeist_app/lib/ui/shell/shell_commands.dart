@@ -15,6 +15,7 @@ import '../../services/registered_command.dart';
 import '../../services/window_full_screen.dart';
 import '../../services/workspace_controller.dart';
 import '../../theme/family_hues.dart';
+import '../compare_view.dart' show compareViewShortcuts;
 import 'delete_confirm_dialog.dart';
 import 'keyboard_shortcuts_dialog.dart';
 import '../top_toast.dart';
@@ -501,7 +502,11 @@ List<RegisteredCommand> buildShellCommands({
           SingleActivator(LogicalKeyboardKey.slash, control: true),
         ],
       ),
-      run: (context) => showKeyboardShortcutsDialog(context, allCommands()),
+      run: (context) => showKeyboardShortcutsDialog(
+        context,
+        allCommands(),
+        views: [compareViewShortcuts],
+      ),
       menuPlacement: const CommandMenuPlacement(
         menu: AppMenuId.help,
         order: 10,

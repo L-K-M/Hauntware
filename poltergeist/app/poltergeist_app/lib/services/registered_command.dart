@@ -202,3 +202,23 @@ class RegisteredCommand {
   /// `context.mounted` after any `await` before using it again.
   final Future<void> Function(BuildContext context) run;
 }
+
+/// Keys a view binds for itself, outside the registry: n and Shift+N step
+/// through the compare view's changes (06 §6) only while it shows, and a
+/// registered chord would claim n everywhere. Help ▸ Keyboard Shortcuts
+/// lists them under [title] after the menus, from the activators the view
+/// binds, so the sheet cannot drift from the keys.
+final class ViewShortcuts {
+  const ViewShortcuts({required this.title, required this.keys});
+
+  final String Function(AppLocalizations l10n) title;
+
+  /// Each key's label and the chord the view binds for it.
+  final List<
+    ({
+      String Function(AppLocalizations l10n) label,
+      ShortcutActivator activator,
+    })
+  >
+  keys;
+}

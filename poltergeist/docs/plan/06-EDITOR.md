@@ -1470,7 +1470,8 @@ specifics:
   (`3/12`, read as "Change 3 of 12"), previous and next buttons, and the
   layout switch. n and Shift+N step through regions and wrap, outside
   text fields only. They are view-local keys, so they stay out of the
-  shortcut registry and its dialog.
+  shortcut registry; since 2026-10-13 Help ▸ Keyboard Shortcuts lists
+  them under Compare, from the activators the view binds.
 - The diff colours are an app theme extension (`CompareDiffColors`), the
   "EditorSyntaxTheme-style slots" above, derived per palette: family
   green and red washes over the surface, with text held to 4.5:1 and
@@ -1484,7 +1485,9 @@ specifics:
   exactly. Control characters and the Unicode line and paragraph
   separators draw as visible symbols, since a paragraph would otherwise
   break the row at them. Rows have no syntax highlighting and no
-  selection.
+  selection. Since 2026-10-13 the rows and the Separate editors draw in
+  the editor's text size and follow it as it changes, keeping the
+  reader's place as a resize does; the −/+ markers grow with the text.
 - A change of layout, by the switch or by the posture after a rotation,
   keeps the active region, or else the line at the top, in view. A side
   whose find bar or editor has focus when the other side finishes
@@ -1586,7 +1589,8 @@ via `openSettings(initialTab:)` (Séance's deep-link pattern). Editor
 to Séance's behavior; a divergence wants an upstreamable reason, not a
 preference. The text size is appearance, not behavior: since 2026-10-06
 Settings → Appearance and the editor's View › Zoom set it, with the range
-and steps Planchette and Séance share (`EditorTextSize`).
+and steps Planchette and Séance share (`EditorTextSize`). The compare
+view's rows and editors follow it too (§6).
 
 ## Definition of done
 

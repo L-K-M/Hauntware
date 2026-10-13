@@ -9,20 +9,25 @@ import '../menus/app_menus.dart' show appMenuTitle;
 /// Help ▸ Keyboard Shortcuts (10 §8): every registered command that has a
 /// chord, grouped by the menu it lives in — generated from the registry
 /// (D21), so the sheet can never drift from what the keys actually do.
+/// [views] add the keys a view binds for itself, each under its own
+/// heading after the menus.
 Future<void> showKeyboardShortcutsDialog(
   BuildContext context,
-  List<RegisteredCommand> commands,
-) {
+  List<RegisteredCommand> commands, {
+  List<ViewShortcuts> views = const [],
+}) {
   return showDialog<void>(
     context: context,
-    builder: (context) => _KeyboardShortcutsDialog(commands: commands),
+    builder: (context) =>
+        _KeyboardShortcutsDialog(commands: commands, views: views),
   );
 }
 
 class _KeyboardShortcutsDialog extends StatelessWidget {
-  const _KeyboardShortcutsDialog({required this.commands});
+  const _KeyboardShortcutsDialog({required this.commands, required this.views});
 
   final List<RegisteredCommand> commands;
+  final List<ViewShortcuts> views;
 
   @override
   Widget build(BuildContext context) {
@@ -44,10 +49,16 @@ class _KeyboardShortcutsDialog extends StatelessWidget {
           .putIfAbsent(command.menuPlacement?.menu, () => [])
           .add((command.label(l10n), chords.join('  ·  ')));
     }
-    final menus = [
+    // Menus first, then each view's own keys, then the commands no menu
+    // holds.
+    final sections = <(String, List<(String, String)>)>[
       for (final id in AppMenuId.values)
-        if (grouped.containsKey(id)) id,
-      if (grouped.containsKey(null)) null,
+        if (grouped[id] case final rows?) (appMenuTitle(id, l10n), rows),
+      for (final view in views)
+        if (_viewRows(view, l10n, platform) case final rows
+            when rows.isNotEmpty)
+          (view.title(l10n), rows),
+      if (grouped[null] case final rows?) (l10n.helpShortcutsOtherGroup, rows),
     ];
 
     return Dialog(
@@ -82,20 +93,18 @@ class _KeyboardShortcutsDialog extends StatelessWidget {
                 padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
                 shrinkWrap: true,
                 children: [
-                  for (final menu in menus) ...[
+                  for (final (title, rows) in sections) ...[
                     Padding(
                       padding: const EdgeInsets.only(top: 14, bottom: 4),
                       child: Text(
-                        menu == null
-                            ? l10n.helpShortcutsOtherGroup
-                            : appMenuTitle(menu, l10n),
+                        title,
                         style: theme.textTheme.labelMedium?.copyWith(
                           color: chrome.secondaryText,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
                     ),
-                    for (final (label, chord) in grouped[menu]!)
+                    for (final (label, chord) in rows)
                       Padding(
                         padding: const EdgeInsets.symmetric(vertical: 3),
                         child: Row(
@@ -125,4 +134,16 @@ class _KeyboardShortcutsDialog extends StatelessWidget {
       ),
     );
   }
+
+  /// [view]'s keys as label and chord, leaving out any chord the platform
+  /// has no spelling for.
+  static List<(String, String)> _viewRows(
+    ViewShortcuts view,
+    AppLocalizations l10n,
+    TargetPlatform platform,
+  ) => [
+    for (final key in view.keys)
+      if (formatShortcutActivator(key.activator, platform) case final chord?)
+        (key.label(l10n), chord),
+  ];
 }
