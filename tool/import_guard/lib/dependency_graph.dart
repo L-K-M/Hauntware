@@ -44,10 +44,9 @@ class DependencyGraph {
     bool Function(String) isForbidden,
   ) async {
     final pending = <List<String>>[
-      for (final dependency in dependencyNames(
-        await _pubspec(name),
-        ['dependencies'],
-      ))
+      for (final dependency in dependencyNames(await _pubspec(name), [
+        'dependencies',
+      ]))
         [name, dependency],
     ];
     final visited = <String>{name};

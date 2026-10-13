@@ -85,10 +85,11 @@ void main() {
 
     final seance = config.product('seance');
     expect(seance.scan, ['packages', 'app']);
-    expect(
-      seance.purePackages,
-      ['packages/seance_protocol', 'packages/seance_core', 'packages/seance_sync_server'],
-    );
+    expect(seance.purePackages, [
+      'packages/seance_protocol',
+      'packages/seance_core',
+      'packages/seance_sync_server',
+    ]);
     expect(seance.dartssh2DevDependents, ['app/seance_app']);
     expect(seance.importExemptions, [
       'app/seance_app/test/host_key_blocked_test.dart',
@@ -354,18 +355,18 @@ products:
     ]);
     expect(product.noDartIo, ['packages/seance_protocol/lib']);
     expect(product.seanceCoreImplementationImports, ['packages/seance_core']);
-    expect(
-      product.forbiddenDependencies,
-      {'ghost_*': ['seance_core'], 'ghost_ui': ['ghost_theme']},
-    );
+    expect(product.forbiddenDependencies, {
+      'ghost_*': ['seance_core'],
+      'ghost_ui': ['ghost_theme'],
+    });
   });
 
   test('unions every matching forbidden-dependency key', () {
     final product = _parse(_extended).product('seance');
-    expect(
-      product.forbiddenDependenciesFor('ghost_ui'),
-      {'seance_core', 'ghost_theme'},
-    );
+    expect(product.forbiddenDependenciesFor('ghost_ui'), {
+      'seance_core',
+      'ghost_theme',
+    });
     expect(product.forbiddenDependenciesFor('ghost_marks'), {'seance_core'});
     expect(product.forbiddenDependenciesFor('planchette_core'), isEmpty);
   });
@@ -385,8 +386,10 @@ products:
       product.forbidsDartIo('packages/seance_protocol/lib/src/inbox.dart'),
       isTrue,
     );
-    expect(product.forbidsDartIo('packages/seance_core/lib/src/inbox.dart'),
-        isFalse);
+    expect(
+      product.forbidsDartIo('packages/seance_core/lib/src/inbox.dart'),
+      isFalse,
+    );
     expect(
       product.allowsSeanceCoreImplementationImport(
         'packages/seance_core/test/sync_test.dart',
@@ -400,13 +403,13 @@ products:
       isFalse,
     );
     expect(
-      product.isImportExempt(
-        'app/seance_app/test/host_key_blocked_test.dart',
-      ),
+      product.isImportExempt('app/seance_app/test/host_key_blocked_test.dart'),
       isTrue,
     );
-    expect(product.isImportExempt('app/seance_app/test/other_test.dart'),
-        isFalse);
+    expect(
+      product.isImportExempt('app/seance_app/test/other_test.dart'),
+      isFalse,
+    );
     expect(product.allowsDartssh2DevDependency('app/seance_app'), isTrue);
     expect(product.allowsDartssh2Dependency('app/seance_app'), isFalse);
   });
@@ -419,12 +422,14 @@ products:
   ]) {
     test('rejects an invalid forbidden dependency entry: $entry', () {
       expect(
-        () => _parse(_extended.replaceFirst(
-          '    forbidden_dependencies:\n'
-          '      "ghost_*": [seance_core]\n'
-          '      ghost_ui: [ghost_theme]',
-          '    $entry',
-        )),
+        () => _parse(
+          _extended.replaceFirst(
+            '    forbidden_dependencies:\n'
+                '      "ghost_*": [seance_core]\n'
+                '      ghost_ui: [ghost_theme]',
+            '    $entry',
+          ),
+        ),
         throwsFormatException,
       );
     });
@@ -437,6 +442,7 @@ String _withoutDanglingEntries(String yaml, String key) {
   final lines = yaml.split('\n');
   final out = <String>[];
   var skipping = false;
+
   for (final line in lines) {
     if (line == '    $key: null') {
       skipping = true;
@@ -449,5 +455,6 @@ String _withoutDanglingEntries(String yaml, String key) {
     skipping = false;
     out.add(line);
   }
+
   return out.join('\n');
 }

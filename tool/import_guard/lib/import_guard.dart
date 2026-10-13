@@ -194,7 +194,10 @@ Future<List<String>> _checkPackage(
   // Overrides and unused declarations can add forbidden edges before an
   // import exists. App declarations need no Flutter resolution in the Dart
   // CI job.
-  final manifests = [package.pubspec, if (package.overrides != null) package.overrides!];
+  final manifests = [
+    package.pubspec,
+    if (package.overrides != null) package.overrides!,
+  ];
   final violations = <String>[];
 
   for (final manifest in manifests) {
@@ -310,7 +313,9 @@ Future<List<String>> _checkSource(
         );
         continue;
       }
-      final packageName = uri.scheme == 'package' ? uri.pathSegments.first : null;
+      final packageName = uri.scheme == 'package'
+          ? uri.pathSegments.first
+          : null;
       if (packageName == 'dartssh2' &&
           !product.allowsDartssh2Import(relative) &&
           !product.isImportExempt(relative)) {
@@ -319,7 +324,8 @@ Future<List<String>> _checkSource(
           '${_dartssh2ImportArea(product)}',
         );
       }
-      if (uri.scheme == 'dart' && uri.path == 'io' &&
+      if (uri.scheme == 'dart' &&
+          uri.path == 'io' &&
           product.forbidsDartIo(relative)) {
         violations.add(
           '${_reported(product, relative)}: dart:io import/export is '

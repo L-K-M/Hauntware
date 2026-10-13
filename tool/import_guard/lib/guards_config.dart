@@ -131,9 +131,7 @@ final class ProductGuard {
 /// run of characters (`ghost_*` matches `ghost_ui`).
 bool packageNameMatches(String pattern, String name) {
   if (!pattern.contains('*')) return pattern == name;
-  final regex = RegExp(
-    '^${RegExp.escape(pattern).replaceAll(r'\*', '.*')}\$',
-  );
+  final regex = RegExp('^${RegExp.escape(pattern).replaceAll(r'\*', '.*')}\$');
   return regex.hasMatch(name);
 }
 

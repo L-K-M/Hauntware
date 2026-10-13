@@ -642,29 +642,33 @@ dependency_overrides: {"dartssh2": any}
       });
     });
 
-    test('allows a seance_core implementation import in an allowed dir',
-        () async {
-      await withFixture((f) async {
-        await f.package('seance_core', '');
-        await f.write(
-          '$_core/lib/src/connection/ssh.dart',
-          "import 'package:seance_core/src/ssh/ssh_session.dart';",
-        );
-        await f.expectExit(0);
-      });
-    });
+    test(
+      'allows a seance_core implementation import in an allowed dir',
+      () async {
+        await withFixture((f) async {
+          await f.package('seance_core', '');
+          await f.write(
+            '$_core/lib/src/connection/ssh.dart',
+            "import 'package:seance_core/src/ssh/ssh_session.dart';",
+          );
+          await f.expectExit(0);
+        });
+      },
+    );
 
-    test('rejects a seance_core implementation import outside allowed dirs',
-        () async {
-      await withFixture((f) async {
-        await f.package('seance_core', '');
-        await f.write(
-          '$_core/lib/other.dart',
-          "import 'package:seance_core/src/ssh/ssh_session.dart';",
-        );
-        await f.expectExit(1, 'seance_core implementation');
-      });
-    });
+    test(
+      'rejects a seance_core implementation import outside allowed dirs',
+      () async {
+        await withFixture((f) async {
+          await f.package('seance_core', '');
+          await f.write(
+            '$_core/lib/other.dart',
+            "import 'package:seance_core/src/ssh/ssh_session.dart';",
+          );
+          await f.expectExit(1, 'seance_core implementation');
+        });
+      },
+    );
   });
 }
 
