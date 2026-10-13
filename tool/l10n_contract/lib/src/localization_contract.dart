@@ -238,9 +238,14 @@ final class LocalizationContract {
           present = scanStringLiterals(
             file.readAsStringSync(),
           ).map((literal) => literal.lexeme).toSet();
-        } on LocalizationParseException {
-          // The tree scan already reports the unparseable file; do not
-          // also declare every entry in it dead.
+        } on LocalizationParseException catch (error) {
+          // Do not declare every entry in an unparseable file dead. Report
+          // the file itself unless the tree scan already does.
+          if (!_coveredByTreeScan(entry.key)) {
+            findings.add(
+              UnparseableSource(path: entry.key, message: error.message),
+            );
+          }
           continue;
         }
       }
@@ -253,6 +258,14 @@ final class LocalizationContract {
     }
 
     return findings;
+  }
+
+  bool _coveredByTreeScan(String path) {
+    if (isGeneratedPath(path)) return false;
+
+    return config.scannedDirectories.any(
+      (directory) => path.startsWith('$directory/'),
+    );
   }
 
   String get _absoluteRoot => p.absolute(appRoot);

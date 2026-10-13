@@ -191,6 +191,39 @@ import 'default.dart'
     expect(findings.whereType<UnparseableSource>(), hasLength(1));
   });
 
+  test('reports an unparseable allowlisted file outside the scan', () {
+    final contract = LocalizationContract(
+      appRoot: 'test/fixtures/broken_app',
+      config: const L10nContractConfig(
+        generatedLocalizationPrefix: 'lib/l10n/app_localizations',
+        generatedDartSuffixes: {'.g.dart'},
+        scannedDirectories: [],
+      ),
+      allowedTechnicalLiterals: const {
+        'lib/broken.dart': {"'Hidden'"},
+      },
+    );
+
+    expect(
+      contract.scan().whereType<UnparseableSource>().map(
+        (finding) => finding.path,
+      ),
+      equals(['lib/broken.dart']),
+    );
+  });
+
+  test('reports an unparseable allowlisted file only once', () {
+    final findings = _contract(
+      appRoot: 'test/fixtures/broken_app',
+      allowed: {
+        'lib/broken.dart': {"'Hidden'"},
+      },
+    ).scan();
+
+    expect(findings.whereType<UnparseableSource>(), hasLength(1));
+    expect(findings.whereType<DeadAllowlistEntry>(), isEmpty);
+  });
+
   test('fails closed when a scanned directory is missing', () {
     final contract = LocalizationContract(
       appRoot: 'test/fixtures/mini_app',
