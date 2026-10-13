@@ -542,7 +542,7 @@ warning for scoped data loss and lockout-class commands (`iptables -F`
 | 22 | `\bnft\s+flush\s+ruleset\b` | warning | Drops the entire nftables ruleset |
 | 23 | `\buserdel\b(?![^\n]*(\s-\w*r\|--remove\b))` | warning | Removes a user account |
 | 24 | `\buserdel\b(?=[^\n]*(\s-\w*r\|--remove\b))` (`-r`, `-rf`, `-fr`) | critical | `userdel -r` also deletes the home directory |
-| 25 | `\bkill\b[^\n]*\s1\b` | warning | Signals PID 1; `-9 1` is the plan's case, `TERM 1` shuts systemd down |
+| 25 | `\bkill\b[^\n]*\s1\b` | warning | Signals PID 1, the init process or a container's main process; this can reboot the host or stop the container. Corrected in F2-4: systemd re-executes on `TERM` and reboots on `INT` (systemd(1)), and PID 1 receives only signals it handles, so `-9 1` is dropped inside its namespace (pid_namespaces(7)); `kill -9 1` stays the plan's case |
 
 Overlap with the 14 existing rules, checked rule by rule: `docker`,
 `crontab`, `ufw`, `nft`, `userdel`, `kill` have no coverage today (plan's

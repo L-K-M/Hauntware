@@ -16,6 +16,15 @@ class _MemHostKeyStore implements HostKeyStore {
   Future<void> put(HostKey key) async => _map[key.locator] = key;
 }
 
+/// One F2d danger rule: its explanation and severity, commands that must
+/// raise exactly its finding, and near misses that must not raise it.
+typedef _DangerRuleCase = ({
+  String explanation,
+  DangerSeverity severity,
+  List<String> fires,
+  List<String> misses,
+});
+
 void main() {
   group('SshConfigImporter', () {
     test('parses hosts, ignores wildcard-only defaults and comments', () {
@@ -158,6 +167,226 @@ Host bastion db
       // git clean dry-run and non-forced finds are fine.
       expect(DangerLinter.worst('git clean -n'), isNull);
       expect(DangerLinter.worst('find . -name "*.log"'), isNull);
+    });
+
+    // Docker, systemd, cron, firewall and account rules from
+    // docs/design/seance-core-transport.md §3.6, one table per rule: every
+    // firing command raises exactly that rule's finding, and no near miss
+    // raises it.
+    group('F2d rules', () {
+      const critical = DangerSeverity.critical;
+      const warning = DangerSeverity.warning;
+      final rules = <_DangerRuleCase>[
+        (
+          explanation:
+              'docker system prune sweeping images and volumes '
+              'destroys all unused data.',
+          severity: critical,
+          fires: [
+            'docker system prune -a --volumes',
+            'docker system prune --all',
+            'docker system prune --volumes',
+            'docker system prune -a',
+            'docker system prune -af',
+            'docker system prune -fa',
+            'sudo docker system prune --all --force',
+          ],
+          misses: [
+            'docker system prune',
+            'docker system prune -f',
+            'docker system prune --filter until=24h',
+            'docker system df',
+          ],
+        ),
+        (
+          explanation:
+              'Removes every unused volume, taking attached data with it.',
+          severity: critical,
+          fires: [
+            'docker volume prune',
+            'docker volume prune -f',
+            'sudo docker volume prune --all',
+          ],
+          misses: ['docker volume ls', 'docker volume inspect pgdata'],
+        ),
+        (
+          explanation: 'Deletes a named volume and its data.',
+          severity: warning,
+          fires: [
+            'docker volume rm pgdata',
+            'docker volume rm -f pgdata cache',
+          ],
+          misses: [
+            'docker volume ls',
+            'docker volume create pgdata',
+            'docker rm -f web',
+          ],
+        ),
+        (
+          explanation: 'compose down -v drops the stack\'s volumes.',
+          severity: critical,
+          fires: [
+            'docker compose down -v',
+            'docker compose down --volumes',
+            'docker compose -f f.yaml down -v',
+            'docker-compose down -v',
+            'docker compose -p web down --rmi all -v',
+          ],
+          misses: [
+            'docker compose down',
+            'docker compose down --remove-orphans',
+            'docker compose up -d',
+            'docker run -v /a:/b nginx',
+          ],
+        ),
+        (
+          explanation:
+              'Stopping or masking sshd cuts future SSH access to the host.',
+          severity: warning,
+          fires: [
+            'systemctl stop sshd',
+            'sudo systemctl disable ssh',
+            'systemctl mask ssh.service',
+            'systemctl disable --now ssh.socket',
+          ],
+          misses: [
+            'systemctl status sshd',
+            'systemctl restart sshd',
+            'systemctl stop nginx',
+          ],
+        ),
+        (
+          explanation: 'crontab -r deletes the user\'s whole cron table.',
+          severity: warning,
+          fires: ['crontab -r', 'crontab -u deploy -r', 'crontab -ir'],
+          // The r in a user name is not the -r flag.
+          misses: ['crontab -l', 'crontab -e', 'crontab -u rob -l'],
+        ),
+        (
+          explanation: 'Removes or switches off the firewall.',
+          severity: warning,
+          fires: [
+            'ufw reset',
+            'ufw --force reset',
+            'ufw disable',
+            'sudo ufw --force disable',
+          ],
+          misses: [
+            'ufw status',
+            'ufw status verbose',
+            'ufw allow 22/tcp',
+            'ufw enable',
+          ],
+        ),
+        (
+          explanation: 'Drops the entire nftables ruleset.',
+          severity: warning,
+          fires: ['nft flush ruleset', 'sudo nft flush ruleset'],
+          misses: ['nft list ruleset'],
+        ),
+        (
+          explanation: 'Removes a user account.',
+          severity: warning,
+          // -R names a chroot directory, not a removal.
+          fires: [
+            'userdel deploy',
+            'userdel -f deploy',
+            'userdel -R /mnt/chroot deploy',
+          ],
+          misses: [
+            'userdel -r deploy',
+            'usermod -L deploy',
+            'useradd -m deploy',
+          ],
+        ),
+        (
+          explanation: 'userdel -r also deletes the home directory.',
+          severity: critical,
+          fires: [
+            'userdel -r deploy',
+            'userdel -rf deploy',
+            'userdel -fr deploy',
+            'userdel --remove deploy',
+            'sudo userdel -r deploy',
+          ],
+          misses: ['userdel deploy', 'userdel -f deploy'],
+        ),
+        (
+          explanation:
+              'Signals PID 1, the init process or a container\'s '
+              'main process; this can reboot the host or stop the container.',
+          severity: warning,
+          fires: [
+            'kill -9 1',
+            'kill 1',
+            'kill -TERM 1',
+            'kill -s INT 1',
+            'sudo kill -HUP 1',
+          ],
+          // A longer PID, a job spec, and -1 as the signal are not PID 1.
+          misses: ['kill 1000', 'kill -9 12345', 'kill %1', 'kill -1 1234'],
+        ),
+      ];
+
+      for (final rule in rules) {
+        test('${rule.fires.first} is ${rule.severity.name}', () {
+          for (final command in rule.fires) {
+            final findings = [
+              for (final f in DangerLinter.scan(command))
+                (f.severity, f.explanation),
+            ];
+            expect(findings, [
+              (rule.severity, rule.explanation),
+            ], reason: command);
+          }
+          for (final command in rule.misses) {
+            final explanations = [
+              for (final f in DangerLinter.scan(command)) f.explanation,
+            ];
+            expect(
+              explanations,
+              isNot(contains(rule.explanation)),
+              reason: command,
+            );
+          }
+        });
+      }
+
+      test('leaves the benign commands of the design alone', () {
+        const benign = [
+          'docker compose up',
+          'docker volume ls',
+          'docker run -v /a:/b nginx',
+          'docker system df',
+          'systemctl status sshd',
+          'crontab -l',
+          'crontab -e',
+          'ufw status',
+          'nft list ruleset',
+          'usermod -aG docker deploy',
+          'useradd -m deploy',
+          'kill 1000',
+          'docker compose down',
+        ];
+        for (final command in benign) {
+          expect(DangerLinter.scan(command), isEmpty, reason: command);
+        }
+      });
+
+      test('keeps the existing rules separate', () {
+        // Each command raises only the pre-existing rule it already hit.
+        const existing = {
+          'rm -rf /var/lib/docker': DangerSeverity.critical,
+          'systemctl reboot': DangerSeverity.warning,
+          'iptables -F': DangerSeverity.warning,
+        };
+        for (final MapEntry(key: command, value: severity)
+            in existing.entries) {
+          final findings = DangerLinter.scan(command);
+          expect(findings, hasLength(1), reason: command);
+          expect(findings.single.severity, severity, reason: command);
+        }
+      });
     });
   });
 
