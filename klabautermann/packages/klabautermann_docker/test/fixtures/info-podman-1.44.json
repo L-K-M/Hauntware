@@ -1,0 +1,31 @@
+{
+  "Platform": { "Name": "linux/amd64/podman-5.4.1" },
+  "Components": [
+    { "Name": "Podman Engine", "Version": "5.4.1", "Details": { "APIVersion": "5.4.1" } }
+  ],
+  "Version": "5.4.1",
+  "ApiVersion": "1.44",
+  "MinAPIVersion": "1.24",
+  "Os": "linux",
+  "Arch": "amd64",
+  "Containers": 2,
+  "ContainersRunning": 1,
+  "ContainersPaused": 0,
+  "ContainersStopped": 1,
+  "Images": 3,
+  "Driver": "overlay",
+  "LoggingDriver": "journald",
+  "CgroupDriver": "systemd",
+  "CgroupVersion": "2",
+  "KernelVersion": "6.8.0-52-generic",
+  "OperatingSystem": "Ubuntu 24.04.2 LTS",
+  "OSType": "linux",
+  "Architecture": "x86_64",
+  "NCPU": 4,
+  "MemTotal": 8376610816,
+  "DockerRootDir": "/home/dev/.local/share/containers/storage",
+  "Name": "podman-host",
+  "ServerVersion": "5.4.1",
+  "SecurityOptions": ["name=rootless", "name=seccomp,profile=builtin"],
+  "Warnings": []
+}

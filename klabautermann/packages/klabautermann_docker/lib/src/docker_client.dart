@@ -20,6 +20,10 @@ final class DockerClient {
   /// one from [negotiate].
   final ApiVersion apiVersion;
 
+  /// Feature gates derived from [apiVersion] (03 §5.8); the typed
+  /// endpoint helpers read the shape gates from here.
+  ApiFeatureGates get gates => ApiFeatureGates(apiVersion);
+
   final DockerHttpClient _http;
 
   /// `HEAD /_ping`, falling back to `GET` (03 §5.8): the engine's

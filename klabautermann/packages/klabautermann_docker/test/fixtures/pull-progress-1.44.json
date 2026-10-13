@@ -1,0 +1,4 @@
+{"status":"Pulling fs layer","progressDetail":{},"id":"a3ed95caeb02"}
+{"status":"Downloading","progressDetail":{"current":32768,"total":8200000},"progress":"[>  ]","id":"a3ed95caeb02"}
+{"status":"Pull complete","progressDetail":{},"id":"a3ed95caeb02"}
+{"status":"Digest: sha256:abcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcd"}

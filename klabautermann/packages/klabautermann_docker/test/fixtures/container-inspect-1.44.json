@@ -1,0 +1,98 @@
+{
+  "Id": "9f8e7d6c5b4a39281706f5e4d3c2b1a09f8e7d6c5b4a39281706f5e4d3c2b1a0",
+  "Created": "2026-05-01T10:20:30.123456789Z",
+  "Path": "/docker-entrypoint.sh",
+  "Args": ["nginx", "-g", "daemon off;"],
+  "State": {
+    "Status": "running",
+    "Running": true,
+    "Paused": false,
+    "Restarting": false,
+    "OOMKilled": false,
+    "Dead": false,
+    "Pid": 4242,
+    "ExitCode": 0,
+    "Error": "",
+    "StartedAt": "2026-05-01T10:20:31.000000000Z",
+    "FinishedAt": "0001-01-01T00:00:00Z",
+    "Health": {
+      "Status": "healthy",
+      "FailingStreak": 0,
+      "Log": [
+        {
+          "Start": "2026-05-01T10:25:00.000000000Z",
+          "End": "2026-05-01T10:25:00.020000000Z",
+          "ExitCode": 0,
+          "Output": "ok\n"
+        }
+      ]
+    }
+  },
+  "Image": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+  "Name": "/web-1",
+  "RestartCount": 0,
+  "Driver": "overlay2",
+  "Platform": "linux",
+  "LogPath": "/var/lib/docker/containers/9f8e/9f8e-json.log",
+  "HostConfig": {
+    "NetworkMode": "web_default",
+    "Privileged": false,
+    "ReadonlyRootfs": false,
+    "Binds": ["web_data:/data"],
+    "Memory": 536870912,
+    "NanoCpus": 500000000,
+    "PidMode": "",
+    "AutoRemove": false,
+    "RestartPolicy": { "Name": "unless-stopped", "MaximumRetryCount": 0 },
+    "LogConfig": { "Type": "json-file", "Config": { "max-size": "10m" } }
+  },
+  "Config": {
+    "Hostname": "9f8e7d6c5b4a",
+    "Image": "nginx:1.27",
+    "User": "",
+    "WorkingDir": "",
+    "StopSignal": "SIGQUIT",
+    "Tty": false,
+    "OpenStdin": false,
+    "StdinOnce": false,
+    "Env": [
+      "PATH=/usr/local/sbin:/usr/local/bin",
+      "POSTGRES_PASSWORD=hunter2",
+      "APP_MODE=production",
+      "DATABASE_URL=postgres://admin:s3cr3t@db:5432/app"
+    ],
+    "Cmd": ["nginx", "-g", "daemon off;"],
+    "Entrypoint": ["/docker-entrypoint.sh"],
+    "Labels": {
+      "com.docker.compose.project": "web",
+      "com.docker.compose.service": "web",
+      "org.opencontainers.image.title": "web",
+      "API_TOKEN=not-a-key-name": "value"
+    }
+  },
+  "Mounts": [
+    {
+      "Type": "volume",
+      "Name": "web_data",
+      "Source": "/var/lib/docker/volumes/web_data/_data",
+      "Destination": "/data",
+      "Driver": "local",
+      "Mode": "z",
+      "RW": true,
+      "Propagation": ""
+    }
+  ],
+  "NetworkSettings": {
+    "IPAddress": "172.18.0.2",
+    "Gateway": "172.18.0.1",
+    "Networks": {
+      "web_default": {
+        "IPAddress": "172.18.0.2",
+        "Gateway": "172.18.0.1",
+        "MacAddress": "02:42:ac:12:00:02",
+        "NetworkID": "abcdef0123456789",
+        "Aliases": ["web", "web-1"]
+      }
+    }
+  }
+}

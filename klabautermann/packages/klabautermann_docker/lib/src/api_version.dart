@@ -177,6 +177,16 @@ DockerParseResult<PingInfo> parsePingHeaders(HttpHeaders headers) {
   );
 }
 
+/// One `Components[]` entry of `GET /version` (03 §7.12 DKE-01).
+@immutable
+final class EngineComponent {
+  const EngineComponent({this.name, this.version, this.details = const {}});
+
+  final String? name;
+  final String? version;
+  final Map<String, Object?> details;
+}
+
 /// The fields of `GET /version` the negotiation and engine panels use
 /// (03 §5.8, §7.12). Models are tolerant: unknown fields are ignored.
 @immutable
@@ -192,6 +202,8 @@ final class DockerServerVersion {
     this.kernelVersion,
     this.experimental,
     this.isPodman = false,
+    this.platformName,
+    this.components = const [],
   });
 
   /// `ApiVersion`: the newest compat version the engine offers.
@@ -212,6 +224,12 @@ final class DockerServerVersion {
   /// Podman detection through `/version` (`Components[].Name` or
   /// `Platform.Name` mentions Podman).
   final bool isPodman;
+
+  /// `Platform.Name` (for example `Docker Engine - Community`).
+  final String? platformName;
+
+  /// `Components[]` (Engine, containerd, runc, ...) for the engine panel.
+  final List<EngineComponent> components;
 }
 
 /// Parses a decoded `GET /version` JSON document; never throws on host
@@ -257,21 +275,40 @@ DockerParseResult<DockerServerVersion> parseServerVersion(Object? decoded) {
 
   // Podman marks itself in Components[].Name or Platform.Name.
   var podman = false;
-  final components = decoded['Components'];
-  if (components is List) {
-    for (final c in components) {
-      if (c is Map &&
-          c['Name'] is String &&
-          (c['Name'] as String).toLowerCase().contains('podman')) {
-        podman = true;
+  final components = <EngineComponent>[];
+  final rawComponents = decoded['Components'];
+  if (rawComponents is List) {
+    for (final c in rawComponents) {
+      if (c is Map) {
+        final name = c['Name'];
+        final version = c['Version'];
+        final details = c['Details'];
+        components.add(
+          EngineComponent(
+            name: name is String ? name : null,
+            version: version is String ? version : null,
+            details: details is Map
+                ? {
+                    for (final e in details.entries)
+                      if (e.key is String) e.key as String: e.value,
+                  }
+                : const {},
+          ),
+        );
+        if (name is String && name.toLowerCase().contains('podman')) {
+          podman = true;
+        }
       }
     }
   }
+  String? platformName;
   final platform = decoded['Platform'];
-  if (platform is Map &&
-      platform['Name'] is String &&
-      (platform['Name'] as String).toLowerCase().contains('podman')) {
-    podman = true;
+  if (platform is Map) {
+    final name = platform['Name'];
+    if (name is String) {
+      platformName = name;
+      if (name.toLowerCase().contains('podman')) podman = true;
+    }
   }
 
   return DockerParseResult(
@@ -286,6 +323,8 @@ DockerParseResult<DockerServerVersion> parseServerVersion(Object? decoded) {
       kernelVersion: stringField('KernelVersion'),
       experimental: boolField('Experimental'),
       isPodman: podman,
+      platformName: platformName,
+      components: components,
     ),
     warnings,
   );
