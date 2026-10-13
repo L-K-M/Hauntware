@@ -182,13 +182,6 @@ void main() {
         ..seed(await _sealServer(web))
         ..seed(await _sealServer(_server('srv-db')))
         ..seed(await _sealServer(_server('srv-old')))
-        ..seed(
-          await _sealServer(
-            _server('srv-old'),
-            updatedAt: _epochMs + 1,
-            deleted: true,
-          ),
-        )
         ..seed(await _sealPin(_pin('SHA256:fleet')))
         ..seed(
           await _sealSecret(
@@ -203,20 +196,40 @@ void main() {
       expect(api.pushCalls, 0);
       expect(await device.records.dirtyRecords(), isEmpty);
       expect(device.codec.seals, 0);
-      // The pulled configs still materialize in the catalog, the tombstoned
-      // one stays gone, and the pin and the credential land.
+      // The pulled configs still materialize in the catalog, and the pin
+      // and the credential land.
       expect(
         [for (final server in device.coordinator.catalog!.servers) server.id],
-        ['srv-db', 'srv-web'],
+        ['srv-db', 'srv-old', 'srv-web'],
       );
-      expect(await device.servers.byId('srv-old'), isNull);
+      expect(await device.servers.byId('srv-old'), isNotNull);
       expect(
         (await device.hostKeys.get('h.example.com', 22))!.fingerprintSha256,
         'SHA256:fleet',
       );
       expect((await device.vault.getSecret('s1'))!.value, 'hunter2');
 
-      // A second round has nothing to push either.
+      // A foreign tombstone pulled by a later round removes the
+      // materialized row and its catalog entry, still without a push or
+      // a seal.
+      api.seed(
+        await _sealServer(
+          _server('srv-old'),
+          updatedAt: _epochMs + 1,
+          deleted: true,
+        ),
+      );
+      await device.coordinator.runRound(api);
+      expect(api.pushCalls, 0);
+      expect(await device.records.dirtyRecords(), isEmpty);
+      expect(device.codec.seals, 0);
+      expect(
+        [for (final server in device.coordinator.catalog!.servers) server.id],
+        ['srv-db', 'srv-web'],
+      );
+      expect(await device.servers.byId('srv-old'), isNull);
+
+      // A third round has nothing to push either.
       await device.coordinator.runRound(api);
       expect(api.pushCalls, 0);
       expect(device.codec.seals, 0);
