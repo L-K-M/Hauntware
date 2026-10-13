@@ -19,6 +19,11 @@ final class ProductGuard {
     required this.purePackages,
     required this.dartssh2Imports,
     required this.dartssh2Dependents,
+    required this.dartssh2DevDependents,
+    required this.importExemptions,
+    required this.noDartIo,
+    required this.forbiddenDependencies,
+    required this.seanceCoreImplementationImports,
     required this.standaloneResolutions,
     required this.engineProtocol,
     required this.engineProtocolCallbackOwners,
@@ -39,6 +44,27 @@ final class ProductGuard {
 
   /// Package directories allowed to declare a `dartssh2` dependency.
   final List<String> dartssh2Dependents;
+
+  /// Package directories allowed to declare `dartssh2` only under
+  /// `dev_dependencies` (a runtime or override declaration is a
+  /// violation).
+  final List<String> dartssh2DevDependents;
+
+  /// Single files exempt from the dartssh2 import rule.
+  final List<String> importExemptions;
+
+  /// Directories whose Dart sources must not import `dart:io`, including
+  /// conditional imports.
+  final List<String> noDartIo;
+
+  /// A map from a package name or glob to the package names or globs it
+  /// must not depend on directly or transitively. Every matching key's
+  /// list applies.
+  final Map<String, List<String>> forbiddenDependencies;
+
+  /// Directories allowed to import `package:seance_core/src/...`; every
+  /// other file in the product that does is a violation.
+  final List<String> seanceCoreImplementationImports;
 
   /// Package directories resolving through their own package config
   /// outside the product workspace lock.
@@ -61,6 +87,52 @@ final class ProductGuard {
   /// dartssh2 import area.
   bool allowsDartssh2Import(String relative) =>
       dartssh2Imports.any((dir) => p.posix.isWithin(dir, relative));
+
+  /// Whether [packagePath] may declare dartssh2 under any dependency
+  /// section.
+  bool allowsDartssh2Dependency(String packagePath) =>
+      dartssh2Dependents.contains(packagePath);
+
+  /// Whether [packagePath] may declare dartssh2 only under
+  /// `dev_dependencies`.
+  bool allowsDartssh2DevDependency(String packagePath) =>
+      dartssh2DevDependents.contains(packagePath);
+
+  /// Whether [relative] (product-relative file path) is exempt from the
+  /// dartssh2 import rule.
+  bool isImportExempt(String relative) => importExemptions.contains(relative);
+
+  /// Whether [relative] (product-relative) sits inside a `no_dart_io`
+  /// directory.
+  bool forbidsDartIo(String relative) =>
+      noDartIo.any((dir) => p.posix.isWithin(dir, relative));
+
+  /// Whether [relative] (product-relative) sits inside a directory allowed
+  /// to import `package:seance_core/src/...`.
+  bool allowsSeanceCoreImplementationImport(String relative) =>
+      seanceCoreImplementationImports.any(
+        (dir) => p.posix.isWithin(dir, relative),
+      );
+
+  /// The forbidden dependency patterns that apply to [packageName]: the
+  /// union of every key's list whose key matches the name.
+  Set<String> forbiddenDependenciesFor(String packageName) {
+    final patterns = <String>{};
+    for (final entry in forbiddenDependencies.entries) {
+      if (packageNameMatches(entry.key, packageName)) {
+        patterns.addAll(entry.value);
+      }
+    }
+    return patterns;
+  }
+}
+
+/// Whether the package [name] matches [pattern], where `*` matches any
+/// run of characters (`ghost_*` matches `ghost_ui`).
+bool packageNameMatches(String pattern, String name) {
+  if (!pattern.contains('*')) return pattern == name;
+  final regex = RegExp('^${RegExp.escape(pattern).replaceAll(r'\*', '.*')}\$');
+  return regex.hasMatch(name);
 }
 
 final class GuardsConfig {
@@ -132,7 +204,15 @@ const _requiredProductKeys = {
   'engine_protocol',
   'engine_protocol_callback_owners',
 };
-const _productKeys = {..._requiredProductKeys, 'standalone_resolutions'};
+const _optionalProductKeys = {
+  'standalone_resolutions',
+  'dartssh2_dev_dependents',
+  'import_exemptions',
+  'no_dart_io',
+  'forbidden_dependencies',
+  'seance_core_implementation_imports',
+};
+const _productKeys = {..._requiredProductKeys, ..._optionalProductKeys};
 
 ProductGuard _parseProduct(String name, Object? value, String source) {
   final label = '$source: products.$name';
@@ -176,6 +256,23 @@ ProductGuard _parseProduct(String name, Object? value, String source) {
       map['dartssh2_dependents'],
       '$label.dartssh2_dependents',
     ),
+    dartssh2DevDependents: _pathList(
+      map['dartssh2_dev_dependents'],
+      '$label.dartssh2_dev_dependents',
+    ),
+    importExemptions: _pathList(
+      map['import_exemptions'],
+      '$label.import_exemptions',
+    ),
+    noDartIo: _pathList(map['no_dart_io'], '$label.no_dart_io'),
+    forbiddenDependencies: _forbiddenDependencies(
+      map['forbidden_dependencies'],
+      '$label.forbidden_dependencies',
+    ),
+    seanceCoreImplementationImports: _pathList(
+      map['seance_core_implementation_imports'],
+      '$label.seance_core_implementation_imports',
+    ),
     standaloneResolutions: _pathList(
       map['standalone_resolutions'],
       '$label.standalone_resolutions',
@@ -183,6 +280,36 @@ ProductGuard _parseProduct(String name, Object? value, String source) {
     engineProtocol: engineProtocol,
     engineProtocolCallbackOwners: callbackOwners,
   );
+}
+
+/// `forbidden_dependencies` is a map from a package name or glob to the
+/// package names or globs it must not depend on. Both sides are validated
+/// as package patterns so a malformed glob cannot silently match nothing.
+Map<String, List<String>> _forbiddenDependencies(Object? value, String label) {
+  final map = _expectMap(value, label);
+  if (map == null) return const {};
+  final result = <String, List<String>>{};
+  for (final entry in map.entries) {
+    final key = entry.key;
+    if (key is! String) {
+      throw FormatException('$label: keys must be package names or globs');
+    }
+    _checkPackagePattern(key, label);
+    final patterns = _stringList(entry.value, '$label.$key');
+    for (final pattern in patterns) {
+      _checkPackagePattern(pattern, '$label.$key');
+    }
+    result[key] = patterns;
+  }
+  return result;
+}
+
+/// Package patterns are `[A-Za-z0-9_]` with an optional `*` wildcard, and
+/// must not start with `*` so an accidental global ban fails closed.
+void _checkPackagePattern(String pattern, String label) {
+  if (!RegExp(r'^[A-Za-z0-9_][A-Za-z0-9_*]*$').hasMatch(pattern)) {
+    throw FormatException('$label: invalid package pattern "$pattern"');
+  }
 }
 
 /// Callback owners are exceptions inside the engine protocol directory;

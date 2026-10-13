@@ -53,7 +53,9 @@ export 'src/ssh/remote_file_system.dart'
 
 export 'src/probe/probe_service.dart';
 
-export 'src/store/file_permissions.dart';
+// The fail-closed chmod is the catalog writer's primitive; catalog.dart
+// exports it.
+export 'src/store/file_permissions.dart' hide restrictLocalPathPermissions;
 export 'src/store/stores.dart';
 
 export 'src/inbox/inbox_api.dart';

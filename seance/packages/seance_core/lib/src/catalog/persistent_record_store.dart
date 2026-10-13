@@ -9,9 +9,10 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:seance_core/seance_core.dart';
+import 'package:seance_protocol/seance_protocol.dart';
 
-import '../transfer/transfer_journal.dart' show TransferJournalIo;
+import '../sync/local_record_store.dart';
+import 'atomic_file_writer.dart';
 
 /// The bookkeeping beyond the pinned [LocalRecordStore] contract that
 /// 04 §3.2's apply pass needs: the apply cursor (`lastAppliedSeq`,
@@ -91,7 +92,7 @@ String _stamp(DateTime now) => now
 /// ```
 ///
 /// Written atomically after every mutation through the house temp+rename
-/// writer ([TransferJournalIo.atomicRewrite]). Tombstones are retained
+/// writer ([AtomicFileWriter.write]). Tombstones are retained
 /// indefinitely (04 §3.2 — no GC: any window risks resurrecting a deletion
 /// through a long-offline device). A corrupt file is quarantined under a
 /// unique per-occurrence name and the store restarts empty; the caller
@@ -108,7 +109,7 @@ final class PersistentLocalRecordStore implements SyncRecordStore {
        // ignore: prefer_initializing_formals
        _file = File(path),
        _atomicWriter =
-           atomicWriter ?? const TransferJournalIo().atomicRewrite,
+           atomicWriter ?? const AtomicFileWriter().write,
        _now = now ?? DateTime.now,
        // ignore: prefer_initializing_formals
        _onError = onError;
