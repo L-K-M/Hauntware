@@ -8,8 +8,9 @@ library;
 import 'package:seance_protocol/seance_protocol.dart';
 
 /// The one crypto consumer the task permits: Séance's own [RecordCodec]
-/// (AES-256-GCM + HKDF-SHA256, `{kind, data}` payloads, unknown kind names
-/// preserved as [RecordKind.unknown]).
+/// (XChaCha20-Poly1305 under the HKDF-SHA256-derived vault key,
+/// `{kind, data}` payloads, unknown kind names preserved as
+/// [RecordKind.unknown]).
 ///
 /// [open] is deliberately throw-only: a decrypt or JSON failure surfaces,
 /// and the caller decides whether that means "not for our vault key,
