@@ -75,3 +75,22 @@ is not a device smoke test:
 
 None applies to M1a yet; they gate the milestones that ship the matching
 behavior; this list keeps them visible so they are not lost between PRs.
+
+## macOS native fixtures
+
+The macOS runner uses Séance's keyboard and accessibility compatibility
+controller (`KlabautermannFlutterViewController`, ledgered in
+[SHARED.md](SHARED.md)). `scripts/test-macos-keyboard.sh` and
+`scripts/test-macos-accessibility.sh` compile it against the cached
+Flutter engine and run the native fixtures modelled on Séance's. With
+`--stock-engine` they test the stock controller instead and are expected
+to fail. They need macOS and have not run yet. No CI job builds
+Klabautermann for macOS yet either, so nothing has compiled the copied
+Objective-C or the Swift bridging: both wait for the Klabautermann client
+legs in the root workflows. Until then
+`app/klabautermann_app/test/macos_runner_test.dart` guards the wiring on
+Linux.
+
+Follow-up: this is the suite's fourth copy of the controller. The D32
+review in [SHARED.md](SHARED.md) defers a shared macOS plugin to a
+separate suite PR, which must land before any product makes a fifth.
