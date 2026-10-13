@@ -1,7 +1,7 @@
 /// Sectioning for the server list.
 ///
-/// Kept free of Flutter, like [server_filter.dart], so the rules that decide
-/// what the list looks like can be unit-tested without pumping a widget.
+/// Kept free of Flutter so the rules that decide what the list looks like
+/// can be unit-tested without pumping a widget.
 ///
 /// The shape is the sibling rail's (Poltergeist's plan, 10 §5): a PINNED
 /// section when anything is pinned, then SERVERS — its ungrouped servers
