@@ -1,5 +1,61 @@
 # Séance ports and pin audits
 
+## Catalog library move, PR 1b (2026-10-13)
+
+The sync coordinator follows the leaf files into
+`package:seance_core/catalog.dart` (`../../docs/design/catalog-library.md`
+sections 4, 5, 12 and 13, row 1). `BookmarkCoordinator` becomes the
+shared `RecordCoordinator`, its `bookmark:` half becomes Poltergeist's
+`BookmarkHandler`, and `BookmarkBackupService` builds the shared
+coordinator with that handler. Rounds, the apply pass and its cursor
+rules, the quarantine, the passphrase hold and the re-seal paths keep
+their order and outcomes: the moved and staying tests assert the same
+results, changed only in wiring and in the renamed write calls below.
+
+| Before | Now |
+|---|---|
+| `poltergeist_core/lib/src/bookmarks/bookmark_coordinator.dart`: rounds, apply pass, quarantine, re-seal | `seance_core/lib/src/catalog/record_coordinator.dart` (`RecordCoordinator`) |
+| the same file's server, pin and credential writes | `catalog/catalog_writer.dart` (`CatalogWriter`); credential publication and retraction in `catalog/secret_handler.dart` |
+| the same file's `serverConfig`, `hostkey:` and `secret:` apply paths | `catalog/server_config_handler.dart`, `catalog/host_key_handler.dart`, `catalog/secret_handler.dart` |
+| the same file's `bookmark:` apply, re-seal and local writes | `poltergeist_core/lib/src/bookmarks/bookmark_handler.dart` (stays in Poltergeist) |
+| `seance_core/lib/src/catalog/seance_server_catalog.dart` (`SeanceServerCatalog`) | `catalog/catalog_snapshot.dart` (`CatalogSnapshot`) and `catalog/catalog_controller.dart` (`CatalogController`, held by the coordinator, not exported) |
+| `isDecryptableSyncId` in `catalog/record_crypto.dart`, a fixed prefix list | `catalog/record_coordinator.dart`, derived from handler registration |
+
+- Calls: `onServerSaved`, `onServerDeleted`, `onServerSecretSaved`,
+  `onHostKeyPinned` and `onHostKeyForgotten` become
+  `coordinator.writer.saveServer`, `deleteServer`, `secretSaved`,
+  `publishPin` and `forgetPin`. `onBookmarkSaved`/`onBookmarkDeleted`
+  keep their names as the `BookmarkRecordWrites` extension on
+  `RecordCoordinator`. `HostKeyConflict`, `ApplyReport` and
+  `SyncRoundResult` keep theirs. The shared-account switch's pin re-seal
+  (step 9) seals through `writer.sealLocal` instead of the record store.
+- Construction: `RecordCoordinator` takes `handlers` (Poltergeist passes
+  `BookmarkHandler`; the library registers its own three), an explicit
+  `CatalogMode` instead of the nullable catalog, `onCatalogReplaced`
+  instead of the catalog's `onReplaced`, and a required `PushPolicy`
+  whose only value is `normal` until PR 1c. `inheritCatalogFrom` keeps
+  serving the previous coordinator's catalog when the app rebuilds
+  under the same account and vault key, as the app's catalog reuse did.
+  `SyncEnrollment` takes the same product handlers, from which its
+  passphrase trial derives the decryptable prefixes (prefixless,
+  `hostkey:`, `bookmark:` for Poltergeist, as before).
+- Barrel: the catalog library adds the coordinator, writer, handler
+  seam, snapshot, mode and policy types and drops `deletionStamp`,
+  which only the coordinator used. `poltergeist_core` re-exports what
+  the app reads and stops exporting `SeanceServerCatalog`.
+- Tests: the generic groups of `bookmark_coordinator_test.dart`
+  (host-key records, the `serverConfig` catalog and write path, secret
+  records, the device-level secret switch) move to
+  `seance_core/test/catalog/record_coordinator_test.dart`; the
+  bookmark-driven groups stay as `test/sync/bookmark_handler_test.dart`
+  with the one secret-switch test whose proof record is a bookmark.
+  `push_revision_test.dart`, `enrollment_test.dart` and the convergence
+  test stay, since bookmarks are their vehicle. `fake_sync_api.dart` is
+  copied to the moved tests.
+- Stays in `poltergeist_core/lib/src/bookmarks/`: `bookmark_store.dart`,
+  `bookmark_groups.dart`, `sort_key.dart` and the new
+  `bookmark_handler.dart`.
+
 ## Catalog library move, PR 1a (2026-10-13)
 
 Original Poltergeist sync code moves into Séance's `seance_core` as the

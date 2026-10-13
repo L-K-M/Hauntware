@@ -170,7 +170,7 @@ class SidebarView extends StatefulWidget {
 
   /// The shared-mode Séance server catalog (04 §4.2): SERVERS lists it.
   /// Null in separate mode.
-  final SeanceServerCatalog? catalog;
+  final CatalogSnapshot? catalog;
 
   /// Repaints the rail when the backup service lands a round (the catalog
   /// and the sync status both change in place).

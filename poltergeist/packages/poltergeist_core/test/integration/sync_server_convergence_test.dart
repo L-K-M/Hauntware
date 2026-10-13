@@ -98,7 +98,9 @@ final class _Device {
   late final _MemoryEnrollmentState state;
   late final SyncEnrollment enrollment;
   late final _Clock clock;
-  late final SeanceServerCatalog? catalog;
+  late final bool shared;
+  RecordCoordinator? _coordinator;
+  CatalogSnapshot? get catalog => _coordinator?.catalog;
   late final SyncTrackingServerStore? servers;
 
   static Future<_Device> create(Directory parent, String name,
@@ -125,8 +127,9 @@ final class _Device {
       credentials: device.credentials,
       state: device.state,
       records: device.records,
+      handlers: [BookmarkHandler(bookmarks: device.bookmarks)],
     );
-    device.catalog = shared ? SeanceServerCatalog() : null;
+    device.shared = shared;
     // Shared mode's catalog is a view over the writable server store —
     // the same pair main.dart wires, or pulled serverConfigs never
     // materialize anywhere.
@@ -140,17 +143,19 @@ final class _Device {
     return device;
   }
 
-  BookmarkCoordinator coordinatorFor(List<int> vaultKey) =>
-      BookmarkCoordinator(
+  RecordCoordinator coordinatorFor(List<int> vaultKey) =>
+      _coordinator = RecordCoordinator(
         records: records,
-        bookmarks: bookmarks,
+        handlers: [BookmarkHandler(bookmarks: bookmarks)],
         hostKeys: hostKeys,
         hostKeyMutations: hostKeyMutations,
         crypto: RecordCrypto(RecordCodec(vaultKey)),
         deviceId: state.id,
         pinVerdicts: verdicts,
         tripwires: tripwires,
-        catalog: catalog,
+        catalogMode: shared ? CatalogMode.shared : CatalogMode.separate,
+        pushPolicy: PushPolicy.normal,
+        inheritCatalogFrom: shared ? _coordinator : null,
         servers: servers,
         enrollment: state,
         now: clock.call,

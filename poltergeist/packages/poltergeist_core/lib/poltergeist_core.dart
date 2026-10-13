@@ -148,8 +148,18 @@ export 'src/bookmarks/bookmark_groups.dart'
         BookmarkGroupSection,
         groupBookmarks,
         kUngroupedBookmarkKey;
-export 'src/bookmarks/bookmark_coordinator.dart'
-    show ApplyReport, BookmarkCoordinator, HostKeyConflict, SyncRoundResult;
+export 'src/bookmarks/bookmark_handler.dart'
+    show BookmarkHandler, BookmarkRecordWrites;
+export 'package:seance_core/catalog.dart'
+    show
+        ApplyReport,
+        CatalogMode,
+        CatalogSnapshot,
+        CatalogWriter,
+        HostKeyConflict,
+        PushPolicy,
+        RecordCoordinator,
+        SyncRoundResult;
 export 'src/bookmarks/bookmark_store.dart'
     show
         BookmarkRemovedChange,
@@ -193,7 +203,6 @@ export 'package:seance_core/catalog.dart'
         syncNoticePassphraseCheckFailed,
         syncPassphraseCheckFailedMessage,
         syncRegistrationClosedMessage;
-export 'package:seance_core/catalog.dart' show SeanceServerCatalog;
 export 'package:seance_core/catalog.dart'
     show
         FileServerConfigStore,
