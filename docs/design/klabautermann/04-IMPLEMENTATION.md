@@ -38,7 +38,7 @@ is silently unmanaged (`tool/release_version/lib/release_version.dart:785-794`
 | Release tool | `_projectNames` at `tool/release_version/lib/release_version.dart:39` [V]; a `SuiteProduct` in `_defaultProducts` (`:123` [V]) with `flutterVariablePlistPaths` for iOS and macOS `Info.plist` | M1, together with the scaffold |
 | Release tool tests | `release_script_test.dart` owned-pubspec list (add the app and every `klabautermann/packages/*` pubspec, assert `klabautermann/pubspec.yaml` is not owned) and the forwarder loop; `release_workspace_test.dart` fixture block and `_syncTargets`; `release_version_cli_test.dart` fixture loop and plists; `windows_version_test.dart` app list; `build_script_test.dart` `--check`, macOS bundle and failure-format expectations [R: c4 R5 to R12] | M1 |
 | CI | Jobs in 03, section 11.6; header and target-count comments (`ci.yml:3-9` and the "3 Planchette desktop + 5 Séance + 5 Poltergeist" comment at `ci.yml:986-987` [V]); the `dart_tools` guard steps repointed to root `tool/` in F1a; the client matrix builds on every PR without a path filter, like the siblings (decision 15); the integration job runs privileged `docker:dind` on ephemeral GitHub-hosted Linux runners, pinned by digest, with loopback-only ports (decision 15) | M1; guard steps F1a; integration job M2 |
-| Release workflow | `test` gate step for the `klabautermann` packages and guards; `flutter` gate step; `client_klabautermann` job copied from `client_poltergeist` (`.github/workflows/release.yml:925` [V]), with the macOS accessibility and keyboard fixtures of the Séance leg (`ci.yml:1165-1169` [V]; Poltergeist's leg runs no accessibility fixture), SHA-pinned actions, the provenance step and the lock-drift guard; `docker.needs` (`:1168` [V]) and `sums.needs` (`:1247` [V]) gain `client_klabautermann`; asset-count comment (25 to 33); header comment (`:3-9`, "13 client targets (3 Planchette desktop, 5 Séance, 5 Poltergeist)" becomes 18) and, until v1, a release notes line and heading that label Klabautermann "(preview)", matching the asset names of the manifest row; signing stance (`:18-23`); the `test` and `flutter` gate `timeout-minutes` (`:72`, `:292` [V]) raised with the fourth app and again for the Rust steps; the guard and license-gate steps (`test` gate and `client_poltergeist`'s `SEANCE_LICENSE_GATE_V1` step) repointed to root `tool/` | F1a for the guard steps; M1 for the `test` and `flutter` gate steps and their timeouts; M4 for the `client_klabautermann` job (with its `docker.needs` and `sums.needs` edges), the comments and the notes line (decision 16) |
+| Release workflow | `test` gate step for the `klabautermann` packages and guards; `flutter` gate step; `client_klabautermann` job copied from `client_poltergeist` (`.github/workflows/release.yml:925` [V]), with the macOS accessibility and keyboard fixtures of the Séance leg (`ci.yml:1165-1169` [V]; Poltergeist's leg runs no accessibility fixture), SHA-pinned actions, the provenance step and the lock-drift guard; `docker.needs` (`:1168` [V]) and `sums.needs` (`:1247` [V]) gain `client_klabautermann`; asset-count comment (25 to 33); header comment (`:3-9`, "13 client targets (3 Planchette desktop, 5 Séance, 5 Poltergeist)" becomes 18) and, until v1, a release notes line and heading that label Klabautermann "(preview)", matching the asset names of the manifest row; signing stance (`:18-23`); the `test` and `flutter` gate `timeout-minutes` (`:72`, `:292` [V]) raised with the fourth app and again for the Rust steps; the guard and license-gate steps (`test` gate and `client_poltergeist`'s `SEANCE_LICENSE_GATE_V1` step) repointed to root `tool/` | F1a for the guard steps; M1 for the `test` and `flutter` gate steps and their timeouts; M8 for the timeout raise the Rust steps need; M4 for the `client_klabautermann` job (with its `docker.needs` and `sums.needs` edges), the comments and the notes line (decision 16) |
 | Guards | Root import guard entry, private-key scope list, `.gitleaks.toml` allowlist entries for `klabautermann/app/klabautermann_app/android/(app/ci-release.jks\|key.properties)` and fixture keys (pattern `.gitleaks.toml:11-17` [V]) | F1, M1 |
 | Repository config | `.github/dependabot.yml` gradle entry for `/klabautermann/app/klabautermann_app/android` (pattern `:18-19` [V]); `fixture-images.yml` matrix; `secret-scan.yml` key-scope step; `klabautermann/.gitignore` | M1, M2 |
 | Root docs | `README.md` product table, counts and the "distinct names, IDs, storage locations and keystore namespaces" sentence; root `AGENTS.md` product list, layout, boundaries ("Klabautermann consumes the shared SSH/protocol implementation through its core barrel"), "all 18 clients" (with the `client_klabautermann` release job), the `klabautermann-notify` helper (with the Rust release job) and "the companion"; root `CHANGELOG.md`; design docs in `docs/design/` for each extraction | F1 onward, M1; client counts at M4; helper at M8; companion at M9 |
@@ -112,9 +112,11 @@ with devices, real hosts or a Mac keychain: the milestone's PRs merge on
 their automated exits, and the milestone counts as complete once the
 manual gate is signed off and recorded (`06-EXECUTION.md`, from M1 also
 `klabautermann/docs/STATUS.md`). A "release dry run" creates no tag: it is
-`scripts/release.sh --check` plus the CI client matrix and release gate
-steps on the milestone's last PR; the `workflow_dispatch` entry of
-`release.yml` creates a tag and is part of cutting a release.
+`scripts/release.sh --check` plus, on the milestone's last PR, the CI
+jobs that mirror the release gates and client legs (`ci.yml` builds every
+client the release ships, minus publishing, `ci.yml:986-990` [V]); `release.yml`
+runs only on tags and `workflow_dispatch`, which creates a tag and is part
+of cutting a release.
 
 ### M0: spikes (S1 to S9: 5 to 7 in total, parallel; calendar 3 to 4 weeks)
 
@@ -226,7 +228,8 @@ words; system identity, LXC awareness, uptime; access check; coverage UI
 and gap rendering; session rings, charts and the log viewer, with their
 semantics, safe palettes, reduced motion and threshold announcements
 built in (A11Y-01 to A11Y-04, A11Y-11, A11Y-15); IEC units (A11Y-06) and
-`LC_ALL=C.UTF-8`, `TZ=UTC` command environments (A11Y-08); pause,
+`LC_ALL=C.UTF-8` (or `C` when the probe finds no `C.UTF-8`, 6.1, 6.2),
+`TZ=UTC` command environments (A11Y-08); pause,
 backoff and resume, dead-peer detection, runtime per host, old-systemd
 fallbacks and client-limitation errors (CN-05, CN-06, CN-09, CN-10,
 CN-23); safe interpolation for every sampler argument (SAF-10).

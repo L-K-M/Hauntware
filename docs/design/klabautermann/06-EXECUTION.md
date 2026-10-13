@@ -1,7 +1,9 @@
 # Klabautermann execution notes
 
 Status: implementation started on 2026-10-13. These notes record how the
-plan is executed; where they differ from 03 or 04, they win.
+plan is executed (approvals, environment, PR order, manual gates); on
+those points they win over 03 and 04. Design and owner decisions stay in
+03 and 04.
 
 ## Approvals
 
@@ -16,7 +18,7 @@ Open items 2 to 9 of 04, section 15 are settled when their milestone
 starts, following the plan's recommendation, and recorded below. Open
 item 6: pin publication starts at v1, behind the enrollment assertion;
 the Séance release it names is the first suite release after the #56 fix
-(F3d) merges.
+(F3d) merges, which the owner cuts as a separate task (see Releases).
 
 ## Environment
 

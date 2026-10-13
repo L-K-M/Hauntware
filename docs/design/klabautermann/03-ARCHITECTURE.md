@@ -1805,9 +1805,10 @@ unless the user enables admin mode for that panel.
   the `ps` fallback joins arguments with spaces, so masking there works on
   whitespace tokens. Kill and signal
   (PRC-02): the plan records the PID and its start
-  time (field 22 of `/proc/<pid>/stat`, counted after the last `)`
-  because `comm` may contain spaces and `)` [R: proc(5)], as in the
-  `procs` deltas); the executed `sh -c` re-reads the
+  time (field 22 of `/proc/<pid>/stat`: fields resume at 3, `state`,
+  after the last `)`, because `comm` may contain spaces and `)`, so
+  `starttime` is the 20th whitespace-separated field after that `)`
+  [R: proc(5)], as in the `procs` deltas); the executed `sh -c` re-reads the
   start time and runs `kill -s <SIG> <pid>` only if it matches (ServerBox's
   PID-reuse guard [R]). Elevation only for other users' processes. PID 1,
   sshd, dockerd and the sampler's own PIDs are protected targets.
@@ -2499,8 +2500,14 @@ Fallback ladder:
 
 1. Root login: no elevation.
 2. NOPASSWD (`sudo -n true` succeeded in the probe): `sudo -n -- <cmd>`, no
-   prelude. Without sudo, `doas -n true` succeeded: `doas -n -- <cmd>`, no
-   prelude (doas cannot read a password from a pipe).
+   prelude. When sudo is not installed and `doas -n true` succeeded (a
+   blanket `permit nopass`): `doas -n -- <cmd>`, no prelude (doas cannot
+   read a password from a pipe). Where password sudo and blanket doas
+   NOPASSWD both exist, sudo's rungs apply. Rules scoped to one command
+   (`NOPASSWD: /usr/bin/docker`, `permit nopass cmd docker`) fail the
+   global probe; the Docker relay (5.9 rank 3) tries `sudo -n docker`
+   directly, which is what the CI user with a docker-scoped rule covers
+   (11.3).
 3. Password sudo or sudo-rs: the prelude.
 4. Prelude reports "a password is required" after a successful validation
    (for example `timestamp_timeout=0`, verified [L]): retry once with
