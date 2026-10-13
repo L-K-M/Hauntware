@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ghost_theme/ghost_theme.dart' show ThemeModePreference;
 import 'package:klabautermann_app/ui/settings_page.dart';
 
 import 'support/harness.dart';
@@ -38,13 +39,13 @@ void main() {
 
   testWidgets('the Appearance tab switches the theme mode', (tester) async {
     final harness = await openSettings(tester);
-    expect(harness.appearance.themeMode, ThemeMode.system);
+    expect(harness.appearance.mode, ThemeModePreference.system);
 
     await tester.tap(find.text('Appearance'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Dark'));
     await tester.pumpAndSettle();
-    expect(harness.appearance.themeMode, ThemeMode.dark);
+    expect(harness.appearance.mode, ThemeModePreference.dark);
     // The theme pick rebuilds MaterialApp on the dark theme (03 §10.9).
     final app = tester.widget<MaterialApp>(find.byType(MaterialApp));
     expect(app.themeMode, ThemeMode.dark);
@@ -52,7 +53,11 @@ void main() {
 
     await tester.tap(find.text('Light'));
     await tester.pumpAndSettle();
-    expect(harness.appearance.themeMode, ThemeMode.light);
+    expect(harness.appearance.mode, ThemeModePreference.light);
+    expect(
+      tester.widget<MaterialApp>(find.byType(MaterialApp)).themeMode,
+      ThemeMode.light,
+    );
   });
 
   testWidgets('back returns to the shell', (tester) async {

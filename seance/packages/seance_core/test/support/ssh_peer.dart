@@ -75,6 +75,19 @@ class SshPeerSocket implements SSHSocket {
 
   final PeerAuthentication authentication;
 
+  /// Called for a post-auth message the peer has no built-in answer for
+  /// (channel opens, channel traffic). When null, the message fails the
+  /// connection as before; channel-aware fixtures hook this.
+  void Function(Uint8List payload)? onUnknownMessage;
+
+  /// Called for every global request; when set, the fixture answers (or
+  /// deliberately stays silent) itself. When null, a wantReply request gets
+  /// a request-failure, matching OpenSSH's answer for unknown requests.
+  void Function(SSH_Message_Global_Request request)? onGlobalRequest;
+
+  /// Sends one SSH payload to the client; public for channel-aware fixtures.
+  void sendMessage(Uint8List payload) => _send(payload);
+
   final _incoming = StreamController<Uint8List>();
   final _outgoing = StreamController<List<int>>();
   final _done = Completer<void>();
@@ -232,11 +245,19 @@ class SshPeerSocket implements SSHSocket {
         };
         _send(reply.encode());
       case SSH_Message_Global_Request.messageId:
-        if (SSH_Message_Global_Request.decode(payload).wantReply) {
+        final request = SSH_Message_Global_Request.decode(payload);
+        final handler = onGlobalRequest;
+        if (handler != null) {
+          handler(request);
+        } else if (request.wantReply) {
           _send(SSH_Message_Request_Failure().encode());
         }
       default:
-        throw StateError('The test peer has no reply for ${payload.first}.');
+        final handler = onUnknownMessage;
+        if (handler == null) {
+          throw StateError('The test peer has no reply for ${payload.first}.');
+        }
+        handler(payload);
     }
   }
 

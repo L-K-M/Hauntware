@@ -19,20 +19,45 @@ slice:
   request/event protocol of 03 §10.1 as sealed classes, `engineMain`
   answering `Hello`/`Subscribe`/`Unsubscribe` and rejecting the rows whose
   milestones have not landed, and `IsolateEngineClient` for the UI side.
+  Protocol v2 types `CatalogReplaced` as a list of plain `FleetEntry`
+  values and adds `ImportSshConfig`/`SshConfigImported`: the engine
+  parses ssh_config text with `seance_core`'s `SshConfigImporter` off the
+  UI isolate (CN-19).
 - `klabautermann_app`: `flutter create`d for the five platforms with the
   04 §12.3 identities, generated launcher icons, the desktop three-pane
   shell (fleet rail, workspace, inspector) at 960 px and up, the phone
   master-detail stack below 600 dp, the settings route with its seven
   planned tabs (Appearance's theme switch works), light and dark themes
-  over `ghost_ui` tokens, and the English ARB catalogue (D35, A11Y-05).
+  built through `ghost_theme` from the Klabautermann brand preset (D9;
+  the appearance is held in memory), and the English ARB catalogue (D35,
+  A11Y-05).
+- Local-only import (FL-02, first part): desktops offer "Import from
+  ~/.ssh/config" in the rail's add menu (in the app bar when the window
+  is narrower than the desktop breakpoint); phones have no ssh_config and
+  no entry. The app reads the file, the engine parses it, and the rail
+  lists the hosts; a missing, unreadable or oversized file gets a
+  localized message. Imported entries live in the engine's memory only
+  and are gone after a restart: D13's device-local store arrives with
+  the catalog library. `Include` is not followed (`SshConfigImporter`
+  drops it), and `ProxyJump` and `IdentityFile` are not carried yet: the
+  rail needs neither until links land (M2).
+- Packaging: `scripts/build.sh`, `scripts/package-linux.sh` (.deb and
+  AppImage through the shared `scripts/package-linux-common.sh`) and
+  `scripts/build-flatpak.sh` with `flatpak/ch.lkmc.klabautermann.yml`.
+  The flatpak grants read-only `~/.ssh` for the FL-02 import, which
+  04 §12.1 does not plan yet. The scripts have only run on stub bundles
+  so far; a real Flutter bundle, appimagetool and flatpak-builder first
+  run in the client CI legs.
 
 Pull-only from the start (D14): no surface sends a request that could
 push or write catalog records, and a widget test guards it.
 
 Not in yet (later PRs): pull-only enrollment and the catalog (F3),
-reachability dots and the `ghost_servers` rail (F4), theme editing (F4b),
-the desktop settings window and its native runners (D32), the five client
-CI legs and release job, packaging scripts and flatpak.
+persistence for imported ssh_config entries (with the catalog library),
+reachability dots and the `ghost_servers` rail (F4), theme editing and
+presets (F4b's editor), persisting the appearance (the device settings
+store), the desktop settings window and its native runners (D32), and the
+five client CI legs and release job.
 
 ## Open manual gates
 
@@ -50,3 +75,22 @@ is not a device smoke test:
 
 None applies to M1a yet; they gate the milestones that ship the matching
 behavior; this list keeps them visible so they are not lost between PRs.
+
+## macOS native fixtures
+
+The macOS runner uses Séance's keyboard and accessibility compatibility
+controller (`KlabautermannFlutterViewController`, ledgered in
+[SHARED.md](SHARED.md)). `scripts/test-macos-keyboard.sh` and
+`scripts/test-macos-accessibility.sh` compile it against the cached
+Flutter engine and run the native fixtures modelled on Séance's. With
+`--stock-engine` they test the stock controller instead and are expected
+to fail. They need macOS and have not run yet. No CI job builds
+Klabautermann for macOS yet either, so nothing has compiled the copied
+Objective-C or the Swift bridging: both wait for the Klabautermann client
+legs in the root workflows. Until then
+`app/klabautermann_app/test/macos_runner_test.dart` guards the wiring on
+Linux.
+
+Follow-up: this is the suite's fourth copy of the controller. The D32
+review in [SHARED.md](SHARED.md) defers a shared macOS plugin to a
+separate suite PR, which must land before any product makes a fifth.

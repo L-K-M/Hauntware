@@ -5,6 +5,8 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 import 'package:klabautermann_core/src/engine/engine_isolate.dart';
 import 'package:test/test.dart';
 
+import 'fixtures/ssh_config_fixture.dart';
+
 void main() {
   group('IsolateEngineClient (03 D18)', () {
     test('spawn completes the Hello handshake', () async {
@@ -54,6 +56,43 @@ void main() {
 
       final event = await client.events.first;
       expect((event as RequestRejected).requestName, 'Connect');
+    });
+
+    test('ImportSshConfig answers the fleet, then the counts', () async {
+      final client = await IsolateEngineClient.spawn();
+      addTearDown(client.shutdown);
+
+      final events = StreamIterator(client.events);
+      client.send(const ImportSshConfig(sshConfigFixture));
+
+      // CN-19: the engine isolate parsed the text; the UI receives only
+      // plain entries, and the fleet arrives before the answer.
+      expect(await events.moveNext(), isTrue);
+      final fleet = events.current as CatalogReplaced;
+      expect(fleet.entries.map((e) => e.label), sshConfigFixtureEntries);
+      expect(fleet.entries.first.port, 2222);
+      expect(await events.moveNext(), isTrue);
+      final answer = events.current as SshConfigImported;
+      expect(answer.importedCount, sshConfigFixtureEntries.length);
+      expect(answer.skippedCount, sshConfigFixtureSkipped);
+
+      // A second import replaces the first one's entries.
+      client.send(const ImportSshConfig('Host only\n  HostName 192.0.2.7\n'));
+      expect(await events.moveNext(), isTrue);
+      final replaced = events.current as CatalogReplaced;
+      expect(replaced.entries.map((e) => e.serverId), ['ssh-config:only']);
+      expect(await events.moveNext(), isTrue);
+      expect((events.current as SshConfigImported).importedCount, 1);
+
+      // A config without hosts empties the imported part of the fleet.
+      client.send(const ImportSshConfig('Host *\n  User nobody\n'));
+      expect(await events.moveNext(), isTrue);
+      expect((events.current as CatalogReplaced).entries, isEmpty);
+      expect(await events.moveNext(), isTrue);
+      final none = events.current as SshConfigImported;
+      expect(none.importedCount, 0);
+      expect(none.skippedCount, 0);
+      await events.cancel();
     });
 
     test('send after shutdown throws; shutdown is idempotent', () async {
