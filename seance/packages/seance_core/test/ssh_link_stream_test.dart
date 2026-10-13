@@ -27,15 +27,14 @@ void main() {
       await _eventually(() => channel.stdinBytes.isNotEmpty);
       expect(utf8.decode(channel.stdinBytes), 'GET /health HTTP/1.0\r\n');
 
-      await _eventually(() => inbound.length == 19);
+      await _eventually(() => utf8.decode(inbound) == 'HTTP/1.1 200 OK\r\n');
       expect(utf8.decode(inbound), 'HTTP/1.1 200 OK\r\n');
 
       await duplex.close();
       await done;
     });
 
-    test('a refusal classifies as forwardDisabled and is remembered',
-        () async {
+    test('a refusal classifies as forwardDisabled and is remembered', () async {
       final link = await openTestLink();
       addTearDown(link.link.close);
       link.peer.streamlocalRefusal = (
@@ -59,22 +58,24 @@ void main() {
       expect((link.link.state as SshLinkReady).seen.forwardingRefused, isTrue);
     });
 
-    test('a refused forwarding open releases the link for other work',
-        () async {
-      final link = await openTestLink();
-      addTearDown(link.link.close);
-      link.peer.streamlocalRefusal = (
-        reasonCode: peerRefusalAdministrativelyProhibited,
-        description: 'administratively prohibited',
-      );
+    test(
+      'a refused forwarding open releases the link for other work',
+      () async {
+        final link = await openTestLink();
+        addTearDown(link.link.close);
+        link.peer.streamlocalRefusal = (
+          reasonCode: peerRefusalAdministrativelyProhibited,
+          description: 'administratively prohibited',
+        );
 
-      await expectLater(
-        link.link.openUnixStream('/var/run/docker.sock'),
-        throwsA(isA<ChannelOpenException>()),
-      );
+        await expectLater(
+          link.link.openUnixStream('/var/run/docker.sock'),
+          throwsA(isA<ChannelOpenException>()),
+        );
 
-      expect((await link.link.run('uname')).exitCode, 0);
-    });
+        expect((await link.link.run('uname')).exitCode, 0);
+      },
+    );
   });
 
   group('SshLink.openTcpStream', () {
@@ -141,52 +142,60 @@ void main() {
     test('a paused consumer stalls the peer at its window', () async {
       final link = await openTestLink();
       addTearDown(link.link.close);
-      link.peer.windowSize = 8 * 1024;
 
       final duplex = await link.link.openUnixStream('/run/slow.sock');
       final channel = await _waitForChannel(link.peer);
 
+      // Paused before the peer sends: the client admits exactly its 2 MiB
+      // window and grants nothing more while the consumer is paused.
       final subscription = duplex.stream.listen((_) {});
-      channel.sendData(List<int>.filled(64 * 1024, 0x61));
+      subscription.pause();
+      const window = 2 * 1024 * 1024;
+      channel.sendData(List<int>.filled(window + 64 * 1024, 0x61));
       await _eventually(() => channel.sendWindowRemaining == 0);
       final stalledAt = channel.bytesSent;
-      expect(stalledAt, lessThanOrEqualTo(8 * 1024));
+      expect(stalledAt, window);
 
       // Pausing the consumer stops the window grants, so the peer's send
       // queue stops draining instead of the link buffering without limit.
-      subscription.pause();
       await Future<void>.delayed(const Duration(milliseconds: 20));
       expect(channel.bytesSent, stalledAt);
       expect(channel.sendWindowRemaining, 0);
 
       subscription.resume();
-      await _eventually(() => channel.sendWindowRemaining == 0);
-      expect(channel.bytesSent, greaterThan(stalledAt));
+      await _eventually(() => channel.bytesSent > stalledAt);
 
       await duplex.close();
     });
 
-    test('sink close sends channel EOF while the read side stays open',
-        () async {
-      final link = await openTestLink();
-      addTearDown(link.link.close);
+    test(
+      'sink close sends channel EOF while the read side stays open',
+      () async {
+        final link = await openTestLink();
+        addTearDown(link.link.close);
 
-      final duplex = await link.link.openUnixStream('/run/half.sock');
-      final channel = await _waitForChannel(link.peer);
-      final inbound = <int>[];
-      duplex.stream.listen(inbound.addAll);
+        final duplex = await link.link.openUnixStream('/run/half.sock');
+        final channel = await _waitForChannel(link.peer);
+        channel.closeOnStdinEof = false;
+        final inbound = <int>[];
+        duplex.stream.listen(inbound.addAll);
 
-      duplex.sink.add(utf8.encode('request'));
-      await duplex.sink.close();
+        duplex.sink.add(utf8.encode('request'));
+        await duplex.sink.close();
 
-      // The fixture answers a duplex EOF with its own EOF and close.
-      await _eventually(() => channel.eofFromClient);
-      await _eventually(() => channel.closeFromClient);
-      channel.sendData(utf8.encode('after-eof'));
-      await _eventually(() => utf8.decode(inbound) == 'after-eof');
+        // The client's EOF ends only its own write side: the client has not
+        // closed the channel, and the peer's bytes still arrive.
+        await _eventually(() => channel.eofFromClient);
+        expect(channel.closeFromClient, isFalse);
+        channel.sendData(utf8.encode('after-eof'));
+        await _eventually(() => utf8.decode(inbound) == 'after-eof');
 
-      await duplex.close();
-    });
+        // The peer finishes its side, as a server does when its target closes.
+        channel.sendEof();
+        channel.sendClose();
+        await duplex.close();
+      },
+    );
 
     test('close is idempotent', () async {
       final link = await openTestLink();
@@ -253,7 +262,7 @@ Future<SshPeerChannel> _waitForChannel(SshChannelPeer peer) async {
 /// Waits for [condition] to hold; the fixture answers on the same event loop,
 /// so a bounded number of turns is enough and no real delay is involved.
 Future<void> _eventually(bool Function() condition) async {
-  for (var attempt = 0; attempt < 200; attempt++) {
+  for (var attempt = 0; attempt < 5000; attempt++) {
     if (condition()) return;
     await Future<void>.delayed(Duration.zero);
   }

@@ -60,13 +60,17 @@ final class ChannelByteDuplex implements ByteDuplex {
   /// once the bound expires.
   @override
   Future<void> close() => _cleanup.run(
-    () => runSequentialCleanup([
-      _inbound.cancel,
-      _socket.close,
-      () {
-        _socket.destroy();
-      },
-    ], actionTimeout: _closeBound),
+    () => runSequentialCleanup(
+      [
+        _inbound.cancel,
+        _socket.close,
+        () {
+          _socket.destroy();
+        },
+      ],
+      actionTimeout: _closeBound,
+      failureMode: CleanupFailureMode.ignore,
+    ),
   );
 }
 
@@ -88,7 +92,11 @@ const _closeBound = Duration(seconds: 5);
 /// cancelling it, keeping the bounded-memory property for an abandoned read
 /// side while the write side stays open.
 final class InboundReplay {
-  InboundReplay(Stream<Uint8List> source, {this.maxBufferedBytes, this.onData}) {
+  InboundReplay(
+    Stream<Uint8List> source, {
+    this.maxBufferedBytes,
+    this.onData,
+  }) {
     _subscription = source.listen(
       _receive,
       onError: _receiveError,
@@ -122,9 +130,14 @@ final class InboundReplay {
 
   Stream<List<int>> get stream => _controller.stream;
 
-  /// Stops pulling the source; used by close paths that already sent the
-  /// channel close and no longer need its bytes.
-  Future<void> cancel() => _subscription.cancel();
+  /// Stops pulling the source and ends the consumer's stream once the bytes
+  /// already buffered are delivered. Used by close paths that already sent
+  /// the channel close and no longer need its bytes.
+  Future<void> cancel() async {
+    await _subscription.cancel();
+    _upstreamDone = true;
+    _pump();
+  }
 
   void _receive(Uint8List data) {
     onData?.call();

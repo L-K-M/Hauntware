@@ -154,18 +154,22 @@ final class SshRemoteProcess implements RemoteProcess {
 
   @override
   Future<void> close() => _cleanup.run(
-    () => runSequentialCleanup([
-      () => signal(RemoteSignal.term),
-      _session.close,
-      _stdout.cancel,
-      _stderr.cancel,
-      // dartssh2 sends CHANNEL_CLOSE only once the peer answers its EOF, so a
-      // peer that never replies would leave `exit` pending forever. Destroying
-      // after the polite close hangs up locally and completes `exit`, which is
-      // what a bounded close has to guarantee.
-      () => _session.channel.destroy(),
-      _grant.release,
-    ], actionTimeout: _closeBound),
+    () => runSequentialCleanup(
+      [
+        () => signal(RemoteSignal.term),
+        _session.close,
+        _stdout.cancel,
+        _stderr.cancel,
+        // dartssh2 sends CHANNEL_CLOSE only once the peer answers its EOF, so a
+        // peer that never replies would leave `exit` pending forever. Destroying
+        // after the polite close hangs up locally and completes `exit`, which is
+        // what a bounded close has to guarantee.
+        () => _session.channel.destroy(),
+        _grant.release,
+      ],
+      actionTimeout: _closeBound,
+      failureMode: CleanupFailureMode.ignore,
+    ),
   );
 }
 

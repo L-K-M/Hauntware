@@ -191,42 +191,35 @@ abstract interface class SshLink {
     // production callers pass neither and take the real network path.
     @visibleForTesting
     Future<SSHSocket> Function(String, int, Duration)? connect,
-    @visibleForTesting
-    SshForwardConnector? forward,
+    @visibleForTesting SshForwardConnector? forward,
     SshAgentIdentityLoader? loadAgentIdentities,
     Duration timeout = const Duration(seconds: 15),
     // The remaining knobs are the fake-clock and refusal-fixture seams;
     // production callers take the defaults.
-    @visibleForTesting
-    Duration idlePingInterval = const Duration(seconds: 15),
-    @visibleForTesting
-    Duration pingTimeout = const Duration(seconds: 30),
-    @visibleForTesting
-    Duration closeTimeout = const Duration(seconds: 5),
-    @visibleForTesting
-    Duration sftpIdleRelease = const Duration(seconds: 60),
-    @visibleForTesting
-    int sessionBudget = 8,
+    @visibleForTesting Duration idlePingInterval = const Duration(seconds: 15),
+    @visibleForTesting Duration pingTimeout = const Duration(seconds: 30),
+    @visibleForTesting Duration closeTimeout = const Duration(seconds: 5),
+    @visibleForTesting Duration sftpIdleRelease = const Duration(seconds: 60),
+    @visibleForTesting int sessionBudget = 8,
     SshConnectionLog? log,
-  }) =>
-      _SshLink._connect(
-        config: config,
-        credentials: credentials,
-        tofu: tofu,
-        onHostKey: onHostKey,
-        onKeyboardInteractive: onKeyboardInteractive,
-        resolveJumpHost: resolveJumpHost,
-        connect: connect,
-        forward: forward,
-        loadAgentIdentities: loadAgentIdentities,
-        timeout: timeout,
-        idlePingInterval: idlePingInterval,
-        pingTimeout: pingTimeout,
-        closeTimeout: closeTimeout,
-        sftpIdleRelease: sftpIdleRelease,
-        sessionBudget: sessionBudget,
-        log: log,
-      );
+  }) => _SshLink._connect(
+    config: config,
+    credentials: credentials,
+    tofu: tofu,
+    onHostKey: onHostKey,
+    onKeyboardInteractive: onKeyboardInteractive,
+    resolveJumpHost: resolveJumpHost,
+    connect: connect,
+    forward: forward,
+    loadAgentIdentities: loadAgentIdentities,
+    timeout: timeout,
+    idlePingInterval: idlePingInterval,
+    pingTimeout: pingTimeout,
+    closeTimeout: closeTimeout,
+    sftpIdleRelease: sftpIdleRelease,
+    sessionBudget: sessionBudget,
+    log: log,
+  );
 }
 
 final class _SshLink implements SshLink {
@@ -390,7 +383,12 @@ final class _SshLink implements SshLink {
             ? null
             : (client, host, port, channelTimeout) async {
                 link._setState(const SshLinkConnecting());
-                final socket = await forward(client, host, port, channelTimeout);
+                final socket = await forward(
+                  client,
+                  host,
+                  port,
+                  channelTimeout,
+                );
                 link._setState(const SshLinkAuthenticating());
                 return socket;
               },
@@ -456,21 +454,25 @@ final class _SshLink implements SshLink {
     }
     _pingOutstanding = true;
     unawaited(
-      Future.sync(_client.ping).timeout(pingTimeout).then(
-        (_) => _pingOutstanding = false,
-        onError: (Object error) {
-          _pingOutstanding = false;
-          if (error is TimeoutException && !_closed) {
-            log?.add(
-              'Ping unanswered for ${pingTimeout.inSeconds}s; '
-              'closing the link.',
-            );
-            unawaited(
-              _cleanup.run(() => _closeOnce(SshLinkClosedReason.pingTimeout)),
-            );
-          }
-        },
-      ),
+      Future.sync(_client.ping)
+          .timeout(pingTimeout)
+          .then(
+            (_) => _pingOutstanding = false,
+            onError: (Object error) {
+              _pingOutstanding = false;
+              if (error is TimeoutException && !_closed) {
+                log?.add(
+                  'Ping unanswered for ${pingTimeout.inSeconds}s; '
+                  'closing the link.',
+                );
+                unawaited(
+                  _cleanup.run(
+                    () => _closeOnce(SshLinkClosedReason.pingTimeout),
+                  ),
+                );
+              }
+            },
+          ),
     );
   }
 
@@ -498,7 +500,6 @@ final class _SshLink implements SshLink {
   }) => _execCore.run(
     command,
     open: () => _openSessionChannel(command).then((r) => r.$1),
-    openTimeout: openTimeout,
     timeout: timeout,
     maxOutputBytes: maxOutputBytes,
     stdin: stdin,
@@ -542,10 +543,20 @@ final class _SshLink implements SshLink {
     bool trackChannel = true,
   }) async {
     _throwIfClosingForChannel();
-    final grant = await _budget.acquire(
+    final acquire = _budget.acquire(
       ChannelWaitPriority.userAction,
       'exec: $command',
     );
+    final ChannelGrant grant;
+    try {
+      grant = await acquire.timeout(openTimeout);
+    } on TimeoutException {
+      // The waiter stays queued until a slot frees. Its late grant is
+      // released at once, so the command the caller gave up on never runs
+      // and the slot goes to the next waiter.
+      unawaited(acquire.then((late) => late.release(), onError: (_) {}));
+      rethrow;
+    }
     _pendingOpens++;
     try {
       final pending = _client.execute(command, pty: pty);
@@ -740,13 +751,17 @@ final class _SshLink implements SshLink {
     final fileSystem = _fileSystem;
     _fileSystem = null;
     try {
-      await runSequentialCleanup([
-        for (final process in _processes.toList()) process.close,
-        for (final duplex in _duplexes.toList()) duplex.close,
-        for (final channel in _execChannels.toList()) channel.close,
-        if (fileSystem != null) fileSystem.releaseNow,
-        () => _clientOrNull?.close(),
-      ], actionTimeout: closeTimeout);
+      await runSequentialCleanup(
+        [
+          for (final process in _processes.toList()) process.close,
+          for (final duplex in _duplexes.toList()) duplex.close,
+          for (final channel in _execChannels.toList()) channel.close,
+          if (fileSystem != null) fileSystem.releaseNow,
+          () => _clientOrNull?.close(),
+        ],
+        actionTimeout: closeTimeout,
+        failureMode: CleanupFailureMode.ignore,
+      );
     } finally {
       await _stateController.close();
     }
@@ -814,8 +829,11 @@ final class _LeasedLinkFileSystem implements RemoteFileSystem {
       _withFs((fs) => fs.createDirectory(path));
 
   @override
-  Future<void> rename(String oldPath, String newPath, {bool overwrite = false}) =>
-      _withFs((fs) => fs.rename(oldPath, newPath, overwrite: overwrite));
+  Future<void> rename(
+    String oldPath,
+    String newPath, {
+    bool overwrite = false,
+  }) => _withFs((fs) => fs.rename(oldPath, newPath, overwrite: overwrite));
 
   @override
   Future<void> delete(RemoteFileEntry entry) =>

@@ -112,6 +112,11 @@ final class SshPeerChannel {
 
   var bytesSent = 0;
   var eofFromClient = false;
+
+  /// A forwarding channel answers the client's EOF with its own EOF and
+  /// close, which lets a client close complete. Clear it to keep the read
+  /// side open after EOF.
+  var closeOnStdinEof = true;
   var closeFromClient = false;
   var eofSent = false;
   var closeSent = false;
@@ -132,7 +137,7 @@ final class SshPeerChannel {
   void Function(SshPeerChannel channel)? onStdinEof;
 
   /// Runs for inbound bytes on a non-session channel; when null the peer
-  /// echoes them back.
+  /// records them in [SshPeerChannel.stdinBytes], as it does for a session.
   void Function(SshPeerChannel channel, Uint8List data)? onData;
 
   var _sftpMode = false;
@@ -188,18 +193,14 @@ final class SshPeerChannel {
   void sendEof() {
     if (eofSent) return;
     eofSent = true;
-    peer._send(
-      SSH_Message_Channel_EOF(recipientChannel: remoteId).encode(),
-    );
+    peer._send(SSH_Message_Channel_EOF(recipientChannel: remoteId).encode());
   }
 
   /// CHANNEL_CLOSE toward the client.
   void sendClose() {
     if (closeSent) return;
     closeSent = true;
-    peer._send(
-      SSH_Message_Channel_Close(recipientChannel: remoteId).encode(),
-    );
+    peer._send(SSH_Message_Channel_Close(recipientChannel: remoteId).encode());
   }
 
   void _pump() {
@@ -302,9 +303,7 @@ final class SshChannelPeer {
 
   /// Session channels the client has opened and not yet fully closed.
   int get openSessionChannels => _channels.values
-      .where(
-        (c) => c.type == 'session' && !c.closeSent && !c.closeFromClient,
-      )
+      .where((c) => c.type == 'session' && !c.closeSent && !c.closeFromClient)
       .length;
 
   void _send(Uint8List payload) => socket.sendMessage(payload);
@@ -358,9 +357,7 @@ final class SshChannelPeer {
       case SSH_Message_Channel_Request.messageId:
         _onChannelRequest(SSH_Message_Channel_Request.decode(payload));
       default:
-        throw StateError(
-          'The channel peer has no reply for ${payload.first}.',
-        );
+        throw StateError('The channel peer has no reply for ${payload.first}.');
     }
   }
 
@@ -502,7 +499,7 @@ final class SshChannelPeer {
     if (handler != null) {
       handler(channel, data);
     } else {
-      channel.sendData(data);
+      channel.stdinBytes.addAll(data);
     }
   }
 
@@ -510,7 +507,7 @@ final class SshChannelPeer {
     channel.eofFromClient = true;
     channel.stdinEof = true;
     channel.onStdinEof?.call(channel);
-    if (channel.type != 'session') {
+    if (channel.type != 'session' && channel.closeOnStdinEof) {
       channel.sendEof();
       channel.sendClose();
     }

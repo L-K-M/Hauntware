@@ -62,25 +62,27 @@ void main() {
       expect(result.truncated, isTrue);
     });
 
-    test('keeps draining a stream past the cap so the peer never stalls',
-        () async {
-      final link = await openTestLink();
-      addTearDown(link.link.close);
-      link.peer.onExec = (channel, command) {
-        channel
-          ..sendData(List<int>.filled(64 * 1024, 0x61))
-          ..sendExitStatus(0)
-          ..sendEof()
-          ..sendClose();
-      };
+    test(
+      'keeps draining a stream past the cap so the peer never stalls',
+      () async {
+        final link = await openTestLink();
+        addTearDown(link.link.close);
+        link.peer.onExec = (channel, command) {
+          channel
+            ..sendData(List<int>.filled(64 * 1024, 0x61))
+            ..sendExitStatus(0)
+            ..sendEof()
+            ..sendClose();
+        };
 
-      final result = await link.link.run('flood', maxOutputBytes: 16);
+        final result = await link.link.run('flood', maxOutputBytes: 16);
 
-      expect(result.stdout, 'a' * 16);
-      expect(result.truncated, isTrue);
-      // The whole payload crossed the wire; only the capture stopped early.
-      expect(link.peer.channels.single.bytesSent, greaterThan(16));
-    });
+        expect(result.stdout, 'a' * 16);
+        expect(result.truncated, isTrue);
+        // The whole payload crossed the wire; only the capture stopped early.
+        expect(link.peer.channels.single.bytesSent, greaterThan(16));
+      },
+    );
 
     test('writes stdin and seals it with EOF', () async {
       final link = await openTestLink();
@@ -117,6 +119,25 @@ void main() {
       // The abort closed the channel's write side instead of leaving the
       // channel open; dartssh2 answers the close only once the peer replies.
       await _eventually(() => link.peer.channels.single.eofFromClient);
+    });
+
+    test('a run that gives up waiting for a slot never executes', () async {
+      final link = await openTestLink(sessionBudget: 1);
+      addTearDown(link.link.close);
+      link.peer.onExec = SshChannelPeer.execQuietFollower;
+
+      final held = await link.link.start('sleep 100');
+      await expectLater(
+        link.link.run('true'),
+        throwsA(isA<RemoteCommandException>()),
+      );
+      // Freeing the slot must not start the command the caller gave up on.
+      link.peer.onExec = SshChannelPeer.execEchoAndExit;
+      await held.close();
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      expect(link.peer.channels.where((c) => c.execCommand == 'true'), isEmpty);
+
+      await expectLater(link.link.run('true'), completes);
     });
 
     test('a closed link refuses to run', () async {
@@ -181,7 +202,9 @@ void main() {
       };
 
       final process = await link.link.start('noisy');
-      final stderr = utf8.decode(await process.stderr.expand((c) => c).toList());
+      final stderr = utf8.decode(
+        await process.stderr.expand((c) => c).toList(),
+      );
       expect(stderr, 'diagnostic\n');
       expect((await process.exit).exitCode, 3);
     });
@@ -200,21 +223,23 @@ void main() {
       expect(link.peer.channels.single.requestsSeen, contains('pty-req'));
     });
 
-    test('closes stdin with channel EOF while the read side stays open',
-        () async {
-      final link = await openTestLink();
-      addTearDown(link.link.close);
-      link.peer.onExec = SshChannelPeer.execQuietFollower;
+    test(
+      'closes stdin with channel EOF while the read side stays open',
+      () async {
+        final link = await openTestLink();
+        addTearDown(link.link.close);
+        link.peer.onExec = SshChannelPeer.execQuietFollower;
 
-      final process = await link.link.start('cat');
-      process.stdin.add(utf8.encode('one line\n'));
-      await process.stdin.close();
+        final process = await link.link.start('cat');
+        process.stdin.add(utf8.encode('one line\n'));
+        await process.stdin.close();
 
-      await _eventually(() => link.peer.channels.single.eofFromClient);
-      expect(utf8.decode(link.peer.channels.single.stdinBytes), 'one line\n');
-      // EOF is one direction: the channel is still open for the peer to answer.
-      expect(link.peer.channels.single.closeFromClient, isFalse);
-    });
+        await _eventually(() => link.peer.channels.single.eofFromClient);
+        expect(utf8.decode(link.peer.channels.single.stdinBytes), 'one line\n');
+        // EOF is one direction: the channel is still open for the peer to answer.
+        expect(link.peer.channels.single.closeFromClient, isFalse);
+      },
+    );
 
     test('signals the process and the peer sees the signal name', () async {
       final link = await openTestLink();
@@ -265,7 +290,8 @@ void main() {
       }
 
       await _eventually(
-        () => link.peer.channels.single.signalsSeen.length ==
+        () =>
+            link.peer.channels.single.signalsSeen.length ==
             RemoteSignal.values.length,
       );
       expect(link.peer.channels.single.signalsSeen, [

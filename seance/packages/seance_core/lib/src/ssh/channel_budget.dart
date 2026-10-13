@@ -63,10 +63,7 @@ final class ChannelOpenException implements Exception {
 
 /// What the link has learned about the peer from refused opens.
 final class SshLinkSeen {
-  const SshLinkSeen({
-    this.learnedSessionLimit,
-    this.forwardingRefused = false,
-  });
+  const SshLinkSeen({this.learnedSessionLimit, this.forwardingRefused = false});
 
   /// The session-channel ceiling the server demonstrated, below the
   /// configured budget. `null` while the server has refused nothing.
@@ -85,7 +82,8 @@ final class SshLinkSeen {
   int get hashCode => Object.hash(learnedSessionLimit, forwardingRefused);
 
   @override
-  String toString() => 'SshLinkSeen(learnedSessionLimit: $learnedSessionLimit, '
+  String toString() =>
+      'SshLinkSeen(learnedSessionLimit: $learnedSessionLimit, '
       'forwardingRefused: $forwardingRefused)';
 }
 
@@ -150,10 +148,7 @@ final class ChannelBudget {
   ///
   /// Queued futures only complete when a slot frees or [failWaiters] runs, so
   /// callers inside a link close path must rely on the link failing them.
-  Future<ChannelGrant> acquire(
-    ChannelWaitPriority priority,
-    String reason,
-  ) {
+  Future<ChannelGrant> acquire(ChannelWaitPriority priority, String reason) {
     if (effectiveLimit == 0) {
       return Future.error(
         const ChannelOpenException(
