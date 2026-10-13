@@ -9,8 +9,11 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:poltergeist_app/l10n/app_localizations.dart';
+import 'package:poltergeist_app/services/skip_rule_sets.dart';
+import 'package:poltergeist_app/services/skip_rule_sets_controller.dart';
 import 'package:poltergeist_app/services/sync_plan_controller.dart';
 import 'package:poltergeist_app/ui/sync/sync_pair_editor.dart';
+import 'package:poltergeist_app/ui/sync/sync_rule_sets.dart';
 import 'package:poltergeist_app/ui/sync/sync_rules_edit_request.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
 import 'package:poltergeist_sync/poltergeist_sync.dart';
@@ -35,6 +38,7 @@ Future<List<SyncPairEditorResult?>> _pumpEditor(
   Map<SyncSide, SyncDocrootPathState> initialDocrootPaths = const {},
   SyncRulesEditTarget initialEditTarget = SyncRulesEditTarget.general,
   List<Bookmark> servers = const [],
+  SkipRuleSetsController? skipRuleSets,
 }) async {
   final results = <SyncPairEditorResult?>[];
   tester.view.physicalSize = const Size(1200, 1400);
@@ -58,6 +62,7 @@ Future<List<SyncPairEditorResult?>> _pumpEditor(
                     initialDocrootPaths: initialDocrootPaths,
                     initialEditTarget: initialEditTarget,
                     servers: servers,
+                    skipRuleSets: skipRuleSets,
                   ),
                 ),
               );
@@ -79,6 +84,41 @@ Future<void> _save(WidgetTester tester) async {
 }
 
 void main() {
+  testWidgets('Add Rule Set appends the lines the excludes lack', (
+    tester,
+  ) async {
+    final sets = SkipRuleSetsController(
+      initial: [
+        SkipRuleSet(name: 'Web', patterns: ['node_modules/', '*.log']),
+      ],
+    );
+    addTearDown(sets.dispose);
+    final results = await _pumpEditor(
+      tester,
+      initial: testSyncPair(rules: const SyncRuleSet(excludeGlobs: ['*.log'])),
+      skipRuleSets: sets,
+    );
+    await tester.tap(find.text('Options'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey(SkipRuleSetKey.addMenu)));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey((SkipRuleSetKey.addItem, 'Web'))),
+    );
+    await tester.pumpAndSettle();
+    await _save(tester);
+
+    expect(results.single!.pair.rules.excludeGlobs, ['*.log', 'node_modules/']);
+  });
+
+  testWidgets('without the model the menu stays out', (tester) async {
+    await _pumpEditor(tester, initial: testSyncPair());
+    await tester.tap(find.text('Options'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey(SkipRuleSetKey.addMenu)), findsNothing);
+  });
+
   testWidgets('a save keeps acceptedTimeShifts and the symlink policy', (
     tester,
   ) async {

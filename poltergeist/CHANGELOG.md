@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **Reuse skip rules across syncs.** Save a sync's skip rules as a named
+  rule set, then add the set to another sync from Edit Rules… or the
+  advanced pair editor. Adding a set copies its patterns after the rules
+  already there and leaves out any that are already present, so later
+  changes to the set don't change syncs that used it. Manage Rule Sets…
+  renames, edits and deletes sets. Rule sets stay on this device.
 - **See what changed between two files.** The compare view now marks the
   lines that differ: removed lines on the left and added lines on the
   right, with blank space opposite them. Step through the changes with

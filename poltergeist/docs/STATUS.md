@@ -4,6 +4,42 @@ Living snapshot of where Poltergeist is, what's proven, and what to pick up
 next. Read [AGENTS.md](../AGENTS.md) for build/test commands and
 [09-PLAYBOOK.md](plan/09-PLAYBOOK.md) for the PR process.
 
+## Skip rule sets (2026-10-13)
+
+Sync's skip rules can now be saved as named rule sets and added to
+other pairs. The Skip Rules dialog (the Sync sheet's Edit Rules…) gains
+Add Rule Set, Save as Rule Set… and Manage Rule Sets…, and the advanced
+pair editor's excludes field gains Add Rule Set. Adding a set appends
+its lines after the pair's own and leaves out lines the pair already
+has; lines never move, so a pair's `!` re-include keeps its effect. The
+pair keeps the copy, so later edits to a set change no pair, and the
+savedSync record gains no field. Sets live on this device under
+`sync.skipRuleSets` in `settings.json` and are never synced. This is the
+named skip-rules item of the v1.x backlog (07 §3.13; 05 §3).
+
+Names are trimmed and unique ignoring case, and a set needs at least one
+pattern; comment lines alone do not count. An empty Add Rule Set menu
+says there are no saved sets. Saving and deleting persist before the
+list changes, so a failed write shows its error in the dialog and lists
+nothing new, and each write edits the sets as stored, so a launch whose
+read failed cannot wipe them. Saving, editing or deleting a set never
+commits the pair's rules: only Done does. The app defaults stay out of
+every set and still evaluate last.
+
+Code: `services/skip_rule_sets.dart` (the set, decoding and the pure
+append and list rules), `services/skip_rule_sets_controller.dart`, three
+`AppPreferences` methods, and `ui/sync/sync_rule_sets.dart` (the menu,
+the manager and the editor). The controller is created once in
+`main.dart` and passed through `PoltergeistApp` and `WorkspaceShell` to
+the sheet, its Skip Rules dialog and both pair-editor entry points.
+
+Tests: APP_TESTS_NOTE
+
+Local validation: Flutter analysis is clean, the localization contract
+passes, and all APP_TESTS app tests pass. Not run: native platforms,
+screen readers, and IME composition in the new fields; the QA
+checklist's Skip rule sets section covers them.
+
 ## Compare view keys and text size (2026-10-13)
 
 Help ▸ Keyboard Shortcuts now lists n and Shift+N under Compare, after
@@ -8779,10 +8815,11 @@ then the v1.x backlog (named skip rules, batch rename, custom keymap,
 native icons, Compare entry point, preview warming — and Sync Browsing
 if risk 8's cut line is ever exercised). None was started in this release-prep
 slice; D10 completed on 2026-09-29 and D27 completed on 2026-09-30 as recorded
-above. Numbered fast-follow items 1–4 and deep links are complete; the text-diff
-view remains demand-dependent. From the v1.x backlog, the Compare entry
-point shipped on 2026-10-11 as Compare Files, and batch rename as Rename
-Items. Item
+above. Numbered fast-follow items 1–4 and deep links are complete, and the
+text-diff view shipped on 2026-10-12 as the minimal diff view. From the
+v1.x backlog, the Compare entry point shipped on 2026-10-11 as Compare
+Files, batch rename as Rename Items, and named skip rules on 2026-10-13
+as rule sets. Item
 23's remote-transfer wiring is the de-facto headline fast-follow even
 though §3.13 predates naming it.
 

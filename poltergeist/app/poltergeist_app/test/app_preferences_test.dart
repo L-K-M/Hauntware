@@ -9,6 +9,8 @@ import 'package:poltergeist_app/services/app_preferences.dart';
 import 'package:poltergeist_app/services/double_click_action.dart';
 import 'package:poltergeist_app/services/settings_store.dart';
 import 'package:poltergeist_app/services/sidebar_controller.dart';
+import 'package:poltergeist_app/services/skip_rule_sets.dart';
+import 'package:poltergeist_app/services/skip_rule_sets_controller.dart';
 import 'package:poltergeist_app/theme/app_appearance.dart';
 import 'package:poltergeist_app/theme/theme_palette.dart';
 import 'package:poltergeist_app/theme/theme_presets.dart';
@@ -324,6 +326,55 @@ void main() {
     expect(await malformed.setSidebarServerPinned('s4', pinned: true), {'s4'});
   });
 
+  test('skip rule sets round-trip, rename in place and delete', () async {
+    final preferences = AppPreferences(
+      store: SettingsStore(path: settingsFile.path),
+    );
+    expect(await preferences.loadSkipRuleSets(), isEmpty);
+
+    await preferences.putSkipRuleSet(
+      SkipRuleSet(name: 'Web', patterns: ['node_modules/', '*.log']),
+    );
+    await preferences.putSkipRuleSet(
+      SkipRuleSet(name: 'Docs', patterns: ['_site/']),
+    );
+    final renamed = await preferences.putSkipRuleSet(
+      SkipRuleSet(name: 'Site', patterns: ['node_modules/']),
+      replacing: 'Web',
+    );
+    expect(renamed.map((set) => set.name), ['Site', 'Docs']);
+    await preferences.removeSkipRuleSet('docs');
+
+    final reloaded = AppPreferences(
+      store: SettingsStore(path: settingsFile.path),
+    );
+    expect(await reloaded.loadSkipRuleSets(), [
+      SkipRuleSet(name: 'Site', patterns: ['node_modules/']),
+    ]);
+  });
+
+  test('a damaged rule-set value keeps the sets that still decode', () async {
+    await settingsFile.writeAsString(
+      '{"sync.skipRuleSets":[{"name":"Web","patterns":["*.log",7]},'
+      '"junk",{"name":"","patterns":[]},{"name":"WEB","patterns":[]}]}',
+    );
+    final preferences = AppPreferences(
+      store: SettingsStore(path: settingsFile.path),
+    );
+
+    expect(await preferences.loadSkipRuleSets(), [
+      SkipRuleSet(name: 'Web', patterns: ['*.log']),
+    ]);
+
+    await settingsFile.writeAsString('{"sync.skipRuleSets":"Web"}');
+    expect(
+      await AppPreferences(
+        store: SettingsStore(path: settingsFile.path),
+      ).loadSkipRuleSets(),
+      isEmpty,
+    );
+  });
+
   group('a startup read that failed', () {
     // The file is unreadable at launch (invalid UTF-8 here, an IO error
     // in the field) and readable again by the user's first edit: the
@@ -392,6 +443,52 @@ void main() {
         'fav:work',
         'srv:prod',
       });
+    });
+
+    test('a rule-set change keeps the sets it could not read', () async {
+      final initial = await preferences.loadSkipRuleSets();
+      expect(initial, isEmpty);
+      await settingsFile.writeAsString(
+        '{"sync.skipRuleSets":[{"name":"Web","patterns":["*.log"]}]}',
+      );
+      // main.dart's wiring.
+      final sets = SkipRuleSetsController(
+        initial: initial,
+        put: preferences.putSkipRuleSet,
+        remove: preferences.removeSkipRuleSet,
+      );
+      addTearDown(sets.dispose);
+
+      await sets.put(SkipRuleSet(name: 'Docs', patterns: ['_site/']));
+
+      expect(await stored('sync.skipRuleSets'), [
+        {
+          'name': 'Web',
+          'patterns': ['*.log'],
+        },
+        {
+          'name': 'Docs',
+          'patterns': ['_site/'],
+        },
+      ]);
+      expect(sets.value.map((set) => set.name), ['Web', 'Docs']);
+    });
+
+    test('a rule-set change fails, writing nothing, while the store stays '
+        'unreadable', () async {
+      expect(await preferences.loadSkipRuleSets(), isEmpty);
+
+      await expectLater(
+        preferences.putSkipRuleSet(
+          SkipRuleSet(name: 'Docs', patterns: ['_site/']),
+        ),
+        throwsA(isA<FileSystemException>()),
+      );
+      await expectLater(
+        preferences.removeSkipRuleSet('Docs'),
+        throwsA(isA<FileSystemException>()),
+      );
+      expect(await settingsFile.readAsBytes(), [0xff]);
     });
 
     test('a pin or a fold fails, writing nothing, while the store stays '

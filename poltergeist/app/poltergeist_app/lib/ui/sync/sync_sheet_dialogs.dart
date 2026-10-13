@@ -1,6 +1,7 @@
 // The Sync sheet's three small follow-up dialogs (D32 §7): the
 // favorite's name, the exclude-rules editor (with the engine's
-// built-in patterns shown read-only), and the time-offset tolerance.
+// built-in patterns shown read-only and 05 §3's named rule sets), and
+// the time-offset tolerance.
 // Each is stateful so its TextEditingController outlives the exit
 // animation — disposing it in `showDialog`'s continuation would leave
 // the transition building against a dead controller.
@@ -9,7 +10,10 @@ import 'package:flutter/services.dart';
 import 'package:poltergeist_sync/poltergeist_sync.dart';
 
 import '../../l10n/app_localizations.dart';
+import '../../services/skip_rule_sets.dart';
+import '../../services/skip_rule_sets_controller.dart';
 import '../../theme/app_theme.dart';
+import 'sync_rule_sets.dart';
 
 /// Asks for the favorite's name; null when cancelled.
 Future<String?> showSyncFavoriteNameDialog(
@@ -20,13 +24,17 @@ Future<String?> showSyncFavoriteNameDialog(
   builder: (_) => _FavoriteNameDialog(initialName: initialName),
 );
 
-/// Edits the pair's exclude globs; null when cancelled.
+/// Edits the pair's exclude globs; null when cancelled. With
+/// [skipRuleSets], the dialog also adds a named set's lines, saves its
+/// lines as a set, and opens Manage Rule Sets; none of these commit the
+/// pair's rules, which only Done returns.
 Future<List<String>?> showSyncRulesDialog(
   BuildContext context, {
   required List<String> globs,
+  SkipRuleSetsController? skipRuleSets,
 }) => showDialog<List<String>>(
   context: context,
-  builder: (_) => _RulesDialog(globs: globs),
+  builder: (_) => _RulesDialog(globs: globs, skipRuleSets: skipRuleSets),
 );
 
 /// The time-offset dialog's answer.
@@ -101,9 +109,10 @@ class _FavoriteNameDialogState extends State<_FavoriteNameDialog> {
 }
 
 class _RulesDialog extends StatefulWidget {
-  const _RulesDialog({required this.globs});
+  const _RulesDialog({required this.globs, required this.skipRuleSets});
 
   final List<String> globs;
+  final SkipRuleSetsController? skipRuleSets;
 
   @override
   State<_RulesDialog> createState() => _RulesDialogState();
@@ -122,6 +131,14 @@ class _RulesDialogState extends State<_RulesDialog> {
     for (final line in _field.text.split('\n'))
       if (line.trim().isNotEmpty) line.trim(),
   ];
+
+  void _addSet(SkipRuleSet set) {
+    final text = appendSkipRules(_globs, set.patterns).join('\n');
+    _field.value = TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -152,6 +169,35 @@ class _RulesDialogState extends State<_RulesDialog> {
                 border: const OutlineInputBorder(),
               ),
             ),
+            if (widget.skipRuleSets case final sets?) ...[
+              const SizedBox(height: 8),
+              ListenableBuilder(
+                listenable: _field,
+                builder: (context, _) => Wrap(
+                  spacing: 8,
+                  runSpacing: 4,
+                  children: [
+                    SkipRuleSetMenu(sets: sets, onAdd: _addSet),
+                    TextButton(
+                      key: const ValueKey(SkipRuleSetKey.saveAs),
+                      onPressed: hasSkipPattern(_globs)
+                          ? () => showSkipRuleSetEditor(
+                              context,
+                              sets,
+                              patterns: _globs,
+                            )
+                          : null,
+                      child: Text(l10n.syncRuleSetsSaveAs),
+                    ),
+                    TextButton(
+                      key: const ValueKey(SkipRuleSetKey.manage),
+                      onPressed: () => showSkipRuleSetsManager(context, sets),
+                      child: Text(l10n.syncRuleSetsManage),
+                    ),
+                  ],
+                ),
+              ),
+            ],
             const SizedBox(height: 16),
             Text(
               l10n.syncRulesDefaultsTitle,

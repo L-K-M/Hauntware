@@ -12,9 +12,12 @@ import 'package:poltergeist_core/poltergeist_core.dart';
 import 'package:poltergeist_sync/poltergeist_sync.dart';
 
 import '../../l10n/app_localizations.dart';
+import '../../services/skip_rule_sets.dart';
+import '../../services/skip_rule_sets_controller.dart';
 import '../../services/sync_plan_controller.dart' show SyncCaseOverrides;
 import '../../services/uuid.dart';
 import '../display_path.dart';
+import 'sync_rule_sets.dart';
 import 'sync_rules_edit_request.dart';
 
 const String _unlistedServerId = 'sync-editor-unlisted-server';
@@ -49,6 +52,7 @@ final class SyncPairEditorDialog extends StatefulWidget {
     this.initialEditTarget = SyncRulesEditTarget.general,
     this.servers = const [],
     this.saveLabel,
+    this.skipRuleSets,
   });
 
   final SyncPair? initial;
@@ -77,6 +81,10 @@ final class SyncPairEditorDialog extends StatefulWidget {
   /// The save verb's label — "Save" for a new favorite, "Save &
   /// Rescan" over a live session.
   final String? saveLabel;
+
+  /// This device's named skip rule sets (05 §3), offered beside the
+  /// excludes; null leaves the menu out.
+  final SkipRuleSetsController? skipRuleSets;
 
   @override
   State<SyncPairEditorDialog> createState() => _SyncPairEditorDialogState();
@@ -393,6 +401,19 @@ class _SyncPairEditorDialogState extends State<SyncPairEditorDialog> {
     return SyncCaseOverrides(left: _caseLeft, right: _caseRight);
   }
 
+  /// Appends a named set's lines the excludes lack (05 §3); the pair
+  /// keeps the copy.
+  void _addRuleSet(SkipRuleSet set) {
+    final text = appendSkipRules(
+      skipRuleLines(_excludes.text),
+      set.patterns,
+    ).join('\n');
+    _excludes.value = TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -572,6 +593,11 @@ class _SyncPairEditorDialogState extends State<SyncPairEditorDialog> {
                     alignLabelWithHint: true,
                   ),
                 ),
+                if (widget.skipRuleSets case final sets?)
+                  Align(
+                    alignment: AlignmentDirectional.centerStart,
+                    child: SkipRuleSetMenu(sets: sets, onAdd: _addRuleSet),
+                  ),
                 const SizedBox(height: 8),
                 Row(
                   children: [

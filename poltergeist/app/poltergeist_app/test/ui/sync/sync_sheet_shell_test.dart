@@ -14,12 +14,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:poltergeist_app/l10n/app_localizations.dart';
 import 'package:poltergeist_app/services/engine_session.dart';
+import 'package:poltergeist_app/services/skip_rule_sets.dart';
+import 'package:poltergeist_app/services/skip_rule_sets_controller.dart';
 import 'package:poltergeist_app/services/sync_plan_controller.dart';
 import 'package:poltergeist_app/services/sync_queue_facade.dart';
 import 'package:poltergeist_app/theme/app_theme.dart';
 import 'package:poltergeist_app/ui/sync/sync_commands.dart';
 import 'package:poltergeist_app/ui/sync/sync_pair_editor.dart';
 import 'package:poltergeist_app/ui/sync/sync_plan_view.dart';
+import 'package:poltergeist_app/ui/sync/sync_rule_sets.dart';
 import 'package:poltergeist_app/ui/workspace_shell.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
 import 'package:poltergeist_sync/poltergeist_sync.dart'
@@ -56,6 +59,7 @@ Future<_Fixture> _pumpShell(
   required void Function(_Fixture fixture) seed,
   String rightName = 'right',
   _BookmarkExposure bookmarkExposure = _BookmarkExposure.available,
+  SkipRuleSetsController? skipRuleSets,
 }) async {
   final scratch = Directory.systemTemp.createTempSync('pg-sheet-shell-');
   addTearDown(() => scratch.deleteSync(recursive: true));
@@ -106,6 +110,7 @@ Future<_Fixture> _pumpShell(
         engineSession: session,
         syncEnvironment: testSyncEnvironment(scratch),
         syncTasks: SyncQueueTasks(),
+        skipRuleSets: skipRuleSets,
       ),
     ),
   );
@@ -176,6 +181,28 @@ void main() {
     expect(session.lastRun, isNull);
     expect(File('${fixture.right.path}/a.txt').existsSync(), isFalse);
     expect(find.byKey(const ValueKey('sync.plan.holdBanner')), findsNothing);
+  });
+
+  testWidgets('the shell hands its rule sets to the Skip Rules dialog', (
+    tester,
+  ) async {
+    final sets = SkipRuleSetsController(
+      initial: [
+        SkipRuleSet(name: 'Web', patterns: ['node_modules/']),
+      ],
+    );
+    addTearDown(sets.dispose);
+    await _pumpShell(tester, seed: (_) {}, skipRuleSets: sets);
+    await runShellCommand(tester, kSyncSynchronizePanesCommandId);
+    await tester.tap(find.byKey(const ValueKey('sync.sheet.editRules')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey(SkipRuleSetKey.addMenu)));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey((SkipRuleSetKey.addItem, 'Web'))),
+      findsOneWidget,
+    );
   });
 
   testWidgets('Synchronize runs a creates-only plan straight away', (
