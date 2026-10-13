@@ -1,6 +1,8 @@
 # 03. Architecture
 
-Status: plan with owner decisions of 2026-10-10. Nothing here is implemented.
+Status: plan with owner decisions of 2026-10-10. Implementation started on
+2026-10-13; a passage that cites a merged PR describes built code, and the
+rest is plan.
 
 The decision log (section 2) was synthesized from three competing proposals,
 A (agentless-first minimalist), B (capability-first with an optional
@@ -1319,7 +1321,7 @@ platform identities in 04, section 12.3):
 | `vault.json`, `vault.json.rekey` | Credentials and re-key journal | `SC/src/store/` | MVP |
 | `host_keys.json`, verdict and tripwire files | Pins and quarantine state | catalog library | MVP |
 | `endpoint_pins.json` | Confirmed endpoints | catalog library | MVP |
-| `ssh_config_imports.json` [E] | D13's device-local store for FL-02 imports from `~/.ssh/config` (alias, host, port, user), replaced whole by each import; never pushed (D14). Not built: it arrives with the catalog library (F3); until then the engine holds imports in memory and a restart drops them (10.1) | `klabautermann_core` [E] | MVP |
+| `ssh_config_imports.json` [E] | D13's device-local store for FL-02 imports from `~/.ssh/config` (alias, host, port, user), replaced whole by each import; never pushed (D14). `IdentityFile` and `ProxyJump` join when links land (M2). Not built: it arrives with the catalog library (F3); until then the engine holds imports in memory and a restart drops them (10.1) | `klabautermann_core` [E] | MVP |
 | `settings.json` | Device settings, `klabautermann.sync.deviceId` (minted once, never regenerated), monitor set, per-server device preferences | app | MVP |
 | `capabilities/<serverId>.json` | Cached probe results, 24 h TTL | `klabautermann_core` | MVP |
 | `audit/<serverId>.jsonl` | Audit log, 90-day retention [E] | `klabautermann_core` | MVP |
@@ -1334,19 +1336,20 @@ caches are purged and polling stops on remote delete, exclusion or endpoint
 change (SYN-08).
 
 Per-server files (`capabilities/`, `audit/`, `history/`) are named by
-`serverId`. A synced id is a bare UUID and safe as a file name. An import
-id, `ssh-config:<alias>` (10.1), is not: `:` is invalid in Windows file
-names, and an alias is any run of non-blank characters, so it can contain
-path separators, or differ from another alias only in case and collide on
-a case-insensitive file system (the macOS and Windows defaults). The
-encoding is decided when the import store lands. *Proposal, not
-decided:* name an import's files `ssh-config-` followed by the lowercase
-hex SHA-256 of the alias's UTF-8 bytes, for example
-`capabilities/ssh-config-<64 hex digits>.json`. The name uses only
-lowercase letters, digits and hyphens, has a fixed length well under the
-usual 255-byte limit, survives case folding, and cannot equal a UUID (`s`
-is not a hex digit); the alias stays in the import store, so the name
-need not decode back to it.
+`serverId`. Séance mints synced ids as UUID v4, but a pulled id is
+untrusted input: a per-server file name is used only after the id is
+validated as a UUID. An import id, `ssh-config:<alias>` (10.1), is unsafe
+as a file name: `:` is invalid in Windows file names, and an alias is any
+run of non-blank characters, so it can contain path separators, or differ
+from another alias only in case and collide on a case-insensitive file
+system (the macOS and Windows defaults). The encoding is decided when the
+import store lands. *Proposal, not decided:* name an import's files
+`ssh-config-` followed by the lowercase hex SHA-256 of the alias's UTF-8
+bytes, for example `capabilities/ssh-config-<64 hex digits>.json`. The
+name uses only lowercase letters, digits and hyphens, has a fixed length
+well under the usual 255-byte limit, survives case folding, and cannot
+equal a UUID (`s` is not a hex digit); the alias stays in the import
+store, so the name need not decode back to it.
 
 ---
 
