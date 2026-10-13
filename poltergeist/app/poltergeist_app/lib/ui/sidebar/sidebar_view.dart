@@ -2,7 +2,12 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:ghost_servers/ghost_servers.dart' show groupServers;
+import 'package:ghost_servers/ghost_servers.dart'
+    show
+        GhostIndicatorRule,
+        ghostHiddenLiveIndicator,
+        ghostStatusDot,
+        groupServers;
 import 'package:path/path.dart' as p;
 import 'package:poltergeist_core/poltergeist_core.dart';
 
@@ -20,6 +25,7 @@ import '../../services/sidebar_probe_owner.dart';
 import '../../services/workspace_controller.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/family_hues.dart';
+import '../ghost_servers_adapter.dart';
 import '../panes/pane_drop_area.dart' show paneDropModifiers;
 import '../panes/pane_format.dart' show formatPaneSize;
 import '../place_glyphs.dart';
@@ -937,6 +943,9 @@ List<SidebarMenuEntry> _openVerbs(
 /// unknown or idle server paints nothing. [appearance] carries the
 /// state's words for the row's semantics and tooltip, dot or not. The
 /// colours are the chrome's status colours, which a theme palette names.
+///
+/// The rail rule ([railIndicatorOf]) and the paint map are
+/// `ghost_servers`' since 2026-10-13, the paint map shared with Séance.
 @visibleForTesting
 ({ServerIndicatorAppearance appearance, SidebarStatusDot? dot})
 sidebarServerIndicator(
@@ -945,29 +954,16 @@ sidebarServerIndicator(
   ServerStatus? status,
   ProbeStatus? probe,
 }) {
-  final appearance = railIndicatorOf(l10n, status: status, probe: probe);
-  final dot = switch (appearance.glyph) {
-    ServerIndicatorGlyph.connected => SidebarStatusDot(chrome.statusConnected),
-    ServerIndicatorGlyph.pending => SidebarStatusDot(chrome.statusConnecting),
-    ServerIndicatorGlyph.failed => SidebarStatusDot(chrome.statusFailed),
-    ServerIndicatorGlyph.blocked => SidebarStatusDot(
-      chrome.statusFailed,
-      style: SidebarDotStyle.blocked,
-    ),
-    ServerIndicatorGlyph.probe => switch (probe) {
-      ProbeStatus.online => SidebarStatusDot(
-        chrome.statusConnected,
-        style: SidebarDotStyle.ring,
-      ),
-      ProbeStatus.offline => SidebarStatusDot(
-        chrome.statusFailed,
-        style: SidebarDotStyle.ring,
-      ),
-      ProbeStatus.unknown || null => null,
-    },
-    ServerIndicatorGlyph.none || ServerIndicatorGlyph.idle => null,
-  };
-  return (appearance: appearance, dot: dot);
+  final indicator = resolveServerIndicator(
+    l10n,
+    GhostIndicatorRule.rail,
+    status: status,
+    probe: probe,
+  );
+  return (
+    appearance: serverIndicatorAppearance(indicator),
+    dot: ghostStatusDot(indicator, poltergeistStatusColors(chrome)),
+  );
 }
 
 /// [sidebarServerIndicator] with the row's theme.

@@ -93,7 +93,13 @@ carries the new IEC binary size/rate formatters for Klabautermann;
 2026-10-13 in its own package, `ghost_servers` (over `seance_protocol`
 and `ghost_ui`); the SERVERS section's catalog grouping calls its
 `groupServers` instead of grouping inline, with the `srv:` collapse keys
-unchanged.
+unchanged. The status-dot vocabulary followed the same day in that
+package's `server_status.dart`: `serverIndicatorOf` and `railIndicatorOf`
+keep their names and ARB words as delegates to its list and rail rules
+(through `ui/ghost_servers_adapter.dart`), the rail's paint map and the
+sidebar's hidden-live header dot draw through `ghostStatusDot` and
+`ghostHiddenLiveIndicator`, and the pane-tab `ServerStateGlyph` paint
+stays here.
 
 ## Cross-app deep links (2026-10-02)
 
