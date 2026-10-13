@@ -237,6 +237,23 @@ void main() {
       );
     });
 
+    test('concurrent opens cannot overshoot the bound', () async {
+      final link = await openTestLink();
+      addTearDown(link.link.close);
+
+      // Every open passes the bound check before any completes, so the
+      // check has to count the opens still in flight.
+      final outcomes = await Future.wait([
+        for (var index = 0; index < 17; index++)
+          link.link
+              .openUnixStream('/run/burst-$index')
+              .then<Object>((duplex) => duplex, onError: (Object e) => e),
+      ]);
+
+      expect(outcomes.whereType<ByteDuplex>(), hasLength(16));
+      expect(outcomes.whereType<ChannelOpenException>(), hasLength(1));
+    });
+
     test('duplexes do not consume the session budget', () async {
       final link = await openTestLink(sessionBudget: 1);
       addTearDown(link.link.close);

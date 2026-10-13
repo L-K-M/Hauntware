@@ -116,10 +116,31 @@ void main() {
           ),
         ),
       );
-      // The abort closed the channel's write side instead of leaving the
-      // channel open; dartssh2 answers the close only once the peer replies.
+      // The abort hung the channel up instead of leaving it open: EOF for
+      // the write side, then CLOSE, without waiting for the peer.
       await _eventually(() => link.peer.channels.single.eofFromClient);
     });
+
+    test(
+      'a timed-out run frees its slot when the peer never answers',
+      () async {
+        final link = await openTestLink(sessionBudget: 1);
+        addTearDown(link.link.close);
+        // A command wedged on the host (a hung NFS stat, say) keeps running
+        // and never answers the client's EOF.
+        link.peer.onExec = SshChannelPeer.execQuietFollower;
+
+        await expectLater(
+          link.link.run('df', timeout: const Duration(milliseconds: 150)),
+          throwsA(isA<RemoteCommandException>()),
+        );
+        await _eventually(() => link.peer.channels.single.closeFromClient);
+
+        link.peer.onExec = SshChannelPeer.execEchoAndExit;
+        final result = await link.link.run('true');
+        expect(result.exitCode, 0);
+      },
+    );
 
     test('a run that gives up waiting for a slot never executes', () async {
       final link = await openTestLink(sessionBudget: 1);

@@ -297,6 +297,9 @@ final class _SshLink implements SshLink {
   var _dataSinceLastTick = false;
   var _pendingOpens = 0;
 
+  /// Forwarding opens in flight, counted against [_maxDuplexes].
+  var _pendingDuplexOpens = 0;
+
   /// Live resources the close path tears down, in close order.
   final _execChannels = <SSHSession>{};
   final _processes = <RemoteProcess>{};
@@ -614,13 +617,16 @@ final class _SshLink implements SshLink {
     ChannelOpenKind kind,
   ) async {
     _throwIfClosingForChannel();
-    if (_duplexes.length >= _maxDuplexes) {
-      throw const ChannelOpenException(
+    // Opens still in flight count against the bound, or a burst of
+    // concurrent opens would all pass this check before any registers.
+    if (_duplexes.length + _pendingDuplexOpens >= _maxDuplexes) {
+      throw ChannelOpenException(
         ChannelRefusal.other,
-        'The link already carries 16 open streams.',
+        'The link already carries $_maxDuplexes open streams.',
       );
     }
     _pendingOpens++;
+    _pendingDuplexOpens++;
     try {
       final pending = open();
       SSHForwardChannel channel;
@@ -645,6 +651,7 @@ final class _SshLink implements SshLink {
       throw _classifyOpen(e, kind);
     } finally {
       _pendingOpens--;
+      _pendingDuplexOpens--;
     }
   }
 

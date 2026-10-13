@@ -208,17 +208,16 @@ final class ExecCore {
   /// The wording of the [RemoteCommandException] a dead transport produces.
   final String disconnectedMessage;
 
-  /// Opens a fresh non-PTY channel through [open], captures both output
-  /// streams bounded at [maxOutputBytes], and waits one deadline across
+  /// Opens a fresh non-PTY channel through [open], captures each output
+  /// stream bounded at [maxOutputBytes], and waits one deadline across
   /// stream completion and `channel.done`.
   ///
-  /// [openTimeout] bounds the channel open itself when the caller's open can
-  /// stall behind a queue or an uncooperative peer; [stdin] bytes, when
-  /// given, are written and sealed with EOF before output is awaited.
+  /// [open] owns its own bound and late-open cleanup (the link's budgeted
+  /// open does both); [stdin] bytes, when given, are written and sealed
+  /// with EOF before output is awaited.
   Future<RemoteCommandResult> run(
     String command, {
     required Future<SSHSession> Function() open,
-    Duration? openTimeout,
     Duration? timeout,
     int maxOutputBytes = 256 * 1024,
     List<int>? stdin,
@@ -229,10 +228,7 @@ final class ExecCore {
     }
     final SSHSession channel;
     try {
-      final pending = open();
-      channel = await (openTimeout == null
-          ? pending
-          : pending.timeout(openTimeout));
+      channel = await open();
     } on ChannelOpenException {
       rethrow;
     } catch (e) {
@@ -244,7 +240,7 @@ final class ExecCore {
 
     if (stdin != null) {
       channel.write(Uint8List.fromList(stdin));
-      unawaited(channel.stdin.close());
+      channel.stdin.close().ignore();
     }
 
     final stdout = BytesBuilder(copy: false);
@@ -285,7 +281,11 @@ final class ExecCore {
         await subscription.cancel();
       }
       channel.done.ignore();
-      channel.close();
+      // A polite close only sends EOF and waits for the peer's CLOSE, which a
+      // command wedged on the host never sends: the channel, and the budget
+      // slot its `done` releases, would stay held. Destroying sends CLOSE and
+      // ends the channel locally.
+      channel.channel.destroy();
     }
 
     // One deadline across both waits: two independent effectiveTimeout

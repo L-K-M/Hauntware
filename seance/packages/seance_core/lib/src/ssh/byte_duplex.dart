@@ -169,8 +169,10 @@ final class InboundReplay {
     if (_pending.isEmpty && !_controller.isClosed) {
       final error = _error;
       if (error != null) {
+        final stackTrace = _stackTrace ?? StackTrace.empty;
         _error = null;
-        _controller.addError(error, _stackTrace ?? StackTrace.empty);
+        _stackTrace = null;
+        _controller.addError(error, stackTrace);
       }
       if (_upstreamDone) unawaited(_controller.close());
     }
