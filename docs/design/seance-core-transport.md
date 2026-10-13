@@ -562,6 +562,30 @@ Benign nonmatches the tests pin: `docker compose up`, `docker volume ls`,
 `crontab -l`/`crontab -e`, `ufw status`, `nft list ruleset`, `usermod`,
 `useradd`, `kill 1000`, `docker compose down` (no `-v`).
 
+**Command segments.** Every rule, the original 14 and the ones above, is
+matched against one command at a time rather than the whole line, so a
+flag or path from the next command cannot complete a pattern. Before
+matching, `scan` removes backslash-newline continuations and splits the
+text at unquoted `;`, `&&`, `||`, `&`, `|`, `|&` and newlines. Single
+quotes, `$'...'`, double quotes, backslash escapes, `$(...)`, `<(...)`,
+`>(...)` and backticks keep a command together; `>&`, `<&`, `&>` and `>|`
+are redirections; a `#` that starts a word runs to the end of the line
+without opening quotes. Two rules need a wider view: `curl|sh` is matched
+per pipeline (commands joined by `|` or `|&` stay together) and the fork
+bomb, which is built from separators, on the whole text. A finding
+carries the line on which its command starts, one finding per rule and
+line, so the Command inbox scans a script whole instead of line by line
+and a continued command is checked as one.
+
+The splitter is a scanner, not a shell parser, and errs toward keeping
+text together: extra text can only add a false positive, while a wrong
+split can hide part of a match. Known gaps: a `case` pattern's `)` inside
+`$(...)` ends the substitution early, here-document bodies are split like
+commands, and aliases, functions and `eval` are not expanded. Tests pin
+that `systemctl stop nginx; ssh deploy@host`, `rm -rf ./build; ls /` and
+`git clean -n && rm -f out.o` raise nothing, that `userdel \` + newline +
+`-r deploy` is critical, and that `rm -rf \` + newline + `/etc` is caught.
+
 ### 3.7 Barrel exports (F2e)
 
 `seance_core.dart` gains, in the ssh group after `:28`:

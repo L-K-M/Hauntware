@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Assistant: the danger check looks at one command at a time, in
+  suggested commands and in Command inbox scripts. A flag or path in the
+  next command no longer raises a warning, so
+  `systemctl stop nginx; ssh host` is not flagged. A command continued
+  over lines with a trailing backslash is checked as one, so `userdel \`
+  followed by `-r deploy` on the next line is marked critical.
 - Assistant: the danger check on suggested commands and Command inbox
   scripts covers Docker, systemd, cron, firewall and user commands.
   `docker system prune` with `--all` or `--volumes`,

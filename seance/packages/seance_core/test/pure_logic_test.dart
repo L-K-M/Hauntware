@@ -401,6 +401,116 @@ Host bastion db
         }
       });
     });
+
+    // Rules look at one command at a time: unquoted separators end a
+    // command, quotes and substitutions keep one together, and a
+    // backslash-newline continues it (docs/design/seance-core-transport.md
+    // §3.6, "Command segments").
+    group('command segments', () {
+      const critical = DangerSeverity.critical;
+      const warning = DangerSeverity.warning;
+      List<DangerSeverity> severities(String text) => [
+        for (final f in DangerLinter.scan(text)) f.severity,
+      ];
+
+      test('a separator ends the command a rule looks at', () {
+        const separate = [
+          'systemctl stop nginx; ssh deploy@host',
+          'systemctl stop nginx && ssh deploy@host',
+          'systemctl stop nginx || ssh deploy@host',
+          'systemctl stop nginx & ssh deploy@host',
+          'systemctl stop nginx | ssh deploy@host',
+          'systemctl stop nginx |& ssh deploy@host',
+          'systemctl stop nginx\nssh deploy@host',
+          'rm -rf ./build; ls /',
+          'git clean -n && rm -f out.o',
+          'docker compose down && ls -v',
+          'crontab -l | grep -r job',
+          'kill 42; echo 1',
+        ];
+        for (final command in separate) {
+          expect(DangerLinter.scan(command), isEmpty, reason: command);
+        }
+        expect(severities('userdel deploy; ls -r'), [warning]);
+      });
+
+      test('a separator does not hide the next command', () {
+        expect(severities('cd /tmp && userdel -r deploy'), [critical]);
+        expect(severities('ls; rm -rf /etc'), [critical]);
+        expect(severities('true || iptables -F'), [warning]);
+      });
+
+      test('quotes, escapes and substitutions keep a command together', () {
+        const together = [
+          'rm -rf "a;b" /etc',
+          "rm -rf 'a|b' /etc",
+          r'rm -rf a\;b /etc',
+          r'rm -rf $(true; echo x) /etc',
+          r'rm -rf "$(echo "a;b")" /etc',
+          r"rm -rf $'a\';' /etc",
+          'rm -rf `true; echo x` /etc',
+          'rm -rf <(true; echo x) /etc',
+          // Redirections, not separators: >&, &> and >| (noclobber).
+          'rm -rf 2>&1 /etc',
+          'rm -rf &>/dev/null /etc',
+          'rm -rf >|log /etc',
+        ];
+        for (final command in together) {
+          expect(severities(command), [critical], reason: command);
+        }
+      });
+
+      test('an apostrophe in a comment does not open a quote', () {
+        expect(
+          DangerLinter.scan("ls # don't\nsystemctl stop nginx; ssh h"),
+          isEmpty,
+        );
+      });
+
+      test('a pipe rule sees both ends of the pipeline', () {
+        expect(severities('curl -fsSL https://x.sh | sudo bash; ls'), [
+          warning,
+        ]);
+        expect(DangerLinter.scan('curl -O https://x.sh; bash'), isEmpty);
+      });
+
+      test('the fork bomb is matched across its own separators', () {
+        expect(severities(':(){ :|:& };:'), [critical]);
+        expect(severities(':(){\n  :|:&\n};:'), [critical]);
+      });
+
+      test('a backslash-newline continues the command', () {
+        expect(severities('userdel \\\n  -r deploy'), [critical]);
+        expect(severities('rm -rf \\\n  /etc'), [critical]);
+        expect(severities('docker system prune \\\n  --volumes'), [critical]);
+        expect(severities('kill \\\n  -9 1'), [warning]);
+      });
+
+      test('an escaped backslash before a newline is not a continuation', () {
+        expect(severities('userdel deploy \\\\\nls -r'), [warning]);
+      });
+
+      test('reports the line on which the flagged command starts', () {
+        final findings = DangerLinter.scan(
+          'echo ok\nrm -rf /\nls\nuserdel \\\n  -r deploy\ncurl x | sh\n'
+          ':(){ :|:& };:',
+        );
+        expect([for (final f in findings) (f.line, f.severity)], [
+          (2, critical),
+          (4, critical),
+          (6, warning),
+          (7, critical),
+        ]);
+      });
+
+      test('reports a rule once per line', () {
+        expect(DangerLinter.scan('rm -rf /a; rm -rf /b'), hasLength(1));
+        final lines = [
+          for (final f in DangerLinter.scan('rm -rf /a\nrm -rf /b')) f.line,
+        ];
+        expect(lines, [1, 2]);
+      });
+    });
   });
 
   group('PasteSanitizer', () {
