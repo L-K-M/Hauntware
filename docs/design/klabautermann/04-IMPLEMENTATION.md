@@ -90,7 +90,7 @@ without a migration.
 | Apple bundle id | `ch.lkmc.klabautermannApp`; `PRODUCT_NAME` ASCII |
 | Linux binary, WM class | `klabautermann`, `Ch.lkmc.klabautermann` (equals `StartupWMClass`) |
 | Windows | `klabautermann.exe`; `CompanyName` `ch.lkmc`, as for Séance and Planchette and matching the `ch.lkmc.*` ids; it fixes the Windows data path (Poltergeist stays the outlier with `L-K-M` [R: c4 G6]) |
-| Keystore entries | `klabautermann.vault.masterKey.v1`, `klabautermann.apikey.sync.token`, `klabautermann.apikey.<name>`; a remembered sudo password (v1.x) lives in the vault behind the master key, not in its own entry (D41, 4.5) |
+| Keystore entries | `klabautermann.vault.masterKey.v1`, `klabautermann.apikey.sync.token`, `klabautermann.apikey.<name>`; a remembered sudo password (v1.x) lives in the vault behind the master key, not in its own entry (D41, 4.5); a sender's deposit key (v1.x) is the vault entry `sender-key:<serverConfigId>`, never a `secret:` record, reaching other devices only inside the sealed sender sub-record (4.8) |
 | Settings keys | `klabautermann.sync.deviceId`, `klabautermann.*` |
 | Method channels | `klabautermann/settings_window`, `klabautermann/settings_link`, `klabautermann/window`, `klabautermann/menu_checks`, `klabautermann/keepalive` |
 | URL scheme | `klabautermann://` |
@@ -206,7 +206,9 @@ scaffold starts with minimal themes from `ghost_ui` tokens and switches to
 shell (PLT-01, PLT-02); `l10n.yaml`, the English ARB catalogue and
 gen-l10n, with the app registered in `tool/l10n_contract` in the PR that
 creates its first ARB file (A11Y-05; English only until v1.x adds
-languages); contract tests.
+languages); off-UI parsing in the engine isolate (CN-19); the sync rows
+the pull-only list needs (SYN-02, SYN-03, SYN-07, SYN-08); contract
+tests.
 Exit: `scripts/build.sh --check` and the release tool's `check` list the
 product; all five client legs build on every PR and pass launch checks; no
 release leg yet (decision 16); the guard
@@ -224,7 +226,10 @@ words; system identity, LXC awareness, uptime; access check; coverage UI
 and gap rendering; session rings, charts and the log viewer, with their
 semantics, safe palettes, reduced motion and threshold announcements
 built in (A11Y-01 to A11Y-04, A11Y-11, A11Y-15); IEC units (A11Y-06) and
-`LC_ALL=C.UTF-8`, `TZ=UTC` command environments (A11Y-08).
+`LC_ALL=C.UTF-8`, `TZ=UTC` command environments (A11Y-08); pause,
+backoff and resume, dead-peer detection, runtime per host, old-systemd
+fallbacks and client-limitation errors (CN-05, CN-06, CN-09, CN-10,
+CN-23); safe interpolation for every sampler argument (SAF-10).
 Exit: fixture suites for every MVP collector on tier A platforms;
 integration tests for sampler start, tick, timeout recovery and reconnect
 resume; 11.4 budgets met; coverage copy in ARB.
@@ -237,7 +242,8 @@ elevated file reads arrive with admin mode in M4); engine info;
 event-driven refresh; container list, inspect with masking, health; log
 follow and search; list stats; image list; stack discovery with source
 verification, overview and file view; managed-by badges; Docker summary
-card; low-session mode.
+card; low-session mode; the root-equivalence notice per engine
+(SAF-08).
 Exit: recorded-API tests for 1.41, 1.44, 1.52, 1.55 and Podman compat;
 integration tests on the Docker fixture and the negative variants
 (no streamlocal, `DisableForwarding`, `AllowTcpForwarding no`,
@@ -259,8 +265,9 @@ of 12.1 (release job, manifest entries, workflow contracts, client counts)
 and the preview label until v1 in the asset names, the in-app title and
 about screen and the release notes, with identities unchanged (12.3,
 decision 16).
-Exit: every MVP row in `02-FEATURES.md` §2 implemented or recorded as a
-deviation (03, section 1.4); integration tests for each mutation path,
+Exit: every MVP row in `02-FEATURES.md` §2, and SAF-11, which 03
+section 1.4 moves into the MVP, implemented or recorded as a deviation
+(03, section 1.4); integration tests for each mutation path,
 including the detached compose flow with re-attach under the user
 runners (`setsid` on the Docker fixture, `systemd-run` system and
 `--user` on the runner VM leg of 03, 11.3; older systemd through recorded

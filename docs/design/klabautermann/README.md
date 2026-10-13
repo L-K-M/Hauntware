@@ -120,7 +120,10 @@ maps every review "must address" item to its resolution.
 | Later | Release | T2 rows (four scheduled in M9; ALR-12, ALR-13 and X-09 wait on further decisions) and work after v1.x: push relay, backups inside Klabautermann, permissive template catalogs | 92 |
 
 Rows are catalog rows in 02; execution counts exclude the 7 non-goal rows
-(487 of 494). The counts are those of
+(487 of 494). The release counts are catalog counts before the two
+release changes of [03 §1.4](03-ARCHITECTURE.md#14-deviations-from-and-corrections-to-02-featuresmd)
+(SAF-11 to MVP, SYN-05 to v1), which make them MVP 111, v1 136, v1.x 148,
+Later 92. The counts are those of
 [02 Feature counts](02-FEATURES.md#feature-counts), which wins if they
 differ. T2 rows keep the release tier Later; ALR-11, ALR-14, ALR-15 and
 HIS-08 are scheduled in M9, and ALR-12, ALR-13 and X-09 wait on further
