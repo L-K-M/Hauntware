@@ -100,11 +100,12 @@ known-divergent surface.
   wraps onto two lines, and the layout buttons show icons with tooltips.
 - [ ] OWNER MANUAL QA: macOS ⌘F in Separate opens the editor's find bar
   rather than Edit ▸ Filter.
-- [ ] OWNER MANUAL QA: with a compare open, change the text size in
-  Settings → Appearance (the Settings window on desktop, the dialog on a
-  phone): the rows and the Separate editors resize at once and the line
-  at the top stays in view. Help ▸ Keyboard Shortcuts lists N and
-  Shift+N under Compare.
+- [ ] OWNER MANUAL QA: on each desktop, open the Settings window, then a
+  compare, and change the text size under Appearance: the diff rows
+  resize at once and keep the line at the top in view, and the Separate
+  editors resize too. On a phone, a compare opened after a size change
+  draws at the new size. Help ▸ Keyboard Shortcuts lists N and Shift+N
+  under Compare.
 
 ## Screen reader smoke
 

@@ -1486,8 +1486,10 @@ specifics:
   separators draw as visible symbols, since a paragraph would otherwise
   break the row at them. Rows have no syntax highlighting and no
   selection. Since 2026-10-13 the rows and the Separate editors draw in
-  the editor's text size and follow it as it changes, keeping the
-  reader's place as a resize does; the −/+ markers grow with the text.
+  the editor's text size and follow it as it changes. The rows keep the
+  reader's place as a resize does; the Separate editors keep their
+  scroll offset, as the editor's own zoom does. The −/+ markers grow
+  with the text.
 - A change of layout, by the switch or by the posture after a rotation,
   keeps the active region, or else the line at the top, in view. A side
   whose find bar or editor has focus when the other side finishes

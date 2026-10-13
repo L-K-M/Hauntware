@@ -838,6 +838,10 @@ void main() {
         paragraph.getMaxIntrinsicWidth(double.infinity),
         lessThanOrEqualTo(paragraph.size.width + 0.01),
       );
+      // The −/+ markers grow with the text, in a slot wide enough for them.
+      final marker = find.byIcon(Icons.remove).first;
+      expect(tester.widget<Icon>(marker).size, 28);
+      expect(tester.getSize(marker).width, greaterThanOrEqualTo(28));
       expect(tester.takeException(), isNull);
 
       await tester.tap(find.text('Separate'));
