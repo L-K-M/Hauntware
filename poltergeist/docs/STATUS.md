@@ -60,7 +60,7 @@ the sheet, the Advanced editor or the plan view's editor, appending
 duplicates, case-sensitive names) each fail a test.
 
 Local validation: Flutter analysis is clean, the localization contract
-passes, and all APP_TESTS app tests pass. Not run: native platforms,
+passes, and all 3,461 app tests pass. Not run: native platforms,
 screen readers, and IME composition in the new fields; the QA
 checklist's Skip rule sets section covers them.
 
