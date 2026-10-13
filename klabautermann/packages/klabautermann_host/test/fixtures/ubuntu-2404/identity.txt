@@ -1,0 +1,18 @@
+== os-release ==
+PRETTY_NAME="Ubuntu 24.04.3 LTS"
+NAME="Ubuntu"
+VERSION_ID="24.04"
+VERSION="24.04.3 LTS (Noble Numbat)"
+VERSION_CODENAME=noble
+ID=ubuntu
+ID_LIKE=debian
+HOME_URL="https://www.ubuntu.com/"
+SUPPORT_URL="https://help.ubuntu.com/"
+BUG_REPORT_URL="https://bugs.launchpad.net/ubuntu/"
+PRIVACY_POLICY_URL="https://www.ubuntu.com/legal/terms-and-policies/privacy-policy"
+UBUNTU_CODENAME=noble
+LOGO=ubuntu-logo
+== uname ==
+Linux 6.8.0-79-generic x86_64
+== hostnamectl ==
+{"Hostname":"ub24","MachineID":"b2c3d4e5f60718293a4b5c6d7e8f9a0b","BootID":"2b3c4d5e6f708192a3b4c5d6e7f8a9b0","OperatingSystemPrettyName":"Ubuntu 24.04.3 LTS","OperatingSystemCPEName":"cpe:/o:canonical:ubuntu_linux:24.04","KernelName":"Linux","KernelRelease":"6.8.0-79-generic","KernelVersion":"#79-Ubuntu SMP PREEMPT_DYNAMIC Tue Aug 12 14:42:46 UTC 2025","OSVersion":"VERSION=24.04.3 LTS (Noble Numbat)","HardwareVendor":"VMware, Inc.","HardwareModel":"VMware Virtual Platform"}

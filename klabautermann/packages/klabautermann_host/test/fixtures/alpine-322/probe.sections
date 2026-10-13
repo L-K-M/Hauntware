@@ -1,0 +1,70 @@
+### kernel ok
+Linux 6.6.32-0-lts x86_64
+### distro ok
+NAME="Alpine Linux"
+ID=alpine
+VERSION_ID=3.22.0
+PRETTY_NAME="Alpine Linux v3.22"
+HOME_URL="https://alpinelinux.org/"
+BUG_REPORT_URL="https://gitlab.alpinelinux.org/alpine/aports/-/issues"
+### init ok
+pid1_comm=init
+systemd_dir=no
+systemctl_version=
+### virt missing
+### identity ok
+uid=1000
+user=alpine
+groups=alpine
+### elev ok
+sudo_version=
+sudo_noninteractive=
+doas=present
+doas_noninteractive=1
+run0=absent
+printf=builtin
+### tools ok
+journalctl=
+crontab=/usr/bin/crontab
+ss=/usr/bin/ss
+ip=/sbin/ip
+lsblk=/usr/bin/lsblk
+findmnt=
+smartctl=
+sensors=
+docker=
+podman=
+socat=
+timeout=/usr/bin/timeout
+setsid=/usr/bin/setsid
+ncdu=
+gdu=
+sadf=
+logger=/usr/bin/logger
+systemd-run=
+systemd-analyze=
+apt-get=
+dnf=
+dnf5=
+apk=/sbin/apk
+pacman=
+zypper=
+nvidia-smi=
+### kfeat ok
+psi=yes
+cgroup_v2=yes
+### locale missing
+### sockets ok
+/var/run/docker.sock no no
+/run/podman/podman.sock no no
+/run/user/1000/docker.sock no no
+/run/user/1000/podman/podman.sock no no
+### session ok
+ssh_connection=10.0.2.2 55000 10.0.2.15 22
+ppid=800
+ppid_comm=sshd
+### clock ok
+epoch=1750300000
+offset=+0000
+### linger ok
+xdg_runtime_dir=

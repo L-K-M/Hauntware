@@ -286,7 +286,7 @@ Widget _railMark(BuildContext context, ServerTint tint, ServerMark mark) {
       child: Icon(
         serverIconData(mark.icon),
         size: sidebarGlyphSize(context),
-        color: SeanceChrome.of(context).secondaryText,
+        color: SeanceChrome.of(context, seanceThemeStyle).secondaryText,
       ),
     );
   }

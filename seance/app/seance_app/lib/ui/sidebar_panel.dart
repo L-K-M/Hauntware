@@ -94,7 +94,10 @@ class _SidebarPanelState extends State<SidebarPanel>
           child: Column(
             children: [
               _PanelTabStrip(controller: controller, tabs: tabs),
-              Divider(height: 1, color: SeanceChrome.of(context).separator),
+              Divider(
+                height: 1,
+                color: SeanceChrome.of(context, seanceThemeStyle).separator,
+              ),
               Expanded(
                 // A tab's page is built when it is first opened, so Files and
                 // Git initialize their session's controller only then.

@@ -105,7 +105,7 @@ class _BootstrapState extends State<_Bootstrap> with WidgetsBindingObserver {
   /// The theme until the state exists to say otherwise: the settings are
   /// read during bootstrap, so the spinner is drawn in the default theme.
   final ValueNotifier<AppAppearance> _bootAppearance = ValueNotifier(
-    AppAppearance.initial,
+    seanceInitialAppearance,
   );
 
   @override

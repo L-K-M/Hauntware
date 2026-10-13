@@ -8,6 +8,7 @@ const _apps = [
   'planchette/app/planchette_app',
   'seance/app/seance_app',
   'poltergeist/app/poltergeist_app',
+  'klabautermann/app/klabautermann_app',
 ];
 
 void main() {

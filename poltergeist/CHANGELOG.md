@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **Two syncs can claim a new trash folder at once.** When two syncs
+  started together on the same new trash folder, one could fail with
+  "The sync-trash ownership marker is invalid". A sync interrupted while
+  claiming its trash folder could also leave the folder unusable. Both
+  now settle on one owner.
 - **Skip `.git/` and `node_modules/` in one click.** The advanced pair
   editor offers both as chips under the exclude rules. Clear a chip to
   remove its rule again.

@@ -1,0 +1,14 @@
+== blocks ==
+Filesystem           Type            1B-blocks      Used Available Use% Mounted on
+dev                  devtmpfs        10240         0     10240   0% /dev
+run                  tmpfs           262144      1024    261120   1% /run
+/dev/vda3            ext4          20971520   8388608  12582912  40% /
+shm                  tmpfs           524288         0    524288   0% /dev/shm
+/dev/vda1            vfat            524288     20480    503808   4% /boot/efi
+== inodes ==
+Filesystem           Inodes          IUsed   IFree   IUse% Mounted on
+dev                    255024         280  254744     1% /dev
+run                    256000         300  255700     1% /run
+/dev/vda3             1310720      180000 1130720    14% /
+shm                    256000           1  255999     1% /dev/shm
+/dev/vda1                   0           0       0      - /boot/efi

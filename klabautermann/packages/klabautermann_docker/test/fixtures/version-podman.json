@@ -1,0 +1,40 @@
+{
+  "Platform": { "Name": "linux/amd64/podman-5.4.1" },
+  "Components": [
+    {
+      "Name": "Podman Engine",
+      "Version": "5.4.1",
+      "Details": {
+        "APIVersion": "5.4.1",
+        "Arch": "amd64",
+        "BuildTime": "2026-03-01T00:00:00+00:00",
+        "Experimental": "false",
+        "GitCommit": "11223344556677889900aabbccddeeff00112233",
+        "GoVersion": "go1.24.7",
+        "KernelVersion": "6.8.0-52-generic",
+        "MinAPIVersion": "4.0.0",
+        "Os": "linux"
+      }
+    },
+    {
+      "Name": "Conmon",
+      "Version": "conmon version 2.1.13, commit: abc123",
+      "Details": { "Package": "conmon-2.1.13-1" }
+    },
+    {
+      "Name": "OCI runtime (crun)",
+      "Version": "crun version 1.21",
+      "Details": {}
+    }
+  ],
+  "Version": "5.4.1",
+  "ApiVersion": "1.44",
+  "MinAPIVersion": "1.24",
+  "GitCommit": "11223344556677889900aabbccddeeff00112233",
+  "GoVersion": "go1.24.7",
+  "Os": "linux",
+  "Arch": "amd64",
+  "KernelVersion": "6.8.0-52-generic",
+  "Built": 1740000000,
+  "OsArch": "linux/amd64"
+}

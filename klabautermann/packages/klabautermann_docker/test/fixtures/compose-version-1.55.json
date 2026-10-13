@@ -1,0 +1,6 @@
+{
+  "version": "v2.39.1",
+  "revision": "0123456789",
+  "goVersion": "go1.24.7",
+  "gitCommit": "abcdef1"
+}

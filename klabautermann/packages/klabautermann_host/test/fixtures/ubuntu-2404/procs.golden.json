@@ -1,0 +1,87 @@
+{
+  "result": {
+    "processes": [
+      {
+        "pid": 1,
+        "ppid": 0,
+        "comm": "systemd",
+        "state": "S",
+        "uid": 0,
+        "gid": 0,
+        "name": "systemd",
+        "threads": 1,
+        "rssKb": 16800,
+        "userName": null,
+        "utime": 150,
+        "stime": 70,
+        "startTicks": 42000,
+        "argv": [
+          "/sbin/init",
+          "--system"
+        ],
+        "argsJoined": null
+      },
+      {
+        "pid": 2,
+        "ppid": 0,
+        "comm": "kthreadd",
+        "state": "S",
+        "uid": 0,
+        "gid": 0,
+        "name": "kthreadd",
+        "threads": 1,
+        "rssKb": 0,
+        "userName": null,
+        "utime": 0,
+        "stime": 0,
+        "startTicks": 6,
+        "argv": [],
+        "argsJoined": null
+      },
+      {
+        "pid": 900,
+        "ppid": 1,
+        "comm": "a)b c",
+        "state": "S",
+        "uid": 1000,
+        "gid": 1000,
+        "name": "a)b c",
+        "threads": 1,
+        "rssKb": 3000,
+        "userName": null,
+        "utime": 15,
+        "stime": 4,
+        "startTicks": 88000,
+        "argv": [
+          "/home/dev/my app",
+          "--serve"
+        ],
+        "argsJoined": null
+      },
+      {
+        "pid": 1500,
+        "ppid": 1,
+        "comm": "snapd",
+        "state": "S",
+        "uid": 0,
+        "gid": 0,
+        "name": "snapd",
+        "threads": 8,
+        "rssKb": 98000,
+        "userName": null,
+        "utime": 900,
+        "stime": 120,
+        "startTicks": 150000,
+        "argv": [
+          "/usr/lib/snapd/snapd"
+        ],
+        "argsJoined": null
+      }
+    ],
+    "argvSource": "cmdline",
+    "forgedHeaders": 0,
+    "skippedPids": 0,
+    "timeoutAbsent": false
+  },
+  "warnings": []
+}

@@ -1,0 +1,109 @@
+[
+  {
+    "Id": "9f8e7d6c5b4a39281706f5e4d3c2b1a09f8e7d6c5b4a39281706f5e4d3c2b1a0",
+    "Names": ["/web-1"],
+    "Image": "nginx:1.27",
+    "ImageID": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+    "Command": "/docker-entrypoint.sh nginx -g 'daemon off;'",
+    "Created": 1780001000,
+    "Ports": [
+      { "IP": "0.0.0.0", "PrivatePort": 80, "PublicPort": 8080, "Type": "tcp" },
+      { "IP": "::", "PrivatePort": 443, "Type": "tcp" }
+    ],
+    "Labels": {
+      "com.docker.compose.project": "web",
+      "com.docker.compose.service": "web",
+      "com.docker.compose.container-number": "1",
+      "com.docker.compose.oneoff": "False",
+      "com.docker.compose.project.working_dir": "/opt/web",
+      "com.docker.compose.project.config_files": "/opt/web/compose.yaml,/opt/web/compose.override.yaml",
+      "com.docker.compose.project.environment_file": "/opt/web/.env",
+      "com.docker.compose.config-hash": "abc123def456",
+      "com.docker.compose.image": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "com.docker.compose.depends_on": "db:service_started:false",
+      "com.docker.compose.version": "2.39.1"
+    },
+    "State": "running",
+    "Status": "Up 2 hours (healthy)",
+    "HostConfig": { "NetworkMode": "web_default" },
+    "NetworkSettings": {
+      "Networks": { "web_default": { "IPAddress": "172.18.0.2" } }
+    },
+    "Mounts": [
+      {
+        "Type": "volume",
+        "Name": "web_data",
+        "Source": "/var/lib/docker/volumes/web_data/_data",
+        "Destination": "/data",
+        "Driver": "local",
+        "Mode": "z",
+        "RW": true,
+        "Propagation": ""
+      }
+    ]
+  },
+  {
+    "Id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "Names": ["/web-db-1"],
+    "Image": "postgres:17",
+    "ImageID": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+    "Command": "postgres",
+    "Created": 1780000900,
+    "Ports": [],
+    "Labels": {
+      "com.docker.compose.project": "web",
+      "com.docker.compose.service": "db",
+      "com.docker.compose.oneoff": "False",
+      "com.docker.compose.project.working_dir": "/opt/web",
+      "com.docker.compose.project.config_files": "/opt/web/compose.yaml",
+      "com.docker.compose.config-hash": "abc123def456",
+      "com.docker.compose.depends_on": ""
+    },
+    "State": "running",
+    "Status": "Up 2 hours",
+    "HostConfig": { "NetworkMode": "web_default" },
+    "NetworkSettings": {
+      "Networks": { "web_default": { "IPAddress": "172.18.0.3" } }
+    },
+    "Mounts": []
+  },
+  {
+    "Id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "Names": ["/coolify-app-1"],
+    "Image": "ghcr.io/coollabsio/app:2.1.0",
+    "ImageID": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+    "Command": "/app",
+    "Created": 1780000800,
+    "Ports": [],
+    "Labels": {
+      "com.docker.compose.project": "coolify-app",
+      "com.docker.compose.service": "app",
+      "com.docker.compose.oneoff": "False",
+      "coolify.managed": "true",
+      "coolify.applicationId": "42"
+    },
+    "State": "running",
+    "Status": "Up 3 hours (unhealthy)",
+    "HostConfig": { "NetworkMode": "coolify" },
+    "NetworkSettings": { "Networks": {} },
+    "Mounts": []
+  },
+  {
+    "Id": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "Names": ["/loose-db"],
+    "Image": "postgres:17",
+    "ImageID": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+    "Command": "postgres",
+    "Created": 1780000700,
+    "Ports": [],
+    "Labels": {
+      "io.portainer.stack.name": "legacy",
+      "com.example.note": "not a compose container"
+    },
+    "State": "exited",
+    "Status": "Exited (0) 3 hours ago",
+    "HostConfig": { "NetworkMode": "bridge" },
+    "NetworkSettings": { "Networks": {} },
+    "Mounts": []
+  }
+]

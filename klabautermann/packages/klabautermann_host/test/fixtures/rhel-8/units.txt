@@ -1,0 +1,8 @@
+== units_text ==
+auditd.service loaded active running Security Auditing Service
+chronyd.service loaded active running NTP client/server
+crond.service loaded active running Command Scheduler
+sshd.service loaded active running OpenSSH server daemon
+foo.service loaded failed failed A deliberately failed unit
+== failed_text ==
+foo.service loaded failed failed A deliberately failed unit

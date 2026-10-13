@@ -307,7 +307,7 @@ class _AppearanceSettingsState extends State<AppearanceSettings> {
     final data = await Clipboard.getData(Clipboard.kTextPlain);
     if (!mounted) return;
     final text = data?.text;
-    final pasted = text == null ? null : ThemePalette.tryParse(text);
+    final pasted = text == null ? null : seanceThemeCodec.tryParse(text);
     if (pasted == null) {
       showTopToastIn(
         context,
@@ -984,7 +984,9 @@ class _TerminalPreview extends StatelessWidget {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: colors.background,
-        borderRadius: BorderRadius.circular(SeanceChrome.of(context).corner(6)),
+        borderRadius: BorderRadius.circular(
+          SeanceChrome.of(context, seanceThemeStyle).corner(6),
+        ),
       ),
       child: Text.rich(
         TextSpan(

@@ -1,0 +1,10 @@
+== os-release ==
+NAME="Alpine Linux"
+ID=alpine
+VERSION_ID=3.22.0
+PRETTY_NAME="Alpine Linux v3.22"
+HOME_URL="https://alpinelinux.org/"
+BUG_REPORT_URL="https://gitlab.alpinelinux.org/alpine/aports/-/issues"
+== uname ==
+Linux 6.6.32-0-lts x86_64
+== hostnamectl ==

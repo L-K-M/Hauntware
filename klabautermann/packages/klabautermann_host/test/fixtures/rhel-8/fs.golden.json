@@ -1,0 +1,99 @@
+{
+  "result": {
+    "mounts": [
+      {
+        "device": "devtmpfs",
+        "type": "devtmpfs",
+        "mountPoint": "/dev",
+        "sizeBytes": 16777216,
+        "usedBytes": 0,
+        "availBytes": 16777216,
+        "capacityPercent": 0,
+        "inodesTotal": 409600,
+        "inodesUsed": 400,
+        "inodesFree": 409200,
+        "inodeUsePercent": 1
+      },
+      {
+        "device": "tmpfs",
+        "type": "tmpfs",
+        "mountPoint": "/dev/shm",
+        "sizeBytes": 167772160,
+        "usedBytes": 0,
+        "availBytes": 167772160,
+        "capacityPercent": 0,
+        "inodesTotal": 4096000,
+        "inodesUsed": 10,
+        "inodesFree": 4095990,
+        "inodeUsePercent": 1
+      },
+      {
+        "device": "tmpfs",
+        "type": "tmpfs",
+        "mountPoint": "/run",
+        "sizeBytes": 167772160,
+        "usedBytes": 12582912,
+        "availBytes": 155189248,
+        "capacityPercent": 8,
+        "inodesTotal": 4096000,
+        "inodesUsed": 1200,
+        "inodesFree": 4094800,
+        "inodeUsePercent": 1
+      },
+      {
+        "device": "/dev/mapper/rhel-root",
+        "type": "xfs",
+        "mountPoint": "/",
+        "sizeBytes": 53687091200,
+        "usedBytes": 24696061952,
+        "availBytes": 28991029248,
+        "capacityPercent": 47,
+        "inodesTotal": 26214400,
+        "inodesUsed": 350000,
+        "inodesFree": 25864400,
+        "inodeUsePercent": 2
+      },
+      {
+        "device": "/dev/sda1",
+        "type": "xfs",
+        "mountPoint": "/boot",
+        "sizeBytes": 1073741824,
+        "usedBytes": 310378496,
+        "availBytes": 763363328,
+        "capacityPercent": 29,
+        "inodesTotal": 524288,
+        "inodesUsed": 330,
+        "inodesFree": 523958,
+        "inodeUsePercent": 1
+      },
+      {
+        "device": "/dev/mapper/rhel-home",
+        "type": "xfs",
+        "mountPoint": "/home",
+        "sizeBytes": 107374182400,
+        "usedBytes": 42949672960,
+        "availBytes": 64424509440,
+        "capacityPercent": 40,
+        "inodesTotal": 52428800,
+        "inodesUsed": 200000,
+        "inodesFree": 52228800,
+        "inodeUsePercent": 1
+      },
+      {
+        "device": "tmpfs",
+        "type": "tmpfs",
+        "mountPoint": "/run/user/0",
+        "sizeBytes": 33554432,
+        "usedBytes": 0,
+        "availBytes": 33554432,
+        "capacityPercent": 0,
+        "inodesTotal": 4096000,
+        "inodesUsed": 15,
+        "inodesFree": 4095985,
+        "inodeUsePercent": 1
+      }
+    ],
+    "timeoutAbsent": false
+  },
+  "warnings": []
+}

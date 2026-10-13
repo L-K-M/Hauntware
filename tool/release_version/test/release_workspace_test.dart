@@ -31,9 +31,9 @@ void main() {
 
     expect(report.version.semantic, '1.1.0');
     expect(report.version.appVersion, '1.1.0+1010099');
-    // Manifest + 10 packages + the live bench shim + 3 apps; workspace
+    // Manifest + 13 packages + the live bench shim + 4 apps; workspace
     // roots (unversioned) and vendored forks stay out of the count.
-    expect(report.pubspecCount, 15);
+    expect(report.pubspecCount, 19);
     expect(report.lockedPackageCount, greaterThan(0));
   });
 
@@ -659,8 +659,8 @@ void main() {
       },
     );
 
-    // Three app pubspecs plus the two literal poltergeist plists.
-    expect(recreated, hasLength(5));
+    // Four app pubspecs plus the two literal poltergeist plists.
+    expect(recreated, hasLength(6));
     for (final file in recreated) {
       expect(file.readAsStringSync(), foreignContents);
     }
@@ -890,6 +890,34 @@ void _writeFixture(Directory root) {
     'poltergeist/tool/bench/pubspec.lock',
     lock({'poltergeist_m0_bench': '1.1.0', 'seance_core': '1.1.0'}),
   );
+
+  // --- Klabautermann ---
+  write('klabautermann/pubspec.yaml', 'name: _klabautermann_workspace\n');
+  for (final package in [
+    'klabautermann_core',
+    'klabautermann_docker',
+    'klabautermann_host',
+  ]) {
+    write('klabautermann/packages/$package/pubspec.yaml', pubspec(package));
+  }
+  write(
+    'klabautermann/app/klabautermann_app/pubspec.yaml',
+    pubspec('klabautermann_app', '1.1.0+1010099'),
+  );
+  write(
+    'klabautermann/app/klabautermann_app/pubspec.lock',
+    lock({'klabautermann_core': '1.1.0'}),
+  );
+  write(
+    'klabautermann/app/klabautermann_app/ios/Runner/Info.plist',
+    plist(r'$(FLUTTER_BUILD_NUMBER)'),
+  );
+  write(
+    'klabautermann/app/klabautermann_app/macos/Runner/Info.plist',
+    plist(r'$(FLUTTER_BUILD_NUMBER)'),
+  );
+  write('klabautermann/README.md', readme('1.1.0'));
+  write('klabautermann/pubspec.lock', lock({'klabautermann_core': '1.1.0'}));
 }
 
 void _bump(Directory root, String relativePath, String version) {
@@ -922,6 +950,7 @@ const _syncTargets = [
   'poltergeist/app/poltergeist_app/pubspec.yaml',
   'poltergeist/app/poltergeist_app/ios/Runner/Info.plist',
   'poltergeist/app/poltergeist_app/macos/Runner/Info.plist',
+  'klabautermann/app/klabautermann_app/pubspec.yaml',
 ];
 
 Map<String, String> _snapshot(Directory root, List<String> relativePaths) => {

@@ -32,7 +32,7 @@ class HeaderToolbar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final state = AppScope.of(context);
-    final chrome = SeanceChrome.of(context);
+    final chrome = SeanceChrome.of(context, seanceThemeStyle);
     final platform = Theme.of(context).platform;
     // Only a window with the unified toolbar has passthrough views to
     // register; anywhere else the header is plain Flutter.
@@ -98,7 +98,7 @@ class _HeaderTitle extends StatelessWidget {
     // tab strip reads it: a rename or recolour shows at once.
     final server = state.configFor(active.serverId) ?? active.config;
     final theme = Theme.of(context);
-    final chrome = SeanceChrome.of(context);
+    final chrome = SeanceChrome.of(context, seanceThemeStyle);
     // A local shell has no server to read colour, mark or address from:
     // the terminal glyph on the neutral badge, and the session's own words
     // for what it is and where it runs.
@@ -163,7 +163,7 @@ class _Capsule extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final chrome = SeanceChrome.of(context);
+    final chrome = SeanceChrome.of(context, seanceThemeStyle);
     return Material(
       color: chrome.capsuleFill,
       borderRadius: BorderRadius.circular(chrome.corner(8)),
@@ -196,7 +196,7 @@ class _ToolbarButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final chrome = SeanceChrome.of(context);
+    final chrome = SeanceChrome.of(context, seanceThemeStyle);
     final radius = BorderRadius.circular(chrome.corner(6));
     return Tooltip(
       message: '$label $shortcut',

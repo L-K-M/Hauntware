@@ -2,7 +2,7 @@
 # Root test orchestrator for the Hauntware monorepo.
 #
 # Runs the root suite tooling plus the pure-Dart and Flutter suites of
-# all three subtrees (planchette/, seance/, poltergeist/) from their
+# every subtree (planchette/, seance/, poltergeist/, klabautermann/) from their
 # actual working
 # directories — each subtree keeps its own pub workspace, and pub
 # resolves per subtree root, so dependencies are resolved SEQUENTIALLY
@@ -135,6 +135,22 @@ if [[ "$scope" != flutter ]]; then
     run dart run tool/protocol_guard/bin/check.dart
     run dart run tool/license_gate/bin/check.dart --marker-only
   )
+
+  # ---- Klabautermann: pure-Dart workspace packages (the app is below).
+  # The sampler's shell test runs dash and bash where present.
+  (
+    cd klabautermann
+    run dart pub get
+    dirs=()
+    for package in packages/*; do
+      [[ -d "$package" ]] || continue
+      run dart analyze --fatal-infos "$package"
+      [[ -d "$package/test" ]] && dirs+=("$package")
+    done
+    run dart format --output=none --set-exit-if-changed packages
+    ((${#dirs[@]} > 0)) || { echo "no package has a test/ directory" >&2; exit 1; }
+    run dart test --reporter expanded "${dirs[@]}"
+  )
 fi
 
 if [[ "$scope" != dart ]]; then
@@ -144,17 +160,19 @@ if [[ "$scope" != dart ]]; then
     # planchette_core is pure Dart; the rest resolve through Flutter.
     (cd packages/planchette_core && run dart pub get)
     for dir in packages/ghost_ui packages/planchette_editor \
-               packages/ghost_desktop packages/ghost_marks app/planchette_app; do
+               packages/ghost_desktop packages/ghost_marks packages/ghost_theme \
+               app/planchette_app; do
       (cd "$dir" && run flutter pub get)
     done
     for dir in packages/ghost_ui packages/planchette_editor \
-               packages/ghost_desktop packages/ghost_marks app/planchette_app; do
+               packages/ghost_desktop packages/ghost_marks packages/ghost_theme \
+               app/planchette_app; do
       (cd "$dir" && run flutter analyze && run flutter test)
     done
     run dart format --set-exit-if-changed --output=none \
       packages/planchette_core packages/planchette_editor \
       packages/ghost_ui packages/ghost_desktop packages/ghost_marks \
-      app/planchette_app
+      packages/ghost_theme app/planchette_app
   )
 
   # ---- Séance: app plus the vendored xterm fork (its tests are not
@@ -169,6 +187,12 @@ if [[ "$scope" != dart ]]; then
   (
     cd poltergeist
     (cd app/poltergeist_app && run flutter pub get && run flutter analyze && run flutter test)
+  )
+
+  # ---- Klabautermann app.
+  (
+    cd klabautermann
+    (cd app/klabautermann_app && run flutter pub get && run flutter analyze && run flutter test)
   )
 fi
 

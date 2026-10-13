@@ -839,7 +839,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(
-        ThemePalette.decodeStored(jsonDecode(clipboard!)),
+        seanceThemeCodec.decodeStored(jsonDecode(clipboard!)),
         ThemePresets.solarized,
       );
       expect(find.text('Theme copied.'), findsOneWidget);

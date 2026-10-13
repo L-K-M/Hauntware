@@ -1,0 +1,112 @@
+{
+  "result": {
+    "kernelSys": "Linux",
+    "kernelRelease": "6.6.32-0-lts",
+    "kernelArch": "x86_64",
+    "distroId": "alpine",
+    "distroIdLike": null,
+    "distroVersionId": "3.22.0",
+    "distroPrettyName": "Alpine Linux v3.22",
+    "pid1Comm": "init",
+    "systemdDir": false,
+    "systemctlVersionLine": null,
+    "systemdVersion": null,
+    "virtualization": null,
+    "container": null,
+    "uid": 1000,
+    "user": "alpine",
+    "groups": [
+      "alpine"
+    ],
+    "sudoVersionLine": null,
+    "sudoKind": "none",
+    "sudoNonInteractive": null,
+    "doasPresent": true,
+    "doasNonInteractive": false,
+    "run0Present": false,
+    "printfBuiltin": true,
+    "tools": {
+      "journalctl": null,
+      "crontab": "/usr/bin/crontab",
+      "ss": "/usr/bin/ss",
+      "ip": "/sbin/ip",
+      "lsblk": "/usr/bin/lsblk",
+      "findmnt": null,
+      "smartctl": null,
+      "sensors": null,
+      "docker": null,
+      "podman": null,
+      "socat": null,
+      "timeout": "/usr/bin/timeout",
+      "setsid": "/usr/bin/setsid",
+      "ncdu": null,
+      "gdu": null,
+      "sadf": null,
+      "logger": "/usr/bin/logger",
+      "systemd-run": null,
+      "systemd-analyze": null,
+      "apt-get": null,
+      "dnf": null,
+      "dnf5": null,
+      "apk": "/sbin/apk",
+      "pacman": null,
+      "zypper": null,
+      "nvidia-smi": null
+    },
+    "psi": true,
+    "cgroupV2": true,
+    "cUtf8": null,
+    "engineSockets": [
+      {
+        "path": "/var/run/docker.sock",
+        "exists": false,
+        "writable": false
+      },
+      {
+        "path": "/run/podman/podman.sock",
+        "exists": false,
+        "writable": false
+      },
+      {
+        "path": "/run/user/1000/docker.sock",
+        "exists": false,
+        "writable": false
+      },
+      {
+        "path": "/run/user/1000/podman/podman.sock",
+        "exists": false,
+        "writable": false
+      }
+    ],
+    "sshConnection": "10.0.2.2 55000 10.0.2.15 22",
+    "sessionParentPid": 800,
+    "sessionParentComm": "sshd",
+    "epochSeconds": 1750300000,
+    "zoneOffset": "+0000",
+    "timezone": null,
+    "etcTimezone": null,
+    "localtimeTarget": null,
+    "lingerEnabled": null,
+    "killUserProcesses": null,
+    "xdgRuntimeDir": null,
+    "areaStatuses": {
+      "kernel": "ok",
+      "distro": "ok",
+      "init": "ok",
+      "virt": "missing",
+      "identity": "ok",
+      "elev": "ok",
+      "tools": "ok",
+      "kfeat": "ok",
+      "locale": "missing",
+      "sockets": "ok",
+      "session": "ok",
+      "clock": "ok",
+      "linger": "ok"
+    }
+  },
+  "warnings": [
+    "probe area virt reported missing",
+    "probe area locale reported missing"
+  ]
+}

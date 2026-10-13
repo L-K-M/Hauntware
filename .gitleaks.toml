@@ -1,10 +1,11 @@
 # Secret-scan configuration for the whole monorepo (gitleaks reads the
 # root file only). Carries Poltergeist's former poltergeist/.gitleaks.toml
 # allowlist plus the Séance PEM-header fixtures the monorepo-wide
-# private-key scope now covers. Each path is listed twice: under its
-# product prefix for current commits, and at its standalone-repository
-# location for the imported history the scheduled full-history scan also
-# reads.
+# private-key scope now covers. Each Poltergeist and Séance path is listed
+# twice: under its product prefix for current commits, and at its
+# standalone-repository location for the imported history the scheduled
+# full-history scan also reads. Klabautermann has no standalone history, so
+# its paths are prefixed only.
 [extend]
 useDefault = true
 
@@ -21,4 +22,6 @@ paths = [
   '''^(seance/)?app/seance_app/test/credential_prompt_test\.dart$''',
   '''^(seance/)?packages/seance_core/test/pure_logic_test\.dart$''',
   '''^(seance/)?packages/seance_core/test/quoted_secret_redaction_test\.dart$''',
+  '''^klabautermann/app/klabautermann_app/android/app/ci-release\.jks$''',
+  '''^klabautermann/app/klabautermann_app/android/key\.properties$''',
 ]

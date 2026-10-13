@@ -1,0 +1,23 @@
+{
+  "Volumes": [
+    {
+      "CreatedAt": "2026-05-01T10:00:00Z",
+      "Driver": "local",
+      "Labels": { "com.docker.compose.project": "web" },
+      "Mountpoint": "/var/lib/docker/volumes/web_data/_data",
+      "Name": "web_data",
+      "Options": {},
+      "Scope": "local"
+    },
+    {
+      "CreatedAt": "2026-05-02T11:30:00Z",
+      "Driver": "local",
+      "Labels": {},
+      "Mountpoint": "/var/lib/docker/volumes/loose/_data",
+      "Name": "loose",
+      "Options": { "type": "none", "o": "bind", "device": "/tmp/x" },
+      "Scope": "local"
+    }
+  ],
+  "Warnings": null
+}
