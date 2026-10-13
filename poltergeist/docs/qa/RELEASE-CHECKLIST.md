@@ -107,6 +107,28 @@ known-divergent surface.
   draws at the new size. Help ▸ Keyboard Shortcuts lists N and Shift+N
   under Compare.
 
+## Skip rule sets
+
+- [ ] OWNER MANUAL QA: on each desktop and on Android, save a rule set,
+  quit and relaunch: the set is still listed, and adding it to a pair
+  appends only the lines the pair lacks.
+- [ ] OWNER MANUAL QA: with bookmark sync on two devices, add a set to a
+  saved sync and save the pair (Save & Rescan in the plan view, or
+  Save as Favorite in the sheet): the pair's new lines reach the other
+  device, the set does not.
+- [ ] OWNER MANUAL QA: VoiceOver, NVDA and TalkBack read the Add Rule Set
+  menu items and each set's row and its edit and delete buttons in
+  Manage Rule Sets.
+- [ ] OWNER MANUAL QA: type Japanese and Korean into a set's name and
+  pattern fields on each desktop and on Android: composition renders in
+  place.
+- [ ] OWNER MANUAL QA: phone posture: Manage Rule Sets and its editor fit
+  without clipping, and the keyboard does not hide the pattern field.
+- [ ] OWNER MANUAL QA: VoiceOver, NVDA and TalkBack read the pair
+  editor's `.git/` and `node_modules/` chips with their selected state,
+  and on a phone the chips wrap under the exclude rules without
+  clipping.
+
 ## Screen reader smoke
 
 - [ ] OWNER MANUAL QA: **macOS VoiceOver** and **Windows NVDA** (Narrator

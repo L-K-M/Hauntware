@@ -9,8 +9,11 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:poltergeist_app/l10n/app_localizations.dart';
+import 'package:poltergeist_app/services/skip_rule_sets.dart';
+import 'package:poltergeist_app/services/skip_rule_sets_controller.dart';
 import 'package:poltergeist_app/services/sync_plan_controller.dart';
 import 'package:poltergeist_app/ui/sync/sync_pair_editor.dart';
+import 'package:poltergeist_app/ui/sync/sync_rule_sets.dart';
 import 'package:poltergeist_app/ui/sync/sync_rules_edit_request.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
 import 'package:poltergeist_sync/poltergeist_sync.dart';
@@ -35,6 +38,7 @@ Future<List<SyncPairEditorResult?>> _pumpEditor(
   Map<SyncSide, SyncDocrootPathState> initialDocrootPaths = const {},
   SyncRulesEditTarget initialEditTarget = SyncRulesEditTarget.general,
   List<Bookmark> servers = const [],
+  SkipRuleSetsController? skipRuleSets,
 }) async {
   final results = <SyncPairEditorResult?>[];
   tester.view.physicalSize = const Size(1200, 1400);
@@ -58,6 +62,7 @@ Future<List<SyncPairEditorResult?>> _pumpEditor(
                     initialDocrootPaths: initialDocrootPaths,
                     initialEditTarget: initialEditTarget,
                     servers: servers,
+                    skipRuleSets: skipRuleSets,
                   ),
                 ),
               );
@@ -79,6 +84,138 @@ Future<void> _save(WidgetTester tester) async {
 }
 
 void main() {
+  testWidgets('Add Rule Set appends the lines the excludes lack', (
+    tester,
+  ) async {
+    final sets = SkipRuleSetsController(
+      initial: [
+        SkipRuleSet(name: 'Web', patterns: ['node_modules/', '*.log']),
+      ],
+    );
+    addTearDown(sets.dispose);
+    final results = await _pumpEditor(
+      tester,
+      initial: testSyncPair(rules: const SyncRuleSet(excludeGlobs: ['*.log'])),
+      skipRuleSets: sets,
+    );
+    await tester.tap(find.text('Options'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey(SkipRuleSetKey.addMenu)));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey((SkipRuleSetKey.addItem, 'Web'))),
+    );
+    await tester.pumpAndSettle();
+    // The set's line chooses the matching quick pick.
+    expect(
+      tester
+          .widget<FilterChip>(
+            find.byKey(const ValueKey(SkipRuleQuickPick.nodeModules)),
+          )
+          .selected,
+      isTrue,
+    );
+    await _save(tester);
+
+    expect(results.single!.pair.rules.excludeGlobs, ['*.log', 'node_modules/']);
+  });
+
+  testWidgets('without the model the menu stays out', (tester) async {
+    await _pumpEditor(tester, initial: testSyncPair());
+    await tester.tap(find.text('Options'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey(SkipRuleSetKey.addMenu)), findsNothing);
+    // The quick picks need no stored sets.
+    expect(
+      find.byKey(const ValueKey(SkipRuleQuickPick.nodeModules)),
+      findsOneWidget,
+    );
+  });
+
+  group('quick picks', () {
+    bool selected(WidgetTester tester, SkipRuleQuickPick pick) =>
+        tester.widget<FilterChip>(find.byKey(ValueKey(pick))).selected;
+
+    Future<void> tapPick(WidgetTester tester, SkipRuleQuickPick pick) async {
+      await tester.tap(find.byKey(ValueKey(pick)));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('a pick appends its line and shows as chosen', (tester) async {
+      final results = await _pumpEditor(
+        tester,
+        initial: testSyncPair(
+          rules: const SyncRuleSet(excludeGlobs: ['*.log', '!debug.log']),
+        ),
+      );
+      await tester.tap(find.text('Options'));
+      await tester.pumpAndSettle();
+      expect(selected(tester, SkipRuleQuickPick.git), isFalse);
+
+      await tapPick(tester, SkipRuleQuickPick.git);
+
+      expect(selected(tester, SkipRuleQuickPick.git), isTrue);
+      expect(selected(tester, SkipRuleQuickPick.nodeModules), isFalse);
+      await _save(tester);
+      expect(results.single!.pair.rules.excludeGlobs, [
+        '*.log',
+        '!debug.log',
+        '.git/',
+      ]);
+    });
+
+    testWidgets('clearing a pick removes only its exact line', (tester) async {
+      final results = await _pumpEditor(
+        tester,
+        initial: testSyncPair(
+          rules: const SyncRuleSet(
+            excludeGlobs: ['node_modules/', '*.log', 'node_modules', 'build/'],
+          ),
+        ),
+      );
+      await tester.tap(find.text('Options'));
+      await tester.pumpAndSettle();
+      expect(selected(tester, SkipRuleQuickPick.nodeModules), isTrue);
+
+      await tapPick(tester, SkipRuleQuickPick.nodeModules);
+
+      expect(selected(tester, SkipRuleQuickPick.nodeModules), isFalse);
+      await _save(tester);
+      expect(results.single!.pair.rules.excludeGlobs, [
+        '*.log',
+        'node_modules',
+        'build/',
+      ]);
+    });
+
+    testWidgets('typing the line chooses the pick', (tester) async {
+      await _pumpEditor(tester, initial: testSyncPair());
+      await tester.tap(find.text('Options'));
+      await tester.pumpAndSettle();
+      final excludes = find.widgetWithText(TextField, 'Exclude rules');
+
+      await tester.enterText(excludes, '*.log\n  .git/  ');
+      await tester.pump();
+      expect(selected(tester, SkipRuleQuickPick.git), isTrue);
+
+      await tester.enterText(excludes, '*.log\n.git');
+      await tester.pump();
+      expect(selected(tester, SkipRuleQuickPick.git), isFalse);
+    });
+
+    testWidgets('the picks start under the field, not centred', (tester) async {
+      await _pumpEditor(tester, initial: testSyncPair());
+      await tester.tap(find.text('Options'));
+      await tester.pumpAndSettle();
+
+      expect(
+        tester.getTopLeft(find.byKey(const ValueKey(SkipRuleQuickPick.git))).dx,
+        tester.getTopLeft(find.widgetWithText(TextField, 'Exclude rules')).dx,
+      );
+    });
+  });
+
   testWidgets('a save keeps acceptedTimeShifts and the symlink policy', (
     tester,
   ) async {

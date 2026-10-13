@@ -22,6 +22,7 @@ import 'services/appearance_controller.dart';
 import 'services/directory_grouping_controller.dart';
 import 'services/double_click_action_controller.dart';
 import 'services/editor_text_size_controller.dart';
+import 'services/skip_rule_sets_controller.dart';
 import 'services/application_error_reporter.dart';
 import 'services/bookmark_backup_service.dart';
 import 'services/checkout_prompt_ledger.dart';
@@ -562,6 +563,13 @@ Future<void> main(List<String> args) async {
     ),
     save: DirectoryGroupingController.saveTo(viewPreferences),
   );
+  // Sync's named skip rule sets (05 §3): device-local templates, shared
+  // by every window's Sync sheet and pair editor.
+  final skipRuleSets = SkipRuleSetsController(
+    initial: await preferences.loadSkipRuleSets(),
+    put: preferences.putSkipRuleSet,
+    remove: preferences.removeSkipRuleSet,
+  );
 
   // What every window shares beyond the models above (00 D39): the
   // reachability owner (it drives the engine's one probe target set),
@@ -700,6 +708,7 @@ Future<void> main(List<String> args) async {
       appearance: appearance,
       editorTextSize: editorTextSize,
       directoryGrouping: directoryGrouping,
+      skipRuleSets: skipRuleSets,
       deepLinks: deepLinks,
       seanceLauncher: seanceLauncher,
       settingsWindow: settingsWindow,

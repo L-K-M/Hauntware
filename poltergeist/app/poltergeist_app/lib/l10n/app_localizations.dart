@@ -10735,6 +10735,132 @@ abstract class AppLocalizations {
   /// **'Done'**
   String get syncRulesDone;
 
+  /// 05 §3 named rule sets: menu button beside a sync pair's skip rules that lists this device's rule sets; picking one appends its patterns the pair lacks.
+  ///
+  /// In en, this message translates to:
+  /// **'Add Rule Set'**
+  String get syncRuleSetsAdd;
+
+  /// 05 §3: the disabled item the Add Rule Set menu shows when this device has no rule sets.
+  ///
+  /// In en, this message translates to:
+  /// **'No saved rule sets'**
+  String get syncRuleSetsNone;
+
+  /// 05 §3: Skip Rules dialog button that saves the patterns in the field as a new named rule set.
+  ///
+  /// In en, this message translates to:
+  /// **'Save as Rule Set…'**
+  String get syncRuleSetsSaveAs;
+
+  /// 05 §3: Skip Rules dialog button that opens the list of this device's rule sets.
+  ///
+  /// In en, this message translates to:
+  /// **'Manage Rule Sets…'**
+  String get syncRuleSetsManage;
+
+  /// 05 §3: title of the dialog listing this device's rule sets.
+  ///
+  /// In en, this message translates to:
+  /// **'Rule Sets'**
+  String get syncRuleSetsTitle;
+
+  /// 05 §3: what the Rule Sets dialog shows before any set exists.
+  ///
+  /// In en, this message translates to:
+  /// **'Save a sync\'s skip rules as a rule set, then add them to other syncs in one step. Adding a set copies its patterns, so later changes to the set don\'t change those syncs.'**
+  String get syncRuleSetsEmpty;
+
+  /// 05 §3: Rule Sets dialog action that starts a new rule set.
+  ///
+  /// In en, this message translates to:
+  /// **'New Rule Set…'**
+  String get syncRuleSetsNew;
+
+  /// 05 §3: tooltip and screen-reader label of a rule set's edit button in the Rule Sets dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit {name}'**
+  String syncRuleSetsEditTooltip(String name);
+
+  /// 05 §3: tooltip and screen-reader label of a rule set's delete button in the Rule Sets dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete {name}'**
+  String syncRuleSetsDeleteTooltip(String name);
+
+  /// 05 §3: title of the editor for a new rule set.
+  ///
+  /// In en, this message translates to:
+  /// **'New Rule Set'**
+  String get syncRuleSetNewTitle;
+
+  /// 05 §3: title of the editor for an existing rule set.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit Rule Set'**
+  String get syncRuleSetEditTitle;
+
+  /// 05 §3: label of a rule set's name field.
+  ///
+  /// In en, this message translates to:
+  /// **'Name'**
+  String get syncRuleSetName;
+
+  /// 05 §3: shown under the name field when Save is pressed with no name.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a name.'**
+  String get syncRuleSetNameEmpty;
+
+  /// 05 §3: shown under the name field when another set already has this name (names ignore case).
+  ///
+  /// In en, this message translates to:
+  /// **'A rule set named “{name}” already exists.'**
+  String syncRuleSetNameTaken(String name);
+
+  /// 05 §3: shown under the patterns field when Save is pressed with no pattern (comment lines alone do not count).
+  ///
+  /// In en, this message translates to:
+  /// **'Add at least one pattern.'**
+  String get syncRuleSetNoPatterns;
+
+  /// 05 §3: saves the rule set being edited.
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get syncRuleSetSave;
+
+  /// 05 §3: shown in the editor when writing the settings file failed; the set is not saved.
+  ///
+  /// In en, this message translates to:
+  /// **'The rule set could not be saved. Try again.'**
+  String get syncRuleSetSaveFailed;
+
+  /// 05 §3: title of the confirmation before a rule set is deleted.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete “{name}”?'**
+  String syncRuleSetDeleteTitle(String name);
+
+  /// 05 §3: body of the delete confirmation; pairs hold a copy of the set's patterns.
+  ///
+  /// In en, this message translates to:
+  /// **'Syncs that already use its patterns keep them.'**
+  String get syncRuleSetDeleteBody;
+
+  /// 05 §3: confirms deleting a rule set.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get syncRuleSetDelete;
+
+  /// 05 §3: shown in the Rule Sets dialog when writing the settings file failed; the set is still listed.
+  ///
+  /// In en, this message translates to:
+  /// **'The rule set could not be deleted. Try again.'**
+  String get syncRuleSetDeleteFailed;
+
   /// Title of the time-tolerance dialog.
   ///
   /// In en, this message translates to:
