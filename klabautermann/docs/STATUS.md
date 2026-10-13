@@ -48,6 +48,27 @@ slice:
   04 §12.1 does not plan yet. The scripts have only run on stub bundles
   so far; a real Flutter bundle, appimagetool and flatpak-builder first
   run in the client CI legs.
+- Desktop settings window (03 §10.2, D32): on macOS, Linux and Windows,
+  Settings opens in a native window of its own through `ghost_desktop`'s
+  `GhostSettingsWindowHost`; phones, and a desktop runner that cannot
+  open the window, keep the settings route. The window is a second
+  Flutter engine: `main` hands it the settings window's app before the
+  engine isolate starts, so it runs no engine isolate (D18), store or
+  sync, and everything it shows or changes crosses
+  `klabautermann/settings_link` (the Appearance tab's theme switch acts
+  on the app's `AppearanceController` and both windows re-theme). The
+  three runners are copies of Séance's, ledgered in
+  [SHARED.md](SHARED.md). No CI job compiles the client runners yet, so
+  `SettingsWindow.swift`, `settings_window.cc` and `settings_window.cpp`
+  are unbuilt until the client legs land;
+  `app/klabautermann_app/test/settings_window_runner_test.dart` guards
+  their wiring on Linux. `ghost_desktop` brings the `window_manager` and
+  `screen_retriever` plugins, which the main window registers but nothing
+  uses until the window lifecycle moves onto `ghost_desktop`; meanwhile
+  `window_manager`'s Linux and Windows code reports window events nobody
+  listens to, which debug builds log as discarded channel messages. The
+  macOS menu's "Preferences…" item is not wired to Settings yet; the
+  menus come from the command registry (03 §10.2).
 
 Pull-only from the start (D14): no surface sends a request that could
 push or write catalog records, and a widget test guards it.
@@ -56,8 +77,9 @@ Not in yet (later PRs): pull-only enrollment and the catalog (F3),
 persistence for imported ssh_config entries (with the catalog library),
 reachability dots and the `ghost_servers` rail (F4), theme editing and
 presets (F4b's editor), persisting the appearance (the device settings
-store), the desktop settings window and its native runners (D32), and the
-five client CI legs and release job.
+store), the macOS integrated titlebar, window-state restore and menus
+through `ghost_desktop` (03 §10.2), and the five client CI legs and
+release job.
 
 ## Open manual gates
 
@@ -73,8 +95,24 @@ is not a device smoke test:
 - VM passes on Debian 12, Ubuntu 24.04 and 26.04 (sudo-rs), RHEL 8 and 9,
   Alpine and a BusyBox NAS, plus a Synology host (11.3).
 
-None applies to M1a yet; they gate the milestones that ship the matching
-behavior; this list keeps them visible so they are not lost between PRs.
+None of those applies to M1a yet; they gate the milestones that ship the
+matching behavior; this list keeps them visible so they are not lost
+between PRs. M1 adds one gate of its own:
+
+- Desktop settings window (D32), once per desktop OS: macOS, Windows,
+  and Linux in a GNOME Wayland session and an X11 session, from a build
+  that includes the window. Open Settings from the rail's gear: a
+  separate settings window opens on General, and the main window shows
+  no settings page. Switch Appearance to Dark, Light and System: both
+  windows follow each time. Close the window (close button; on macOS
+  also ⌘W and ⌘⇧W) and open Settings again: it reappears at once on a
+  fresh screen, and the app keeps running. Choose Settings while the
+  window shows: it comes forward. Close the main window with Settings
+  open, and again with it hidden: the app quits each time, without a
+  crash (on Linux, without an X error). On macOS, ⌘Q with Settings in
+  front quits the app, and opening and closing the window twice with
+  VoiceOver on does not crash. Open: needs a person on each OS; the
+  widget and runner-source tests do not open a native window.
 
 ## macOS native fixtures
 
