@@ -1,0 +1,23 @@
+name: klabautermann_docker
+description: >-
+  Pure-Dart Docker Engine API client for Klabautermann: an HTTP/1.1 client
+  over an injected byte duplex, the stdcopy demultiplexer and log line
+  handling, API version negotiation with feature gates, and the versioned
+  API plumbing every endpoint uses (docs/design/klabautermann/03, sections
+  3.3 and 5.4 to 5.9). No SSH, no Flutter, no dart:io.
+version: 1.9.0
+publish_to: none
+resolution: workspace
+
+environment:
+  sdk: ^3.12.0
+
+dependencies:
+  # Case-insensitive header maps and utility collections.
+  collection: ^1.19.0
+  # @immutable annotations on the public value types.
+  meta: ^1.15.0
+
+dev_dependencies:
+  lints: ^5.0.0
+  test: ^1.25.0
