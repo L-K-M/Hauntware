@@ -91,6 +91,33 @@ void main() {
       expect(ArgValidators.uint('12a'), isNotNull);
       expect(ArgValidators.uint(''), isNotNull);
     });
+
+    test(
+      'journalPriority accepts severities and names, case-insensitively',
+      () {
+        expect(ArgValidators.journalPriority('3'), isNull);
+        expect(ArgValidators.journalPriority('warning'), isNull);
+        expect(ArgValidators.journalPriority('WARNING'), isNull);
+        expect(ArgValidators.journalPriority('8'), isNotNull);
+        expect(ArgValidators.journalPriority('nope'), isNotNull);
+      },
+    );
+
+    test('journalCursor accepts only the key=hex grammar', () {
+      expect(ArgValidators.journalCursor('s=abc;i=1;b=deadbeef'), isNull);
+      expect(ArgValidators.journalCursor('not a cursor'), isNotNull);
+      expect(ArgValidators.journalCursor('s=ZZ'), isNotNull);
+      expect(ArgValidators.journalCursor(''), isNotNull);
+    });
+
+    test('calendarExpression and journalGrep reject control bytes', () {
+      expect(ArgValidators.calendarExpression('daily'), isNull);
+      expect(ArgValidators.calendarExpression('*-*-* 00:00:00'), isNull);
+      expect(ArgValidators.calendarExpression('daily\nrm'), isNotNull);
+      expect(ArgValidators.calendarExpression(''), isNotNull);
+      expect(ArgValidators.journalGrep('denied'), isNull);
+      expect(ArgValidators.journalGrep('\u0000'), isNotNull);
+    });
   });
 
   test('HwsRequestError carries the collector and argument', () {

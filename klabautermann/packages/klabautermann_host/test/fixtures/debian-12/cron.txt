@@ -1,0 +1,24 @@
+== crontab_meta ==
+rc=0
+== crontab ==
+# m h dom mon dow command
+CRON_TZ=Europe/Berlin
+17 3 * * * /usr/local/bin/backup --full
+@daily /usr/bin/find /tmp -mindepth 1 -delete
+== etc_crontab ==
+SHELL=/bin/sh
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+17 *	* * *	root	cd / && run-parts --report /etc/cron.hourly
+25 6	* * *	root	test -x /usr/sbin/anacron || run-parts --report /etc/cron.daily
+47 6	* * 7	root	test -x /usr/sbin/anacron || run-parts --report /etc/cron.weekly
+52 6	1 * *	root	test -x /usr/sbin/anacron || run-parts --report /etc/cron.monthly
+== cron_d ==
+anacron	# /etc/cron.d/anacron: crontab fragment for anacron
+anacron	30 7	* * *	root	test -x /etc/init.d/anacron && systemctl start anacron
+sysstat	# /etc/cron.d/sysstat: sysstat activity
+sysstat	*/10 * * * *	root	/usr/lib/sysstat/debian-sa1 1 1
+== cron_dirs ==
+hourly 0anacron
+daily apt-compat
+weekly man-db
+monthly mdadm

@@ -1,0 +1,642 @@
+{
+  "result": {
+    "jobs": [
+      {
+        "source": "crontab",
+        "schedule": "17 3 * * *",
+        "command": "/usr/local/bin/backup --full",
+        "user": null,
+        "cronTz": "Europe/Berlin",
+        "expression": {
+          "minutes": [
+            17
+          ],
+          "hours": [
+            3
+          ],
+          "monthDays": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23,
+            24,
+            25,
+            26,
+            27,
+            28,
+            29,
+            30,
+            31
+          ],
+          "months": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12
+          ],
+          "weekDays": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6
+          ],
+          "domStar": true,
+          "dowStar": true,
+          "isReboot": false
+        },
+        "raw": "17 3 * * * /usr/local/bin/backup --full"
+      },
+      {
+        "source": "crontab",
+        "schedule": "@daily",
+        "command": "/usr/bin/find /tmp -mindepth 1 -delete",
+        "user": null,
+        "cronTz": "Europe/Berlin",
+        "expression": {
+          "minutes": [
+            0
+          ],
+          "hours": [
+            0
+          ],
+          "monthDays": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23,
+            24,
+            25,
+            26,
+            27,
+            28,
+            29,
+            30,
+            31
+          ],
+          "months": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12
+          ],
+          "weekDays": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6
+          ],
+          "domStar": true,
+          "dowStar": true,
+          "isReboot": false
+        },
+        "raw": "@daily /usr/bin/find /tmp -mindepth 1 -delete"
+      },
+      {
+        "source": "/etc/crontab",
+        "schedule": "17 * * * *",
+        "command": "cd / && run-parts --report /etc/cron.hourly",
+        "user": "root",
+        "cronTz": null,
+        "expression": {
+          "minutes": [
+            17
+          ],
+          "hours": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23
+          ],
+          "monthDays": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23,
+            24,
+            25,
+            26,
+            27,
+            28,
+            29,
+            30,
+            31
+          ],
+          "months": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12
+          ],
+          "weekDays": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6
+          ],
+          "domStar": true,
+          "dowStar": true,
+          "isReboot": false
+        },
+        "raw": "17 *\t* * *\troot\tcd / && run-parts --report /etc/cron.hourly"
+      },
+      {
+        "source": "/etc/crontab",
+        "schedule": "25 6 * * *",
+        "command": "test -x /usr/sbin/anacron || run-parts --report /etc/cron.daily",
+        "user": "root",
+        "cronTz": null,
+        "expression": {
+          "minutes": [
+            25
+          ],
+          "hours": [
+            6
+          ],
+          "monthDays": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23,
+            24,
+            25,
+            26,
+            27,
+            28,
+            29,
+            30,
+            31
+          ],
+          "months": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12
+          ],
+          "weekDays": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6
+          ],
+          "domStar": true,
+          "dowStar": true,
+          "isReboot": false
+        },
+        "raw": "25 6\t* * *\troot\ttest -x /usr/sbin/anacron || run-parts --report /etc/cron.daily"
+      },
+      {
+        "source": "/etc/crontab",
+        "schedule": "47 6 * * 7",
+        "command": "test -x /usr/sbin/anacron || run-parts --report /etc/cron.weekly",
+        "user": "root",
+        "cronTz": null,
+        "expression": {
+          "minutes": [
+            47
+          ],
+          "hours": [
+            6
+          ],
+          "monthDays": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23,
+            24,
+            25,
+            26,
+            27,
+            28,
+            29,
+            30,
+            31
+          ],
+          "months": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12
+          ],
+          "weekDays": [
+            0
+          ],
+          "domStar": true,
+          "dowStar": false,
+          "isReboot": false
+        },
+        "raw": "47 6\t* * 7\troot\ttest -x /usr/sbin/anacron || run-parts --report /etc/cron.weekly"
+      },
+      {
+        "source": "/etc/crontab",
+        "schedule": "52 6 1 * *",
+        "command": "test -x /usr/sbin/anacron || run-parts --report /etc/cron.monthly",
+        "user": "root",
+        "cronTz": null,
+        "expression": {
+          "minutes": [
+            52
+          ],
+          "hours": [
+            6
+          ],
+          "monthDays": [
+            1
+          ],
+          "months": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12
+          ],
+          "weekDays": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6
+          ],
+          "domStar": false,
+          "dowStar": true,
+          "isReboot": false
+        },
+        "raw": "52 6\t1 * *\troot\ttest -x /usr/sbin/anacron || run-parts --report /etc/cron.monthly"
+      },
+      {
+        "source": "/etc/cron.d/anacron",
+        "schedule": "30 7 * * *",
+        "command": "test -x /etc/init.d/anacron && systemctl start anacron",
+        "user": "root",
+        "cronTz": null,
+        "expression": {
+          "minutes": [
+            30
+          ],
+          "hours": [
+            7
+          ],
+          "monthDays": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23,
+            24,
+            25,
+            26,
+            27,
+            28,
+            29,
+            30,
+            31
+          ],
+          "months": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12
+          ],
+          "weekDays": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6
+          ],
+          "domStar": true,
+          "dowStar": true,
+          "isReboot": false
+        },
+        "raw": "30 7\t* * *\troot\ttest -x /etc/init.d/anacron && systemctl start anacron"
+      },
+      {
+        "source": "/etc/cron.d/sysstat",
+        "schedule": "*/10 * * * *",
+        "command": "/usr/lib/sysstat/debian-sa1 1 1",
+        "user": "root",
+        "cronTz": null,
+        "expression": {
+          "minutes": [
+            0,
+            10,
+            20,
+            30,
+            40,
+            50
+          ],
+          "hours": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23
+          ],
+          "monthDays": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23,
+            24,
+            25,
+            26,
+            27,
+            28,
+            29,
+            30,
+            31
+          ],
+          "months": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12
+          ],
+          "weekDays": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6
+          ],
+          "domStar": true,
+          "dowStar": true,
+          "isReboot": false
+        },
+        "raw": "*/10 * * * *\troot\t/usr/lib/sysstat/debian-sa1 1 1"
+      }
+    ],
+    "dirEntries": [
+      {
+        "period": "hourly",
+        "name": "0anacron"
+      },
+      {
+        "period": "daily",
+        "name": "apt-compat"
+      },
+      {
+        "period": "weekly",
+        "name": "man-db"
+      },
+      {
+        "period": "monthly",
+        "name": "mdadm"
+      }
+    ],
+    "ownCrontabPresent": true,
+    "timeoutAbsent": false
+  },
+  "warnings": []
+}

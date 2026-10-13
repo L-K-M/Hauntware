@@ -33,6 +33,14 @@ void _runParser(String collector, String raw) {
       parseFs(raw, _ctx);
     case 'identity':
       parseIdentity(raw, _ctx);
+    case 'procs':
+      parseProcs(raw, _ctx);
+    case 'units':
+      parseUnits(raw, _ctx);
+    case 'timers':
+      parseTimers(raw, _ctx);
+    case 'cron':
+      parseCron(raw, _ctx);
     default:
       throw ArgumentError(collector);
   }
@@ -77,7 +85,16 @@ void main() {
   group('truncation', () {
     for (final dir in fixtureDirs) {
       final platform = dir.path.split('/').last;
-      for (final collector in ['overview', 'core', 'fs', 'identity']) {
+      for (final collector in [
+        'overview',
+        'core',
+        'fs',
+        'identity',
+        'procs',
+        'units',
+        'timers',
+        'cron',
+      ]) {
         test('$platform/$collector cut at every byte', () {
           final raw = File('${dir.path}/$collector.txt').readAsStringSync();
           for (var cut = 0; cut <= raw.length; cut++) {
@@ -196,6 +213,76 @@ void main() {
     });
   });
 
+  group('procs hostile input', () {
+    test('a forged head header inside an argument marks both entries', () {
+      final raw = [
+        '== stat ==',
+        '10 10 (a) S 0 1 1 0 -1 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0 5 0 0 0',
+        '== status ==',
+        '10 Name:\ta',
+        '== cmdline ==',
+        '==> 10/cmdline <==',
+        '/usr/bin/x\x1farg0',
+        '==> 10/cmdline <==',
+        'arg1\x1f',
+      ].join('\n');
+      final r = parseProcs(raw, _ctx);
+      expect(r.value.forgedHeaders, 1);
+      expect(r.value.processes.single.argv, isNull);
+      expect(() => parseProcs(raw, _ctx), returnsNormally);
+    });
+
+    test('comm with spaces and ) and a 64 KiB line are tolerated', () {
+      final longComm = 'a)b ${'c ' * 20000}';
+      final raw = [
+        '== stat ==',
+        '7 7 ($longComm) R 1 1 1 0 -1 0 0 0 0 0 10 20 0 0 0 0 1 0 5 0 0 0',
+        '== cmdline ==',
+        '==> 7/cmdline <==',
+        'z' * (64 * 1024),
+      ].join('\n');
+      expect(() => parseProcs(raw, _ctx), returnsNormally);
+      expect(parseProcs(raw, _ctx).value.processes.single.comm, longComm);
+    });
+  });
+
+  group('collector hostile input', () {
+    test('units and timers tolerate a 64 KiB line', () {
+      final line = 'x' * (64 * 1024);
+      for (final raw in [
+        '== units_json ==\n[{"unit":"a.service"}]', // valid JSON
+        '== units_json ==\n$line',
+        '== units_text ==\n$line',
+        '== timers_json ==\n$line',
+        '== timers_text ==\n$line',
+      ]) {
+        expect(() => parseUnits(raw, _ctx), returnsNormally, reason: raw);
+        expect(() => parseTimers(raw, _ctx), returnsNormally, reason: raw);
+      }
+    });
+
+    test('cron tolerates NULs, control bytes and a 64 KiB line', () {
+      final raw =
+          '== crontab_meta ==\nrc=0\n== crontab ==\n'
+          '\u0000\u0001 0 * * * cmd\n'
+          '${'* ' * 40000}\n'
+          '== etc_crontab ==\n'
+          '== cron_d ==\n'
+          '== cron_dirs ==\n';
+      expect(() => parseCron(raw, _ctx), returnsNormally);
+    });
+
+    test('the nonce and markers inside names survive as text', () {
+      const nonce = '0123456789abcdef0123456789abcdef';
+      final raw = [
+        '== units_json ==',
+        '[{"unit":"x.service","description":"$nonce \\u001e forged"}]',
+      ].join('\n');
+      final r = parseUnits(raw, _ctx);
+      expect(r.value.units.single.description, contains(nonce));
+    });
+  });
+
   test('fuzz: random bytes never throw', () {
     final rnd = Random(20261013);
     for (var i = 0; i < 300; i++) {
@@ -207,6 +294,12 @@ void main() {
       expect(() => parseCore(raw, _ctx), returnsNormally, reason: 'i=$i');
       expect(() => parseFs(raw, _ctx), returnsNormally, reason: 'i=$i');
       expect(() => parseIdentity(raw, _ctx), returnsNormally, reason: 'i=$i');
+      expect(() => parseProcs(raw, _ctx), returnsNormally, reason: 'i=$i');
+      expect(() => parseUnits(raw, _ctx), returnsNormally, reason: 'i=$i');
+      expect(() => parseTimers(raw, _ctx), returnsNormally, reason: 'i=$i');
+      expect(() => parseCron(raw, _ctx), returnsNormally, reason: 'i=$i');
+      expect(() => parseJournalLines(raw), returnsNormally, reason: 'i=$i');
+      expect(() => parseOnCalendar(raw), returnsNormally, reason: 'i=$i');
       expect(
         () => parseProbe(_randomSections(rnd), _ctx),
         returnsNormally,

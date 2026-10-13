@@ -29,9 +29,6 @@ enum SamplerKind {
 typedef ArgValidator = String? Function(String value);
 
 /// A collector the HWS/1 program can run (03 §6.4).
-///
-/// `procs`, `units`, `timers` and `cron` join with their fragments and
-/// parsers in part 2.
 enum Collector {
   /// The capability probe (03 §6.1). Emits one section per probe area on
   /// the slow sampler; the client requests it once after connect.
@@ -51,7 +48,22 @@ enum Collector {
 
   /// Host identity: `/etc/os-release`, `uname`, `hostnamectl --json=short`
   /// (03 §6.4, slow sampler).
-  identity(SamplerKind.slow, []);
+  identity(SamplerKind.slow, []),
+
+  /// Process list: `/proc/<pid>/stat` and `status` with builtins, every
+  /// `cmdline` through one `head|tr` pipeline, `ps` fallback (03 §7.2,
+  /// slow sampler while the view is visible).
+  procs(SamplerKind.slow, []),
+
+  /// systemd units and failed units (03 §6.4, §7.5).
+  units(SamplerKind.slow, []),
+
+  /// systemd timers (03 §6.4, §7.7).
+  timers(SamplerKind.slow, []),
+
+  /// Cron jobs: own `crontab -l`, `/etc/crontab`, `/etc/cron.d/*` and the
+  /// `cron.{hourly,daily,weekly,monthly}` directory names (03 §6.4, §7.7).
+  cron(SamplerKind.slow, []);
 
   const Collector(this.sampler, this.argValidators);
 
@@ -122,6 +134,48 @@ abstract final class ArgValidators {
     }
     return null;
   }
+
+  /// A syslog priority for `journalctl -p` (03 §7.6): a severity number
+  /// 0..7 or one of the named levels journalctl accepts.
+  static String? journalPriority(String value) {
+    if (!_journalPriorities.contains(value.toLowerCase())) {
+      return 'unknown journal priority';
+    }
+    return null;
+  }
+
+  /// A journald cursor for `journalctl --after-cursor` (03 §7.6): six
+  /// `key=hex` fields joined by semicolons.
+  static String? journalCursor(String value) {
+    if (value.isEmpty || value.length > 512) return 'cursor length';
+    if (!_journalCursorPattern.hasMatch(value)) return 'cursor grammar';
+    return null;
+  }
+
+  /// A journald search pattern for `journalctl -g` (03 §7.6): any
+  /// non-empty line without control bytes; the pattern is quoted, not
+  /// validated as a regex.
+  static String? journalGrep(String value) => _freeText(value, 'pattern');
+
+  /// A `--since`/`--until` time expression: free text without control
+  /// bytes (03 §7.6).
+  static String? journalSince(String value) => _freeText(value, 'time');
+
+  /// A systemd calendar expression for `systemd-analyze calendar`
+  /// (03 §7.7): free text without control bytes; `systemd-analyze` is
+  /// the grammar authority, quoting happens after this check.
+  static String? calendarExpression(String value) =>
+      _freeText(value, 'calendar expression');
+
+  /// Shared check for free-text arguments: non-empty, bounded, and free
+  /// of control characters so no markup can leak into a command line.
+  static String? _freeText(String value, String what) {
+    if (value.isEmpty || value.length > 512) return 'bad $what';
+    for (final c in value.codeUnits) {
+      if (c < 0x20 || c == 0x7f) return 'control byte in $what';
+    }
+    return null;
+  }
 }
 
 final _unitNamePattern = RegExp(
@@ -130,6 +184,30 @@ final _unitNamePattern = RegExp(
 );
 
 final _userNamePattern = RegExp(r'^[a-z_][a-z0-9_-]*[$]?$');
+
+/// Syslog severities journalctl accepts for `-p` (syslog.h + names).
+const _journalPriorities = {
+  '0',
+  '1',
+  '2',
+  '3',
+  '4',
+  '5',
+  '6',
+  '7',
+  'emerg',
+  'alert',
+  'crit',
+  'err',
+  'warning',
+  'notice',
+  'info',
+  'debug',
+};
+
+/// journald cursor fields are `key=hex` pairs joined by `;`, keys from
+/// `sibmtx` (sd_journal_seek_cursor).
+final _journalCursorPattern = RegExp(r'^[a-z]+=[0-9a-f]+(;[a-z]+=[0-9a-f]+)*$');
 
 /// Signal names a remote `kill -s` may carry (03 §8.8 "signal names
 /// (enum)"). Kept to the portable POSIX list plus the usual Linux names.

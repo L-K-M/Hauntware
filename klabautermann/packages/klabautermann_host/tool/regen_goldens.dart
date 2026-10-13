@@ -13,13 +13,26 @@ void main() {
     'test/fixtures',
   ).listSync().whereType<Directory>()) {
     final platform = dir.path.split('/').last;
-    for (final collector in ['overview', 'core', 'fs', 'identity']) {
+    for (final collector in [
+      'overview',
+      'core',
+      'fs',
+      'identity',
+      'procs',
+      'units',
+      'timers',
+      'cron',
+    ]) {
       final payload = File('${dir.path}/$collector.txt').readAsStringSync();
       final result = switch (collector) {
         'overview' => parseOverview(payload, _ctx).toJsonResult(),
         'core' => parseCore(payload, _ctx).toJsonResult(),
         'fs' => parseFs(payload, _ctx).toJsonResult(),
         'identity' => parseIdentity(payload, _ctx).toJsonResult(),
+        'procs' => parseProcs(payload, _ctx).toJsonResult(),
+        'units' => parseUnits(payload, _ctx).toJsonResult(),
+        'timers' => parseTimers(payload, _ctx).toJsonResult(),
+        'cron' => parseCron(payload, _ctx).toJsonResult(),
         _ => throw StateError(collector),
       };
       _write('${dir.path}/$collector.golden.json', result);
@@ -55,6 +68,10 @@ Object? _toJson(Object? v) {
   if (v is FsSnapshot) return v.toJson();
   if (v is IdentitySnapshot) return v.toJson();
   if (v is HostProfile) return v.toJson();
+  if (v is ProcsSnapshot) return v.toJson();
+  if (v is UnitsSnapshot) return v.toJson();
+  if (v is TimersSnapshot) return v.toJson();
+  if (v is CronSnapshot) return v.toJson();
   throw ArgumentError(v);
 }
 
