@@ -8,7 +8,7 @@ for package_config in \
   "$suite_root/.dart_tool/package_config.json" \
   "$suite_root/poltergeist/.dart_tool/package_config.json"; do
   if [ ! -f "$package_config" ]; then
-    echo "error: missing $package_config; run dart pub get" >&2
+    echo "error: missing $package_config; run dart pub get in $(dirname "$package_config")" >&2
     exit 2
   fi
 done
