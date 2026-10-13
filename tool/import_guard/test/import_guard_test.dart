@@ -474,18 +474,31 @@ dependency_overrides: {"dartssh2": any}
     await fixture.expectExit(2, 'Linked package');
   });
 
-  test('the CLI accepts a --product selector', () async {
-    await fixture.expectCliExit(0, const ['--product', 'poltergeist']);
-  });
+  // Each CLI check starts a cold Dart VM that loads the analyzer; on a loaded
+  // runner that can pass the 30 s default. The assertions are about exit
+  // codes, not startup speed.
+  group(
+    'the CLI',
+    () {
+      test('accepts a --product selector', () async {
+        await fixture.expectCliExit(0, const ['--product', 'poltergeist']);
+      });
 
-  test('the CLI rejects an unknown product', () async {
-    await fixture.expectCliExit(2, const ['--product', 'unknown'], 'unknown');
-  });
+      test('rejects an unknown product', () async {
+        await fixture.expectCliExit(
+          2,
+          const ['--product', 'unknown'],
+          'unknown',
+        );
+      });
 
-  test('the CLI rejects malformed arguments', () async {
-    await fixture.expectCliExit(64, const ['positional'], 'usage');
-    await fixture.expectCliExit(64, const ['--product'], 'usage');
-  });
+      test('rejects malformed arguments', () async {
+        await fixture.expectCliExit(64, const ['positional'], 'usage');
+        await fixture.expectCliExit(64, const ['--product'], 'usage');
+      });
+    },
+    timeout: const Timeout(Duration(minutes: 3)),
+  );
 
   group('extended rules', () {
     Future<void> withFixture(
