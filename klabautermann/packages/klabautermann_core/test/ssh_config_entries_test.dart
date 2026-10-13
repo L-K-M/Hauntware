@@ -18,6 +18,15 @@ void main() {
       }
     });
 
+    test('returns a list no caller can edit', () {
+      // The engine keeps this list as its import state.
+      final entries = fleetEntriesFromSshConfig(sshConfigFixture).entries;
+
+      expect(() => entries.add(entries.first), throwsUnsupportedError);
+      // A fixed-length list would still allow this; an unmodifiable one not.
+      expect(() => entries[0] = entries[1], throwsUnsupportedError);
+    });
+
     test('reads HostName, Port and User; the first block wins', () {
       final entries = {
         for (final e in fleetEntriesFromSshConfig(sshConfigFixture).entries)
