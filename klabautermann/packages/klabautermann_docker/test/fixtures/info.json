@@ -1,0 +1,52 @@
+{
+  "ID": "KLBT:ST4U:REPL:ACEM:ENTF:IXTU:RESX:ONLY:HAND:WRIT:TENF:XTUR",
+  "Containers": 4,
+  "ContainersRunning": 2,
+  "ContainersPaused": 0,
+  "ContainersStopped": 2,
+  "Images": 7,
+  "Driver": "overlay2",
+  "DriverStatus": [
+    ["Backing Filesystem", "extfs"],
+    ["Supports d_type", "true"],
+    ["Using metacopy", "false"],
+    ["Native Overlay Diff", "true"],
+    ["userxattr", "false"]
+  ],
+  "Plugins": {
+    "Volume": ["local"],
+    "Network": ["bridge", "host", "ipvlan", "macvlan", "null", "overlay"],
+    "Log": ["json-file", "journald", "local", "syslog"]
+  },
+  "MemoryLimit": true,
+  "SwapLimit": true,
+  "CpuCfsPeriod": true,
+  "CpuCfsQuota": true,
+  "IPv4Forwarding": true,
+  "BridgeNfIptables": true,
+  "BridgeNfIp6tables": true,
+  "OomKillDisable": true,
+  "LoggingDriver": "json-file",
+  "CgroupDriver": "systemd",
+  "CgroupVersion": "2",
+  "NEventsListener": 0,
+  "KernelVersion": "6.14.0-21-generic",
+  "OperatingSystem": "Ubuntu 24.04.2 LTS",
+  "OSVersion": "24.04",
+  "OSType": "linux",
+  "Architecture": "x86_64",
+  "NCPU": 8,
+  "MemTotal": 16772243456,
+  "DockerRootDir": "/var/lib/docker",
+  "HttpProxy": "",
+  "HttpsProxy": "",
+  "NoProxy": "",
+  "Name": "fixture-host",
+  "ServerVersion": "29.3.1",
+  "SecurityOptions": [
+    "name=apparmor",
+    "name=seccomp,profile=builtin",
+    "name=cgroupns"
+  ],
+  "Warnings": null
+}

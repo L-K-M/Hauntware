@@ -113,6 +113,7 @@ exit 1
         'poltergeist/packages/poltergeist_sync/pubspec.yaml',
         // The live bench compat shim bumps in lockstep with the suite.
         'poltergeist/tool/bench/pubspec.yaml',
+        'klabautermann/packages/klabautermann_docker/pubspec.yaml',
         'klabautermann/packages/klabautermann_host/pubspec.yaml',
       ]),
     );
