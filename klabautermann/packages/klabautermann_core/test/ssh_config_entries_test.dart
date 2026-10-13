@@ -95,11 +95,13 @@ void main() {
     });
 
     test('a negative Port is skipped; an unparsable one reads as 22', () {
-      // ssh rejects the whole config over any of these lines. A negative
-      // port is out of range like any other, but Séance's SshConfigImporter
-      // reads an unparsable Port as absent, so its host imports with the
-      // default port and is not counted. This pins that current behavior,
-      // so a change in seance_core surfaces here.
+      // ssh rejects the whole config over `Port -1` or `Port 22a`, but it
+      // resolves a service name such as `ssh` to its port, 22. A negative
+      // port is out of range like any other. Séance's SshConfigImporter
+      // reads an unparsable Port, service names included, as absent, so
+      // its host imports with the default port and is not counted: `word`
+      // matches ssh only because that default is 22. This pins the current
+      // behavior, so a change in seance_core surfaces here.
       final result = fleetEntriesFromSshConfig(
         'Host negative\n  Port -1\n'
         'Host typo\n  Port 22a\n'
