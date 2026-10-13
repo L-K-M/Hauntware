@@ -152,6 +152,15 @@ const List<SuiteProduct> _defaultProducts = [
       'poltergeist/app/poltergeist_app/macos/Runner/Info.plist',
     ],
   ),
+  SuiteProduct(
+    name: 'klabautermann',
+    appPubspecPath: 'klabautermann/app/klabautermann_app/pubspec.yaml',
+    readmePath: 'klabautermann/README.md',
+    flutterVariablePlistPaths: [
+      'klabautermann/app/klabautermann_app/ios/Runner/Info.plist',
+      'klabautermann/app/klabautermann_app/macos/Runner/Info.plist',
+    ],
+  ),
 ];
 
 /// Synchronizes and verifies the suite's release-version declarations.

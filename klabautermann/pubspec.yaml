@@ -1,9 +1,9 @@
 # Klabautermann — Dart pub workspace root.
 #
 # Groups the pure-Dart packages that can be built and tested without the
-# Flutter SDK. The Flutter app in `app/klabautermann_app` (once scaffolded)
-# is intentionally NOT a workspace member: it requires the Flutter SDK and
-# is resolved on its own.
+# Flutter SDK. The Flutter app in `app/klabautermann_app` is intentionally
+# NOT a workspace member: it requires the Flutter SDK and is resolved on
+# its own.
 name: _klabautermann_workspace
 publish_to: none
 
@@ -11,6 +11,7 @@ environment:
   sdk: ^3.12.0
 
 workspace:
+  - packages/klabautermann_core
   - packages/klabautermann_docker
   - packages/klabautermann_host
 

@@ -113,6 +113,8 @@ exit 1
         'poltergeist/packages/poltergeist_sync/pubspec.yaml',
         // The live bench compat shim bumps in lockstep with the suite.
         'poltergeist/tool/bench/pubspec.yaml',
+        'klabautermann/app/klabautermann_app/pubspec.yaml',
+        'klabautermann/packages/klabautermann_core/pubspec.yaml',
         'klabautermann/packages/klabautermann_docker/pubspec.yaml',
         'klabautermann/packages/klabautermann_host/pubspec.yaml',
       ]),
@@ -382,7 +384,12 @@ esac
     expect(result.stdout, contains('cwd=${findRepositoryRoot().path}\n'));
   });
 
-  for (final product in ['planchette', 'seance', 'poltergeist']) {
+  for (final product in [
+    'planchette',
+    'seance',
+    'poltergeist',
+    'klabautermann',
+  ]) {
     test('$product release.sh forwards the whole-suite release', () async {
       final root = findRepositoryRoot();
       final result = await Process.run(

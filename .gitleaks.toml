@@ -1,8 +1,9 @@
 # Secret-scan configuration for the whole monorepo (gitleaks reads the
 # root file only). Carries Poltergeist's former poltergeist/.gitleaks.toml
-# allowlist. Each path is listed twice: under poltergeist/ for current
-# commits, and at its standalone-repository location for the imported
-# history the scheduled full-history scan also reads.
+# allowlist. Each Poltergeist path is listed twice: under poltergeist/ for
+# current commits, and at its standalone-repository location for the
+# imported history the scheduled full-history scan also reads.
+# Klabautermann has no standalone history, so its paths are prefixed only.
 [extend]
 useDefault = true
 
@@ -14,4 +15,6 @@ paths = [
   '''^(poltergeist/)?test/integration/keys/ssh_host_ed25519_key$''',
   '''^(poltergeist/)?test/integration/keys/ssh_host_ed25519_key_swap$''',
   '''^(poltergeist/)?test/integration/keys/ssh_host_rsa_key$''',
+  '''^klabautermann/app/klabautermann_app/android/app/ci-release\.jks$''',
+  '''^klabautermann/app/klabautermann_app/android/key\.properties$''',
 ]
