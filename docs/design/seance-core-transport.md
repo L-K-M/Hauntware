@@ -439,12 +439,14 @@ as today.
 
 ```dart
 final class ElevationProbe {                 // filled by the host probe, 6.1
+  final bool isRoot;                         // `id -u` printed 0
   final String? sudoVersionLine;             // `sudo -V` first line
   final bool sudoIsRs;
   final bool sudoNopasswd;                   // `sudo -n true` succeeded
   final bool doasPresent;                    // `command -v doas`
   final bool doasNopasswd;                   // `doas -n true` succeeded
   final bool run0Present;                    // `command -v run0`
+  final bool run0Nopasswd;                   // `run0 --no-ask-password true`
   final bool printfIsBuiltin;                // `command -V printf`
 }
 
@@ -476,7 +478,11 @@ polkit `systemctl --no-ask-password`), builds `sh -c '<prelude>' elevate <args>`
 with each arg through `quoteShellWord` (`shell_command.dart:63`), pipes
 the password line first then `stdin`, and classifies exit 125 plus the
 stderr texts: never `2>/dev/null`, per D24's rejection record
-(`03-ARCHITECTURE.md:478-483`).
+(`03-ARCHITECTURE.md:478-483`). Every rung's command line starts with
+`env LC_ALL=C`: sudo translates its messages, so without it a rejection
+on a non-English host would be an unclassified exit 125, and 8.8 runs
+every remote command in the C locale anyway. The prelude text itself is
+unchanged.
 
 ### 3.5 CredentialResolver (F2c)
 
