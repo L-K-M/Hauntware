@@ -1,0 +1,87 @@
+{
+  "result": {
+    "processes": [
+      {
+        "pid": 1,
+        "ppid": 0,
+        "comm": "init",
+        "state": "S",
+        "uid": 0,
+        "gid": 0,
+        "name": "init",
+        "threads": 1,
+        "rssKb": 500,
+        "userName": null,
+        "utime": 20,
+        "stime": 8,
+        "startTicks": 1200,
+        "argv": [
+          "/init"
+        ],
+        "argsJoined": null
+      },
+      {
+        "pid": 2,
+        "ppid": 0,
+        "comm": "kthreadd",
+        "state": "S",
+        "uid": 0,
+        "gid": 0,
+        "name": "kthreadd",
+        "threads": 1,
+        "rssKb": 0,
+        "userName": null,
+        "utime": 0,
+        "stime": 0,
+        "startTicks": 3,
+        "argv": [],
+        "argsJoined": null
+      },
+      {
+        "pid": 300,
+        "ppid": 1,
+        "comm": "crond",
+        "state": "S",
+        "uid": 0,
+        "gid": 0,
+        "name": "crond",
+        "threads": 1,
+        "rssKb": 200,
+        "userName": null,
+        "utime": 15,
+        "stime": 3,
+        "startTicks": 40000,
+        "argv": [
+          "/usr/sbin/crond",
+          "-f"
+        ],
+        "argsJoined": null
+      },
+      {
+        "pid": 400,
+        "ppid": 1,
+        "comm": "dropbear",
+        "state": "S",
+        "uid": 0,
+        "gid": 0,
+        "name": "dropbear",
+        "threads": 1,
+        "rssKb": 1000,
+        "userName": null,
+        "utime": 10,
+        "stime": 4,
+        "startTicks": 90000,
+        "argv": [
+          "/usr/sbin/dropbear",
+          "-F"
+        ],
+        "argsJoined": null
+      }
+    ],
+    "argvSource": "cmdline",
+    "forgedHeaders": 0,
+    "skippedPids": 0,
+    "timeoutAbsent": false
+  },
+  "warnings": []
+}

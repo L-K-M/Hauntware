@@ -1,0 +1,34 @@
+name: klabautermann_app
+description: Klabautermann fleet manager for servers and Docker.
+publish_to: none
+version: 1.9.0+1090099
+
+environment:
+  sdk: ^3.12.0
+  flutter: '>=3.47.2'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  # gen-l10n's generated localizations use intl primitives.
+  intl: 0.20.3
+  # The engine-isolate protocol and client the app composes over (03 D18).
+  klabautermann_core:
+    path: ../../packages/klabautermann_core
+  # Shared sidebar kit, family palette and theme tokens (03 §10.2, §10.9).
+  ghost_ui:
+    path: ../../../planchette/packages/ghost_ui
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: 6.0.0
+  # Launcher icons (config in flutter_launcher_icons.yaml):
+  # dart run flutter_launcher_icons
+  flutter_launcher_icons: 0.14.4
+
+flutter:
+  uses-material-design: true
+  generate: true

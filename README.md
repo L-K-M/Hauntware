@@ -14,6 +14,7 @@ One repository, one version and one release cadence:
 | [Planchette](planchette/README.md) | Text editor and shared editor/UI packages | Linux, macOS, Windows |
 | [Séance](seance/README.md) | SSH client and optional local terminal | Android, iOS, Linux, macOS, Windows |
 | [Poltergeist](poltergeist/README.md) | File transfer and folder synchronization | Android, iOS, Linux, macOS, Windows |
+| [Klabautermann](klabautermann/README.md) | Server management and Docker | Android, iOS, Linux, macOS, Windows |
 
 Séance also supplies the shared encrypted sync server. Product names,
 application IDs, storage locations and keystore namespaces stay distinct.

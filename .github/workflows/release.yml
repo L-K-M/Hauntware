@@ -235,6 +235,18 @@ jobs:
             packages/seance_protocol packages/seance_core packages/seance_sync_server
           dart test \
             packages/seance_protocol packages/seance_core packages/seance_sync_server
+      - name: Klabautermann — resolve, analyze, test pure-Dart packages
+        working-directory: klabautermann
+        run: |
+          set -euo pipefail
+          dart pub get
+          dirs=()
+          for package in packages/*; do
+            [[ -d "$package" ]] || continue
+            dart analyze --fatal-infos "$package"
+            [[ -d "$package/test" ]] && dirs+=("$package")
+          done
+          dart test "${dirs[@]}"
       - name: Poltergeist — resolve, analyze, test packages and tools
         working-directory: poltergeist
         run: |
@@ -260,16 +272,8 @@ jobs:
         working-directory: poltergeist
         run: |
           set -euo pipefail
-          dart analyze tool/import_guard
-          dart test tool/import_guard/test
-          bash scripts/check-imports.sh
-          dart analyze tool/protocol_guard
-          dart test tool/protocol_guard/test
-          dart run tool/protocol_guard/bin/check.dart .
-          dart analyze tool/license_gate
           dart analyze tool/release_version
           dart analyze tool/seance_pin_audit
-          dart test tool/license_gate/test
           dart test tool/release_version/test
           dart test tool/seance_pin_audit/test
           (cd packages/poltergeist_bench && dart analyze && dart test test)
@@ -280,6 +284,16 @@ jobs:
           test/integration/test-fixture-safety.sh
           source test/integration/lib/fixture.sh
           check_rendered_config
+      - name: Suite guards — analyze, test, check every product
+        run: |
+          set -euo pipefail
+          dart pub get
+          dart analyze tool/import_guard tool/protocol_guard tool/license_gate
+          dart test tool/import_guard/test
+          dart test tool/protocol_guard/test
+          dart test tool/license_gate/test
+          dart run tool/import_guard/bin/check.dart
+          dart run tool/protocol_guard/bin/check.dart
           # Marker-only in the gate like PR CI: the full license check
           # runs inside the client legs that ship binaries.
           dart run tool/license_gate/bin/check.dart --marker-only
@@ -289,7 +303,7 @@ jobs:
   flutter:
     name: Flutter tests (release gate)
     runs-on: ubuntu-latest
-    timeout-minutes: 45   # three apps plus shared packages
+    timeout-minutes: 45   # four apps plus shared packages
     permissions:
       contents: read
     steps:
@@ -327,6 +341,7 @@ jobs:
           (cd planchette/packages/planchette_editor && flutter pub get)
           (cd planchette/packages/ghost_desktop && flutter pub get)
           (cd planchette/packages/ghost_marks && flutter pub get)
+          (cd planchette/packages/ghost_theme && flutter pub get)
           (cd planchette/app/planchette_app && flutter pub get)
       - name: Planchette — analyze and test shared packages and app
         run: |
@@ -334,6 +349,7 @@ jobs:
           (cd planchette/packages/planchette_editor && flutter analyze --no-pub && flutter test --no-pub)
           (cd planchette/packages/ghost_desktop && flutter analyze --no-pub && flutter test --no-pub)
           (cd planchette/packages/ghost_marks && flutter analyze --no-pub && flutter test --no-pub)
+          (cd planchette/packages/ghost_theme && flutter analyze --no-pub && flutter test --no-pub)
           (cd planchette/app/planchette_app && flutter analyze --no-pub && flutter test --no-pub)
       - name: Séance — analyze and test app and vendored xterm fork
         run: |
@@ -341,6 +357,12 @@ jobs:
           (cd seance/third_party/xterm && flutter pub get && flutter test --no-pub)
       - name: Poltergeist — analyze and test app
         working-directory: poltergeist/app/poltergeist_app
+        run: |
+          flutter pub get
+          flutter analyze --no-pub
+          flutter test --no-pub
+      - name: Klabautermann — analyze and test app
+        working-directory: klabautermann/app/klabautermann_app
         run: |
           flutter pub get
           flutter analyze --no-pub
@@ -1038,8 +1060,9 @@ jobs:
       - name: Resolve app dependencies
         working-directory: poltergeist/app/poltergeist_app
         run: flutter pub get
+      - name: Resolve suite root
+        run: dart pub get
       - name: Verify pinned Séance licenses
-        working-directory: poltergeist
         run: dart run tool/license_gate/bin/check.dart # SEANCE_LICENSE_GATE_V1
       - name: Build
         working-directory: poltergeist/app/poltergeist_app

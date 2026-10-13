@@ -212,7 +212,7 @@ void main() {
   test('a theme set in the window re-themes the app and the window', () async {
     final window = await openWindow();
     addTearDown(window.dispose);
-    expect(window.appearance.value, AppAppearance.initial);
+    expect(window.appearance.value, seanceInitialAppearance);
     final palette = ThemePresets.bubblegum.copyWith(cornerScale: 0.35);
 
     await window.setAppearance(palette, ThemeModePreference.light);

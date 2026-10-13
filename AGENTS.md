@@ -12,9 +12,9 @@ each subtree's `AGENTS.md`; shared library implementations are never copied.
   vendored xterm and PTY implementations.
 - `poltergeist/`: pure-Dart transfer/sync packages, five-platform application,
   live benchmark/tooling and immutable historical M0 evidence.
-- `klabautermann/`: planned fourth application (server management and
-  Docker). Only its icon master exists so far; the plan is in
-  `docs/design/klabautermann/`. Implementation is a separate task.
+- `klabautermann/`: fourth application (server management and Docker),
+  built per `docs/design/klabautermann/`: pure-Dart packages first, the
+  Flutter app from milestone M1.
 - Root `pubspec.yaml`: suite version and release-tool dependencies, not a
   Flutter workspace. Each product keeps its own pure-Dart workspace.
 

@@ -80,7 +80,9 @@ class TerminalFindBarState extends State<TerminalFindBar> {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final session = widget.session;
-    final radius = BorderRadius.circular(SeanceChrome.of(context).corner(8));
+    final radius = BorderRadius.circular(
+      SeanceChrome.of(context, seanceThemeStyle).corner(8),
+    );
     return CallbackShortcuts(
       bindings: {
         const SingleActivator(LogicalKeyboardKey.escape): widget.onClose,

@@ -1,0 +1,128 @@
+// `cron` parser tests (03 §6.4, §7.7): the user's `crontab -l`, the
+// system crontabs with their user column, `/etc/cron.d/*` with per-file
+// `CRON_TZ` scoping, and the `cron.<period>` directory names.
+import 'package:klabautermann_host/klabautermann_host.dart';
+import 'package:test/test.dart';
+
+const _ctx = ParseContext.standard;
+
+void main() {
+  test('crontab -l jobs parse without a user field', () {
+    final raw = [
+      '== crontab_meta ==',
+      'rc=0',
+      '== crontab ==',
+      '# m h dom mon dow command',
+      'CRON_TZ=Europe/Berlin',
+      '17 3 * * * /usr/local/bin/backup --full',
+      '@daily /usr/bin/find /tmp -mindepth 1 -delete',
+      '== etc_crontab ==',
+      '== cron_d ==',
+      '== cron_dirs ==',
+    ].join('\n');
+
+    final r = parseCron(raw, _ctx);
+    expect(r.value.ownCrontabPresent, isTrue);
+    expect(r.value.jobs, hasLength(2));
+    final daily = r.value.jobs.first;
+    expect(daily.source, 'crontab');
+    expect(daily.user, isNull);
+    expect(daily.cronTz, 'Europe/Berlin');
+    expect(daily.expression, isNotNull);
+    expect(daily.expression!.minutes, {17});
+    expect(daily.expression!.hours, {3});
+    expect(r.value.jobs.last.schedule, '@daily');
+    expect(r.value.jobs.last.command, '/usr/bin/find /tmp -mindepth 1 -delete');
+    expect(r.value.jobs.last.expression!.hours, {0});
+  });
+
+  test('/etc/crontab carries the user column', () {
+    final raw = [
+      '== crontab_meta ==',
+      'rc=1',
+      '== crontab ==',
+      'no crontab for root',
+      '== etc_crontab ==',
+      'SHELL=/bin/sh',
+      '17 *\t* * *\troot\tcd / && run-parts --report /etc/cron.hourly',
+      '== cron_d ==',
+      '== cron_dirs ==',
+    ].join('\n');
+
+    final r = parseCron(raw, _ctx);
+    expect(r.value.ownCrontabPresent, isFalse);
+    final job = r.value.jobs.single;
+    expect(job.source, '/etc/crontab');
+    expect(job.user, 'root');
+    expect(job.schedule, '17 * * * *');
+    expect(job.command, 'cd / && run-parts --report /etc/cron.hourly');
+    expect(r.warnings, isEmpty);
+  });
+
+  test('cron.d lines keep the file prefix and scope CRON_TZ per file', () {
+    final raw = [
+      '== crontab_meta ==',
+      'rc=0',
+      '== crontab ==',
+      '== etc_crontab ==',
+      '== cron_d ==',
+      'a\tCRON_TZ=UTC',
+      'a\t0 1 * * *\troot\t/usr/bin/a',
+      'b\t30 7 * * *\troot\t/usr/bin/b',
+      '== cron_dirs ==',
+    ].join('\n');
+
+    final r = parseCron(raw, _ctx);
+    expect(r.value.jobs, hasLength(2));
+    final a = r.value.jobs.firstWhere((j) => j.command == '/usr/bin/a');
+    final b = r.value.jobs.firstWhere((j) => j.command == '/usr/bin/b');
+    expect(a.source, '/etc/cron.d/a');
+    expect(a.cronTz, 'UTC');
+    // CRON_TZ does not cross files (03 §7.7).
+    expect(b.cronTz, isNull);
+    expect(b.user, 'root');
+  });
+
+  test('cron.<period> directory entries land per period', () {
+    final raw = [
+      '== crontab_meta ==',
+      'tool=missing',
+      '== crontab ==',
+      '== etc_crontab ==',
+      '== cron_d ==',
+      '== cron_dirs ==',
+      'hourly 0anacron',
+      'hourly cleanup',
+      'daily apt-compat',
+      'weekly man-db',
+      'monthly mdadm',
+    ].join('\n');
+
+    final r = parseCron(raw, _ctx);
+    expect(r.value.ownCrontabPresent, isNull);
+    expect(r.value.dirEntries, hasLength(5));
+    expect(r.value.dirEntries.first.period, CronPeriod.hourly);
+    expect(r.value.dirEntries.first.name, '0anacron');
+    expect(r.value.dirEntries.map((e) => e.period).toSet(), {
+      CronPeriod.hourly,
+      CronPeriod.daily,
+      CronPeriod.weekly,
+      CronPeriod.monthly,
+    });
+  });
+
+  test('a malformed schedule warns but the job is kept', () {
+    final raw = [
+      '== crontab_meta ==',
+      'rc=0',
+      '== crontab ==',
+      '99 0 * * * /usr/bin/bad',
+      '== etc_crontab ==',
+      '== cron_d ==',
+      '== cron_dirs ==',
+    ].join('\n');
+    final r = parseCron(raw, _ctx);
+    expect(r.value.jobs.single.expression, isNull);
+    expect(r.warnings, contains(contains('unparseable')));
+  });
+}

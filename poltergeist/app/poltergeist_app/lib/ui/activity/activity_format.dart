@@ -1,18 +1,21 @@
 import 'package:flutter/foundation.dart' show TargetPlatform;
+import 'package:ghost_ui/ghost_ui.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
 
 import '../../l10n/app_localizations.dart';
-import '../panes/pane_format.dart';
 
 /// The activity panel's transfer formatting (02 §5.3/§6): rates, ETAs,
 /// route text, and the throttle popover's custom-rate parser. String
-/// literals here are technical (units, separators, regex grammar) —
+/// literals here are technical (units, separators, route grammar) —
 /// reviewed per file in the localization contract; authored copy lives
-/// in the ARB.
+/// in the ARB. The rate/ETA rendering and the parse grammar moved to
+/// `package:ghost_ui` (`ghost_rate_format.dart`); this file keeps the
+/// app's names and its parse ceiling.
 
 /// The throttle popover's ceiling for a custom rate (02 §6's "bounded
 /// input"): 10 GB/s is far past any link the app will see; larger
-/// entries are rejected inline, never silently clamped.
+/// entries are rejected inline, never silently clamped. The cap is app
+/// policy — it crosses into `ghostParseByteRate` as a parameter.
 const maxTransferRateBytesPerSecond = 10 * 1000 * 1000 * 1000;
 
 /// A smoothed rate as "2.3 MB/s" — the row, footer, and status chip's
@@ -20,8 +23,7 @@ const maxTransferRateBytesPerSecond = 10 * 1000 * 1000 * 1000;
 String formatTransferRate(
   double bytesPerSecond, {
   required TargetPlatform platform,
-}) =>
-    '${formatPaneSize(bytesPerSecond.round(), platform: platform)}/s';
+}) => ghostFormatByteRate(bytesPerSecond, platform: platform);
 
 /// One configured limit as the chip/popover shows it: the pane size
 /// format plus the rate suffix; null (unlimited) renders the header
@@ -29,59 +31,20 @@ String formatTransferRate(
 String formatTransferLimit(
   int bytesPerSecond, {
   required TargetPlatform platform,
-}) =>
-    '${formatPaneSize(bytesPerSecond, platform: platform)}/s';
+}) => ghostFormatByteRate(bytesPerSecond, platform: platform);
 
 /// ETA text (02 §5.3): compact, one-decimal-free, capped at days —
-/// "45s", "4m 20s", "1h 3m", "2d 5h". The unit glyphs are technical
-/// formatting, allowlisted in the localization contract.
-String formatTransferEta(Duration eta) {
-  var seconds = eta.inSeconds;
-  if (seconds < 0) seconds = 0;
-  if (seconds < 60) return '${seconds}s';
-  final minutes = seconds ~/ 60;
-  if (minutes < 60) return '${minutes}m ${seconds % 60}s';
-  final hours = minutes ~/ 60;
-  if (hours < 24) return '${hours}h ${minutes % 60}m';
-  return '${hours ~/ 24}d ${hours % 24}h';
-}
+/// "45s", "4m 20s", "1h 3m", "2d 5h".
+String formatTransferEta(Duration eta) => ghostFormatCompactEta(eta);
 
 /// The custom-rate field's grammar (02 §6): a number optionally followed
 /// by a byte unit (B, KB, MB, GB, TB — decimal like the size formatter)
 /// and an optional `/s`. A bare number means bytes per second. Returns
-/// bytes/sec, or null on anything the grammar does not cover — the
-/// popover renders that as an inline error and never clamps.
-int? parseTransferRate(String input) {
-  final match = _ratePattern.firstMatch(input.trim());
-  if (match == null) return null;
-  final value = double.tryParse(match.group(1)!.replaceAll(',', '.'));
-  if (value == null || value <= 0) return null;
-  final unit = match.group(2)?.toLowerCase();
-  final multiplier = switch (unit) {
-    null || '' || 'b' => 1,
-    'k' || 'kb' => 1000,
-    'm' || 'mb' => 1000 * 1000,
-    'g' || 'gb' => 1000 * 1000 * 1000,
-    't' || 'tb' => 1000 * 1000 * 1000 * 1000,
-    _ => -1,
-  };
-  if (multiplier < 0) return null;
-  // Reject before rounding: an over-range literal saturates the
-  // product to Infinity, and Infinity.round() throws — an invalid
-  // entry must surface the inline error, never crash or clamp.
-  final product = value * multiplier;
-  if (!product.isFinite || product > maxTransferRateBytesPerSecond) {
-    return null;
-  }
-  final bytes = product.round();
-  if (bytes <= 0) return null;
-  return bytes;
-}
-
-final _ratePattern = RegExp(
-  r'^(\d+(?:[.,]\d+)?)\s*([kmgt]?i?b)?(?:\s*/\s*s)?$',
-  caseSensitive: false,
-);
+/// bytes/sec, or null on anything the grammar does not cover or that
+/// exceeds [maxTransferRateBytesPerSecond] — the popover renders that as
+/// an inline error and never clamps.
+int? parseTransferRate(String input) =>
+    ghostParseByteRate(input, maxBytesPerSecond: maxTransferRateBytesPerSecond);
 
 /// The leaf name of a source/destination path — task titles and item
 /// rows. Handles both separators (a Windows local path on any host) and

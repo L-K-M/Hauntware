@@ -60,7 +60,7 @@ class _SettingsWindowAppState extends State<SettingsWindowApp> {
     final error = widget.error;
     if (backend == null) {
       return _app(
-        AppAppearance.initial,
+        seanceInitialAppearance,
         Scaffold(
           body: Center(
             child: Padding(

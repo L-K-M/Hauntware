@@ -1,0 +1,90 @@
+{
+  "result": {
+    "processes": [
+      {
+        "pid": 1,
+        "ppid": 0,
+        "comm": "systemd",
+        "state": "S",
+        "uid": 0,
+        "gid": 0,
+        "name": "systemd",
+        "threads": 1,
+        "rssKb": 12345,
+        "userName": null,
+        "utime": 100,
+        "stime": 50,
+        "startTicks": 98765,
+        "argv": [
+          "/sbin/init",
+          "--system"
+        ],
+        "argsJoined": null
+      },
+      {
+        "pid": 2,
+        "ppid": 0,
+        "comm": "kthreadd",
+        "state": "S",
+        "uid": 0,
+        "gid": 0,
+        "name": "kthreadd",
+        "threads": 1,
+        "rssKb": 0,
+        "userName": null,
+        "utime": 0,
+        "stime": 0,
+        "startTicks": 5,
+        "argv": [],
+        "argsJoined": null
+      },
+      {
+        "pid": 623,
+        "ppid": 1,
+        "comm": "sshd",
+        "state": "S",
+        "uid": 0,
+        "gid": 0,
+        "name": "sshd",
+        "threads": 1,
+        "rssKb": 4500,
+        "userName": null,
+        "utime": 250,
+        "stime": 30,
+        "startTicks": 154000,
+        "argv": [
+          "/usr/sbin/sshd",
+          "-D",
+          "-p",
+          "22"
+        ],
+        "argsJoined": null
+      },
+      {
+        "pid": 884,
+        "ppid": 1,
+        "comm": "cron",
+        "state": "S",
+        "uid": 0,
+        "gid": 0,
+        "name": "cron",
+        "threads": 1,
+        "rssKb": 800,
+        "userName": null,
+        "utime": 40,
+        "stime": 8,
+        "startTicks": 330000,
+        "argv": [
+          "/usr/sbin/cron",
+          "-f"
+        ],
+        "argsJoined": null
+      }
+    ],
+    "argvSource": "cmdline",
+    "forgedHeaders": 0,
+    "skippedPids": 0,
+    "timeoutAbsent": false
+  },
+  "warnings": []
+}

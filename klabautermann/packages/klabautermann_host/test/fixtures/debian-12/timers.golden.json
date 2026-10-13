@@ -1,0 +1,29 @@
+{
+  "result": {
+    "timers": [
+      {
+        "unit": "logrotate.timer",
+        "activates": "logrotate.service",
+        "nextUs": 1750000000000000,
+        "leftUs": 3600000000,
+        "lastUs": 1749990000000000,
+        "passedUs": 10000000000,
+        "nextText": null,
+        "lastText": null
+      },
+      {
+        "unit": "fstrim.timer",
+        "activates": "fstrim.service",
+        "nextUs": null,
+        "leftUs": null,
+        "lastUs": null,
+        "passedUs": null,
+        "nextText": null,
+        "lastText": null
+      }
+    ],
+    "format": "json",
+    "timeoutAbsent": false
+  },
+  "warnings": []
+}

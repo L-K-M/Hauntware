@@ -11,7 +11,6 @@ import 'package:seance_app/services/local_settings_backend.dart';
 import 'package:seance_app/services/secure_master_key.dart';
 import 'package:seance_app/services/settings_backend.dart';
 import 'package:seance_app/theme/app_appearance.dart';
-import 'package:seance_app/theme/theme_palette.dart';
 import 'package:seance_app/theme/theme_presets.dart';
 import 'package:seance_core/seance_core.dart';
 
@@ -328,7 +327,7 @@ void main() {
       expect(notified, 1);
       expect(backend.settings.themePalette, ThemePresets.midnight);
       expect(
-        ThemePalette.decodeStored(onDisk()['themePalette']),
+        seanceThemeCodec.decodeStored(onDisk()['themePalette']),
         ThemePresets.midnight,
       );
       expect(onDisk()['themeMode'], 'dark');
@@ -345,7 +344,7 @@ void main() {
       final modified = settingsFile().lastModifiedSync();
 
       await backend.setAppearance(
-        ThemePalette.decodeStored(ThemePresets.paper.toJson()),
+        seanceThemeCodec.decodeStored(ThemePresets.paper.toJson()),
         ThemeModePreference.light,
       );
 

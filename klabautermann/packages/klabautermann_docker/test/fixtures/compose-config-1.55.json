@@ -1,0 +1,23 @@
+{
+  "name": "web",
+  "services": {
+    "web": {
+      "image": "nginx:1.27",
+      "depends_on": {
+        "db": { "condition": "service_started", "required": false }
+      },
+      "ports": [
+        { "mode": "ingress", "target": 80, "published": "8080", "protocol": "tcp" }
+      ],
+      "profiles": []
+    },
+    "db": {
+      "image": "postgres:17",
+      "depends_on": {},
+      "ports": [],
+      "profiles": ["debug"]
+    }
+  },
+  "volumes": { "web_data": null },
+  "networks": { "default": { "name": "web_default" } }
+}

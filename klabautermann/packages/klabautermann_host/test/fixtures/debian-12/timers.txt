@@ -1,0 +1,2 @@
+== timers_json ==
+[{"next":1750000000000000,"left":3600000000,"last":1749990000000000,"passed":10000000000,"unit":"logrotate.timer","activates":"logrotate.service"},{"next":null,"left":null,"last":null,"passed":null,"unit":"fstrim.timer","activates":"fstrim.service"}]

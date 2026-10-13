@@ -1,0 +1,23 @@
+{
+  "Id": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+  "RepoTags": ["alpine:3.21"],
+  "RepoDigests": ["alpine@sha256:abcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcd"],
+  "Parent": "",
+  "Comment": "",
+  "Author": "",
+  "Created": "2026-02-14T09:00:00.000000000Z",
+  "Architecture": "amd64",
+  "Os": "linux",
+  "Variant": "",
+  "Size": 8200000,
+  "Config": {
+    "User": "",
+    "WorkingDir": "",
+    "StopSignal": "SIGTERM",
+    "Env": ["PATH=/usr/local/sbin", "CI_TOKEN=glpat-xxxxxxxxxxxx"],
+    "Cmd": ["/bin/sh"],
+    "Entrypoint": null,
+    "ExposedPorts": { "80/tcp": {} },
+    "Labels": { "org.opencontainers.image.source": "https://example.test/alpine" }
+  }
+}
