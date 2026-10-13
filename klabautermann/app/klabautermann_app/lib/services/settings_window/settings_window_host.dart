@@ -11,6 +11,21 @@ import 'package:ghost_theme/ghost_theme.dart' show ThemeModePreference;
 import '../../controllers/appearance_controller.dart';
 import 'settings_window_link.dart';
 
+/// The settings window host for [platform], or null where Settings stays a
+/// route: only the desktop runners host the window (D32), and phones push
+/// the settings route.
+SettingsWindowHost? settingsWindowHostFor(
+  TargetPlatform platform, {
+  required AppearanceSettings appearance,
+}) => switch (platform) {
+  TargetPlatform.macOS ||
+  TargetPlatform.linux ||
+  TargetPlatform.windows => SettingsWindowHost(appearance: appearance),
+  TargetPlatform.android ||
+  TargetPlatform.iOS ||
+  TargetPlatform.fuchsia => null,
+};
+
 /// Opens Settings in a native window of its own and serves it from the
 /// app's isolate. Desktop only; the composition root builds none on a
 /// phone, where Settings is a route.

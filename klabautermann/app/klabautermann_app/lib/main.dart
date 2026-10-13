@@ -44,14 +44,10 @@ Future<void> main(List<String> args) async {
 
   // Desktop only: the runners there host the settings window; phones keep
   // the settings route.
-  final settingsWindow = switch (defaultTargetPlatform) {
-    TargetPlatform.macOS ||
-    TargetPlatform.linux ||
-    TargetPlatform.windows => SettingsWindowHost(appearance: appearance),
-    TargetPlatform.android ||
-    TargetPlatform.iOS ||
-    TargetPlatform.fuchsia => null,
-  };
+  final settingsWindow = settingsWindowHostFor(
+    defaultTargetPlatform,
+    appearance: appearance,
+  );
 
   runApp(
     KlabautermannApp(

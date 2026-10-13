@@ -155,8 +155,33 @@ void main() {
       expect(find.byType(SettingsPage), findsOneWidget);
     });
 
-    testWidgets('on a phone, Settings is the route and no window is asked '
-        'for', (tester) async {
+    test('only the desktops get a settings window host', () {
+      final appearance = AppearanceController();
+      addTearDown(appearance.dispose);
+      for (final platform in [
+        TargetPlatform.android,
+        TargetPlatform.iOS,
+        TargetPlatform.fuchsia,
+      ]) {
+        expect(
+          settingsWindowHostFor(platform, appearance: appearance),
+          isNull,
+          reason: '$platform',
+        );
+      }
+      for (final platform in [
+        TargetPlatform.linux,
+        TargetPlatform.macOS,
+        TargetPlatform.windows,
+      ]) {
+        final host = settingsWindowHostFor(platform, appearance: appearance);
+        expect(host, isNotNull, reason: '$platform');
+        host!.dispose();
+      }
+    });
+
+    testWidgets('without a host, as on a phone, Settings is the route and '
+        'no window is asked for', (tester) async {
       runnerWithWindow();
       await pumpApp(tester, size: const Size(400, 800));
 
