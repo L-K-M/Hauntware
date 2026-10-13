@@ -32,6 +32,40 @@ class DependencyGraph {
   static Future<DependencyGraph> load(File config) async =>
       DependencyGraph._(await loadPackageConfigUri(config.uri));
 
+  /// Whether [name] resolves in this graph. Unresolved (for example
+  /// Flutter-only) packages cannot be walked for transitive edges.
+  bool contains(String name) => _config[name] != null;
+
+  /// The runtime dependency trail from [name] to the first package for
+  /// which [isForbidden] holds, or null when the closure is clean. The
+  /// root itself is never reported; only what it depends on.
+  Future<String?> forbiddenDependency(
+    String name,
+    bool Function(String) isForbidden,
+  ) async {
+    final pending = <List<String>>[
+      for (final dependency in dependencyNames(
+        await _pubspec(name),
+        ['dependencies'],
+      ))
+        [name, dependency],
+    ];
+    final visited = <String>{name};
+
+    for (var index = 0; index < pending.length; index++) {
+      final trail = pending[index];
+      final current = trail.last;
+      if (!visited.add(current)) continue;
+      if (isForbidden(current)) return trail.join(' -> ');
+
+      final pubspec = await _pubspec(current);
+      for (final dependency in dependencyNames(pubspec, ['dependencies'])) {
+        pending.add([...trail, dependency]);
+      }
+    }
+    return null;
+  }
+
   Future<String?> flutterDependency(String name) async {
     final pending = <List<String>>[
       [name],

@@ -224,6 +224,12 @@ jobs:
         run: dart pub get
       - name: Resolve workspace
         run: dart pub get
+      - name: Resolve Séance workspace
+        working-directory: seance
+        run: dart pub get
+      - name: Resolve Planchette workspace
+        working-directory: planchette
+        run: dart pub get
       - name: Resolve M0 benchmark harness
         working-directory: poltergeist/packages/poltergeist_bench
         run: dart pub get

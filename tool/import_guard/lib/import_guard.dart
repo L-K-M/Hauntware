@@ -32,23 +32,11 @@ Future<List<String>> checkImports(
       directory: await _loadStandaloneGraph(product, productRoot, directory),
   };
   final violations = <String>[];
+  final packages = <String, _ScannedPackage>{};
   var purePackageCount = 0;
 
   for (final area in product.scan) {
-    final directory = Directory(p.join(productRoot, area));
-
-    // Directory.list follows a linked root even when child links are disabled.
-    final type = await FileSystemEntity.type(
-      directory.path,
-      followLinks: false,
-    );
-    if (type == FileSystemEntityType.link) {
-      throw FileSystemException('Linked scan root', directory.path);
-    }
-    if (type != FileSystemEntityType.directory) {
-      throw FileSystemException('Missing scan root', directory.path);
-    }
-
+    final directory = _scanRoot(productRoot, area);
     await for (final entity in directory.list(followLinks: false)) {
       if (entity is Link) {
         throw FileSystemException('Linked package', entity.path);
@@ -56,17 +44,20 @@ Future<List<String>> checkImports(
       if (entity is! Directory) continue;
 
       final relative = p.posix.join(area, p.basename(entity.path));
-      violations.addAll(
-        await _checkPackage(
-          entity,
-          relative,
-          product,
-          _graphFor(relative, product, graph, standalone),
-        ),
+      final package = await _loadPackage(
+        entity,
+        relative,
+        product,
+        _graphFor(relative, product, graph, standalone),
       );
-      if (product.isPurePackage(relative)) purePackageCount++;
+      packages[relative] = package;
+      violations.addAll(await _checkPackage(package, product));
+      if (package.pure) purePackageCount++;
     }
+  }
 
+  for (final area in product.scan) {
+    final directory = Directory(p.join(productRoot, area));
     await for (final file in dartSources(
       directory,
       productRoot,
@@ -78,7 +69,7 @@ Future<List<String>> checkImports(
           file,
           relative,
           product,
-          _graphFor(relative, product, graph, standalone),
+          _containingPackage(relative, packages),
         ),
       );
     }
@@ -88,6 +79,20 @@ Future<List<String>> checkImports(
     throw const FormatException('No pure-Dart packages found');
   }
   return violations;
+}
+
+/// Resolves a configured scan root, failing closed on a linked or absent
+/// directory.
+Directory _scanRoot(String productRoot, String area) {
+  final directory = Directory(p.join(productRoot, area));
+  final type = FileSystemEntity.typeSync(directory.path, followLinks: false);
+  if (type == FileSystemEntityType.link) {
+    throw FileSystemException('Linked scan root', directory.path);
+  }
+  if (type != FileSystemEntityType.directory) {
+    throw FileSystemException('Missing scan root', directory.path);
+  }
+  return directory;
 }
 
 /// Reported paths are relative to the repository root.
@@ -135,7 +140,9 @@ Future<DependencyGraph?> _loadStandaloneGraph(
   return DependencyGraph.load(config);
 }
 
-Future<List<String>> _checkPackage(
+/// The scanned package under [directory], with its parsed manifests and
+/// the forbidden patterns that apply to its name.
+Future<_ScannedPackage> _loadPackage(
   Directory directory,
   String relative,
   ProductGuard product,
@@ -144,35 +151,80 @@ Future<List<String>> _checkPackage(
   final pubspec = await readPubspec(
     File(p.join(directory.path, 'pubspec.yaml')),
   );
-  final pure = product.isPurePackage(relative);
-  if (pure) {
-    final name = pubspec['name'];
-    if (name is! String) {
-      throw FormatException('Missing package name: ${directory.path}');
+  final overrides = File(p.join(directory.path, 'pubspec_overrides.yaml'));
+  final name = pubspec['name'];
+  return _ScannedPackage(
+    directory: directory,
+    relative: relative,
+    name: name is String ? name : null,
+    pubspec: pubspec,
+    overrides: await overrides.exists() ? await readPubspec(overrides) : null,
+    pure: product.isPurePackage(relative),
+    graph: graph,
+    forbidden: name is String
+        ? product.forbiddenDependenciesFor(name)
+        : const {},
+  );
+}
+
+/// The scanned package that owns [relative] (product-relative), if any:
+/// the first two path segments under a scan area name the package.
+_ScannedPackage? _containingPackage(
+  String relative,
+  Map<String, _ScannedPackage> packages,
+) {
+  final segments = p.posix.split(relative);
+  if (segments.length < 2) return null;
+  return packages[p.posix.join(segments[0], segments[1])];
+}
+
+Future<List<String>> _checkPackage(
+  _ScannedPackage package,
+  ProductGuard product,
+) async {
+  final relative = package.relative;
+  if (package.pure) {
+    final name = package.name;
+    if (name == null) {
+      throw FormatException('Missing package name: ${package.directory.path}');
     }
-    graph.verifyRoot(name, directory);
+    package.graph.verifyRoot(name, package.directory);
   }
 
-  // Overrides and unused declarations can add forbidden edges before an import
-  // exists. App declarations need no Flutter resolution in the Dart CI job.
-  final manifests = [pubspec];
-  final overrides = File(p.join(directory.path, 'pubspec_overrides.yaml'));
-  if (await overrides.exists()) manifests.add(await readPubspec(overrides));
+  // Overrides and unused declarations can add forbidden edges before an
+  // import exists. App declarations need no Flutter resolution in the Dart
+  // CI job.
+  final manifests = [package.pubspec, if (package.overrides != null) package.overrides!];
   final violations = <String>[];
 
   for (final manifest in manifests) {
-    final dependencies = dependencyNames(manifest, dependencySections).toSet();
-    // The harness measures dartssh2 against OpenSSH, so its dependency is
-    // sanctioned; every other package outside core's connection layer is not.
-    if (!product.dartssh2Dependents.contains(relative) &&
-        dependencies.contains('dartssh2')) {
+    _checkDartssh2Dependencies(manifest, package, product, violations);
+    for (final dependency in dependencyNames(manifest, dependencySections)) {
+      if (_matchesAny(package.forbidden, dependency)) {
+        violations.add(
+          '${_reported(product, relative)}: forbidden dependency $dependency',
+        );
+      }
+    }
+  }
+
+  if (!package.pure) return violations;
+
+  final name = package.name!;
+  if (package.forbidden.isNotEmpty && package.graph.contains(name)) {
+    final trail = await package.graph.forbiddenDependency(
+      name,
+      (dependency) => _matchesAny(package.forbidden, dependency),
+    );
+    if (trail != null) {
       violations.add(
-        '${_reported(product, relative)}: dartssh2 dependency outside '
-        '${_dartssh2DependentName(product)}',
+        '${_reported(product, relative)}: forbidden transitive dependency '
+        '$trail',
       );
     }
-    if (!pure) continue;
+  }
 
+  for (final manifest in manifests) {
     if (requiresFlutter(manifest) ||
         dependencySections.any((section) => hasFlutterSdk(manifest, section))) {
       violations.add(
@@ -181,8 +233,8 @@ Future<List<String>> _checkPackage(
       );
       continue;
     }
-    for (final dependency in dependencies) {
-      final forbidden = await graph.flutterDependency(dependency);
+    for (final dependency in dependencyNames(manifest, dependencySections)) {
+      final forbidden = await package.graph.flutterDependency(dependency);
       if (forbidden != null) {
         violations.add(
           '${_reported(product, relative)}: Flutter/plugin dependency '
@@ -194,6 +246,31 @@ Future<List<String>> _checkPackage(
   return violations;
 }
 
+/// Checks dartssh2 declarations per section: a full dependent may declare
+/// it anywhere, a dev dependent only under `dev_dependencies`, and every
+/// other package not at all.
+void _checkDartssh2Dependencies(
+  Map<String, Object?> manifest,
+  _ScannedPackage package,
+  ProductGuard product,
+  List<String> violations,
+) {
+  final relative = package.relative;
+  if (product.allowsDartssh2Dependency(relative)) return;
+
+  for (final section in dependencySections) {
+    if (!dependencyNames(manifest, [section]).contains('dartssh2')) continue;
+    if (section == 'dev_dependencies' &&
+        product.allowsDartssh2DevDependency(relative)) {
+      continue;
+    }
+    violations.add(
+      '${_reported(product, relative)}: dartssh2 dependency outside '
+      '${_dartssh2DependentName(product)}',
+    );
+  }
+}
+
 String _dartssh2DependentName(ProductGuard product) =>
     product.dartssh2Dependents.isEmpty
     ? 'the configured dartssh2 dependents'
@@ -203,7 +280,7 @@ Future<List<String>> _checkSource(
   File file,
   String relative,
   ProductGuard product,
-  DependencyGraph graph,
+  _ScannedPackage? package,
 ) async {
   final unit = parseString(
     content: await file.readAsString(),
@@ -233,11 +310,37 @@ Future<List<String>> _checkSource(
         );
         continue;
       }
-      final package = uri.scheme == 'package' ? uri.pathSegments.first : null;
-      if (package == 'dartssh2' && !product.allowsDartssh2Import(relative)) {
+      final packageName = uri.scheme == 'package' ? uri.pathSegments.first : null;
+      if (packageName == 'dartssh2' &&
+          !product.allowsDartssh2Import(relative) &&
+          !product.isImportExempt(relative)) {
         violations.add(
           '${_reported(product, relative)}: dartssh2 import/export outside '
           '${_dartssh2ImportArea(product)}',
+        );
+      }
+      if (uri.scheme == 'dart' && uri.path == 'io' &&
+          product.forbidsDartIo(relative)) {
+        violations.add(
+          '${_reported(product, relative)}: dart:io import/export is '
+          'forbidden here',
+        );
+      }
+      if (packageName == 'seance_core' &&
+          uri.pathSegments.length > 1 &&
+          uri.pathSegments[1] == 'src' &&
+          !product.allowsSeanceCoreImplementationImport(relative)) {
+        violations.add(
+          '${_reported(product, relative)}: seance_core implementation '
+          'import/export $uri',
+        );
+      }
+      if (packageName != null &&
+          package != null &&
+          _matchesAny(package.forbidden, packageName)) {
+        violations.add(
+          '${_reported(product, relative)}: forbidden import/export '
+          '$packageName',
         );
       }
       if (!_insidePurePackage(product, relative)) continue;
@@ -248,8 +351,8 @@ Future<List<String>> _checkSource(
         );
         continue;
       }
-      if (package == null) continue;
-      final forbidden = await graph.flutterDependency(package);
+      if (packageName == null) continue;
+      final forbidden = await package!.graph.flutterDependency(packageName);
       if (forbidden != null) {
         violations.add(
           '${_reported(product, relative)}: Flutter/plugin import/export '
@@ -274,4 +377,31 @@ bool _insidePurePackage(ProductGuard product, String relative) {
     return false;
   }
   return product.isPurePackage(p.posix.join(segments[0], segments[1]));
+}
+
+bool _matchesAny(Set<String> patterns, String name) =>
+    patterns.any((pattern) => packageNameMatches(pattern, name));
+
+/// One scanned package: its manifests, purity, resolution and the
+/// forbidden patterns its name selects.
+class _ScannedPackage {
+  const _ScannedPackage({
+    required this.directory,
+    required this.relative,
+    required this.name,
+    required this.pubspec,
+    required this.overrides,
+    required this.pure,
+    required this.graph,
+    required this.forbidden,
+  });
+
+  final Directory directory;
+  final String relative;
+  final String? name;
+  final Map<String, Object?> pubspec;
+  final Map<String, Object?>? overrides;
+  final bool pure;
+  final DependencyGraph graph;
+  final Set<String> forbidden;
 }

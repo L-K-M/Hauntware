@@ -18,6 +18,17 @@ missing required keys, and unknown product names. Per product it declares:
 - `dartssh2_imports`: directories allowed to import/export `package:dartssh2`
 - `dartssh2_dependents`: package directories allowed to declare a `dartssh2`
   dependency
+- `dartssh2_dev_dependents`: package directories allowed to declare
+  `dartssh2` only under `dev_dependencies`
+- `import_exemptions`: single files exempt from the dartssh2 import rule
+- `no_dart_io`: directories whose Dart sources must not import `dart:io`,
+  including conditional imports
+- `forbidden_dependencies`: a map from a package name or glob (`ghost_*`) to
+  the package names or globs it must not depend on directly or transitively;
+  the lists of every matching key apply
+- `seance_core_implementation_imports`: directories allowed to import
+  `package:seance_core/src/...`; every other file in the product that does is
+  a violation
 - `standalone_resolutions`: packages resolving through their own
   `.dart_tool/package_config.json` outside the product workspace lock
 - `engine_protocol`: the engine protocol directory (`null` when the product
@@ -38,8 +49,10 @@ dart run tool/protocol_guard/bin/check.dart [--product <name>]
 dart run tool/license_gate/bin/check.dart [--marker-only]
 ```
 
-- `import_guard` confines `dartssh2` and Flutter/plugin imports per the
-  product's entry (`tool/import_guard/README.md`).
+- `import_guard` confines `dartssh2`, `seance_core` implementation imports and
+  Flutter/plugin imports per the product's entry, and enforces the product's
+  `no_dart_io` and `forbidden_dependencies` rules
+  (`tool/import_guard/README.md`).
 - `protocol_guard` keeps function-typed fields out of the engine protocol
   types (`tool/protocol_guard/README.md`).
 - `license_gate` verifies the `SEANCE_LICENSE_GATE_V1` release wiring and
@@ -49,5 +62,5 @@ dart run tool/license_gate/bin/check.dart [--marker-only]
   the `poltergeist` product.
 
 Without `--product`, the import and protocol guards check every configured
-product; today only `poltergeist` is configured. Reported paths are
+product: `seance`, `planchette` and `poltergeist`. Reported paths are
 repository-root-relative, so they carry the product directory as a prefix.

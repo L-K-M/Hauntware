@@ -123,8 +123,9 @@ if [[ "$scope" != flutter ]]; then
   )
 
   # ---- Suite guards (F1a): they live at the root, resolve through the
-  # root manifest and check every product in tool/guards.yaml — today
-  # Poltergeist only, whose workspace the block above just resolved.
+  # root manifest and check every product in tool/guards.yaml — Séance,
+  # Planchette and Poltergeist, whose workspaces the blocks above just
+  # resolved.
   (
     run dart analyze tool/import_guard tool/protocol_guard tool/license_gate
     run dart test tool/import_guard/test

@@ -19,6 +19,36 @@ const _product = 'poltergeist';
 const _core = '$_product/packages/poltergeist_core';
 const _app = '$_product/app/poltergeist_app';
 
+// Exercises every extended rule key against the same monorepo-shaped
+// fixture. The forbidden target is a neutral package so only the
+// forbidden-dependency rule fires.
+const _extendedGuardsConfig = '''
+products:
+  poltergeist:
+    scan: [packages, app]
+    pure_packages: [packages/*]
+    dartssh2_imports:
+      - packages/poltergeist_core/lib/src/connection
+      - packages/poltergeist_bench
+    dartssh2_dependents:
+      - packages/poltergeist_core
+      - packages/poltergeist_bench
+    dartssh2_dev_dependents:
+      - app/poltergeist_app
+    import_exemptions:
+      - app/poltergeist_app/lib/exempt.dart
+    no_dart_io:
+      - packages/poltergeist_core/lib
+    forbidden_dependencies:
+      poltergeist_sync: [bridge]
+    seance_core_implementation_imports:
+      - packages/poltergeist_core/lib/src/connection
+    standalone_resolutions:
+      - packages/poltergeist_bench
+    engine_protocol: packages/poltergeist_core/lib/src/engine
+    engine_protocol_callback_owners: {}
+''';
+
 void main() {
   late _Fixture fixture;
 
@@ -456,6 +486,186 @@ dependency_overrides: {"dartssh2": any}
     await fixture.expectCliExit(64, const ['positional'], 'usage');
     await fixture.expectCliExit(64, const ['--product'], 'usage');
   });
+
+  group('extended rules', () {
+    Future<void> withFixture(
+      Future<void> Function(_Fixture fixture) body,
+    ) async {
+      final extended = await _Fixture.create(
+        guardsConfig: _extendedGuardsConfig,
+      );
+      try {
+        await body(extended);
+      } finally {
+        await extended.root.delete(recursive: true);
+      }
+    }
+
+    test('allows a dev-only dartssh2 declaration', () async {
+      await withFixture((f) async {
+        await f.write(
+          '$_app/pubspec.yaml',
+          'name: poltergeist_app\ndev_dependencies: {dartssh2: any}\n',
+        );
+        await f.expectExit(0);
+      });
+    });
+
+    test('rejects a runtime dartssh2 declaration in a dev dependent', () async {
+      await withFixture((f) async {
+        await f.write(
+          '$_app/pubspec.yaml',
+          'name: poltergeist_app\ndependencies: {dartssh2: any}\n',
+        );
+        await f.expectExit(1, 'dartssh2');
+      });
+    });
+
+    test('rejects an overridden dartssh2 in a dev dependent', () async {
+      await withFixture((f) async {
+        await f.write(
+          '$_app/pubspec_overrides.yaml',
+          'dependency_overrides: {dartssh2: any}\n',
+        );
+        await f.expectExit(1, 'dartssh2');
+      });
+    });
+
+    test('allows a dartssh2 import in an exempt file', () async {
+      await withFixture((f) async {
+        await f.write(
+          '$_app/lib/exempt.dart',
+          "import 'package:dartssh2/dartssh2.dart';",
+        );
+        await f.expectExit(0);
+      });
+    });
+
+    test('rejects a dartssh2 import outside the exempt file', () async {
+      await withFixture((f) async {
+        await f.write(
+          '$_app/lib/other.dart',
+          "import 'package:dartssh2/dartssh2.dart';",
+        );
+        await f.expectExit(1, 'dartssh2');
+      });
+    });
+
+    test('rejects dart:io in a no_dart_io directory', () async {
+      await withFixture((f) async {
+        await f.write('$_core/lib/src/io.dart', "import 'dart:io';");
+        await f.expectExit(1, 'dart:io');
+      });
+    });
+
+    test('rejects a conditional dart:io import', () async {
+      await withFixture((f) async {
+        await f.write(
+          '$_core/lib/src/io.dart',
+          "import 'x.dart' if (dart.library.io) 'dart:io';",
+        );
+        await f.expectExit(1, 'dart:io');
+      });
+    });
+
+    test('allows dart:io outside a no_dart_io directory', () async {
+      await withFixture((f) async {
+        await f.write('$_app/lib/io.dart', "import 'dart:io';");
+        await f.expectExit(0);
+      });
+    });
+
+    test('rejects a forbidden dependency in a pubspec', () async {
+      await withFixture((f) async {
+        await f.package('bridge', '');
+        await f.write(
+          '$_product/packages/poltergeist_sync/pubspec.yaml',
+          'name: poltergeist_sync\ndependencies: {bridge: any}\n',
+        );
+        await f._register(
+          'poltergeist_sync',
+          '$_product/packages/poltergeist_sync',
+        );
+        await f.expectExit(1, 'forbidden dependency bridge');
+      });
+    });
+
+    test('accepts a clean pubspec against forbidden dependencies', () async {
+      await withFixture((f) async {
+        await f.write(
+          '$_product/packages/poltergeist_sync/pubspec.yaml',
+          'name: poltergeist_sync\n',
+        );
+        await f._register(
+          'poltergeist_sync',
+          '$_product/packages/poltergeist_sync',
+        );
+        await f.expectExit(0);
+      });
+    });
+
+    test('rejects a forbidden import', () async {
+      await withFixture((f) async {
+        await f.package('bridge', '');
+        await f.write(
+          '$_product/packages/poltergeist_sync/pubspec.yaml',
+          'name: poltergeist_sync\n',
+        );
+        await f._register(
+          'poltergeist_sync',
+          '$_product/packages/poltergeist_sync',
+        );
+        await f.write(
+          '$_product/packages/poltergeist_sync/lib/sync.dart',
+          "import 'package:bridge/bridge.dart';",
+        );
+        await f.expectExit(1, 'forbidden import/export bridge');
+      });
+    });
+
+    test('rejects a forbidden transitive dependency', () async {
+      await withFixture((f) async {
+        await f.package('bridge', '');
+        await f.package('middle', 'dependencies: {bridge: any}');
+        await f.write(
+          '$_product/packages/poltergeist_sync/pubspec.yaml',
+          'name: poltergeist_sync\ndependencies: {middle: any}\n',
+        );
+        await f._register(
+          'poltergeist_sync',
+          '$_product/packages/poltergeist_sync',
+        );
+        await f.expectExit(
+          1,
+          'forbidden transitive dependency poltergeist_sync -> middle -> bridge',
+        );
+      });
+    });
+
+    test('allows a seance_core implementation import in an allowed dir',
+        () async {
+      await withFixture((f) async {
+        await f.package('seance_core', '');
+        await f.write(
+          '$_core/lib/src/connection/ssh.dart',
+          "import 'package:seance_core/src/ssh/ssh_session.dart';",
+        );
+        await f.expectExit(0);
+      });
+    });
+
+    test('rejects a seance_core implementation import outside allowed dirs',
+        () async {
+      await withFixture((f) async {
+        await f.package('seance_core', '');
+        await f.write(
+          '$_core/lib/other.dart',
+          "import 'package:seance_core/src/ssh/ssh_session.dart';",
+        );
+        await f.expectExit(1, 'seance_core implementation');
+      });
+    });
+  });
 }
 
 class _Fixture {
@@ -486,7 +696,10 @@ products:
     engine_protocol_callback_owners: {}
 ''';
 
-  static Future<_Fixture> create() async {
+  static Future<_Fixture> create({
+    String guardsConfig = _guardsConfig,
+    String product = 'poltergeist',
+  }) async {
     final root = await Directory.systemTemp.createTemp('import-guard-');
     // The tool resolves through the repository root's package config,
     // exactly like the real run from the checkout root.
@@ -503,12 +716,12 @@ products:
       root,
       config,
       GuardsConfig.parse(
-        loadYaml(_guardsConfig),
+        loadYaml(guardsConfig),
         source: 'guards.yaml',
-      ).product('poltergeist'),
+      ).product(product),
     );
     await fixture.write('.dart_tool/package_config.json', jsonEncode(config));
-    await fixture.write('tool/guards.yaml', _guardsConfig);
+    await fixture.write('tool/guards.yaml', guardsConfig);
     await fixture.write(
       '$_product/scripts/check-imports.sh',
       await File('poltergeist/scripts/check-imports.sh').readAsString(),
