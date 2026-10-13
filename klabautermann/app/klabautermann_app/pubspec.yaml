@@ -20,6 +20,10 @@ dependencies:
   # Shared sidebar kit, family palette and theme tokens (03 §10.2, §10.9).
   ghost_ui:
     path: ../../../planchette/packages/ghost_ui
+  # The theme model and builder: the brand style, presets and appearance
+  # value the light and dark themes are built from (03 D9, §10.9).
+  ghost_theme:
+    path: ../../../planchette/packages/ghost_theme
 
 dev_dependencies:
   flutter_test:

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:ghost_theme/ghost_theme.dart' show GhostTheme;
 
 import 'controllers/appearance_controller.dart';
 import 'controllers/fleet_controller.dart';
@@ -32,19 +33,19 @@ class KlabautermannApp extends StatelessWidget {
     return ListenableBuilder(
       listenable: appearance,
       builder: (context, _) {
+        // Built through ghost_theme the way Séance draws its MaterialApp
+        // (03 D9): the extensions shared widgets read come with it.
+        final themes = GhostTheme.forAppearance(
+          klabautermannThemeStyle,
+          appearance.value,
+        );
         return MaterialApp(
           onGenerateTitle: (context) => AppLocalizations.of(context).appTitle,
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
-          theme: klabautermannTheme(
-            Brightness.light,
-            Theme.of(context).platform,
-          ),
-          darkTheme: klabautermannTheme(
-            Brightness.dark,
-            Theme.of(context).platform,
-          ),
-          themeMode: appearance.themeMode,
+          theme: themes.theme,
+          darkTheme: themes.darkTheme,
+          themeMode: themes.themeMode,
           // The shell's settings callback needs a context under the
           // MaterialApp's Navigator; the ListenableBuilder's own context
           // sits above it.
