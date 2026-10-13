@@ -1,4 +1,4 @@
-// The keyboard fixture shared by the three products. Each product's
+// The keyboard fixture shared by the four products. Each product's
 // scripts/test-macos-keyboard.mm imports its controller as
 // FixtureController and includes this file, so every product is tested
 // against its own native view controller with the same checks.
