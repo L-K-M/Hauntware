@@ -159,6 +159,7 @@ void main() {
     // The first toast times out (4 s) before the second import.
     await tester.pump(const Duration(seconds: 5));
     await tester.pumpAndSettle();
+    expect(find.textContaining('Imported 1 server'), findsNothing);
     await _chooseImportFromRail(tester);
     harness.engine.emit(
       const SshConfigImported(importedCount: 0, skippedCount: 0),
