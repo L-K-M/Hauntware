@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+- **Two syncs can claim a new trash folder at once.** When two syncs
+  started together on the same new trash folder, one could fail with
+  "The sync-trash ownership marker is invalid". A sync interrupted while
+  claiming its trash folder could also leave the folder unusable. Both
+  now settle on one owner.
+- **Skip `.git/` and `node_modules/` in one click.** The advanced pair
+  editor offers both as chips under the exclude rules. Clear a chip to
+  remove its rule again.
+- **Reuse skip rules across syncs.** Save a sync's skip rules as a named
+  rule set, then add the set to another sync from Edit Rules… or the
+  advanced pair editor. Adding a set copies its patterns after the rules
+  already there and leaves out any that are already present, so later
+  changes to the set don't change syncs that used it. Manage Rule Sets…
+  renames, edits and deletes sets. Rule sets stay on this device.
 - **See what changed between two files.** The compare view now marks the
   lines that differ: removed lines on the left and added lines on the
   right, with blank space opposite them. Step through the changes with

@@ -4,6 +4,137 @@ Living snapshot of where Poltergeist is, what's proven, and what to pick up
 next. Read [AGENTS.md](../AGENTS.md) for build/test commands and
 [09-PLAYBOOK.md](plan/09-PLAYBOOK.md) for the PR process.
 
+## Trash root claim race (2026-10-13)
+
+Main's CI failed on Windows in `trash_purge_test.dart`'s "concurrent
+first claims converge on one root identity". When two syncs claimed the
+same existing, empty trash directory at once, the second could list the
+root while the first claim's staged marker (`.poltergeist-root.init-…`)
+had no identity file yet. It read that as an invalid marker and failed
+the run instead of letting the race settle on one owner. A claim that
+stopped between staging its directory and writing the identity left the
+root unclaimable the same way.
+
+Adoption now accepts a staged marker whose identity is absent, is a
+prefix of a marker (a remote write still in progress), or vanishes
+because its claim renamed it into place mid-read. Staged content that
+could never become a marker still fails closed, as do all other
+occupants. Because a staged marker can now pass before its identity
+exists, only the exact name a claim gives it (`.init-` plus 32 hex
+digits) qualifies; the old prefix check accepted any suffix. Reading
+the root's own marker is unchanged.
+
+Code: `_checkStagedMarker` in `poltergeist_sync/lib/src/trash_root.dart`,
+sharing its identity read with `_readMarker`.
+
+Tests: 4 new in `trash_root_test.dart`. A claim held at its identity
+write lets a second claim run against the half-written root; both agree
+on one root id and only the marker remains. Absent, empty and partial
+identities are adopted; staged non-hex content and names a claim would
+not make still fail closed. The first two failed with the CI's error
+before the fix, and the name test failed against the old prefix check.
+The original concurrency test then passed five runs in a row.
+
+Local validation: `dart analyze` is clean and all 410 poltergeist_sync
+tests pass on Linux. Not run: Windows, where the race surfaced; CI
+covers it.
+
+## Pair-editor quick picks (2026-10-13)
+
+The advanced pair editor's exclude rules now offer `.git/` and
+`node_modules/` as chips, as 05 §3 specified. A chip shows as chosen
+while the excludes hold its exact line, whether typed or added.
+Choosing it appends the line after the pair's own, as Add Rule Set
+does, so a pair's earlier lines keep their place. Clearing it removes
+that line only: near misses such as `.git` or `!.git/` are different
+rules and stay. The chips sit before Add Rule Set and need no saved
+sets. Their labels are the patterns themselves, gitignore syntax rather
+than copy, so they have no translations. The Skip Rules dialog does not
+get them, since the spec names only the pair editor.
+
+Code: `SkipRuleQuickPick` and the pure `removeSkipRule` in
+`services/skip_rule_sets.dart`, and the chip row in
+`ui/sync/sync_pair_editor.dart`.
+
+Tests: 5 new. `removeSkipRule` (1) and the pair editor (4): choosing a
+chip appends after a `!` line, clearing one keeps its near misses,
+typing the line chooses it, and the row starts under the field. Two
+existing tests gain checks: without saved sets the chips still show,
+and adding a set with `node_modules/` chooses that chip. The first
+render with real fonts showed the row centred under the field; the
+alignment test failed against that before the fix. An independent
+review found nothing important. Declined: a chip stays chosen when a
+later `!.git/` re-includes the directory, since it tracks the line and
+the plan view shows the effect; and the labels gain no tooltip, since
+the labelled field sits directly above them.
+
+Local validation: Flutter analysis is clean, the localization contract
+passes, and all 3,468 app tests pass. Not run: native platforms and
+screen readers; the QA checklist's Skip rule sets section covers them.
+
+## Skip rule sets (2026-10-13)
+
+Sync's skip rules can now be saved as named rule sets and added to
+other pairs. The Skip Rules dialog (the Sync sheet's Edit Rules…) gains
+Add Rule Set, Save as Rule Set… and Manage Rule Sets…, and the advanced
+pair editor's excludes field gains Add Rule Set. Adding a set appends
+its lines after the pair's own and leaves out lines the pair already
+has, which stay in place. Appended lines win under last match, so a set
+line can re-exclude what a pair's `!` line re-included; the plan shows
+the result before anything runs. The pair keeps the copy, so later
+edits to a set change no pair, and the savedSync record gains no
+field. Sets live on this device under `sync.skipRuleSets` in
+`settings.json` and are never synced. This is the named skip-rules
+item of the v1.x backlog (07 §3.13; 05 §3).
+
+Names are trimmed and unique ignoring case, and a set needs at least one
+pattern; comment lines alone do not count. An empty Add Rule Set menu
+says there are no saved sets. Saving and deleting persist before the
+list changes, so a failed write shows its error in the dialog, read out
+by screen readers, and lists nothing new. Each write edits the sets as
+stored and refuses a name a stored set holds, so a launch whose read
+failed can neither wipe the sets nor let a new set replace one. The
+editor stays open until its write finishes, and Escape closes an open
+Add Rule Set menu without closing the dialog. Saving, editing or
+deleting a set never commits the pair's rules: only Done does. The app
+defaults stay out of every set and still evaluate last. A stored set
+with no usable pattern is dropped on load, and save and delete failures
+are also reported to the app's error reporter.
+
+Code: `services/skip_rule_sets.dart` (the set, decoding and the pure
+append and list rules), `services/skip_rule_sets_controller.dart`, three
+`AppPreferences` methods, and `ui/sync/sync_rule_sets.dart` (the menu,
+the manager and the editor). The controller is created once in
+`main.dart` and passed through `PoltergeistApp` and `WorkspaceShell` to
+the sheet, its Skip Rules dialog and both pair-editor entry points.
+
+An independent review of the first commit, each finding verified, led
+to these fixes, each with a regression test that failed first: Escape
+on a mouse-opened Add Rule Set menu closed the whole dialog with its
+unsaved edits; a new set could replace a stored one the screen missed
+after a failed read; closing the editor mid-write let its pop land on
+the dialog beneath; failure messages were not read out; and the plan
+view's editor wiring had no test. It also corrected the spec's wording
+on `!` lines and the QA step for bookmark sync.
+
+Tests: 40 new. The set's decoding and the pure append and list rules
+(15), the controller (3), and the preferences round trip, damaged values
+and failed-read cases, including a name the screen missed (5). The Sync
+sheet's tests (13) cover adding a set, Escape on the open menu, the
+empty menu, Save as Rule Set without committing, the name and pattern
+checks, managing sets while pairs keep their copy, failed saves and
+deletes read out as live regions, the editor staying open mid-write, a
+name the store already holds, the Advanced editor and phone width. The
+pair editor gains 2 and the shell 2 (the sheet's dialog and the plan
+view's editor each receive the sets). Mutation checks (no forwarding to
+the sheet, the Advanced editor or the plan view's editor, appending
+duplicates, case-sensitive names) each fail a test.
+
+Local validation: Flutter analysis is clean, the localization contract
+passes, and all 3,463 app tests pass. Not run: native platforms,
+screen readers, and IME composition in the new fields; the QA
+checklist's Skip rule sets section covers them.
+
 ## Compare view keys and text size (2026-10-13)
 
 Help ▸ Keyboard Shortcuts now lists n and Shift+N under Compare, after
@@ -8779,10 +8910,11 @@ then the v1.x backlog (named skip rules, batch rename, custom keymap,
 native icons, Compare entry point, preview warming — and Sync Browsing
 if risk 8's cut line is ever exercised). None was started in this release-prep
 slice; D10 completed on 2026-09-29 and D27 completed on 2026-09-30 as recorded
-above. Numbered fast-follow items 1–4 and deep links are complete; the text-diff
-view remains demand-dependent. From the v1.x backlog, the Compare entry
-point shipped on 2026-10-11 as Compare Files, and batch rename as Rename
-Items. Item
+above. Numbered fast-follow items 1–4 and deep links are complete, and the
+text-diff view shipped on 2026-10-12 as the minimal diff view. From the
+v1.x backlog, the Compare entry point shipped on 2026-10-11 as Compare
+Files, batch rename as Rename Items, and named skip rules on 2026-10-13
+as rule sets. Item
 23's remote-transfer wiring is the de-facto headline fast-follow even
 though §3.13 predates naming it.
 

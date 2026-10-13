@@ -1,0 +1,53 @@
+{
+  "result": {
+    "units": [
+      {
+        "unit": "auditd.service",
+        "load": "loaded",
+        "active": "active",
+        "sub": "running",
+        "description": "Security Auditing Service"
+      },
+      {
+        "unit": "chronyd.service",
+        "load": "loaded",
+        "active": "active",
+        "sub": "running",
+        "description": "NTP client/server"
+      },
+      {
+        "unit": "crond.service",
+        "load": "loaded",
+        "active": "active",
+        "sub": "running",
+        "description": "Command Scheduler"
+      },
+      {
+        "unit": "sshd.service",
+        "load": "loaded",
+        "active": "active",
+        "sub": "running",
+        "description": "OpenSSH server daemon"
+      },
+      {
+        "unit": "foo.service",
+        "load": "loaded",
+        "active": "failed",
+        "sub": "failed",
+        "description": "A deliberately failed unit"
+      }
+    ],
+    "failed": [
+      {
+        "unit": "foo.service",
+        "load": "loaded",
+        "active": "failed",
+        "sub": "failed",
+        "description": "A deliberately failed unit"
+      }
+    ],
+    "format": "text",
+    "timeoutAbsent": false
+  },
+  "warnings": []
+}

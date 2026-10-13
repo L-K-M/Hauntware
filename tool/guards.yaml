@@ -1,0 +1,29 @@
+# Suite guard configuration, one entry per product (03 §3.4).
+# Paths are relative to the product directory. The root import and
+# protocol guards read this file; adding a product must not need code
+# changes. `tool/import_guard/lib/guards_config.dart` defines the schema
+# and rejects unknown or missing keys.
+products:
+  poltergeist:
+    scan: [packages, app]
+    pure_packages: [packages/*]
+    # dartssh2 imports stay confined to core's connection layer plus the
+    # sanctioned M0 harness (the relocated bench package).
+    dartssh2_imports:
+      - packages/poltergeist_core/lib/src/connection
+      - packages/poltergeist_bench
+    dartssh2_dependents:
+      - packages/poltergeist_core
+      - packages/poltergeist_bench
+    # Packages resolving through their own .dart_tool/package_config.json
+    # outside the product workspace lock.
+    standalone_resolutions:
+      - packages/poltergeist_bench
+    engine_protocol: packages/poltergeist_core/lib/src/engine
+    engine_protocol_callback_owners:
+      packages/poltergeist_core/lib/src/engine/progress_coalescer.dart:
+        [ProgressCoalescer]
+      packages/poltergeist_core/lib/src/engine/connect_log_coalescer.dart:
+        [ConnectLogCoalescer]
+      packages/poltergeist_core/lib/src/engine/engine_probes.dart:
+        [EngineProbes]

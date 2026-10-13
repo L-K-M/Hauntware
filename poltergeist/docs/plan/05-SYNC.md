@@ -354,7 +354,30 @@ concurrently in the engine isolate (D8).
   `*.poltergeist-*` (together the last two cover `.poltergeist-trash/`,
   `.poltergeist-*.tmp` temps, the editor's `<name>.poltergeist-<uuid>.edit`
   / `.backup` siblings, and any future app droppings — D15). The pair
-  editor offers quick-pick chips for `.git/` and `node_modules/`.
+  editor offers quick-pick chips for `.git/` and `node_modules/`
+  (shipped 2026-10-13): a chip shows as chosen while the excludes hold
+  its exact line, choosing it appends the line as a rule set would, and
+  clearing it removes that line only, so a near miss such as `.git` or
+  `!.git/` stays.
+- **Named rule sets** (v1.x, 2026-10-13): a rule set is a name and a
+  list of `excludeGlobs` lines, kept on this device in `settings.json`
+  (03 §6) and never synced. Names are trimmed and unique ignoring case,
+  and a set holds at least one pattern; comment lines alone do not
+  count, and a stored set without one is dropped on load. The Skip Rules
+  dialog (the Sync sheet's Edit Rules…) offers Add Rule Set, Save as
+  Rule Set… and Manage Rule Sets…; the pair editor's excludes field
+  offers Add Rule Set. Adding a set appends its lines after the pair's
+  own and leaves out lines the pair already has, which stay where they
+  are. Every appended line comes after the pair's lines and wins under
+  last match, so a set line can re-exclude a path a pair's `!` line
+  re-included, and a set's `!` line that the pair already has is left
+  out rather than repeated after the set's excludes. The plan shows the
+  effect before anything runs. The pair keeps the copy: renaming,
+  editing or deleting a set later changes no pair, and the savedSync
+  record (04) gains no field. Sets hold only pair patterns, never the
+  app defaults, which still evaluate after every pair line. Adding a set
+  never scans or runs; the plan previews the result, and §8's rails
+  apply unchanged.
 - **Name hazards are surfaced, never silently "fixed"** — each becomes a
   plan item with a conflict-class reason (§6):
   - macOS HFS+ canonicalizes to NFD, while APFS (the default since 2017)
@@ -1214,7 +1237,13 @@ heavy set (`node_modules`, `.git`, `build`, `target`, `__pycache__`):
    `.poltergeist-root/identity` ownership marker — never a recursive
    walk. The marker's random id is the physical-root scope used by
    journals and local activity locks, so endpoint aliases converge; an
-   unmarked non-trash directory is never adopted or purged. During the
+   unmarked non-trash directory is never adopted or purged. A staged
+   claim (`.poltergeist-root.init-` plus 32 hex digits, exactly as a
+   claim names it) that another claim is still writing, or that a
+   stopped claim left behind, does not block adoption: its identity may
+   be absent, a prefix of a marker, or gone into place. Staged content
+   that could never become a marker, or any other name, fails closed.
+   During the
    active-marker format transition, each run holds both the legacy hashed
    marker and the v2 name-encoded marker. Readers resolve v2 first so Windows
    never needs to read a current locked marker; an unreadable legacy-only
@@ -1842,5 +1871,5 @@ Testing hooks, elaborated in 08:
 | Scheduled / watched / auto-run sync | v2 (D25); parked in 07 |
 | Symlink `copyAsLink` / `follow` policies | v1.x/v2; enum reserved in §6 |
 | Remote `setTimes` before the Séance pin bump | upstream PR + pin sequencing in 04/07 (03 §2.4) |
-| Named reusable skip-rules engine (Transmit-style Rules) | 07 parking; sync ships its own ignore rules (§3) |
+| Named reusable skip-rules engine (Transmit-style Rules) | Shipped in v1.x as §3's named rule sets; the remainder (sets linked to pairs, synced sets, size or date conditions) stays in 02's deferral table |
 | Text diff view for double-clicked pairs | Shipped in v1.x as 06 §6's minimal diff view |

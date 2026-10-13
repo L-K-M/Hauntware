@@ -2,7 +2,9 @@
 
 <img src="../../../klabautermann/media-sources/klabautermann-icon.png" alt="Klabautermann app icon" width="160">
 
-Status: plan with owner decisions of 2026-10-10. Nothing here is implemented.
+Status: plan with owner decisions of 2026-10-10. Implementation started on
+2026-10-13; [06-EXECUTION.md](06-EXECUTION.md) records approvals, manual
+gates and environment limits.
 
 This directory plans Klabautermann, the fourth Hauntware product: a server
 management and observability app. This README summarizes the plan, the
@@ -63,7 +65,8 @@ The differentiators are listed in [02 §5](02-FEATURES.md#5-differentiators).
 | 4 | [03-ARCHITECTURE.md](03-ARCHITECTURE.md) | Sections 1 to 11: principles, decision log with the owner decisions, packages, catalog, transport, collection, subsystems, privilege and safety, tiers, UI, testing |
 | 5 | [04-IMPLEMENTATION.md](04-IMPLEMENTATION.md) | Sections 12 to 15 and Appendices A to C: suite integration, milestones, risks, owner decisions, verification notes |
 | 6 | [05-NAMES.md](05-NAMES.md) | Naming rules, the name decision, shortlist, collision screen |
-| 7 | [research/README.md](research/README.md) | Index of the research appendices, freshness caveat, abbreviation key, marker legends |
+| 7 | [06-EXECUTION.md](06-EXECUTION.md) | Execution notes: approvals under the owner's instruction, environment limits, manual sign-off gates |
+| 8 | [research/README.md](research/README.md) | Index of the research appendices, freshness caveat, abbreviation key, marker legends |
 
 The nine research appendices are imported as captured and not maintained;
 where one disagrees with a chapter, the chapter wins.
@@ -117,7 +120,10 @@ maps every review "must address" item to its resolution.
 | Later | Release | T2 rows (four scheduled in M9; ALR-12, ALR-13 and X-09 wait on further decisions) and work after v1.x: push relay, backups inside Klabautermann, permissive template catalogs | 92 |
 
 Rows are catalog rows in 02; execution counts exclude the 7 non-goal rows
-(487 of 494). The counts are those of
+(487 of 494). The release counts are catalog counts before the two
+release changes of [03 §1.4](03-ARCHITECTURE.md#14-deviations-from-and-corrections-to-02-featuresmd)
+(SAF-11 to MVP, SYN-05 to v1), which make them MVP 111, v1 136, v1.x 148,
+Later 92. Before those changes the counts are those of
 [02 Feature counts](02-FEATURES.md#feature-counts), which wins if they
 differ. T2 rows keep the release tier Later; ALR-11, ALR-14, ALR-15 and
 HIS-08 are scheduled in M9, and ALR-12, ALR-13 and X-09 wait on further

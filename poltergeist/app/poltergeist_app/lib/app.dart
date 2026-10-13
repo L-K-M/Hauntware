@@ -43,6 +43,7 @@ import 'services/settings_window/settings_window_host.dart';
 import 'services/sidebar_controller.dart'
     show CollapsedSectionWriter, PinnedServerWriter, SidebarDensity;
 import 'services/sidebar_probe_owner.dart';
+import 'services/skip_rule_sets_controller.dart';
 import 'services/ssh_config_import_setup.dart';
 import 'services/sync_environment.dart';
 import 'services/sync_queue_facade.dart';
@@ -130,6 +131,7 @@ class PoltergeistApp extends StatefulWidget {
     this.appearance,
     this.editorTextSize,
     this.directoryGrouping,
+    this.skipRuleSets,
     this.deepLinks,
     this.seanceLauncher,
   });
@@ -369,6 +371,10 @@ class PoltergeistApp extends StatefulWidget {
   /// Null keeps folders on top and leaves the row out.
   final DirectoryGroupingModel? directoryGrouping;
 
+  /// Sync's named skip rule sets on this device (05 §3). Null leaves
+  /// the rule-set controls out of the Skip Rules dialog and pair editor.
+  final SkipRuleSetsController? skipRuleSets;
+
   final DeepLinkCoordinator? deepLinks;
   final SeanceLauncher? seanceLauncher;
 
@@ -571,6 +577,7 @@ class _PoltergeistAppState extends State<PoltergeistApp> {
       appearance: widget.appearance,
       editorTextSize: widget.editorTextSize,
       directoryGrouping: widget.directoryGrouping,
+      skipRuleSets: widget.skipRuleSets,
       deepLinks: widget.deepLinks,
       seanceLauncher: widget.seanceLauncher,
     );

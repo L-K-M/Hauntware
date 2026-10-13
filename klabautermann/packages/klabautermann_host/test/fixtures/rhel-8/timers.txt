@@ -1,0 +1,6 @@
+== timers_text ==
+NEXT                          LEFT          LAST                          PASSED      UNIT                          ACTIVATES
+Mon 2023-11-13 21:45:58 UTC   2h 15min left Mon 2023-11-13 19:30:00 UTC   10min ago   logrotate.timer               logrotate.service
+Mon 2023-11-13 22:00:00 UTC   2h 30min left n/a                           n/a         mdadm-last-resort.timer       mdadm-last-resort.service
+n/a                           n/a           n/a                           n/a         fstrim.timer                  fstrim.service
+3 timers listed.

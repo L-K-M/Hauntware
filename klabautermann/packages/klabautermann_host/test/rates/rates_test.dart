@@ -249,4 +249,60 @@ void main() {
       expect(d.disk['sda']!.readBytesPerSecond, 200 * 512 / 2);
     });
   });
+
+  group('procCpuPercent', () {
+    ProcEntry proc(int pid, {int? utime, int? stime, int? start}) =>
+        ProcEntry(pid: pid, utime: utime, stime: stime, startTicks: start);
+
+    ProcsSnapshot snap(List<ProcEntry> ps) => ProcsSnapshot(processes: ps);
+
+    test('the utime plus stime delta over the interval is a percentage', () {
+      final r = procCpuPercent(
+        snap([proc(100, utime: 10, stime: 10, start: 5)]),
+        snap([proc(100, utime: 30, stime: 10, start: 5)]),
+        2,
+      );
+      // 20 jiffies over 2 s at 100 Hz = 10 percent of one CPU.
+      expect(r[100], 10);
+    });
+
+    test('a changed startTicks is a pid reuse and yields no entry', () {
+      final r = procCpuPercent(
+        snap([proc(100, utime: 10, stime: 10, start: 5)]),
+        snap([proc(100, utime: 30, stime: 10, start: 99)]),
+        2,
+      );
+      expect(r, isEmpty);
+    });
+
+    test(
+      'a jiffy decrease, a missing pid or a zero interval yields nothing',
+      () {
+        expect(
+          procCpuPercent(
+            snap([proc(100, utime: 30, stime: 30)]),
+            snap([proc(100, utime: 10, stime: 10)]),
+            2,
+          ),
+          isEmpty,
+        );
+        expect(
+          procCpuPercent(
+            snap([proc(100, utime: 10, stime: 10)]),
+            snap([proc(200, utime: 30, stime: 30)]),
+            2,
+          ),
+          isEmpty,
+        );
+        expect(
+          procCpuPercent(
+            snap([proc(100, utime: 10, stime: 10)]),
+            snap([proc(100, utime: 20, stime: 20)]),
+            0,
+          ),
+          isEmpty,
+        );
+      },
+    );
+  });
 }

@@ -1,0 +1,39 @@
+{
+  "result": {
+    "timers": [
+      {
+        "unit": "logrotate.timer",
+        "activates": "logrotate.service",
+        "nextUs": 1699911958000000,
+        "leftUs": 8100000000,
+        "lastUs": 1699903800000000,
+        "passedUs": 600000000,
+        "nextText": "Mon 2023-11-13 21:45:58 UTC",
+        "lastText": "Mon 2023-11-13 19:30:00 UTC"
+      },
+      {
+        "unit": "mdadm-last-resort.timer",
+        "activates": "mdadm-last-resort.service",
+        "nextUs": 1699912800000000,
+        "leftUs": 9000000000,
+        "lastUs": null,
+        "passedUs": null,
+        "nextText": "Mon 2023-11-13 22:00:00 UTC",
+        "lastText": "n/a"
+      },
+      {
+        "unit": "fstrim.timer",
+        "activates": "fstrim.service",
+        "nextUs": null,
+        "leftUs": null,
+        "lastUs": null,
+        "passedUs": null,
+        "nextText": "n/a",
+        "lastText": "n/a"
+      }
+    ],
+    "format": "text",
+    "timeoutAbsent": false
+  },
+  "warnings": []
+}

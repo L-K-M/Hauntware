@@ -25,6 +25,16 @@ const int _markerRandomBytes = 16;
 const int _maxMarkerBytes = 128;
 const int _privateDirectoryMode = 0x1C0; // 0700
 
+/// The name [_claimMarker] gives its candidate, and nothing looser: a
+/// staged marker is adopted even before its identity exists, so only a
+/// directory a claim could have made may pass for one.
+final RegExp _stagedMarkerNamePattern = RegExp(
+  '^${RegExp.escape('$syncTrashRootMarkerName$_markerCandidateSeparator')}'
+  '[0-9a-f]{${_markerRandomBytes * 2}}\$',
+);
+final RegExp _markerPrefixPattern = RegExp(
+  '^${RegExp.escape(_markerPrefix)}[0-9a-f]{0,32}\$',
+);
 final RegExp _markerPattern = RegExp(
   '^${RegExp.escape(_markerPrefix)}([0-9a-f]{32})\\n?\$',
 );
@@ -226,16 +236,46 @@ Future<void> _validateLegacyRoot(
 ) async {
   final children = await fileSystem.listDirectory(trashRoot);
   for (final child in children) {
-    if (!child.isDirectory) throw _unsafeRoot(trashRoot);
-    if (!child.name.startsWith(
-      '$syncTrashRootMarkerName$_markerCandidateSeparator',
-    )) {
+    if (!child.isDirectory || !_stagedMarkerNamePattern.hasMatch(child.name)) {
       throw _unsafeRoot(trashRoot);
     }
 
-    // A valid staged marker is evidence of an interrupted concurrent claim.
-    await _readMarker(fileSystem, context, context.join(trashRoot, child.name));
+    await _checkStagedMarker(
+      fileSystem,
+      context,
+      context.join(trashRoot, child.name),
+    );
   }
+}
+
+/// Accepts a staged marker as evidence of a concurrent or interrupted
+/// claim. A claim still in flight may not have written its identity yet,
+/// may be mid-write on a remote without atomic uploads, or may rename the
+/// candidate into place while it is read; a claim that stopped leaves the
+/// same states behind. Only content that could never become a marker
+/// fails closed.
+Future<void> _checkStagedMarker(
+  RemoteFileSystem fileSystem,
+  p.Context context,
+  String candidatePath,
+) async {
+  final String? identity;
+  try {
+    identity = await _readIdentity(fileSystem, context, candidatePath);
+  } on RemoteFileException catch (error) {
+    if (error.kind == RemoteFileErrorKind.notFound) return;
+    rethrow;
+  }
+  if (identity == null || _couldBecomeMarker(identity)) return;
+  throw _invalidMarker(candidatePath);
+}
+
+/// Whether [text] is a marker or the start of one.
+bool _couldBecomeMarker(String text) {
+  if (text.length <= _markerPrefix.length) {
+    return _markerPrefix.startsWith(text);
+  }
+  return _markerPrefixPattern.hasMatch(text) || _markerPattern.hasMatch(text);
 }
 
 Future<String> _claimMarker(
@@ -288,11 +328,25 @@ Future<String> _readMarker(
   p.Context context,
   String markerPath,
 ) async {
+  final identity = await _readIdentity(fileSystem, context, markerPath);
+  final match = identity == null ? null : _markerPattern.firstMatch(identity);
+  if (match == null) throw _invalidMarker(markerPath);
+  return match.group(1)!;
+}
+
+/// The text of [markerPath]'s identity file, or null when it does not
+/// exist. An identity that is not a small regular UTF-8 file is invalid.
+Future<String?> _readIdentity(
+  RemoteFileSystem fileSystem,
+  p.Context context,
+  String markerPath,
+) async {
   final identityPath = context.join(markerPath, _markerIdentityName);
   final RemoteFileEntry identity;
   try {
     identity = await fileSystem.stat(identityPath, followLinks: false);
-  } on RemoteFileException {
+  } on RemoteFileException catch (error) {
+    if (error.kind == RemoteFileErrorKind.notFound) return null;
     throw _invalidMarker(markerPath);
   }
   if (identity.type != RemoteFileType.file ||
@@ -306,15 +360,11 @@ Future<String> _readMarker(
   } on _MarkerTooLarge {
     throw _invalidMarker(markerPath);
   }
-  final String decoded;
   try {
-    decoded = utf8.decode(sink.bytes);
+    return utf8.decode(sink.bytes);
   } on FormatException {
     throw _invalidMarker(markerPath);
   }
-  final match = _markerPattern.firstMatch(decoded);
-  if (match == null) throw _invalidMarker(markerPath);
-  return match.group(1)!;
 }
 
 Future<void> _removeMarkerCandidate(
