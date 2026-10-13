@@ -57,7 +57,7 @@ void main() {
   test('check verifies the suite tree', () {
     expect(run(['check']), 0);
     expect(output.single, contains('1.1.0+1010099'));
-    expect(output.single, contains('7 pubspecs'));
+    expect(output.single, contains('9 pubspecs'));
     expect(errors, isEmpty);
   });
 
@@ -231,7 +231,12 @@ void _writeFixture(Directory root) {
       'v<!-- version -->$version<!-- /version -->\n';
 
   write('pubspec.yaml', 'name: hauntware\nversion: 1.1.0\n');
-  for (final project in ['planchette', 'seance', 'poltergeist']) {
+  for (final project in [
+    'planchette',
+    'seance',
+    'poltergeist',
+    'klabautermann',
+  ]) {
     write(
       '$project/packages/${project}_core/pubspec.yaml',
       pubspec('${project}_core'),
@@ -273,6 +278,14 @@ void _writeFixture(Directory root) {
   write(
     'poltergeist/app/poltergeist_app/macos/Runner/Info.plist',
     plist('2.1.0'),
+  );
+  write(
+    'klabautermann/app/klabautermann_app/ios/Runner/Info.plist',
+    plist(r'$(FLUTTER_BUILD_NUMBER)'),
+  );
+  write(
+    'klabautermann/app/klabautermann_app/macos/Runner/Info.plist',
+    plist(r'$(FLUTTER_BUILD_NUMBER)'),
   );
 }
 

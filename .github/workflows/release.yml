@@ -303,7 +303,7 @@ jobs:
   flutter:
     name: Flutter tests (release gate)
     runs-on: ubuntu-latest
-    timeout-minutes: 45   # three apps plus shared packages
+    timeout-minutes: 45   # four apps plus shared packages
     permissions:
       contents: read
     steps:
@@ -357,6 +357,12 @@ jobs:
           (cd seance/third_party/xterm && flutter pub get && flutter test --no-pub)
       - name: Poltergeist — analyze and test app
         working-directory: poltergeist/app/poltergeist_app
+        run: |
+          flutter pub get
+          flutter analyze --no-pub
+          flutter test --no-pub
+      - name: Klabautermann — analyze and test app
+        working-directory: klabautermann/app/klabautermann_app
         run: |
           flutter pub get
           flutter analyze --no-pub

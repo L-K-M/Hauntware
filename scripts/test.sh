@@ -135,8 +135,8 @@ if [[ "$scope" != flutter ]]; then
     run dart run tool/license_gate/bin/check.dart --marker-only
   )
 
-  # ---- Klabautermann: pure-Dart workspace packages (the app does not
-  # exist yet). The sampler's shell test runs dash and bash where present.
+  # ---- Klabautermann: pure-Dart workspace packages (the app is below).
+  # The sampler's shell test runs dash and bash where present.
   (
     cd klabautermann
     run dart pub get
@@ -186,6 +186,12 @@ if [[ "$scope" != dart ]]; then
   (
     cd poltergeist
     (cd app/poltergeist_app && run flutter pub get && run flutter analyze && run flutter test)
+  )
+
+  # ---- Klabautermann app.
+  (
+    cd klabautermann
+    (cd app/klabautermann_app && run flutter pub get && run flutter analyze && run flutter test)
   )
 fi
 
