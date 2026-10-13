@@ -103,20 +103,23 @@ class DangerLinter {
     // or unbounded destruction; scoped data loss and lockouts warn, as the
     // power and iptables rules above do.
     _Rule(
-      // Plain `docker system prune` removes stopped containers, dangling
-      // images and build cache; --all/-a adds every unused image and
-      // --volumes every unused volume.
+      // Plain `docker system prune` removes stopped containers, unused
+      // networks, dangling images and build cache; --all/-a adds every
+      // unused image and --volumes unused volumes. Since Docker 23 (API
+      // 1.42) volume pruning takes only anonymous volumes unless
+      // `docker volume prune` gets --all; older engines take named ones too.
       RegExp(
         r'\bdocker\s+system\s+prune\b(?=[^\n]*(--volumes\b|--all\b|\s-\w*a))',
       ),
       DangerSeverity.critical,
-      'docker system prune sweeping images and volumes destroys all unused '
-      'data.',
+      'docker system prune --all deletes every unused image; --volumes also '
+      'deletes unused volumes and their data.',
     ),
     _Rule(
       RegExp(r'\bdocker\s+volume\s+prune\b'),
       DangerSeverity.critical,
-      'Removes every unused volume, taking attached data with it.',
+      'Removes unused volumes and their data (named ones too with --all or '
+      'before Docker 23).',
     ),
     _Rule(
       RegExp(r'\bdocker\s+volume\s+rm\b'),
@@ -172,11 +175,13 @@ class DangerLinter {
     ),
     _Rule(
       // `\s1\b` needs a standalone 1, so PIDs such as 1000 and job specs
-      // such as %1 do not match, and \bkill\b leaves pkill and killall
-      // alone. PID 1 only receives signals it handles (pid_namespaces(7)):
-      // systemd re-executes on TERM but reboots on INT (systemd(1)), and a
+      // such as %1 do not match, and a 1 that is the operand of -s, -n or
+      // -l is a signal, not a PID. The (?<![\w-]) and (?![\w-]) guards
+      // leave pkill, killall and tmux's kill-session alone. PID 1 only
+      // receives signals it handles (pid_namespaces(7)): systemd
+      // re-executes on TERM but reboots on INT (systemd(1)), and a
       // container's main process usually exits on TERM.
-      RegExp(r'\bkill\b[^\n]*\s1\b'),
+      RegExp(r'(?<![\w-])kill(?![\w-])[^\n]*(?<!\s-[snl])\s1\b'),
       DangerSeverity.warning,
       'Signals PID 1, the init process or a container\'s main process; '
       'this can reboot the host or stop the container.',

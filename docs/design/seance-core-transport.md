@@ -532,8 +532,8 @@ warning for scoped data loss and lockout-class commands (`iptables -F`
 
 | # | Pattern | Severity | Explanation |
 |---|---|---|---|
-| 15 | `\bdocker\s+system\s+prune\b(?=[^\n]*(--volumes\b\|--all\b\|\s-\w*a))` (also `-af`, `-fa`) | critical | `docker system prune` sweeping images and volumes destroys all unused data |
-| 16 | `\bdocker\s+volume\s+prune\b` | critical | Removes every unused volume, taking attached data with it |
+| 15 | `\bdocker\s+system\s+prune\b(?=[^\n]*(--volumes\b\|--all\b\|\s-\w*a))` (also `-af`, `-fa`) | critical | `docker system prune --all` deletes every unused image; `--volumes` also deletes unused volumes and their data. Corrected in F2-4: since Docker 23 (API 1.42) volume pruning takes only anonymous volumes, so "all unused data" overstated it |
+| 16 | `\bdocker\s+volume\s+prune\b` | critical | Removes unused volumes and their data (named ones too with `--all` or before Docker 23). Corrected in F2-4: Docker 23 prunes only anonymous volumes by default (23.0.0 release notes; `docker volume prune` reference) |
 | 17 | `\bdocker\s+volume\s+rm\b` | warning | Deletes a named volume and its data |
 | 18 | `\b(?:docker\s+compose\|docker-compose)\b[^\n]*\sdown\b(?=[^\n]*(--volumes\b\|\s-\w*v))` (also `compose -f f.yaml down -v`) | critical | `compose down -v` drops the stack's volumes |
 | 19 | `\bsystemctl\s+(?:stop\|disable\|mask)\b[^\n]*\bssh` | warning | Stopping or masking sshd cuts future SSH access to the host |
@@ -542,7 +542,7 @@ warning for scoped data loss and lockout-class commands (`iptables -F`
 | 22 | `\bnft\s+flush\s+ruleset\b` | warning | Drops the entire nftables ruleset |
 | 23 | `\buserdel\b(?![^\n]*(\s-\w*r\|--remove\b))` | warning | Removes a user account |
 | 24 | `\buserdel\b(?=[^\n]*(\s-\w*r\|--remove\b))` (`-r`, `-rf`, `-fr`) | critical | `userdel -r` also deletes the home directory |
-| 25 | `\bkill\b[^\n]*\s1\b` | warning | Signals PID 1, the init process or a container's main process; this can reboot the host or stop the container. Corrected in F2-4: systemd re-executes on `TERM` and reboots on `INT` (systemd(1)), and PID 1 receives only signals it handles, so `-9 1` is dropped inside its namespace (pid_namespaces(7)); `kill -9 1` stays the plan's case |
+| 25 | `(?<![\w-])kill(?![\w-])[^\n]*(?<!\s-[snl])\s1\b` | warning | Signals PID 1, the init process or a container's main process; this can reboot the host or stop the container. Corrected in F2-4: the plan's `\bkill\b[^\n]*\s1\b` also fired on `tmux kill-session -t 1` and on a 1 that is the operand of `-s`, `-n` or `-l`; systemd re-executes on `TERM` and reboots on `INT` (systemd(1)), and PID 1 receives only signals it handles, so `-9 1` is dropped inside its namespace (pid_namespaces(7)); `kill -9 1` stays the plan's case |
 
 Overlap with the 14 existing rules, checked rule by rule: `docker`,
 `crontab`, `ufw`, `nft`, `userdel`, `kill` have no coverage today (plan's

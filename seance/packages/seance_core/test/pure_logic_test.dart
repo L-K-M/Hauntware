@@ -179,8 +179,8 @@ Host bastion db
       final rules = <_DangerRuleCase>[
         (
           explanation:
-              'docker system prune sweeping images and volumes '
-              'destroys all unused data.',
+              'docker system prune --all deletes every unused image; '
+              '--volumes also deletes unused volumes and their data.',
           severity: critical,
           fires: [
             'docker system prune -a --volumes',
@@ -200,7 +200,8 @@ Host bastion db
         ),
         (
           explanation:
-              'Removes every unused volume, taking attached data with it.',
+              'Removes unused volumes and their data (named ones too with '
+              '--all or before Docker 23).',
           severity: critical,
           fires: [
             'docker volume prune',
@@ -321,10 +322,22 @@ Host bastion db
             'kill 1',
             'kill -TERM 1',
             'kill -s INT 1',
+            'kill -s 1 1',
             'sudo kill -HUP 1',
           ],
-          // A longer PID, a job spec, and -1 as the signal are not PID 1.
-          misses: ['kill 1000', 'kill -9 12345', 'kill %1', 'kill -1 1234'],
+          // A longer PID, a job spec, -1 as the signal, a signal or -l
+          // operand, and tmux's hyphenated kill-* commands are not PID 1.
+          misses: [
+            'kill 1000',
+            'kill -9 12345',
+            'kill %1',
+            'kill -1 1234',
+            'kill -s 1 1234',
+            'kill -n 1 1234',
+            'kill -l 1',
+            'tmux kill-session -t 1',
+            'tmux kill-window -t 1',
+          ],
         ),
       ];
 
