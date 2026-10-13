@@ -1,0 +1,32 @@
+name: klabautermann_core
+description: >-
+  Pure-Dart engine layer for Klabautermann: the D18 engine isolate, its
+  plain-data request/event protocol (03 §10.1), and the services the app
+  composes over (docs/design/klabautermann/03, sections 3.2 and 10.1).
+version: 1.9.0
+publish_to: none
+resolution: workspace
+
+environment:
+  sdk: ^3.12.0
+
+dependencies:
+  # 03 §3.2: the app reaches seance_core types only through this barrel.
+  # SshLink transport, the sync catalog and the elevation prelude are wired
+  # here in M2 and later; declared now so the dependency is fixed early.
+  seance_core:
+    path: ../../../seance/packages/seance_core
+  # Host sampling protocol, parsers and snapshot types (Collector,
+  # OverviewSnapshot) the engine protocol carries.
+  klabautermann_host:
+    path: ../klabautermann_host
+  # Docker API client, models and parsers the engine drives for
+  # DockerQuery/DockerResult.
+  klabautermann_docker:
+    path: ../klabautermann_docker
+  # @immutable on the protocol's plain-data types.
+  meta: ^1.15.0
+
+dev_dependencies:
+  lints: ^5.0.0
+  test: ^1.25.0

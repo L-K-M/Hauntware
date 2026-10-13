@@ -1,0 +1,18 @@
+== blocks ==
+Filesystem              Type 1B-blocks        Used    Available Capacity Mounted on
+devtmpfs                devtmpfs  16777216           0     16777216       0% /dev
+tmpfs                   tmpfs    167772160           0    167772160       0% /dev/shm
+tmpfs                   tmpfs    167772160     12582912    155189248       8% /run
+/dev/mapper/rhel-root   xfs    53687091200  24696061952  28991029248      47% /
+/dev/sda1               xfs      1073741824    310378496    763363328      29% /boot
+/dev/mapper/rhel-home   xfs    107374182400  42949672960  64424509440     40% /home
+tmpfs                   tmpfs     33554432           0     33554432       0% /run/user/0
+== inodes ==
+Filesystem              Inodes   IUsed    IFree IUse% Mounted on
+devtmpfs                409600     400  409200    1% /dev
+tmpfs                  4096000      10 4095990    1% /dev/shm
+tmpfs                  4096000    1200 4094800    1% /run
+/dev/mapper/rhel-root  26214400  350000 25864400    2% /
+/dev/sda1               524288     330  523958    1% /boot
+/dev/mapper/rhel-home  52428800  200000 52228800    1% /home
+tmpfs                  4096000      15 4095985    1% /run/user/0

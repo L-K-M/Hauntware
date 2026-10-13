@@ -1,0 +1,7 @@
+{"Type":"container","Action":"create","Actor":{"ID":"9f8e7d6c5b4a39281706f5e4d3c2b1a09f8e7d6c5b4a39281706f5e4d3c2b1a0","Attributes":{"image":"nginx:1.27","name":"web-1"}},"scope":"local","time":1780001000,"timeNano":1780001000123456789}
+{"Type":"container","Action":"start","Actor":{"ID":"9f8e7d6c5b4a39281706f5e4d3c2b1a09f8e7d6c5b4a39281706f5e4d3c2b1a0","Attributes":{"image":"nginx:1.27","name":"web-1"}},"scope":"local","time":1780001001,"timeNano":1780001001123456789}
+{"Type":"container","Action":"health_status: healthy","Actor":{"ID":"9f8e7d6c5b4a39281706f5e4d3c2b1a09f8e7d6c5b4a39281706f5e4d3c2b1a0","Attributes":{"name":"web-1"}},"scope":"local","time":1780001002,"timeNano":1780001002123456789}
+{"Type":"image","Action":"pull","Actor":{"ID":"alpine:3.21","Attributes":{"name":"alpine:3.21"}},"scope":"local","time":1780001003,"timeNano":1780001003123456789}
+{"Type":"volume","Action":"create","Actor":{"ID":"web_data","Attributes":{"driver":"local"}},"scope":"local","time":1780001004,"timeNano":1780001004123456789}
+{"Type":"network","Action":"connect","Actor":{"ID":"abcdef0123456789","Attributes":{"name":"web_default","container":"9f8e"}},"scope":"local","time":1780001005,"timeNano":1780001005123456789}
+{"Type":"daemon","Action":"reload","Actor":{"ID":"daemon","Attributes":{}},"scope":"local","time":1780001006,"timeNano":1780001006123456789}

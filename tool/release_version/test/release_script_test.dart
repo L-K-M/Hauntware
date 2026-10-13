@@ -100,6 +100,7 @@ exit 1
         'planchette/app/planchette_app/pubspec.yaml',
         'planchette/packages/ghost_desktop/pubspec.yaml',
         'planchette/packages/ghost_marks/pubspec.yaml',
+        'planchette/packages/ghost_theme/pubspec.yaml',
         'planchette/packages/ghost_ui/pubspec.yaml',
         'planchette/packages/planchette_core/pubspec.yaml',
         'planchette/packages/planchette_editor/pubspec.yaml',
@@ -113,6 +114,10 @@ exit 1
         'poltergeist/packages/poltergeist_sync/pubspec.yaml',
         // The live bench compat shim bumps in lockstep with the suite.
         'poltergeist/tool/bench/pubspec.yaml',
+        'klabautermann/app/klabautermann_app/pubspec.yaml',
+        'klabautermann/packages/klabautermann_core/pubspec.yaml',
+        'klabautermann/packages/klabautermann_docker/pubspec.yaml',
+        'klabautermann/packages/klabautermann_host/pubspec.yaml',
       ]),
     );
     // Not owned: vendored forks and the unversioned workspace roots.
@@ -121,6 +126,7 @@ exit 1
     expect(pubspecs, isNot(contains('planchette/pubspec.yaml')));
     expect(pubspecs, isNot(contains('seance/pubspec.yaml')));
     expect(pubspecs, isNot(contains('poltergeist/pubspec.yaml')));
+    expect(pubspecs, isNot(contains('klabautermann/pubspec.yaml')));
 
     // The post-bump hook delegates to the version tool — no sed inline.
     expect(result.stdout, contains('post-bump --version'));
@@ -379,7 +385,12 @@ esac
     expect(result.stdout, contains('cwd=${findRepositoryRoot().path}\n'));
   });
 
-  for (final product in ['planchette', 'seance', 'poltergeist']) {
+  for (final product in [
+    'planchette',
+    'seance',
+    'poltergeist',
+    'klabautermann',
+  ]) {
     test('$product release.sh forwards the whole-suite release', () async {
       final root = findRepositoryRoot();
       final result = await Process.run(

@@ -442,7 +442,7 @@ class AppSettings {
     },
     // Lenient all the way down: a hand-edited theme costs at most its own
     // bad values, never the rest of the settings file.
-    themePalette: ThemePalette.decodeStored(json['themePalette']),
+    themePalette: seanceThemeCodec.decodeStored(json['themePalette']),
     themeMode: ThemeModePreference.values.firstWhere(
       (m) => m.name == json['themeMode'],
       orElse: () => ThemeModePreference.system,

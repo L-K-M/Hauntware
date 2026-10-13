@@ -4,6 +4,58 @@ Living snapshot of where Poltergeist is, what's proven, and what to pick up
 next. Read [AGENTS.md](../AGENTS.md) for build/test commands and
 [09-PLAYBOOK.md](plan/09-PLAYBOOK.md) for the PR process.
 
+## Pair-editor exclude row polish (2026-10-13)
+
+Two follow-ups GLM raised on the rule sets PR and deferred there. Adding
+a rule set whose lines the excludes already hold no longer rewrites the
+field, so the caret and selection stay where they were; the check
+compares rules, so blank lines or a trailing newline do not count as a
+change. The quick-pick
+row now keeps 8 px between wrapped rows: desktop chips shrink-wrap their
+tap targets, so wrapped rows touched in a narrow window.
+
+Tests: 2 new in `sync_pair_editor_test.dart`, each failing first (the
+caret jumped to the end, also with a trailing newline in the field; the
+gap between rows was 0 on macOS), and the Add Rule Set test now checks
+that a changing add still puts the caret at the end. Local validation:
+analysis is clean and the pair editor, Sync sheet, shell and
+localization contract tests pass.
+
+## Trash root claim race (2026-10-13)
+
+Main's CI failed on Windows in `trash_purge_test.dart`'s "concurrent
+first claims converge on one root identity". When two syncs claimed the
+same existing, empty trash directory at once, the second could list the
+root while the first claim's staged marker (`.poltergeist-root.init-…`)
+had no identity file yet. It read that as an invalid marker and failed
+the run instead of letting the race settle on one owner. A claim that
+stopped between staging its directory and writing the identity left the
+root unclaimable the same way.
+
+Adoption now accepts a staged marker whose identity is absent, is a
+prefix of a marker (a remote write still in progress), or vanishes
+because its claim renamed it into place mid-read. Staged content that
+could never become a marker still fails closed, as do all other
+occupants. Because a staged marker can now pass before its identity
+exists, only the exact name a claim gives it (`.init-` plus 32 hex
+digits) qualifies; the old prefix check accepted any suffix. Reading
+the root's own marker is unchanged.
+
+Code: `_checkStagedMarker` in `poltergeist_sync/lib/src/trash_root.dart`,
+sharing its identity read with `_readMarker`.
+
+Tests: 4 new in `trash_root_test.dart`. A claim held at its identity
+write lets a second claim run against the half-written root; both agree
+on one root id and only the marker remains. Absent, empty and partial
+identities are adopted; staged non-hex content and names a claim would
+not make still fail closed. The first two failed with the CI's error
+before the fix, and the name test failed against the old prefix check.
+The original concurrency test then passed five runs in a row.
+
+Local validation: `dart analyze` is clean and all 410 poltergeist_sync
+tests pass on Linux. Not run: Windows, where the race surfaced; CI
+covers it.
+
 ## Pair-editor quick picks (2026-10-13)
 
 The advanced pair editor's exclude rules now offer `.git/` and

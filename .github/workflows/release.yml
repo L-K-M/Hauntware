@@ -235,6 +235,18 @@ jobs:
             packages/seance_protocol packages/seance_core packages/seance_sync_server
           dart test \
             packages/seance_protocol packages/seance_core packages/seance_sync_server
+      - name: Klabautermann — resolve, analyze, test pure-Dart packages
+        working-directory: klabautermann
+        run: |
+          set -euo pipefail
+          dart pub get
+          dirs=()
+          for package in packages/*; do
+            [[ -d "$package" ]] || continue
+            dart analyze --fatal-infos "$package"
+            [[ -d "$package/test" ]] && dirs+=("$package")
+          done
+          dart test "${dirs[@]}"
       - name: Poltergeist — resolve, analyze, test packages and tools
         working-directory: poltergeist
         run: |
@@ -294,7 +306,7 @@ jobs:
   flutter:
     name: Flutter tests (release gate)
     runs-on: ubuntu-latest
-    timeout-minutes: 45   # three apps plus shared packages
+    timeout-minutes: 45   # four apps plus shared packages
     permissions:
       contents: read
     steps:
@@ -332,6 +344,7 @@ jobs:
           (cd planchette/packages/planchette_editor && flutter pub get)
           (cd planchette/packages/ghost_desktop && flutter pub get)
           (cd planchette/packages/ghost_marks && flutter pub get)
+          (cd planchette/packages/ghost_theme && flutter pub get)
           (cd planchette/app/planchette_app && flutter pub get)
       - name: Planchette — analyze and test shared packages and app
         run: |
@@ -339,6 +352,7 @@ jobs:
           (cd planchette/packages/planchette_editor && flutter analyze --no-pub && flutter test --no-pub)
           (cd planchette/packages/ghost_desktop && flutter analyze --no-pub && flutter test --no-pub)
           (cd planchette/packages/ghost_marks && flutter analyze --no-pub && flutter test --no-pub)
+          (cd planchette/packages/ghost_theme && flutter analyze --no-pub && flutter test --no-pub)
           (cd planchette/app/planchette_app && flutter analyze --no-pub && flutter test --no-pub)
       - name: Séance — analyze and test app and vendored xterm fork
         run: |
@@ -346,6 +360,12 @@ jobs:
           (cd seance/third_party/xterm && flutter pub get && flutter test --no-pub)
       - name: Poltergeist — analyze and test app
         working-directory: poltergeist/app/poltergeist_app
+        run: |
+          flutter pub get
+          flutter analyze --no-pub
+          flutter test --no-pub
+      - name: Klabautermann — analyze and test app
+        working-directory: klabautermann/app/klabautermann_app
         run: |
           flutter pub get
           flutter analyze --no-pub

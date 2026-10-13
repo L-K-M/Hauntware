@@ -22,6 +22,7 @@ export 'src/ghost_file_kinds.dart';
 export 'src/ghost_file_row.dart';
 export 'src/ghost_file_theme.dart';
 export 'src/ghost_menus.dart';
+export 'src/ghost_rate_format.dart';
 export 'src/middle_ellipsis_text.dart';
 export 'src/selected_tab_view.dart';
 export 'src/sidebar_kit.dart';

@@ -1,0 +1,46 @@
+{
+  "result": {
+    "units": [
+      {
+        "unit": "cron.service",
+        "load": "loaded",
+        "active": "active",
+        "sub": "running",
+        "description": "Regular background program processing daemon"
+      },
+      {
+        "unit": "ssh.service",
+        "load": "loaded",
+        "active": "active",
+        "sub": "running",
+        "description": "OpenBSD Secure Shell server"
+      },
+      {
+        "unit": "systemd-timesyncd.service",
+        "load": "loaded",
+        "active": "active",
+        "sub": "running",
+        "description": "Network Time Synchronization"
+      },
+      {
+        "unit": "foo.service",
+        "load": "loaded",
+        "active": "failed",
+        "sub": "failed",
+        "description": "A deliberately failed unit"
+      }
+    ],
+    "failed": [
+      {
+        "unit": "foo.service",
+        "load": "loaded",
+        "active": "failed",
+        "sub": "failed",
+        "description": "A deliberately failed unit"
+      }
+    ],
+    "format": "json",
+    "timeoutAbsent": false
+  },
+  "warnings": []
+}

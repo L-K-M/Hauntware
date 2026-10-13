@@ -315,7 +315,7 @@ class TerminalTabStrip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final chrome = SeanceChrome.of(context);
+    final chrome = SeanceChrome.of(context, seanceThemeStyle);
     final accent = this.accent;
     return Container(
       height: 38,
@@ -614,7 +614,7 @@ class _ChipShellState extends State<_ChipShell> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final chrome = SeanceChrome.of(context);
+    final chrome = SeanceChrome.of(context, seanceThemeStyle);
     final onMenu = widget.onMenu;
     final pointedAt = _hovered || _focused;
     final offerClose = pointedAt || widget.selected || widget.dirty;

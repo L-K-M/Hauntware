@@ -1,0 +1,88 @@
+{
+  "@@locale": "en",
+  "appTitle": "Klabautermann",
+  "fleetTitle": "Fleet",
+  "fleetSectionServers": "Servers",
+  "fleetEmptyTitle": "No servers yet",
+  "fleetEmptyBody": "Add a server to start monitoring your fleet.",
+  "serversCount": "{count, plural, =0{no servers} =1{1 server} other{{count} servers}}",
+  "@serversCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "sidebarSectionSemantics": "{title}, {count}",
+  "@sidebarSectionSemantics": {
+    "description": "A fleet rail section header's merged screen-reader announcement: its title and member count.",
+    "placeholders": {
+      "title": {
+        "type": "String"
+      },
+      "count": {
+        "type": "String"
+      }
+    }
+  },
+  "sidebarShowSection": "Show section",
+  "sidebarHideSection": "Hide section",
+  "sidebarFilterHint": "Filter servers",
+  "sidebarFilterClear": "Clear filter",
+  "sidebarAddMenu": "Add",
+  "sidebarRowMenu": "Server actions",
+  "sidebarCompactRows": "Compact rows",
+  "sidebarComfortableRows": "Comfortable rows",
+  "addServer": "Add server",
+  "syncFleet": "Synchronize",
+  "openSettings": "Settings",
+  "statusConnected": "Connected",
+  "statusConnecting": "Connecting",
+  "statusDisconnected": "Disconnected",
+  "statusFailed": "Failed",
+  "statusSemantics": "Server status: {status}",
+  "@statusSemantics": {
+    "description": "Screen-reader label for a server row's status dot.",
+    "placeholders": {
+      "status": {
+        "type": "String",
+        "example": "Connected"
+      }
+    }
+  },
+  "settingsTitle": "Settings",
+  "settingsTabGeneral": "General",
+  "settingsTabAppearance": "Appearance",
+  "settingsTabSync": "Sync",
+  "settingsTabServers": "Servers",
+  "settingsTabDocker": "Docker",
+  "settingsTabSafety": "Safety",
+  "settingsTabAlerts": "Alerts",
+  "themeLabel": "Theme",
+  "themeSystem": "System",
+  "themeLight": "Light",
+  "themeDark": "Dark",
+  "workspaceEmptyTitle": "Select a server",
+  "workspaceEmptyBody": "Choose a server from the fleet to see its workspace.",
+  "inspectorTitle": "Inspector",
+  "inspectorEmptyBody": "Details, alerts, operations and coverage appear here once you select a server.",
+  "placeholderMilestone": "Available in a later milestone.",
+  "serverTitle": "{name}",
+  "@serverTitle": {
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "web-1"
+      }
+    }
+  },
+  "workspaceTabOverview": "Overview",
+  "workspaceTabProcesses": "Processes",
+  "workspaceTabServices": "Services",
+  "workspaceTabLogs": "Logs",
+  "workspaceTabJobs": "Jobs",
+  "workspaceTabDocker": "Docker",
+  "workspaceTabSystem": "System",
+  "workspaceTabAccess": "Access",
+  "serverTabMore": "More"
+}

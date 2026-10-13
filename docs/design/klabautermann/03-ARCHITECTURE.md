@@ -191,7 +191,7 @@ value. Path abbreviations: `SC` = `seance/packages/seance_core/lib`, `SP` =
 
 | Release | Contents | Execution | Sync |
 |---|---|---|---|
-| MVP (preview, in suite releases labelled preview from M4) | Catalog §2: fleet list, overview, processes, services, journal and file tails, scheduled jobs, containers, images, logs, stats, compose stacks; single-target guarded actions; access check; settings; themes through `ghost_theme` with theme editing and presets | T0 | Pull-only |
+| MVP (preview, in suite releases labelled preview from M4) | Catalog §2: fleet list, overview, processes, services, journal and file tails, scheduled jobs, containers, images, logs, stats, compose stacks; single-target guarded actions; a device audit log (SAF-11, 1.4); access check; settings; themes through `ghost_theme` with theme editing and presets | T0 | Pull-only |
 | v1 (first public) | Catalog §4 table stakes; in-app server editing; container exec; config edits with diff, backup and validation; volumes, networks, prune; packages read-only; hardware; triage; in-app alerts with local notifications; session history; hand-offs to Séance and Poltergeist (X-03, X-04, X-10) | T0 | Read-write, own record kind (`pref` and `rule` types); first-seen host-key pins published |
 | v1.x | T1 host checks with alert delivery through the sync server (`klabautermann-notify` helper, one sender per server, "while you were away" list, D42) and the optional notifier, scheduled update checks, host recorders and "Enable sysstat", desktop tray, Android watch mode, remembered and optionally synced sudo password, volume browsing with a confirmed helper container, tier B hosts, update pipeline, drift detection, log explorer, fleet tables | T0 and T1 | Adds query, layout, window, sudo, registry, sender and alertstatus types; `rule` gains `evalScope: host` |
 | Later | M9 after v1.x: the Rust T2 companion (opt-in per server) and the Later rows tagged T2 except ALR-12, ALR-13 and X-09, which wait on further decisions (9.4). Not estimated: backups inside the app on T1, permissive template catalogs, push relay (further decision), Séance metrics strip | T1; T2 on servers where the user enables it | The companion reuses the sender and alertstatus types (D42); further companion records bounded and decided in M9 (9.4) |
@@ -208,7 +208,7 @@ value. Path abbreviations: `SC` = `seance/packages/seance_core/lib`, `SP` =
 | CN-03 | Nonce-framed sections | Also length-prefixed; nonce delivered on stdin, never in argv | Other local users can read argv; length prefixes defeat forged markers even if a nonce leaks (D22) |
 | CN-22 | Classified `SSHChannelOpenError` | Classified by channel type plus open count | sshd refuses a session channel with `SSH2_OPEN_CONNECT_FAILED` "open failed", not "resource shortage" [R: openssh-portable `serverloop.c`, reported by review] |
 | §2 prerequisites | `ghost_prompts` and `ghost_theme` before the MVP | Prompts inside `ghost_servers` part 1; `ghost_theme` before the MVP as F4b, as listed | D8; D9 (owner decision 2026-10-10) |
-| ALR-11, §6 | Inbox for agent alerts | Command inbox shipped in suite 1.9.0 (`seance/CHANGELOG.md:86,111` [V]); Séance's inbox cursor stops at unknown-app items (`SC/src/inbox/inbox_service.dart:214-222` [V]) and must change first, now before T1 alert delivery in v1.x (owner decision 2026-10-10 (21/22)) | D31, D42 |
+| ALR-11, §6 | Inbox for agent alerts | Command inbox shipped in suite 1.9.0 (`seance/CHANGELOG.md:103,128` [V]); Séance's inbox cursor stops at unknown-app items (`SC/src/inbox/inbox_service.dart:214-222` [V]) and must change first, now before T1 alert delivery in v1.x (owner decision 2026-10-10 (21/22)) | D31, D42 |
 | ALR-16 | v1.x | Separate raise and clear thresholds and durations ship in v1 with ALR-01 (rule model in 7.19, `rule` record in 4.8); flap damping and host-side use with T1 (ALR-04) stay v1.x | D29 puts in-app alerts with hysteresis in v1, and the synced v1 `rule` format already carries both thresholds, so its clear fields work from the first release |
 | SYN-05 | v1.x | v1, with the first `pref` and `rule` records: every `klabautermann:` type ignores unsealed tombstones and deletes with a sealed `removed` record | A forged tombstone can neither silence a rule nor drop a user-marked protected target (D17, 4.8, 8.6; owner decision 2026-10-10 (9)) |
 | VOL-05 export | Later; helper container `tar` | v1.x as "back up this volume now" (7.18): a one-shot tar of one named volume, read directly or through the elevation prelude (8.3), never through a helper container; import stays Later | Owner decision 2026-10-10 (19) promised one-off database dumps and "back up this volume now" until full backups; D27 allows helper containers only for VOL-03 and CTR-21 |
@@ -262,7 +262,13 @@ password · D42 alert delivery through the sync server
   the owner, including canonical wording where copies differ; (2) moves the
   code and switches at least one shipped app in the same PR, with compat
   `export` shims where call sites are many; (3) runs that app's full suite
-  and pixel baselines unchanged. Behaviour changes, including divergence
+  and pixel baselines unchanged. "Pixel baselines" means the app's frozen
+  theme tests (`theme_build_test.dart` against `legacy_theme.dart` in
+  Poltergeist [V]) and widget suites, which run in CI, plus the real-font
+  capture tests run before and after the move with `SEANCE_CAPTURE=1` or
+  `POLTERGEIST_CAPTURE=1` and one font directory, whose PNGs must be
+  byte-identical; the captures are opt-in and not compared in CI [V], so
+  the PR records that comparison. Behaviour changes, including divergence
   resolutions, ride in separate PRs with their own tests and changelog
   lines. Same-PR bookkeeping: release-tool owned pubspecs, CI lines,
   `scripts/test.sh`, localization allowlist entries that go dead,
@@ -276,7 +282,7 @@ password · D42 alert delivery through the sync server
 - **D4. No dartssh2 in the product.** `SshLink`, `RemoteProcess`, `ByteDuplex`,
   the channel budget and classification, ping timeout, bounded close and
   late-open cleanup live in `SC/src/ssh/`. `SshSession.runCommand`
-  (`SC/src/ssh/ssh_session.dart:488` [V]) delegates to the same exec core. A
+  (`SC/src/ssh/ssh_session.dart:524` [V]) delegates to the same exec core. A
   generalized root import guard enforces that no file under `klabautermann/`
   imports or declares dartssh2; its first PR reproduces Poltergeist's current
   verdicts exactly and encodes the existing exceptions (D4 rules in 3.4).
@@ -332,7 +338,10 @@ password · D42 alert delivery through the sync server
   and dark themes through it from the scaffold on, installs the extensions
   shared widgets need (`SidebarThemeTokens`, `FamilyPalette`, menu theme)
   and ships theme editing and presets in the MVP preview; pasting a theme
-  from a sibling app is v1 (X-01). Owner decision 2026-10-10: theme editing
+  from a sibling app is v1 (X-01). The extension types already live in
+  `ghost_ui` (`sidebar_theme_tokens.dart`, `family_hues.dart` [V]) and stay
+  there: `ghost_theme` depends on `ghost_ui` and builds them, and `ghost_ui`
+  never depends on `ghost_theme` (guard rule, 3.4). Owner decision 2026-10-10: theme editing
   ships in the MVP preview; the proposal had a fixed brand preset in the
   MVP and `ghost_theme` in v1. The cost is an L-sized extraction against
   Séance's real-font PNG baselines on the MVP path. *Rejected:* a fixed
@@ -668,7 +677,7 @@ password · D42 alert delivery through the sync server
 - **D35. Localization and accessibility from day one.** ARB and
   `gen-l10n`; the localization contract scanner moves to root
   `tool/l10n_contract` with Poltergeist switched, instead of a second copy
-  of its 2,803-line test
+  of its 2,832-line test
   (`poltergeist/app/poltergeist_app/test/localization_contract_test.dart`
   [V]).
 - **D36. Integration fixtures.** An sshd plus `docker:dind` fixture built
@@ -883,7 +892,8 @@ products:
     scan: [packages, app]
     pure_packages: [packages/planchette_core]
     dartssh2_imports: []
-    forbidden_dependencies: {"ghost_*": [seance_core]}
+    # The lists of every matching key apply: ghost_ui gets both.
+    forbidden_dependencies: {"ghost_*": [seance_core], ghost_ui: [ghost_theme]}
   klabautermann:
     scan: [packages, app]
     pure_packages: [packages/klabautermann_host, packages/klabautermann_docker, packages/klabautermann_core]
@@ -964,8 +974,8 @@ code in the same PR. There is no F6. F5b moved to F4b (owner decision
 | ID | Extraction | From | To | Switched | Needed by | Size [E] |
 |---|---|---|---|---|---|---|
 | F1a | Import guard, protocol guard, license and local-dependency gate, fixture-key scope list | `poltergeist/tool/*`, `poltergeist/test/integration/assert-private-keys-scoped.sh` | root `tool/`, root script | Poltergeist (identical verdicts) | M1 | M |
-| F1b | Localization contract scanner | Poltergeist's `localization_contract_test.dart` (2,803 lines [V]) | root `tool/l10n_contract` with per-app allowlists | Poltergeist | M1 | S to M |
-| F2a | `SshLink`, `RemoteProcess`, `ByteDuplex` (`openUnixStream`, `openTcpStream`), channel budget and classification, ping timeout, bounded close, late-open cleanup | new, around `SshSession.runCommand` (`SC/src/ssh/ssh_session.dart:488-586`, collapsed error at `:504` [V]) | `SC/src/ssh/` | Séance (`runCommand` and RemoteGit on the shared exec core) | M2 | M |
+| F1b | Localization contract scanner | Poltergeist's `localization_contract_test.dart` (2,832 lines [V]) | root `tool/l10n_contract` with per-app allowlists | Poltergeist | M1 | S to M |
+| F2a | `SshLink`, `RemoteProcess`, `ByteDuplex` (`openUnixStream`, `openTcpStream`), channel budget and classification, ping timeout, bounded close, late-open cleanup | new, around `SshSession.runCommand` (`SC/src/ssh/ssh_session.dart:524-622`, collapsed error at `:540` [V]) | `SC/src/ssh/` | Séance (`runCommand` and RemoteGit on the shared exec core) | M2 | M |
 | F2b | Elevation (detection, prelude, classification, executor) | new | `SC/src/ssh/elevation.dart` | none (new capability; Séance adopts for snippets later) | M4 | S |
 | F2c | `CredentialResolver` | `SA/services/app_services.dart:1075-1150`, `PA/services/server_editor_backend.dart:210-262` [R] | `seance_core` | Séance and Poltergeist | M1 | S |
 | F2d | Docker, systemd, cron and firewall danger rules | new | `SC/src/llm/danger_linter.dart` | Séance benefits directly | M4 | S |
@@ -975,7 +985,7 @@ code in the same PR. There is no F6. F5b moved to F4b (owner decision
 | F3c | `ghost_keystore` | `SA/services/secure_master_key.dart:75`, `PA/services/secure_master_key.dart:45` [V] | `planchette/packages/ghost_keystore` | Poltergeist (Séance follow-up); tests assert literal entry names | M1 | S to M |
 | F3d | Séance #56: conflict check for pulled host-key pins (owner decision 2026-10-10, D15) | Séance's `hostkey:` apply path in `SC/src/sync/sync_coordinator.dart` | Séance's coordinator routes pulled pins through the catalog library's quarantine handler | Séance | M4 (before publication in v1) | S to M (1 to 2) |
 | F4 | `ghost_servers` part 1; IEC byte and rate formatters | dot vocabulary (`SA/ui/server_status_dot.dart`, `PA/ui/server_state_indicator.dart`), sectioning (`SA/ui/server_grouping.dart`), TOFU, keyboard-interactive and credential dialogs, connection log view and test report [R: c3 §1.8]; Poltergeist's app-local rate formatter [R: c3 §5.4] | `planchette/packages/ghost_servers`; formatters in `ghost_ui` | Séance and Poltergeist (ARB adapters; dead allowlist entries removed); Poltergeist for the formatters | M1 to M2 | M |
-| F4b | `ghost_theme` (owner decision 2026-10-10, D9) | both apps' theme stacks | `planchette/packages/ghost_theme` | Séance (Poltergeist follow-up) | M1 (after or parallel with F4; at the latest M4) | L |
+| F4b | `ghost_theme` (owner decision 2026-10-10, D9) | both apps' theme stacks (extension types stay in `ghost_ui`, D9) | `planchette/packages/ghost_theme` | Séance (Poltergeist follow-up) | M1 (after or parallel with F4; at the latest M4) | L |
 | F5a | `ghost_servers` part 2: server editor and delegate | `PA/ui/server_editor.dart` (delegate seam) and Séance's copy | `ghost_servers` | Poltergeist (Séance follow-up with a delegate over `AppState`) | M5 (v1) | M to L |
 | F5c | `seance_terminal` | `SA/services/xterm_engine.dart` and view widgets | `seance/packages/seance_terminal` | Séance | M5 | M |
 | F5d | `suite_links`, Séance intake (a server and a starting folder only), Poltergeist mobile registration | `PA/services/seance_links.dart`, `PA/services/deep_links.dart` | `SC/src/links/` | Poltergeist (parser), Séance (intake) | M5 | M |
@@ -990,7 +1000,7 @@ code in the same PR. There is no F6. F5b moved to F4b (owner decision
 | `SshLink` and the exec core | One dartssh2 confinement zone for the suite; Séance gets dead-peer detection, which it lacks today (no ping timeout anywhere in its path, c2 R3), plus channel classification and exit signals |
 | `ByteDuplex` streams | The only safe place to apply the listen-before-write workaround once |
 | Elevation | Pure command wrapping and classification usable by Séance snippets and inbox proposals that need root |
-| `CredentialResolver` | Two near-identical app copies exist today |
+| `CredentialResolver` | Two app copies exist today; Séance's adds a draft identity bookmark guarded by an `ArgumentError` (`SA/services/app_services.dart:1080-1108` [V]), which the shared resolver keeps (Poltergeist passes none) |
 | Danger rules | Séance snippet runs and inbox reviews benefit |
 | Catalog library and stores | Two coordinator implementations already diverge (c1 §3.3); a third must not appear |
 | `suite_links` | Poltergeist already builds `seance://` links app-side; a strict shared parser serves every intake |
@@ -1136,7 +1146,8 @@ re-push (c1 §2.4).
   passes the freshness floor (c1 §2.2). Otherwise the app prompts and stores
   the credential locally under the same `secretRef` (SYN-02).
 - **Resolution.** `CredentialResolver` (vault lookup by `secretRef`,
-  identity file through an injected reader, agent through `SshAgentClient`).
+  identity file through an injected reader, agent through `SshAgentClient`,
+  editor drafts including Séance's draft identity bookmark contract, 3.6).
   On mobile, agent auth and `identityFilePath` generally do not work, so the
   prompt offers to import a key into the vault.
 - **Background rule (FL-21).** Background sampling uses only servers whose
@@ -1332,9 +1343,9 @@ abstract interface class RemoteProcess {
 }
 ```
 
-- Built on `openAuthenticatedClient` (`SC/src/ssh/ssh_session.dart:694`
+- Built on `openAuthenticatedClient` (`SC/src/ssh/ssh_session.dart:730`
   [V]) with `keepAliveInterval: null`, as its documentation asks when a pool
-  owns liveness (`:692-693` [V]); TOFU, keyboard-interactive and jump-host
+  owns liveness (`:728-729` [V]); TOFU, keyboard-interactive and jump-host
   seams (16 hops, cycle detection [R: c2 §2.1]) are reused unchanged.
 - **Liveness (CN-06).** Idle ping every 15 s; a ping not answered within
   30 s marks the link lost and closes it (Poltergeist's pattern [R: c2
@@ -1566,7 +1577,7 @@ the probe returns:
 | Init and systemd | `/proc/1/comm`, `/run/systemd/system`, `systemctl --version` first line |
 | Virtualization | `systemd-detect-virt`, `systemd-detect-virt -c` (SYS-04) |
 | Identity | `id -u`, `id -un`, `id -nG` (journal and docker groups) |
-| Elevation | `sudo -V` first line (sudo or sudo-rs), `sudo -n true` result, `command -v doas run0`, `command -V printf` (builtin or not, 8.3) |
+| Elevation | `sudo -V` first line (sudo or sudo-rs), `sudo -n true` result, `command -v doas run0`, `doas -n true` result when doas exists, `command -V printf` (builtin or not, 8.3) |
 | Tools | `command -v` for about 30 tools: `journalctl`, `crontab`, `ss`, `ip`, `lsblk`, `findmnt`, `smartctl`, `sensors`, `docker`, `podman`, `socat`, `timeout`, `setsid`, `ncdu`, `gdu`, `sadf`, `logger`, `systemd-run`, `apt-get`, `dnf`, `dnf5`, `apk`, `pacman`, `zypper`, `nvidia-smi`, ... |
 | Kernel features | `/proc/pressure/cpu` readable; `/sys/fs/cgroup/cgroup.controllers` (cgroup v2) |
 | Locale | `locale -a` contains `C.UTF-8` |
@@ -1794,7 +1805,10 @@ unless the user enables admin mode for that panel.
   the `ps` fallback joins arguments with spaces, so masking there works on
   whitespace tokens. Kill and signal
   (PRC-02): the plan records the PID and its start
-  time (field 22 of `/proc/<pid>/stat`); the executed `sh -c` re-reads the
+  time (field 22 of `/proc/<pid>/stat`: fields resume at 3, `state`,
+  after the last `)`, because `comm` may contain spaces and `)`, so
+  `starttime` is the 20th whitespace-separated field after that `)`
+  [R: proc(5)], as in the `procs` deltas); the executed `sh -c` re-reads the
   start time and runs `kill -s <SIG> <pid>` only if it matches (ServerBox's
   PID-reuse guard [R]). Elevation only for other users' processes. PID 1,
   sshd, dockerd and the sampler's own PIDs are protected targets.
@@ -1891,7 +1905,9 @@ unless the user enables admin mode for that panel.
   names, macros, `CRON_TZ`) evaluated in the server's time zone and offset from
   the probe, with DST transitions and `RandomizedDelaySec` annotated;
   `OnCalendar` expressions use `(unset TZ; systemd-analyze calendar
-  --iterations=N '<expr>')` on the host instead of a reimplementation,
+  --iterations=N '<expr>')` on the host instead of a reimplementation
+  (`--iterations` from systemd 242 [R: systemd NEWS]; below that, one next
+  run without `--iterations`, so RHEL 8 shows one run),
   because PID 1 evaluates zone-less expressions in the system zone [R:
   systemd.time(7)] (6.2); phrases come from ARB templates. Other
   users' crontabs (JOB-03): `crontab -l -u <user>` through elevation, read-only.
@@ -1928,7 +1944,8 @@ unless the user enables admin mode for that panel.
 
 - **v1.** Users and groups (`getent`), with sudo, wheel and docker members
   flagged as root-equivalent; logged-in sessions (`who`, `loginctl
-  list-sessions --output=json`, JSON from systemd 240; `-j` from 256).
+  list-sessions --output=json`, JSON from systemd 240 [R: systemd NEWS],
+  so RHEL 8 (239) shows `who` alone; `-j` from 256).
 - **v1.x.** Terminate a session; login history (`last`, `lastb`, sshd journal
   entries; wtmpdb and lastlog2 migrations [U]); `authorized_keys` inventory
   (sudo); "where is this key" across the fleet; sudoers overview.
@@ -2292,7 +2309,11 @@ matching row applies:
     one is treated as a replay). An alert more than 10 minutes ahead (the
     clock skew Séance allows, `SP/inbox/inbox.dart:30` [V]) is kept and
     flagged "server clock ahead" rather than refused, so a skewed host
-    clock cannot silence alerts [E]. Like Séance, an item of a known sender
+    clock cannot silence alerts [E]. A valid item whose `check` is `test`
+    (9.3) is never listed or announced: the device that started the test
+    reports it passed and deletes it; other devices open and validate it
+    like any item (a failure counts against its sender) and then skip it
+    without deleting it. Like Séance, an item of a known sender
     that fails to open or validate is deleted and counted against its
     sender, shown in its settings row; an item with a higher `v` is left on
     the server and shown as "alert in a newer format, update
@@ -2479,7 +2500,14 @@ Fallback ladder:
 
 1. Root login: no elevation.
 2. NOPASSWD (`sudo -n true` succeeded in the probe): `sudo -n -- <cmd>`, no
-   prelude.
+   prelude. When sudo is not installed and `doas -n true` succeeded (a
+   blanket `permit nopass`): `doas -n -- <cmd>`, no prelude (doas cannot
+   read a password from a pipe). Where password sudo and blanket doas
+   NOPASSWD both exist, sudo's rungs apply. Rules scoped to one command
+   (`NOPASSWD: /usr/bin/docker`, `permit nopass cmd docker`) fail the
+   global probe; the Docker relay (5.9 rank 3) tries `sudo -n docker`
+   directly, which is what the CI user with a docker-scoped rule covers
+   (11.3).
 3. Password sudo or sudo-rs: the prelude.
 4. Prelude reports "a password is required" after a successful validation
    (for example `timestamp_timeout=0`, verified [L]): retry once with
@@ -2844,7 +2872,7 @@ size and memory are [U] until S10.
   SSH-authenticated connection through stdin with `umask 077`, installs
   the helper after checking its hash and runs a test deposit (check id
   `test`), which the installing device fetches and deletes and other
-  devices never list. Before the first sender, the user
+  devices never list (7.19). Before the first sender, the user
   confirms that every device runs a Séance release with the inbox change
   of 9.4 item 1, in the style of the enrollment assertion (4.3) [E].
 - *Quota.* On a sync server with the sender quota change, marked senders
@@ -2966,7 +2994,7 @@ constraints:
       not appear there today and need no change; a regression test keeps
       any future server-side app list filtering them.
 2. **Server floor and limits.** The command inbox shipped in suite 1.9.0
-   (`seance/CHANGELOG.md:86,111` [V]), so 1.9.0 is the minimum sync server.
+   (`seance/CHANGELOG.md:103,128` [V]), so 1.9.0 is the minimum sync server.
    Limits: 96 KiB per blob (`SP/inbox/inbox.dart:14`), 7-day retention
    (`:26`), 30 deposits per minute and 100 pending items per app, 50 apps
    per account shared with Séance's inbox apps
@@ -3295,10 +3323,18 @@ palette) and presets in the preview. v1: paste from Séance and Poltergeist
   `dial-stdio`, compose discovery, verification and detached pull and up;
   `fixture-images.yml` hard-codes one image today [V] and becomes a matrix.
 - A rootful Podman variant [U: Podman service inside the fixture].
-  systemd inside a CI container is [U]; until proven, `systemctl`,
-  `journalctl`, `systemd-run` and linger paths rely on recorded fixtures from
-  real hosts and the manual VM checklist (Debian 12, Ubuntu 24.04 and 26.04,
-  RHEL 8 and 9, Alpine, a BusyBox NAS).
+  systemd inside a CI container is [U]. The GitHub-hosted Ubuntu runner
+  VM is itself a systemd host (systemd 255 on `ubuntu-24.04`) with
+  passwordless sudo [R]: a `klabautermann_integration` leg starts sshd and
+  reaches it over SSH on loopback as throwaway users created by the job
+  (one with password sudo, its password generated at job start and never
+  committed or echoed; one with a NOPASSWD rule scoped to `docker`) and
+  covers `systemctl`, `journalctl`,
+  `systemd-run` system and `--user`, linger, the elevation prelude
+  against a real sudo and the detached runners. Older systemd (239, 245)
+  and the remaining host classes rely on recorded fixtures from real hosts
+  and the manual VM checklist (Debian 12, Ubuntu 24.04 and 26.04, RHEL 8
+  and 9, Alpine, a BusyBox NAS).
 - The fixture safety checker gains rules rejecting published 2375 or 2376
   and host `docker.sock` bind mounts. Privileged DinD is root on the runner:
   approved by the owner on 2026-10-10 for ephemeral GitHub-hosted Linux
@@ -3315,9 +3351,13 @@ palette) and presets in the preview. v1: paste from Séance and Poltergeist
 - Fast tick at most 2.5 KB and 5 ms of server CPU on the reference VM [E].
 - 10 monitored hosts at default phone cadence: under 1 KB/s in total.
 - UI frame p99 under 16 ms with 10 hosts and one 1,000 lines/s follow on a
-  low-end Android phone (spike S5 baseline).
+  low-end Android phone (spike S5 baseline; a device measurement, manual
+  sign-off, 04 section 13).
 - Log viewer memory under 64 MiB at the line cap.
-- 24 h soak against the fixture with no channel, memory or file growth.
+- Soak against the fixture with no channel, memory or file growth: a
+  10-minute run in the `klabautermann_integration` job (every job needs a
+  `timeout-minutes`, `scripts/check-workflows.sh` [V]) and a 24 h run
+  before M4 and M7 (manual sign-off).
 
 ### 11.5 Host write inventory test
 

@@ -155,7 +155,10 @@ void main() {
     tester,
   ) async {
     await pump(tester, selected: true);
-    final chrome = SeanceChrome.of(tester.element(find.byType(SidebarRow)));
+    final chrome = SeanceChrome.of(
+      tester.element(find.byType(SidebarRow)),
+      seanceThemeStyle,
+    );
     final markEdge = tester.getTopLeft(find.byType(ServerRailMark)).dx;
     expect(pill(tester)?.color, chrome.inactiveSelectionFill);
     expect(pill(tester)?.borderRadius, isNotNull);

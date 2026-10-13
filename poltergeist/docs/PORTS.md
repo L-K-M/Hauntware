@@ -102,7 +102,12 @@ Host adapters retain ARB strings, resolved chrome, controllers, operations
 and drag payloads. Both apps use the same desktop/touch file-row widgets.
 The in-place tab view, `SelectedTabView`, followed on 2026-10-04. The
 server badges, accents and glyph tables followed on 2026-10-08 in their
-own package, `ghost_marks`, which also depends on `seance_protocol`.
+own package, `ghost_marks`, which also depends on `seance_protocol`. The
+transfer-rate, limit and ETA formatters and the custom-rate parse
+grammar followed on 2026-10-13 in `ghost_rate_format.dart`, which also
+carries the new IEC binary size/rate formatters for Klabautermann;
+`activity_format.dart` keeps the app's names as delegates and owns the
+10 GB/s parse ceiling.
 
 ## Cross-app deep links (2026-10-02)
 

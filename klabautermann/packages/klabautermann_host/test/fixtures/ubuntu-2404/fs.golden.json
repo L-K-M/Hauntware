@@ -1,0 +1,86 @@
+{
+  "result": {
+    "mounts": [
+      {
+        "device": "/dev/mapper/ubuntu--vg-ubuntu--lv",
+        "type": "ext4",
+        "mountPoint": "/",
+        "sizeBytes": 107321753600,
+        "usedBytes": 45634027520,
+        "availBytes": 56180822016,
+        "capacityPercent": 45,
+        "inodesTotal": 6710880,
+        "inodesUsed": 812345,
+        "inodesFree": 5898535,
+        "inodeUsePercent": 13
+      },
+      {
+        "device": "tmpfs",
+        "type": "tmpfs",
+        "mountPoint": "/run",
+        "sizeBytes": 828112896,
+        "usedBytes": 1048576,
+        "availBytes": 827064320,
+        "capacityPercent": 1,
+        "inodesTotal": 504420,
+        "inodesUsed": 1100,
+        "inodesFree": 503320,
+        "inodeUsePercent": 1
+      },
+      {
+        "device": "/dev/nvme0n1p2",
+        "type": "ext4",
+        "mountPoint": "/boot",
+        "sizeBytes": 2013265920,
+        "usedBytes": 306184192,
+        "availBytes": 1586225152,
+        "capacityPercent": 17,
+        "inodesTotal": 122880,
+        "inodesUsed": 350,
+        "inodesFree": 122530,
+        "inodeUsePercent": 1
+      },
+      {
+        "device": "/dev/nvme0n1p1",
+        "type": "vfat",
+        "mountPoint": "/boot/efi",
+        "sizeBytes": 1122070528,
+        "usedBytes": 6488064,
+        "availBytes": 1115582464,
+        "capacityPercent": 1,
+        "inodesTotal": 0,
+        "inodesUsed": 0,
+        "inodesFree": 0,
+        "inodeUsePercent": null
+      },
+      {
+        "device": "tmpfs",
+        "type": "tmpfs",
+        "mountPoint": "/dev/shm",
+        "sizeBytes": 4140552192,
+        "usedBytes": 0,
+        "availBytes": 4140552192,
+        "capacityPercent": 0,
+        "inodesTotal": 1008840,
+        "inodesUsed": 80,
+        "inodesFree": 1008760,
+        "inodeUsePercent": 1
+      },
+      {
+        "device": "tmpfs",
+        "type": "tmpfs",
+        "mountPoint": "/run/user/1000",
+        "sizeBytes": 5242880,
+        "usedBytes": 12288,
+        "availBytes": 5230592,
+        "capacityPercent": 1,
+        "inodesTotal": 1008840,
+        "inodesUsed": 50,
+        "inodesFree": 1008790,
+        "inodeUsePercent": 1
+      }
+    ],
+    "timeoutAbsent": false
+  },
+  "warnings": []
+}

@@ -1,0 +1,316 @@
+/// Parser for the `timers` slow-collector payload (03 §6.4, §7.7):
+/// `systemctl list-timers --all --output=json` on systemd 246+
+/// (`== timers_json ==`), else the columnar `list-timers --all` table
+/// (`== timers_text ==`) sliced at its header's column offsets.
+library;
+
+import 'dart:convert';
+
+import 'package:meta/meta.dart';
+
+import '../hws/program.dart' show kTimeoutAbsentMarker;
+import 'models.dart' show splitBlocks;
+import 'parse_result.dart';
+
+/// Which shape the timers block took (03 §6.4): JSON on systemd 246+,
+/// the columnar text table below it, or absent output.
+enum TimerListFormat { json, text, none }
+
+/// One row of `systemctl list-timers --all` (03 §7.7).
+@immutable
+final class SystemdTimer {
+  const SystemdTimer({
+    required this.unit,
+    this.activates,
+    this.nextUs,
+    this.leftUs,
+    this.lastUs,
+    this.passedUs,
+    this.nextText,
+    this.lastText,
+  });
+
+  /// The timer unit name (`foo.timer`).
+  final String unit;
+
+  /// The unit the timer activates (`foo.service`).
+  final String? activates;
+
+  /// Absolute epoch microseconds for the next and last elapse, or null
+  /// when never (`n/a`) or unparseable.
+  final int? nextUs, lastUs;
+
+  /// Relative microseconds for the LEFT and PASSED columns.
+  final int? leftUs, passedUs;
+
+  /// The raw NEXT and LAST cells on the text path: they are rendered in
+  /// the server's local zone with a zone abbreviation we cannot resolve,
+  /// so non-UTC text stays unconverted (03 §6.1 "unknown stays unknown").
+  final String? nextText, lastText;
+
+  /// NEXT as a UTC instant, when known.
+  DateTime? get nextUtc => nextUs == null
+      ? null
+      : DateTime.fromMicrosecondsSinceEpoch(nextUs!, isUtc: true);
+
+  /// LAST as a UTC instant, when known.
+  DateTime? get lastUtc => lastUs == null
+      ? null
+      : DateTime.fromMicrosecondsSinceEpoch(lastUs!, isUtc: true);
+
+  Map<String, Object?> toJson() => {
+    'unit': unit,
+    'activates': activates,
+    'nextUs': nextUs,
+    'leftUs': leftUs,
+    'lastUs': lastUs,
+    'passedUs': passedUs,
+    'nextText': nextText,
+    'lastText': lastText,
+  };
+}
+
+/// One `timers` tick (03 §6.4).
+@immutable
+final class TimersSnapshot {
+  TimersSnapshot({
+    List<SystemdTimer>? timers,
+    this.format = TimerListFormat.none,
+    this.timeoutAbsent = false,
+  }) : timers = List.unmodifiable(timers ?? []);
+
+  /// All loaded timers, in `systemctl` order.
+  final List<SystemdTimer> timers;
+
+  /// Which wire shape the block held.
+  final TimerListFormat format;
+
+  /// True when the payload reports the collector ran without `timeout`
+  /// (03 §6.3).
+  final bool timeoutAbsent;
+
+  Map<String, Object?> toJson() => {
+    'timers': timers.map((t) => t.toJson()).toList(),
+    'format': format.name,
+    'timeoutAbsent': timeoutAbsent,
+  };
+}
+
+/// Parses a `timers` section payload; never throws (03 §6.5).
+ParseResult<TimersSnapshot> parseTimers(String raw, ParseContext ctx) {
+  final warnings = <String>[];
+  final split = splitBlocks(raw, kTimeoutAbsentMarker);
+  if (split.timeoutAbsent) {
+    warnings.add('timers ran without a timeout guard');
+  }
+  if (split.preambleLines > 0) {
+    warnings.add('${split.preambleLines} preamble line(s) ignored');
+  }
+
+  List<SystemdTimer> timers = const [];
+  var format = TimerListFormat.none;
+  if (split.blocks['timers_json'] case final lines?) {
+    format = TimerListFormat.json;
+    timers = _parseTimersJson(lines, warnings);
+  } else if (split.blocks['timers_text'] case final lines?) {
+    format = TimerListFormat.text;
+    timers = _parseTimersText(lines, warnings);
+  } else {
+    warnings.add('timers: no timers block');
+  }
+
+  return ParseResult(
+    TimersSnapshot(
+      timers: timers,
+      format: format,
+      timeoutAbsent: split.timeoutAbsent,
+    ),
+    warnings,
+  );
+}
+
+/// `list-timers --output=json` rows: objects with `next`, `left`,
+/// `last`, `passed` (finite microseconds or null), `unit` and
+/// `activates`. Unknown keys are tolerated.
+List<SystemdTimer> _parseTimersJson(List<String> lines, List<String> warnings) {
+  final text = lines.join('\n').trim();
+  if (text.isEmpty) return const [];
+  Object? decoded;
+  try {
+    decoded = jsonDecode(text);
+  } on FormatException {
+    warnings.add('timers_json: not JSON');
+    return const [];
+  }
+  if (decoded is! List) {
+    warnings.add('timers_json: JSON is not a list');
+    return const [];
+  }
+  final out = <SystemdTimer>[];
+  for (final e in decoded) {
+    if (e is! Map) {
+      warnings.add('timers_json: non-object row skipped');
+      continue;
+    }
+    final unit = e['unit'];
+    if (unit is! String || unit.isEmpty) {
+      warnings.add('timers_json: row without a unit name skipped');
+      continue;
+    }
+    out.add(
+      SystemdTimer(
+        unit: unit,
+        activates: _str(e['activates']),
+        nextUs: _usec(e['next']),
+        leftUs: _usec(e['left']),
+        lastUs: _usec(e['last']),
+        passedUs: _usec(e['passed']),
+      ),
+    );
+  }
+  return out;
+}
+
+/// A JSON value as a string without throwing (the `activates` field).
+String? _str(Object? v) {
+  if (v == null) return null;
+  if (v is String) return v;
+  if (v is num || v is bool) return '$v';
+  return null;
+}
+
+/// A JSON microsecond field: an integer, a numeric string, or null.
+int? _usec(Object? v) {
+  if (v is int) return v;
+  if (v is String) return int.tryParse(v);
+  return null;
+}
+
+/// The columnar `list-timers --all` table: column content starts at the
+/// header's field offsets, so rows slice positionally (timestamps and
+/// spans may contain single spaces). Legend and hint lines are dropped;
+/// anything that does not end in a `*.timer` unit warns and skips.
+List<SystemdTimer> _parseTimersText(List<String> lines, List<String> warnings) {
+  final out = <SystemdTimer>[];
+  List<int>? columns;
+  for (final line in lines) {
+    if (line.trim().isEmpty) continue;
+    if (columns == null) {
+      // The first non-empty line is the header; its six column starts
+      // delimit every row.
+      columns = _timerColumns(line);
+      if (columns == null) {
+        warnings.add('timers_text: no column header');
+        return const [];
+      }
+      continue;
+    }
+    if (RegExp(r'^\d+ timers? listed\.$').hasMatch(line.trim()) ||
+        line.startsWith('Pass --all')) {
+      continue;
+    }
+    final cells = <String>[];
+    for (var i = 0; i < columns.length; i++) {
+      final from = columns[i];
+      if (from >= line.length) {
+        cells.add('');
+        continue;
+      }
+      final to = i + 1 < columns.length ? columns[i + 1] : line.length;
+      cells.add(line.substring(from, to.clamp(from, line.length)).trim());
+    }
+    if (cells.length < 6 || !cells[4].endsWith('.timer')) {
+      warnings.add('timers_text: malformed row "${line.trim()}"');
+      continue;
+    }
+    out.add(
+      SystemdTimer(
+        unit: cells[4],
+        activates: cells[5].isEmpty || cells[5] == '-' ? null : cells[5],
+        nextText: cells[0].isEmpty ? null : cells[0],
+        nextUs: _timerTimestampUs(cells[0]),
+        leftUs: _timespanUs(cells[1]),
+        lastText: cells[2].isEmpty ? null : cells[2],
+        lastUs: _timerTimestampUs(cells[2]),
+        passedUs: _timespanUs(cells[3]),
+      ),
+    );
+  }
+  if (columns == null) warnings.add('timers_text: empty block');
+  return out;
+}
+
+/// Column start offsets of the `list-timers` header, or null when it is
+/// not the `NEXT LEFT LAST PASSED UNIT ACTIVATES` shape.
+List<int>? _timerColumns(String header) {
+  const names = ['NEXT', 'LEFT', 'LAST', 'PASSED', 'UNIT', 'ACTIVATES'];
+  final offsets = <int>[];
+  var at = 0;
+  for (final name in names) {
+    final i = header.indexOf(name, at);
+    if (i < 0) return null;
+    offsets.add(i);
+    at = i + name.length;
+  }
+  return offsets;
+}
+
+/// Parses a `list-timers` timestamp cell (`Mon 2023-11-13 21:45:58 UTC`)
+/// into epoch microseconds. Only a trailing `UTC` converts; other zone
+/// abbreviations are ambiguous and stay null. `n/a` yields null.
+int? _timerTimestampUs(String cell) {
+  final t = cell.trim();
+  if (t.isEmpty || t == 'n/a' || t == '-') return null;
+  if (!t.endsWith(' UTC')) return null;
+  // Drop the weekday prefix and the UTC suffix.
+  final sp = t.indexOf(' ');
+  if (sp < 0) return null;
+  final stamp = '${t.substring(sp + 1, t.length - 4).trim()}Z';
+  return DateTime.tryParse(stamp)?.microsecondsSinceEpoch;
+}
+
+/// Parses a `list-timers` span cell (`20h left`, `1 day ago`, `n/a`)
+/// into microseconds; unknown unit words yield null.
+int? _timespanUs(String cell) {
+  var t = cell.trim();
+  if (t.isEmpty || t == 'n/a' || t == '-') return null;
+  for (final tail in const [' left', ' ago']) {
+    if (t.endsWith(tail)) t = t.substring(0, t.length - tail.length);
+  }
+  var total = 0;
+  var matched = false;
+  for (final part in t.split(RegExp(r'\s+'))) {
+    final m = RegExp(r'^(\d+)(\w+)$').firstMatch(part);
+    if (m == null) return null;
+    final us = _spanUnits[m[2]!];
+    if (us == null) return null;
+    total += int.parse(m[1]!) * us;
+    matched = true;
+  }
+  return matched ? total : null;
+}
+
+/// systemd `format_timespan` units, in microseconds.
+const _spanUnits = {
+  'us': 1,
+  'µs': 1,
+  'μs': 1,
+  'usec': 1,
+  'ms': 1000,
+  'msec': 1000,
+  's': 1000000,
+  'sec': 1000000,
+  'min': 60000000,
+  'h': 3600000000,
+  'hr': 3600000000,
+  'd': 86400000000,
+  'day': 86400000000,
+  'days': 86400000000,
+  'w': 604800000000,
+  'week': 604800000000,
+  'weeks': 604800000000,
+  'month': 2629800000000,
+  'months': 2629800000000,
+  'year': 31557600000000,
+  'years': 31557600000000,
+};

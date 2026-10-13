@@ -20,6 +20,11 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+  - package-ecosystem: gradle
+    directory: /klabautermann/app/klabautermann_app/android
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
   # Planchette's pub workspace, editor and app, as in its standalone repo.
   - package-ecosystem: pub
     directory: /planchette

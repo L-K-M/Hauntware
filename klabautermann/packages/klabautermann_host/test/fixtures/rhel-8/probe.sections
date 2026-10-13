@@ -1,0 +1,85 @@
+### kernel ok
+Linux 4.18.0-553.el8.x86_64 x86_64
+### distro ok
+NAME="Red Hat Enterprise Linux"
+VERSION="8.10 (Ootpa)"
+ID="rhel"
+ID_LIKE="fedora"
+VERSION_ID="8.10"
+PLATFORM_ID="platform:el8"
+PRETTY_NAME="Red Hat Enterprise Linux 8.10 (Ootpa)"
+ANSI_COLOR="0;31"
+CPE_NAME="cpe:/o:redhat:enterprise_linux:8::baseos"
+HOME_URL="https://www.redhat.com/"
+BUG_REPORT_URL="https://issues.redhat.com/"
+### init ok
+pid1_comm=systemd
+systemd_dir=yes
+systemctl_rc=0
+systemctl_version=systemd 239 (239-82.el8)
+### virt ok
+virt_rc=0
+virt=kvm
+container_rc=1
+container=none
+### identity ok
+uid=1001
+user=ops
+groups=ops wheel
+### elev ok
+sudo_version=Sudo version 1.9.5p2
+sudo_noninteractive=1
+doas=absent
+doas_noninteractive=
+run0=absent
+printf=builtin
+### tools ok
+journalctl=/usr/bin/journalctl
+crontab=/usr/bin/crontab
+ss=/usr/sbin/ss
+ip=/usr/sbin/ip
+lsblk=/usr/bin/lsblk
+findmnt=/usr/bin/findmnt
+smartctl=/usr/sbin/smartctl
+sensors=
+docker=
+podman=
+socat=
+timeout=/usr/bin/timeout
+setsid=/usr/bin/setsid
+ncdu=
+gdu=
+sadf=
+logger=/usr/bin/logger
+systemd-run=/usr/bin/systemd-run
+systemd-analyze=/usr/bin/systemd-analyze
+apt-get=
+dnf=/usr/bin/dnf
+dnf5=
+apk=
+pacman=
+zypper=
+nvidia-smi=
+### kfeat ok
+psi=no
+cgroup_v2=no
+### locale ok
+c_utf8=yes
+### sockets ok
+/var/run/docker.sock no no
+/run/podman/podman.sock no no
+/run/user/1001/docker.sock no no
+/run/user/1001/podman/podman.sock no no
+### session ok
+ssh_connection=172.16.0.5 60300 172.16.0.30 22
+ppid=8200
+ppid_comm=sshd
+### clock ok
+epoch=1750200000
+offset=-0400
+Timezone=America/New_York
+localtime=/usr/share/zoneinfo/America/New_York
+### linger ok
+xdg_runtime_dir=/run/user/1001
+Linger=no
+KillUserProcesses=no

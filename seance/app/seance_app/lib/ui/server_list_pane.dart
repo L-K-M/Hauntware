@@ -244,7 +244,7 @@ class _ServerListPaneState extends State<ServerListPane> {
   @override
   Widget build(BuildContext context) {
     final state = AppScope.of(context);
-    final chrome = SeanceChrome.of(context);
+    final chrome = SeanceChrome.of(context, seanceThemeStyle);
     final background = _home
         ? Theme.of(context).colorScheme.surface
         : chrome.sidebarBackground;
@@ -1047,7 +1047,7 @@ class _NoMatches extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final chrome = SeanceChrome.of(context);
+    final chrome = SeanceChrome.of(context, seanceThemeStyle);
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
@@ -1080,7 +1080,7 @@ class _EmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final chrome = SeanceChrome.of(context);
+    final chrome = SeanceChrome.of(context, seanceThemeStyle);
     return Center(
       child: SingleChildScrollView(
         padding: const EdgeInsets.all(24),

@@ -1237,7 +1237,13 @@ heavy set (`node_modules`, `.git`, `build`, `target`, `__pycache__`):
    `.poltergeist-root/identity` ownership marker — never a recursive
    walk. The marker's random id is the physical-root scope used by
    journals and local activity locks, so endpoint aliases converge; an
-   unmarked non-trash directory is never adopted or purged. During the
+   unmarked non-trash directory is never adopted or purged. A staged
+   claim (`.poltergeist-root.init-` plus 32 hex digits, exactly as a
+   claim names it) that another claim is still writing, or that a
+   stopped claim left behind, does not block adoption: its identity may
+   be absent, a prefix of a marker, or gone into place. Staged content
+   that could never become a marker, or any other name, fails closed.
+   During the
    active-marker format transition, each run holds both the legacy hashed
    marker and the v2 name-encoded marker. Readers resolve v2 first so Windows
    never needs to read a current locked marker; an unreadable legacy-only

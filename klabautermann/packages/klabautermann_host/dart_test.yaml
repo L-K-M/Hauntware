@@ -1,0 +1,5 @@
+tags:
+  shell:
+# A wedged sampler test (an unread pipe or a hung child shell) would pin the
+# VM; cap every test instead.
+timeout: 60s

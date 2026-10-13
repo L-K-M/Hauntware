@@ -1,0 +1,88 @@
+### kernel ok
+Linux 6.8.0-79-generic x86_64
+### distro ok
+PRETTY_NAME="Ubuntu 24.04.3 LTS"
+NAME="Ubuntu"
+VERSION_ID="24.04"
+VERSION="24.04.3 LTS (Noble Numbat)"
+VERSION_CODENAME=noble
+ID=ubuntu
+ID_LIKE=debian
+HOME_URL="https://www.ubuntu.com/"
+SUPPORT_URL="https://help.ubuntu.com/"
+BUG_REPORT_URL="https://bugs.launchpad.net/ubuntu/"
+PRIVACY_POLICY_URL="https://www.ubuntu.com/legal/terms-and-policies/privacy-policy"
+UBUNTU_CODENAME=noble
+LOGO=ubuntu-logo
+### init ok
+pid1_comm=systemd
+systemd_dir=yes
+systemctl_rc=0
+systemctl_version=systemd 255 (255.4-1ubuntu8.10)
+### virt ok
+virt_rc=0
+virt=vmware
+container_rc=1
+container=none
+### identity ok
+uid=1000
+user=anke
+groups=anke adm cdrom sudo dip plugdev users lpadmin docker
+### elev ok
+sudo_version=Sudo version 1.9.15p5
+sudo_noninteractive=0
+doas=absent
+doas_noninteractive=
+run0=absent
+printf=builtin
+### tools ok
+journalctl=/usr/bin/journalctl
+crontab=/usr/bin/crontab
+ss=/usr/bin/ss
+ip=/usr/sbin/ip
+lsblk=/usr/bin/lsblk
+findmnt=/usr/bin/findmnt
+smartctl=/usr/sbin/smartctl
+sensors=/usr/bin/sensors
+docker=/usr/bin/docker
+podman=
+socat=
+timeout=/usr/bin/timeout
+setsid=/usr/bin/setsid
+ncdu=
+gdu=
+sadf=
+logger=/usr/bin/logger
+systemd-run=/usr/bin/systemd-run
+systemd-analyze=/usr/bin/systemd-analyze
+apt-get=/usr/bin/apt-get
+dnf=
+dnf5=
+apk=
+pacman=
+zypper=
+nvidia-smi=
+### kfeat ok
+psi=yes
+cgroup_v2=yes
+### locale ok
+c_utf8=yes
+### sockets ok
+/var/run/docker.sock yes yes
+/run/podman/podman.sock no no
+/run/user/1000/docker.sock no no
+/run/user/1000/podman/podman.sock no no
+### session ok
+ssh_connection=10.0.0.5 51822 10.0.0.20 22
+ppid=3100
+ppid_comm=sshd
+### clock ok
+epoch=1750100000
+offset=+0200
+Timezone=Europe/Berlin
+etc_timezone=
+localtime=/usr/share/zoneinfo/Europe/Berlin
+### linger ok
+xdg_runtime_dir=/run/user/1000
+Linger=yes
+KillUserProcesses=no
