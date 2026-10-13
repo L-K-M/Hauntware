@@ -104,12 +104,17 @@ SshConfigSource? sshConfigSourceFor(
       return null;
   }
 
-  // Windows' OpenSSH reads %USERPROFILE%\.ssh\config, which this resolves
-  // to as well; its file APIs accept the joined forward slashes.
+  // Win32-OpenSSH reads %USERPROFILE%\.ssh\config and ignores HOME, which
+  // expandHomePath would prefer; a HOME set for Emacs or MSYS tools must
+  // not point the import at another file. Windows' file APIs accept the
+  // joined forward slashes.
+  final homeEnvironment = platform == TargetPlatform.windows
+      ? {'USERPROFILE': ?environment['USERPROFILE']}
+      : environment;
   const configPath = '~/.ssh/config';
   final path = expandHomePath(
     configPath,
-    environment: environment,
+    environment: homeEnvironment,
     isMacOS: platform == TargetPlatform.macOS,
   );
   if (path == configPath) return null;

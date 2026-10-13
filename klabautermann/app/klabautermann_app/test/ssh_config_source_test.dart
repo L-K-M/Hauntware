@@ -34,6 +34,20 @@ void main() {
       expect((windows as FileSshConfigSource).path, r'C:\Users\me/.ssh/config');
     });
 
+    test('Windows ignores HOME, as Win32-OpenSSH does', () {
+      // HOME set globally for Emacs or MSYS tools must not move the file.
+      final source = sshConfigSourceFor(TargetPlatform.windows, const {
+        'HOME': r'D:\home',
+        'USERPROFILE': r'C:\Users\me',
+      });
+      expect((source as FileSshConfigSource).path, r'C:\Users\me/.ssh/config');
+
+      expect(
+        sshConfigSourceFor(TargetPlatform.windows, const {'HOME': r'D:\home'}),
+        isNull,
+      );
+    });
+
     test('a macOS sandbox container home resolves to the real home', () {
       final source = sshConfigSourceFor(TargetPlatform.macOS, const {
         'HOME': '/Users/me/Library/Containers/ch.lkmc.klabautermannApp/Data',
