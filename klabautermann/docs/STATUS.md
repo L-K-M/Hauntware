@@ -45,9 +45,9 @@ slice:
   AppImage through the shared `scripts/package-linux-common.sh`) and
   `scripts/build-flatpak.sh` with `flatpak/ch.lkmc.klabautermann.yml`.
   The flatpak grants read-only `~/.ssh` for the FL-02 import, which
-  04 §12.1 does not plan yet. Locally they have only run on stub
-  bundles; CI's Linux client leg runs them on the real release bundle,
-  with appimagetool and flatpak-builder.
+  04 §12.1 records, pending owner confirmation. Locally they have only
+  run on stub bundles; CI's Linux client leg runs them on the real
+  release bundle, with appimagetool and flatpak-builder.
 - Client CI legs: `klabautermann_client` in the root `ci.yml` builds
   Android, Linux, macOS, iOS and Windows on every PR, launches the three
   desktop release builds, checks the APK's version code and the macOS
