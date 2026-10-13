@@ -31,10 +31,20 @@ void main() {
       expect(CronExpression.parse('30/10 * * * *')!.minutes, {30, 40, 50});
     });
 
+    test('a bounded step walks the range from its low end', () {
+      expect(CronExpression.parse('* 9-17/4 * * *')!.hours, {9, 13, 17});
+    });
+
     test('month and weekday names, including ranges', () {
       final e = CronExpression.parse('0 0 1 jan-mar mon,wed')!;
       expect(e.months, {1, 2, 3});
       expect(e.weekDays, {1, 3});
+    });
+
+    test('month and weekday names are case-insensitive', () {
+      final e = CronExpression.parse('0 0 * JAN,JUL MON-FRI')!;
+      expect(e.months, {1, 7});
+      expect(e.weekDays, {1, 2, 3, 4, 5});
     });
 
     test('a written 7 normalizes to sunday 0', () {

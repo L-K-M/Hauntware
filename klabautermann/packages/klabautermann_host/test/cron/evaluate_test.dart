@@ -84,6 +84,8 @@ void main() {
     );
     expect(runs.single.dst, CronDst.gap);
     expect(runs.single.atUtc, DateTime.utc(2026, 3, 29, 1));
+    // The annotated wall minute is the one the clock skipped.
+    expect(runs.single.wall, DateTime.utc(2026, 3, 29, 2));
   });
 
   test('a fall-back overlap run keeps the first occurrence', () {

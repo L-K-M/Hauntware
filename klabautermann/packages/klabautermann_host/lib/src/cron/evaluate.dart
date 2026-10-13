@@ -11,17 +11,17 @@ import 'package:meta/meta.dart';
 import 'expression.dart';
 
 /// A server time zone (03 §7.7): the fixed offset always present, and
-/// an optional rule lookup derived from the probe's `tzName` when the
-/// embedding platform provides one.
+/// an optional rule lookup the embedding platform may supply from the
+/// probe's `timezone` name.
 @immutable
 final class ServerZone {
   const ServerZone({required this.offset, this.ianaName, this.offsetAt});
 
-  /// The fixed offset from the probe (`tzOffset`). Used when [offsetAt]
-  /// is absent and as a sanity anchor.
+  /// The fixed offset from the probe's `zoneOffset` (`+0200`). Used when
+  /// [offsetAt] is absent and as a sanity anchor.
   final Duration offset;
 
-  /// The IANA name from the probe (`tzName`), e.g. `Europe/Berlin`.
+  /// The IANA name from the probe's `timezone` (`Europe/Berlin`).
   final String? ianaName;
 
   /// Returns the zone's offset at an instant, or null when unknown.
