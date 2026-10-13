@@ -45,9 +45,15 @@ slice:
   AppImage through the shared `scripts/package-linux-common.sh`) and
   `scripts/build-flatpak.sh` with `flatpak/ch.lkmc.klabautermann.yml`.
   The flatpak grants read-only `~/.ssh` for the FL-02 import, which
-  04 §12.1 does not plan yet. The scripts have only run on stub bundles
-  so far; a real Flutter bundle, appimagetool and flatpak-builder first
-  run in the client CI legs.
+  04 §12.1 does not plan yet. Locally they have only run on stub
+  bundles; CI's Linux client leg runs them on the real release bundle,
+  with appimagetool and flatpak-builder.
+- Client CI legs: `klabautermann_client` in the root `ci.yml` builds
+  Android, Linux, macOS, iOS and Windows on every PR, launches the three
+  desktop release builds, checks the APK's version code and the macOS
+  bundle's signature, packages the .deb, AppImage and Flatpak, and runs
+  the macOS fixtures. No release job ships these builds before M4
+  (decision 16).
 
 Pull-only from the start (D14): no surface sends a request that could
 push or write catalog records, and a widget test guards it.
@@ -57,7 +63,14 @@ persistence for imported ssh_config entries (with the catalog library),
 reachability dots and the `ghost_servers` rail (F4), theme editing and
 presets (F4b's editor), persisting the appearance (the device settings
 store), the desktop settings window and its native runners (D32), and the
-five client CI legs and release job.
+release job (M4).
+
+The macOS launch check is weaker than the siblings': the runner's window
+is still the template's, visible before Dart runs, and the app installs
+no Dart menu, so the check proves only that the release app stays up
+without an unhandled Dart exception. The Linux and Windows runners show
+their window on the first frame, so a startup that never reaches `runApp`
+fails there.
 
 ## Open manual gates
 
@@ -84,12 +97,11 @@ controller (`KlabautermannFlutterViewController`, ledgered in
 `scripts/test-macos-accessibility.sh` compile it against the cached
 Flutter engine and run the native fixtures modelled on Séance's. With
 `--stock-engine` they test the stock controller instead and are expected
-to fail. They need macOS and have not run yet. No CI job builds
-Klabautermann for macOS yet either, so nothing has compiled the copied
-Objective-C or the Swift bridging: both wait for the Klabautermann client
-legs in the root workflows. Until then
-`app/klabautermann_app/test/macos_runner_test.dart` guards the wiring on
-Linux.
+to fail. They need macOS: CI's `klabautermann_client` macOS leg runs
+both after building the release app, and that build is the first to
+compile the copied Objective-C and the Swift bridging.
+`app/klabautermann_app/test/macos_runner_test.dart` also guards the
+wiring on Linux.
 
 Follow-up: this is the suite's fourth copy of the controller. The D32
 review in [SHARED.md](SHARED.md) defers a shared macOS plugin to a
