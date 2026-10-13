@@ -9,6 +9,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:planchette_editor/planchette_editor.dart';
 import 'package:poltergeist_app/l10n/app_localizations.dart';
+import 'package:poltergeist_app/services/editor_text_size_controller.dart';
+import 'package:poltergeist_app/services/settings_models.dart';
 import 'package:poltergeist_app/services/sync_compare_controller.dart';
 import 'package:poltergeist_app/theme/app_theme.dart';
 import 'package:poltergeist_app/theme/compare_diff_colors.dart';
@@ -786,6 +788,113 @@ void main() {
       });
     }
 
+    testWidgets('rows and the separate editors follow the editor text size', (
+      tester,
+    ) async {
+      final long = List.filled(120, 'a').join();
+      final textSize = EditorTextSizeController(initial: 20);
+      addTearDown(textSize.dispose);
+      final controller = await _startedPair(
+        tester,
+        temporaryDirectory,
+        'top\n$long\nend\n',
+        'top\nshort\nend\n',
+      );
+      await _pumpView(
+        tester,
+        controller,
+        startDiff: _syncDiff,
+        size: const Size(1200, 1600),
+        textSize: textSize,
+      );
+      await tester.pump();
+
+      final wrapped = find.textContaining('aaaa');
+      double fontSize(Finder text) =>
+          tester.widget<Text>(text).style!.fontSize!;
+      int chunks() => tester
+          .renderObject<RenderParagraph>(wrapped)
+          .text
+          .toPlainText()
+          .split('\n')
+          .length;
+      expect(fontSize(wrapped), 20);
+      final chunksAt20 = chunks();
+
+      await textSize.setTextSize(28);
+      await tester.pump();
+
+      expect(fontSize(wrapped), 28);
+      expect(fontSize(find.text('short')), 28);
+      // Larger text wraps into more lines, and the row grows to hold them
+      // with nothing cut at a line's end.
+      expect(chunks(), greaterThan(chunksAt20));
+      expect(
+        tester.getBottomLeft(wrapped).dy,
+        lessThanOrEqualTo(tester.getTopLeft(find.text('end').first).dy),
+      );
+      final paragraph = tester.renderObject<RenderParagraph>(wrapped);
+      expect(
+        paragraph.getMaxIntrinsicWidth(double.infinity),
+        lessThanOrEqualTo(paragraph.size.width + 0.01),
+      );
+      // The −/+ markers grow with the text, in a slot wide enough for them.
+      final marker = find.byIcon(Icons.remove).first;
+      expect(tester.widget<Icon>(marker).size, 28);
+      expect(tester.getSize(marker).width, greaterThanOrEqualTo(28));
+      expect(tester.takeException(), isNull);
+
+      await tester.tap(find.text('Separate'));
+      await tester.pump();
+      final editors = tester.widgetList<PlanchetteEditor>(
+        find.byType(PlanchetteEditor),
+      );
+      expect(editors, hasLength(2));
+      expect(
+        editors.map((editor) => editor.textStyle.fontSize),
+        everyElement(28),
+      );
+    });
+
+    testWidgets('a text size change keeps the place inside a tall row', (
+      tester,
+    ) async {
+      final long = List.filled(400, 'q').join();
+      final textSize = EditorTextSizeController();
+      addTearDown(textSize.dispose);
+      final controller = await _startedPair(
+        tester,
+        temporaryDirectory,
+        'top\n$long\n${_numberedLines(100)}',
+        'changed\n$long\n${_numberedLines(100)}',
+      );
+      await _pumpView(
+        tester,
+        controller,
+        startDiff: _syncDiff,
+        textSize: textSize,
+      );
+      await tester.pump();
+      // Five lines into the tall second row.
+      _rowsPosition(tester).jumpTo(tester.getSize(find.text('top')).height * 6);
+      await tester.pump();
+
+      await textSize.setTextSize(20);
+      await tester.pump();
+      await tester.pump();
+
+      // Each line and the row grew; the offset keeps its share of the row
+      // instead of staying at the old pixel offset. The first row is now
+      // above the viewport, in its cache.
+      final line = tester.getSize(find.text('top', skipOffstage: false)).height;
+      final rowHeight = tester
+          .getSize(find.textContaining('qqqq').first)
+          .height;
+      final pixels = _rowsPosition(tester).pixels;
+      expect(pixels, greaterThan(line + line * 5));
+      expect(pixels, lessThan(line + rowHeight));
+    });
+
     testWidgets('long lines wrap at column boundaries and paired rows stay '
         'aligned', (tester) async {
       final long = List.filled(120, 'a').join();
@@ -1332,6 +1441,7 @@ Future<void> _pumpView(
   TargetPlatform? platform,
   Brightness brightness = Brightness.dark,
   double textScale = 1,
+  EditorTextSizeModel? textSize,
 }) {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -1368,6 +1478,7 @@ Future<void> _pumpView(
           title: title,
           clock: clock ?? () => DateTime.utc(2026, 10, 2),
           startDiff: startDiff ?? _FakeDiffs().start,
+          textSize: textSize,
         ),
       ),
     ),

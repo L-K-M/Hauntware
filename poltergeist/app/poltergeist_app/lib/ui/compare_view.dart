@@ -13,6 +13,8 @@ import 'package:poltergeist_core/poltergeist_core.dart';
 
 import '../l10n/app_localizations.dart';
 import '../services/compare_diff_controller.dart';
+import '../services/registered_command.dart' show ViewShortcuts;
+import '../services/settings_models.dart' show EditorTextSizeModel;
 import '../services/sync_compare_controller.dart';
 import '../theme/app_theme.dart' show poltergeistMonoTextStyle;
 import 'compact/compact_posture.dart' show compactPostureApplies;
@@ -60,6 +62,19 @@ enum _SideBody { full, header }
 const _nextChange = SingleActivator(LogicalKeyboardKey.keyN);
 const _previousChange = SingleActivator(LogicalKeyboardKey.keyN, shift: true);
 
+/// n and Shift+N for Help ▸ Keyboard Shortcuts: the activators the view
+/// binds, so the sheet lists exactly the keys that step.
+final compareViewShortcuts = ViewShortcuts(
+  title: (l10n) => l10n.helpShortcutsCompareGroup,
+  keys: [
+    (label: (l10n) => l10n.helpShortcutsNextChange, activator: _nextChange),
+    (
+      label: (l10n) => l10n.helpShortcutsPreviousChange,
+      activator: _previousChange,
+    ),
+  ],
+);
+
 const _arrowScrollLines = 3;
 const _pageScrollFraction = 0.9;
 
@@ -78,6 +93,7 @@ final class CompareView extends StatefulWidget {
     required this.controller,
     this.title,
     this.clock,
+    this.textSize,
     @visibleForTesting this.startDiff,
   });
 
@@ -89,6 +105,11 @@ final class CompareView extends StatefulWidget {
 
   /// Test seam for the metadata header's relative modified-time labels.
   final DateTime Function()? clock;
+
+  /// The built-in editor's text size, which the rows and the Separate
+  /// editors draw in and follow as it changes; null draws at
+  /// [pe.EditorTextSize.standard].
+  final EditorTextSizeModel? textSize;
 
   /// Test seam for the diff worker; null runs [startTextComparison].
   final TextComparisonStarter? startDiff;
@@ -134,6 +155,9 @@ class _CompareViewState extends State<CompareView> {
   @override
   void didUpdateWidget(CompareView oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.textSize, widget.textSize)) {
+      _listenable = _merged();
+    }
     if (identical(oldWidget.controller, widget.controller)) return;
 
     oldWidget.controller.removeListener(_syncDiff);
@@ -162,9 +186,17 @@ class _CompareViewState extends State<CompareView> {
     _diff = CompareDiffController(
       start: widget.startDiff ?? startTextComparison,
     );
-    _listenable = Listenable.merge([widget.controller, _diff]);
+    _listenable = _merged();
     widget.controller.addListener(_syncDiff);
   }
+
+  /// What the view rebuilds for: the side loads, the diff and the text
+  /// size.
+  Listenable _merged() =>
+      Listenable.merge([widget.controller, _diff, ?widget.textSize]);
+
+  double get _fontSize =>
+      (widget.textSize?.value ?? pe.EditorTextSize.standard).toDouble();
 
   /// Hands the diff both documents once both sides have loaded.
   void _syncDiff() {
@@ -374,6 +406,7 @@ class _CompareViewState extends State<CompareView> {
       label: label,
       now: now,
       body: body,
+      fontSize: _fontSize,
       onFindInSeparate: _openSeparate,
     );
   }
@@ -445,6 +478,7 @@ class _CompareViewState extends State<CompareView> {
             layout: _lineLayout(layout),
             activeRegion: _activeRegion,
             controller: _rowsController,
+            fontSize: _fontSize,
           )
         : _computingCard(context, l10n);
     return Column(
@@ -828,6 +862,7 @@ class _CompareSide extends StatefulWidget {
     required this.label,
     required this.now,
     required this.body,
+    required this.fontSize,
     required this.onFindInSeparate,
   });
 
@@ -836,6 +871,9 @@ class _CompareSide extends StatefulWidget {
   final String label;
   final DateTime now;
   final _SideBody body;
+
+  /// The editor's text size in logical pixels.
+  final double fontSize;
 
   /// Switches to the Separate layout, from a header-only Find.
   final VoidCallback onFindInSeparate;
@@ -1112,7 +1150,10 @@ class _CompareSideState extends State<_CompareSide> {
       strings: PoltergeistEditorStrings(l10n),
       editingLocked: true,
       showStatus: false,
-      textStyle: poltergeistMonoTextStyle.copyWith(fontSize: 14, height: 1.35),
+      textStyle: poltergeistMonoTextStyle.copyWith(
+        fontSize: widget.fontSize,
+        height: 1.35,
+      ),
     );
   }
 

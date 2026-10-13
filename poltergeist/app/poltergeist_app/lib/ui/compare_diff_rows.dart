@@ -11,16 +11,15 @@ import '../theme/app_theme.dart' show poltergeistMonoTextStyle;
 import '../theme/compare_diff_colors.dart';
 import 'compare_diff_layout.dart';
 
-/// The diff rows' text: the compare view's editor face, unhighlighted.
-/// Spacing is pinned so an ambient text theme cannot widen the columns the
-/// wrap counts.
-final _rowStyle = poltergeistMonoTextStyle.copyWith(
-  fontSize: 14,
+/// The diff rows' text at [fontSize]: the compare view's editor face,
+/// unhighlighted. Spacing is pinned so an ambient text theme cannot widen
+/// the columns the wrap counts.
+TextStyle _rowStyleAt(double fontSize) => poltergeistMonoTextStyle.copyWith(
+  fontSize: fontSize,
   height: 1.35,
   letterSpacing: 0,
   wordSpacing: 0,
 );
-final _rowStrut = StrutStyle.fromTextStyle(_rowStyle, forceStrutHeight: true);
 
 /// A digit run long enough to average the face's advance.
 final _measureSample = '0' * 10;
@@ -29,8 +28,9 @@ final _measureSample = '0' * 10;
 const int _minimumTextColumns = 2;
 
 const double _activeBarWidth = 3;
-const double _markerWidth = 16;
-const double _markerSize = 14;
+
+/// The −/+ marker's room beside its glyph, which is as large as the text.
+const double _markerPadding = 2;
 const double _gutterStartPadding = 4;
 const double _gutterEndPadding = 8;
 const double _textEndPadding = 8;
@@ -78,6 +78,7 @@ final class CompareDiffRows extends StatefulWidget {
     required this.layout,
     required this.activeRegion,
     required this.controller,
+    required this.fontSize,
   });
 
   final TextComparisonComputed result;
@@ -90,15 +91,19 @@ final class CompareDiffRows extends StatefulWidget {
   final int? activeRegion;
   final CompareRowsController controller;
 
+  /// The rows' text size in logical pixels: the editor's text size.
+  final double fontSize;
+
   @override
   State<CompareDiffRows> createState() => _CompareDiffRowsState();
 }
 
-/// What one width and text scale make of the rows.
+/// What one width, text scale and text style make of the rows.
 final class _RowMetrics {
   const _RowMetrics({
     required this.width,
     required this.scaler,
+    required this.style,
     required this.rows,
     required this.lineHeight,
     required this.gutter,
@@ -108,6 +113,7 @@ final class _RowMetrics {
 
   final double width;
   final TextScaler scaler;
+  final TextStyle style;
   final LineDiffRows rows;
   final double lineHeight;
   final double gutter;
@@ -116,9 +122,15 @@ final class _RowMetrics {
   /// Each row's first visual line ([compareRowOffsets]).
   final Int32List offsets;
 
-  bool fits(double width, TextScaler scaler, LineDiffRows rows) =>
+  bool fits(
+    double width,
+    TextScaler scaler,
+    TextStyle style,
+    LineDiffRows rows,
+  ) =>
       width == this.width &&
       scaler == this.scaler &&
+      style == this.style &&
       identical(rows, this.rows);
 
   int get rowCount => offsets.length - 1;
@@ -156,16 +168,20 @@ enum _Tone { unchanged, removed, added }
 class _CompareDiffRowsState extends State<CompareDiffRows> {
   _RowMetrics? _metrics;
   (TextScaler, TextStyle, ({double charWidth, double lineHeight}))? _measured;
+  late TextStyle _rowStyle;
+  late StrutStyle _rowStrut;
 
   @override
   void initState() {
     super.initState();
+    _styleRows();
     widget.controller._rows = this;
   }
 
   @override
   void didUpdateWidget(CompareDiffRows oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.fontSize != widget.fontSize) _styleRows();
     if (identical(oldWidget.controller, widget.controller)) return;
 
     if (identical(oldWidget.controller._rows, this)) {
@@ -183,6 +199,13 @@ class _CompareDiffRowsState extends State<CompareDiffRows> {
   }
 
   ScrollController get _scroll => widget.controller.scroll;
+
+  void _styleRows() {
+    _rowStyle = _rowStyleAt(widget.fontSize);
+    _rowStrut = StrutStyle.fromTextStyle(_rowStyle, forceStrutHeight: true);
+  }
+
+  double get _markerWidth => widget.fontSize + _markerPadding;
 
   /// The face's advance and line height at [scaler], measured in [style],
   /// the row style as the ambient text style completes it, rather than
@@ -218,7 +241,9 @@ class _CompareDiffRowsState extends State<CompareDiffRows> {
   _RowMetrics _metricsFor(double width, TextScaler scaler, TextStyle style) {
     final rows = widget.rows;
     final current = _metrics;
-    if (current != null && current.fits(width, scaler, rows)) return current;
+    if (current != null && current.fits(width, scaler, style, rows)) {
+      return current;
+    }
 
     final (:charWidth, :lineHeight) = _measure(scaler, style);
     final lineCount = math.max(
@@ -255,6 +280,7 @@ class _CompareDiffRowsState extends State<CompareDiffRows> {
     final next = _RowMetrics(
       width: width,
       scaler: scaler,
+      style: style,
       rows: rows,
       lineHeight: lineHeight,
       gutter: gutter,
@@ -269,8 +295,8 @@ class _CompareDiffRowsState extends State<CompareDiffRows> {
           : current.offsets,
     );
 
-    // A resize or text-scale change that rewraps the rows keeps the reader
-    // at the same place in the row at the top. A layout switch brings its
+    // A resize, or a change of text scale or size, that rewraps the rows
+    // keeps the reader at the same place in the row at the top. A layout switch brings its
     // own target from the view.
     if (current != null &&
         rewrapped &&
@@ -655,7 +681,7 @@ class _CompareDiffRowsState extends State<CompareDiffRows> {
           height: metrics.lineHeight,
           child: icon == null
               ? null
-              : Icon(icon, size: _markerSize, color: marker),
+              : Icon(icon, size: widget.fontSize, color: marker),
         ),
         Expanded(child: body),
       ],

@@ -4,6 +4,32 @@ Living snapshot of where Poltergeist is, what's proven, and what to pick up
 next. Read [AGENTS.md](../AGENTS.md) for build/test commands and
 [09-PLAYBOOK.md](plan/09-PLAYBOOK.md) for the PR process.
 
+## Compare view keys and text size (2026-10-13)
+
+Help ▸ Keyboard Shortcuts now lists n and Shift+N under Compare, after
+the menus. The keys stay out of the command registry, where a chord
+would claim n everywhere; the sheet reads the activators the compare
+view binds (`compareViewShortcuts`), so it cannot drift from the keys.
+The diff rows and the Separate editors draw in the built-in editor's
+text size and follow it as Settings → Appearance or View › Zoom changes
+it. A change that rewraps the rows keeps the reader's place in the row
+at the top, as a resize does, and the −/+ markers grow with the text.
+The Separate editors keep their scroll offset, as the editor's own zoom
+does.
+
+Tests: two compare view tests (rows and editors follow a live size
+change and rewrap without clipping, with markers that grow; a size
+change keeps the place inside a tall row) and three for the sheet (the
+view group after the menus with macOS glyphs, spelled-out keys on
+Windows, and Help ▸ Keyboard Shortcuts passing the compare keys).
+Mutation checks (row metrics not keyed on the text style, the view not
+listening to the size, a fixed marker size or slot) each fail a test.
+
+Local validation: Flutter analysis is clean, the localization contract
+passes, and all 3,423 app tests pass. Not run: native platforms and the
+Settings window driving an open compare view; the QA checklist's Compare
+and diff view section covers it.
+
 ## Minimal diff view (2026-10-12)
 
 The compare view (06 §6), opened from a sync-plan row or by File ▸

@@ -9801,6 +9801,24 @@ abstract class AppLocalizations {
   /// **'Other'**
   String get helpShortcutsOtherGroup;
 
+  /// Keyboard Shortcuts sheet: group for the keys the compare view (06 §6) binds for itself, outside the menus.
+  ///
+  /// In en, this message translates to:
+  /// **'Compare'**
+  String get helpShortcutsCompareGroup;
+
+  /// Keyboard Shortcuts sheet, Compare group: n moves to the next changed region.
+  ///
+  /// In en, this message translates to:
+  /// **'Next change'**
+  String get helpShortcutsNextChange;
+
+  /// Keyboard Shortcuts sheet, Compare group: Shift+N moves to the previous changed region.
+  ///
+  /// In en, this message translates to:
+  /// **'Previous change'**
+  String get helpShortcutsPreviousChange;
+
   /// Default name of a folder created by New Folder (file.newFolder); numbered like 'untitled folder (2)' when the name is taken. The inline rename opens on it right away.
   ///
   /// In en, this message translates to:

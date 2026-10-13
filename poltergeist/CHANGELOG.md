@@ -7,7 +7,8 @@
   right, with blank space opposite them. Step through the changes with
   the arrow buttons or N and Shift+N, switch to one unified column, or
   pick Separate to scroll each file on its own and use Find. Files over
-  20,000 lines open side by side without marks.
+  20,000 lines open side by side without marks. The text follows your
+  editor text size, and Help ▸ Keyboard Shortcuts lists N and Shift+N.
 - **Rename several items at once.** Select two or more items and choose
   File ▸ Rename Items… to replace text in their names, add text before
   or after them, or give them a name and a number. A preview shows every
