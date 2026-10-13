@@ -863,7 +863,9 @@ import 'package:seance_core/seance_core.dart' show SshConfigImporter;
 
 The barrel's `klabautermann_host` export shows `Collector`, `CoreSnapshot`
 and `OverviewSnapshot`; each list grows only as a milestone wires a type
-in. No ghost package depends on `seance_core`. Poltergeist's and
+in. No `ghost_*` package depends on `seance_core`; `klabautermann_core`
+is a product package, and the two curated lines above are its only
+`seance_core` edge. Poltergeist's and
 Séance's edges to the new shared packages appear as each extraction
 switches them (3.5). The Rust workspace
 `klabautermann/rust/` (v1.x, D42) has no edge in this graph: it shares no
