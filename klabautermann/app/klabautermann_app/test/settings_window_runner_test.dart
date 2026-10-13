@@ -51,9 +51,9 @@ void main() {
     );
 
     // The window's own files import nothing from the engine package. The
-    // screens they render are shared with the main window and may, and the
-    // window's isolate loads the whole program anyway, so the D18 guarantee
-    // is the early return above, not the imports.
+    // screens they render are shared with the main window and may import
+    // it, and the window's isolate loads the whole program anyway, so the
+    // D18 guarantee is the early return above, not the imports.
     for (final path in [
       'lib/settings_window_app.dart',
       'lib/services/settings_window/remote_settings.dart',

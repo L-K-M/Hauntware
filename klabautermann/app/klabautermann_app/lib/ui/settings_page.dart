@@ -21,10 +21,15 @@ class SettingsPage extends StatefulWidget {
   });
 
   final AppearanceSettings appearance;
+
+  /// The tab the page opens on, read once when it is first built: the
+  /// settings window keys each page it shows by generation, so opening on
+  /// another tab makes a new page rather than updating this one.
   final SettingsTab initialTab;
 
   /// Tabs the app asks the showing settings window to switch to; null on
-  /// the route.
+  /// the route. Subscribed once, when the page's state is created, like
+  /// [initialTab].
   final Stream<SettingsTab>? tabRequests;
 
   @override
