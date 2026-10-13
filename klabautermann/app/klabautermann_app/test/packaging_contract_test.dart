@@ -199,10 +199,7 @@ void main() {
   group('Flatpak', () {
     test('grants exactly the 04 §12.1 permissions', () {
       final manifest = _read(_flatpakManifest);
-      final finishArgs = RegExp(
-        r'^  - (--\S+)$',
-        multiLine: true,
-      ).allMatches(manifest).map((match) => match[1]!).toList();
+      final finishArgs = _finishArgs(manifest);
 
       expect(finishArgs.toSet(), _flatpakFinishArgs);
       expect(finishArgs, hasLength(_flatpakFinishArgs.length));
@@ -330,6 +327,32 @@ cp -a "$2" "$3.appdir" && touch "$3"
   );
 
   return (result: result, out: out);
+}
+
+/// Every item of the manifest's `finish-args` block, up to the next
+/// top-level key. flatpak-builder also applies quoted, commented and
+/// folded items, so a line in the block that is not a plain `  - --flag`
+/// item fails the test rather than escaping the permission check.
+List<String> _finishArgs(String manifest) {
+  final lines = manifest.split('\n');
+  final keys = lines.where(
+    (line) => !line.trimLeft().startsWith('#') && line.contains('finish-args'),
+  );
+  expect(keys, ['finish-args:'], reason: 'one block-style finish-args key');
+
+  final plainItem = RegExp(r'^  - (--\S+)$');
+  final items = <String>[];
+  for (final line in lines.skip(lines.indexOf('finish-args:') + 1)) {
+    final trimmed = line.trim();
+    if (trimmed.isEmpty || trimmed.startsWith('#')) continue;
+    if (!line.startsWith(' ')) break;
+
+    final item = plainItem.firstMatch(line);
+    expect(item, isNotNull, reason: 'not a plain finish-args item: "$line"');
+    items.add(item![1]!);
+  }
+
+  return items;
 }
 
 /// The app's semantic version, as the packager reads it from pubspec.yaml.
