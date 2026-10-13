@@ -23,7 +23,6 @@ environment:
 
 dev_dependencies:
   analyzer: 14.1.0
-  crypto: ^3.0.7
   lints: ^5.0.0
   path: ^1.9.1
   package_config: 3.0.0
