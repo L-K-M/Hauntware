@@ -1862,30 +1862,13 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'update:${info.latestVersion}'",
     r"'dragout:${notice.id}'",
   },
-  // Rate/ETA rendering and path grammar: the `/s` suffix, the ETA unit
-  // glyphs, the custom-rate regex and its unit table, both path
-  // separators, the endpoint:path composition, and the `→` route arrow
-  // — technical formatting and machine data, reviewed per file.
+  // Path grammar and route text: both path separators, the
+  // endpoint:path composition, the empty-string seed, and the `→` route
+  // arrow — technical formatting and machine data, reviewed per file.
+  // The rate/ETA and custom-rate-parse literals moved to ghost_ui's
+  // `ghost_rate_format.dart` with the functions that own them.
   'lib/ui/activity/activity_format.dart': {
-    r"'${formatPaneSize(bytesPerSecond.round(), platform: platform)}/s'",
-    r"'${formatPaneSize(bytesPerSecond, platform: platform)}/s'",
-    r"'${seconds}s'",
-    r"'${minutes}m ${seconds % 60}s'",
-    r"'${hours}h ${minutes % 60}m'",
-    r"'${hours ~/ 24}d ${hours % 24}h'",
-    "','",
-    "'.'",
     "''",
-    "'b'",
-    "'k'",
-    "'kb'",
-    "'m'",
-    "'mb'",
-    "'g'",
-    "'gb'",
-    "'t'",
-    "'tb'",
-    r"r'^(\d+(?:[.,]\d+)?)\s*([kmgt]?i?b)?(?:\s*/\s*s)?$'",
     "'/'",
     "'\\\\'",
     r"'$candidate/'",
