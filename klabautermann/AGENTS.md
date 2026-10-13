@@ -57,6 +57,15 @@ flutter pub get && flutter analyze && flutter test
 CI (`.github/workflows/ci.yml` at the repository root) analyzes and tests
 the workspace packages and the app on every PR.
 
+On macOS, after `flutter build macos` (or with `FLUTTER_ROOT` pointing at
+an SDK with its macOS release engine cached), `scripts/test-macos-keyboard.sh`
+and `scripts/test-macos-accessibility.sh` run the native keyboard and
+accessibility fixtures modelled on Séance's against the runner's
+`KlabautermannFlutterViewController`, copied from Séance and ledgered in
+[docs/SHARED.md](docs/SHARED.md). Neither launches the app or touches user
+data; `--stock-engine` runs the stock controller and must fail. Rerun them
+after every Flutter upgrade: both fixes rely on private engine selectors.
+
 ## Conventions
 
 - The product name is **Klabautermann**, plain ASCII everywhere a file
