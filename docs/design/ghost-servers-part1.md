@@ -95,7 +95,12 @@ statusConnected / statusConnecting / statusFailed / statusUnknown
 
 What is shared: the precedence algebra and the paint vocabulary
 (`SidebarDotStyle`/`SidebarStatusDot` already live in `ghost_ui`,
-`sidebar_kit.dart:1210-1230`). What diverges: the truth inputs
+`sidebar_kit.dart:1210-1230`). The algebra is not one rule: Séance's dot
+paints connected > connecting > error, its `aggregateSessionStatus` ranks
+connecting > connected, Poltergeist's list rule preserves the probe and
+its rail rule lets connection truth override it. The package exposes each
+as a named rule and every app surface maps to exactly the rule it uses
+today, so no surface changes behaviour in the move. What diverges: the truth inputs
 (`TerminalStatus` is seance_app `app_state.dart:34`; `ServerStatus`/
 `ServerConnectionState` are poltergeist_core `connection_manager.dart:18-58`;
 `ProbeStatus` is seance_core `probe_service.dart:14`), the list-vs-rail
@@ -291,7 +296,12 @@ Barrel `ghost_servers.dart` exports `server_status.dart`,
 `connection_log_view.dart`, `connection_test_report.dart`.
 
 `ghost_ui` gains `src/ghost_rate_format.dart` (exported from the barrel):
-IEC binary formatters plus the moved transfer-rate helpers. The boundary
+new IEC binary formatters, used by Klabautermann, plus the moved
+transfer-rate helpers, which keep formatting through `ghostFormatFileSize`
+and its platform convention, so Poltergeist's strings stay byte-identical;
+`ghostParseByteRate` takes the cap as a required parameter, so the cap
+stays app policy while the over-range contract (`'9'*400` parses to null)
+moves with the function and its test. The boundary
 holds: every `seance_core`/`poltergeist_core` type crosses as a neutral
 record or a callback; §3 proves the VM shapes are sufficient because
 Poltergeist's isolate boundary already requires exactly this shape.
@@ -476,12 +486,19 @@ Future<GhostCredentialReply?> showGhostCredentialDialog(BuildContext context,
     Future<String?> Function()? pickKeyText,          // Séance: file_picker
     Future<String> Function(String path)? readKeyFile, // Poltergeist: audited read
     GlobalKey? dialogKey});
+// The injector matching request.keyField is required: pastedPem needs
+// pickKeyText, filePath needs readKeyFile; a missing one throws
+// ArgumentError before the dialog opens.
 
 // src/connection_log_view.dart
 class GhostConnectionLogView extends StatelessWidget {
   const GhostConnectionLogView({required this.text,
       this.strings = const GhostConnectionLogStrings(),
-      this.followTail = false, this.onCopy, this.onCopyError});
+      this.reverse = false, this.followTail = false,
+      this.onCopy, this.onCopyError});
+  /// Poltergeist's panel renders newest-first (`reverse: true`,
+  /// `connection_status_panel.dart:283`); followTail does not apply there.
+  final bool reverse;
 }
 
 // src/connection_test_report.dart
@@ -540,7 +557,7 @@ flips in a follow-up with its own test).
 | 2. Sectioning | `ghost_servers` skeleton; `server_grouping.dart` moves verbatim (import repoint to `seance_protocol`); `serverListRows` gains `labels`; Séance file -> export shim; Poltergeist adopts `groupServers` in `sidebar_servers_section.dart:30-50` (`_ServerGroup` deleted; collapse keys unchanged via `SidebarCollapseKeys.serverGroup`) | Both | Séance suite + `server_list_capture_test`; Poltergeist suite + `sidebar_capture_test`/`sidebar_catalog_test`; `server_grouping_test` (422) moves to the package |
 | 3. Status dots | `server_status.dart` + `ghostStatusDot` + bags; both adapters; `serverDotFor`/`aggregateSessionStatus`/`serverIndicatorOf`/`railIndicatorOf` become delegates; `ServerStateGlyph` stays app-side (pane-tab paint) | Both | Séance suite (status/dot/list/tile tests + captures); Poltergeist suite (`server_state_indicator_test` splits: resolution cases to package, ARB/paint stay); `sidebar_capture_test` unchanged |
 | 4. Host-key + keyboard prompts | VMs, dialogs, bags; `dialogKey` for both; Séance `main.dart:148-158` and `terminal_pane` wiring call adapters; Poltergeist `prompt_coordinator:241,262` maps `*PromptData` -> VM; Séance passes `submitOnEnter: false` | Both | Séance suite (dialog tests move to package; `host_key_blocked_test`/`credential_required_test` unchanged); Poltergeist suite (prompt tests keep adapter+ARB coverage); allowlist :20-25 and :649 removed in this PR |
-| 5. Log view + test report | `GhostConnectionLogView`/`GhostConnectionTestReport` + bags; panel `_ConnectionLogView` delegates with `followTail` + silent `onCopy`; dedupe the duplicate `connectionLog*` ARB block (:233-243, keep :8388-8404); allowlist :2476-2480 removed, :621 shrunk | Both | Séance suite (`connection_test_report_test` moves); Poltergeist suite (`connection_status_panel_test` unchanged); PORTS entries updated to the "now live in ghost_servers" wording |
+| 5. Log view + test report | `GhostConnectionLogView`/`GhostConnectionTestReport` + bags; panel `_ConnectionLogView` delegates with `reverse: true` + silent `onCopy`; dedupe the duplicate `connectionLog*` ARB block (:233-243, keep :8388-8404); allowlist :2476-2480 removed, :621 shrunk | Both | Séance suite (`connection_test_report_test` moves); Poltergeist suite (`connection_status_panel_test` unchanged); PORTS entries updated to the "now live in ghost_servers" wording |
 | 6. Credential prompt | Parameterized dialog + bags + reply; Séance adapter (`pastedPem`, `pickKeyText` injected, reply -> `MissingCredential`); Poltergeist adapter (`filePath`, `readKeyFile`, `vaultUnavailable`, `saveToVault`, reply -> `CredentialDialogResult`); allowlist :622 removed | Both | Séance suite (`credential_prompt_test` moves, `credential_required_test` unchanged); Poltergeist suite (`credential_dialog_test` adapts to the shim signature; `prompt_coordinator_test`/`identity_file_reader_test` untouched); no vault/audit/file code moves |
 | 7. Audit | `PORTS.md` ledger updates; record `ghost_servers` as a new path consumer of `seance_protocol`; `scripts/test.sh` lists verified (:141-151); boundary check: no `seance_core`/`poltergeist_core`/`dartssh2` import under `planchette/packages/ghost_servers/` | none | Both full suites; contract test green; Séance pin-audit not required (no `seance/` lineage change) |
 
@@ -572,7 +589,10 @@ any pixel drift to a single surface.
    font fallback list (`'monospace'` resolves on capture hosts, so
    baselines hold; flagged here as the one intentional normalization).
 8. Boundary: `ghost_servers` must not gain a `seance_core` edge; every
-   needed symbol is protocol-level (§1.9), verified above.
+   app-core symbol it consumes is protocol-level (§1.9), verified above.
+   Its other dependencies are Flutter and `ghost_ui` (§2); PR 7's boundary
+   check asserts that `ghost_ui` and `seance_protocol` are its only
+   package dependencies.
 
 ## 8. Corrections to the plan
 
