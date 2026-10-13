@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:ghost_theme/ghost_theme.dart' show GhostChrome;
 import 'package:klabautermann_core/klabautermann_core.dart' show LinkPhase;
 
 import '../controllers/fleet_controller.dart';
@@ -126,13 +127,15 @@ class FleetServerRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final status = KlabautermannStatusColors.of(context);
+    // The status colours live on ghost_theme's chrome beside the tokens
+    // they are held to the same contrast floor with.
+    final chrome = GhostChrome.of(context, klabautermannThemeStyle);
     final phase = fleet.linkPhaseFor(server.id);
     final statusWord = linkPhaseWord(l10n, phase);
     final dot = switch (phase) {
-      LinkPhase.connected => SidebarStatusDot(status.connected),
-      LinkPhase.connecting => SidebarStatusDot(status.connecting),
-      LinkPhase.failed => SidebarStatusDot(status.failed),
+      LinkPhase.connected => SidebarStatusDot(chrome.statusConnected),
+      LinkPhase.connecting => SidebarStatusDot(chrome.statusConnecting),
+      LinkPhase.failed => SidebarStatusDot(chrome.statusFailed),
       // Nothing observed yet paints no dot; the label still says the word.
       LinkPhase.disconnected => null,
     };

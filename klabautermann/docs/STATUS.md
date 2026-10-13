@@ -28,7 +28,9 @@ slice:
   shell (fleet rail, workspace, inspector) at 960 px and up, the phone
   master-detail stack below 600 dp, the settings route with its seven
   planned tabs (Appearance's theme switch works), light and dark themes
-  over `ghost_ui` tokens, and the English ARB catalogue (D35, A11Y-05).
+  built through `ghost_theme` from the Klabautermann brand preset (D9;
+  the appearance is held in memory), and the English ARB catalogue (D35,
+  A11Y-05).
 - Local-only import (FL-02, first part): desktops offer "Import from
   ~/.ssh/config" in the rail's add menu (in the app bar when the window
   is narrower than the desktop breakpoint); phones have no ssh_config and
@@ -45,12 +47,13 @@ push or write catalog records, and a widget test guards it.
 
 Not in yet (later PRs): pull-only enrollment and the catalog (F3),
 persistence for imported ssh_config entries (with the catalog library),
-reachability dots and the `ghost_servers` rail (F4), theme editing (F4b),
-the desktop settings window and its native runners (D32), the five client
-CI legs and release job, packaging scripts and flatpak. The flatpak
-needs a way to reach `~/.ssh/config` for FL-02, such as a read-only
-`--filesystem=~/.ssh:ro` grant: 04 §12.1 plans no home access, and a
-sandbox-hidden file reads as missing.
+reachability dots and the `ghost_servers` rail (F4), theme editing and
+presets (F4b's editor), persisting the appearance (the device settings
+store), the desktop settings window and its native runners (D32), the
+five client CI legs and release job, packaging scripts and flatpak. The
+flatpak needs a way to reach `~/.ssh/config` for FL-02, such as a
+read-only `--filesystem=~/.ssh:ro` grant: 04 §12.1 plans no home access,
+and a sandbox-hidden file reads as missing.
 
 ## Open manual gates
 
