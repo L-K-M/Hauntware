@@ -477,13 +477,17 @@ final class GhostThemeStyle {
     required this.brand,                // first preset ('Séance', ...)
     required this.initial,              // ThemePresets.initial
     required this.dark, required this.light,   // GhostThemeNeutrals tables
-    this.hasTerminal = false,
-    this.selectionLabel = SelectionLabel.overRail,   // | overListing
-    this.dialogRadius = 28, this.scalesDialogAlways = false,
-    this.dialogTitleOnDesktop = false,
-    this.tooltipUsesInterfaceFont = false,
+    // Every per-app divergence is required, so a missed value is a
+    // compile error rather than pixel drift; null-defaulted hooks below
+    // mean "absent", not an app's choice.
+    required this.hasTerminal,
+    required this.selectionLabel,                    // overRail | overListing
+    required this.dialogRadius,
+    required this.scalesDialogAlways,
+    required this.dialogTitleOnDesktop,
+    required this.tooltipUsesInterfaceFont,
     this.fabRadius,                                  // null = no FAB theme
-    this.visualDensity = VisualDensity.comfortable,
+    required this.visualDensity,
     this.focusColorOpacity,                          // null = unset
     required this.monoFontFamilies,
   });
@@ -632,8 +636,10 @@ device-theme group stays app-side (store keys are app keys), capture tests
 stay app-side (they capture app scenes).
 
 Add in the package: codec tests for both `hasTerminal` shapes (a terminal-
-only clipboard parses for Séance, is not a theme for Poltergeist; the two
-pinned behaviors that make the seam mandatory); `GhostChrome` lerp/copyWith;
+only clipboard parses for Séance, is not a theme for Poltergeist; a full
+Séance theme with a `terminal` block read by the `hasTerminal: false`
+codec parses its palette and ignores the block, Poltergeist's read-past
+behavior today; the pinned behaviors that make the seam mandatory); `GhostChrome` lerp/copyWith;
 `GhostThemePresets.matching`/`relabel`; a style-equivalence test that freezes
 each app's `GhostThemeStyle` against its current tables (Séance's
 `_legacyScheme` and Poltergeist's `legacy_theme.dart` pattern); extension
@@ -643,6 +649,10 @@ M4: a contract test that a Séance-copied theme JSON pastes into
 Klabautermann's codec (X-01).
 
 ## 7. Risks
+
+- **A forgotten style value.** Every divergence knob of `GhostThemeStyle`
+  is a required parameter, so a missed override fails to compile instead
+  of surfacing only in the frozen-table comparison or a capture diff.
 
 - **Pixel drift from reordered construction.** `build` is ~160 lines of
   `copyWith` calls; a missed component theme or reordered extension lands
