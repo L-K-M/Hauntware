@@ -107,6 +107,13 @@ void main() {
       find.byKey(const ValueKey((SkipRuleSetKey.addItem, 'Web'))),
     );
     await tester.pumpAndSettle();
+    final excludes = tester
+        .widget<TextField>(find.widgetWithText(TextField, 'Exclude rules'))
+        .controller!;
+    expect(
+      excludes.selection,
+      TextSelection.collapsed(offset: excludes.text.length),
+    );
     // The set's line chooses the matching quick pick.
     expect(
       tester
@@ -226,7 +233,11 @@ void main() {
       final excludes = tester
           .widget<TextField>(find.widgetWithText(TextField, 'Exclude rules'))
           .controller!;
-      excludes.selection = const TextSelection.collapsed(offset: 2);
+      // A trailing newline, as Enter after the last rule leaves it.
+      excludes.value = const TextEditingValue(
+        text: '*.log\nnode_modules/\n',
+        selection: TextSelection.collapsed(offset: 2),
+      );
 
       await tester.tap(find.byKey(const ValueKey(SkipRuleSetKey.addMenu)));
       await tester.pumpAndSettle();
@@ -235,7 +246,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(excludes.text, '*.log\nnode_modules/');
+      expect(excludes.text, '*.log\nnode_modules/\n');
       expect(excludes.selection, const TextSelection.collapsed(offset: 2));
     });
 

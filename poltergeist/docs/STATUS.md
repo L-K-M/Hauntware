@@ -8,13 +8,18 @@ next. Read [AGENTS.md](../AGENTS.md) for build/test commands and
 
 Two follow-ups GLM raised on the rule sets PR and deferred there. Adding
 a rule set whose lines the excludes already hold no longer rewrites the
-field, so the caret and selection stay where they were. The quick-pick
+field, so the caret and selection stay where they were; the check
+compares rules, so blank lines or a trailing newline do not count as a
+change. The quick-pick
 row now keeps 8 px between wrapped rows: desktop chips shrink-wrap their
 tap targets, so wrapped rows touched in a narrow window.
 
 Tests: 2 new in `sync_pair_editor_test.dart`, each failing first (the
-caret jumped to the end; the gap between rows was 0 on macOS). Local
-validation: analysis is clean and the pair editor's 21 tests pass.
+caret jumped to the end, also with a trailing newline in the field; the
+gap between rows was 0 on macOS), and the Add Rule Set test now checks
+that a changing add still puts the caret at the end. Local validation:
+analysis is clean and the pair editor, Sync sheet, shell and
+localization contract tests pass.
 
 ## Trash root claim race (2026-10-13)
 
