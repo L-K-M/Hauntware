@@ -77,9 +77,9 @@ and where only the plan attests an API the citation is marked `[plan]`.
 |---|---|---|---|
 | `lib/src/sync/push_batcher.dart` | 71 | `batchForPush` `:24-71`, pure function over `PushLimits` | F2e: barrel export; only `src/sync/sync_engine.dart` consumes it today |
 | `lib/src/llm/danger_linter.dart` | 134 | `DangerSeverity` `:2`, `DangerFinding` `:4-14`, 14 rules `:26-100`, `scan` `:104-117`, `worst` `:120-126` | F2d: append rules; `scan`/`worst` untouched |
-| `lib/src/terminal/shell_command.dart` |  to  | `quoteShellWord` `:63` | F2b elevation prelude and argv quoting reuse it (8.8 names it the one quoting function) |
+| `lib/src/terminal/shell_command.dart` | 72 | `quoteShellWord` `:63` | F2b elevation prelude and argv quoting reuse it (8.8 names it the one quoting function) |
 | `lib/src/terminal/session_transport.dart` | 31 | `SessionTransport` interface | unchanged; `SshLink` is separate from `SessionTransport` (the shell stays `SshSession`) |
-| `lib/src/store/stores.dart` |  to  | `SecretVault` `:171` (`getSecret`), `VaultStore` `:132` | unchanged; F2c's vault seam matches `getSecret`'s signature |
+| `lib/src/store/stores.dart` | 393 | `SecretVault` `:171` (`getSecret`), `VaultStore` `:132` | unchanged; F2c's vault seam matches `getSecret`'s signature |
 | `lib/seance_core.dart` | 68 | ssh exports `:19-28`, `remote_file_system` show-list `:29-40`, stores `:44-45`, llm `:61-68` | F2e adds `push_batcher.dart`, `sequential_cleanup.dart`, and the new F2 modules |
 
 ### 1.3 Poltergeist `lib/src/connection/` (4,725 lines, 9 files; pattern only)
@@ -91,7 +91,7 @@ copies four of its mechanisms:
 |---|---|---|
 | Idle ping with timeout | `_pingIdleTransport` `connection_manager.dart:1927-1963`: one outstanding ping per transport `:1930`, skipped while `hasActiveOperations` or pending opens/closes `:1934-1935`, `pingOperationTimeout` 30 s `ssh_transport.dart:42`, timeout closes the transport and lets the `done` watcher run death `:1943-1955` | the same rule set on `SshLink`: data in flight is proof of life; a ping unanswered 30 s marks the link lost |
 | Channel budget | `PoolPolicy.maxChannelsPerTransport` = 8 `pool_policy.dart:32,:56`, `maxTransferChannelsPerTransport` = 4 `:25,:55` | cap 8 on session channels in `SshLink`; Poltergeist's per-kind split is pool policy, not link policy |
-| Reconnect backoff | `reconnect.dart:3-4`: 1 s base, 0.3 downward jitter; cap 30 s `pool_policy.dart:46,:59` | constants only, for `SshLink.backoff(until)` |
+| Reconnect backoff | `reconnect.dart:3-4`: 1 s base, 0.3 downward jitter; cap 30 s `pool_policy.dart:46,:59` | constants only, for the Klabautermann supervisor's backoff and the `SshLinkBackoff(until)` state it drives (§3.2) |
 | Late-open cleanup | `_DartSshTransport.openChannel` `ssh_transport.dart:392-401`: the abandoned `_client.sftp()` future is retained and its late channel closed via `closeSshResource` | same "hold the pending future, close the latecomer" inside the exec core and forwarding opens |
 | Bounded close | `closeSshResource` `ssh_cleanup.dart:12-20`, 5 s `_closeTimeout` `:6` | already `runSequentialCleanup`; F2e removes the implementation import |
 
@@ -277,7 +277,9 @@ beyond the F2e export list (D4; plan 3.4):
 No new package dependencies; nothing new depends on Flutter or dart:io
 beyond what `ssh/` already uses. The exec core is package-private: the
 public surface is `SshLink`'s methods plus the value types, so
-`klabautermann_*` never sees a dartssh2 type.
+`klabautermann_*` never sees a dartssh2 type: the `connect` and `forward`
+seams of `SshLink.connect` (§3.1) name dartssh2's `SSHSocket`, so they are
+`@visibleForTesting` and production callers pass neither.
 
 Barrel (`seance_core.dart`) additions: exports for the six files above,
 `src/sync/push_batcher.dart`, and `src/ssh/sequential_cleanup.dart`.
@@ -299,7 +301,8 @@ responsibility for connect transcripts.
 abstract interface class SshLink {
   ServerConfig get config;
   SshLinkState get state;                 // current value
-  Stream<SshLinkState> get states;        // broadcast, replays current
+  Stream<SshLinkState> get states;        // broadcast; each new listener
+                                          // first receives the current state
   SshLinkSeen get seen;
 
   Future<RemoteCommandResult> run(
@@ -384,13 +387,19 @@ Poltergeist's opener makes at `ssh_transport.dart:280-282`.
 isolate-crossable data (no Futures, no dartssh2 types):
 
 `SshLinkIdle`, `SshLinkConnecting`, `SshLinkAuthenticating`,
-`SshLinkReady(SshLinkSeen seen)`, `SshLinkDegraded(String reason)`,
+`SshLinkReady(SshLinkSeen seen)`, `SshLinkDegraded(SshLinkDegradedReason reason)`,
 `SshLinkBackoff(DateTime until)`, `SshLinkNeedsUser(LinkPrompt prompt)`,
-`SshLinkClosed(String reason)`.
+`SshLinkClosed(SshLinkClosedReason reason)`. Reasons are enums (for
+example `pingTimeout`, `sessionLimitLearned`, `transportError`,
+`closedByOwner`, `linkLost`), never text: each app renders its own copy.
+A learned fact (a below-cap session refusal, a forwarding refusal)
+re-emits `SshLinkReady` with the updated `SshLinkSeen`, so listeners see
+every change without polling `seen`.
 
 The sketch's inline comment `// connecting, ready, degraded, lost,
 closed` is reconciled as: "lost" is a transition `ready/degraded →
-closed(reason: 'link lost')` when `close()` runs without reconnect, or
+closed(reason: SshLinkClosedReason.linkLost)` when the link closes itself
+after detected loss, or
 `→ backoff(until)` when a reconnect owner exists. `SshLink` itself does
 not reconnect: per 5.1, reconnect is the caller's policy; the link only
 detects, closes and reports. Recommendation: a thin `SshLinkReconnect`
@@ -452,6 +461,9 @@ final class ElevationException implements Exception {
 
 final class ElevatedExecutor {
   ElevatedExecutor(this.link, this.probe);
+  /// The prelude's own exit when `sudo -v` fails (8.3). A rejection needs
+  /// this status and a classified sudo text on stderr; 125 alone may be
+  /// the elevated command's own status and is then returned as such.
   static const int passwordRejectedExit = 125;
   Future<RemoteCommandResult> run(List<String> argv,
       {String? password, List<int>? stdin, Duration? timeout});
@@ -482,11 +494,12 @@ final class CredentialDraft {
 final class CredentialMissingException implements Exception { ... }
 
 final class CredentialResolver {
-  CredentialResolver(this._source, {this.missingSecretPolicy});
+  CredentialResolver(this._source,
+      {this.missingSecretPolicy = MissingSecretPolicy.fail});
 
-  /// throw (Séance's semantics, the default) or empty (Poltergeist's
-  /// editor path today). A small explicit switch, deleted when
-  /// Poltergeist takes the fail-loud policy.
+  /// fail (Séance's semantics, the default) or substituteEmpty
+  /// (Poltergeist's editor path today). A small explicit switch, deleted
+  /// when Poltergeist takes the fail-loud policy.
   final MissingSecretPolicy missingSecretPolicy;
 
   Future<SshCredentials> resolve(ServerConfig config, {CredentialDraft? draft});
@@ -519,16 +532,16 @@ warning for scoped data loss and lockout-class commands (`iptables -F`
 
 | # | Pattern | Severity | Explanation |
 |---|---|---|---|
-| 15 | `\bdocker\s+system\s+prune\b(?=[^\n]*(--volumes|--all\|\s-{1,2}a\b))` | critical | `docker system prune` sweeping images and volumes destroys all unused data |
+| 15 | `\bdocker\s+system\s+prune\b(?=[^\n]*(--volumes\b\|--all\b\|\s-{1,2}a\b))` | critical | `docker system prune` sweeping images and volumes destroys all unused data |
 | 16 | `\bdocker\s+volume\s+prune\b` | critical | Removes every unused volume, taking attached data with it |
 | 17 | `\bdocker\s+volume\s+rm\b` | warning | Deletes a named volume and its data |
-| 18 | `\b(?:docker\s+compose\|docker-compose)\s+down\b(?=[^\n]*(--volumes\|\s-\w*v))` | critical | `compose down -v` drops the stack's volumes |
+| 18 | `\b(?:docker\s+compose\|docker-compose)\b[^\n]*\sdown\b(?=[^\n]*(--volumes\b\|\s-\w*v))` (also `compose -f f.yaml down -v`) | critical | `compose down -v` drops the stack's volumes |
 | 19 | `\bsystemctl\s+(?:stop\|disable\|mask)\b[^\n]*\bssh` | warning | Stopping or masking sshd cuts future SSH access to the host |
 | 20 | `\bcrontab\b[^\n]*\s-\w*r` | warning | `crontab -r` deletes the user's whole cron table |
-| 21 | `\bufw\s+(?:reset\|disable)\b` | warning | Removes or switches off the firewall |
+| 21 | `\bufw\b(?:\s+--?\w[\w-]*)*\s+(?:reset\|disable)\b` (also `ufw --force reset`) | warning | Removes or switches off the firewall |
 | 22 | `\bnft\s+flush\s+ruleset\b` | warning | Drops the entire nftables ruleset |
-| 23 | `\buserdel\b(?![^\n]*(\s-{1,2}r\b\|--remove\b))` | warning | Removes a user account |
-| 24 | `\buserdel\b(?=[^\n]*(\s-{1,2}r\b\|--remove\b))` | critical | `userdel -r` also deletes the home directory |
+| 23 | `\buserdel\b(?![^\n]*(\s-\w*r\|--remove\b))` | warning | Removes a user account |
+| 24 | `\buserdel\b(?=[^\n]*(\s-\w*r\|--remove\b))` (`-r`, `-rf`, `-fr`) | critical | `userdel -r` also deletes the home directory |
 | 25 | `\bkill\b[^\n]*\s1\b` | warning | Signals PID 1; `-9 1` is the plan's case, `TERM 1` shuts systemd down |
 
 Overlap with the 14 existing rules, checked rule by rule: `docker`,
@@ -584,9 +597,13 @@ buffers without limit) and stdout subject to the consumer's pause.
 ### 4.2 Idle ping with timeout
 
 `SshLink` runs its own liveness clock at `idlePingInterval` (15 s). A
-tick is skipped while a ping is outstanding or the link has channels with
-operations in flight (the `_pingIdleTransport` rule,
-`connection_manager.dart:1927-1935`: in-flight data is proof of life).
+tick is skipped while a ping is outstanding or bytes arrived on the
+connection within the interval: received data is proof of life
+(Poltergeist's `_pingIdleTransport` skips while operations are in flight,
+`connection_manager.dart:1927-1935`, which suits its short SFTP
+operations). An open channel alone is not proof of life: a quiet log
+follower or a long command never suppresses pings, so a silently dropped
+path is detected while they run.
 `client.ping()` never times itself out (5.10's unchanged defect); the
 link wraps it in `pingTimeout` (30 s, matching `pingOperationTimeout`
 `ssh_transport.dart:42`). Expiry marks the link lost: state moves to
@@ -700,7 +717,9 @@ auto-answer-on-agent and cancel-to-`RemoteFileException` behaviour.
 ## 5. Migration plan (staged PRs)
 
 D3 order, each PR green on both shipped apps; behaviour changes
-isolated. The Séance pin-audit job runs on every PR touching `seance/**`;
+isolated. The Séance pin-audit job runs on every PR touching `seance/**`,
+Poltergeist's pubspecs and lockfiles, `poltergeist/docs/PORTS.md`, the
+audit script and tool, or `ci.yml` (its path filter, `ci.yml:300-314`);
 the record refreshes only if provenance changes (a new contributor,
 attribution or license line in `seance/`: none is planned), in which
 case that PR runs `scripts/audit-seance-pin.sh --write-record` and
@@ -711,7 +730,7 @@ commits the regenerated `PORTS.md` block with the diff.
 | F2-1 transport/exec core | `byte_duplex.dart`, `channel_budget.dart`, `remote_process.dart` (with `_ExecCore`), `ssh_link.dart`; `SshSession.runCommand` rebased onto the core; barrel exports the new modules | Séance: `session.runCommand` (`app_state.dart:1550`) unchanged in signature, now shared: suite proves parity. Poltergeist untouched | `seance/**` touched → audit runs; new files by the same contributor leave the record unchanged |
 | F2-2 elevation | `elevation.dart`, probe model, executor, classifier; pure tests + the Linux sudo CI test | none: new capability (plan row F2b is `new`; Séance's snippet adoption is a later product PR, plan 7.21) | same as F2-1 |
 | F2-3a resolver move | `credential_resolver.dart` + `CredentialMissingException` moved up (deleted from `app_services.dart:77`); Séance switches `resolveCredentials`/`resolveJumpHost` to delegate | Séance: identical semantics, `resolve_credentials_test.dart` green | same |
-| F2-3b resolver adopt | Poltergeist's `server_editor_backend._resolveCredentials` and `PromptCoordinator`'s vault-first branch delegate to the shared resolver (`missingSecretPolicy: empty` first, or `throw` if the divergence is resolved in this PR: decision in §3.5) | Poltergeist: editor test path + pool prompt path | same; `poltergeist/**` also in the path filter |
+| F2-3b resolver adopt | Poltergeist's `server_editor_backend._resolveCredentials` and `PromptCoordinator`'s vault-first branch delegate to the shared resolver (`missingSecretPolicy: substituteEmpty` first, or `fail` if the divergence is resolved in this PR: decision in §3.5) | Poltergeist: editor test path + pool prompt path | same; `poltergeist/**` also in the path filter |
 | F2-4 danger rules | the 11 rules of §3.6 + tests in `pure_logic_test.dart` | Séance benefits automatically: `DangerLinter` is already consumed via the barrel (`chat_sidebar.dart:307`, `inbox_view.dart:283`, `command_generator.dart:120`) | same |
 | F2-5 exports + cleanup | `push_batcher.dart` + `sequential_cleanup.dart` barrel exports; `ssh_cleanup.dart:3` drops the implementation import; `PORTS.md` "Connection cleanup dependency" entry (`:338-349`) updated to record the new mechanism | Poltergeist switches the import in the same PR | `PORTS.md` is in the path filter; the audit verifies the record block, which a prose edit does not touch |
 
@@ -730,7 +749,8 @@ extended with refusal, stall and silence knobs:
   classifies `forwardDisabled`; other refusals classify `other`.
 - **Liveness**: the peer answers pings until told to go silent; a ping
   unanswered 30 s moves the link to lost and closes it; pings are skipped
-  while a channel has operations in flight.
+  only while bytes arrive; a quiet follower channel open for minutes does
+  not suppress them (the dropped-path case).
 - **Close**: a peer that never answers close still sees `close()` return
   within the 5 s bound (mirroring `sequential_cleanup_test.dart`); a
   channel open completing after its timeout is closed on arrival, not
@@ -858,16 +878,19 @@ Verified against the worktree at `20acafc7`:
 - **`run` signature**: `Duration? timeout` for typedef assignability
   (correction 5).
 - **SFTP inside the budget**: `openFileSystem` acquires one budget slot
-  lazily and releases after 60 s idle (5.2's table; lease shape from
+  lazily and releases it after `sftpIdleRelease` (60 s, a constructor
+  seam like the ping intervals); the next file operation re-acquires a
+  slot through the budget's normal queue (5.2's table; lease shape from
   `leased_file_system.dart`).
 - **Elevation API shape**: `run(List<String> argv)` quoting each element:
   `"$@"` needs real argv, not a shell string; shell constructs are
   `['sh','-c',script]` at the call site.
 - **`CredentialMissingException`**: moves to `credential_resolver.dart`
   and is barrel-exported; Séance call sites keep compiling unchanged.
-- **Missing-secret divergence**: `missingSecretPolicy` flag, default
-  `throw` (Séance's semantics: fail loud over silently authenticating
-  with `''`); Poltergeist's switch to `throw` is a deliberate, separate
-  behaviour PR unless the owner folds it into F2-3b.
+- **Missing-secret divergence**: `enum MissingSecretPolicy { fail,
+  substituteEmpty }`, default `fail` (Séance's semantics: fail loud over
+  silently authenticating with `''`); Poltergeist passes
+  `substituteEmpty` in F2-3b, and its switch to `fail` is a deliberate,
+  separate behaviour PR.
 - **New linter severities**: graded against the existing 14-rule
   calibration: critical only for mass/unbounded destruction (§3.6).
