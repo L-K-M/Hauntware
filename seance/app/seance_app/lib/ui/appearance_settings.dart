@@ -984,7 +984,9 @@ class _TerminalPreview extends StatelessWidget {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: colors.background,
-        borderRadius: BorderRadius.circular(SeanceChrome.of(context).corner(6)),
+        borderRadius: BorderRadius.circular(
+          SeanceChrome.of(context, seanceThemeStyle).corner(6),
+        ),
       ),
       child: Text.rich(
         TextSpan(

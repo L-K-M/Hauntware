@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:seance_app/theme.dart';
+import 'package:ghost_theme/ghost_theme.dart';
+
+import 'support/host_styles.dart';
 
 /// Every color token, named so a failure says which one stopped following.
-final _colors = <String, Color Function(SeanceChrome)>{
+final _colors = <String, Color Function(GhostChrome)>{
   'sidebarBackground': (c) => c.sidebarBackground,
   'headerBackground': (c) => c.headerBackground,
   'paneBackground': (c) => c.paneBackground,
@@ -16,13 +18,17 @@ final _colors = <String, Color Function(SeanceChrome)>{
   'inactiveSelectionFill': (c) => c.inactiveSelectionFill,
   'activePaneIndicator': (c) => c.activePaneIndicator,
   'secondaryText': (c) => c.secondaryText,
+  'statusConnected': (c) => c.statusConnected,
+  'statusConnecting': (c) => c.statusConnecting,
+  'statusFailed': (c) => c.statusFailed,
+  'statusUnknown': (c) => c.statusUnknown,
 };
 
 void main() {
-  final lightTheme = SeanceTheme.light();
-  final darkTheme = SeanceTheme.dark();
-  final light = lightTheme.extension<SeanceChrome>()!;
-  final dark = darkTheme.extension<SeanceChrome>()!;
+  final lightTheme = GhostTheme.light(seanceStyle);
+  final darkTheme = GhostTheme.dark(seanceStyle);
+  final light = lightTheme.extension<GhostChrome>()!;
+  final dark = darkTheme.extension<GhostChrome>()!;
 
   // MaterialApp animates a light/dark switch through ThemeData.lerp, which
   // lerps extensions too: a stepped lerp would hold the chrome-painted
@@ -33,7 +39,7 @@ void main() {
       lightTheme,
       darkTheme,
       t,
-    ).extension<SeanceChrome>()!;
+    ).extension<GhostChrome>()!;
 
     for (final MapEntry(key: name, value: color) in _colors.entries) {
       expect(

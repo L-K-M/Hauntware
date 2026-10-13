@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ghost_ui/ghost_ui.dart' show SidebarThemeTokens;
-import 'package:seance_app/theme.dart';
-import 'package:seance_app/theme/app_appearance.dart';
-import 'package:seance_app/theme/contrast.dart';
-import 'package:seance_app/theme/theme_palette.dart';
-import 'package:seance_app/theme/theme_presets.dart';
+import 'package:ghost_theme/ghost_theme.dart';
+import 'package:ghost_ui/ghost_ui.dart'
+    show FamilyPalette, GhostFileTheme, SidebarThemeTokens, contrastRatio;
+
+import 'support/host_styles.dart';
 
 /// The theme as it was built before palettes existed, from the tables as
 /// they were then, written out here so the comparison below cannot drift
@@ -45,8 +44,8 @@ void main() {
       for (final brightness in Brightness.values) {
         test('${brightness.name} on ${platform.name}', () {
           final theme = brightness == Brightness.dark
-              ? SeanceTheme.dark(platform: platform)
-              : SeanceTheme.light(platform: platform);
+              ? GhostTheme.dark(seanceStyle, platform: platform)
+              : GhostTheme.light(seanceStyle, platform: platform);
           final scheme = _legacyScheme(brightness);
           final desktop = platform == TargetPlatform.macOS;
           final plain = ThemeData(
@@ -122,7 +121,7 @@ void main() {
           expect(theme.bottomSheetTheme, plain.bottomSheetTheme);
           expect(theme.snackBarTheme, plain.snackBarTheme);
 
-          final chrome = theme.extension<SeanceChrome>()!;
+          final chrome = theme.extension<GhostChrome>()!;
           expect(chrome.sidebarBackground, scheme.surfaceContainerLow);
           expect(chrome.headerBackground, scheme.surfaceContainer);
           expect(chrome.paneBackground, scheme.surface);
@@ -141,18 +140,24 @@ void main() {
           expect(chrome.cornerScale, 1);
 
           final light = brightness == Brightness.light;
-          final status = theme.extension<SeanceStatusColors>()!;
-          expect(status.online, Color(light ? 0xFF1A7F37 : 0xFF3FB950));
-          expect(status.offline, Color(light ? 0xFFCF222E : 0xFFFF7B72));
-          expect(status.connecting, Color(light ? 0xFFB06E00 : 0xFFD29922));
-          expect(status.unknown, Color(light ? 0xFF57606A : 0xFF8B949E));
+          expect(
+            chrome.statusConnected,
+            Color(light ? 0xFF1A7F37 : 0xFF3FB950),
+          );
+          expect(chrome.statusFailed, Color(light ? 0xFFCF222E : 0xFFFF7B72));
+          expect(
+            chrome.statusConnecting,
+            Color(light ? 0xFFB06E00 : 0xFFD29922),
+          );
+          expect(chrome.statusUnknown, Color(light ? 0xFF57606A : 0xFF8B949E));
         });
       }
     }
 
     test('the MaterialApp gets both, following the system', () {
-      final themes = SeanceTheme.forAppearance(
-        AppAppearance(palette: ThemePresets.seance),
+      final themes = GhostTheme.forAppearance(
+        seanceStyle,
+        AppAppearance(palette: seancePresets.brand),
       );
       expect(themes.themeMode, ThemeMode.system);
       expect(themes.theme.colorScheme, _legacyScheme(Brightness.light));
@@ -161,11 +166,14 @@ void main() {
   });
 
   test('a new device is drawn in Terminal, whatever the system says', () {
-    final themes = SeanceTheme.forAppearance(seanceInitialAppearance);
+    final themes = GhostTheme.forAppearance(
+      seanceStyle,
+      AppAppearance(palette: seancePresets.initial),
+    );
     expect(themes.theme, same(themes.darkTheme));
     expect(themes.theme.brightness, Brightness.dark);
-    expect(themes.theme.colorScheme.surface, ThemePresets.terminal.surface);
-    expect(themes.theme.colorScheme.primary, ThemePresets.terminal.accent);
+    expect(themes.theme.colorScheme.surface, seancePresets.terminal.surface);
+    expect(themes.theme.colorScheme.primary, seancePresets.terminal.accent);
   });
 
   group('a palette lands where it says', () {
@@ -184,10 +192,9 @@ void main() {
         connecting: const Color(0xFFFFD740),
         unknown: const Color(0xFF90A4AE),
       );
-      final theme = SeanceTheme.build(palette, Brightness.light);
+      final theme = GhostTheme.build(seanceStyle, palette, Brightness.light);
       final scheme = theme.colorScheme;
-      final chrome = theme.extension<SeanceChrome>()!;
-      final status = theme.extension<SeanceStatusColors>()!;
+      final chrome = theme.extension<GhostChrome>()!;
 
       // A dark surface of its own makes the theme dark, whatever was asked.
       expect(theme.brightness, Brightness.dark);
@@ -209,10 +216,10 @@ void main() {
       expect(theme.dividerColor, palette.hairline);
       expect(chrome.selectionFill, palette.selection);
       expect(chrome.activePaneIndicator, palette.accent);
-      expect(status.online, palette.online);
-      expect(status.offline, palette.offline);
-      expect(status.connecting, palette.connecting);
-      expect(status.unknown, palette.unknown);
+      expect(chrome.statusConnected, palette.online);
+      expect(chrome.statusFailed, palette.offline);
+      expect(chrome.statusConnecting, palette.connecting);
+      expect(chrome.statusUnknown, palette.unknown);
       expect(theme.textTheme.bodyMedium?.color, palette.text);
     });
 
@@ -222,7 +229,11 @@ void main() {
         surface: const Color(0xFFFAF5E8),
         text: const Color(0xFF29241C),
       );
-      final scheme = SeanceTheme.build(palette, Brightness.dark).colorScheme;
+      final scheme = GhostTheme.build(
+        seanceStyle,
+        palette,
+        Brightness.dark,
+      ).colorScheme;
       expect(scheme.brightness, Brightness.light);
       // Each step further from the surface toward the text: the fraction
       // of the way from one to the other, which is negative for a shade
@@ -247,21 +258,23 @@ void main() {
     });
 
     test('a light selection gets a dark label', () {
-      final theme = SeanceTheme.build(
-        ThemePresets.highContrast,
+      final theme = GhostTheme.build(
+        seanceStyle,
+        seancePresets.highContrast,
         Brightness.light,
       );
       expect(
-        theme.extension<SeanceChrome>()!.onSelection,
+        theme.extension<GhostChrome>()!.onSelection,
         const Color(0xFF000000),
       );
     });
 
     test('another accent gets a selection white text reads on', () {
-      final chrome = SeanceTheme.build(
-        ThemePresets.seance.copyWith(accent: const Color(0xFF7FD1FF)),
+      final chrome = GhostTheme.build(
+        seanceStyle,
+        seancePresets.brand.copyWith(accent: const Color(0xFF7FD1FF)),
         Brightness.dark,
-      ).extension<SeanceChrome>()!;
+      ).extension<GhostChrome>()!;
       expect(chrome.onSelection, const Color(0xFFFFFFFF));
       expect(chrome.selectionFill, isNot(const Color(0xFF5A4BC0)));
       expect(
@@ -273,20 +286,22 @@ void main() {
 
   group('brightness', () {
     test('a surface of its own is one theme for the MaterialApp', () {
-      final themes = SeanceTheme.forAppearance(
+      final themes = GhostTheme.forAppearance(
+        seanceStyle,
         AppAppearance(
-          palette: ThemePresets.midnight,
+          palette: seancePresets.midnight,
           mode: ThemeModePreference.light,
         ),
       );
       expect(themes.theme.brightness, Brightness.dark);
       expect(themes.darkTheme.brightness, Brightness.dark);
-      expect(themes.theme.colorScheme.surface, ThemePresets.midnight.surface);
+      expect(themes.theme.colorScheme.surface, seancePresets.midnight.surface);
     });
 
     test('the mode picks between the two otherwise', () {
-      ThemeMode modeFor(ThemeModePreference mode) => SeanceTheme.forAppearance(
-        AppAppearance(palette: ThemePresets.graphite, mode: mode),
+      ThemeMode modeFor(ThemeModePreference mode) => GhostTheme.forAppearance(
+        seanceStyle,
+        AppAppearance(palette: seancePresets.graphite, mode: mode),
       ).themeMode;
       expect(modeFor(ThemeModePreference.system), ThemeMode.system);
       expect(modeFor(ThemeModePreference.light), ThemeMode.light);
@@ -296,8 +311,9 @@ void main() {
 
   group('shape and type', () {
     test('the corner scale reaches the components and the chrome', () {
-      final theme = SeanceTheme.build(
-        ThemePresets.seance.copyWith(cornerScale: 0.5),
+      final theme = GhostTheme.build(
+        seanceStyle,
+        seancePresets.brand.copyWith(cornerScale: 0.5),
         Brightness.light,
         platform: TargetPlatform.linux,
       );
@@ -324,13 +340,17 @@ void main() {
         theme.chipTheme.shape,
         RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
       );
-      final chrome = theme.extension<SeanceChrome>()!;
+      final chrome = theme.extension<GhostChrome>()!;
       expect(chrome.cornerScale, 0.5);
       expect(chrome.corner(6), 3);
     });
 
     test('square is square', () {
-      final theme = SeanceTheme.build(ThemePresets.terminal, Brightness.dark);
+      final theme = GhostTheme.build(
+        seanceStyle,
+        seancePresets.terminal,
+        Brightness.dark,
+      );
       expect(
         theme.dialogTheme.shape,
         RoundedRectangleBorder(borderRadius: BorderRadius.circular(0)),
@@ -341,8 +361,9 @@ void main() {
       // The Terminal preset's cornerScale is 0 — square panels everywhere —
       // but the shared menu skin clamps desktop menu corners to an 8 px
       // minimum, for both popup routes and MenuAnchor panels.
-      final theme = SeanceTheme.build(
-        ThemePresets.terminal,
+      final theme = GhostTheme.build(
+        seanceStyle,
+        seancePresets.terminal,
         Brightness.dark,
         platform: TargetPlatform.linux,
       );
@@ -357,8 +378,9 @@ void main() {
     });
 
     test('the interface font reaches the text theme', () {
-      final theme = SeanceTheme.build(
-        ThemePresets.seance.withFontFamily('Inter'),
+      final theme = GhostTheme.build(
+        seanceStyle,
+        seancePresets.brand.withFontFamily('Inter'),
         Brightness.light,
         platform: TargetPlatform.linux,
       );
@@ -369,12 +391,12 @@ void main() {
     });
   });
 
-  // The shared sidebar kit reads SeanceChrome only through these tokens.
+  // The shared sidebar kit reads GhostChrome only through these tokens.
   // Read the extension itself: SidebarThemeTokens.of falls back to values
   // equal to the default chrome, so it would hide a missing extension.
-  test('the sidebar kit tokens mirror SeanceChrome', () {
-    final scaled = ThemePresets.seance.copyWith(cornerScale: 0.5);
-    for (final palette in [...ThemePresets.all, scaled]) {
+  test('the sidebar kit tokens mirror GhostChrome', () {
+    final scaled = seancePresets.brand.copyWith(cornerScale: 0.5);
+    for (final palette in [...seancePresets.all, scaled]) {
       for (final brightness in Brightness.values) {
         for (final platform in const [
           TargetPlatform.macOS,
@@ -383,13 +405,14 @@ void main() {
           TargetPlatform.android,
           TargetPlatform.iOS,
         ]) {
-          final theme = SeanceTheme.build(
+          final theme = GhostTheme.build(
+            seanceStyle,
             palette,
             brightness,
             platform: platform,
           );
           final where = '${palette.name} $brightness $platform';
-          final chrome = theme.extension<SeanceChrome>()!;
+          final chrome = theme.extension<GhostChrome>()!;
           final tokens = theme.extension<SidebarThemeTokens>();
           expect(tokens, isNotNull, reason: where);
           expect(
@@ -421,19 +444,54 @@ void main() {
     }
   });
 
+  // The extensions the shared chrome is built alongside: a host that reads
+  // any of these (the sidebar kit, the file listings, the family hues)
+  // falls back to a same-looking default without it, so a missing install
+  // would hide here rather than fail.
+  test('the shared extensions are all installed', () {
+    for (final platform in [TargetPlatform.macOS, TargetPlatform.android]) {
+      final theme = GhostTheme.build(
+        seanceStyle,
+        seancePresets.brand,
+        Brightness.dark,
+        platform: platform,
+      );
+      expect(theme.extension<GhostChrome>(), isNotNull, reason: platform.name);
+      expect(
+        theme.extension<SidebarThemeTokens>(),
+        isNotNull,
+        reason: platform.name,
+      );
+      expect(
+        theme.extension<GhostFileTheme>(),
+        isNotNull,
+        reason: platform.name,
+      );
+      expect(
+        theme.extension<FamilyPalette>(),
+        isNotNull,
+        reason: platform.name,
+      );
+    }
+  });
+
   testWidgets('status colours come from the theme', (tester) async {
     late Color online;
     await tester.pumpWidget(
       MaterialApp(
-        theme: SeanceTheme.build(ThemePresets.midnight, Brightness.light),
+        theme: GhostTheme.build(
+          seanceStyle,
+          seancePresets.midnight,
+          Brightness.light,
+        ),
         home: Builder(
           builder: (context) {
-            online = StatusColors.online(context);
+            online = GhostChrome.of(context, seanceStyle).statusConnected;
             return const SizedBox();
           },
         ),
       ),
     );
-    expect(online, ThemePresets.midnight.online);
+    expect(online, seancePresets.midnight.online);
   });
 }
