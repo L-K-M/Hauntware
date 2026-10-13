@@ -5,7 +5,7 @@
 /// not-for-us ciphertext survives untouched.
 library;
 
-import 'package:seance_core/seance_core.dart';
+import 'package:seance_protocol/seance_protocol.dart';
 
 /// The one crypto consumer the task permits: Séance's own [RecordCodec]
 /// (AES-256-GCM + HKDF-SHA256, `{kind, data}` payloads, unknown kind names

@@ -13,15 +13,9 @@ library;
 
 import 'dart:math' show min;
 
+import 'package:seance_core/catalog.dart';
 import 'package:seance_core/seance_core.dart';
 
-import '../sync/enrollment.dart';
-import '../sync/host_key_mutations.dart';
-import '../sync/persistent_record_store.dart';
-import '../sync/record_crypto.dart';
-import '../sync/seance_server_catalog.dart';
-import '../sync/server_store.dart';
-import '../sync/sync_verdicts.dart';
 import 'bookmark_store.dart';
 
 /// What one dispatch did with a record — drives the apply cursor, which
