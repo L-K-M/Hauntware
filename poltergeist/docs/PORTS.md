@@ -1,5 +1,23 @@
 # Séance ports and pin audits
 
+## Shared localization contract scanner (2026-10-13)
+
+Poltergeist's app-local `localization_contract_test.dart` scanner moves to
+root `tool/l10n_contract` (03 §3.5 F1b, D3). Literal detection,
+interpolation handling, generated-file and generated-localization
+exclusions, parser-diagnostic rejection, per-file technical-literal
+allowlists and the "every exception stays live" check now live in one
+pure-Dart package. The app keeps its reviewed allowlist, with unchanged
+entries and comments, and calls the shared scanner as a path
+`dev_dependency`; nothing is copied or forked. Séance and Planchette have
+no such test and are not switched.
+
+The scanner's own tests (representative-literal, interpolation,
+generated-file and parser-diagnostic cases) move to
+`tool/l10n_contract/test/` with small fixtures. On the real tree the
+switched test keeps its pass verdict, and it fails on a planted
+user-facing literal and on a dead allowlist entry, both reverted.
+
 ## dartssh2 4.1.0 re-pin (2026-10-10)
 
 dartssh2 moves from 3.0.2 to 4.1.0 in every declaration that pins it

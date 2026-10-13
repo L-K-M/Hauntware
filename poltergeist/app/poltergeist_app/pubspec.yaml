@@ -69,6 +69,10 @@ dependency_overrides:
 
 dev_dependencies:
   analyzer: 14.1.0
+  # The shared localization contract scanner that replaced this app's local
+  # copy (03 §3.5 F1b); test-only, nothing shipped.
+  l10n_contract:
+    path: ../../../tool/l10n_contract
   # MockClient for the update-check request-shape test (01 §6's pinned
   # egress contract); test-only, nothing shipped.
   http: 1.6.0

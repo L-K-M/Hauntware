@@ -51,3 +51,23 @@ dart run tool/license_gate/bin/check.dart [--marker-only]
 Without `--product`, the import and protocol guards check every configured
 product; today only `poltergeist` is configured. Reported paths are
 repository-root-relative, so they carry the product directory as a prefix.
+
+## `tool/l10n_contract`
+
+The shared localization contract scanner (03 §3.5 F1b), extracted from
+Poltergeist's app-local `localization_contract_test.dart` so a second app
+reuses it instead of copying it. It is a standalone pure-Dart package
+(its own `pubspec.yaml`, `publish_to: none`, no Flutter), so it resolves
+and runs in place, before the root `dart pub get`:
+
+```sh
+cd tool/l10n_contract && dart pub get && dart analyze && dart test
+```
+
+`LocalizationContract` takes an app root, an `L10nContractConfig`
+(generated localization prefix, generated Dart suffixes, scanned
+directories) and a per-file technical-literal allowlist, and returns
+typed `L10nFinding`s: disallowed literals, unparseable sources and dead
+allowlist entries. An empty scan is the contract's success verdict.
+Apps consume it as a path `dev_dependency` and keep their own allowlist
+as data; the scanner itself never depends on `package:test`.

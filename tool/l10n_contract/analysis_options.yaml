@@ -1,0 +1,8 @@
+# Root analysis options for the suite tooling under tool/.
+include: package:lints/recommended.yaml
+
+analyzer:
+  # The scanner tests read deliberately broken and generated sources as
+  # fixtures; they are data, not code that has to analyze clean.
+  exclude:
+    - test/fixtures/**
