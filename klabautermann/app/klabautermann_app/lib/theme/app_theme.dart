@@ -20,8 +20,8 @@ const Color _seed = Color(0xFF2B6F9E);
 /// 80/20/30/90 dark, 40/100/90/30 light). The selection pill is the seed
 /// itself, which already clears 4.5:1 under white text. The error family
 /// stays Automatic, as on Séance: `ColorScheme.fromSeed` supplies
-/// Material's, which M1a drew too. The theme test holds these pairs to
-/// their contrast floors.
+/// Material's tonal error red. The theme test holds these pairs to their
+/// contrast floors.
 const GhostThemeNeutrals _dark = GhostThemeNeutrals(
   surface: Color(0xFF232932),
   containerLowest: Color(0xFF1C2128),
