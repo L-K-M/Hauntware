@@ -183,9 +183,11 @@ void main() {
     test('fleet entries survive with every field and stay read-only', () async {
       final event =
           await roundTrip(
-                CatalogReplaced(const [
+                // Growable, so the read-only check below proves the event
+                // holds its own copy instead of passing a const list on.
+                CatalogReplaced([
                   _webEntry,
-                  FleetEntry(
+                  const FleetEntry(
                     serverId: '0b9a6f3e-2d1c-4e5f-8a7b-6c5d4e3f2a1b',
                     label: 'db-1',
                     host: '10.0.0.4',
