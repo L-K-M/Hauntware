@@ -1,9 +1,11 @@
 # Secret-scan configuration for the whole monorepo (gitleaks reads the
 # root file only). Carries Poltergeist's former poltergeist/.gitleaks.toml
-# allowlist. Each Poltergeist path is listed twice: under poltergeist/ for
-# current commits, and at its standalone-repository location for the
-# imported history the scheduled full-history scan also reads.
-# Klabautermann has no standalone history, so its paths are prefixed only.
+# allowlist plus the Séance PEM-header fixtures the monorepo-wide
+# private-key scope now covers. Each Poltergeist and Séance path is listed
+# twice: under its product prefix for current commits, and at its
+# standalone-repository location for the imported history the scheduled
+# full-history scan also reads. Klabautermann has no standalone history, so
+# its paths are prefixed only.
 [extend]
 useDefault = true
 
@@ -15,6 +17,11 @@ paths = [
   '''^(poltergeist/)?test/integration/keys/ssh_host_ed25519_key$''',
   '''^(poltergeist/)?test/integration/keys/ssh_host_ed25519_key_swap$''',
   '''^(poltergeist/)?test/integration/keys/ssh_host_rsa_key$''',
+  '''^(seance/)?app/seance_app/lib/ui/credential_prompt\.dart$''',
+  '''^(seance/)?app/seance_app/test/command_stats_privacy_test\.dart$''',
+  '''^(seance/)?app/seance_app/test/credential_prompt_test\.dart$''',
+  '''^(seance/)?packages/seance_core/test/pure_logic_test\.dart$''',
+  '''^(seance/)?packages/seance_core/test/quoted_secret_redaction_test\.dart$''',
   '''^klabautermann/app/klabautermann_app/android/app/ci-release\.jks$''',
   '''^klabautermann/app/klabautermann_app/android/key\.properties$''',
 ]

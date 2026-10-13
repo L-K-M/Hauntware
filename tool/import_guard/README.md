@@ -14,10 +14,20 @@ Linux; the shell fixtures require Bash and permission to create symlinks.
 
 Per product, the guard parses import/export directives, including
 conditional branches and escaped literals, in the configured scan areas
-(Poltergeist: `packages/` and `app/`). Only the configured import areas may
-reference `package:dartssh2` — Poltergeist's core connection module and its
-M0 bench package. Configured pure-Dart packages cannot reference `dart:ui`,
-`dart:ui_web`, Flutter packages, or plugins.
+(Séance, Planchette, Poltergeist and Klabautermann: `packages/` and `app/`).
+Only the configured import areas may reference `package:dartssh2` — for
+example Poltergeist's core connection module and its M0 bench package, plus
+the files named in `import_exemptions`. Configured pure-Dart packages cannot
+reference `dart:ui`, `dart:ui_web`, Flutter packages, or plugins.
+
+Beyond imports, the guard enforces the product's `no_dart_io` directories
+(no `dart:io`, conditional imports included), the
+`seance_core_implementation_imports` allowlist (`package:seance_core/src/...`
+is a violation everywhere else in the product), and
+`forbidden_dependencies` (a package-name or glob map, checked against each
+scanned package's pubspec dependencies and Dart imports, and walked
+transitively through resolved packages). Every matching key's forbidden
+list applies, so `ghost_ui` inherits both a `ghost_*` entry and its own.
 
 Plugin classification uses the product's resolved package configuration
 (`<product>/.dart_tool/package_config.json`) and each dependency's pubspec:

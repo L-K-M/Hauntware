@@ -28,9 +28,10 @@ Future<List<String>> checkProtocol(
   final root = p.normalize(p.absolute(repositoryRoot));
   final productRoot = p.join(root, product.name);
   final engineRel = product.engineProtocol;
-  if (engineRel == null) {
-    throw FormatException('${product.name}: engine_protocol is not configured');
-  }
+  // A null engine_protocol marks a product with no engine (Séance and
+  // Planchette). The config requires the key, so null is declared, not
+  // missing.
+  if (engineRel == null) return const [];
   final engine = Directory(p.join(productRoot, engineRel));
   await _requireDirectory(engine);
 
