@@ -850,7 +850,7 @@ re-exports exactly one `seance_core` name, the home rule the app uses to
 find `~/.ssh/config` for the FL-02 import (it also undoes a macOS
 sandbox's container `HOME`). The engine imports the ssh_config parser
 under its own `show` list
-(`klabautermann_core/lib/src/fleet/ssh_config_entries.dart`) and maps
+(`klabautermann/packages/klabautermann_core/lib/src/fleet/ssh_config_entries.dart`) and maps
 its hosts to `FleetEntry` values (10.1), so no `seance_core` type crosses
 the isolate boundary (D18):
 
@@ -3189,7 +3189,7 @@ the engine in `engine_isolate.dart` beside it):
   `~/.ssh/config` and decides whether the platform has one, and the
   engine opens no file for it. The engine parses the text off the UI
   isolate (CN-19) with `seance_core`'s `SshConfigImporter`
-  (`klabautermann_core/lib/src/fleet/ssh_config_entries.dart`), replaces
+  (`klabautermann/packages/klabautermann_core/lib/src/fleet/ssh_config_entries.dart`), replaces
   every entry an earlier import produced, and sends `CatalogReplaced`
   before `SshConfigImported`, so the fleet already shows the imports when
   the counts arrive. `skippedCount` counts host blocks left out for a
