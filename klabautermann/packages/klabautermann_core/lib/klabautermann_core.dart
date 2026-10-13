@@ -11,3 +11,6 @@ export 'src/engine/protocol.dart';
 // explicit `show` list that grows as its milestone wires the types in.
 export 'package:klabautermann_host/klabautermann_host.dart'
     show Collector, CoreSnapshot, OverviewSnapshot;
+// The app resolves `~/.ssh/config` for the FL-02 import with Séance's home
+// rule, which also undoes a macOS sandbox's container `HOME`.
+export 'package:seance_core/seance_core.dart' show expandHomePath;

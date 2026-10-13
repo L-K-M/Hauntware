@@ -6,7 +6,11 @@ import 'package:meta/meta.dart';
 /// The isolate protocol version; [Hello] and [EngineReady] compare it so an
 /// app and engine built apart fail loudly instead of silently desynchronizing
 /// (03 D18).
-const int kEngineProtocolVersion = 1;
+///
+/// v2 types [CatalogReplaced] as a list of [FleetEntry] values (v1 carried
+/// an opaque record map) and adds the FL-02 import: [ImportSshConfig],
+/// answered by [SshConfigImported].
+const int kEngineProtocolVersion = 2;
 
 /// Every message the UI isolate sends the engine (03 §10.1, D18). Plain data
 /// only: no function-typed fields, no Futures, no `dartssh2` or `seance_core`
@@ -43,6 +47,25 @@ final class EnrollSync extends EngineRequest {
 /// push local catalog records). Alert inbox fetches ride inside it (D42).
 final class RunSyncRound extends EngineRequest {
   const RunSyncRound();
+}
+
+/// Imports the hosts of an OpenSSH client config as device-local fleet
+/// entries (FL-02, 03 §4.2). The UI reads the file and sends its [text]:
+/// which file to read, and whether the platform has one at all, stays the
+/// UI's decision, and the engine opens no file for this request. The engine
+/// parses [text] off the UI isolate (CN-19), replaces every entry an earlier
+/// import produced, and answers [CatalogReplaced] with the whole fleet, then
+/// [SshConfigImported].
+///
+/// Not a catalog write under D14: imported entries never become records and
+/// are never pushed. Until the catalog library brings D13's device-local
+/// store, they live in the engine's memory and are gone when it stops.
+/// FL-02 has no 03 §10.1 row yet.
+final class ImportSshConfig extends EngineRequest {
+  const ImportSshConfig(this.text);
+
+  /// The config file's text, decoded by the UI.
+  final String text;
 }
 
 /// Confirms probed endpoints into the fleet (03 §5.1, §10.1).
@@ -193,13 +216,33 @@ final class RequestRejected extends EngineEvent {
   final String reason;
 }
 
-/// The sync catalog replaced the server's record set (03 §10.1). The payload
-/// stays an opaque record map until F3 moves the catalog types into
-/// `seance_core`; the UI then reads concrete record types instead.
+/// The fleet the engine knows changed (03 §10.1): [entries] is the whole
+/// list in display order and replaces the previous one. Synced entries come
+/// first (none until the catalog library lands, F3), then device-local
+/// imports in file order. The catalog's own record types stay engine-side;
+/// the UI only ever sees [FleetEntry] values.
 final class CatalogReplaced extends EngineEvent {
-  const CatalogReplaced(this.snapshot);
+  CatalogReplaced(Iterable<FleetEntry> entries)
+    : entries = List.unmodifiable(entries);
 
-  final Map<String, Object?> snapshot;
+  final List<FleetEntry> entries;
+}
+
+/// The answer to one [ImportSshConfig], sent after the [CatalogReplaced]
+/// that carries the imported entries, so the fleet already shows them.
+final class SshConfigImported extends EngineEvent {
+  const SshConfigImported({
+    required this.importedCount,
+    required this.skippedCount,
+  });
+
+  /// Hosts the import added to the fleet; zero when the config names none.
+  final int importedCount;
+
+  /// Host blocks the import left out: a `Port` outside 1 to 65535, or an
+  /// alias an earlier block already took. Wildcard-only blocks such as
+  /// `Host *` are defaults rather than hosts and do not count.
+  final int skippedCount;
 }
 
 /// The sync round's phase changed (03 §10.1).
@@ -367,6 +410,63 @@ final class TerminalClosed extends EngineEvent {
 
   final String terminalId;
   final String? reason;
+}
+
+/// The port SSH uses when a config names none (RFC 4253, section 4.1).
+const int kSshDefaultPort = 22;
+
+/// Where a [FleetEntry] came from, which decides what may happen to it.
+enum FleetEntryOrigin {
+  /// A `serverConfig` record pulled from the shared Séance sync account
+  /// (D13); read-only in the MVP (D14). None arrive until the catalog
+  /// library lands (F3).
+  synced,
+
+  /// Imported on this device from an OpenSSH client config (FL-02, 03
+  /// §4.2). Device-local and never pushed in the MVP; held in the engine's
+  /// memory until the catalog library brings the device-local store.
+  sshConfig,
+}
+
+/// One server as the fleet rail lists it (03 §10.1, §10.3): its identity
+/// and endpoint, and nothing the rail does not need yet. The catalog's
+/// full records stay engine-side; this is the plain data that crosses the
+/// isolate boundary (D18).
+@immutable
+final class FleetEntry {
+  const FleetEntry({
+    required this.serverId,
+    required this.label,
+    required this.host,
+    required this.port,
+    required this.origin,
+    this.user,
+    this.group,
+  });
+
+  /// The id every per-server request carries: a synced record's bare
+  /// UUID, or `ssh-config:<alias>` for an import. Import ids are
+  /// device-local and never reach the sync server.
+  final String serverId;
+
+  /// The name the rail shows: the record's label or the config's alias.
+  final String label;
+
+  /// The host name or address SSH connects to.
+  final String host;
+
+  /// The SSH port, [kSshDefaultPort] unless the source names another.
+  final int port;
+
+  /// The login name; null leaves it to SSH, which uses the local account
+  /// name when the config names no `User`.
+  final String? user;
+
+  /// The group the rail files the entry under, or null for none. An
+  /// ssh_config has no groups, so imports always carry null.
+  final String? group;
+
+  final FleetEntryOrigin origin;
 }
 
 /// Which log source an [OpenLogStream] follows (03 §7.6).

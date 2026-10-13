@@ -14,6 +14,15 @@ void _echo(SendPort replies) {
   inbox.listen(replies.send);
 }
 
+const _webEntry = FleetEntry(
+  serverId: 'ssh-config:web-1',
+  label: 'web-1',
+  host: 'web-1.example',
+  port: 2222,
+  user: 'deploy',
+  origin: FleetEntryOrigin.sshConfig,
+);
+
 void main() {
   group('engine protocol (03 §10.1)', () {
     late Isolate echo;
@@ -58,6 +67,7 @@ void main() {
           cadence: Duration(seconds: 2),
         ),
         const Unsubscribe('srv-1'),
+        const ImportSshConfig('Host web-1\n  HostName web-1.example\n'),
         const OpenLogStream(
           LogStreamSpec(
             serverId: 'srv-1',
@@ -104,7 +114,8 @@ void main() {
       final events = <EngineEvent>[
         const EngineReady(kEngineProtocolVersion),
         const RequestRejected('Connect', 'nope'),
-        const CatalogReplaced({'servers': 3}),
+        CatalogReplaced(const [_webEntry]),
+        const SshConfigImported(importedCount: 1, skippedCount: 0),
         const SyncStatus(SyncPhase.running),
         const EndpointChanged('srv-1'),
         const LinkState('srv-1', LinkPhase.connected),
@@ -167,6 +178,51 @@ void main() {
               as Sample;
       expect(event.seq, 42);
       expect(event.snapshot.meminfo.totalKb, 1024);
+    });
+
+    test('fleet entries survive with every field and stay read-only', () async {
+      final event =
+          await roundTrip(
+                CatalogReplaced(const [
+                  _webEntry,
+                  FleetEntry(
+                    serverId: '0b9a6f3e-2d1c-4e5f-8a7b-6c5d4e3f2a1b',
+                    label: 'db-1',
+                    host: '10.0.0.4',
+                    port: kSshDefaultPort,
+                    origin: FleetEntryOrigin.synced,
+                    group: 'Production',
+                  ),
+                ]),
+              )
+              as CatalogReplaced;
+
+      final [web, db] = event.entries;
+      expect(web.serverId, 'ssh-config:web-1');
+      expect(web.label, 'web-1');
+      expect(web.host, 'web-1.example');
+      expect(web.port, 2222);
+      expect(web.user, 'deploy');
+      expect(web.group, isNull);
+      expect(web.origin, FleetEntryOrigin.sshConfig);
+      expect(db.user, isNull);
+      expect(db.group, 'Production');
+      expect(db.origin, FleetEntryOrigin.synced);
+      // The snapshot replaces the UI's list wholesale; nobody edits it in
+      // place, on either side of the boundary.
+      expect(() => event.entries.add(_webEntry), throwsUnsupportedError);
+
+      final answer =
+          await roundTrip(
+                const SshConfigImported(importedCount: 3, skippedCount: 2),
+              )
+              as SshConfigImported;
+      expect(answer.importedCount, 3);
+      expect(answer.skippedCount, 2);
+
+      final request =
+          await roundTrip(const ImportSshConfig('Host a\n')) as ImportSshConfig;
+      expect(request.text, 'Host a\n');
     });
 
     test('sealed answers and typed bytes survive', () async {

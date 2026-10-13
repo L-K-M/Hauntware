@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 
+import 'support/fake_ssh_config.dart';
 import 'support/harness.dart';
 
 /// Whether [request] could push catalog records or write server-side
@@ -26,15 +27,26 @@ void main() {
       tester,
       size: const Size(1280, 800),
       servers: twoServers,
+      sshConfig: FakeSshConfigSource.text('Host web-2\n'),
     );
 
     // Exercise every control the scaffold ships: select a server, collapse
-    // the section, open the settings route and switch the theme, then run
-    // a sampler subscription the way the monitor set will drive it (03
-    // §10.1). The traffic this produces is the traffic to judge.
+    // the section, import ~/.ssh/config (FL-02), open the settings route
+    // and switch the theme, then run a sampler subscription the way the
+    // monitor set will drive it (03 §10.1). The traffic this produces is
+    // the traffic to judge.
     await tester.tap(find.text('web-1'));
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Hide section'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Add'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Import from ~/.ssh/config'));
+    await tester.pumpAndSettle();
+    expect(harness.engine.sentOfType<ImportSshConfig>(), hasLength(1));
+    harness.engine.emit(
+      const SshConfigImported(importedCount: 1, skippedCount: 0),
+    );
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Settings'));
     await tester.pumpAndSettle();
