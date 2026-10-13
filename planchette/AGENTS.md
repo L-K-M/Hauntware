@@ -27,8 +27,9 @@ packages/
                           Séance and Poltergeist, over seance_protocol;
                           outside the workspace
   ghost_theme/            the editable theme palette, its stored/pasted JSON
-                          form, the shipped presets and the per-app style and
-                          codec seams; outside the workspace
+                          form, the shipped presets, the theme builders and
+                          chrome extension, and the per-app style and codec
+                          seams; outside the workspace
 app/
   planchette_app/         Flutter client — NOT a workspace member (it needs
                           the Flutter SDK; members must not).

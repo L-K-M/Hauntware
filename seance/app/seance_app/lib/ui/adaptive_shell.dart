@@ -382,7 +382,7 @@ class _AdaptivePaneLayoutState extends State<AdaptivePaneLayout> {
           );
         }
 
-        final chrome = SeanceChrome.of(context);
+        final chrome = SeanceChrome.of(context, seanceThemeStyle);
         // The list handle runs the full height, so its top lies inside the
         // band, where AppKit would take a drag on it for the window's.
         if (MacosToolbarBandScope.unifiedToolbarOf(context)) {
