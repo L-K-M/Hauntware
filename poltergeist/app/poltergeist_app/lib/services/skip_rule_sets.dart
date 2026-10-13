@@ -44,6 +44,16 @@ final class SkipRuleSet {
   int get hashCode => Object.hash(name, Object.hashAll(patterns));
 }
 
+/// Thrown when a save would take a name another set already holds:
+/// the stored list can hold a set the list on screen missed (a launch
+/// whose read failed), and saving must never replace it.
+final class SkipRuleSetNameTaken implements Exception {
+  const SkipRuleSetNameTaken(this.name);
+
+  /// The name as the existing set spells it.
+  final String name;
+}
+
 /// The stored sets in [stored], in order. Entries that do not decode are
 /// dropped, as is any set whose name an earlier one already holds, so a
 /// damaged value keeps every set it still can.
@@ -93,24 +103,30 @@ SkipRuleSet? skipRuleSetNamed(List<SkipRuleSet> sets, String name) {
   return null;
 }
 
-/// [sets] with [set] saved: in place of the set named [replacing] (an
-/// edit or rename) or of one already named like [set], else at the end.
+/// [sets] with [set] saved in place of the set named [replacing] (an
+/// edit or rename), else at the end. Throws [SkipRuleSetNameTaken] when
+/// any other set already holds [set]'s name.
 List<SkipRuleSet> putSkipRuleSetInto(
   List<SkipRuleSet> sets,
   SkipRuleSet set, {
   String? replacing,
 }) {
+  final replaced = replacing == null ? null : _nameKey(replacing);
+  for (final existing in sets) {
+    final key = _nameKey(existing.name);
+    if (key == _nameKey(set.name) && key != replaced) {
+      throw SkipRuleSetNameTaken(existing.name);
+    }
+  }
+
   final next = <SkipRuleSet>[];
   var placed = false;
   for (final existing in sets) {
-    final replaced =
-        _nameKey(existing.name) == _nameKey(set.name) ||
-        (replacing != null && _nameKey(existing.name) == _nameKey(replacing));
-    if (!replaced) {
-      next.add(existing);
-    } else if (!placed) {
+    if (!placed && _nameKey(existing.name) == replaced) {
       next.add(set);
       placed = true;
+    } else {
+      next.add(existing);
     }
   }
   if (!placed) next.add(set);

@@ -474,6 +474,31 @@ void main() {
       expect(sets.value.map((set) => set.name), ['Web', 'Docs']);
     });
 
+    test('a new set never replaces a stored set it could not see', () async {
+      final sets = SkipRuleSetsController(
+        initial: await preferences.loadSkipRuleSets(),
+        put: preferences.putSkipRuleSet,
+        remove: preferences.removeSkipRuleSet,
+      );
+      addTearDown(sets.dispose);
+      await settingsFile.writeAsString(
+        '{"sync.skipRuleSets":[{"name":"Web","patterns":["*.log"]}]}',
+      );
+
+      // The empty list on screen lets "web" through the editor's check.
+      await expectLater(
+        sets.put(SkipRuleSet(name: 'web', patterns: ['dist/'])),
+        throwsA(isA<SkipRuleSetNameTaken>()),
+      );
+
+      expect(await stored('sync.skipRuleSets'), [
+        {
+          'name': 'Web',
+          'patterns': ['*.log'],
+        },
+      ]);
+    });
+
     test('a rule-set change fails, writing nothing, while the store stays '
         'unreadable', () async {
       expect(await preferences.loadSkipRuleSets(), isEmpty);

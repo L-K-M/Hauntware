@@ -4,6 +4,8 @@
 @TestOn('vm')
 library;
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart' show SemanticsAction;
 import 'package:flutter/services.dart';
@@ -324,6 +326,32 @@ void main() {
       ]);
     });
 
+    testWidgets('Escape closes only the menu, keeping the typed rules', (
+      tester,
+    ) async {
+      await _pumpSheet(tester, skipRuleSets: _ruleSets([_web]));
+      await _tapKey(tester, 'sync.sheet.editRules');
+      await tester.enterText(
+        find.byKey(const ValueKey('sync.rules.field')),
+        'typed/',
+      );
+      await _tapRuleSet(tester, SkipRuleSetKey.addMenu);
+      expect(
+        find.byKey(const ValueKey((SkipRuleSetKey.addItem, 'Web'))),
+        findsOneWidget,
+      );
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey((SkipRuleSetKey.addItem, 'Web'))),
+        findsNothing,
+      );
+      expect(find.text('Skip Rules'), findsOneWidget);
+      expect(_rulesField(tester), 'typed/');
+    });
+
     testWidgets('an empty menu says there are no saved sets', (tester) async {
       await _pumpSheet(tester, skipRuleSets: _ruleSets(const []));
       await _tapKey(tester, 'sync.sheet.editRules');
@@ -442,6 +470,7 @@ void main() {
         put: (_, {replacing}) => Future.error(StateError('disk full')),
       );
       addTearDown(sets.dispose);
+      final semantics = tester.ensureSemantics();
       await _pumpSheet(tester, skipRuleSets: sets);
       await _tapKey(tester, 'sync.sheet.editRules');
       await _tapRuleSet(tester, SkipRuleSetKey.manage);
@@ -460,9 +489,85 @@ void main() {
         find.text('The rule set could not be saved. Try again.'),
         findsOneWidget,
       );
+      // Read out when it appears, not only when someone reaches it.
+      expect(
+        tester.getSemantics(
+          find.byKey(const ValueKey(SkipRuleSetKey.editorError)),
+        ),
+        isSemantics(isLiveRegion: true),
+      );
       expect(find.text('Edit Rule Set'), findsNothing);
       expect(find.text('New Rule Set'), findsOneWidget);
       expect(sets.value, isEmpty);
+      semantics.dispose();
+    });
+
+    testWidgets('the editor stays put while a save is writing', (tester) async {
+      final write = Completer<List<SkipRuleSet>>();
+      final sets = SkipRuleSetsController(
+        put: (_, {replacing}) => write.future,
+      );
+      addTearDown(sets.dispose);
+      await _pumpSheet(tester, skipRuleSets: sets);
+      await _tapKey(tester, 'sync.sheet.editRules');
+      await tester.enterText(
+        find.byKey(const ValueKey('sync.rules.field')),
+        '*.log',
+      );
+      await tester.pump();
+      await _tapRuleSet(tester, SkipRuleSetKey.saveAs);
+      await tester.enterText(
+        find.byKey(const ValueKey(SkipRuleSetKey.editorName)),
+        'Logs',
+      );
+      await tester.tap(find.byKey(const ValueKey(SkipRuleSetKey.editorSave)));
+      await tester.pump();
+
+      // Neither Escape nor Cancel closes it mid-write.
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Cancel').last);
+      await tester.pumpAndSettle();
+      expect(find.text('New Rule Set'), findsOneWidget);
+
+      write.complete([
+        SkipRuleSet(name: 'Logs', patterns: ['*.log']),
+      ]);
+      await tester.pumpAndSettle();
+      // Only the editor closed; the Skip Rules dialog is still open.
+      expect(find.text('New Rule Set'), findsNothing);
+      expect(find.text('Skip Rules'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('a name the store already holds is refused in the editor', (
+      tester,
+    ) async {
+      // The list on screen is empty, as after a launch whose read failed.
+      final sets = SkipRuleSetsController(
+        put: (_, {replacing}) =>
+            Future.error(const SkipRuleSetNameTaken('Web')),
+      );
+      addTearDown(sets.dispose);
+      await _pumpSheet(tester, skipRuleSets: sets);
+      await _tapKey(tester, 'sync.sheet.editRules');
+      await _tapRuleSet(tester, SkipRuleSetKey.manage);
+      await _tapRuleSet(tester, SkipRuleSetKey.managerNew);
+      await tester.enterText(
+        find.byKey(const ValueKey(SkipRuleSetKey.editorName)),
+        'web',
+      );
+      await tester.enterText(
+        find.byKey(const ValueKey(SkipRuleSetKey.editorPatterns)),
+        'dist/',
+      );
+      await _tapRuleSet(tester, SkipRuleSetKey.editorSave);
+
+      expect(
+        find.text('A rule set named “Web” already exists.'),
+        findsOneWidget,
+      );
+      expect(find.text('New Rule Set'), findsOneWidget);
     });
 
     testWidgets('a failed delete says so and keeps the set', (tester) async {
@@ -471,6 +576,7 @@ void main() {
         remove: (_) => Future.error(StateError('disk full')),
       );
       addTearDown(sets.dispose);
+      final semantics = tester.ensureSemantics();
       await _pumpSheet(tester, skipRuleSets: sets);
       await _tapKey(tester, 'sync.sheet.editRules');
       await _tapRuleSet(tester, SkipRuleSetKey.manage);
@@ -481,7 +587,14 @@ void main() {
         find.text('The rule set could not be deleted. Try again.'),
         findsOneWidget,
       );
+      expect(
+        tester.getSemantics(
+          find.byKey(const ValueKey(SkipRuleSetKey.managerError)),
+        ),
+        isSemantics(isLiveRegion: true),
+      );
       expect(sets.value, [_web]);
+      semantics.dispose();
     });
 
     testWidgets('the Advanced editor offers the sets too', (tester) async {

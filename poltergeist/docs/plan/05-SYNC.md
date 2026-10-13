@@ -362,9 +362,12 @@ concurrently in the engine isolate (D8).
   sheet's Edit Rules…) offers Add Rule Set, Save as Rule Set… and
   Manage Rule Sets…; the pair editor's excludes field offers Add Rule
   Set. Adding a set appends its lines after the pair's own and leaves
-  out lines the pair already has. Lines never move, so a pair's `!`
-  line keeps its effect, while a set's own `!` lines come after the
-  pair's lines and win under last match. The pair keeps the copy:
+  out lines the pair already has, which stay where they are. Every
+  appended line comes after the pair's lines and wins under last match,
+  so a set line can re-exclude a path a pair's `!` line re-included,
+  and a set's `!` line that the pair already has is left out rather
+  than repeated after the set's excludes. The plan shows the effect
+  before anything runs. The pair keeps the copy:
   renaming, editing or deleting a set later changes no pair, and the
   savedSync record (04) gains no field. Sets hold only pair patterns,
   never the app defaults, which still evaluate after every pair line.

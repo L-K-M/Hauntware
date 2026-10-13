@@ -11,18 +11,22 @@ other pairs. The Skip Rules dialog (the Sync sheet's Edit Rules…) gains
 Add Rule Set, Save as Rule Set… and Manage Rule Sets…, and the advanced
 pair editor's excludes field gains Add Rule Set. Adding a set appends
 its lines after the pair's own and leaves out lines the pair already
-has; lines never move, so a pair's `!` re-include keeps its effect. The
-pair keeps the copy, so later edits to a set change no pair, and the
-savedSync record gains no field. Sets live on this device under
+has, which stay in place. Appended lines win under last match, so a set
+line can re-exclude what a pair's `!` line re-included; the plan shows
+the result before anything runs. The pair keeps the copy, so later
+edits to a set change no pair, and the savedSync record gains no field. Sets live on this device under
 `sync.skipRuleSets` in `settings.json` and are never synced. This is the
 named skip-rules item of the v1.x backlog (07 §3.13; 05 §3).
 
 Names are trimmed and unique ignoring case, and a set needs at least one
 pattern; comment lines alone do not count. An empty Add Rule Set menu
 says there are no saved sets. Saving and deleting persist before the
-list changes, so a failed write shows its error in the dialog and lists
-nothing new, and each write edits the sets as stored, so a launch whose
-read failed cannot wipe them. Saving, editing or deleting a set never
+list changes, so a failed write shows its error in the dialog, read out
+by screen readers, and lists nothing new. Each write edits the sets as
+stored and refuses a name a stored set holds, so a launch whose read
+failed can neither wipe the sets nor let a new set replace one. The
+editor stays open until its write finishes, and Escape closes an open
+Add Rule Set menu without closing the dialog. Saving, editing or deleting a set never
 commits the pair's rules: only Done does. The app defaults stay out of
 every set and still evaluate last.
 
@@ -33,7 +37,27 @@ the manager and the editor). The controller is created once in
 `main.dart` and passed through `PoltergeistApp` and `WorkspaceShell` to
 the sheet, its Skip Rules dialog and both pair-editor entry points.
 
-Tests: APP_TESTS_NOTE
+An independent review of the first commit, each finding verified, led
+to these fixes, each with a regression test that failed first: Escape
+on a mouse-opened Add Rule Set menu closed the whole dialog with its
+unsaved edits; a new set could replace a stored one the screen missed
+after a failed read; closing the editor mid-write let its pop land on
+the dialog beneath; failure messages were not read out; and the plan
+view's editor wiring had no test. It also corrected the spec's wording
+on `!` lines and the QA step for bookmark sync.
+
+Tests: 38 new. The set's decoding and the pure append and list rules
+(13), the controller (3), and the preferences round trip, damaged values
+and failed-read cases, including a name the screen missed (5). The Sync
+sheet's tests (13) cover adding a set, Escape on the open menu, the
+empty menu, Save as Rule Set without committing, the name and pattern
+checks, managing sets while pairs keep their copy, failed saves and
+deletes read out as live regions, the editor staying open mid-write, a
+name the store already holds, the Advanced editor and phone width. The
+pair editor gains 2 and the shell 2 (the sheet's dialog and the plan
+view's editor each receive the sets). Mutation checks (no forwarding to
+the sheet, the Advanced editor or the plan view's editor, appending
+duplicates, case-sensitive names) each fail a test.
 
 Local validation: Flutter analysis is clean, the localization contract
 passes, and all APP_TESTS app tests pass. Not run: native platforms,

@@ -29,31 +29,50 @@ enum SkipRuleSetKey {
 
 /// Add Rule Set: a menu of this device's sets; picking one hands it to
 /// [onAdd], which appends its lines to the pair ([appendSkipRules]).
-final class SkipRuleSetMenu extends StatelessWidget {
+final class SkipRuleSetMenu extends StatefulWidget {
   const SkipRuleSetMenu({super.key, required this.sets, required this.onAdd});
 
   final SkipRuleSetsController sets;
   final ValueChanged<SkipRuleSet> onAdd;
 
   @override
+  State<SkipRuleSetMenu> createState() => _SkipRuleSetMenuState();
+}
+
+class _SkipRuleSetMenuState extends State<SkipRuleSetMenu> {
+  // Opening the menu focuses its button, so Escape closes the menu
+  // rather than reaching the dialog around it, which would discard
+  // the rules being edited there.
+  final _buttonFocus = FocusNode();
+
+  @override
+  void dispose() {
+    _buttonFocus.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final sets = widget.sets;
     return ListenableBuilder(
       listenable: sets,
       builder: (context, _) => MenuAnchor(
+        childFocusNode: _buttonFocus,
         menuChildren: [
           if (sets.value.isEmpty)
             MenuItemButton(onPressed: null, child: Text(l10n.syncRuleSetsNone)),
           for (final set in sets.value)
             MenuItemButton(
               key: ValueKey((SkipRuleSetKey.addItem, set.name)),
-              onPressed: () => onAdd(set),
+              onPressed: () => widget.onAdd(set),
               trailingIcon: Text(l10n.syncSheetRuleCount(set.patterns.length)),
               child: Text(set.name),
             ),
         ],
         builder: (context, menu, _) => TextButton.icon(
           key: const ValueKey(SkipRuleSetKey.addMenu),
+          focusNode: _buttonFocus,
           onPressed: () => menu.isOpen ? menu.close() : menu.open(),
           icon: const Icon(Icons.arrow_drop_down),
           iconAlignment: IconAlignment.end,
@@ -188,10 +207,13 @@ class _ManagerDialogState extends State<_ManagerDialog> {
               if (_error case final error?)
                 Padding(
                   padding: const EdgeInsets.only(top: 8),
-                  child: Text(
-                    error,
-                    key: const ValueKey(SkipRuleSetKey.managerError),
-                    style: TextStyle(color: theme.colorScheme.error),
+                  child: Semantics(
+                    liveRegion: true,
+                    child: Text(
+                      error,
+                      key: const ValueKey(SkipRuleSetKey.managerError),
+                      style: TextStyle(color: theme.colorScheme.error),
+                    ),
                   ),
                 ),
             ],
@@ -268,6 +290,14 @@ class _EditorDialogState extends State<_EditorDialog> {
     setState(() => _saving = true);
     try {
       await widget.sets.put(set, replacing: widget.initial?.name);
+    } on SkipRuleSetNameTaken catch (taken) {
+      // A stored set the list on screen missed holds the name.
+      if (!mounted) return;
+      setState(() {
+        _saving = false;
+        _nameError = l10n.syncRuleSetNameTaken(taken.name);
+      });
+      return;
     } catch (_) {
       if (!mounted) return;
       setState(() {
@@ -283,67 +313,75 @@ class _EditorDialogState extends State<_EditorDialog> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
-    return AlertDialog(
-      title: Text(
-        widget.initial == null
-            ? l10n.syncRuleSetNewTitle
-            : l10n.syncRuleSetEditTitle,
-      ),
-      scrollable: true,
-      content: SizedBox(
-        width: 420,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            TextField(
-              key: const ValueKey(SkipRuleSetKey.editorName),
-              controller: _name,
-              autofocus: true,
-              decoration: InputDecoration(
-                labelText: l10n.syncRuleSetName,
-                errorText: _nameError,
-              ),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              key: const ValueKey(SkipRuleSetKey.editorPatterns),
-              controller: _patterns,
-              minLines: 4,
-              maxLines: 10,
-              style: theme.textTheme.bodyMedium?.merge(
-                poltergeistMonoTextStyle,
-              ),
-              decoration: InputDecoration(
-                helperText: l10n.syncRulesHint,
-                helperMaxLines: 3,
-                errorText: _patternsError,
-                border: const OutlineInputBorder(),
-              ),
-            ),
-            if (_saveError case final error?)
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: Text(
-                  error,
-                  key: const ValueKey(SkipRuleSetKey.editorError),
-                  style: TextStyle(color: theme.colorScheme.error),
+    // While a save is writing the editor stays open, so the pop that
+    // follows the write closes this dialog and not the one beneath it.
+    return PopScope(
+      canPop: !_saving,
+      child: AlertDialog(
+        title: Text(
+          widget.initial == null
+              ? l10n.syncRuleSetNewTitle
+              : l10n.syncRuleSetEditTitle,
+        ),
+        scrollable: true,
+        content: SizedBox(
+          width: 420,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              TextField(
+                key: const ValueKey(SkipRuleSetKey.editorName),
+                controller: _name,
+                autofocus: true,
+                decoration: InputDecoration(
+                  labelText: l10n.syncRuleSetName,
+                  errorText: _nameError,
                 ),
               ),
-          ],
+              const SizedBox(height: 16),
+              TextField(
+                key: const ValueKey(SkipRuleSetKey.editorPatterns),
+                controller: _patterns,
+                minLines: 4,
+                maxLines: 10,
+                style: theme.textTheme.bodyMedium?.merge(
+                  poltergeistMonoTextStyle,
+                ),
+                decoration: InputDecoration(
+                  helperText: l10n.syncRulesHint,
+                  helperMaxLines: 3,
+                  errorText: _patternsError,
+                  border: const OutlineInputBorder(),
+                ),
+              ),
+              if (_saveError case final error?)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Semantics(
+                    liveRegion: true,
+                    child: Text(
+                      error,
+                      key: const ValueKey(SkipRuleSetKey.editorError),
+                      style: TextStyle(color: theme.colorScheme.error),
+                    ),
+                  ),
+                ),
+            ],
+          ),
         ),
+        actions: [
+          TextButton(
+            onPressed: _saving ? null : () => Navigator.of(context).pop(),
+            child: Text(l10n.syncCancel),
+          ),
+          FilledButton(
+            key: const ValueKey(SkipRuleSetKey.editorSave),
+            onPressed: _saving ? null : _save,
+            child: Text(l10n.syncRuleSetSave),
+          ),
+        ],
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: Text(l10n.syncCancel),
-        ),
-        FilledButton(
-          key: const ValueKey(SkipRuleSetKey.editorSave),
-          onPressed: _saving ? null : _save,
-          child: Text(l10n.syncRuleSetSave),
-        ),
-      ],
     );
   }
 }

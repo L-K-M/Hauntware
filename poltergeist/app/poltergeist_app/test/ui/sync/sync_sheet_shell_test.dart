@@ -248,6 +248,46 @@ void main() {
     expect(File('${fixture.right.path}/a.txt').readAsStringSync(), 'old');
   });
 
+  testWidgets('the plan view\'s pair editor gets the rule sets too', (
+    tester,
+  ) async {
+    final sets = SkipRuleSetsController();
+    addTearDown(sets.dispose);
+    await _pumpShell(
+      tester,
+      rightName: 'public_html',
+      seed: (f) => File('${f.left.path}/a.txt').writeAsStringSync('alpha'),
+      skipRuleSets: sets,
+    );
+    await runShellCommand(tester, kSyncSynchronizePanesCommandId);
+    await _tapAndWait(
+      tester,
+      'sync.sheet.simulate',
+      () => _session(tester)?.phase == SyncPlanPhase.ready,
+    );
+    await tester.runAsync(() async {
+      await tester.tap(
+        find.byKey(const ValueKey('sync.docrootWarningAction.right')),
+      );
+      for (
+        var i = 0;
+        i < 100 && find.byType(SyncPairEditorDialog).evaluate().isEmpty;
+        i++
+      ) {
+        await tester.pump(const Duration(milliseconds: 20));
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+    });
+    await tester.pumpAndSettle();
+
+    expect(
+      tester
+          .widget<SyncPairEditorDialog>(find.byType(SyncPairEditorDialog))
+          .skipRuleSets,
+      same(sets),
+    );
+  });
+
   testWidgets('docroot action saves, focuses, and persists the safer path', (
     tester,
   ) async {

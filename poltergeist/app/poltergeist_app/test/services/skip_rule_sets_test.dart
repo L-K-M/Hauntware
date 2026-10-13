@@ -118,9 +118,25 @@ void main() {
       ]);
     });
 
-    test('a set named like another replaces it', () {
-      final again = _set('DOCS', ['public/']);
-      expect(putSkipRuleSetInto(sets, again), [sets[0], again]);
+    test('refuses a name another set holds, ignoring case', () {
+      expect(
+        () => putSkipRuleSetInto(sets, _set('DOCS', ['public/'])),
+        throwsA(
+          isA<SkipRuleSetNameTaken>().having((e) => e.name, 'name', 'Docs'),
+        ),
+      );
+      expect(
+        () => putSkipRuleSetInto(sets, _set('docs', ['x/']), replacing: 'Web'),
+        throwsA(isA<SkipRuleSetNameTaken>()),
+      );
+      // A set may keep its own name in another case.
+      expect(
+        putSkipRuleSetInto(sets, _set('WEB', ['*.log']), replacing: 'web'),
+        [
+          _set('WEB', ['*.log']),
+          sets[1],
+        ],
+      );
     });
 
     test('removes a set by name', () {

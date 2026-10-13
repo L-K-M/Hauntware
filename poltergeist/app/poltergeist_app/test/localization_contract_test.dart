@@ -174,8 +174,8 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   // one instance serves the import command and the Connections surface.
   'lib/services/ssh_config_import_setup.dart': {r"'$home/.ssh/config'", "'~'"},
   // A skip rule set's settings.json fields, the line separator its
-  // patterns join and split on, and the gitignore comment marker (05 §3)
-  // — data, never rendered.
+  // patterns join and split on, and the gitignore comment marker (05 §3):
+  // data, never rendered.
   'lib/services/skip_rule_sets.dart': {"'name'", "'patterns'", "'\\n'", "'#'"},
   // The composed queue's honest-absence connection seam: the refusal's
   // `operation` label is diagnostic metadata (the exception renders
@@ -2353,10 +2353,10 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'local'",
     "' '",
   },
-  // The sheet dialogs' widget keys, the rules field's line split/join,
-  // and the tolerance field's numeric seed — plumbing, never copy.
   // A rule set's patterns join into the editor field one per line.
   'lib/ui/sync/sync_rule_sets.dart': {"'\\n'"},
+  // The sheet dialogs' widget keys, the rules field's line split/join,
+  // and the tolerance field's numeric seed — plumbing, never copy.
   'lib/ui/sync/sync_sheet_dialogs.dart': {
     "'sync.favoriteName.field'",
     "'sync.favoriteName.save'",

@@ -507,9 +507,10 @@ class AppPreferences {
   }
 
   /// Saves [set] into the sets as stored when the write runs, in place
-  /// of the set named [replacing] or of one named like [set], and
-  /// completes with the sets now stored. Fails, writing nothing, while
-  /// the store cannot be read.
+  /// of the set named [replacing] or as a new set, and completes with
+  /// the sets now stored. Fails, writing nothing, while the store cannot
+  /// be read or when another stored set holds the name
+  /// ([SkipRuleSetNameTaken]).
   Future<List<SkipRuleSet>> putSkipRuleSet(
     SkipRuleSet set, {
     String? replacing,

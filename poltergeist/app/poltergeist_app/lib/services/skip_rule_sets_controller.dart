@@ -2,8 +2,8 @@ import 'package:flutter/foundation.dart';
 
 import 'skip_rule_sets.dart';
 
-/// Writes [set] in place of the set named `replacing`, or by its own
-/// name, and completes with every set now stored.
+/// Writes [set] in place of the set named `replacing`, or as a new set,
+/// and completes with every set now stored.
 typedef SkipRuleSetPut =
     Future<List<SkipRuleSet>> Function(SkipRuleSet set, {String? replacing});
 
@@ -35,8 +35,9 @@ final class SkipRuleSetsController extends ChangeNotifier
   List<SkipRuleSet> get value => _value;
 
   /// Saves [set], in place of the set named [replacing] when it edits or
-  /// renames one. Callers check the name with [skipRuleSetNamed] first;
-  /// a set named like another replaces it.
+  /// renames one. Throws [SkipRuleSetNameTaken] when another set holds
+  /// the name: callers check [value] first, but the stored list can hold
+  /// sets this copy missed after a launch whose read failed.
   Future<void> put(SkipRuleSet set, {String? replacing}) async {
     final put = _put;
     _publish(

@@ -113,8 +113,9 @@ known-divergent surface.
   quit and relaunch: the set is still listed, and adding it to a pair
   appends only the lines the pair lacks.
 - [ ] OWNER MANUAL QA: with bookmark sync on two devices, add a set to a
-  saved sync: the pair's new lines reach the other device, the set does
-  not.
+  saved sync and save the pair (Save & Rescan in the plan view, or
+  Save as Favorite in the sheet): the pair's new lines reach the other
+  device, the set does not.
 - [ ] OWNER MANUAL QA: VoiceOver, NVDA and TalkBack read the Add Rule Set
   menu items and each set's row and its edit and delete buttons in
   Manage Rule Sets.
