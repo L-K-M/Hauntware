@@ -93,6 +93,9 @@ deliberate reconciliation of support trees and matching vault/key backups.
   update.
 - Resolve ambiguity before making consequential changes. State low-risk
   assumptions; ask when scope, safety, or expected behavior is unclear.
+- Decide procedural questions yourself, such as which PR a change goes
+  in, whether to fold it in or follow up, and the order of steps. State
+  the choice and continue; do not wait for an answer on them.
 - Keep changes focused. Do not modify unrelated code, formatting, or comments.
 - Prefer surgical edits over whole-file rewrites when the result is equivalent.
 - Stage only intended files. Inspect the diff before committing.
