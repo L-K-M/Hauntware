@@ -31,11 +31,11 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:path/path.dart' as p;
+import 'package:seance_core/catalog.dart' show syncLocalDirectory;
 import 'package:seance_core/seance_core.dart';
 
 import '../checkout/managed_checkout_spec.dart';
 import '../checkout/managed_remote_file.dart';
-import '../fs/local_directory_sync.dart';
 import '../fs/local_fs_safety.dart';
 import 'destination_name_key.dart';
 import 'transfer_task.dart';

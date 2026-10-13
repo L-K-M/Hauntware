@@ -7,8 +7,9 @@ library;
 
 import 'dart:convert';
 
-import 'package:seance_core/seance_core.dart';
+import 'package:seance_protocol/seance_protocol.dart';
 
+import '../sync/sync_engine.dart';
 import 'persistent_record_store.dart';
 import 'record_crypto.dart';
 
