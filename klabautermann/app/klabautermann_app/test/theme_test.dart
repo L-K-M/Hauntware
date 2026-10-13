@@ -8,7 +8,9 @@ import 'package:ghost_ui/ghost_ui.dart'
         GhostFileTheme,
         SidebarRow,
         SidebarStatusDot,
-        SidebarThemeTokens;
+        SidebarThemeTokens,
+        compositeOver,
+        contrastRatio;
 import 'package:klabautermann_app/controllers/appearance_controller.dart';
 import 'package:klabautermann_app/theme/app_theme.dart';
 import 'package:klabautermann_app/ui/fleet_rail.dart';
@@ -20,13 +22,6 @@ import 'support/harness.dart';
 const _textContrast = 4.5; // WCAG AA body text
 const _indicatorContrast = 3.0; // WCAG non-text contrast
 const _desktopMenuRowExtent = 26.0; // GhostMenuTheme's compact row
-
-double _contrast(Color a, Color b) {
-  const luminanceOffset = 0.05; // WCAG relative-luminance formula
-  final first = a.computeLuminance() + luminanceOffset;
-  final second = b.computeLuminance() + luminanceOffset;
-  return first > second ? first / second : second / first;
-}
 
 ThemeData _brandTheme(Brightness brightness, TargetPlatform platform) {
   return brightness == Brightness.dark
@@ -119,7 +114,7 @@ void main() {
         };
         for (final MapEntry(key: name, value: (fore, back)) in pairs.entries) {
           expect(
-            _contrast(fore, back),
+            contrastRatio(fore, back),
             greaterThanOrEqualTo(_textContrast),
             reason: '$name: $fore on $back',
           );
@@ -135,14 +130,14 @@ void main() {
         final rail = chrome.sidebarBackground;
         final surfaces = {
           'rail': rail,
-          'rail hover': Color.alphaBlend(chrome.hoverFill, rail),
-          'rail selection pill': Color.alphaBlend(
+          'rail hover': compositeOver(chrome.hoverFill, rail),
+          'rail selection pill': compositeOver(
             chrome.inactiveSelectionFill,
             rail,
           ),
           'page': page,
-          'page hover': Color.alphaBlend(chrome.hoverFill, page),
-          'page selection pill': Color.alphaBlend(
+          'page hover': compositeOver(chrome.hoverFill, page),
+          'page selection pill': compositeOver(
             chrome.inactiveSelectionFill,
             page,
           ),
@@ -156,7 +151,7 @@ void main() {
         for (final MapEntry(key: dotName, value: dot) in dots.entries) {
           for (final MapEntry(key: name, value: surface) in surfaces.entries) {
             expect(
-              _contrast(dot, surface),
+              contrastRatio(dot, surface),
               greaterThanOrEqualTo(_indicatorContrast),
               reason: '$dotName $dot on the $name ($surface)',
             );

@@ -12,7 +12,7 @@ import 'package:ghost_theme/ghost_theme.dart';
 const Color _seed = Color(0xFF2B6F9E);
 
 /// The dark and light tables: the sibling slate/Finder neutrals, in value
-/// the same as Séance's (ghost-theme.md §4 makes them the family contract),
+/// the same as Séance's (ghost-theme.md §2 makes them the family contract),
 /// with the sea-blue primary family and the status dots M1a's
 /// `KlabautermannStatusColors` drew.
 ///
