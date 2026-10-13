@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Assistant: the danger check on suggested commands and Command inbox
+  scripts covers Docker, systemd, cron, firewall and user commands.
+  `docker system prune` with `--all` or `--volumes`,
+  `docker volume prune`, `docker compose down -v` and `userdel -r` are
+  marked critical. `docker volume rm`, stopping, disabling or masking
+  the SSH server, `crontab -r`, `ufw reset`, `ufw disable`,
+  `nft flush ruleset`, `userdel` and a `kill` aimed at PID 1 ask you to
+  review them before running.
 - SSH: Séance now uses dartssh2 4.1.0 (was 3.0.2). Servers that offer
   only chacha20-poly1305 connect; servers that require post-quantum
   ML-KEM key exchange still cannot. Strict key exchange, the Terrapin
