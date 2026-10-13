@@ -121,7 +121,10 @@ jobs:
   # ---- Séance -----------------------------------------------------------
   seance_dart:
     name: Séance pure-Dart packages (analyze + test)
-    runs-on: ubuntu-latest
+    # Pinned for the real-sudo step: its wrong-password test expects
+    # classic sudo's texts. Ubuntu 26.04 makes sudo-rs the default
+    # sudo, so moving this job there needs sudo-rs texts recorded.
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     defaults:
       run:
