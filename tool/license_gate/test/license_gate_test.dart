@@ -1366,7 +1366,7 @@ Future<LicenseGateReport> _verify(
 /// root the gate runs against.
 final class _ProjectFixture {
   /// The directory passed as `repositoryRoot` — `poltergeist/` inside the
-  /// worktree, matching the release job's working directory.
+  /// worktree, matching the CLI's scan root.
   final Directory directory;
 
   /// The Git worktree toplevel.

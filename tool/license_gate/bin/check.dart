@@ -5,6 +5,12 @@ import 'dart:io';
 
 import '../lib/license_gate.dart';
 
+// The gate guards consumers of Séance code; the `SEANCE_LICENSE_GATE_V1`
+// release marker lives on Poltergeist's client leg, so the pubspec scan
+// stays scoped to that product's tree while the tool runs from the
+// repository root.
+const _scanRoot = 'poltergeist';
+
 Future<void> main(List<String> arguments) async {
   final mode = switch (arguments) {
     [] => LicenseGateMode.release,
@@ -22,7 +28,7 @@ Future<void> main(List<String> arguments) async {
 
   try {
     final report = await verifySeanceLicenseGate(
-      repositoryRoot: Directory.current,
+      repositoryRoot: Directory(_scanRoot),
       mode: mode,
     );
     stdout.writeln(

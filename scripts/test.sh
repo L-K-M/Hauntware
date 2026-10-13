@@ -74,11 +74,11 @@ if [[ "$scope" != flutter ]]; then
       packages/seance_protocol packages/seance_core packages/seance_sync_server
   )
 
-  # ---- Poltergeist: workspace packages plus the tooling suites the
-  # repo gates on (import/protocol guards, license gate, release
-  # version tool, pin audit, benchmark harness + contract tests,
-  # integration fixture tools). The bench harness and legacy bench
-  # entrypoint resolve standalone, outside the workspace lock.
+  # ---- Poltergeist: workspace packages plus its remaining tooling
+  # suites (release version tool, pin audit, benchmark harness +
+  # contract tests, integration fixture tools). The bench harness and
+  # legacy bench entrypoint resolve standalone, outside the workspace
+  # lock.
   (
     cd poltergeist
     run dart pub get
@@ -100,16 +100,8 @@ if [[ "$scope" != flutter ]]; then
     ((${#dirs[@]} > 0)) || { echo "no package has a test/ directory" >&2; exit 1; }
     run dart test --reporter expanded "${dirs[@]}"
 
-    run dart analyze tool/import_guard
-    run dart test tool/import_guard/test
-    run bash scripts/check-imports.sh
-    run dart analyze tool/protocol_guard
-    run dart test tool/protocol_guard/test
-    run dart run tool/protocol_guard/bin/check.dart .
-    run dart analyze tool/license_gate
     run dart analyze tool/release_version
     run dart analyze tool/seance_pin_audit
-    run dart test tool/license_gate/test
     run dart test tool/release_version/test
     run dart test tool/seance_pin_audit/test
     run bash scripts/audit-seance-pin.sh
@@ -128,6 +120,18 @@ if [[ "$scope" != flutter ]]; then
     run dart test test/integration
     run test/integration/test-fixture-safety.sh
     run bash -c 'source test/integration/lib/fixture.sh && check_rendered_config'
+  )
+
+  # ---- Suite guards (F1a): they live at the root, resolve through the
+  # root manifest and check every product in tool/guards.yaml — today
+  # Poltergeist only, whose workspace the block above just resolved.
+  (
+    run dart analyze tool/import_guard tool/protocol_guard tool/license_gate
+    run dart test tool/import_guard/test
+    run dart test tool/protocol_guard/test
+    run dart test tool/license_gate/test
+    run dart run tool/import_guard/bin/check.dart
+    run dart run tool/protocol_guard/bin/check.dart
     run dart run tool/license_gate/bin/check.dart --marker-only
   )
 fi

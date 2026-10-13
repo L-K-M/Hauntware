@@ -6,11 +6,18 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
+import 'package:yaml/yaml.dart';
 
+import '../lib/guards_config.dart';
 import '../lib/import_guard.dart';
 
-const _core = 'packages/poltergeist_core';
-const _app = 'app/poltergeist_app';
+// The fixture reproduces the monorepo layout: the generalized guard runs
+// from a repository root against the `poltergeist` product entry, so the
+// verdicts below are the ones the pre-move guard produced, with every
+// reported path gaining its `poltergeist/` prefix.
+const _product = 'poltergeist';
+const _core = '$_product/packages/poltergeist_core';
+const _app = '$_product/app/poltergeist_app';
 
 void main() {
   late _Fixture fixture;
@@ -42,6 +49,27 @@ void main() {
       await fixture.expectExit(1, 'dartssh2');
     });
   }
+
+  test('reports violations with the product path prefix', () async {
+    await fixture.write(
+      '$_product/packages/poltergeist_sync/pubspec.yaml',
+      'name: poltergeist_sync',
+    );
+    await fixture._register(
+      'poltergeist_sync',
+      '$_product/packages/poltergeist_sync',
+    );
+    await fixture.write(
+      '$_product/packages/poltergeist_sync/lib/sync.dart',
+      "import 'package:dartssh2/dartssh2.dart';",
+    );
+    await fixture.expectExit(
+      1,
+      'poltergeist/packages/poltergeist_sync/lib/sync.dart: dartssh2 '
+      'import/export outside '
+      'poltergeist/packages/poltergeist_core/lib/src/connection',
+    );
+  });
 
   test('ignores comments and ordinary strings', () async {
     await fixture.write('$_core/lib/example.dart', '''
@@ -83,9 +111,16 @@ const example = "package:flutter/widgets.dart";
 
   test('missing package configuration gives shell remediation', () async {
     await File(
-      p.join(fixture.root.path, '.dart_tool/package_config.json'),
+      p.join(fixture.root.path, '$_product/.dart_tool/package_config.json'),
     ).delete();
     await fixture.expectScriptExit(2, 'run dart pub get');
+  });
+
+  test('missing package configuration fails closed with the hint', () async {
+    await File(
+      p.join(fixture.root.path, '$_product/.dart_tool/package_config.json'),
+    ).delete();
+    await fixture.expectExit(2, 'run dart pub get');
   });
 
   test(
@@ -141,18 +176,18 @@ dependency_overrides: {"dartssh2": any}
     '$_core/lib/src/connection_extra/ssh.dart',
     '$_core/test/ssh_test.dart',
     '$_core/lib/core.dart',
-    'packages/poltergeist_sync/lib/sync.dart',
+    '$_product/packages/poltergeist_sync/lib/sync.dart',
   ]) {
     test('rejects SSH at $location', () async {
       await fixture.write(location, "import 'package:dartssh2/dartssh2.dart';");
-      if (location.startsWith('packages/poltergeist_sync/')) {
+      if (location.startsWith('$_product/packages/poltergeist_sync/')) {
         await fixture.write(
-          'packages/poltergeist_sync/pubspec.yaml',
+          '$_product/packages/poltergeist_sync/pubspec.yaml',
           'name: poltergeist_sync',
         );
         await fixture._register(
           'poltergeist_sync',
-          'packages/poltergeist_sync',
+          '$_product/packages/poltergeist_sync',
         );
       }
       await fixture.expectExit(1, 'dartssh2');
@@ -220,7 +255,7 @@ dependency_overrides: {"dartssh2": any}
     },
   );
 
-  test('excludes generated trees and the retired tool/ harness', () async {
+  test('excludes generated trees and tool/ harnesses', () async {
     for (final directory in ['build', '.dart_tool', '.symlinks', 'ephemeral']) {
       await fixture.write(
         '$_core/$directory/bad.dart',
@@ -228,7 +263,7 @@ dependency_overrides: {"dartssh2": any}
       );
     }
     await fixture.write(
-      'tool/bench/lib/ssh.dart',
+      '$_product/tool/bench/lib/ssh.dart',
       "import 'package:dartssh2/dartssh2.dart';",
     );
     await fixture.expectExit(0);
@@ -307,10 +342,13 @@ dependency_overrides: {"dartssh2": any}
   }
 
   test('scans a package named build', () async {
-    await fixture.write('packages/build/pubspec.yaml', 'name: fixture_build');
-    await fixture._register('fixture_build', 'packages/build');
     await fixture.write(
-      'packages/build/lib/ssh.dart',
+      '$_product/packages/build/pubspec.yaml',
+      'name: fixture_build',
+    );
+    await fixture._register('fixture_build', '$_product/packages/build');
+    await fixture.write(
+      '$_product/packages/build/lib/ssh.dart',
       "import 'package:dartssh2/dartssh2.dart';",
     );
     await fixture.expectExit(1, 'dartssh2');
@@ -347,13 +385,13 @@ dependency_overrides: {"dartssh2": any}
   for (final directory in ['packages', 'app']) {
     test('fails closed without $directory', () async {
       await Directory(
-        p.join(fixture.root.path, directory),
+        p.join(fixture.root.path, '$_product/$directory'),
       ).delete(recursive: true);
       await fixture.expectExit(2, 'Missing scan root');
     });
 
     test('fails closed on linked $directory root', () async {
-      final path = p.join(fixture.root.path, directory);
+      final path = p.join(fixture.root.path, '$_product/$directory');
       final target = '$path-target';
       await Directory(path).rename(target);
       await Link(path).create(target);
@@ -363,7 +401,7 @@ dependency_overrides: {"dartssh2": any}
   }
 
   for (final input in [
-    '.dart_tool/package_config.json',
+    '$_product/.dart_tool/package_config.json',
     '$_core/pubspec.yaml',
   ]) {
     test('fails closed without $input', () async {
@@ -397,16 +435,61 @@ dependency_overrides: {"dartssh2": any}
     ).create('core.dart');
     await fixture.expectExit(2, 'Linked scan input');
   });
+
+  test('fails closed on a linked package', () async {
+    await fixture.write('linked/lib/ssh.dart', "import 'dart:io';");
+    await Link(
+      p.join(fixture.root.path, '$_product/packages/linked'),
+    ).create(p.join(fixture.root.path, 'linked'));
+    await fixture.expectExit(2, 'Linked package');
+  });
+
+  test('the CLI accepts a --product selector', () async {
+    await fixture.expectCliExit(0, const ['--product', 'poltergeist']);
+  });
+
+  test('the CLI rejects an unknown product', () async {
+    await fixture.expectCliExit(2, const ['--product', 'unknown'], 'unknown');
+  });
+
+  test('the CLI rejects malformed arguments', () async {
+    await fixture.expectCliExit(64, const ['positional'], 'usage');
+    await fixture.expectCliExit(64, const ['--product'], 'usage');
+  });
 }
 
 class _Fixture {
-  _Fixture(this.root, this._config);
+  _Fixture(this.root, this._config, this.product);
 
+  /// The fixture repository root: `poltergeist/` sits inside it.
   final Directory root;
+
+  /// The product workspace package config entries (root config plus the
+  /// registered fixture packages).
   final Map<String, Object?> _config;
+  final ProductGuard product;
+
+  static const _guardsConfig = '''
+products:
+  poltergeist:
+    scan: [packages, app]
+    pure_packages: [packages/*]
+    dartssh2_imports:
+      - packages/poltergeist_core/lib/src/connection
+      - packages/poltergeist_bench
+    dartssh2_dependents:
+      - packages/poltergeist_core
+      - packages/poltergeist_bench
+    standalone_resolutions:
+      - packages/poltergeist_bench
+    engine_protocol: packages/poltergeist_core/lib/src/engine
+    engine_protocol_callback_owners: {}
+''';
 
   static Future<_Fixture> create() async {
     final root = await Directory.systemTemp.createTemp('import-guard-');
+    // The tool resolves through the repository root's package config,
+    // exactly like the real run from the checkout root.
     final configFile = File('.dart_tool/package_config.json').absolute;
     final config =
         jsonDecode(await configFile.readAsString()) as Map<String, dynamic>;
@@ -416,10 +499,19 @@ class _Fixture {
           .resolve(entry['rootUri'] as String)
           .toString();
     }
-    final fixture = _Fixture(root, config);
+    final fixture = _Fixture(
+      root,
+      config,
+      GuardsConfig.parse(
+        loadYaml(_guardsConfig),
+        source: 'guards.yaml',
+      ).product('poltergeist'),
+    );
+    await fixture.write('.dart_tool/package_config.json', jsonEncode(config));
+    await fixture.write('tool/guards.yaml', _guardsConfig);
     await fixture.write(
-      'scripts/check-imports.sh',
-      await File('scripts/check-imports.sh').readAsString(),
+      '$_product/scripts/check-imports.sh',
+      await File('poltergeist/scripts/check-imports.sh').readAsString(),
     );
 
     // CLI checks invoke the real shell entrypoint from a different directory.
@@ -459,7 +551,7 @@ class _Fixture {
     bool writeStandaloneConfig = true,
     Map<String, String> standaloneDependencies = const {},
   }) async {
-    const bench = 'packages/poltergeist_bench';
+    const bench = '$_product/packages/poltergeist_bench';
     await write('$bench/pubspec.yaml', pubspec);
     await write('$bench/lib/ssh.dart', source);
     if (!writeStandaloneConfig) return;
@@ -504,14 +596,17 @@ class _Fixture {
       'packageUri': 'lib/',
       'languageVersion': '3.12',
     });
-    await write('.dart_tool/package_config.json', jsonEncode(_config));
+    await write(
+      '$_product/.dart_tool/package_config.json',
+      jsonEncode(_config),
+    );
   }
 
   Future<void> expectExit(int code, [String? diagnostic]) async {
     late int actualCode;
     late String output;
     try {
-      final violations = await checkImports(root.path);
+      final violations = await checkImports(root.path, product);
       actualCode = violations.isEmpty ? 0 : 1;
       output = violations.join('\n');
     } catch (error) {
@@ -525,7 +620,7 @@ class _Fixture {
   Future<void> expectScriptExit(int code, [String? diagnostic]) async {
     final result = await Process.run(
       'bash',
-      [p.join(root.path, 'scripts/check-imports.sh')],
+      [p.join(root.path, '$_product/scripts/check-imports.sh')],
       environment: {
         'PATH':
             '${p.dirname(Platform.resolvedExecutable)}'
@@ -533,6 +628,20 @@ class _Fixture {
             '${Platform.environment['PATH']}',
       },
     );
+    expect(result.exitCode, code, reason: '${result.stdout}\n${result.stderr}');
+    if (diagnostic != null) expect(result.stderr, contains(diagnostic));
+  }
+
+  Future<void> expectCliExit(
+    int code,
+    List<String> arguments, [
+    String? diagnostic,
+  ]) async {
+    final result = await Process.run(Platform.resolvedExecutable, [
+      '--packages=${p.join(root.path, '.dart_tool/package_config.json')}',
+      p.join(root.path, 'tool/import_guard/bin/check.dart'),
+      ...arguments,
+    ], workingDirectory: root.path);
     expect(result.exitCode, code, reason: '${result.stdout}\n${result.stderr}');
     if (diagnostic != null) expect(result.stderr, contains(diagnostic));
   }

@@ -7,11 +7,33 @@ import 'dart:isolate';
 
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
+import 'package:yaml/yaml.dart';
 
+import '../../import_guard/lib/guards_config.dart';
 import '../lib/protocol_guard.dart';
 
-const _core = 'packages/poltergeist_core';
+const _product = 'poltergeist';
+const _core = '$_product/packages/poltergeist_core';
 const _engine = '$_core/lib/src/engine';
+
+// The same entry tool/guards.yaml carries for Poltergeist; the guard
+// checks reported paths against it from the fixture's repository root.
+const _guardsConfig = '''
+products:
+  poltergeist:
+    scan: [packages, app]
+    pure_packages: [packages/*]
+    dartssh2_imports: []
+    dartssh2_dependents: []
+    engine_protocol: packages/poltergeist_core/lib/src/engine
+    engine_protocol_callback_owners:
+      packages/poltergeist_core/lib/src/engine/progress_coalescer.dart:
+        [ProgressCoalescer]
+      packages/poltergeist_core/lib/src/engine/connect_log_coalescer.dart:
+        [ConnectLogCoalescer]
+      packages/poltergeist_core/lib/src/engine/engine_probes.dart:
+        [EngineProbes]
+''';
 
 void main() {
   late _Fixture fixture;
@@ -275,7 +297,7 @@ class ProgressCoalescer extends Base implements EngineEvent {}
   test(
     'detects relocation into app despite unresolved Flutter imports',
     () async {
-      await fixture._write('app/poltergeist_app/lib/escaped.dart', '''
+      await fixture._write('$_product/app/poltergeist_app/lib/escaped.dart', '''
 import 'package:flutter/widgets.dart';
 import 'package:poltergeist_core/src/engine/protocol.dart' as engine;
 class Escaped extends engine.EngineEvent {}
@@ -297,15 +319,15 @@ mixin Hooks { final callback = () {}; }
   test('ignores generated outputs and the benchmark harness', () async {
     for (final directory in [
       '$_core/build',
-      'app/poltergeist_app/linux/flutter/ephemeral',
-      'tool/bench/lib',
+      '$_product/app/poltergeist_app/linux/flutter/ephemeral',
+      '$_product/tool/bench/lib',
     ]) {
       await fixture._write('$directory/generated.dart', 'not valid Dart');
     }
     expect(await fixture._check(), isEmpty);
   });
 
-  for (final directory in ['packages', 'app', _engine]) {
+  for (final directory in ['$_product/packages', '$_product/app', _engine]) {
     test('fails closed without $directory', () async {
       await Directory(
         p.join(fixture._root.path, directory),
@@ -358,26 +380,45 @@ mixin Hooks { final callback = () {}; }
 }
 
 class _Fixture {
-  _Fixture(this._root);
+  _Fixture(this._root, this._guard);
 
+  /// The fixture repository root; `poltergeist/` is the product inside it.
   final Directory _root;
+  final ProductGuard _guard;
 
   static Future<_Fixture> _create() async {
     final fixture = _Fixture(
       await Directory.systemTemp.createTemp('protocol-guard-'),
+      GuardsConfig.parse(
+        loadYaml(_guardsConfig),
+        source: 'guards.yaml',
+      ).product(_product),
     );
+    await fixture._write('tool/guards.yaml', _guardsConfig);
+    // The CLI subprocess resolves the tool through a root package config
+    // like the real run; the copied entries keep their pub-cache rootUris.
+    final toolConfig = File('.dart_tool/package_config.json').absolute;
+    final config =
+        jsonDecode(await toolConfig.readAsString()) as Map<String, dynamic>;
+    for (final entry
+        in (config['packages'] as List).cast<Map<String, dynamic>>()) {
+      entry['rootUri'] = toolConfig.uri
+          .resolve(entry['rootUri'] as String)
+          .toString();
+    }
+    await fixture._write('.dart_tool/package_config.json', jsonEncode(config));
     await fixture._write('$_core/pubspec.yaml', '''
 name: poltergeist_core
 environment: {sdk: ^3.12.0}
 ''');
     await fixture._write(
-      '.dart_tool/package_config.json',
+      '$_product/.dart_tool/package_config.json',
       jsonEncode({
         'configVersion': 2,
         'packages': [
           {
             'name': 'poltergeist_core',
-            'rootUri': '../$_core',
+            'rootUri': '../packages/poltergeist_core',
             'packageUri': 'lib/',
             'languageVersion': '3.12',
           },
@@ -389,7 +430,7 @@ abstract class EngineRequest {}
 abstract class EngineEvent {}
 class Intermediate extends EngineEvent {}
 ''');
-    await Directory(p.join(fixture._root.path, 'app')).create();
+    await Directory(p.join(fixture._root.path, '$_product/app')).create();
     return fixture;
   }
 
@@ -399,21 +440,23 @@ class Intermediate extends EngineEvent {}
     await file.writeAsString(contents);
   }
 
-  Future<List<String>> _check() => checkProtocol(_root.path);
+  Future<List<String>> _check() => checkProtocol(_root.path, _guard);
 
   Future<void> _expectExit(int expected, [String? diagnostic]) async {
-    // Resolve from the workspace so nested test invocations find the same CLI.
-    final workspace = await Isolate.resolvePackageUri(
-      Uri.parse('package:_poltergeist_workspace/'),
+    // Resolve from the suite root so nested test invocations find the same
+    // CLI; the subprocess runs it from the fixture root like the real job.
+    final suite = await Isolate.resolvePackageUri(
+      Uri.parse('package:hauntware/'),
     );
-    if (workspace == null) throw StateError('Workspace package is unresolved');
+    if (suite == null) throw StateError('Root package is unresolved');
 
-    final script = workspace.resolve('../tool/protocol_guard/bin/check.dart');
+    final script = suite.resolve('../tool/protocol_guard/bin/check.dart');
     final result = await Process.run(Platform.resolvedExecutable, [
-      'run',
+      '--packages=${p.join(_root.path, '.dart_tool/package_config.json')}',
       script.toFilePath(),
-      _root.path,
-    ]);
+      '--product',
+      _guard.name,
+    ], workingDirectory: _root.path);
     expect(
       result.exitCode,
       expected,
