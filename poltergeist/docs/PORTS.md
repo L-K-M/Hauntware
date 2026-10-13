@@ -94,9 +94,11 @@ carries the new IEC binary size/rate formatters for Klabautermann;
 and `ghost_ui`); the SERVERS section's catalog grouping calls its
 `groupServers` instead of grouping inline, with the `srv:` collapse keys
 unchanged. The status-dot vocabulary followed the same day in that
-package's `server_status.dart`: `serverIndicatorOf` and `railIndicatorOf`
-keep their names and ARB words as delegates to its list and rail rules
-(through `ui/ghost_servers_adapter.dart`), the rail's paint map and the
+package's `server_status.dart`: `serverIndicatorOf` keeps its name and
+ARB words as a delegate to its list rule (through
+`ui/ghost_servers_adapter.dart`), the sidebar rail resolves the rail
+rule through that adapter directly (so `railIndicatorOf`, left without
+a caller, was removed), the rail's paint map and the
 sidebar's hidden-live header dot draw through `ghostStatusDot` and
 `ghostHiddenLiveIndicator`, and the pane-tab `ServerStateGlyph` paint
 stays here.

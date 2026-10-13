@@ -67,31 +67,6 @@ ServerIndicatorAppearance serverIndicatorOf(
   ),
 );
 
-/// The D32 rail's resolution (10 §5). The rail tells "connected" (a
-/// disc) apart from "reachable" (a ring), so any connection truth
-/// beyond idle outranks the probe here: a live or in-flight transport
-/// must never read as merely reachable, which [serverIndicatorOf]'s
-/// tri-state list rule would show for a connected or connecting server
-/// whose probe answered. With no connection (or an idle one) the probe
-/// speaks, exactly as there.
-///
-/// The shared rail rule (`ghost_servers`, `GhostIndicatorRule.rail`),
-/// Séance's only rule, since 2026-10-13. The sidebar rail resolves it
-/// through the adapter itself, to take its words and its dot from one
-/// resolution.
-ServerIndicatorAppearance railIndicatorOf(
-  AppLocalizations l10n, {
-  ServerStatus? status,
-  ProbeStatus? probe,
-}) => serverIndicatorAppearance(
-  resolveServerIndicator(
-    l10n,
-    GhostIndicatorRule.rail,
-    status: status,
-    probe: probe,
-  ),
-);
-
 /// A shared indicator in this app's glyph vocabulary: every probe answer
 /// is the one [ServerIndicatorGlyph.probe] marker (the caller paints the
 /// reachability dot), and a state without words reads as the empty label.

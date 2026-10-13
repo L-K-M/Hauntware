@@ -95,34 +95,6 @@ void main() {
         expect(appearance.label, label, reason: status.state.name);
       }
     });
-
-    test('the rail delegate maps onto the same glyphs and words', () {
-      for (final (status, probe, glyph, label) in [
-        (
-          const ServerStatus(ServerConnectionState.reconnecting),
-          ProbeStatus.online,
-          ServerIndicatorGlyph.pending,
-          _l10n.connectionStateReconnecting,
-        ),
-        (
-          const ServerStatus(ServerConnectionState.connected),
-          ProbeStatus.online,
-          ServerIndicatorGlyph.connected,
-          _l10n.connectionStateConnected,
-        ),
-        (
-          const ServerStatus(ServerConnectionState.disconnected),
-          ProbeStatus.offline,
-          ServerIndicatorGlyph.probe,
-          _l10n.probeStatusOffline,
-        ),
-      ]) {
-        final appearance = railIndicatorOf(_l10n, status: status, probe: probe);
-
-        expect(appearance.glyph, glyph, reason: status.state.name);
-        expect(appearance.label, label, reason: status.state.name);
-      }
-    });
   });
 
   group('ServerStateGlyph paints', () {

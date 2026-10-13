@@ -944,7 +944,7 @@ List<SidebarMenuEntry> _openVerbs(
 /// state's words for the row's semantics and tooltip, dot or not. The
 /// colours are the chrome's status colours, which a theme palette names.
 ///
-/// The rail rule ([railIndicatorOf]) and the paint map are
+/// The rail rule ([GhostIndicatorRule.rail]) and the paint map are
 /// `ghost_servers`' since 2026-10-13, the paint map shared with Séance.
 @visibleForTesting
 ({ServerIndicatorAppearance appearance, SidebarStatusDot? dot})

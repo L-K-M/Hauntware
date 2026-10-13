@@ -59,8 +59,9 @@ enum GhostProbeState {
 
 /// Which precedence a surface resolves with.
 enum GhostIndicatorRule {
-  /// Poltergeist's server list and pane tabs: the probe's own answer stays
-  /// wherever live truth does not contradict it.
+  /// Poltergeist's pane tabs, which pass no probe: the probe's own answer
+  /// stays wherever live truth does not contradict it. Server rows in
+  /// both apps resolve with [rail].
   list,
 
   /// Séance's rail and Poltergeist's sidebar rail: any live truth beyond
