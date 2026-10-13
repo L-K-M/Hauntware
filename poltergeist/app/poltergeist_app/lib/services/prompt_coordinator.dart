@@ -280,12 +280,10 @@ class PromptCoordinator {
         data.secretRef != null &&
         vault != null) {
       try {
-        final secret = await vault!.getSecret(data.secretRef!);
-        if (secret != null &&
-            secret.value.isNotEmpty &&
-            _secretMatches(secret, data.authMethod)) {
+        final stored = await _storedCredentials(vault!, data);
+        if (stored != null) {
           if (!_wasDismissed(pending)) {
-            _reply(pending, _storedReply(secret));
+            _reply(pending, _storedReply(stored));
           }
           _finishShowing();
           return;
@@ -414,18 +412,51 @@ class PromptCoordinator {
     );
   }
 
+  /// The vault-first answer from the shared resolver, or null when the vault
+  /// holds nothing usable for [data] and the dialog must ask.
+  ///
+  /// Under `substituteEmpty` an absent entry resolves to an empty credential,
+  /// as do an empty stored value and a kind mismatch ([_VaultFirstSource]
+  /// hides those); empty means "ask". The config deliberately omits
+  /// [CredentialPromptData.identityFilePath]: this branch has never read key
+  /// files (the dialog does, through [_readIdentityFile]), so a stored key
+  /// still answers when the server also names a key file.
+  static Future<SshCredentials?> _storedCredentials(
+    SecretVault vault,
+    CredentialPromptData data,
+  ) async {
+    final resolver = CredentialResolver(
+      _VaultFirstSource(vault, data.authMethod),
+      missingSecretPolicy: MissingSecretPolicy.substituteEmpty,
+    );
+    final credentials = await resolver.resolve(
+      ServerConfig(
+        id: data.secretRef ?? data.host,
+        label: '${data.username}@${data.host}',
+        host: data.host,
+        port: data.port,
+        username: data.username,
+        authMethod: data.authMethod,
+        secretRef: data.secretRef,
+        createdAt: 0,
+        updatedAt: 0,
+      ),
+    );
+
+    final value = credentials.password ?? credentials.privateKeyPem;
+    return (value == null || value.isEmpty) ? null : credentials;
+  }
+
   static bool _secretMatches(Secret secret, AuthMethod method) =>
       (secret.kind == SecretKind.privateKey &&
           method == AuthMethod.privateKey) ||
       (secret.kind == SecretKind.password && method == AuthMethod.password);
 
-  static CredentialPromptReply _storedReply(Secret secret) =>
+  static CredentialPromptReply _storedReply(SshCredentials credentials) =>
       CredentialPromptReply(
-        password: secret.kind == SecretKind.password ? secret.value : null,
-        privateKeyPem: secret.kind == SecretKind.privateKey
-            ? secret.value
-            : null,
-        keyPassphrase: secret.keyPassphrase,
+        password: credentials.password,
+        privateKeyPem: credentials.privateKeyPem,
+        keyPassphrase: credentials.keyPassphrase,
         origin: CredentialOrigin.stored,
       );
 
@@ -439,4 +470,30 @@ class PromptCoordinator {
     _showing = null;
     _drain();
   }
+}
+
+/// What the vault-first branch lets [CredentialResolver] see: a stored
+/// secret only when its kind matches the prompt's auth method, so a password
+/// entry is never offered as a key or the reverse. It reads no key files.
+final class _VaultFirstSource implements CredentialSource {
+  const _VaultFirstSource(this._vault, this._authMethod);
+
+  final SecretVault _vault;
+  final AuthMethod _authMethod;
+
+  @override
+  Future<Secret?> storedSecret(String secretRef) async {
+    final secret = await _vault.getSecret(secretRef);
+    if (secret == null) return null;
+
+    return PromptCoordinator._secretMatches(secret, _authMethod)
+        ? secret
+        : null;
+  }
+
+  /// Unreachable: [PromptCoordinator._storedCredentials] resolves a config
+  /// without an identity-file path, and only such a path reaches this seam.
+  @override
+  Future<String> identityFile(ServerConfig config, CredentialDraft? draft) =>
+      throw StateError('the vault-first branch reads no identity files');
 }

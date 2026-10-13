@@ -45,6 +45,16 @@ final class ServerEditorBackend extends ServerEditorDelegate {
   final GlobalKey<NavigatorState> _navigatorKey;
   final TransferLimitsController _transferLimits;
 
+  /// The shared decision table (draft over vault, drafts read only under
+  /// their own auth method) over this editor's vault and identity reader.
+  /// `substituteEmpty` keeps this path's answer to a named vault entry this
+  /// device lacks: an empty credential, not an error. Switching it to
+  /// `fail` is a separate behaviour change.
+  late final _credentials = CredentialResolver(
+    _EditorCredentialSource(_vault, _identityReader),
+    missingSecretPolicy: MissingSecretPolicy.substituteEmpty,
+  );
+
   @override
   List<ServerConfig> get servers =>
       _backups.catalog?.servers ?? const <ServerConfig>[];
@@ -119,18 +129,23 @@ final class ServerEditorBackend extends ServerEditorDelegate {
         // snapshot even if sync replaces the catalog during an async read.
         jumpHosts = _snapshotJumpHosts(config, transcript);
 
-        return _resolveCredentials(
+        return _credentials.resolve(
           config,
-          draftPassword: draftPassword,
-          draftPrivateKey: draftPrivateKey,
-          draftKeyPassphrase: draftKeyPassphrase,
+          draft: CredentialDraft(
+            password: draftPassword,
+            privateKeyPem: draftPrivateKey,
+            keyPassphrase: draftKeyPassphrase,
+          ),
         );
       },
       authenticate: liveHostAuthenticator(
         hostKeys: _hostKeys,
         onHostKey: _promptForHostKey,
         onKeyboardInteractive: _promptKeyboardInteractive,
-        resolveJumpHost: (serverId) => _resolveJumpHost(jumpHosts, serverId),
+        // Saved hops come from the route snapshot captured before secrets.
+        resolveJumpHost: _credentials.jumpHostResolver(
+          (serverId) async => jumpHosts[serverId],
+        ),
       ),
       log: transcript,
     );
@@ -189,79 +204,6 @@ final class ServerEditorBackend extends ServerEditorDelegate {
     return lookupAppLocalizations(AppLocalizations.supportedLocales.first);
   }
 
-  /// Resolves a saved hop from the route snapshot captured before secrets.
-  Future<ResolvedSshHost?> _resolveJumpHost(
-    Map<String, ServerConfig> jumpHosts,
-    String serverId,
-  ) async {
-    final config = jumpHosts[serverId];
-    if (config == null) return null;
-
-    return ResolvedSshHost(config, await _resolveCredentials(config));
-  }
-
-  /// What a connection authenticates with, draft fields first — the port of
-  /// upstream's `resolveCredentials` minus its security-bookmark branch
-  /// (Poltergeist is not sandboxed; referenced keys open by path).
-  ///
-  /// Read the drafts only under their own auth method, as the editor passes
-  /// them: a stale box's text must never beat the stored credential of the
-  /// method actually in force.
-  Future<SshCredentials> _resolveCredentials(
-    ServerConfig config, {
-    String? draftPassword,
-    String? draftPrivateKey,
-    String? draftKeyPassphrase,
-  }) async {
-    String? draft(String? value) =>
-        (value == null || value.isEmpty) ? null : value;
-    switch (config.authMethod) {
-      case AuthMethod.agent:
-        return const SshCredentials.agent();
-      case AuthMethod.password:
-        final typed = draft(draftPassword);
-        if (typed != null) return SshCredentials.password(typed);
-        final secret = config.secretRef == null
-            ? null
-            : await _vault.getSecret(config.secretRef!);
-        return SshCredentials.password(secret?.value ?? '');
-      case AuthMethod.privateKey:
-        // "Reference, don't store": read the key from disk at connect time.
-        if (config.identityFilePath != null) {
-          final pem = await _identityReader.read(
-            serverId: config.id,
-            serverLabel: '${config.username}@${config.host}',
-            identityFilePath: config.identityFilePath!,
-          );
-          return SshCredentials.privateKey(
-            pem,
-            // Behind the `??`, so a typed passphrase skips the read that was
-            // about to be discarded.
-            keyPassphrase:
-                draft(draftKeyPassphrase) ??
-                (config.secretRef == null
-                    ? null
-                    : (await _vault.getSecret(config.secretRef!))
-                        ?.keyPassphrase),
-          );
-        }
-        final typedPem = draft(draftPrivateKey);
-        if (typedPem != null) {
-          return SshCredentials.privateKey(
-            typedPem,
-            keyPassphrase: draft(draftKeyPassphrase),
-          );
-        }
-        final secret = config.secretRef == null
-            ? null
-            : await _vault.getSecret(config.secretRef!);
-        return SshCredentials.privateKey(
-          secret?.value ?? '',
-          keyPassphrase: draft(draftKeyPassphrase) ?? secret?.keyPassphrase,
-        );
-    }
-  }
-
   /// The trial's host-key prompt: the same dialog a real connect raises,
   /// answered on the root navigator so it works while the editor is open.
   /// Returning false declines — the trial fails honestly rather than
@@ -301,4 +243,26 @@ final class ServerEditorBackend extends ServerEditorDelegate {
       ),
     );
   }
+}
+
+/// The editor's storage behind [CredentialResolver]: the resolving vault,
+/// and referenced keys read by path through the audited reader (Poltergeist
+/// is not sandboxed, so there is no identity bookmark to honour).
+final class _EditorCredentialSource implements CredentialSource {
+  const _EditorCredentialSource(this._vault, this._identityReader);
+
+  final SecretVault _vault;
+  final IdentityFileReader _identityReader;
+
+  @override
+  Future<Secret?> storedSecret(String secretRef) => _vault.getSecret(secretRef);
+
+  /// The resolver calls this only when [ServerConfig.identityFilePath] is set.
+  @override
+  Future<String> identityFile(ServerConfig config, CredentialDraft? draft) =>
+      _identityReader.read(
+        serverId: config.id,
+        serverLabel: '${config.username}@${config.host}',
+        identityFilePath: config.identityFilePath!,
+      );
 }
