@@ -2,7 +2,9 @@
 
 <img src="../../../klabautermann/media-sources/klabautermann-icon.png" alt="Klabautermann app icon" width="160">
 
-Status: plan with owner decisions of 2026-10-10. Nothing here is implemented.
+Status: plan with owner decisions of 2026-10-10. Implementation started on
+2026-10-13; [06-EXECUTION.md](06-EXECUTION.md) records approvals, manual
+gates and environment limits.
 
 This directory plans Klabautermann, the fourth Hauntware product: a server
 management and observability app. This README summarizes the plan, the
@@ -63,7 +65,8 @@ The differentiators are listed in [02 §5](02-FEATURES.md#5-differentiators).
 | 4 | [03-ARCHITECTURE.md](03-ARCHITECTURE.md) | Sections 1 to 11: principles, decision log with the owner decisions, packages, catalog, transport, collection, subsystems, privilege and safety, tiers, UI, testing |
 | 5 | [04-IMPLEMENTATION.md](04-IMPLEMENTATION.md) | Sections 12 to 15 and Appendices A to C: suite integration, milestones, risks, owner decisions, verification notes |
 | 6 | [05-NAMES.md](05-NAMES.md) | Naming rules, the name decision, shortlist, collision screen |
-| 7 | [research/README.md](research/README.md) | Index of the research appendices, freshness caveat, abbreviation key, marker legends |
+| 7 | [06-EXECUTION.md](06-EXECUTION.md) | Execution notes: approvals under the owner's instruction, environment limits, manual sign-off gates |
+| 8 | [research/README.md](research/README.md) | Index of the research appendices, freshness caveat, abbreviation key, marker legends |
 
 The nine research appendices are imported as captured and not maintained;
 where one disagrees with a chapter, the chapter wins.
