@@ -1,9 +1,9 @@
 # Klabautermann execution notes
 
 Status: implementation started on 2026-10-13. These notes record how the
-plan is executed (approvals, environment, PR order, manual gates); on
-those points they win over 03 and 04. Design and owner decisions stay in
-03 and 04.
+plan is executed (approvals, environment, PR order, manual gates,
+releases); on those points they win over 03 and 04. Design and owner
+decisions stay in 03 and 04.
 
 ## Approvals
 
@@ -66,5 +66,8 @@ until a person with the hardware signs them off (04, section 13).
 
 ## Releases
 
-No release is cut as part of this work. M4 and M7 end with a release dry
-run; cutting a suite release stays a separate explicit task.
+No release is cut as part of this work. No release workflow leg builds
+Klabautermann clients before M4: the `client_klabautermann` job, its
+manifest entries and workflow contracts land there (04, decision 16).
+M4 and M7 end with a release dry run; cutting a suite release stays a
+separate explicit task.
