@@ -6,7 +6,7 @@
 /// cache-invalidation bookkeeping.
 library;
 
-import 'package:seance_core/seance_core.dart';
+import 'package:seance_protocol/seance_protocol.dart';
 
 import 'server_order.dart';
 
