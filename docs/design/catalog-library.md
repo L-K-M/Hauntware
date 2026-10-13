@@ -33,7 +33,7 @@ move, both listed in the table.
 | `sync/enrollment.dart` | 384 | `SyncAccount`, `SyncCredentialStore`, `SyncEnrollmentState`, `SyncEnrollmentApi` (`:68`), result/exception types | Enrollment state machine and credential seams | `SyncEnrollmentApi implements SyncApi` (`:68`): the enrollment transport stays an app-supplied implementation. |
 | `sync/host_key_mutations.dart` | 94 | `ConflictAwareHostKeyStore` (`:10`), `HostKeyInstallResult` (`:4`), `HostKeyMutationGate` (`:24`), `InMemoryConflictAwareHostKeyStore` (`:35`) | Conditional pin writes (`putIfNoConflict` `:11`, `replaceIfCurrent` `:14`) and the cross-rebuild mutation gate | The quarantine handler (F3d) consumes these interfaces. |
 | `sync/record_crypto.dart` | 43 | `RecordCrypto` (`:17`), `isDecryptableSyncId` (`:38`) | Throw-only `RecordCodec` wrapper; decryptable-prefix policy for enrollment trials | Comment at `:11` says AES-256-GCM + HKDF-SHA256; the codec is XChaCha20-Poly1305 (`SP/src/crypto/vault.dart:121,126-127`). Fix the comment in the move PR (15). |
-| `sync/seance_server_catalog.dart` | 51 | `SeanceServerCatalog` (`:16`) | Read-only materialized server list rebuilt after each apply; `replace` setter plus `onReplaced` callback | Becomes `CatalogSnapshot`, the read-only snapshot type (4); the shared write path is `CatalogWriter` (5.1). |
+| `sync/seance_server_catalog.dart` | 51 | `SeanceServerCatalog` (`:16`) | Read-only materialized server list rebuilt after each apply; `replace` setter plus `onReplaced` callback | Splits in two: `CatalogSnapshot` is the read-only interface apps consume (`servers`, `byId`); `CatalogController`, which adds `replace` and the change notification, is constructed and held only by `RecordCoordinator` (4). The shared write path is `CatalogWriter` (5.1). |
 | `sync/server_order.dart` | 8 | `compareServersByLabel` | Label ordering for the catalog | Shared verbatim. |
 | `sync/sync_verdicts.dart` | 111 | `PinVerdictStore` (`:22`), `SyncTripwireStore` (`:48`), in-memory impls (`:63`,`:96`) | Negative pins, kept verdicts, tripwire counters | Interfaces move to the catalog; durable implementations stay app-side (4). |
 
@@ -136,19 +136,41 @@ sync_tuple.dart                 SyncTuple (was BookmarkSyncTuple)
 sync_record_store.dart          SyncRecordStore interface
 persistent_record_store.dart    PersistentLocalRecordStore
 server_config_store.dart        FileServerConfigStore (servers.json)
-catalog_snapshot.dart           CatalogSnapshot (was SeanceServerCatalog): read-only view
+catalog_snapshot.dart           CatalogSnapshot: the read-only interface apps consume
+catalog_controller.dart         CatalogController: CatalogSnapshot plus replace/onReplaced, held only by RecordCoordinator
 catalog_writer.dart             CatalogWriter: the shared write path (03 4.4 "Write semantics")
 endpoint_pin_store.dart         EndpointPinStore (new, D16/4.7: designed, not extracted)
-enrollment.dart                 SyncAccount, SyncCredentialStore, SyncEnrollmentState
+enrollment.dart                 SyncEnrollment, SyncEnrollmentApi, SyncAccount,
+                                SyncAccountMode, SyncCredentialStore,
+                                SyncEnrollmentState, EnrollmentResult,
+                                SyncEnrollmentException, KdfDowngradeException,
+                                RegistrationClosedException, the notice keys and
+                                two message constants (enrollment.dart:15-384)
 host_key_handler.dart           HostKeyHandler: quarantine apply and publication seam
 server_config_handler.dart      ServerConfigHandler
 secret_handler.dart             SecretHandler (publication and excluded-server shield)
-pin_verdicts.dart               PinVerdictStore, SyncTripwireStore interfaces
-host_key_mutations.dart         ConflictAwareHostKeyStore, HostKeyInstallResult, HostKeyMutationGate
+pin_verdicts.dart               PinVerdictStore, SyncTripwireStore,
+                                InMemoryPinVerdictStore, InMemorySyncTripwireStore
+host_key_mutations.dart         ConflictAwareHostKeyStore, HostKeyInstallResult,
+                                HostKeyMutationGate, InMemoryConflictAwareHostKeyStore
 record_crypto.dart              RecordCrypto, isDecryptableSyncId
 atomic_file_writer.dart         temp+rename+fsync default for the store seams
 server_order.dart               compareServersByLabel
 ```
+
+The in-memory implementations move with their interfaces because the
+moved tests construct them: `enrollment_test.dart:111,113-114,138-141`
+builds `InMemoryConflictAwareHostKeyStore`, `InMemoryPinVerdictStore` and
+`InMemorySyncTripwireStore`, and `bookmark_coordinator_test.dart` and
+`push_revision_test.dart` do the same. `SyncEnrollmentApi` and the
+enrollment result and exception types move in full (they are the
+enrollment surface, not an app seam); what stays app-side is only the
+durable storage behind the interfaces: Poltergeist's
+`SettingsPinVerdictStore`/`SettingsSyncTripwireStore`
+(`PA/services/sync_verdict_stores.dart`) and both apps' settings-backed
+`SyncEnrollmentState`/`SyncCredentialStore`, plus the app-rendered copy of
+the enrollment messages (the `sync*Message` constants move; each app's ARB
+string stays).
 
 Under `SC/lib/src/store/` (F3b): `file_vault_store.dart`
 (`FileVaultStore`, `VaultRekeyJournal`, `VaultRekeyOutcome`) and
@@ -159,10 +181,12 @@ wrapping `flutter_secure_storage`, so it cannot live in pure-Dart
 `seance_core`. It exports `MasterKeyManager` parameterized by entry
 prefix plus `MasterKeyUnavailableException`. Registration follows
 `04-IMPLEMENTATION.md` 12.2: owned pubspec at suite version, release-tool
-owned-list entry, CI resolve/analyze/test/format lines, `scripts/test.sh`
-entry, `poltergeist/docs/PORTS.md` ledger entries, and (in the Séance
-follow-up PR that switches `seance/` onto the package) a Séance
-pin-audit check because `seance/` lineage changes (11, 13).
+  owned-list entry, CI resolve/analyze/test/format lines, `scripts/test.sh`
+  entry, and `poltergeist/docs/PORTS.md` ledger entries. The Séance
+  follow-up PR switches only Séance's keystore construction (its vault
+  master-key entry and `apikey` namespace) onto the package, not its sync
+  coordinator, which stays Séance's own until F7 (D6); that PR changes
+  `seance/` lineage and so runs the Séance pin-audit check (11, 13).
 
 ### 2.2 Dependency check
 
@@ -181,14 +205,48 @@ One boundary break exists today and is fixed in the move:
 `PC/src/transfer/transfer_journal.dart`, which itself imports
 `package:path` and Poltergeist checkout/fs files (`:33-38`). The stores
 use only `TransferJournalIo().atomicRewrite`
-(`transfer_journal.dart:1352-1393`: temp+rename, `fsyncDirectory` `:1331`,
-`restrictLocalPathPermissions` `PC/src/fs/local_fs_safety.dart:204`).
+(`transfer_journal.dart:1352-1393`: temp+rename, `fsyncDirectory` `:1331`).
 Recommendation: carry a minimal `AtomicFileWriter` in
-`src/catalog/atomic_file_writer.dart` implementing the same write order,
-built on `restrictFileToOwner` (`SC/src/store/file_permissions.dart:12`)
-and a local `fsyncDirectory`. This keeps Poltergeist's bytes and crash
-semantics identical, and the `atomicWriter` constructor seam stays for
-deterministic tests.
+`src/catalog/atomic_file_writer.dart` implementing the same write order
+(temp sibling, fsync, rename, directory fsync) and the same permission
+model. Two owner-restriction primitives exist today and they differ:
+
+- `restrictFileToOwner` (`SC/src/store/file_permissions.dart:12-16`):
+  Linux and macOS only; in-process `posix.chmodWithMode` to 0600 (0700
+  through `restrictDirectoryToOwner`, `:20-24`); a failed chmod is
+  ignored; a no-op elsewhere, so Windows and mobile keep their per-user
+  storage ACLs.
+- `restrictLocalPathPermissions` (`PC/src/fs/local_fs_safety.dart:204-233`):
+  Linux and macOS only; runs `chmod` resolved by absolute path
+  (`/usr/bin/chmod`, `/bin/chmod`) so a PATH-hijacked shim cannot silently
+  defeat it; throws `FileSystemException` when chmod is unavailable or
+  exits nonzero, so the write aborts rather than landing lax; a no-op
+  elsewhere.
+
+Both target the same bits (0600 file, 0700 directory) and both leave
+Windows and mobile to their ACLs, so neither widens Windows. They differ
+in failure handling. `atomicRewrite`'s `restrictToOwner` path uses
+`restrictLocalPathPermissions`, restricting the empty temp before any
+content lands and the destination again after the rename
+(`transfer_journal.dart:1360-1380`); `writeStringAtomically(ownerOnly)`
+uses `restrictFileToOwner` on the temp only
+(`SA/services/atomic_file.dart:61-64`, `PA/services/atomic_file.dart:27-30`).
+
+The writer uses the fail-closed behaviour of
+`restrictLocalPathPermissions`, which moves with the stores into
+`SC/src/store/file_permissions.dart` beside `restrictFileToOwner` (a
+`seance_core` file cannot import `poltergeist_core`;
+`local_fs_safety.dart` keeps its name as a re-export, so Poltergeist's
+other callers do not change), and it keeps the caller's privacy choice. Today Poltergeist's
+sync stores write with `restrictToOwner: false`
+(`server_store.dart:116`, `persistent_record_store.dart:111`), so
+`servers.json` and `sync_records.json` stay at the process default, and
+the F3b vault store keeps `ownerOnly`
+(`PA/services/file_stores.dart:135-139`), so `vault.json` stays 0600. Every
+file is therefore at least as restricted as today, and a chmod failure
+aborts the write instead of leaving a lax file; Poltergeist's bytes and
+crash semantics are otherwise identical, and the `atomicWriter`
+constructor seam stays for deterministic tests.
 
 Layering: app adapters implement `SyncCredentialStore`,
 `PinVerdictStore`, `SyncTripwireStore` and `EndpointPinStore`
@@ -219,12 +277,30 @@ generalize.
 /// Ordering/push behaviour for one coordinator.
 enum PushPolicy { none, normal }
 
-/// One (updatedAt, deviceId) write stamp; was BookmarkSyncTuple.
+/// One (updatedAt, deviceId) write stamp; was BookmarkSyncTuple
+/// (bookmark_store.dart:80-127). The moved type does NOT implement
+/// Comparable<BookmarkSyncTuple> and has no compareTo; the total order
+/// Poltergeist uses today is the inline guard `_outranksMaterialized`
+/// (bookmark_coordinator.dart:1196-1204): a record applies when its
+/// `updatedAt` is strictly greater than the materialized tuple's, or
+/// `updatedAt` is equal and its `deviceId.compareTo(materialized.deviceId)`
+/// is >= 0: a higher lexicographic deviceId wins, and an exact tie (same
+/// updatedAt and deviceId) also applies, the same winning envelope
+/// arriving again, idempotent by construction. The `deleted` flag rides
+/// the tuple but is not part of that order.
 final class SyncTuple {
-  const SyncTuple({required this.updatedAt, required this.deviceId});
+  const SyncTuple({
+    required this.updatedAt,
+    required this.deviceId,
+    this.deleted = false,
+  });
   final int updatedAt;
   final String deviceId;
-  int compareTo(SyncTuple other);   // LWW order
+  final bool deleted;                // tombstone tuple (bookmark_store.dart:83)
+  /// The same total order `_outranksMaterialized` applies to records,
+  /// exposed for tuple-to-tuple comparison; not `Comparable`, matching
+  /// today's type.
+  bool outranks(SyncTuple other);
   Map<String, Object?> toJson();
   factory SyncTuple.fromJson(Map<String, Object?> json);
 }
@@ -248,12 +324,14 @@ abstract interface class SyncRecordStore implements LocalRecordStore {
 /// (bookmark_coordinator.dart:1096-1112).
 enum ApplyPhase { configs, pins, secrets }
 
-/// What one record may do. `applied` and `skipped` let the apply cursor
-/// advance; `deferred` parks the record, and `blockedAt` caps the
-/// cursor below the lowest deferred seq (`advanceTo = blocked - 1`) so
-/// it never advances past a deferred record
-/// (bookmark_coordinator.dart:1072-1131, the clamp at :1125-1128;
-/// displaced pulled losers also defer, :1118-1124).
+/// What one record may do: exactly the three values of the private
+/// `_ApplyOutcome` the code has today (bookmark_coordinator.dart:29).
+/// `applied` and `skipped` let the apply cursor advance; `deferred` parks
+/// the record. The cursor cap is coordinator logic, not an outcome value:
+/// the coordinator tracks the lowest deferred seq in a local `blockedAt`
+/// and clamps `advanceTo = blocked - 1`, so the cursor never advances past
+/// a deferred record (bookmark_coordinator.dart:1073-1088, the clamp at
+/// :1125-1130; displaced pulled losers also defer, :1118-1124).
 enum ApplyOutcome { applied, skipped, deferred }
 
 /// Per-round state a handler needs; built once per apply pass.
@@ -286,12 +364,19 @@ final class RecordCoordinator {
     required ConflictAwareHostKeyStore hostKeys,
     required PinVerdictStore pinVerdicts,
     required SyncTripwireStore tripwires,
-    required CatalogSnapshot? catalog,
+    /// The coordinator builds and holds the [CatalogController] itself; in
+    /// shared mode apps read it through [catalog] and are notified through
+    /// this callback (today's app-built `onReplaced`,
+    /// bookmark_backup_service.dart:252-260, becomes the callback). Null
+    /// means separate mode: no controller, no prefixless decrypt.
+    void Function(List<ServerConfig> snapshot)? onCatalogReplaced,
     required PushPolicy pushPolicy,
     required String deviceId,
     DateTime Function()? now,
   });
   Future<SyncRoundResult> runRound(SyncApi api);
+  /// Read-only view of the server materialization; null outside shared mode.
+  CatalogSnapshot? get catalog;
   Future<List<PinConflict>> pinConflicts();
   Future<void> keepLocalPin(PinConflict conflict);
   Future<void> acceptPulledPin(PinConflict conflict);
@@ -313,26 +398,45 @@ final class CatalogWriter {
     bool syncSecrets = false,  // Poltergeist's default (bookmark_coordinator.dart:112)
     DateTime Function()? now,
   });
-  Future<void> saveServer(ServerConfig server);    // was onServerSaved
-  Future<void> deleteServer(ServerConfig server);  // was onServerDeleted
-  Future<void> secretSaved(String secretId);       // was onServerSecretSaved
-  Future<void> publishPin(HostKey pin);            // deliberate publication (v1; was onHostKeyPinned)
-  Future<void> forgetPin(String host, int port);   // was onHostKeyForgotten
+  Future<WriteOutcome> saveServer(ServerConfig server);    // was onServerSaved
+  Future<WriteOutcome> deleteServer(ServerConfig server);  // was onServerDeleted
+  Future<WriteOutcome> secretSaved(String secretId);       // was onServerSecretSaved
+  Future<WriteOutcome> publishPin(HostKey pin);            // deliberate publication (v1; was onHostKeyPinned)
+  Future<WriteOutcome> forgetPin(String host, int port);   // was onHostKeyForgotten
   /// crypto.seal + records.putLocal: the single funnel every dirty
   /// record arrives through; PushPolicy.none stops it here.
   Future<void> sealLocal(DecryptedRecord record);
 }
 
-/// Read-only materialization of pulled serverConfig records
-/// (was SeanceServerCatalog, seance_server_catalog.dart:16-51). The
-/// coordinator rebuilds it after each apply pass; apps read `servers`
-/// and subscribe through `onReplaced`. It stays a separate type from
-/// `CatalogWriter`: reading and writing the catalog are different seams.
-final class CatalogSnapshot {
-  CatalogSnapshot({void Function(List<ServerConfig> snapshot)? onReplaced});
+/// Result of a [CatalogWriter] mutation. [refusedPullOnly] means
+/// `PushPolicy.none`: the call returned before touching any local store,
+/// sealing any record, or changing any verdict. [written] means the policy
+/// allowed the call to run; it may still be a domain no-op (for example
+/// `secretSaved` with `syncSecrets` off, `bookmark_coordinator.dart:304`).
+enum WriteOutcome { written, refusedPullOnly }
+
+/// The read-only interface apps consume (the public half of the old
+/// SeanceServerCatalog, seance_server_catalog.dart:16-51): `servers`
+/// (sorted by `compareServersByLabel`) and `byId`. No mutator and no
+/// change registration reach an app.
+abstract interface class CatalogSnapshot {
   List<ServerConfig> get servers;
   ServerConfig? byId(String id);
-  void replace(Iterable<ServerConfig> servers);   // coordinator-side
+}
+
+/// The mutable controller: [replace] is the coordinator's rebuild (today's
+/// `_rebuildCatalog`, bookmark_coordinator.dart:1515-1542) and the
+/// notification is the app-supplied callback the coordinator passes in.
+/// Constructed and held only by `RecordCoordinator`; apps never see it.
+/// It stays a separate type from `CatalogWriter`: reading and writing the
+/// catalog are different seams.
+final class CatalogController implements CatalogSnapshot {
+  CatalogController({void Function(List<ServerConfig> snapshot)? onReplaced});
+  @override
+  List<ServerConfig> get servers;
+  @override
+  ServerConfig? byId(String id);
+  void replace(Iterable<ServerConfig> servers);
 }
 
 /// Confirmed endpoint tuple per serverId (D16, 03 4.7). Designed here;
@@ -411,24 +515,29 @@ and undecodable rows stay verbatim through `_preserved`
 
 Under `PushPolicy.none` (D14, 03 4.4 "Pull-only mode") sealing,
 catalog writes, pin publication and secret publication are disabled.
-The API enforces it at two funnels. `CatalogWriter.sealLocal` is the
-single path every seal reaches (the same one-gate shape
-`_publishSecret` uses for `_syncSecrets` at
-`bookmark_coordinator.dart:336-346`); under `none` it returns before
-`crypto.seal`, so `records.putLocal` never runs and no record is
-marked dirty. And `runRound`'s push branch
-(`bookmark_coordinator.dart:894-933`) is skipped under `none` as it
-already is under `_pushesHeld()`, so nothing is pushed even if a
-record somehow became dirty. The re-seal paths
+Every `CatalogWriter` mutating call (`saveServer`, `deleteServer`,
+`secretSaved`, `publishPin`, `forgetPin`) checks the policy at entry and
+returns `WriteOutcome.refusedPullOnly` before it touches any local store:
+`saveServer` does not reach `servers.save`, `deleteServer` does not reach
+`servers.remove` or the row drop, `secretSaved` does not read
+`servers.load`, and `forgetPin` does not add its negative pin. Refusing
+before any write is the point: today `onServerSaved` persists the row and
+then seals (`bookmark_coordinator.dart:235-267`), so under `none` a
+device-local edit would survive with no record behind it and the next
+pulled `serverConfig` would silently undo it. The MVP app offers no server
+editing, so no call is made; the typed refusal is what proves nothing
+changed. `CatalogWriter.sealLocal` is the second funnel and the same
+one-gate shape `_publishSecret` uses for `_syncSecrets`
+(`bookmark_coordinator.dart:336-346`): under `none` it returns before
+`crypto.seal`, so `records.putLocal` never runs and no record is marked
+dirty. `runRound`'s push branch (`bookmark_coordinator.dart:894-933`) is
+skipped under `none` as it already is under `_pushesHeld()`, so nothing
+is pushed even if a record somehow became dirty. The re-seal paths
 (`reSealAfterStoreLoss`, `reSealPendingWrites`, `catchUpSecrets`, the
 shared-account switch's step 9) return without sealing for the same
-reason: every one of them funnels through `sealLocal`. The writer's
-domain-store calls (`servers.save`, `servers.remove`, vault reads)
-are unaffected, so a device-local server can still persist, but for
-the pull-only MVP the app's UI issues no catalog writes at all. The
-pull-only test (03 11.2 item 4; section 11) asserts a full round
-marks nothing dirty and sends no `api.push`, and zero dirty marks
-transitively proves zero seals.
+reason: every one of them funnels through `sealLocal`. The pull-only test
+(03 11.2 item 4; section 11) asserts a full round marks nothing dirty and
+sends no `api.push`, and zero dirty marks transitively proves zero seals.
 
 `ghost_keystore` (section 9):
 
@@ -461,16 +570,22 @@ cursor rules, secret-last ordering, quarantine resolution
 2. `BookmarkSyncTuple` becomes `SyncTuple` in
    `src/catalog/sync_tuple.dart`; the `server_store.dart` alias (`:32`)
    dissolves.
-3. `SeanceServerCatalog` becomes `CatalogSnapshot` (the same class,
-   renamed): still a read-only materialization the coordinator rebuilds
-   after each apply (`_rebuildCatalog`, `bookmark_coordinator.dart:1515-1542`)
-   and apps still consume through `servers` and `onReplaced`
-   (`seance_server_catalog.dart:16-51`). The write path moves the other
+3. `SeanceServerCatalog` splits into `CatalogSnapshot` (the read-only
+   interface apps consume: `servers`, `byId`) and `CatalogController`
+   (`CatalogSnapshot` plus `replace` and the change notification), which
+   only `RecordCoordinator` constructs and holds (section 4). The
+   coordinator still rebuilds it after each apply (`_rebuildCatalog`,
+   `bookmark_coordinator.dart:1515-1542`); the app keeps reading `servers`
+   through the snapshot, and its notification callback
+   (`seance_server_catalog.dart:16-51`; the app side at
+   `bookmark_backup_service.dart:252-260`) becomes the coordinator's
+   construction callback. The write path moves the other
    direction: `BookmarkCoordinator`'s `on*`/`_seal*`/`_publish*`/
    `_retract*` members become `CatalogWriter` (section 4).
-4. `PushPolicy.none` short-circuits `sealLocal` and the push branch so
-   sealing, catalog writes, pin publication and secret publication
-   cannot run (D14; the two funnels in section 4; test in section 11).
+4. `PushPolicy.none` refuses every mutating call with
+   `WriteOutcome.refusedPullOnly` and short-circuits `sealLocal` and the
+   push branch, so sealing, catalog writes, pin publication and secret
+   publication cannot run (D14; section 4; test in section 11).
 5. `isDecryptableSyncId` (`record_crypto.dart:38-43`, today prefixless +
    `bookmark` + `hostkey` only) becomes derived from handler
    registration, so `klabautermann:` records are never trial-decrypt
@@ -575,21 +690,62 @@ TOFU on every Séance device. That is issue #56.
 Fix: route the hostKey case through the library's quarantine handler,
 `ConflictAwareHostKeyStore.putIfNoConflict`
 (`host_key_mutations.dart:11`, returning
-`HostKeyInstallResult {installed, conflict}` at `:4`). On `conflict`,
-park the pulled pin behind the existing verdict/diff flow
-(`PinVerdictStore`, `sync_verdicts.dart:22`) exactly as Poltergeist's
-coordinator does (`bookmark_coordinator.dart:513-635`). Séance gains a
-`ConflictAwareHostKeyStore` implementation over its `FileHostKeyStore`
-(F3b extracts it); if F3d lands first it ships a thin adapter instead.
+`HostKeyInstallResult {installed, conflict}` at `:4`). On `conflict`, the
+pulled pin is not written into `host_keys.json`; the conflict is
+re-derived on each round from the round's pulled `hostkey:` records
+against the live store. Séance's pulled mirror is in-memory per round
+(`local_record_store.dart`; the app constructs `InMemoryLocalRecordStore`,
+`SA/services/app_services.dart:954`), so like Poltergeist the quarantine
+is re-derived rather than stored, and the pulled key never lands in the
+pin file. Séance gains a `ConflictAwareHostKeyStore` implementation over
+its `FileHostKeyStore` (SA `services/file_stores.dart:554`; F3b extracts
+it), or a thin adapter if F3d lands first. This changes only Séance's
+pulled-pin conflict check, not its dispatch: Séance's `SyncCoordinator`
+stays its own until F7 (D6).
+
+Séance's minimal `PinVerdictStore` implementation lives app-side over its
+own settings (`AppSettings`, `SA/services/app_settings.dart`), mirroring
+Poltergeist's `SettingsPinVerdictStore`
+(`PA/services/sync_verdict_stores.dart:21-92`) with two keys: the
+negative-pin set and the kept-verdict map. It persists in settings, never
+the record store, for the reason stated in `sync_verdicts.dart:1-6`: the
+record store's corruption quarantine would erase the very verdict that
+guards it. Séance has no "forget host" removal today (`HostKeyStore` at
+`SC/src/hostkey/tofu.dart:30-34` offers no removal; the app builds only
+`FileHostKeyStore`, `SA/services/app_services.dart:284`), so
+`negativePins()` stays empty and `addNegativePin` is unused until that UI
+exists; `removeNegativePin` is exercised by accept-pulled, and the
+kept-verdict pair is what stops a resolved conflict re-warning.
+
+Resolution surface: a Settings > Sync list of the re-derived conflicts
+(the model is Poltergeist's `backup_enrolled_view.dart:174`), each row
+offering **keep local** (record the rejected fingerprint through
+`recordKeptVerdict` and re-install the local pin) and **accept pulled**
+(install the pulled key and clear any negative pin): the two operations
+`RecordCoordinator.keepLocalPin`/`acceptPulledPin` perform today
+(`bookmark_coordinator.dart:513-565`). A legitimate key rotation also has
+a path through the existing connection flow: the next connect presents the
+pulled key as `HostKeyVerdict.changed`, and trusting it pins it
+(`showHostKeyDialog`, `SA/ui/host_key_dialog.dart:7-84`; `TofuVerifier.pin`,
+`tofu.dart:61-62`), after which the re-derived diff finds no conflict. That
+dialog's changed-key branch already shows both fingerprints and the
+warning, so F3d reuses its presentation; its Cancel/Trust pair does not
+express keep-local, so F3d adds a small pulled-pin resolution sheet built
+on the same `_Fingerprint` widgets (`host_key_dialog.dart:86-106`) with
+"Keep local key" and "Trust the pulled key". No pin stays quarantined
+without a resolution path, and a conflict the user already resolved is not
+re-warned.
 
 Regression test (fails before, passes after; 03 11.2 item 7): device A
 pins `host:22` to key K1 and pushes; a fake server returns a pulled
-`hostkey:host:22` record carrying K2. Assert the device keeps K1 and
-records a quarantined conflict; before the fix, the store returns K2.
+`hostkey:host:22` record carrying K2. Assert the device keeps K1, records
+a quarantined conflict, and leaves `host_keys.json` unchanged; before the
+fix, the store returns K2.
 
 Poltergeist's apply path already quarantines
 (`bookmark_coordinator.dart:513-635`), so the shared `HostKeyHandler` is
-Poltergeist's logic generalized; F3d is Séance adopting it. After it
+Poltergeist's logic generalized; F3d is Séance adopting the quarantine
+check, not the shared dispatch. After it
 ships, `sync_account_gate.dart:27` flips
 `kMinSharedVersionIncludesSeance56Fix` in the release that carries it,
 and the Séance pin audit (`poltergeist/tool/seance_pin_audit`,
@@ -620,11 +776,14 @@ while a rekey is staged; host-key loads and mutations are serialized
 (#172); conflict-aware conditional writes stay available. Intentional
 differences to document: Poltergeist ports only `FileVaultStore` and
 `FileHostKeyStore`, not `FileConfigStore`/`FileSnippetStore`; corrupt
-quarantine is store-owned and UTC-stamped; serialized-mutation queue
-differences between the apps are reviewed per method. Order: extract
-into `seance_core`, switch Poltergeist in the same PR, Séance follow-up
-(D7). Byte-identity of `vault.json`, `vault.json.rekey` and
-`host_keys.json` is golden-file tested.
+  quarantine is store-owned and UTC-stamped; serialized-mutation queue
+  differences between the apps are reviewed per method. Order: extract
+  into `seance_core`, switch Poltergeist in the same PR, then a Séance
+  follow-up PR that switches only Séance's vault and host-key stores
+  (`FileVaultStore`, `FileHostKeyStore`) onto the shared copies (D7); its
+  sync coordinator is untouched until F7 (D6). Byte-identity of
+  `vault.json`, `vault.json.rekey` and `host_keys.json` is golden-file
+  tested.
 
 ## 9. F3c: `planchette/packages/ghost_keystore`
 
@@ -659,10 +818,12 @@ review). Stays app-side: `AppLock` integration, product error copy,
 `poltergeist.sync.deviceId` mint-once).
 
 Switch order per 03 3.5 (F3c row) and 04 section 13 (F3): Poltergeist
-moves to `ghost_keystore` in the F3c PR; Séance switches in a
-follow-up PR (the same pattern as F3b, D7). The Séance follow-up is
-the PR that changes `seance/` lineage and runs the pin audit
-(section 11).
+moves to `ghost_keystore` in the F3c PR; a Séance follow-up PR then moves
+only Séance's `MasterKeyManager` (its vault master-key entry and
+`apikey` namespace) onto the package, the same "switch the keystore, not
+the coordinator" pattern as F3b (D7). Séance's `SyncCoordinator` and its
+store wiring stay Séance's own until F7 (D6). The Séance follow-up is the
+PR that changes `seance/` lineage and runs the pin audit (section 11).
 
 ## 10. Klabautermann's use of the library
 
@@ -715,7 +876,9 @@ the #56 fix (D15).
   and `klabautermann:` records ignored by Séance
   (`sync_coordinator.dart:854-855`).
 - Pull-only (item 4): a full round under `PushPolicy.none`; assert no
-  record is marked dirty and no push request is sent (D14).
+  record is marked dirty and no push request is sent (D14), and that each
+  `CatalogWriter` mutating call returns `WriteOutcome.refusedPullOnly`
+  with the server store, record store and verdicts unchanged.
 - #56 regression (item 7): section 7.
 - Extraction parity: per-divergence tests named in section 6; rekey
   journal and store atomicity tests move with F3b
@@ -778,17 +941,20 @@ none may require app-visible API changes beyond constructor wiring.
 | 4 | Divergence 3 | `batchForPush` adoption (needs the F2e export). | PORTS.md; batching tests. |
 | 5 | Divergence 4 | Delta pull with full-resync fallback. | PORTS.md; cursor tests. |
 | 6 | Divergence 5 | Row-preserving decode in the shared store. | PORTS.md; corrupt-row tests. |
-| 7 | F3b | Extract `FileVaultStore`/`VaultRekeyJournal`/`FileHostKeyStore` to `SC/src/store/`; switch Poltergeist; Séance follow-up PR. | PORTS.md; golden `vault.json`/`host_keys.json`. |
-| 8 | F3c | `planchette/packages/ghost_keystore`; switch Poltergeist's `MasterKeyManager` caller in the same PR; Séance switches in a follow-up PR (03 3.5 F3c, D7). | PORTS.md; 04 12.2 registration; the F3c PR itself adds a `planchette/` path dep (no `seance/` lineage change), the Séance follow-up PR changes `seance/` and refreshes the audit record; manual macOS keychain check recorded in the PR. |
+| 7 | F3b | Extract `FileVaultStore`/`VaultRekeyJournal`/`FileHostKeyStore` to `SC/src/store/`; switch Poltergeist; then a Séance follow-up PR that switches only Séance's vault and host-key stores, not its `SyncCoordinator` (D6). | PORTS.md; golden `vault.json`/`host_keys.json`. |
+| 8 | F3c | `planchette/packages/ghost_keystore`; switch Poltergeist's `MasterKeyManager` caller in the same PR; then a Séance follow-up PR that switches only Séance's `MasterKeyManager` (keystore), not its `SyncCoordinator` (D6; 03 3.5 F3c, D7). | PORTS.md; 04 12.2 registration; the F3c PR itself adds a `planchette/` path dep (no `seance/` lineage change), the Séance follow-up PR changes `seance/` and refreshes the audit record; manual macOS keychain check recorded in the PR. |
 | 9 | F3d | Route Séance's hostKey case through the quarantine handler (section 7). | `seance/` lineage changes; the audit runs, and the record is refreshed in the same PR if it reports a mismatch; Séance changelog; flips `kMinSharedVersionIncludesSeance56Fix` in the shipping release. |
 | 10 | Ledger close | Final `poltergeist/docs/PORTS.md`, pin-audit and compatibility updates. | - |
 
 Every divergence PR (rows 2 to 6) edits the moved library inside
 `seance/packages/seance_core`, so each is audit-relevant: the CI job
 verifies the `SEANCE_PIN_AUDIT_V3` block and the PR refreshes it when
-provenance drifts (section 11). F3b (row 7) touches `seance/` in both
-halves (the extraction lands in `seance_core`, the follow-up switches
-`seance_app`), so its audit runs apply to both PRs.
+provenance drifts (section 11). F3b and F3c (rows 7 and 8) each touch
+`seance/` in both halves (the extraction lands in `seance_core`, the
+follow-up switches `seance_app` onto it), so their audit runs apply to
+both PRs. F3d (row 9) changes Séance's `SyncCoordinator` too, but only its
+pulled-pin conflict check, not its dispatch; Séance adopts the shared
+`RecordCoordinator` only in F7 (D6).
 
 Publication stays disabled until #56 ships: the MVP is pull-only (D14)
 and publishes nothing; from v1 Klabautermann publishes first-seen pins
@@ -813,8 +979,8 @@ the fix (D15; 03 4.6 and 4.3).
 - Keystore prefix regressions destroy vaults (a wrong entry mints over
   an existing vault). Mitigation: literal-name tests, `hasExistingVault`
   contract tests, the manual macOS keychain check.
-- #56 sequencing. If F3d lands before F3b's Séance switch, Séance needs
-  a small `ConflictAwareHostKeyStore` adapter over its existing
+- #56 sequencing. If F3d lands before F3b's Séance store switch, Séance
+  needs a small `ConflictAwareHostKeyStore` adapter over its existing
   `FileHostKeyStore`; budgeted in the F3d PR rather than blocking on
   F3b.
 
