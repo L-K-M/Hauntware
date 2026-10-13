@@ -39,9 +39,10 @@ Future<List<SyncPairEditorResult?>> _pumpEditor(
   SyncRulesEditTarget initialEditTarget = SyncRulesEditTarget.general,
   List<Bookmark> servers = const [],
   SkipRuleSetsController? skipRuleSets,
+  Size size = const Size(1200, 1400),
 }) async {
   final results = <SyncPairEditorResult?>[];
-  tester.view.physicalSize = const Size(1200, 1400);
+  tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
   await tester.pumpWidget(
@@ -203,6 +204,65 @@ void main() {
       await tester.pump();
       expect(selected(tester, SkipRuleQuickPick.git), isFalse);
     });
+
+    testWidgets('adding lines the excludes hold leaves the caret alone', (
+      tester,
+    ) async {
+      final sets = SkipRuleSetsController(
+        initial: [
+          SkipRuleSet(name: 'Web', patterns: ['node_modules/', '*.log']),
+        ],
+      );
+      addTearDown(sets.dispose);
+      await _pumpEditor(
+        tester,
+        initial: testSyncPair(
+          rules: const SyncRuleSet(excludeGlobs: ['*.log', 'node_modules/']),
+        ),
+        skipRuleSets: sets,
+      );
+      await tester.tap(find.text('Options'));
+      await tester.pumpAndSettle();
+      final excludes = tester
+          .widget<TextField>(find.widgetWithText(TextField, 'Exclude rules'))
+          .controller!;
+      excludes.selection = const TextSelection.collapsed(offset: 2);
+
+      await tester.tap(find.byKey(const ValueKey(SkipRuleSetKey.addMenu)));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey((SkipRuleSetKey.addItem, 'Web'))),
+      );
+      await tester.pumpAndSettle();
+
+      expect(excludes.text, '*.log\nnode_modules/');
+      expect(excludes.selection, const TextSelection.collapsed(offset: 2));
+    });
+
+    // Desktop chips shrink-wrap their tap targets, so nothing but the
+    // Wrap's run spacing separates the rows there.
+    testWidgets(
+      'wrapped rows keep a gap between them',
+      variant: TargetPlatformVariant.only(TargetPlatform.macOS),
+      (tester) async {
+        await _pumpEditor(
+          tester,
+          initial: testSyncPair(),
+          size: const Size(400, 1400),
+        );
+        await tester.tap(find.text('Options'));
+        await tester.pumpAndSettle();
+
+        final first = tester.getRect(
+          find.byKey(const ValueKey(SkipRuleQuickPick.git)),
+        );
+        final second = tester.getRect(
+          find.byKey(const ValueKey(SkipRuleQuickPick.nodeModules)),
+        );
+        expect(second.top, greaterThan(first.top), reason: 'the row wraps');
+        expect(second.top - first.bottom, greaterThanOrEqualTo(8));
+      },
+    );
 
     testWidgets('the picks start under the field, not centred', (tester) async {
       await _pumpEditor(tester, initial: testSyncPair());

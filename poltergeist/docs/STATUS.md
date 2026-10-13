@@ -4,6 +4,18 @@ Living snapshot of where Poltergeist is, what's proven, and what to pick up
 next. Read [AGENTS.md](../AGENTS.md) for build/test commands and
 [09-PLAYBOOK.md](plan/09-PLAYBOOK.md) for the PR process.
 
+## Pair-editor exclude row polish (2026-10-13)
+
+Two follow-ups GLM raised on the rule sets PR and deferred there. Adding
+a rule set whose lines the excludes already hold no longer rewrites the
+field, so the caret and selection stay where they were. The quick-pick
+row now keeps 8 px between wrapped rows: desktop chips shrink-wrap their
+tap targets, so wrapped rows touched in a narrow window.
+
+Tests: 2 new in `sync_pair_editor_test.dart`, each failing first (the
+caret jumped to the end; the gap between rows was 0 on macOS). Local
+validation: analysis is clean and the pair editor's 21 tests pass.
+
 ## Trash root claim race (2026-10-13)
 
 Main's CI failed on Windows in `trash_purge_test.dart`'s "concurrent
