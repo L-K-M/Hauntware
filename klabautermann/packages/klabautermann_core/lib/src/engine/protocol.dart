@@ -467,6 +467,23 @@ final class FleetEntry {
   final String? group;
 
   final FleetEntryOrigin origin;
+
+  // By value: every CatalogReplaced copies its entries across the isolate
+  // boundary, so identity would make an unchanged entry look changed.
+  @override
+  bool operator ==(Object other) =>
+      other is FleetEntry &&
+      serverId == other.serverId &&
+      label == other.label &&
+      host == other.host &&
+      port == other.port &&
+      user == other.user &&
+      group == other.group &&
+      origin == other.origin;
+
+  @override
+  int get hashCode =>
+      Object.hash(serverId, label, host, port, user, group, origin);
 }
 
 /// Which log source an [OpenLogStream] follows (03 §7.6).

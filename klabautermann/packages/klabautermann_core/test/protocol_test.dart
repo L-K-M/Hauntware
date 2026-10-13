@@ -225,6 +225,45 @@ void main() {
       expect(request.text, 'Host a\n');
     });
 
+    test('fleet entries compare by value, across the boundary too', () async {
+      // Built at run time, so equal entries are never one canonical const.
+      FleetEntry entry({
+        String serverId = 'ssh-config:web-1',
+        String label = 'web-1',
+        String host = 'web-1.example',
+        int port = 2222,
+        String? user = 'deploy',
+        String? group,
+        FleetEntryOrigin origin = FleetEntryOrigin.sshConfig,
+      }) => FleetEntry(
+        serverId: serverId,
+        label: label,
+        host: host,
+        port: port,
+        user: user,
+        group: group,
+        origin: origin,
+      );
+
+      final web = entry();
+      expect(web, entry());
+      expect(web.hashCode, entry().hashCode);
+      // Every SendPort copy is a new object; it still equals the original.
+      expect(await roundTrip(web), web);
+
+      for (final other in [
+        entry(serverId: 'ssh-config:web-2'),
+        entry(label: 'web'),
+        entry(host: 'web-2.example'),
+        entry(port: kSshDefaultPort),
+        entry(user: null),
+        entry(group: 'Production'),
+        entry(origin: FleetEntryOrigin.synced),
+      ]) {
+        expect(web, isNot(other));
+      }
+    });
+
     test('sealed answers and typed bytes survive', () async {
       final trust =
           await roundTrip(const AnswerPrompt('p', PromptTrustAnswer(false)))
