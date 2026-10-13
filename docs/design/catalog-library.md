@@ -336,8 +336,9 @@ enum ApplyOutcome { applied, skipped, deferred }
 
 /// Per-round state a handler needs; built once per apply pass.
 final class ApplyContext {
-  final SyncRecordStore records;     // re-dated retractions seal back (the 1347-1358 case)
+  final SyncRecordStore records;
   final RecordCrypto crypto;
+  final CatalogWriter writer;        // re-dated retractions seal back via sealLocal (the 1347-1358 case)
   final SyncTripwireStore tripwires;
   final bool holdActive;             // passphrase hold (03 4.5)
   final DateTime Function() now;
@@ -364,18 +365,19 @@ final class RecordCoordinator {
     required ConflictAwareHostKeyStore hostKeys,
     required PinVerdictStore pinVerdicts,
     required SyncTripwireStore tripwires,
-    /// The coordinator builds and holds the [CatalogController] itself; in
-    /// shared mode apps read it through [catalog] and are notified through
-    /// this callback (today's app-built `onReplaced`,
-    /// bookmark_backup_service.dart:252-260, becomes the callback). Null
-    /// means separate mode: no controller, no prefixless decrypt.
+    /// Shared mode builds and holds the [CatalogController]; separate
+    /// mode has none and never decrypts prefixless ids.
+    required CatalogMode catalogMode,
+    /// Change notification for [catalog] (today's app-built `onReplaced`,
+    /// bookmark_backup_service.dart:252-260). Optional, never a mode
+    /// switch; passing it in separate mode throws an ArgumentError.
     void Function(List<ServerConfig> snapshot)? onCatalogReplaced,
     required PushPolicy pushPolicy,
     required String deviceId,
     DateTime Function()? now,
   });
   Future<SyncRoundResult> runRound(SyncApi api);
-  /// Read-only view of the server materialization; null outside shared mode.
+  /// Read-only view of the server materialization; null in separate mode.
   CatalogSnapshot? get catalog;
   Future<List<PinConflict>> pinConflicts();
   Future<void> keepLocalPin(PinConflict conflict);
@@ -405,8 +407,14 @@ final class CatalogWriter {
   Future<WriteOutcome> forgetPin(String host, int port);   // was onHostKeyForgotten
   /// crypto.seal + records.putLocal: the single funnel every dirty
   /// record arrives through; PushPolicy.none stops it here.
-  Future<void> sealLocal(DecryptedRecord record);
+  Future<WriteOutcome> sealLocal(DecryptedRecord record);
 }
+
+/// Whether pulled prefixless `serverConfig` records materialize (04 4.2).
+/// Today the app selects shared mode by passing a `SeanceServerCatalog`
+/// rather than null (bookmark_coordinator.dart:109,161-164); the
+/// coordinator now builds the controller itself, so the mode is explicit.
+enum CatalogMode { shared, separate }
 
 /// Result of a [CatalogWriter] mutation. [refusedPullOnly] means
 /// `PushPolicy.none`: the call returned before touching any local store,
@@ -528,16 +536,28 @@ pulled `serverConfig` would silently undo it. The MVP app offers no server
 editing, so no call is made; the typed refusal is what proves nothing
 changed. `CatalogWriter.sealLocal` is the second funnel and the same
 one-gate shape `_publishSecret` uses for `_syncSecrets`
-(`bookmark_coordinator.dart:336-346`): under `none` it returns before
-`crypto.seal`, so `records.putLocal` never runs and no record is marked
-dirty. `runRound`'s push branch (`bookmark_coordinator.dart:894-933`) is
-skipped under `none` as it already is under `_pushesHeld()`, so nothing
-is pushed even if a record somehow became dirty. The re-seal paths
-(`reSealAfterStoreLoss`, `reSealPendingWrites`, `catchUpSecrets`, the
-shared-account switch's step 9) return without sealing for the same
-reason: every one of them funnels through `sealLocal`. The pull-only test
-(03 11.2 item 4; section 11) asserts a full round marks nothing dirty and
-sends no `api.push`, and zero dirty marks transitively proves zero seals.
+(`bookmark_coordinator.dart:336-346`): under `none` it returns
+`refusedPullOnly` before `crypto.seal`, so `records.putLocal` never runs
+and no record is marked dirty. `runRound`'s push branch
+(`bookmark_coordinator.dart:894-933`) is skipped under `none` as it
+already is under `_pushesHeld()`, so nothing is pushed even if a record
+somehow became dirty. The re-seal paths (`reSealAfterStoreLoss`,
+`reSealPendingWrites`, `catchUpSecrets`, the shared-account switch's
+step 9), keep-local's re-push of the kept pin
+(`bookmark_coordinator.dart:534-546`) and an excluded server's re-dated
+retraction during apply (`:1346-1358`) return without sealing for the
+same reason: every one of them funnels through `sealLocal`.
+
+Pulling is unaffected. Handlers apply pulled records by writing the
+stores directly (`applySyncedRecord`, the host-key store), never through
+the mutating `CatalogWriter` calls, so a pull-only round still
+materializes pulled servers. Conflict resolution stays available too:
+`keepLocalPin` and `acceptPulledPin` are coordinator calls that change
+the local pin and verdicts; only keep-local's seal stops at `sealLocal`.
+The pull-only test (03 11.2 item 4; section 11) asserts a full round
+marks nothing dirty, sends no `api.push` and still materializes the
+round's pulled `serverConfig` records in `catalog`; zero dirty marks
+transitively proves zero seals.
 
 `ghost_keystore` (section 9):
 
@@ -579,8 +599,9 @@ cursor rules, secret-last ordering, quarantine resolution
    through the snapshot, and its notification callback
    (`seance_server_catalog.dart:16-51`; the app side at
    `bookmark_backup_service.dart:252-260`) becomes the coordinator's
-   construction callback. The write path moves the other
-   direction: `BookmarkCoordinator`'s `on*`/`_seal*`/`_publish*`/
+   construction callback. The app's nullable `catalog` argument, today's
+   mode switch, becomes the explicit `CatalogMode`. The write path moves
+   the other direction: `BookmarkCoordinator`'s `on*`/`_seal*`/`_publish*`/
    `_retract*` members become `CatalogWriter` (section 4).
 4. `PushPolicy.none` refuses every mutating call with
    `WriteOutcome.refusedPullOnly` and short-circuits `sealLocal` and the
@@ -776,14 +797,14 @@ while a rekey is staged; host-key loads and mutations are serialized
 (#172); conflict-aware conditional writes stay available. Intentional
 differences to document: Poltergeist ports only `FileVaultStore` and
 `FileHostKeyStore`, not `FileConfigStore`/`FileSnippetStore`; corrupt
-  quarantine is store-owned and UTC-stamped; serialized-mutation queue
-  differences between the apps are reviewed per method. Order: extract
-  into `seance_core`, switch Poltergeist in the same PR, then a Séance
-  follow-up PR that switches only Séance's vault and host-key stores
-  (`FileVaultStore`, `FileHostKeyStore`) onto the shared copies (D7); its
-  sync coordinator is untouched until F7 (D6). Byte-identity of
-  `vault.json`, `vault.json.rekey` and `host_keys.json` is golden-file
-  tested.
+quarantine is store-owned and UTC-stamped; serialized-mutation queue
+differences between the apps are reviewed per method. Order: extract
+into `seance_core`, switch Poltergeist in the same PR, then a Séance
+follow-up PR that switches only Séance's vault and host-key stores
+(`FileVaultStore`, `FileHostKeyStore`) onto the shared copies (D7); its
+sync coordinator is untouched until F7 (D6). Byte-identity of
+`vault.json`, `vault.json.rekey` and `host_keys.json` is golden-file
+tested.
 
 ## 9. F3c: `planchette/packages/ghost_keystore`
 
@@ -876,9 +897,11 @@ the #56 fix (D15).
   and `klabautermann:` records ignored by Séance
   (`sync_coordinator.dart:854-855`).
 - Pull-only (item 4): a full round under `PushPolicy.none`; assert no
-  record is marked dirty and no push request is sent (D14), and that each
-  `CatalogWriter` mutating call returns `WriteOutcome.refusedPullOnly`
-  with the server store, record store and verdicts unchanged.
+  record is marked dirty and no push request is sent (D14), that the
+  round's pulled `serverConfig` records still materialize in `catalog`,
+  and that each `CatalogWriter` mutating call returns
+  `WriteOutcome.refusedPullOnly` with the server store, record store and
+  verdicts unchanged.
 - #56 regression (item 7): section 7.
 - Extraction parity: per-divergence tests named in section 6; rekey
   journal and store atomicity tests move with F3b
@@ -949,11 +972,13 @@ none may require app-visible API changes beyond constructor wiring.
 Every divergence PR (rows 2 to 6) edits the moved library inside
 `seance/packages/seance_core`, so each is audit-relevant: the CI job
 verifies the `SEANCE_PIN_AUDIT_V3` block and the PR refreshes it when
-provenance drifts (section 11). F3b and F3c (rows 7 and 8) each touch
-`seance/` in both halves (the extraction lands in `seance_core`, the
-follow-up switches `seance_app` onto it), so their audit runs apply to
-both PRs. F3d (row 9) changes Séance's `SyncCoordinator` too, but only its
-pulled-pin conflict check, not its dispatch; Séance adopts the shared
+provenance drifts (section 11). F3b (row 7) touches `seance/` in both
+halves (the extraction lands in `seance_core`, the follow-up switches
+`seance_app` onto it), so its audit runs apply to both PRs. F3c (row 8)
+lands in `planchette/packages/ghost_keystore`, so only its Séance
+follow-up changes `seance/` lineage and runs the audit. F3d (row 9)
+changes Séance's `SyncCoordinator` too, but only its pulled-pin conflict
+check, not its dispatch; Séance adopts the shared
 `RecordCoordinator` only in F7 (D6).
 
 Publication stays disabled until #56 ships: the MVP is pull-only (D14)
