@@ -1444,6 +1444,54 @@ when their names differ.
   merge — surfaced-not-resolved is the sync chapter's rule and this view
   inherits it.
 
+**Shipped (v1.x, 2026-10-12).** The minimal diff view landed with these
+specifics:
+
+- Lines split at `\n` as the editor numbers them, so a missing final
+  newline is one changed region (an empty last line on one side). The
+  20 000-line cap counts each side the way a line counter does: a file of
+  exactly 20 000 lines passes with or without its final newline.
+- The engine (`poltergeist_core` `line_diff.dart`) is Myers' linear-space
+  middle snake over interned lines. It skips the common prefix and
+  suffix and marks lines that occur on one side only before the search,
+  which keeps the result minimal. A box that passes 1 024 edit steps
+  splits at its furthest frontier point instead. The result then reports
+  itself as not minimal, and the view says some changes show as larger
+  blocks.
+- The worker is a one-shot isolate with no time limit. The cost limit
+  bounds the work, and leaving the view or swapping its documents kills
+  the worker. A dead worker shows a notice, never "no changes".
+- Layouts: Side by side (gaps opposite the shorter side), Unified (each
+  region's removed lines, then its added lines; the compact posture's
+  default) and Separate, the v1 columns with Find and independent
+  scrolling. A Find button above the rows switches to Separate and opens
+  that side's find bar. The choice lasts for the route.
+- A change bar under the notices shows `N changed regions`, the position
+  (`3/12`, read as "Change 3 of 12"), previous and next buttons, and the
+  layout switch. n and Shift+N step through regions and wrap, outside
+  text fields only. They are view-local keys, so they stay out of the
+  shortcut registry and its dialog.
+- The diff colours are an app theme extension (`CompareDiffColors`), the
+  "EditorSyntaxTheme-style slots" above, derived per palette: family
+  green and red washes over the surface, with text held to 4.5:1 and
+  markers to 3:1 on them. The shared `EditorSyntaxTheme` is unchanged.
+  Rows carry −/+ markers and screen-reader labels ("Left only, line 4"),
+  so colour is never the only cue.
+- Rows wrap at display-column boundaries (tabs at 4, wide characters at
+  2) so every row's height is known before it is built, and show at most
+  10 000 columns of a line with a count of the rest. A custom sliver reads
+  every row offset from those heights, so a jump to a far change lands
+  exactly. Control characters and the Unicode line and paragraph
+  separators draw as visible symbols, since a paragraph would otherwise
+  break the row at them. Rows have no syntax highlighting and no
+  selection.
+- A change of layout, by the switch or by the posture after a rotation,
+  keeps the active region, or else the line at the top, in view. A side
+  whose find bar or editor has focus when the other side finishes
+  loading stays in Separate, so the rows never replace it mid-use.
+- Byte-identical files and texts that differ only in line endings or the
+  BOM each get their own notice.
+
 ## 7. Syntax additions for the file-manager audience
 
 Séance's 12 declarative families target what an SSH terminal user edits.
@@ -1627,7 +1675,7 @@ and steps Planchette and Séance share (`EditorTextSize`).
 
 | Deferred item | Where it lives |
 |---|---|
-| Computed text diff view (Myers, inline toggle) | v1.x, milestone in 07 (§6 specs it; 05's out-of-scope table defers it here) |
+| Computed text diff view (Myers, inline toggle) | Shipped in v1.x as the minimal diff view (§6) |
 | Cross-pane "Compare selected items" entry point | Shipped in v1.x as Compare Files (§6) |
 | Richer editor body (line numbers, gutter, multi-cursor, e.g. `re_editor`) | v2 parking (D25 spirit); the §2 layering keeps the swap cheap |
 | Auto-upload-on-external-save option | not planned for v1; revisit only with a real demand signal (§4.4 rationale) |

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:poltergeist_app/theme/app_theme.dart';
+import 'package:poltergeist_app/theme/compare_diff_colors.dart';
 
 import 'contrast_math.dart';
 
@@ -147,6 +148,35 @@ void main() {
         for (final (name, fg, bg) in pairs) {
           expect(
             contrast(fg, bg),
+            greaterThanOrEqualTo(minimumNonTextContrast),
+            reason: '$name (${brightness.name})',
+          );
+        }
+      });
+
+      test('compare diff rows keep text ≥ 4.5:1 and marks ≥ 3:1', () {
+        // 06 §6: the diff rows' washes are tinted surfaces of their own.
+        final diff = theme.extension<CompareDiffColors>()!;
+        for (final (name, foreground, background) in [
+          ('added text', diff.addedText, diff.addedFill),
+          ('removed text', diff.removedText, diff.removedFill),
+          ('line number', scheme.onSurfaceVariant, scheme.surface),
+        ]) {
+          expect(
+            contrast(foreground, background),
+            greaterThanOrEqualTo(_minimumTextContrast),
+            reason: '$name (${brightness.name})',
+          );
+        }
+        for (final (name, foreground, background) in [
+          ('added marker', diff.addedMarker, diff.addedFill),
+          ('removed marker', diff.removedMarker, diff.removedFill),
+          ('active bar', diff.activeRegion, scheme.surface),
+          ('active bar on added', diff.activeRegion, diff.addedFill),
+          ('active bar on removed', diff.activeRegion, diff.removedFill),
+        ]) {
+          expect(
+            contrast(foreground, background),
             greaterThanOrEqualTo(minimumNonTextContrast),
             reason: '$name (${brightness.name})',
           );

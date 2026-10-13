@@ -103,6 +103,21 @@ Poltergeist” command are proposed in
 retain §7.1's safety contract: every embedded-host link gets an interstitial,
 and a missing `serverId` is a dead end with no host or connection fallback.
 
+## Minimal diff view (2026-10-12)
+
+Original Poltergeist work. The line diff in `poltergeist_core`
+(`line_diff.dart`, `text_comparison.dart`, `text_comparison_worker.dart`)
+was written from Myers' 1986 paper; no GNU diffutils, diff-match-patch or
+Séance source was copied, and Planchette's LCS-based `unifiedDiff` is
+untouched. It reuses planchette_core's `lineStartOffsets` and
+`displayColumnFor` rather than copying them. The compare view's rows,
+change bar and `CompareDiffColors` theme extension are app code. No Séance
+pin changed.
+
+Port-back candidates: planchette_core could host the engine so Planchette's
+`unifiedDiff` keeps minimal results past its 2 000-line LCS cap (move it
+there rather than copying it); Séance has no compare surface.
+
 ## Sync-pair side-by-side compare (2026-10-02)
 
 Original Poltergeist composition over its existing shared Planchette editor

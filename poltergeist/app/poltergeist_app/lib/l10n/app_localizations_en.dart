@@ -5423,6 +5423,114 @@ class AppLocalizationsEn extends AppLocalizations {
   String get syncCompareBomDiffers => 'BOM differs';
 
   @override
+  String syncCompareRegionCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count changed regions',
+      one: '1 changed region',
+      zero: 'No changed regions',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String syncCompareRegionAnnouncement(int current, int total) {
+    return 'Change $current of $total';
+  }
+
+  @override
+  String syncComparePreviousChange(String shortcut) {
+    return 'Previous change ($shortcut)';
+  }
+
+  @override
+  String syncCompareNextChange(String shortcut) {
+    return 'Next change ($shortcut)';
+  }
+
+  @override
+  String get syncCompareLayoutLabel => 'Comparison layout';
+
+  @override
+  String get syncCompareLayoutSideBySide => 'Side by side';
+
+  @override
+  String get syncCompareLayoutUnified => 'Unified';
+
+  @override
+  String get syncCompareLayoutSeparate => 'Separate';
+
+  @override
+  String get syncCompareLayoutSeparateTooltip =>
+      'Each file in its own editor, with Find';
+
+  @override
+  String get syncCompareComputing => 'Comparing lines…';
+
+  @override
+  String get syncCompareShowFilesNow => 'Show files now';
+
+  @override
+  String syncCompareOverLineCap(int limit, int left, int right) {
+    final intl.NumberFormat limitNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String limitString = limitNumberFormat.format(limit);
+    final intl.NumberFormat leftNumberFormat = intl.NumberFormat.decimalPattern(
+      localeName,
+    );
+    final String leftString = leftNumberFormat.format(left);
+    final intl.NumberFormat rightNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String rightString = rightNumberFormat.format(right);
+
+    return 'Changes aren\'t marked: comparison is limited to $limitString lines per file (left $leftString, right $rightString).';
+  }
+
+  @override
+  String get syncCompareDiffFailed => 'Changes couldn\'t be computed.';
+
+  @override
+  String get syncCompareIdenticalFiles => 'The files are identical.';
+
+  @override
+  String get syncCompareIdenticalText =>
+      'The text is identical; the files differ only in line endings or the byte order mark.';
+
+  @override
+  String get syncCompareDiffSimplified =>
+      'Some changes are shown as larger blocks because the files differ widely.';
+
+  @override
+  String syncCompareRowTruncated(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count more characters not shown',
+      one: '1 more character not shown',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String syncCompareRowBoth(int left, int right) {
+    return 'Left line $left, right line $right';
+  }
+
+  @override
+  String syncCompareRowLeftOnly(int line) {
+    return 'Left only, line $line';
+  }
+
+  @override
+  String syncCompareRowRightOnly(int line) {
+    return 'Right only, line $line';
+  }
+
+  @override
+  String get syncCompareRowBlank => 'Blank line';
+
+  @override
   String get syncSideLeft => 'left';
 
   @override
