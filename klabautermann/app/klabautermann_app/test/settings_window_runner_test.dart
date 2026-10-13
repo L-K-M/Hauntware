@@ -252,24 +252,28 @@ void main() {
       expect(plugins, isNonNegative);
       expect(install, greaterThan(plugins));
 
-      final destroy = source.substring(
-        source.indexOf('void FlutterWindow::OnDestroy() {'),
-      );
+      // Each earlier anchor must exist: a missing one is -1, which every
+      // later index exceeds.
+      final onDestroy = source.indexOf('void FlutterWindow::OnDestroy() {');
+      expect(onDestroy, isNonNegative);
+      final destroy = source.substring(onDestroy);
+      final dropHost = destroy.indexOf('settings_window_ = nullptr;');
+      expect(dropHost, isNonNegative);
       expect(
-        destroy.indexOf('settings_window_ = nullptr;'),
-        lessThan(destroy.indexOf('flutter_controller_ = nullptr;')),
+        destroy.indexOf('flutter_controller_ = nullptr;'),
+        greaterThan(dropHost),
       );
 
       // Members are destroyed in reverse order: the host goes first.
       final header = readSource('windows/runner/flutter_window.h');
+      final controller = header.indexOf(
+        'std::unique_ptr<flutter::FlutterViewController> '
+        'flutter_controller_;',
+      );
+      expect(controller, isNonNegative);
       expect(
         header.indexOf('std::unique_ptr<SettingsWindowHost> settings_window_;'),
-        greaterThan(
-          header.indexOf(
-            'std::unique_ptr<flutter::FlutterViewController> '
-            'flutter_controller_;',
-          ),
-        ),
+        greaterThan(controller),
       );
     });
 
