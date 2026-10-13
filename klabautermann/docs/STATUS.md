@@ -45,9 +45,9 @@ slice:
   AppImage through the shared `scripts/package-linux-common.sh`) and
   `scripts/build-flatpak.sh` with `flatpak/ch.lkmc.klabautermann.yml`.
   The flatpak grants read-only `~/.ssh` for the FL-02 import, which
-  04 §12.1 does not plan yet. The scripts have only run on stub bundles
-  so far; a real Flutter bundle, appimagetool and flatpak-builder first
-  run in the client CI legs.
+  04 §12.1 records, pending owner confirmation. The scripts have only run
+  on stub bundles so far; a real Flutter bundle, appimagetool and
+  flatpak-builder first run in the client CI legs.
 - Desktop settings window (03 §10.2, D32): on macOS, Linux and Windows,
   Settings opens in a native window of its own through `ghost_desktop`'s
   `GhostSettingsWindowHost`; phones, and a desktop runner that cannot
