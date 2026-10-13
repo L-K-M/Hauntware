@@ -30,7 +30,8 @@ const int _maximumPort = 65535;
 /// is outside 1 to 65535, or when an earlier block already took its alias
 /// (the alias is the entry's id; ssh would merge the two blocks, this keeps
 /// the first). The text is parsed in the calling isolate: the engine's, so
-/// a large config never stalls the UI (CN-19).
+/// a large config never stalls the UI (CN-19). The engine keeps the returned
+/// entries as its import state, so the list is unmodifiable.
 ({List<FleetEntry> entries, int skippedCount}) fleetEntriesFromSshConfig(
   String text,
 ) {
@@ -61,7 +62,7 @@ const int _maximumPort = 65535;
       ),
     );
   }
-  return (entries: entries, skippedCount: skipped);
+  return (entries: List.unmodifiable(entries), skippedCount: skipped);
 }
 
 String? _nonEmpty(String? value) =>

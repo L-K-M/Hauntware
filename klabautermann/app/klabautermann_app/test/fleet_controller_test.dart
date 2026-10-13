@@ -110,6 +110,24 @@ void main() {
         expect(fleet.selectedServer, isNull);
       },
     );
+
+    test('forgets the link phase of a server the new fleet drops', () async {
+      final fleet = controller();
+      engine
+        ..emit(CatalogReplaced([_entry('web-1'), _entry('db-1')]))
+        ..emit(const LinkState('ssh-config:web-1', LinkPhase.connected))
+        ..emit(const LinkState('ssh-config:db-1', LinkPhase.failed));
+      await settle();
+
+      engine.emit(CatalogReplaced([_entry('db-1')]));
+      await settle();
+      expect(fleet.linkPhaseFor('ssh-config:db-1'), LinkPhase.failed);
+
+      // A re-added server starts disconnected, not in its old phase.
+      engine.emit(CatalogReplaced([_entry('web-1'), _entry('db-1')]));
+      await settle();
+      expect(fleet.linkPhaseFor('ssh-config:web-1'), LinkPhase.disconnected);
+    });
   });
 
   group('importSshConfig (FL-02)', () {

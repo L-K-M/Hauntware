@@ -60,7 +60,6 @@ final class RunSyncRound extends EngineRequest {
 /// Not a catalog write under D14: imported entries never become records and
 /// are never pushed. Until the catalog library brings D13's device-local
 /// store, they live in the engine's memory and are gone when it stops.
-/// FL-02 has no 03 §10.1 row yet.
 final class ImportSshConfig extends EngineRequest {
   const ImportSshConfig(this.text);
 
@@ -467,6 +466,23 @@ final class FleetEntry {
   final String? group;
 
   final FleetEntryOrigin origin;
+
+  // By value: every CatalogReplaced copies its entries across the isolate
+  // boundary, so identity would make an unchanged entry look changed.
+  @override
+  bool operator ==(Object other) =>
+      other is FleetEntry &&
+      serverId == other.serverId &&
+      label == other.label &&
+      host == other.host &&
+      port == other.port &&
+      user == other.user &&
+      group == other.group &&
+      origin == other.origin;
+
+  @override
+  int get hashCode =>
+      Object.hash(serverId, label, host, port, user, group, origin);
 }
 
 /// Which log source an [OpenLogStream] follows (03 §7.6).

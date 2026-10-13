@@ -68,9 +68,9 @@ slice:
   AppImage through the shared `scripts/package-linux-common.sh`) and
   `scripts/build-flatpak.sh` with `flatpak/ch.lkmc.klabautermann.yml`.
   The flatpak grants read-only `~/.ssh` for the FL-02 import, which
-  04 §12.1 does not plan yet. The scripts have only run on stub bundles
-  so far; a real Flutter bundle, appimagetool and flatpak-builder first
-  run in the client CI legs.
+  04 §12.1 records, pending owner confirmation. The scripts have only run
+  on stub bundles so far; a real Flutter bundle, appimagetool and
+  flatpak-builder first run in the client CI legs.
 
 Pull-only from the start (D14): no surface sends a request that could
 push or write catalog records, and a widget test guards it.
