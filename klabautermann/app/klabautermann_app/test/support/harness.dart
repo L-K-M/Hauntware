@@ -4,6 +4,7 @@ import 'package:klabautermann_app/app.dart';
 import 'package:klabautermann_app/controllers/appearance_controller.dart';
 import 'package:klabautermann_app/controllers/fleet_controller.dart';
 import 'package:klabautermann_app/controllers/monitoring_controller.dart';
+import 'package:klabautermann_app/services/settings_window/settings_window_link.dart';
 import 'package:klabautermann_app/services/ssh_config_source.dart';
 
 import 'fake_engine.dart';
@@ -34,11 +35,16 @@ final class AppHarness {
 /// which is what decides the shell (03 §10.2 desktop, §10.5 phone).
 /// [sshConfig] stands in for the platform's ssh_config source: a fake for a
 /// desktop, null (the default) for a phone, as `sshConfigSourceFor` picks.
+/// [openSettingsWindow] likewise stands in for the desktop settings window
+/// (null, the default, is a phone's route); a test that builds one over
+/// [appearance] passes that controller in, and the harness disposes it.
 Future<AppHarness> pumpApp(
   WidgetTester tester, {
   Size size = const Size(1280, 800),
   List<FleetServer> servers = const [],
   SshConfigSource? sshConfig,
+  AppearanceController? appearance,
+  OpenSettingsWindow? openSettingsWindow,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -49,7 +55,7 @@ Future<AppHarness> pumpApp(
     engine: engine,
     fleet: FleetController(engine, servers: servers, sshConfig: sshConfig),
     monitoring: MonitoringController(engine),
-    appearance: AppearanceController(),
+    appearance: appearance ?? AppearanceController(),
   );
   addTearDown(() async {
     harness.dispose();
@@ -61,6 +67,7 @@ Future<AppHarness> pumpApp(
       fleet: harness.fleet,
       monitoring: harness.monitoring,
       appearance: harness.appearance,
+      openSettingsWindow: openSettingsWindow,
     ),
   );
   await tester.pumpAndSettle();
