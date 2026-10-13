@@ -418,8 +418,12 @@ class _SyncPairEditorDialogState extends State<SyncPairEditorDialog> {
     );
   }
 
+  /// Replaces the excludes with [lines]. An add that changes no rule
+  /// leaves the field, caret and selection as they were, blank lines and
+  /// a trailing newline included; a save drops those anyway.
   void _setExcludes(List<String> lines) {
     final text = lines.join('\n');
+    if (text == skipRuleLines(_excludes.text).join('\n')) return;
     _excludes.value = TextEditingValue(
       text: text,
       selection: TextSelection.collapsed(offset: text.length),
@@ -613,6 +617,7 @@ class _SyncPairEditorDialogState extends State<SyncPairEditorDialog> {
                       final lines = skipRuleLines(_excludes.text);
                       return Wrap(
                         spacing: 8,
+                        runSpacing: 8,
                         crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
                           for (final pick in SkipRuleQuickPick.values)
