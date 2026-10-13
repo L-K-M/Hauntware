@@ -156,7 +156,8 @@ final class ElevatedExecutor {
   /// as [SshLink.run] does, non-zero exits included.
   ///
   /// [password] is sent only on the rungs that need one (3 and 4), as the
-  /// first stdin line; [stdin] follows it and reaches the command. [timeout]
+  /// first stdin line; [stdin] follows it and reaches the command, whose
+  /// stdin then ends on every rung, also when [stdin] is null. [timeout]
   /// bounds the whole call: the rung-4 retry gets what the first attempt
   /// left. Without one, each attempt takes [SshLink.run]'s default.
   ///
@@ -177,7 +178,10 @@ final class ElevatedExecutor {
     if (strategy != ElevationStrategy.sudoPrelude) {
       final result = await _link.run(
         buildElevatedCommand(strategy, argv),
-        stdin: stdin,
+        // Sealed even when empty, as the prelude rungs always seal it after
+        // the password line: a null stdin would stay open on these rungs
+        // only, and a command that reads it would wait for the timeout.
+        stdin: stdin ?? const <int>[],
         timeout: timeout,
       );
       _throwIfRefused(strategy, result);

@@ -55,17 +55,15 @@ const _hostileWords = [
 typedef _Reply = ({int exit, String stdout, String stderr});
 
 /// Answers successive execs with [replies], each once the client sealed its
-/// stdin when [afterStdin] (the prelude rungs always send stdin), otherwise
-/// at once.
+/// stdin, which every rung does.
 void Function(SshPeerChannel, String) _answers(
   List<_Reply> replies, {
-  bool afterStdin = true,
   Duration delay = Duration.zero,
 }) {
   var next = 0;
   return (channel, command) {
     final reply = replies[next++];
-    void send(SshPeerChannel c) {
+    channel.onStdinEof = (c) {
       Timer(delay, () {
         if (reply.stdout.isNotEmpty) c.sendData(utf8.encode(reply.stdout));
         if (reply.stderr.isNotEmpty) c.sendStderr(utf8.encode(reply.stderr));
@@ -74,13 +72,7 @@ void Function(SshPeerChannel, String) _answers(
           ..sendEof()
           ..sendClose();
       });
-    }
-
-    if (afterStdin) {
-      channel.onStdinEof = send;
-    } else {
-      send(channel);
-    }
+    };
   };
 }
 
@@ -431,7 +423,7 @@ void main() {
       () async {
         final link = await openTestLink();
         addTearDown(link.link.close);
-        link.peer.onExec = _answers([_reply(stdout: '0\n')], afterStdin: false);
+        link.peer.onExec = _answers([_reply(stdout: '0\n')]);
         final executor = ElevatedExecutor(
           link.link,
           const ElevationProbe(isRoot: true),
@@ -471,7 +463,7 @@ void main() {
       addTearDown(link.link.close);
       link.peer.onExec = _answers([
         _reply(exit: 1, stderr: _e8PasswordRequired),
-      ], afterStdin: false);
+      ]);
       final executor = ElevatedExecutor(link.link, _nopasswdSudo);
 
       await expectLater(
@@ -496,7 +488,7 @@ void main() {
         addTearDown(link.link.close);
         link.peer.onExec = _answers([
           _reply(exit: 1, stderr: 'Unit nginx.service not found.\n'),
-        ], afterStdin: false);
+        ]);
         final executor = ElevatedExecutor(link.link, _nopasswdSudo);
 
         final result = await executor.run(['systemctl', 'restart', 'nginx']);
@@ -766,6 +758,42 @@ void main() {
       },
     );
 
+    // The prelude rungs always seal stdin after the password line, so every
+    // other rung has to as well: a stdin-reading command must not finish on
+    // a password-sudo host and hang until the timeout on a NOPASSWD one.
+    for (final (rung, probe, argv) in [
+      ('root login', const ElevationProbe(isRoot: true), ['cat']),
+      ('NOPASSWD sudo', _nopasswdSudo, ['cat']),
+      (
+        'NOPASSWD doas',
+        const ElevationProbe(doasPresent: true, doasNopasswd: true),
+        ['cat'],
+      ),
+      (
+        'run0',
+        const ElevationProbe(run0Present: true, run0Nopasswd: true),
+        ['cat'],
+      ),
+      ('polkit systemctl', const ElevationProbe(), ['systemctl', 'edit', 'x']),
+    ]) {
+      test('$rung seals stdin when the caller passes none', () async {
+        final link = await openTestLink();
+        addTearDown(link.link.close);
+        link.peer.onExec = _answers([_reply(stdout: 'done\n')]);
+        final executor = ElevatedExecutor(link.link, probe);
+
+        final result = await executor.run(
+          argv,
+          timeout: const Duration(seconds: 1),
+        );
+
+        expect(result.stdout, 'done\n');
+        final channel = link.peer.channels.single;
+        expect(channel.eofFromClient, isTrue);
+        expect(channel.stdinBytes, isEmpty);
+      });
+    }
+
     test('no applicable rung refuses before any channel', () async {
       final link = await openTestLink();
       addTearDown(link.link.close);
@@ -794,7 +822,7 @@ void main() {
               'Failed to restart nginx.service: Interactive authentication '
               'required.\n',
         ),
-      ], afterStdin: false);
+      ]);
       final executor = ElevatedExecutor(link.link, const ElevationProbe());
 
       await expectLater(
