@@ -358,21 +358,22 @@ concurrently in the engine isolate (D8).
 - **Named rule sets** (v1.x, 2026-10-13): a rule set is a name and a
   list of `excludeGlobs` lines, kept on this device in `settings.json`
   (03 §6) and never synced. Names are trimmed and unique ignoring case,
-  and a set holds at least one pattern. The Skip Rules dialog (the Sync
-  sheet's Edit Rules…) offers Add Rule Set, Save as Rule Set… and
-  Manage Rule Sets…; the pair editor's excludes field offers Add Rule
-  Set. Adding a set appends its lines after the pair's own and leaves
-  out lines the pair already has, which stay where they are. Every
-  appended line comes after the pair's lines and wins under last match,
-  so a set line can re-exclude a path a pair's `!` line re-included,
-  and a set's `!` line that the pair already has is left out rather
-  than repeated after the set's excludes. The plan shows the effect
-  before anything runs. The pair keeps the copy:
-  renaming, editing or deleting a set later changes no pair, and the
-  savedSync record (04) gains no field. Sets hold only pair patterns,
-  never the app defaults, which still evaluate after every pair line.
-  Adding a set never scans or runs; the plan previews the result, and
-  §8's rails apply unchanged.
+  and a set holds at least one pattern; comment lines alone do not
+  count, and a stored set without one is dropped on load. The Skip Rules
+  dialog (the Sync sheet's Edit Rules…) offers Add Rule Set, Save as
+  Rule Set… and Manage Rule Sets…; the pair editor's excludes field
+  offers Add Rule Set. Adding a set appends its lines after the pair's
+  own and leaves out lines the pair already has, which stay where they
+  are. Every appended line comes after the pair's lines and wins under
+  last match, so a set line can re-exclude a path a pair's `!` line
+  re-included, and a set's `!` line that the pair already has is left
+  out rather than repeated after the set's excludes. The plan shows the
+  effect before anything runs. The pair keeps the copy: renaming,
+  editing or deleting a set later changes no pair, and the savedSync
+  record (04) gains no field. Sets hold only pair patterns, never the
+  app defaults, which still evaluate after every pair line. Adding a set
+  never scans or runs; the plan previews the result, and §8's rails
+  apply unchanged.
 - **Name hazards are surfaced, never silently "fixed"** — each becomes a
   plan item with a conflict-class reason (§6):
   - macOS HFS+ canonicalizes to NFD, while APFS (the default since 2017)

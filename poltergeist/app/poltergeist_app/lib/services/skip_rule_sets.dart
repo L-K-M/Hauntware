@@ -6,8 +6,9 @@ import 'package:flutter/foundation.dart';
 /// the saved-sync record carries no reference to it.
 @immutable
 final class SkipRuleSet {
-  SkipRuleSet({required this.name, required Iterable<String> patterns})
-    : patterns = List.unmodifiable(patterns);
+  SkipRuleSet({required String name, required Iterable<String> patterns})
+    : name = name.trim(),
+      patterns = List.unmodifiable(patterns);
 
   /// Trimmed and unique on this device, ignoring case.
   final String name;
@@ -18,7 +19,8 @@ final class SkipRuleSet {
   Map<String, Object> toJson() => {'name': name, 'patterns': patterns};
 
   /// The set [json] holds, or null when it holds none: a non-map, a
-  /// missing or blank name, or patterns that are not a list. Non-string
+  /// missing or blank name, patterns that are not a list, or patterns
+  /// with no line the editor would accept ([hasSkipPattern]). Non-string
   /// pattern entries are dropped and the rest read as [skipRuleLines]
   /// reads an editor's lines.
   static SkipRuleSet? fromJson(Object? json) {
@@ -28,10 +30,9 @@ final class SkipRuleSet {
     if (name is! String || name.trim().isEmpty || patterns is! List) {
       return null;
     }
-    return SkipRuleSet(
-      name: name.trim(),
-      patterns: skipRuleLines(patterns.whereType<String>().join('\n')),
-    );
+    final lines = skipRuleLines(patterns.whereType<String>().join('\n'));
+    if (!hasSkipPattern(lines)) return null;
+    return SkipRuleSet(name: name, patterns: lines);
   }
 
   @override

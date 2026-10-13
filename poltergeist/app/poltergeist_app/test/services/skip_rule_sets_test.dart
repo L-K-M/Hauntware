@@ -11,6 +11,25 @@ void main() {
       expect(SkipRuleSet.fromJson(set.toJson()), set);
     });
 
+    test('a set with no usable pattern is no set', () {
+      for (final patterns in [
+        <Object>[],
+        [1, true],
+        ['', '  '],
+        ['# only a comment'],
+      ]) {
+        expect(
+          SkipRuleSet.fromJson({'name': 'Media', 'patterns': patterns}),
+          isNull,
+          reason: '$patterns',
+        );
+      }
+    });
+
+    test('the name is trimmed however the set is made', () {
+      expect(SkipRuleSet(name: '  Web ', patterns: ['*.log']).name, 'Web');
+    });
+
     test('rejects what is not a set and cleans what is', () {
       expect(SkipRuleSet.fromJson('Web'), isNull);
       expect(SkipRuleSet.fromJson({'name': '  ', 'patterns': []}), isNull);
@@ -129,6 +148,11 @@ void main() {
         () => putSkipRuleSetInto(sets, _set('docs', ['x/']), replacing: 'Web'),
         throwsA(isA<SkipRuleSetNameTaken>()),
       );
+      // A refused save leaves the list it was given as it was.
+      expect(sets, [
+        _set('Web', ['*.log']),
+        _set('Docs', ['_site/']),
+      ]);
       // A set may keep its own name in another case.
       expect(
         putSkipRuleSetInto(sets, _set('WEB', ['*.log']), replacing: 'web'),

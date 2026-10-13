@@ -119,8 +119,9 @@ known-divergent surface.
 - [ ] OWNER MANUAL QA: VoiceOver, NVDA and TalkBack read the Add Rule Set
   menu items and each set's row and its edit and delete buttons in
   Manage Rule Sets.
-- [ ] OWNER MANUAL QA: type Japanese and Korean into a set's name on each
-  desktop: composition renders in place.
+- [ ] OWNER MANUAL QA: type Japanese and Korean into a set's name and
+  pattern fields on each desktop and on Android: composition renders in
+  place.
 - [ ] OWNER MANUAL QA: phone posture: Manage Rule Sets and its editor fit
   without clipping, and the keyboard does not hide the pattern field.
 

@@ -279,6 +279,11 @@ void main() {
       }
     });
     await tester.pumpAndSettle();
+    expect(
+      find.byType(SyncPairEditorDialog),
+      findsOneWidget,
+      reason: 'the docroot action should open the pair editor',
+    );
 
     expect(
       tester

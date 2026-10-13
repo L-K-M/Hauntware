@@ -5,6 +5,7 @@
 import 'package:flutter/material.dart';
 
 import '../../l10n/app_localizations.dart';
+import '../../services/application_error_reporter.dart';
 import '../../services/skip_rule_sets.dart';
 import '../../services/skip_rule_sets_controller.dart';
 import '../../theme/app_theme.dart';
@@ -153,7 +154,8 @@ class _ManagerDialogState extends State<_ManagerDialog> {
 
     try {
       await widget.sets.remove(set.name);
-    } catch (_) {
+    } catch (error, stackTrace) {
+      ApplicationErrorReporter().report(error, stackTrace);
       if (mounted) setState(() => _error = l10n.syncRuleSetDeleteFailed);
     }
   }
@@ -174,6 +176,19 @@ class _ManagerDialogState extends State<_ManagerDialog> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              // Above the list, so a long list cannot push it out of view.
+              if (_error case final error?)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Semantics(
+                    liveRegion: true,
+                    child: Text(
+                      error,
+                      key: const ValueKey(SkipRuleSetKey.managerError),
+                      style: TextStyle(color: theme.colorScheme.error),
+                    ),
+                  ),
+                ),
               if (widget.sets.value.isEmpty)
                 Text(
                   l10n.syncRuleSetsEmpty,
@@ -202,18 +217,6 @@ class _ManagerDialogState extends State<_ManagerDialog> {
                         icon: const Icon(Icons.delete_outline),
                       ),
                     ],
-                  ),
-                ),
-              if (_error case final error?)
-                Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: Semantics(
-                    liveRegion: true,
-                    child: Text(
-                      error,
-                      key: const ValueKey(SkipRuleSetKey.managerError),
-                      style: TextStyle(color: theme.colorScheme.error),
-                    ),
                   ),
                 ),
             ],
@@ -298,7 +301,8 @@ class _EditorDialogState extends State<_EditorDialog> {
         _nameError = l10n.syncRuleSetNameTaken(taken.name);
       });
       return;
-    } catch (_) {
+    } catch (error, stackTrace) {
+      ApplicationErrorReporter().report(error, stackTrace);
       if (!mounted) return;
       setState(() {
         _saving = false;

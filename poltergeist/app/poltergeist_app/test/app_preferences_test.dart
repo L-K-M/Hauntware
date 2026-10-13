@@ -356,7 +356,8 @@ void main() {
   test('a damaged rule-set value keeps the sets that still decode', () async {
     await settingsFile.writeAsString(
       '{"sync.skipRuleSets":[{"name":"Web","patterns":["*.log",7]},'
-      '"junk",{"name":"","patterns":[]},{"name":"WEB","patterns":[]}]}',
+      '"junk",{"name":"","patterns":[]},{"name":"WEB","patterns":["x/"]},'
+      '{"name":"Media","patterns":["",3]}]}',
     );
     final preferences = AppPreferences(
       store: SettingsStore(path: settingsFile.path),

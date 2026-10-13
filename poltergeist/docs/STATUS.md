@@ -14,9 +14,10 @@ its lines after the pair's own and leaves out lines the pair already
 has, which stay in place. Appended lines win under last match, so a set
 line can re-exclude what a pair's `!` line re-included; the plan shows
 the result before anything runs. The pair keeps the copy, so later
-edits to a set change no pair, and the savedSync record gains no field. Sets live on this device under
-`sync.skipRuleSets` in `settings.json` and are never synced. This is the
-named skip-rules item of the v1.x backlog (07 §3.13; 05 §3).
+edits to a set change no pair, and the savedSync record gains no
+field. Sets live on this device under `sync.skipRuleSets` in
+`settings.json` and are never synced. This is the named skip-rules
+item of the v1.x backlog (07 §3.13; 05 §3).
 
 Names are trimmed and unique ignoring case, and a set needs at least one
 pattern; comment lines alone do not count. An empty Add Rule Set menu
@@ -26,9 +27,11 @@ by screen readers, and lists nothing new. Each write edits the sets as
 stored and refuses a name a stored set holds, so a launch whose read
 failed can neither wipe the sets nor let a new set replace one. The
 editor stays open until its write finishes, and Escape closes an open
-Add Rule Set menu without closing the dialog. Saving, editing or deleting a set never
-commits the pair's rules: only Done does. The app defaults stay out of
-every set and still evaluate last.
+Add Rule Set menu without closing the dialog. Saving, editing or
+deleting a set never commits the pair's rules: only Done does. The app
+defaults stay out of every set and still evaluate last. A stored set
+with no usable pattern is dropped on load, and save and delete failures
+are also reported to the app's error reporter.
 
 Code: `services/skip_rule_sets.dart` (the set, decoding and the pure
 append and list rules), `services/skip_rule_sets_controller.dart`, three
@@ -46,8 +49,8 @@ the dialog beneath; failure messages were not read out; and the plan
 view's editor wiring had no test. It also corrected the spec's wording
 on `!` lines and the QA step for bookmark sync.
 
-Tests: 38 new. The set's decoding and the pure append and list rules
-(13), the controller (3), and the preferences round trip, damaged values
+Tests: 40 new. The set's decoding and the pure append and list rules
+(15), the controller (3), and the preferences round trip, damaged values
 and failed-read cases, including a name the screen missed (5). The Sync
 sheet's tests (13) cover adding a set, Escape on the open menu, the
 empty menu, Save as Rule Set without committing, the name and pattern
@@ -60,7 +63,7 @@ the sheet, the Advanced editor or the plan view's editor, appending
 duplicates, case-sensitive names) each fail a test.
 
 Local validation: Flutter analysis is clean, the localization contract
-passes, and all 3,461 app tests pass. Not run: native platforms,
+passes, and all 3,463 app tests pass. Not run: native platforms,
 screen readers, and IME composition in the new fields; the QA
 checklist's Skip rule sets section covers them.
 

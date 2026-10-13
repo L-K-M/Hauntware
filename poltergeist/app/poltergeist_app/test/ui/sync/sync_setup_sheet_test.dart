@@ -489,6 +489,8 @@ void main() {
         find.text('The rule set could not be saved. Try again.'),
         findsOneWidget,
       );
+      // The failure is reported, not only shown.
+      expect(tester.takeException(), isA<StateError>());
       // Read out when it appears, not only when someone reaches it.
       expect(
         tester.getSemantics(
@@ -586,6 +588,14 @@ void main() {
       expect(
         find.text('The rule set could not be deleted. Try again.'),
         findsOneWidget,
+      );
+      expect(tester.takeException(), isA<StateError>());
+      // Above the list, so a long list cannot push it out of view.
+      expect(
+        tester
+            .getTopLeft(find.byKey(const ValueKey(SkipRuleSetKey.managerError)))
+            .dy,
+        lessThan(tester.getTopLeft(find.text('Web')).dy),
       );
       expect(
         tester.getSemantics(
