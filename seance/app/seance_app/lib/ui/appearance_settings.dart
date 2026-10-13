@@ -307,7 +307,7 @@ class _AppearanceSettingsState extends State<AppearanceSettings> {
     final data = await Clipboard.getData(Clipboard.kTextPlain);
     if (!mounted) return;
     final text = data?.text;
-    final pasted = text == null ? null : ThemePalette.tryParse(text);
+    final pasted = text == null ? null : seanceThemeCodec.tryParse(text);
     if (pasted == null) {
       showTopToastIn(
         context,

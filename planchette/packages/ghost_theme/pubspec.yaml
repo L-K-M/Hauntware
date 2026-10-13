@@ -1,0 +1,25 @@
+name: ghost_theme
+description: >-
+  Shared theme model for the Ghost app family (Planchette,
+  Poltergeist and Seance): the editable ThemePalette and its
+  stored/pasted JSON form, the shipped preset tables, and the
+  per-app style and codec seams each host binds.
+version: 1.9.0
+publish_to: none
+
+environment:
+  sdk: ^3.12.0
+  flutter: '>=3.47.2'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  # ThemeModePreference and the brightness helpers the appearance value
+  # resolves through.
+  ghost_ui:
+    path: ../ghost_ui
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0

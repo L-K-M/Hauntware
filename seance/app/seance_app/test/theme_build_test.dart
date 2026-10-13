@@ -161,7 +161,7 @@ void main() {
   });
 
   test('a new device is drawn in Terminal, whatever the system says', () {
-    final themes = SeanceTheme.forAppearance(AppAppearance.initial);
+    final themes = SeanceTheme.forAppearance(seanceInitialAppearance);
     expect(themes.theme, same(themes.darkTheme));
     expect(themes.theme.brightness, Brightness.dark);
     expect(themes.theme.colorScheme.surface, ThemePresets.terminal.surface);
@@ -272,58 +272,6 @@ void main() {
   });
 
   group('brightness', () {
-    test('a surface decides it; otherwise the mode, then the system', () {
-      final automatic = ThemePresets.seance;
-      expect(
-        resolveBrightness(
-          automatic,
-          Brightness.dark,
-          ThemeModePreference.system,
-        ),
-        Brightness.dark,
-      );
-      expect(
-        resolveBrightness(
-          automatic,
-          Brightness.dark,
-          ThemeModePreference.light,
-        ),
-        Brightness.light,
-      );
-      expect(
-        resolveBrightness(
-          automatic,
-          Brightness.light,
-          ThemeModePreference.dark,
-        ),
-        Brightness.dark,
-      );
-      expect(
-        resolveBrightness(
-          ThemePresets.paper,
-          Brightness.dark,
-          ThemeModePreference.dark,
-        ),
-        Brightness.light,
-      );
-      expect(
-        resolveBrightness(
-          ThemePresets.midnight,
-          Brightness.light,
-          ThemeModePreference.system,
-        ),
-        Brightness.dark,
-      );
-      expect(
-        resolveBrightness(
-          ThemePresets.midnight,
-          Brightness.light,
-          ThemeModePreference.light,
-        ),
-        Brightness.dark,
-      );
-    });
-
     test('a surface of its own is one theme for the MaterialApp', () {
       final themes = SeanceTheme.forAppearance(
         AppAppearance(
