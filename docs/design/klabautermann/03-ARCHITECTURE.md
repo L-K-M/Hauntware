@@ -892,6 +892,7 @@ products:
     scan: [packages, app]
     pure_packages: [packages/planchette_core]
     dartssh2_imports: []
+    # The lists of every matching key apply: ghost_ui gets both.
     forbidden_dependencies: {"ghost_*": [seance_core], ghost_ui: [ghost_theme]}
   klabautermann:
     scan: [packages, app]
@@ -2308,8 +2309,10 @@ matching row applies:
     clock skew Séance allows, `SP/inbox/inbox.dart:30` [V]) is kept and
     flagged "server clock ahead" rather than refused, so a skewed host
     clock cannot silence alerts [E]. A valid item whose `check` is `test`
-    (9.3) is never announced: the device that started the test reports it
-    passed and deletes it; other devices skip it. Like Séance, an item of a known sender
+    (9.3) is never listed or announced: the device that started the test
+    reports it passed and deletes it; other devices open and validate it
+    like any item (a failure counts against its sender) and then skip it
+    without deleting it. Like Séance, an item of a known sender
     that fails to open or validate is deleted and counted against its
     sender, shown in its settings row; an item with a higher `v` is left on
     the server and shown as "alert in a newer format, update
@@ -3315,9 +3318,11 @@ palette) and presets in the preview. v1: paste from Séance and Poltergeist
 - A rootful Podman variant [U: Podman service inside the fixture].
   systemd inside a CI container is [U]. The GitHub-hosted Ubuntu runner
   VM is itself a systemd host (systemd 255 on `ubuntu-24.04`) with
-  passwordless sudo [R]: a `klabautermann_integration` leg reaches it over
-  SSH on loopback as throwaway users (one with password sudo, one with a
-  NOPASSWD rule scoped to `docker`) and covers `systemctl`, `journalctl`,
+  passwordless sudo [R]: a `klabautermann_integration` leg starts sshd and
+  reaches it over SSH on loopback as throwaway users created by the job
+  (one with password sudo, its password generated at job start and never
+  committed or echoed; one with a NOPASSWD rule scoped to `docker`) and
+  covers `systemctl`, `journalctl`,
   `systemd-run` system and `--user`, linger, the elevation prelude
   against a real sudo and the detached runners. Older systemd (239, 245)
   and the remaining host classes rely on recorded fixtures from real hosts
