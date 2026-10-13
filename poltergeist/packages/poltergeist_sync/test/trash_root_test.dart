@@ -1,6 +1,7 @@
 @TestOn('vm')
 library;
 
+import 'dart:async';
 import 'dart:io';
 
 import 'package:poltergeist_core/poltergeist_core.dart';
@@ -50,4 +51,129 @@ void main() {
       isFalse,
     );
   });
+
+  group('a staged marker from another claim', () {
+    late Directory root;
+
+    setUp(() async {
+      final scratch = await Directory.systemTemp.createTemp(
+        'poltergeist-trash-root-',
+      );
+      addTearDown(() async {
+        if (await scratch.exists()) await scratch.delete(recursive: true);
+      });
+      root = Directory(_context.join(scratch.path, 'trash'))..createSync();
+    });
+
+    Future<SyncTrashRootIdentity> claim([RemoteFileSystem? fileSystem]) =>
+        resolveSyncTrashRoot(
+          fileSystem ?? LocalFileSystem(),
+          root.path,
+          pathStyle: _style,
+          access: SyncTrashRootAccess.createOrClaim,
+        );
+
+    Directory stage(String? identity) {
+      final candidate = Directory(
+        _context.join(root.path, '$syncTrashRootMarkerName.init-${'a' * 32}'),
+      )..createSync();
+      if (identity != null) {
+        File(
+          _context.join(candidate.path, 'identity'),
+        ).writeAsStringSync(identity);
+      }
+      return candidate;
+    }
+
+    test('still being written, it is waited out, not refused', () async {
+      final first = _StalledClaimFs();
+      final firstClaim = claim(first);
+      await first.staged.future;
+
+      // The root holds only the first claim's candidate, with no identity.
+      final second = await claim();
+      first.release.complete();
+
+      expect((await firstClaim).rootId, second.rootId);
+      expect(root.listSync().map((entry) => _context.basename(entry.path)), [
+        syncTrashRootMarkerName,
+      ]);
+    });
+
+    test('left unfinished by a claim that stopped, it is adopted', () async {
+      for (final identity in [null, '', 'poltergeist-sync-trash-v1:0123']) {
+        final candidate = stage(identity);
+
+        await expectLater(claim(), completes, reason: '$identity');
+
+        Directory(
+          _context.join(root.path, syncTrashRootMarkerName),
+        ).deleteSync(recursive: true);
+        candidate.deleteSync(recursive: true);
+      }
+    });
+
+    test('holding anything but a marker, it still fails closed', () async {
+      stage('poltergeist-sync-trash-v1:not-hex');
+
+      await expectLater(
+        claim(),
+        throwsA(
+          isA<RemoteFileException>().having(
+            (error) => error.kind,
+            'kind',
+            RemoteFileErrorKind.conflict,
+          ),
+        ),
+      );
+      expect(
+        Directory(
+          _context.join(root.path, syncTrashRootMarkerName),
+        ).existsSync(),
+        isFalse,
+      );
+    });
+  });
+}
+
+final _style = Platform.isWindows
+    ? SyncTrashPathStyle.windows
+    : SyncTrashPathStyle.posix;
+final _context = syncTrashPathContext(_style);
+
+/// Holds the first marker claim after it stages its candidate directory
+/// and before it writes the identity, so a second claim lists the root
+/// while the first is mid-write.
+final class _StalledClaimFs extends LocalFileSystem {
+  final staged = Completer<void>();
+  final release = Completer<void>();
+
+  @override
+  Future<RemoteFileEntry> upload(
+    String path,
+    Stream<List<int>> content, {
+    int? length,
+    bool overwrite = false,
+    int? preserveMode,
+    RemoteFileEntry? expectedTarget,
+    RemoteTransferProgress? onProgress,
+    RemoteTransferCancellation? cancellation,
+    bool computeHash = true,
+  }) async {
+    if (!staged.isCompleted) {
+      staged.complete();
+      await release.future;
+    }
+    return super.upload(
+      path,
+      content,
+      length: length,
+      overwrite: overwrite,
+      preserveMode: preserveMode,
+      expectedTarget: expectedTarget,
+      onProgress: onProgress,
+      cancellation: cancellation,
+      computeHash: computeHash,
+    );
+  }
 }
