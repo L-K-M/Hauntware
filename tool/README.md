@@ -62,5 +62,6 @@ dart run tool/license_gate/bin/check.dart [--marker-only]
   the `poltergeist` product.
 
 Without `--product`, the import and protocol guards check every configured
-product: `seance`, `planchette` and `poltergeist`. Reported paths are
-repository-root-relative, so they carry the product directory as a prefix.
+product: `seance`, `planchette`, `poltergeist` and `klabautermann`. Reported
+paths are repository-root-relative, so they carry the product directory as a
+prefix.

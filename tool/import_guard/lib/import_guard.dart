@@ -57,7 +57,7 @@ Future<List<String>> checkImports(
   }
 
   for (final area in product.scan) {
-    final directory = Directory(p.join(productRoot, area));
+    final directory = _scanRoot(productRoot, area);
     await for (final file in dartSources(
       directory,
       productRoot,
@@ -202,7 +202,8 @@ Future<List<String>> _checkPackage(
 
   for (final manifest in manifests) {
     _checkDartssh2Dependencies(manifest, package, product, violations);
-    for (final dependency in dependencyNames(manifest, dependencySections)) {
+    final dependencies = dependencyNames(manifest, dependencySections).toSet();
+    for (final dependency in dependencies) {
       if (_matchesAny(package.forbidden, dependency)) {
         violations.add(
           '${_reported(product, relative)}: forbidden dependency $dependency',
@@ -236,7 +237,10 @@ Future<List<String>> _checkPackage(
       );
       continue;
     }
-    for (final dependency in dependencyNames(manifest, dependencySections)) {
+    for (final dependency in dependencyNames(
+      manifest,
+      dependencySections,
+    ).toSet()) {
       final forbidden = await package.graph.flutterDependency(dependency);
       if (forbidden != null) {
         violations.add(
@@ -358,7 +362,10 @@ Future<List<String>> _checkSource(
         continue;
       }
       if (packageName == null) continue;
-      final forbidden = await package!.graph.flutterDependency(packageName);
+      if (package == null) {
+        throw StateError('Pure package not scanned for: $relative');
+      }
+      final forbidden = await package.graph.flutterDependency(packageName);
       if (forbidden != null) {
         violations.add(
           '${_reported(product, relative)}: Flutter/plugin import/export '

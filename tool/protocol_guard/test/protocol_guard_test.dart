@@ -356,6 +356,25 @@ mixin Hooks { final callback = () {}; }
     expect(await checkProtocol(fixture._root.path, seance), isEmpty);
   });
 
+  test('a guards config omitting engine_protocol fails closed at parse', () {
+    const missingKey = '''
+products:
+  seance:
+    scan: [packages, app]
+    pure_packages: [packages/seance_core]
+    dartssh2_imports: []
+    dartssh2_dependents: []
+    engine_protocol_callback_owners: {}
+''';
+    expect(
+      () => GuardsConfig.parse(
+        loadYaml(missingKey),
+        source: 'guards.yaml',
+      ).product('seance'),
+      throwsFormatException,
+    );
+  });
+
   test('fails closed on an empty engine directory', () async {
     await File(p.join(fixture._root.path, '$_engine/protocol.dart')).delete();
     await expectLater(fixture._check(), throwsFormatException);
