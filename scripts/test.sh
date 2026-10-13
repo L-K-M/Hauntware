@@ -2,7 +2,7 @@
 # Root test orchestrator for the Hauntware monorepo.
 #
 # Runs the root suite tooling plus the pure-Dart and Flutter suites of
-# all three subtrees (planchette/, seance/, poltergeist/) from their
+# every subtree (planchette/, seance/, poltergeist/, klabautermann/) from their
 # actual working
 # directories — each subtree keeps its own pub workspace, and pub
 # resolves per subtree root, so dependencies are resolved SEQUENTIALLY
@@ -129,6 +129,22 @@ if [[ "$scope" != flutter ]]; then
     run test/integration/test-fixture-safety.sh
     run bash -c 'source test/integration/lib/fixture.sh && check_rendered_config'
     run dart run tool/license_gate/bin/check.dart --marker-only
+  )
+
+  # ---- Klabautermann: pure-Dart workspace packages (the app does not
+  # exist yet). The sampler's shell test runs dash and bash where present.
+  (
+    cd klabautermann
+    run dart pub get
+    dirs=()
+    for package in packages/*; do
+      [[ -d "$package" ]] || continue
+      run dart analyze --fatal-infos "$package"
+      [[ -d "$package/test" ]] && dirs+=("$package")
+    done
+    run dart format --output=none --set-exit-if-changed packages
+    ((${#dirs[@]} > 0)) || { echo "no package has a test/ directory" >&2; exit 1; }
+    run dart test --reporter expanded "${dirs[@]}"
   )
 fi
 

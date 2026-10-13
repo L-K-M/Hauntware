@@ -1,0 +1,73 @@
+{
+  "result": {
+    "mounts": [
+      {
+        "device": "/dev/mapper/debian--vg-root",
+        "type": "ext4",
+        "mountPoint": "/",
+        "sizeBytes": 492869091328,
+        "usedBytes": 268435456000,
+        "availBytes": 199229803520,
+        "capacityPercent": 58,
+        "inodesTotal": 30531584,
+        "inodesUsed": 524288,
+        "inodesFree": 30007296,
+        "inodeUsePercent": 2
+      },
+      {
+        "device": "tmpfs",
+        "type": "tmpfs",
+        "mountPoint": "/run",
+        "sizeBytes": 16777216,
+        "usedBytes": 0,
+        "availBytes": 16777216,
+        "capacityPercent": 0,
+        "inodesTotal": 2048000,
+        "inodesUsed": 800,
+        "inodesFree": 2047200,
+        "inodeUsePercent": 1
+      },
+      {
+        "device": "/dev/sda1",
+        "type": "ext2",
+        "mountPoint": "/boot",
+        "sizeBytes": 502831104,
+        "usedBytes": 104857600,
+        "availBytes": 373293056,
+        "capacityPercent": 22,
+        "inodesTotal": 32768,
+        "inodesUsed": 350,
+        "inodesFree": 32418,
+        "inodeUsePercent": 2
+      },
+      {
+        "device": "192.168.1.10:/volume1/backups",
+        "type": "nfs4",
+        "mountPoint": "/mnt/backup",
+        "sizeBytes": 1932735283200,
+        "usedBytes": 1610612736000,
+        "availBytes": 322122547200,
+        "capacityPercent": 84,
+        "inodesTotal": 12000000,
+        "inodesUsed": 9000000,
+        "inodesFree": 3000000,
+        "inodeUsePercent": 75
+      },
+      {
+        "device": "tmpfs",
+        "type": "tmpfs",
+        "mountPoint": "/run/user/1000",
+        "sizeBytes": 1677721,
+        "usedBytes": 1024,
+        "availBytes": 1676697,
+        "capacityPercent": 1,
+        "inodesTotal": 409600,
+        "inodesUsed": 42,
+        "inodesFree": 409558,
+        "inodeUsePercent": 1
+      }
+    ],
+    "timeoutAbsent": false
+  },
+  "warnings": []
+}

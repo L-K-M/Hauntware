@@ -1,0 +1,18 @@
+== blocks ==
+Filesystem              Type 1B-blocks        Used    Available Capacity Mounted on
+/dev/mapper/ubuntu--vg-ubuntu--lv
+                        ext4 107321753600  45634027520  56180822016      45% /
+tmpfs                   tmpfs    828112896      1048576    827064320       1% /run
+/dev/nvme0n1p2          ext4   2013265920    306184192   1586225152      17% /boot
+/dev/nvme0n1p1          vfat    1122070528      6488064   1115582464       1% /boot/efi
+tmpfs                   tmpfs   4140552192           0   4140552192       0% /dev/shm
+tmpfs                   tmpfs     5242880       12288      5230592       1% /run/user/1000
+== inodes ==
+Filesystem              Inodes   IUsed    IFree IUse% Mounted on
+/dev/mapper/ubuntu--vg-ubuntu--lv
+                       6710880  812345 5898535   13% /
+tmpfs                   504420    1100  503320    1% /run
+/dev/nvme0n1p2          122880     350  122530    1% /boot
+/dev/nvme0n1p1               0       0       0     - /boot/efi
+tmpfs                  1008840      80 1008760    1% /dev/shm
+tmpfs                  1008840      50 1008790    1% /run/user/1000

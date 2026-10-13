@@ -1,0 +1,73 @@
+{
+  "result": {
+    "mounts": [
+      {
+        "device": "dev",
+        "type": "devtmpfs",
+        "mountPoint": "/dev",
+        "sizeBytes": 10240,
+        "usedBytes": 0,
+        "availBytes": 10240,
+        "capacityPercent": 0,
+        "inodesTotal": 255024,
+        "inodesUsed": 280,
+        "inodesFree": 254744,
+        "inodeUsePercent": 1
+      },
+      {
+        "device": "run",
+        "type": "tmpfs",
+        "mountPoint": "/run",
+        "sizeBytes": 262144,
+        "usedBytes": 1024,
+        "availBytes": 261120,
+        "capacityPercent": 1,
+        "inodesTotal": 256000,
+        "inodesUsed": 300,
+        "inodesFree": 255700,
+        "inodeUsePercent": 1
+      },
+      {
+        "device": "/dev/vda3",
+        "type": "ext4",
+        "mountPoint": "/",
+        "sizeBytes": 20971520,
+        "usedBytes": 8388608,
+        "availBytes": 12582912,
+        "capacityPercent": 40,
+        "inodesTotal": 1310720,
+        "inodesUsed": 180000,
+        "inodesFree": 1130720,
+        "inodeUsePercent": 14
+      },
+      {
+        "device": "shm",
+        "type": "tmpfs",
+        "mountPoint": "/dev/shm",
+        "sizeBytes": 524288,
+        "usedBytes": 0,
+        "availBytes": 524288,
+        "capacityPercent": 0,
+        "inodesTotal": 256000,
+        "inodesUsed": 1,
+        "inodesFree": 255999,
+        "inodeUsePercent": 1
+      },
+      {
+        "device": "/dev/vda1",
+        "type": "vfat",
+        "mountPoint": "/boot/efi",
+        "sizeBytes": 524288,
+        "usedBytes": 20480,
+        "availBytes": 503808,
+        "capacityPercent": 4,
+        "inodesTotal": 0,
+        "inodesUsed": 0,
+        "inodesFree": 0,
+        "inodeUsePercent": null
+      }
+    ],
+    "timeoutAbsent": false
+  },
+  "warnings": []
+}

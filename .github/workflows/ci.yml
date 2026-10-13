@@ -202,6 +202,47 @@ jobs:
           fi
           dart test --reporter expanded "${dirs[@]}"
 
+  # ---- Klabautermann ---------------------------------------------------
+  # Pure-Dart packages only until the app exists (plan 03 §11.6); Ubuntu
+  # only, because the sampler's shell test needs dash and bash.
+  klabautermann_dart:
+    name: Klabautermann pure-Dart packages (Ubuntu)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: klabautermann
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+      - name: Resolve workspace
+        run: dart pub get
+      # Discover packages, but keep every analyze/test path explicit.
+      - name: Analyze
+        run: |
+          set -euo pipefail
+          for package in packages/*; do
+            [[ -d "$package" ]] || continue
+            dart analyze --fatal-infos "$package"
+          done
+      - name: Check formatting
+        run: dart format --output=none --set-exit-if-changed packages
+      - name: Test
+        run: |
+          set -euo pipefail
+          dirs=()
+          for package in packages/*; do
+            [[ -d "$package/test" ]] || continue
+            dirs+=("$package")
+          done
+          if [[ ${#dirs[@]} -eq 0 ]]; then
+            echo "no package has a test/ directory yet"; exit 1
+          fi
+          dart test --reporter expanded "${dirs[@]}"
+
   # These guards use POSIX tools, Docker, or GNU timeout, not native contracts.
   dart_tools:
     name: Poltergeist Dart tooling (Ubuntu)
