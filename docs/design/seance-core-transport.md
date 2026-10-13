@@ -530,19 +530,31 @@ follows the existing split: critical for mass or unbounded destruction,
 warning for scoped data loss and lockout-class commands (`iptables -F`
 `:96-100`, the power rule `:91-95`).
 
+After F2-4 (review of #156), rows 15 to 19 and 22 to 25 were revised and
+row 26 added. The rows use three shorthands: `D` is
+`\bdocker(?:\s+-\S+(?:\s+[^\s-]\S*)?)*`, `docker` and its global
+options (`--context prod`, `-H ssh://h`); `K` is
+`(?<![\w-])kill(?![\w-])` plus a negative lookahead that skips a first
+argument of `-l`, `-L`, `--list`, `--table` or signal 0 (`-0`, `-s 0`,
+`-n 0`, `--signal 0`), forms that send no signal; only the first argument
+counts, so a `# -l` comment cannot hide `kill -9 1`; `N` is
+`(?<!\s(?:-[snq]|--signal|--queue|--timeout))`, which rejects a word
+that is a signal, queue or timeout operand rather than a PID.
+
 | # | Pattern | Severity | Explanation |
 |---|---|---|---|
-| 15 | `\bdocker\s+system\s+prune\b(?=[^\n]*(--volumes\b\|--all\b\|\s-\w*a))` (also `-af`, `-fa`) | critical | `docker system prune --all` deletes every unused image; `--volumes` also deletes unused volumes and their data. Corrected in F2-4: since Docker 23 (API 1.42) volume pruning takes only anonymous volumes, so "all unused data" overstated it |
-| 16 | `\bdocker\s+volume\s+prune\b` | critical | Removes unused volumes and their data (named ones too with `--all` or before Docker 23). Corrected in F2-4: Docker 23 prunes only anonymous volumes by default (23.0.0 release notes; `docker volume prune` reference) |
-| 17 | `\bdocker\s+volume\s+rm\b` | warning | Deletes a named volume and its data |
-| 18 | `\b(?:docker\s+compose\|docker-compose)\b[^\n]*\sdown\b(?=[^\n]*(--volumes\b\|\s-\w*v))` (also `compose -f f.yaml down -v`) | critical | `compose down -v` drops the stack's volumes |
-| 19 | `\bsystemctl\s+(?:stop\|disable\|mask)\b[^\n]*\bssh` | warning | Stopping or masking sshd cuts future SSH access to the host |
+| 15 | `D\s+system\s+prune\b(?=[^\n]*(--volumes\b\|--all\b\|\s-\w*a))` (also `-af`, `-fa`, `docker --context prod system prune -af --volumes`) | critical | `docker system prune --all` deletes every unused image; `--volumes` also deletes unused volumes and their data. Corrected in F2-4: since Docker 23 (API 1.42) volume pruning takes only anonymous volumes, so "all unused data" overstated it |
+| 16 | `D\s+volume\s+prune\b` (also `docker -H ssh://h volume prune -f`) | critical | Removes unused volumes and their data (named ones too with `--all` or before Docker 23). Corrected in F2-4: Docker 23 prunes only anonymous volumes by default (23.0.0 release notes; `docker volume prune` reference) |
+| 17 | `D\s+volume\s+(?:rm\|remove)\b` | warning | Deletes a named volume and its data. `docker volume remove` is the alias of `rm`; only global options, not arbitrary words, may precede `volume`, so `docker run alpine volume rm x` is not matched |
+| 18 | `(?:D\s+compose\|\bdocker-compose)\b[^\n]*\sdown\b(?=[^\n]*(--volumes\b\|\s-\w*v))` (also `compose -f f.yaml down -v`, `docker --context prod compose down -v`) | critical | `compose down -v` drops the stack's volumes |
+| 19 | `\bsystemctl(?:\s+-\S+(?:\s+[^\s-]\S*)?)*\s+(?:stop\|disable\|mask)\s[^\n]*\bsshd?(?![\w-])\|\bservice\s+sshd?\s+stop\b` | warning | Stopping or masking sshd cuts future SSH access to the host. Options may precede the verb (`systemctl --now disable ssh`, `-q stop sshd`, `-H prod stop sshd`); `service ssh stop` is the SysV form; the unit is `ssh` or `sshd` with an optional suffix (`ssh.socket`, `sshd@1.service`), so `sshfs`, `ssh-agent` and `sshd-keygen` are not matched |
 | 20 | `\bcrontab\b[^\n]*\s-\w*r` | warning | `crontab -r` deletes the user's whole cron table |
 | 21 | `\bufw\b(?:\s+--?\w[\w-]*)*\s+(?:reset\|disable)\b` (also `ufw --force reset`) | warning | Removes or switches off the firewall |
-| 22 | `\bnft\s+flush\s+ruleset\b` | warning | Drops the entire nftables ruleset |
-| 23 | `\buserdel\b(?![^\n]*(\s-\w*r\|--remove\b))` | warning | Removes a user account |
-| 24 | `\buserdel\b(?=[^\n]*(\s-\w*r\|--remove\b))` (`-r`, `-rf`, `-fr`) | critical | `userdel -r` also deletes the home directory |
-| 25 | `(?<![\w-])kill(?![\w-])[^\n]*(?<!\s-[snl])\s1\b` | warning | Signals PID 1, the init process or a container's main process; this can reboot the host or stop the container. Corrected in F2-4: the plan's `\bkill\b[^\n]*\s1\b` also fired on `tmux kill-session -t 1` and on a 1 that is the operand of `-s`, `-n` or `-l`; systemd re-executes on `TERM` and reboots on `INT` (systemd(1)), and PID 1 receives only signals it handles, so `-9 1` is dropped inside its namespace (pid_namespaces(7)); `kill -9 1` stays the plan's case |
+| 22 | `\bnft\s+flush\s+(?:ruleset\|table\|chain)\b` | warning | Drops nftables rules (a whole ruleset, table or chain); this can leave the host unfiltered or lock you out. A flushed table or chain keeps its base chains' policies, so a drop policy then blocks everything, the `iptables -F` case (`iptables -F INPUT` is the chain form); a flushed ruleset has no tables left and filters nothing |
+| 23 | `\buserdel\b(?![^\n]*(\s-\w*r\|--remove\b))`, or `\bdeluser` with exactly one operand, no leading `--group` and neither `--remove-home` nor `--remove-all-files` | warning | Removes a user account. `deluser NAME GROUP` only takes NAME out of GROUP and `deluser --group NAME` removes a group, so a second operand or a leading `--group` rules it out; a `#` comment counts as neither. An option that takes a value (`--conf FILE`) is read as an operand, a rare form left unflagged |
+| 24 | `\buserdel\b(?=[^\n]*(\s-\w*r\|--remove\b))\|\bdeluser\b(?=[^\n]*\s--remove-(?:home\|all-files)\b)` (`-r`, `-rf`, `-fr`) | critical | `userdel -r` and `deluser --remove-home` also delete the home directory; `deluser --remove-all-files` deletes every file the user owns. The deluser flags destroy the same unbounded user data as `userdel -r`, so they share its severity |
+| 25 | `K[^\n]*N\s1\b` | warning | Signals PID 1, the init process or a container's main process; this can reboot the host or stop the container. Corrected in F2-4: the plan's `\bkill\b[^\n]*\s1\b` also fired on `tmux kill-session -t 1` and on a 1 that is the operand of `-s`, `-n` or `-l`; systemd re-executes on `TERM` and reboots on `INT` (systemd(1)), and PID 1 receives only signals it handles, so `-9 1` is dropped inside its namespace (pid_namespaces(7)); `kill -9 1` stays the plan's case. Revised after F2-4: `--signal 1 42`, `--list 1` and `kill -0 1` (signal 0 only probes) are not PID 1, while `kill -s KILL 1` still is |
+| 26 | `K\s+\S+[^\n]*N\s-1(?=\s\|$)` | warning | Signals every process you are allowed to signal; as root that ends every service and session on the host. PID -1 is every process the caller may signal except init (kill(2)); only a `-1` after the first argument is a PID, since a leading `-1` is SIGHUP. Warning like rule 25 and the power rule: processes stop, stored data stays |
 
 Overlap with the 14 existing rules, checked rule by rule: `docker`,
 `crontab`, `ufw`, `nft`, `userdel`, `kill` have no coverage today (plan's
@@ -560,7 +572,11 @@ existing critical rule independently.
 Benign nonmatches the tests pin: `docker compose up`, `docker volume ls`,
 `docker run -v /a:/b`, `docker system df`, `systemctl status sshd`,
 `crontab -l`/`crontab -e`, `ufw status`, `nft list ruleset`, `usermod`,
-`useradd`, `kill 1000`, `docker compose down` (no `-v`).
+`useradd`, `kill 1000`, `docker compose down` (no `-v`). The revised rows
+add `systemctl stop sshfs`, `systemctl --user stop ssh-agent`,
+`service ssh restart`, `kill --signal 1 42`, `kill --list 1`,
+`kill -0 1`, `kill -1 1234`, `deluser deploy docker` and
+`docker run alpine volume rm pgdata`.
 
 **Command segments.** Every rule, the original 14 and the ones above, is
 matched against one command at a time rather than the whole line, so a

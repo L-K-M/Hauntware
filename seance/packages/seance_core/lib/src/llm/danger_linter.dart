@@ -34,6 +34,28 @@ class DangerFinding {
 /// (`userdel \` + newline + `-r deploy` is one command). [_ShellText]
 /// describes the split and its limits.
 class DangerLinter {
+  /// `docker` and any global options before its subcommand, such as
+  /// `--context prod` or `-H ssh://h`. An option's value is a word that
+  /// does not start with `-`; backtracking lets a flag without one stand
+  /// alone.
+  static const _docker = r'\bdocker(?:\s+-\S+(?:\s+[^\s-]\S*)?)*';
+
+  /// `kill`, unless its first argument means no signal is sent: -l, -L,
+  /// --list and --table print signal names, and signal 0 (-0, -s 0, -n 0,
+  /// --signal 0) only probes whether a process exists. Only the first
+  /// argument counts, so a `# -l` comment cannot hide `kill -9 1`. The
+  /// (?<![\w-]) and (?![\w-]) guards leave pkill, killall and tmux's
+  /// kill-session alone.
+  static const _kill =
+      r'(?<![\w-])kill(?![\w-])'
+      r'(?!\s+(?:-[lL]\b|--list\b|--table\b|-0\b|-[sn]\s*0\b'
+      r'|--signal[=\s]\s*0\b))';
+
+  /// Rejects a word that is the operand of a signal, queue or timeout
+  /// option, so it is not read as a PID.
+  static const _notOptionOperand =
+      r'(?<!\s(?:-[snq]|--signal|--queue|--timeout))';
+
   static final List<_Rule> _rules = [
     _Rule(
       // A recursive/forced rm whose target is an ABSOLUTE path (/, /etc,
@@ -124,20 +146,22 @@ class DangerLinter {
       // 1.42) volume pruning takes only anonymous volumes unless
       // `docker volume prune` gets --all; older engines take named ones too.
       RegExp(
-        r'\bdocker\s+system\s+prune\b(?=[^\n]*(--volumes\b|--all\b|\s-\w*a))',
+        '$_docker'
+        r'\s+system\s+prune\b(?=[^\n]*(--volumes\b|--all\b|\s-\w*a))',
       ),
       DangerSeverity.critical,
       'docker system prune --all deletes every unused image; --volumes also '
       'deletes unused volumes and their data.',
     ),
     _Rule(
-      RegExp(r'\bdocker\s+volume\s+prune\b'),
+      RegExp('$_docker' r'\s+volume\s+prune\b'),
       DangerSeverity.critical,
       'Removes unused volumes and their data (named ones too with --all or '
       'before Docker 23).',
     ),
     _Rule(
-      RegExp(r'\bdocker\s+volume\s+rm\b'),
+      // `docker volume remove` is an alias of rm.
+      RegExp('$_docker' r'\s+volume\s+(?:rm|remove)\b'),
       DangerSeverity.warning,
       'Deletes a named volume and its data.',
     ),
@@ -145,16 +169,25 @@ class DangerLinter {
       // Options may sit between compose and down (`-f f.yaml`, `-p web`);
       // only -v/--volumes after down drops volumes.
       RegExp(
-        r'\b(?:docker\s+compose|docker-compose)\b[^\n]*\sdown\b'
+        '(?:$_docker'
+        r'\s+compose|\bdocker-compose)\b[^\n]*\sdown\b'
         r'(?=[^\n]*(--volumes\b|\s-\w*v))',
       ),
       DangerSeverity.critical,
       'compose down -v drops the stack\'s volumes.',
     ),
     _Rule(
-      // Matches ssh, sshd, ssh.service and ssh.socket; status and restart
-      // leave access intact and are not flagged.
-      RegExp(r'\bsystemctl\s+(?:stop|disable|mask)\b[^\n]*\bssh'),
+      // Options, with or without a value, may come before the verb
+      // (systemctl --now disable ssh, systemctl -H prod stop sshd), and
+      // service(8) takes the unit first. The unit is ssh or sshd with an
+      // optional suffix (ssh.socket, sshd@1.service), so sshfs, ssh-agent
+      // and sshd-keygen are not matched; status and restart leave access
+      // intact.
+      RegExp(
+        r'\bsystemctl(?:\s+-\S+(?:\s+[^\s-]\S*)?)*\s+(?:stop|disable|mask)\s'
+        r'[^\n]*\bsshd?(?![\w-])'
+        r'|\bservice\s+sshd?\s+stop\b',
+      ),
       DangerSeverity.warning,
       'Stopping or masking sshd cuts future SSH access to the host.',
     ),
@@ -170,36 +203,72 @@ class DangerLinter {
       'Removes or switches off the firewall.',
     ),
     _Rule(
-      RegExp(r'\bnft\s+flush\s+ruleset\b'),
+      // A flushed table or chain keeps its base chains' policies, so a drop
+      // policy then blocks everything, as after `iptables -F` above; a
+      // flushed ruleset has no tables left and filters nothing.
+      RegExp(r'\bnft\s+flush\s+(?:ruleset|table|chain)\b'),
       DangerSeverity.warning,
-      'Drops the entire nftables ruleset.',
+      'Drops nftables rules (a whole ruleset, table or chain); this can '
+      'leave the host unfiltered or lock you out.',
     ),
-    // The two userdel rules are mutually exclusive: the same -r/--remove
-    // condition is a negative lookahead here and a positive one below, so a
-    // command gets one finding at the right severity. The match is
-    // case-sensitive because -R (--root) names a chroot, not a removal.
+    // The two account rules are mutually exclusive: each command's removal
+    // flags are a negative lookahead here and a positive one below, so a
+    // command gets one finding at the right severity. userdel is matched
+    // case-sensitively because -R (--root) names a chroot, not a removal.
+    // deluser NAME removes an account but deluser NAME GROUP only takes
+    // NAME out of GROUP, and deluser --group NAME removes a group, so a
+    // second operand or a leading --group rules the warning out. Neither
+    // test reads a `#` comment, so a comment cannot hide the command. An
+    // option that takes a value (--conf FILE) is read as an operand, which
+    // misses that rare form. deluser --remove-home and --remove-all-files
+    // destroy the home directory or more, so they are critical like
+    // userdel -r.
     _Rule(
-      RegExp(r'\buserdel\b(?![^\n]*(\s-\w*r|--remove\b))'),
+      RegExp(
+        r'\buserdel\b(?![^\n]*(\s-\w*r|--remove\b))'
+        r'|\bdeluser(?![^\n]*\s--remove-(?:home|all-files)\b)'
+        r'(?:\s+(?!--group\b)-\S+)*\s+[^\s<>#-][^\s<>]*(?=\s|$)'
+        r'(?!(?:\s+-\S+)*\s+[^\s<>#-][^\s<>]*(?=\s|$))',
+      ),
       DangerSeverity.warning,
       'Removes a user account.',
     ),
     _Rule(
-      RegExp(r'\buserdel\b(?=[^\n]*(\s-\w*r|--remove\b))'),
+      RegExp(
+        r'\buserdel\b(?=[^\n]*(\s-\w*r|--remove\b))'
+        r'|\bdeluser\b(?=[^\n]*\s--remove-(?:home|all-files)\b)',
+      ),
       DangerSeverity.critical,
-      'userdel -r also deletes the home directory.',
+      'userdel -r and deluser --remove-home also delete the home '
+      'directory; deluser --remove-all-files deletes every file the user '
+      'owns.',
     ),
     _Rule(
       // `\s1\b` needs a standalone 1, so PIDs such as 1000 and job specs
-      // such as %1 do not match, and a 1 that is the operand of -s, -n or
-      // -l is a signal, not a PID. The (?<![\w-]) and (?![\w-]) guards
-      // leave pkill, killall and tmux's kill-session alone. PID 1 only
-      // receives signals it handles (pid_namespaces(7)): systemd
-      // re-executes on TERM but reboots on INT (systemd(1)), and a
-      // container's main process usually exits on TERM.
-      RegExp(r'(?<![\w-])kill(?![\w-])[^\n]*(?<!\s-[snl])\s1\b'),
+      // such as %1 do not match, and a 1 that is the operand of -s, -n,
+      // --signal and the like is a signal, not a PID. PID 1 only receives
+      // signals it handles (pid_namespaces(7)): systemd re-executes on TERM
+      // but reboots on INT (systemd(1)), and a container's main process
+      // usually exits on TERM.
+      RegExp('$_kill' r'[^\n]*' '$_notOptionOperand' r'\s1\b'),
       DangerSeverity.warning,
       'Signals PID 1, the init process or a container\'s main process; '
       'this can reboot the host or stop the container.',
+    ),
+    _Rule(
+      // PID -1 is every process the caller may signal (kill(2)). Only a
+      // -1 after the first argument is a PID: a leading -1 is SIGHUP. This
+      // warns like the PID 1 and power rules: processes stop, stored data
+      // stays.
+      RegExp(
+        '$_kill'
+        r'\s+\S+[^\n]*'
+        '$_notOptionOperand'
+        r'\s-1(?=\s|$)',
+      ),
+      DangerSeverity.warning,
+      'Signals every process you are allowed to signal; as root that ends '
+      'every service and session on the host.',
     ),
   ];
 

@@ -190,12 +190,16 @@ Host bastion db
             'docker system prune -af',
             'docker system prune -fa',
             'sudo docker system prune --all --force',
+            // Global options may precede the subcommand.
+            'docker --context prod system prune -af --volumes',
+            'docker -H ssh://h --debug system prune --all',
           ],
           misses: [
             'docker system prune',
             'docker system prune -f',
             'docker system prune --filter until=24h',
             'docker system df',
+            'docker --context prod system df',
           ],
         ),
         (
@@ -207,8 +211,14 @@ Host bastion db
             'docker volume prune',
             'docker volume prune -f',
             'sudo docker volume prune --all',
+            'docker -H ssh://h volume prune -f',
+            'docker --context=prod volume prune',
           ],
-          misses: ['docker volume ls', 'docker volume inspect pgdata'],
+          misses: [
+            'docker volume ls',
+            'docker volume inspect pgdata',
+            'docker --context prod volume ls',
+          ],
         ),
         (
           explanation: 'Deletes a named volume and its data.',
@@ -216,11 +226,17 @@ Host bastion db
           fires: [
             'docker volume rm pgdata',
             'docker volume rm -f pgdata cache',
+            'docker volume remove pgdata',
+            'docker --context prod volume rm pgdata',
+            'docker -c prod volume remove pgdata',
           ],
+          // Only global options, not arbitrary words, may sit between
+          // docker and the subcommand.
           misses: [
             'docker volume ls',
             'docker volume create pgdata',
             'docker rm -f web',
+            'docker run alpine volume rm pgdata',
           ],
         ),
         (
@@ -232,12 +248,15 @@ Host bastion db
             'docker compose -f f.yaml down -v',
             'docker-compose down -v',
             'docker compose -p web down --rmi all -v',
+            'docker --context prod compose down -v',
+            'docker --debug compose -f f.yaml down --volumes',
           ],
           misses: [
             'docker compose down',
             'docker compose down --remove-orphans',
             'docker compose up -d',
             'docker run -v /a:/b nginx',
+            'docker --context prod compose down',
           ],
         ),
         (
@@ -249,11 +268,26 @@ Host bastion db
             'sudo systemctl disable ssh',
             'systemctl mask ssh.service',
             'systemctl disable --now ssh.socket',
+            // Options before the verb.
+            'systemctl --now disable ssh',
+            'systemctl -q stop sshd',
+            'systemctl --no-wall mask ssh.socket',
+            'systemctl -H prod stop sshd',
+            'systemctl stop sshd@1.service',
+            'service ssh stop',
+            'sudo service sshd stop',
           ],
+          // sshfs, ssh-agent and sshd-keygen are other units.
           misses: [
             'systemctl status sshd',
             'systemctl restart sshd',
+            'systemctl -q restart sshd',
             'systemctl stop nginx',
+            'systemctl stop sshfs',
+            'systemctl --user stop ssh-agent',
+            'systemctl stop sshd-keygen.service',
+            'service ssh restart',
+            'service ssh status',
           ],
         ),
         (
@@ -280,10 +314,17 @@ Host bastion db
           ],
         ),
         (
-          explanation: 'Drops the entire nftables ruleset.',
+          explanation:
+              'Drops nftables rules (a whole ruleset, table or chain); this '
+              'can leave the host unfiltered or lock you out.',
           severity: warning,
-          fires: ['nft flush ruleset', 'sudo nft flush ruleset'],
-          misses: ['nft list ruleset'],
+          fires: [
+            'nft flush ruleset',
+            'sudo nft flush ruleset',
+            'nft flush table inet filter',
+            'nft flush chain inet filter input',
+          ],
+          misses: ['nft list ruleset', 'nft list table inet filter'],
         ),
         (
           explanation: 'Removes a user account.',
@@ -293,15 +334,29 @@ Host bastion db
             'userdel deploy',
             'userdel -f deploy',
             'userdel -R /mnt/chroot deploy',
+            'deluser deploy',
+            'sudo deluser --quiet deploy',
+            'deluser deploy >/dev/null 2>&1',
+            // A comment is not a second operand or a --group flag.
+            'deluser deploy # leaves the group alone',
+            'deluser deploy # --group',
           ],
+          // deluser NAME GROUP only takes NAME out of GROUP.
           misses: [
             'userdel -r deploy',
             'usermod -L deploy',
             'useradd -m deploy',
+            'deluser deploy docker',
+            'deluser --group staff',
+            'delgroup staff',
+            'deluser --remove-home deploy',
           ],
         ),
         (
-          explanation: 'userdel -r also deletes the home directory.',
+          explanation:
+              'userdel -r and deluser --remove-home also delete the home '
+              'directory; deluser --remove-all-files deletes every file the '
+              'user owns.',
           severity: critical,
           fires: [
             'userdel -r deploy',
@@ -309,8 +364,16 @@ Host bastion db
             'userdel -fr deploy',
             'userdel --remove deploy',
             'sudo userdel -r deploy',
+            'deluser --remove-home deploy',
+            'sudo deluser --remove-all-files deploy',
+            'deluser deploy --remove-home',
           ],
-          misses: ['userdel deploy', 'userdel -f deploy'],
+          misses: [
+            'userdel deploy',
+            'userdel -f deploy',
+            'deluser deploy',
+            'deluser deploy sudo',
+          ],
         ),
         (
           explanation:
@@ -324,6 +387,11 @@ Host bastion db
             'kill -s INT 1',
             'kill -s 1 1',
             'sudo kill -HUP 1',
+            'kill -s KILL 1',
+            'kill --signal KILL 1',
+            'kill -- 1',
+            // Only the first argument can make it a listing or a probe.
+            'kill -9 1 # -l',
           ],
           // A longer PID, a job spec, -1 as the signal, a signal or -l
           // operand, and tmux's hyphenated kill-* commands are not PID 1.
@@ -337,6 +405,39 @@ Host bastion db
             'kill -l 1',
             'tmux kill-session -t 1',
             'tmux kill-window -t 1',
+            // Long forms of a signal or list operand, and signal 0, which
+            // only probes whether the process exists.
+            'kill --signal 1 42',
+            'kill --signal=1 42',
+            'kill --list 1',
+            'kill -0 1',
+            'kill -s 0 1',
+            'kill --signal 0 1',
+            // PID -1 is the next rule.
+            'kill -9 -1',
+          ],
+        ),
+        (
+          explanation:
+              'Signals every process you are allowed to signal; as root that '
+              'ends every service and session on the host.',
+          severity: warning,
+          fires: [
+            'kill -9 -1',
+            'kill -- -1',
+            'kill -s KILL -1',
+            'kill -TERM -1',
+            'kill -1 -1',
+            'sudo kill -HUP -1',
+          ],
+          // A leading -1 is the signal (HUP); -12345 is a process group.
+          misses: [
+            'kill -1 1234',
+            'kill -1',
+            'kill -9 -12345',
+            'kill -0 -1',
+            'kill -l -1',
+            'pkill -9 -1',
           ],
         ),
       ];
