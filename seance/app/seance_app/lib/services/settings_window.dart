@@ -7,6 +7,7 @@ import 'package:ghost_desktop/ghost_desktop.dart';
 import '../app_state.dart';
 import '../theme/app_appearance.dart';
 import '../theme/theme_palette.dart';
+import '../theme/theme_presets.dart';
 import '../ui/terminal_appearance.dart';
 import 'app_settings.dart';
 import 'app_lock.dart';
@@ -171,7 +172,7 @@ class SettingsWindowHost {
       case SettingsLinkMethod.setAppearance:
         final json = map();
         await _backend.setAppearance(
-          ThemePalette.decodeStored(json['palette']),
+          seanceThemeCodec.decodeStored(json['palette']),
           ThemeModePreference.values.byName(json['mode'] as String),
         );
       case SettingsLinkMethod.setEditorRegistry:
@@ -264,7 +265,7 @@ class RemoteSettingsBackend extends GhostSettingsWindowClient<SettingsTab>
   /// tab re-themes the window it is made in as well as the app.
   ValueListenable<AppAppearance> get appearance => _appearance;
   final ValueNotifier<AppAppearance> _appearance = ValueNotifier(
-    AppAppearance.initial,
+    seanceInitialAppearance,
   );
 
   /// Say hello to the app and take its first snapshot. Throws a

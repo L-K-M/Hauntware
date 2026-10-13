@@ -2,15 +2,19 @@ import 'dart:convert';
 
 import 'package:flutter/painting.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:seance_app/theme.dart';
-import 'package:seance_app/theme/theme_palette.dart';
-import 'package:seance_app/theme/theme_presets.dart';
+import 'package:ghost_theme/ghost_theme.dart';
+
+import 'support/host_styles.dart';
 
 /// The theme as a stored value: the hex forms people paste, the lenient
 /// decode a hand-edited settings file gets, and the preset identity that
 /// names a palette.
+///
+/// Moved from Séance's `test/theme_palette_test.dart` when the model left
+/// the app: every assertion is the app's, bound to [seancePresets] and
+/// [seanceCodec], the host the suite ran against.
 void main() {
-  ThemePalette roundTrip(ThemePalette palette) => ThemePalette.fromJson(
+  ThemePalette roundTrip(ThemePalette palette) => seanceCodec.fromJson(
     (jsonDecode(jsonEncode(palette.toJson())) as Map).cast<String, Object?>(),
   );
 
@@ -61,9 +65,9 @@ void main() {
 
   group('lenient decode', () {
     test('an empty object is Séance, the all-Automatic preset', () {
-      final palette = ThemePalette.fromJson(const {});
-      expect(palette.name, ThemePresets.seance.name);
-      expect(palette.accent, ThemePresets.seance.accent);
+      final palette = seanceCodec.fromJson(const {});
+      expect(palette.name, seancePresets.brand.name);
+      expect(palette.accent, seancePresets.brand.accent);
       for (final slot in ThemeSlot.values) {
         expect(palette.slot(slot), isNull, reason: slot.name);
       }
@@ -71,11 +75,11 @@ void main() {
       expect(palette.fontFamily, isNull);
       expect(palette.cornerScale, 1);
       // Its values are Séance's, so it is that preset again.
-      expect(palette.matchingPreset, same(ThemePresets.seance));
+      expect(seancePresets.matching(palette), same(seancePresets.brand));
     });
 
     test('a bad value costs only itself', () {
-      final palette = ThemePalette.fromJson(const {
+      final palette = seanceCodec.fromJson(const {
         'name': 'Mine',
         'accent': 'crimson',
         'surface': '#102030',
@@ -86,20 +90,20 @@ void main() {
         'fontFamily': 12,
       });
       expect(palette.name, 'Mine');
-      expect(palette.accent, ThemePresets.seance.accent);
+      expect(palette.accent, seancePresets.brand.accent);
       expect(palette.surface, const Color(0xFF102030));
       expect(palette.text, isNull);
       expect(palette.sidebar, isNull);
       expect(palette.online, const Color(0xFF00FF00));
-      expect(palette.cornerScale, ThemePresets.seance.cornerScale);
+      expect(palette.cornerScale, seancePresets.brand.cornerScale);
       expect(palette.fontFamily, isNull);
     });
 
     test('a terminal block is taken whole or not at all', () {
-      final good = ThemePresets.solarized.terminal!.toJson();
+      final good = seancePresets.solarized.terminal!.toJson();
       expect(
         ThemeTerminalColors.fromJson(good),
-        ThemePresets.solarized.terminal,
+        seancePresets.solarized.terminal,
       );
 
       final shortAnsi = {...good, 'ansi': (good['ansi']! as List).sublist(1)};
@@ -110,7 +114,7 @@ void main() {
       final noCursor = {...good}..remove('cursor');
       for (final block in [shortAnsi, badAnsi, noCursor, 'terminal', null]) {
         expect(ThemeTerminalColors.fromJson(block), isNull, reason: '$block');
-        final palette = ThemePalette.fromJson({
+        final palette = seanceCodec.fromJson({
           'accent': '#123456',
           'terminal': block,
         });
@@ -120,27 +124,27 @@ void main() {
     });
 
     test('names are trimmed and a blank one names what it matches', () {
-      expect(ThemePalette.fromJson(const {'name': '  Ocean  '}).name, 'Ocean');
+      expect(seanceCodec.fromJson(const {'name': '  Ocean  '}).name, 'Ocean');
       expect(
-        ThemePalette.fromJson(const {'name': '   ', 'accent': '#123456'}).name,
+        seanceCodec.fromJson(const {'name': '   ', 'accent': '#123456'}).name,
         ThemePalette.customName,
       );
       expect(
-        ThemePalette.fromJson({
-          ...ThemePresets.paper.toJson(),
+        seanceCodec.fromJson({
+          ...seancePresets.paper.toJson(),
           'name': '',
         }).name,
-        ThemePresets.paper.name,
+        seancePresets.paper.name,
       );
       expect(
-        ThemePalette(name: '', accent: SeanceTheme.seed).name,
+        ThemePalette(name: '', accent: seanceStyle.seed).name,
         ThemePalette.customName,
       );
     });
 
     test('the corner scale is clamped, and NaN is the designed corner', () {
       double corners(Object value) =>
-          ThemePalette.fromJson({'cornerScale': value}).cornerScale;
+          seanceCodec.fromJson({'cornerScale': value}).cornerScale;
       expect(corners(-3), ThemePalette.minCornerScale);
       expect(corners(9), ThemePalette.maxCornerScale);
       expect(corners(double.infinity), ThemePalette.maxCornerScale);
@@ -148,7 +152,7 @@ void main() {
       expect(corners(1.25), 1.25);
       // And through copyWith, which is what the slider writes.
       expect(
-        ThemePresets.initial.copyWith(cornerScale: double.nan).cornerScale,
+        seancePresets.initial.copyWith(cornerScale: double.nan).cornerScale,
         1,
       );
     });
@@ -165,8 +169,8 @@ void main() {
         const {'name': 'Mine'},
       ]) {
         expect(
-          ThemePalette.decodeStored(stored),
-          ThemePresets.initial,
+          seanceCodec.decodeStored(stored),
+          seancePresets.initial,
           reason: '$stored',
         );
       }
@@ -176,16 +180,16 @@ void main() {
       // Every key the stored form holds but the name: a stored map with
       // only one of them is still a theme, not a stray map the default
       // replaces, so a key the gate forgets fails here.
-      final full = ThemePresets.paper.withFontFamily('Inter').toJson();
+      final full = seancePresets.paper.withFontFamily('Inter').toJson();
       expect(full.keys, contains('terminal'));
       for (final key in full.keys.where((key) => key != 'name')) {
-        final decoded = ThemePalette.decodeStored({key: full[key]});
+        final decoded = seanceCodec.decodeStored({key: full[key]});
         expect(decoded.toJson()[key], full[key], reason: key);
       }
     });
 
     test('only colours drawn over something keep their alpha', () {
-      final palette = ThemePalette.fromJson(const {
+      final palette = seanceCodec.fromJson(const {
         'accent': '#FF000080',
         'surface': '#10203080',
         'hairline': '#FFFFFF33',
@@ -204,10 +208,14 @@ void main() {
 
   group('identity', () {
     test('every preset round-trips through JSON and is recognised', () {
-      for (final preset in ThemePresets.all) {
+      for (final preset in seancePresets.all) {
         final restored = roundTrip(preset);
         expect(restored, preset, reason: preset.name);
-        expect(restored.matchingPreset, same(preset), reason: preset.name);
+        expect(
+          seancePresets.matching(restored),
+          same(preset),
+          reason: preset.name,
+        );
       }
     });
 
@@ -215,35 +223,35 @@ void main() {
       // A colour as an HSV slider produces it, whose channels come out of a
       // conversion rather than typed digits; the trip must be byte-exact.
       final picked = HSVColor.fromAHSV(1, 123.456, 0.37, 0.81).toColor();
-      final palette = ThemePresets.initial
-          .copyWith(accent: picked)
-          .relabelled();
+      final palette = seancePresets.relabel(
+        seancePresets.initial.copyWith(accent: picked),
+      );
       expect(roundTrip(palette), palette);
     });
 
     test('a preset is matched by its values, not its name', () {
-      final borrowed = ThemePresets.initial.copyWith(
-        name: ThemePresets.midnight.name,
+      final borrowed = seancePresets.initial.copyWith(
+        name: seancePresets.midnight.name,
       );
-      expect(borrowed.matchingPreset, same(ThemePresets.initial));
+      expect(seancePresets.matching(borrowed), same(seancePresets.initial));
 
-      final edited = ThemePresets.midnight.withSlot(
+      final edited = seancePresets.midnight.withSlot(
         ThemeSlot.surface,
         const Color(0xFF000000),
       );
-      expect(edited.matchingPreset, isNull);
-      expect(edited.relabelled().name, ThemePalette.customName);
+      expect(seancePresets.matching(edited), isNull);
+      expect(seancePresets.relabel(edited).name, ThemePalette.customName);
 
       // Edited back to exactly the preset, it is the preset again.
-      final restored = edited
-          .withSlot(ThemeSlot.surface, ThemePresets.midnight.surface)
-          .relabelled();
-      expect(restored.name, ThemePresets.midnight.name);
-      expect(restored, ThemePresets.midnight);
+      final restored = seancePresets.relabel(
+        edited.withSlot(ThemeSlot.surface, seancePresets.midnight.surface),
+      );
+      expect(restored.name, seancePresets.midnight.name);
+      expect(restored, seancePresets.midnight);
     });
 
     test('withSlot sets one slot and can hand it back to Automatic', () {
-      final paper = ThemePresets.paper;
+      final paper = seancePresets.paper;
       final automatic = paper.withSlot(ThemeSlot.sidebar, null);
       expect(automatic.sidebar, isNull);
       for (final slot in ThemeSlot.values) {
@@ -258,7 +266,7 @@ void main() {
     });
 
     test('Automatic values are left out of the stored form', () {
-      final json = ThemePresets.seance.toJson();
+      final json = seancePresets.brand.toJson();
       expect(json.keys, unorderedEquals(['name', 'accent', 'cornerScale']));
     });
   });
@@ -267,8 +275,8 @@ void main() {
     test('a copied theme pastes back as itself', () {
       final text = const JsonEncoder.withIndent(
         '  ',
-      ).convert(ThemePresets.vapor.toJson());
-      expect(ThemePalette.tryParse(text), ThemePresets.vapor);
+      ).convert(seancePresets.vapor.toJson());
+      expect(seanceCodec.tryParse(text), seancePresets.vapor);
     });
 
     test('text that is not a theme is refused', () {
@@ -281,12 +289,12 @@ void main() {
         '{"foo": 1}',
         '{unquoted: 1}',
       ]) {
-        expect(ThemePalette.tryParse(text), isNull, reason: text);
+        expect(seanceCodec.tryParse(text), isNull, reason: text);
       }
     });
 
     test('a partial theme pastes leniently', () {
-      final pasted = ThemePalette.tryParse('{"accent": "#0af"}');
+      final pasted = seanceCodec.tryParse('{"accent": "#0af"}');
       expect(pasted?.accent, const Color(0xFF00AAFF));
       expect(pasted?.surface, isNull);
     });

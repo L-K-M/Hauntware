@@ -638,12 +638,16 @@ Do not "simplify" these away — they are load-bearing:
   accent, nullable ("Automatic") colour slots, status colours, an optional
   terminal block, a font family and a corner scale, stored as one JSON
   object in `settings.json` (device-local) and decoded leniently: a bad
-  key costs only itself. `ThemePresets.all` are starting points copied in,
-  recognised by value (`matchingPreset`); the first (Séance, every
-  colour Automatic) must keep drawing the pre-theme look
-  (`theme_build_test.dart`) and is what partial themes and extension-less
-  host themes fall back to, while `ThemePresets.initial` (Terminal) is
-  what a new device starts in and Reset puts back.
+  key costs only itself. The model now lives in Planchette's `ghost_theme`
+  package (design docs/design/ghost-theme.md, F4b PR 1); Séance's
+  `lib/theme/*.dart` are compatibility shims plus `seanceThemeStyle`/
+  `seanceThemePresets`/`seanceThemeCodec`, its `hasTerminal: true` binding.
+  `ThemePresets.all` are starting points copied in, recognised by value
+  (`matchingPreset`); the first (Séance, every colour Automatic) must keep
+  drawing the pre-theme look (`theme_build_test.dart`) and is what partial
+  themes and extension-less host themes fall back to, while
+  `ThemePresets.initial` (Terminal) is what a new device starts in and
+  Reset puts back.
   `SeanceTheme.build` resolves Automatic slots from the sibling tables, or
   from the palette's own surface once it sets one. Hand-drawn corners opt
   in through `SeanceChrome.corner`; the MaterialApps rebuild from

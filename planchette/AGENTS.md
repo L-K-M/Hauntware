@@ -26,6 +26,9 @@ packages/
   ghost_marks/            server badges, accents and glyph tables shared by
                           Séance and Poltergeist, over seance_protocol;
                           outside the workspace
+  ghost_theme/            the editable theme palette, its stored/pasted JSON
+                          form, the shipped presets and the per-app style and
+                          codec seams; outside the workspace
 app/
   planchette_app/         Flutter client — NOT a workspace member (it needs
                           the Flutter SDK; members must not).
@@ -54,6 +57,7 @@ dart test    packages/planchette_core
 (cd packages/planchette_editor && flutter pub get && flutter analyze && flutter test)
 (cd packages/ghost_ui && flutter pub get && flutter analyze && flutter test)
 (cd packages/ghost_marks && flutter pub get && flutter analyze && flutter test)
+(cd packages/ghost_theme && flutter pub get && flutter analyze && flutter test)
 (cd app/planchette_app && flutter pub get && flutter analyze && flutter test)
 
 # Desktop app for this host, staged into dist/
