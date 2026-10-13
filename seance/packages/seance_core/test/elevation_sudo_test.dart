@@ -3,8 +3,9 @@
 // Appendix A, E8). It needs local accounts with specific sudoers rules, so
 // every group is skipped unless its environment variables name them. The
 // in-process wire fixture runs each exec as the account, without a tty, the
-// way sshd runs an exec request: through `runuser` when the test runs as
-// root, otherwise through `sudo -n -u` (a CI user with NOPASSWD sudo).
+// way sshd runs an exec request: in a new session through `setsid`, then
+// `runuser` when the test runs as root, otherwise `sudo -n -u` (a CI user
+// with NOPASSWD sudo).
 //
 //   SEANCE_SUDO_TEST_USER           password sudo: `<user> ALL=(ALL) ALL`
 //   SEANCE_SUDO_TEST_PASSWORD       the password of the two accounts below
@@ -39,7 +40,29 @@ Object _skipWithout(String variable, {bool needsPassword = true}) {
   return false;
 }
 
+/// Any configured account, for checks of the fixture itself.
+final _anyAccount =
+    _account('SEANCE_SUDO_TEST_USER') ??
+    _account('SEANCE_SUDO_TEST_NOCACHE_USER') ??
+    _account('SEANCE_SUDO_TEST_NOPASSWD_USER');
+
 void main() {
+  group('the wire fixture', () {
+    // Without this, a run from a terminal lets sudo key its cached
+    // credential to that terminal instead of the parent PID, which hides
+    // what the prelude exists for and lets a wrong password pass.
+    test('runs each exec without a controlling terminal', () async {
+      final (link: link, exits: _) = await _openAs(_anyAccount!);
+
+      final result = await link.link.run(
+        'if (exec 3</dev/tty) 2>/dev/null; then echo tty; else echo none; fi',
+        stdin: const [],
+      );
+
+      expect(result.stdout, 'none\n');
+    });
+  }, skip: _anyAccount == null ? 'no SEANCE_SUDO_TEST_*_USER is set' : false);
+
   group('password sudo', () {
     test('the probe sees password sudo and a builtin printf', () async {
       final probe = await _probe(_account('SEANCE_SUDO_TEST_USER')!);
@@ -128,7 +151,7 @@ void main() {
         final (link: link, exits: _) = await _openAs(user);
         final executor = ElevatedExecutor(link.link, probe);
 
-        final result = await executor.run(['id', '-u'], stdin: const []);
+        final result = await executor.run(['id', '-u']);
 
         expect(result.stdout, '0\n');
         expect(
@@ -141,12 +164,18 @@ void main() {
   );
 }
 
-/// The command prefix that runs a process as [user] without a tty.
+/// The command prefix that runs a process as [user] without a tty. `setsid`
+/// drops the controlling terminal a run from a terminal would otherwise
+/// pass on: `runuser` keeps it, and the outer sudo would open a pty.
 Future<List<String>> _asUser(String user) async {
   final uid = await Process.run('id', ['-u']);
-  return (uid.stdout as String).trim() == '0'
-      ? ['runuser', '-u', user, '--']
-      : ['sudo', '-n', '-u', user, '--'];
+  return [
+    'setsid',
+    '-w',
+    ...(uid.stdout as String).trim() == '0'
+        ? ['runuser', '-u', user, '--']
+        : ['sudo', '-n', '-u', user, '--'],
+  ];
 }
 
 /// The elevation facts of the host probe (03 §6.1), gathered as [user].
