@@ -103,11 +103,23 @@ const _tebibyte = 1024.0 * 1024 * 1024 * 1024;
 /// The top of an automatic scale for a series whose highest known value is
 /// [dataMax]: 100 for a percentage, so hosts compare by eye, and otherwise
 /// the next round IEC figure (500 KiB, 1 MiB, 2 MiB), so the scale label
-/// reads as a round number. An empty or all-zero series gets 1 KiB.
+/// reads as a round number. An empty or all-zero series gets 1 KiB. Debug
+/// builds assert that [dataMax] is finite; release builds give a
+/// non-finite one 1 KiB too.
 double chartScaleMax(double? dataMax, ChartUnit unit) {
   assert(dataMax == null || dataMax.isFinite, 'samples are finite');
+  return uncheckedChartScaleMax(dataMax, unit);
+}
+
+/// [chartScaleMax] without its debug check, as a release build runs it, so
+/// tests can show that a non-finite [dataMax] gets 1 KiB there too rather
+/// than an endless search.
+@visibleForTesting
+double uncheckedChartScaleMax(double? dataMax, ChartUnit unit) {
   if (unit == ChartUnit.percent) return 100;
-  if (dataMax == null || dataMax <= 0) return 1024;
+  // NaN would never meet a step and +Infinity would reach an infinite
+  // decade, so neither may enter the search below.
+  if (dataMax == null || !dataMax.isFinite || dataMax <= 0) return 1024;
   for (var unitSize = 1.0; unitSize < _tebibyte; unitSize *= 1024) {
     for (final step in _scaleSteps) {
       if (step * unitSize >= dataMax) return step * unitSize;

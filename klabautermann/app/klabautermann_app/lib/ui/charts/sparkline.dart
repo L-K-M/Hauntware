@@ -61,9 +61,6 @@ class _SparklineState extends State<Sparkline>
   );
   late int _added;
 
-  /// Read in [build], so a sample's listener needs no context lookup.
-  bool _motionReduced = false;
-
   @override
   void initState() {
     super.initState();
@@ -92,7 +89,9 @@ class _SparklineState extends State<Sparkline>
     final steppedByOne = widget.series.added == _added + 1;
     _added = widget.series.added;
     setState(() {});
-    if (!steppedByOne || _motionReduced) {
+    // Read per sample: iOS's Reduce Motion rebuilds nothing when it
+    // changes, so a value cached in build could be stale.
+    if (!steppedByOne || chartMotionReduced(context)) {
       _slide.value = 1;
       return;
     }
@@ -101,7 +100,6 @@ class _SparklineState extends State<Sparkline>
 
   @override
   Widget build(BuildContext context) {
-    _motionReduced = chartMotionReduced(context);
     final palette = ChartPalette.of(context);
     final samples = widget.series.samples;
     final highest = samples.fold<double?>(

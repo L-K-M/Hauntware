@@ -252,7 +252,8 @@ final class SshConfigImported extends EngineEvent {
   /// Hosts the import added to the fleet; zero when the config names none.
   final int importedCount;
 
-  /// Host blocks the import left out: a `Port` outside 1 to 65535, or an
+  /// Hosts the import left out: a `Port` the importer refuses (one ssh
+  /// rejects, or a service name other than `ssh`, `http` or `https`), or an
   /// alias an earlier block already took. Wildcard-only blocks such as
   /// `Host *` are defaults rather than hosts and do not count.
   final int skippedCount;

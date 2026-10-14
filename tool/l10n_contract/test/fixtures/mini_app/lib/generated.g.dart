@@ -1,0 +1,1 @@
+const generatedLabel = 'Generated copy';

@@ -1,7 +1,10 @@
 import 'dart:io';
+import 'dart:isolate';
 import 'dart:math' as math;
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:klabautermann_app/ui/charts/chart_values.dart'
+    show uncheckedChartScaleMax;
 import 'package:klabautermann_app/ui/charts/charts.dart';
 
 import '../support/charts.dart';
@@ -12,6 +15,25 @@ final _roundIecFigure = RegExp(
   r'^((1|2|5|10|20|50|100|200|500) (B|KiB|MiB|GiB)|[125]0* TiB)$',
 );
 final _decimalUnit = RegExp(r'\b(kB|KB|MB|GB|TB)\b');
+
+/// [compute]'s result from its own isolate, which is killed after [limit],
+/// so a loop that never ends fails the test instead of hanging the suite.
+Future<Object?> _inIsolate(
+  Object? Function() compute, {
+  Duration limit = const Duration(seconds: 10),
+}) async {
+  final port = ReceivePort();
+  final isolate = await Isolate.spawn(
+    (SendPort reply) => reply.send(compute()),
+    port.sendPort,
+  );
+  try {
+    return await port.first.timeout(limit);
+  } finally {
+    isolate.kill(priority: Isolate.immediate);
+    port.close();
+  }
+}
 
 /// A11Y-06 and A11Y-02: IEC-only axis and value text, and the series
 /// summary's statistics and words.
@@ -69,8 +91,9 @@ void main() {
 
     test('the charts never call a decimal size formatter', () {
       final offenders = [
-        for (final file in Directory('lib/ui/charts').listSync())
+        for (final file in Directory('lib/ui/charts').listSync(recursive: true))
           if (file is File &&
+              file.path.endsWith('.dart') &&
               RegExp(
                 r'ghostFormat(FileSize|ByteRate)\s*\(',
               ).hasMatch(file.readAsStringSync()))
@@ -78,6 +101,34 @@ void main() {
       ];
 
       expect(offenders, isEmpty);
+    });
+  });
+
+  group('a non-finite maximum', () {
+    const nonFinite = [double.nan, double.infinity, double.negativeInfinity];
+
+    test('trips the debug check', () {
+      for (final value in nonFinite) {
+        expect(
+          () => chartScaleMax(value, ChartUnit.bytes),
+          throwsAssertionError,
+          reason: '$value',
+        );
+      }
+    });
+
+    // Release builds drop the assert, so they run the unchecked path. Tests
+    // always run with asserts on, so they call that path directly.
+    test('gets 1 KiB, not an endless search, without the check', () async {
+      for (final value in nonFinite) {
+        for (final unit in [ChartUnit.bytes, ChartUnit.bytesPerSecond]) {
+          expect(
+            await _inIsolate(() => uncheckedChartScaleMax(value, unit)),
+            1024,
+            reason: '$value $unit',
+          );
+        }
+      }
     });
   });
 
