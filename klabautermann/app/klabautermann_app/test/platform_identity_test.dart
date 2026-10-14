@@ -199,7 +199,9 @@ void main() {
   });
 }
 
-String _read(String path) => File(path).readAsStringSync();
+/// Line endings normalized, so a CRLF checkout reads the same.
+String _read(String path) =>
+    File(path).readAsStringSync().replaceAll('\r\n', '\n');
 
 bool _isTextProjectFile(String path) {
   if (path.contains(
