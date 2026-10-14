@@ -352,11 +352,17 @@ abstract class AppLocalizations {
   /// **'Dark'**
   String get themeDark;
 
-  /// Top toast after a theme pick that applied but could not be written to the settings file.
+  /// Top toast after a theme pick, in Settings or the desktop settings window, that applied but could not be written to the settings file.
   ///
   /// In en, this message translates to:
   /// **'The theme changed, but it could not be saved, so it will not be kept after a restart.'**
   String get themeNotSaved;
+
+  /// Top toast shown when the app did not take a theme-mode change made in Settings.
+  ///
+  /// In en, this message translates to:
+  /// **'The theme could not be changed.'**
+  String get themeNotChanged;
 
   /// Startup notice: the settings file was damaged, set aside under a new name, and replaced with the defaults.
   ///
@@ -405,6 +411,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Your imported servers were saved by a newer version of Klabautermann. Servers you import now will not be kept after a restart.'**
   String get importsFileNewer;
+
+  /// Shown in the desktop settings window when the app does not answer it.
+  ///
+  /// In en, this message translates to:
+  /// **'Settings cannot reach Klabautermann. Close this window and open Settings again.'**
+  String get settingsWindowUnreachable;
 
   /// No description provided for @workspaceEmptyTitle.
   ///

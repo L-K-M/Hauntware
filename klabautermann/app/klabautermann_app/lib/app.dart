@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:ghost_theme/ghost_theme.dart' show GhostTheme;
 import 'package:klabautermann_core/klabautermann_core.dart'
@@ -7,13 +9,14 @@ import 'controllers/appearance_controller.dart';
 import 'controllers/fleet_controller.dart';
 import 'controllers/monitoring_controller.dart';
 import 'l10n/app_localizations.dart';
+import 'services/settings_window/settings_window_link.dart';
 import 'theme/app_theme.dart';
 import 'ui/adaptive_shell.dart';
 import 'ui/settings_page.dart';
 import 'ui/startup_issue_notice.dart';
 
-/// The settings route's name; desktop gets a second window later (D32),
-/// this stays the mobile and fallback path.
+/// The settings route's name: Settings on phones, and on a desktop whose
+/// runner cannot open the settings window (D32).
 const String kSettingsRoute = '/settings';
 
 /// The composition root's view (03 §10.1): one `MaterialApp` whose only
@@ -27,6 +30,7 @@ class KlabautermannApp extends StatelessWidget {
     required this.appearance,
     this.settingsIssue,
     this.importStoreIssue,
+    this.openSettingsWindow,
   });
 
   final FleetController fleet;
@@ -39,6 +43,32 @@ class KlabautermannApp extends StatelessWidget {
   /// What went wrong when the engine loaded `ssh_config_imports.json`,
   /// told once at startup beside [settingsIssue].
   final ImportStoreIssue? importStoreIssue;
+
+  /// Opens Settings in its own window; null on phones, where Settings is
+  /// [kSettingsRoute].
+  final OpenSettingsWindow? openSettingsWindow;
+
+  /// The settings window where there is one, otherwise the route. A window
+  /// that cannot open falls back to the route, so Settings stays reachable,
+  /// whatever it fails with (an error too, as Séance's fallback does).
+  Future<void> _openSettings(BuildContext context) async {
+    final openWindow = openSettingsWindow;
+    if (openWindow != null) {
+      try {
+        if (await openWindow(SettingsTab.general)) return;
+      } on Object catch (error, stackTrace) {
+        FlutterError.reportError(
+          FlutterErrorDetails(
+            exception: error,
+            stack: stackTrace,
+            context: ErrorDescription('while opening the settings window'),
+          ),
+        );
+      }
+    }
+    if (!context.mounted) return;
+    unawaited(Navigator.of(context).pushNamed(kSettingsRoute));
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -68,8 +98,7 @@ class KlabautermannApp extends StatelessWidget {
               builder: (context) => AdaptiveShell(
                 fleet: fleet,
                 monitoring: monitoring,
-                onOpenSettings: () =>
-                    Navigator.of(context).pushNamed(kSettingsRoute),
+                onOpenSettings: () => unawaited(_openSettings(context)),
               ),
             ),
           ),

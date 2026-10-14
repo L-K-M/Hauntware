@@ -13,6 +13,9 @@
   damaged file is kept aside as `ssh_config_imports.json.corrupt-<time>`
   and you are told at startup; an import that cannot be saved still shows
   until you quit, and you are told it will not be kept.
+- Desktop settings window: on macOS, Linux and Windows, Settings opens in
+  a window of its own, and a theme change there applies to the app.
+  Phones keep the settings page.
 - The theme you pick in Settings is kept across restarts, in this
   device's `settings.json`, which also records the device's sync id.
   A damaged settings file is kept aside as `settings.json.corrupt-<time>`

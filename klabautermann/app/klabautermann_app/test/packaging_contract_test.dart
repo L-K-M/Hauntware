@@ -22,8 +22,8 @@ const _packageName = 'klabautermann';
 const _assetStem = 'klabautermann-preview';
 
 // 04 §12.1: network, ssh-agent, the Secret Service and the display
-// sockets the siblings use, plus read-only ~/.ssh for the FL-02 import.
-// No home access.
+// sockets the siblings use, plus read-only ~/.ssh/config for the FL-02
+// import. No home access, and no other file under ~/.ssh.
 const _flatpakFinishArgs = {
   '--share=ipc',
   '--socket=wayland',
@@ -31,7 +31,7 @@ const _flatpakFinishArgs = {
   '--device=dri',
   '--share=network',
   '--socket=ssh-auth',
-  '--filesystem=~/.ssh:ro',
+  '--filesystem=~/.ssh/config:ro',
   '--talk-name=org.freedesktop.secrets',
 };
 

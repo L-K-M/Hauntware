@@ -227,7 +227,7 @@ void main() {
       expect(saved, [controller.value], reason: 'a no-op saves nothing');
     });
 
-    test('a failed save keeps the change and throws', () async {
+    test('a failed save keeps the change and says it was not saved', () async {
       final controller = AppearanceController(
         save: (_) async => throw const FileSystemException('disk full'),
       );
@@ -235,7 +235,13 @@ void main() {
 
       await expectLater(
         controller.setMode(ThemeModePreference.dark),
-        throwsA(isA<FileSystemException>()),
+        throwsA(
+          isA<AppearanceNotSavedException>().having(
+            (error) => error.message,
+            'message',
+            contains('disk full'),
+          ),
+        ),
       );
       expect(controller.mode, ThemeModePreference.dark);
     });
