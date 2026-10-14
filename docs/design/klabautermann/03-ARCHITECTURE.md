@@ -606,31 +606,40 @@ Proposals awaiting the owner close the section; they are not decisions.
   host's `cpuN` lines for the CPUs in the container's cpuset and writes
   their sum as the `cpu` line. It reads `diskstats` and `pressure/io`
   through a controller named `blkio`, which cgroup v2 calls `io`, and
-  passes the host's file through when that lookup fails. So lxcfs 5.0
-  and 6.0, which also run on legacy and hybrid cgroup layouts, serve the
-  container's own `stat` CPU times and `diskstats` only on such a host,
-  serve the host's on a cgroup v2 host, and serve no `/proc/pressure`;
-  lxcfs 7.0 and main support cgroup v2 only and always serve the host's
-  `stat` CPU times, `diskstats` and `pressure/io` [R: lxcfs
-  `src/proc_loadavg.c`, `src/proc_fuse.c` (`proc_stat_read`,
-  `proc_diskstats_read`, the pressure reader), `src/proc_cpuview.c`
-  (`read_cpuacct_usage_all`), `src/cgroups/cgfsng.c` (`cg_init`) and
+  passes the host's file through when that lookup fails. For
+  `diskstats` it also needs the cgroup v1 `blkio.io_*_recursive` files,
+  which only the CFQ scheduler provided and Linux 5.0 removed. So lxcfs
+  5.0 and 6.0, which also run on legacy and hybrid cgroup layouts, serve
+  the container's own `stat` CPU times only on such a host and its own
+  `diskstats` only there on a kernel older than 5.0, serve the host's on
+  a cgroup v2 host, and serve no `/proc/pressure`; lxcfs 7.0 and main
+  support cgroup v2 only and always serve the host's `stat` CPU times,
+  `diskstats` and `pressure/io` [R: lxcfs `src/proc_loadavg.c`,
+  `src/proc_fuse.c` (`proc_stat_read`, `proc_diskstats_read`, the
+  pressure reader), `src/proc_cpuview.c` (`read_cpuacct_usage_all`),
+  `src/cgroups/cgfsng.c` (`cg_init`, `cgfsng_get_io`) and
   `config/init/systemd/lxcfs.service.in`, at lxcfs-5.0.4, v6.0.6,
-  v7.0.0 and main `e1c5a7d`; `4e95204` removed cgroup v1 support].
+  v7.0.0 and main `e1c5a7d`; `4e95204` removed cgroup v1 support;
+  Linux `block/cfq-iosched.c` at v4.20 and `block/Makefile` at v5.0].
   Neither the flag, the lxcfs version nor, reliably, the host's cgroup
   layout shows inside the container, so these four files count as the
   host's there even as lxcfs mounts; `meminfo`, `uptime`,
   `pressure/cpu` and `pressure/memory` under lxcfs are the container's.
+  lxcfs serves the host's `meminfo`, `pressure/cpu` and
+  `pressure/memory` too when it cannot use the memory or cpu
+  controller, as on a kernel booted with `cgroup_disable=memory`; the
+  probe still trusts them there, because that setup is rare and does
+  not show reliably inside the container.
   Any lxcfs mount over `/proc` also marks a container when
   `systemd-detect-virt -c` answers `none`. *Rejected:* trusting every
   lxcfs mount (a default lxcfs container would show the host's load,
   CPU times and disk I/O as its own); trusting `stat` and `diskstats`
   when the container sees no cgroup v2 (a container without a cgroup2
   mount on a cgroup v2 host looks the same), at the cost of hiding the
-  container's own CPU times and `diskstats` that lxcfs 5.0 and 6.0
-  serve on cgroup v1 hosts; an unknown answer for those files (unknown
-  already means that the container question is open, which it is not
-  here).
+  container's own CPU times that lxcfs 5.0 and 6.0 serve on cgroup v1
+  hosts (their `diskstats` there also needs a kernel older than 5.0);
+  an unknown answer for those files (unknown already means that the
+  container question is open, which it is not here).
 - **D52. Runtime code lives outside `src/engine/`.** In
   `klabautermann_core`, links, sampling, logs and capabilities live in
   `lib/src/links/`, `lib/src/sampling/`, `lib/src/logs/` and

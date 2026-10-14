@@ -90,10 +90,18 @@ enum SystemWideProcFile {
   ///   lines for the CPUs in the container's cpuset and sums them into
   ///   the `cpu` line;
   /// - `diskstats` and `pressure/io`, for which lxcfs looks up a cgroup
-  ///   controller named `blkio`, which cgroup v2 calls `io`.
+  ///   controller named `blkio`, which cgroup v2 calls `io`. On cgroup
+  ///   v1, `diskstats` also needs the `blkio.io_*_recursive` files that
+  ///   went with the CFQ scheduler in Linux 5.0.
   ///
   /// Neither the `-l` flag, the lxcfs version nor, reliably, the host's
   /// cgroup layout shows inside the container.
+  ///
+  /// lxcfs also serves the host's `meminfo`, `pressure/cpu` and
+  /// `pressure/memory` when it cannot use the memory or cpu controller,
+  /// as on a kernel booted with `cgroup_disable=memory`. They stay
+  /// trusted: that setup is rare and does not show reliably inside the
+  /// container.
   ///
   /// `uptime`'s first field is the container's age either way. Its
   /// second, the idle time, is not the kernel's figure under lxcfs: the
