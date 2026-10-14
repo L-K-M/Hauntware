@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:klabautermann_app/ui/charts/bars.dart' show BarPainter, BarRun;
+import 'package:klabautermann_app/ui/charts/bars.dart'
+    show BarFill, BarPainter, BarRun;
 import 'package:klabautermann_app/ui/charts/charts.dart';
 
 import '../support/charts.dart';
@@ -51,21 +52,32 @@ List<PressureCell> _cells(
   PressureCell(label: 'Disk', percent: disk, thresholds: thresholds),
 ];
 
-Finder _paintIn(Type bar) => find.descendant(
+Finder _paintersIn(Type bar) => find.descendant(
   of: find.byType(bar),
   matching: find.byWidgetPredicate(
     (widget) => widget is CustomPaint && widget.painter is BarPainter,
   ),
 );
 
+/// The bar's own painter; a stacked bar's legend swatches follow it.
+Finder _paintIn(Type bar) => _paintersIn(bar).first;
+
+BarPainter _painter(WidgetTester tester, Finder paint) =>
+    tester.widget<CustomPaint>(paint).painter! as BarPainter;
+
 List<BarRun> _runsIn(WidgetTester tester, Type bar) =>
-    (tester.widget<CustomPaint>(_paintIn(bar)).painter! as BarPainter).runs;
+    _painter(tester, _paintIn(bar)).runs;
 
 BarRun _fill(double start, double end, Color color, {int cell = 0}) =>
-    (cell: cell, start: start, end: end, color: color, hatched: false);
+    (cell: cell, start: start, end: end, color: color, fill: BarFill.solid);
 
-BarRun _hatched(double start, {int cell = 0}) =>
-    (cell: cell, start: start, end: 1, color: _palette.muted, hatched: true);
+BarRun _hatched(double start, {int cell = 0}) => (
+  cell: cell,
+  start: start,
+  end: 1,
+  color: _palette.muted,
+  fill: BarFill.unknown,
+);
 
 String _label(WidgetTester tester, Type bar) =>
     tester.getSemantics(find.byType(bar)).label;
@@ -123,7 +135,12 @@ void main() {
           ),
         );
 
-        expect(_runsIn(tester, StackedBar).first.color, colour);
+        final firstRun = _runsIn(tester, StackedBar).first;
+        expect(firstRun.color, colour);
+        expect(
+          firstRun.fill,
+          severity == null ? BarFill.solid : BarFill.severe,
+        );
         final part = severity == null
             ? 'Used ${used.round()} GiB'
             : 'Used ${used.round()} GiB ($severity)';
@@ -139,6 +156,40 @@ void main() {
         semantics.dispose();
       });
     }
+
+    testWidgets('stripes a severe segment and its swatch', (tester) async {
+      await tester.pumpWidget(
+        _memory(used: 13 * _gib, cache: 0.5 * _gib, thresholds: _thresholds),
+      );
+      // Used is 13 of 16 GiB on a 200 - 4 - 14 = 182 px bar.
+      const used = 182 * 13 / 16;
+      const stripe = BarPainter.severeStripe;
+
+      expect(
+        _paintIn(StackedBar),
+        paints
+          ..rect(color: _palette.track)
+          ..rect(
+            rect: const Rect.fromLTRB(0, 0, used, 8),
+            color: _palette.warning,
+          )
+          ..rect(
+            rect: const Rect.fromLTRB(0, 4 - stripe / 2, used, 4 + stripe / 2),
+            color: _palette.track,
+          )
+          ..rect(color: _palette.series[1]),
+      );
+      // The legend draws each swatch like its segment.
+      final swatches = tester
+          .widgetList<CustomPaint>(_paintersIn(StackedBar))
+          .skip(1)
+          .map((paint) => (paint.painter! as BarPainter).runs.single);
+      expect(swatches.map((run) => (run.color, run.fill)), [
+        (_palette.warning, BarFill.severe),
+        (_palette.series[1], BarFill.solid),
+        (_palette.series[2], BarFill.solid),
+      ]);
+    });
 
     testWidgets('hatches what it cannot attribute, never a zero', (
       tester,
@@ -276,7 +327,7 @@ void main() {
       );
     });
 
-    testWidgets('shows the highest severity by colour, icon and words', (
+    testWidgets('shows severity by colour, stripe, icon and words', (
       tester,
     ) async {
       final semantics = tester.ensureSemantics();
@@ -284,10 +335,10 @@ void main() {
         _pressure(_cells(50, 92, 85, thresholds: _thresholds)),
       );
 
-      expect(_runsIn(tester, PressureBar).map((run) => run.color), [
-        _palette.series[0],
-        _palette.critical,
-        _palette.warning,
+      expect(_runsIn(tester, PressureBar).map((run) => (run.color, run.fill)), [
+        (_palette.series[0], BarFill.solid),
+        (_palette.critical, BarFill.severe),
+        (_palette.warning, BarFill.severe),
       ]);
       expect(find.byIcon(Icons.error_rounded), findsOneWidget);
       const summary = 'CPU 50%, Memory 92% (critical), Disk 85% (warning)';

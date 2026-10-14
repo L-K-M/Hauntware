@@ -43,10 +43,11 @@ final class PressureCell {
 /// tell that segment from free space, and an unknown total hatches the
 /// whole bar. [thresholds] judge the first segment's share of [total] in
 /// percent, the figure the bar is about (used memory, used disk): past a
-/// level that segment takes the severity colour, an icon beside the bar
-/// shows the severity by its shape, and the legend and the summary say it
-/// (A11Y-01). [stale] values turn every fill grey and carry no severity,
-/// because the last reading's may no longer hold (OV-04).
+/// level that segment takes the severity colour with a stripe of the track
+/// through it, an icon beside the bar shows the severity by its shape, and
+/// the legend and the summary say it (A11Y-01). [stale] values turn every
+/// fill grey and carry no severity, because the last reading's may no
+/// longer hold (OV-04).
 ///
 /// The legend names each segment with its value; screen readers get one
 /// summary instead (A11Y-02), which is not a live region (A11Y-15). The bar
@@ -156,14 +157,21 @@ class StackedBar extends StatelessWidget {
                       child: _bar(
                         palette,
                         cellCount: 1,
-                        runs: _stackedRuns(values, total, colours, palette),
+                        runs: _stackedRuns(
+                          values,
+                          total,
+                          colours,
+                          _fillOf(severity),
+                          palette,
+                        ),
                       ),
                     ),
                   ),
                   if (thresholds != null) _severitySlot(severity, palette),
                 ],
               ),
-              if (showLegend) _legend(context, palette, parts, colours),
+              if (showLegend)
+                _legend(context, palette, parts, colours, _fillOf(severity)),
             ],
           ),
         ),
@@ -171,15 +179,22 @@ class StackedBar extends StatelessWidget {
     );
   }
 
-  /// The runs of a bar whose segments have [values] out of [total].
+  /// The runs of a bar whose segments have [values] out of [total], the
+  /// first drawn as [firstFill].
   static List<BarRun> _stackedRuns(
     List<double?> values,
     double? total,
     List<Color> colours,
+    BarFill firstFill,
     ChartPalette palette,
   ) {
-    BarRun unknownFrom(double start) =>
-        (cell: 0, start: start, end: 1, color: palette.muted, hatched: true);
+    BarRun unknownFrom(double start) => (
+      cell: 0,
+      start: start,
+      end: 1,
+      color: palette.muted,
+      fill: BarFill.unknown,
+    );
     if (total == null) return [unknownFrom(0)];
 
     final runs = <BarRun>[];
@@ -193,7 +208,7 @@ class StackedBar extends StatelessWidget {
           start: start,
           end: end,
           color: colours[index],
-          hatched: false,
+          fill: index == 0 ? firstFill : BarFill.solid,
         ));
       }
       start = end;
@@ -207,6 +222,7 @@ class StackedBar extends StatelessWidget {
     ChartPalette palette,
     List<String> parts,
     List<Color> colours,
+    BarFill firstFill,
   ) {
     final style = Theme.of(
       context,
@@ -220,12 +236,22 @@ class StackedBar extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             spacing: 4,
             children: [
+              // Drawn like its segment, so a severe one keeps its stripe.
               SizedBox.square(
                 dimension: 8,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: colours[index],
-                    borderRadius: BorderRadius.circular(2),
+                child: CustomPaint(
+                  painter: BarPainter(
+                    cellCount: 1,
+                    runs: [
+                      (
+                        cell: 0,
+                        start: 0,
+                        end: 1,
+                        color: colours[index],
+                        fill: index == 0 ? firstFill : BarFill.solid,
+                      ),
+                    ],
+                    trackColor: palette.track,
                   ),
                 ),
               ),
@@ -242,10 +268,11 @@ class StackedBar extends StatelessWidget {
 /// (CPU, memory and disk, in that order), each in its fixed series colour
 /// and filled to its share.
 ///
-/// Past a threshold a cell takes the severity colour, the slot beside the
-/// cells shows the highest severity by an icon's shape, and the tooltip
-/// on hover and the summary name each metric with its value and severity
-/// (A11Y-01).
+/// Past a threshold a cell takes the severity colour with a stripe of the
+/// track through it, so the cell that crossed shows without colour; the
+/// slot beside the cells shows the highest severity by an icon's shape,
+/// and the tooltip on hover and the summary name each metric with its
+/// value and severity (A11Y-01).
 /// An unknown share hatches its cell rather than leaving it empty
 /// (03 §10.4). [stale] values turn every fill grey and carry no severity
 /// (OV-04). Its size stays the same whatever it shows, so fleet rows keep
@@ -288,7 +315,13 @@ class PressureBar extends StatelessWidget {
     final runs = <BarRun>[
       for (final (index, percent) in percents.indexed)
         if (percent == null)
-          (cell: index, start: 0, end: 1, color: palette.muted, hatched: true)
+          (
+            cell: index,
+            start: 0,
+            end: 1,
+            color: palette.muted,
+            fill: BarFill.unknown,
+          )
         else if (percent > 0)
           (
             cell: index,
@@ -298,7 +331,7 @@ class PressureBar extends StatelessWidget {
                 ? palette.muted
                 : palette.severityColor(severities[index]) ??
                       palette.series[index],
-            hatched: false,
+            fill: _fillOf(severities[index]),
           ),
     ];
 
@@ -354,6 +387,13 @@ class PressureBar extends StatelessWidget {
 double? _reading(double? value) =>
     value != null && value.isFinite && value >= 0 ? value : null;
 
+/// A severe fill carries a stripe as well as its colour: the warning and
+/// critical tints are not held apart from the series tints under
+/// colour-vision deficiencies (light amber and orange nearly meet under
+/// deuteranopia), so the stripe shows which part crossed (A11Y-01).
+BarFill _fillOf(ChartSeverity severity) =>
+    severity == ChartSeverity.normal ? BarFill.solid : BarFill.severe;
+
 String _withSeverity(
   String part,
   ChartSeverity severity,
@@ -406,16 +446,29 @@ Widget _bar(
 );
 
 /// A stretch of one bar cell, from [start] to [end] as shares of the
-/// cell's width: filled with [color], or [hatched] with it where the host
-/// did not report a value. A cell's runs come in order, and one that
-/// starts past the cell's left edge starts where the run before it ends.
+/// cell's width, drawn in [color] as [fill] says. A cell's runs come in
+/// order, and one that starts past the cell's left edge starts where the
+/// run before it ends.
 typedef BarRun = ({
   int cell,
   double start,
   double end,
   Color color,
-  bool hatched,
+  BarFill fill,
 });
+
+/// How a [BarRun] draws its colour.
+enum BarFill {
+  /// Filled.
+  solid,
+
+  /// Filled, with a stripe of the track through the middle: a value past
+  /// a threshold.
+  severe,
+
+  /// Hatched: a value the host did not report.
+  unknown,
+}
 
 /// Paints a [StackedBar]'s or a [PressureBar]'s cells; visible so painter
 /// tests can check what it draws, and kept out of the charts' barrel.
@@ -444,6 +497,10 @@ final class BarPainter extends CustomPainter {
 
   static const _hatchSpacing = 4.0;
   static const hatchWidth = 1.0;
+
+  /// The height of a [BarFill.severe] run's stripe.
+  static const severeStripe = 2.0;
+
   static const _cornerRadius = 2.0;
 
   @override
@@ -471,10 +528,21 @@ final class BarPainter extends CustomPainter {
         final right = rect.left + end * rect.width;
         if (right <= left) continue;
         final runRect = Rect.fromLTRB(left, rect.top, right, rect.bottom);
-        if (run.hatched) {
-          _hatch(canvas, runRect, run.color);
-        } else {
-          canvas.drawRect(runRect, Paint()..color = run.color);
+        switch (run.fill) {
+          case BarFill.solid:
+            canvas.drawRect(runRect, Paint()..color = run.color);
+          case BarFill.severe:
+            canvas.drawRect(runRect, Paint()..color = run.color);
+            canvas.drawRect(
+              Rect.fromCenter(
+                center: runRect.center,
+                width: runRect.width,
+                height: severeStripe,
+              ),
+              track,
+            );
+          case BarFill.unknown:
+            _hatch(canvas, runRect, run.color);
         }
       }
       canvas.restore();
