@@ -95,9 +95,9 @@ class AppLocalizationsEn extends AppLocalizations {
       skippedCount,
       locale: localeName,
       other:
-          '$skippedCount hosts were skipped because their port, HostName, IdentityFile or ProxyJump is unsupported, or their name repeats an earlier host.',
+          '$skippedCount hosts were skipped because of settings Klabautermann cannot follow as ssh would, such as a ProxyCommand, Include or Match block.',
       one:
-          '1 host was skipped because its port, HostName, IdentityFile or ProxyJump is unsupported, or its name repeats an earlier host.',
+          '1 host was skipped because of settings Klabautermann cannot follow as ssh would, such as a ProxyCommand, Include or Match block.',
     );
     return '$_temp0 $_temp1';
   }
