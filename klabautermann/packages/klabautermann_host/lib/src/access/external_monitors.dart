@@ -1,11 +1,12 @@
 /// The external-monitor rule (03 §9.5 coverage card, 01 §"host-down
 /// alerts"): a monitor already running on the host watches it while the
 /// app is closed. Read from the `units` list, so the answer stays unknown
-/// until that list loads; a monitor outside systemd is not seen.
+/// until a complete list loads; a monitor outside systemd is not seen.
 library;
 
 import 'package:meta/meta.dart';
 
+import '../hws/frames.dart' show SectionStatus;
 import '../parse/units.dart';
 import 'access_check.dart' show AccessStatus;
 
@@ -48,8 +49,8 @@ final class ExternalMonitorReport {
     List<ExternalMonitorUnit> units = const [],
   ]) : units = List.unmodifiable(units);
 
-  /// ok when a monitor runs, missing when the loaded list has none
-  /// running, unknown before the list loads or when it produced nothing.
+  /// ok when a monitor runs, missing when a complete list has none
+  /// running, unknown otherwise.
   final AccessStatus status;
 
   /// Every loaded monitor unit, running or not, in `systemctl` order.
@@ -62,10 +63,20 @@ final class ExternalMonitorReport {
   ];
 }
 
-/// Applies the rule to the latest [units] tick; null means the list has
-/// not loaded yet.
-ExternalMonitorReport detectExternalMonitors(UnitsSnapshot? units) {
-  if (units == null || units.format == UnitListFormat.none) {
+/// Applies the rule to the latest `units` tick: its parsed [units] and
+/// section [status], both null before the list has loaded. Only an `ok`
+/// section with at least one unit can rule a monitor out: a failed,
+/// denied or timed-out section may hold a truncated list behind its
+/// header, and an empty list means systemctl failed or its output did
+/// not parse, since a systemd host always lists units (init.scope).
+ExternalMonitorReport detectExternalMonitors(
+  UnitsSnapshot? units, {
+  required SectionStatus? status,
+}) {
+  if (units == null ||
+      status != SectionStatus.ok ||
+      units.format == UnitListFormat.none ||
+      units.units.isEmpty) {
     return ExternalMonitorReport(AccessStatus.unknown);
   }
 
