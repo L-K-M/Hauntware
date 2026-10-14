@@ -93,6 +93,12 @@
   "statusConnecting": "Connecting",
   "statusDisconnected": "Disconnected",
   "statusFailed": "Failed",
+  "statusAuthenticating": "Authenticating",
+  "statusLimited": "Connected with limits",
+  "statusWaitingToReconnect": "Waiting to reconnect",
+  "statusNeedsInput": "Needs your input",
+  "statusBlocked": "Blocked",
+  "statusConnectionLost": "Connection lost",
   "statusSemantics": "Server status: {status}",
   "@statusSemantics": {
     "description": "Screen-reader label for a server row's status dot.",

@@ -42,6 +42,16 @@ slice:
   the engine keeps the imports (below); `EngineReady` reports a problem
   with that file and `SshConfigImported` says whether the import was
   saved, both added within v2.
+- Protocol v3 (M2 links, 03 §10.1): `LinkState` carries a sealed
+  `LinkStatus` (D46's eight states plus `blocked`, typed reasons and an
+  optional failure kind), `Prompt` a sealed request per kind, and
+  `PromptWithdrawn`, `SetAppActivity` and `Reachability` join; `FleetEntry`
+  gains the nullable `jumpRoute`, `authKind`, `searchText` and
+  `locatorConflict`. The fleet controller keeps link statuses and probe
+  answers only for listed servers, and the rail words every status.
+  Nothing produces them yet: the engine still rejects `Connect` and
+  `SetAppActivity`, sends no prompts or probe answers, and fills none of
+  the new fleet fields.
 - `klabautermann_app`: `flutter create`d for the five platforms with the
   04 §12.3 identities, generated launcher icons, the desktop three-pane
   shell (fleet rail, workspace, inspector) at 960 px and up, the phone
