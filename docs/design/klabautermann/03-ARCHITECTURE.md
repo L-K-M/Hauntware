@@ -3506,7 +3506,8 @@ the engine in `engine_isolate.dart` beside it):
   panel's `units` and the health card's `failedUnits` (D45), and without
   the probe, which the engine runs itself after connecting and reports as
   `HostProfileChanged` when it first knows a server's profile in a run or
-  a later probe finds a different one. The same ids again replace a
+  a later probe finds a different one, ignoring the clock and session
+  fields that change with every probe. The same ids again replace a
   subscription's streams, and an empty set drops it. `SetCadenceProfile`
   picks the 6.4 column (Desktop until the app sends one); a stream the
   column reads on demand is read once per `Subscribe` naming it, a

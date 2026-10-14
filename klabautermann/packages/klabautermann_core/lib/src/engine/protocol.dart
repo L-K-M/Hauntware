@@ -431,8 +431,12 @@ final class Gap extends EngineEvent {
 
 /// What the capability probe found on [serverId] (03 §6.1). The engine
 /// sends it when it first knows the server's profile in a run, and again
-/// whenever a later probe finds a different one. The probe is not a
-/// [SampleStream]: the engine runs it itself after connecting.
+/// whenever a later probe finds a different one, compared without the
+/// fields every probe or session changes: the clock (`epochSeconds`,
+/// `zoneOffset`) and the session (`sshConnection`, `sessionParentPid`,
+/// `sessionParentComm`), which may therefore be older than the last
+/// probe. The probe is not a [SampleStream]: the engine runs it itself
+/// after connecting.
 final class HostProfileChanged extends EngineEvent {
   const HostProfileChanged(this.serverId, this.profile);
 
