@@ -273,4 +273,44 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get serverTabMore => 'More';
+
+  @override
+  String chartSeriesSummary(
+    String label,
+    String current,
+    String lowest,
+    String highest,
+    String trend,
+  ) {
+    return '$label: now $current, lowest $lowest, highest $highest, $trend';
+  }
+
+  @override
+  String chartSeriesEmpty(String label) {
+    return '$label: no data yet';
+  }
+
+  @override
+  String get chartUnknownValue => 'unknown';
+
+  @override
+  String get chartTrendRising => 'rising';
+
+  @override
+  String get chartTrendFalling => 'falling';
+
+  @override
+  String get chartTrendSteady => 'steady';
+
+  @override
+  String chartPercent(double share) {
+    final intl.NumberFormat shareNumberFormat =
+        intl.NumberFormat.decimalPercentPattern(
+          locale: localeName,
+          decimalDigits: 0,
+        );
+    final String shareString = shareNumberFormat.format(share);
+
+    return '$shareString';
+  }
 }

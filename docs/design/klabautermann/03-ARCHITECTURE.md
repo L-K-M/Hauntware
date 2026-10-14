@@ -3304,6 +3304,21 @@ colours from the theme and `FamilyPalette`, checked with `contrastRatio`;
 a semantics summary per series (current, min, max, trend); no animation
 under reduced motion.
 
+As built in M2 (K05a, `app/klabautermann_app/lib/ui/charts/`): series take
+the family's blue, orange, teal and brown; warning is its yellow and
+critical its red, deepened to `#A31515` in the light theme, where the
+family red parts too little from the amber under deuteranopia. A test
+holds each to 3:1 on the chart surfaces and each pair in a set to a CIE76
+distance of 10 under simulated protanopia, deuteranopia and tritanopia.
+Reduced motion is Android's remove-animations flag or iOS's Reduce Motion,
+which Flutter keeps out of `MediaQuery`. Null or non-finite samples are
+gaps; downsampling columns align to running sample indices, and a gap
+narrower than a column is lost in it. Automatic scales run 0 to 100 for
+percentages and to the next 1, 2 or 5 step within an IEC unit for bytes
+and rates. The trend compares the means of the oldest and newest quarters;
+a change under 5 % of the scale is steady. The goldens' bundled font is
+the pinned Flutter SDK's Roboto, compared on Linux only.
+
 ### 10.8 Log viewer
 
 A ring buffer capped by lines (50,000) and bytes (32 MiB) with a 16 KiB line

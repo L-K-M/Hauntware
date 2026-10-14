@@ -1,0 +1,127 @@
+import 'dart:math' as math;
+
+import 'package:flutter/foundation.dart';
+import 'package:ghost_ui/ghost_ui.dart'
+    show ghostFormatBinaryRate, ghostFormatBinarySize;
+
+/// What a series measures. Byte figures are always IEC binary units
+/// (A11Y-06): server tools report in KiB and MiB, so the charts never use
+/// the decimal file sizes of `ghostFormatFileSize`.
+enum ChartUnit {
+  /// A share from 0 to 100.
+  percent,
+  bytes,
+  bytesPerSecond,
+}
+
+/// The words charts say, from the host's catalogue (03 D10: the charts
+/// take string bags so they can move to a shared package unchanged).
+@immutable
+final class ChartStrings {
+  const ChartStrings({
+    required this.seriesSummary,
+    required this.seriesEmpty,
+    required this.unknownValue,
+    required this.trendRising,
+    required this.trendFalling,
+    required this.trendSteady,
+    required this.percent,
+  });
+
+  /// A series' screen-reader summary (A11Y-02): its label, the formatted
+  /// current, lowest and highest values, and the trend word.
+  final String Function(
+    String label,
+    String current,
+    String min,
+    String max,
+    String trend,
+  )
+  seriesSummary;
+
+  /// A series that holds no known sample yet.
+  final String Function(String label) seriesEmpty;
+
+  /// A value the host did not report; never shown as zero (03 §10.4).
+  final String unknownValue;
+
+  final String trendRising;
+  final String trendFalling;
+  final String trendSteady;
+
+  /// A share from 0 to 100 in the UI locale's number format.
+  final String Function(double value) percent;
+}
+
+/// [value] as axis or value text in [unit].
+String formatChartValue(double value, ChartUnit unit, ChartStrings strings) =>
+    switch (unit) {
+      ChartUnit.percent => strings.percent(value),
+      ChartUnit.bytes => ghostFormatBinarySize(value.round()),
+      ChartUnit.bytesPerSecond => ghostFormatBinaryRate(value),
+    };
+
+/// The steps of an automatic scale within one IEC unit: 1, 2 and 5 times a
+/// power of ten, stopping below 1024 so a label never reads "1000 KiB".
+const _scaleSteps = [1, 2, 5, 10, 20, 50, 100, 200, 500];
+
+/// The top of an automatic scale for a series whose highest known value is
+/// [dataMax]: 100 for a percentage, so hosts compare by eye, and otherwise
+/// the next round IEC figure (500 KiB, 1 MiB, 2 MiB), so the scale label
+/// reads as a round number. An empty or all-zero series gets 1 KiB.
+double chartScaleMax(double? dataMax, ChartUnit unit) {
+  assert(dataMax == null || dataMax.isFinite, 'samples are finite');
+  if (unit == ChartUnit.percent) return 100;
+  if (dataMax == null || dataMax <= 0) return 1024;
+  for (var unitSize = 1.0; ; unitSize *= 1024) {
+    for (final step in _scaleSteps) {
+      if (step * unitSize >= dataMax) return step * unitSize;
+    }
+  }
+}
+
+/// The screen-reader summary of a series labelled [label] (A11Y-02): its
+/// current, lowest and highest values and its trend on a scale spanning
+/// [span], or that it has no data yet. Charts expose it on demand and never
+/// as a live region (A11Y-15).
+String chartSeriesSummary({
+  required String label,
+  required List<double?> samples,
+  required ChartUnit unit,
+  required double span,
+  required ChartStrings strings,
+}) {
+  final known = [for (final value in samples) ?value];
+  if (known.isEmpty) return strings.seriesEmpty(label);
+
+  String format(double value) => formatChartValue(value, unit, strings);
+  final current = samples.last;
+  return strings.seriesSummary(
+    label,
+    current == null ? strings.unknownValue : format(current),
+    format(known.reduce(math.min)),
+    format(known.reduce(math.max)),
+    _trendWord(known, span, strings),
+  );
+}
+
+/// A change smaller than this share of the scale reads as steady, so noise
+/// on a quiet host does not announce a trend.
+const _steadyShare = 0.05;
+
+/// The trend compares the means of the oldest and newest quarters of the
+/// known samples, so one noisy sample weighs less than in a first-to-last
+/// comparison. Fewer than four known samples read as steady.
+const _trendWindowDivisor = 4;
+
+String _trendWord(List<double> known, double span, ChartStrings strings) {
+  final window = known.length ~/ _trendWindowDivisor;
+  if (window == 0 || span <= 0) return strings.trendSteady;
+
+  double mean(Iterable<double> values) =>
+      values.reduce((a, b) => a + b) / window;
+  final change =
+      mean(known.skip(known.length - window)) - mean(known.take(window));
+  if (change.abs() < span * _steadyShare) return strings.trendSteady;
+  return change > 0 ? strings.trendRising : strings.trendFalling;
+}
