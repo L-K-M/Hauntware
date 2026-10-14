@@ -77,6 +77,8 @@ void main() {
         "github.event_name != 'pull_request' || "
         "steps.changes.outputs.integration == 'true'",
       );
+      // The flags [_Repo.guard] runs the guard with.
+      expect(_step(detector, id: 'entries')['shell'], 'bash');
       final checkout = _step(detector, uses: 'actions/checkout@');
       expect(checkout['with']['fetch-depth'], 0);
       for (final key in _entries.keys) {
@@ -386,7 +388,8 @@ final class _Repo {
     return clone;
   }
 
-  /// Runs [script] as the Actions runner runs a bash `run:` step.
+  /// Runs [script] with the flags the Actions runner gives a `shell: bash`
+  /// step.
   Future<_GuardResult> guard(String script) async {
     final output = File('${directory.path}.output');
     await output.writeAsString('');

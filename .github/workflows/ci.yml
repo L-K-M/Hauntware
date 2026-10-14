@@ -720,6 +720,9 @@ jobs:
         if: >-
           github.event_name != 'pull_request' ||
           steps.changes.outputs.integration == 'true'
+        # Adds pipefail to the runner's default bash -e, as the contract
+        # tests run the guard.
+        shell: bash
         run: |
           # In a shallow clone a deleted entry point would read as not
           # committed yet and skip its leg instead of failing it.
