@@ -245,7 +245,8 @@ void main() {
     final vault = _ScriptedVault()
       ..onRead = (id) async {
         if (id == _targetSecretId) {
-          backups.service.catalog!.replace([newHop]);
+          // The hop changes under the read: a save rebuilds the catalog.
+          await backups.service.saveServer(newHop);
           return const Secret(
             id: _targetSecretId,
             kind: SecretKind.password,

@@ -29,6 +29,16 @@ final class SyncTuple {
   /// this tuple is what a pulled live record must out-tuple to resurrect.
   final bool deleted;
 
+  /// The §3.2 total order a pulled record must win before it materializes:
+  /// a strictly greater [updatedAt], or an equal one whose [deviceId]
+  /// compares at or above [other]'s. An exact tie applies too — the same
+  /// winning envelope arriving again, idempotent by construction. The
+  /// [deleted] flag rides the tuple but takes no part in the order. Not
+  /// [Comparable]: equal stamps from different devices are not "equal".
+  bool outranks(SyncTuple other) =>
+      updatedAt > other.updatedAt ||
+      (updatedAt == other.updatedAt && deviceId.compareTo(other.deviceId) >= 0);
+
   @override
   bool operator ==(Object other) =>
       other is SyncTuple &&

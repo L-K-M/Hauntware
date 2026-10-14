@@ -89,6 +89,7 @@ final class BookmarkBackupService extends ChangeNotifier
         _resetRecords = resetRecords,
         // ignore: prefer_initializing_formals
         _bookmarks = bookmarks,
+        _bookmarkHandler = BookmarkHandler(bookmarks: bookmarks),
         // ignore: prefer_initializing_formals
         _hostKeys = hostKeys,
         // ignore: prefer_initializing_formals
@@ -117,6 +118,10 @@ final class BookmarkBackupService extends ChangeNotifier
   SyncRecordStore _records;
   final Future<SyncRecordStore> Function() _resetRecords;
   final SyncTrackingBookmarkStore _bookmarks;
+
+  /// The `bookmark:` handler every coordinator registers, and the
+  /// registration enrollment's passphrase trial derives from.
+  final BookmarkHandler _bookmarkHandler;
   final ConflictAwareHostKeyStore _hostKeys;
   final HostKeyMutationGate _hostKeyMutations = HostKeyMutationGate();
   final PinVerdictStore _pinVerdicts;
@@ -134,9 +139,9 @@ final class BookmarkBackupService extends ChangeNotifier
   /// the editor write through.
   final VaultStore _vaultStore;
 
-  /// Pushes a materialized route snapshot before [SeanceServerCatalog.replace]
-  /// returns, closing the window where a connect could observe the new row
-  /// before the engine did.
+  /// Pushes a materialized route snapshot before the coordinator's catalog
+  /// rebuild returns, closing the window where a connect could observe the
+  /// new row before the engine did.
   final void Function(List<ServerConfig> snapshot)? _serverCatalogPublisher;
   final SettingsStore? _settings;
   final String? Function()? _recordQuarantinePath;
@@ -162,8 +167,7 @@ final class BookmarkBackupService extends ChangeNotifier
   DateTime? _lastSyncAt;
   String? _lastSyncError;
 
-  BookmarkCoordinator? _coordinator;
-  RecordCrypto? _crypto;
+  RecordCoordinator? _coordinator;
   int _coordinatorRebuildGeneration = 0;
 
   /// The shared-mode credential vault the coordinator and the server
@@ -236,30 +240,19 @@ final class BookmarkBackupService extends ChangeNotifier
       _retainedTokenAvailable &&
       _sharedSyncSucceeded;
 
-  /// The Séance server catalog materialized in shared mode (read-only).
-  SeanceServerCatalog? _catalog;
+  /// The Séance server catalog materialized in shared mode (read-only):
+  /// the current coordinator's, or one it inherited under the same
+  /// binding.
+  CatalogSnapshot? _catalog;
   ({String baseUrl, String username, List<int> vaultKey})? _catalogBinding;
 
   /// Shared mode's catalog, for the surfaces §4.2 unlocks.
-  SeanceServerCatalog? get catalog => _catalog;
+  CatalogSnapshot? get catalog => _catalog;
 
   void _clearServerCatalog() {
     _catalog = null;
     _catalogBinding = null;
     _serverCatalogPublisher?.call(const []);
-  }
-
-  SeanceServerCatalog _newServerCatalog() {
-    late final SeanceServerCatalog catalog;
-    catalog = SeanceServerCatalog(
-      onReplaced: (snapshot) {
-        // A superseded coordinator may finish after sign-out or a rebind.
-        // Its snapshot must never restore routes owned by the old account.
-        if (!identical(_catalog, catalog)) return;
-        _serverCatalogPublisher?.call(snapshot);
-      },
-    );
-    return catalog;
   }
 
   /// Load all durable state and build the coordinator when the vault key
@@ -321,7 +314,7 @@ final class BookmarkBackupService extends ChangeNotifier
     final coordinator = _coordinator;
     if (coordinator == null) return;
 
-    await coordinator.onServerSaved(server);
+    await coordinator.writer.saveServer(server);
     notifyListeners();
   }
 
@@ -336,7 +329,7 @@ final class BookmarkBackupService extends ChangeNotifier
         final coordinator = _coordinator;
         if (coordinator == null) return;
 
-        await coordinator.onServerDeleted(server);
+        await coordinator.writer.deleteServer(server);
         notifyListeners();
       });
 
@@ -391,7 +384,7 @@ final class BookmarkBackupService extends ChangeNotifier
         secretId: uuidV4(),
         now: _now().toUtc().millisecondsSinceEpoch,
       );
-      // Credential before config — `onServerSaved` publishes the opted-in
+      // Credential before config — `saveServer` publishes the opted-in
       // `secret:` record, which reads the vault entry just written.
       final secret = plan.secret;
       if (secret != null) await saveServerSecret(secret);
@@ -410,7 +403,7 @@ final class BookmarkBackupService extends ChangeNotifier
     }
     await vault.putLocalSecret(secret,
         updatedAt: _now().toUtc().millisecondsSinceEpoch);
-    await _coordinator?.onServerSecretSaved(secret.id);
+    await _coordinator?.writer.secretSaved(secret.id);
   }
 
   /// The credential a `secretRef` names, for the editor's fields — null
@@ -441,7 +434,6 @@ final class BookmarkBackupService extends ChangeNotifier
 
     if (account == null || key == null) {
       _coordinator = null;
-      _crypto = null;
       _secretVault = null;
       _clearServerCatalog();
       return;
@@ -450,16 +442,16 @@ final class BookmarkBackupService extends ChangeNotifier
     final crypto = RecordCrypto(RecordCodec(key));
     final shared = account.mode == SyncAccountMode.shared;
     final binding = _catalogBinding;
+    final previous = _coordinator;
+    // Same account and vault key: the new coordinator keeps serving the
+    // live catalog, so a rebind never flashes an empty server list.
     final canReuseCatalog = shared &&
         _catalog != null &&
+        previous != null &&
+        identical(previous.catalog, _catalog) &&
         binding?.baseUrl == account.baseUrl &&
         binding?.username == account.username &&
         listEquals(binding?.vaultKey, key);
-    final catalog = !shared
-        ? null
-        : canReuseCatalog
-            ? _catalog
-            : _newServerCatalog();
     final nextBinding = !shared
         ? null
         : (
@@ -468,26 +460,39 @@ final class BookmarkBackupService extends ChangeNotifier
             vaultKey: List<int>.unmodifiable(key),
           );
     final secretVault = shared ? SecretVault(_vaultStore, key) : null;
-    final coordinator = BookmarkCoordinator(
+    late final RecordCoordinator coordinator;
+    coordinator = RecordCoordinator(
       records: _records,
-      bookmarks: _bookmarks,
+      handlers: [_bookmarkHandler],
       hostKeys: _hostKeys,
       hostKeyMutations: _hostKeyMutations,
       crypto: crypto,
       deviceId: deviceId!,
       pinVerdicts: _pinVerdicts,
       tripwires: _tripwires,
-      catalog: catalog,
+      catalogMode: shared ? CatalogMode.shared : CatalogMode.separate,
+      pushPolicy: PushPolicy.normal,
+      inheritCatalogFrom: canReuseCatalog ? previous : null,
+      onCatalogReplaced: shared && !canReuseCatalog
+          ? (snapshot) {
+              // A superseded coordinator may finish after sign-out or a
+              // rebind. Its snapshot must never restore routes owned by the
+              // old account. Coordinators that inherit this catalog keep
+              // this callback, so the check follows the catalog.
+              if (!identical(_catalog, coordinator.catalog)) return;
+              _serverCatalogPublisher?.call(snapshot);
+            }
+          : null,
       servers: shared ? _servers : null,
       secrets: secretVault,
       syncSecrets: _syncSecrets,
       enrollment: _enrollmentState,
       now: _now,
     );
+    final catalog = coordinator.catalog;
 
     // Commit one generation together so callbacks cannot observe mixed keys.
     final replacedCatalog = !identical(_catalog, catalog);
-    _crypto = crypto;
     _catalog = catalog;
     _catalogBinding = nextBinding;
     _secretVault = secretVault;
@@ -501,6 +506,7 @@ final class BookmarkBackupService extends ChangeNotifier
         credentials: _credentials,
         state: _enrollmentState,
         records: _records,
+        handlers: [_bookmarkHandler],
       );
 
   /// A durable-state mutation must never overlap an in-flight round: the
@@ -640,7 +646,6 @@ final class BookmarkBackupService extends ChangeNotifier
     await _enrollmentState.setAccount(null);
     _coordinatorRebuildGeneration += 1;
     _coordinator = null;
-    _crypto = null;
     _secretVault = null;
     _clearServerCatalog();
     _lastSyncAt = null;
@@ -742,8 +747,7 @@ final class BookmarkBackupService extends ChangeNotifier
         //    shared-mode catalog.
         await _rebuildCoordinator();
         final coordinator = _coordinator;
-        final crypto = _crypto;
-        if (coordinator == null || crypto == null) {
+        if (coordinator == null) {
           throw StateError('enrolled without a readable vault key');
         }
         // 6. Materialize the enrollment pull first — a conflicting shared
@@ -761,17 +765,18 @@ final class BookmarkBackupService extends ChangeNotifier
             {for (final conflict in held) conflict.locator};
         // 9. Re-seal every non-held local pin under a fresh LWW tuple on
         //    this deviceId so hosts verified in separate mode reach the
-        //    shared fleet.
+        //    shared fleet — through the writer's seal funnel, like every
+        //    other dirty record.
         final deviceId = await _enrollmentState.deviceId();
         for (final pin in await _hostKeys.all()) {
           if (heldLocators.contains(pin.locator)) continue;
-          await _records.putLocal(await crypto.seal(DecryptedRecord(
+          await coordinator.writer.sealLocal(DecryptedRecord(
             id: pin.recordId,
             kind: RecordKind.hostKey,
             updatedAt: _now().toUtc().millisecondsSinceEpoch,
             deviceId: deviceId,
             data: pin.toJson(),
-          )));
+          ));
         }
         await refresh();
         return BackupSwitchOutcome(

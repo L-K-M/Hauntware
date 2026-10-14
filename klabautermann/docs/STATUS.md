@@ -12,6 +12,12 @@ slice:
 
 - `klabautermann_host`: HWS/1 program, frame protocol, capability probe,
   parsers and snapshot/rate models with per-platform fixture goldens.
+- HWS/1 reader (M2): the frame parser skips login-shell output before
+  READY up to 64 KiB and reads an empty `B` uptime as unknown;
+  `HwsTickAssembler` turns frames into replies (READY version check, a
+  reply lost to a framing error, out-of-order markers ending the
+  session), and `kSamplerStartCommand` is the start line. No engine code
+  uses them yet; the real-shell test runs on them.
 - `klabautermann_docker`: pure-Dart HTTP/1.1 client, NDJSON/JSON-seq
   scanning, stdcopy, versioned API models and negotiation, compose labels
   and grouping.
@@ -45,6 +51,13 @@ slice:
   the Flutter SDK's Roboto and compare on Linux only. `Gauge` follows in
   its own PR. Nothing shows a chart yet: the overview and fleet rows that
   feed the rings come later in M2.
+- Sortable table (M2): the app's `SortableTable`, which the M2 lists
+  build on. The caller owns the sort (a header click flips it; ties keep
+  the caller's order and unknown values sort last). A screen reader hears
+  each cell with its column name and gets the row's verbs as actions
+  (A11Y-03, 03 §10.10). The body is one keyboard stop with an active row
+  (arrows, paging, Home, End, Enter, Shift+F10), and rows keep the
+  listing's fixed extent at the text scale. No panel uses it yet.
 - Device settings (03 §4.10): `settings.json` under the app's
   `getApplicationSupportDirectory()`, through `klabautermann_core`'s
   `DeviceSettingsStore`, which the composition root opens before the
