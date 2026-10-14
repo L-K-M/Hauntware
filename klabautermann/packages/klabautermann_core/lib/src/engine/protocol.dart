@@ -401,8 +401,10 @@ final class SamplingState extends EngineEvent {
 
 /// [serverId]'s [streams] have no readings from [from] to [until], for
 /// [cause] (03 §9.5 item 5, §6.2). The engine sends it when readings
-/// resume, so both ends are known; a gap still open shows in
-/// [SamplingState]. Charts draw it as a labelled band and never
+/// resume, so both ends are known. While a gap is open, a background or
+/// disconnected one shows in [SamplingState]; a [GapCause.readingLost]
+/// one shows only as an ageing [Sample.at], since the phase stays
+/// [SamplingPhase.sampling]. Charts draw it as a labelled band and never
 /// interpolate across it.
 final class Gap extends EngineEvent {
   const Gap({

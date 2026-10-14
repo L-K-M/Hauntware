@@ -3533,9 +3533,11 @@ the engine in `engine_isolate.dart` beside it):
   `Gap` arrives once readings resume, with both ends and its cause
   (background, disconnected, or a reading lost to a deadline, a framing
   error or a sampler restart, 6.2), so a chart labels the band (9.5 item
-  5); an open gap shows in `SamplingState`. Until the samplers
-  are wired, the engine records subscriptions and the profile and sends
-  none of these events.
+  5, whose labels do not yet word a lost reading). While a gap is open,
+  a background or disconnected one shows in `SamplingState`; a lost
+  reading leaves the phase at sampling and shows only as an ageing
+  `Sample.at`. Until the samplers are wired, the engine records
+  subscriptions and the profile and sends none of these events.
 - **`SetAppActivity(activity)`** is a request of its own and applies to
   every subscription, link and probe at once: 6.4 pauses everything while
   the app is in the background, and D34 adds the phones' grace period
