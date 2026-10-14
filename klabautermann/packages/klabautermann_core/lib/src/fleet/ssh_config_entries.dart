@@ -41,7 +41,7 @@ const int _maximumPort = 65535;
 
   for (final host in SshConfigImporter.parse(text)) {
     final port = host.port ?? kSshDefaultPort;
-    if (port < _minimumPort || port > _maximumPort) {
+    if (!isTcpPort(port)) {
       skipped++;
       continue;
     }
@@ -51,19 +51,37 @@ const int _maximumPort = 65535;
     }
 
     entries.add(
-      FleetEntry(
-        serverId: '$_importIdPrefix${host.alias}',
-        label: host.alias,
+      importedFleetEntry(
+        alias: host.alias,
         // `HostName=` with no value is as good as absent.
         host: _nonEmpty(host.hostName) ?? host.alias,
         port: port,
         user: _nonEmpty(host.user),
-        origin: FleetEntryOrigin.sshConfig,
       ),
     );
   }
   return (entries: List.unmodifiable(entries), skippedCount: skipped);
 }
+
+/// The fleet entry for one imported host: the one place that derives an
+/// import's id from its alias, shared by the parser above and the import
+/// store, which keeps only alias, host, port and user (03 §4.10).
+FleetEntry importedFleetEntry({
+  required String alias,
+  required String host,
+  required int port,
+  String? user,
+}) => FleetEntry(
+  serverId: '$_importIdPrefix$alias',
+  label: alias,
+  host: host,
+  port: port,
+  user: user,
+  origin: FleetEntryOrigin.sshConfig,
+);
+
+/// Whether [port] is in the TCP port range, so it can name an endpoint.
+bool isTcpPort(int port) => port >= _minimumPort && port <= _maximumPort;
 
 String? _nonEmpty(String? value) =>
     value == null || value.isEmpty ? null : value;
