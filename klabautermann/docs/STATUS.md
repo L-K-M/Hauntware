@@ -18,6 +18,14 @@ slice:
   reply lost to a framing error, out-of-order markers ending the
   session), and `kSamplerStartCommand` is the start line. No engine code
   uses them yet; the real-shell test runs on them.
+- Jobs model (JOB-01, JOB-02 data): `klabautermann_host`'s `mergeJobs`
+  turns a `cron` and a `timers` tick into one list of cron lines,
+  periodic scripts and timers, each with an English-free
+  `ScheduleDescription` and, for cron, next runs with DST annotations
+  in the server zone or the line's `CRON_TZ`. Timer triggers and
+  `RandomizedDelaySec` have fields but no source yet, `CRON_TZ` zones
+  other than the server's and UTC need a resolver, and nothing in the
+  engine or app consumes the list yet.
 - Access rules (M2, `klabautermann_host` `access/`): the CN-24 rows from
   a `HostProfile` (passwordless sudo, journal group with the LOG-04
   notice, Docker socket rights with the SAF-08 flag, systemd version,
@@ -42,6 +50,16 @@ slice:
   the engine keeps the imports (below); `EngineReady` reports a problem
   with that file and `SshConfigImported` says whether the import was
   saved, both added within v2.
+- Protocol v3 (M2 links, 03 §10.1): `LinkState` carries a sealed
+  `LinkStatus` (D46's eight states plus `blocked`, typed reasons and an
+  optional failure kind), `Prompt` a sealed request per kind, and
+  `PromptWithdrawn`, `SetAppActivity` and `Reachability` join; `FleetEntry`
+  gains the nullable `jumpRoute`, `authKind`, `searchText` and
+  `locatorConflict`. The fleet controller keeps link statuses and probe
+  answers only for listed servers, and the rail words every status.
+  Nothing produces them yet: the engine still rejects `Connect` and
+  `SetAppActivity`, sends no prompts or probe answers, and fills none of
+  the new fleet fields.
 - `klabautermann_app`: `flutter create`d for the five platforms with the
   04 §12.3 identities, generated launcher icons, the desktop three-pane
   shell (fleet rail, workspace, inspector) at 960 px and up, the phone
@@ -61,6 +79,12 @@ slice:
   the Flutter SDK's Roboto and compare on Linux only. `Gauge` follows in
   its own PR. Nothing shows a chart yet: the overview and fleet rows that
   feed the rings come later in M2.
+- Bars (03 §10.7, M2): `StackedBar` for the memory breakdown and disks
+  (MEM-01, DSK-01) and the fleet rows' three-cell `PressureBar` (FL-07),
+  with hatching for unknown values, grey when stale, and threshold
+  colours paired with a stripe, an icon and words (A11Y-01), plus
+  screen-reader summaries and light and dark goldens. Nothing shows
+  them yet.
 - Sortable table (M2): the app's `SortableTable`, which the M2 lists
   build on. The caller owns the sort (a header click flips it; ties keep
   the caller's order and unknown values sort last). A screen reader hears

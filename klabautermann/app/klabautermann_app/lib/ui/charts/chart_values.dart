@@ -27,6 +27,13 @@ final class ChartStrings {
     required this.trendFalling,
     required this.trendSteady,
     required this.percent,
+    required this.barSummary,
+    required this.barPart,
+    required this.listSeparator,
+    required this.withSeverity,
+    required this.severityWarning,
+    required this.severityCritical,
+    required this.stale,
   });
 
   /// A series' screen-reader summary (A11Y-02): its label, the formatted
@@ -55,6 +62,27 @@ final class ChartStrings {
 
   /// A share from 0 to 100 in the UI locale's number format.
   final String Function(double value) percent;
+
+  /// A stacked bar's screen-reader summary: its label, its [barPart]s
+  /// joined by [listSeparator], and the formatted total.
+  final String Function(String label, String parts, String total) barSummary;
+
+  /// One part of a bar, as its legend and summary name it: the part's
+  /// label and its formatted value.
+  final String Function(String label, String value) barPart;
+
+  /// Between the parts of a bar's summary.
+  final String listSeparator;
+
+  /// A [barPart] past a threshold, with [severityWarning] or
+  /// [severityCritical] (A11Y-01: the colour never speaks alone).
+  final String Function(String part, String severity) withSeverity;
+
+  final String severityWarning;
+  final String severityCritical;
+
+  /// A bar's summary while its values are stale (OV-04).
+  final String Function(String summary) stale;
 }
 
 /// [value] as axis or value text in [unit].

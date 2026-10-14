@@ -10,6 +10,7 @@ import 'package:seance_protocol/seance_protocol.dart';
 import '../store/stores.dart';
 import 'catalog_writer.dart';
 import 'persistent_record_store.dart';
+import 'push_policy.dart';
 import 'record_handler.dart';
 import 'server_config_store.dart';
 
@@ -217,8 +218,9 @@ final class SecretHandler implements RecordHandler {
   /// Seal the vault entry [ref] into its `secret:` record, dirty for the
   /// next push. An unreadable or absent entry publishes nothing — the
   /// pull side's repair path is what heals it. Nothing publishes while
-  /// the device-level switch is off — every publish path funnels through
-  /// here, so this is the one gate. When this device's own earlier
+  /// the device-level switch is off or [writer] is pull-only — every
+  /// publish path funnels through here, so this is the one gate, and it
+  /// closes before the vault bump below. When this device's own earlier
   /// retraction still sits in the record store past the credential's
   /// stamp, re-date the credential past it (and persist the bump so vault
   /// and record agree): without the bump the tombstone wins LWW and the
@@ -227,6 +229,7 @@ final class SecretHandler implements RecordHandler {
   /// credential stays withdrawn until it is edited.
   Future<void> publish(String ref, CatalogWriter writer) async {
     final vault = _vault;
+    if (writer.pushPolicy == PushPolicy.none) return;
     if (!_syncSecrets || vault == null) return;
     final Secret? secret;
     try {
