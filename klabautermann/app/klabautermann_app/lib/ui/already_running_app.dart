@@ -42,32 +42,36 @@ class _AlreadyRunning extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     return Scaffold(
+      // Scrolls when large text outgrows a small window (A11Y-09), so the
+      // Quit button stays reachable.
       body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 480),
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Semantics(
-                  header: true,
-                  child: Text(
-                    l10n.alreadyRunningTitle,
-                    style: Theme.of(context).textTheme.headlineSmall,
-                    textAlign: TextAlign.center,
+        child: SingleChildScrollView(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 480),
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Semantics(
+                    header: true,
+                    child: Text(
+                      l10n.alreadyRunningTitle,
+                      style: Theme.of(context).textTheme.headlineSmall,
+                      textAlign: TextAlign.center,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 12),
-                Text(l10n.alreadyRunningBody, textAlign: TextAlign.center),
-                const SizedBox(height: 24),
-                // Focused, so Enter or Space quits without a pointer.
-                FilledButton(
-                  autofocus: true,
-                  onPressed: onQuit,
-                  child: Text(l10n.alreadyRunningQuit),
-                ),
-              ],
+                  const SizedBox(height: 12),
+                  Text(l10n.alreadyRunningBody, textAlign: TextAlign.center),
+                  const SizedBox(height: 24),
+                  // Focused, so Enter or Space quits without a pointer.
+                  FilledButton(
+                    autofocus: true,
+                    onPressed: onQuit,
+                    child: Text(l10n.alreadyRunningQuit),
+                  ),
+                ],
+              ),
             ),
           ),
         ),

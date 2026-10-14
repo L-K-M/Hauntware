@@ -154,6 +154,24 @@ void main() {
       await tester.sendKeyEvent(LogicalKeyboardKey.enter);
       expect(quits, 1);
     });
+
+    testWidgets('scrolls to its Quit button in a small window at twice the '
+        'text size (A11Y-09)', (tester) async {
+      tester.view.physicalSize = const Size(640, 400);
+      tester.view.devicePixelRatio = 1;
+      tester.platformDispatcher.textScaleFactorTestValue = 2;
+      addTearDown(tester.view.reset);
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+
+      var quits = 0;
+      await tester.pumpWidget(AlreadyRunningApp(onQuit: () => quits++));
+      await tester.pumpAndSettle();
+
+      await tester.ensureVisible(find.text('Quit'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Quit'));
+      expect(quits, 1);
+    });
   });
 
   testWidgets('an instance without the lock says so once at startup', (
