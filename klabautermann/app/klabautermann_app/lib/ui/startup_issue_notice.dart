@@ -7,7 +7,8 @@ import 'package:klabautermann_core/klabautermann_core.dart'
         DeviceSettingsIssue,
         DeviceSettingsIssueKind,
         ImportStoreIssue,
-        ImportStoreIssueKind;
+        ImportStoreIssueKind,
+        InstanceLockUnavailable;
 
 import '../l10n/app_localizations.dart';
 
@@ -16,20 +17,24 @@ const Duration _noticeDuration = Duration(seconds: 10);
 
 /// Tells the user once, after the first frame, what went wrong with the
 /// device-local files when the app started: the app's `settings.json`
-/// ([settingsIssue]) and the engine's `ssh_config_imports.json`
-/// ([importStoreIssue]), as Séance does for its own settings file. A
-/// silent reset, or changes that will not be kept, is not something to
-/// leave the user to find out. Shows nothing when both are null.
+/// ([settingsIssue]), the engine's `ssh_config_imports.json`
+/// ([importStoreIssue]) and the instance lock ([instanceLockIssue]), as
+/// Séance does for its own settings file. A silent reset, changes that
+/// will not be kept, or a missing guard against a second instance is not
+/// something to leave the user to find out. Shows nothing when all are
+/// null.
 class StartupIssueNotice extends StatefulWidget {
   const StartupIssueNotice({
     super.key,
     required this.settingsIssue,
     required this.importStoreIssue,
+    required this.instanceLockIssue,
     required this.child,
   });
 
   final DeviceSettingsIssue? settingsIssue;
   final ImportStoreIssue? importStoreIssue;
+  final InstanceLockUnavailable? instanceLockIssue;
   final Widget child;
 
   @override
@@ -42,7 +47,12 @@ class _StartupIssueNoticeState extends State<StartupIssueNotice> {
     super.initState();
     final settingsIssue = widget.settingsIssue;
     final importStoreIssue = widget.importStoreIssue;
-    if (settingsIssue == null && importStoreIssue == null) return;
+    final instanceLockIssue = widget.instanceLockIssue;
+    if (settingsIssue == null &&
+        importStoreIssue == null &&
+        instanceLockIssue == null) {
+      return;
+    }
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -53,6 +63,7 @@ class _StartupIssueNoticeState extends State<StartupIssueNotice> {
         if (settingsIssue != null) settingsIssueMessage(l10n, settingsIssue),
         if (importStoreIssue != null)
           importStoreIssueMessage(l10n, importStoreIssue),
+        if (instanceLockIssue != null) l10n.instanceLockUnavailable,
       ]) {
         showTopToast(overlay, message: message, duration: _noticeDuration);
       }

@@ -33,3 +33,7 @@
   Quit. On macOS the menu bar also has About, Enter Full Screen and the
   window commands, but no longer an Edit or Help menu until commands for
   them land; ⌘C, ⌘V, ⌘X, ⌘A and ⌘Z still work in text fields.
+- One copy at a time on macOS, Linux and Windows: opening Klabautermann
+  again while it runs only shows that it is already running, with a Quit
+  button, so two copies never overwrite each other's settings and
+  imported servers.

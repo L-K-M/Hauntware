@@ -173,6 +173,22 @@
   "@importsFileNewer": {
     "description": "Startup notice: a newer app version wrote the file holding the servers imported from ~/.ssh/config, so this version does not write it."
   },
+  "instanceLockUnavailable": "Klabautermann could not check whether it is already running. If you open it twice, the two copies can overwrite each other's settings and imported servers.",
+  "@instanceLockUnavailable": {
+    "description": "Startup notice: the lock that keeps a second copy of the desktop app from starting could not be taken, so a second copy would not be stopped."
+  },
+  "alreadyRunningTitle": "Klabautermann is already running",
+  "@alreadyRunningTitle": {
+    "description": "Heading of the only screen a second copy of the desktop app shows before it quits."
+  },
+  "alreadyRunningBody": "Switch to the Klabautermann window that is already open. Only one copy runs at a time, so two copies never overwrite each other's settings and imported servers.",
+  "@alreadyRunningBody": {
+    "description": "Body of the screen a second copy of the desktop app shows: where to go instead, and why only one copy runs."
+  },
+  "alreadyRunningQuit": "Quit",
+  "@alreadyRunningQuit": {
+    "description": "Button on the already-running screen that quits the second copy."
+  },
   "settingsWindowUnreachable": "Settings cannot reach Klabautermann. Close this window and open Settings again.",
   "@settingsWindowUnreachable": {
     "description": "Shown in the desktop settings window when the app does not answer it."

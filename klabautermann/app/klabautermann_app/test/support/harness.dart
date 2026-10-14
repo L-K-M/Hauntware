@@ -8,7 +8,7 @@ import 'package:klabautermann_app/controllers/monitoring_controller.dart';
 import 'package:klabautermann_app/services/settings_window/settings_window_link.dart';
 import 'package:klabautermann_app/services/ssh_config_source.dart';
 import 'package:klabautermann_core/klabautermann_core.dart'
-    show DeviceSettingsIssue, ImportStoreIssue;
+    show DeviceSettingsIssue, ImportStoreIssue, InstanceLockUnavailable;
 
 import 'fake_engine.dart';
 
@@ -44,7 +44,8 @@ final class AppHarness {
 /// or under a settings window host (the harness disposes it), and
 /// [settingsIssue] is what opening that store reported. [importStoreIssue]
 /// stands in for what the engine's handshake reported about its import
-/// store. [toolbarBand] stands in for the macOS integrated titlebar's band
+/// store, [instanceLockIssue] for an instance lock that could not be
+/// taken, and [toolbarBand] for the macOS integrated titlebar's band
 /// state.
 Future<AppHarness> pumpApp(
   WidgetTester tester, {
@@ -54,6 +55,7 @@ Future<AppHarness> pumpApp(
   AppearanceController? appearance,
   DeviceSettingsIssue? settingsIssue,
   ImportStoreIssue? importStoreIssue,
+  InstanceLockUnavailable? instanceLockIssue,
   OpenSettingsWindow? openSettingsWindow,
   ValueListenable<bool>? toolbarBand,
 }) async {
@@ -80,6 +82,7 @@ Future<AppHarness> pumpApp(
       appearance: harness.appearance,
       settingsIssue: settingsIssue,
       importStoreIssue: importStoreIssue,
+      instanceLockIssue: instanceLockIssue,
       openSettingsWindow: openSettingsWindow,
       toolbarBand: toolbarBand,
     ),
