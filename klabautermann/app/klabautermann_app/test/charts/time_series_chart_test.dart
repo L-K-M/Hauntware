@@ -307,56 +307,23 @@ void main() {
     semantics.dispose();
   });
 
-  testWidgets('keeps the summaries when large text leaves no plot', (
+  testWidgets('keeps a plot and the summaries under doubled text', (
     tester,
   ) async {
     final semantics = tester.ensureSemantics();
     tester.platformDispatcher.textScaleFactorTestValue = 2;
     addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
-    final ring = TimeSeriesRing(capacity: 2, lanes: 1);
-    addTearDown(ring.dispose);
-    ring.add(_at(500), [50]);
-    await tester.pumpWidget(
-      chartFrame(
-        SizedBox(
-          width: 400,
-          height: 90,
-          child: TimeSeriesChart(
-            data: ring,
-            labels: const ['User'],
-            unit: ChartUnit.percent,
-            strings: testChartStrings,
-            source: 'Here',
-            end: _end,
-          ),
-        ),
-      ),
-    );
-
-    const label = 'User: now 50%, lowest 50%, highest 50%, steady';
-    expect(
-      find.semantics.byLabel(label).evaluate().single,
-      matchesSemantics(label: label),
-    );
-    semantics.dispose();
-  });
-
-  testWidgets('keeps a plot when doubled text grows the legend', (
-    tester,
-  ) async {
-    tester.platformDispatcher.textScaleFactorTestValue = 2;
-    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
     final ring = TimeSeriesRing(capacity: 10, lanes: 4);
     addTearDown(ring.dispose);
-    for (final (minute, reason) in ChartGapReason.values.indexed) {
-      ring.add(_at(minute * 120), [1, 2, 3, 4]);
-      ring.openGap(_at(minute * 120 + 60), reason);
+    for (final (index, reason) in ChartGapReason.values.indexed) {
+      ring.add(_at(index * 120), [50, 2, 3, 4]);
+      ring.openGap(_at(index * 120 + 60), reason);
     }
     await tester.pumpWidget(
       chartFrame(
         SizedBox(
           width: 400,
-          height: 120,
+          height: 90,
           child: TimeSeriesChart(
             data: ring,
             labels: const ['User', 'System', 'I/O wait', 'Steal'],
@@ -372,7 +339,15 @@ void main() {
     // The legend and source scroll within half the height rather than
     // overflowing the chart and squeezing the plot to nothing.
     expect(tester.takeException(), isNull);
-    expect(tester.getSize(_plot).height, greaterThanOrEqualTo(56));
+    expect(tester.getSize(_plot).height, greaterThanOrEqualTo(41));
+    // The axis labels leave no room for the plot itself, but the summaries
+    // still carry the data.
+    const label = 'User: now unknown, lowest 50%, highest 50%, steady';
+    expect(
+      find.semantics.byLabel(label).evaluate().single,
+      matchesSemantics(label: label),
+    );
+    semantics.dispose();
   });
 
   test('puts time ticks on round local times in any zone', () {
