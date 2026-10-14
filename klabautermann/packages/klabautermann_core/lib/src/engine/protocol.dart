@@ -1334,8 +1334,8 @@ final class OverviewResult extends SampleResult {
     this.memory,
     this.load,
     this.loadPerCore,
-    Map<String, NetRate> network = const {},
-  }) : network = Map.unmodifiable(network);
+    Map<String, NetRate>? network,
+  }) : network = _unmodifiable(network);
 
   /// CPU occupancy since the previous reading; null without one to compare
   /// with (the first reading, or after a reboot or a counter reset).
@@ -1350,9 +1350,10 @@ final class OverviewResult extends SampleResult {
   /// core context); null while the engine does not know that number.
   final double? loadPerCore;
 
-  /// Byte rates per interface since the previous reading; empty without
-  /// one.
-  final Map<String, NetRate> network;
+  /// Byte rates per interface since the previous reading; null without
+  /// one, and empty only when the host reported no interface, so unknown
+  /// never sums to zero (03 §1.2 principle 6).
+  final Map<String, NetRate>? network;
 }
 
 /// The focused server's reading ([SampleStream.core], OV-01): the
@@ -1360,27 +1361,27 @@ final class OverviewResult extends SampleResult {
 final class CoreResult extends SampleResult {
   CoreResult({
     this.cpu,
-    Map<String, CpuPercentages> perCpu = const {},
+    Map<String, CpuPercentages>? perCpu,
     this.memory,
     this.load,
     this.loadPerCore,
-    Map<String, NetRate> network = const {},
-    Map<String, DiskRate> disks = const {},
+    Map<String, NetRate>? network,
+    Map<String, DiskRate>? disks,
     this.cpuPressure,
     this.ioPressure,
     this.memoryPressure,
     this.uptime,
     this.bootedAt,
-  }) : perCpu = Map.unmodifiable(perCpu),
-       network = Map.unmodifiable(network),
-       disks = Map.unmodifiable(disks);
+  }) : perCpu = _unmodifiable(perCpu),
+       network = _unmodifiable(network),
+       disks = _unmodifiable(disks);
 
   /// As [OverviewResult.cpu].
   final CpuPercentages? cpu;
 
   /// Occupancy per core (`cpu0`, `cpu1` and so on) since the previous
-  /// reading; empty without one.
-  final Map<String, CpuPercentages> perCpu;
+  /// reading; null without one, as [OverviewResult.network].
+  final Map<String, CpuPercentages>? perCpu;
 
   final MemoryUsage? memory;
   final LoadAvg? load;
@@ -1389,11 +1390,11 @@ final class CoreResult extends SampleResult {
   final double? loadPerCore;
 
   /// As [OverviewResult.network].
-  final Map<String, NetRate> network;
+  final Map<String, NetRate>? network;
 
-  /// Byte rates per block device since the previous reading; empty
-  /// without one.
-  final Map<String, DiskRate> disks;
+  /// Byte rates per block device since the previous reading; null without
+  /// one, as [OverviewResult.network].
+  final Map<String, DiskRate>? disks;
 
   /// Pressure stall information; null where the kernel has none, which is
   /// normal (7.1).
@@ -1426,6 +1427,9 @@ final class MemoryUsage {
   final int? buffersBytes, cachedBytes, sharedBytes;
   final int? swapTotalBytes, swapUsedBytes;
 }
+
+Map<String, V>? _unmodifiable<V>(Map<String, V>? map) =>
+    map == null ? null : Map.unmodifiable(map);
 
 /// Mount usage and inodes ([SampleStream.fs], 7.3).
 final class FsResult extends SampleResult {

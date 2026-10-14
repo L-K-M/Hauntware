@@ -263,8 +263,8 @@ void main() {
       expect(overview.memory!.swapUsedBytes, 512);
       expect(overview.load!.load5, 1);
       expect(overview.loadPerCore, 0.375);
-      expect(overview.network['eth0']!.rxBytesPerSecond, 10);
-      expect(() => overview.network.clear(), throwsUnsupportedError);
+      expect(overview.network!['eth0']!.rxBytesPerSecond, 10);
+      expect(() => overview.network!.clear(), throwsUnsupportedError);
 
       final core =
           await result(
@@ -286,13 +286,18 @@ void main() {
                 ),
               )
               as CoreResult;
-      expect(core.perCpu['cpu0']!.busy, 15);
-      expect(core.disks['sda']!.writeBytesPerSecond, 1024);
+      expect(core.perCpu!['cpu0']!.busy, 15);
+      expect(core.disks!['sda']!.writeBytesPerSecond, 1024);
       expect(core.ioPressure!.some!.avg60, 2);
       expect(core.cpuPressure, isNull);
       expect(core.uptime, const Duration(days: 3));
       expect(core.bootedAt, DateTime.utc(2026, 10, 11, 12));
-      expect(core.network, isEmpty);
+      // No previous reading is unknown, not zero (03 §1.2 principle 6).
+      expect(core.network, isNull);
+      final measuredNone =
+          await result(SampleStream.overview, OverviewResult(network: {}))
+              as OverviewResult;
+      expect(measuredNone.network, isEmpty);
 
       final fs =
           await result(
