@@ -1248,8 +1248,8 @@ class AppState extends ChangeNotifier {
   }
 
   /// Import hosts from an OpenSSH config file's text. `skipped` counts the
-  /// hosts left out because their block is invalid, such as a `Port` ssh
-  /// would reject.
+  /// hosts left out because their block is invalid, such as a `Port` the
+  /// importer refuses.
   Future<({int imported, int skipped})> importSshConfig(String text) async {
     final now = DateTime.now().millisecondsSinceEpoch;
     final result = SshConfigImporter.parse(text);

@@ -64,9 +64,11 @@ enum SshConfigImportLimitation {
   hostInclude,
 
   /// The pinned importer refused the block's `Port`: not a decimal
-  /// 1–65535 or a service name it knows, which ssh would reject too. The
-  /// bookmark model refuses such ports (04 §2.1 — they would mint
-  /// malformed `hostkey:` ids) and the row cannot be imported at all.
+  /// 1–65535 or the service name `ssh`, `http` or `https`. ssh rejects most
+  /// such values but may resolve another service name. The bookmark model
+  /// refuses ports outside 1–65535 (04 §2.1 — they would mint malformed
+  /// `hostkey:` ids), and any other refused value has no port, so the row
+  /// cannot be imported at all.
   invalidPort,
 
   /// Connection defaults — `Port`, `User`, `HostName`, `IdentityFile` —

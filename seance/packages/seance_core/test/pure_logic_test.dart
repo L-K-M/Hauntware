@@ -210,6 +210,13 @@ Host y
       }
     });
 
+    test('skips a Port service name other than ssh, http or https', () {
+      // ssh asks getservbyname(3), which may know `www`; the importer cannot.
+      final result = SshConfigImporter.parse('Host w\n  Port www\n');
+      expect(result.hosts, isEmpty);
+      expect(result.skipped.single.value, 'www');
+    });
+
     test('a rejected Port skips its block even beside a valid one', () {
       final result = SshConfigImporter.parse(
         'Host a\n  Port 22a\n  Port 2222\n'

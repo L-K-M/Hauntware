@@ -3193,9 +3193,10 @@ the engine in `engine_isolate.dart` beside it):
   every entry an earlier import produced, and sends `CatalogReplaced`
   before `SshConfigImported`, so the fleet already shows the imports when
   the counts arrive. `skippedCount` counts hosts left out for a `Port`
-  ssh would reject (the importer reports them) or an alias an earlier
-  block already took; wildcard-only blocks such as `Host *` are defaults
-  and are not counted.
+  the importer refuses (one ssh rejects, or a service name other than
+  `ssh`, `http` or `https`; the importer reports them) or an alias an
+  earlier block already took; wildcard-only blocks such as `Host *` are
+  defaults and are not counted.
   An import is not a catalog write (D14). Until D13's device-local store
   lands (4.10), the engine holds imports in memory and a restart drops
   them.

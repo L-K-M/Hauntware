@@ -859,7 +859,7 @@ class _ServerListPaneState extends State<ServerListPane> {
           message: skipped == 0
               ? 'Imported $imported host(s)'
               : 'Imported $imported host(s). Skipped $skipped with an '
-                    'invalid Port.',
+                    'unsupported Port.',
         );
       }
     }

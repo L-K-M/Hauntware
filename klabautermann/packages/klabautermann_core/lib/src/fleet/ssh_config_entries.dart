@@ -22,8 +22,9 @@ const String _importIdPrefix = 'ssh-config:';
 ///   drops the directive and the engine opens no file, so hosts defined only
 ///   in an included file are not imported;
 /// - `Port` is a decimal 1 to 65535 or the service name `ssh`, `http` or
-///   `https`; a block with any other `Port` is skipped, where ssh would
-///   reject the whole config, and its hosts are counted.
+///   `https`; a block with any other `Port` is skipped and its hosts are
+///   counted. ssh rejects the whole config over such a `Port`, unless it is
+///   another service name ssh resolves.
 ///
 /// On top of the importer, a host is skipped and counted when an earlier
 /// block already took its alias (the alias is the entry's id; ssh would

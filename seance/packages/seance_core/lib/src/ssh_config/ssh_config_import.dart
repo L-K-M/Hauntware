@@ -43,7 +43,8 @@ class ImportedHost {
 
 /// Why [SshConfigImporter] left a host out.
 enum SkippedHostReason {
-  /// The block's `Port` is not a port ssh accepts (see [SshConfigImporter]).
+  /// The importer refuses the block's `Port`: one ssh rejects, or a service
+  /// name other than `ssh`, `http` or `https` (see [SshConfigImporter]).
   invalidPort,
 }
 
@@ -97,11 +98,11 @@ class SshConfigImport {
 /// `Port` is read as ssh's `a2port()` reads it: a decimal 1 to 65535, or a
 /// service name. ssh resolves names with `getservbyname(3)`, which Dart
 /// cannot call portably, so only `ssh`, `http` and `https` are known here.
-/// ssh rejects the whole config over any other `Port`; the importer leaves
-/// out only the hosts of that block and reports them in
-/// [SshConfigImport.skipped]. A `Port` outside the imported blocks (before
-/// the first `Host`, in a wildcard-only block or in a `Match` block) is not
-/// read, so it is not checked either.
+/// ssh rejects the whole config over a `Port` that is neither. The importer
+/// refuses those and any other service name, leaves out only the hosts of
+/// that block and reports them in [SshConfigImport.skipped]. A `Port`
+/// outside the imported blocks (before the first `Host`, in a wildcard-only
+/// block or in a `Match` block) is not read, so it is not checked either.
 class SshConfigImporter {
   static const int _minimumPort = 1;
   static const int _maximumPort = 65535;
@@ -191,7 +192,7 @@ class SshConfigImporter {
   }
 
   /// The port ssh's `a2port()` reads from [value], or null where ssh
-  /// reports "Bad port".
+  /// reports "Bad port" or [value] names a service not in [_servicePorts].
   static int? _parsePort(String value) {
     if (!_decimal.hasMatch(value)) return _servicePorts[value];
 
@@ -351,7 +352,7 @@ class _Block {
   /// The last valid `Port`, like every other directive here.
   int? port;
 
-  /// The first `Port` ssh would reject, which makes the block invalid.
+  /// The first `Port` the importer refuses, which makes the block invalid.
   ({int line, String value})? badPort;
 
   _Block({required this.patterns});
