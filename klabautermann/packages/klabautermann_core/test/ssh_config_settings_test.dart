@@ -387,6 +387,68 @@ void main() {
       );
     });
 
+    test('Port, User, the first IdentityFile and the route each count for '
+        'the final pass', () {
+      const fixed = {
+        'Port': '  Port 22\n',
+        'User': '  User u\n',
+        'IdentityFile': '  IdentityFile ~/.ssh/k\n',
+        'route': '  ProxyJump none\n',
+      };
+      const late = {
+        'Port': '  Port 2200\n',
+        'User': '  User late\n',
+        'IdentityFile': '  IdentityFile ~/.ssh/late\n',
+        'route': '  ProxyJump gw\n',
+      };
+      const settled = ('web.example.com', 22, 'u', '~/.ssh/k', 'none');
+      const afterLate = {
+        'Port': ('web.example.com', 2200, 'u', '~/.ssh/k', 'none'),
+        'User': ('web.example.com', 22, 'late', '~/.ssh/k', 'none'),
+        'IdentityFile': ('web.example.com', 22, 'u', '~/.ssh/late', 'none'),
+        'route': ('web.example.com', 22, 'u', '~/.ssh/k', 'gw'),
+      };
+
+      for (final unset in fixed.keys) {
+        final host = [
+          'Host web\n  HostName web.example.com\n',
+          for (final MapEntry(:key, :value) in fixed.entries)
+            if (key != unset) value,
+        ].join();
+
+        // An Include anywhere could ask for the pass and set it then.
+        expect(
+          _resolve('${host}Host other\n  Include other.conf\n', 'web'),
+          UnresolvedReason.secondPass,
+          reason: '$unset unset, with an Include',
+        );
+        // A pass that /etc/ssh/ssh_config may ask for would set it.
+        expect(
+          _resolve('${host}Host *.example.com\n${late[unset]}', 'web'),
+          UnresolvedReason.secondPass,
+          reason: '$unset set only on the final pass',
+        );
+        // A Match final here asks for the pass, and it sets the value.
+        expect(
+          _resolve('${host}Match final\n${late[unset]}', 'web'),
+          afterLate[unset],
+          reason: '$unset set by a Match final',
+        );
+      }
+
+      // With all four set, neither can change what the engine dials.
+      final all =
+          'Host web\n  HostName web.example.com\n${fixed.values.join()}';
+      expect(
+        _resolve('${all}Host other\n  Include other.conf\n', 'web'),
+        settled,
+      );
+      expect(
+        _resolve('${all}Host *.example.com\n${late.values.join()}', 'web'),
+        settled,
+      );
+    });
+
     test('a line ssh rejects leaves out the names its block applies to', () {
       for (final line in [
         'Port 0',
