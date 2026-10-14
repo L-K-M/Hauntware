@@ -3388,7 +3388,11 @@ reason in view, each series and the source, which the caller words. The
 hatching's strokes are 2 px wide, so that drawn at one pixel per point
 each still holds 3:1 against the band on the chart surfaces. Time ticks
 fall on round local times, and the chart never animates: it moves when a
-sample arrives or a rebuild moves its right edge later.
+sample arrives or a rebuild moves its right edge later. The lanes differ
+by hue alone, short of 10.10's "never colour alone" for two to four
+series: the colour-blind check (10.7) and the per-series summaries are
+no second visual cue, and a dash pattern would read as missed samples,
+so that cue is still open.
 
 ---
 
