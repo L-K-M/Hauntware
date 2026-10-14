@@ -138,6 +138,16 @@ if [[ "$scope" != flutter ]]; then
     run dart run tool/license_gate/bin/check.dart --marker-only
   )
 
+  # ---- Shared localization contract scanner (F1b): a standalone
+  # pure-Dart package with its own pubspec, so it resolves in place
+  # instead of through the root manifest.
+  (
+    cd tool/l10n_contract
+    run dart pub get
+    run dart analyze
+    run dart test
+  )
+
   # ---- Klabautermann: pure-Dart workspace packages (the app is below).
   # The sampler's shell test runs dash and bash where present.
   (

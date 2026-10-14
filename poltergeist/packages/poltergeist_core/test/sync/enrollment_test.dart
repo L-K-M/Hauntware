@@ -145,21 +145,24 @@ final class _Device {
       credentials: device.credentials,
       state: device.state,
       records: device.records,
+      handlers: [BookmarkHandler(bookmarks: device.bookmarks)],
     );
     return device;
   }
 
-  BookmarkCoordinator coordinatorFor(List<int> vaultKey) {
+  RecordCoordinator coordinatorFor(List<int> vaultKey) {
     crypto = RecordCrypto(RecordCodec(vaultKey));
-    return BookmarkCoordinator(
+    return RecordCoordinator(
       records: records,
-      bookmarks: bookmarks,
+      handlers: [BookmarkHandler(bookmarks: bookmarks)],
       hostKeys: hostKeys,
       hostKeyMutations: hostKeyMutations,
       crypto: crypto,
       deviceId: state.id,
       pinVerdicts: verdicts,
       tripwires: tripwires,
+      catalogMode: CatalogMode.separate,
+      pushPolicy: PushPolicy.normal,
       enrollment: state,
       now: clock.call,
     );
