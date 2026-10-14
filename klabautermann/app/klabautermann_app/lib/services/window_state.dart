@@ -25,9 +25,11 @@ const Duration _geometrySaveDelay = Duration(milliseconds: 500);
 /// time. The file is device-local and never synced; on Windows its bounds
 /// are physical pixels ([GhostCoordinateSpace.physicalOnWindows]).
 final class WindowStateStore implements GhostWindowPersistence {
-  WindowStateStore(this._file);
+  /// `writer` replaces the file's contents; a seam for tests.
+  WindowStateStore(this._file, {this._writer = writeFileAtomically});
 
   final File _file;
+  final Future<void> Function(File target, List<int> bytes) _writer;
   Future<void> _saveTail = Future<void>.value();
 
   /// The stored state, or null when there is none. This runs before the
@@ -52,7 +54,7 @@ final class WindowStateStore implements GhostWindowPersistence {
   @override
   Future<void> save(GhostWindowSnapshot snapshot) {
     final bytes = utf8.encode(jsonEncode(snapshot.toJson()));
-    final saved = _saveTail.then((_) => writeFileAtomically(_file, bytes));
+    final saved = _saveTail.then((_) => _writer(_file, bytes));
     _saveTail = saved.then<void>((_) {}, onError: (Object _) {});
     return saved;
   }

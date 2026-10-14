@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:ui';
@@ -99,6 +100,62 @@ void main() {
         ['window_state.json'],
         reason: 'no temp file is left behind',
       );
+    });
+  });
+
+  group('saving', () {
+    const first = GhostWindowSnapshot(bounds: Rect.fromLTWH(0, 0, 400, 300));
+    const second = GhostWindowSnapshot(bounds: Rect.fromLTWH(50, 60, 900, 700));
+
+    test('writes one save at a time, in the order asked', () async {
+      final events = <String>[];
+      final firstWrite = Completer<void>();
+      var writes = 0;
+      final windowState = WindowStateStore(
+        file,
+        writer: (target, bytes) async {
+          final name = ++writes == 1 ? 'first' : 'second';
+          events.add('$name started');
+          if (name == 'first') await firstWrite.future;
+          events.add('$name done');
+        },
+      );
+
+      final saves = Future.wait([
+        windowState.save(first),
+        windowState.save(second),
+      ]);
+      await settle();
+      expect(events, ['first started'], reason: 'the second save waits');
+
+      firstWrite.complete();
+      await saves;
+      expect(events, [
+        'first started',
+        'first done',
+        'second started',
+        'second done',
+      ]);
+    });
+
+    test('a failed save reports its error and does not hold up the next '
+        'one', () async {
+      final written = <String>[];
+      var writes = 0;
+      final windowState = WindowStateStore(
+        file,
+        writer: (target, bytes) async {
+          if (++writes == 1) throw const FileSystemException('disk full');
+          written.add(utf8.decode(bytes));
+        },
+      );
+
+      final failed = windowState.save(first);
+      final next = windowState.save(second);
+
+      await expectLater(failed, throwsA(isA<FileSystemException>()));
+      await next;
+      expect(written.map(jsonDecode), [second.toJson()]);
     });
   });
 
