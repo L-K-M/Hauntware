@@ -418,6 +418,33 @@ void main() {
     expect(_thresholds.severityOf(90), ChartSeverity.critical);
   });
 
+  test('the painter keeps a sliver of a run narrower than the gap', () {
+    final painter = BarPainter(
+      cellCount: 1,
+      runs: [
+        _fill(0, 0.5, _palette.series[0]),
+        _fill(0.5, 0.504, _palette.series[1]),
+      ],
+      trackColor: _palette.track,
+    );
+
+    // The second run is 0.8 px wide: it gives up half of it to the gap
+    // rather than vanishing, as small buffers on a wide memory bar did.
+    expect(
+      (Canvas canvas) => painter.paint(canvas, const Size(200, 8)),
+      paints
+        ..rect(color: _palette.track)
+        ..rect(
+          rect: const Rect.fromLTRB(0, 0, 100, 8),
+          color: _palette.series[0],
+        )
+        ..rect(
+          rect: const Rect.fromLTRB(100.4, 0, 100.8, 8),
+          color: _palette.series[1],
+        ),
+    );
+  });
+
   test('the painter repaints when what it draws changes', () {
     BarPainter painter({
       int cellCount = 1,

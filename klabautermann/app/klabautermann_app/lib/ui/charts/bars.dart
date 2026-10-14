@@ -493,8 +493,10 @@ final class BarPainter extends CustomPainter {
 
   /// The track shows through this gap between neighbouring runs, so the
   /// segments part by more than colour, also when stale turns them grey.
-  /// The run after the gap gives up the width; a run that ends inside its
-  /// cell is not shortened, so a small value still shows.
+  /// The run after the gap gives up the width, at most half its own, so a
+  /// run narrower than the gap keeps a sliver rather than vanishing; a run
+  /// that ends inside its cell is not shortened, so a small value still
+  /// shows.
   static const runGap = 1.0;
 
   static const _hatchSpacing = 4.0;
@@ -526,7 +528,9 @@ final class BarPainter extends CustomPainter {
         if (run.cell != cell) continue;
         final start = run.start.clamp(0.0, 1.0);
         final end = run.end.clamp(0.0, 1.0);
-        final left = rect.left + start * rect.width + (start > 0 ? runGap : 0);
+        final runWidth = (end - start) * rect.width;
+        final gap = start > 0 ? math.min(runGap, runWidth / 2) : 0.0;
+        final left = rect.left + start * rect.width + gap;
         final right = rect.left + end * rect.width;
         if (right <= left) continue;
         final runRect = Rect.fromLTRB(left, rect.top, right, rect.bottom);
