@@ -101,9 +101,10 @@ enum UnresolvedReason {
   /// file that could ask for that pass and set any value there, and the
   /// `Port`, `User`, `IdentityFile` or route is still unset; without an
   /// `Include` or a `Match final` here, only `/etc/ssh/ssh_config` can ask
-  /// for the pass, and it would set one of those; or
-  /// `CanonicalizeHostname` is other than `no`, so ssh canonicalizes the
-  /// host through DNS before that pass.
+  /// for the pass, and it would set one of those (see
+  /// [UnresolvedSshSettings.passes]); or `CanonicalizeHostname` is other
+  /// than `no`, so ssh canonicalizes the host through DNS before that
+  /// pass.
   secondPass,
 
   /// The name holds U+FFFD, which the app's decoding puts in place of
@@ -131,9 +132,17 @@ final class ResolvedSshSettings extends SshConfigResolution {
 
 /// No settings: ssh would use ones the engine cannot know or follow.
 final class UnresolvedSshSettings extends SshConfigResolution {
-  const UnresolvedSshSettings(this.reason);
+  const UnresolvedSshSettings(this.reason, {this.passes});
 
   final UnresolvedReason reason;
+
+  /// For a [UnresolvedReason.secondPass] that only `/etc/ssh/ssh_config`
+  /// can ask for: the settings without that pass and with it, each as
+  /// [ResolvedSshSettings.host] gives them. Null when either pass gives
+  /// none. Where the final pass gives a route ssh refuses, that pass is
+  /// not the one ssh takes, so the import keeps the first pass's settings
+  /// (03 §10.1).
+  final ({ImportedHost firstPass, ImportedHost finalPass})? passes;
 }
 
 /// An OpenSSH client config, read so that it answers, for any name you
@@ -173,10 +182,12 @@ final class UnresolvedSshSettings extends SshConfigResolution {
 /// every name: with a `Match final` here, what that pass sets applies;
 /// without one, a name whose `Port`, `User`, first `IdentityFile` or route
 /// that pass would set is unresolved, since the outcome depends on a file
-/// the engine cannot see. Where the host ssh dials cannot be known (an
-/// address with a scope, whose form depends on the device's interfaces, or
-/// one the system resolver may read where Dart does not), a block with a
-/// pattern other than `*` may apply on that pass.
+/// the engine cannot see; [UnresolvedSshSettings.passes] then holds both
+/// passes' settings, for the import to keep the first where ssh would
+/// refuse the final pass's route. Where the host ssh dials cannot be
+/// known (an address with a scope, whose form depends on the device's
+/// interfaces, or one the system resolver may read where Dart does not),
+/// a block with a pattern other than `*` may apply on that pass.
 ///
 /// `Include` is not followed. A file it names could set any value, so an
 /// `Include` in a block that applies leaves the name unresolved. An
@@ -316,7 +327,7 @@ final class SshConfigSettings {
           route == null) {
         return const UnresolvedSshSettings(UnresolvedReason.secondPass);
       }
-      return reading.finish(host);
+      return reading.finish(host, reading.dialing);
     }
 
     final firstPass = reading.dialing;
@@ -324,12 +335,26 @@ final class SshConfigSettings {
     if (_readPass(reading, reading.finalHost) case final reason?) {
       return UnresolvedSshSettings(reason);
     }
+    if (_wantsFinalPass || reading.dialing == firstPass) {
+      return reading.finish(host, reading.dialing);
+    }
+
     // Without a `Match final` here, only /etc/ssh/ssh_config can ask for
     // the pass, so the outcome must not depend on it.
-    if (!_wantsFinalPass && reading.dialing != firstPass) {
-      return const UnresolvedSshSettings(UnresolvedReason.secondPass);
-    }
-    return reading.finish(host);
+    return switch ((
+      reading.finish(host, firstPass),
+      reading.finish(host, reading.dialing),
+    )) {
+      (
+        ResolvedSshSettings(host: final early),
+        ResolvedSshSettings(host: final late),
+      ) =>
+        UnresolvedSshSettings(
+          UnresolvedReason.secondPass,
+          passes: (firstPass: early, finalPass: late),
+        ),
+      _ => const UnresolvedSshSettings(UnresolvedReason.secondPass),
+    };
   }
 
   /// Reads the blocks that apply into [reading], on its pass, with `Host`
@@ -364,6 +389,14 @@ typedef _Line = ({
   List<String> arguments,
   String rest,
   bool openQuote,
+});
+
+/// The values the engine dials with, beside the `HostName`.
+typedef _Dialing = ({
+  int? port,
+  String? user,
+  String? identityFile,
+  ({bool command, String value})? route,
 });
 
 sealed class _Block {
@@ -694,13 +727,7 @@ final class _Reading {
 
   /// The values the engine dials with, which the final pass must not
   /// change unless the file asks for it.
-  ({
-    int? port,
-    String? user,
-    String? identityFile,
-    ({bool command, String value})? route,
-  })
-  get dialing =>
+  _Dialing get dialing =>
       (port: port, user: user, identityFile: identityFile, route: route);
 
   /// Applies [line] from a block that applies, or may apply; the reason
@@ -757,15 +784,14 @@ final class _Reading {
   }
 
   /// The settings, once every block has been read, for [host], the
-  /// `HostName` with `%h` expanded.
-  SshConfigResolution finish(String host) {
-    final route = this.route;
+  /// `HostName` with `%h` expanded, dialing with [values].
+  SshConfigResolution finish(String host, _Dialing values) {
+    final (:port, :user, identityFile: key, :route) = values;
     if (route != null &&
         route.command &&
         _asciiLower(route.value) != _noProxyCommand) {
       return const UnresolvedSshSettings(UnresolvedReason.proxyCommand);
     }
-    final key = identityFile;
     if (key != null && !isImportedIdentityFile(key)) {
       return const UnresolvedSshSettings(UnresolvedReason.identityFileToken);
     }

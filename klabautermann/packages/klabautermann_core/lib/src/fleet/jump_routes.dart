@@ -116,74 +116,15 @@ Map<String, List<JumpHop>?> jumpRoutes(
   List<ImportedHost> hops = const [],
   Set<String> leftOut = const {},
 }) {
-  final named = [...hosts, ...hops];
-  final byAlias = {for (final host in named) host.alias: host};
-  final parsed = {
-    for (final host in named)
-      host.alias: switch (host.proxyJump) {
-        null => const <_Hop>[],
-        final value => _parseProxyJump(value),
-      },
-  };
-
-  // The route of [host] in at most [limit] hops, or null. [visiting] holds
-  // the hosts whose first hop led here, to catch a loop.
-  List<JumpHop>? follow(ImportedHost host, Set<String> visiting, int limit) {
-    final own = parsed[host.alias];
-    if (own == null || own.length > limit) return null;
-
-    final route = <JumpHop>[];
-    for (final (index, (:name, :user, host: hopHost, :port)) in own.indexed) {
-      if (leftOut.contains(hopHost)) return null;
-
-      final alias = byAlias[hopHost];
-      if (index == 0 && alias != null) {
-        if (!visiting.add(alias.alias)) return null;
-
-        // ssh reaches the first hop through its own ProxyJump, so that
-        // route comes first and leaves room for this host's hops.
-        final upstream = follow(alias, visiting, limit - own.length);
-        if (upstream == null) return null;
-        route.addAll(upstream);
-      }
-
-      final previous = route.lastOrNull;
-      final hop = JumpHop._(
-        id: previous == null ? '$_hopIdPrefix$name' : '${previous.id},$name',
-        name: name,
-        host: alias?.effectiveHost ?? hopHost,
-        port: port ?? alias?.port ?? kSshDefaultPort,
-        user: user ?? alias?.user,
-        identityFile: alias?.identityFile,
-        written: own[index],
-      );
-      if (previous != null &&
-          _isJumpLoop(previous._written, hop.host, hop.port, hop.user)) {
-        return null;
-      }
-      route.add(hop);
-    }
-    return List.unmodifiable(route);
-  }
+  final router = _Router([...hosts, ...hops], leftOut, _LoopTest.mayLoop);
 
   // A hop record's own last hop is checked where a route reaches it as a
   // first hop, with that route's user and port.
   final routes = {
-    for (final hop in hops) hop.alias: follow(hop, {hop.alias}, _maxJumpHops),
-    for (final host in hosts)
-      host.alias: switch (follow(host, {host.alias}, _maxJumpHops)) {
-        final route?
-            when route.isNotEmpty &&
-                _isJumpLoop(
-                  route.last._written,
-                  host.effectiveHost,
-                  host.port ?? kSshDefaultPort,
-                  host.user,
-                ) =>
-          null,
-        final route => route,
-      },
+    for (final hop in hops) hop.alias: router.follow(hop).route,
+    for (final host in hosts) host.alias: router.followToEnd(host).route,
   };
+  final parsed = router.parsed;
 
   // A host whose route is null is left out, so every route that names it
   // is null too, and so on. Following who names whom reaches each host
@@ -209,6 +150,130 @@ Map<String, List<JumpHop>?> jumpRoutes(
   return {for (final host in hosts) host.alias: routes[host.alias]};
 }
 
+/// The names among [hosts] and [hops] whose route ssh certainly refuses
+/// or never completes, with each name's settings as given: following
+/// first hops leads back to a name already on the way, or a hop as
+/// written is the host or hop it leads to, ssh's "jumphost loop" (see
+/// [_isJumpLoop]), here only where the user and the host ssh dials are
+/// known. A name's own route ends at the name itself, on its own port
+/// and as its own user. Routes through a name in [leftOut] count only
+/// when they loop before it.
+///
+/// The import reads the config as if `/etc/ssh/ssh_config` asked for the
+/// final pass, and keeps a name's first pass where that pass gives one of
+/// these routes (03 §10.1).
+Set<String> loopingRoutes(
+  List<ImportedHost> hosts, {
+  List<ImportedHost> hops = const [],
+  Set<String> leftOut = const {},
+}) {
+  final named = [...hosts, ...hops];
+  final router = _Router(named, leftOut, _LoopTest.mustLoop);
+  return {
+    for (final host in named)
+      if (router.followToEnd(host).loops) host.alias,
+  };
+}
+
+/// Which jumps [_isJumpLoop] counts.
+enum _LoopTest {
+  /// Every jump that may be a loop: where the user or the host ssh dials
+  /// is unknown, one that could match. [jumpRoutes] leaves such routes
+  /// out.
+  mayLoop,
+
+  /// Only jumps that are certainly loops.
+  mustLoop,
+}
+
+/// A route, or null with whether it failed because it loops.
+typedef _Followed = ({List<JumpHop>? route, bool loops});
+
+/// Follows routes through a set of named hosts and hop records.
+final class _Router {
+  _Router(List<ImportedHost> named, this._leftOut, this._test)
+    : _byAlias = {for (final host in named) host.alias: host},
+      parsed = {
+        for (final host in named)
+          host.alias: switch (host.proxyJump) {
+            null => const <_Hop>[],
+            final value => _parseProxyJump(value),
+          },
+      };
+
+  final Set<String> _leftOut;
+  final _LoopTest _test;
+  final Map<String, ImportedHost> _byAlias;
+
+  /// Each name's hops, null where the engine cannot read its `ProxyJump`.
+  final Map<String, List<_Hop>?> parsed;
+
+  /// The route of [host] with [host] as its end: its last hop must not
+  /// be a jumphost loop to [host] on its own port and as its own user.
+  _Followed followToEnd(ImportedHost host) {
+    final followed = follow(host);
+    final route = followed.route;
+    if (route == null || route.isEmpty) return followed;
+
+    final loops = _isJumpLoop(
+      route.last._written,
+      host.effectiveHost,
+      host.port ?? kSshDefaultPort,
+      host.user,
+      _test,
+    );
+    return loops ? (route: null, loops: true) : followed;
+  }
+
+  /// The route of [host] in at most [limit] hops. [visiting] holds the
+  /// hosts whose first hop led here, to catch a loop.
+  _Followed follow(
+    ImportedHost host, [
+    Set<String>? visiting,
+    int limit = _maxJumpHops,
+  ]) {
+    const unfollowable = (route: null, loops: false);
+    const looping = (route: null, loops: true);
+    visiting ??= {host.alias};
+
+    final own = parsed[host.alias];
+    if (own == null || own.length > limit) return unfollowable;
+
+    final route = <JumpHop>[];
+    for (final (index, (:name, :user, host: hopHost, :port)) in own.indexed) {
+      if (_leftOut.contains(hopHost)) return unfollowable;
+
+      final alias = _byAlias[hopHost];
+      if (index == 0 && alias != null) {
+        if (!visiting.add(alias.alias)) return looping;
+
+        // ssh reaches the first hop through its own ProxyJump, so that
+        // route comes first and leaves room for this host's hops.
+        final upstream = follow(alias, visiting, limit - own.length);
+        if (upstream.route == null) return upstream;
+        route.addAll(upstream.route!);
+      }
+
+      final previous = route.lastOrNull;
+      final hop = JumpHop._(
+        id: previous == null ? '$_hopIdPrefix$name' : '${previous.id},$name',
+        name: name,
+        host: alias?.effectiveHost ?? hopHost,
+        port: port ?? alias?.port ?? kSshDefaultPort,
+        user: user ?? alias?.user,
+        identityFile: alias?.identityFile,
+        written: own[index],
+      );
+      if (previous != null &&
+          _isJumpLoop(previous._written, hop.host, hop.port, hop.user, _test)) {
+        return looping;
+      }
+      route.add(hop);
+    }
+    return (route: List.unmodifiable(route), loops: false);
+  }
+}
+
 /// The name each hop of a `ProxyJump` [value] gives, as [jumpRoutes] looks
 /// it up: empty for `none`, null when the engine cannot read [value].
 List<String>? proxyJumpHosts(String value) => switch (_parseProxyJump(value)) {
@@ -225,14 +290,24 @@ typedef _Hop = ({String name, String? user, String host, int? port});
 /// and its user, else [user], is [user]. Where that host cannot be known,
 /// any jump to an address counts. A jump with its own user, to a host
 /// whose user is the local account's, which the import does not know,
-/// counts as a loop.
-bool _isJumpLoop(_Hop jump, String host, int port, String? user) {
+/// counts as a loop. With [test] [_LoopTest.mustLoop], neither unknown
+/// counts.
+bool _isJumpLoop(
+  _Hop jump,
+  String host,
+  int port,
+  String? user,
+  _LoopTest test,
+) {
+  final mayLoop = test == _LoopTest.mayLoop;
   if ((jump.port ?? kSshDefaultPort) != port) return false;
-  if (jump.user != null && user != null && jump.user != user) return false;
+  if (jump.user != null && jump.user != user && (user != null || !mayLoop)) {
+    return false;
+  }
 
   return switch (sshCanonicalHost(host)) {
     final dialed? => jump.host == dialed,
-    null => looksLikeSshAddress(jump.host),
+    null => mayLoop && looksLikeSshAddress(jump.host),
   };
 }
 

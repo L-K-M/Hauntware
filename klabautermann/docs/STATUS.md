@@ -135,7 +135,10 @@ slice:
   it (`Include` is not followed), a second reading of the file for the
   host ssh dials that would change it (Fedora's and RHEL's
   `/etc/ssh/ssh_config` ask ssh for one), a token ssh fills in, a line
-  ssh rejects, or a route ssh would refuse. Nothing dials them yet.
+  ssh rejects, or a route ssh would refuse. Where that second reading
+  would route a host through itself or into a jumphost loop, ssh cannot
+  be taking it, so the host keeps the first reading's values (as a
+  bastion under `Host * !bastion` does). Nothing dials them yet.
 - Packaging: `scripts/build.sh`, `scripts/package-linux.sh` (.deb and
   AppImage through the shared `scripts/package-linux-common.sh`) and
   `scripts/build-flatpak.sh` with `flatpak/ch.lkmc.klabautermann.yml`.

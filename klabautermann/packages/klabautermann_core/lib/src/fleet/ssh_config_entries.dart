@@ -26,7 +26,11 @@ import 'ssh_config_settings.dart';
 ///   take through a `ProxyCommand`, a `Match` or `Include` the engine
 ///   cannot evaluate, a final pass that a system config may ask for, a
 ///   `HostName` or `IdentityFile` token, or a line ssh rejects, all of
-///   which apply to the hops it names too.
+///   which apply to the hops it names too. Where only that final pass
+///   changes a name's settings, and it would give the name a route ssh
+///   refuses ([loopingRoutes]: a jumphost loop, or a route through the
+///   name itself), ssh cannot be taking that pass for it, so the name
+///   keeps its first pass's settings.
 ///
 /// The text is parsed in the calling isolate: the engine's, so a large
 /// config never stalls the UI (CN-19). Both lists are unmodifiable, in
@@ -37,54 +41,85 @@ import 'ssh_config_settings.dart';
 importedHostsFromSshConfig(String text) {
   final config = SshConfigSettings.parse(text);
   final aliases = config.aliases.toSet();
-  final leftOut = <String>{};
-  final hosts = <ImportedHost>[];
-  for (final alias in config.aliases) {
-    switch (config.resolve(alias)) {
-      case ResolvedSshSettings(:final host):
-        hosts.add(host);
-      case UnresolvedSshSettings():
-        leftOut.add(alias);
+
+  // Each alias and every name a route gives, through the hop records' own
+  // routes and either pass's, with what ssh would use for it.
+  final resolved = <String, SshConfigResolution>{};
+  final names = [...config.aliases];
+  final seen = {...names};
+  for (var index = 0; index < names.length; index++) {
+    final resolution = resolved[names[index]] = config.resolve(names[index]);
+    final settings = switch (resolution) {
+      ResolvedSshSettings(:final host) => [host],
+      UnresolvedSshSettings(:final passes?) => [
+        passes.firstPass,
+        passes.finalPass,
+      ],
+      UnresolvedSshSettings() => const <ImportedHost>[],
+    };
+    for (final name in settings.expand(_hopNames)) {
+      if (seen.add(name)) names.add(name);
     }
   }
 
-  // Every name a route gives that no Host line does, through the hop
-  // records' own routes too.
-  final hops = <String, ImportedHost>{};
-  final named = [...hosts];
-  for (var index = 0; index < named.length; index++) {
-    for (final name in _hopNames(named[index])) {
-      if (aliases.contains(name) ||
-          leftOut.contains(name) ||
-          hops.containsKey(name)) {
-        continue;
-      }
-      switch (config.resolve(name)) {
-        case ResolvedSshSettings(:final host):
-          hops[name] = host;
-          named.add(host);
-        case UnresolvedSshSettings():
-          leftOut.add(name);
-      }
-    }
+  // The hosts, the hop records and the names left out, with the settings
+  // [pick] gives each name, or null.
+  ({List<ImportedHost> hosts, List<ImportedHost> hops, Set<String> leftOut})
+  split(ImportedHost? Function(SshConfigResolution) pick) {
+    final settings = {
+      for (final name in names)
+        if (pick(resolved[name]!) case final host?) name: host,
+    };
+    return (
+      hosts: [for (final alias in config.aliases) ?settings[alias]],
+      hops: [
+        for (final name in names)
+          if (!aliases.contains(name)) ?settings[name],
+      ],
+      leftOut: {
+        for (final name in names)
+          if (!settings.containsKey(name)) name,
+      },
+    );
   }
 
-  final routes = jumpRoutes(
-    hosts,
-    hops: hops.values.toList(),
-    leftOut: leftOut,
+  // With the final pass that /etc/ssh/ssh_config may ask for, a name
+  // whose route ssh would refuse cannot be taking that pass, so it keeps
+  // its first pass's settings.
+  final finalPass = split(
+    (resolution) => switch (resolution) {
+      ResolvedSshSettings(:final host) => host,
+      UnresolvedSshSettings(:final passes?) => passes.finalPass,
+      UnresolvedSshSettings() => null,
+    },
   );
+  final looping = loopingRoutes(
+    finalPass.hosts,
+    hops: finalPass.hops,
+    leftOut: finalPass.leftOut,
+  );
+  final (:hosts, :hops, :leftOut) = split(
+    (resolution) => switch (resolution) {
+      ResolvedSshSettings(:final host) => host,
+      UnresolvedSshSettings(:final passes?)
+          when looping.contains(passes.firstPass.alias) =>
+        passes.firstPass,
+      UnresolvedSshSettings() => null,
+    },
+  );
+  final routes = jumpRoutes(hosts, hops: hops, leftOut: leftOut);
   final followed = [
     for (final host in hosts)
       if (routes[host.alias] != null) host,
   ];
 
   // The hop records the kept hosts' routes reach.
+  final records = {for (final hop in hops) hop.alias: hop};
   final reached = <String, ImportedHost>{};
   final reaching = [...followed];
   for (var index = 0; index < reaching.length; index++) {
     for (final name in _hopNames(reaching[index])) {
-      final hop = hops[name];
+      final hop = records[name];
       if (hop == null || reached.containsKey(name)) continue;
 
       reached[name] = hop;

@@ -3506,7 +3506,16 @@ the engine in `engine_isolate.dart` beside it):
     for every host and hop: with a `Match final` in it, what that pass
     sets applies; without one, a host whose `Port`, `User`, first
     `IdentityFile` or route that pass would set is left out, because the
-    outcome depends on a system file the engine cannot see. For a
+    outcome depends on a system file the engine cannot see. One
+    exception: where that pass would give the host a route ssh refuses
+    (a jumphost loop, below, or a route that leads back through the host
+    itself, as `Host * !bastion` with `ProxyJump bastion` does for a
+    bastion whose `HostName` is `bastion.example.com`), ssh cannot be
+    taking that pass for it, so the host keeps its first pass's
+    settings. Only loops that are certain count: a jump with its own
+    user, to a host without `User`, or to an address whose final form
+    the import cannot know, does not. A host whose two passes give two
+    routes ssh would take is left out and counted. For a
     `HostName` whose final form the import cannot know (an address with
     a scope, or one the system resolver may read where Dart does not), a
     block whose pattern may match it counts as a `Match` that may apply.

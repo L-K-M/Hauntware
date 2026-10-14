@@ -260,6 +260,22 @@ void main() {
           'Host *.internal.example.com\n  User ops\n  ProxyJump bastion\n'
           'Host bastion\n  HostName bastion.example.com\n  ProxyJump none\n';
       expect(_resolve(config, 'db'), UnresolvedReason.secondPass);
+      // The import still sees both, to keep the first where ssh would
+      // refuse the final pass's route.
+      final passes =
+          (SshConfigSettings.parse(config).resolve('db')
+                  as UnresolvedSshSettings)
+              .passes!;
+      expect(
+        [
+          passes.firstPass,
+          passes.finalPass,
+        ].map((h) => (h.alias, h.hostName, h.user, h.proxyJump)),
+        [
+          ('db', 'db.internal.example.com', null, null),
+          ('db', 'db.internal.example.com', 'ops', 'bastion'),
+        ],
+      );
       expect(_resolve(config, 'bastion'), (
         'bastion.example.com',
         22,

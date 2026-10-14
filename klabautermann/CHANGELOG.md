@@ -27,7 +27,8 @@
   uses a `ProxyCommand`, one an `Include` or a `Match` block it cannot
   evaluate could change, one whose port, user, key or jump host would
   change when ssh reads the file a second time for the name it dials (as
-  Fedora's and RHEL's `/etc/ssh/ssh_config` make it do), one whose
+  Fedora's and RHEL's `/etc/ssh/ssh_config` make it do), unless that
+  reading would route it through itself, one whose
   `HostName` or `IdentityFile` needs something it cannot fill in, or one
   whose `ProxyJump` ssh would refuse or it cannot follow (a route of
   more than 16 hops included).

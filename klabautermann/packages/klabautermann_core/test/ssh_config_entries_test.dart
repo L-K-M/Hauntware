@@ -306,18 +306,52 @@ void main() {
         'prod-web': ['me@bastion.example.com:22', 'me@10.0.0.5:22'],
       });
       expect(importedHostsFromSshConfig(config).skippedCount, 0);
+    });
 
-      // Without the second negation, the final pass that
-      // /etc/ssh/ssh_config may ask for (Fedora's and RHEL's do) matches
-      // `*` against bastion.example.com and routes bastion through
-      // itself, so bastion and the host behind it are left out.
-      final unsure = importedHostsFromSshConfig(
-        'Host * !bastion\n  ProxyJump bastion\n'
-        'Host bastion\n  HostName bastion.example.com\n'
-        'Host prod-web\n  HostName 10.0.0.5\n',
+    test('a final pass that would route a host through itself keeps the '
+        'first pass', () {
+      // The final pass that /etc/ssh/ssh_config may ask for (Fedora's and
+      // RHEL's do) matches `*` against bastion.example.com and routes
+      // bastion through itself, or into ssh's jumphost loop. ssh cannot
+      // reach bastion that way, so that pass is not the route ssh takes.
+      for (final jump in ['bastion', 'bastion.example.com']) {
+        final config =
+            'Host * !bastion\n  ProxyJump $jump\n'
+            'Host bastion\n  HostName bastion.example.com\n'
+            'Host prod-web\n  HostName 10.0.0.5\n';
+
+        expect(_dials(config)['bastion'], [
+          'me@bastion.example.com:22',
+        ], reason: config);
+      }
+      const common =
+          'Host * !bastion\n  ProxyJump bastion\n'
+          'Host bastion\n  HostName bastion.example.com\n'
+          'Host prod-web\n  HostName 10.0.0.5\n';
+      expect(_dials(common), {
+        'bastion': ['me@bastion.example.com:22'],
+        'prod-web': ['me@bastion.example.com:22', 'me@10.0.0.5:22'],
+      });
+      expect(importedHostsFromSshConfig(common).skippedCount, 0);
+
+      // Two valid routes: direct, or through gw on that pass.
+      final twoRoutes = importedHostsFromSshConfig(
+        'Host web\n  HostName 10.0.0.5\n'
+        'Host 10.0.0.*\n  ProxyJump gw\n'
+        'Host gw\n  HostName gw.example.com\n',
       );
-      expect(unsure.hosts, isEmpty);
-      expect(unsure.skippedCount, 2);
+      expect(twoRoutes.hosts.map((h) => h.alias), ['gw']);
+      expect(twoRoutes.skippedCount, 1);
+
+      // With no User, ssh compares a jump's own user with the local
+      // account, which the import does not know: not certainly a loop.
+      final unknownUser = importedHostsFromSshConfig(
+        'Match originalhost bastion.example.com\n  ProxyJump none\n'
+        'Host * !bastion\n  ProxyJump admin@bastion.example.com\n'
+        'Host bastion\n  HostName bastion.example.com\n',
+      );
+      expect(unknownUser.hosts, isEmpty);
+      expect(unknownUser.skippedCount, 1);
     });
 
     test('a wildcard block before the host\'s own block comes first', () {
