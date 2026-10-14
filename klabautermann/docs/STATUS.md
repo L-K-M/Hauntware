@@ -23,11 +23,12 @@ slice:
   `sh -s`, and as `<login shell> -c '<start command>'` the way sshd
   runs a command) and records [the evidence](evidence/s2/README.md):
   output before READY, fast-tick bytes and CPU, `procs` beyond 1,000
-  processes and slow-tick times. The unguarded `procs` loops pass the
-  D47 deadline near 2,000 processes under dash and 1,000 under bash,
-  which K15 has to resolve. Fixture capture with its redaction review,
-  SSH mode, the other shells (CI images, else the manual list) and
-  systemd collectors (runner VM) remain.
+  processes and slow-tick times. The unguarded `procs` loops reach the
+  10 s guarded budget near 2,000 processes under dash, where passing
+  the D47 deadline depends on its margin, not yet fixed, and pass it by
+  1,079 under bash; K15 has to resolve that. Fixture capture with its
+  redaction review, SSH mode, the other shells (CI images, else the
+  manual list) and systemd collectors (runner VM) remain.
 - Access rules (M2, `klabautermann_host` `access/`): the CN-24 rows from
   a `HostProfile` (passwordless sudo, journal group with the LOG-04
   notice, Docker socket rights with the SAF-08 flag, systemd version,

@@ -47,18 +47,22 @@ in 10 ms clock ticks; fast-tick CPU is averaged over 500 ticks.
   2,350 processes; longer ones sooner. Time grows roughly with the
   square of the process count: 48 ms, 2.3 s, 10.3 s and 23.3 s under
   dash at 78, 1,079, 2,083 and 3,085 processes, and 121 ms, 17.3 s,
-  67.5 s and 153 s under bash, nearly all of it CPU time.
+  67.5 s and 153 s under bash at 79, 1,079, 2,091 and 3,085, nearly all
+  of it CPU time.
 - **`procs` against its deadline.** The `stat` and `status` loops over
   `/proc` run in shell builtins, so `timeout 10` does not bound them.
   Under 03 D47 a slow request's deadline is derived from the guarded
   commands its collectors can run, each bounded by `timeout 10`, plus a
-  margin. `procs` runs one (`head` over the command lines; the `ps`
-  fallback up to two), so its derived deadline is about 10 s (20 s)
-  plus the margin. The loops alone pass that near 2,000 processes under
-  dash (10.3 s at 2,083) and by 1,079 under bash (17.3 s), so on such
-  hosts a working sampler would keep restarting. K15 has to bound the
-  loops or add a process-count term to the `procs` deadline; the second
-  amends D47.
+  margin that D47 has not fixed yet. `procs` runs one (`head` over the
+  command lines; the `ps` fallback up to two), so its derived deadline
+  is about 10 s (20 s) plus the margin. The loops alone reach the 10 s
+  guarded budget near 2,000 processes under dash (10.3 s at 2,083), so
+  whether they pass the deadline there depends on the margin; at the
+  square-law growth above, a margin of about 3 s would move the dash
+  crossing to the 1 MiB cap. Under bash they pass it by 1,079 processes
+  (17.3 s) for any margin under 7 s, so on such hosts a working sampler
+  would keep restarting. K15 has to bound the loops or add a
+  process-count term to the `procs` deadline; the second amends D47.
 - **Slow tick.** Medians of three runs, dash then bash: probe 73 and
   89 ms, `fs` 7 and 9 ms, `identity` 9 and 12 ms, `procs` (78 and 79
   processes) 44 and 89 ms, `cron` 1 ms, and all slow collectors but the
