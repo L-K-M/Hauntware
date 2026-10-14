@@ -434,6 +434,34 @@ void main() {
       expect(narrow.size.height, closeTo(narrow.textSize.height, 0.01));
     });
 
+    testWidgets('a line separator wraps the line instead of hiding text', (
+      tester,
+    ) async {
+      final logs = await _pump(tester, wrap: LogWrap.on);
+      logs.add(['first\u2028second']);
+      await tester.pump();
+
+      _expectWholeRows(tester, 'first\u2028second');
+    });
+
+    testWidgets('a cut line is measured with its note', (tester) async {
+      final logs = await _pump(
+        tester,
+        wrap: LogWrap.on,
+        controller: LogViewController(buffer: LogBuffer(maxLineBytes: 8)),
+      );
+      // The kept text fits one row; its note does not.
+      logs.add(['a' * 20, 'b']);
+      await tester.pump();
+
+      const shown = 'aaaaaaaa [line cut: 20 characters in all]';
+      _expectWholeRows(tester, shown);
+      expect(
+        _paragraph(tester, shown).size.height,
+        greaterThan(_paragraph(tester, 'b').size.height),
+      );
+    });
+
     testWidgets('a long line arriving at the line cap takes its rows', (
       tester,
     ) async {
@@ -609,20 +637,20 @@ void main() {
 
   group('markers and levels', () {
     testWidgets('dropped lines and cut lines are worded', (tester) async {
+      // With wrap off the note sits past the ellipsis until sideways
+      // scrolling lands; screen readers still read it.
       final logs = await _pump(
         tester,
+        wrap: LogWrap.on,
         controller: LogViewController(buffer: LogBuffer(maxLineBytes: 64)),
       );
       logs.add(['a' * 20000], dropped: 1234);
       await tester.pump();
 
       expect(find.text('1,234 lines dropped here'), findsOneWidget);
-      expect(
-        find.text(
-          '${'a' * 64} [line cut: 20,000 characters in all]',
-          findRichText: true,
-        ),
-        findsOneWidget,
+      _expectWholeRows(
+        tester,
+        '${'a' * 64} [line cut: 20,000 characters in all]',
       );
     });
 

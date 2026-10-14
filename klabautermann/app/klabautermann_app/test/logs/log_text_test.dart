@@ -186,4 +186,11 @@ void main() {
     expect(logTextCells('日本'), 4, reason: 'wide characters');
     expect(logTextCells('😀'), 4, reason: 'two code units');
   });
+
+  test('logTextCells never fits a line or paragraph separator', () {
+    // The text engine breaks the row there, so no width bound holds.
+    for (final separator in ['\u2028', '\u2029']) {
+      expect(logTextCells('a${separator}b'), greaterThan(1 << 20));
+    }
+  });
 }

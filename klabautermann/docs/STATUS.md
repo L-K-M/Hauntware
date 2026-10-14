@@ -220,9 +220,9 @@ slice:
   end, on End or Follow; colours levels with a spoken gutter icon; holds
   every span to 4.5:1; and scrolls by keyboard with a focus ring. Light
   and dark goldens draw with the test font and compare on Linux only. Not
-  yet: sideways scrolling without wrap (a long line ends in an ellipsis)
-  and tab stops. No panel shows it yet: the Logs and Services panels and
-  the followers come later in M2.
+  yet: sideways scrolling without wrap (a long line ends in an ellipsis,
+  which hides a cut line's note) and tab stops. No panel shows it yet: the
+  Logs and Services panels and the followers come later in M2.
 
 Pull-only from the start (D14): no surface sends a request that could
 push or write catalog records, and a widget test guards it.

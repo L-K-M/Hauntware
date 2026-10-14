@@ -17,6 +17,14 @@ const int _maxNarrowUnit = 0xff;
 
 const int _tab = 0x09;
 
+/// U+2028 LINE SEPARATOR and U+2029 PARAGRAPH SEPARATOR: not controls, so
+/// `parseSgr` keeps them, but the text engine breaks the row at either.
+const int _lineSeparator = 0x2028;
+const int _paragraphSeparator = 0x2029;
+
+/// What [logTextCells] counts a row break as: wider than any view.
+const int _rowBreakCells = 1 << 24;
+
 /// What separates a cut line from its note.
 const String _noteGap = ' ';
 
@@ -92,10 +100,10 @@ final class LogPalette {
   final List<Color> _ansi;
 
   final _styles = <(SgrStyle, LogLevel?), TextStyle>{};
-  final _legible = <(Color, Color), Color>{};
+  final _legibleCache = <(Color, Color), Color>{};
 
   /// The text colour of a line at [level] where its SGR styles set none.
-  Color levelColor(LogLevel? level) => legible(switch (level) {
+  Color levelColor(LogLevel? level) => _legible(switch (level) {
     LogLevel.error => _error,
     LogLevel.warning => _warning,
     LogLevel.debug => _secondary,
@@ -104,7 +112,7 @@ final class LogPalette {
 
   /// The style of a cut line's note and of a dropped-lines record.
   late final TextStyle markerStyle = TextStyle(
-    color: legible(_secondary, background),
+    color: _legible(_secondary, background),
     fontStyle: FontStyle.italic,
   );
 
@@ -117,9 +125,9 @@ final class LogPalette {
 
   /// [color], or the colour nearest it toward black or white (whichever
   /// [background] favours) that keeps [logTextMinContrast] on [background].
-  Color legible(Color color, Color background) {
-    if (_legible.length >= _cacheLimit) _legible.clear();
-    return _legible.putIfAbsent((color, background), () {
+  Color _legible(Color color, Color background) {
+    if (_legibleCache.length >= _cacheLimit) _legibleCache.clear();
+    return _legibleCache.putIfAbsent((color, background), () {
       if (contrastRatio(color, background) >= logTextMinContrast) {
         return color;
       }
@@ -154,7 +162,7 @@ final class LogPalette {
     if (style.faint) foreground = Color.lerp(foreground, drawnOver, _faintMix)!;
 
     return TextStyle(
-      color: legible(foreground, drawnOver),
+      color: _legible(foreground, drawnOver),
       backgroundColor: background,
       fontWeight: style.bold ? FontWeight.bold : null,
       fontStyle: style.italic ? FontStyle.italic : null,
@@ -234,13 +242,19 @@ TextSpan logLineSpan(
 
 /// An upper bound of the width [text] takes once styled, in Latin-1 glyph
 /// advances of a monospace font: one for a Latin-1 code unit, two for any
-/// other (a wide character, half of a pair) and for a tab. It lets the
-/// view size its rows without laying out every line.
+/// other (a wide character, half of a pair) and for a tab. A line or
+/// paragraph separator breaks the row, so it counts as wider than any
+/// view. It lets the view size its rows without laying out every line.
 int logTextCells(String text) {
   var cells = 0;
   for (var i = 0; i < text.length; i++) {
     final unit = text.codeUnitAt(i);
-    cells += unit <= _maxNarrowUnit && unit != _tab ? 1 : 2;
+    cells += switch (unit) {
+      _tab => 2,
+      _lineSeparator || _paragraphSeparator => _rowBreakCells,
+      _ when unit <= _maxNarrowUnit => 1,
+      _ => 2,
+    };
   }
   return cells;
 }
