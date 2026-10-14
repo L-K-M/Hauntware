@@ -293,18 +293,18 @@ final class _HostBlock extends _Block {
         for (final pattern in patterns)
           if (pattern.isNotEmpty)
             pattern.startsWith('!')
-                ? (negated: true, pattern: pattern.substring(1))
-                : (negated: false, pattern: pattern),
+                ? (negated: true, glob: _Glob(pattern.substring(1)))
+                : (negated: false, glob: _Glob(pattern)),
       ] {
     final positive = [
-      for (final (:negated, :pattern) in _patterns)
-        if (!negated) pattern,
+      for (final (:negated, :glob) in _patterns)
+        if (!negated) glob.pattern,
     ];
     wildcard = positive.any((p) => p.contains('*') || p.contains('?'));
     names = positive.isEmpty || wildcard ? null : positive.toSet();
   }
 
-  final List<({bool negated, String pattern})> _patterns;
+  final List<({bool negated, _Glob glob})> _patterns;
 
   /// Whether a pattern that is not negated holds a wildcard.
   late final bool wildcard;
@@ -319,8 +319,8 @@ final class _HostBlock extends _Block {
   @override
   _Applies applies(String name, _Reading reading) {
     var active = false;
-    for (final (:negated, :pattern) in _patterns) {
-      if (!_matchPattern(name, pattern)) continue;
+    for (final (:negated, :glob) in _patterns) {
+      if (!glob.matches(name)) continue;
       if (negated) return _Applies.no;
       active = true;
     }
@@ -341,7 +341,7 @@ final class _MatchBlock extends _Block {
 
   /// `match_cfg_line()`'s reading of a `Match` line's [arguments].
   factory _MatchBlock.parse(int order, List<String> arguments) {
-    final criteria = <({_Criterion kind, bool negated, String patterns})>[];
+    final criteria = <({_Criterion kind, bool negated, _HostList? list})>[];
     var wantsSecondPass = false;
     var attributes = 0;
     var index = 0;
@@ -367,7 +367,7 @@ final class _MatchBlock extends _Block {
         if (attributes > 1 || (next.isNotEmpty && !next.startsWith('#'))) {
           return done(malformed: true);
         }
-        criteria.add((kind: _Criterion.all, negated: negated, patterns: ''));
+        criteria.add((kind: _Criterion.all, negated: negated, list: null));
         return done();
       }
 
@@ -377,7 +377,7 @@ final class _MatchBlock extends _Block {
         criteria.add((
           kind: _Criterion.secondPass,
           negated: negated,
-          patterns: '',
+          list: null,
         ));
         continue;
       }
@@ -397,12 +397,16 @@ final class _MatchBlock extends _Block {
         _ => null,
       };
       if (kind == null) return done(malformed: true);
-      criteria.add((kind: kind, negated: negated, patterns: patterns));
+      criteria.add((
+        kind: kind,
+        negated: negated,
+        list: _HostList.parse(patterns),
+      ));
     }
     return done(malformed: attributes == 0);
   }
 
-  final List<({_Criterion kind, bool negated, String patterns})> _criteria;
+  final List<({_Criterion kind, bool negated, _HostList? list})> _criteria;
 
   /// Whether ssh rejects the line, and so the whole config.
   final bool malformed;
@@ -416,16 +420,16 @@ final class _MatchBlock extends _Block {
     if (malformed) return _Applies.maybe;
 
     var unknown = false;
-    for (final (:kind, :negated, :patterns) in _criteria) {
+    for (final (:kind, :negated, :list) in _criteria) {
       final bool? holds = switch (kind) {
         _Criterion.all => true,
         // This is the first pass.
         _Criterion.secondPass => false,
         _Criterion.host => switch (reading.matchHost) {
           null => null,
-          final host => _matchHostname(host, patterns) == 1,
+          final host => list!.match(host) == 1,
         },
-        _Criterion.originalHost => _matchHostname(name, patterns) == 1,
+        _Criterion.originalHost => list!.match(name) == 1,
         _Criterion.unknown => null,
       };
       if (holds == null) {
@@ -670,29 +674,88 @@ bool _matchPattern(String text, String pattern, [int t = 0, int p = 0]) {
   }
 }
 
-/// ssh's `match_hostname()`: [host], lowercased, against a comma-separated
-/// [list] of lowercased patterns, each possibly negated. 1 for a match,
-/// -1 when a negated pattern matches, else 0.
-int _matchHostname(String host, String list) {
-  final text = _asciiLower(host);
-  var positive = false;
-  var index = 0;
-  while (index < list.length) {
-    final negated = list.codeUnitAt(index) == _bang;
-    if (negated) index++;
+/// A `match_pattern()` pattern, read once. A pattern whose only wildcard
+/// is `*` matches when its literal pieces appear in order, the first at
+/// the start and the last at the end; any other goes through
+/// [_matchPattern].
+final class _Glob {
+  _Glob(this.pattern)
+    : _pieces = pattern.contains('?') ? null : pattern.split('*');
 
-    var end = index;
-    while (end < list.length && list.codeUnitAt(end) != _comma) {
-      end++;
+  final String pattern;
+
+  /// The pieces between the `*`s, or null when the pattern holds a `?`.
+  final List<String>? _pieces;
+
+  bool matches(String text) {
+    final pieces = _pieces;
+    if (pieces == null) return _matchPattern(text, pattern);
+    if (pieces.length == 1) return text == pattern;
+
+    final (first, last) = (pieces.first, pieces.last);
+    if (text.length < first.length + last.length ||
+        !text.startsWith(first) ||
+        !text.endsWith(last)) {
+      return false;
     }
-    if (end - index >= _maximumSubpatternLength) return 0;
+    var from = first.length;
+    final end = text.length - last.length;
+    for (var index = 1; index < pieces.length - 1; index++) {
+      final piece = pieces[index];
+      if (piece.isEmpty) continue;
 
-    final pattern = _asciiLower(list.substring(index, end));
-    index = end < list.length ? end + 1 : end;
-    if (_matchPattern(text, pattern)) {
-      if (negated) return -1;
+      final at = text.indexOf(piece, from);
+      if (at < 0 || at + piece.length > end) return false;
+      from = at + piece.length;
+    }
+    return true;
+  }
+}
+
+/// A `Match` criterion's comma-separated list of patterns, each possibly
+/// negated, read once and lowercased, as `match_pattern_list()` reads it
+/// for `match_hostname()`. A subpattern of 1023 characters or more makes
+/// the list match nothing where ssh reaches it, so it is kept as null.
+final class _HostList {
+  _HostList._(this._entries);
+
+  factory _HostList.parse(String list) {
+    final entries = <({bool negated, _Glob glob})?>[];
+    var index = 0;
+    while (index < list.length) {
+      final negated = list.codeUnitAt(index) == _bang;
+      if (negated) index++;
+
+      var end = index;
+      while (end < list.length && list.codeUnitAt(end) != _comma) {
+        end++;
+      }
+      entries.add(
+        end - index >= _maximumSubpatternLength
+            ? null
+            : (
+                negated: negated,
+                glob: _Glob(_asciiLower(list.substring(index, end))),
+              ),
+      );
+      index = end < list.length ? end + 1 : end;
+    }
+    return _HostList._(entries);
+  }
+
+  final List<({bool negated, _Glob glob})?> _entries;
+
+  /// ssh's `match_hostname()` for [host], lowercased: 1 for a match, -1
+  /// when a negated pattern matches, else 0.
+  int match(String host) {
+    final text = _asciiLower(host);
+    var positive = false;
+    for (final entry in _entries) {
+      if (entry == null) return 0;
+      if (!entry.glob.matches(text)) continue;
+      if (entry.negated) return -1;
       positive = true;
     }
+    return positive ? 1 : 0;
   }
-  return positive ? 1 : 0;
 }
