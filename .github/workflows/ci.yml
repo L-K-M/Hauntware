@@ -2,11 +2,17 @@ name: CI
 
 # Coordinated CI for the Hauntware monorepo: every gate the three
 # module workflows enforced, run over the subtrees planchette/,
-# seance/ and poltergeist/. Each subtree keeps its own pub workspace
-# (root pubspecs are untouched), so dependency resolution stays
+# seance/ and poltergeist/, plus klabautermann/, which was born in the
+# monorepo and had no module workflow. Each subtree keeps its own pub
+# workspace (root pubspecs are untouched), so dependency resolution stays
 # per-subtree — pure-Dart workspaces resolve with `dart pub get`,
 # Flutter packages and apps with `flutter pub get`, never mixed.
 # scripts/test.sh mirrors the test steps below for local runs.
+#
+# The client matrices compile 18 targets: 3 Planchette desktop and 5
+# each for Séance, Poltergeist and Klabautermann. release.yml ships 13 of
+# them; Klabautermann's five legs stay CI-only until its preview release
+# job lands at milestone M4 (docs/design/klabautermann, decision 16).
 
 on:
   push:
@@ -149,6 +155,35 @@ jobs:
           packages/seance_core
           packages/seance_sync_server
 
+  # The catalog library's stores write user data on every desktop
+  # platform, and their suites ran in poltergeist_dart's three-OS matrix
+  # before they moved to seance_core; seance_dart covers Ubuntu.
+  seance_catalog:
+    name: Séance catalog library (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    defaults:
+      run:
+        working-directory: seance
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+      - name: Resolve workspace
+        run: dart pub get
+      - name: Test
+        run: >-
+          dart test
+          packages/seance_core/test/catalog
+          packages/seance_core/test/file_permissions_test.dart
+          packages/seance_core/test/local_directory_sync_test.dart
+
   # ---- Poltergeist ------------------------------------------------------
   poltergeist_dart:
     name: Poltergeist pure-Dart packages (${{ matrix.os }})
@@ -203,8 +238,9 @@ jobs:
           dart test --reporter expanded "${dirs[@]}"
 
   # ---- Klabautermann ---------------------------------------------------
-  # Pure-Dart packages only until the app exists (plan 03 §11.6); Ubuntu
-  # only, because the sampler's shell test needs dash and bash.
+  # The pure-Dart packages; the app has klabautermann_flutter and
+  # klabautermann_client below. Ubuntu only (plan 03 §11.6, D37), because
+  # the sampler's shell test needs dash and bash.
   klabautermann_dart:
     name: Klabautermann pure-Dart packages (Ubuntu)
     runs-on: ubuntu-latest
@@ -264,6 +300,15 @@ jobs:
         working-directory: .
         run: dart pub get
       - name: Resolve workspace
+        run: dart pub get
+      - name: Resolve Séance workspace
+        working-directory: seance
+        run: dart pub get
+      - name: Resolve Planchette workspace
+        working-directory: planchette
+        run: dart pub get
+      - name: Resolve Klabautermann workspace
+        working-directory: klabautermann
         run: dart pub get
       - name: Resolve M0 benchmark harness
         working-directory: poltergeist/packages/poltergeist_bench
@@ -1075,7 +1120,9 @@ jobs:
   # desktop + 5 Séance + 5 Poltergeist targets — and run the Linux
   # packaging steps and the native fixtures, so a platform- or
   # packaging-breaking change is caught here, not when a tag tries to
-  # publish. Mirrors release.yml's client jobs minus publishing.
+  # publish. Mirrors release.yml's client jobs minus publishing. The 5
+  # Klabautermann targets build here too, ahead of their release job
+  # (M4, decision 16 of docs/design/klabautermann).
 
   planchette_client:
     name: Planchette client (${{ matrix.target }})
@@ -1425,6 +1472,146 @@ jobs:
           # (flatpak's sandbox helper) builds in.
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true   # absent on kernels without the knob
           scripts/build-flatpak.sh "$(find dist-packages -maxdepth 1 -type f -name 'poltergeist_*.deb' -print -quit)"
+
+  # Klabautermann's legs copy poltergeist_client and add the two native
+  # macOS fixtures of seance_client (docs/design/klabautermann, 04
+  # §12.1). Like the siblings they build on every PR without a path
+  # filter (owner decision 15, D37). No release leg ships these builds
+  # until client_klabautermann joins release.yml at M4 (decision 16);
+  # keep the two in step from then on.
+  klabautermann_client:
+    name: Klabautermann client (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45   # first run downloads the Flutter toolchain
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: android
+            build: apk --release
+          # x64 only, for the reason poltergeist_client gives: Flutter
+          # publishes no linux-arm64 host artifacts.
+          - os: ubuntu-latest
+            target: linux
+            build: linux --release
+            flavor: x64
+          - os: macos-latest
+            target: macos
+            build: macos --release
+          - os: macos-latest
+            target: ios
+            # The unsigned .xcarchive the M4 release leg will zip, as
+            # Poltergeist's does.
+            build: ipa --release --no-codesign
+          - os: windows-latest
+            target: windows
+            build: windows --release
+    steps:
+      - uses: actions/checkout@v7
+      # Pin the JDK so the Gradle build is deterministic rather than tracking
+      # the runner's default; keep in step with the app's compileOptions.
+      - uses: actions/setup-java@v6
+        if: matrix.target == 'android'
+        with:
+          distribution: temurin
+          java-version: '17'
+      # GTK toolchain for the Flutter Linux embedder; imagemagick and file
+      # feed scripts/package-linux.sh (icon resize, appimagetool), xvfb and
+      # xdotool the launch check. No plugin links libsecret or jsoncpp yet:
+      # add libsecret-1-dev and libjsoncpp-dev with the first keyring
+      # plugin, as the siblings do.
+      - name: Install Linux desktop toolchain
+        if: startsWith(matrix.target, 'linux')
+        run: >-
+          sudo apt-get update && sudo apt-get install -y
+          clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev
+          imagemagick file xvfb xdotool
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+      # The committed project already signs ad-hoc, so today this step
+      # (Poltergeist's) only switches the signing style to manual; it keeps
+      # CI on the release leg's signing path if a developer identity is
+      # ever committed.
+      - name: Switch macOS signing to ad-hoc (runner has no certificate)
+        if: matrix.target == 'macos'
+        run: |
+          sed -i '' \
+            -e 's/"CODE_SIGN_IDENTITY\[sdk=macosx\*\]" = "Apple Development";/"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";/' \
+            -e 's/CODE_SIGN_STYLE = Automatic;/CODE_SIGN_STYLE = Manual;/' \
+            -e 's/DEVELOPMENT_TEAM = [^;]*;/DEVELOPMENT_TEAM = "";/' \
+            klabautermann/app/klabautermann_app/macos/Runner.xcodeproj/project.pbxproj
+      - name: Resolve app dependencies
+        working-directory: klabautermann/app/klabautermann_app
+        run: flutter pub get
+      - name: Build
+        working-directory: klabautermann/app/klabautermann_app
+        run: flutter build ${{ matrix.build }}
+      # Native-asset frameworks must not land on embedded ones, and the app
+      # must pass the codesign check scripts/build.sh --install runs.
+      - name: Verify macOS app bundle
+        if: matrix.target == 'macos'
+        working-directory: klabautermann/app/klabautermann_app
+        run: bash "$GITHUB_WORKSPACE/scripts/verify-macos-app.sh"
+      # Séance's fixtures, compiled against the runner's copy of its
+      # controller (klabautermann/docs/SHARED.md) and the cached release
+      # engine the build above downloaded.
+      - name: Test native accessibility lifecycle
+        if: matrix.target == 'macos'
+        working-directory: klabautermann
+        run: scripts/test-macos-accessibility.sh
+      - name: Test native keyboard modifiers
+        if: matrix.target == 'macos'
+        working-directory: klabautermann
+        run: scripts/test-macos-keyboard.sh
+      # A release-only startup failure leaves a running app without its UI;
+      # unit tests run with asserts on and never see one. The Linux and
+      # Windows runners show the window on the first frame, so a startup
+      # that never reaches runApp fails there. The macOS runner is still
+      # the template's, whose window is visible before Dart runs and which
+      # has no Dart menu yet, so that launch proves only that the app stays
+      # up without an unhandled Dart exception. Nothing reads the keychain
+      # yet, so every launch gets the script's throwaway home.
+      - name: Release app launch (macOS)
+        if: matrix.target == 'macos'
+        working-directory: klabautermann/app/klabautermann_app
+        run: python3 "$GITHUB_WORKSPACE/scripts/test-desktop-launch.py" build/macos/Build/Products/Release/Klabautermann.app
+      - name: Release app launch (Linux)
+        if: matrix.target == 'linux'
+        working-directory: klabautermann/app/klabautermann_app
+        run: xvfb-run -a python3 "$GITHUB_WORKSPACE/scripts/test-desktop-launch.py" build/linux/${{ matrix.flavor }}/release/bundle/klabautermann
+      - name: Release app launch (Windows)
+        if: matrix.target == 'windows'
+        working-directory: klabautermann/app/klabautermann_app
+        shell: bash
+        run: python "$GITHUB_WORKSPACE/scripts/test-desktop-launch.py" build/windows/x64/runner/Release/klabautermann.exe
+      # Prove Gradle consumed the synchronized pubspec code in the real APK.
+      - name: Verify Android version code
+        if: matrix.target == 'android'
+        working-directory: klabautermann/app/klabautermann_app
+        shell: bash
+        run: bash "$GITHUB_WORKSPACE/scripts/verify-android-version.sh"
+      # The packaging the M4 release leg will ship. No upload: ordinary CI
+      # does not publish binaries (see poltergeist_client).
+      - name: Package Linux artifacts (.deb + AppImage)
+        if: startsWith(matrix.target, 'linux')
+        working-directory: klabautermann
+        run: scripts/package-linux.sh --output-dir dist-packages
+      # Repack the same .deb as a Flatpak bundle; no upload either.
+      - name: Flatpak bundle (build check only)
+        if: startsWith(matrix.target, 'linux')
+        working-directory: klabautermann
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y flatpak flatpak-builder elfutils
+          # Ubuntu 24.04 denies the unprivileged user namespaces bubblewrap
+          # (flatpak's sandbox helper) builds in.
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true   # absent on kernels without the knob
+          deb="$(find dist-packages -maxdepth 1 -type f -name 'klabautermann_*.deb' -print -quit)"
+          [ -n "$deb" ] || { echo "::error::no klabautermann_*.deb in dist-packages" >&2; exit 1; }
+          scripts/build-flatpak.sh "$deb"
 
   # ---- Séance sync server image -----------------------------------------
   docker:

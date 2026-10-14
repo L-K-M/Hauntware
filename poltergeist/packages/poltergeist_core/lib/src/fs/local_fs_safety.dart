@@ -3,6 +3,11 @@ import 'dart:math';
 
 import 'package:path/path.dart' as p;
 
+// The owner-only chmod moved to seance_core beside restrictFileToOwner so
+// the catalog stores' writer can share it (docs/PORTS.md); re-exported so
+// this file's callers do not change.
+export 'package:seance_core/catalog.dart' show restrictLocalPathPermissions;
+
 // Ported from Séance
 // app/seance_app/lib/services/remote_files_controller.dart @ 2e6d1f1
 // (the four private statics); see docs/PORTS.md.
@@ -193,44 +198,6 @@ final RegExp windowsReservedName = RegExp(
   r'^(con|prn|aux|nul|clock\$|com[1-9\u00b9\u00b2\u00b3]|lpt[1-9\u00b9\u00b2\u00b3]|conin\$|conout\$)$',
   caseSensitive: false,
 );
-
-/// Owner-only mode bits on [path] — `'600'` for files, `'700'` for
-/// directories — on Linux and macOS; other platforms keep their
-/// per-user storage ACLs (09 §3.5/06 §3.1's posture). A failed or
-/// unavailable chmod aborts the caller's operation: private content
-/// either lands owner-only or not at all — the incident store's rule,
-/// shared so the managed-checkout index, its temps, its quarantines,
-/// and the checkout dirs/files cannot drift into a laxer posture.
-Future<void> restrictLocalPathPermissions(String path, String mode) async {
-  if (!Platform.isLinux && !Platform.isMacOS) return;
-  // Resolve chmod by absolute path where it exists — a PATH-hijacked
-  // shim exiting 0 would silently defeat the owner-only invariant.
-  var chmod = 'chmod';
-  for (final candidate in const ['/usr/bin/chmod', '/bin/chmod']) {
-    if (await File(candidate).exists()) {
-      chmod = candidate;
-      break;
-    }
-  }
-  ProcessResult result;
-  try {
-    result = await Process.run(chmod, ['--', mode, path]);
-  } on ProcessException catch (error) {
-    throw FileSystemException(
-      'chmod is unavailable; cannot restrict $path to the owner '
-      '(${error.message})',
-      path,
-    );
-  }
-  if (result.exitCode != 0) {
-    final detail = (result.stderr as String).trim();
-    throw FileSystemException(
-      'Could not restrict $path to the owner (chmod exited '
-      '${result.exitCode}${detail.isEmpty ? '' : ': $detail'})',
-      path,
-    );
-  }
-}
 
 /// Creates [path] and every missing parent while refusing to traverse
 /// through symlinks or non-directories (`followLinks: false` at every

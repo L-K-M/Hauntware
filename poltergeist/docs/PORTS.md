@@ -1,5 +1,58 @@
 # Séance ports and pin audits
 
+## Catalog library move, PR 1a (2026-10-13)
+
+Original Poltergeist sync code moves into Séance's `seance_core` as the
+`package:seance_core/catalog.dart` secondary library
+(`../../docs/design/catalog-library.md` sections 1.1, 2.1, 2.2 and 13,
+row 1, taken in three PRs: 1a moves the leaf files, 1b splits the
+coordinator, 1c adds the pull-only policy). Files move with `git mv`;
+only import lines, the default writer, the library location and the
+renames below change. The `poltergeist_core` barrel re-exports every
+moved symbol, so the app, `poltergeist_sync` and the bench compile
+unchanged.
+
+| Left `poltergeist_core/lib/src/` | Now `seance_core/lib/src/` |
+|---|---|
+| `sync/persistent_record_store.dart` | `catalog/persistent_record_store.dart` |
+| `sync/server_store.dart` | `catalog/server_config_store.dart` |
+| `sync/enrollment.dart` | `catalog/enrollment.dart` |
+| `sync/host_key_mutations.dart` | `catalog/host_key_mutations.dart` |
+| `sync/record_crypto.dart` | `catalog/record_crypto.dart` |
+| `sync/seance_server_catalog.dart` | `catalog/seance_server_catalog.dart` |
+| `sync/server_order.dart` | `catalog/server_order.dart` |
+| `sync/sync_verdicts.dart` | `catalog/pin_verdicts.dart` |
+| `fs/local_directory_sync.dart` | `store/local_directory_sync.dart` |
+| `restrictLocalPathPermissions` in `fs/local_fs_safety.dart` | `store/file_permissions.dart` |
+| `BookmarkSyncTuple` in `bookmarks/bookmark_store.dart` | `catalog/sync_tuple.dart`, as `SyncTuple` |
+
+- Compatibility: `bookmark_store.dart` keeps `typedef BookmarkSyncTuple
+  = SyncTuple`, `ServerSyncTuple` now aliases `SyncTuple`, and
+  `local_fs_safety.dart` re-exports `restrictLocalPathPermissions`.
+- Writer: the moved stores default to the new `AtomicFileWriter`
+  (`catalog/atomic_file_writer.dart`), which reproduces
+  `TransferJournalIo.atomicRewrite`'s write order (temp sibling, fsync,
+  rename, directory fsync) and its fail-closed owner-only path; the
+  `atomicWriter` seams stay. Byte goldens for `servers.json` and
+  `sync_records.json`, captured from the pre-move stores, pass unchanged
+  against the moved ones. This writer is the move's one reproduction
+  (design section 2.2): the transfer journal keeps `atomicRewrite`
+  behind its fault-injection seam, sharing the moved chmod and directory
+  fsync rather than copies of them.
+- `seance_core` gains no dependency (`ffi` was already declared). Beyond
+  what `poltergeist_core` exported, the catalog barrel also exports
+  `SyncTuple`, `deletionStamp` (the coordinator stamps server tombstone
+  records with it) and `syncLocalDirectory`.
+- Tests: `persistent_record_store_test.dart`, `server_store_test.dart`
+  (now `server_config_store_test.dart`) and the golden test move to
+  `seance_core/test/catalog/`; a new `seance_catalog` CI job keeps them
+  on macOS and Windows. Until PR 1b, `bookmark_coordinator.dart`,
+  `bookmark_store.dart`, `bookmark_groups.dart`, `sort_key.dart` and the
+  tests whose subjects stay (`enrollment_test.dart` among them, since it
+  drives the coordinator) remain in `poltergeist_core`.
+- The record-crypto comment now names XChaCha20-Poly1305, the cipher the
+  record codec uses (design section 15, item 3).
+
 ## dartssh2 4.1.0 re-pin (2026-10-10)
 
 dartssh2 moves from 3.0.2 to 4.1.0 in every declaration that pins it

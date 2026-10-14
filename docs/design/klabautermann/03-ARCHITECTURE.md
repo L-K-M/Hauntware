@@ -1,6 +1,8 @@
 # 03. Architecture
 
-Status: plan with owner decisions of 2026-10-10. Nothing here is implemented.
+Status: plan with owner decisions of 2026-10-10. Implementation started on
+2026-10-13; a passage that cites a merged PR describes built code, and the
+rest is plan.
 
 The decision log (section 2) was synthesized from three competing proposals,
 A (agentless-first minimalist), B (capability-first with an optional
@@ -842,9 +844,30 @@ graph TD
 
 `klabautermann_app` reaches `seance_core` types only through
 `klabautermann_core`'s curated barrel with explicit `show` lists (precedent
-`PC/poltergeist_core.dart:11-14` [R]). No ghost package depends on
-`seance_core`. Poltergeist's and Séance's edges to the new shared packages
-appear as each extraction switches them (3.5). The Rust workspace
+`PC/poltergeist_core.dart:11-14` [R]). As built in M1 (PR #151), the
+barrel (`klabautermann/packages/klabautermann_core/lib/klabautermann_core.dart`)
+re-exports exactly one `seance_core` name, the home rule the app uses to
+find `~/.ssh/config` for the FL-02 import (it also undoes a macOS
+sandbox's container `HOME`). The engine imports the ssh_config parser
+under its own `show` list
+(`klabautermann/packages/klabautermann_core/lib/src/fleet/ssh_config_entries.dart`) and maps
+its hosts to `FleetEntry` values (10.1), so no `seance_core` type crosses
+the isolate boundary (D18):
+
+```dart
+// klabautermann_core.dart: the app's only route to seance_core
+export 'package:seance_core/seance_core.dart' show expandHomePath;
+// src/fleet/ssh_config_entries.dart: engine-side only
+import 'package:seance_core/seance_core.dart' show SshConfigImporter;
+```
+
+The barrel's `klabautermann_host` export shows `Collector`, `CoreSnapshot`
+and `OverviewSnapshot`; each list grows only as a milestone wires a type
+in. No `ghost_*` package depends on `seance_core`; `klabautermann_core`
+is a product package, and the two curated lines above are its only
+`seance_core` edge. Poltergeist's and
+Séance's edges to the new shared packages appear as each extraction
+switches them (3.5). The Rust workspace
 `klabautermann/rust/` (v1.x, D42) has no edge in this graph: it shares no
 code with the Dart packages and is held to them by cross-language test
 vectors (inbox sealing, alert format v1) and, from M9, the parity corpus.
@@ -1300,6 +1323,7 @@ platform identities in 04, section 12.3):
 | `vault.json`, `vault.json.rekey` | Credentials and re-key journal | `SC/src/store/` | MVP |
 | `host_keys.json`, verdict and tripwire files | Pins and quarantine state | catalog library | MVP |
 | `endpoint_pins.json` | Confirmed endpoints | catalog library | MVP |
+| `ssh_config_imports.json` [E] | D13's device-local store for FL-02 imports from `~/.ssh/config` (alias, host, port, user), replaced whole by each import; never pushed (D14). `IdentityFile` and `ProxyJump` join when links land (M2). Not built: it arrives with the catalog library (F3); until then the engine holds imports in memory and a restart drops them (10.1) | `klabautermann_core` [E] | MVP |
 | `settings.json` | Device settings, `klabautermann.sync.deviceId` (minted once, never regenerated), monitor set, per-server device preferences | app | MVP |
 | `capabilities/<serverId>.json` | Cached probe results, 24 h TTL | `klabautermann_core` | MVP |
 | `audit/<serverId>.jsonl` | Audit log, 90-day retention [E] | `klabautermann_core` | MVP |
@@ -1312,6 +1336,22 @@ Configuration stays in JSON files like both siblings (`seance/AGENTS.md` §9
 output and snapshots touch disk only through explicit export. Per-server
 caches are purged and polling stops on remote delete, exclusion or endpoint
 change (SYN-08).
+
+Per-server files (`capabilities/`, `audit/`, `history/`) are named by
+`serverId`. Séance mints synced ids as UUID v4, but a pulled id is
+untrusted input: a per-server file name is used only after the id is
+validated as a UUID. An import id, `ssh-config:<alias>` (10.1), is unsafe
+as a file name: `:` is invalid in Windows file names, and an alias is any
+run of non-blank characters, so it can contain path separators, or differ
+from another alias only in case and collide on a case-insensitive file
+system (the macOS and Windows defaults). The encoding is decided when the
+import store lands. *Proposal, not decided:* name an import's files
+`ssh-config-` followed by the lowercase hex SHA-256 of the alias's UTF-8
+bytes, for example `capabilities/ssh-config-<64 hex digits>.json`. The
+name uses only lowercase letters, digits and hyphens, has a fixed length
+well under the usual 255-byte limit, survives case folding, and cannot
+equal a UUID (`s` is not a hex digit); the alias stays in the import
+store, so the name need not decode back to it.
 
 ---
 
@@ -3110,11 +3150,12 @@ localization catalog from the first build:
   full app. Not Séance's monolithic `AppState` (3,027 lines [R: c3 §0]).
 - Per-server and per-series `ValueListenable`s keep sample updates local;
   `MaterialApp` rebuilds only on appearance changes.
-- Engine protocol (plain data, D18):
+- Engine protocol (plain data, D18), version 2 (`kEngineProtocolVersion`):
 
 | Requests (UI to engine) | Events (engine to UI) |
 |---|---|
-| `EnrollSync`, `RunSyncRound` | `CatalogReplaced(snapshot)`, `SyncStatus` |
+| `EnrollSync`, `RunSyncRound` | `CatalogReplaced(entries)`, `SyncStatus` |
+| `ImportSshConfig(text)` (FL-02, desktop) | `CatalogReplaced(entries)` with the imports, then `SshConfigImported(importedCount, skippedCount)` |
 | `ConfirmEndpoints(ids)`, `SetMonitorSet(ids)` | `EndpointChanged(serverId)` |
 | `Connect(serverId)`, `Disconnect(serverId)` | `LinkState(serverId, state, reason)` |
 | `Subscribe(serverId, collectorSet, cadence)`, `Unsubscribe` | `Sample(serverId, seq, snapshot)` (coalesced per tick) |
@@ -3124,6 +3165,39 @@ localization catalog from the first build:
 | `AnswerPrompt(promptId, answer)` | `Prompt` (host key, keyboard-interactive, credential, elevation) |
 | `HandleAlert(alertRef, acknowledge or dismiss)` (v1.x; inbox fetch runs inside `RunSyncRound`) | `AlertsArrived(serverId, alerts)`, `AlertStatusChanged` (D42) |
 | `OpenTerminal(serverId, containerId, shell)` (v1) | `TerminalBytes`, `TerminalClosed` |
+
+The protocol as built in M1 (PR #151; types in
+`klabautermann/packages/klabautermann_core/lib/src/engine/protocol.dart`,
+the engine in `engine_isolate.dart` beside it):
+
+- **Version.** `Hello` carries `kEngineProtocolVersion`; the engine
+  answers `EngineReady` with its own version, or `RequestRejected` on a
+  mismatch, so an app and engine built apart fail before any feature
+  traffic. These lifecycle messages, `Shutdown`, and `RequestRejected`
+  (also the answer to rows whose milestone has not landed) are not table
+  rows. Version 2 replaced v1's opaque record map in `CatalogReplaced`
+  with typed entries and added the import row.
+- **`CatalogReplaced(entries)`** carries the whole fleet in display order
+  as a read-only list of immutable `FleetEntry` values: `serverId`,
+  `label`, `host`, `port`, `origin` (`synced` or `sshConfig`) and the
+  optional `user` and `group`. Synced entries come first (none until the
+  catalog library lands, F3), then imports in file order; the catalog's
+  record types stay engine-side. A synced entry's `serverId` is the
+  record's bare UUID; an import's is `ssh-config:<alias>`, device-local
+  and never sent to the sync server. Imports carry no group.
+- **`ImportSshConfig(text)`** carries the config's text: the UI reads
+  `~/.ssh/config` and decides whether the platform has one, and the
+  engine opens no file for it. The engine parses the text off the UI
+  isolate (CN-19) with `seance_core`'s `SshConfigImporter`
+  (`klabautermann/packages/klabautermann_core/lib/src/fleet/ssh_config_entries.dart`), replaces
+  every entry an earlier import produced, and sends `CatalogReplaced`
+  before `SshConfigImported`, so the fleet already shows the imports when
+  the counts arrive. `skippedCount` counts host blocks left out for a
+  `Port` outside 1 to 65535 or an alias an earlier block already took;
+  wildcard-only blocks such as `Host *` are defaults and are not counted.
+  An import is not a catalog write (D14). Until D13's device-local store
+  lands (4.10), the engine holds imports in memory and a restart drops
+  them.
 
 ### 10.2 Desktop (width of 960 px or more)
 

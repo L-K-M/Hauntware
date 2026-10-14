@@ -1,0 +1,34 @@
+# Flatpak manifest. scripts/build-flatpak.sh extracts the release .deb into
+# dist/flatpak/stage and builds from that: the bundle ships the same files
+# the .deb installs, relaid under flatpak's /app prefix.
+id: ch.lkmc.klabautermann
+runtime: org.gnome.Platform
+runtime-version: '50'
+sdk: org.gnome.Sdk
+command: klabautermann
+finish-args:
+  - --share=ipc
+  - --socket=wayland
+  - --socket=fallback-x11
+  # GPU rendering for the Flutter embedder.
+  - --device=dri
+  # Fleet manager over SSH: sessions out and ssh-agent for auth. No home
+  # access (04 §12.1): exports go through the portal file chooser.
+  - --share=network
+  - --socket=ssh-auth
+  # FL-02 imports hosts from ~/.ssh/config, and nothing reads identity
+  # files until links land (M2), so M1 grants that one file, read-only.
+  # The rest of ~/.ssh, private keys included, stays outside the sandbox;
+  # widening the grant needs owner sign-off (04 §12.1).
+  - --filesystem=~/.ssh/config:ro
+  # Secrets live in the host keyring (Secret Service API).
+  - --talk-name=org.freedesktop.secrets
+modules:
+  - name: klabautermann
+    buildsystem: simple
+    sources:
+      - type: dir
+        path: ../dist/flatpak/stage
+    build-commands:
+      - rm -rf DEBIAN
+      - "if [ -d usr ]; then cp -a usr/. /app/; else cp -a . /app/; fi"

@@ -18,6 +18,8 @@ One repository, one version and one release cadence:
 
 Séance also supplies the shared encrypted sync server. Product names,
 application IDs, storage locations and keystore namespaces stay distinct.
+Klabautermann is in development: CI builds its five clients on every pull
+request, and suite releases include them from its preview milestone.
 
 ## Develop
 
@@ -30,7 +32,7 @@ scripts/test.sh dart       # Pure-Dart packages, guards and tooling
 scripts/test.sh flutter    # Shared Flutter packages and applications
 scripts/build.sh --check   # Inspect available products/toolchains
 scripts/build.sh seance    # Build the selected product
-scripts/build.sh --install # Build all three apps and install them (macOS: /Applications)
+scripts/build.sh --install # Build all four apps and install them (macOS: /Applications)
 python3 scripts/check-history.py
 ```
 
@@ -53,10 +55,11 @@ scripts/release.sh --check
 scripts/release.sh 1.2.0 --push  # Explicit future release, not part of migration
 ```
 
-One `vX.Y.Z` tag drives all 13 client targets, sync-server binaries and its
-container image. One publish point follows every required test/build and
-artifact/checksum check. Android keeps the existing committed sideload
-signing keys; desktop bundles remain unsigned/ad-hoc and iOS bundles unsigned.
+One `vX.Y.Z` tag drives all 13 released client targets (Klabautermann's five
+join with its preview), sync-server binaries and its container image. One
+publish point follows every required test/build and artifact/checksum check.
+Android keeps the existing committed sideload signing keys; desktop bundles
+remain unsigned/ad-hoc and iOS bundles unsigned.
 Vendored package versions and historical benchmark measurements stay intact.
 
 ## Migration and history
