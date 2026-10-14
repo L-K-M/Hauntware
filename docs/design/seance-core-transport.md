@@ -542,7 +542,12 @@ argument of `-l`, `-L`, `--list`, `--table` or signal 0 (`-0`, `-s 0`,
 `-n 0`, `--signal 0`), forms that send no signal; only the first argument
 counts, so a `# -l` comment cannot hide `kill -9 1`; `N` is
 `(?<!\s(?:-[snq]|--signal|--queue|--timeout))`, which rejects a word
-that is a signal, queue or timeout operand rather than a PID.
+that is a signal, queue or timeout operand rather than a PID. The code
+writes rows 25 and 26 in an equivalent linear form: the operand
+lookbehind follows the PID, and only the first `kill` on a line is tried
+(for row 26, also a `kill` whose arguments continue on the next line
+inside quotes), since a later kill reaches nothing the first one does
+not. Trying every kill took about 36 s on a 64 KB line of `kill x`.
 
 | # | Pattern | Severity | Explanation |
 |---|---|---|---|
