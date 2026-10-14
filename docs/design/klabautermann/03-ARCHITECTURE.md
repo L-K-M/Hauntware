@@ -601,23 +601,36 @@ Proposals awaiting the owner close the section; they are not decisions.
   host is a container, not which values are its own. K09 refines this:
   an lxcfs mount is not proof for every file. lxcfs passes the host's
   `/proc/loadavg` through unless it runs with `-l`, which its upstream
-  systemd unit does not pass, and it reads `diskstats` and `pressure/io`
-  through a cgroup controller named `blkio`, which cgroup v2 calls `io`,
-  so on cgroup v2 it passes those host files through too [R: lxcfs
-  `src/proc_loadavg.c`, `src/proc_fuse.c`, `src/cgroups/cgfsng.c` and
-  `config/init/systemd/lxcfs.service.in`, main and 5.0.4]. Neither the
-  flag nor, reliably, the host's cgroup version shows inside the
-  container, so these three files count as the host's there even as
-  lxcfs mounts; `meminfo`, `stat`, `uptime`, `pressure/cpu` and
-  `pressure/memory` under lxcfs are the container's. Any lxcfs mount
-  over `/proc` also marks a container when `systemd-detect-virt -c`
-  answers `none`. *Rejected:* trusting every lxcfs mount (a default
-  lxcfs container would show the host's load and disk I/O as its own);
-  trusting `diskstats` when the container sees no cgroup v2 (a container
-  without a cgroup2 mount on a cgroup v2 host looks the same), at the
-  cost of hiding the container's own `diskstats` that lxcfs 5.0 serves
-  on cgroup v1 hosts; an unknown answer for those files (unknown already
-  means that the container question is open, which it is not here).
+  systemd unit does not pass. It takes the CPU times in `/proc/stat`
+  from the cgroup v1 `cpuacct` controller; without one it copies the
+  host's `cpuN` lines for the CPUs in the container's cpuset and writes
+  their sum as the `cpu` line. It reads `diskstats` and `pressure/io`
+  through a controller named `blkio`, which cgroup v2 calls `io`, and
+  passes the host's file through when that lookup fails. So lxcfs 5.0
+  and 6.0, which also run on legacy and hybrid cgroup layouts, serve the
+  container's own `stat` CPU times and `diskstats` only on such a host,
+  serve the host's on a cgroup v2 host, and serve no `/proc/pressure`;
+  lxcfs 7.0 and main support cgroup v2 only and always serve the host's
+  `stat` CPU times, `diskstats` and `pressure/io` [R: lxcfs
+  `src/proc_loadavg.c`, `src/proc_fuse.c` (`proc_stat_read`,
+  `proc_diskstats_read`, the pressure reader), `src/proc_cpuview.c`
+  (`read_cpuacct_usage_all`), `src/cgroups/cgfsng.c` (`cg_init`) and
+  `config/init/systemd/lxcfs.service.in`, at lxcfs-5.0.4, v6.0.6,
+  v7.0.0 and main `e1c5a7d`; `4e95204` removed cgroup v1 support].
+  Neither the flag, the lxcfs version nor, reliably, the host's cgroup
+  layout shows inside the container, so these four files count as the
+  host's there even as lxcfs mounts; `meminfo`, `uptime`,
+  `pressure/cpu` and `pressure/memory` under lxcfs are the container's.
+  Any lxcfs mount over `/proc` also marks a container when
+  `systemd-detect-virt -c` answers `none`. *Rejected:* trusting every
+  lxcfs mount (a default lxcfs container would show the host's load,
+  CPU times and disk I/O as its own); trusting `stat` and `diskstats`
+  when the container sees no cgroup v2 (a container without a cgroup2
+  mount on a cgroup v2 host looks the same), at the cost of hiding the
+  container's own CPU times and `diskstats` that lxcfs 5.0 and 6.0
+  serve on cgroup v1 hosts; an unknown answer for those files (unknown
+  already means that the container question is open, which it is not
+  here).
 - **D52. Runtime code lives outside `src/engine/`.** In
   `klabautermann_core`, links, sampling, logs and capabilities live in
   `lib/src/links/`, `lib/src/sampling/`, `lib/src/logs/` and
@@ -1857,7 +1870,7 @@ the probe returns:
 | Kernel, architecture | `uname -s -r -m` |
 | Distribution | `/etc/os-release` (`ID`, `ID_LIKE`, `VERSION_ID`, `PRETTY_NAME`) |
 | Init and systemd | `/proc/1/comm`, `/run/systemd/system`, `systemctl --version` first line |
-| Virtualization | `systemd-detect-virt`, `systemd-detect-virt -c` (SYS-04); the `fuse.lxcfs` mounts in `/proc/mounts`, which tell which system-wide `/proc` files show the container's own values (D50) |
+| Virtualization | `systemd-detect-virt`, `systemd-detect-virt -c` (SYS-04); the `fuse.lxcfs` mounts in `/proc/mounts`. An lxcfs mount shows the container's own `meminfo` and `uptime`, and from lxcfs 7.0, the first to serve `/proc/pressure`, its own `pressure/cpu` and `pressure/memory`; `stat`, `loadavg`, `diskstats` and `pressure/io` count as the host's even as mounts (D50) |
 | Identity | `id -u`, `id -un`, `id -nG` (journal and docker groups) |
 | Elevation | `sudo -V` first line (sudo or sudo-rs), `sudo -n true` result, `command -v doas run0`, `doas -n true` result when doas exists, `run0 --no-ask-password true` result when run0 exists (8.3 rung 6), `command -V printf` (builtin or not, 8.3); the Identity row's `id -u` decides the root-login rung |
 | Tools | `command -v` for about 30 tools: `journalctl`, `crontab`, `ss`, `ip`, `lsblk`, `findmnt`, `smartctl`, `sensors`, `docker`, `podman`, `socat`, `timeout`, `setsid`, `ncdu`, `gdu`, `sadf`, `logger`, `systemd-run`, `apt-get`, `dnf`, `dnf5`, `apk`, `pacman`, `zypper`, `nvidia-smi`, ... |

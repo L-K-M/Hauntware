@@ -66,7 +66,7 @@ final class EngineSocket {
 /// container's own and are deliberately not listed.
 enum SystemWideProcFile {
   meminfo('/proc/meminfo', lxcfsShowsOwn: true),
-  stat('/proc/stat', lxcfsShowsOwn: true),
+  stat('/proc/stat', lxcfsShowsOwn: false),
   loadavg('/proc/loadavg', lxcfsShowsOwn: false),
   uptime('/proc/uptime', lxcfsShowsOwn: true),
   diskstats('/proc/diskstats', lxcfsShowsOwn: false),
@@ -80,11 +80,24 @@ enum SystemWideProcFile {
   final String path;
 
   /// Whether a `fuse.lxcfs` mount over this file shows the container's
-  /// own figures. False where lxcfs can pass the host's file through
-  /// without a sign inside the container (D50): `loadavg` unless lxcfs
-  /// runs with `-l`, and `diskstats` and `pressure/io`, for which lxcfs
-  /// looks up a cgroup controller named `blkio`, which cgroup v2 calls
-  /// `io`.
+  /// own figures. False where lxcfs can serve the host's figures without
+  /// a sign inside the container (D50):
+  /// - `loadavg`, which lxcfs passes through unless it runs with `-l`;
+  /// - `stat`, whose CPU times lxcfs takes from the cgroup v1 `cpuacct`
+  ///   controller: lxcfs 5.0 and 6.0 find it only on a host with a
+  ///   legacy or hybrid cgroup layout, and lxcfs 7, which supports
+  ///   cgroup v2 only, never does. Without it, lxcfs copies the host's
+  ///   lines for the CPUs in the container's cpuset and sums them into
+  ///   the `cpu` line;
+  /// - `diskstats` and `pressure/io`, for which lxcfs looks up a cgroup
+  ///   controller named `blkio`, which cgroup v2 calls `io`.
+  ///
+  /// Neither the `-l` flag, the lxcfs version nor, reliably, the host's
+  /// cgroup layout shows inside the container.
+  ///
+  /// `uptime`'s first field is the container's age either way. Its
+  /// second, the idle time, is not the kernel's figure under lxcfs: the
+  /// age minus the `cpuacct` busy time, or the age itself without one.
   final bool _lxcfsShowsOwn;
 }
 
@@ -233,7 +246,7 @@ final class HostProfile {
   /// Whether [file] may show the container host's figures rather than
   /// this system's own (D50, SYS-04), so its values must show as unknown
   /// with that reason. False when lxcfs serves the container's own
-  /// figures there, which it does not do reliably for `loadavg`,
+  /// figures there, which it does not do reliably for `stat`, `loadavg`,
   /// `diskstats` and `pressure/io`, or when `systemd-detect-virt -c`
   /// found no container; true inside a container otherwise; null when
   /// neither is known, as on a host without `systemd-detect-virt` and

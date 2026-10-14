@@ -160,7 +160,7 @@ void main() {
   });
 
   group('showsHostFigures (D50)', () {
-    const lxcfs = ['/proc/cpuinfo', '/proc/meminfo', '/proc/stat'];
+    const lxcfs = ['/proc/cpuinfo', '/proc/meminfo', '/proc/uptime'];
 
     test('outside a container every file is the system own', () {
       final p = HostProfile(container: 'none', lxcfsMounts: const []);
@@ -179,14 +179,14 @@ void main() {
     test('lxcfs serves only the files it mounts', () {
       final p = HostProfile(container: 'lxc', lxcfsMounts: lxcfs);
       expect(p.showsHostFigures(SystemWideProcFile.meminfo), isFalse);
-      expect(p.showsHostFigures(SystemWideProcFile.stat), isFalse);
+      expect(p.showsHostFigures(SystemWideProcFile.uptime), isFalse);
       expect(p.showsHostFigures(SystemWideProcFile.loadavg), isTrue);
       expect(p.showsHostFigures(SystemWideProcFile.pressureCpu), isTrue);
     });
 
-    test('lxcfs passes the host figures through for three files', () {
-      // A default lxcfs serves loadavg without -l, and diskstats and
-      // pressure/io under cgroup v2, from the host's files.
+    test('lxcfs passes the host figures through for four files', () {
+      // A default lxcfs serves loadavg without -l, and stat, diskstats
+      // and pressure/io under cgroup v2, with the host's figures.
       final p = HostProfile(
         container: 'lxc',
         lxcfsMounts: const [
@@ -204,6 +204,7 @@ void main() {
             if (p.showsHostFigures(f)!) f,
         ],
         [
+          SystemWideProcFile.stat,
           SystemWideProcFile.loadavg,
           SystemWideProcFile.diskstats,
           SystemWideProcFile.pressureIo,

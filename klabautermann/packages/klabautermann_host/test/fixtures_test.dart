@@ -54,7 +54,7 @@ void main() {
       }
     });
 
-    test('with lxcfs only meminfo, stat and uptime are its own', () {
+    test('with lxcfs only meminfo and uptime are its own', () {
       final p = _profile(root, 'debian-12-lxc-lxcfs');
       expect(
         [
@@ -62,6 +62,7 @@ void main() {
             if (p.showsHostFigures(f)!) f,
         ],
         [
+          SystemWideProcFile.stat,
           SystemWideProcFile.loadavg,
           SystemWideProcFile.diskstats,
           SystemWideProcFile.pressureCpu,

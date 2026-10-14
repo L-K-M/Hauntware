@@ -8,12 +8,15 @@ systemd-detect-virt(1) and systemd 252's manual pages. Replace it with a
 capture once one exists.
 
 The probe's `lxcfs` area lists those mounts (D50). `core.txt` and
-`overview.txt` carry the container's two CPUs, 2 GiB and uptime as lxcfs
-would report them. Load and disk counters are the host's although lxcfs
-mounts both files: lxcfs passes `/proc/loadavg` through unless it runs
-with `-l`, and on cgroup v2 `/proc/diskstats` too, because it looks up a
-`blkio` controller that cgroup v2 calls `io`. The `/proc/pressure` files,
-which lxcfs 5.0 does not serve, carry the host's values, and `btime` is
-the host's boot time, assuming lxcfs passes the non-CPU lines of
-`/proc/stat` through unchanged [U]. `/proc/net/dev` and the processes
-are the container's own.
+`overview.txt` carry the container's 2 GiB and uptime as lxcfs would
+report them. `/proc/stat` lists the container's two CPUs with the host's
+times: on cgroup v2, lxcfs finds no `cpuacct` controller, so it copies
+the host's `cpuN` lines for the two CPUs in the container's cpuset and
+writes their sum as the `cpu` line. Load and disk counters are the
+host's too although lxcfs mounts both files: lxcfs passes
+`/proc/loadavg` through unless it runs with `-l`, and on cgroup v2
+`/proc/diskstats` too, because it looks up a `blkio` controller that
+cgroup v2 calls `io`. The `/proc/pressure` files, which lxcfs 5.0 does
+not serve, carry the host's values. `btime` is the host's boot time,
+because lxcfs passes the other lines of `/proc/stat` through unchanged.
+`/proc/net/dev` and the processes are the container's own.
