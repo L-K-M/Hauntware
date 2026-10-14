@@ -42,40 +42,48 @@ class DesktopShell extends StatelessWidget {
     return Scaffold(
       body: SafeArea(
         top: false,
-        child: MediaQuery.removePadding(
-          context: context,
-          removeTop: true,
-          child: Row(
-            children: [
-              SizedBox(
-                width: railWidth,
-                child: _BelowTopInset(
-                  inset: top,
-                  color: SidebarThemeTokens.of(context).sidebarBackground,
-                  child: FleetRail(
-                    fleet: fleet,
-                    onOpenSettings: onOpenSettings,
-                    onAddServer: onAddServer,
+        // The context under the SafeArea: its MediaQuery has the side and
+        // bottom insets consumed and the Scaffold's keyboard inset removed.
+        // DesktopShell's own context would bring all of them back.
+        child: Builder(
+          builder: (context) => MediaQuery.removePadding(
+            context: context,
+            removeTop: true,
+            child: Row(
+              children: [
+                SizedBox(
+                  width: railWidth,
+                  child: _BelowTopInset(
+                    inset: top,
+                    color: SidebarThemeTokens.of(context).sidebarBackground,
+                    child: FleetRail(
+                      fleet: fleet,
+                      onOpenSettings: onOpenSettings,
+                      onAddServer: onAddServer,
+                    ),
                   ),
                 ),
-              ),
-              VerticalDivider(width: 1, color: colors.outlineVariant),
-              Expanded(
-                child: _BelowTopInset(
-                  inset: top,
-                  child: ServerWorkspace(fleet: fleet, monitoring: monitoring),
+                VerticalDivider(width: 1, color: colors.outlineVariant),
+                Expanded(
+                  child: _BelowTopInset(
+                    inset: top,
+                    child: ServerWorkspace(
+                      fleet: fleet,
+                      monitoring: monitoring,
+                    ),
+                  ),
                 ),
-              ),
-              VerticalDivider(width: 1, color: colors.outlineVariant),
-              SizedBox(
-                width: inspectorWidth,
-                child: _BelowTopInset(
-                  inset: top,
-                  color: colors.surfaceContainerLow,
-                  child: InspectorPane(fleet: fleet),
+                VerticalDivider(width: 1, color: colors.outlineVariant),
+                SizedBox(
+                  width: inspectorWidth,
+                  child: _BelowTopInset(
+                    inset: top,
+                    color: colors.surfaceContainerLow,
+                    child: InspectorPane(fleet: fleet),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
