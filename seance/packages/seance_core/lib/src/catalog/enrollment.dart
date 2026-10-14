@@ -11,7 +11,9 @@ import 'package:seance_protocol/seance_protocol.dart';
 
 import '../sync/sync_engine.dart';
 import 'persistent_record_store.dart';
+import 'record_coordinator.dart' show isDecryptableSyncId;
 import 'record_crypto.dart';
+import 'record_handler.dart';
 
 /// 04 §4.3's verbatim copy for 403 `registration_closed` on a Design B
 /// register — the UI renders this string (ARB-mirrored when the settings
@@ -38,7 +40,7 @@ const String syncPassphraseCheckFailedMessage =
 /// its condition provably resolves, never on dismissal.
 const String syncNoticePassphraseCheckFailed = 'passphraseCheckFailed';
 
-/// Raised by [BookmarkCoordinator] on a 401 during rounds (the dead-account
+/// Raised by `RecordCoordinator` on a 401 during rounds (the dead-account
 /// posture, 04 §7.3); enrollment clears it on success and a good pull
 /// clears it on recovery. A failed *login* does not raise it — the user was
 /// never enrolled, so there is no account state to flag dead.
@@ -182,23 +184,30 @@ final class RegistrationClosedException extends SyncEnrollmentException {
 }
 
 /// The Design B enrollment driver (04 §4.1/§4.5). Owns no transport: the
-/// [SyncEnrollmentApi] seam comes per call like [BookmarkCoordinator]'s.
+/// [SyncEnrollmentApi] seam comes per call like `RecordCoordinator`'s.
 final class SyncEnrollment {
+  /// [handlers] are the product handlers the app registers with its
+  /// coordinator: the passphrase trial opens only ids their registration
+  /// makes decryptable ([isDecryptableSyncId]).
   const SyncEnrollment({
     required SyncCredentialStore credentials,
     required SyncEnrollmentState state,
     required SyncRecordStore records,
+    required List<RecordHandler> handlers,
   })  : // Collaborator names stay public; the fields stay private.
         // ignore: prefer_initializing_formals
         _credentials = credentials,
         // ignore: prefer_initializing_formals
         _state = state,
         // ignore: prefer_initializing_formals
-        _records = records;
+        _records = records,
+        // ignore: prefer_initializing_formals
+        _handlers = handlers;
 
   final SyncCredentialStore _credentials;
   final SyncEnrollmentState _state;
   final SyncRecordStore _records;
+  final List<RecordHandler> _handlers;
 
   /// Register a fresh separate-mode account (04 §4.1): mint a 16-byte salt,
   /// derive both keys, POST /v1/register, then persist. A fresh
@@ -279,15 +288,16 @@ final class SyncEnrollment {
 
     final response = await api.pull(since: 0);
     // The trial-decrypt: the FIRST non-tombstone record on a decryptable
-    // id decides — kind-agnostic across prefixless/bookmark:/hostkey:,
-    // never secret:/snippet:/unrecognized (§3.2's never-decrypt dispatch
+    // id decides — kind-agnostic across every prefix the registration
+    // opens (prefixless, hostkey:, and product prefixes such as bookmark:),
+    // never secret:/snippet:/unregistered (§3.2's never-decrypt dispatch
     // binds enrollment too). Auth success cannot prove the E2E passphrase.
     var unverified = true;
     String? warning;
     final crypto = RecordCrypto(RecordCodec(keys.vaultKey));
     for (final record in response.records) {
       if (record.deleted || record.blob.isEmpty) continue;
-      if (!isDecryptableSyncId(record.id)) continue;
+      if (!isDecryptableSyncId(record.id, _handlers)) continue;
       try {
         await crypto.open(record);
         unverified = false;

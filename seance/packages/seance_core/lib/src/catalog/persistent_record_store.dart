@@ -33,7 +33,7 @@ abstract interface class SyncRecordStore implements LocalRecordStore {
   );
 
   /// The highest server seq already materialized into the domain stores.
-  /// [BookmarkCoordinator.applyPulled] advances it only past records that
+  /// `RecordCoordinator.applyPulled` advances it only past records that
   /// were applied or superseded that round — never past a seen-but-deferred
   /// one, which a delta pull would never re-deliver.
   Future<int> lastAppliedSeq();
@@ -97,7 +97,7 @@ String _stamp(DateTime now) => now
 /// through a long-offline device). A corrupt file is quarantined under a
 /// unique per-occurrence name and the store restarts empty; the caller
 /// surfaces the durable Settings → Backup notice and drives
-/// [BookmarkCoordinator.reSealAfterStoreLoss]. A newer `version` fails
+/// `RecordCoordinator.reSealAfterStoreLoss`. A newer `version` fails
 /// closed in place — data this build must not overwrite.
 final class PersistentLocalRecordStore implements SyncRecordStore {
   PersistentLocalRecordStore({
