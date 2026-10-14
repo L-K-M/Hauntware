@@ -112,13 +112,17 @@ void main() {
     expect(session.restarts, 0);
   });
 
-  test('keeps one request outstanding and counts the overlap', () async {
+  test('keeps one request outstanding and counts overlapping ticks', () async {
     open();
     final p = await ready();
     final first = session.tick([Collector.overview]);
     final second = await session.tick([Collector.core]);
     expect((second as SamplerSkipped).reason, SamplerSkipReason.busy);
-    expect(session.skippedRequests, 1);
+    // An on-demand read is skipped the same way; 03 §6.2 counts only
+    // overlapping ticks.
+    final read = await session.onDemand(Collector.core, const []);
+    expect((read as SamplerSkipped).reason, SamplerSkipReason.busy);
+    expect(session.skippedTicks, 1);
     expect(p.requests, ['hw_t 1 overview']);
 
     p.emitText(p.reply(1, {'overview': ''}));

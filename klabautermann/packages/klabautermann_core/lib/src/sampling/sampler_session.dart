@@ -3,9 +3,10 @@
 /// A session starts `sh -s` with [kSamplerStartCommand], writes the
 /// constant program with a fresh nonce, and accepts requests once the
 /// program prints READY. At most one request is outstanding; a request
-/// that would overlap is skipped and counted. A failed start, a missed
-/// deadline, output the program cannot produce, or the process ending
-/// closes the process and restarts the sampler after a backoff delay:
+/// that would overlap is skipped, and a skipped tick is counted. A failed
+/// start, a missed deadline, output the program cannot produce, or the
+/// process ending closes the process and restarts the sampler after a
+/// backoff delay:
 ///
 /// ```text
 ///   idle ─start()─▶ starting ─READY─▶ ready ◀─────────────┐
@@ -162,8 +163,8 @@ final class SamplerSkipped extends SamplerOutcome {
 
 /// Why a request was not written.
 enum SamplerSkipReason {
-  /// Another request is outstanding (03 §6.2); counted in
-  /// [SamplerSession.skippedRequests].
+  /// Another request is outstanding (03 §6.2); a tick skipped this way
+  /// is counted in [SamplerSession.skippedTicks].
   busy,
 
   /// The sampler is starting or waiting out a restart delay.
@@ -220,8 +221,10 @@ final class SamplerSession {
   /// Processes given up and restarted (or about to restart) so far.
   int get restarts => _restarts;
 
-  /// Requests skipped because another was outstanding (03 §6.2).
-  int get skippedRequests => _skipped;
+  /// Ticks skipped because another request was outstanding (03 §6.2).
+  /// A skipped on-demand read is user-started, not cadence overload, and
+  /// is not counted.
+  int get skippedTicks => _skipped;
 
   /// The most recent stderr of the sampler processes, with control
   /// characters other than newline and tab removed; for diagnostics.
@@ -241,7 +244,11 @@ final class SamplerSession {
     for (final c in collectors) {
       if (c.sampler != kind) return _wrongSampler(c);
     }
-    return _request(collectors, (seq) => encodeTickRequest(seq, collectors));
+    return _request(
+      _RequestKind.tick,
+      collectors,
+      (seq) => encodeTickRequest(seq, collectors),
+    );
   }
 
   /// Requests an on-demand read (`hw_o`) of [collector] with [args],
@@ -249,7 +256,7 @@ final class SamplerSession {
   /// (03 §8.8); the future fails with [HwsRequestError] when they do not.
   Future<SamplerOutcome> onDemand(Collector collector, List<String> args) {
     if (collector.sampler != kind) return _wrongSampler(collector);
-    return _request([
+    return _request(_RequestKind.onDemand, [
       collector,
     ], (seq) => encodeOnDemandRequest(seq, collector, args, quote: _quote));
   }
@@ -438,6 +445,7 @@ final class SamplerSession {
   // -- requests -------------------------------------------------------
 
   Future<SamplerOutcome> _request(
+    _RequestKind requestKind,
     List<Collector> collectors,
     String Function(int seq) encode,
   ) {
@@ -455,7 +463,7 @@ final class SamplerSession {
       return _skip(SamplerSkipReason.notReady);
     }
     if (_pending != null) {
-      _skipped++;
+      if (requestKind == _RequestKind.tick) _skipped++;
       return _skip(SamplerSkipReason.busy);
     }
 
@@ -514,6 +522,8 @@ final class SamplerSession {
   static Duration _defaultRestartDelay(int failures) =>
       samplerRestartDelay(failures, _jitter);
 }
+
+enum _RequestKind { tick, onDemand }
 
 /// One process of a session, from [SshLink.start] to its close.
 final class _Attempt {
