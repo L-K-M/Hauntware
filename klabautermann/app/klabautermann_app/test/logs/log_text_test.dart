@@ -205,6 +205,30 @@ void main() {
         isNot(runs[3].style!.backgroundColor),
       );
     });
+
+    test('only the current match is underlined, even in underlined text', () {
+      final span = logLineSpan(
+        const LogLine(0, '\x1b[4;9mERROR ERROR\x1b[0m'),
+        palette: palette,
+        base: base,
+        matches: const [
+          TextMatch(start: 0, end: 5),
+          TextMatch(start: 6, end: 11),
+        ],
+        currentMatch: 1,
+      );
+
+      final runs = span.children!.cast<TextSpan>();
+      expect(runs.map((run) => run.text), ['ERROR', ' ', 'ERROR']);
+      expect(runs[0].style!.decoration, TextDecoration.lineThrough);
+      expect(
+        runs[2].style!.decoration,
+        TextDecoration.combine([
+          TextDecoration.lineThrough,
+          TextDecoration.underline,
+        ]),
+      );
+    });
   });
 
   for (final brightness in Brightness.values) {

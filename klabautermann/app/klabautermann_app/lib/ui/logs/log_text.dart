@@ -144,19 +144,20 @@ final class LogPalette {
   );
 
   /// [style] inside a search match (LOG-05): the match background, with
-  /// the text held to [logTextMinContrast] on it. The current match also
-  /// gets an underline, so it differs by more than colour.
+  /// the text held to [logTextMinContrast] on it. Only the current match
+  /// is underlined, whatever the line's SGR underline, so it differs by
+  /// more than colour; a strikethrough stays.
   TextStyle matchStyle(TextStyle style, {required bool current}) {
     final background = current ? _currentMatch : _match;
+    final struck =
+        style.decoration?.contains(TextDecoration.lineThrough) ?? false;
     return style.copyWith(
       backgroundColor: background,
       color: _legible(style.color ?? _foreground, background),
-      decoration: current
-          ? TextDecoration.combine([
-              ?style.decoration,
-              TextDecoration.underline,
-            ])
-          : null,
+      decoration: TextDecoration.combine([
+        if (struck) TextDecoration.lineThrough,
+        if (current) TextDecoration.underline,
+      ]),
     );
   }
 
