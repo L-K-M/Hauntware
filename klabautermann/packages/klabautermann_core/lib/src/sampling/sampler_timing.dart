@@ -26,7 +26,10 @@ const kSlowRequestMargin = Duration(seconds: 5);
 /// or `ps`, the JSON or text calls of `units` and `timers`) only one
 /// branch runs, so the bound is high by those. No guarded call sits
 /// inside a loop. A test ties each figure to the fragment text, so a
-/// program change has to revisit it.
+/// program change has to revisit it. The count belongs with the
+/// fragments in `klabautermann_host`: once that package exposes it
+/// (`Collector.guardedCommands` is planned), this table goes, so the
+/// count has one owner.
 int guardedCommandBound(Collector collector) => switch (collector) {
   Collector.overview || Collector.core => 0,
   Collector.probe => 17,
