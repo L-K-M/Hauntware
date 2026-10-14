@@ -903,5 +903,31 @@ void main() {
       expect(find.text('Import SSH config'), findsOneWidget);
       expect(find.byKey(const ValueKey('servers.filter.field')), findsNothing);
     });
+
+    testWidgets('Import SSH config counts the hosts it skips', (tester) async {
+      await boot(tester, []);
+      await pumpRail(tester);
+      await tester.tap(find.text('Import SSH config'));
+      await tester.pumpAndSettle();
+      // `www` is a service ssh may resolve, so the toast must not call it
+      // invalid.
+      await tester.enterText(
+        find.byType(TextField),
+        'Host ok\nHost typo\n  Port www\n',
+      );
+      await tester.tap(find.widgetWithText(FilledButton, 'Import'));
+
+      // The import writes the store on disk, which only completes outside
+      // the fake-async zone; each hop needs a real wait and then a pump.
+      const message = 'Imported 1 host(s). Skipped 1 with an unsupported Port.';
+      for (var i = 0; i < 50 && find.text(message).evaluate().isEmpty; i++) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 20)),
+        );
+        await tester.pump();
+      }
+      expect(find.text(message), findsOneWidget);
+      await tester.pumpAndSettle(const Duration(seconds: 10));
+    });
   });
 }

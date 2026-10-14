@@ -118,7 +118,8 @@ class AppearanceTab extends StatelessWidget {
     } on AppearanceNotSavedException catch (error) {
       debugPrint('$error');
       if (overlay.mounted) showTopToast(overlay, message: l10n.themeNotSaved);
-    } on Exception {
+    } on Exception catch (error) {
+      debugPrint('$error');
       if (overlay.mounted) {
         showTopToast(overlay, message: l10n.themeNotChanged);
       }

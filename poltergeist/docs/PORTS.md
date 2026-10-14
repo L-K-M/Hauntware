@@ -81,6 +81,27 @@ results, changed only in wiring and in the renamed write calls below.
   `bookmark_groups.dart`, `sort_key.dart` and the new
   `bookmark_handler.dart`.
 
+## Shared localization contract scanner (2026-10-13)
+
+Poltergeist's app-local `localization_contract_test.dart` scanner moves to
+root `tool/l10n_contract` (03 §3.5 F1b, D3). Literal detection,
+interpolation handling, generated-file and generated-localization
+exclusions, parser-diagnostic rejection, per-file technical-literal
+allowlists and the "every exception stays live" check now live in one
+pure-Dart package. The app keeps its reviewed allowlist, with unchanged
+entries and comments, and calls the shared scanner as a path
+`dev_dependency`; nothing is copied or forked. Séance and Planchette have
+no such test and are not switched. Klabautermann still runs its interim
+`klabautermann/app/klabautermann_app/test/localization_test.dart` and
+registers with the shared tool in a follow-up K-lane PR, since a dry run
+of the shared scanner over its `lib/` found 39 literals to review.
+
+The scanner's own tests (representative-literal, interpolation,
+generated-file and parser-diagnostic cases) move to
+`tool/l10n_contract/test/` with small fixtures. On the real tree the
+switched test keeps its pass verdict, and it fails on a planted
+user-facing literal and on a dead allowlist entry, both reverted.
+
 ## Catalog library move, PR 1a (2026-10-13)
 
 Original Poltergeist sync code moves into Séance's `seance_core` as the
@@ -227,7 +248,15 @@ carries the new IEC binary size/rate formatters for Klabautermann;
 2026-10-13 in its own package, `ghost_servers` (over `seance_protocol`
 and `ghost_ui`); the SERVERS section's catalog grouping calls its
 `groupServers` instead of grouping inline, with the `srv:` collapse keys
-unchanged.
+unchanged. The status-dot vocabulary followed the same day in that
+package's `server_status.dart`: `serverIndicatorOf` keeps its name and
+ARB words as a delegate to its list rule (through
+`ui/ghost_servers_adapter.dart`), the sidebar rail resolves the rail
+rule through that adapter directly (so `railIndicatorOf`, left without
+a caller, was removed), the rail's paint map and the
+sidebar's hidden-live header dot draw through `ghostStatusDot` and
+`ghostHiddenLiveIndicator`, and the pane-tab `ServerStateGlyph` paint
+stays here.
 
 ## Cross-app deep links (2026-10-02)
 
@@ -977,7 +1006,8 @@ counterpart is ported here.
   `ui/sidebar/sidebar_servers_section.dart` now calls `groupServers`
   with the controller's pinned set; its collapse keys still go through
   `SidebarCollapseKeys.serverGroup`.
-- Port-back candidates: none — Séance owns the source.
+- Port-back candidates: none — the source now lives in the shared
+  `ghost_servers` package, which both apps consume.
 
 ## app/poltergeist_app/lib/ui/server_filter.dart
 

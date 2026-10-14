@@ -95,9 +95,9 @@ class AppLocalizationsEn extends AppLocalizations {
       skippedCount,
       locale: localeName,
       other:
-          '$skippedCount hosts were skipped because their port is invalid or their name repeats an earlier host.',
+          '$skippedCount hosts were skipped because their port is unsupported or their name repeats an earlier host.',
       one:
-          '1 host was skipped because its port is invalid or its name repeats an earlier host.',
+          '1 host was skipped because its port is unsupported or its name repeats an earlier host.',
     );
     return '$_temp0 $_temp1';
   }
@@ -117,10 +117,29 @@ class AppLocalizationsEn extends AppLocalizations {
       'The import from ~/.ssh/config failed. Try again, and restart the app if it keeps failing.';
 
   @override
+  String get sshConfigImportNotSaved =>
+      'This import could not be saved, so it will not be kept after a restart.';
+
+  @override
   String get syncFleet => 'Synchronize';
 
   @override
   String get openSettings => 'Settings';
+
+  @override
+  String get settingsCommand => 'Settings…';
+
+  @override
+  String get appQuitLabel => 'Quit';
+
+  @override
+  String get menuFile => 'File';
+
+  @override
+  String get menuView => 'View';
+
+  @override
+  String get menuWindow => 'Window';
 
   @override
   String get statusConnected => 'Connected';
@@ -203,6 +222,19 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get settingsFileNotSaved =>
       'Your settings could not be saved. Changes you make now may be lost when Klabautermann restarts.';
+
+  @override
+  String importsFileRecovered(String fileName) {
+    return 'Your imported servers could not be read and were cleared. The old file is kept as $fileName. Import ~/.ssh/config again to bring them back.';
+  }
+
+  @override
+  String get importsFileLeftAsIs =>
+      'Your imported servers could not be read, so their file was left as it is. Servers you import now will not be kept after a restart.';
+
+  @override
+  String get importsFileNewer =>
+      'Your imported servers were saved by a newer version of Klabautermann. Servers you import now will not be kept after a restart.';
 
   @override
   String get settingsWindowUnreachable =>

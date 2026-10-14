@@ -45,7 +45,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(harness.engine.sentOfType<ImportSshConfig>(), hasLength(1));
     harness.engine.emit(
-      const SshConfigImported(importedCount: 1, skippedCount: 0),
+      const SshConfigImported(importedCount: 1, skippedCount: 0, saved: true),
     );
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Settings'));
