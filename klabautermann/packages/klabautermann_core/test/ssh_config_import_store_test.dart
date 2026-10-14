@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:klabautermann_core/klabautermann_core.dart';
+import 'package:klabautermann_core/src/fleet/imported_fleet.dart'
+    show ImportedHostDetail;
 import 'package:klabautermann_core/src/fleet/ssh_config_entries.dart';
 import 'package:klabautermann_core/src/fleet/ssh_config_import_store.dart';
 import 'package:seance_core/seance_core.dart' show ImportedHost;
@@ -57,6 +59,7 @@ void main() {
 
       expect(store.issue, isNull);
       expect(store.hosts, isEmpty);
+      expect(store.detail, ImportedHostDetail.full);
       expect(names(), isEmpty);
     });
 
@@ -84,6 +87,7 @@ void main() {
 
       final reopened = await SshConfigImportStore.open(file);
       expect(reopened.issue, isNull);
+      expect(reopened.detail, ImportedHostDetail.full);
       expect(_fields(reopened.hosts), _fields([_web, _bastion]));
       expect(() => reopened.hosts.add(_web), throwsUnsupportedError);
     });
@@ -352,8 +356,10 @@ void main() {
       expect(_fields(store.hosts), [('a', 'h', 22, null, null, null)]);
     });
 
-    test('reads a version 1 file, which the next import rewrites', () async {
-      // Version 1 kept neither IdentityFile nor ProxyJump.
+    test('reads a version 1 file as addresses only, until the next import '
+        'rewrites it', () async {
+      // Version 1 kept neither IdentityFile nor ProxyJump, so whether a
+      // host signs in with a key or sits behind a jump host is unknown.
       file.writeAsBytesSync(
         _document([
           {'alias': 'a', 'host': 'h', 'port': 2200, 'user': 'u'},
@@ -364,7 +370,9 @@ void main() {
 
       expect(store.issue, isNull);
       expect(_fields(store.hosts), [('a', 'h', 2200, 'u', null, null)]);
+      expect(store.detail, ImportedHostDetail.addressOnly);
       expect(await store.replace([_web]), isTrue);
+      expect(store.detail, ImportedHostDetail.full);
       expect(
         (jsonDecode(file.readAsStringSync()) as Map)['version'],
         sshConfigImportsSchemaVersion,

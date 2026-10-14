@@ -21,6 +21,19 @@ typedef _Mapped = ({
   ServerConfig config,
 });
 
+/// How much of each host's config an import holds.
+enum ImportedHostDetail {
+  /// All the engine maps: a fresh import, or a schema 2 store, which keeps
+  /// each host's `IdentityFile` and `ProxyJump`.
+  full,
+
+  /// Alias, address, port and user only: a schema 1 store, written before
+  /// `IdentityFile` and `ProxyJump` were kept. Whether a host signs in
+  /// with a key or sits behind a jump host is unknown, so its entry names
+  /// neither and it gets no config until the next import.
+  addressOnly,
+}
+
 /// The login name for an imported host or hop whose config names no
 /// user: `USER` (macOS, Linux) or else `USERNAME` (Windows) in
 /// [environment]; null when neither holds one. ssh takes the account's
@@ -43,9 +56,19 @@ final class ImportedFleet {
 
   /// Maps [hosts], in order, logging in as [localUser] wherever a host or
   /// hop names no user. A host whose `ProxyJump` [jumpRoutes] cannot
-  /// follow is left out; the import never stores one.
-  factory ImportedFleet(List<ImportedHost> hosts, {String? localUser}) {
-    final routes = jumpRoutes(hosts);
+  /// follow is left out; the import never stores one. Hosts with
+  /// [ImportedHostDetail.addressOnly] are listed, but with no route,
+  /// sign-in, conflict or config.
+  factory ImportedFleet(
+    List<ImportedHost> hosts, {
+    String? localUser,
+    ImportedHostDetail detail = ImportedHostDetail.full,
+  }) {
+    final full = detail == ImportedHostDetail.full;
+    // Without detail no route is claimed, so no locator conflicts either.
+    final routes = full
+        ? jumpRoutes(hosts)
+        : {for (final host in hosts) host.alias: const <JumpHop>[]};
     final configs = <String, ServerConfig>{};
 
     // Each config, keyed by its id, dialed through the hop [through]. One
@@ -59,7 +82,8 @@ final class ImportedFleet {
       final mapped = host
           .toServerConfig(id: id, now: 0)
           .copyWith(username: user ?? '', jumpHostId: through?.id);
-      if (user != null &&
+      if (full &&
+          user != null &&
           (through == null || configs.containsKey(through.id))) {
         configs[id] = mapped;
       }
@@ -107,9 +131,11 @@ final class ImportedFleet {
             jumpRoute: route.isEmpty
                 ? null
                 : List.unmodifiable([for (final hop in route) hop.name]),
-            authKind: config.authMethod == AuthMethod.privateKey
-                ? FleetAuthKind.identityFile
-                : FleetAuthKind.agent,
+            authKind: switch ((full, config.authMethod)) {
+              (false, _) => null,
+              (true, AuthMethod.privateKey) => FleetAuthKind.identityFile,
+              (true, _) => FleetAuthKind.agent,
+            },
             searchText: serverSearchHaystack(config),
             locatorConflict: conflicts[index],
           ),
@@ -124,8 +150,9 @@ final class ImportedFleet {
   final Map<String, ServerConfig> _configs;
 
   /// The config of an imported host (`ssh-config:<alias>`) or a jump hop
-  /// (`ssh-config-hop:...`); null for any other id, and for a host or hop
-  /// with no login name ([localUserName] found none) or behind such a hop.
+  /// (`ssh-config-hop:...`); null for any other id, for a host or hop with
+  /// no login name ([localUserName] found none) or behind such a hop, and
+  /// for every host with [ImportedHostDetail.addressOnly].
   ServerConfig? serverConfig(String id) => _configs[id];
 
   /// For each of [mapped], the ids of the others that pin a host key at

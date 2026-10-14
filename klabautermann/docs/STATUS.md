@@ -122,7 +122,9 @@ slice:
   build has run it yet: the tests restart the engine isolate against a
   temporary folder. `Include` is not followed (`SshConfigImporter` drops
   it). Since M2 the store keeps each host's `IdentityFile` and
-  `ProxyJump` (schema 2, which reads schema 1), and the engine maps
+  `ProxyJump` (schema 2; a schema 1 file's hosts are listed without
+  route, sign-in or connect config until the next import), and the
+  engine maps
   imports to the `ServerConfig`s and jump-hop configs links will dial
   (03 §10.1), filling the route, sign-in, search text and `host:port`
   conflict fields; `%h` in `HostName` is expanded, and a host whose

@@ -6,6 +6,7 @@ import 'package:seance_core/seance_core.dart' show ImportedHost;
 import '../engine/protocol.dart';
 import '../settings/device_settings_store.dart'
     show unusedCorruptCopyPath, writeFileAtomically;
+import 'imported_fleet.dart' show ImportedHostDetail;
 import 'jump_routes.dart';
 import 'ssh_config_entries.dart';
 
@@ -17,8 +18,13 @@ const String sshConfigImportsFileName = 'ssh_config_imports.json';
 /// a newer build and is never rewritten by this one
 /// ([ImportStoreIssueKind.newerVersion]). Version 2 added `identityFile`
 /// and `proxyJump`; a version 1 file, written before either was kept,
-/// reads as hosts with neither, and the next import rewrites it.
+/// reads as hosts with addresses only ([SshConfigImportStore.detail]),
+/// and the next import rewrites it.
 const int sshConfigImportsSchemaVersion = 2;
+
+/// The schema that added `identityFile` and `proxyJump`. An older file
+/// holds addresses only ([ImportedHostDetail.addressOnly]).
+const int _signInAndRouteSchemaVersion = 2;
 
 const String _versionKey = 'version';
 const String _entriesKey = 'entries';
@@ -53,11 +59,13 @@ final class SshConfigImportStore {
     this._writer,
     this.issue, [
     this._hosts = const [],
+    this._detail = ImportedHostDetail.full,
   ]);
 
   final File _file;
   final SshConfigImportsWriter _writer;
   List<ImportedHost> _hosts;
+  ImportedHostDetail _detail;
 
   /// The problem met while opening, or null when the file was fine or
   /// absent.
@@ -96,6 +104,7 @@ final class SshConfigImportStore {
     }
 
     final List<ImportedHost> hosts;
+    final ImportedHostDetail detail;
     try {
       final document = _decodeDocument(raw);
       if (document.version > sshConfigImportsSchemaVersion) {
@@ -109,15 +118,22 @@ final class SshConfigImportStore {
         );
       }
       hosts = _decodeHosts(document.json);
+      detail = document.version < _signInAndRouteSchemaVersion
+          ? ImportedHostDetail.addressOnly
+          : ImportedHostDetail.full;
     } on FormatException catch (error) {
       return _setAside(file, writer, error, now());
     }
 
-    return SshConfigImportStore._(file, writer, null, hosts);
+    return SshConfigImportStore._(file, writer, null, hosts, detail);
   }
 
   /// The stored imports in file order; unmodifiable.
   List<ImportedHost> get hosts => _hosts;
+
+  /// How much of each host's config [hosts] holds: addresses only from a
+  /// version 1 file until [replace], else all of it.
+  ImportedHostDetail get detail => _detail;
 
   /// Replaces every stored import with [hosts], as
   /// `importedHostsFromSshConfig` returns them, and saves the set.
@@ -129,6 +145,7 @@ final class SshConfigImportStore {
   /// imported. Never throws.
   Future<bool> replace(List<ImportedHost> hosts) async {
     _hosts = List.unmodifiable(hosts);
+    _detail = ImportedHostDetail.full;
     switch (issue?.kind) {
       case ImportStoreIssueKind.leftAsIs || ImportStoreIssueKind.newerVersion:
         return false;

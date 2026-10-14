@@ -265,6 +265,31 @@ void main() {
       },
     );
 
+    test('hosts with addresses only are listed without a route, a sign-in '
+        'or a config', () {
+      // A schema 1 store: whether `db` had a ProxyJump or IdentityFile is
+      // unknown, so the engine claims neither and dials nothing.
+      final fleet = ImportedFleet(
+        const [
+          ImportedHost(alias: 'db', hostName: '10.0.0.5', port: 22),
+          ImportedHost(alias: 'lan', hostName: '10.0.0.5', port: 22),
+        ],
+        localUser: 'me',
+        detail: ImportedHostDetail.addressOnly,
+      );
+
+      final entry = fleet.entries.first;
+      expect(
+        (entry.serverId, entry.host, entry.port),
+        ('ssh-config:db', '10.0.0.5', 22),
+      );
+      expect(entry.jumpRoute, isNull);
+      expect(entry.authKind, isNull);
+      expect(entry.searchText, contains('10.0.0.5'));
+      expect(entry.locatorConflict, isNull);
+      expect(fleet.serverConfig('ssh-config:db'), isNull);
+    });
+
     test('flags servers at one locator behind different routes', () {
       final entries = _byLabel(
         _fleet(

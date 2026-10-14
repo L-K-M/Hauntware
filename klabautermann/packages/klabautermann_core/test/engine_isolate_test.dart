@@ -261,6 +261,39 @@ void main() {
       expect(File(issue.preservedAs!).readAsStringSync(), damaged);
     });
 
+    test('a schema 1 store lists its hosts with neither route nor sign-in '
+        'until the next import', () async {
+      // What M1 saved for `Host db / HostName 10.0.0.5 / ProxyJump bastion
+      // / IdentityFile ~/.ssh/k`: neither of the last two was kept.
+      importsFile.writeAsStringSync(
+        jsonEncode({
+          'version': 1,
+          'entries': [
+            {'alias': 'db', 'host': '10.0.0.5', 'port': 22},
+          ],
+        }),
+      );
+
+      final client = await spawnEngine();
+
+      expect(client.ready.importStoreIssue, isNull);
+      final (:events, :fleet) = await started(client);
+      final stored = fleet.entries.single;
+      expect((stored.label, stored.host), ('db', '10.0.0.5'));
+      expect(stored.jumpRoute, isNull);
+      expect(stored.authKind, isNull, reason: 'unknown, not the agent');
+
+      client.send(
+        const ImportSshConfig(
+          'Host db\n  HostName 10.0.0.5\n  ProxyJump bastion\n'
+          '  IdentityFile ~/.ssh/k\n',
+        ),
+      );
+      final imported = ((await next(events)) as CatalogReplaced).entries.single;
+      expect(imported.jumpRoute, ['bastion']);
+      expect(imported.authKind, FleetAuthKind.identityFile);
+    });
+
     test('an import that cannot be saved shows for this run and says '
         'so', () async {
       // Missing at start, so the store opens empty; a file in the

@@ -58,7 +58,11 @@ void engineMain(EngineStart start) {
 
   // Synced entries lead this list once the catalog library lands (F3).
   CatalogReplaced fleet() => CatalogReplaced(
-    ImportedFleet(imports.hosts, localUser: localUser).entries,
+    ImportedFleet(
+      imports.hosts,
+      localUser: localUser,
+      detail: imports.detail,
+    ).entries,
   );
 
   Future<void> handle(Object? message) async {
