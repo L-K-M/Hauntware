@@ -716,7 +716,8 @@ final class _RowCounts {
     final row = (into + _rowTolerance).floor();
     // An offset past the last entry, as in an overscroll, has no share.
     if (change == 0 || row < 0 || row >= before) return 0;
-    return ((row + 0.5) * rows / before).floor() - row;
+    final target = (into * rows / before - (into - row)).round();
+    return target.clamp(0, rows - 1) - row;
   }
 
   /// Measures the entry at [index] unless this generation did, and returns

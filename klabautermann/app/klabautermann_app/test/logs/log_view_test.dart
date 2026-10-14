@@ -1,4 +1,5 @@
 import 'dart:io' show Platform;
+import 'dart:math' as math;
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -106,6 +107,67 @@ int _topLine(WidgetTester tester) {
     if (top < 0 || line < top) top = line;
   }
   return top;
+}
+
+/// The line whose text starts with "line [i]", wrapped or not.
+Finder _lineStarting(int i) => find.byWidgetPredicate(
+  (widget) =>
+      widget is RichText &&
+      RegExp('^line $i\\b').hasMatch(widget.text.toPlainText()),
+);
+
+/// The height of a row: the shortest "line N" in the view, which the views
+/// that use it always show on one row.
+double _rowHeight(WidgetTester tester) => [
+  for (final element in find.byType(RichText).evaluate())
+    if ((element.widget as RichText).text.toPlainText().startsWith('line '))
+      (element.renderObject! as RenderBox).size.height,
+].reduce(math.min);
+
+/// The oldest line at least partly in the view, and the share of its
+/// height above the view's top edge.
+typedef _TopHold = ({int line, double hidden});
+
+_TopHold _topHold(WidgetTester tester) {
+  final line = _topLine(tester);
+  final rect = tester.getRect(_lineStarting(line));
+  return (line: line, hidden: -rect.top / rect.height);
+}
+
+/// Expects [before]'s line still the oldest in the view: its first row at
+/// the top edge if it was there, and otherwise as large a share of it
+/// above the edge as before, give or take the row the offset moves in
+/// whole rows by.
+void _expectTopHeld(WidgetTester tester, _TopHold before, String reason) {
+  expect(_topLine(tester), before.line, reason: reason);
+  final rect = tester.getRect(_lineStarting(before.line));
+  if (before.hidden <= 1e-3) {
+    expect(rect.top, closeTo(0, 0.01), reason: '$reason: first row');
+    return;
+  }
+  expect(
+    -rect.top,
+    closeTo(before.hidden * rect.height, _rowHeight(tester) + 0.01),
+    reason: '$reason: share above the edge',
+  );
+}
+
+/// Pauses the view and scrolls it so the oldest line in it starts exactly
+/// at its top edge.
+Future<void> _pauseAtLineTop(
+  WidgetTester tester,
+  LogViewController logs,
+) async {
+  await tester.drag(find.byType(LogView), const Offset(0, 600));
+  await tester.pumpAndSettle();
+  expect(logs.following.value, isFalse);
+
+  final position = _position(tester);
+  final top = tester.getTopLeft(_lineStarting(_topLine(tester))).dy;
+  position.jumpTo(position.pixels + top);
+  await tester.pump();
+  expect(logs.following.value, isFalse);
+  expect(_topHold(tester).hidden, closeTo(0, 1e-3));
 }
 
 RenderParagraph _paragraph(WidgetTester tester, String text) =>
@@ -259,30 +321,78 @@ void main() {
     for (final wrap in LogWrap.values) {
       testWidgets('a text scale change, wrap ${wrap.name}', (tester) async {
         final logs = await paused(tester, wrap);
-        final top = _topLine(tester);
+        var top = _topHold(tester);
 
         tester.platformDispatcher.textScaleFactorTestValue = 2;
         addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
         await tester.pump();
         expect(logs.following.value, isFalse);
-        expect(_topLine(tester), top);
+        _expectTopHeld(tester, top, 'scale 2');
 
+        top = _topHold(tester);
         tester.platformDispatcher.clearTextScaleFactorTestValue();
         await tester.pump();
         expect(logs.following.value, isFalse);
-        expect(_topLine(tester), top);
+        _expectTopHeld(tester, top, 'scale 1');
       });
     }
 
     testWidgets('wrap turned off and on', (tester) async {
       final logs = await paused(tester, LogWrap.on);
-      final top = _topLine(tester);
 
       for (final wrap in [LogWrap.off, LogWrap.on, LogWrap.off, LogWrap.on]) {
+        final top = _topHold(tester);
         await tester.pumpWidget(_app(logs, wrap: wrap));
         expect(logs.following.value, isFalse, reason: wrap.name);
-        expect(_topLine(tester), top, reason: wrap.name);
+        _expectTopHeld(tester, top, wrap.name);
       }
+    });
+
+    // In both, the line at the top edge wraps to more rows than its count
+    // held, and its first row must stay at that edge.
+    testWidgets('the first wrap with rows still estimated keeps a line '
+        'at the top edge whole', (tester) async {
+      final logs = LogViewController()
+        ..add([
+          for (var i = 0; i < 300; i++)
+            'line $i ${List.filled(25, 'word').join(' ')}',
+        ]);
+      await _pump(tester, controller: logs);
+      await _pauseAtLineTop(tester, logs);
+      final top = _topHold(tester);
+      final row = tester.getSize(_lineStarting(top.line)).height;
+
+      await tester.pumpWidget(_app(logs, wrap: LogWrap.on));
+      expect(logs.following.value, isFalse);
+      expect(
+        tester.getSize(_lineStarting(top.line)).height,
+        greaterThan(2 * row),
+      );
+      _expectTopHeld(tester, top, 'wrap on');
+    });
+
+    testWidgets('a text scale change with wrap on keeps a line at the top '
+        'edge whole', (tester) async {
+      final logs = LogViewController()
+        ..add([
+          for (var i = 0; i < 300; i++)
+            'line $i ${List.filled(3, 'word').join(' ')}',
+        ]);
+      await _pump(tester, controller: logs, wrap: LogWrap.on);
+      await _pauseAtLineTop(tester, logs);
+      final top = _topHold(tester);
+      final row = tester.getSize(_lineStarting(top.line)).height;
+
+      tester.platformDispatcher.textScaleFactorTestValue = 2;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      await tester.pump();
+      expect(logs.following.value, isFalse);
+      // Two rows, each twice as high.
+      expect(
+        tester.getSize(_lineStarting(top.line)).height,
+        greaterThan(3 * row),
+      );
+      _expectTopHeld(tester, top, 'scale 2');
     });
   });
 
@@ -754,12 +864,20 @@ void main() {
       return logs;
     }
 
+    /// The share of [long]'s height above the view's top edge.
+    double hiddenShare(WidgetTester tester, String long) {
+      final rect = tester.getRect(find.text(long, findRichText: true));
+      return -rect.top / rect.height;
+    }
+
     /// Expects the view to be paused with [long] still across its top
-    /// edge and line 50 wholly in sight below it.
+    /// edge, the share [hidden] of it above that edge give or take a row,
+    /// and line 50 wholly in sight below it.
     void expectHeld(
       WidgetTester tester,
       LogViewController logs,
       String long,
+      double hidden,
       String step,
     ) {
       final reason = '$step: top line ${_topLine(tester)}';
@@ -768,6 +886,11 @@ void main() {
       final rect = tester.getRect(find.text(long, findRichText: true));
       expect(rect.top, lessThanOrEqualTo(0), reason: reason);
       expect(rect.bottom, greaterThan(0), reason: reason);
+      expect(
+        -rect.top,
+        closeTo(hidden * rect.height, tester.getSize(_line(50)).height + 0.01),
+        reason: '$reason: share above the edge',
+      );
     }
 
     testWidgets('a paused view keeps the line across its top in sight as '
@@ -776,9 +899,10 @@ void main() {
       final logs = await straddle(tester, long, below: 3);
 
       for (final width in [900.0, 300.0, 200.0, 400.0]) {
+        final hidden = hiddenShare(tester, long);
         tester.view.physicalSize = Size(width, 200);
         await tester.pump();
-        expectHeld(tester, logs, long, '$width wide');
+        expectHeld(tester, logs, long, hidden, '$width wide');
       }
     });
 
@@ -789,11 +913,72 @@ void main() {
       LogLevel? noLevel(LogLine line) => null;
       final logs = await straddle(tester, long, below: 2, levelOf: noLevel);
 
+      var hidden = hiddenShare(tester, long);
       await tester.pumpWidget(_app(logs, wrap: LogWrap.on));
-      expectHeld(tester, logs, long, 'gutter gone');
+      expectHeld(tester, logs, long, hidden, 'gutter gone');
 
+      hidden = hiddenShare(tester, long);
       await tester.pumpWidget(_app(logs, wrap: LogWrap.on, levelOf: noLevel));
-      expectHeld(tester, logs, long, 'gutter back');
+      expectHeld(tester, logs, long, hidden, 'gutter back');
+    });
+
+    testWidgets('a paused view keeps a line at its top edge whole as it '
+        'narrows', (tester) async {
+      // One row at 800 px, two at 400.
+      final logs = LogViewController()
+        ..add([
+          for (var i = 0; i < 300; i++)
+            'line $i ${List.filled(8, 'word').join(' ')}',
+        ]);
+      await _pump(
+        tester,
+        controller: logs,
+        wrap: LogWrap.on,
+        size: const Size(800, 200),
+      );
+      await _pauseAtLineTop(tester, logs);
+      final top = _topHold(tester);
+      final row = tester.getSize(_lineStarting(top.line)).height;
+
+      tester.view.physicalSize = const Size(400, 200);
+      await tester.pump();
+      expect(logs.following.value, isFalse);
+      expect(
+        tester.getSize(_lineStarting(top.line)).height,
+        closeTo(2 * row, 0.01),
+      );
+      _expectTopHeld(tester, top, '400 wide');
+    });
+
+    testWidgets('Home after narrowing reaches the start of the oldest line', (
+      tester,
+    ) async {
+      final logs = await _pump(
+        tester,
+        wrap: LogWrap.on,
+        size: const Size(800, 200),
+      );
+      // One row at 800 px, so still counted as one at 300 px, where it
+      // wraps.
+      logs.add([
+        for (var i = 0; i < 3000; i++)
+          'line $i ${List.filled(8, 'word').join(' ')}',
+      ]);
+      await tester.pump();
+      final row = tester.getSize(_lineStarting(2999)).height;
+      tester.view.physicalSize = const Size(300, 200);
+      await tester.pump();
+      expect(logs.following.value, isTrue);
+
+      await tester.tap(find.byType(LogView));
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.home);
+      await tester.pump();
+
+      expect(_position(tester).pixels, 0);
+      expect(tester.getTopLeft(_lineStarting(0)).dy, 0);
+      expect(tester.getSize(_lineStarting(0)).height, greaterThan(row));
+      expect(logs.following.value, isFalse);
     });
 
     for (final width in [300.0, 600.0]) {
