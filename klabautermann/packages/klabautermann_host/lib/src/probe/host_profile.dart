@@ -257,6 +257,13 @@ final class HostProfile {
   /// The width of this kernel's `/proc` counters (CN-04): 32 bits when
   /// `uname -m` names a 32-bit kernel, else 64, which `ParseContext` also
   /// assumes when the architecture is unknown.
+  ///
+  /// `uname -m` reports the process personality: a 64-bit x86 kernel
+  /// under a 32-bit personality, as in an LXC container with
+  /// `lxc.arch = i686`, reports `i686` and counts as 32 bits here, so a
+  /// counter reset there reads as a wrap. `/proc/sys/kernel/arch` (Linux
+  /// 6.1 and later) keeps the kernel's own name; the probe does not read
+  /// it yet.
   CounterWidth get counterWidth {
     final arch = kernelArch;
     if (arch != null && _kernel32Pattern.hasMatch(arch)) {
