@@ -508,12 +508,23 @@ void main() {
         ),
         [],
       );
-      // An address compares by value: ssh writes the host it dials in
-      // canonical form.
-      expect(
-        kept('Host v6\n  HostName 2001:0db8::1\n  ProxyJump [2001:db8::1]\n'),
-        [],
-      );
+      // ssh compares the jump as written with the host it dials, which it
+      // writes as getnameinfo() does when it is an address, unless only
+      // its case would change.
+      for (final (hostName, jump, loops) in [
+        ('2001:0db8::1', '2001:db8::1', true),
+        ('2001:db8::1', '2001:0db8::1', false),
+        ('2001:0DB8::1', '2001:0DB8::1', false),
+        ('2001:DB8::1', '2001:db8::1', false),
+        ('2001:DB8::1', '2001:DB8::1', true),
+        // The system resolver may read `10.1` as 10.0.0.1, which Dart
+        // cannot tell, so any address counts.
+        ('10.1', '10.0.0.1', true),
+        ('10.1', 'gw', false),
+      ]) {
+        final config = 'Host v6\n  HostName $hostName\n  ProxyJump [$jump]\n';
+        expect(kept(config), loops ? isEmpty : ['v6'], reason: config);
+      }
       // A hop before the last: the nested ssh for gw jumps through
       // 10.0.0.1, which is where gw is.
       expect(

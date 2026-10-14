@@ -1,8 +1,7 @@
-import 'dart:io' show InternetAddress;
-
 import 'package:seance_core/seance_core.dart' show ImportedHost;
 
 import '../engine/protocol.dart' show kSshDefaultPort;
+import 'ssh_config_settings.dart' show looksLikeSshAddress, sshCanonicalHost;
 
 /// Prefixes a [JumpHop.id]. Import ids are `ssh-config:<alias>` and synced
 /// ids bare UUIDs, so a hop id collides with neither.
@@ -221,28 +220,20 @@ typedef _Hop = ({String name, String? user, String host, int? port});
 
 /// Whether ssh refuses to reach [host] on [port] as [user] through the
 /// [jump] before it (`ssh.c`: "jumphost loop"): the jump's host as
-/// written is [host], its port, else 22, is [port], and its user, else
-/// [user], is [user]. ssh writes an address it dials in canonical form,
-/// so addresses compare by value. A jump with its own user, to a host
+/// written is the host ssh dials for [host] ([sshCanonicalHost]: an
+/// address as `getnameinfo()` writes it), its port, else 22, is [port],
+/// and its user, else [user], is [user]. Where that host cannot be known,
+/// any jump to an address counts. A jump with its own user, to a host
 /// whose user is the local account's, which the import does not know,
 /// counts as a loop.
 bool _isJumpLoop(_Hop jump, String host, int port, String? user) {
   if ((jump.port ?? kSshDefaultPort) != port) return false;
   if (jump.user != null && user != null && jump.user != user) return false;
-  if (jump.host == host) return true;
 
-  final (written, dialed) = (
-    InternetAddress.tryParse(jump.host),
-    InternetAddress.tryParse(host),
-  );
-  if (written == null || dialed == null) return false;
-
-  final (a, b) = (written.rawAddress, dialed.rawAddress);
-  if (a.length != b.length) return false;
-  for (var index = 0; index < a.length; index++) {
-    if (a[index] != b[index]) return false;
-  }
-  return true;
+  return switch (sshCanonicalHost(host)) {
+    final dialed? => jump.host == dialed,
+    null => looksLikeSshAddress(jump.host),
+  };
 }
 
 /// The hops a `ProxyJump` [value] names, first hop first: empty for

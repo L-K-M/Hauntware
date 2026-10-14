@@ -339,7 +339,7 @@ final class SshConfigSettings {
     }
 
     final firstPass = reading.dialing;
-    reading.startFinalPass(_finalHost(host));
+    reading.startFinalPass(sshCanonicalHost(host));
     if (_readPass(reading, reading.finalHost) case final reason?) {
       return UnresolvedSshSettings(reason);
     }
@@ -449,7 +449,7 @@ final class _HostBlock extends _Block {
   /// `readconf.c`'s `oHost`: a matching negated pattern ends the line and
   /// turns the block off. A pattern that is [_Glob.undecided] may match.
   /// An unknown target is an address in a form the import cannot tell
-  /// ([_finalHost]): `*` matches it, a pattern without wildcards only if
+  /// ([sshCanonicalHost]): `*` matches it, a pattern without wildcards only if
   /// it looks like an address, and any other may.
   @override
   _Applies applies(String? target, _Reading reading) {
@@ -463,7 +463,7 @@ final class _HostBlock extends _Block {
           ? glob.matches(target)
           : glob.matchesAll
           ? true
-          : glob.literal && !_looksLikeAddress(glob.pattern)
+          : glob.literal && !looksLikeSshAddress(glob.pattern)
           ? false
           : null;
       if (matches == null) {
@@ -615,7 +615,7 @@ final class _Reading {
   bool finalPass = false;
 
   /// On the final pass, the host ssh matches `Host` and `Match host`
-  /// against ([_finalHost]); null when it cannot be known.
+  /// against ([sshCanonicalHost]); null when it cannot be known.
   String? finalHost;
 
   /// Starts the final pass, matching [host].
@@ -831,14 +831,14 @@ String? _expandHostName(String value, String name) {
   return expanded.toString();
 }
 
-/// The host ssh matches `Host` and `Match host` against on its final pass
-/// (`ssh.c`), for [host], the `HostName` with `%h` expanded: lowercased
-/// unless it is an address, and an address as `getnameinfo()` writes it,
-/// unless only its case differs. Null when the import cannot know it: for
+/// The host ssh dials once it has read the config, and matches `Host` and
+/// `Match host` against on its final pass (`ssh.c`), for [host], the
+/// `HostName` with `%h` expanded: lowercased unless it is an address, and
+/// an address as `getnameinfo()` writes it, unless only its case differs. Null when the import cannot know it: for
 /// an address with a scope, whose form depends on the device's
 /// interfaces, one Dart does not parse though the system resolver may
 /// (`10.1`), or a host holding U+FFFD.
-String? _finalHost(String host) {
+String? sshCanonicalHost(String host) {
   if (host.contains(_replacement)) return null;
   if (!_isAddress(host)) return _asciiLower(host);
   if (host.contains('%')) return null;
@@ -849,14 +849,14 @@ String? _finalHost(String host) {
   return _asciiLower(written) == _asciiLower(host) ? host : written;
 }
 
-/// ssh's `is_addr()`: [_looksLikeAddress], or a name that parses as an IP
+/// ssh's `is_addr()`: [looksLikeSshAddress], or a name that parses as an IP
 /// address.
 bool _isAddress(String host) =>
-    _looksLikeAddress(host) || InternetAddress.tryParse(host) != null;
+    looksLikeSshAddress(host) || InternetAddress.tryParse(host) != null;
 
 /// ssh's `is_addr_fast()`: a `%`, a `:` or nothing but digits and dots.
 /// Every form ssh may give an address on its final pass looks like this.
-bool _looksLikeAddress(String host) =>
+bool looksLikeSshAddress(String host) =>
     host.contains('%') || host.contains(':') || _digitsAndDots.hasMatch(host);
 
 /// ASCII lowercase, as ssh's `lowercase()` and `tolower()` in the C locale.
