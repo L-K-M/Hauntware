@@ -154,6 +154,24 @@ class AppLocalizationsEn extends AppLocalizations {
   String get statusFailed => 'Failed';
 
   @override
+  String get statusAuthenticating => 'Authenticating';
+
+  @override
+  String get statusLimited => 'Connected with limits';
+
+  @override
+  String get statusWaitingToReconnect => 'Waiting to reconnect';
+
+  @override
+  String get statusNeedsInput => 'Needs your input';
+
+  @override
+  String get statusBlocked => 'Blocked';
+
+  @override
+  String get statusConnectionLost => 'Connection lost';
+
+  @override
   String statusSemantics(String status) {
     return 'Server status: $status';
   }
@@ -302,6 +320,80 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get serverTabMore => 'More';
+
+  @override
+  String chartSeriesSummary(
+    String label,
+    String current,
+    String lowest,
+    String highest,
+    String trend,
+  ) {
+    return '$label: now $current, lowest $lowest, highest $highest, $trend';
+  }
+
+  @override
+  String chartSeriesEmpty(String label) {
+    return '$label: no data yet';
+  }
+
+  @override
+  String chartSeriesUnknown(String label) {
+    return '$label: unknown';
+  }
+
+  @override
+  String get chartUnknownValue => 'unknown';
+
+  @override
+  String get chartTrendRising => 'rising';
+
+  @override
+  String get chartTrendFalling => 'falling';
+
+  @override
+  String get chartTrendSteady => 'steady';
+
+  @override
+  String chartPercent(double share) {
+    final intl.NumberFormat shareNumberFormat =
+        intl.NumberFormat.decimalPercentPattern(
+          locale: localeName,
+          decimalDigits: 0,
+        );
+    final String shareString = shareNumberFormat.format(share);
+
+    return '$shareString';
+  }
+
+  @override
+  String chartBarSummary(String label, String parts, String total) {
+    return '$label: $parts of $total';
+  }
+
+  @override
+  String chartBarPart(String label, String value) {
+    return '$label $value';
+  }
+
+  @override
+  String get chartListSeparator => ', ';
+
+  @override
+  String chartWithSeverity(String part, String severity) {
+    return '$part ($severity)';
+  }
+
+  @override
+  String get chartSeverityWarning => 'warning';
+
+  @override
+  String get chartSeverityCritical => 'critical';
+
+  @override
+  String chartStale(String summary) {
+    return '$summary, stale';
+  }
 
   @override
   String tableCellSemantics(String column, String value) {

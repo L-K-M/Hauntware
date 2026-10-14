@@ -155,9 +155,10 @@ final class RecordCoordinator {
   /// [catalogMode] decides whether [servers] (required in shared mode, and
   /// only there) materializes pulled configs and a [catalog]; [secrets] is
   /// shared-mode only too. [onCatalogReplaced] is the catalog's change
-  /// notification, called synchronously on every rebuild. [pushPolicy] has
-  /// one value so far, [PushPolicy.normal]: every write seals and every
-  /// round pushes, as Poltergeist's coordinator always did.
+  /// notification, called synchronously on every rebuild. A [pushPolicy]
+  /// of [PushPolicy.none] makes the coordinator pull-only: rounds pull and
+  /// apply but never push, [writer] refuses every mutation, and the
+  /// re-seal paths seal nothing.
   ///
   /// [inheritCatalogFrom] is for an app that rebuilds its coordinator under
   /// the same account and vault key (a settings change, a reload): the new
@@ -273,6 +274,7 @@ final class RecordCoordinator {
       pinVerdicts: pinVerdicts,
       servers: servers,
       secrets: secretHandler,
+      pushPolicy: pushPolicy,
       now: clock,
       refreshCatalog: () => coordinator._refreshCatalog(),
     );
@@ -290,6 +292,7 @@ final class RecordCoordinator {
       catalog: catalog,
       servers: servers,
       writer: writer,
+      pushPolicy: pushPolicy,
       enrollment: enrollment,
       maxRounds: maxRounds,
     );
@@ -309,6 +312,7 @@ final class RecordCoordinator {
     required this._catalog,
     required this._servers,
     required this._writer,
+    required this._pushPolicy,
     required this._enrollment,
     required this._maxRounds,
   }) : _handlers = {for (final handler in handlers) handler.prefix: handler};
@@ -343,6 +347,12 @@ final class RecordCoordinator {
   final SyncTrackingServerStore? _servers;
 
   final CatalogWriter _writer;
+
+  /// [PushPolicy.none] skips every round's push half and both re-seal
+  /// passes; every seal below them stops at [CatalogWriter.sealLocal] too.
+  final PushPolicy _pushPolicy;
+
+  bool get _pullOnly => _pushPolicy == PushPolicy.none;
 
   /// The durable enrollment state (04 §4.5): while `passphraseUnverified`
   /// holds, [runRound] holds all pushes and the deferred foreign-record
@@ -509,8 +519,9 @@ final class RecordCoordinator {
   /// set — content-identical for already-synced rows, harmless under LWW.
   /// Each handler re-seals its own prefix
   /// ([RecordHandler.reSealAfterStoreLoss]). Returns the number of records
-  /// re-sealed.
+  /// re-sealed: none under [PushPolicy.none], which seals nothing.
   Future<int> reSealAfterStoreLoss() async {
+    if (_pullOnly) return 0;
     var resealed = 0;
     for (final handler in _handlers.values) {
       resealed += await handler.reSealAfterStoreLoss(_writer);
@@ -532,8 +543,9 @@ final class RecordCoordinator {
   /// dirty — releasing it would push the corruption the hold existed to
   /// prevent (unreachable in separate mode: every local-write path
   /// produces product or `hostkey:` ids, which always have a materialized
-  /// source).
+  /// source). Pull-only has no pending writes to release and seals none.
   Future<int> reSealPendingWrites() async {
+    if (_pullOnly) return 0;
     var resealed = 0;
     for (final record in await _records.dirtyRecords()) {
       final handler = _handlers[syncIdPrefix(record.id)];
@@ -575,7 +587,9 @@ final class RecordCoordinator {
   /// `maxRounds`. While 04 §4.5's `passphraseUnverified` hold is set the
   /// push half is skipped entirely — nothing sealed under an unproven key
   /// leaves the device — and the round ends with the deferred
-  /// foreign-record check. A 401 `unauthorized` is a dead or revoked
+  /// foreign-record check. Under [PushPolicy.none] the push half never
+  /// runs, so nothing is pushed even if a record became dirty some other
+  /// way. A 401 `unauthorized` is a dead or revoked
   /// account (tokens never expire server-side, so there is no refresh):
   /// the durable notice is raised and the round ends — local-only.
   Future<SyncRoundResult> runRound(SyncApi api) async {
@@ -598,7 +612,7 @@ final class RecordCoordinator {
       await _setNotice(syncNoticeAccountAuthFailed, false);
       pulled += roundPulled;
       var progressed = roundPulled > 0;
-      if (!await _pushesHeld()) {
+      if (!_pullOnly && !await _pushesHeld()) {
         final dirty = await _records.dirtyRecords();
         if (dirty.isNotEmpty) {
           final PushResponse response;

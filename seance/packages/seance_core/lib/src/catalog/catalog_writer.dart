@@ -11,14 +11,23 @@ import 'package:seance_protocol/seance_protocol.dart';
 import 'host_key_mutations.dart';
 import 'persistent_record_store.dart';
 import 'pin_verdicts.dart';
+import 'push_policy.dart';
 import 'record_crypto.dart';
 import 'secret_handler.dart';
 import 'server_config_handler.dart';
 import 'server_config_store.dart';
 
+/// Result of a [CatalogWriter] mutation. [refusedPullOnly] means
+/// [PushPolicy.none]: the call returned before touching any local store,
+/// sealing any record or changing any verdict. [written] means the policy
+/// let the call run; it may still be a domain no-op (a server write in
+/// separate mode, `secretSaved` with the secret switch off).
+enum WriteOutcome { written, refusedPullOnly }
+
 /// The local writes one coordinator seals. Every dirty record arrives
 /// through [sealLocal]; the server writes also refresh the coordinator's
-/// catalog before they return.
+/// catalog before they return. Under [PushPolicy.none] every mutating
+/// call refuses at entry with [WriteOutcome.refusedPullOnly].
 final class CatalogWriter {
   /// Built by the `RecordCoordinator`, which owns the collaborators and the
   /// catalog a server write refreshes; apps reach the writer through
@@ -33,6 +42,7 @@ final class CatalogWriter {
     required PinVerdictStore pinVerdicts,
     required SyncTrackingServerStore? servers,
     required SecretHandler secrets,
+    required PushPolicy pushPolicy,
     required DateTime Function() now,
     required Future<void> Function() refreshCatalog,
   }) : // Collaborator names stay public; the fields stay private.
@@ -51,6 +61,8 @@ final class CatalogWriter {
        // ignore: prefer_initializing_formals
        _secrets = secrets,
        // ignore: prefer_initializing_formals
+       _pushPolicy = pushPolicy,
+       // ignore: prefer_initializing_formals
        _now = now,
        // ignore: prefer_initializing_formals
        _refreshCatalog = refreshCatalog;
@@ -68,6 +80,7 @@ final class CatalogWriter {
   final SyncTrackingServerStore? _servers;
 
   final SecretHandler _secrets;
+  final PushPolicy _pushPolicy;
   final DateTime Function() _now;
   final Future<void> Function() _refreshCatalog;
 
@@ -79,10 +92,19 @@ final class CatalogWriter {
   /// The coordinator's clock — the stamp a local deletion is dated at.
   DateTime now() => _now();
 
+  /// The policy this writer enforces.
+  PushPolicy get pushPolicy => _pushPolicy;
+
+  bool get _pullOnly => _pushPolicy == PushPolicy.none;
+
   /// `crypto.seal` + `records.putLocal`: the single funnel every dirty
-  /// record arrives through, local edits and re-seals alike.
-  Future<void> sealLocal(DecryptedRecord record) async {
+  /// record arrives through, local edits and re-seals alike. Under
+  /// [PushPolicy.none] it refuses before `crypto.seal`, so nothing is
+  /// sealed and no record is marked dirty.
+  Future<WriteOutcome> sealLocal(DecryptedRecord record) async {
+    if (_pullOnly) return WriteOutcome.refusedPullOnly;
     await _records.putLocal(await _crypto.seal(record));
+    return WriteOutcome.written;
   }
 
   /// A local server save in shared mode (04 §4.2, amended): persist the
@@ -92,10 +114,13 @@ final class CatalogWriter {
   /// retracts instead: a tombstone dated at the edit drops the account
   /// copy while the local row survives (Séance's `_retract`), and the
   /// orphaned credential's record withdraws with it. A no-op in separate
-  /// mode, where no server store exists.
-  Future<void> saveServer(ServerConfig server) async {
+  /// mode, where no server store exists. Pull-only refuses before the row
+  /// is saved: a local edit with no record behind it would be undone
+  /// silently by the next pulled `serverConfig`.
+  Future<WriteOutcome> saveServer(ServerConfig server) async {
+    if (_pullOnly) return WriteOutcome.refusedPullOnly;
     final store = _servers;
-    if (store == null) return;
+    if (store == null) return WriteOutcome.written;
     final stored = await store.save(server);
     if (stored.excludeFromSync) {
       await sealLocal(
@@ -117,6 +142,7 @@ final class CatalogWriter {
       if (stored.syncSecret && ref != null) await _secrets.publish(ref, this);
     }
     await _refreshCatalog();
+    return WriteOutcome.written;
   }
 
   /// A local server delete: drop the row and seal a real tombstone — the
@@ -124,10 +150,11 @@ final class CatalogWriter {
   /// orphaned credential's record. The record takes the stamp the store
   /// recorded for its tombstone tuple ([deletionStamp]: past every
   /// version seen, so a peer's fast clock cannot outrank the delete), so
-  /// store and record agree on it.
-  Future<void> deleteServer(ServerConfig server) async {
+  /// store and record agree on it. Pull-only refuses before the row drops.
+  Future<WriteOutcome> deleteServer(ServerConfig server) async {
+    if (_pullOnly) return WriteOutcome.refusedPullOnly;
     final store = _servers;
-    if (store == null) return;
+    if (store == null) return WriteOutcome.written;
     final prior = await store.byId(server.id);
     await store.remove(server.id);
     final tuple = await store.syncTupleOf(server.id);
@@ -148,6 +175,7 @@ final class CatalogWriter {
     );
     await _secrets.retractOrphaned(server.secretRef, deletedAt, this);
     await _refreshCatalog();
+    return WriteOutcome.written;
   }
 
   /// A credential the editor saved into the vault (via
@@ -156,10 +184,12 @@ final class CatalogWriter {
   /// or non-`syncSecret` server stays local (Séance's
   /// `_publishableSecretRefs` rule), and so does every credential while
   /// the device-level "Sync saved passwords & keys" switch is off.
-  /// Null-safe when shared mode has no vault or store.
-  Future<void> secretSaved(String secretId) async {
+  /// Null-safe when shared mode has no vault or store. Pull-only refuses
+  /// before reading the server set.
+  Future<WriteOutcome> secretSaved(String secretId) async {
+    if (_pullOnly) return WriteOutcome.refusedPullOnly;
     final store = _servers;
-    if (!_secrets.publishes || store == null) return;
+    if (!_secrets.publishes || store == null) return WriteOutcome.written;
     var publishable = false;
     for (final server in await store.load()) {
       if (!server.excludeFromSync &&
@@ -170,6 +200,7 @@ final class CatalogWriter {
       }
     }
     if (publishable) await _secrets.publish(secretId, this);
+    return WriteOutcome.written;
   }
 
   /// A deliberately published TOFU pin (divergence 2's seam; no app calls
@@ -177,19 +208,23 @@ final class CatalogWriter {
   /// explicit re-trust is the only thing that lifts the untrust verdict
   /// (04 §3.2). The pin record lands first: lifting the verdict before the
   /// replacement is durable would leave a window where a pulled rival key
-  /// auto-applies.
-  Future<void> publishPin(HostKey pin) => _hostKeyMutations.run(() async {
-    await sealLocal(
-      DecryptedRecord(
-        id: pin.recordId,
-        kind: RecordKind.hostKey,
-        updatedAt: pin.pinnedAt,
-        deviceId: _deviceId,
-        data: pin.toJson(),
-      ),
-    );
-    await _pinVerdicts.removeNegativePin(pin.locator);
-  });
+  /// auto-applies. Pull-only refuses before the verdict changes.
+  Future<WriteOutcome> publishPin(HostKey pin) async {
+    if (_pullOnly) return WriteOutcome.refusedPullOnly;
+    await _hostKeyMutations.run(() async {
+      await sealLocal(
+        DecryptedRecord(
+          id: pin.recordId,
+          kind: RecordKind.hostKey,
+          updatedAt: pin.pinnedAt,
+          deviceId: _deviceId,
+          data: pin.toJson(),
+        ),
+      );
+      await _pinVerdicts.removeNegativePin(pin.locator);
+    });
+    return WriteOutcome.written;
+  }
 
   /// "Forget host": tombstone the pin's record AND record the durable
   /// negative pin. The tombstone alone cannot hold — a still-trusting peer
@@ -197,19 +232,23 @@ final class CatalogWriter {
   /// verdict the next diff would auto-apply the very key the user removed
   /// under MITM suspicion. Local de-trust is the caller's side of the
   /// contract: `HostKeyStore` offers no removal, so the app drops the pin
-  /// through its own store alongside this call.
-  Future<void> forgetPin(String host, int port) =>
-      _hostKeyMutations.run(() async {
-        final locator = hostKeyLocator(host, port);
-        await _pinVerdicts.addNegativePin(locator);
-        await sealLocal(
-          DecryptedRecord(
-            id: '$_hostKeyPrefix$locator',
-            kind: RecordKind.hostKey,
-            updatedAt: _now().toUtc().millisecondsSinceEpoch,
-            deviceId: _deviceId,
-            deleted: true,
-          ),
-        );
-      });
+  /// through its own store alongside this call. Pull-only refuses before
+  /// the negative pin is added.
+  Future<WriteOutcome> forgetPin(String host, int port) async {
+    if (_pullOnly) return WriteOutcome.refusedPullOnly;
+    await _hostKeyMutations.run(() async {
+      final locator = hostKeyLocator(host, port);
+      await _pinVerdicts.addNegativePin(locator);
+      await sealLocal(
+        DecryptedRecord(
+          id: '$_hostKeyPrefix$locator',
+          kind: RecordKind.hostKey,
+          updatedAt: _now().toUtc().millisecondsSinceEpoch,
+          deviceId: _deviceId,
+          deleted: true,
+        ),
+      );
+    });
+    return WriteOutcome.written;
+  }
 }
