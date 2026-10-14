@@ -562,6 +562,60 @@ abstract class AppLocalizations {
   /// **'More'**
   String get serverTabMore;
 
+  /// A chart's screen-reader summary of one series: what it measures, its current, lowest and highest values (already formatted with their units) and its trend, one of chartTrendRising, chartTrendFalling or chartTrendSteady.
+  ///
+  /// In en, this message translates to:
+  /// **'{label}: now {current}, lowest {lowest}, highest {highest}, {trend}'**
+  String chartSeriesSummary(
+    String label,
+    String current,
+    String lowest,
+    String highest,
+    String trend,
+  );
+
+  /// A chart's screen-reader summary of a series that has no sample yet.
+  ///
+  /// In en, this message translates to:
+  /// **'{label}: no data yet'**
+  String chartSeriesEmpty(String label);
+
+  /// A chart's screen-reader summary of a series whose every sample is a value the server did not report.
+  ///
+  /// In en, this message translates to:
+  /// **'{label}: unknown'**
+  String chartSeriesUnknown(String label);
+
+  /// Shown and read in place of a value the server did not report; never shown as zero.
+  ///
+  /// In en, this message translates to:
+  /// **'unknown'**
+  String get chartUnknownValue;
+
+  /// A series' trend in its screen-reader summary: it has gone up over the chart's window.
+  ///
+  /// In en, this message translates to:
+  /// **'rising'**
+  String get chartTrendRising;
+
+  /// A series' trend in its screen-reader summary: it has gone down over the chart's window.
+  ///
+  /// In en, this message translates to:
+  /// **'falling'**
+  String get chartTrendFalling;
+
+  /// A series' trend in its screen-reader summary: it has stayed about level over the chart's window.
+  ///
+  /// In en, this message translates to:
+  /// **'steady'**
+  String get chartTrendSteady;
+
+  /// A chart value in percent, such as a CPU or memory share; the share arrives as a fraction from 0 to 1 and is formatted in the UI locale.
+  ///
+  /// In en, this message translates to:
+  /// **'{share}'**
+  String chartPercent(double share);
+
   /// A table cell as a screen reader hears it within its row: the column's header label, then the cell's value (A11Y-03).
   ///
   /// In en, this message translates to:

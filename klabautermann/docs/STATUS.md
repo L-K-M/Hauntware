@@ -50,6 +50,17 @@ slice:
   built through `ghost_theme` from the Klabautermann brand preset (D9;
   the appearance persists in `settings.json`, below), and the English
   ARB catalogue (D35, A11Y-05).
+- Chart foundations (03 §10.7, M2): `lib/ui/charts/` holds `Sparkline`
+  over a fixed-capacity `SeriesRing` that repaints on its version
+  counter, with min-max downsampling to the pixel width, gaps for unknown
+  samples, threshold bands, IEC scale and value text, a screen-reader
+  summary per series from the ARB through a string bag (A11Y-02), and no
+  motion when the platform asks (A11Y-11). The palette test holds the
+  severity and series colours to 3:1 and keeps them apart under simulated
+  colour-vision deficiencies (A11Y-04); light and dark goldens draw with
+  the Flutter SDK's Roboto and compare on Linux only. `Gauge` follows in
+  its own PR. Nothing shows a chart yet: the overview and fleet rows that
+  feed the rings come later in M2.
 - Sortable table (M2): the app's `SortableTable`, which the M2 lists
   build on. The caller owns the sort (a header click flips it; ties keep
   the caller's order and unknown values sort last). A screen reader hears

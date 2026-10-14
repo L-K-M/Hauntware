@@ -3548,6 +3548,17 @@ colours from the theme and `FamilyPalette`, checked with `contrastRatio`;
 a semantics summary per series (current, min, max, trend); no animation
 under reduced motion.
 
+As built in M2 (`app/klabautermann_app/lib/ui/charts/`): series take the
+family's blue, orange, teal and brown; warning is its yellow and critical
+its red, deepened to `#A31515` in the light theme, where the family red
+parts too little from the amber under deuteranopia. Lines and threshold
+rules draw these at full strength (band washes are decoration), and a test
+holds each to 3:1 on the chart surfaces and each pair in a set to a CIE76
+distance of 10 under simulated protanopia, deuteranopia and tritanopia.
+The trend compares the means of the oldest and newest quarters; a change
+under 5 % of the scale is steady. The goldens draw with the pinned Flutter
+SDK's Roboto and compare on Linux only.
+
 ### 10.8 Log viewer
 
 A ring buffer capped by lines (50,000) and bytes (32 MiB) with a 16 KiB line

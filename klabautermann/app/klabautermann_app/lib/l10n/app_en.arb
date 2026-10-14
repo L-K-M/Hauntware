@@ -216,6 +216,81 @@
   "workspaceTabSystem": "System",
   "workspaceTabAccess": "Access",
   "serverTabMore": "More",
+  "chartSeriesSummary": "{label}: now {current}, lowest {lowest}, highest {highest}, {trend}",
+  "@chartSeriesSummary": {
+    "description": "A chart's screen-reader summary of one series: what it measures, its current, lowest and highest values (already formatted with their units) and its trend, one of chartTrendRising, chartTrendFalling or chartTrendSteady.",
+    "placeholders": {
+      "label": {
+        "type": "String",
+        "example": "CPU"
+      },
+      "current": {
+        "type": "String",
+        "example": "42%"
+      },
+      "lowest": {
+        "type": "String",
+        "example": "3%"
+      },
+      "highest": {
+        "type": "String",
+        "example": "97%"
+      },
+      "trend": {
+        "type": "String",
+        "example": "rising"
+      }
+    }
+  },
+  "chartSeriesEmpty": "{label}: no data yet",
+  "@chartSeriesEmpty": {
+    "description": "A chart's screen-reader summary of a series that has no sample yet.",
+    "placeholders": {
+      "label": {
+        "type": "String",
+        "example": "CPU"
+      }
+    }
+  },
+  "chartSeriesUnknown": "{label}: unknown",
+  "@chartSeriesUnknown": {
+    "description": "A chart's screen-reader summary of a series whose every sample is a value the server did not report.",
+    "placeholders": {
+      "label": {
+        "type": "String",
+        "example": "Memory"
+      }
+    }
+  },
+  "chartUnknownValue": "unknown",
+  "@chartUnknownValue": {
+    "description": "Shown and read in place of a value the server did not report; never shown as zero."
+  },
+  "chartTrendRising": "rising",
+  "@chartTrendRising": {
+    "description": "A series' trend in its screen-reader summary: it has gone up over the chart's window."
+  },
+  "chartTrendFalling": "falling",
+  "@chartTrendFalling": {
+    "description": "A series' trend in its screen-reader summary: it has gone down over the chart's window."
+  },
+  "chartTrendSteady": "steady",
+  "@chartTrendSteady": {
+    "description": "A series' trend in its screen-reader summary: it has stayed about level over the chart's window."
+  },
+  "chartPercent": "{share}",
+  "@chartPercent": {
+    "description": "A chart value in percent, such as a CPU or memory share; the share arrives as a fraction from 0 to 1 and is formatted in the UI locale.",
+    "placeholders": {
+      "share": {
+        "type": "double",
+        "format": "decimalPercentPattern",
+        "optionalParameters": {
+          "decimalDigits": 0
+        }
+      }
+    }
+  },
   "tableCellSemantics": "{column}: {value}",
   "@tableCellSemantics": {
     "description": "A table cell as a screen reader hears it within its row: the column's header label, then the cell's value (A11Y-03).",
