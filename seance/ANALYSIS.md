@@ -1000,31 +1000,37 @@ flag is not proof an answer is non-sensitive.
 
 ### SSH-05: ssh_config import parity
 **IDs:** SOL-022, SEA-007, SEA-027, S2-10, S4-26, ProxyJump import (S5 gap),
-`importSshConfig` outside `_mutate` · **Priority:** P2 · **Status:** Open
+`importSshConfig` outside `_mutate` · **Priority:** P2 · **Status:** Partial
+(lines split as ssh splits them, every name on a `Host` line imports, and a
+host with a refused `Port` is skipped and counted)
 
 **Problem.** Paste-only dialog without preview or dedupe
 (`ui/server_list_pane.dart:788-823`); a fresh UUID per import; the last value
 wins (`ssh_config_import.dart:69`; OpenSSH is first-wins); wildcard defaults are
-dropped (`:74-79`); naive quote and comment stripping (`:94-97, 112`); no
-Include; `ProxyJump` is parsed (`:87`) but not mapped to `jumpHostId`; an empty
-username is kept. S2-10 (table row only): `Key = value` imports `= host` as the
-hostname, and `%h` is not expanded. S4-26: the dialog's `TextEditingController`
-is never disposed. `importSshConfig` (`app_state.dart:1155` @9322f6e) writes
-the store outside `_mutate` (harmless today, but it breaks the queue's
-invariant). Keyless hosts import as agent (#131; see SSH-06).
+dropped (`:74-79`); no Include; `ProxyJump` is parsed (`:87`) but not mapped to
+`jumpHostId`; an empty username is kept. S2-10 (table row only): `%h` is not
+expanded. S4-26: the dialog's `TextEditingController` is never disposed.
+`importSshConfig` (`app_state.dart:1155` @9322f6e) writes the store outside
+`_mutate` (harmless today, but it breaks the queue's invariant). Keyless hosts import as agent (#131; see SSH-06).
 
-**Next.** A tokenizer with quotes, comments and `=` separators; first value
-wins; evaluate every concrete alias of a block against matching `Host *`
-defaults; handle multiple identities; Include with a loop guard;
+`SshConfigLine` now splits each line as ssh's `argv_split()` does: quotes and
+backslash escapes are removed, `#` starts a comment only where an argument
+would start, and one `=` may follow the keyword, so `Key = value` reads
+`value` (S2-10). Every name on a `Host` line imports with the block's
+settings, and a host whose `Port` the importer refuses is skipped and counted
+in the toast.
+
+**Next.** First value wins; evaluate each imported alias against matching
+`Host *` defaults; handle multiple identities; Include with a loop guard;
 `%h` expansion; ProxyJump mapped to a saved host; unresolved auth marked
 setup-required. An `_ImportSshConfigDialog` StatefulWidget owning its
 controller, with file Browse and "Read ~/.ssh/config" on desktop, a preview
 with unsupported-directive warnings and host/port/user dedupe; run under
 `_mutate`. Consider `ssh -G` behind an evaluator interface on desktop.
 
-**Gate.** Idempotent repeated imports; wildcard, multi-alias and repeated
-blocks; quotes; `Key = value`; Include loops; ProxyJump mapping; sandbox file
-grants. No directive executes local commands during preview.
+**Gate.** Idempotent repeated imports; wildcard and repeated blocks; Include
+loops; ProxyJump mapping; sandbox file grants. No directive executes local
+commands during preview.
 
 ### SSH-06: Agent default, agent reachability and the macOS sandbox
 **IDs:** X-06, L-02, S2-16, X-04 (Séance side) · **Priority:** P1 (macOS) ·

@@ -51,7 +51,7 @@ BookmarkImportDialogRow _dialogRow(SshConfigImportRow row) {
   return BookmarkImportDialogRow(
     id: row.id,
     label: row.host.alias,
-    endpoint: '${row.host.effectiveHost}:${row.port}',
+    endpoint: '${row.host.effectiveHost}:${row.portLabel}',
     username: row.username,
     authentication: hasKeyPath
         ? (l10n) => l10n.sshImportAuthKey(keyPath)
@@ -95,7 +95,7 @@ String _limitationText(
   SshConfigImportLimitation.proxyCommand => l10n.sshImportLimitProxyCommand,
   SshConfigImportLimitation.matchBlock => l10n.sshImportLimitMatch,
   SshConfigImportLimitation.hostInclude => l10n.sshImportLimitHostInclude,
-  SshConfigImportLimitation.invalidPort => l10n.sshImportLimitInvalidPort,
+  SshConfigImportLimitation.invalidPort => l10n.sshImportLimitUnsupportedPort,
   SshConfigImportLimitation.wildcardDefaults =>
     l10n.sshImportLimitWildcardDefaults,
 };

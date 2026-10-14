@@ -800,12 +800,11 @@ never touches them.
 ### P1-13 · P3 · ssh_config `%` tokens import literally
 - **Problem.** `HostName %h.corp.example` and `IdentityFile ~/.ssh/%h_ed25519`
 import verbatim with no D22 badge (`core: import/ssh_config_import.dart`;
-the pinned importer does not expand either). Séance S2-10 also reports the
-`Key = value` form importing `= value`.
+the pinned importer does not expand either). Séance S2-10's `Key = value`
+form, which imported `= value`, is fixed in the pinned importer.
 - **Next.** Expand `%h`, `%u`/`%r`, `%p`, `%d`, `%%` in HostName and
 IdentityFile; badge `%C`, `%L`, `%n`, `${ENV}` as
-`SshConfigImportLimitation.unexpandedToken`. If the `=` form lives in the
-pinned importer, fix it upstream and pick it up at the re-pin (X-25).
+`SshConfigImportLimitation.unexpandedToken`.
 - **Gate.** Table tests in `ssh_config_import_test.dart`.
 - **Refs.** Effort S. D22. Idea: import "explain" view.
 
