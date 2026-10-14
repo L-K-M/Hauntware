@@ -271,6 +271,17 @@ between PRs. M1 adds gates of its own:
   The import item is dimmed while an import runs. Phones and tablets show
   no menu. Open: needs a person on each OS; the widget tests check the
   model and the Flutter side of `PlatformMenuBar`, not AppKit's menu.
+- Single desktop instance (03 §4.10), once per desktop OS from a build
+  that includes the lock. With Klabautermann running, launch it again
+  (on macOS with `open -n`, since Finder would only activate the first):
+  the second window shows only that Klabautermann is already running,
+  keeps the standard titlebar and size on macOS, and Quit closes it while
+  the first keeps running with its settings and window state untouched.
+  Quit the first, then launch again: it starts normally. Kill the first
+  with SIGKILL (Task Manager on Windows) and launch again: it starts
+  normally, because the system dropped the lock. Open: needs a person on
+  each OS; the tests take the lock from Dart processes, not from two
+  native app instances.
 
 ## macOS native fixtures
 
