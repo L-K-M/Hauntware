@@ -1,0 +1,745 @@
+import 'dart:async';
+import 'dart:math' as math;
+
+import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart' show CustomSemanticsAction;
+import 'package:flutter/services.dart';
+import 'package:ghost_ui/ghost_ui.dart'
+    show
+        GhostFileTheme,
+        SidebarMenuAction,
+        SidebarMenuEntry,
+        ghostIsDesktopPlatform,
+        scaledGhostFileRowExtent,
+        showSidebarMenuSheet,
+        sidebarMenuWidgets;
+
+import '../l10n/app_localizations.dart';
+
+/// Which way a [TableSort] orders its column.
+enum TableSortDirection { ascending, descending }
+
+/// Where a column's header and cells sit: text reads from the start edge,
+/// figures line up on the end edge.
+enum CellAlignment { start, end }
+
+/// How a column claims horizontal space in a [SortableTable].
+sealed class ColumnExtent {
+  const ColumnExtent();
+}
+
+/// A width in logical pixels at a text scale of 1. It grows with the
+/// ambient text scale, so larger type does not truncate the figures.
+final class FixedColumnExtent extends ColumnExtent {
+  const FixedColumnExtent(this.width);
+
+  final double width;
+}
+
+/// A share of the width the fixed columns and the row-action slot leave.
+final class FlexColumnExtent extends ColumnExtent {
+  const FlexColumnExtent([this.flex = 1]);
+
+  final int flex;
+}
+
+/// One column of a [SortableTable] over rows of type [R].
+@immutable
+final class SortableTableColumn<R> {
+  const SortableTableColumn({
+    required this.id,
+    required this.label,
+    required this.text,
+    this.sortKey,
+    this.firstDirection = TableSortDirection.ascending,
+    this.extent = const FlexColumnExtent(),
+    this.alignment = CellAlignment.start,
+    this.cell,
+  });
+
+  /// The column's stable identity: what a [TableSort] names, and the
+  /// header cell's key (`<tableId>.column.<id>`).
+  final String id;
+
+  /// The header text, and the column name announced with every cell
+  /// (A11Y-03).
+  final String label;
+
+  /// The cell's value as text. It is drawn when [cell] is null and is
+  /// always what a screen reader hears, so a drawn cell is never silent.
+  final String Function(R row) text;
+
+  /// What the column sorts by; null leaves the header a plain label. A
+  /// null result is an unknown value (an LXC reading without lxcfs,
+  /// SYS-04), which sorts last in both directions.
+  final Comparable<Object>? Function(R row)? sortKey;
+
+  /// The direction the first click on this header sorts in: figures whose
+  /// largest values matter (CPU, memory) start descending.
+  final TableSortDirection firstDirection;
+
+  final ColumnExtent extent;
+  final CellAlignment alignment;
+
+  /// A drawn cell (a bar, an icon with its word) in place of the plain
+  /// [text]. It is excluded from semantics, which read [text] instead.
+  final Widget Function(BuildContext context, R row)? cell;
+
+  bool get sortable => sortKey != null;
+}
+
+/// The column a [SortableTable] is sorted by and the direction.
+@immutable
+final class TableSort {
+  const TableSort(this.columnId, this.direction);
+
+  final String columnId;
+  final TableSortDirection direction;
+
+  /// The sort a click on [column]'s header asks for after [current]: the
+  /// sorted column flips direction, any other column starts in its
+  /// [SortableTableColumn.firstDirection].
+  static TableSort next<R>(TableSort? current, SortableTableColumn<R> column) {
+    if (current == null || current.columnId != column.id) {
+      return TableSort(column.id, column.firstDirection);
+    }
+    return TableSort(
+      column.id,
+      current.direction == TableSortDirection.ascending
+          ? TableSortDirection.descending
+          : TableSortDirection.ascending,
+    );
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      other is TableSort &&
+      other.columnId == columnId &&
+      other.direction == direction;
+
+  @override
+  int get hashCode => Object.hash(columnId, direction);
+}
+
+/// [rows] in [sort]'s order, the table's one ordering rule:
+///
+/// - no sort, or one naming no sortable column, keeps the caller's order;
+/// - rows whose keys tie keep the caller's order in both directions, so a
+///   live refresh does not shuffle equal rows (Dart's `List.sort` is not
+///   stable);
+/// - unknown (null) keys sort last in both directions.
+List<R> sortTableRows<R>(
+  List<R> rows,
+  List<SortableTableColumn<R>> columns,
+  TableSort? sort,
+) {
+  if (sort == null) return rows;
+
+  Comparable<Object>? Function(R row)? keyOf;
+  for (final column in columns) {
+    if (column.id == sort.columnId) keyOf = column.sortKey;
+  }
+  if (keyOf == null) return rows;
+
+  final sign = sort.direction == TableSortDirection.ascending ? 1 : -1;
+  final keyed = [
+    for (var index = 0; index < rows.length; index++)
+      (index: index, key: keyOf(rows[index])),
+  ];
+  keyed.sort((a, b) {
+    final aKey = a.key;
+    final bKey = b.key;
+    final int order;
+    if (aKey == null || bKey == null) {
+      order = (aKey == null ? 1 : 0) - (bKey == null ? 1 : 0);
+    } else {
+      order = sign * aKey.compareTo(bKey);
+    }
+    return order != 0 ? order : a.index - b.index;
+  });
+  return [for (final entry in keyed) rows[entry.index]];
+}
+
+/// The sortable semantic table the M2 lists (processes, services, jobs)
+/// share, ahead of `ghost_ui`'s `GhostColumnTable` (F5e, v1; 03 §10.10):
+///
+/// - Columns are announced (A11Y-03): each cell reaches a screen reader
+///   as "column: value" inside its row's node, and each header announces
+///   its sort state and, when it sorts, a hint.
+/// - The row-action slot: [rowActions] draws a trailing "…" button that
+///   opens the row's verbs (a menu on desktop, a sheet on touch) and
+///   exposes the enabled ones as the row's custom semantics actions.
+/// - Keyboard focus: the body is one focus stop (the sortable headers
+///   come before it) holding an active row, drawn with a ring while focus
+///   is from the keyboard. ↑ and ↓, Page Up and Page Down, Home and End
+///   move it; Enter or Space activates it; Shift+F10 or the context-menu
+///   key opens its actions. The active row follows its [rowKey] across
+///   re-sorts and refreshes.
+/// - Fixed row height: every row is the platform's listing extent (22 px
+///   on desktop, 48 on touch) at the ambient text scale, so a refresh
+///   never reflows the list and keyboard paging is exact.
+///
+/// Sort state is the caller's ([sort], [onSort]): a tab view disposes the
+/// panes it hides, and the panel's controller keeps the order across
+/// that. The table needs a bounded height; when the columns do not fit
+/// the width it scrolls sideways rather than overflow.
+///
+/// Flutter's table semantics roles are not used: their debug checks
+/// require table, row and cell nodes to nest directly, which the
+/// virtualized list's scroll node between them breaks.
+class SortableTable<R> extends StatefulWidget {
+  const SortableTable({
+    super.key,
+    required this.tableId,
+    required this.columns,
+    required this.rows,
+    required this.rowKey,
+    this.sort,
+    this.onSort,
+    this.onRowActivated,
+    this.rowActions,
+    this.empty,
+  });
+
+  /// Prefixes the keys of the header cells (`<tableId>.column.<id>`),
+  /// the rows (`<tableId>.row.<rowKey>`) and their action buttons
+  /// (`<tableId>.rowActions.<rowKey>`).
+  final String tableId;
+
+  final List<SortableTableColumn<R>> columns;
+
+  /// The rows in the caller's order, which ties and an absent sort keep.
+  final List<R> rows;
+
+  /// A row's stable identity (a PID, a unit name): the active row follows
+  /// it when the rows refresh or re-sort.
+  final Object Function(R row) rowKey;
+
+  final TableSort? sort;
+
+  /// Called with [TableSort.next] when a sortable header is clicked; null
+  /// leaves every header a plain label.
+  final ValueChanged<TableSort>? onSort;
+
+  /// A click or tap on a row, or Enter or Space on the active row.
+  final ValueChanged<R>? onRowActivated;
+
+  /// A row's verbs for the row-action slot; null draws no slot.
+  final List<SidebarMenuEntry> Function(R row)? rowActions;
+
+  /// Shown under the header when [rows] is empty.
+  final Widget? empty;
+
+  @override
+  State<SortableTable<R>> createState() => _SortableTableState<R>();
+}
+
+/// The narrowest a flex column gets before the table scrolls sideways.
+const _minFlexWidth = 64.0;
+const _cellPadding = EdgeInsets.symmetric(horizontal: 8);
+const _chevronSize = 14.0;
+const _actionIconSize = 16.0;
+const _focusRingWidth = 2.0;
+
+enum _Step { previous, next, pageUp, pageDown, first, last }
+
+final class _MoveIntent extends Intent {
+  const _MoveIntent(this.step);
+
+  final _Step step;
+}
+
+final class _OpenRowActionsIntent extends Intent {
+  const _OpenRowActionsIntent();
+}
+
+/// An action that is enabled only while [enabled] holds, so a key the
+/// table cannot use (Enter without [SortableTable.onRowActivated], an
+/// arrow over no rows) passes on instead of being swallowed.
+final class _TableAction<T extends Intent> extends Action<T> {
+  _TableAction(this.enabled, this.onInvoke);
+
+  final bool Function() enabled;
+  final void Function(T intent) onInvoke;
+
+  @override
+  bool isEnabled(T intent) => enabled();
+
+  @override
+  Object? invoke(T intent) {
+    onInvoke(intent);
+    return null;
+  }
+}
+
+class _SortableTableState<R> extends State<SortableTable<R>> {
+  static const _shortcuts = <ShortcutActivator, Intent>{
+    SingleActivator(LogicalKeyboardKey.arrowUp): _MoveIntent(_Step.previous),
+    SingleActivator(LogicalKeyboardKey.arrowDown): _MoveIntent(_Step.next),
+    SingleActivator(LogicalKeyboardKey.pageUp): _MoveIntent(_Step.pageUp),
+    SingleActivator(LogicalKeyboardKey.pageDown): _MoveIntent(_Step.pageDown),
+    SingleActivator(LogicalKeyboardKey.home): _MoveIntent(_Step.first),
+    SingleActivator(LogicalKeyboardKey.end): _MoveIntent(_Step.last),
+    // Repeats may move the active row, never activate it.
+    SingleActivator(LogicalKeyboardKey.enter, includeRepeats: false):
+        ActivateIntent(),
+    SingleActivator(LogicalKeyboardKey.numpadEnter, includeRepeats: false):
+        ActivateIntent(),
+    SingleActivator(LogicalKeyboardKey.space, includeRepeats: false):
+        ActivateIntent(),
+    SingleActivator(LogicalKeyboardKey.contextMenu, includeRepeats: false):
+        _OpenRowActionsIntent(),
+    SingleActivator(LogicalKeyboardKey.f10, shift: true, includeRepeats: false):
+        _OpenRowActionsIntent(),
+    SingleActivator(LogicalKeyboardKey.escape): DismissIntent(),
+  };
+
+  final _scroll = ScrollController();
+  final _focus = FocusNode(debugLabel: 'SortableTable');
+  final _firstVerbFocus = FocusNode(debugLabel: 'SortableTable menu');
+  final _menu = MenuController();
+  final _bodyKey = GlobalKey();
+  late final Map<Type, Action<Intent>> _actions = {
+    _MoveIntent: _TableAction<_MoveIntent>(
+      () => _sorted.isNotEmpty,
+      (intent) => _move(intent.step),
+    ),
+    ActivateIntent: _TableAction<ActivateIntent>(
+      () => widget.onRowActivated != null && _activeIndex != null,
+      (_) => widget.onRowActivated!(_sorted[_activeIndex!]),
+    ),
+    _OpenRowActionsIntent: _TableAction<_OpenRowActionsIntent>(
+      () =>
+          _activeIndex != null &&
+          _semanticsActions(widget.rowActions?.call(_sorted[_activeIndex!])) !=
+              null,
+      (_) => _openActions(_activeIndex!),
+    ),
+    // A menu a pointer opened leaves focus on the body: Esc closes it.
+    DismissIntent: _TableAction<DismissIntent>(
+      () => _menu.isOpen,
+      (_) => _menu.close(),
+    ),
+  };
+
+  List<R> _sorted = const [];
+
+  /// The active row by identity, and its index in [_sorted]. The index
+  /// outlives a vanished key for one re-sort, so the ring stays where it
+  /// was rather than jumping to the top.
+  Object? _activeKey;
+  int? _activeIndex;
+
+  bool _hasFocus = false;
+  bool _showRing = false;
+  double _rowExtent = 0;
+  List<SidebarMenuEntry> _menuEntries = const [];
+
+  @override
+  void initState() {
+    super.initState();
+    _resort();
+  }
+
+  @override
+  void didUpdateWidget(SortableTable<R> oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _resort();
+  }
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    _focus.dispose();
+    _firstVerbFocus.dispose();
+    super.dispose();
+  }
+
+  void _resort() {
+    _sorted = sortTableRows(widget.rows, widget.columns, widget.sort);
+    final key = _activeKey;
+    if (key == null) return;
+
+    final found = _sorted.indexWhere((row) => widget.rowKey(row) == key);
+    if (found >= 0) {
+      _activeIndex = found;
+    } else if (_sorted.isEmpty) {
+      _activeKey = _activeIndex = null;
+    } else {
+      _setActive(math.min(_activeIndex ?? 0, _sorted.length - 1));
+    }
+  }
+
+  void _setActive(int index) {
+    _activeIndex = index;
+    _activeKey = widget.rowKey(_sorted[index]);
+  }
+
+  void _onFocusChange(bool focused) {
+    setState(() {
+      _hasFocus = focused;
+      if (focused && _activeIndex == null && _sorted.isNotEmpty) {
+        _setActive(0);
+      }
+    });
+  }
+
+  void _move(_Step step) {
+    // A menu a pointer opened leaves focus on the body: a key steps in.
+    if (_menu.isOpen) {
+      _firstVerbFocus.requestFocus();
+      return;
+    }
+
+    final current = _activeIndex ?? 0;
+    final viewport = _scroll.position.viewportDimension;
+    final page = math.max(1, (viewport / _rowExtent).floor() - 1);
+    final target = switch (step) {
+      _Step.previous => current - 1,
+      _Step.next => current + 1,
+      _Step.pageUp => current - page,
+      _Step.pageDown => current + page,
+      _Step.first => 0,
+      _Step.last => _sorted.length - 1,
+    };
+    setState(() => _setActive(target.clamp(0, _sorted.length - 1)));
+
+    // The least scroll that shows the row whole; the fixed extent makes
+    // its offset exact without building it.
+    final position = _scroll.position;
+    final top = _activeIndex! * _rowExtent;
+    final shown = position.pixels.clamp(
+      math.min(top, top + _rowExtent - viewport),
+      top,
+    );
+    _scroll.jumpTo(
+      shown
+          .clamp(position.minScrollExtent, position.maxScrollExtent)
+          .toDouble(),
+    );
+  }
+
+  void _onRowTap(int index) {
+    setState(() => _setActive(index));
+    _focus.requestFocus();
+    widget.onRowActivated?.call(_sorted[index]);
+  }
+
+  bool get _touch => !ghostIsDesktopPlatform(Theme.of(context).platform);
+
+  /// Opens row [index]'s verbs, making it the active row in the focused
+  /// body: a sheet on touch, else the menu at the pointer's [global]
+  /// position or, from the keyboard, under the row. The keyboard's menu
+  /// takes focus once it has mounted, or its arrows would still walk the
+  /// rows behind it; a pointer's leaves it on the body, so no verb shows
+  /// a focus fill the click did not ask for.
+  void _openActions(int index, {Offset? global}) {
+    final row = _sorted[index];
+    final entries = widget.rowActions!(row);
+    setState(() {
+      _setActive(index);
+      _menuEntries = entries;
+    });
+    _focus.requestFocus();
+    if (_touch) {
+      unawaited(
+        showSidebarMenuSheet(
+          context,
+          title: widget.columns.first.text(row),
+          entries: entries,
+        ),
+      );
+      return;
+    }
+
+    final body = _bodyKey.currentContext!.findRenderObject()! as RenderBox;
+    _menu.open(
+      position: global == null
+          ? Offset(0, (index + 1) * _rowExtent - _scroll.offset)
+          : body.globalToLocal(global),
+    );
+    if (global != null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _menu.isOpen) _firstVerbFocus.requestFocus();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scaler = MediaQuery.textScalerOf(context);
+    _rowExtent = scaledGhostFileRowExtent(context);
+    var minWidth = widget.rowActions == null ? 0.0 : _rowExtent;
+    for (final column in widget.columns) {
+      minWidth += switch (column.extent) {
+        FixedColumnExtent(:final width) => scaler.scale(width),
+        FlexColumnExtent() => scaler.scale(_minFlexWidth),
+      };
+    }
+
+    final empty = widget.empty;
+    final body = MenuAnchor(
+      controller: _menu,
+      // Focus returns to the table when the menu closes.
+      childFocusNode: _focus,
+      menuChildren: sidebarMenuWidgets(
+        _menuEntries,
+        firstFocus: _firstVerbFocus,
+      ),
+      child: FocusableActionDetector(
+        key: _bodyKey,
+        focusNode: _focus,
+        // The active row carries the focused flag instead: a node for the
+        // whole body would announce nothing useful.
+        includeFocusSemantics: false,
+        // One stop for the body: Shift+F10 reaches a row's actions, not a
+        // Tab stop per row.
+        descendantsAreFocusable: false,
+        shortcuts: _shortcuts,
+        actions: _actions,
+        onFocusChange: _onFocusChange,
+        onShowFocusHighlight: (show) => setState(() => _showRing = show),
+        child: _sorted.isEmpty && empty != null
+            ? empty
+            : ListView.builder(
+                controller: _scroll,
+                itemExtent: _rowExtent,
+                itemCount: _sorted.length,
+                itemBuilder: _row,
+              ),
+      ),
+    );
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        Widget table = Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _header(context),
+            Expanded(child: body),
+          ],
+        );
+        if (constraints.maxWidth < minWidth) {
+          table = SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: SizedBox(width: minWidth, child: table),
+          );
+        }
+        // The cells' ink paints on this Material, which also carries the
+        // listing's colour.
+        return Material(
+          color: GhostFileTheme.of(context).paneBackground,
+          child: table,
+        );
+      },
+    );
+  }
+
+  /// [cells] in the columns' extents, then the row-action slot (empty
+  /// when [slot] is null), so the header and every row line up.
+  Widget _laidOut(BuildContext context, List<Widget> cells, {Widget? slot}) {
+    final scaler = MediaQuery.textScalerOf(context);
+    return Row(
+      children: [
+        for (var index = 0; index < cells.length; index++)
+          switch (widget.columns[index].extent) {
+            FixedColumnExtent(:final width) => SizedBox(
+              width: scaler.scale(width),
+              child: cells[index],
+            ),
+            FlexColumnExtent(:final flex) => Expanded(
+              flex: flex,
+              child: cells[index],
+            ),
+          },
+        if (widget.rowActions != null)
+          SizedBox(width: _rowExtent, height: _rowExtent, child: slot),
+      ],
+    );
+  }
+
+  Widget _header(BuildContext context) {
+    return Container(
+      key: ValueKey('${widget.tableId}.columns'),
+      height: _rowExtent,
+      decoration: BoxDecoration(
+        border: Border(
+          bottom: BorderSide(color: GhostFileTheme.of(context).separator),
+        ),
+      ),
+      child: _laidOut(context, [
+        for (final column in widget.columns) _headerCell(context, column),
+      ]),
+    );
+  }
+
+  Widget _headerCell(BuildContext context, SortableTableColumn<R> column) {
+    final l10n = AppLocalizations.of(context);
+    final fileTheme = GhostFileTheme.of(context);
+    final theme = Theme.of(context);
+    final sort = widget.sort;
+    final onSort = widget.onSort;
+    final sorted = column.sortable && sort?.columnId == column.id;
+    final ascending = sort?.direction == TableSortDirection.ascending;
+    final VoidCallback? onTap = column.sortable && onSort != null
+        ? () => onSort(TableSort.next(sort, column))
+        : null;
+    final end = column.alignment == CellAlignment.end;
+
+    final label = Flexible(
+      child: Text(
+        column.label,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        softWrap: false,
+        style: theme.textTheme.labelSmall?.copyWith(
+          color: sorted ? theme.colorScheme.onSurface : fileTheme.secondaryText,
+          fontWeight: sorted ? FontWeight.w600 : FontWeight.w500,
+        ),
+      ),
+    );
+    // An empty icon keeps the label where it sits while unsorted.
+    final chevron = Icon(
+      sorted
+          ? (ascending ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down)
+          : null,
+      size: _chevronSize,
+      color: fileTheme.secondaryText,
+    );
+    return Semantics(
+      key: ValueKey('${widget.tableId}.column.${column.id}'),
+      container: true,
+      button: onTap != null,
+      label: column.label,
+      value: sorted
+          ? (ascending ? l10n.tableSortedAscending : l10n.tableSortedDescending)
+          : null,
+      hint: onTap == null ? null : l10n.tableSortHint,
+      excludeSemantics: true,
+      onTap: onTap,
+      child: InkWell(
+        onTap: onTap,
+        excludeFromSemantics: true,
+        hoverColor: fileTheme.hoverFill,
+        child: Padding(
+          padding: _cellPadding,
+          child: Row(
+            mainAxisAlignment: end
+                ? MainAxisAlignment.end
+                : MainAxisAlignment.start,
+            children: end ? [chevron, label] : [label, chevron],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _row(BuildContext context, int index) {
+    final l10n = AppLocalizations.of(context);
+    final fileTheme = GhostFileTheme.of(context);
+    final row = _sorted[index];
+    final key = widget.rowKey(row);
+    final active = index == _activeIndex;
+    final entries = widget.rowActions?.call(row);
+
+    final slot = entries == null
+        ? null
+        : Builder(
+            builder: (button) => IconButton(
+              key: ValueKey('${widget.tableId}.rowActions.$key'),
+              tooltip: l10n.tableRowActions,
+              iconSize: _actionIconSize,
+              padding: EdgeInsets.zero,
+              icon: const Icon(Icons.more_horiz),
+              onPressed: () {
+                final box = button.findRenderObject()! as RenderBox;
+                _openActions(
+                  index,
+                  global: box.localToGlobal(box.size.bottomLeft(Offset.zero)),
+                );
+              },
+            ),
+          );
+    return Semantics(
+      key: ValueKey('${widget.tableId}.row.$key'),
+      container: true,
+      button: widget.onRowActivated != null,
+      focusable: true,
+      focused: active && _hasFocus,
+      customSemanticsActions: _semanticsActions(entries),
+      onTap: widget.onRowActivated == null
+          ? null
+          : () => widget.onRowActivated!(row),
+      child: InkWell(
+        canRequestFocus: false,
+        excludeFromSemantics: true,
+        hoverColor: fileTheme.hoverFill,
+        onTap: () => _onRowTap(index),
+        onSecondaryTapUp: entries == null || _touch
+            ? null
+            : (details) => _openActions(index, global: details.globalPosition),
+        onLongPress: entries == null || !_touch
+            ? null
+            : () => _openActions(index),
+        child: Container(
+          // Over the cells, so the ring shifts nothing while it shows.
+          foregroundDecoration: active && _showRing
+              ? BoxDecoration(
+                  border: Border.all(
+                    color: fileTheme.activePaneIndicator,
+                    width: _focusRingWidth,
+                  ),
+                )
+              : null,
+          child: _laidOut(context, [
+            for (final column in widget.columns) _cell(context, column, row),
+          ], slot: slot),
+        ),
+      ),
+    );
+  }
+
+  Widget _cell(BuildContext context, SortableTableColumn<R> column, R row) {
+    final text = column.text(row);
+    final drawn = column.cell;
+    final style = Theme.of(context).textTheme.bodyMedium;
+    final end = column.alignment == CellAlignment.end;
+    return Semantics(
+      label: text.isEmpty
+          ? null
+          : AppLocalizations.of(context).tableCellSemantics(column.label, text),
+      excludeSemantics: true,
+      child: Padding(
+        padding: _cellPadding,
+        child: drawn != null
+            ? drawn(context, row)
+            : Text(
+                text,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                softWrap: false,
+                textAlign: end ? TextAlign.end : TextAlign.start,
+                // Figures line up digit under digit.
+                style: end
+                    ? style?.copyWith(
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                      )
+                    : style,
+              ),
+      ),
+    );
+  }
+}
+
+/// A row's enabled top-level verbs as custom semantics actions (TalkBack's
+/// and VoiceOver's actions menus), as `ghost_ui`'s sidebar rows expose
+/// theirs. Null when there is none, so a verbless row does not advertise
+/// an empty actions menu.
+Map<CustomSemanticsAction, VoidCallback>? _semanticsActions(
+  List<SidebarMenuEntry>? entries,
+) {
+  final actions = <CustomSemanticsAction, VoidCallback>{
+    for (final entry in entries ?? const <SidebarMenuEntry>[])
+      if (entry case SidebarMenuAction(:final label, :final onSelected?))
+        CustomSemanticsAction(label: label): onSelected,
+  };
+  return actions.isEmpty ? null : actions;
+}

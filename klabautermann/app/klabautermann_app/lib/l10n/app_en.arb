@@ -179,5 +179,35 @@
   "workspaceTabDocker": "Docker",
   "workspaceTabSystem": "System",
   "workspaceTabAccess": "Access",
-  "serverTabMore": "More"
+  "serverTabMore": "More",
+  "tableCellSemantics": "{column}: {value}",
+  "@tableCellSemantics": {
+    "description": "A table cell as a screen reader hears it within its row: the column's header label, then the cell's value (A11Y-03).",
+    "placeholders": {
+      "column": {
+        "type": "String",
+        "example": "CPU"
+      },
+      "value": {
+        "type": "String",
+        "example": "4.2 %"
+      }
+    }
+  },
+  "tableSortedAscending": "Sorted ascending",
+  "@tableSortedAscending": {
+    "description": "Screen-reader value of the table column header the rows are sorted by, smallest first."
+  },
+  "tableSortedDescending": "Sorted descending",
+  "@tableSortedDescending": {
+    "description": "Screen-reader value of the table column header the rows are sorted by, largest first."
+  },
+  "tableSortHint": "Sort by this column",
+  "@tableSortHint": {
+    "description": "Screen-reader hint of a table column header that sorts the rows when activated."
+  },
+  "tableRowActions": "Row actions",
+  "@tableRowActions": {
+    "description": "Tooltip and screen-reader label of the button at the end of a table row that opens the row's actions."
+  }
 }

@@ -273,4 +273,21 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get serverTabMore => 'More';
+
+  @override
+  String tableCellSemantics(String column, String value) {
+    return '$column: $value';
+  }
+
+  @override
+  String get tableSortedAscending => 'Sorted ascending';
+
+  @override
+  String get tableSortedDescending => 'Sorted descending';
+
+  @override
+  String get tableSortHint => 'Sort by this column';
+
+  @override
+  String get tableRowActions => 'Row actions';
 }
