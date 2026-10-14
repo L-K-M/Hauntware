@@ -28,6 +28,14 @@ slice:
   restart comes after 0.7 s to 1 s). Tested against a scripted process
   and local dash and bash (a SIGSTOP stall included); nothing starts it
   yet, and no SSH fixture test covers it.
+- Jobs model (JOB-01, JOB-02 data): `klabautermann_host`'s `mergeJobs`
+  turns a `cron` and a `timers` tick into one list of cron lines,
+  periodic scripts and timers, each with an English-free
+  `ScheduleDescription` and, for cron, next runs with DST annotations
+  in the server zone or the line's `CRON_TZ`. Timer triggers and
+  `RandomizedDelaySec` have fields but no source yet, `CRON_TZ` zones
+  other than the server's and UTC need a resolver, and nothing in the
+  engine or app consumes the list yet.
 - Access rules (M2, `klabautermann_host` `access/`): the CN-24 rows from
   a `HostProfile` (passwordless sudo, journal group with the LOG-04
   notice, Docker socket rights with the SAF-08 flag, systemd version,
@@ -52,6 +60,16 @@ slice:
   the engine keeps the imports (below); `EngineReady` reports a problem
   with that file and `SshConfigImported` says whether the import was
   saved, both added within v2.
+- Protocol v3 (M2 links, 03 §10.1): `LinkState` carries a sealed
+  `LinkStatus` (D46's eight states plus `blocked`, typed reasons and an
+  optional failure kind), `Prompt` a sealed request per kind, and
+  `PromptWithdrawn`, `SetAppActivity` and `Reachability` join; `FleetEntry`
+  gains the nullable `jumpRoute`, `authKind`, `searchText` and
+  `locatorConflict`. The fleet controller keeps link statuses and probe
+  answers only for listed servers, and the rail words every status.
+  Nothing produces them yet: the engine still rejects `Connect` and
+  `SetAppActivity`, sends no prompts or probe answers, and fills none of
+  the new fleet fields.
 - `klabautermann_app`: `flutter create`d for the five platforms with the
   04 §12.3 identities, generated launcher icons, the desktop three-pane
   shell (fleet rail, workspace, inspector) at 960 px and up, the phone
@@ -60,6 +78,17 @@ slice:
   built through `ghost_theme` from the Klabautermann brand preset (D9;
   the appearance persists in `settings.json`, below), and the English
   ARB catalogue (D35, A11Y-05).
+- Chart foundations (03 §10.7, M2): `lib/ui/charts/` holds `Sparkline`
+  over a fixed-capacity `SeriesRing` that repaints on its version
+  counter, with min-max downsampling to the pixel width, gaps for unknown
+  samples, threshold bands, IEC scale and value text, a screen-reader
+  summary per series from the ARB through a string bag (A11Y-02), and no
+  motion when the platform asks (A11Y-11). The palette test holds the
+  severity and series colours to 3:1 and keeps them apart under simulated
+  colour-vision deficiencies (A11Y-04); light and dark goldens draw with
+  the Flutter SDK's Roboto and compare on Linux only. `Gauge` follows in
+  its own PR. Nothing shows a chart yet: the overview and fleet rows that
+  feed the rings come later in M2.
 - Sortable table (M2): the app's `SortableTable`, which the M2 lists
   build on. The caller owns the sort (a header click flips it; ties keep
   the caller's order and unknown values sort last). A screen reader hears
@@ -214,6 +243,15 @@ slice:
   only Linux's lock conflict is exercised across two processes; the
   macOS and Windows error codes are unit-tested. No real build has run it
   yet.
+- Log buffer model (03 §10.8): `klabautermann_core`'s `LogBuffer` holds up
+  to 50,000 entries and 32 MiB of text, counted as the VM stores it (one
+  byte a code unit for Latin-1 text, two otherwise), cuts a line at 16 KiB
+  and keeps its full length for the truncation marker, and records a
+  `LogBatch`'s drops as one "dropped N lines" entry. `parseSgr` turns a
+  line's SGR colours and attributes into spans and drops every other
+  escape and control but tab. A heap test keeps a full buffer of either
+  kind under the 64 MiB budget (03 §11.4). Nothing uses them yet: the
+  viewer and the engine's followers come in later M2 PRs.
 
 Pull-only from the start (D14): no surface sends a request that could
 push or write catalog records, and a widget test guards it.
@@ -225,11 +263,10 @@ in `settings.json`, and the release job (M4).
 
 The macOS runner now keeps its window hidden until Dart has placed it,
 so the CI launch check's wait for a visible window also proves that
-startup reached the window restore. The check does not yet pass
-`--menu File` as Planchette's and Poltergeist's do, and the `ci.yml`
-comment above it still describes the template runner; both are a
-root-lane follow-up. The Linux and Windows runners show their window on
-the first frame, so a startup that never reaches `runApp` fails there.
+startup reached the window restore. It also passes `--menu File`, as
+Planchette's and Poltergeist's do, so the Dart menu bar must be
+installed. The Linux and Windows runners show their window on the first
+frame, so a startup that never reaches `runApp` fails there.
 
 ## Open manual gates
 

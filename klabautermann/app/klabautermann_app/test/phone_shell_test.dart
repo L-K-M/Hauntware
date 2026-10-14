@@ -60,7 +60,7 @@ void main() {
     }
   });
 
-  testWidgets('the detail page follows the server\'s link phase in words', (
+  testWidgets('the detail page follows the server\'s link status in words', (
     tester,
   ) async {
     await pumpApp(tester, size: const Size(390, 800), servers: twoServers);

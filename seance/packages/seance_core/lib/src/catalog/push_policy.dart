@@ -4,8 +4,14 @@ library;
 
 /// The push behaviour of one coordinator.
 enum PushPolicy {
-  /// Today's behaviour: local edits seal through the catalog writer and
-  /// every round pushes the dirty set. The pull-only policy D14 needs
-  /// arrives with the write-path refusals that make it hold.
+  /// Pull-only (D14, 03 §4.4 "Pull-only mode"): rounds pull and apply,
+  /// and nothing is sealed, written to the catalog, published or pushed.
+  /// Every mutating `CatalogWriter` call refuses before touching a store,
+  /// `CatalogWriter.sealLocal` refuses before `crypto.seal`, and a round
+  /// skips its push half.
+  none,
+
+  /// Local edits seal through the catalog writer and every round pushes
+  /// the dirty set — Poltergeist's behaviour.
   normal,
 }
