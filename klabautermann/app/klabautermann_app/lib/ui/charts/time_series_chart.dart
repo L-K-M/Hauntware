@@ -23,6 +23,9 @@ import 'time_series.dart';
 /// the ring's version counter inside its own [RepaintBoundary]. It moves
 /// only when a sample arrives or a rebuild hands it a later [end], and it
 /// never animates, so reduced motion (A11Y-11) leaves it unchanged.
+///
+/// On an axis its parent leaves unbounded, and when measured intrinsically,
+/// the chart takes 320 x 200.
 class TimeSeriesChart extends StatelessWidget {
   const TimeSeriesChart({
     super.key,
@@ -172,27 +175,15 @@ class TimeSeriesChart extends StatelessWidget {
 
     return Semantics(
       container: true,
-      // The fallback size, for a parent that leaves the chart unbounded.
-      child: LimitedBox(
-        maxWidth: 320,
-        maxHeight: 200,
-        child: LayoutBuilder(
-          builder: (context, constraints) => Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(child: plot),
-              const SizedBox(height: 4),
-              // Large text may not squeeze the plot out: the legend and the
-              // source take at most half the height and scroll within it.
-              ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxHeight: constraints.maxHeight / 2,
-                ),
-                child: SingleChildScrollView(child: legend),
-              ),
-            ],
+      child: CustomMultiChildLayout(
+        delegate: _ChartLayout(),
+        children: [
+          LayoutId(id: _ChartPart.plot, child: plot),
+          LayoutId(
+            id: _ChartPart.legend,
+            child: SingleChildScrollView(child: legend),
           ),
-        ),
+        ],
       ),
     );
   }
@@ -206,6 +197,43 @@ class TimeSeriesChart extends StatelessWidget {
           Text(label, style: style),
         ],
       );
+}
+
+enum _ChartPart { plot, legend }
+
+/// Lays the plot out above the legend and the source. Large text may not
+/// squeeze the plot out: the legend and the source take at most half the
+/// height and scroll within it. Unlike a [LayoutBuilder], this layout
+/// answers intrinsic measurements, so the chart can sit in an
+/// [IntrinsicHeight] row.
+final class _ChartLayout extends MultiChildLayoutDelegate {
+  /// The size on an axis the parent leaves unbounded, which is also what
+  /// an intrinsic measurement gets.
+  static const _fallback = Size(320, 200);
+  static const _legendGap = 4.0;
+
+  @override
+  Size getSize(BoxConstraints constraints) => Size(
+    constraints.hasBoundedWidth ? constraints.maxWidth : _fallback.width,
+    constraints.hasBoundedHeight ? constraints.maxHeight : _fallback.height,
+  );
+
+  @override
+  void performLayout(Size size) {
+    final legend = layoutChild(
+      _ChartPart.legend,
+      BoxConstraints(maxWidth: size.width, maxHeight: size.height / 2),
+    );
+    positionChild(_ChartPart.legend, Offset(0, size.height - legend.height));
+    final plotHeight = size.height - legend.height - _legendGap;
+    layoutChild(
+      _ChartPart.plot,
+      BoxConstraints.tight(Size(size.width, math.max(0, plotHeight))),
+    );
+  }
+
+  @override
+  bool shouldRelayout(_ChartLayout oldDelegate) => false;
 }
 
 String _gapLabel(ChartGapReason reason, ChartStrings strings) =>

@@ -350,6 +350,37 @@ void main() {
     semantics.dispose();
   });
 
+  testWidgets('asks for its fallback height when measured intrinsically', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      chartFrame(
+        IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(
+                child: TimeSeriesChart(
+                  data: _network(),
+                  labels: const ['Receive', 'Transmit'],
+                  unit: ChartUnit.bytesPerSecond,
+                  strings: testChartStrings,
+                  source: 'Sampled by this device while connected',
+                  end: _end,
+                ),
+              ),
+              const SizedBox(width: 8, height: 120),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    expect(tester.takeException(), isNull);
+    expect(tester.getSize(find.byType(TimeSeriesChart)).height, 200);
+    expect(tester.getSize(_plot).height, greaterThan(100));
+  });
+
   test('puts time ticks on round local times in any zone', () {
     int utc(int hour, int minute) =>
         DateTime.utc(2026, 10, 14, hour, minute).microsecondsSinceEpoch;
