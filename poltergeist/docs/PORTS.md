@@ -904,7 +904,8 @@ counterpart is ported here.
   `ui/sidebar/sidebar_servers_section.dart` now calls `groupServers`
   with the controller's pinned set; its collapse keys still go through
   `SidebarCollapseKeys.serverGroup`.
-- Port-back candidates: none — Séance owns the source.
+- Port-back candidates: none — the source now lives in the shared
+  `ghost_servers` package, which both apps consume.
 
 ## app/poltergeist_app/lib/ui/server_filter.dart
 
