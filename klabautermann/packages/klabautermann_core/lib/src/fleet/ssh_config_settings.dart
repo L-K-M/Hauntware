@@ -1104,10 +1104,10 @@ String? _expandHostName(String value, String name) {
 /// The host ssh dials once it has read the config, and matches `Host` and
 /// `Match host` against on its final pass (`ssh.c`), for [host], the
 /// `HostName` with `%h` expanded: lowercased unless it is an address, and
-/// an address as `getnameinfo()` writes it, unless only its case differs. Null when the import cannot know it: for
-/// an address with a scope, whose form depends on the device's
-/// interfaces, one Dart does not parse though the system resolver may
-/// (`10.1`), or a host holding U+FFFD.
+/// an address as `getnameinfo()` writes it, unless only its case differs.
+/// Null when the import cannot know it: for an address with a scope,
+/// whose form depends on the device's interfaces, one Dart does not parse
+/// though the system resolver may (`10.1`), or a host holding U+FFFD.
 String? sshCanonicalHost(String host) {
   if (host.contains(_replacement)) return null;
   if (!_isAddress(host)) return _asciiLower(host);
