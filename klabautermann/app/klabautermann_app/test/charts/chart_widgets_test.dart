@@ -185,6 +185,30 @@ void main() {
     });
   }
 
+  testWidgets('a new sample follows a Reduce Motion switch since the build', (
+    tester,
+  ) async {
+    final ring = _ring([10, 20], capacity: 10);
+    await tester.pumpWidget(_sparkline(ring));
+
+    // iOS's switch reaches no MediaQuery, so nothing rebuilds the
+    // sparkline before its next sample.
+    tester.platformDispatcher.accessibilityFeaturesTestValue =
+        FakeAccessibilityFeatures(reduceMotion: true);
+    addTearDown(tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
+    await tester.pump();
+    ring.add(30);
+    await tester.pump();
+    expect(tester.hasRunningAnimations, isFalse);
+
+    tester.platformDispatcher.clearAccessibilityFeaturesTestValue();
+    await tester.pump();
+    ring.add(40);
+    await tester.pump();
+    expect(tester.hasRunningAnimations, isTrue);
+    await tester.pumpAndSettle();
+  });
+
   testWidgets('offers its summary on demand, not as a live region', (
     tester,
   ) async {
