@@ -243,10 +243,10 @@ void main() {
         'one', () {
       expect(
         _resolve(
-          'Host web\n  ProxyJump=a, b\n  ProxyCommand nc %h %p\n',
+          'Host web\n  ProxyJump=a,b # c\n  ProxyCommand nc %h %p\n',
           'web',
         ),
-        ('web', 22, null, null, 'a, b'),
+        ('web', 22, null, null, 'a,b # c'),
       );
       expect(
         _resolve('Host web\n  ProxyCommand none\n  ProxyJump a\n', 'web'),
@@ -335,13 +335,18 @@ void main() {
     });
 
     test('CanonicalizeHostname other than no leaves a name out', () {
-      for (final value in ['yes', 'always', 'True', 'bogus']) {
+      for (final value in ['yes', 'always', 'True']) {
         expect(
           _resolve('CanonicalizeHostname $value\nHost web\n', 'web'),
           UnresolvedReason.secondPass,
           reason: value,
         );
       }
+      // ssh rejects the whole config over any other value.
+      expect(
+        _resolve('CanonicalizeHostname bogus\nHost web\n', 'web'),
+        UnresolvedReason.rejectedLine,
+      );
       for (final value in ['no', 'False']) {
         expect(_resolve('CanonicalizeHostname $value\nHost web\n', 'web'), (
           'web',
@@ -586,13 +591,17 @@ void main() {
           UnresolvedReason.rejectedLine,
           reason: line,
         );
-        expect(_resolve('Host web\nHost db\n  $line\n', 'web'), (
-          'web',
-          22,
-          null,
-          null,
-          null,
-        ), reason: '$line applies to db only');
+        // ssh checks these two in every block.
+        final everywhere =
+            line.startsWith('ProxyJump') ||
+            line.startsWith('CanonicalizeHostname');
+        expect(
+          _resolve('Host web\nHost db\n  $line\n', 'web'),
+          everywhere
+              ? UnresolvedReason.rejectedLine
+              : ('web', 22, null, null, null),
+          reason: '$line applies to db only',
+        );
       }
       expect(
         _resolve('Host web\n  Port +2200\nHost *\n  Port https\n', 'web'),

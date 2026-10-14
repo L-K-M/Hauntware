@@ -32,8 +32,9 @@
   `IdentityFile` needs something it cannot fill in, one whose
   `HostName`, `User` or `IdentityFile` holds bytes that are not UTF-8,
   or one whose `ProxyJump` ssh would refuse or it cannot follow (a route
-  of more than 16 hops included). A file that starts with a byte-order
-  mark, which ssh refuses, imports no host.
+  of more than 16 hops included). A file ssh refuses as a whole imports
+  no host: one that starts with a byte-order mark, or holds a
+  `ProxyJump` or `CanonicalizeHostname` line ssh rejects anywhere.
 - Desktop settings window: on macOS, Linux and Windows, Settings opens in
   a window of its own, and a theme change there applies to the app.
   Phones keep the settings page.

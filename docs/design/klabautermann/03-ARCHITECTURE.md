@@ -3563,7 +3563,17 @@ the engine in `engine_isolate.dart` beside it):
     `ssh`, `http` or `https`, a value missing or doubled, a quote left
     open, or a `Host` line with an empty pattern). ssh rejects the whole
     config over such a line wherever it stands; the import checks only
-    the blocks that apply to a host. It does not read the system-wide
+    the blocks that apply to a host, except for `ProxyJump` and
+    `CanonicalizeHostname`, which ssh checks in every block: a
+    `ProxyJump` whose syntax `parse_jump()` rejects (an empty hop, a
+    port it cannot read, an ssh URI with a path, and so on; a service
+    name other than `ssh`, `http` or `https` counts as one it cannot
+    read), or a `CanonicalizeHostname` other than `yes`, `no`, `true`,
+    `false` or `always`, anywhere in the file leaves out every host.
+    Other lines count only where they apply to a host, so a malformed
+    `Match` whose block sets nothing the import reads, a `Match exec`
+    command with a token ssh cannot expand, and a directive the engine
+    does not map are not checked. It does not read the system-wide
     `/etc/ssh/ssh_config`, which ssh reads after the user's file and
     which can set what that file leaves unset.
   - `ProxyJump` follows ssh (`parse_jump()` and `ssh.c`): `a,b` dials

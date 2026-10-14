@@ -121,13 +121,86 @@ void main() {
         'Host blank\n  HostName=\n'
         'Host nobody\n  User\n'
         'Host two\n  IdentityFile ~/.ssh/a ~/.ssh/b\n'
-        'Host *.example\n  ProxyJump\n'
-        'Host db.example\n'
         'Host fine\n  User u\n',
       );
 
       expect(result.hosts.map((h) => h.alias), ['fine']);
-      expect(result.skippedCount, 4);
+      expect(result.skippedCount, 3);
+    });
+
+    test('a ProxyJump or CanonicalizeHostname line ssh rejects anywhere '
+        'leaves out every host', () {
+      // parse_jump() checks every ProxyJump line, in a block that applies
+      // or not, and readconf.c every CanonicalizeHostname value; ssh
+      // rejects the whole config over one (each checked with OpenSSH
+      // 9.9p1's `ssh -G`).
+      for (final line in [
+        'ProxyJump',
+        'ProxyJump ==',
+        'ProxyJump a,,b',
+        'ProxyJump a,b,',
+        'ProxyJump #old',
+        'ProxyJump "a, b"',
+        'ProxyJump "gw',
+        'ProxyJump @gw',
+        'ProxyJump [gw',
+        'ProxyJump [gw]x',
+        'ProxyJump gw/2222',
+        'ProxyJump gw:0',
+        'ProxyJump gw:65536',
+        'ProxyJump 2001:db8::1',
+        'ProxyJump ssh://_gw',
+        'ProxyJump ssh://gw..x',
+        'ProxyJump ssh://[::1]',
+        'ProxyJump ssh://;x@gw',
+        'ProxyJump ssh://u%zz@gw',
+        'ProxyJump ssh://gw/path',
+        'ProxyJump ssh://gw:22/x',
+        'ProxyJump ssh://gw:/',
+        'ProxyJump gw,ssh://_x',
+        'CanonicalizeHostname',
+        'CanonicalizeHostname maybe',
+        'CanonicalizeHostname yes no',
+      ]) {
+        for (final config in [
+          'Host web\n  HostName 10.0.0.5\n'
+              'Host *.unused\n  $line\n'
+              'Host db\n  HostName 10.0.0.6\n',
+          // After the value it would set is set.
+          'Host web\n  HostName 10.0.0.5\n  ProxyJump none\n'
+              '  CanonicalizeHostname no\n  $line\n'
+              'Host db\n  HostName 10.0.0.6\n',
+        ]) {
+          final result = importedHostsFromSshConfig(config);
+
+          expect(result.hosts, isEmpty, reason: config);
+          expect(result.skippedCount, 2, reason: config);
+        }
+      }
+
+      // Forms ssh accepts, though the engine follows not all of them.
+      for (final line in [
+        'ProxyJump NONE',
+        'ProxyJump none # old',
+        'ProxyJump = = gw',
+        'ProxyJump a ,b',
+        'ProxyJump gw:',
+        'ProxyJump gw:+22',
+        'ProxyJump [gw]:ssh',
+        'ProxyJump u@[]',
+        'ProxyJump x@y@gw',
+        'ProxyJump ssh://9gw.',
+        'ProxyJump ssh://u;x@gw:',
+        'ProxyJump ssh://u%41@gw:22/',
+        'CanonicalizeHostname NO',
+        'CanonicalizeHostname always # c',
+      ]) {
+        final result = importedHostsFromSshConfig(
+          'Host web\n  HostName 10.0.0.5\nHost *.unused\n  $line\n',
+        );
+
+        expect(result.hosts.map((h) => h.alias), ['web'], reason: line);
+      }
     });
 
     test('expands %h and %% in HostName, as ssh does, and skips a host '
@@ -219,20 +292,15 @@ void main() {
         for (final h in importedHostsFromSshConfig(text).hosts) h.alias,
       ];
 
-      // One host per line, each with what ssh rejects or reads otherwise.
+      // One host per line, each with a route ssh reads otherwise. A
+      // ProxyJump ssh rejects leaves out every host (above).
       final result = importedHostsFromSshConfig(
-        'Host empty-user\n  ProxyJump @jump\n'
-        'Host port-zero\n  ProxyJump jump:0\n'
         'Host service\n  ProxyJump jump:ssh\n'
-        'Host slash\n  ProxyJump jump/22\n'
-        'Host bracket\n  ProxyJump [jump\n'
-        'Host hole\n  ProxyJump a,,b\n'
         'Host token\n  ProxyJump %h-jump\n'
-        'Host uri-path\n  ProxyJump ssh://jump/x\n'
         'Host fine\n  ProxyJump jump\n',
       );
       expect(result.hosts.map((h) => h.alias), ['fine']);
-      expect(result.skippedCount, 8);
+      expect(result.skippedCount, 2);
 
       // A first-hop loop, and a host that names a looping one.
       expect(
@@ -546,7 +614,7 @@ void main() {
       // all, and runs the hops through /bin/sh.
       final result = importedHostsFromSshConfig(
         'Host spaced\n  ProxyJump a ,b\n'
-        'Host quoted\n  ProxyJump "a, b"\n'
+        'Host quoted\n  ProxyJump "a,b"\n'
         'Host bare\n  ProxyJump = a,b # two hops\n',
       );
 

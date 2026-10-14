@@ -5,6 +5,7 @@ import 'package:seance_core/seance_core.dart'
     show ImportedHost, SshConfigImporter;
 
 import '../engine/protocol.dart' show kSshDefaultPort;
+import 'jump_routes.dart' show sshAcceptsProxyJump;
 
 /// The TCP port range; a stored `Port` outside it names no reachable
 /// endpoint.
@@ -32,6 +33,16 @@ const String _noProxyCommand = 'none';
 
 /// The `CanonicalizeHostname` values that leave canonicalization off.
 const Set<String> _canonicalizationOff = {'no', 'false'};
+
+/// Every `CanonicalizeHostname` value ssh reads, in any case
+/// (`multistate_canonicalizehostname`).
+const Set<String> _canonicalizationValues = {
+  'yes',
+  'no',
+  'true',
+  'false',
+  'always',
+};
 
 /// The longest subpattern `match_pattern_list()` reads, in bytes; a longer
 /// one makes the whole list match nothing.
@@ -80,8 +91,10 @@ const Map<String, _Keyword> _keywords = {
 /// Why [SshConfigSettings.resolve] gives no settings for a name.
 enum UnresolvedReason {
   /// ssh rejects the whole config: the file starts with a byte-order
-  /// mark, or a block that applies holds a line ssh rejects: a `Port` the
-  /// import cannot read (see [SshConfigSettings]), a `HostName`, `User`,
+  /// mark, a `ProxyJump` or `CanonicalizeHostname` line anywhere is one
+  /// ssh rejects, or a block that applies holds a line ssh rejects: a
+  /// `Port` the import cannot read (see [SshConfigSettings]), a
+  /// `HostName`, `User`,
   /// `IdentityFile`, `ProxyJump`, `ProxyCommand` or
   /// `CanonicalizeHostname` with no value, or with more than one where
   /// ssh takes one, one of those lines or the `Host` line with a quote
@@ -230,9 +243,12 @@ final class UnresolvedSshSettings extends SshConfigResolution {
 /// `https`, as Séance's `SshConfigImporter` reads it (ssh resolves other
 /// names too). Such a line leaves unresolved only the names its block
 /// applies to; lines in other blocks, and directives the engine does not
-/// map, are not checked. Nor is the system-wide `/etc/ssh/ssh_config`,
-/// which ssh reads after this file and which can set what this file leaves
-/// unset, read at all.
+/// map, are not checked. The exceptions are `ProxyJump`, whose syntax
+/// ssh's `parse_jump()` checks in every block ([sshAcceptsProxyJump]),
+/// and `CanonicalizeHostname`, whose value ssh checks in every block: one
+/// ssh rejects leaves every name unresolved, wherever it stands. Nor is
+/// the system-wide `/etc/ssh/ssh_config`, which ssh reads after this file
+/// and which can set what this file leaves unset, read at all.
 final class SshConfigSettings {
   SshConfigSettings._(
     this.aliases,
@@ -251,7 +267,7 @@ final class SshConfigSettings {
     var wantsFinalPass = false;
 
     // The names still count as hosts, all of them left out.
-    final rejected = text.startsWith(_byteOrderMark);
+    var rejected = text.startsWith(_byteOrderMark);
     final lines = (rejected ? text.substring(1) : text).split('\n');
 
     for (final raw in lines) {
@@ -280,6 +296,18 @@ final class SshConfigSettings {
           final keyword = _keywords[line.keyword];
           if (keyword == null) continue;
 
+          // ssh checks these in every block, whether it applies or not.
+          rejected |= switch (keyword) {
+            _Keyword.proxyJump =>
+              line.openQuote || !sshAcceptsProxyJump(line.command),
+            _Keyword.canonicalizeHostname =>
+              line.openQuote ||
+                  line.arguments.length != 1 ||
+                  !_canonicalizationValues.contains(
+                    _asciiLower(line.arguments.single),
+                  ),
+            _ => false,
+          };
           includes |= keyword == _Keyword.include;
           blocks.last.lines.add((
             keyword: keyword,
@@ -329,7 +357,9 @@ final class SshConfigSettings {
   /// Whether a `Match final` makes ssh read the config a final time.
   final bool _wantsFinalPass;
 
-  /// Whether ssh rejects the whole config, whatever name it is given.
+  /// Whether ssh rejects the whole config, whatever name it is given: it
+  /// starts with a byte-order mark, or holds a `ProxyJump` or
+  /// `CanonicalizeHostname` line ssh rejects.
   final bool _rejected;
 
   /// The settings ssh would use for [name], the host name you give it.
@@ -790,7 +820,7 @@ final class _Reading {
     if (line.openQuote) return UnresolvedReason.rejectedLine;
     if (line.keyword == _Keyword.include) return UnresolvedReason.include;
     if (switch (line.keyword) {
-      _Keyword.port => single == null || _parsePort(single) == null,
+      _Keyword.port => single == null || parseSshPort(single) == null,
       _Keyword.proxyJump || _Keyword.proxyCommand => line.rest.isEmpty,
       _ => single == null,
     }) {
@@ -802,7 +832,7 @@ final class _Reading {
         hostName == null && !finalPass,
         () => hostName = single,
       ),
-      _Keyword.port => first(port == null, () => port = _parsePort(single!)),
+      _Keyword.port => first(port == null, () => port = parseSshPort(single!)),
       _Keyword.user => first(user == null, () => user = single),
       // ssh skips `none` when it loads keys, so the next file is first.
       _Keyword.identityFile => first(
@@ -869,9 +899,10 @@ bool isImportedIdentityFile(String path) =>
 
 bool _isNoIdentityFile(String path) => _asciiLower(path) == _noIdentityFile;
 
-/// The port ssh's `a2port()` reads from [value], or null where ssh
-/// reports "Bad port" or [value] names a service not in [_servicePorts].
-int? _parsePort(String value) {
+/// The port ssh's `a2port()` reads from [value], above 0, or null where
+/// ssh reports "Bad port" or [value] names a service not in
+/// [_servicePorts], for a `Port` or a port in a `ProxyJump`.
+int? parseSshPort(String value) {
   if (!_decimal.hasMatch(value)) return _servicePorts[value];
 
   // null when the digits overflow an int, which is out of range too.
