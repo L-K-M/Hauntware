@@ -1687,7 +1687,8 @@ shown as unknown, never as zero.
   marker for the nonce; more output, a malformed READY or another
   collector-set version fails the start. An empty `<uptime>` (unreadable
   `/proc/uptime`) is unknown, not a framing error. A reply lost to a
-  framing error is a gap; a well-framed marker out of order cannot come
+  framing error is a gap. A well-framed marker out of order, or a reply of
+  more than 32 sections (which bounds one reply's memory), cannot come
   from the constant program and ends the session.
 - **Fork budget.** Builtin collectors append to a shell variable while
   reading `/proc` and `/sys` with `read`, so the fast path forks nothing.

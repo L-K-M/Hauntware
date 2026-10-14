@@ -13,6 +13,13 @@ library;
 import 'frames.dart';
 import 'program.dart' show kCollectorSetVersion;
 
+/// Upper bound on the sections in one reply. A tick emits one section per
+/// requested collector and the probe one per area, so the program's
+/// largest reply (every collector once) holds 21 today. Past the cap the
+/// session fails, which keeps one reply's memory within this many
+/// [kMaxSectionBytes].
+const kMaxReplySections = 32;
+
 /// Why a session cannot continue (03 §6.2). The sampler must be
 /// restarted; the assembler ignores everything after it reports one.
 enum HwsSessionFault {
@@ -27,6 +34,9 @@ enum HwsSessionFault {
   /// A second READY, a section or end outside a reply, a begin inside
   /// one, or an end whose sequence number differs from its begin.
   outOfOrder,
+
+  /// A reply held more than [kMaxReplySections] sections.
+  tooManySections,
 }
 
 /// What [HwsTickAssembler] reports.
@@ -144,6 +154,14 @@ final class HwsTickAssembler {
         _phase = _Phase.inReply;
 
       case (_Phase.inReply, final HwsSection section):
+        if (_sections.length == kMaxReplySections) {
+          _fail(
+            out,
+            HwsSessionFault.tooManySections,
+            'reply $_openSeq exceeds $kMaxReplySections sections',
+          );
+          return;
+        }
         _sections.add(section);
 
       case (_Phase.inReply, HwsEnd(:final seq)) when seq == _openSeq:

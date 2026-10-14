@@ -76,6 +76,46 @@ void main() {
     ]);
   });
 
+  group('section cap', () {
+    List<int> replyWith(int sections) => [
+      ..._ready,
+      ..._marker('B 1 1.00'),
+      for (var i = 0; i < sections; i++) ..._section('core', 'x'),
+      ..._marker('E 1'),
+    ];
+
+    test('a reply at the cap completes', () {
+      expect(
+        _assemble(replyWith(kMaxReplySections)).last,
+        startsWith('tick 1'),
+      );
+    });
+
+    test('a reply over the cap ends the session', () {
+      final assembler = HwsTickAssembler(nonce: nonce);
+      expect(assembler.push(replyWith(kMaxReplySections + 1)).map(_describe), [
+        'ready $kCollectorSetVersion',
+        'failed tooManySections',
+      ]);
+      expect(assembler.push(_reply(2)), isEmpty);
+    });
+
+    test('the largest reply the program emits stays within the cap', () {
+      // Every collector but the probe emits one section; the probe emits
+      // one per area function it calls.
+      final program = buildSamplerProgram(kind: SamplerKind.slow, nonce: nonce);
+      final areas = RegExp(
+        r'^  _probe_[a-z]+$',
+        multiLine: true,
+      ).allMatches(program).length;
+      expect(areas, greaterThan(0));
+      expect(
+        areas + Collector.values.length - 1,
+        lessThanOrEqualTo(kMaxReplySections),
+      );
+    });
+  });
+
   group('session failures', () {
     test('a READY with another collector-set version', () {
       final assembler = HwsTickAssembler(nonce: nonce);
