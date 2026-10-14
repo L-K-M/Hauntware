@@ -6,8 +6,9 @@
 #   scripts/verify-android-version.sh [app-dir]
 #
 # app-dir defaults to the current directory (the release and CI legs
-# run it from seance/app/seance_app or poltergeist/app/poltergeist_app)
-# and must hold pubspec.yaml plus the built
+# run it from seance/app/seance_app or poltergeist/app/poltergeist_app,
+# CI also from klabautermann/app/klabautermann_app) and must hold
+# pubspec.yaml plus the built
 # build/app/outputs/flutter-apk/app-release.apk. Needs apkanalyzer from
 # the Android command-line tools ($ANDROID_HOME or PATH).
 set -euo pipefail

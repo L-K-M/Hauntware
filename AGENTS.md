@@ -1,8 +1,9 @@
 # AGENTS.md
 
-Hauntware contains Planchette, Séance and Poltergeist with one version and
-release cadence. Product-specific architecture and native setup remain in
-each subtree's `AGENTS.md`; shared library implementations are never copied.
+Hauntware contains Planchette, Séance, Poltergeist and Klabautermann with one
+version and release cadence. Product-specific architecture and native setup
+remain in each subtree's `AGENTS.md`; shared library implementations are never
+copied.
 
 ## Layout and toolchains
 
@@ -12,9 +13,10 @@ each subtree's `AGENTS.md`; shared library implementations are never copied.
   vendored xterm and PTY implementations.
 - `poltergeist/`: pure-Dart transfer/sync packages, five-platform application,
   live benchmark/tooling and immutable historical M0 evidence.
-- `klabautermann/`: fourth application (server management and Docker),
-  built per `docs/design/klabautermann/`: pure-Dart packages first, the
-  Flutter app from milestone M1.
+- `klabautermann/`: pure-Dart host/Docker/engine packages, five-platform
+  server and Docker management application, built per
+  `docs/design/klabautermann/`. CI builds its clients; suite releases ship
+  them from milestone M4.
 - Root `pubspec.yaml`: suite version and release-tool dependencies, not a
   Flutter workspace. Each product keeps its own pure-Dart workspace.
 
@@ -43,9 +45,10 @@ and run each standalone Flutter/tool command in its own directory.
 ## Boundaries and preserved state
 
 UI uses host services; shared document/UI packages remain host-neutral.
-Poltergeist consumes the shared SSH/protocol implementation through its core
-barrel. Preserve application IDs, keychain names, wire formats and user data.
-Native platform folders carry reviewed identities and compatibility fixes.
+Poltergeist and Klabautermann consume the shared SSH/protocol implementation
+through their core barrels. Preserve application IDs, keychain names, wire
+formats and user data. Native platform folders carry reviewed identities and
+compatibility fixes.
 
 All owned package/app versions follow the root suite version. Vendored
 `third_party/` versions/licenses and `poltergeist/docs/evidence/m0/` plus
