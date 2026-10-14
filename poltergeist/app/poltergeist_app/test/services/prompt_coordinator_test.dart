@@ -380,6 +380,77 @@ void main() {
     await tester.pumpAndSettle();
   });
 
+  testWidgets('a stored secret of the other kind falls through to the dialog', (
+    tester,
+  ) async {
+    await _pumpHost(tester, navigatorKey, messengerKey);
+    coordinator.start();
+    vault.secret = const Secret(
+      id: 'secret-7',
+      kind: SecretKind.password,
+      value: 'stored-pw',
+    );
+
+    bridge.emit(
+      _event(
+        'kind-mismatch',
+        EnginePromptKind.credentialNeeded,
+        const CredentialPromptData(
+          host: 'example.com',
+          port: 2222,
+          username: 'deploy',
+          authMethod: AuthMethod.privateKey,
+          secretRef: 'secret-7',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // A password must never be offered to the engine as key material.
+    expect(vault.reads, ['secret-7']);
+    expect(find.byType(AlertDialog), findsOneWidget);
+    expect(bridge.replies, isEmpty);
+
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('a stored key answers with its passphrase and reads no key '
+      'file', (tester) async {
+    await _pumpHost(tester, navigatorKey, messengerKey);
+    coordinator.start();
+    vault.secret = const Secret(
+      id: 'secret-7',
+      kind: SecretKind.privateKey,
+      value: 'STORED PRIVATE KEY',
+      keyPassphrase: 'stored-phrase',
+    );
+
+    bridge.emit(
+      _event(
+        'stored-key',
+        EnginePromptKind.credentialNeeded,
+        const CredentialPromptData(
+          host: 'example.com',
+          port: 2222,
+          username: 'deploy',
+          authMethod: AuthMethod.privateKey,
+          secretRef: 'secret-7',
+          identityFilePath: '~/.ssh/id_ed25519',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final reply = bridge.replies.single.$3 as CredentialPromptReply;
+    expect(reply.origin, CredentialOrigin.stored);
+    expect(reply.privateKeyPem, 'STORED PRIVATE KEY');
+    expect(reply.keyPassphrase, 'stored-phrase');
+    expect(reply.password, isNull);
+    expect(reader.reads, isEmpty, reason: 'key files are the dialog\'s job');
+    expect(find.byType(AlertDialog), findsNothing);
+  });
+
   testWidgets('a vault miss prompts; the typed answer replies as prompted', (
     tester,
   ) async {
