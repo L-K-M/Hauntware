@@ -147,12 +147,14 @@ final class TimeSeriesRing extends ChangeNotifier {
   DateTime _time(int micros) => DateTime.fromMicrosecondsSinceEpoch(micros);
 
   void _changed() {
-    // A gap that ended at or before the oldest sample is out of the data;
-    // the cap bounds gaps opened while no sample arrives.
+    // A gap that ended before the oldest sample is out of the data. One
+    // that the oldest sample closed stays: it names the time before that
+    // sample, as when sampling stopped before the first one arrived. The
+    // cap bounds gaps opened while no sample arrives.
     if (length > 0) {
       final oldest = microsAt(0);
       _gaps.removeWhere(
-        (gap) => gap.end != null && gap.end!.microsecondsSinceEpoch <= oldest,
+        (gap) => gap.end != null && gap.end!.microsecondsSinceEpoch < oldest,
       );
     }
     if (_gaps.length > capacity) _gaps.removeRange(0, _gaps.length - capacity);

@@ -92,10 +92,25 @@ void main() {
       ring.add(_at(0), [1]);
       ring.openGap(_at(1), ChartGapReason.disconnected);
       ring.add(_at(2), [2]);
+      // The sample before the gap leaves, but the gap still ends at the
+      // oldest sample.
+      ring.add(_at(3), [3]);
       expect(ring.gaps, hasLength(1));
 
-      ring.add(_at(3), [3]);
+      ring.add(_at(4), [4]);
       expect(ring.gaps, isEmpty);
+    });
+
+    test('keeps a gap that the first sample closes', () {
+      final ring = _ring();
+      ring.openGap(_at(0), ChartGapReason.disconnected);
+      ring.add(_at(180), [1]);
+
+      expect(ring.gaps.single, (
+        start: _at(0),
+        end: _at(180),
+        reason: ChartGapReason.disconnected,
+      ));
     });
 
     test('keeps at most capacity gaps while no sample arrives', () {
