@@ -1,0 +1,330 @@
+// Access-check rule tests (CN-24, CN-09, LOG-04, SAF-08; 03 §6.1, §8.1,
+// §8.3, §8.4, §10.4): one table per fixture platform, then the cases the
+// fixtures do not cover. Unknown is never shown as missing or zero.
+import 'package:klabautermann_host/klabautermann_host.dart';
+import 'package:test/test.dart';
+
+import 'support.dart';
+
+typedef R = AccessReason;
+typedef I = AccessItem;
+
+const _ok = AccessStatus.ok;
+const _missing = AccessStatus.missing;
+const _unknown = AccessStatus.unknown;
+
+/// A row as (status, reason, copyable fix joined by spaces, SAF-08 flag).
+typedef _Row = (AccessStatus, AccessReason, String?, bool);
+
+_Row _row(AccessRow r) =>
+    (r.status, r.reason, r.fix?.commandLine.join(' '), r.rootEquivalent);
+
+_Row _of(HostProfile p, AccessItem item) => _row(evaluateAccess(p).row(item));
+
+String _sudoers(String user) => [
+  'sudo',
+  'sh',
+  '-c',
+  kSudoersFixScript,
+  'klabautermann-fix',
+  '$user ALL=(ALL) NOPASSWD: ALL',
+  kSudoersDropIn,
+].join(' ');
+
+const _pending = (_unknown, R.pendingDockerSupport, null, false);
+const _noSocket = (_missing, R.noEngineSocket, null, false);
+const _noEngine = (_missing, R.noEngine, null, false);
+const _json = (_ok, R.systemdJson, null, false);
+
+final _tables = <String, Map<AccessItem, _Row>>{
+  // Password sudo, no journal group, no engine, systemd 252.
+  'debian-12': {
+    I.sudoNoPassword: (_missing, R.sudoNotPasswordless, _sudoers('anke'), true),
+    I.journal: (
+      _missing,
+      R.notInJournalGroup,
+      'sudo usermod -aG systemd-journal anke',
+      false,
+    ),
+    I.dockerSocket: _noSocket,
+    I.streamlocal: _pending,
+    I.composePlugin: _pending,
+    I.systemd: _json,
+    I.runtime: _noEngine,
+  },
+  // NOPASSWD sudo, adm, a writable rootful Docker socket, systemd 255.
+  'ubuntu-2404': {
+    I.sudoNoPassword: (_ok, R.sudoNoPassword, null, true),
+    I.journal: (_ok, R.journalGroup, null, false),
+    I.dockerSocket: (_ok, R.rootfulSocket, null, true),
+    I.streamlocal: _pending,
+    I.composePlugin: _pending,
+    I.systemd: _json,
+    I.runtime: (_ok, R.enginesDetected, null, false),
+  },
+  // Password sudo, wheel, no engine, systemd 239 (text fallback, CN-10).
+  'rhel-8': {
+    I.sudoNoPassword: (_missing, R.sudoNotPasswordless, _sudoers('ops'), true),
+    I.journal: (_ok, R.journalGroup, null, false),
+    I.dockerSocket: _noSocket,
+    I.streamlocal: _pending,
+    I.composePlugin: _pending,
+    I.systemd: (_ok, R.systemdTextFallback, null, false),
+    I.runtime: _noEngine,
+  },
+  // doas with a password, no journal, OpenRC, no engine.
+  'alpine-322': {
+    I.sudoNoPassword: (_missing, R.doasNotPasswordless, null, true),
+    I.journal: (_missing, R.noJournal, null, false),
+    I.dockerSocket: _noSocket,
+    I.streamlocal: _pending,
+    I.composePlugin: _pending,
+    I.systemd: (_missing, R.notSystemd, null, false),
+    I.runtime: _noEngine,
+  },
+};
+
+void main() {
+  group('platform tables', () {
+    for (final platform in fixturePlatforms) {
+      test(platform, () {
+        final report = evaluateAccess(fixtureProfile(platform));
+        expect(report.rows.map((r) => r.item), AccessItem.values);
+        expect({
+          for (final r in report.rows) r.item: _row(r),
+        }, _tables[platform]);
+      });
+    }
+
+    test('the LOG-04 notice follows the journal row', () {
+      bool? limited(String p) =>
+          evaluateAccess(fixtureProfile(p)).journalLimited;
+      expect(limited('debian-12'), true);
+      expect(limited('ubuntu-2404'), false);
+      expect(limited('rhel-8'), false);
+      // No journal at all: nothing is silently truncated.
+      expect(limited('alpine-322'), null);
+    });
+
+    test('runtimes per host come from the existing sockets (CN-09)', () {
+      final ubuntu = evaluateAccess(fixtureProfile('ubuntu-2404')).engines;
+      expect(ubuntu.map((e) => (e.runtime, e.mode, e.socket.path)), [
+        (EngineRuntime.docker, EngineMode.rootful, '/var/run/docker.sock'),
+      ]);
+      expect(evaluateAccess(fixtureProfile('debian-12')).engines, isEmpty);
+    });
+  });
+
+  group('unknown is never shown as missing', () {
+    test('a profile without probe answers is unknown on every row', () {
+      final report = evaluateAccess(HostProfile());
+      for (final r in report.rows) {
+        expect((r.status, r.fix), (_unknown, null), reason: r.item.name);
+      }
+      expect(report.journalLimited, isNull);
+      expect(report.engines, isEmpty);
+    });
+
+    test('denied probe areas leave every row unknown', () {
+      final sections = [
+        for (final area in 'distro init identity elev tools sockets'.split(' '))
+          ProbeSection(area, SectionStatus.denied, ''),
+      ];
+      final profile = parseProbe(sections, ParseContext.standard).value;
+      for (final r in evaluateAccess(profile).rows) {
+        expect(r.status, _unknown, reason: r.item.name);
+      }
+    });
+
+    test('an unanswered sudo -n stays unknown', () {
+      expect(_of(host(sudoNonInteractive: null), I.sudoNoPassword), (
+        _unknown,
+        R.probeAreaUnavailable,
+        null,
+        false,
+      ));
+    });
+
+    test('a journal group check without a tools answer stays unknown', () {
+      expect(_of(host(tools: const {}), I.journal).$1, _unknown);
+    });
+
+    test('an unparsed or untested systemd version is unknown', () {
+      expect(_of(host(systemdVersion: null), I.systemd), (
+        _unknown,
+        R.systemdVersionUnparsed,
+        null,
+        false,
+      ));
+      expect(_of(host(systemdVersion: 219), I.systemd), (
+        _unknown,
+        R.systemdOlderThanTested,
+        null,
+        false,
+      ));
+    });
+  });
+
+  group('elevation', () {
+    test('a root login needs neither sudo nor a journal group', () {
+      final root = host(uid: 0, user: 'root', groups: const ['root']);
+      expect(_of(root, I.sudoNoPassword), (_ok, R.rootLogin, null, false));
+      expect(_of(root, I.journal), (_ok, R.rootLogin, null, false));
+    });
+
+    test('blanket doas permit nopass counts where sudo is absent', () {
+      final doas = host(
+        sudoKind: SudoKind.none,
+        sudoNonInteractive: null,
+        doasPresent: true,
+        doasNonInteractive: true,
+      );
+      expect(_of(doas, I.sudoNoPassword), (_ok, R.doasNoPassword, null, true));
+    });
+
+    test('no sudo and no doas is missing without a fix', () {
+      expect(_of(host(sudoKind: SudoKind.none), I.sudoNoPassword), (
+        _missing,
+        R.noElevationTool,
+        null,
+        false,
+      ));
+    });
+
+    test('the sudoers fix is a checked drop-in, passed as arguments', () {
+      final fix = evaluateAccess(host(user: 'anke')).row(I.sudoNoPassword).fix!;
+      expect(fix.elevation, FixElevation.sudo);
+      expect(fix.argv, [
+        'sh',
+        '-c',
+        kSudoersFixScript,
+        'klabautermann-fix',
+        'anke ALL=(ALL) NOPASSWD: ALL',
+        '/etc/sudoers.d/klabautermann',
+      ]);
+      // sudo's #includedir skips names with a dot (sudoers(5)), so the
+      // file is inert until visudo accepted it and mv renamed it.
+      expect(kSudoersFixScript, contains('visudo -cf "\$2.new" && mv'));
+      expect(kSudoersFixScript, startsWith('umask 0227 && '));
+    });
+
+    test('a user name outside the grammar gets no fix', () {
+      final report = evaluateAccess(host(user: 'Bad User;rm'));
+      expect(report.row(I.sudoNoPassword).status, _missing);
+      expect(report.row(I.sudoNoPassword).fix, isNull);
+      expect(report.row(I.journal).fix, isNull);
+    });
+
+    test('the fix prefix follows the elevation', () {
+      final argv = ['usermod', '-aG', 'docker', 'ops'];
+      expect(AccessFix(argv, FixElevation.sudo).commandLine.first, 'sudo');
+      expect(AccessFix(argv, FixElevation.doas).commandLine.first, 'doas');
+      expect(AccessFix(argv, FixElevation.none).commandLine, argv);
+      expect(AccessFix(argv, FixElevation.rootShell).commandLine, argv);
+      final noTool = host(sudoKind: SudoKind.none);
+      expect(
+        evaluateAccess(noTool).row(I.journal).fix!.elevation,
+        FixElevation.rootShell,
+      );
+    });
+  });
+
+  group('Docker socket rights (SAF-08)', () {
+    const rootfulDocker = '/var/run/docker.sock';
+
+    test('a writable rootless socket is user-equivalent', () {
+      final p = host(
+        sockets: [socket('/run/user/1000/podman/podman.sock', writable: true)],
+      );
+      expect(_of(p, I.dockerSocket), (_ok, R.rootlessSocket, null, false));
+      final engine = evaluateAccess(p).engines.single;
+      expect(
+        (engine.runtime, engine.mode),
+        (EngineRuntime.podman, EngineMode.rootless),
+      );
+    });
+
+    test('an unreachable rootful Docker socket offers the docker group', () {
+      expect(_of(host(sockets: [socket(rootfulDocker)]), I.dockerSocket), (
+        _missing,
+        R.socketNotWritable,
+        'sudo usermod -aG docker ops',
+        true,
+      ));
+    });
+
+    test('BusyBox userlands get addgroup, elevated through doas', () {
+      final alpine = host(
+        distroId: 'alpine',
+        sudoKind: SudoKind.none,
+        doasPresent: true,
+        doasNonInteractive: false,
+        sockets: [socket(rootfulDocker)],
+      );
+      expect(_of(alpine, I.dockerSocket).$3, 'doas addgroup ops docker');
+    });
+
+    test('no group advice when the user is already in docker', () {
+      final member = host(
+        groups: const ['ops', 'docker'],
+        sockets: [socket(rootfulDocker)],
+      );
+      expect(_of(member, I.dockerSocket).$1, _missing);
+      expect(_of(member, I.dockerSocket).$3, isNull);
+    });
+
+    test('a rootful Podman socket has no group to suggest', () {
+      expect(
+        _of(host(sockets: [socket('/run/podman/podman.sock')]), I.dockerSocket),
+        (_missing, R.socketNotWritable, null, true),
+      );
+    });
+
+    test('any writable rootful socket makes the row root-equivalent', () {
+      final both = host(
+        sockets: [
+          socket(rootfulDocker, writable: true),
+          socket('/run/user/1000/docker.sock', writable: true),
+        ],
+      );
+      expect(_of(both, I.dockerSocket), (_ok, R.rootfulSocket, null, true));
+    });
+  });
+
+  group('runtime per host (CN-09)', () {
+    test('a CLI without any socket is reported as such', () {
+      final cli = host(tools: const {'docker': null, 'podman': '/bin/podman'});
+      expect(_of(cli, I.runtime), (
+        _missing,
+        R.engineCliWithoutSocket,
+        null,
+        false,
+      ));
+    });
+
+    test('socket paths classify into runtime and mode', () {
+      const docker = EngineRuntime.docker, podman = EngineRuntime.podman;
+      const rootful = EngineMode.rootful, rootless = EngineMode.rootless;
+      final cases = {
+        '/var/run/docker.sock': (docker, rootful),
+        '/run/docker.sock': (docker, rootful),
+        '/run/podman/podman.sock': (podman, rootful),
+        '/run/user/1001/docker.sock': (docker, rootless),
+        '/run/user/0/podman/podman.sock': (podman, rootless),
+        '/tmp/docker.sock': null,
+        '/run/user/x/docker.sock': null,
+        '/run/user/1000/podman.sock': null,
+      };
+      for (final MapEntry(key: path, value: want) in cases.entries) {
+        final e = classifyEngineSocket(socket(path));
+        expect(e == null ? null : (e.runtime, e.mode), want, reason: path);
+      }
+    });
+
+    test('absent sockets are not engines', () {
+      final p = host(sockets: [socket('/var/run/docker.sock', exists: false)]);
+      expect(evaluateAccess(p).engines, isEmpty);
+      expect(_of(p, I.runtime), _noEngine);
+    });
+  });
+}
