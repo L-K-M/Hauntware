@@ -8,17 +8,19 @@ import 'package:path_provider/path_provider.dart';
 import 'app.dart';
 import 'controllers/fleet_controller.dart';
 import 'controllers/monitoring_controller.dart';
+import 'services/macos_titlebar.dart';
 import 'services/settings_window/settings_window_host.dart';
 import 'services/settings_window/settings_window_link.dart';
 import 'services/ssh_config_source.dart';
 import 'services/stored_appearance.dart';
+import 'services/window_state.dart';
 import 'settings_window_app.dart';
 
-/// The composition root (03 §10.1): the settings-window branch, then the
-/// device settings store, the engine isolate, one `ChangeNotifier`
-/// controller per concern built over them, and `runApp`. The catalog
-/// stores, vault and the macOS titlebar join this list as their
-/// milestones land.
+/// The composition root (03 §10.1): the settings-window branch, the macOS
+/// titlebar, then the device settings store, the main window's restored
+/// frame, the engine isolate, one `ChangeNotifier` controller per concern
+/// built over them, and `runApp`. The catalog stores and vault join this
+/// list as their milestones land.
 Future<void> main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -33,21 +35,37 @@ Future<void> main(List<String> args) async {
     return;
   }
 
+  // macOS: the integrated titlebar goes in while the runner still keeps
+  // the window hidden, so it never shows the standard one first.
+  final toolbarBand = defaultTargetPlatform == TargetPlatform.macOS
+      ? await installMacosTitlebar()
+      : null;
+
   // settings.json (03 §4.10), owned by this isolate. Opened before the
   // engine isolate so the device id is minted and saved before anything
   // that could read it starts, and so the first frame is drawn in the
   // stored theme. Opening never throws; a file it cannot use is reported
   // after the first frame.
   final supportDirectory = await getApplicationSupportDirectory();
+  File supportFile(String name) =>
+      File('${supportDirectory.path}${Platform.pathSeparator}$name');
   final settings = await DeviceSettingsStore.open(
-    File(
-      '${supportDirectory.path}${Platform.pathSeparator}'
-      '$deviceSettingsFileName',
-    ),
+    supportFile(deviceSettingsFileName),
   );
   if (settings.issue case final issue?) {
     debugPrint('settings.json: ${issue.kind.name} ${issue.error ?? ''}');
   }
+
+  // Desktop only: put the main window back where it was closed (size,
+  // monitor, maximized or full screen) before the first frame, and keep
+  // tracking it. On macOS this is also what shows the window, which the
+  // runner keeps hidden until it is placed, so it runs before anything
+  // below that can throw, such as the engine handshake: a throw ahead of
+  // it would leave the app without a window.
+  await restoreMainWindow(
+    stateFile: supportFile(windowStateFileName),
+    platform: defaultTargetPlatform,
+  );
 
   // D18: all SSH, sampling, parsing, Docker, sync and rule evaluation run
   // in the engine isolate; the UI sends plain-data requests and listens.
@@ -91,6 +109,7 @@ Future<void> main(List<String> args) async {
       settingsIssue: settings.issue,
       importStoreIssue: importStoreIssue,
       openSettingsWindow: settingsWindow?.open,
+      toolbarBand: toolbarBand,
     ),
   );
 }
