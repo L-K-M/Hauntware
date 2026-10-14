@@ -18,6 +18,10 @@ final RegExp _decimal = RegExp(r'^[0-9]+$');
 /// digit or `_`, then letters, digits, `.`, `-` and `_`.
 final RegExp _domain = RegExp(r'^[A-Za-z0-9_][A-Za-z0-9_.-]*$');
 
+/// The characters, besides whitespace and control characters, that ssh's
+/// `valid_hostname()` rejects; the shell that runs the hops reads them.
+const String _shellCharacters = '\'`"\$\\;&<>|(){}';
+
 /// One jump host on an imported server's route (03 §10.1): the hop as its
 /// `ProxyJump` names it and the endpoint ssh would dial for it.
 final class JumpHop {
@@ -76,6 +80,12 @@ final class JumpHop {
 ///
 /// - is one ssh rejects, or names a port other than a decimal 1 to 65535
 ///   (ssh also resolves service names);
+/// - has a hop whose user or host holds whitespace, a quote or another
+///   character the shell reads, or starts with `-`, or a hop before the
+///   last that holds such a character as written: ssh runs the route as
+///   a `ProxyCommand` through `/bin/sh`, putting the last hop's user and
+///   host in it and the hops before as written, and the nested ssh
+///   rejects such a host name or reads it as an option;
 /// - contains `%`, which ssh expands as a token (ssh_config(5), TOKENS);
 /// - loops back through first hops to a host already on the way;
 /// - makes a route of more than 16 hops, the first hop's own route
@@ -185,16 +195,33 @@ List<_Hop>? _parseProxyJump(String value) {
   final text = (hash < 0 ? value : value.substring(0, hash)).trimRight();
   if (text.contains('%')) return null;
 
+  final names = text.split(',');
   final hops = <_Hop>[];
-  for (final name in text.split(',')) {
+  for (final (index, name) in names.indexed) {
+    // ssh hands the hops before the last to the nested ssh with `-J`, as
+    // written, and only the last one's user and host as parsed.
+    if (index < names.length - 1 && !_isShellWord(name)) return null;
+
     final hop = name.startsWith('ssh://')
         ? _parseSshUri(name.substring('ssh://'.length))
         : _parseUserHostPort(name);
-    if (hop == null) return null;
+    if (hop == null ||
+        !_isShellWord(hop.host) ||
+        hop.host.startsWith('-') ||
+        !_isShellWord(hop.user ?? '') ||
+        (hop.user?.startsWith('-') ?? false)) {
+      return null;
+    }
     hops.add((name: name, user: hop.user, host: hop.host, port: hop.port));
   }
   return hops;
 }
+
+/// Whether [text] holds no whitespace, control character or
+/// [_shellCharacters], so the shell reads it as written.
+bool _isShellWord(String text) => !text.codeUnits.any(
+  (c) => c <= 0x20 || c == 0x7f || _shellCharacters.codeUnits.contains(c),
+);
 
 /// `[user@]host[:port]` as ssh's `parse_user_host_port()` reads it: the
 /// user ends at the last `@`, and a host in brackets may hold colons.

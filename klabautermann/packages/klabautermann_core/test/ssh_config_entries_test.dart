@@ -439,6 +439,22 @@ void main() {
       );
     });
 
+    test('reads a ProxyJump from the whole rest of its line, and leaves out '
+        'a hop with whitespace or quotes', () {
+      // ssh hands ProxyJump the rest of the line as written, quotes and
+      // all, and runs the hops through /bin/sh.
+      final result = importedHostsFromSshConfig(
+        'Host spaced\n  ProxyJump a ,b\n'
+        'Host quoted\n  ProxyJump "a, b"\n'
+        'Host bare\n  ProxyJump = a,b # two hops\n',
+      );
+
+      expect(result.hosts.map((h) => (h.alias, h.proxyJump)), [
+        ('bare', 'a,b # two hops'),
+      ]);
+      expect(result.skippedCount, 2);
+    });
+
     test('leaves out a host whose route is a ProxyCommand, which the engine '
         'cannot run', () {
       // Whichever of ProxyCommand and ProxyJump ssh reads first is the

@@ -398,8 +398,8 @@ void main() {
       expect(hops('h:'), [('h:', null, 'h', 22)]);
       // An ssh URI drops `;` parameters and one trailing dot, and may end
       // in `/`.
-      expect(hops('ssh://u+x;fp=1@h.example.:2202/'), [
-        ('ssh://u+x;fp=1@h.example.:2202/', 'u x', 'h.example', 2202),
+      expect(hops('ssh://u;fp=1@h.example.:2202/'), [
+        ('ssh://u;fp=1@h.example.:2202/', 'u', 'h.example', 2202),
       ]);
       // A `#` starts a comment.
       expect(hops('h#note'), [('h', null, 'h', 22)]);
@@ -418,6 +418,35 @@ void main() {
       ]) {
         expect(hops(value), isNull, reason: value);
       }
+    });
+
+    test('refuses a hop with whitespace, a quote or another character the '
+        'shell reads', () {
+      // ssh runs the hops as a ProxyCommand through /bin/sh, and the
+      // nested ssh rejects such a host name (`valid_hostname()`) or reads
+      // a leading `-` as an option.
+      for (final value in [
+        'a, b',
+        'a ,b',
+        'a b',
+        '"bastion"',
+        "'bastion'",
+        'a;b',
+        r'u$x@h',
+        'h`id`',
+        'a|b',
+        '-oProxyCommand=x',
+        '-u@h',
+        'ssh://-h',
+        // ssh decodes `+` in a URI's user to a space.
+        'ssh://u+x@h',
+        // A hop before the last reaches the shell as written.
+        'ssh://u;fp=1@h,last',
+      ]) {
+        expect(hops(value), isNull, reason: value);
+      }
+      expect(hops('a,b'), hasLength(2));
+      expect(hops('a,ssh://u;fp=1@h'), hasLength(2));
     });
   });
 }
