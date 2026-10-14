@@ -47,8 +47,9 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'The theme was not saved: $error'",
   },
   'lib/controllers/fleet_controller.dart': {
-    // The row subtitle's address in OpenSSH notation: user@host, with an
-    // IPv6 host bracketed before :port. Machine data, not copy.
+    // The row subtitle's address: host or user@host, with :port when the
+    // port is not 22 and an IPv6 host then bracketed before it. Machine
+    // data, not copy.
     "''",
     r"'${entry.user}@'",
     r"'$login${entry.host}'",
@@ -67,7 +68,8 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   'lib/services/macos_titlebar.dart': {
     // The 04 §12.3 method channel name.
     "'klabautermann/window'",
-    // debugPrint diagnostics of a failed titlebar install.
+    // debugPrint diagnostics of a failed titlebar install or reset, and of
+    // an unavailable toolbar band state.
     r"'Integrated titlebar install failed: $error'",
     r"'Standard titlebar reset failed: $error'",
     r"'Toolbar band state unavailable: $error'",
