@@ -18,6 +18,14 @@ slice:
   reply lost to a framing error, out-of-order markers ending the
   session), and `kSamplerStartCommand` is the start line. No engine code
   uses them yet; the real-shell test runs on them.
+- Jobs model (JOB-01, JOB-02 data): `klabautermann_host`'s `mergeJobs`
+  turns a `cron` and a `timers` tick into one list of cron lines,
+  periodic scripts and timers, each with an English-free
+  `ScheduleDescription` and, for cron, next runs with DST annotations
+  in the server zone or the line's `CRON_TZ`. Timer triggers and
+  `RandomizedDelaySec` have fields but no source yet, `CRON_TZ` zones
+  other than the server's and UTC need a resolver, and nothing in the
+  engine or app consumes the list yet.
 - Access rules (M2, `klabautermann_host` `access/`): the CN-24 rows from
   a `HostProfile` (passwordless sudo, journal group with the LOG-04
   notice, Docker socket rights with the SAF-08 flag, systemd version,
