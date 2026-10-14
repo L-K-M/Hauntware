@@ -340,6 +340,13 @@ Host bastion db
             // A comment is not a second operand or a --group flag.
             'deluser deploy # leaves the group alone',
             'deluser deploy # --group',
+            // Text after a shell operator or a newline in the same quoted
+            // or substituted text is not a second operand.
+            "ssh host 'deluser bob; rm -f x'",
+            'ssh host "deluser bob && echo ok"',
+            "ssh host 'deluser bob --quiet; echo ok'",
+            r'x=$(deluser bob; echo)',
+            "cat <<EOF\nDon't panic\nEOF\ndeluser bob\necho done",
           ],
           // deluser NAME GROUP only takes NAME out of GROUP.
           misses: [
@@ -347,6 +354,7 @@ Host bastion db
             'usermod -L deploy',
             'useradd -m deploy',
             'deluser deploy docker',
+            "ssh host 'deluser deploy docker; ls'",
             'deluser --group staff',
             'delgroup staff',
             'deluser --remove-home deploy',

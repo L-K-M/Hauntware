@@ -61,6 +61,15 @@ class DangerLinter {
   static const _notOptionOperand =
       r'(?<!\s(?:-[snq]|--signal|--queue|--timeout))';
 
+  /// A deluser option or operand after blanks. Either word ends at a blank
+  /// or a shell operator, and the blanks exclude newlines, because quotes
+  /// and `$(...)` keep `deluser bob; rm x` in one segment and the text
+  /// after `;` is not a second operand. An operand is not an option,
+  /// redirection or comment.
+  static const _delOption = r'[ \t]+-[^\s;&|()]+';
+  static const _delOperand =
+      r'[ \t]+[^\s<>#;&|()-][^\s<>;&|()]*(?=[\s;&|()]|$)';
+
   static final List<_Rule> _rules = [
     _Rule(
       // A recursive/forced rm whose target is an ABSOLUTE path (/, /etc,
@@ -233,8 +242,9 @@ class DangerLinter {
       RegExp(
         r'\buserdel\b(?![^\n]*(\s-\w*r|--remove\b))'
         r'|\bdeluser(?![^\n]*\s--remove-(?:home|all-files)\b)'
-        r'(?:\s+(?!--group\b)-\S+)*\s+[^\s<>#-][^\s<>]*(?=\s|$)'
-        r'(?!(?:\s+-\S+)*\s+[^\s<>#-][^\s<>]*(?=\s|$))',
+        r'(?:(?![ \t]+--group\b)'
+        '$_delOption)*$_delOperand'
+        '(?!(?:$_delOption)*$_delOperand)',
       ),
       DangerSeverity.warning,
       'Removes a user account.',
