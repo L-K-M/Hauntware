@@ -392,6 +392,29 @@ void main() {
       handle.dispose();
     });
 
+    testWidgets('rows that arrive under focus get an active row', (
+      tester,
+    ) async {
+      final host = await _pump(tester, rows: const []);
+      for (var stop = 0; stop < 4; stop++) {
+        await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      }
+      host.update(() => host.rows = _procs);
+      await tester.pumpAndSettle();
+      expect(_ringed(tester, _row(1)), isTrue);
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.pumpAndSettle();
+      expect(_ringed(tester, _row(2)), isTrue, reason: 'Down skips no row');
+
+      // A list that empties and refills, as on a reconnect, starts over.
+      host.update(() => host.rows = const []);
+      await tester.pumpAndSettle();
+      host.update(() => host.rows = _procs);
+      await tester.pumpAndSettle();
+      expect(_ringed(tester, _row(1)), isTrue);
+    });
+
     testWidgets('the arrows, paging, Home and End move the active row and '
         'scroll it into view', (tester) async {
       // A 22 px header over a 110 px body: five rows show, a page is four.

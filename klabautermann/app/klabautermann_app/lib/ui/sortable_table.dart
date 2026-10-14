@@ -358,7 +358,11 @@ class _SortableTableState<R> extends State<SortableTable<R>> {
   void _resort() {
     _sorted = sortTableRows(widget.rows, widget.columns, widget.sort);
     final key = _activeKey;
-    if (key == null) return;
+    if (key == null) {
+      // Rows arriving while the body has focus need an active row.
+      if (_hasFocus && _sorted.isNotEmpty) _setActive(0);
+      return;
+    }
 
     final found = _sorted.indexWhere((row) => widget.rowKey(row) == key);
     if (found >= 0) {
@@ -394,17 +398,20 @@ class _SortableTableState<R> extends State<SortableTable<R>> {
       return;
     }
 
-    final current = _activeIndex ?? 0;
+    final current = _activeIndex;
     final viewport = _scroll.position.viewportDimension;
     final page = math.max(1, (viewport / _rowExtent).floor() - 1);
-    final target = switch (step) {
-      _Step.previous => current - 1,
-      _Step.next => current + 1,
-      _Step.pageUp => current - page,
-      _Step.pageDown => current + page,
-      _Step.first => 0,
-      _Step.last => _sorted.length - 1,
-    };
+    // With no active row yet, any key makes the first row active.
+    final target = current == null
+        ? 0
+        : switch (step) {
+            _Step.previous => current - 1,
+            _Step.next => current + 1,
+            _Step.pageUp => current - page,
+            _Step.pageDown => current + page,
+            _Step.first => 0,
+            _Step.last => _sorted.length - 1,
+          };
     setState(() => _setActive(target.clamp(0, _sorted.length - 1)));
     _reveal();
   }
