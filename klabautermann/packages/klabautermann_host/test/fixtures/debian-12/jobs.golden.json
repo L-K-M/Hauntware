@@ -390,7 +390,7 @@
         "nextText": null,
         "lastText": null
       },
-      "schedules": [],
+      "triggers": null,
       "randomizedDelayUs": null
     },
     {
@@ -406,7 +406,7 @@
         "nextText": null,
         "lastText": null
       },
-      "schedules": [],
+      "triggers": null,
       "randomizedDelayUs": null
     }
   ]

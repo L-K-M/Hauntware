@@ -314,14 +314,17 @@ void main() {
           _merge(null, timers: TimersSnapshot(timers: [timer])).single
               as TimerJobEntry;
       expect(entry.nextRunUtc, timer.nextUtc);
+      // Not collected is null, distinct from a timer without triggers.
+      expect(entry.triggers, isNull);
       expect(entry.schedules, isEmpty);
+      expect(entry.toJson()['triggers'], isNull);
       expect(entry.randomizedDelay, isNull);
     });
 
     test('triggers and RandomizedDelaySec serialize when collected', () {
       final entry = TimerJobEntry(
         timer: const SystemdTimer(unit: 'apt-daily.timer'),
-        schedules: [
+        triggers: [
           CalendarSchedule(normalized: '*-*-* 06,18:00:00'),
           const MonotonicSchedule(
             base: MonotonicBase.boot,
@@ -333,7 +336,7 @@ void main() {
       final json = entry.toJson();
       expect(json['kind'], 'timer');
       expect(json['randomizedDelayUs'], 43200000000);
-      expect((json['schedules']! as List).map((s) => (s as Map)['type']), [
+      expect((json['triggers']! as List).map((s) => (s as Map)['type']), [
         'calendar',
         'monotonic',
       ]);

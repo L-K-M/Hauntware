@@ -157,16 +157,15 @@ final class PeriodicJobEntry extends JobEntry {
 final class TimerJobEntry extends JobEntry {
   TimerJobEntry({
     required this.timer,
-    List<ScheduleDescription> schedules = const [],
+    List<ScheduleDescription>? triggers,
     this.randomizedDelay,
-  }) : schedules = List.unmodifiable(schedules);
+  }) : triggers = triggers == null ? null : List.unmodifiable(triggers);
 
   final SystemdTimer timer;
 
-  /// The timer's `OnCalendar=` and monotonic triggers; empty until the
-  /// timer properties are collected.
-  @override
-  final List<ScheduleDescription> schedules;
+  /// The timer's `OnCalendar=` and monotonic triggers; null until the
+  /// timer properties are collected, so an empty list means none.
+  final List<ScheduleDescription>? triggers;
 
   /// `RandomizedDelaySec=`; null until the timer properties are
   /// collected.
@@ -176,6 +175,9 @@ final class TimerJobEntry extends JobEntry {
   String get id => 'timer|${timer.unit}';
 
   @override
+  List<ScheduleDescription> get schedules => triggers ?? const [];
+
+  @override
   DateTime? get nextRunUtc => timer.nextUtc;
 
   @override
@@ -183,7 +185,7 @@ final class TimerJobEntry extends JobEntry {
     'kind': 'timer',
     'id': id,
     'timer': timer.toJson(),
-    'schedules': schedules.map((s) => s.toJson()).toList(),
+    'triggers': triggers?.map((s) => s.toJson()).toList(),
     'randomizedDelayUs': randomizedDelay?.inMicroseconds,
   };
 }

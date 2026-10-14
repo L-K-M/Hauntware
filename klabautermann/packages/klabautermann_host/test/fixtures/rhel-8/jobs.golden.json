@@ -359,7 +359,7 @@
         "nextText": "Mon 2023-11-13 21:45:58 UTC",
         "lastText": "Mon 2023-11-13 19:30:00 UTC"
       },
-      "schedules": [],
+      "triggers": null,
       "randomizedDelayUs": null
     },
     {
@@ -375,7 +375,7 @@
         "nextText": "Mon 2023-11-13 22:00:00 UTC",
         "lastText": "n/a"
       },
-      "schedules": [],
+      "triggers": null,
       "randomizedDelayUs": null
     },
     {
@@ -391,7 +391,7 @@
         "nextText": "n/a",
         "lastText": "n/a"
       },
-      "schedules": [],
+      "triggers": null,
       "randomizedDelayUs": null
     }
   ]
