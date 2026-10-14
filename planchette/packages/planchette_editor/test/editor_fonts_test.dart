@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ghost_fonts/ghost_fonts.dart';
 import 'package:planchette_editor/planchette_editor.dart';
 
 TextStyle documentStyle(WidgetTester tester) => tester
@@ -28,22 +29,28 @@ Future<void> mount(
 }
 
 void main() {
-  const expected = {
+  final bundled = BundledMonoFont.jetBrainsMono.family;
+
+  // Each platform's first own face behind the bundled family.
+  const platformFace = {
     TargetPlatform.macOS: 'Menlo',
     TargetPlatform.iOS: 'Menlo',
     TargetPlatform.windows: 'Cascadia Mono',
-    TargetPlatform.linux: 'monospace',
-    TargetPlatform.android: 'monospace',
-    TargetPlatform.fuchsia: 'monospace',
+    TargetPlatform.linux: 'DejaVu Sans Mono',
+    TargetPlatform.android: 'DejaVu Sans Mono',
+    TargetPlatform.fuchsia: 'DejaVu Sans Mono',
   };
 
-  testWidgets('the document uses a real monospace family on each platform', (
+  testWidgets('the document draws bundled JetBrains Mono on each platform', (
     tester,
   ) async {
     await mount(tester);
     final style = documentStyle(tester);
-    expect(style.fontFamily, expected[defaultTargetPlatform]);
-    expect(style.fontFamilyFallback, isNotEmpty);
+    expect(style.fontFamily, bundled);
+    expect(style.fontFamilyFallback!.take(2), [
+      bundled,
+      platformFace[defaultTargetPlatform],
+    ]);
     // Every stack ends in the generic family where the platform has one.
     expect([
       style.fontFamily,
@@ -51,7 +58,7 @@ void main() {
     ], contains('monospace'));
     expect(style.fontSize, 14);
     expect(style.height, 1.35);
-  }, variant: TargetPlatformVariant(expected.keys.toSet()));
+  }, variant: TargetPlatformVariant(platformFace.keys.toSet()));
 
   testWidgets('a host family and size replace the defaults', (tester) async {
     await mount(
@@ -62,38 +69,44 @@ void main() {
     expect(style.fontFamily, 'Host Mono');
     expect(style.fontSize, 18);
     expect(style.height, 1.35);
-    // The platform stack remains behind a host family that may be missing.
-    expect(style.fontFamilyFallback, isNotEmpty);
+    // The editor's stack remains behind a host family that may be missing.
+    expect(style.fontFamilyFallback!.first, bundled);
+  });
+
+  testWidgets("a bundled font's name draws the bundled copy", (tester) async {
+    // As a settings file stores it: the display name, any case.
+    await mount(tester, style: const TextStyle(fontFamily: ' iosevka term'));
+    final style = documentStyle(tester);
+    expect(style.fontFamily, BundledMonoFont.iosevkaTerm.family);
+    expect(style.fontFamilyFallback!.first, bundled);
   });
 
   // Ported from #15.
-  testWidgets('a size-only host style keeps the platform family', (
-    tester,
-  ) async {
+  testWidgets('a size-only host style keeps the editor family', (tester) async {
     await mount(tester, style: const TextStyle(fontSize: 16));
     final style = documentStyle(tester);
-    expect(style.fontFamily, 'Menlo');
+    expect(style.fontFamily, bundled);
     expect(style.fontSize, 16);
-  }, variant: const TargetPlatformVariant({TargetPlatform.macOS}));
+  });
 
-  testWidgets('the generic monospace name means the platform family', (
+  testWidgets('the generic monospace name means the editor family', (
     tester,
   ) async {
     // Hosts written for the old default pass the generic name, which only
     // fontconfig and Android resolve.
     for (final generic in ['monospace', 'Monospace']) {
       await mount(tester, style: TextStyle(fontFamily: generic));
-      expect(documentStyle(tester).fontFamily, 'Menlo');
+      expect(documentStyle(tester).fontFamily, bundled);
       expect(documentStyle(tester).fontFamilyFallback, isNotEmpty);
     }
-  }, variant: const TargetPlatformVariant({TargetPlatform.macOS}));
+  });
 
   testWidgets('the family follows the operating system, not the theme', (
     tester,
   ) async {
     // Installed fonts belong to the OS; a theme may style another platform.
     await mount(tester, theme: ThemeData(platform: TargetPlatform.android));
-    expect(documentStyle(tester).fontFamily, 'Menlo');
+    expect(documentStyle(tester).fontFamilyFallback, contains('Menlo'));
   }, variant: const TargetPlatformVariant({TargetPlatform.macOS}));
 
   test('review fix: every platform falls back to a fixed-width face', () {

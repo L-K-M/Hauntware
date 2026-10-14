@@ -2196,7 +2196,18 @@ unless the user enables admin mode for that panel.
   (`--iterations` from systemd 242 [R: systemd NEWS]; below that, one next
   run without `--iterations`, so RHEL 8 shows one run),
   because PID 1 evaluates zone-less expressions in the system zone [R:
-  systemd.time(7)] (6.2); phrases come from ARB templates. Other
+  systemd.time(7)] (6.2); phrases come from ARB templates, worded from
+  the cron fields as written (`*/15` and `0,15,30,45` read differently).
+  A `cron.<period>` script takes the schedules and merged next runs of
+  every `run-parts` line for its directory that does not defer to anacron.
+  When the payload shows anacron installed (a `0anacron` hook or
+  `/etc/cron.d/anacron`), Debian's `test -x /usr/sbin/anacron ||` lines
+  defer to it, and daily, weekly and monthly scripts with no line run
+  under cronie-anacron; their runs show as unknown with that reason
+  until JOB-04 (v1). Without that evidence a guarded line runs the
+  directory itself, and a script with no line has no driver. A
+  `CRON_TZ` the client cannot resolve keeps the schedule without next
+  runs, also with a reason. Other
   users' crontabs (JOB-03): `crontab -l -u <user>` through elevation, read-only.
   Run timer now (JOB-08): `systemctl start <service>` with SVC-03's guards,
   output followed from the journal.
@@ -3649,6 +3660,35 @@ colours from the theme and `FamilyPalette`, checked with `contrastRatio`;
 a semantics summary per series (current, min, max, trend); no animation
 under reduced motion.
 
+As built in M2 (`app/klabautermann_app/lib/ui/charts/`): series take the
+family's blue, orange, teal and brown; warning is its yellow and critical
+its red, deepened to `#A31515` in the light theme, where the family red
+parts too little from the amber under deuteranopia. Lines and threshold
+rules draw these at full strength (band washes are decoration), and a test
+holds each to 3:1 on the chart surfaces and each pair in a set to a CIE76
+distance of 10 under simulated protanopia, deuteranopia and tritanopia.
+The trend compares the means of the oldest and newest quarters; a change
+under 5 % of the scale is steady. The goldens draw with the pinned Flutter
+SDK's Roboto and compare on Linux only.
+
+`StackedBar` and `PressureBar` do not animate, and they take values
+rather than a ring, so their painter repaints when its runs change
+instead of on a version counter. A value the host did not
+report is hatched over the track, never left empty; in a stacked bar an
+unknown segment hatches everything past the known ones, since it cannot be
+told from free space. A stacked bar's thresholds judge its first
+segment's share of the total (used memory, used disk). Past a threshold
+the fill takes the severity colour with a 2 px stripe of the track
+through it, an icon beside the bar tells warning (triangle) from critical
+(circle) by shape, and the stacked bar's legend, the pressure bar's hover
+tooltip and both summaries name the severity (A11Y-01). The stripe, not
+the colour, shows which segment or cell crossed: the palette test keeps
+pairs apart only within the series and within the severities, and the
+light amber and orange measure a CIE76 distance of 2.0 under
+deuteranopia. Stale values turn every fill the family's graphite and drop
+the severity, since an old reading's may no longer hold. Every fill holds
+3:1 on the track (`surfaceContainerHighest`).
+
 ### 10.8 Log viewer
 
 A ring buffer capped by lines (50,000) and bytes (32 MiB) with a 16 KiB line
@@ -3660,6 +3700,27 @@ journal rows (priority, unit, PID, message, expandable fields); search with
 match stepping; font size 10 to 18 px and line-by-line screen-reader
 navigation in v1. `planchette_editor` is unsuitable for live logs (one text
 buffer, highlighting off above 200,000 characters [R: c3 §1.5]).
+
+As built in M2 (`klabautermann/packages/klabautermann_core/lib/src/logs/`):
+`LogBuffer` counts a line's bytes as the Dart VM stores it: one byte a
+UTF-16 code unit when every unit is Latin-1 (so all ASCII), two otherwise.
+The VM picks that form whether a string is decoded, split or cut, and a
+heap test checks both kinds, so the caps bound the text's memory. The
+16 KiB line cap keeps 16,384 Latin-1 or 8,192 other code units, never half
+a surrogate pair. A cut line keeps its full length for the marker, which
+the app words. A `LogBatch`'s drops become one "dropped N lines" entry
+ahead of its lines, merged into an adjacent one; it counts against the
+50,000-entry cap and holds no bytes, while eviction past a cap leaves no
+entry. Lines are stored as received and styled for display by `parseSgr`,
+each from the plain style, so no style carries from one line to the next.
+It keeps colours, bold, faint, italic, underline, inverse and
+strikethrough, ignores blink and conceal, and drops every other escape and
+control but tab. An unterminated OSC, DCS, SOS, PM or APC string hides the
+rest of its own line. The parser does not keep text visible: matching
+colours (`30;40`, or equal RGB values) still hide it, so the viewer must
+hold each span's foreground and background to a minimum contrast
+(`contrastRatio`, A11Y-04), RGB included. Full at the caps with either
+kind of text, the buffer holds about 35 MiB of the 64 MiB budget (11.4).
 
 ### 10.9 Theme
 
