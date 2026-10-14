@@ -288,7 +288,10 @@ void main() {
           ParseContext.standard,
         ).value;
         expect(profile.kernelSys, isNotNull);
-        expect(profile.tools, isNotEmpty);
+        expect(profile.tools.keys, unorderedEquals(kProbeTools));
+        // LOG-22's file tail relies on tail, which coreutils and BusyBox
+        // both ship.
+        expect(profile.toolPresent('tail'), isTrue);
         final ostype = File('/proc/sys/kernel/ostype');
         if (ostype.existsSync()) {
           expect(profile.kernelSys, ostype.readAsStringSync().trim());

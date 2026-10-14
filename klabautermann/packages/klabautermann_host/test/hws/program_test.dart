@@ -122,8 +122,20 @@ void main() {
   test('the probe tool list carries the documented tools', () {
     expect(
       kProbeTools,
-      containsAll(<String>['journalctl', 'timeout', 'docker']),
+      containsAll(<String>['journalctl', 'timeout', 'docker', 'dmesg', 'tail']),
     );
-    expect(kProbeTools, hasLength(26));
+    expect(kProbeTools, hasLength(28));
+  });
+
+  test('the probe checks exactly the listed tools', () {
+    final program = buildSamplerProgram(
+      kind: SamplerKind.slow,
+      nonce: '0123456789abcdef0123456789abcdef',
+    );
+    final loop = RegExp(
+      r'_probe_tools\(\) \{\n  _o=.*\n  for _t in ([^;]+); do',
+    ).firstMatch(program);
+    expect(loop, isNotNull);
+    expect(loop![1]!.split(' '), kProbeTools);
   });
 }

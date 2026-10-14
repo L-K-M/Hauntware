@@ -33,7 +33,9 @@ const kTimeoutAbsentMarker = 'hw_timeout=absent';
 final blockHeaderPattern = RegExp(r'^== ([a-z0-9_-]+) ==$');
 
 /// The probe's tool list (03 §6.1 "about 30 tools"): the program checks
-/// each with `command -v` and reports its path or absence.
+/// each with `command -v` and reports its path or absence. `dmesg` and
+/// `tail` back the kernel-log fallback (LOG-03) and the file tail
+/// (LOG-22) panel declarations.
 const kProbeTools = [
   'journalctl',
   'crontab',
@@ -61,6 +63,8 @@ const kProbeTools = [
   'pacman',
   'zypper',
   'nvidia-smi',
+  'dmesg',
+  'tail',
 ];
 
 /// Generates the per-session nonce: 128 bits from a caller-supplied
@@ -450,7 +454,7 @@ _probe_elev() {
 
 _probe_tools() {
   _o=''
-  for _t in journalctl crontab ss ip lsblk findmnt smartctl sensors docker podman socat timeout setsid ncdu gdu sadf logger systemd-run systemd-analyze apt-get dnf dnf5 apk pacman zypper nvidia-smi; do
+  for _t in journalctl crontab ss ip lsblk findmnt smartctl sensors docker podman socat timeout setsid ncdu gdu sadf logger systemd-run systemd-analyze apt-get dnf dnf5 apk pacman zypper nvidia-smi dmesg tail; do
     if command -v "$_t" >/dev/null 2>&1; then
       _o="$_o$NL$_t=$(command -v "$_t" 2>/dev/null)"
     else
