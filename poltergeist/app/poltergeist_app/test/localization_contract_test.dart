@@ -609,14 +609,6 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'the vault is unavailable — cannot save secrets'",
     "'the vault is unavailable — cannot duplicate servers'",
   },
-  'lib/theme/app_theme.dart': {
-    "'JetBrains Mono'",
-    "'SF Mono'",
-    "'Menlo'",
-    "'Consolas'",
-    "'DejaVu Sans Mono'",
-    "'monospace'",
-  },
   // Exception texts and audit-record fields — machine-facing data the
   // dialog renders inside an ARB-authored sentence, never standalone UI
   // copy (the reader's wording mirrors Séance's).
