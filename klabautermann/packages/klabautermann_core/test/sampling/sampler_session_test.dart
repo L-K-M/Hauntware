@@ -156,24 +156,46 @@ void main() {
     expect(session.restarts, 1);
   });
 
-  test('backs off longer after each failure, not after a reply', () async {
-    link.startFailures.addAll([StateError('refused'), StateError('refused')]);
-    open();
-    final p = await ready();
-    expect(delays, [0, 1]);
-    expect(
-      states.whereType<SamplerBackoff>().map((s) => s.cause),
-      everyElement(SamplerFault.startFailed),
+  test('keeps a healthy sampler running past its deadlines', () async {
+    // READY and the reply cancel their deadlines; a timer left running
+    // would restart this sampler.
+    open(
+      deadlines: const SamplerDeadlines(
+        ready: Duration(milliseconds: 300),
+        fastRequest: Duration(milliseconds: 300),
+      ),
     );
-
+    final p = await ready();
     final outcome = session.tick([Collector.overview]);
     p.emitText(p.reply(1, {'overview': ''}));
-    await outcome;
-    p.end(const RemoteExit(exitCode: 1));
-    await link.process(1);
-    expect(delays, [0, 1, 0]);
-    expect(session.restarts, 3);
+    expect(await outcome, isA<SamplerReplied>());
+    await Future<void>.delayed(const Duration(milliseconds: 750));
+    expect(session.state, isA<SamplerReady>());
+    expect((session.restarts, p.closeCalls), (0, 0));
   });
+
+  for (final lost in [false, true]) {
+    final answer = lost ? 'a lost reply' : 'a reply';
+    test('backs off longer after each failure, not after $answer', () async {
+      link.startFailures.addAll([StateError('refused'), StateError('refused')]);
+      open();
+      final p = await ready();
+      expect(delays, [0, 1]);
+      expect(
+        states.whereType<SamplerBackoff>().map((s) => s.cause),
+        everyElement(SamplerFault.startFailed),
+      );
+
+      // A lost reply still shows the process is alive.
+      final outcome = session.tick([Collector.overview]);
+      p.emitText(lost ? p.lostReply(1) : p.reply(1, {'overview': ''}));
+      await outcome;
+      p.end(const RemoteExit(exitCode: 1));
+      await link.process(1);
+      expect(delays, [0, 1, 0]);
+      expect(session.restarts, 3);
+    });
+  }
 
   test('ends a request as a gap when the process exits', () async {
     open();
@@ -208,12 +230,7 @@ void main() {
     open();
     final p = await ready();
     final outcome = session.tick([Collector.overview]);
-    // A byte count over the section cap is a framing error; the reader
-    // resynchronizes on the E marker (03 §6.2).
-    p.emitText(
-      '\x1e${p.nonce} B 1 1.0\n\x1e${p.nonce} S overview ok 99999999\n'
-      'junk\n\x1e${p.nonce} E 1\n',
-    );
+    p.emitText(p.lostReply(1));
     final gap = await outcome as SamplerGap;
     expect((gap.seq, gap.reason), (1, SamplerGapReason.lost));
     expect(session.state, isA<SamplerReady>());

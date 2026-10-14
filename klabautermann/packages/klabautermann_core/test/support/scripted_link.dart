@@ -100,6 +100,13 @@ final class ScriptedProcess implements RemoteProcess {
     return b.toString();
   }
 
+  /// A reply to [seq] that a framing error loses: a byte count over the
+  /// section cap, from which the reader resynchronizes on the E marker
+  /// (03 §6.2).
+  String lostReply(int seq) =>
+      '\x1e$nonce B $seq 1.0\n\x1e$nonce S overview ok 99999999\n'
+      'junk\n\x1e$nonce E $seq\n';
+
   /// The process ends on its own with [exit].
   void end([RemoteExit exit = const RemoteExit(exitCode: 0)]) {
     if (_exit.isCompleted) return;
