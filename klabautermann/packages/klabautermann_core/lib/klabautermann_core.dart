@@ -9,7 +9,8 @@ export 'src/engine/protocol.dart';
 // The log viewer's line store and SGR reader (03 §10.8).
 export 'src/logs/log_buffer.dart';
 export 'src/logs/sgr.dart';
-// The app's settings.json (03 §4.10); its default writer stays internal.
+// The app's settings.json (03 §4.10), and the atomic writer the app's
+// other device-local files (window_state.json) share with it.
 export 'src/settings/device_settings_store.dart'
     show
         DeviceSettingsIssue,
@@ -18,7 +19,8 @@ export 'src/settings/device_settings_store.dart'
         DeviceSettingsStore,
         DeviceSettingsWriter,
         deviceSettingsFileName,
-        deviceSettingsSchemaVersion;
+        deviceSettingsSchemaVersion,
+        writeFileAtomically;
 
 // 03 §3.2: the app reaches seance_core, klabautermann_host and
 // klabautermann_docker types only through this barrel, each behind an

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:klabautermann_app/app.dart';
@@ -43,7 +44,8 @@ final class AppHarness {
 /// or under a settings window host (the harness disposes it), and
 /// [settingsIssue] is what opening that store reported. [importStoreIssue]
 /// stands in for what the engine's handshake reported about its import
-/// store.
+/// store. [toolbarBand] stands in for the macOS integrated titlebar's band
+/// state.
 Future<AppHarness> pumpApp(
   WidgetTester tester, {
   Size size = const Size(1280, 800),
@@ -53,6 +55,7 @@ Future<AppHarness> pumpApp(
   DeviceSettingsIssue? settingsIssue,
   ImportStoreIssue? importStoreIssue,
   OpenSettingsWindow? openSettingsWindow,
+  ValueListenable<bool>? toolbarBand,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -78,6 +81,7 @@ Future<AppHarness> pumpApp(
       settingsIssue: settingsIssue,
       importStoreIssue: importStoreIssue,
       openSettingsWindow: openSettingsWindow,
+      toolbarBand: toolbarBand,
     ),
   );
   await tester.pumpAndSettle();
