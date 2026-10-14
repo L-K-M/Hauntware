@@ -17,3 +17,13 @@
   A damaged settings file is kept aside as `settings.json.corrupt-<time>`
   and you are told at startup; a file Klabautermann cannot read, or one
   from a newer version, is left as it is.
+- On macOS the window's titlebar is part of the app: the traffic lights
+  sit in a band above the fleet rail, and full screen gives the band back
+  to the content.
+- The desktop window opens where you closed it, at the same size, and
+  maximized or full screen if it was. A window whose display is gone
+  opens fully on one that is still connected.
+- Desktop menus: Settings… (⌘, on macOS, Ctrl+, on Linux and Windows),
+  Import from ~/.ssh/config, and on Linux and Windows a File menu with
+  Quit. On macOS the menu bar also has About, Enter Full Screen and the
+  window commands.

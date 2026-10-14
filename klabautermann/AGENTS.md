@@ -113,6 +113,18 @@ after every Flutter upgrade: both fixes rely on private engine selectors.
   window's isolate. The runners (copied from Séance, docs/SHARED.md) hide
   the window on close and never destroy it while the app runs: on Linux,
   disposing a second engine terminates the EGL display both share.
+- **The macOS main window starts hidden** (03 §10.2): its runner keeps it
+  invisible until `restoreMainWindow` (`lib/services/window_state.dart`)
+  has placed it, and the integrated titlebar goes in before that. Anything
+  that throws or hangs in `main` before the restore leaves the app
+  without a window on macOS. Both run only in the app's engine, after the
+  settings-window branch.
+- **Menus are a rendering of the command registry** (03 §10.2,
+  `lib/ui/menus/`): a new menu item or app shortcut is an `AppCommand`
+  with a menu placement, never a native item. `PlatformMenuBar` replaces
+  the storyboard's menu on macOS, so `MainMenu.xib` items do nothing.
+  Register only commands with a real action; a toggle needs the
+  `klabautermann/menu_checks` peer (Poltergeist's `MenuChecks.swift`).
 
 <!-- shared-rules:start -->
 
