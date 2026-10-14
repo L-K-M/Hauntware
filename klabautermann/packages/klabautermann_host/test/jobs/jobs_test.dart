@@ -244,6 +244,10 @@ void main() {
         '17 * * * * root cd / && run-parts --report /etc/cron.hourly\n'
         '25 6 * * * root test -x /usr/sbin/anacron || '
         'run-parts --report /etc/cron.daily';
+    // Debian's anacron package ships this file and the 0anacron hooks.
+    const anacronD =
+        'anacron\t30 7 * * * root test -x /etc/init.d/anacron && '
+        'systemctl start anacron';
 
     test('a direct run-parts line lends its schedule and runs', () {
       final jobs = _merge(_cron(etc: debianEtc, dirs: 'hourly 0anacron'));
@@ -259,12 +263,35 @@ void main() {
     });
 
     test('a line that defers to anacron leaves the runs unknown', () {
-      final jobs = _merge(_cron(etc: debianEtc, dirs: 'daily apt-compat'));
+      final jobs = _merge(
+        _cron(etc: debianEtc, cronD: anacronD, dirs: 'daily apt-compat'),
+      );
       final script = jobs.whereType<PeriodicJobEntry>().single;
       expect(script.driverIds, ['cron|/etc/crontab|1']);
       expect(script.schedules, isEmpty);
       expect(script.nextRuns, isEmpty);
       expect(script.runsUnknown, JobRunsUnknown.anacron);
+    });
+
+    test('without anacron installed a guarded line runs the directory', () {
+      final jobs = _merge(_cron(etc: debianEtc, dirs: 'daily apt-compat'));
+      final script = jobs.whereType<PeriodicJobEntry>().single;
+      expect(script.schedules.single.text, '25 6 * * *');
+      expect(script.nextRunUtc, DateTime.utc(2026, 6, 2, 6, 25));
+    });
+
+    test('cronie-anacron runs daily, weekly and monthly from no line', () {
+      // RHEL 8 and later: /etc/crontab holds no run-parts line, and
+      // /etc/cron.hourly/0anacron starts anacron.
+      final jobs = _merge(
+        _cron(
+          cronD: '0hourly\t01 * * * * root run-parts /etc/cron.hourly',
+          dirs: 'hourly 0anacron\ndaily logrotate\nmonthly x',
+        ),
+      ).whereType<PeriodicJobEntry>().toList();
+      expect(jobs[0].nextRuns, isNotEmpty);
+      expect(jobs[1].runsUnknown, JobRunsUnknown.anacron);
+      expect(jobs[2].runsUnknown, JobRunsUnknown.anacron);
     });
 
     test('a directory nothing runs has no driver', () {

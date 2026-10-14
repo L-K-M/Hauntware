@@ -25,11 +25,13 @@ enum JobRunsUnknown {
   /// No minute within the evaluation horizon matches (`0 0 30 2 *`).
   noRunInHorizon,
 
-  /// Every `run-parts` line for the directory defers to anacron, whose
-  /// timing the MVP does not model (JOB-04 is v1).
+  /// anacron runs the directory, and the MVP does not model its timing
+  /// (JOB-04 is v1). The payload shows anacron installed, and the
+  /// directory's `run-parts` lines all defer to it or, for the daily,
+  /// weekly and monthly directories, none exists (cronie-anacron).
   anacron,
 
-  /// No cron line runs the directory through `run-parts`.
+  /// Neither a cron line nor anacron runs the directory.
   noDriver,
 }
 
@@ -230,9 +232,16 @@ List<JobEntry> mergeJobs({
     );
   }
 
+  final dirEntries = cron?.dirEntries ?? const <CronDirEntry>[];
+  // Package files that only an installed anacron leaves: the 0anacron
+  // hooks (Debian's daily/weekly/monthly, cronie-anacron's hourly) and
+  // Debian's /etc/cron.d/anacron.
+  final anacron =
+      dirEntries.any((e) => e.name == '0anacron') ||
+      cronEntries.any((e) => e.job.source == '/etc/cron.d/anacron');
   final periodic = [
-    for (final entry in cron?.dirEntries ?? const <CronDirEntry>[])
-      _periodicEntry(entry, cronEntries, runCount),
+    for (final entry in dirEntries)
+      _periodicEntry(entry, cronEntries, runCount, anacron: anacron),
   ];
 
   return [
@@ -321,29 +330,33 @@ ServerZone? _cronZone(
 /// A periodic script with the schedules of the `run-parts` lines for its
 /// directory that do not defer to anacron, and the first [runCount] of
 /// their runs. Debian's `test -x /usr/sbin/anacron || run-parts ...`
-/// lines do nothing while anacron is installed, and anacron's own delays
-/// are v1 (JOB-04). Without runs, the first direct line's reason stands.
+/// lines do nothing while [anacron] is installed and run the directory
+/// otherwise; anacron's own delays are v1 (JOB-04). Without runs, the
+/// first direct line's reason stands.
 PeriodicJobEntry _periodicEntry(
   CronDirEntry entry,
   List<CronJobEntry> cronEntries,
-  int runCount,
-) {
+  int runCount, {
+  required bool anacron,
+}) {
   final directory = _periodDirectory(entry.period);
   final drivers = cronEntries
       .where((e) => _runsParts(e.job.command, directory))
       .toList();
   final driverIds = [for (final d in drivers) d.id];
   final direct = drivers
-      .where((d) => !d.job.command.contains('anacron'))
+      .where((d) => !(anacron && d.job.command.contains('anacron')))
       .toList();
 
   if (direct.isEmpty) {
+    // anacron's default anacrontab runs the daily, weekly and monthly
+    // directories, not the hourly one.
+    final byAnacron =
+        drivers.isNotEmpty || (anacron && entry.period != CronPeriod.hourly);
     return PeriodicJobEntry(
       entry: entry,
       driverIds: driverIds,
-      runsUnknown: drivers.isEmpty
-          ? JobRunsUnknown.noDriver
-          : JobRunsUnknown.anacron,
+      runsUnknown: byAnacron ? JobRunsUnknown.anacron : JobRunsUnknown.noDriver,
     );
   }
   final instants = <DateTime>{};

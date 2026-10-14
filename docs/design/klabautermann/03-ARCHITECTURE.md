@@ -1958,9 +1958,13 @@ unless the user enables admin mode for that panel.
   systemd.time(7)] (6.2); phrases come from ARB templates, worded from
   the cron fields as written (`*/15` and `0,15,30,45` read differently).
   A `cron.<period>` script takes the schedules and merged next runs of
-  every `run-parts` line for its directory that does not defer to anacron;
-  behind Debian's `test -x /usr/sbin/anacron ||` lines, or with no such
-  line, its runs show as unknown with that reason until JOB-04 (v1). A
+  every `run-parts` line for its directory that does not defer to anacron.
+  When the payload shows anacron installed (a `0anacron` hook or
+  `/etc/cron.d/anacron`), Debian's `test -x /usr/sbin/anacron ||` lines
+  defer to it, and daily, weekly and monthly scripts with no line run
+  under cronie-anacron; their runs show as unknown with that reason
+  until JOB-04 (v1). Without that evidence a guarded line runs the
+  directory itself, and a script with no line has no driver. A
   `CRON_TZ` the client cannot resolve keeps the schedule without next
   runs, also with a reason. Other
   users' crontabs (JOB-03): `crontab -l -u <user>` through elevation, read-only.

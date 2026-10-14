@@ -208,7 +208,7 @@
       "driverIds": [],
       "schedules": [],
       "nextRuns": [],
-      "runsUnknown": "noDriver"
+      "runsUnknown": "anacron"
     },
     {
       "kind": "periodic",
@@ -219,7 +219,7 @@
       "driverIds": [],
       "schedules": [],
       "nextRuns": [],
-      "runsUnknown": "noDriver"
+      "runsUnknown": "anacron"
     },
     {
       "kind": "periodic",
@@ -230,7 +230,7 @@
       "driverIds": [],
       "schedules": [],
       "nextRuns": [],
-      "runsUnknown": "noDriver"
+      "runsUnknown": "anacron"
     }
   ]
 }
