@@ -43,8 +43,8 @@ Host bastion db
   HostName 10.0.0.5
   ProxyJump prod
 ''';
-      final hosts = SshConfigImporter.parse(text);
-      expect(hosts.map((h) => h.alias), ['prod', 'bastion']);
+      final hosts = SshConfigImporter.parse(text).hosts;
+      expect(hosts.map((h) => h.alias), ['prod', 'bastion', 'db']);
 
       final prod = hosts.first;
       expect(prod.hostName, 'prod.example.com');
@@ -52,29 +52,209 @@ Host bastion db
       expect(prod.user, 'deploy');
       expect(prod.identityFile, '~/.ssh/prod_ed25519');
 
-      final bastion = hosts[1];
-      expect(bastion.effectiveHost, '10.0.0.5');
-      expect(bastion.proxyJump, 'prod');
+      // `ssh bastion` and `ssh db` both use the block, so each is a host
+      // with its settings.
+      for (final alias in ['bastion', 'db']) {
+        final host = hosts.singleWhere((h) => h.alias == alias);
+        expect(host.effectiveHost, '10.0.0.5', reason: alias);
+        expect(host.proxyJump, 'prod', reason: alias);
+      }
+    });
+
+    test('imports each name a Host line gives, not its patterns', () {
+      // ssh skips the block for a name a negated pattern matches, so
+      // `db-old` and `web-1` are not hosts here; `db` counts once.
+      final hosts = SshConfigImporter.parse(
+        'Host web-* db !db-old db-old app db web-1 !web-? ""\n'
+        '  HostName 10.0.0.9\n',
+      ).hosts;
+      expect(hosts.map((h) => h.alias), ['db', 'app']);
+      expect(hosts.map((h) => h.hostName), ['10.0.0.9', '10.0.0.9']);
+    });
+
+    test('reports every name of a block it skips', () {
+      final result = SshConfigImporter.parse('Host a b *.c\n  Port 22a\n');
+      expect(result.hosts, isEmpty);
+      expect(result.skipped.map((s) => (s.host.alias, s.value, s.line)), [
+        ('a', '22a', 2),
+        ('b', '22a', 2),
+      ]);
     });
 
     test('supports Key=value form and quoted values', () {
       const text = 'Host x\n  HostName=x.example.com\n  User="root"\n';
-      final h = SshConfigImporter.parse(text).single;
+      final h = SshConfigImporter.parse(text).hosts.single;
       expect(h.hostName, 'x.example.com');
       expect(h.user, 'root');
+    });
+
+    test('accepts one = with whitespace around it, as ssh does', () {
+      const text =
+          'Host = x\n'
+          '  HostName = "x.example.com"\n'
+          '  User =deploy\n'
+          '  Port= 2222\n'
+          '  IdentityFile  =  ~/.ssh/id\n';
+      final h = SshConfigImporter.parse(text).hosts.single;
+      expect(h.alias, 'x');
+      expect(h.hostName, 'x.example.com');
+      expect(h.user, 'deploy');
+      expect(h.port, 2222);
+      expect(h.identityFile, '~/.ssh/id');
+
+      // ssh's strdelim() skips one `=`; a second one is an argument.
+      final doubled = SshConfigImporter.parse(
+        'Host y\n  HostName == y.example.com\n',
+      ).hosts.single;
+      expect(doubled.hostName, '=');
+    });
+
+    test('splits and unquotes arguments as ssh does', () {
+      const text =
+          'Host x\n'
+          // Quotes keep spaces and `#` in one argument.
+          '  IdentityFile "~/My Keys/#1"\n'
+          // Single quotes count too, as in ssh's argv_split().
+          "  User 'ops'\n"
+          // A `#` starts a comment only where an argument would start.
+          '  HostName x.example.com # comment\n'
+          '  ProxyJump jump#2\n';
+      final h = SshConfigImporter.parse(text).hosts.single;
+      expect(h.identityFile, '~/My Keys/#1');
+      expect(h.user, 'ops');
+      expect(h.hostName, 'x.example.com');
+      expect(h.proxyJump, 'jump#2');
+
+      // A comment ends a Host line too, and a tab separates names.
+      final names = SshConfigImporter.parse(
+        'Host web # prod\nHost a\tb\n',
+      ).hosts;
+      expect(names.map((h) => h.alias), ['web', 'a', 'b']);
+
+      // A backslash escapes a space or a quote; any other one is kept.
+      final escaped = SshConfigImporter.parse(r'''
+Host y
+  IdentityFile ~/My\ Keys/\"id\"\x
+''').hosts.single;
+      expect(escaped.identityFile, r'~/My Keys/"id"\x');
+
+      // ssh rejects an unterminated quote; the importer reads it to the end
+      // of the line rather than dropping the value.
+      final open = SshConfigImporter.parse(
+        'Host z\n  User "ops\n',
+      ).hosts.single;
+      expect(open.user, 'ops');
+
+      // A directive with no value is absent, so the alias is the address.
+      final blank = SshConfigImporter.parse(
+        'Host b\n  HostName=\n',
+      ).hosts.single;
+      expect(blank.hostName, isNull);
+      expect(blank.effectiveHost, 'b');
+
+      // So is an empty quoted one.
+      final empty = SshConfigImporter.parse(
+        'Host e\n  HostName ""\n',
+      ).hosts.single;
+      expect(empty.hostName, isNull);
+      expect(empty.effectiveHost, 'e');
+    });
+
+    test('reads Port as ssh does: a decimal 1 to 65535 or a service', () {
+      final result = SshConfigImporter.parse(
+        'Host top\n  Port 65535\n'
+        // ssh's strtonum() reads base 10 and allows a sign.
+        'Host padded\n  Port 0022\n'
+        'Host signed\n  Port +2222\n'
+        'Host named\n  Port ssh\n'
+        'Host web\n  Port https\n',
+      );
+      expect(result.hosts.map((h) => (h.alias, h.port)), [
+        ('top', 65535),
+        ('padded', 22),
+        ('signed', 2222),
+        ('named', 22),
+        ('web', 443),
+      ]);
+      expect(result.skipped, isEmpty);
+    });
+
+    test('skips and reports a host whose Port ssh rejects', () {
+      // ssh rejects the whole config over each of these ("Bad port").
+      const values = {
+        '-1': '-1',
+        '0': '0',
+        '65536': '65536',
+        '22a': '22a',
+        '0x16': '0x16',
+        'SSH': 'SSH',
+        '99999999999999999999': '99999999999999999999',
+        '""': '',
+      };
+      for (final MapEntry(key: written, value: value) in values.entries) {
+        final result = SshConfigImporter.parse(
+          'Host bad\n'
+          '  HostName bad.example.com\n'
+          '  Port $written\n'
+          'Host good\n',
+        );
+        expect(result.hosts.map((h) => h.alias), ['good'], reason: written);
+
+        final skipped = result.skipped.single;
+        expect(skipped.reason, SkippedHostReason.invalidPort, reason: written);
+        expect(skipped.value, value, reason: written);
+        expect(skipped.line, 3, reason: written);
+        expect(skipped.host.alias, 'bad', reason: written);
+        expect(skipped.host.hostName, 'bad.example.com', reason: written);
+        expect(skipped.host.port, isNull, reason: written);
+      }
+    });
+
+    test('skips a Port service name other than ssh, http or https', () {
+      // ssh asks getservbyname(3), which may know `www`; the importer cannot.
+      final result = SshConfigImporter.parse('Host w\n  Port www\n');
+      expect(result.hosts, isEmpty);
+      expect(result.skipped.single.value, 'www');
+    });
+
+    test('a rejected Port skips its block even beside a valid one', () {
+      final result = SshConfigImporter.parse(
+        'Host a\n  Port 22a\n  Port 2222\n'
+        'Host b\n  Port 2222\n  Port=\n'
+        // The first rejected Port is the one reported.
+        'Host c\n  Port 22a\n  Port 0x16\n',
+      );
+      expect(result.hosts, isEmpty);
+      expect(result.skipped.map((s) => (s.host.alias, s.value, s.line)), [
+        ('a', '22a', 2),
+        ('b', '', 6),
+        ('c', '22a', 8),
+      ]);
+    });
+
+    test('checks Port only in the blocks it imports', () {
+      // ssh would reject these too, but no imported host reads them.
+      final result = SshConfigImporter.parse(
+        'Port 0\n'
+        'Host *\n  Port 22a\n'
+        'Match all\n  Port x\n'
+        'Host ok\n',
+      );
+      expect(result.hosts.map((h) => h.alias), ['ok']);
+      expect(result.skipped, isEmpty);
     });
 
     test('converts to a ServerConfig with reference-not-store key auth', () {
       final h = SshConfigImporter.parse(
         'Host x\n HostName h\n IdentityFile ~/.ssh/id\n',
-      ).single;
+      ).hosts.single;
       final cfg = h.toServerConfig(id: 'id1', now: 5);
       expect(cfg.authMethod, AuthMethod.privateKey);
       expect(cfg.identityFilePath, '~/.ssh/id');
       // OpenSSH tries the agent for a keyless host, so imports do the same.
       final keylessCfg = SshConfigImporter.parse(
         'Host y\n HostName h\n',
-      ).single.toServerConfig(id: 'id2', now: 5);
+      ).hosts.single.toServerConfig(id: 'id2', now: 5);
       expect(keylessCfg.authMethod, AuthMethod.agent);
     });
   });

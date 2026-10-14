@@ -258,6 +258,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get sshImportLimitInvalidPort => 'Cannot import: port outside 1–65535';
 
   @override
+  String get sshImportLimitUnsupportedPort =>
+      'Cannot import: port must be 1–65535, ssh, http or https';
+
+  @override
   String get sshImportLimitWildcardDefaults =>
       'Won’t behave as in ssh: defaults from a top-level or Host * block are not inherited';
 

@@ -298,6 +298,9 @@ jobs:
           dart test tool/import_guard/test
           dart test tool/protocol_guard/test
           dart test tool/license_gate/test
+          # The shared localization contract scanner is a standalone
+          # pure-Dart package (03 §3.5 F1b), so it resolves in place.
+          (cd tool/l10n_contract && dart pub get && dart analyze && dart test)
           dart run tool/import_guard/bin/check.dart
           dart run tool/protocol_guard/bin/check.dart
           # Marker-only in the gate like PR CI: the full license check

@@ -390,6 +390,17 @@ jobs:
       - name: Test dependency guard
         working-directory: .
         run: dart test tool/import_guard/test
+      # The shared localization contract scanner (03 §3.5 F1b) is a
+      # standalone pure-Dart package, so it resolves in place.
+      - name: Resolve localization contract scanner
+        working-directory: tool/l10n_contract
+        run: dart pub get
+      - name: Analyze localization contract scanner
+        working-directory: tool/l10n_contract
+        run: dart analyze
+      - name: Test localization contract scanner
+        working-directory: tool/l10n_contract
+        run: dart test
       # Contract: the guard must exit non-zero on any 03 §1 violation —
       # including scan errors and a missing scan root — so this gate fails
       # closed.
