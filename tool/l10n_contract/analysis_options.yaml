@@ -1,4 +1,4 @@
-# Root analysis options for the suite tooling under tool/.
+# Analysis options for the l10n_contract package, using the root lints.
 include: package:lints/recommended.yaml
 
 analyzer:

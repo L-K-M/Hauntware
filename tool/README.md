@@ -72,7 +72,7 @@ The shared localization contract scanner (03 §3.5 F1b), extracted from
 Poltergeist's app-local `localization_contract_test.dart` so a second app
 reuses it instead of copying it. It is a standalone pure-Dart package
 (its own `pubspec.yaml`, `publish_to: none`, no Flutter), so it resolves
-and runs in place, before the root `dart pub get`:
+and runs in place, independently of the root `dart pub get`:
 
 ```sh
 cd tool/l10n_contract && dart pub get && dart analyze && dart test
