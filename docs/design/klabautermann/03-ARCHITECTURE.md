@@ -3528,7 +3528,11 @@ the engine in `engine_isolate.dart` beside it):
   user with a retry flag. `host` and `port` name the machine that asks,
   a jump host while the engine connects through it. `PromptWithdrawn`
   (expired, or the attempt ended) closes a prompt the engine no longer
-  waits on. `FleetEntry` gains the nullable `jumpRoute` (hop names in
+  waits on. A prompt expires 2 minutes after it is sent [E], OpenSSH's
+  default `LoginGraceTime` (sshd_config(5)), after which such a server
+  has dropped the unauthenticated connection anyway. Its `promptId` is a
+  UUID, so an answer meant for an earlier engine's prompt matches
+  nothing. `FleetEntry` gains the nullable `jumpRoute` (hop names in
   dial order), `authKind` (agent, identity file, stored key, password),
   `searchText` (built in the engine with `serverSearchHaystack`, which
   the app may not import, 3.2) and `locatorConflict` (the ids of entries
