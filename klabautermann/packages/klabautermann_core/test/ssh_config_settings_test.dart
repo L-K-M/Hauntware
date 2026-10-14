@@ -271,6 +271,47 @@ void main() {
       );
     });
 
+    test('an unclosed quote or an empty Host pattern leaves out the names '
+        'its block applies to', () {
+      // ssh rejects the config over either: argv_split() over the quote
+      // ("invalid quotes"), oHost over the pattern ("empty argument").
+      for (final config in [
+        'Host t\n  HostName "10.0.0.5\n',
+        'Host t\n  ProxyJump "a\n',
+        'Host t\n  User u\nHost *\n  IdentityFile \'~/.ssh/k\n',
+        'Host "t\n  HostName 10.0.0.5\n',
+        'Host "" t\n  HostName 10.0.0.5\n',
+        'Host t \'\'\n',
+      ]) {
+        expect(
+          _resolve(config, 't'),
+          UnresolvedReason.rejectedLine,
+          reason: config,
+        );
+      }
+      expect(
+        _resolve('Match originalhost "t\n  User x\n', 't'),
+        UnresolvedReason.mayApply,
+      );
+      // In a block that does not apply, as for any line ssh rejects.
+      expect(_resolve('Host t\nHost "" db\n  User "u\n', 't'), (
+        't',
+        22,
+        null,
+        null,
+        null,
+      ));
+      // Closed, escaped or commented quotes are fine.
+      expect(
+        _resolve(
+          'Host t\n  HostName "10.0.0.5" # it\'s\n  User \\"u\n'
+              '  IdentityFile \'~/.ssh/my key\'\n',
+          't',
+        ),
+        ('10.0.0.5', 22, '"u', '~/.ssh/my key', null),
+      );
+    });
+
     test('resolves every alias of a large config quickly', () {
       // 20,000 hosts behind 300 wildcard blocks, each matching some.
       final config = StringBuffer();

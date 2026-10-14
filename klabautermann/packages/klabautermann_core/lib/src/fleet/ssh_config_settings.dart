@@ -63,10 +63,11 @@ const Map<String, _Keyword> _keywords = {
 /// Why [SshConfigSettings.resolve] gives no settings for a name.
 enum UnresolvedReason {
   /// A block that applies holds a line ssh rejects: a `Port` the import
-  /// cannot read (see [SshConfigSettings]), or a `HostName`, `User`,
+  /// cannot read (see [SshConfigSettings]), a `HostName`, `User`,
   /// `IdentityFile`, `ProxyJump`, `ProxyCommand` or
   /// `CanonicalizeHostname` with no value, or with more than one where
-  /// ssh takes one.
+  /// ssh takes one, one of those lines or the `Host` line with a quote
+  /// left open, or a `Host` line with an empty pattern.
   rejectedLine,
 
   /// The `HostName` holds a token other than `%h` or `%%`, or ends in
@@ -153,12 +154,13 @@ final class UnresolvedSshSettings extends SshConfigResolution {
 /// name unresolved.
 ///
 /// ssh rejects the whole config over some lines wherever they stand: a
-/// `Port` it cannot read, or a directive with no value or more values
-/// than it takes. A `Port` here is a decimal 1 to 65535 or one of the
-/// service names `ssh`, `http` and `https`, as Séance's
-/// `SshConfigImporter` reads it (ssh resolves other names too). Such a
-/// line leaves unresolved only the names its block applies to; lines in
-/// other blocks, and directives the engine does not map, are not checked.
+/// `Port` it cannot read, a directive with no value or more values than
+/// it takes, a quote left open, or an empty `Host` pattern. A `Port` here
+/// is a decimal 1 to 65535 or one of the service names `ssh`, `http` and
+/// `https`, as Séance's `SshConfigImporter` reads it (ssh resolves other
+/// names too). Such a line leaves unresolved only the names its block
+/// applies to; lines in other blocks, and directives the engine does not
+/// map, are not checked.
 /// Nor is the system-wide `/etc/ssh/ssh_config`, which ssh reads after
 /// this file and which can set what this file leaves unset, read at all.
 final class SshConfigSettings {
@@ -174,12 +176,23 @@ final class SshConfigSettings {
       final line = SshConfigLine.tryParse(raw);
       if (line == null) continue;
 
+      final rest = _rest(raw);
       switch (line.keyword) {
         case 'host':
-          blocks.add(_HostBlock(blocks.length, line.arguments));
+          blocks.add(
+            _HostBlock(
+              blocks.length,
+              line.arguments,
+              rejected: _hasOpenQuote(rest) || line.arguments.contains(''),
+            ),
+          );
           aliases.addAll(SshConfigImporter.hostAliases(line.arguments));
         case 'match':
-          final block = _MatchBlock.parse(blocks.length, line.arguments);
+          final block = _MatchBlock.parse(
+            blocks.length,
+            line.arguments,
+            openQuote: _hasOpenQuote(rest),
+          );
           rereads |= block.wantsSecondPass;
           blocks.add(block);
         default:
@@ -190,19 +203,22 @@ final class SshConfigSettings {
           blocks.last.lines.add((
             keyword: keyword,
             arguments: line.arguments,
-            rest: _rest(raw),
+            rest: rest,
+            openQuote: _hasOpenQuote(rest),
           ));
       }
     }
 
-    // Only blocks with lines the engine reads can change a setting. A Host
+    // Only blocks with lines the engine reads can change a setting, and a
+    // Host line ssh rejects leaves out the names it applies to. A Host
     // block whose patterns hold no wildcard can only match those names, so
     // a name considers those blocks and the rest, which keeps resolving
     // every alias of a large config fast.
     final always = <_Block>[];
     final byName = <String, List<_Block>>{};
     for (final block in blocks) {
-      if (block.lines.isEmpty) continue;
+      final rejected = block is _HostBlock && block.rejected;
+      if (block.lines.isEmpty && !rejected) continue;
 
       switch (block) {
         case _HostBlock(:final names?):
@@ -252,6 +268,9 @@ final class SshConfigSettings {
 
       final applies = block.applies(name, reading);
       if (applies == _Applies.no) continue;
+      if (block case _HostBlock(rejected: true)) {
+        return const UnresolvedSshSettings(UnresolvedReason.rejectedLine);
+      }
 
       for (final line in block.lines) {
         final reason = reading.read(line, mayApply: applies == _Applies.maybe);
@@ -266,9 +285,14 @@ final class SshConfigSettings {
 enum _Applies { yes, no, maybe }
 
 /// One line the engine reads: its directive, its arguments as ssh splits
-/// them, and the rest of the line as written, which ssh hands
-/// `ProxyJump` and `ProxyCommand` whole.
-typedef _Line = ({_Keyword keyword, List<String> arguments, String rest});
+/// them, the rest of the line as written, which ssh hands `ProxyJump` and
+/// `ProxyCommand` whole, and whether a quote in it is left open.
+typedef _Line = ({
+  _Keyword keyword,
+  List<String> arguments,
+  String rest,
+  bool openQuote,
+});
 
 sealed class _Block {
   _Block(this.order);
@@ -290,7 +314,7 @@ final class _Top extends _Block {
 }
 
 final class _HostBlock extends _Block {
-  _HostBlock(super.order, List<String> patterns)
+  _HostBlock(super.order, List<String> patterns, {required this.rejected})
     : _patterns = [
         for (final pattern in patterns)
           if (pattern.isNotEmpty)
@@ -307,6 +331,10 @@ final class _HostBlock extends _Block {
   }
 
   final List<({bool negated, _Glob glob})> _patterns;
+
+  /// Whether ssh rejects the `Host` line, and so the whole config: a quote
+  /// is left open, or a pattern is empty.
+  final bool rejected;
 
   /// Whether a pattern that is not negated holds a wildcard.
   late final bool wildcard;
@@ -341,8 +369,13 @@ final class _MatchBlock extends _Block {
     required this.wantsSecondPass,
   });
 
-  /// `match_cfg_line()`'s reading of a `Match` line's [arguments].
-  factory _MatchBlock.parse(int order, List<String> arguments) {
+  /// `match_cfg_line()`'s reading of a `Match` line's [arguments]; ssh
+  /// rejects one with an [openQuote] before it reads them.
+  factory _MatchBlock.parse(
+    int order,
+    List<String> arguments, {
+    required bool openQuote,
+  }) {
     final criteria = <({_Criterion kind, bool negated, _HostList? list})>[];
     var wantsSecondPass = false;
     var attributes = 0;
@@ -351,7 +384,7 @@ final class _MatchBlock extends _Block {
     _MatchBlock done({bool malformed = false}) => _MatchBlock._(
       order,
       criteria,
-      malformed: malformed,
+      malformed: malformed || openQuote,
       wantsSecondPass: wantsSecondPass,
     );
 
@@ -479,6 +512,7 @@ final class _Reading {
     final single = line.arguments.length == 1 && line.arguments.first != ''
         ? line.arguments.first
         : null;
+    if (line.openQuote) return UnresolvedReason.rejectedLine;
     if (line.keyword == _Keyword.include) return UnresolvedReason.include;
     if (switch (line.keyword) {
       _Keyword.port => single == null || _parsePort(single) == null,
@@ -591,6 +625,44 @@ String _rest(String line) {
     index++;
   }
   return text.substring(index);
+}
+
+/// Whether `argv_split()` finds a quote in [text], the arguments of a
+/// config line, left open at its end ("invalid quotes"). A `#` that starts
+/// an argument ends the line; a backslash escapes a quote, a backslash,
+/// and outside quotes a space.
+bool _hasOpenQuote(String text) {
+  var index = 0;
+  while (index < text.length) {
+    final character = text[index];
+    if (character == ' ' || character == '\t') {
+      index++;
+      continue;
+    }
+    if (character == '#') return false;
+
+    String? quote;
+    for (; index < text.length; index++) {
+      final c = text[index];
+      final next = index + 1 < text.length ? text[index + 1] : '';
+      if (c == r'\') {
+        final escapes =
+            next == '"' ||
+            next == "'" ||
+            next == r'\' ||
+            (quote == null && next == ' ');
+        if (escapes) index++;
+      } else if (quote == null && (c == ' ' || c == '\t')) {
+        break;
+      } else if (quote == null && (c == '"' || c == "'")) {
+        quote = c;
+      } else if (c == quote) {
+        quote = null;
+      }
+    }
+    if (quote != null) return true;
+  }
+  return false;
 }
 
 /// ssh's expansion of a `HostName` [value] for [name] (`ssh.c` calls

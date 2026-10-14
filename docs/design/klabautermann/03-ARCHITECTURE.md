@@ -3517,7 +3517,8 @@ the engine in `engine_isolate.dart` beside it):
     a `%` token or a `${VAR}`, which ssh fills in from the connection and
     the environment; or a block that applies holds a line ssh rejects (a
     `Port` other than a decimal 1 to 65535 or `ssh`, `http` or `https`,
-    or a value missing or doubled). ssh rejects the whole config over
+    a value missing or doubled, a quote left open, or a `Host` line with
+    an empty pattern). ssh rejects the whole config over
     such a line wherever it stands; the import checks only the blocks
     that apply to a host. It does not read the system-wide
     `/etc/ssh/ssh_config`, which ssh reads after the user's file and
