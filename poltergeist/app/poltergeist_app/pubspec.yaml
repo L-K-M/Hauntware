@@ -49,6 +49,9 @@ dependencies:
   # Server badges and accents, shared with Séance.
   ghost_marks:
     path: ../../../planchette/packages/ghost_marks
+  # The server list's sectioning, shared with Séance.
+  ghost_servers:
+    path: ../../../planchette/packages/ghost_servers
   poltergeist_core:
     path: ../../packages/poltergeist_core
   poltergeist_sync:
