@@ -1060,7 +1060,9 @@ enum LinkClosedReason {
   connectFailed,
 }
 
-/// What the engine found behind a [LinkClosed] (03 §5.3).
+/// What the engine found behind a [LinkClosed]. The first five are the
+/// connect failures protocol version 3 classifies (03 §10.1); the last
+/// three are 03 §5.3's client limitations.
 enum LinkFailureKind {
   /// The connection was refused, or the host had no route or no address.
   unreachable,

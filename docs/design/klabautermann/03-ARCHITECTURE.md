@@ -3465,9 +3465,10 @@ the engine in `engine_isolate.dart` beside it):
   own typed values: `degraded(reason)`, `backoff(until)`,
   `needsUser(promptId, kind)`, `blocked(reason)` (endpoint changed, host
   key changed) and `closed(reason, failure)`, whose optional failure kind
-  names 5.3's classifications (unreachable, timed out, credentials
-  rejected or unavailable, host key declined, unsupported or only
-  insecure algorithms, key exchange timed out). `ready` carries no
+  names this version's connect failures (unreachable, timed out,
+  credentials rejected or unavailable, host key declined) and 5.3's
+  three client limitations (unsupported or only insecure algorithms, key
+  exchange timed out). `ready` carries no
   values, because a learned session limit is `degraded` and what the host
   can do arrives with the sampling protocol; `needsUser` names its prompt
   by id instead of carrying it (5.1's `needsUser(prompt)`), because the
