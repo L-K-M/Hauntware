@@ -503,14 +503,15 @@ Proposals awaiting the owner close the section; they are not decisions.
   maths (the wrap and reset rules of 6.4) and computes every derived value
   (percentages, load per core, the memory breakdown) before an event
   leaves it; the UI paints values and never holds counters. "Client-side"
-  in 02 CN-04 means the engine isolate. The v2 `Sample` still carries the
-  raw counters of an `OverviewSnapshot`
+  in 02 CN-04 means the engine isolate. The v2 `Sample` carried the raw
+  counters of an `OverviewSnapshot`
   (`klabautermann_core/lib/src/engine/protocol.dart:293-308` [V]); the
-  sampling protocol replaces it. Why: parsing already runs in the engine
-  (6.5), the previous reading and `btime` belong with the sampler session
-  that sees restarts and gaps, and the v1 rollups (D29) need the same
-  values. *Rejected:* rates in the app's controllers (a second owner of
-  the reset and gap rules, and per-tick work on the UI isolate).
+  v3 sampling protocol replaced it (10.1). Why: parsing already runs in
+  the engine (6.5), the previous reading and `btime` belong with the
+  sampler session that sees restarts and gaps, and the v1 rollups (D29)
+  need the same values. *Rejected:* rates in the app's controllers (a
+  second owner of the reset and gap rules, and per-tick work on the UI
+  isolate).
 - **D44. The engine owns `Sample.seq`.** A `Sample`'s `seq` is a per-server
   counter the engine assigns; it rises monotonically for the engine's
   lifetime, across sampler restarts and reconnects. The HWS/1 request
@@ -1068,10 +1069,11 @@ import 'package:seance_core/catalog.dart' show syncLocalDirectory;
 import 'package:seance_core/seance_core.dart' show uuidV4;
 ```
 
-The barrel's `klabautermann_host` export shows `Collector`, `CoreSnapshot`
-and `OverviewSnapshot`; each list grows only as a milestone wires a type
-in. No `ghost_*` package depends on `seance_core`; `klabautermann_core`
-is a product package, and the curated lines above are its only
+The barrel's `klabautermann_host` export shows only the plain-data types
+that sampling results and `HostProfileChanged` carry (10.1); each list
+changes only as a milestone wires a type in or retires one. No
+`ghost_*` package depends on `seance_core`; `klabautermann_core` is a
+product package, and the curated lines above are its only
 `seance_core` edge. Poltergeist's and
 Séance's edges to the new shared packages appear as each extraction
 switches them (3.5). The Rust workspace
@@ -3522,8 +3524,9 @@ the engine in `engine_isolate.dart` beside it):
   without the kernel's cumulative stall counter, and uptime), each rate
   map null until a previous reading exists, so unknown never sums to
   zero; for `procs`, per-process CPU shares with the start time PRC-02
-  checks; and the parsed tables for `fs`, `identity`, `units`,
-  `failedUnits`, `timers` and `cron`. A
+  checks; for `identity`, the strings SYS-01 shows, resolved in the
+  engine so the host's JSON never crosses (6.5); and the parsed tables
+  for `fs`, `units`, `failedUnits`, `timers` and `cron`. A
   stream whose collector reports a section status other than `ok` (6.2)
   gets `CollectorUnavailable` with that status as an enum and the
   collector's error output, control characters stripped. Requests and

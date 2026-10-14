@@ -31,7 +31,8 @@ export 'src/settings/instance_lock.dart'
 
 // 03 §3.2: the app reaches seance_core, klabautermann_host and
 // klabautermann_docker types only through this barrel, each behind an
-// explicit `show` list that grows as its milestone wires the types in.
+// explicit `show` list that changes as a milestone wires types in or
+// retires them.
 // The host types are the plain data that sampling results and
 // HostProfileChanged carry (D52).
 export 'package:klabautermann_host/klabautermann_host.dart'
