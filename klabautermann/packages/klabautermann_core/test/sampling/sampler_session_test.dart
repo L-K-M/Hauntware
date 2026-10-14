@@ -47,6 +47,8 @@ void main() {
       },
     );
     session.states.listen(states.add);
+    // Per opened session: the deadline and delay tests never open one.
+    addTearDown(session.close);
     return session;
   }
 
@@ -65,8 +67,6 @@ void main() {
     delays = [];
     states = [];
   });
-
-  tearDown(() => session.close());
 
   test('starts with the constant command and program, then READY', () async {
     open().start();
