@@ -19,6 +19,11 @@ final RegExp _decimal = RegExp(r'^[0-9]+$');
 /// digit or `_`, then letters, digits, `.`, `-` and `_`.
 final RegExp _domain = RegExp(r'^[A-Za-z0-9_][A-Za-z0-9_.-]*$');
 
+/// U+FFFD, which the app's UTF-8 decoding of the config puts in place of
+/// bytes that are not UTF-8. A hop's host holding one is a name the
+/// import leaves out; its user, which ssh signs in as, is refused here.
+const String _replacement = '\u{FFFD}';
+
 /// What `isspace()` finds in the C locale.
 const String _cWhitespace = ' \t\n\v\f\r';
 
@@ -99,6 +104,8 @@ final class JumpHop {
 ///   last on from the value as written, up to its last comma, so the
 ///   comment reaches the shell;
 /// - contains `%`, which ssh expands as a token (ssh_config(5), TOKENS);
+/// - has a hop whose user holds U+FFFD, in place of bytes that are not
+///   UTF-8, which ssh would sign in with;
 /// - loops back through first hops to a host already on the way;
 /// - has a hop, as written, that is the host or hop it leads to, which
 ///   ssh refuses as a jumphost loop (see [_isJumpLoop]);
@@ -343,7 +350,8 @@ List<_Hop>? _parseProxyJump(String value) {
         !_isShellWord(hop.host) ||
         hop.host.startsWith('-') ||
         !_isShellWord(hop.user ?? '') ||
-        (hop.user?.startsWith('-') ?? false)) {
+        (hop.user?.startsWith('-') ?? false) ||
+        (hop.user?.contains(_replacement) ?? false)) {
       return null;
     }
     hops.add((name: name, user: hop.user, host: hop.host, port: hop.port));

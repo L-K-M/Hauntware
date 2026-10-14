@@ -122,6 +122,11 @@ enum UnresolvedReason {
   /// bytes that are not UTF-8: ssh compares the bytes themselves, which
   /// the import cannot know, and distinct names can decode alike.
   undecodedName,
+
+  /// The `HostName`, `User` or first `IdentityFile` ssh would use holds
+  /// U+FFFD: ssh dials and signs in with the bytes themselves, which the
+  /// import cannot know.
+  undecodedValue,
 }
 
 /// What [SshConfigSettings.resolve] found for a name.
@@ -167,7 +172,8 @@ final class UnresolvedSshSettings extends SshConfigResolution {
 /// patterns matches the name and no negated one does (`*` and `?` are
 /// wildcards, matched case-sensitively on UTF-8 bytes, as `match_pattern()`
 /// does). The app decodes the file with U+FFFD for bytes that are not
-/// UTF-8, so a name holding one is unresolved, and a wildcard pattern
+/// UTF-8, so a name holding one is unresolved, as is one whose `HostName`,
+/// `User` or first `IdentityFile` holds one, and a wildcard pattern
 /// holding one may match any name. Whichever of `ProxyJump` and
 /// `ProxyCommand` ssh reads first is the route. `IdentityFile` adds a key
 /// file each time; ssh tries them in order, and the engine signs in with
@@ -344,6 +350,10 @@ final class SshConfigSettings {
     final host = reading.matchHost;
     if (host == null) {
       return const UnresolvedSshSettings(UnresolvedReason.hostNameToken);
+    }
+    // The name holds none, so the `HostName` does.
+    if (host.contains(_replacement)) {
+      return const UnresolvedSshSettings(UnresolvedReason.undecodedValue);
     }
 
     if (_includes) {
@@ -823,6 +833,10 @@ final class _Reading {
     }
     if (key != null && !isImportedIdentityFile(key)) {
       return const UnresolvedSshSettings(UnresolvedReason.identityFileToken);
+    }
+    if ((user?.contains(_replacement) ?? false) ||
+        (key?.contains(_replacement) ?? false)) {
+      return const UnresolvedSshSettings(UnresolvedReason.undecodedValue);
     }
 
     return ResolvedSshSettings(

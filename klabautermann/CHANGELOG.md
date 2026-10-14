@@ -28,10 +28,11 @@
   evaluate could change, one whose port, user, key or jump host would
   change when ssh reads the file a second time for the name it dials (as
   Fedora's and RHEL's `/etc/ssh/ssh_config` make it do), unless that
-  reading would route it through itself, one whose
-  `HostName` or `IdentityFile` needs something it cannot fill in, or one
-  whose `ProxyJump` ssh would refuse or it cannot follow (a route of
-  more than 16 hops included). A file that starts with a byte-order
+  reading would route it through itself, one whose `HostName` or
+  `IdentityFile` needs something it cannot fill in, one whose
+  `HostName`, `User` or `IdentityFile` holds bytes that are not UTF-8,
+  or one whose `ProxyJump` ssh would refuse or it cannot follow (a route
+  of more than 16 hops included). A file that starts with a byte-order
   mark, which ssh refuses, imports no host.
 - Desktop settings window: on macOS, Linux and Windows, Settings opens in
   a window of its own, and a theme change there applies to the app.

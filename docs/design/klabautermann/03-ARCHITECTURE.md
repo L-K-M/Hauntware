@@ -3554,7 +3554,9 @@ the engine in `engine_isolate.dart` beside it):
     a `%` token or a `${VAR}`, which ssh fills in from the connection
     and the environment; its name holds U+FFFD, which the app decodes in
     place of bytes that are not UTF-8 (ssh compares the bytes, and
-    distinct names decode alike), or a wildcard pattern holding U+FFFD
+    distinct names decode alike), or so does its `HostName`, `User` or
+    first `IdentityFile`, or a hop's user (ssh dials and signs in with
+    the bytes), or a wildcard pattern holding U+FFFD
     may apply and could set a value first; or a block that applies holds
     a line ssh rejects (a `Port` other than a decimal 1 to 65535 or
     `ssh`, `http` or `https`, a value missing or doubled, a quote left

@@ -169,6 +169,22 @@ void main() {
       expect(result.skippedCount, 3);
     });
 
+    test('leaves out a host whose values hold bytes that are not UTF-8', () {
+      // The app decodes Latin-1 é and ö as U+FFFD; ssh would dial and sign
+      // in with the bytes themselves, here or for a jump host.
+      final result = importedHostsFromSshConfig(
+        'Host x\n  HostName caf\u{FFFD}.example\n'
+        'Host y\n  User j\u{FFFD}rg\n'
+        'Host z\n  IdentityFile ~/.ssh/k\u{FFFD}y\n'
+        'Host behind-user\n  HostName 10.0.0.5\n  ProxyJump j\u{FFFD}rg@gw\n'
+        'Host behind-y\n  HostName 10.0.0.6\n  ProxyJump y\n'
+        'Host fine\n  HostName 10.0.0.7\n  ProxyJump gw\n',
+      );
+
+      expect(result.hosts.map((h) => h.alias), ['fine']);
+      expect(result.skippedCount, 5);
+    });
+
     test('a byte-order mark makes ssh reject the whole file', () {
       // ssh reads the mark's bytes as the start of the first keyword:
       // "Bad configuration option: \357\273\277host". The app keeps the

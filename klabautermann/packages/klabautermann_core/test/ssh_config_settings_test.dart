@@ -90,6 +90,34 @@ void main() {
       expect(_applies('Host caf\u{FFFD}', 'web'), isFalse);
     });
 
+    test('a HostName, User or IdentityFile holding U+FFFD leaves the name '
+        'out', () {
+      // ssh dials and signs in with the bytes themselves, which the
+      // import cannot know.
+      for (final line in [
+        'HostName caf\u{FFFD}.example',
+        'HostName %h.caf\u{FFFD}',
+        'User j\u{FFFD}rg',
+        'IdentityFile ~/.ssh/k\u{FFFD}y',
+        'IdentityFile none\n  IdentityFile ~/.ssh/k\u{FFFD}y',
+      ]) {
+        expect(
+          _resolve('Host x\n  $line\n', 'x'),
+          UnresolvedReason.undecodedValue,
+          reason: line,
+        );
+      }
+      // Only the values ssh uses count.
+      expect(
+        _resolve(
+          'Host x\n  User a\n  IdentityFile ~/.ssh/a\n'
+              '  User j\u{FFFD}rg\n  IdentityFile ~/.ssh/k\u{FFFD}y\n',
+          'x',
+        ),
+        ('x', 22, 'a', '~/.ssh/a', null),
+      );
+    });
+
     test('splits lines as readconf.c does', () {
       // Only space, tab, CR, LF and form feed end a line, and only space
       // and tab separate arguments: U+00A0, U+FEFF, \v and other Unicode
