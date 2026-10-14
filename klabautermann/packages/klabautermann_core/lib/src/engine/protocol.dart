@@ -11,7 +11,6 @@ import 'package:klabautermann_host/klabautermann_host.dart'
         HostProfile,
         LoadAvg,
         NetRate,
-        Pressure,
         SystemdUnit,
         TimersSnapshot,
         UnitsSnapshot;
@@ -1398,7 +1397,7 @@ final class CoreResult extends SampleResult {
 
   /// Pressure stall information; null where the kernel has none, which is
   /// normal (7.1).
-  final Pressure? cpuPressure, ioPressure, memoryPressure;
+  final StallShares? cpuPressure, ioPressure, memoryPressure;
 
   /// How long the host has been up.
   final Duration? uptime;
@@ -1426,6 +1425,24 @@ final class MemoryUsage {
   final int? totalBytes, usedBytes, availableBytes;
   final int? buffersBytes, cachedBytes, sharedBytes;
   final int? swapTotalBytes, swapUsedBytes;
+}
+
+/// One `/proc/pressure` file as 7.1 shows it: the shares of time some or
+/// all tasks stalled. The kernel's cumulative stall counter (`total`)
+/// stays in the engine (D43). A line the file lacks stays null.
+@immutable
+final class StallShares {
+  const StallShares({this.some, this.full});
+
+  final StallAverages? some, full;
+}
+
+/// Stall shares in percent over the last 10, 60 and 300 seconds.
+@immutable
+final class StallAverages {
+  const StallAverages(this.avg10, this.avg60, this.avg300);
+
+  final double avg10, avg60, avg300;
 }
 
 Map<String, V>? _unmodifiable<V>(Map<String, V>? map) =>

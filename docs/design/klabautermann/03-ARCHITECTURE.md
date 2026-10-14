@@ -3515,8 +3515,9 @@ the engine in `engine_isolate.dart` beside it):
   stream holding derived values (D43): for `overview` and `core`, CPU
   percentages, memory in bytes with `MemAvailable` semantics, load per
   core and byte rates per interface (`core` adds per-core CPU, disk rates,
-  pressure and uptime), each rate map null until a previous reading
-  exists, so unknown never sums to zero; for `procs`, per-process CPU
+  the pressure averages without the kernel's cumulative stall counter, and
+  uptime), each rate map null until a previous reading exists, so unknown
+  never sums to zero; for `procs`, per-process CPU
   shares with the start time PRC-02 checks; and the parsed tables for
   `fs`, `identity`, `units`, `failedUnits`, `timers` and `cron`. A
   stream whose collector reports a section status other than `ok` (6.2)

@@ -5,7 +5,7 @@ import 'dart:typed_data';
 
 import 'package:klabautermann_core/klabautermann_core.dart';
 import 'package:klabautermann_host/klabautermann_host.dart'
-    show CronJob, FsMount, PressureLine, SystemdTimer;
+    show CronJob, FsMount, SystemdTimer;
 import 'package:test/test.dart';
 
 /// Echoes every message back; protocol values cross a real isolate boundary
@@ -278,9 +278,7 @@ void main() {
                       writeBytesPerSecond: 1024,
                     ),
                   },
-                  ioPressure: const Pressure(
-                    some: PressureLine(avg10: 1, avg60: 2, avg300: 3),
-                  ),
+                  ioPressure: const StallShares(some: StallAverages(1, 2, 3)),
                   uptime: const Duration(days: 3),
                   bootedAt: DateTime.utc(2026, 10, 11, 12),
                 ),
@@ -840,5 +838,8 @@ void main() {
     expect(names, contains('HostProfile'));
     // Collector holds argument validators, ServerZone its `offsetAt`.
     expect(names.intersection({'Collector', 'ServerZone'}), isEmpty);
+    // Pressure holds the cumulative stall counter, which stays in the
+    // engine (D43); StallShares carries the averages.
+    expect(names, isNot(contains('Pressure')));
   });
 }
