@@ -3,9 +3,11 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:klabautermann_app/services/instance_guard.dart';
+import 'package:klabautermann_app/services/window_state.dart';
 import 'package:klabautermann_app/ui/already_running_app.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 
+import 'support/fake_window.dart';
 import 'support/harness.dart';
 import 'support/native_sources.dart';
 
@@ -51,25 +53,76 @@ void main() {
       });
     }
 
-    test('comes after the settings window\'s branch and before the settings '
-        'store and the engine', () {
+    test('comes after the settings window\'s branch and before the '
+        'titlebar, the settings store, the window state and the engine', () {
       final main = readSource('lib/main.dart');
       final branch = main.indexOf('if (args.contains(settingsWindowArgument))');
       final lock = main.indexOf('lockInstanceFor(');
       final held = main.indexOf('case InstanceLockHeld():');
+      final titlebar = main.indexOf('installMacosTitlebar(');
       final settings = main.indexOf('DeviceSettingsStore.open(');
+      final restore = main.indexOf('restoreMainWindow(');
       final engine = main.indexOf('IsolateEngineClient.spawn(');
 
       expect(branch, isNonNegative);
       expect(lock, greaterThan(branch));
-      expect(settings, greaterThan(lock));
-      expect(engine, greaterThan(lock));
-      // A second instance runs the notice and returns before either.
+      for (final later in [titlebar, settings, restore, engine]) {
+        expect(later, greaterThan(lock));
+      }
+      // A second instance shows its window, runs the notice and returns
+      // before all of them: window_state.json is the running instance's.
       expect(held, greaterThan(lock));
+      final heldReturn = main.indexOf('return;', held);
+      expect(heldReturn, lessThan(titlebar));
+      final heldPath = main.substring(held, heldReturn);
       expect(
-        main.substring(held, settings),
-        contains(RegExp(r'runApp\(\s*AlreadyRunningApp\([^]*?\);\s*return;')),
+        heldPath,
+        contains(
+          RegExp(
+            r'await showMainWindowUnrestored\(\s*platform: '
+            r'defaultTargetPlatform,?\s*\);\s*runApp\(\s*AlreadyRunningApp\(',
+          ),
+        ),
       );
+      for (final name in ['restoreMainWindow(', 'windowStateFileName']) {
+        expect(heldPath, isNot(contains(name)), reason: name);
+      }
+    });
+  });
+
+  group('a second instance\'s window', () {
+    test('is shown on macOS where the runner placed it, with no window '
+        'state read or written', () async {
+      final window = FakeWindow();
+      await showMainWindowUnrestored(
+        platform: TargetPlatform.macOS,
+        window: window,
+      );
+      expect(window.calls, ['ensureInitialized', 'show', 'focus']);
+      expect(window.listening, isFalse);
+    });
+
+    for (final platform in [
+      TargetPlatform.linux,
+      TargetPlatform.windows,
+      TargetPlatform.android,
+      TargetPlatform.iOS,
+    ]) {
+      test('is left to the runner on ${platform.name}', () async {
+        final window = FakeWindow();
+        await showMainWindowUnrestored(platform: platform, window: window);
+        expect(window.calls, isEmpty);
+      });
+    }
+
+    test('stays as it is when the window plugin fails, without '
+        'throwing', () async {
+      final window = FakeWindow()..failEnsureInitialized = true;
+      await showMainWindowUnrestored(
+        platform: TargetPlatform.macOS,
+        window: window,
+      );
+      expect(window.calls, ['ensureInitialized']);
     });
   });
 

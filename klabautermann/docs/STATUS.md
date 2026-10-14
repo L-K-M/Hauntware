@@ -166,12 +166,14 @@ slice:
 - Single desktop instance (03 §4.10): on macOS, Linux and Windows the
   composition root takes an exclusive, non-blocking advisory lock on
   `instance.lock` in the support directory (`klabautermann_core`'s
-  `InstanceLock`) after the settings window's branch and before
-  `settings.json` opens and the engine isolate starts, and holds it while
-  the process lives; the system drops it when the process ends, a crash
-  included. A second instance opens neither file and shows only that
-  Klabautermann is already running, with a Quit button, which closes the
-  first-launch device-id race. A lock that cannot be taken for another
+  `InstanceLock`) after the settings window's branch and before the
+  macOS titlebar, `settings.json`, `window_state.json` and the engine
+  isolate, and holds it while the process lives; the system drops it when
+  the process ends, a crash included. A second instance touches none of
+  them: its window keeps the runner's frame and standard titlebar (on
+  macOS Dart shows it, since the runner keeps it hidden) and shows only
+  that Klabautermann is already running, with a Quit button, which closes
+  the first-launch device-id race. A lock that cannot be taken for another
   reason (an unwritable support directory, a file system without locks)
   lets the app run unguarded and says so in a startup toast. Phones take
   no lock. A relaunch does not bring the running window forward (the

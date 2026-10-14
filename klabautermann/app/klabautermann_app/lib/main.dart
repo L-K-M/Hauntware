@@ -41,11 +41,11 @@ Future<void> main(List<String> args) async {
   }
 
   // One desktop instance (03 §4.10): the support directory's lock comes
-  // before settings.json opens and the engine isolate starts, so a second
-  // instance never reads or writes either, and the device id below is
-  // minted by one process only. The lock lasts as long as this process.
-  // When it cannot be taken at all, the app runs unguarded and says so
-  // after the first frame rather than refusing to start.
+  // before settings.json, window_state.json and the engine isolate, so a
+  // second instance never reads or writes any of them, and the device id
+  // below is minted by one process only. The lock lasts as long as this
+  // process. When it cannot be taken at all, the app runs unguarded and
+  // says so after the first frame rather than refusing to start.
   final supportDirectory = await getApplicationSupportDirectory();
   InstanceLockUnavailable? instanceLockIssue;
   switch (await lockInstanceFor(defaultTargetPlatform, supportDirectory)) {
@@ -53,6 +53,10 @@ Future<void> main(List<String> args) async {
       break;
     case InstanceLockHeld():
       debugPrint('Klabautermann is already running; this instance quits.');
+      // The frame is the running instance's to restore and save, so this
+      // window stays where the runner put it, with the standard titlebar;
+      // on macOS it still has to be shown.
+      await showMainWindowUnrestored(platform: defaultTargetPlatform);
       runApp(
         AlreadyRunningApp(
           onQuit: () => unawaited(

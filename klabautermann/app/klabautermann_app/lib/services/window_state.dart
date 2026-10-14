@@ -122,8 +122,9 @@ GhostWindowLifecycle mainWindowLifecycle({
 /// a [platform] with no window to remember. The lifecycle stays alive while
 /// the app runs because the window adapter holds it as its listener.
 ///
-/// Call it once per launch in the app's isolate, before `runApp` and never
-/// in the settings window's engine. Never throws: a failure is logged and
+/// Call it once per launch in the app's isolate, before `runApp`, and
+/// never in the settings window's engine or in a second instance, which
+/// uses [showMainWindowUnrestored]. Never throws: a failure is logged and
 /// the window keeps the runner's placement. On macOS it is also what makes
 /// the hidden-at-launch window visible (`MainFlutterWindow.swift`'s `order`
 /// override), and the lifecycle shows the window even when restoring
@@ -156,4 +157,29 @@ Future<GhostWindowLifecycle?> restoreMainWindow({
     // window on macOS.
   }
   return lifecycle;
+}
+
+/// Shows the main window where the runner placed it, without
+/// `window_state.json`: for a second desktop instance (03 §4.10), which
+/// must neither read nor overwrite the frame the running instance owns.
+/// Only macOS needs it, because its runner keeps the window hidden until
+/// Dart shows it (`MainFlutterWindow.swift`'s `order` override); the Linux
+/// and Windows runners show theirs on the first frame. Never throws: a
+/// failure is logged. [window] is a test seam.
+Future<void> showMainWindowUnrestored({
+  required TargetPlatform platform,
+  GhostWindowAdapter? window,
+}) async {
+  if (platform != TargetPlatform.macOS) return;
+
+  window ??= WindowManagerGhostWindowAdapter();
+  try {
+    // window_manager's macOS calls reach the window only once the plugin
+    // has been initialized with it.
+    await window.ensureInitialized();
+    await window.show();
+    await window.focus();
+  } on Object catch (error) {
+    debugPrint('Window state: $error');
+  }
 }
