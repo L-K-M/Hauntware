@@ -968,12 +968,13 @@ final class _ConfigLine {
     if (text == null) return (null, null);
 
     var at = 0;
-    while (at < text.length && !'$_whitespace"='.contains(text[at])) {
+    while (at < text.length && !_endsKeyword(text.codeUnitAt(at))) {
       at++;
     }
     if (at == text.length) return (text, null);
 
-    if (text[at] == '"') {
+    final delimiter = text.codeUnitAt(at);
+    if (delimiter == _doubleQuote) {
       final unquoted = text.substring(0, at) + text.substring(at + 1);
       final close = unquoted.indexOf('"', at);
       if (close < 0) return (null, null);
@@ -985,11 +986,21 @@ final class _ConfigLine {
 
     var rest = _skip(text.substring(at + 1), _whitespace);
     // Only one `=` may separate.
-    if (text[at] != '=' && rest.startsWith('=')) {
+    if (delimiter != _equals && rest.startsWith('=')) {
       rest = _skip(rest.substring(1), _whitespace);
     }
     return (text.substring(0, at), rest);
   }
+
+  /// Whether `strdelim()` ends a token at [unit]: [_whitespace], a double
+  /// quote or `=`.
+  static bool _endsKeyword(int unit) =>
+      unit == _space ||
+      unit == _tab ||
+      unit == _carriageReturn ||
+      unit == _lineFeed ||
+      unit == _doubleQuote ||
+      unit == _equals;
 
   /// [text] without the [characters] that start it.
   static String _skip(String text, String characters) {
@@ -997,7 +1008,7 @@ final class _ConfigLine {
     while (at < text.length && characters.contains(text[at])) {
       at++;
     }
-    return text.substring(at);
+    return at == 0 ? text : text.substring(at);
   }
 
   /// `argv_split()` on [text], ending at a comment.
@@ -1005,34 +1016,45 @@ final class _ConfigLine {
     final arguments = <String>[];
     var index = 0;
     while (index < text.length) {
-      final character = text[index];
-      if (character == ' ' || character == '\t') {
+      final character = text.codeUnitAt(index);
+      if (character == _space || character == _tab) {
         index++;
         continue;
       }
-      if (character == '#') break;
+      if (character == _hash) break;
 
-      final argument = StringBuffer();
-      String? quote;
-      for (; index < text.length; index++) {
-        final c = text[index];
-        final next = index + 1 < text.length ? text[index + 1] : '';
-        if (c == r'\') {
+      // Most arguments hold no quote or backslash: take them whole.
+      var end = index;
+      while (end < text.length && !_splitsArgument(text.codeUnitAt(end))) {
+        end++;
+      }
+      if (end == text.length || !_quotesArgument(text.codeUnitAt(end))) {
+        arguments.add(text.substring(index, end));
+        index = end;
+        continue;
+      }
+
+      final argument = StringBuffer(text.substring(index, end));
+      int? quote;
+      for (index = end; index < text.length; index++) {
+        final c = text.codeUnitAt(index);
+        final next = index + 1 < text.length ? text.codeUnitAt(index + 1) : 0;
+        if (c == _backslash) {
           final escapes =
-              next == '"' ||
-              next == "'" ||
-              next == r'\' ||
-              (quote == null && next == ' ');
+              next == _doubleQuote ||
+              next == _singleQuote ||
+              next == _backslash ||
+              (quote == null && next == _space);
           if (escapes) index++;
-          argument.write(escapes ? next : c);
-        } else if (quote == null && (c == ' ' || c == '\t')) {
+          argument.writeCharCode(escapes ? next : c);
+        } else if (quote == null && (c == _space || c == _tab)) {
           break;
-        } else if (quote == null && (c == '"' || c == "'")) {
+        } else if (quote == null && (c == _doubleQuote || c == _singleQuote)) {
           quote = c;
         } else if (c == quote) {
           quote = null;
         } else {
-          argument.write(c);
+          argument.writeCharCode(c);
         }
       }
       arguments.add(argument.toString());
@@ -1040,6 +1062,16 @@ final class _ConfigLine {
     }
     return (arguments: arguments, openQuote: false);
   }
+
+  /// Whether `argv_split()` ends a plain argument at [unit], or must read
+  /// it closely from there.
+  static bool _splitsArgument(int unit) =>
+      unit == _space || unit == _tab || _quotesArgument(unit);
+
+  /// Whether [unit] is a quote or a backslash, which `argv_split()` drops
+  /// or reads as an escape.
+  static bool _quotesArgument(int unit) =>
+      unit == _doubleQuote || unit == _singleQuote || unit == _backslash;
 }
 
 /// ssh's expansion of a `HostName` [value] for [name] (`ssh.c` calls
@@ -1112,6 +1144,15 @@ const int _star = 0x2a;
 const int _question = 0x3f;
 const int _bang = 0x21;
 const int _comma = 0x2c;
+const int _space = 0x20;
+const int _tab = 0x09;
+const int _carriageReturn = 0x0d;
+const int _lineFeed = 0x0a;
+const int _doubleQuote = 0x22;
+const int _singleQuote = 0x27;
+const int _backslash = 0x5c;
+const int _equals = 0x3d;
+const int _hash = 0x23;
 
 /// [text] as its UTF-8 bytes, one character for each byte: ssh compares
 /// bytes, so a `?` matches one byte. ASCII is its own bytes.
