@@ -94,8 +94,7 @@ enum UnresolvedReason {
   /// mark, a `ProxyJump` or `CanonicalizeHostname` line anywhere is one
   /// ssh rejects, or a block that applies holds a line ssh rejects: a
   /// `Port` the import cannot read (see [SshConfigSettings]), a
-  /// `HostName`, `User`,
-  /// `IdentityFile`, `ProxyJump`, `ProxyCommand` or
+  /// `HostName`, `User`, `IdentityFile`, `ProxyJump`, `ProxyCommand` or
   /// `CanonicalizeHostname` with no value, or with more than one where
   /// ssh takes one, one of those lines or the `Host` line with a quote
   /// left open, or a `Host` line with an empty pattern.
@@ -232,9 +231,9 @@ final class UnresolvedSshSettings extends SshConfigResolution {
 /// Lines split as `readconf.c` splits them ([_ConfigLine]): only space,
 /// tab, CR, LF and form feed are stripped from a line's end, and only
 /// space and tab separate arguments, so other whitespace, such as U+00A0,
-/// is part of a value.
-/// ssh reads a byte-order mark at the top of the file as part of the first
-/// keyword and rejects the whole config, so every name is unresolved.
+/// is part of a value. ssh reads a byte-order mark at the top of the file
+/// as part of the first keyword and rejects the whole config, so every
+/// name is unresolved.
 ///
 /// ssh rejects the whole config over some lines wherever they stand: a
 /// `Port` it cannot read, a directive with no value or more values than it
