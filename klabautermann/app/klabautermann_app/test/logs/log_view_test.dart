@@ -28,6 +28,21 @@ List<String> _lines(int from, int count) => [
   for (var i = from; i < from + count; i++) 'line $i',
 ];
 
+Widget _app(
+  LogViewController logs, {
+  LogWrap wrap = LogWrap.off,
+  LogLevel? Function(LogLine line)? levelOf,
+  Brightness brightness = Brightness.light,
+}) => MaterialApp(
+  debugShowCheckedModeBanner: false,
+  theme: _theme(brightness),
+  localizationsDelegates: AppLocalizations.localizationsDelegates,
+  supportedLocales: AppLocalizations.supportedLocales,
+  home: Material(
+    child: LogView(controller: logs, wrap: wrap, levelOf: levelOf),
+  ),
+);
+
 Future<LogViewController> _pump(
   WidgetTester tester, {
   LogViewController? controller,
@@ -43,15 +58,7 @@ Future<LogViewController> _pump(
   addTearDown(logs.dispose);
 
   await tester.pumpWidget(
-    MaterialApp(
-      debugShowCheckedModeBanner: false,
-      theme: _theme(brightness),
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
-      supportedLocales: AppLocalizations.supportedLocales,
-      home: Material(
-        child: LogView(controller: logs, wrap: wrap, levelOf: levelOf),
-      ),
-    ),
+    _app(logs, wrap: wrap, levelOf: levelOf, brightness: brightness),
   );
   return logs;
 }
@@ -71,6 +78,23 @@ bool _shows(WidgetTester tester, int i) {
   if (_line(i).evaluate().isEmpty) return false;
   final rect = tester.getRect(_line(i));
   return rect.top >= 0 && rect.bottom <= _viewSize.height;
+}
+
+/// The oldest line at least partly in the view.
+int _topLine(WidgetTester tester) {
+  var top = -1;
+  for (final element in find.byType(RichText).evaluate()) {
+    final text = (element.widget as RichText).text.toPlainText();
+    final match = RegExp(r'^line (\d+)$').firstMatch(text);
+    final box = element.renderObject! as RenderBox;
+    if (match == null ||
+        box.localToGlobal(Offset(0, box.size.height)).dy <= 0) {
+      continue;
+    }
+    final line = int.parse(match.group(1)!);
+    if (top < 0 || line < top) top = line;
+  }
+  return top;
 }
 
 Future<void> _wheel(WidgetTester tester, double dy) async {
@@ -190,6 +214,94 @@ void main() {
         expect(logs.following.value, isFalse);
       });
     }
+  });
+
+  group('follow while lines wrap and leave', () {
+    final wordy = List.filled(30, 'word').join(' ');
+    List<String> wordyLines() => [
+      for (var i = 0; i < 40; i++) 'line $i $wordy',
+      'newest',
+    ];
+    double newestBottom(WidgetTester tester) =>
+        tester.getBottomLeft(find.text('newest', findRichText: true)).dy;
+
+    testWidgets('opens on the newest line', (tester) async {
+      final logs = LogViewController()..add(wordyLines());
+      await _pump(
+        tester,
+        controller: logs,
+        wrap: LogWrap.on,
+        size: const Size(250, 200),
+      );
+
+      expect(_atEnd(tester), isTrue);
+      expect(newestBottom(tester), closeTo(200, 0.01));
+    });
+
+    testWidgets('a wider view keeps the newest line in sight at once', (
+      tester,
+    ) async {
+      final logs = LogViewController()..add(wordyLines());
+      await _pump(
+        tester,
+        controller: logs,
+        wrap: LogWrap.on,
+        size: const Size(250, 200),
+      );
+      await tester.pumpAndSettle();
+
+      tester.view.physicalSize = const Size(600, 200);
+      await tester.pump();
+
+      expect(_atEnd(tester), isTrue);
+      expect(newestBottom(tester), closeTo(200, 0.01));
+    });
+
+    testWidgets('a fling while paused keeps its lines as old ones leave', (
+      tester,
+    ) async {
+      final logs = await _pump(
+        tester,
+        controller: LogViewController(buffer: LogBuffer(maxLines: 400)),
+      );
+      logs.add(_lines(0, 400));
+      await tester.pump();
+
+      await tester.fling(find.byType(LogView), const Offset(0, 200), 1000);
+      await tester.pump(const Duration(milliseconds: 16));
+      await tester.pump(const Duration(milliseconds: 16));
+      expect(logs.following.value, isFalse);
+      final top = _topLine(tester);
+
+      // Evicts lines 0 to 49, all above the view, while the fling runs on
+      // toward older lines.
+      logs.add(_lines(400, 50));
+      await tester.pump(const Duration(milliseconds: 16));
+      expect(_topLine(tester), inInclusiveRange(top - 2, top));
+
+      await tester.pumpAndSettle();
+      expect(logs.following.value, isFalse);
+      expect(_topLine(tester), lessThanOrEqualTo(top));
+    });
+
+    testWidgets('clearing a paused view follows again', (tester) async {
+      final logs = await _pump(tester);
+      logs.add(_lines(0, 100));
+      await tester.pump();
+      await tester.drag(find.byType(LogView), const Offset(0, 300));
+      await tester.pumpAndSettle();
+      expect(logs.following.value, isFalse);
+
+      logs.clear();
+      await tester.pump();
+      expect(logs.following.value, isTrue);
+      expect(find.text('Follow'), findsNothing);
+
+      logs.add(_lines(100, 100));
+      await tester.pump();
+      expect(_atEnd(tester), isTrue);
+      expect(_shows(tester, 199), isTrue);
+    });
   });
 
   group('keyboard', () {

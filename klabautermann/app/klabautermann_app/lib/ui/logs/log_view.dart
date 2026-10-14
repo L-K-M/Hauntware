@@ -574,22 +574,35 @@ final class _TailScrollPosition extends ScrollPositionWithSingleContext {
 
   final bool Function() _following;
 
-  /// Moves the offset by [delta] as a layout correction does, so a drag or
-  /// fling in progress carries on from the new offset, and lays out again.
-  /// Sends no scroll notification: the user did not scroll.
+  /// Moves the offset by [delta] as a layout correction does and lays out
+  /// again. A drag carries on from the new offset; a fling, whose
+  /// simulation sets absolute offsets, starts again from it at its current
+  /// velocity. Sends no scroll notification: the user did not scroll.
   void shiftBy(double delta) {
     correctBy(delta);
+    final current = activity;
+    if (current is BallisticScrollActivity) goBallistic(current.velocity);
     notifyListeners();
   }
 
   @override
   bool applyContentDimensions(double minScrollExtent, double maxScrollExtent) {
+    // Content that shrank under a following offset (wrapped rows after a
+    // wider layout, a long line leaving) moves the offset to the new end
+    // at once. Past the end during a gesture or fling is a bounce, left to
+    // the physics.
+    final shrank =
+        _following() &&
+        pixels > maxScrollExtent &&
+        !(activity?.isScrolling ?? false);
+    if (shrank) correctPixels(maxScrollExtent);
     final accepted = super.applyContentDimensions(
       minScrollExtent,
       maxScrollExtent,
     );
-    // An overscroll past the end (a bounce) is left to the physics.
-    if (!_following() || pixels >= maxScrollExtent) return accepted;
+    if (!shrank && (!_following() || pixels >= maxScrollExtent)) {
+      return accepted;
+    }
 
     correctPixels(maxScrollExtent);
     // The viewport laid out its children for the old offset: lay out again.

@@ -33,9 +33,11 @@ class LogViewController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Empties the view; see [LogBuffer.clear].
+  /// Empties the view and follows again, since an empty view has no place
+  /// to hold; see [LogBuffer.clear].
   void clear() {
     _buffer.clear();
+    _following.value = true;
     notifyListeners();
   }
 
