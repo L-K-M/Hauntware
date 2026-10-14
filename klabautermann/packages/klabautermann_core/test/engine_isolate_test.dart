@@ -101,7 +101,7 @@ void main() {
       ]);
     });
 
-    test('Subscribe/Unsubscribe are accepted without a reply', () async {
+    test('sampling subscriptions are accepted without a reply', () async {
       final client = await spawnEngine();
       final (:events, fleet: _) = await started(client);
 
@@ -109,12 +109,13 @@ void main() {
         ..send(
           const Subscribe(
             serverId: 'srv-1',
-            collectors: {Collector.overview},
-            cadence: Duration(seconds: 2),
+            subscriptionId: 'row',
+            streams: {SampleStream.overview},
           ),
         )
-        ..send(const Unsubscribe('srv-1'))
-        // The probe proves the engine handled both silently instead of
+        ..send(const SetCadenceProfile(CadenceProfile.cellularSaver))
+        ..send(const Unsubscribe(serverId: 'srv-1', subscriptionId: 'row'))
+        // The probe proves the engine handled them silently instead of
         // dying or rejecting them.
         ..send(const Connect('probe'));
 

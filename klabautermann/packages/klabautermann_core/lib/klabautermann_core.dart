@@ -32,8 +32,22 @@ export 'src/settings/instance_lock.dart'
 // 03 §3.2: the app reaches seance_core, klabautermann_host and
 // klabautermann_docker types only through this barrel, each behind an
 // explicit `show` list that grows as its milestone wires the types in.
+// The host types are the plain data that sampling results and
+// HostProfileChanged carry (D52).
 export 'package:klabautermann_host/klabautermann_host.dart'
-    show Collector, CoreSnapshot, OverviewSnapshot;
+    show
+        CpuPercentages,
+        CronSnapshot,
+        DiskRate,
+        FsSnapshot,
+        HostProfile,
+        IdentitySnapshot,
+        LoadAvg,
+        NetRate,
+        Pressure,
+        SystemdUnit,
+        TimersSnapshot,
+        UnitsSnapshot;
 // The app resolves `~/.ssh/config` for the FL-02 import with Séance's home
 // rule, which also undoes a macOS sandbox's container `HOME`.
 export 'package:seance_core/seance_core.dart' show expandHomePath;

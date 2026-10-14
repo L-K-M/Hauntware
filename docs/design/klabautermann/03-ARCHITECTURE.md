@@ -515,13 +515,13 @@ Proposals awaiting the owner close the section; they are not decisions.
   counter the engine assigns; it rises monotonically for the engine's
   lifetime, across sampler restarts and reconnects. The HWS/1 request
   number (`hw_t <seq>`, 6.2) belongs to one sampler session, restarts with
-  it and stays inside the engine. Today `Sample.seq` is that number
+  it and stays inside the engine. In v2 `Sample.seq` was that number
   (`protocol.dart:293-294` [V]), and the UI drops a sample whose `seq` is
   not above the last one it kept
   (`klabautermann_app/lib/controllers/monitoring_controller.dart:52-54`
-  [V]), so every sample after a sampler restart would be dropped. The UI
-  resets that floor on `EngineReady`, because a new engine counts from
-  the start. *Rejected:* the request number with a UI reset on restart
+  [V]), so every sample after a sampler restart would have been dropped.
+  The UI resets that floor on `EngineReady`, because a new engine counts
+  from the start. *Rejected:* the request number with a UI reset on restart
   (the UI does not see sampler restarts).
 - **D45. Subscriptions are keyed by `(serverId, subscriptionId)`.** Each
   surface that shows a server's data (a fleet row, the overview, a visible
@@ -532,15 +532,17 @@ Proposals awaiting the owner close the section; they are not decisions.
   columns of 6.4) and the app's activity (foreground or background, D34)
   are requests of their own. One 6.4 cadence depends on the surface:
   `units` runs every 15 s for the Services panel and every 60 s for the
-  health card, so the engine has to tell those subscriptions apart; the
-  sampling protocol settles how (a surface kind on the subscription, or a
-  separate failed-units collector). Today the engine keeps one
-  subscription per server and a second `Subscribe` replaces the first
+  health card, so the engine has to tell those subscriptions apart: the
+  sampling protocol gives the health card a `failedUnits` stream of its
+  own (10.1). The M1 engine kept one subscription per server and a second
+  `Subscribe` replaced the first
   (`klabautermann_core/lib/src/engine/engine_isolate.dart:45,74-77` [V]),
-  so closing a panel would also stop the fleet row's sampling. *Rejected:*
-  one subscription per server (surfaces overwrite each other); cadence per
-  subscription (the profile and the app's activity hold for every
-  subscription at once, so each change would resend all of them).
+  so closing a panel would also have stopped the fleet row's sampling.
+  *Rejected:* one subscription per server (surfaces overwrite each
+  other); cadence per subscription (the profile and the app's activity
+  hold for every subscription at once, so each change would resend all
+  of them); a surface kind on the subscription (a cadence hint by another
+  name, and the health card would still receive the full unit list).
 - **D46. Link vocabulary: `SshLinkState` plus `blocked`.** Across the
   isolate boundary a link is in one of the eight states of `seance_core`'s
   `SshLinkState` (`idle`, `connecting`, `authenticating`, `ready`,
@@ -1986,8 +1988,9 @@ Everything pauses when its view is hidden or the app is backgrounded; the
 polling budget (SAF-19, v1) caps per-server cadence. A collector runs
 while at least one subscription for the server names it; the Desktop,
 Phone and Cellular saver columns are cadence profiles, chosen by a request
-of their own rather than per subscription, and the sampling protocol
-settles how the engine tells the two `units` surfaces apart (D45). Rates
+of their own rather than per subscription, and the health card's failed
+units are a stream of their own, apart from the Services panel's `units`
+(D45, 10.1). Rates
 are computed in the engine isolate (D43) from counter deltas with wrap
 detection and reset detection (a changed `btime` or a decreasing counter
 starts a new series); disk throughput uses 512-byte sectors (CN-04). A
@@ -3405,7 +3408,8 @@ localization catalog from the first build:
 | `ImportSshConfig(text)` (FL-02, desktop) | `CatalogReplaced(entries)` with the imports, then `SshConfigImported(importedCount, skippedCount, saved)` |
 | `ConfirmEndpoints(ids)`, `SetMonitorSet(ids)` | `EndpointChanged(serverId)` |
 | `Connect(serverId)`, `Disconnect(serverId)` | `LinkState(serverId, status)` (D46's states plus `blocked`; typed reasons inside the status) |
-| `Subscribe(serverId, subscriptionId, collectorSet)`, `Unsubscribe(serverId, subscriptionId)`; the cadence profile and app activity are separate requests (D45) | `Sample(serverId, seq, snapshot)` (coalesced per tick; engine-owned `seq`, D44; rates and derived values, D43) |
+| `Subscribe(serverId, subscriptionId, streams)`, `Unsubscribe(serverId, subscriptionId)`, `SetCadenceProfile(profile)`; app activity is a separate request too (D45) | `Sample(serverId, stream, seq, at, result)` (engine-owned `seq`, D44; rates and derived values, D43), `SamplingState(serverId, phase, since)`, `Gap(serverId, streams, from, until, cause)` |
+| none: the engine probes after connecting (6.1) | `HostProfileChanged(serverId, profile)` |
 | `OpenLogStream(spec)`, `CloseStream(id)` | `LogBatch(streamId, lines, dropped)` (at most 20 per second per stream [E]) |
 | `DockerQuery(serverId, query)` | `DockerResult`, `DockerEvent` |
 | `PlanAction(intent)`, `RunAction(planId, confirmation)` | `ActionPlanned(preview)`, `ActionProgress`, `ActionFinished` |
@@ -3416,9 +3420,7 @@ localization catalog from the first build:
 | `OpenTerminal(serverId, containerId, shell)` (v1) | `TerminalBytes`, `TerminalClosed` |
 
 The `LinkState`, `Subscribe` and `Sample` rows carry what D43 to D46
-decide. `LinkState` took its version 3 shape with the links protocol
-(below); the M2 sampling changes fix the other fields of `Subscribe` and
-`Sample`, which keep their M1 shape in `protocol.dart` until then.
+decide, in their version 3 shapes (below).
 
 The protocol as built in M1 (PR #151; types in
 `klabautermann/packages/klabautermann_core/lib/src/engine/protocol.dart`,
@@ -3497,6 +3499,38 @@ the engine in `engine_isolate.dart` beside it):
   `ghost_servers`' `GhostSessionState.failed`) unless the engine closed
   it on purpose with no failure kind: the kinds name only what the
   engine classified, and a lost link is a failure its reason explains.
+- **Version 3 (M2 sampling).** Sampling joined version 3 without a bump,
+  as the import store's fields joined version 2, before any version 3
+  build shipped. `Subscribe` names the surface's `SampleStream`s: the 6.4
+  collectors as surfaces see them, with `units` split into the Services
+  panel's `units` and the health card's `failedUnits` (D45), and without
+  the probe, which the engine runs itself after connecting and reports as
+  `HostProfileChanged` when it first knows a server's profile in a run or
+  a later probe finds a different one. The same ids again replace a
+  subscription's streams, and an empty set drops it. `SetCadenceProfile`
+  picks the 6.4 column (Desktop until the app sends one). The engine
+  sends one `Sample` per subscribed stream and reading: `seq` counts per
+  server across its streams (D44), `at` is the engine's own clock in UTC,
+  since a host's clock may be off, and `result` is a sealed value per
+  stream holding derived values (D43): for `overview` and `core`, CPU
+  percentages, memory in bytes with `MemAvailable` semantics, load per
+  core and byte rates per interface (`core` adds per-core CPU, disk rates,
+  pressure and uptime); for `procs`, per-process CPU shares with the
+  start time PRC-02 checks; and the parsed tables for `fs`, `identity`,
+  `units`, `failedUnits`, `timers` and `cron`. A
+  stream whose collector reports a section status other than `ok` (6.2)
+  gets `CollectorUnavailable` with that status as an enum and the
+  collector's error output, control characters stripped. Requests and
+  events name streams instead of `klabautermann_host`'s `Collector`,
+  whose argument validators are functions (D52). `SamplingState` says
+  per server whether nothing is watched, the link is not ready, the
+  samplers run or the app's background pauses them, and since when (9.5
+  item 4). `Gap` arrives once readings resume, with both ends and its
+  cause (background, disconnected, or a reading lost to a deadline, a
+  framing error or a sampler restart, 6.2), so a chart labels the band
+  (9.5 item 5); an open gap shows in `SamplingState`. Until the samplers
+  are wired, the engine records subscriptions and the profile and sends
+  none of these events.
 - **`SetAppActivity(activity)`** is a request of its own and applies to
   every subscription, link and probe at once: 6.4 pauses everything while
   the app is in the background, and D34 adds the phones' grace period
