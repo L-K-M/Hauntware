@@ -22,7 +22,10 @@ slice:
   Protocol v2 types `CatalogReplaced` as a list of plain `FleetEntry`
   values and adds `ImportSshConfig`/`SshConfigImported`: the engine
   parses ssh_config text with `seance_core`'s `SshConfigImporter` off the
-  UI isolate (CN-19).
+  UI isolate (CN-19). Spawning takes the app's support directory, where
+  the engine keeps the imports (below); `EngineReady` reports a problem
+  with that file and `SshConfigImported` says whether the import was
+  saved, both added within v2.
 - `klabautermann_app`: `flutter create`d for the five platforms with the
   04 §12.3 identities, generated launcher icons, the desktop three-pane
   shell (fleet rail, workspace, inspector) at 960 px and up, the phone
@@ -65,16 +68,29 @@ slice:
   are not stored. No real build has run it yet: the tests restart against
   a temporary folder, not the platform's support directory (a sandboxed
   macOS container, the Flatpak's `~/.var/app`).
-- Local-only import (FL-02, first part): desktops offer "Import from
+- Local-only import (FL-02): desktops offer "Import from
   ~/.ssh/config" in the rail's add menu (in the app bar when the window
   is narrower than the desktop breakpoint); phones have no ssh_config and
   no entry. The app reads the file, the engine parses it, and the rail
   lists the hosts; a missing, unreadable or oversized file gets a
-  localized message. Imported entries live in the engine's memory only
-  and are gone after a restart: D13's device-local store arrives with
-  the catalog library. `Include` is not followed (`SshConfigImporter`
-  drops it), and `ProxyJump` and `IdentityFile` are not carried yet: the
-  rail needs neither until links land (M2).
+  localized message. The imports persist: the engine keeps them in
+  `ssh_config_imports.json` (D13's device-local store, 03 §4.10) in the
+  support directory the app passes it at spawn, and its first fleet
+  snapshot after a restart lists them. Each import replaces the whole
+  stored set rather than merging into it: `~/.ssh/config` is the one
+  source, and until the editor (FL-03, v1) a merge would keep a host the
+  user removed from the file with no way to drop it. The set is saved
+  atomically (the settings store's writer) before the fleet changes; an
+  import that cannot be saved still shows for the session, and a second
+  toast says it will not be kept. A damaged file is renamed to
+  `ssh_config_imports.json.corrupt-<UTC time>` and the engine starts
+  without imports; a file it cannot read or rename, or one from a newer
+  schema, is left as it is and no import is saved that run. Each case is
+  told once in a top toast at startup. As with `settings.json`, no real
+  build has run it yet: the tests restart the engine isolate against a
+  temporary folder. `Include` is not followed (`SshConfigImporter` drops
+  it), and `ProxyJump` and `IdentityFile` are not carried or stored yet:
+  the rail needs neither until links land (M2).
 - Packaging: `scripts/build.sh`, `scripts/package-linux.sh` (.deb and
   AppImage through the shared `scripts/package-linux-common.sh`) and
   `scripts/build-flatpak.sh` with `flatpak/ch.lkmc.klabautermann.yml`.
@@ -120,7 +136,6 @@ Pull-only from the start (D14): no surface sends a request that could
 push or write catalog records, and a widget test guards it.
 
 Not in yet (later PRs): pull-only enrollment and the catalog (F3),
-persistence for imported ssh_config entries (with the catalog library),
 reachability dots and the `ghost_servers` rail (F4), theme editing and
 presets (F4b's editor), the monitor set and per-server device preferences
 in `settings.json`, the macOS integrated titlebar, window-state restore
