@@ -366,17 +366,26 @@ enum _Scope {
 typedef _Segment = ({String text, int line});
 
 /// What [_ShellText.parse] is inside of; quotes and substitutions nest.
-enum _Open { singleQuote, ansiQuote, doubleQuote, substitution, backtick }
+enum _Open {
+  singleQuote,
+  ansiQuote,
+  doubleQuote,
+  substitution,
+  parameter,
+  backtick,
+}
 
 /// Shell text split into commands and pipelines.
 ///
 /// This is a scanner, not a shell parser. It removes backslash-newline
 /// continuations and ends a command at an unquoted `;`, `&&`, `||`, `&`,
 /// `|`, `|&` or newline; the pipes end a command but not its pipeline. It
-/// splits only outside single quotes, `$'...'`, double quotes, `$(...)`,
-/// `<(...)`, `>(...)` and backticks, and honours backslash escapes. `>&`,
-/// `<&`, `&>` and `>|` are redirections, and a `#` that starts a word runs
-/// to the end of the line without opening quotes.
+/// splits only outside single quotes, `$'...'`, double quotes, `${...}`,
+/// `$(...)`, `<(...)`, `>(...)` and backticks, and honours backslash
+/// escapes. As in bash, quotes nest inside `${...}` even within double
+/// quotes (`"${x:-"a;b"}"`). `>&`, `<&`, `&>` and `>|` are redirections,
+/// and a `#` that starts a word runs to the end of the line without
+/// opening quotes.
 ///
 /// It errs toward keeping a command together: extra text only risks a
 /// false positive, while a wrong split can hide part of a match. Known
@@ -448,6 +457,8 @@ final class _ShellText {
           open.add(_Open.backtick);
         } else if (char == '(' && prev == r'$') {
           open.add(_Open.substitution);
+        } else if (char == '{' && prev == r'$') {
+          open.add(_Open.parameter);
         }
       } else if (char == "'") {
         open.add(_Open.singleQuote);
@@ -463,6 +474,10 @@ final class _ShellText {
               (prev.isNotEmpty && r'$<>'.contains(prev)))) {
         open.add(_Open.substitution);
       } else if (char == ')' && inner == _Open.substitution) {
+        open.removeLast();
+      } else if (char == '{' && prev == r'$') {
+        open.add(_Open.parameter);
+      } else if (char == '}' && inner == _Open.parameter) {
         open.removeLast();
       } else if (inner == null) {
         if (char == '#' && (prev == '' || _wordBreaks.contains(prev))) {

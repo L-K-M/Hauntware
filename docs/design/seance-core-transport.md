@@ -586,8 +586,10 @@ matched against one command at a time rather than the whole line, so a
 flag or path from the next command cannot complete a pattern. Before
 matching, `scan` removes backslash-newline continuations and splits the
 text at unquoted `;`, `&&`, `||`, `&`, `|`, `|&` and newlines. Single
-quotes, `$'...'`, double quotes, backslash escapes, `$(...)`, `<(...)`,
-`>(...)` and backticks keep a command together; `>&`, `<&`, `&>` and `>|`
+quotes, `$'...'`, double quotes, backslash escapes, `${...}`, `$(...)`,
+`<(...)`, `>(...)` and backticks keep a command together, and as in bash,
+quotes nest inside `${...}` even within double quotes
+(`rm -rf "${D:-"a;b"}" /etc` is one command); `>&`, `<&`, `&>` and `>|`
 are redirections; a `#` that starts a word runs to the end of the line
 without opening quotes. Two rules need a wider view: `curl|sh` is matched
 per pipeline (commands joined by `|` or `|&` stay together) and the fork

@@ -582,6 +582,10 @@ Host bastion db
           r"rm -rf $'a\';' /etc",
           'rm -rf `true; echo x` /etc',
           'rm -rf <(true; echo x) /etc',
+          // Parameter expansions, whose quotes nest even inside double
+          // quotes.
+          r'rm -rf ${D:-x;y} /etc',
+          r'rm -rf "${D:-"a;b"}" /etc',
           // Redirections, not separators: >&, &> and >| (noclobber).
           'rm -rf 2>&1 /etc',
           'rm -rf &>/dev/null /etc',
