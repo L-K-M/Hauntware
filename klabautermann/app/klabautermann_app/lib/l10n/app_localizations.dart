@@ -202,7 +202,7 @@ abstract class AppLocalizations {
   /// **'{count, plural, =0{Your ~/.ssh/config names no hosts to import.} =1{Imported 1 server from ~/.ssh/config.} other{Imported {count} servers from ~/.ssh/config.}}'**
   String sshConfigImported(int count);
 
-  /// Shown instead of sshConfigImported when the import left host blocks out; importedCount (0 or more) is the number of servers it added, skippedCount (1 or more) the number of host blocks it left out. One message, so the translation decides how its sentences join.
+  /// Shown instead of sshConfigImported when the import left hosts out; importedCount (0 or more) is the number of servers it added, skippedCount (1 or more) the number of hosts it left out. One message, so the translation decides how its sentences join.
   ///
   /// In en, this message translates to:
   /// **'{importedCount, plural, =0{No hosts were imported from ~/.ssh/config.} =1{Imported 1 server from ~/.ssh/config.} other{Imported {importedCount} servers from ~/.ssh/config.}} {skippedCount, plural, =1{1 host was skipped because its port is unsupported or its name repeats an earlier host.} other{{skippedCount} hosts were skipped because their port is unsupported or their name repeats an earlier host.}}'**
