@@ -95,9 +95,9 @@ class AppLocalizationsEn extends AppLocalizations {
       skippedCount,
       locale: localeName,
       other:
-          '$skippedCount hosts were skipped because their port is invalid or their name repeats an earlier host.',
+          '$skippedCount hosts were skipped because their port is unsupported or their name repeats an earlier host.',
       one:
-          '1 host was skipped because its port is invalid or its name repeats an earlier host.',
+          '1 host was skipped because its port is unsupported or its name repeats an earlier host.',
     );
     return '$_temp0 $_temp1';
   }
@@ -237,6 +237,20 @@ class AppLocalizationsEn extends AppLocalizations {
       'Your imported servers were saved by a newer version of Klabautermann. Servers you import now will not be kept after a restart.';
 
   @override
+  String get instanceLockUnavailable =>
+      'Klabautermann could not check whether it is already running. If you open it twice, the two copies can overwrite each other\'s settings and imported servers.';
+
+  @override
+  String get alreadyRunningTitle => 'Klabautermann is already running';
+
+  @override
+  String get alreadyRunningBody =>
+      'Switch to the Klabautermann window that is already open. Only one copy runs at a time, so two copies never overwrite each other\'s settings and imported servers.';
+
+  @override
+  String get alreadyRunningQuit => 'Quit';
+
+  @override
   String get settingsWindowUnreachable =>
       'Settings cannot reach Klabautermann. Close this window and open Settings again.';
 
@@ -288,4 +302,21 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get serverTabMore => 'More';
+
+  @override
+  String tableCellSemantics(String column, String value) {
+    return '$column: $value';
+  }
+
+  @override
+  String get tableSortedAscending => 'Sorted ascending';
+
+  @override
+  String get tableSortedDescending => 'Sorted descending';
+
+  @override
+  String get tableSortHint => 'Sort by this column';
+
+  @override
+  String get tableRowActions => 'Row actions';
 }

@@ -1,8 +1,10 @@
 /// ssh_config import with preview + dedupe (D22; 07 §3.3).
 ///
 /// Séance's `SshConfigImporter` — consumed through the git pin, never a
-/// local copy — parses host blocks. What the pinned importer silently
-/// discards is exactly what this module makes loud instead:
+/// local copy — parses host blocks, and its `SshConfigLine` splits every
+/// line this module scans, so both read each line the same way. What the
+/// pinned importer silently discards is exactly what this module makes
+/// loud instead:
 ///
 /// - a plain, top-level `Include` is resolved read-only at import time
 ///   (the same local-file trust already granted to `~/.ssh/config`
@@ -23,8 +25,6 @@ import 'package:seance_core/seance_core.dart';
 import '_bookmark_import_dedupe.dart';
 
 const int _defaultSshPort = 22;
-const int _minimumSshPort = 1;
-const int _maximumSshPort = 65535;
 
 /// OpenSSH's own `Include` nesting cap; beyond it ssh refuses the whole
 /// config, while import records an unresolved-include note and keeps the
@@ -63,9 +63,12 @@ enum SshConfigImportLimitation {
   /// apply its directives to this host. Only top-level includes resolve.
   hostInclude,
 
-  /// The block's `Port` is outside 1–65535; the bookmark model refuses
-  /// such ports (04 §2.1 — they would mint malformed `hostkey:` ids) and
-  /// the row cannot be imported at all.
+  /// The pinned importer refused the block's `Port`: not a decimal
+  /// 1–65535 or the service name `ssh`, `http` or `https`. ssh rejects most
+  /// such values but may resolve another service name. The bookmark model
+  /// refuses ports outside 1–65535 (04 §2.1 — they would mint malformed
+  /// `hostkey:` ids), and any other refused value has no port, so the row
+  /// cannot be imported at all.
   invalidPort,
 
   /// Connection defaults — `Port`, `User`, `HostName`, `IdentityFile` —
@@ -142,6 +145,10 @@ class SshConfigImportRow {
 
   final List<SshConfigImportLimitation> limitations;
 
+  /// The block's `Port` argument as written when the pinned importer
+  /// refused it ([SshConfigImportLimitation.invalidPort]); null otherwise.
+  final String? refusedPort;
+
   bool get importByDefault =>
       !matchesExistingBookmark &&
       !matchesEarlierImportRow &&
@@ -159,6 +166,9 @@ class SshConfigImportRow {
   /// The dedupe key's port half — 22 unless the block names another.
   int get port => host.port ?? _defaultSshPort;
 
+  /// The port to show: the refused argument, or [port].
+  String get portLabel => refusedPort ?? '$port';
+
   const SshConfigImportRow({
     required this.id,
     required this.host,
@@ -168,6 +178,7 @@ class SshConfigImportRow {
     this.matchesEarlierImportRow = false,
     this.earlierImportRowAlias,
     this.limitations = const [],
+    this.refusedPort,
   });
 
   /// Builds the bookmark this row imports: a `remotePath` bookmark over
@@ -284,10 +295,20 @@ class SshConfigImportService {
         if (parsed.host.proxyJump != null)
           SshConfigImportLimitation.proxyJump,
       };
-      final parsedPort = parsed.host.port;
-      if (parsedPort != null &&
-          (parsedPort < _minimumSshPort || parsedPort > _maximumSshPort)) {
+      final refusedPort = parsed.refusedPort;
+      if (refusedPort != null) {
+        // The row can never import, so it takes no part in dedupe.
         limitations.add(SshConfigImportLimitation.invalidPort);
+        rows.add(
+          SshConfigImportRow(
+            id: mintId(),
+            host: parsed.host,
+            sourcePath: parsed.sourcePath,
+            limitations: List.unmodifiable(limitations),
+            refusedPort: refusedPort,
+          ),
+        );
+        continue;
       }
 
       // Host+port+username — the host lowercased because DNS/ssh
@@ -322,12 +343,16 @@ class SshConfigImportService {
   }
 }
 
-/// One host block parsed out of one file.
+/// One host parsed out of one file.
 class _ParsedHost {
   final ImportedHost host;
   final String sourcePath;
 
-  const _ParsedHost(this.host, this.sourcePath);
+  /// The `Port` argument the pinned importer refused; null for a host it
+  /// imports.
+  final String? refusedPort;
+
+  const _ParsedHost(this.host, this.sourcePath, {this.refusedPort});
 }
 
 /// Walks the resolved config accumulating hosts, limitations, and
@@ -349,14 +374,16 @@ class _ParsedHost {
 class _Resolver {
   final SshConfigImportService service;
 
-  /// Hosts in first-obtained order across the whole resolved config.
+  /// Hosts in first-obtained order across the whole resolved config, each
+  /// chunk's refused hosts after its importable ones.
   final List<_ParsedHost> hosts = [];
 
   /// Limitations applying to every row: Match blocks, top-level
   /// ProxyCommand/ProxyJump defaults, and wildcard-block defaults.
   final Set<SshConfigImportLimitation> globalLimitations = {};
 
-  /// Per-alias limitations from the alias's own host block.
+  /// Per-alias limitations from the alias's own host block, which gives
+  /// them to every alias it names.
   final Map<String, Set<SshConfigImportLimitation>> hostLimitations = {};
 
   final List<SshConfigUnresolvedInclude> notices = [];
@@ -382,14 +409,22 @@ class _Resolver {
     // block-less directives scoped to that host by ssh, so they must not
     // promote to global limitations (the hostInclude badge covers the
     // loss); Match blocks inside it still apply globally, as in ssh.
-    final deferredIncludes = <(String args, bool deferredContext)>[];
+    final deferredIncludes = <(List<String> args, bool deferredContext)>[];
     final chunks = _splitAtTopLevelIncludes(text, deferredIncludes);
 
     for (final chunk in chunks) {
-      hosts.addAll(
-        SshConfigImporter.parse(chunk.text)
-            .map((host) => _ParsedHost(host, path)),
-      );
+      final parsed = SshConfigImporter.parse(chunk.text);
+      hosts.addAll(parsed.hosts.map((host) => _ParsedHost(host, path)));
+      // Refused hosts follow the chunk's importable ones: they never
+      // import, so their position decides no first-obtained dedupe.
+      for (final skipped in parsed.skipped) {
+        switch (skipped.reason) {
+          case SkippedHostReason.invalidPort:
+            hosts.add(
+              _ParsedHost(skipped.host, path, refusedPort: skipped.value),
+            );
+        }
+      }
       _scanUnsupported(chunk, promoteTopLevelDefaults);
       for (final args in chunk.includeArgsAfter) {
         await _resolveInclude(
@@ -418,20 +453,18 @@ class _Resolver {
   /// map) and its arguments land in [deferredIncludes] instead.
   List<_Chunk> _splitAtTopLevelIncludes(
     String text,
-    List<(String, bool)> deferredIncludes,
+    List<(List<String>, bool)> deferredIncludes,
   ) {
     final chunks = <_Chunk>[];
     var lines = <String>[];
     _BlockContext context = const _BlockContextTop();
 
     for (final raw in text.split('\n')) {
-      final line = _stripComment(raw).trim();
-      final key = _directiveKey(line)?.toLowerCase();
+      final line = SshConfigLine.tryParse(raw);
 
-      if (key == 'include') {
-        // Raw value: the include tokenizer is itself quote-aware, so a
-        // quoted path with spaces must survive to it unstripped.
-        final args = _rawDirectiveValue(line);
+      if (line?.keyword == 'include') {
+        // Each argument is one path or glob, unquoted as ssh reads it.
+        final args = line!.arguments;
         if (context is _BlockContextTop) {
           chunks.add(_Chunk(List.of(lines), [args]));
           lines = [];
@@ -456,7 +489,7 @@ class _Resolver {
         // case, already covered by the matchBlock limitation on every row.
       } else {
         lines.add(raw);
-        context = _advanceContext(context, key, line);
+        context = _advanceContext(context, line);
       }
     }
     chunks.add(_Chunk(lines, const []));
@@ -468,19 +501,18 @@ class _Resolver {
     _BlockContext context = const _BlockContextTop();
 
     for (final raw in chunk.lines) {
-      final line = _stripComment(raw).trim();
-      if (line.isEmpty) continue;
-      final key = _directiveKey(line)?.toLowerCase();
-      if (key == null) continue;
+      final line = SshConfigLine.tryParse(raw);
+      if (line == null) continue;
+      final key = line.keyword;
 
       switch (key) {
         case 'host':
-          context = _advanceContext(context, key, line);
+          context = _advanceContext(context, line);
         case 'match':
           // Match criteria evaluation is out of scope (that would
           // reimplement ssh semantics); any Match block badges every row.
           globalLimitations.add(SshConfigImportLimitation.matchBlock);
-          context = _advanceContext(context, key, line);
+          context = _advanceContext(context, line);
         case 'proxycommand':
         case 'proxyjump':
           final limitation = key == 'proxycommand'
@@ -495,11 +527,13 @@ class _Resolver {
               if (promoteTopLevelDefaults) {
                 globalLimitations.add(limitation);
               }
-            case _BlockContextHost(alias: final alias):
+            case _BlockContextHost(aliases: final aliases):
               // Host-block ProxyJump arrives via ImportedHost.proxyJump;
               // the scan still covers ProxyCommand there.
               if (key == 'proxycommand') {
-                _hostLimitations(alias).add(limitation);
+                for (final alias in aliases) {
+                  _hostLimitations(alias).add(limitation);
+                }
               }
             case _BlockContextWildcard():
               // A wildcard block matches every connection, so its
@@ -510,8 +544,11 @@ class _Resolver {
               break; // the matchBlock badge already covers the row
           }
         case 'include':
-          if (context case _BlockContextHost(alias: final alias)) {
-            _hostLimitations(alias).add(SshConfigImportLimitation.hostInclude);
+          if (context case _BlockContextHost(aliases: final aliases)) {
+            const limitation = SshConfigImportLimitation.hostInclude;
+            for (final alias in aliases) {
+              _hostLimitations(alias).add(limitation);
+            }
           }
           // Top-level includes resolve (the chunker cut them out); a
           // Match-block include is covered by the matchBlock badge.
@@ -548,19 +585,22 @@ class _Resolver {
       hostLimitations.putIfAbsent(alias, () => {});
 
   Future<void> _resolveInclude({
-    required String args,
+    required List<String> args,
     required int depth,
     required Set<String> ancestors,
     required bool promoteTopLevelDefaults,
   }) async {
     if (depth >= _maximumIncludeDepth) {
       notices.add(
-        SshConfigUnresolvedInclude(SshConfigIncludeNote.depthExceeded, args),
+        SshConfigUnresolvedInclude(
+          SshConfigIncludeNote.depthExceeded,
+          args.join(' '),
+        ),
       );
       return;
     }
 
-    for (final token in _tokenizeWhitespace(args)) {
+    for (final token in args) {
       final targets = await _expandToken(token);
       for (final target in targets) {
         if (ancestors.contains(target)) {
@@ -750,7 +790,7 @@ String _normalizeAbsolutePath(String path) {
 
 class _Chunk {
   final List<String> lines;
-  final List<String> includeArgsAfter;
+  final List<List<String>> includeArgsAfter;
 
   const _Chunk(this.lines, this.includeArgsAfter);
 
@@ -762,12 +802,13 @@ class _Chunk {
 sealed class _BlockContext {
   const _BlockContext();
 
-  factory _BlockContext.fromHostLine(String value) {
-    final alias = _tokenizeHostPatterns(value)
-        .firstWhere(_isConcretePattern, orElse: () => '');
-    return alias.isEmpty
+  /// Names the block's aliases with the pin's own rule, so an alias has
+  /// badges here exactly when it has a row there.
+  factory _BlockContext.fromHostPatterns(List<String> patterns) {
+    final aliases = SshConfigImporter.hostAliases(patterns);
+    return aliases.isEmpty
         ? const _BlockContextWildcard()
-        : _BlockContextHost(alias);
+        : _BlockContextHost(aliases);
   }
 }
 
@@ -776,9 +817,9 @@ class _BlockContextTop extends _BlockContext {
 }
 
 class _BlockContextHost extends _BlockContext {
-  final String alias;
+  final List<String> aliases;
 
-  const _BlockContextHost(this.alias);
+  const _BlockContextHost(this.aliases);
 }
 
 class _BlockContextWildcard extends _BlockContext {
@@ -789,108 +830,14 @@ class _BlockContextMatch extends _BlockContext {
   const _BlockContextMatch();
 }
 
-/// The context after a `host`/`match` line; every other key keeps it.
-_BlockContext _advanceContext(
-  _BlockContext context,
-  String? key,
-  String line,
-) {
-  switch (key?.toLowerCase()) {
+/// The context after a `host`/`match` line; every other line keeps it.
+_BlockContext _advanceContext(_BlockContext context, SshConfigLine? line) {
+  switch (line?.keyword) {
     case 'host':
-      return _BlockContext.fromHostLine(_directiveValue(line));
+      return _BlockContext.fromHostPatterns(line!.arguments);
     case 'match':
       return const _BlockContextMatch();
     default:
       return context;
   }
 }
-
-// ─── Line-level helpers ────────────────────────────────────────────────
-//
-// These mirror (deliberately, and only for line shape) the pinned
-// importer's own rules — comment-at-`#`, `Key value` or `Key=value`,
-// quote stripping — so a line the pin drops is dropped here too. No host
-// parsing lives in this file; hosts only ever come from
-// `SshConfigImporter.parse`.
-
-/// Strips from the first `#`, matching the pinned importer's comment rule.
-String _stripComment(String line) {
-  final idx = line.indexOf('#');
-  return idx >= 0 ? line.substring(0, idx) : line;
-}
-
-/// The directive key of a `Key value` / `Key=value` line; null when the
-/// line has no key (or is empty).
-String? _directiveKey(String line) {
-  final eq = line.indexOf('=');
-  final sp = line.indexOf(RegExp(r'\s'));
-  int cut;
-  if (eq >= 0 && (sp < 0 || eq < sp)) {
-    cut = eq;
-  } else if (sp >= 0) {
-    cut = sp;
-  } else {
-    return line.isEmpty ? null : line;
-  }
-  final key = line.substring(0, cut).trim();
-  return key.isEmpty ? null : key;
-}
-
-/// The value side of a directive line (quotes stripped, like the pin).
-String _directiveValue(String line) =>
-    _rawDirectiveValue(line).replaceAll('"', '');
-
-/// The value side of a directive line with quotes intact.
-String _rawDirectiveValue(String line) {
-  final eq = line.indexOf('=');
-  final sp = line.indexOf(RegExp(r'\s'));
-  int cut;
-  if (eq >= 0 && (sp < 0 || eq < sp)) {
-    cut = eq;
-  } else if (sp >= 0) {
-    cut = sp;
-  } else {
-    return '';
-  }
-  return line.substring(cut + 1).trim();
-}
-
-/// Host patterns split on every whitespace run, mirroring the pinned
-/// importer's own `split(RegExp(r'\s+'))` rule: a carriage return,
-/// vertical tab, or form feed between patterns separates them there, so
-/// the scan must key per-host badges by the same tokens or the badge is
-/// silently dropped. Quote stripping already happened in
-/// [_directiveValue], exactly as the pin strips quotes before
-/// tokenizing.
-List<String> _tokenizeHostPatterns(String value) =>
-    value.split(RegExp(r'\s+')).where((s) => s.isNotEmpty).toList();
-
-/// Whitespace-separated tokens for include arguments, double-quote
-/// aware (paths may carry spaces). Only space and tab separate — the
-/// include tokenizer owns its own quote rule, deliberately distinct
-/// from the pin-mirroring [_tokenizeHostPatterns].
-List<String> _tokenizeWhitespace(String value) {
-  final tokens = <String>[];
-  final current = StringBuffer();
-  var inQuotes = false;
-
-  for (final c in value.split('')) {
-    if (c == '"') {
-      inQuotes = !inQuotes;
-    } else if ((c == ' ' || c == '\t') && !inQuotes) {
-      if (current.isNotEmpty) tokens.add(current.toString());
-      current.clear();
-    } else {
-      current.write(c);
-    }
-  }
-  if (current.isNotEmpty) tokens.add(current.toString());
-  return tokens;
-}
-
-/// Mirrors the pinned importer's wildcard test so an alias exists here
-/// exactly when a row exists there.
-bool _isConcretePattern(String pattern) =>
-    !pattern.contains('*') &&
-    !pattern.contains('?') &&
-    !pattern.startsWith('!');

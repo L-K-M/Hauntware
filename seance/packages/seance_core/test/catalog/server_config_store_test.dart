@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:seance_core/catalog.dart';
 import 'package:seance_core/seance_core.dart';
 import 'package:seance_core/src/catalog/atomic_file_writer.dart';
+import 'package:seance_core/src/catalog/catalog_controller.dart';
 import 'package:test/test.dart';
 
 final _fixedNow = DateTime.utc(2026, 9, 24, 12);
@@ -249,7 +250,7 @@ void main() {
         [for (final row in stored['servers'] as List) (row as Map)['id']],
         ['a', 'm', 'z'],
       );
-      final catalog = SeanceServerCatalog()..replace(servers);
+      final catalog = CatalogController()..replace(servers);
       expect(catalog.servers.map((s) => s.id), ['a', 'm', 'z']);
     });
   });

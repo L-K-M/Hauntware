@@ -33,7 +33,7 @@ final class _BlockedPush implements SyncApi {
 void main() {
   late Directory directory;
   late PersistentLocalRecordStore records;
-  late BookmarkCoordinator coordinator;
+  late RecordCoordinator coordinator;
   late RecordCrypto crypto;
 
   Bookmark bookmark(String label, {DateTime? updatedAt}) => Bookmark(
@@ -53,15 +53,23 @@ void main() {
     directory = await Directory.systemTemp.createTemp('push-revision-');
     records = reopen();
     crypto = RecordCrypto(RecordCodec(List<int>.filled(32, 7)));
-    coordinator = BookmarkCoordinator(
+    coordinator = RecordCoordinator(
       records: records,
-      bookmarks: FileBookmarkStore(path: '${directory.path}/bookmarks.json'),
+      handlers: [
+        BookmarkHandler(
+          bookmarks: FileBookmarkStore(
+            path: '${directory.path}/bookmarks.json',
+          ),
+        ),
+      ],
       hostKeys: InMemoryConflictAwareHostKeyStore(),
       hostKeyMutations: HostKeyMutationGate(),
       crypto: crypto,
       deviceId: 'device-a',
       pinVerdicts: InMemoryPinVerdictStore(),
       tripwires: InMemorySyncTripwireStore(),
+      catalogMode: CatalogMode.separate,
+      pushPolicy: PushPolicy.normal,
       maxRounds: 1,
     );
   });
@@ -140,15 +148,23 @@ void main() {
       await round;
 
       records = reopen();
-      final restarted = BookmarkCoordinator(
+      final restarted = RecordCoordinator(
         records: records,
-        bookmarks: FileBookmarkStore(path: '${directory.path}/bookmarks.json'),
+        handlers: [
+          BookmarkHandler(
+            bookmarks: FileBookmarkStore(
+              path: '${directory.path}/bookmarks.json',
+            ),
+          ),
+        ],
         hostKeys: InMemoryConflictAwareHostKeyStore(),
         hostKeyMutations: HostKeyMutationGate(),
         crypto: crypto,
         deviceId: 'device-a',
         pinVerdicts: InMemoryPinVerdictStore(),
         tripwires: InMemorySyncTripwireStore(),
+        catalogMode: CatalogMode.separate,
+        pushPolicy: PushPolicy.normal,
       );
       await restarted.runRound(server);
 

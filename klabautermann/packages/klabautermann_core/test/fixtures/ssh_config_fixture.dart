@@ -14,7 +14,7 @@ Host web-1
   Port 2222
   IdentityFile ~/.ssh/id_ed25519
 
-# Several patterns: the first non-wildcard one names the entry.
+# Several patterns: each non-wildcard one names an entry, here only db-1.
 Host db-1 *.db.internal
   HostName 10.0.0.4   # trailing comment
 

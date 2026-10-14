@@ -430,6 +430,25 @@ Include work.conf "my configs/main.conf" other.conf
     );
   });
 
+  test('Include arguments split as the pin splits every line', () async {
+    // `Include = x` names x, as ssh reads one `=` with whitespace around
+    // it; a quoted `#` is part of the path, not a comment.
+    final source = _FakeSource(
+      files: {
+        _configPath: '''
+Include = work.conf
+Include "#ops.conf" # a trailing comment
+''',
+        '$_home/.ssh/work.conf': 'Host work\n',
+        '$_home/.ssh/#ops.conf': 'Host ops\n',
+      },
+    );
+
+    final preview = await _service(source).loadPreview(configPath: _configPath);
+    expect(preview.rows.map((r) => r.host.alias).toList(), ['work', 'ops']);
+    expect(preview.notices, isEmpty);
+  });
+
   test('Include with ~ expansion and nesting', () async {
     final source = _FakeSource(files: {
       _configPath: 'Include ~/.ssh/outer.conf\n',
@@ -687,30 +706,83 @@ Host web
     }
   });
 
-  test('ports outside 1–65535 make the row unimportable', () async {
+  test('a Port the pin refuses makes the row unimportable', () async {
     final preview = await _load('''
 Host zero
   Port 0
 
 Host huge
+  HostName huge.example.com
   Port 70000
+
+Host typo
+  Port 22a
 
 Host fine
   Port 65535
+
+Host named
+  Port ssh
 ''');
+    final rows = {for (final row in preview.rows) row.host.alias: row};
 
-    expect(preview.rows[0].importable, isFalse);
-    expect(preview.rows[0].importByDefault, isFalse);
-    expect(
-      preview.rows[0].limitations,
-      contains(SshConfigImportLimitation.invalidPort),
+    // The pin reports refused hosts apart from the ones it imports; they
+    // follow the chunk's importable rows.
+    expect(preview.rows.map((r) => r.host.alias).toList(), [
+      'fine',
+      'named',
+      'zero',
+      'huge',
+      'typo',
+    ]);
+
+    for (final alias in ['zero', 'huge', 'typo']) {
+      final row = rows[alias]!;
+      expect(row.importable, isFalse, reason: alias);
+      expect(row.importByDefault, isFalse, reason: alias);
+      expect(
+        row.limitations,
+        contains(SshConfigImportLimitation.invalidPort),
+        reason: alias,
+      );
+      expect(
+        () => row.toBookmark(now: DateTime.utc(2026, 9, 8)),
+        throwsStateError,
+        reason: alias,
+      );
+    }
+    // The preview shows the refused argument, not the default port.
+    expect(rows['huge']!.host.effectiveHost, 'huge.example.com');
+    expect(rows['huge']!.portLabel, '70000');
+    expect(rows['typo']!.portLabel, '22a');
+
+    expect(rows['fine']!.importable, isTrue);
+    expect(rows['fine']!.port, 65535);
+    expect(rows['named']!.port, 22);
+    expect(rows['named']!.portLabel, '22');
+  });
+
+  test('a refused row takes no part in dedupe', () async {
+    final preview = await _load(
+      '''
+Host broken
+  HostName web.example.com
+  User alice
+  Port 22a
+
+Host web
+  HostName web.example.com
+  User alice
+''',
+      existing: [_existingBookmark('Typo', host: 'web.example.com')],
     );
-    expect(() => preview.rows[0].toBookmark(now: DateTime.utc(2026, 9, 8)),
-        throwsStateError);
+    final rows = {for (final row in preview.rows) row.host.alias: row};
 
-    expect(preview.rows[1].importable, isFalse);
-    expect(preview.rows[2].importable, isTrue);
-    expect(preview.rows[2].port, 65535);
+    // Only the importable row matches the bookmark for
+    // alice@web.example.com:22; the refused one names no port to compare.
+    expect(rows['web']!.matchesExistingBookmark, isTrue);
+    expect(rows['broken']!.matchesExistingBookmark, isFalse);
+    expect(rows['broken']!.matchesEarlierImportRow, isFalse);
   });
 
   test('a missing root config fails the load', () async {
@@ -932,52 +1004,62 @@ Host web
     }
   });
 
-  test('multi-pattern Host blocks surface one row per the pin', () async {
+  test('multi-pattern Host blocks surface one row per name', () async {
     final preview = await _load('''
-Host alpha beta
+Host alpha beta *.corp !gamma
   ProxyCommand nc %h %p
+  Include extra.conf
 ''');
 
-    // The pinned importer keeps only the first concrete pattern as the
-    // alias (one row); the badge follows that row.
-    expect(preview.rows.map((r) => r.host.alias).toList(), ['alpha']);
-    expect(
-      preview.rows.single.limitations,
-      contains(SshConfigImportLimitation.proxyCommand),
-    );
+    // The pinned importer makes a host of every name the line gives;
+    // the block's badges follow each of those rows.
+    expect(preview.rows.map((r) => r.host.alias).toList(), ['alpha', 'beta']);
+    for (final row in preview.rows) {
+      expect(
+        row.limitations,
+        containsAll([
+          SshConfigImportLimitation.proxyCommand,
+          SshConfigImportLimitation.hostInclude,
+        ]),
+        reason: row.host.alias,
+      );
+    }
   });
 
   test('Host pattern separators agree with the pin for every whitespace kind',
       () async {
-    // The pin tokenizes Host patterns with split(RegExp(r'\s+')); the
-    // scan must key its per-host badges by exactly that alias, or a
-    // control-character separator (carriage return, vertical tab, form
-    // feed) silently drops the badge. Regression: `Host alpha\rbeta`
-    // keyed the ProxyCommand badge under a token the pin never made.
+    // The pin splits Host patterns on spaces and tabs only, as ssh's
+    // argv_split() does, so `Host alpha\rbeta` is one pattern there. The
+    // scan reads lines through the pin's own SshConfigLine, so its
+    // per-host badges key by exactly the alias the pin minted.
+    // Regression: `Host alpha\rbeta` once keyed the ProxyCommand badge
+    // under a token the pin never made.
     const separators = {
       'space': ' ',
       'tab': '\t',
       'carriage-return': '\r',
       'vertical-tab': '\u000b',
       'form-feed': '\u000c',
-      // NBSP rides the same \s class in both Regexps (ECMAScript set).
+      // Not a separator for ssh or the pin either.
       'unicode-space': '\u00a0',
     };
 
     for (final separator in separators.entries) {
       final text = 'Host alpha${separator.value}beta\n'
           '  ProxyCommand nc %h %p\n';
-      // The pinned importer is the oracle: the preview row must carry
-      // the same alias the pin minted, not a second host parser.
-      final pinnedAlias = SshConfigImporter.parse(text).single.alias;
+      // The pinned importer is the oracle: the preview rows must carry
+      // the aliases the pin minted, not a second host parser's.
+      final pinnedAliases =
+          SshConfigImporter.parse(text).hosts.map((h) => h.alias).toList();
       final preview = await _load(text);
 
-      expect(preview.rows, hasLength(1), reason: separator.key);
-      expect(preview.rows.single.host.alias, pinnedAlias,
+      expect(preview.rows.map((r) => r.host.alias).toList(), pinnedAliases,
           reason: separator.key);
-      expect(preview.rows.single.limitations,
-          contains(SshConfigImportLimitation.proxyCommand),
-          reason: separator.key);
+      for (final row in preview.rows) {
+        expect(row.limitations,
+            contains(SshConfigImportLimitation.proxyCommand),
+            reason: separator.key);
+      }
     }
   });
 
@@ -988,7 +1070,7 @@ Host alpha beta
     // can drift from the pin's tokenization again.
     final text = 'Host alpha\rbeta\n'
         '  Include extra.conf\n';
-    final pinnedAlias = SshConfigImporter.parse(text).single.alias;
+    final pinnedAlias = SshConfigImporter.parse(text).hosts.single.alias;
     final preview = await _load(text);
 
     expect(preview.rows.single.host.alias, pinnedAlias);
@@ -997,18 +1079,21 @@ Host alpha beta
   });
 
   test('quoted Host patterns keep alias parity with the pin', () async {
-    // Quote stripping happens in _directiveValue before tokenization,
-    // exactly as the pin strips quotes before splitting — pin that
-    // order so the quote rule cannot drift and key badges under a
-    // token the pin never minted.
+    // The scan unquotes Host patterns through the pin's SshConfigLine,
+    // so the quote rule cannot drift and key badges under a token the
+    // pin never minted.
     final text = 'Host "alpha" "beta"\n'
         '  ProxyCommand nc %h %p\n';
-    final pinnedAlias = SshConfigImporter.parse(text).single.alias;
+    final pinnedAliases =
+        SshConfigImporter.parse(text).hosts.map((h) => h.alias).toList();
     final preview = await _load(text);
 
-    expect(preview.rows.single.host.alias, pinnedAlias);
-    expect(preview.rows.single.limitations,
-        contains(SshConfigImportLimitation.proxyCommand));
+    expect(pinnedAliases, ['alpha', 'beta']);
+    expect(preview.rows.map((r) => r.host.alias).toList(), pinnedAliases);
+    for (final row in preview.rows) {
+      expect(row.limitations,
+          contains(SshConfigImportLimitation.proxyCommand));
+    }
   });
 
   test('Host * connection defaults badge every row', () async {

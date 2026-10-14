@@ -53,6 +53,9 @@ Bookmark _existing(String label, String host, int port, String user) {
   );
 }
 
+const _unsupportedPortChip =
+    'Cannot import: port must be 1–65535, ssh, http or https';
+
 const _sampleConfig = '''
 Host web
   HostName web.example.com
@@ -208,8 +211,9 @@ void main() {
     // chip outranks the earlier-row chip when both would apply.
     expect(find.text('Duplicate of bookmark “Prod web”'), findsNWidgets(2));
     expect(find.text('Duplicate of “web” in this import'), findsNothing);
-    // …and the invalid port chip.
-    expect(find.text('Cannot import: port outside 1–65535'), findsOneWidget);
+    // …and the invalid port chip, beside the port as written.
+    expect(find.text(_unsupportedPortChip), findsOneWidget);
+    expect(find.text('bad-port:70000'), findsOneWidget);
 
     // Both endpoint rows duplicate the existing bookmark, so every row
     // starts skipped; the invalid-port row can never import at all.
@@ -232,6 +236,20 @@ void main() {
     await tester.tap(find.byType(Checkbox).at(0));
     await tester.pump();
     expect(find.text('Import 1'), findsOneWidget);
+  });
+
+  testWidgets('a Port typo names the ports import accepts', (tester) async {
+    const config = '''
+Host typo
+  HostName typo.example.com
+  Port 22a
+''';
+    await _open(tester, _service(_FakeSource({_configPath: config})));
+
+    // `22a` is not out of range, so the chip must not say it is.
+    expect(find.text(_unsupportedPortChip), findsOneWidget);
+    expect(find.text('Cannot import: port outside 1–65535'), findsNothing);
+    expect(find.text('typo.example.com:22a'), findsOneWidget);
   });
 
   testWidgets('Host * defaults badge rows', (tester) async {
