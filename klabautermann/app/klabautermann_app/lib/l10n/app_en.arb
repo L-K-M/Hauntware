@@ -93,6 +93,12 @@
   "statusConnecting": "Connecting",
   "statusDisconnected": "Disconnected",
   "statusFailed": "Failed",
+  "statusAuthenticating": "Authenticating",
+  "statusLimited": "Connected with limits",
+  "statusWaitingToReconnect": "Waiting to reconnect",
+  "statusNeedsInput": "Needs your input",
+  "statusBlocked": "Blocked",
+  "statusConnectionLost": "Connection lost",
   "statusSemantics": "Server status: {status}",
   "@statusSemantics": {
     "description": "Screen-reader label for a server row's status dot.",
@@ -216,6 +222,149 @@
   "workspaceTabSystem": "System",
   "workspaceTabAccess": "Access",
   "serverTabMore": "More",
+  "chartSeriesSummary": "{label}: now {current}, lowest {lowest}, highest {highest}, {trend}",
+  "@chartSeriesSummary": {
+    "description": "A chart's screen-reader summary of one series: what it measures, its current, lowest and highest values (already formatted with their units) and its trend, one of chartTrendRising, chartTrendFalling or chartTrendSteady.",
+    "placeholders": {
+      "label": {
+        "type": "String",
+        "example": "CPU"
+      },
+      "current": {
+        "type": "String",
+        "example": "42%"
+      },
+      "lowest": {
+        "type": "String",
+        "example": "3%"
+      },
+      "highest": {
+        "type": "String",
+        "example": "97%"
+      },
+      "trend": {
+        "type": "String",
+        "example": "rising"
+      }
+    }
+  },
+  "chartSeriesEmpty": "{label}: no data yet",
+  "@chartSeriesEmpty": {
+    "description": "A chart's screen-reader summary of a series that has no sample yet.",
+    "placeholders": {
+      "label": {
+        "type": "String",
+        "example": "CPU"
+      }
+    }
+  },
+  "chartSeriesUnknown": "{label}: unknown",
+  "@chartSeriesUnknown": {
+    "description": "A chart's screen-reader summary of a series whose every sample is a value the server did not report.",
+    "placeholders": {
+      "label": {
+        "type": "String",
+        "example": "Memory"
+      }
+    }
+  },
+  "chartUnknownValue": "unknown",
+  "@chartUnknownValue": {
+    "description": "Shown and read in place of a value the server did not report; never shown as zero."
+  },
+  "chartTrendRising": "rising",
+  "@chartTrendRising": {
+    "description": "A series' trend in its screen-reader summary: it has gone up over the chart's window."
+  },
+  "chartTrendFalling": "falling",
+  "@chartTrendFalling": {
+    "description": "A series' trend in its screen-reader summary: it has gone down over the chart's window."
+  },
+  "chartTrendSteady": "steady",
+  "@chartTrendSteady": {
+    "description": "A series' trend in its screen-reader summary: it has stayed about level over the chart's window."
+  },
+  "chartPercent": "{share}",
+  "@chartPercent": {
+    "description": "A chart value in percent, such as a CPU or memory share; the share arrives as a fraction from 0 to 1 and is formatted in the UI locale.",
+    "placeholders": {
+      "share": {
+        "type": "double",
+        "format": "decimalPercentPattern",
+        "optionalParameters": {
+          "decimalDigits": 0
+        }
+      }
+    }
+  },
+  "chartBarSummary": "{label}: {parts} of {total}",
+  "@chartBarSummary": {
+    "description": "A bar chart's screen-reader summary, such as a memory breakdown: what it measures, its parts (each a chartBarPart, joined by chartListSeparator) and the total they are part of, already formatted with its unit.",
+    "placeholders": {
+      "label": {
+        "type": "String",
+        "example": "Memory"
+      },
+      "parts": {
+        "type": "String",
+        "example": "Used 6 GiB, Cache 3 GiB"
+      },
+      "total": {
+        "type": "String",
+        "example": "16 GiB"
+      }
+    }
+  },
+  "chartBarPart": "{label} {value}",
+  "@chartBarPart": {
+    "description": "One part of a bar chart in its legend and screen-reader summary: what the part measures and its value, already formatted with its unit, or chartUnknownValue.",
+    "placeholders": {
+      "label": {
+        "type": "String",
+        "example": "Cache"
+      },
+      "value": {
+        "type": "String",
+        "example": "3 GiB"
+      }
+    }
+  },
+  "chartListSeparator": ", ",
+  "@chartListSeparator": {
+    "description": "Joins the parts of a bar chart's screen-reader summary, such as \"CPU 42%, Memory 71%\"."
+  },
+  "chartWithSeverity": "{part} ({severity})",
+  "@chartWithSeverity": {
+    "description": "A bar chart part whose value has crossed a threshold, so its colour changed: the part (a chartBarPart) and chartSeverityWarning or chartSeverityCritical.",
+    "placeholders": {
+      "part": {
+        "type": "String",
+        "example": "Memory 92%"
+      },
+      "severity": {
+        "type": "String",
+        "example": "critical"
+      }
+    }
+  },
+  "chartSeverityWarning": "warning",
+  "@chartSeverityWarning": {
+    "description": "A value past its warning threshold, shown in the warning colour with a warning icon."
+  },
+  "chartSeverityCritical": "critical",
+  "@chartSeverityCritical": {
+    "description": "A value past its critical threshold, shown in the critical colour with an error icon."
+  },
+  "chartStale": "{summary}, stale",
+  "@chartStale": {
+    "description": "A bar chart's screen-reader summary while its values are stale: no new sample has arrived in time, so the bar is grey and shows the last values the server reported.",
+    "placeholders": {
+      "summary": {
+        "type": "String",
+        "example": "CPU 42%, Memory 71%, Disk 40%"
+      }
+    }
+  },
   "tableCellSemantics": "{column}: {value}",
   "@tableCellSemantics": {
     "description": "A table cell as a screen reader hears it within its row: the column's header label, then the cell's value (A11Y-03).",

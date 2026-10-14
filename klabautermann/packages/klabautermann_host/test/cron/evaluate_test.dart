@@ -64,6 +64,37 @@ void main() {
     expect(runs.single.atUtc, DateTime.utc(2027, 1, 1));
   });
 
+  test('stretches of days that cannot match are skipped whole', () {
+    // Offset lookups count the scan steps: walking three hours of
+    // minutes per skipped day took about 660,000 over the horizon.
+    var lookups = 0;
+    final zone = ServerZone(
+      offset: Duration.zero,
+      offsetAt: (_) {
+        lookups++;
+        return Duration.zero;
+      },
+    );
+    List<DateTime> runs(String text) => [
+      for (final r in nextCronRuns(
+        CronExpression.parse(text)!,
+        afterUtc: DateTime.utc(2026, 6, 1),
+        zone: zone,
+        count: 2,
+      ))
+        r.atUtc,
+    ];
+
+    expect(runs('0 0 30 2 *'), isEmpty);
+    expect(lookups, lessThan(100));
+    lookups = 0;
+    expect(runs('0 0 29 2 *'), [
+      DateTime.utc(2028, 2, 29),
+      DateTime.utc(2032, 2, 29),
+    ]);
+    expect(lookups, lessThan(5000));
+  });
+
   test('a weekday schedule lands on the next matching weekday', () {
     final runs = nextCronRuns(
       CronExpression.parse('0 8 * * mon')!,
