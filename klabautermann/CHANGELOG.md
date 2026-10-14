@@ -9,3 +9,6 @@
   yet.
 - Desktop import from `~/.ssh/config` (FL-02): the hosts appear in the
   fleet rail for the current session; they are not saved yet.
+- Desktop settings window: on macOS, Linux and Windows, Settings opens in
+  a window of its own, and a theme change there applies to the app.
+  Phones keep the settings page.

@@ -176,6 +176,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get themeDark => 'Dark';
 
   @override
+  String get themeNotChanged => 'The theme could not be changed.';
+
+  @override
+  String get settingsWindowUnreachable =>
+      'Settings cannot reach Klabautermann. Close this window and open Settings again.';
+
+  @override
   String get workspaceEmptyTitle => 'Select a server';
 
   @override

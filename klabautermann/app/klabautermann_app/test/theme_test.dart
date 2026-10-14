@@ -190,20 +190,20 @@ void main() {
   });
 
   group('AppearanceController', () {
-    test('a mode change keeps the palette and notifies once', () {
+    test('a mode change keeps the palette and notifies once', () async {
       final controller = AppearanceController();
       addTearDown(controller.dispose);
       var notifications = 0;
       controller.addListener(() => notifications++);
       final palette = controller.value.palette;
 
-      controller.mode = ThemeModePreference.dark;
+      await controller.setMode(ThemeModePreference.dark);
       expect(controller.value.mode, ThemeModePreference.dark);
       expect(controller.value.palette, palette);
       expect(notifications, 1);
 
       // Picking the mode already in force is not a change.
-      controller.mode = ThemeModePreference.dark;
+      await controller.setMode(ThemeModePreference.dark);
       expect(notifications, 1);
     });
   });
