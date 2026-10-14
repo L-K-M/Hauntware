@@ -640,7 +640,7 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   // null-fallbacks for optional labels — no authored copy.
   'lib/ui/import/ssh_config_import_dialog.dart': {
     "''",
-    r"'${row.host.effectiveHost}:${row.port}'",
+    r"'${row.host.effectiveHost}:${row.portLabel}'",
   },
   // D22 importer null-fallbacks, widget keys, file extensions, and the picker
   // diagnostic reported behind localized copy. None is authored UI copy.
