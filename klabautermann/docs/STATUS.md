@@ -79,6 +79,12 @@ slice:
   the Flutter SDK's Roboto and compare on Linux only. `Gauge` follows in
   its own PR. Nothing shows a chart yet: the overview and fleet rows that
   feed the rings come later in M2.
+- Bars (03 §10.7, M2): `StackedBar` for the memory breakdown and disks
+  (MEM-01, DSK-01) and the fleet rows' three-cell `PressureBar` (FL-07),
+  with hatching for unknown values, grey when stale, and threshold
+  colours paired with a stripe, an icon and words (A11Y-01), plus
+  screen-reader summaries and light and dark goldens. Nothing shows
+  them yet.
 - Sortable table (M2): the app's `SortableTable`, which the M2 lists
   build on. The caller owns the sort (a header click flips it; ties keep
   the caller's order and unknown values sort last). A screen reader hears

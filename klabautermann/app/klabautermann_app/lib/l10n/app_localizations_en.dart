@@ -367,6 +367,35 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String chartBarSummary(String label, String parts, String total) {
+    return '$label: $parts of $total';
+  }
+
+  @override
+  String chartBarPart(String label, String value) {
+    return '$label $value';
+  }
+
+  @override
+  String get chartListSeparator => ', ';
+
+  @override
+  String chartWithSeverity(String part, String severity) {
+    return '$part ($severity)';
+  }
+
+  @override
+  String get chartSeverityWarning => 'warning';
+
+  @override
+  String get chartSeverityCritical => 'critical';
+
+  @override
+  String chartStale(String summary) {
+    return '$summary, stale';
+  }
+
+  @override
   String tableCellSemantics(String column, String value) {
     return '$column: $value';
   }

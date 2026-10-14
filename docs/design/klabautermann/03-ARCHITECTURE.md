@@ -3624,6 +3624,24 @@ The trend compares the means of the oldest and newest quarters; a change
 under 5 % of the scale is steady. The goldens draw with the pinned Flutter
 SDK's Roboto and compare on Linux only.
 
+`StackedBar` and `PressureBar` do not animate, and they take values
+rather than a ring, so their painter repaints when its runs change
+instead of on a version counter. A value the host did not
+report is hatched over the track, never left empty; in a stacked bar an
+unknown segment hatches everything past the known ones, since it cannot be
+told from free space. A stacked bar's thresholds judge its first
+segment's share of the total (used memory, used disk). Past a threshold
+the fill takes the severity colour with a 2 px stripe of the track
+through it, an icon beside the bar tells warning (triangle) from critical
+(circle) by shape, and the stacked bar's legend, the pressure bar's hover
+tooltip and both summaries name the severity (A11Y-01). The stripe, not
+the colour, shows which segment or cell crossed: the palette test keeps
+pairs apart only within the series and within the severities, and the
+light amber and orange measure a CIE76 distance of 2.0 under
+deuteranopia. Stale values turn every fill the family's graphite and drop
+the severity, since an old reading's may no longer hold. Every fill holds
+3:1 on the track (`surfaceContainerHighest`).
+
 ### 10.8 Log viewer
 
 A ring buffer capped by lines (50,000) and bytes (32 MiB) with a 16 KiB line
