@@ -215,6 +215,21 @@ String _gapLabel(ChartGapReason reason, ChartStrings strings) =>
       ChartGapReason.disconnected => strings.gapDisconnected,
     };
 
+/// The first time axis tick at or after [from] on a grid of [step]
+/// microseconds that falls on round local times in a zone [offset]
+/// microseconds off UTC, so a zone half an hour off UTC still reads 12:00
+/// rather than 11:30.
+@visibleForTesting
+int firstTimeSeriesTick({
+  required int from,
+  required int step,
+  required int offset,
+}) {
+  final local = from + offset;
+  final tick = local - local % step - offset;
+  return tick < from ? tick + step : tick;
+}
+
 void _paintHatch(Canvas canvas, Rect band, Color ink) {
   canvas.save();
   canvas.clipRect(band);
@@ -516,13 +531,12 @@ final class TimeSeriesPainter extends CustomPainter {
       orElse: () => _tickSteps.last,
     );
 
-    // Ticks fall on round local times, so a zone half an hour off UTC
-    // still reads 12:00 rather than 11:30.
     final stepMicros = step * Duration.microsecondsPerSecond;
-    final offset = edge.timeZoneOffset.inMicroseconds;
-    final local = from + offset;
-    var tick = local - local % stepMicros - offset;
-    if (tick < from) tick += stepMicros;
+    var tick = firstTimeSeriesTick(
+      from: from,
+      step: stepMicros,
+      offset: edge.timeZoneOffset.inMicroseconds,
+    );
 
     final tickPaint = Paint()..color = _ink;
     for (; tick <= to; tick += stepMicros) {

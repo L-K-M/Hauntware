@@ -7,7 +7,7 @@ import 'package:ghost_theme/ghost_theme.dart' show GhostChrome;
 import 'package:ghost_ui/ghost_ui.dart' show contrastRatio;
 import 'package:klabautermann_app/ui/charts/charts.dart';
 import 'package:klabautermann_app/ui/charts/time_series_chart.dart'
-    show TimeSeriesPainter;
+    show TimeSeriesPainter, firstTimeSeriesTick;
 
 import '../support/charts.dart';
 
@@ -370,6 +370,25 @@ void main() {
     // overflowing the chart and squeezing the plot to nothing.
     expect(tester.takeException(), isNull);
     expect(tester.getSize(_plot).height, greaterThanOrEqualTo(56));
+  });
+
+  test('puts time ticks on round local times in any zone', () {
+    int utc(int hour, int minute) =>
+        DateTime.utc(2026, 10, 14, hour, minute).microsecondsSinceEpoch;
+    int first(int from, Duration offset) => firstTimeSeriesTick(
+      from: from,
+      step: Duration.microsecondsPerHour,
+      offset: offset.inMicroseconds,
+    );
+    const india = Duration(hours: 5, minutes: 30);
+    const nepal = Duration(hours: 5, minutes: 45);
+
+    // 11:50 in India ticks first at noon there, not at 07:00 UTC.
+    expect(first(utc(6, 20), india), utc(6, 30));
+    // 10:45 in Nepal ticks first at 11:00 there; a tick start keeps it.
+    expect(first(utc(5, 0), nepal), utc(5, 15));
+    expect(first(utc(5, 15), nepal), utc(5, 15));
+    expect(first(utc(5, 0), Duration.zero), utc(5, 0));
   });
 
   testWidgets('scales to the data in view in IEC units', (tester) async {
