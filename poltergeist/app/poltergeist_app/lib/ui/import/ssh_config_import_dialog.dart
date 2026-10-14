@@ -95,7 +95,7 @@ String _limitationText(
   SshConfigImportLimitation.proxyCommand => l10n.sshImportLimitProxyCommand,
   SshConfigImportLimitation.matchBlock => l10n.sshImportLimitMatch,
   SshConfigImportLimitation.hostInclude => l10n.sshImportLimitHostInclude,
-  SshConfigImportLimitation.invalidPort => l10n.sshImportLimitInvalidPort,
+  SshConfigImportLimitation.invalidPort => l10n.sshImportLimitUnsupportedPort,
   SshConfigImportLimitation.wildcardDefaults =>
     l10n.sshImportLimitWildcardDefaults,
 };

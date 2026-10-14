@@ -6,10 +6,11 @@
   offers `web` and `db` with the block's settings and notes, where only
   `web` appeared before. Wildcard and `!` patterns still get no row.
 - **A typo in an ssh_config `Port` no longer imports as port 22.** A
-  `Port` ssh would reject, such as `22a` or `0x16`, makes the row
-  unimportable, as a port outside 1–65535 already did, and the preview
-  shows the port as written. `Port ssh`, `http` and `https` read as 22,
-  80 and 443.
+  `Port` other than a number from 1 to 65535 or `ssh`, `http` or
+  `https`, such as `22a` or `0x16`, makes the row unimportable, as a
+  port outside 1–65535 already did. The preview shows the port as
+  written, with a chip naming the ports import accepts. `Port ssh`,
+  `http` and `https` read as 22, 80 and 443.
 - **ssh_config import reads lines as ssh does.** `HostName = example.com`
   imports `example.com`, not `= example.com`, and `Include = extra.conf`
   reads `extra.conf`. Single and double quotes and backslash escapes are
