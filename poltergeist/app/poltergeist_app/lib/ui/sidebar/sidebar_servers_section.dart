@@ -308,32 +308,18 @@ SidebarAdhocSession? _sessionSavedAs(_SidebarData data, Bookmark bookmark) {
 /// and its words for a screen reader: a folded group's or section's
 /// rows, or rows the filter hides, so "what am I connected to" never
 /// needs an unfold. A connection up outranks one being attempted; with
-/// nothing live, no dot.
+/// nothing live, no dot (the shared rule, [ghostHiddenLiveIndicator]).
 ({SidebarStatusDot dot, String label})? _hiddenLive(
   _SidebarData data,
   Iterable<ServerStatus?> statuses,
 ) {
-  final chrome = PoltergeistChrome.of(data.context);
-  var pending = false;
-  for (final status in statuses) {
-    switch (status?.state) {
-      case ServerConnectionState.connected:
-        return (
-          dot: SidebarStatusDot(chrome.statusConnected),
-          label: data.l10n.sidebarHiddenConnected,
-        );
-      case ServerConnectionState.connecting ||
-          ServerConnectionState.reconnecting:
-        pending = true;
-      case _:
-        break;
-    }
-  }
-  if (!pending) return null;
-  return (
-    dot: SidebarStatusDot(chrome.statusConnecting),
-    label: data.l10n.sidebarHiddenConnecting,
+  final live = ghostHiddenLiveIndicator(
+    poltergeistServerStatusStrings(data.l10n),
+    statuses.map(ghostSessionOf),
   );
+  if (live == null) return null;
+  final colors = poltergeistStatusColors(PoltergeistChrome.of(data.context));
+  return (dot: ghostStatusDot(live, colors)!, label: live.label!);
 }
 
 ConnectionServer? _connectionOf(_SidebarData data, String serverId) {
