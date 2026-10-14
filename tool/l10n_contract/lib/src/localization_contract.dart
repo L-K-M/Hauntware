@@ -268,8 +268,10 @@ final class LocalizationContract {
   bool _coveredByTreeScan(String path) {
     if (isGeneratedPath(path)) return false;
 
+    // The tree scan reports normalized paths, so a spelling such as `lib/`
+    // or `./lib` must still cover `lib/...`.
     return config.scannedDirectories.any(
-      (directory) => path.startsWith('$directory/'),
+      (directory) => p.posix.isWithin(p.posix.normalize(directory), path),
     );
   }
 

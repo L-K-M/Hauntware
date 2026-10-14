@@ -215,15 +215,28 @@ import 'default.dart'
   });
 
   test('reports an unparseable allowlisted file only once', () {
-    final findings = _contract(
-      appRoot: 'test/fixtures/broken_app',
-      allowed: {
-        'lib/broken.dart': {"'Hidden'"},
-      },
-    ).scan();
+    // Non-canonical spellings of the scanned directory must still count
+    // as covering the file.
+    for (final directory in ['lib', 'lib/', './lib']) {
+      final findings = LocalizationContract(
+        appRoot: 'test/fixtures/broken_app',
+        config: L10nContractConfig(
+          generatedLocalizationPrefix: 'lib/l10n/app_localizations',
+          generatedDartSuffixes: const {'.g.dart'},
+          scannedDirectories: [directory],
+        ),
+        allowedTechnicalLiterals: const {
+          'lib/broken.dart': {"'Hidden'"},
+        },
+      ).scan();
 
-    expect(findings.whereType<UnparseableSource>(), hasLength(1));
-    expect(findings.whereType<DeadAllowlistEntry>(), isEmpty);
+      expect(
+        findings.whereType<UnparseableSource>(),
+        hasLength(1),
+        reason: 'scanned directory: $directory',
+      );
+      expect(findings.whereType<DeadAllowlistEntry>(), isEmpty);
+    }
   });
 
   test('reports an unreadable allowlisted file instead of throwing', () {
