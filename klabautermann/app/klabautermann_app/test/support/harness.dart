@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:klabautermann_app/app.dart';
@@ -7,7 +8,7 @@ import 'package:klabautermann_app/controllers/monitoring_controller.dart';
 import 'package:klabautermann_app/services/settings_window/settings_window_link.dart';
 import 'package:klabautermann_app/services/ssh_config_source.dart';
 import 'package:klabautermann_core/klabautermann_core.dart'
-    show DeviceSettingsIssue;
+    show DeviceSettingsIssue, ImportStoreIssue;
 
 import 'fake_engine.dart';
 
@@ -41,7 +42,10 @@ final class AppHarness {
 /// (null, the default, is a phone's route). [appearance] replaces the
 /// in-memory controller, for a test that builds one over a settings store
 /// or under a settings window host (the harness disposes it), and
-/// [settingsIssue] is what opening that store reported.
+/// [settingsIssue] is what opening that store reported. [importStoreIssue]
+/// stands in for what the engine's handshake reported about its import
+/// store. [toolbarBand] stands in for the macOS integrated titlebar's band
+/// state.
 Future<AppHarness> pumpApp(
   WidgetTester tester, {
   Size size = const Size(1280, 800),
@@ -49,7 +53,9 @@ Future<AppHarness> pumpApp(
   SshConfigSource? sshConfig,
   AppearanceController? appearance,
   DeviceSettingsIssue? settingsIssue,
+  ImportStoreIssue? importStoreIssue,
   OpenSettingsWindow? openSettingsWindow,
+  ValueListenable<bool>? toolbarBand,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -73,7 +79,9 @@ Future<AppHarness> pumpApp(
       monitoring: harness.monitoring,
       appearance: harness.appearance,
       settingsIssue: settingsIssue,
+      importStoreIssue: importStoreIssue,
       openSettingsWindow: openSettingsWindow,
+      toolbarBand: toolbarBand,
     ),
   );
   await tester.pumpAndSettle();

@@ -1,9 +1,10 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 import 'package:ghost_theme/ghost_theme.dart' show GhostTheme;
 import 'package:klabautermann_core/klabautermann_core.dart'
-    show DeviceSettingsIssue;
+    show DeviceSettingsIssue, ImportStoreIssue;
 
 import 'controllers/appearance_controller.dart';
 import 'controllers/fleet_controller.dart';
@@ -12,8 +13,11 @@ import 'l10n/app_localizations.dart';
 import 'services/settings_window/settings_window_link.dart';
 import 'theme/app_theme.dart';
 import 'ui/adaptive_shell.dart';
-import 'ui/settings_issue_notice.dart';
+import 'ui/macos_toolbar_band.dart';
+import 'ui/menus/app_commands.dart';
+import 'ui/menus/app_menu_host.dart';
 import 'ui/settings_page.dart';
+import 'ui/startup_issue_notice.dart';
 
 /// The settings route's name: Settings on phones, and on a desktop whose
 /// runner cannot open the settings window (D32).
@@ -29,7 +33,9 @@ class KlabautermannApp extends StatelessWidget {
     required this.monitoring,
     required this.appearance,
     this.settingsIssue,
+    this.importStoreIssue,
     this.openSettingsWindow,
+    this.toolbarBand,
   });
 
   final FleetController fleet;
@@ -39,9 +45,18 @@ class KlabautermannApp extends StatelessWidget {
   /// What went wrong opening `settings.json`, told once at startup.
   final DeviceSettingsIssue? settingsIssue;
 
+  /// What went wrong when the engine loaded `ssh_config_imports.json`,
+  /// told once at startup beside [settingsIssue].
+  final ImportStoreIssue? importStoreIssue;
+
   /// Opens Settings in its own window; null on phones, where Settings is
   /// [kSettingsRoute].
   final OpenSettingsWindow? openSettingsWindow;
+
+  /// Whether the macOS unified toolbar band shows, when the window has the
+  /// integrated titlebar (`installMacosTitlebar`); null everywhere else,
+  /// and then no surface reserves a band.
+  final ValueListenable<bool>? toolbarBand;
 
   /// The settings window where there is one, otherwise the route. A window
   /// that cannot open falls back to the route, so Settings stays reachable,
@@ -83,17 +98,35 @@ class KlabautermannApp extends StatelessWidget {
           theme: themes.theme,
           darkTheme: themes.darkTheme,
           themeMode: themes.themeMode,
-          // The shell's settings callback needs a context under the
-          // MaterialApp's Navigator; the ListenableBuilder's own context
-          // sits above it.
-          home: SettingsIssueNotice(
-            issue: settingsIssue,
+          // The band is reserved above every route, so nothing
+          // interactive lands under the traffic lights.
+          builder: (context, child) =>
+              withMacosToolbarBand(toolbarBand, child: child!),
+          // The shell's settings callback and the menus' commands need a
+          // context under the MaterialApp's Navigator; the
+          // ListenableBuilder's own context sits above it.
+          home: StartupIssueNotice(
+            settingsIssue: settingsIssue,
+            importStoreIssue: importStoreIssue,
             child: Builder(
-              builder: (context) => AdaptiveShell(
-                fleet: fleet,
-                monitoring: monitoring,
-                onOpenSettings: () => unawaited(_openSettings(context)),
-              ),
+              builder: (context) {
+                void openSettings() => unawaited(_openSettings(context));
+                // The desktop menus and their shortcuts (03 §10.2), from
+                // the one command registry.
+                return AppMenuHost(
+                  listenable: fleet,
+                  commands: buildAppCommands(
+                    platform: Theme.of(context).platform,
+                    fleet: fleet,
+                    onOpenSettings: openSettings,
+                  ),
+                  child: AdaptiveShell(
+                    fleet: fleet,
+                    monitoring: monitoring,
+                    onOpenSettings: openSettings,
+                  ),
+                );
+              },
             ),
           ),
           routes: {kSettingsRoute: (_) => SettingsPage(appearance: appearance)},

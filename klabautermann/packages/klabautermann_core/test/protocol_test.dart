@@ -115,7 +115,7 @@ void main() {
         const EngineReady(kEngineProtocolVersion),
         const RequestRejected('Connect', 'nope'),
         CatalogReplaced(const [_webEntry]),
-        const SshConfigImported(importedCount: 1, skippedCount: 0),
+        const SshConfigImported(importedCount: 1, skippedCount: 0, saved: true),
         const SyncStatus(SyncPhase.running),
         const EndpointChanged('srv-1'),
         const LinkState('srv-1', LinkPhase.connected),
@@ -216,15 +216,44 @@ void main() {
 
       final answer =
           await roundTrip(
-                const SshConfigImported(importedCount: 3, skippedCount: 2),
+                const SshConfigImported(
+                  importedCount: 3,
+                  skippedCount: 2,
+                  saved: false,
+                ),
               )
               as SshConfigImported;
       expect(answer.importedCount, 3);
       expect(answer.skippedCount, 2);
+      expect(answer.saved, isFalse);
 
       final request =
           await roundTrip(const ImportSshConfig('Host a\n')) as ImportSshConfig;
       expect(request.text, 'Host a\n');
+    });
+
+    test('the import store issue survives with EngineReady', () async {
+      final ready =
+          await roundTrip(
+                const EngineReady(
+                  kEngineProtocolVersion,
+                  importStoreIssue: ImportStoreIssue(
+                    ImportStoreIssueKind.recovered,
+                    preservedAs: '/support/ssh_config_imports.json.corrupt-1',
+                    detail: 'entry 0 has no host',
+                  ),
+                ),
+              )
+              as EngineReady;
+      final issue = ready.importStoreIssue!;
+      expect(issue.kind, ImportStoreIssueKind.recovered);
+      expect(issue.preservedAs, '/support/ssh_config_imports.json.corrupt-1');
+      expect(issue.detail, 'entry 0 has no host');
+
+      final clean =
+          await roundTrip(const EngineReady(kEngineProtocolVersion))
+              as EngineReady;
+      expect(clean.importStoreIssue, isNull);
     });
 
     test('fleet entries compare by value, across the boundary too', () async {

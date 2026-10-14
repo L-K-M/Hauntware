@@ -9,7 +9,7 @@ import 'package:klabautermann_app/controllers/appearance_controller.dart';
 import 'package:klabautermann_app/l10n/app_localizations.dart';
 import 'package:klabautermann_app/services/stored_appearance.dart';
 import 'package:klabautermann_app/theme/app_theme.dart';
-import 'package:klabautermann_app/ui/settings_issue_notice.dart';
+import 'package:klabautermann_app/ui/startup_issue_notice.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 
 import 'support/harness.dart';

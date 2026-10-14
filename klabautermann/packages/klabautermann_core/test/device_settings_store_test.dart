@@ -2,8 +2,6 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:klabautermann_core/klabautermann_core.dart';
-import 'package:klabautermann_core/src/settings/device_settings_store.dart'
-    show writeFileAtomically;
 import 'package:test/test.dart';
 
 const _versionKey = 'klabautermann.settings.version';
@@ -136,6 +134,35 @@ void main() {
       expect(reopened.appearance, {'mode': 'dark'});
     });
 
+    test('saves the appearance as it was passed', () async {
+      final store = await DeviceSettingsStore.open(file);
+      final palette = <String, Object?>{'name': 'Klabautermann'};
+      final appearance = <String, Object?>{'palette': palette, 'mode': 'dark'};
+
+      final saved = store.setAppearance(appearance);
+      appearance['mode'] = 'light';
+      palette['name'] = 'changed';
+      await saved;
+
+      expect(store.appearance, _darkAppearance);
+      expect(document()[_appearanceKey], _darkAppearance);
+    });
+
+    test('a valid file without a device id mints one and saves it', () async {
+      writeDocument({_versionKey: 1, _appearanceKey: _darkAppearance});
+
+      final store = await DeviceSettingsStore.open(file);
+
+      expect(store.issue, isNull);
+      expect(store.deviceId, matches(_uuidV4));
+      expect(document(), {
+        _versionKey: 1,
+        _appearanceKey: _darkAppearance,
+        _deviceIdKey: store.deviceId,
+      });
+      expect(entries(), [deviceSettingsFileName]);
+    });
+
     test('a failed write keeps the change in memory and the file as it '
         'was', () async {
       var failing = false;
@@ -250,6 +277,7 @@ void main() {
         final firstCopy = first.issue!.preservedAs!;
         final secondCopy = second.issue!.preservedAs!;
         expect(secondCopy, isNot(firstCopy));
+        expect(second.issue!.kind, DeviceSettingsIssueKind.recovered);
         expect(File(firstCopy).readAsStringSync(), 'first damage');
         expect(File(secondCopy).readAsStringSync(), 'second damage');
       });

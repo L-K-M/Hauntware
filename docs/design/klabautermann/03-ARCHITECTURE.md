@@ -854,8 +854,10 @@ under its own `show` list
 its hosts to `FleetEntry` values (10.1), so no `seance_core` type crosses
 the isolate boundary (D18). The device settings store (4.10) mints the
 device id with `uuidV4` and syncs the directory after each atomic write
-with the catalog library's `syncLocalDirectory`; the barrel exports only
-the store's own types, so neither name reaches the app:
+with the catalog library's `syncLocalDirectory`. The engine's import store
+(4.10) saves through the same writer, so the file's `seance_core` edge
+serves both isolates. The barrel exports only the store's own types, so
+neither name reaches the app:
 
 ```dart
 // klabautermann_core.dart: the app's only route to seance_core
@@ -863,6 +865,7 @@ export 'package:seance_core/seance_core.dart' show expandHomePath;
 // src/fleet/ssh_config_entries.dart: engine-side only
 import 'package:seance_core/seance_core.dart' show SshConfigImporter;
 // src/settings/device_settings_store.dart: the app isolate's settings.json
+// and the atomic writer the engine's import store shares
 import 'package:seance_core/catalog.dart' show syncLocalDirectory;
 import 'package:seance_core/seance_core.dart' show uuidV4;
 ```
@@ -1329,8 +1332,9 @@ platform identities in 04, section 12.3):
 | `vault.json`, `vault.json.rekey` | Credentials and re-key journal | `SC/src/store/` | MVP |
 | `host_keys.json`, verdict and tripwire files | Pins and quarantine state | catalog library | MVP |
 | `endpoint_pins.json` | Confirmed endpoints | catalog library | MVP |
-| `ssh_config_imports.json` [E] | D13's device-local store for FL-02 imports from `~/.ssh/config` (alias, host, port, user), replaced whole by each import; never pushed (D14). `IdentityFile` and `ProxyJump` join when links land (M2). Not built: it arrives with the catalog library (F3); until then the engine holds imports in memory and a restart drops them (10.1) | `klabautermann_core` [E] | MVP |
+| `ssh_config_imports.json` [E] | D13's device-local store for FL-02 imports from `~/.ssh/config` (alias, host, port, user), replaced whole by each import; never pushed (D14). `IdentityFile` and `ProxyJump` join when links land (M2). Built in M1: the engine isolate loads it at start and saves each import atomically before it answers (10.1). A damaged file is renamed to `ssh_config_imports.json.corrupt-<UTC time>`; a file it cannot read or rename, or one from a newer schema, is left as it is and no import is saved that run | `klabautermann_core` [E] | MVP |
 | `settings.json` | Device settings, `klabautermann.sync.deviceId` (minted once, never regenerated), monitor set, per-server device preferences | app | MVP |
+| `window_state.json` | The desktop main window's last normal frame and its maximized and full-screen flags (10.2), in the shape Séance's file established (`x`, `y`, `width`, `height`, `isMaximized`, `isFullScreen`; physical pixels on Windows); never synced. Added in M1, a deviation from the plan, which listed no window file: kept out of `settings.json`, as Séance and Planchette keep theirs, so debounced drag saves never rewrite the file that holds the device id | app | MVP |
 | `capabilities/<serverId>.json` | Cached probe results, 24 h TTL | `klabautermann_core` | MVP |
 | `audit/<serverId>.jsonl` | Audit log, 90-day retention [E] | `klabautermann_core` | MVP |
 | `history/<serverId>/<tier>.ring` | Fixed-size binary rollups (`RandomAccessFile`, no rewrite per sample) | `klabautermann_core` | v1 |
@@ -1350,8 +1354,10 @@ validated as a UUID. An import id, `ssh-config:<alias>` (10.1), is unsafe
 as a file name: `:` is invalid in Windows file names, and an alias is any
 run of non-blank characters, so it can contain path separators, or differ
 from another alias only in case and collide on a case-insensitive file
-system (the macOS and Windows defaults). The encoding is decided when the
-import store lands. *Proposal, not decided:* name an import's files
+system (the macOS and Windows defaults). The import store keeps every
+alias inside one file and needs no such name, so the encoding is decided
+with the first per-server file an import gets (the capability cache,
+M2). *Proposal, not decided:* name an import's files
 `ssh-config-` followed by the lowercase hex SHA-256 of the alias's UTF-8
 bytes, for example `capabilities/ssh-config-<64 hex digits>.json`. The
 name uses only lowercase letters, digits and hyphens, has a fixed length
@@ -3172,7 +3178,7 @@ localization catalog from the first build:
 | Requests (UI to engine) | Events (engine to UI) |
 |---|---|
 | `EnrollSync`, `RunSyncRound` | `CatalogReplaced(entries)`, `SyncStatus` |
-| `ImportSshConfig(text)` (FL-02, desktop) | `CatalogReplaced(entries)` with the imports, then `SshConfigImported(importedCount, skippedCount)` |
+| `ImportSshConfig(text)` (FL-02, desktop) | `CatalogReplaced(entries)` with the imports, then `SshConfigImported(importedCount, skippedCount, saved)` |
 | `ConfirmEndpoints(ids)`, `SetMonitorSet(ids)` | `EndpointChanged(serverId)` |
 | `Connect(serverId)`, `Disconnect(serverId)` | `LinkState(serverId, state, reason)` |
 | `Subscribe(serverId, collectorSet, cadence)`, `Unsubscribe` | `Sample(serverId, seq, snapshot)` (coalesced per tick) |
@@ -3194,6 +3200,17 @@ the engine in `engine_isolate.dart` beside it):
   (also the answer to rows whose milestone has not landed) are not table
   rows. Version 2 replaced v1's opaque record map in `CatalogReplaced`
   with typed entries and added the import row.
+- **Start.** The app spawns the engine with
+  `IsolateEngineClient.spawn(supportDirectory:)`, its support directory,
+  where the engine keeps its own files (4.10). `EngineReady` carries
+  `importStoreIssue`, what was wrong with `ssh_config_imports.json` at
+  start, or none, and the engine follows it at once with a
+  `CatalogReplaced` holding the imports an earlier run saved. The client
+  holds events that arrive before its first listener, so that fleet
+  waits for the controllers; only the first listener gets it, so the
+  composition root subscribes the fleet controller first.
+  `importStoreIssue` and `SshConfigImported.saved` joined version 2
+  without a bump, since the app and the engine compile together.
 - **`CatalogReplaced(entries)`** carries the whole fleet in display order
   as a read-only list of immutable `FleetEntry` values: `serverId`,
   `label`, `host`, `port`, `origin` (`synced` or `sshConfig`) and the
@@ -3212,9 +3229,10 @@ the engine in `engine_isolate.dart` beside it):
   the counts arrive. `skippedCount` counts host blocks left out for a
   `Port` outside 1 to 65535 or an alias an earlier block already took;
   wildcard-only blocks such as `Host *` are defaults and are not counted.
-  An import is not a catalog write (D14). Until D13's device-local store
-  lands (4.10), the engine holds imports in memory and a restart drops
-  them.
+  An import is not a catalog write (D14). The engine saves the new set to
+  D13's device-local store (4.10) before it answers; `saved` is false when
+  the write failed or the store was left as it is at start, and the fleet
+  then shows the import only until the engine stops.
 
 ### 10.2 Desktop (width of 960 px or more)
 
