@@ -11,6 +11,7 @@ export 'package:ghost_ui/ghost_ui.dart'
         SidebarMenuAction,
         SidebarMenuEntry,
         SidebarRow,
+        SidebarDotStyle,
         SidebarStatusDot,
         SidebarSyncChipData,
         SidebarSyncTone,

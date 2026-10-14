@@ -83,7 +83,7 @@ final class CronRun {
 /// yields an empty list, and the scan gives up after [horizonDays].
 ///
 /// Stepping happens in instants: days that cannot match jump to the next
-/// wall midnight, matching days walk minute by minute, and a wall-clock
+/// wall day that can, matching days walk minute by minute, and a wall-clock
 /// jump between consecutive instants marks a DST transition. Gap jobs
 /// (cronie fires them at the transition instant, within a 3-hour
 /// window) and first-occurrence overlap jobs are annotated [CronDst].
@@ -106,9 +106,20 @@ List<CronRun> nextCronRuns(
     final wallMs = t.millisecondsSinceEpoch + offset.inMilliseconds;
     final wall = DateTime.fromMillisecondsSinceEpoch(wallMs, isUtc: true);
     if (!_dayCanMatch(expression, wall)) {
-      // Jump to just under the next wall midnight; the evaluator then
-      // walks forward minute by minute across whatever the clock does.
-      final midnight = DateTime.utc(wall.year, wall.month, wall.day + 1);
+      // Find the next wall day that can match by date arithmetic alone,
+      // then jump to just under its midnight; the evaluator walks forward
+      // minute by minute from there across whatever the clock does. The
+      // 3-hour margin absorbs an offset rise until then.
+      final stopMs = limit.millisecondsSinceEpoch + offset.inMilliseconds;
+      var midnight = DateTime.utc(wall.year, wall.month, wall.day + 1);
+      while (!_dayCanMatch(expression, midnight) &&
+          midnight.millisecondsSinceEpoch <= stopMs) {
+        midnight = DateTime.utc(
+          midnight.year,
+          midnight.month,
+          midnight.day + 1,
+        );
+      }
       var jumpMs =
           midnight.millisecondsSinceEpoch -
           wallMs -
