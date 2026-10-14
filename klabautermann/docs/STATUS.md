@@ -56,12 +56,15 @@ slice:
   recovery, Poltergeist's copy name; when the defaults cannot be written,
   the toast says the copy was kept but the file was not reset); an
   unreadable file, one whose copy fails, or one from a newer schema is
-  left untouched and nothing is saved that session. Each case is told once in a top toast at startup;
-  a theme change that cannot be saved stays for the session and says
-  so. The monitor set and per-server device preferences have no
-  consumers yet and are not stored. No real build has run it yet: the
-  tests restart against a temporary folder, not the platform's support
-  directory (a sandboxed macOS container, the Flatpak's `~/.var/app`).
+  left untouched and nothing is saved that session. Each case is told once
+  in a top toast at startup; a theme change that cannot be saved stays for
+  the session and says so, in the settings window too: the app answers the
+  window's call as applied but not saved (`SettingsLinkError.notSaved`),
+  which the window words apart from a change the app did not take. The
+  monitor set and per-server device preferences have no consumers yet and
+  are not stored. No real build has run it yet: the tests restart against
+  a temporary folder, not the platform's support directory (a sandboxed
+  macOS container, the Flatpak's `~/.var/app`).
 - Local-only import (FL-02, first part): desktops offer "Import from
   ~/.ssh/config" in the rail's add menu (in the app bar when the window
   is narrower than the desktop breakpoint); phones have no ssh_config and

@@ -93,7 +93,7 @@
   "themeDark": "Dark",
   "themeNotSaved": "The theme changed, but it could not be saved, so it will not be kept after a restart.",
   "@themeNotSaved": {
-    "description": "Top toast after a theme pick that applied but could not be written to the settings file."
+    "description": "Top toast after a theme pick, in Settings or the desktop settings window, that applied but could not be written to the settings file."
   },
   "themeNotChanged": "The theme could not be changed.",
   "@themeNotChanged": {

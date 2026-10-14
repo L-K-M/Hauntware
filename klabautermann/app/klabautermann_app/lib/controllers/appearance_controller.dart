@@ -13,7 +13,9 @@ abstract interface class AppearanceSettings
   /// Switches between the palette's light and dark themes, or back to
   /// following the system; a no-op when [mode] is already in force. In the
   /// settings window [value] trails the call by a round trip to the app,
-  /// and the call throws when the app does not take it.
+  /// and the call throws when the app does not take it. A change the app
+  /// takes but cannot save throws [AppearanceNotSavedException] instead,
+  /// in the app and, over the link, in the window.
   Future<void> setMode(ThemeModePreference mode);
 }
 

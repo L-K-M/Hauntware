@@ -346,7 +346,7 @@ abstract class AppLocalizations {
   /// **'Dark'**
   String get themeDark;
 
-  /// Top toast after a theme pick that applied but could not be written to the settings file.
+  /// Top toast after a theme pick, in Settings or the desktop settings window, that applied but could not be written to the settings file.
   ///
   /// In en, this message translates to:
   /// **'The theme changed, but it could not be saved, so it will not be kept after a restart.'**
