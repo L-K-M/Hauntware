@@ -3487,6 +3487,10 @@ the engine in `engine_isolate.dart` beside it):
   the app may not import, 3.2) and `locatorConflict` (the ids of entries
   that share the `host:port` pin locator behind another route, 4.6). The
   app keeps statuses and probe answers only for servers its fleet lists.
+  A closed link reads as failed (10.3's `failed` dot, and
+  `ghost_servers`' `GhostSessionState.failed`) unless the engine closed
+  it on purpose with no failure kind: the kinds name only what the
+  engine classified, and a lost link is a failure its reason explains.
 - **`SetAppActivity(activity)`** is a request of its own and applies to
   every subscription, link and probe at once: 6.4 pauses everything while
   the app is in the background, and D34 adds the phones' grace period

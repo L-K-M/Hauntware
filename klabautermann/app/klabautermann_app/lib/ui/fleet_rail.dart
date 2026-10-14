@@ -117,9 +117,12 @@ String linkStatusWord(AppLocalizations l10n, LinkStatus status) {
     LinkBackoff() => l10n.statusWaitingToReconnect,
     LinkNeedsUser() => l10n.statusNeedsInput,
     LinkBlocked() => l10n.statusBlocked,
-    LinkClosed(reason: LinkClosedReason.closedByOwner) =>
+    LinkClosed(reason: LinkClosedReason.closedByOwner, failure: null) =>
       l10n.statusDisconnected,
-    LinkClosed(reason: LinkClosedReason.connectFailed) => l10n.statusFailed,
+    LinkClosed(
+      reason: LinkClosedReason.closedByOwner || LinkClosedReason.connectFailed,
+    ) =>
+      l10n.statusFailed,
     LinkClosed() => l10n.statusConnectionLost,
   };
 }
@@ -152,9 +155,12 @@ class FleetServerRow extends StatelessWidget {
         chrome.statusFailed,
         style: SidebarDotStyle.blocked,
       ),
-      // Nothing observed yet, or a link closed on purpose, paints no dot;
-      // the label still says the word.
-      LinkIdle() || LinkClosed(reason: LinkClosedReason.closedByOwner) => null,
+      // Nothing observed yet, or a link closed on purpose with no failure
+      // behind it, paints no dot; the label still says the word. Every
+      // other close is failed: a failure kind names what the engine
+      // classified, and a lost link is a failure its reason explains.
+      LinkIdle() ||
+      LinkClosed(reason: LinkClosedReason.closedByOwner, failure: null) => null,
       LinkClosed() => SidebarStatusDot(chrome.statusFailed),
     };
     return SidebarRow(
