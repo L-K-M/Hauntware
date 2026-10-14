@@ -3601,7 +3601,9 @@ out only the lines near them. Tabs
 are not expanded to stops yet. Any scroll that leaves the
 newest line pauses following, and reaching it again, End or Follow resumes
 it; the scroll position holds the end during layout, and while paused it
-drops the extent of evicted lines from its offset. Every span keeps 4.5:1
+drops the extent of evicted lines from its offset and converts the
+offset when the line height or wrap changes, keeping the line at the top
+and its share above the edge. Every span keeps 4.5:1
 on its background, moved toward black or white as little as needed. SGR
 colours 1 to 6 and 9 to 14 take the family's glyph hues, 8 its graphite;
 0, 7 and 15 stay black, light grey and white. The caller supplies a line's

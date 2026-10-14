@@ -50,10 +50,10 @@ const double _endTolerance = 1;
 ///
 /// Following keeps the newest line in sight. Scrolling away from it pauses
 /// following, and the view then stays on the lines it shows while new
-/// lines arrive and old ones leave the buffer; scrolling back to the
-/// newest line, End, or the Follow button resumes it. Keys: Up and Down
-/// move a line, Page Up and Page Down a page, Home goes to the oldest
-/// line, End follows.
+/// lines arrive and old ones leave the buffer, and when the width, the
+/// text scale or [wrap] changes; scrolling back to the newest line, End,
+/// or the Follow button resumes it. Keys: Up and Down move a line, Page
+/// Up and Page Down a page, Home goes to the oldest line, End follows.
 class LogView extends StatefulWidget {
   const LogView({
     super.key,
@@ -103,6 +103,9 @@ class _LogViewState extends State<LogView> {
       _resetRows();
     } else if (!identical(previous, _text)) {
       _rows.invalidate();
+      // The offset counts lines or rows of the old height.
+      final scale = _text!.lineHeight / previous.lineHeight;
+      if (scale != 1) _holdLines((pixels) => pixels * scale);
     }
   }
 
@@ -113,7 +116,13 @@ class _LogViewState extends State<LogView> {
       _unlisten(oldWidget.controller);
       _listen(widget.controller);
       _resetRows();
-    } else if ((oldWidget.levelOf == null) != (widget.levelOf == null)) {
+      return;
+    }
+
+    if (oldWidget.wrap != widget.wrap) {
+      _holdLines((pixels) => _offsetIn(widget.wrap, pixels));
+    }
+    if ((oldWidget.levelOf == null) != (widget.levelOf == null)) {
       // The gutter came or went, and with it some of every row's width.
       _rows.invalidate();
     }
@@ -154,6 +163,35 @@ class _LogViewState extends State<LogView> {
       }
     }
     setState(() {});
+  }
+
+  /// Moves a paused view's offset to [convert] of it when what the offset
+  /// counts changes, so the same lines stay in sight; a following view
+  /// moves to the newest line anyway.
+  void _holdLines(double Function(double pixels) convert) {
+    if (widget.controller.following.value || !_vertical.hasClients) return;
+
+    final position = _vertical.position;
+    if (position is! _TailScrollPosition || !position.hasPixels) return;
+    position.shiftBy(convert(position.pixels) - position.pixels);
+  }
+
+  /// The offset [pixels], counted in the other mode, as an offset counted
+  /// in [wrap] mode on the same entry and as far into it: without wrap an
+  /// offset counts lines, with wrap the rows of [_rows].
+  double _offsetIn(LogWrap wrap, double pixels) {
+    if (_rows.length == 0) return pixels;
+
+    final line = _text!.lineHeight;
+    final at = math.max(0.0, pixels / line);
+    if (wrap == LogWrap.on) {
+      final index = math.min(at.floor(), _rows.length - 1);
+      final into = (at - index).clamp(0.0, 1.0) * _rows.rowsOf(index);
+      return (_rows.rowsBefore(index) + into) * line;
+    }
+    final index = _rows.indexAtRow((at + _rowTolerance).floor());
+    final into = (at - _rows.rowsBefore(index)) / _rows.rowsOf(index);
+    return (index + into.clamp(0.0, 1.0)) * line;
   }
 
   void _onFollowing() {

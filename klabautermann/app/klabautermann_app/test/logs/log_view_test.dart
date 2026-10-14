@@ -96,7 +96,7 @@ int _topLine(WidgetTester tester) {
   var top = -1;
   for (final element in find.byType(RichText).evaluate()) {
     final text = (element.widget as RichText).text.toPlainText();
-    final match = RegExp(r'^line (\d+)$').firstMatch(text);
+    final match = RegExp(r'^line (\d+)\b').firstMatch(text);
     final box = element.renderObject! as RenderBox;
     if (match == null ||
         box.localToGlobal(Offset(0, box.size.height)).dy <= 0) {
@@ -236,6 +236,54 @@ void main() {
         expect(logs.following.value, isFalse);
       });
     }
+  });
+
+  group('a paused view keeps its lines when rows change', () {
+    // Odd lines wrap to up to five rows when wrap is on.
+    List<String> mixed() => [
+      for (var i = 0; i < 300; i++)
+        i.isEven
+            ? 'line $i'
+            : 'line $i ${List.filled(i % 5 * 6, 'word').join(' ')}',
+    ];
+
+    Future<LogViewController> paused(WidgetTester tester, LogWrap wrap) async {
+      final logs = LogViewController()..add(mixed());
+      await _pump(tester, controller: logs, wrap: wrap);
+      await tester.drag(find.byType(LogView), const Offset(0, 1500));
+      await tester.pumpAndSettle();
+      expect(logs.following.value, isFalse);
+      return logs;
+    }
+
+    for (final wrap in LogWrap.values) {
+      testWidgets('a text scale change, wrap ${wrap.name}', (tester) async {
+        final logs = await paused(tester, wrap);
+        final top = _topLine(tester);
+
+        tester.platformDispatcher.textScaleFactorTestValue = 2;
+        addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+        await tester.pump();
+        expect(logs.following.value, isFalse);
+        expect(_topLine(tester), top);
+
+        tester.platformDispatcher.clearTextScaleFactorTestValue();
+        await tester.pump();
+        expect(logs.following.value, isFalse);
+        expect(_topLine(tester), top);
+      });
+    }
+
+    testWidgets('wrap turned off and on', (tester) async {
+      final logs = await paused(tester, LogWrap.on);
+      final top = _topLine(tester);
+
+      for (final wrap in [LogWrap.off, LogWrap.on, LogWrap.off, LogWrap.on]) {
+        await tester.pumpWidget(_app(logs, wrap: wrap));
+        expect(logs.following.value, isFalse, reason: wrap.name);
+        expect(_topLine(tester), top, reason: wrap.name);
+      }
+    });
   });
 
   group('follow while lines wrap and leave', () {
