@@ -149,6 +149,35 @@ jobs:
           packages/seance_core
           packages/seance_sync_server
 
+  # The catalog library's stores write user data on every desktop
+  # platform, and their suites ran in poltergeist_dart's three-OS matrix
+  # before they moved to seance_core; seance_dart covers Ubuntu.
+  seance_catalog:
+    name: Séance catalog library (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    defaults:
+      run:
+        working-directory: seance
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+      - name: Resolve workspace
+        run: dart pub get
+      - name: Test
+        run: >-
+          dart test
+          packages/seance_core/test/catalog
+          packages/seance_core/test/file_permissions_test.dart
+          packages/seance_core/test/local_directory_sync_test.dart
+
   # ---- Poltergeist ------------------------------------------------------
   poltergeist_dart:
     name: Poltergeist pure-Dart packages (${{ matrix.os }})

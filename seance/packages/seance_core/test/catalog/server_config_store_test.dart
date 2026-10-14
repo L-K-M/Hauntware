@@ -2,7 +2,9 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:poltergeist_core/poltergeist_core.dart';
+import 'package:seance_core/catalog.dart';
+import 'package:seance_core/seance_core.dart';
+import 'package:seance_core/src/catalog/atomic_file_writer.dart';
 import 'package:test/test.dart';
 
 final _fixedNow = DateTime.utc(2026, 9, 24, 12);
@@ -193,7 +195,7 @@ void main() {
         atomicWriter: (file, contents) async {
           writerStarted.complete();
           await gate.future;
-          await const TransferJournalIo().atomicRewrite(file, contents);
+          await const AtomicFileWriter().write(file, contents);
         },
       );
 

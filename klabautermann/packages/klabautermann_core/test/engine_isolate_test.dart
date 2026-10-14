@@ -71,6 +71,17 @@ void main() {
       final fleet = events.current as CatalogReplaced;
       expect(fleet.entries.map((e) => e.label), sshConfigFixtureEntries);
       expect(fleet.entries.first.port, 2222);
+      // What the engine parsed, not only which hosts it found.
+      final byLabel = {for (final e in fleet.entries) e.label: e};
+      expect(byLabel['web-1']!.host, 'web-1.example.com');
+      expect(byLabel['web-1']!.user, 'deploy');
+      // `User=admin`: the `Key=value` form; no HostName means the alias.
+      expect(byLabel['bastion']!.user, 'admin');
+      expect(byLabel['bastion']!.host, 'bastion');
+      // Include is not followed: the labels above hold no included host,
+      // and the block that names one keeps its own HostName.
+      expect(byLabel['legacy']!.host, 'legacy.example.com');
+      expect(byLabel['v6']!.host, '2001:db8::1');
       expect(await events.moveNext(), isTrue);
       final answer = events.current as SshConfigImported;
       expect(answer.importedCount, sshConfigFixtureEntries.length);

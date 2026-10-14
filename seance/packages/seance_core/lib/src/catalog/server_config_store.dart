@@ -19,17 +19,17 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math' show max;
 
-import 'package:seance_core/seance_core.dart';
+import 'package:seance_protocol/seance_protocol.dart';
 
-import '../bookmarks/bookmark_store.dart' show BookmarkSyncTuple;
-import '../transfer/transfer_journal.dart' show TransferJournalIo;
+import 'atomic_file_writer.dart';
 import 'server_order.dart';
+import 'sync_tuple.dart';
 
 /// The materialized LWW tuple for one server id — the same
 /// `(updatedAt, deviceId, deleted)` envelope bookkeeping the bookmark
 /// store keeps. A typedef, not a second class: the coordinator's tuple
 /// guard and the tuple JSON shape are identical for both kinds.
-typedef ServerSyncTuple = BookmarkSyncTuple;
+typedef ServerSyncTuple = SyncTuple;
 
 /// The server store plus the sync bookkeeping the coordinator needs:
 /// the per-row materialized tuples and the record-carrying apply/remove
@@ -113,7 +113,7 @@ final class FileServerConfigStore implements SyncTrackingServerStore {
        // ignore: prefer_initializing_formals
        _file = File(path),
        _atomicWriter =
-           atomicWriter ?? const TransferJournalIo().atomicRewrite,
+           atomicWriter ?? const AtomicFileWriter().write,
        _now = now ?? DateTime.now,
        // Keep the callbacks private while allowing test-only injection.
        // ignore: prefer_initializing_formals

@@ -1,4 +1,6 @@
-import 'package:seance_core/seance_core.dart';
+import 'package:seance_protocol/seance_protocol.dart';
+
+import '../hostkey/tofu.dart';
 
 /// Result of a conditional host-key write.
 enum HostKeyInstallResult { installed, conflict }

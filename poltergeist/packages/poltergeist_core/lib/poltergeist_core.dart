@@ -170,20 +170,21 @@ export 'src/bookmarks/bookmark_store.dart'
         SyncTrackingBookmarkStore,
         bookmarkPayloadCapBytes,
         bookmarkQuarantinePath;
-export 'src/sync/persistent_record_store.dart'
+export 'package:seance_core/catalog.dart'
     show
         PersistentLocalRecordStore,
         SyncCursorRejectedException,
         SyncRecordStore,
         recordStoreQuarantinePath;
-export 'src/sync/record_crypto.dart' show RecordCrypto, isDecryptableSyncId;
-export 'src/sync/host_key_mutations.dart'
+export 'package:seance_core/catalog.dart'
+    show RecordCrypto, isDecryptableSyncId;
+export 'package:seance_core/catalog.dart'
     show
         ConflictAwareHostKeyStore,
         HostKeyInstallResult,
         HostKeyMutationGate,
         InMemoryConflictAwareHostKeyStore;
-export 'src/sync/enrollment.dart'
+export 'package:seance_core/catalog.dart'
     show
         EnrollmentResult,
         KdfDowngradeException,
@@ -199,15 +200,15 @@ export 'src/sync/enrollment.dart'
         syncNoticePassphraseCheckFailed,
         syncPassphraseCheckFailedMessage,
         syncRegistrationClosedMessage;
-export 'src/sync/seance_server_catalog.dart' show SeanceServerCatalog;
-export 'src/sync/server_store.dart'
+export 'package:seance_core/catalog.dart' show SeanceServerCatalog;
+export 'package:seance_core/catalog.dart'
     show
         FileServerConfigStore,
         ServerSyncTuple,
         SyncTrackingServerStore,
         serverStoreQuarantinePath;
 export 'src/update/update_check.dart' show poltergeistUpdateRepo;
-export 'src/sync/sync_verdicts.dart'
+export 'package:seance_core/catalog.dart'
     show
         InMemoryPinVerdictStore,
         InMemorySyncTripwireStore,
