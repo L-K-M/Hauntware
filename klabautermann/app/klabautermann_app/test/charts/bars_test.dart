@@ -68,6 +68,14 @@ BarPainter _painter(WidgetTester tester, Finder paint) =>
 List<BarRun> _runsIn(WidgetTester tester, Type bar) =>
     _painter(tester, _paintIn(bar)).runs;
 
+/// The colour and fill of each legend swatch of a stacked bar.
+List<(Color, BarFill)> _swatchesIn(WidgetTester tester) => tester
+    .widgetList<CustomPaint>(_paintersIn(StackedBar))
+    .skip(1)
+    .map((paint) => (paint.painter! as BarPainter).runs.single)
+    .map((run) => (run.color, run.fill))
+    .toList();
+
 BarRun _fill(double start, double end, Color color, {int cell = 0}) =>
     (cell: cell, start: start, end: end, color: color, fill: BarFill.solid);
 
@@ -180,11 +188,7 @@ void main() {
           ..rect(color: _palette.series[1]),
       );
       // The legend draws each swatch like its segment.
-      final swatches = tester
-          .widgetList<CustomPaint>(_paintersIn(StackedBar))
-          .skip(1)
-          .map((paint) => (paint.painter! as BarPainter).runs.single);
-      expect(swatches.map((run) => (run.color, run.fill)), [
+      expect(_swatchesIn(tester), [
         (_palette.warning, BarFill.severe),
         (_palette.series[1], BarFill.solid),
         (_palette.series[2], BarFill.solid),
@@ -202,6 +206,12 @@ void main() {
         _fill(0, 0.375, _palette.series[0]),
         _fill(0.375, 0.5625, _palette.series[2]),
         _hatched(0.5625),
+      ]);
+      // Its swatch is hatched like the bar, not in a colour the bar lacks.
+      expect(_swatchesIn(tester), [
+        (_palette.series[0], BarFill.solid),
+        (_palette.muted, BarFill.unknown),
+        (_palette.series[2], BarFill.solid),
       ]);
       expect(
         _label(tester, StackedBar),

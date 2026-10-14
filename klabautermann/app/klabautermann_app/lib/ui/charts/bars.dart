@@ -173,7 +173,14 @@ class StackedBar extends StatelessWidget {
                 ],
               ),
               if (showLegend)
-                _legend(context, palette, parts, colours, _fillOf(severity)),
+                _legend(
+                  context,
+                  palette,
+                  parts,
+                  values,
+                  colours,
+                  _fillOf(severity),
+                ),
             ],
           ),
         ),
@@ -223,6 +230,7 @@ class StackedBar extends StatelessWidget {
     BuildContext context,
     ChartPalette palette,
     List<String> parts,
+    List<double?> values,
     List<Color> colours,
     BarFill firstFill,
   ) {
@@ -238,7 +246,8 @@ class StackedBar extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             spacing: 4,
             children: [
-              // Drawn like its segment, so a severe one keeps its stripe.
+              // Drawn like its segment, so a severe one keeps its stripe
+              // and an unknown one is hatched as the bar's unknown rest is.
               SizedBox.square(
                 dimension: 8,
                 child: CustomPaint(
@@ -249,8 +258,14 @@ class StackedBar extends StatelessWidget {
                         cell: 0,
                         start: 0,
                         end: 1,
-                        color: colours[index],
-                        fill: index == 0 ? firstFill : BarFill.solid,
+                        color: values[index] == null
+                            ? palette.muted
+                            : colours[index],
+                        fill: switch (values[index]) {
+                          null => BarFill.unknown,
+                          _ when index == 0 => firstFill,
+                          _ => BarFill.solid,
+                        },
                       ),
                     ],
                     trackColor: palette.track,
