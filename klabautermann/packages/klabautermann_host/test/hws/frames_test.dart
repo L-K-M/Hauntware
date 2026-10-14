@@ -173,7 +173,13 @@ void main() {
     });
 
     test('a marker other than READY is a framing error', () {
-      expect(_parseRaw(_marker('B 1 1.0')), [startsWith('error')]);
+      // Bodies shorter than `READY ` and ones whose tail parses as a READY
+      // payload must both fail on the kind, not later.
+      for (final body in ['E 7', 'B 1 1.0', 'XXXXXXHWS/1 2']) {
+        expect(_parseRaw(_marker(body)), [
+          'error marker before READY',
+        ], reason: body);
+      }
     });
 
     test('a malformed READY marker is a framing error', () {
