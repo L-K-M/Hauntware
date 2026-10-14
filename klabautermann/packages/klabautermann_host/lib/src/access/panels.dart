@@ -110,7 +110,7 @@ final class PanelAvailability {
 }
 
 /// The status of [capability] on the host [profile] describes.
-AccessStatus capabilityStatus(
+AccessStatus _capabilityStatus(
   Capability capability,
   HostProfile profile,
   AccessReport access,
@@ -149,7 +149,7 @@ PanelAvailability evaluatePanel(
   List<Capability>? lacking;
   for (final alternative in kPanelNeeds[panel]!) {
     final statuses = {
-      for (final c in alternative) c: capabilityStatus(c, profile, access),
+      for (final c in alternative) c: _capabilityStatus(c, profile, access),
     };
     List<Capability> having(AccessStatus s) => [
       for (final c in alternative)

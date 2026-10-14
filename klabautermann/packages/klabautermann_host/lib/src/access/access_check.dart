@@ -222,13 +222,13 @@ final class AccessReport {
 
 /// Groups that can read the whole journal (03 §8.1); `systemd-journal`
 /// is the least-privileged one and the one the fix adds.
-const kJournalGroups = {'systemd-journal', 'adm', 'wheel'};
+const _journalGroups = {'systemd-journal', 'adm', 'wheel'};
 
 /// systemd's first release with `list-units --output=json` (03 §6.4).
-const kSystemdJsonVersion = 246;
+const _systemdJsonVersion = 246;
 
 /// RHEL 8's systemd, the oldest on a tier A host (03 §6.6).
-const kSystemdOldestTested = 239;
+const _systemdOldestTested = 239;
 
 /// Evaluates the access check over [profile].
 AccessReport evaluateAccess(HostProfile profile) {
@@ -319,7 +319,7 @@ AccessRow _journalRow(HostProfile p, FixElevation elevation) {
   if (journalctl == false) return _missing(item, AccessReason.noJournal);
   if (p.uid == 0) return _ok(item, AccessReason.rootLogin);
   if (!_answered(p, 'identity')) return _unknown(item);
-  if (p.groups.any(kJournalGroups.contains)) {
+  if (p.groups.any(_journalGroups.contains)) {
     return _ok(item, AccessReason.journalGroup);
   }
   if (journalctl == null) return _unknown(item);
@@ -381,10 +381,10 @@ AccessRow _systemdRow(HostProfile p) {
   if (version == null) {
     return _unknown(item, AccessReason.systemdVersionUnparsed);
   }
-  if (version >= kSystemdJsonVersion) {
+  if (version >= _systemdJsonVersion) {
     return _ok(item, AccessReason.systemdJson);
   }
-  if (version >= kSystemdOldestTested) {
+  if (version >= _systemdOldestTested) {
     return _ok(item, AccessReason.systemdTextFallback);
   }
   return _unknown(item, AccessReason.systemdOlderThanTested);
