@@ -255,10 +255,12 @@ CronJobEntry _cronEntry(
     return CronJobEntry(id: id, job: job, runsUnknown: JobRunsUnknown.unparsed);
   }
 
+  // An empty `CRON_TZ=` counts as unset, here and in [_cronZone].
+  final cronTz = (job.cronTz?.isEmpty ?? true) ? null : job.cronTz;
   final schedule = CronSchedule(
     text: job.schedule,
     expression: expression,
-    timeZone: job.cronTz,
+    timeZone: cronTz,
   );
   if (expression.isReboot) {
     return CronJobEntry(
@@ -269,7 +271,7 @@ CronJobEntry _cronEntry(
     );
   }
 
-  final runZone = _cronZone(job.cronTz, zone, zoneFor);
+  final runZone = _cronZone(cronTz, zone, zoneFor);
   if (runZone == null) {
     return CronJobEntry(
       id: id,
@@ -298,13 +300,13 @@ CronJobEntry _cronEntry(
 const _utcNames = {'UTC', 'Etc/UTC', 'GMT', 'Etc/GMT'};
 
 /// The zone a line with [cronTz] runs in, or null when it cannot be
-/// resolved. An empty `CRON_TZ=` counts as unset.
+/// resolved.
 ServerZone? _cronZone(
   String? cronTz,
   ServerZone server,
   CronZoneResolver? zoneFor,
 ) {
-  if (cronTz == null || cronTz.isEmpty) return server;
+  if (cronTz == null) return server;
 
   final resolved = zoneFor?.call(cronTz);
   if (resolved != null) return resolved;

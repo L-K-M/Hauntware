@@ -220,6 +220,7 @@ void main() {
       final job = _only(
         _merge(_cron(crontab: 'CRON_TZ=\n30 2 * * * a'), zone: _fixed(2)),
       );
+      expect(job.schedule!.timeZone, isNull);
       expect(job.nextRuns.first.atUtc, DateTime.utc(2026, 6, 2, 0, 30));
     });
 
