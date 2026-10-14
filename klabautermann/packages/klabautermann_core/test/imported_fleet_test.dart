@@ -448,5 +448,23 @@ void main() {
       expect(hops('a,b'), hasLength(2));
       expect(hops('a,ssh://u;fp=1@h'), hasLength(2));
     });
+
+    test('refuses a hop with a character the shell globs', () {
+      // ssh passes the hops before the last, and the last one's user and
+      // host, to /bin/sh unquoted: `-J [2001:db8::1]` becomes `-J 1`
+      // where ssh runs in a directory holding a file named 1.
+      for (final value in [
+        '[2001:db8::1],web',
+        'gw*,web',
+        'g?w,web',
+        'u*@gw',
+        'gw[1]',
+        'ssh://u?@gw',
+      ]) {
+        expect(hops(value), isNull, reason: value);
+      }
+      // ssh drops the brackets around the last hop's host.
+      expect(hops('web,[2001:db8::1]'), hasLength(2));
+    });
   });
 }

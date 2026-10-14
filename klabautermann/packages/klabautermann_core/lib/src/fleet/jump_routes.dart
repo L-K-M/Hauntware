@@ -34,8 +34,10 @@ const String _replacement = '\u{FFFD}';
 const String _cWhitespace = ' \t\n\v\f\r';
 
 /// The characters, besides whitespace and control characters, that ssh's
-/// `valid_hostname()` rejects; the shell that runs the hops reads them.
-const String _shellCharacters = '\'`"\$\\;&<>|(){}';
+/// `valid_hostname()` rejects, and the glob characters, which it does not:
+/// the shell that runs the hops reads them all, and globs a word holding
+/// `*`, `?` or `[` into the names of files where ssh runs.
+const String _shellCharacters = '\'`"\$\\;&<>|(){}*?[]';
 
 /// One jump host on an imported server's route (03 §10.1): the hop as its
 /// `ProxyJump` names it and the endpoint ssh would dial for it.
@@ -100,12 +102,14 @@ final class JumpHop {
 ///
 /// - is one ssh rejects, or names a port other than a decimal 1 to 65535
 ///   (ssh also resolves service names);
-/// - has a hop whose user or host holds whitespace, a quote or another
-///   character the shell reads, or starts with `-`, or a hop before the
-///   last that holds such a character as written: ssh runs the route as
-///   a `ProxyCommand` through `/bin/sh`, putting the last hop's user and
-///   host in it and the hops before as written, and the nested ssh
-///   rejects such a host name or reads it as an option;
+/// - has a hop whose user or host holds whitespace, a quote, a glob
+///   character or another character the shell reads, or starts with
+///   `-`, or a hop before the last that holds such a character as
+///   written: ssh runs the route as a `ProxyCommand` through `/bin/sh`,
+///   putting the last hop's user and host in it and the hops before as
+///   written, unquoted, so the shell globs such a word into file names,
+///   or the nested ssh rejects such a host name or reads it as an
+///   option;
 /// - has a `#` comment holding a comma: ssh hands the hops before the
 ///   last on from the value as written, up to its last comma, so the
 ///   comment reaches the shell;
