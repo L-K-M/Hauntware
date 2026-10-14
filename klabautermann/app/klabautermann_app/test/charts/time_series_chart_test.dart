@@ -1,4 +1,7 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show RenderRepaintBoundary;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ghost_theme/ghost_theme.dart' show GhostChrome;
 import 'package:ghost_ui/ghost_ui.dart' show contrastRatio;
@@ -73,6 +76,18 @@ List<Rect> _contours(TimeSeriesPainter painter, Size size, Color color) {
   ];
 }
 
+/// Each gap band's wash that [painter] draws, in time order.
+List<Rect> _bands(TimeSeriesPainter painter, Size size) {
+  final canvas = TestRecordingCanvas();
+  painter.paint(canvas, size);
+  return [
+    for (final call in canvas.invocations)
+      if (call.invocation.memberName == #drawRect &&
+          (call.invocation.positionalArguments[1] as Paint).color.a < 0.1)
+        call.invocation.positionalArguments.first as Rect,
+  ];
+}
+
 /// 03 §10.7 and §9.5 item 5: gaps are hatched, labelled and never
 /// interpolated; the legend names the source; semantics (A11Y-02, A11Y-15)
 /// and the version-counter repaint.
@@ -87,15 +102,7 @@ void main() {
     final size = tester.getSize(_plot);
     final palette = ChartPalette.of(tester.element(_plot));
 
-    // The bands: each gap's wash, in time order.
-    final canvas = TestRecordingCanvas();
-    painter.paint(canvas, size);
-    final bands = [
-      for (final call in canvas.invocations)
-        if (call.invocation.memberName == #drawRect &&
-            (call.invocation.positionalArguments[1] as Paint).color.a < 0.1)
-          call.invocation.positionalArguments.first as Rect,
-    ];
+    final bands = _bands(painter, size);
     expect(bands, hasLength(2));
     // The open gap reaches the right edge.
     expect(bands.last.right, closeTo(size.width - 0.75, 0.01));
@@ -115,6 +122,8 @@ void main() {
       }
     }
     // The lone sample at 12:06 is a dot between the receive lines.
+    final canvas = TestRecordingCanvas();
+    painter.paint(canvas, size);
     final dot = canvas.invocations.singleWhere(
       (call) => call.invocation.memberName == #drawCircle,
     );
@@ -124,12 +133,17 @@ void main() {
   });
 
   for (final brightness in Brightness.values) {
-    test(
-      'the hatching clears 3:1 on the chart surfaces (${brightness.name})',
-      () {
+    testWidgets(
+      'every hatch stroke clears 3:1 as drawn at 1x (${brightness.name})',
+      (tester) async {
         final theme = chartTheme(brightness);
         final chrome = theme.extension<GhostChrome>()!;
         final ink = ChartPalette.fromTheme(theme).scaleText;
+        final ring = TimeSeriesRing(capacity: 2, lanes: 1);
+        addTearDown(ring.dispose);
+        ring.openGap(_at(100), ChartGapReason.disconnected);
+        const scene = ValueKey('hatch');
+
         for (final surface in [
           theme.colorScheme.surface,
           theme.colorScheme.surfaceContainerLow,
@@ -139,19 +153,79 @@ void main() {
           chrome.inspectorBackground,
           chrome.sidebarBackground,
         ]) {
-          final washed = Color.alphaBlend(
+          await tester.pumpWidget(
+            chartFrame(
+              brightness: brightness,
+              RepaintBoundary(
+                key: scene,
+                child: ColoredBox(
+                  color: surface,
+                  child: SizedBox(
+                    width: 400,
+                    height: 200,
+                    child: TimeSeriesChart(
+                      data: ring,
+                      labels: const ['User'],
+                      unit: ChartUnit.percent,
+                      strings: testChartStrings,
+                      source: '',
+                      end: _end,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+          final band = _bands(_painterOf(tester), tester.getSize(_plot)).single;
+          // A desktop at 100 % scaling rasterizes at one pixel per point,
+          // where a thin diagonal stroke never reaches its full colour.
+          final pixels = (await tester.runAsync(() async {
+            final boundary = tester.renderObject<RenderRepaintBoundary>(
+              find.byKey(scene),
+            );
+            final image = await boundary.toImage();
+            final bytes = await image.toByteData();
+            final width = image.width;
+            image.dispose();
+            return (bytes: bytes!, width: width);
+          }))!;
+          Color pixel(int x, int y) {
+            final at = (y * pixels.width + x) * 4;
+            final byte = pixels.bytes.getUint8;
+            return Color.fromARGB(255, byte(at), byte(at + 1), byte(at + 2));
+          }
+
+          final wash = Color.alphaBlend(
             ink.withValues(alpha: TimeSeriesPainter.gapWashAlpha),
             surface,
           );
-          final hatch = Color.alphaBlend(
-            ink.withValues(alpha: TimeSeriesPainter.gapHatchAlpha),
-            washed,
-          );
-          expect(
-            contrastRatio(hatch, washed),
-            greaterThanOrEqualTo(3),
-            reason: '$surface',
-          );
+          var strokes = 0;
+          // Rows clear of the label, the grid and the band's edges; each
+          // run of hatch pixels is one stroke crossing the row.
+          for (
+            var y = (band.top + band.height * 0.55).ceil();
+            y < band.top + band.height * 0.9;
+            y++
+          ) {
+            final left = band.left.ceil() + 1, right = band.right.floor() - 2;
+            var peak = 0.0;
+            var start = -1;
+            for (var x = left; x <= right; x++) {
+              final ratio = contrastRatio(pixel(x, y), wash);
+              if (ratio > 1.2) {
+                if (start < 0) start = x;
+                peak = math.max(peak, ratio);
+                continue;
+              }
+              if (start > left) {
+                expect(peak, greaterThanOrEqualTo(3), reason: '$surface');
+                strokes++;
+              }
+              start = -1;
+              peak = 0;
+            }
+          }
+          expect(strokes, greaterThan(100), reason: '$surface');
         }
       },
     );

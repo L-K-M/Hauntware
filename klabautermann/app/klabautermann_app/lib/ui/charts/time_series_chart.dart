@@ -216,7 +216,7 @@ void _paintHatch(Canvas canvas, Rect band, Color ink) {
     Paint()
       ..color = ink.withValues(alpha: TimeSeriesPainter.gapHatchAlpha)
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 1,
+      ..strokeWidth = TimeSeriesPainter._gapHatchWidth,
   );
   canvas.restore();
 }
@@ -293,10 +293,14 @@ final class TimeSeriesPainter extends CustomPainter {
   static const gridAlpha = 0.24;
 
   /// A gap band's wash and hatching. The hatching, not the wash, carries
-  /// the band: a test holds it to 3:1 against the washed chart surfaces.
+  /// the band. Its strokes are 2 px wide: at one pixel per point a 1 px
+  /// diagonal covers no pixel whole, so antialiasing fades all of it. A
+  /// test holds each stroke, as drawn, to 3:1 against the wash on the
+  /// chart surfaces.
   static const gapWashAlpha = 0.06;
   static const gapHatchAlpha = 0.8;
-  static const gapHatchSpacing = 6.0;
+  static const _gapHatchWidth = 2.0;
+  static const gapHatchSpacing = 8.0;
 
   /// A band narrower than this widens around its centre, so a short gap
   /// still shows.

@@ -3385,9 +3385,10 @@ the next sample closes it and is never joined to the sample before it,
 nor is any sample joined across an unknown one. A band is at least 3 px
 wide and carries its label where the label fits; the legend names every
 reason in view, each series and the source, which the caller words. The
-hatching holds 3:1 on the chart surfaces. Time ticks fall on round local
-times, and the chart never animates: it moves when a sample arrives or
-a rebuild moves its right edge later.
+hatching's strokes are 2 px wide, so that drawn at one pixel per point
+each still holds 3:1 against the band on the chart surfaces. Time ticks
+fall on round local times, and the chart never animates: it moves when a
+sample arrives or a rebuild moves its right edge later.
 
 ---
 
