@@ -175,11 +175,10 @@ in `settings.json`, and the release job (M4).
 
 The macOS runner now keeps its window hidden until Dart has placed it,
 so the CI launch check's wait for a visible window also proves that
-startup reached the window restore. The check does not yet pass
-`--menu File` as Planchette's and Poltergeist's do, and the `ci.yml`
-comment above it still describes the template runner; both are a
-root-lane follow-up. The Linux and Windows runners show their window on
-the first frame, so a startup that never reaches `runApp` fails there.
+startup reached the window restore. It also passes `--menu File`, as
+Planchette's and Poltergeist's do, so the Dart menu bar must be
+installed. The Linux and Windows runners show their window on the first
+frame, so a startup that never reaches `runApp` fails there.
 
 ## Open manual gates
 
