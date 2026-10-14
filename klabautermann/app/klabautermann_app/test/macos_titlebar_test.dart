@@ -7,6 +7,8 @@ import 'package:klabautermann_app/ui/fleet_rail.dart';
 import 'package:klabautermann_app/ui/inspector_pane.dart';
 import 'package:klabautermann_app/ui/macos_toolbar_band.dart';
 import 'package:klabautermann_app/ui/server_workspace.dart';
+import 'package:klabautermann_app/ui/sidebar_kit.dart'
+    show SidebarSectionHeader;
 
 import 'support/harness.dart';
 
@@ -140,10 +142,11 @@ void main() {
       expectPanesBelow(tester, macosToolbarBandHeight);
       expect(tester.getTopLeft(paneFill(FleetRail)).dy, 0);
       expect(tester.getTopLeft(paneFill(InspectorPane)).dy, 0);
-      // The rail's list does not pad for the band a second time.
+      // The rail's list does not pad for the band a second time: its
+      // first row starts right under the section header above it.
       expect(
-        tester.getTopLeft(find.text('SERVERS')).dy,
-        lessThan(macosToolbarBandHeight + 40),
+        tester.getTopLeft(find.byType(FleetServerRow).first).dy,
+        tester.getBottomLeft(find.byType(SidebarSectionHeader)).dy,
       );
     }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
 
