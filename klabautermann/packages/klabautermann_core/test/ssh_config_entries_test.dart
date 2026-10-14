@@ -169,6 +169,18 @@ void main() {
       expect(result.skippedCount, 3);
     });
 
+    test('a byte-order mark makes ssh reject the whole file', () {
+      // ssh reads the mark's bytes as the start of the first keyword:
+      // "Bad configuration option: \357\273\277host". The app keeps the
+      // mark that Dart's UTF-8 decoder drops.
+      final result = importedHostsFromSshConfig(
+        '\u{FEFF}Host web\n  HostName 10.0.0.5\nHost db\n',
+      );
+
+      expect(result.hosts, isEmpty);
+      expect(result.skippedCount, 2);
+    });
+
     test('reads CRLF configs', () {
       final result = importedHostsFromSshConfig(
         'Host win\r\n  HostName win.example\r\n  Port 2200\r\n',
@@ -526,6 +538,18 @@ void main() {
         ('bare', 'a,b # two hops'),
       ]);
       expect(result.skippedCount, 2);
+    });
+
+    test('keeps Unicode whitespace at the end of a ProxyJump hop', () {
+      // parse_jump()'s rtrim() drops only ASCII whitespace, so U+00A0 is
+      // part of the hop's name, which `Host gw` does not match.
+      expect(
+        _dials(
+          'Host web\n  HostName 10.0.0.5\n  ProxyJump gw\u00A0\n'
+          'Host gw\n  HostName gw.example.com\n',
+        )['web'],
+        ['me@gw\u00A0:22', 'me@10.0.0.5:22'],
+      );
     });
 
     test('leaves out a ProxyJump whose comment holds a comma', () {

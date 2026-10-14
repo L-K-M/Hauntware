@@ -19,6 +19,9 @@ final RegExp _decimal = RegExp(r'^[0-9]+$');
 /// digit or `_`, then letters, digits, `.`, `-` and `_`.
 final RegExp _domain = RegExp(r'^[A-Za-z0-9_][A-Za-z0-9_.-]*$');
 
+/// What `isspace()` finds in the C locale.
+const String _cWhitespace = ' \t\n\v\f\r';
+
 /// The characters, besides whitespace and control characters, that ssh's
 /// `valid_hostname()` rejects; the shell that runs the hops reads them.
 const String _shellCharacters = '\'`"\$\\;&<>|(){}';
@@ -323,7 +326,7 @@ List<_Hop>? _parseProxyJump(String value) {
   // written, at its last comma, so a comma in the comment carries the
   // comment into the command /bin/sh runs.
   if (hash >= 0 && value.contains(',', hash)) return null;
-  final text = (hash < 0 ? value : value.substring(0, hash)).trimRight();
+  final text = _rtrim(hash < 0 ? value : value.substring(0, hash));
   if (text.contains('%')) return null;
 
   final names = text.split(',');
@@ -346,6 +349,18 @@ List<_Hop>? _parseProxyJump(String value) {
     hops.add((name: name, user: hop.user, host: hop.host, port: hop.port));
   }
   return hops;
+}
+
+/// [text] without the C locale's `isspace()` characters at its end, so
+/// U+00A0 and other Unicode whitespace stay part of the last hop, as in
+/// `parse_jump()`. Its `rtrim()` also ends the value at such a character
+/// inside it; one left there makes the import refuse the hop.
+String _rtrim(String text) {
+  var end = text.length;
+  while (end > 0 && _cWhitespace.contains(text[end - 1])) {
+    end--;
+  }
+  return text.substring(0, end);
 }
 
 /// Whether [text] holds no whitespace, control character or

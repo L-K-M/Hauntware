@@ -31,7 +31,8 @@
   reading would route it through itself, one whose
   `HostName` or `IdentityFile` needs something it cannot fill in, or one
   whose `ProxyJump` ssh would refuse or it cannot follow (a route of
-  more than 16 hops included).
+  more than 16 hops included). A file that starts with a byte-order
+  mark, which ssh refuses, imports no host.
 - Desktop settings window: on macOS, Linux and Windows, Settings opens in
   a window of its own, and a theme change there applies to the app.
   Phones keep the settings page.

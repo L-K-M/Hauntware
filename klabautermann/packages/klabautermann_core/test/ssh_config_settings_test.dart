@@ -90,6 +90,53 @@ void main() {
       expect(_applies('Host caf\u{FFFD}', 'web'), isFalse);
     });
 
+    test('splits lines as readconf.c does', () {
+      // Only space, tab, CR, LF and form feed end a line, and only space
+      // and tab separate arguments: U+00A0, U+FEFF, \v and other Unicode
+      // whitespace are part of a token.
+      const nbsp = 'Host web\u00A0\n  HostName 10.0.0.5\n  ProxyJump b\n';
+      expect(SshConfigSettings.parse(nbsp).aliases, ['web\u00A0']);
+      expect(_resolve(nbsp, 'web'), ('web', 22, null, null, null));
+      expect(_resolve(nbsp, 'web\u00A0'), ('10.0.0.5', 22, null, null, 'b'));
+      for (final end in ['\u00A0', '\u{FEFF}', '\v', '\u2003', '\u3000']) {
+        expect(
+          _resolve('Host web\n  HostName 10.0.0.5$end\n  User u$end\n', 'web'),
+          ('10.0.0.5$end', 22, 'u$end', null, null),
+          reason: end.codeUnits.toString(),
+        );
+      }
+      expect(_resolve('Host web\f\r \t\n  HostName 10.0.0.5 \f\t\r\n', 'web'), (
+        '10.0.0.5',
+        22,
+        null,
+        null,
+        null,
+      ));
+      // A NUL ends the line, as it ends a C string.
+      expect(_resolve('Host web\n  HostName 10.0.0.5\u0000 x\n', 'web'), (
+        '10.0.0.5',
+        22,
+        null,
+        null,
+        null,
+      ));
+      // strdelim() ends the keyword at a quote too, and drops the quotes.
+      expect(_resolve('Host web\n  "HostName" 10.0.0.5\n', 'web'), (
+        '10.0.0.5',
+        22,
+        null,
+        null,
+        null,
+      ));
+      expect(_resolve('Host web\n  =HostName 10.0.0.5\n', 'web'), (
+        '10.0.0.5',
+        22,
+        null,
+        null,
+        null,
+      ));
+    });
+
     test('a negated Host pattern turns the block off wherever it '
         'stands', () {
       expect(_applies('Host * !bastion', 'bastion'), isFalse);

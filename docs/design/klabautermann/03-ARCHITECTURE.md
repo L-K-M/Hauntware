@@ -1061,7 +1061,7 @@ export 'package:seance_core/seance_core.dart' show expandHomePath;
 // src/fleet/: engine-side only; the ssh_config reader, and the connect
 // configs the imports map to
 import 'package:seance_core/seance_core.dart'
-    show ImportedHost, SshConfigImporter, SshConfigLine;
+    show ImportedHost, SshConfigImporter;
 import 'package:seance_core/seance_core.dart'
     show AuthMethod, ServerConfig, serverSearchHaystack;
 // src/settings/device_settings_store.dart: the app isolate's settings.json
@@ -3464,9 +3464,9 @@ the engine in `engine_isolate.dart` beside it):
 - **`ImportSshConfig(text)`** carries the config's text: the UI reads
   `~/.ssh/config` and decides whether the platform has one, and the
   engine opens no file for it. The engine reads the text off the UI
-  isolate (CN-19), splitting its lines with `seance_core`'s
-  `SshConfigLine` and taking a host for each name a `Host` line gives,
-  as `SshConfigImporter.hostAliases` does
+  isolate (CN-19), splitting its lines as `readconf.c` does (below) and
+  taking a host for each name a `Host` line gives, as `seance_core`'s
+  `SshConfigImporter.hostAliases` does
   (`klabautermann/packages/klabautermann_core/lib/src/fleet/ssh_config_entries.dart`), replaces
   every entry an earlier import produced, and sends `CatalogReplaced`
   before `SshConfigImported`, so the fleet already shows the imports when
@@ -3486,6 +3486,14 @@ the engine in `engine_isolate.dart` beside it):
   does a host from a store of an older schema (4.10). The engine never
   dials a route ssh would not take, so the import reads each host as
   ssh does (`readconf.c`; `ssh_config_settings.dart` beside the import):
+  - Lines split as `readconf.c` splits them: only space, tab, CR, LF and
+    form feed are stripped from a line's end, and only space and tab
+    separate arguments, so U+00A0, U+FEFF, `\v` and other whitespace are
+    part of a value, as they are of a `ProxyJump` hop. ssh reads a
+    byte-order mark at the top of the file as part of the first keyword
+    and rejects the whole config, so such a file imports no host and
+    counts every one; the app keeps the mark, which Dart's UTF-8 decoder
+    drops.
   - Every block that applies to the name sets each value it names unless
     an earlier line set it, so the first value wins within a block and
     across blocks, and a later block for an alias adds only what earlier

@@ -2,7 +2,7 @@ import 'dart:convert' show utf8;
 import 'dart:io' show InternetAddress;
 
 import 'package:seance_core/seance_core.dart'
-    show ImportedHost, SshConfigImporter, SshConfigLine;
+    show ImportedHost, SshConfigImporter;
 
 import '../engine/protocol.dart' show kSshDefaultPort;
 
@@ -41,6 +41,16 @@ const int _maximumSubpatternLength = 1023;
 /// bytes that are not UTF-8.
 const String _replacement = '\u{FFFD}';
 
+/// A UTF-8 byte-order mark. Dart's decoder drops one at the start of the
+/// file, so the app puts it back for the engine to see.
+const String _byteOrderMark = '\u{FEFF}';
+
+/// `readconf.c`'s `WHITESPACE`, which `strdelim()` skips around a keyword.
+const String _whitespace = ' \t\r\n';
+
+/// What `process_config_line_depth()` strips from the end of a line.
+const String _lineEnd = ' \t\r\n\f';
+
 /// The directives the engine maps, and `Include`. ssh reads every other
 /// one too, but none of them changes where or as whom the engine dials.
 enum _Keyword {
@@ -67,8 +77,9 @@ const Map<String, _Keyword> _keywords = {
 
 /// Why [SshConfigSettings.resolve] gives no settings for a name.
 enum UnresolvedReason {
-  /// A block that applies holds a line ssh rejects: a `Port` the import
-  /// cannot read (see [SshConfigSettings]), a `HostName`, `User`,
+  /// ssh rejects the whole config: the file starts with a byte-order
+  /// mark, or a block that applies holds a line ssh rejects: a `Port` the
+  /// import cannot read (see [SshConfigSettings]), a `HostName`, `User`,
   /// `IdentityFile`, `ProxyJump`, `ProxyCommand` or
   /// `CanonicalizeHostname` with no value, or with more than one where
   /// ssh takes one, one of those lines or the `Host` line with a quote
@@ -197,6 +208,13 @@ final class UnresolvedSshSettings extends SshConfigResolution {
 /// pass is unresolved. `CanonicalizeHostname` other than `no` canonicalizes
 /// through DNS before the final pass, so it leaves the name unresolved.
 ///
+/// Lines split as `readconf.c` splits them ([_ConfigLine]): only space,
+/// tab, CR, LF and form feed are stripped from a line's end, and only
+/// space and tab separate arguments, so other whitespace, such as U+00A0,
+/// is part of a value.
+/// ssh reads a byte-order mark at the top of the file as part of the first
+/// keyword and rejects the whole config, so every name is unresolved.
+///
 /// ssh rejects the whole config over some lines wherever they stand: a
 /// `Port` it cannot read, a directive with no value or more values than it
 /// takes, a quote left open, or an empty `Host` pattern. A `Port` here is a
@@ -214,6 +232,7 @@ final class SshConfigSettings {
     this._index,
     this._includes,
     this._wantsFinalPass,
+    this._rejected,
   );
 
   /// Reads [text].
@@ -223,18 +242,21 @@ final class SshConfigSettings {
     var includes = false;
     var wantsFinalPass = false;
 
-    for (final raw in text.split('\n')) {
-      final line = SshConfigLine.tryParse(raw);
+    // The names still count as hosts, all of them left out.
+    final rejected = text.startsWith(_byteOrderMark);
+    final lines = (rejected ? text.substring(1) : text).split('\n');
+
+    for (final raw in lines) {
+      final line = _ConfigLine.parse(raw);
       if (line == null) continue;
 
-      final rest = _rest(raw);
       switch (line.keyword) {
         case 'host':
           blocks.add(
             _HostBlock(
               blocks.length,
               line.arguments,
-              rejected: _hasOpenQuote(rest) || line.arguments.contains(''),
+              rejected: line.openQuote || line.arguments.contains(''),
             ),
           );
           aliases.addAll(SshConfigImporter.hostAliases(line.arguments));
@@ -242,7 +264,7 @@ final class SshConfigSettings {
           final block = _MatchBlock.parse(
             blocks.length,
             line.arguments,
-            openQuote: _hasOpenQuote(rest),
+            openQuote: line.openQuote,
           );
           wantsFinalPass |= block.wantsFinalPass;
           blocks.add(block);
@@ -254,8 +276,8 @@ final class SshConfigSettings {
           blocks.last.lines.add((
             keyword: keyword,
             arguments: line.arguments,
-            rest: rest,
-            openQuote: _hasOpenQuote(rest),
+            rest: line.command,
+            openQuote: line.openQuote,
           ));
       }
     }
@@ -277,6 +299,7 @@ final class SshConfigSettings {
       index,
       includes,
       wantsFinalPass,
+      rejected,
     );
   }
 
@@ -298,8 +321,14 @@ final class SshConfigSettings {
   /// Whether a `Match final` makes ssh read the config a final time.
   final bool _wantsFinalPass;
 
+  /// Whether ssh rejects the whole config, whatever name it is given.
+  final bool _rejected;
+
   /// The settings ssh would use for [name], the host name you give it.
   SshConfigResolution resolve(String name) {
+    if (_rejected) {
+      return const UnresolvedSshSettings(UnresolvedReason.rejectedLine);
+    }
     if (name.contains(_replacement)) {
       return const UnresolvedSshSettings(UnresolvedReason.undecodedName);
     }
@@ -834,57 +863,136 @@ int? _parsePort(String value) {
   return port == null || !isTcpPort(port) ? null : port;
 }
 
-/// The rest of a config [line] after its keyword and the spaces, tabs and
-/// `=` that follow it, as ssh hands it to `ProxyJump` and `ProxyCommand`.
-String _rest(String line) {
-  const separators = ' \t=';
-  final text = line.trim();
-  var index = 0;
-  while (index < text.length && !separators.contains(text[index])) {
-    index++;
-  }
-  while (index < text.length && separators.contains(text[index])) {
-    index++;
-  }
-  return text.substring(index);
-}
+/// One config line as `readconf.c`'s `process_config_line_depth()`
+/// splits it. A NUL ends the line, as it ends a C string, and only
+/// [_lineEnd] is stripped from its end. `strdelim()` ends the keyword at
+/// [_whitespace], `=` or a quote, which it drops; one `=` and the
+/// whitespace around it may follow. `argv_split()` then splits the rest
+/// at spaces and tabs alone: a quote keeps them in an argument and is
+/// dropped, a backslash escapes a quote, a backslash and, outside quotes,
+/// a space, and a `#` where an argument would start ends the line.
+final class _ConfigLine {
+  _ConfigLine._(this.keyword, String rest)
+    : command = _skip(rest, '$_whitespace='),
+      _split = _argvSplit(rest);
 
-/// Whether `argv_split()` finds a quote in [text], the arguments of a
-/// config line, left open at its end ("invalid quotes"). A `#` that starts
-/// an argument ends the line; a backslash escapes a quote, a backslash,
-/// and outside quotes a space.
-bool _hasOpenQuote(String text) {
-  var index = 0;
-  while (index < text.length) {
-    final character = text[index];
-    if (character == ' ' || character == '\t') {
-      index++;
-      continue;
+  /// Splits [raw]; null for a line ssh skips: blank, a comment, or a
+  /// keyword with a quote left open.
+  static _ConfigLine? parse(String raw) {
+    final nul = raw.indexOf('\u0000');
+    var line = nul < 0 ? raw : raw.substring(0, nul);
+
+    // The first character stays, as in ssh.
+    var end = line.length;
+    while (end > 1 && _lineEnd.contains(line[end - 1])) {
+      end--;
     }
-    if (character == '#') return false;
+    line = line.substring(0, end);
 
-    String? quote;
-    for (; index < text.length; index++) {
-      final c = text[index];
-      final next = index + 1 < text.length ? text[index + 1] : '';
-      if (c == r'\') {
-        final escapes =
-            next == '"' ||
-            next == "'" ||
-            next == r'\' ||
-            (quote == null && next == ' ');
-        if (escapes) index++;
-      } else if (quote == null && (c == ' ' || c == '\t')) {
-        break;
-      } else if (quote == null && (c == '"' || c == "'")) {
-        quote = c;
-      } else if (c == quote) {
-        quote = null;
+    var (keyword, rest) = _strdelim(line);
+    if (keyword == null) return null;
+    if (keyword.isEmpty) (keyword, rest) = _strdelim(rest);
+    if (keyword == null || keyword.isEmpty || keyword.startsWith('#')) {
+      return null;
+    }
+    return _ConfigLine._(_asciiLower(keyword), _skip(rest ?? '', _whitespace));
+  }
+
+  /// The keyword, ASCII-lowercased, as `lowercase()` does.
+  final String keyword;
+
+  /// The value ssh hands `ProxyJump` and `ProxyCommand`: the rest of the
+  /// line after the whitespace and `=` that start it.
+  final String command;
+
+  final ({List<String> arguments, bool openQuote}) _split;
+
+  /// The arguments, unquoted and unescaped; empty when the line has none.
+  List<String> get arguments => _split.arguments;
+
+  /// Whether a quote is left open, on which ssh rejects the line and the
+  /// whole config ("invalid quotes").
+  bool get openQuote => _split.openQuote;
+
+  /// `strdelim()` on [text]: the token at its start, or null with a quote
+  /// left open, and the text after the token and the delimiters that end
+  /// it, or null when nothing ends it.
+  static (String?, String?) _strdelim(String? text) {
+    if (text == null) return (null, null);
+
+    var at = 0;
+    while (at < text.length && !'$_whitespace"='.contains(text[at])) {
+      at++;
+    }
+    if (at == text.length) return (text, null);
+
+    if (text[at] == '"') {
+      final unquoted = text.substring(0, at) + text.substring(at + 1);
+      final close = unquoted.indexOf('"', at);
+      if (close < 0) return (null, null);
+      return (
+        unquoted.substring(0, close),
+        _skip(unquoted.substring(close + 1), _whitespace),
+      );
+    }
+
+    var rest = _skip(text.substring(at + 1), _whitespace);
+    // Only one `=` may separate.
+    if (text[at] != '=' && rest.startsWith('=')) {
+      rest = _skip(rest.substring(1), _whitespace);
+    }
+    return (text.substring(0, at), rest);
+  }
+
+  /// [text] without the [characters] that start it.
+  static String _skip(String text, String characters) {
+    var at = 0;
+    while (at < text.length && characters.contains(text[at])) {
+      at++;
+    }
+    return text.substring(at);
+  }
+
+  /// `argv_split()` on [text], ending at a comment.
+  static ({List<String> arguments, bool openQuote}) _argvSplit(String text) {
+    final arguments = <String>[];
+    var index = 0;
+    while (index < text.length) {
+      final character = text[index];
+      if (character == ' ' || character == '\t') {
+        index++;
+        continue;
       }
+      if (character == '#') break;
+
+      final argument = StringBuffer();
+      String? quote;
+      for (; index < text.length; index++) {
+        final c = text[index];
+        final next = index + 1 < text.length ? text[index + 1] : '';
+        if (c == r'\') {
+          final escapes =
+              next == '"' ||
+              next == "'" ||
+              next == r'\' ||
+              (quote == null && next == ' ');
+          if (escapes) index++;
+          argument.write(escapes ? next : c);
+        } else if (quote == null && (c == ' ' || c == '\t')) {
+          break;
+        } else if (quote == null && (c == '"' || c == "'")) {
+          quote = c;
+        } else if (c == quote) {
+          quote = null;
+        } else {
+          argument.write(c);
+        }
+      }
+      arguments.add(argument.toString());
+      if (quote != null) return (arguments: arguments, openQuote: true);
     }
-    if (quote != null) return true;
+    return (arguments: arguments, openQuote: false);
   }
-  return false;
 }
 
 /// ssh's expansion of a `HostName` [value] for [name] (`ssh.c` calls
