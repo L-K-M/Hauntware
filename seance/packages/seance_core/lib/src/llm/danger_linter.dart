@@ -292,10 +292,11 @@ class DangerLinter {
       // -1 after the first argument is a PID: a leading -1 is SIGHUP.
       // `\b` rejects -12345 but accepts a closing quote or parenthesis.
       // This warns like the PID 1 and power rules: processes stop, stored
-      // data stays. Quotes can put a later kill's arguments on the next
-      // line (`sh -c "kill 5; kill` newline `-9 -1"`), so a kill followed
-      // by blanks and a newline is tried as well as the first kill on each
-      // line that a blank follows.
+      // data stays. The whole-line rule this replaced let a kill's
+      // arguments start on the next line (its `\s+` crossed newlines), so
+      // a kill followed by blanks and a newline is tried as well as the
+      // first kill on each line that a blank follows. A shell ends the
+      // command at that newline; the branch only keeps the old matches.
       RegExp(
         '(?:$_kill'
         r'[^\S\n]*\n\s*|'

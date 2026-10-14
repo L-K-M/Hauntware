@@ -543,11 +543,15 @@ argument of `-l`, `-L`, `--list`, `--table` or signal 0 (`-0`, `-s 0`,
 counts, so a `# -l` comment cannot hide `kill -9 1`; `N` is
 `(?<!\s(?:-[snq]|--signal|--queue|--timeout))`, which rejects a word
 that is a signal, queue or timeout operand rather than a PID. The code
-writes rows 25 and 26 in an equivalent linear form: the operand
-lookbehind follows the PID, and only the first `kill` on a line is tried
-(for row 26, also a `kill` whose arguments continue on the next line
-inside quotes), since a later kill reaches nothing the first one does
-not. Trying every kill took about 36 s on a 64 KB line of `kill x`.
+writes rows 25 and 26 in an equivalent linear form. The operand
+lookbehind follows the PID. Only the first `K` on a line is tried (for
+row 26, the first `K` that a blank follows, plus any `K` that blanks and
+a newline follow, which keeps the old `\s+` matches across a newline),
+since a later `K` reaches nothing the first one does not. Row 26 reads
+its arguments as `\S[^\n]*` rather than `\S+[^\n]*`, the same strings
+without retrying every split of a long argument. On 64 KB lines, trying
+every kill took about 36 s on repeated `kill x`, and `\S+` about 34 s
+on one long argument.
 
 | # | Pattern | Severity | Explanation |
 |---|---|---|---|

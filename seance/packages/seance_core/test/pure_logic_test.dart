@@ -401,6 +401,10 @@ Host bastion db
             'kill -- 1',
             // Only the first argument can make it a listing or a probe.
             'kill -9 1 # -l',
+            // A listing kill or pkill earlier in the command does not hide
+            // a later kill.
+            "sh -c 'kill -l; kill -9 1'",
+            "sh -c 'pkill x; kill -9 1'",
           ],
           // A longer PID, a job spec, -1 as the signal, a signal or -l
           // operand, and tmux's hyphenated kill-* commands are not PID 1.
@@ -447,6 +451,11 @@ Host bastion db
             'ssh host "kill -9 -1"',
             '(kill -9 -1)',
             r'x=$(kill -s KILL -1)',
+            // A probing kill earlier in the command does not hide a later
+            // kill.
+            "sh -c 'kill -0 5; kill -9 -1'",
+            // Kept from the whole-line rule, whose blanks crossed newlines.
+            'sh -c "kill 5; kill\n-9 -1"',
           ],
           // A leading -1 is the signal (HUP); -12345 is a process group.
           misses: [
