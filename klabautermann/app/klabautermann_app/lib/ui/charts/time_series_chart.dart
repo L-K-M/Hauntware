@@ -94,6 +94,12 @@ class TimeSeriesChart extends StatelessWidget {
             (gap.end?.microsecondsSinceEpoch ?? to) > from)
           gap,
     ];
+    // While the right edge lies in a gap no value is current, so the last
+    // sample before it must not read as now (03 §10.4).
+    final lastGap = gaps.lastOrNull;
+    final edgeInGap =
+        lastGap != null &&
+        (lastGap.end == null || lastGap.end!.microsecondsSinceEpoch > to);
     final style = theme.textTheme.labelSmall!.copyWith(
       color: palette.scaleText,
     );
@@ -125,7 +131,7 @@ class TimeSeriesChart extends StatelessWidget {
                       for (final (lane, samples) in inView.indexed)
                         chartSeriesSummary(
                           label: labels[lane],
-                          samples: samples,
+                          samples: edgeInGap ? [...samples, null] : samples,
                           unit: unit,
                           span: scaleMax,
                           strings: strings,

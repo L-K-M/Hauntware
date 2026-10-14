@@ -259,8 +259,9 @@ void main() {
     await tester.pumpWidget(_chart(_network()));
 
     for (final label in [
-      'Receive: now 1.5 MiB/s, lowest 1 MiB/s, highest 1.5 MiB/s, rising',
-      'Transmit: now 256 KiB/s, lowest 256 KiB/s, highest 256 KiB/s, steady',
+      // The right edge lies in the open gap, so no value is current.
+      'Receive: now unknown, lowest 1 MiB/s, highest 1.5 MiB/s, rising',
+      'Transmit: now unknown, lowest 256 KiB/s, highest 256 KiB/s, steady',
       // CLDR puts a narrow no-break space before the day period.
       'No data from 12:02:00\u202fPM to 12:04:00\u202fPM: disconnected',
       'No data since 12:09:00\u202fPM: disconnected',
@@ -274,6 +275,13 @@ void main() {
     }
     // The legend's entries repeat the summaries, so they stay silent.
     expect(find.semantics.byLabel('Receive'), findsNothing);
+
+    // Twenty minutes into the gap the window holds no sample, though the
+    // ring does.
+    await tester.pumpWidget(
+      _chart(_network(), end: _end.add(const Duration(minutes: 20))),
+    );
+    expect(find.semantics.byLabel('Receive: unknown'), findsOne);
     semantics.dispose();
   });
 
