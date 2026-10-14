@@ -38,17 +38,24 @@ slice:
   `klabautermann.sync.deviceId` and `klabautermann.appearance`; keys it
   does not know are kept on every write. The device id is a UUID v4
   (`seance_core`'s `uuidV4`, as the catalog library's enrollment
-  expects), minted and saved on the first launch and never regenerated;
-  nothing reads it yet. The theme is restored at startup and saved on
-  every change; the desktop settings window (D32) will reach the same
+  expects), minted and saved on the first launch and never regenerated
+  while the file can be read; a damaged file whose text shows no id gets
+  a new one (the old bytes stay in the corrupt copy). Nothing reads it
+  yet. Only one process is guarded: two instances that start together on
+  a first launch (the Linux runner allows several) each mint an id, and
+  the last write wins. An advisory lock across read, mint and write, or
+  a single desktop instance, must land before enrollment reads the id.
+  The theme is restored at startup and saved on every change; the
+  desktop settings window (D32) will reach the same
   `AppearanceController`, so its changes are saved by the app, not by
   the window. Writes are atomic (temp file, flush, rename, directory
   sync). A damaged file is copied aside as
   `settings.json.corrupt-<UTC time>` before the defaults replace it,
   keeping its device id when the text still shows one (Séance's
-  recovery, Poltergeist's copy name); an unreadable file, one whose copy
-  fails, or one from a newer schema is left untouched and nothing is
-  saved that session. Each case is told once in a top toast at startup;
+  recovery, Poltergeist's copy name; when the defaults cannot be written,
+  the toast says the copy was kept but the file was not reset); an
+  unreadable file, one whose copy fails, or one from a newer schema is
+  left untouched and nothing is saved that session. Each case is told once in a top toast at startup;
   a theme change that cannot be saved stays for the session and says
   so. The monitor set and per-server device preferences have no
   consumers yet and are not stored. No real build has run it yet: the

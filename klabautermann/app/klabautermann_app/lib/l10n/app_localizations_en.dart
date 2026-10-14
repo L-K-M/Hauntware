@@ -185,6 +185,11 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String settingsFileRecoveredNotSaved(String fileName) {
+    return 'Your settings file could not be read or reset. The old file is kept as $fileName. Changes you make now may be lost when Klabautermann restarts.';
+  }
+
+  @override
   String get settingsFileLeftAsIs =>
       'Your settings file could not be read, so it was left as it is. Changes you make now are not saved.';
 

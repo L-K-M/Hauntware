@@ -51,11 +51,13 @@ class _SettingsIssueNoticeState extends State<SettingsIssueNotice> {
 
 /// The user-facing sentence for [issue].
 String settingsIssueMessage(AppLocalizations l10n, DeviceSettingsIssue issue) {
+  // The store sets where it kept the damaged file for the recovered kinds.
+  String keptAs() => File(issue.preservedAs!).uri.pathSegments.last;
+
   return switch (issue.kind) {
-    // The store sets where it kept the damaged file for this kind.
-    DeviceSettingsIssueKind.recovered => l10n.settingsFileRecovered(
-      File(issue.preservedAs!).uri.pathSegments.last,
-    ),
+    DeviceSettingsIssueKind.recovered => l10n.settingsFileRecovered(keptAs()),
+    DeviceSettingsIssueKind.recoveredNotSaved =>
+      l10n.settingsFileRecoveredNotSaved(keptAs()),
     DeviceSettingsIssueKind.unreadable ||
     DeviceSettingsIssueKind.unpreserved => l10n.settingsFileLeftAsIs,
     DeviceSettingsIssueKind.newerVersion => l10n.settingsFileNewer,

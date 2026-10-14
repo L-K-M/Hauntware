@@ -33,6 +33,11 @@ enum DeviceSettingsIssueKind {
   /// id when the damaged text still showed one.
   recovered,
 
+  /// As [recovered], but the defaults could not be written over the
+  /// damaged file, which stays in place for the next launch to recover
+  /// again (with another copy). Later changes try the write again.
+  recoveredNotSaved,
+
   /// The file exists but could not be read. It is left as it is, and
   /// nothing is saved this session.
   unreadable,
@@ -46,13 +51,13 @@ enum DeviceSettingsIssueKind {
   newerVersion,
 
   /// The settings could not be written while the store opened (the first
-  /// device id or the recovered defaults). Later changes try again.
+  /// device id). Later changes try again.
   notSaved;
 
   /// Whether the store refuses every write for the rest of the session.
   bool get readOnly => switch (this) {
     unreadable || unpreserved || newerVersion => true,
-    recovered || notSaved => false,
+    recovered || recoveredNotSaved || notSaved => false,
   };
 }
 
@@ -64,10 +69,13 @@ final class DeviceSettingsIssue {
   final DeviceSettingsIssueKind kind;
 
   /// Where the damaged file's bytes were kept; set for
-  /// [DeviceSettingsIssueKind.recovered] only.
+  /// [DeviceSettingsIssueKind.recovered] and
+  /// [DeviceSettingsIssueKind.recoveredNotSaved] only.
   final String? preservedAs;
 
-  /// The failure behind [kind], for diagnostics.
+  /// The failure behind [kind], for diagnostics: for
+  /// [DeviceSettingsIssueKind.recoveredNotSaved], the failed write rather
+  /// than the parse error.
   final Object? error;
 }
 
@@ -94,7 +102,8 @@ final class DeviceSettingsReadOnlyException implements Exception {
 ///
 /// Every write replaces the whole document atomically (a sibling temp file,
 /// flushed, renamed over the target, then the directory synced) and writes
-/// queue, so the file holds the last change made. A change is applied in
+/// queue, so the file holds the last change this process made; between two
+/// app instances the last writer wins (see [open]). A change is applied in
 /// memory before it is written and stays applied when the write fails: the
 /// call throws, and the next successful write carries it.
 ///
@@ -124,8 +133,12 @@ final class DeviceSettingsStore {
   /// The device id is minted here, on the first launch, rather than when a
   /// consumer first asks: once persisted it exists before any reader does,
   /// so the catalog library's enrollment and every later reader only ever
-  /// read it, and no two readers can race to mint different ids. An id is
-  /// only handed out once it is on disk.
+  /// read it, and no two readers in this process can race to mint
+  /// different ids. An id is only handed out once it is on disk. Nothing
+  /// guards against a second process: two instances that open a missing
+  /// file at once (the Linux runner allows several) each mint and hand out
+  /// an id, and the last rename wins on disk. An inter-process lock or a
+  /// single desktop instance must land before enrollment reads the id.
   ///
   /// [writer] and [now] are seams for tests.
   static Future<DeviceSettingsStore> open(
@@ -137,9 +150,7 @@ final class DeviceSettingsStore {
     try {
       raw = await file.readAsBytes();
     } on PathNotFoundException {
-      final store = DeviceSettingsStore._(file, writer, {});
-      await store._persistAtOpen(rewrite: false);
-      return store;
+      return _openUsable(file, writer, {});
     } on FileSystemException catch (error) {
       return DeviceSettingsStore._(
         file,
@@ -166,8 +177,24 @@ final class DeviceSettingsStore {
       );
     }
 
-    final store = DeviceSettingsStore._(file, writer, document);
-    await store._persistAtOpen(rewrite: false);
+    return _openUsable(file, writer, document);
+  }
+
+  /// A store over [values] read from a usable file, or none: mints the
+  /// device id when there is none and reports a failed save as
+  /// [DeviceSettingsIssueKind.notSaved].
+  static Future<DeviceSettingsStore> _openUsable(
+    File file,
+    DeviceSettingsWriter writer,
+    Map<String, Object?> values,
+  ) async {
+    final store = DeviceSettingsStore._(file, writer, values);
+    if (await store._persistAtOpen(rewrite: false) case final Object error) {
+      store._issue = DeviceSettingsIssue(
+        DeviceSettingsIssueKind.notSaved,
+        error: error,
+      );
+    }
     return store;
   }
 
@@ -175,9 +202,11 @@ final class DeviceSettingsStore {
   DeviceSettingsIssue? get issue => _issue;
 
   /// This install's sync authorship id, `klabautermann.sync.deviceId`: a
-  /// UUID v4 minted once and never regenerated (03 §4.10; the catalog
-  /// library's `SyncEnrollmentState.deviceId` contract). Null only when it
-  /// could not be read or saved this session; no id is invented then.
+  /// UUID v4 minted once and never regenerated while the file can be read
+  /// (03 §4.10; the catalog library's `SyncEnrollmentState.deviceId`
+  /// contract). A damaged file whose text shows no id gets a new one; its
+  /// old bytes stay in the corrupt copy. Null only when it could not be
+  /// read or saved this session; no id is invented then.
   String? get deviceId => _values[_deviceIdKey] as String?;
 
   /// The appearance as the app stored it: an opaque JSON object the app
@@ -197,21 +226,21 @@ final class DeviceSettingsStore {
   }
 
   /// Mints the device id when there is none and writes the document when
-  /// it changed or [rewrite] asks for it. A failure keeps the store usable:
-  /// a minted id is dropped again, since it never reached the disk.
-  Future<void> _persistAtOpen({required bool rewrite}) async {
+  /// it changed or [rewrite] asks for it. Returns the write's failure, or
+  /// null when it saved or had nothing to save; the caller reports it. A
+  /// failure keeps the store usable: a minted id is dropped again, since it
+  /// never reached the disk.
+  Future<Object?> _persistAtOpen({required bool rewrite}) async {
     final mint = deviceId == null;
-    if (!mint && !rewrite) return;
+    if (!mint && !rewrite) return null;
 
     if (mint) _values[_deviceIdKey] = uuidV4();
     try {
       await _save();
+      return null;
     } on Object catch (error) {
       if (mint) _values.remove(_deviceIdKey);
-      _issue ??= DeviceSettingsIssue(
-        DeviceSettingsIssueKind.notSaved,
-        error: error,
-      );
+      return error;
     }
   }
 
@@ -292,17 +321,19 @@ final class DeviceSettingsStore {
       );
     }
 
-    final store = DeviceSettingsStore._(
-      file,
-      writer,
-      values,
-      DeviceSettingsIssue(
-        DeviceSettingsIssueKind.recovered,
-        preservedAs: preservedAs,
-        error: error,
-      ),
-    );
-    await store._persistAtOpen(rewrite: true);
+    final store = DeviceSettingsStore._(file, writer, values);
+    final writeError = await store._persistAtOpen(rewrite: true);
+    store._issue = writeError == null
+        ? DeviceSettingsIssue(
+            DeviceSettingsIssueKind.recovered,
+            preservedAs: preservedAs,
+            error: error,
+          )
+        : DeviceSettingsIssue(
+            DeviceSettingsIssueKind.recoveredNotSaved,
+            preservedAs: preservedAs,
+            error: writeError,
+          );
     return store;
   }
 

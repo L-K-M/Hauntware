@@ -105,6 +105,16 @@
       }
     }
   },
+  "settingsFileRecoveredNotSaved": "Your settings file could not be read or reset. The old file is kept as {fileName}. Changes you make now may be lost when Klabautermann restarts.",
+  "@settingsFileRecoveredNotSaved": {
+    "description": "Startup notice: the settings file was damaged and set aside under a new name, but writing the defaults over it failed.",
+    "placeholders": {
+      "fileName": {
+        "type": "String",
+        "example": "settings.json.corrupt-20261013T230529123456Z"
+      }
+    }
+  },
   "settingsFileLeftAsIs": "Your settings file could not be read, so it was left as it is. Changes you make now are not saved.",
   "@settingsFileLeftAsIs": {
     "description": "Startup notice: the settings file could not be read or set aside, so the app does not write it this session."

@@ -228,9 +228,16 @@ void main() {
       ),
     );
 
+    for (final kind in [
+      DeviceSettingsIssueKind.recovered,
+      DeviceSettingsIssueKind.recoveredNotSaved,
+    ]) {
+      expect(message(kind), contains('settings.json.corrupt-20261013T230529Z'));
+    }
+    // A copy whose reset failed is not reported as a reset.
     expect(
-      message(DeviceSettingsIssueKind.recovered),
-      contains('settings.json.corrupt-20261013T230529Z'),
+      message(DeviceSettingsIssueKind.recoveredNotSaved),
+      isNot(contains('was reset')),
     );
     // Unreadable and impossible to set aside mean the same to the user:
     // the file is left as it is and nothing is saved.

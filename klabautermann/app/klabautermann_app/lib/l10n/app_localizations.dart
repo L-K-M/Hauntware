@@ -358,6 +358,12 @@ abstract class AppLocalizations {
   /// **'Your settings file could not be read and was reset. The old file is kept as {fileName}.'**
   String settingsFileRecovered(String fileName);
 
+  /// Startup notice: the settings file was damaged and set aside under a new name, but writing the defaults over it failed.
+  ///
+  /// In en, this message translates to:
+  /// **'Your settings file could not be read or reset. The old file is kept as {fileName}. Changes you make now may be lost when Klabautermann restarts.'**
+  String settingsFileRecoveredNotSaved(String fileName);
+
   /// Startup notice: the settings file could not be read or set aside, so the app does not write it this session.
   ///
   /// In en, this message translates to:

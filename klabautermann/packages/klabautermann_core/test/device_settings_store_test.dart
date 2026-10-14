@@ -296,7 +296,18 @@ void main() {
           now: () => _time,
         );
 
-        expect(store.issue?.kind, DeviceSettingsIssueKind.recovered);
+        // The copy was made, but the file was not reset, so the user is
+        // not told it was.
+        final issue = store.issue!;
+        expect(issue.kind, DeviceSettingsIssueKind.recoveredNotSaved);
+        expect(issue.kind.readOnly, isFalse);
+        expect(issue.preservedAs, '${file.path}.corrupt-$_stamp');
+        expect(File(issue.preservedAs!).readAsStringSync(), damaged);
+        expect(
+          issue.error,
+          isA<FileSystemException>(),
+          reason: "the write's failure, not the parse error",
+        );
         expect(store.deviceId, 'device-a', reason: 'still on disk');
         expect(file.readAsStringSync(), damaged);
 
@@ -304,6 +315,22 @@ void main() {
         expect(next.issue?.kind, DeviceSettingsIssueKind.recovered);
         expect(next.deviceId, 'device-a');
         expect(document(), {_versionKey: 1, _deviceIdKey: 'device-a'});
+      });
+
+      test('hands out no new device id when the write-back fails', () async {
+        file.writeAsStringSync('no id here');
+        Future<void> writer(File target, List<int> contents) {
+          if (target.path == file.path) {
+            throw const FileSystemException('disk full');
+          }
+          return writeFileAtomically(target, contents);
+        }
+
+        final store = await DeviceSettingsStore.open(file, writer: writer);
+
+        expect(store.issue?.kind, DeviceSettingsIssueKind.recoveredNotSaved);
+        expect(store.deviceId, isNull, reason: 'the minted id never saved');
+        expect(file.readAsStringSync(), 'no id here');
       });
     });
 
