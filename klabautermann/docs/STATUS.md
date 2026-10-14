@@ -78,8 +78,9 @@ slice:
 - Packaging: `scripts/build.sh`, `scripts/package-linux.sh` (.deb and
   AppImage through the shared `scripts/package-linux-common.sh`) and
   `scripts/build-flatpak.sh` with `flatpak/ch.lkmc.klabautermann.yml`.
-  The flatpak grants read-only `~/.ssh` for the FL-02 import, which
-  04 §12.1 records, pending owner confirmation. The scripts have only run
+  The flatpak grants read-only `~/.ssh/config` for the FL-02 import and
+  nothing else under `~/.ssh` (04 §12.1); widening it waits for M2's
+  identity-file reads and the owner's sign-off. The scripts have only run
   on stub bundles so far; a real Flutter bundle, appimagetool and
   flatpak-builder first run in the client CI legs.
 - Desktop settings window (03 §10.2, D32): on macOS, Linux and Windows,
