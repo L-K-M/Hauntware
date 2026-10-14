@@ -84,10 +84,12 @@ void main() {
   });
 
   test('fast-tick measurement reports bytes, blocks and CPU', () async {
+    // Enough ticks for the shell's own CPU to pass one clock tick (about
+    // 1.5 ms each against 10 ms ticks at CLK_TCK 100).
     final m = await measureFastTick(
       dash!,
       Collector.core,
-      3,
+      200,
       await clockTicksPerSecond(),
       env,
     );
@@ -97,7 +99,9 @@ void main() {
       (m['replyBytes']! as Map<String, num>)['min'],
       greaterThan(m['payloadBytes']! as int),
     );
-    expect(m['cpuMsPerTick'], greaterThanOrEqualTo(0));
+    expect(m['cpuMsPerTick'], greaterThan(0));
+    // The fast path forks nothing (03 §6.2).
+    expect(m['childCpuMs'], 0);
   }, skip: dash == null ? 'dash is not installed' : false);
 
   test('procs measurement reads the declared section size', () async {
@@ -110,8 +114,26 @@ void main() {
     expect(runs.map((r) => r['extraProcesses']), [0, 2]);
     for (final r in runs) {
       expect(r['outcome'], 'ok');
-      expect(r['payloadBytes'], greaterThan(0));
+      // The `S` marker's size, not a seq or another small number: each
+      // process adds a stat line, five status lines and its cmdline.
+      expect(r['bytesPerProcess'], inInclusiveRange(100, 4096));
       expect(r['capFraction'], lessThan(1));
+    }
+  }, skip: dash == null ? 'dash is not installed' : false);
+
+  test('slow-tick measurement covers every slow collector', () async {
+    final runs = await measureSlowTick(dash!, await clockTicksPerSecond(), env);
+    final slow = [
+      for (final c in Collector.values)
+        if (c.sampler == SamplerKind.slow) c.name,
+    ];
+    expect(runs.map((r) => (r['collectors']! as List).join(',')), [
+      ...slow,
+      slow.where((c) => c != Collector.probe.name).join(','),
+    ]);
+    for (final r in runs) {
+      expect((r['statuses']! as Map).keys, isNotEmpty);
+      expect((r['wallMs']! as Map<String, num>)['min'], greaterThan(0));
     }
   }, skip: dash == null ? 'dash is not installed' : false);
 
