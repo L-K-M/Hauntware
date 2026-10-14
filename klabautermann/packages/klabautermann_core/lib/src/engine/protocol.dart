@@ -16,7 +16,14 @@ import 'package:meta/meta.dart';
 /// engine compile against these classes in one build, so neither side can
 /// lack a required field and the check has nothing more to catch. 03 §10.1
 /// lists both fields.
-const int kEngineProtocolVersion = 2;
+///
+/// v3 carries links (03 §10.1, D46): [LinkState] holds a sealed
+/// [LinkStatus] whose variants type their own reasons, [Prompt] holds a
+/// sealed [PromptRequest] instead of engine text, [PromptWithdrawn]
+/// retracts a prompt, [SetAppActivity] reports the app's activity,
+/// [Reachability] reports probe results, and [FleetEntry] gains the
+/// nullable `jumpRoute`, `authKind`, `searchText` and `locatorConflict`.
+const int kEngineProtocolVersion = 3;
 
 /// Every message the UI isolate sends the engine (03 §10.1, D18). Plain data
 /// only: no function-typed fields, no Futures, no `dartssh2` or `seance_core`
@@ -99,6 +106,16 @@ final class Disconnect extends EngineRequest {
   const Disconnect(this.serverId);
 
   final String serverId;
+}
+
+/// Tells the engine whether the user can see the app (03 §10.1). One
+/// request covers every subscription, link and probe at once, so a change
+/// never resends them (D45); 03 §6.4 pauses everything while the app is in
+/// the background, and D34 adds the phones' link grace period.
+final class SetAppActivity extends EngineRequest {
+  const SetAppActivity(this.activity);
+
+  final AppActivity activity;
 }
 
 /// Starts the server-side sampler tick for [serverId] (03 §10.1).
@@ -281,14 +298,24 @@ final class EndpointChanged extends EngineEvent {
   final String serverId;
 }
 
-/// The link to [serverId] moved phase (03 §10.1); [reason] carries the
-/// engine's short diagnostic for `failed`/`blocked`-style transitions.
+/// The link to [serverId] changed (03 §10.1, D46). The app keeps the last
+/// [status] per server and ignores one for a server its fleet does not
+/// list.
 final class LinkState extends EngineEvent {
-  const LinkState(this.serverId, this.phase, {this.reason});
+  const LinkState(this.serverId, this.status);
 
   final String serverId;
-  final LinkPhase phase;
-  final String? reason;
+  final LinkStatus status;
+}
+
+/// The last reachability probe of [serverId] (FL-04, 03 §5.12). A probe
+/// is a TCP connect to the SSH port, not a link: [LinkState] says whether
+/// the engine is connected.
+final class Reachability extends EngineEvent {
+  const Reachability(this.serverId, this.status);
+
+  final String serverId;
+  final ReachabilityStatus status;
 }
 
 /// One coalesced sampler tick (03 §10.1); [seq] is the HWS/1 tick number so
@@ -382,23 +409,42 @@ final class ActionFinished extends EngineEvent {
   final String? error;
 }
 
-/// The engine needs the user to decide something mid-operation: host-key
-/// trust, keyboard-interactive answers, a credential, or an elevation
-/// password (03 §10.1). [AnswerPrompt] carries the reply.
+/// The engine needs the user to decide something: trust a host key,
+/// answer keyboard-interactive questions, give a password, or give the
+/// sudo password for admin mode (03 §10.1). [AnswerPrompt] with
+/// [promptId] answers it, and [PromptWithdrawn] retracts it. The engine
+/// sends no text of its own: the app words [request] from its fields
+/// through its ARB catalog (D35), and the only text is what the server
+/// sent.
 final class Prompt extends EngineEvent {
   const Prompt({
     required this.promptId,
     required this.serverId,
-    required this.kind,
-    required this.message,
-    this.questions = const [],
+    required this.host,
+    required this.port,
+    required this.request,
   });
 
   final String promptId;
+
+  /// The fleet server whose link or operation asks.
   final String serverId;
-  final PromptKind kind;
-  final String message;
-  final List<String> questions;
+
+  /// The machine that asks: [serverId]'s own endpoint, or one of its jump
+  /// hosts while the engine connects through it.
+  final String host;
+  final int port;
+
+  final PromptRequest request;
+}
+
+/// The engine stopped waiting on [promptId] (03 §10.1): the app closes the
+/// prompt, and a later [AnswerPrompt] for it has nothing to answer.
+final class PromptWithdrawn extends EngineEvent {
+  const PromptWithdrawn(this.promptId, this.reason);
+
+  final String promptId;
+  final PromptWithdrawnReason reason;
 }
 
 /// Alerts fetched for one server inside a sync round (v1.x, 03 §10.1, D42).
@@ -463,6 +509,10 @@ final class FleetEntry {
     required this.origin,
     this.user,
     this.group,
+    this.jumpRoute,
+    this.authKind,
+    this.searchText,
+    this.locatorConflict,
   });
 
   /// The id every per-server request carries: a synced record's bare
@@ -489,6 +539,25 @@ final class FleetEntry {
 
   final FleetEntryOrigin origin;
 
+  /// The jump hosts the engine connects through, first hop first, each as
+  /// its source names it (an ssh_config alias, or `[user@]host[:port]`);
+  /// null for a direct connection. Pass an unmodifiable list.
+  final List<String>? jumpRoute;
+
+  /// How the engine signs in to the server, or null when the source does
+  /// not say.
+  final FleetAuthKind? authKind;
+
+  /// The lowercase text the rail's filter matches, built by the engine
+  /// with `seance_protocol`'s `serverSearchHaystack`, which the app may not
+  /// import (03 §3.2); null when the engine built none.
+  final String? searchText;
+
+  /// The server ids of the other entries that share this entry's host-key
+  /// pin locator (`host:port`) behind a different jump route, whose pins
+  /// would collide (03 §4.6); null when none do. Pass an unmodifiable list.
+  final List<String>? locatorConflict;
+
   // By value: every CatalogReplaced copies its entries across the isolate
   // boundary, so identity would make an unchanged entry look changed.
   @override
@@ -500,11 +569,53 @@ final class FleetEntry {
       port == other.port &&
       user == other.user &&
       group == other.group &&
-      origin == other.origin;
+      origin == other.origin &&
+      _sameItems(jumpRoute, other.jumpRoute) &&
+      authKind == other.authKind &&
+      searchText == other.searchText &&
+      _sameItems(locatorConflict, other.locatorConflict);
 
   @override
-  int get hashCode =>
-      Object.hash(serverId, label, host, port, user, group, origin);
+  int get hashCode => Object.hash(
+    serverId,
+    label,
+    host,
+    port,
+    user,
+    group,
+    origin,
+    jumpRoute == null ? null : Object.hashAll(jumpRoute!),
+    authKind,
+    searchText,
+    locatorConflict == null ? null : Object.hashAll(locatorConflict!),
+  );
+}
+
+/// How the engine signs in to a [FleetEntry]'s server (03 §4.5).
+enum FleetAuthKind {
+  /// An ssh-agent signs; the device stores nothing.
+  agent,
+
+  /// A private key file on this device, read by its path (an ssh_config
+  /// `IdentityFile`).
+  identityFile,
+
+  /// A private key held in the vault.
+  storedKey,
+
+  /// A password, from the vault or asked for.
+  password,
+}
+
+/// Whether two optional lists hold equal items in the same order.
+bool _sameItems(List<Object?>? a, List<Object?>? b) {
+  if (identical(a, b)) return true;
+  if (a == null || b == null || a.length != b.length) return false;
+
+  for (var i = 0; i < a.length; i++) {
+    if (a[i] != b[i]) return false;
+  }
+  return true;
 }
 
 /// What went wrong with `ssh_config_imports.json` when the engine started
@@ -668,6 +779,87 @@ enum ActionOutcome { succeeded, failed, cancelled }
 /// The 03 §10.1 prompt kinds, in the table's own order.
 enum PromptKind { hostKey, keyboardInteractive, credential, elevation }
 
+/// What a [Prompt] asks; one variant per [PromptKind].
+@immutable
+sealed class PromptRequest {
+  const PromptRequest();
+
+  PromptKind get kind;
+}
+
+/// Trust a host key the pin store has never seen (03 §4.6). A key that
+/// differs from the pinned one does not prompt: it blocks the link with
+/// [LinkBlockedReason.hostKeyChanged].
+final class HostKeyPromptRequest extends PromptRequest {
+  const HostKeyPromptRequest({
+    required this.keyType,
+    required this.fingerprintSha256,
+  });
+
+  /// The key algorithm, such as `ssh-ed25519`.
+  final String keyType;
+
+  /// The fingerprint in OpenSSH's `SHA256:` form.
+  final String fingerprintSha256;
+
+  @override
+  PromptKind get kind => PromptKind.hostKey;
+}
+
+/// The server's keyboard-interactive challenge (RFC 4256), shown as the
+/// server sent it. It carries no echo flags (`seance_core`'s
+/// `KeyboardInteractiveChallenge` has none), so a surface masks every
+/// answer. [PromptResponsesAnswer] answers [questions] in order.
+final class KeyboardInteractivePromptRequest extends PromptRequest {
+  const KeyboardInteractivePromptRequest({
+    this.name = '',
+    this.instruction = '',
+    this.questions = const [],
+  });
+
+  final String name;
+  final String instruction;
+  final List<String> questions;
+
+  @override
+  PromptKind get kind => PromptKind.keyboardInteractive;
+}
+
+/// The login password for [user] (03 §4.5).
+final class CredentialPromptRequest extends PromptRequest {
+  const CredentialPromptRequest({required this.user, this.retry = false});
+
+  final String user;
+
+  /// Whether the server refused the previous answer to this question.
+  final bool retry;
+
+  @override
+  PromptKind get kind => PromptKind.credential;
+}
+
+/// The sudo password of [user] for admin mode (03 §8.2, D41).
+final class ElevationPromptRequest extends PromptRequest {
+  const ElevationPromptRequest({required this.user, this.retry = false});
+
+  final String user;
+
+  /// Whether sudo refused the previous answer.
+  final bool retry;
+
+  @override
+  PromptKind get kind => PromptKind.elevation;
+}
+
+/// Why the engine withdrew a [Prompt].
+enum PromptWithdrawnReason {
+  /// Nobody answered before the prompt's deadline.
+  expired,
+
+  /// What asked ended first: the connect attempt or operation stopped.
+  attemptEnded,
+}
+
 /// The answer to a [Prompt]; one variant per [PromptKind] (03 §10.1).
 @immutable
 sealed class PromptAnswer {
@@ -723,8 +915,197 @@ enum AlertStatus { open, acknowledged, dismissed }
 /// What [HandleAlert] does with an alert (v1.x, 03 §10.1).
 enum AlertAction { acknowledge, dismiss }
 
-/// The link lifecycle behind [LinkState] (03 §10.1, §5.9).
-enum LinkPhase { disconnected, connecting, connected, failed }
+/// Whether the user can see the app, as [SetAppActivity] reports it.
+enum AppActivity {
+  /// The user can see the app.
+  foreground,
+
+  /// The user cannot see the app, such as a phone app sent to the
+  /// background.
+  background,
+}
+
+/// A link's state behind [LinkState] (D46): the eight states of
+/// `seance_core`'s `SshLinkState`, mirrored so that no `seance_core` type
+/// crosses the boundary (03 §3.2), plus the engine's own [LinkBlocked].
+/// Every reason is an enum the app words through its ARB catalog (D35).
+/// Compares by value, because a status that crosses the boundary may
+/// arrive as a copy.
+@immutable
+sealed class LinkStatus {
+  const LinkStatus();
+
+  /// The values that tell two statuses of one variant apart.
+  List<Object?> get _values => const [];
+
+  @override
+  bool operator ==(Object other) =>
+      other is LinkStatus &&
+      other.runtimeType == runtimeType &&
+      _sameItems(other._values, _values);
+
+  @override
+  int get hashCode => Object.hash(runtimeType, Object.hashAll(_values));
+}
+
+/// No attempt has started. The app reads a server it has no status for as
+/// idle.
+final class LinkIdle extends LinkStatus {
+  const LinkIdle();
+}
+
+/// Reaching the server, possibly through its jump hosts.
+final class LinkConnecting extends LinkStatus {
+  const LinkConnecting();
+}
+
+/// The transport is up; user authentication runs.
+final class LinkAuthenticating extends LinkStatus {
+  const LinkAuthenticating();
+}
+
+/// Authenticated and working. A learned session limit is [LinkDegraded];
+/// what the host can do arrives with the sampling protocol, not here.
+final class LinkReady extends LinkStatus {
+  const LinkReady();
+}
+
+/// Working, but the server showed a limit below the engine's budget.
+final class LinkDegraded extends LinkStatus {
+  const LinkDegraded(this.reason);
+
+  final LinkDegradedReason reason;
+
+  @override
+  List<Object?> get _values => [reason];
+}
+
+/// Waiting until [until] before the engine dials again (CN-05).
+final class LinkBackoff extends LinkStatus {
+  const LinkBackoff(this.until);
+
+  final DateTime until;
+
+  @override
+  List<Object?> get _values => [until];
+}
+
+/// Waiting on the [Prompt] [promptId], which asks for [kind]; the prompt
+/// itself arrives as its own event.
+final class LinkNeedsUser extends LinkStatus {
+  const LinkNeedsUser({required this.promptId, required this.kind});
+
+  final String promptId;
+  final PromptKind kind;
+
+  @override
+  List<Object?> get _values => [promptId, kind];
+}
+
+/// The engine does not dial until the user decides something outside the
+/// connect flow (D46); no prompt can answer it.
+final class LinkBlocked extends LinkStatus {
+  const LinkBlocked(this.reason);
+
+  final LinkBlockedReason reason;
+
+  @override
+  List<Object?> get _values => [reason];
+}
+
+/// The link ended. [reason] says how; [failure] says what the engine found
+/// behind it, or null when nothing failed or the engine could not tell.
+final class LinkClosed extends LinkStatus {
+  const LinkClosed(this.reason, {this.failure});
+
+  final LinkClosedReason reason;
+  final LinkFailureKind? failure;
+
+  @override
+  List<Object?> get _values => [reason, failure];
+}
+
+/// Why a link is [LinkDegraded] (`seance_core`'s `SshLinkDegradedReason`).
+enum LinkDegradedReason {
+  /// The server refused a session channel below the budget, so the link
+  /// queues at the learned limit (03 §5.2's low-session mode).
+  sessionLimitLearned,
+}
+
+/// Why a link is [LinkBlocked].
+enum LinkBlockedReason {
+  /// The server's endpoint no longer matches the one confirmed on this
+  /// device (D16, 03 §4.7).
+  endpointChanged,
+
+  /// The server presented a host key other than the pinned one (03 §4.6).
+  hostKeyChanged,
+}
+
+/// How a link ended (`seance_core`'s `SshLinkClosedReason`).
+enum LinkClosedReason {
+  /// The engine closed the link on purpose, for example on [Disconnect].
+  closedByOwner,
+
+  /// The transport ended underneath the link.
+  linkLost,
+
+  /// The transport reported an error before it ended.
+  transportError,
+
+  /// A keepalive ping went unanswered past its deadline (CN-06).
+  pingTimeout,
+
+  /// Connecting or authenticating never produced a transport.
+  connectFailed,
+}
+
+/// What the engine found behind a [LinkClosed]. The first five are the
+/// connect failures protocol version 3 classifies (03 §10.1); the last
+/// three are 03 §5.3's client limitations.
+enum LinkFailureKind {
+  /// The connection was refused, or the host had no route or no address.
+  unreachable,
+
+  /// Connecting or the handshake ran past its deadline.
+  timedOut,
+
+  /// The server refused every credential offered.
+  authenticationRejected,
+
+  /// No credential could be offered: no agent answered, or a key file
+  /// could not be read.
+  credentialUnavailable,
+
+  /// The user, or the background rule, declined a first-seen host key.
+  hostKeyDeclined,
+
+  /// The server requires an algorithm the client does not support yet
+  /// (CN-23).
+  unsupportedAlgorithm,
+
+  /// The server offers only algorithms the suite refuses as insecure
+  /// (D23).
+  insecureAlgorithmsOnly,
+
+  /// The key exchange did not finish before the server gave up (03 §5.3:
+  /// finite-field Diffie-Hellman on Android).
+  keyExchangeTimedOut,
+}
+
+/// A reachability probe's answer behind [Reachability] (`seance_core`'s
+/// `ProbeStatus`).
+enum ReachabilityStatus {
+  /// The host accepted a TCP connection on its SSH port.
+  online,
+
+  /// The connection was refused, or the host had no route or no address.
+  offline,
+
+  /// The probe could not tell, for example after a timeout; not
+  /// [offline], since a host behind a firewall or a jump host may be up.
+  unknown,
+}
 
 /// The sync round's phase behind [SyncStatus] (03 §10.1).
 enum SyncPhase { idle, running, succeeded, failed }

@@ -61,6 +61,7 @@ void main() {
         const SetMonitorSet(['a']),
         const Connect('srv-1'),
         const Disconnect('srv-1'),
+        const SetAppActivity(AppActivity.background),
         const Subscribe(
           serverId: 'srv-1',
           collectors: {Collector.overview, Collector.core},
@@ -118,7 +119,8 @@ void main() {
         const SshConfigImported(importedCount: 1, skippedCount: 0, saved: true),
         const SyncStatus(SyncPhase.running),
         const EndpointChanged('srv-1'),
-        const LinkState('srv-1', LinkPhase.connected),
+        const LinkState('srv-1', LinkReady()),
+        const Reachability('srv-1', ReachabilityStatus.online),
         Sample(
           serverId: 'srv-1',
           seq: 7,
@@ -136,9 +138,11 @@ void main() {
         const Prompt(
           promptId: 'p-1',
           serverId: 'srv-1',
-          kind: PromptKind.hostKey,
-          message: 'trust?',
+          host: 'web-1.example',
+          port: kSshDefaultPort,
+          request: CredentialPromptRequest(user: 'deploy'),
         ),
+        const PromptWithdrawn('p-1', PromptWithdrawnReason.expired),
         const AlertsArrived('srv-1', [
           AlertDescriptor(ref: 'a-1', title: 'disk'),
         ]),
@@ -266,6 +270,10 @@ void main() {
         String? user = 'deploy',
         String? group,
         FleetEntryOrigin origin = FleetEntryOrigin.sshConfig,
+        List<String>? jumpRoute = const ['bastion'],
+        FleetAuthKind? authKind = FleetAuthKind.agent,
+        String? searchText = 'web-1 deploy@web-1.example:2222',
+        List<String>? locatorConflict = const ['ssh-config:db-1'],
       }) => FleetEntry(
         serverId: serverId,
         label: label,
@@ -274,6 +282,11 @@ void main() {
         user: user,
         group: group,
         origin: origin,
+        // Fresh lists, so equality has to compare their items.
+        jumpRoute: jumpRoute?.toList(),
+        authKind: authKind,
+        searchText: searchText,
+        locatorConflict: locatorConflict?.toList(),
       );
 
       final web = entry();
@@ -290,8 +303,207 @@ void main() {
         entry(user: null),
         entry(group: 'Production'),
         entry(origin: FleetEntryOrigin.synced),
+        entry(jumpRoute: null),
+        entry(jumpRoute: const ['bastion', 'inner']),
+        entry(jumpRoute: const []),
+        entry(authKind: null),
+        entry(authKind: FleetAuthKind.identityFile),
+        entry(searchText: null),
+        entry(searchText: 'web-1'),
+        entry(locatorConflict: null),
+        entry(locatorConflict: const ['ssh-config:db-2']),
       ]) {
         expect(web, isNot(other));
+      }
+    });
+
+    test(
+      'the v3 fleet fields survive, and an M1 entry leaves them null',
+      () async {
+        const routed = FleetEntry(
+          serverId: 'ssh-config:inner',
+          label: 'inner',
+          host: '10.0.0.4',
+          port: kSshDefaultPort,
+          origin: FleetEntryOrigin.sshConfig,
+          jumpRoute: ['bastion', 'deploy@hop.example:2200'],
+          authKind: FleetAuthKind.identityFile,
+          searchText: 'inner @10.0.0.4:22 ',
+          locatorConflict: ['ssh-config:other-inner'],
+        );
+        final event =
+            await roundTrip(CatalogReplaced(const [routed, _webEntry]))
+                as CatalogReplaced;
+
+        final [inner, web] = event.entries;
+        expect(inner, routed);
+        expect(inner.jumpRoute, ['bastion', 'deploy@hop.example:2200']);
+        expect(inner.authKind, FleetAuthKind.identityFile);
+        expect(inner.searchText, 'inner @10.0.0.4:22 ');
+        expect(inner.locatorConflict, ['ssh-config:other-inner']);
+        expect(web.jumpRoute, isNull);
+        expect(web.authKind, isNull);
+        expect(web.searchText, isNull);
+        expect(web.locatorConflict, isNull);
+      },
+    );
+
+    test('every link status survives with its values (D46)', () async {
+      final statuses = <LinkStatus>[
+        const LinkIdle(),
+        const LinkConnecting(),
+        const LinkAuthenticating(),
+        const LinkReady(),
+        const LinkDegraded(LinkDegradedReason.sessionLimitLearned),
+        LinkBackoff(DateTime.utc(2026, 10, 14, 12, 0, 30)),
+        const LinkNeedsUser(promptId: 'p-1', kind: PromptKind.hostKey),
+        const LinkBlocked(LinkBlockedReason.hostKeyChanged),
+        const LinkClosed(LinkClosedReason.closedByOwner),
+        const LinkClosed(
+          LinkClosedReason.connectFailed,
+          failure: LinkFailureKind.authenticationRejected,
+        ),
+      ];
+
+      for (final status in statuses) {
+        final received =
+            await roundTrip(LinkState('srv-1', status)) as LinkState;
+        expect(received.serverId, 'srv-1');
+        // Const statuses may arrive shared rather than copied; the backoff's
+        // run-time DateTime arrives as a copy, so equality is by value.
+        expect(received.status, status);
+        expect(received.status.hashCode, status.hashCode);
+      }
+    });
+
+    test('link statuses differ by variant and by every value', () {
+      final distinct = <LinkStatus>[
+        const LinkIdle(),
+        const LinkConnecting(),
+        const LinkAuthenticating(),
+        const LinkReady(),
+        const LinkDegraded(LinkDegradedReason.sessionLimitLearned),
+        LinkBackoff(DateTime.utc(2026, 10, 14, 12)),
+        LinkBackoff(DateTime.utc(2026, 10, 14, 12, 0, 1)),
+        const LinkNeedsUser(promptId: 'p-1', kind: PromptKind.hostKey),
+        const LinkNeedsUser(promptId: 'p-2', kind: PromptKind.hostKey),
+        const LinkNeedsUser(promptId: 'p-1', kind: PromptKind.credential),
+        const LinkBlocked(LinkBlockedReason.hostKeyChanged),
+        const LinkBlocked(LinkBlockedReason.endpointChanged),
+        const LinkClosed(LinkClosedReason.closedByOwner),
+        const LinkClosed(LinkClosedReason.pingTimeout),
+        const LinkClosed(
+          LinkClosedReason.pingTimeout,
+          failure: LinkFailureKind.timedOut,
+        ),
+      ];
+
+      // Built at run time, so equal statuses are not one canonical const.
+      LinkStatus closed(LinkClosedReason reason, [LinkFailureKind? failure]) =>
+          LinkClosed(reason, failure: failure);
+      expect(
+        closed(LinkClosedReason.linkLost, LinkFailureKind.unreachable),
+        closed(LinkClosedReason.linkLost, LinkFailureKind.unreachable),
+      );
+
+      for (var i = 0; i < distinct.length; i++) {
+        for (var j = 0; j < distinct.length; j++) {
+          if (i == j) continue;
+          expect(
+            distinct[i],
+            isNot(distinct[j]),
+            reason: '${distinct[i]} vs ${distinct[j]}',
+          );
+        }
+      }
+    });
+
+    test('structured prompts survive with every field', () async {
+      Future<PromptRequest> request(PromptRequest request) async {
+        final prompt =
+            await roundTrip(
+                  Prompt(
+                    promptId: 'p-7',
+                    serverId: 'ssh-config:inner',
+                    host: 'bastion.example',
+                    port: 2200,
+                    request: request,
+                  ),
+                )
+                as Prompt;
+        // The jump host asks here, not the server the prompt is for.
+        expect(prompt.promptId, 'p-7');
+        expect(prompt.serverId, 'ssh-config:inner');
+        expect(prompt.host, 'bastion.example');
+        expect(prompt.port, 2200);
+        return prompt.request;
+      }
+
+      final hostKey =
+          await request(
+                const HostKeyPromptRequest(
+                  keyType: 'ssh-ed25519',
+                  fingerprintSha256: 'SHA256:abc',
+                ),
+              )
+              as HostKeyPromptRequest;
+      expect(hostKey.kind, PromptKind.hostKey);
+      expect(hostKey.keyType, 'ssh-ed25519');
+      expect(hostKey.fingerprintSha256, 'SHA256:abc');
+
+      final challenge =
+          await request(
+                const KeyboardInteractivePromptRequest(
+                  name: 'Duo',
+                  instruction: 'Second factor',
+                  questions: ['Passcode: ', 'Push? '],
+                ),
+              )
+              as KeyboardInteractivePromptRequest;
+      expect(challenge.kind, PromptKind.keyboardInteractive);
+      expect(challenge.name, 'Duo');
+      expect(challenge.instruction, 'Second factor');
+      expect(challenge.questions, ['Passcode: ', 'Push? ']);
+
+      final credential =
+          await request(
+                const CredentialPromptRequest(user: 'deploy', retry: true),
+              )
+              as CredentialPromptRequest;
+      expect(credential.kind, PromptKind.credential);
+      expect(credential.user, 'deploy');
+      expect(credential.retry, isTrue);
+
+      final elevation =
+          await request(const ElevationPromptRequest(user: 'deploy'))
+              as ElevationPromptRequest;
+      expect(elevation.kind, PromptKind.elevation);
+      expect(elevation.user, 'deploy');
+      expect(elevation.retry, isFalse);
+
+      final withdrawn =
+          await roundTrip(
+                const PromptWithdrawn(
+                  'p-7',
+                  PromptWithdrawnReason.attemptEnded,
+                ),
+              )
+              as PromptWithdrawn;
+      expect(withdrawn.promptId, 'p-7');
+      expect(withdrawn.reason, PromptWithdrawnReason.attemptEnded);
+    });
+
+    test('app activity and reachability survive', () async {
+      for (final activity in AppActivity.values) {
+        final received =
+            await roundTrip(SetAppActivity(activity)) as SetAppActivity;
+        expect(received.activity, activity);
+      }
+      for (final status in ReachabilityStatus.values) {
+        final received =
+            await roundTrip(Reachability('srv-1', status)) as Reachability;
+        expect(received.serverId, 'srv-1');
+        expect(received.status, status);
       }
     });
 
