@@ -1900,6 +1900,14 @@ shown as unknown, never as zero.
   the next `E` marker. A forged marker inside a payload is consumed as
   payload, so forgery fails even if a nonce leaks. Control characters other
   than newline and tab are stripped before display.
+  The login shell's startup files may print before the start command runs,
+  so before READY the reader skips up to 64 KiB of output that starts no
+  marker for the nonce; more output, a malformed READY or another
+  collector-set version fails the start. An empty `<uptime>` (unreadable
+  `/proc/uptime`) is unknown, not a framing error. A reply lost to a
+  framing error is a gap. A well-framed marker out of order, or a reply of
+  more than 32 sections (which bounds one reply's memory), cannot come
+  from the constant program and ends the session.
 - **Fork budget.** Builtin collectors append to a shell variable while
   reading `/proc` and `/sys` with `read`, so the fast path forks nothing.
   Collectors that run an external program capture it with command
