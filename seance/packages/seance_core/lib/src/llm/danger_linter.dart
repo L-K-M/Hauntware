@@ -56,10 +56,21 @@ class DangerLinter {
       r'(?!\s+(?:-[lL]\b|--list\b|--table\b|-0\b|-[sn]\s*0\b'
       r'|--signal[=\s]\s*0\b))';
 
-  /// Rejects a word that is the operand of a signal, queue or timeout
-  /// option, so it is not read as a PID.
-  static const _notOptionOperand =
-      r'(?<!\s(?:-[snq]|--signal|--queue|--timeout))';
+  /// The first match of [word] on a line, reached from the start of the
+  /// line. A rule that reads on to the end of the line after [word] needs
+  /// only the first match: what a later one reaches is on the rest of the
+  /// line after the first one too. Trying every match scanned the rest of
+  /// the line again from each, and a 64 KB line of `kill x` took over
+  /// 30 s.
+  static String _firstOnLine(String word) =>
+      '(?<![^\\n])(?:(?!$word)[^\\n])*$word';
+
+  /// Rejects [pid], just matched after a blank, if it is the operand of a
+  /// signal, queue or timeout option, so a signal is not read as a PID.
+  /// Following the PID instead of preceding it, the lookbehind runs only
+  /// where the PID matched rather than at every position on the line.
+  static String _notOptionOperand(String pid) =>
+      '(?<!\\s(?:-[snq]|--signal|--queue|--timeout)\\s$pid)';
 
   /// A deluser option or operand after blanks. Either word ends at a blank
   /// or a shell operator, and the blanks exclude newlines, because quotes
@@ -266,7 +277,12 @@ class DangerLinter {
       // signals it handles (pid_namespaces(7)): systemd re-executes on TERM
       // but reboots on INT (systemd(1)), and a container's main process
       // usually exits on TERM.
-      RegExp('$_kill' r'[^\n]*' '$_notOptionOperand' r'\s1\b'),
+      RegExp(
+        '${_firstOnLine(_kill)}'
+        r'[^\n]*\s1'
+        '${_notOptionOperand('1')}'
+        r'\b',
+      ),
       DangerSeverity.warning,
       'Signals PID 1, the init process or a container\'s main process; '
       'this can reboot the host or stop the container.',
@@ -276,12 +292,18 @@ class DangerLinter {
       // -1 after the first argument is a PID: a leading -1 is SIGHUP.
       // `\b` rejects -12345 but accepts a closing quote or parenthesis.
       // This warns like the PID 1 and power rules: processes stop, stored
-      // data stays.
+      // data stays. Quotes can put a later kill's arguments on the next
+      // line (`sh -c "kill 5; kill` newline `-9 -1"`), so a kill followed
+      // by blanks and a newline is tried as well as the first kill on each
+      // line that a blank follows.
       RegExp(
-        '$_kill'
-        r'\s+\S+[^\n]*'
-        '$_notOptionOperand'
-        r'\s-1\b',
+        '(?:$_kill'
+        r'[^\S\n]*\n\s*|'
+        '${_firstOnLine('$_kill\\s')}'
+        r'\s*)'
+        r'\S[^\n]*\s-1'
+        '${_notOptionOperand('-1')}'
+        r'\b',
       ),
       DangerSeverity.warning,
       'Signals every process you are allowed to signal; as root that ends '

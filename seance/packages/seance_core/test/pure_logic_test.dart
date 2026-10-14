@@ -540,6 +540,29 @@ Host bastion db
           );
         }
       });
+
+      test('scans kill commands at the inbox size limit', () {
+        // Each kill on a line scanned the rest of the line again, so a
+        // 64 KB line of `kill x` took over 30 s, and the PID -1 rule tried
+        // every split of one long argument, which took as long.
+        const word = 'kill x';
+        final scripts = {
+          'repeated kill': List.filled(
+            kInboxMaxScriptBytes ~/ (word.length + 1),
+            word,
+          ).join(' '),
+          'one long argument': 'kill ${'a' * (kInboxMaxScriptBytes - 5)}',
+        };
+        for (final MapEntry(key: name, value: script) in scripts.entries) {
+          final watch = Stopwatch()..start();
+          DangerLinter.scan(script);
+          expect(
+            watch.elapsed,
+            lessThan(const Duration(seconds: 2)),
+            reason: name,
+          );
+        }
+      });
     });
 
     // Rules look at one command at a time: unquoted separators end a
