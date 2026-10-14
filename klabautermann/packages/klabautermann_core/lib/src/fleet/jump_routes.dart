@@ -6,6 +6,11 @@ import '../engine/protocol.dart' show kSshDefaultPort;
 /// ids bare UUIDs, so a hop id collides with neither.
 const String _hopIdPrefix = 'ssh-config-hop:';
 
+/// The most hops a route may have: Séance's connector refuses a longer one
+/// (`_maxJumpHosts` in seance_core's `ssh_session.dart`), so the engine
+/// never imports a route it could not dial.
+const int _maxJumpHops = 16;
+
 /// A decimal TCP port, as the engine reads one in a `ProxyJump`.
 final RegExp _decimal = RegExp(r'^[0-9]+$');
 
@@ -69,70 +74,89 @@ final class JumpHop {
 ///   (ssh also resolves service names);
 /// - contains `%`, which ssh expands as a token (ssh_config(5), TOKENS);
 /// - loops back through first hops to a host already on the way;
+/// - makes a route of more than 16 hops, the first hop's own route
+///   included, which Séance's connector refuses to dial;
 /// - names a host in [leftOut], or one whose own route is null: ssh would
 ///   take that host's settings from a block the engine does not have.
+///
+/// The work is linear in the hosts: following a route stops past 16 hops,
+/// and each null route reaches the hosts that name it once.
 Map<String, List<JumpHop>?> jumpRoutes(
   List<ImportedHost> hosts, {
   Set<String> leftOut = const {},
 }) {
   final byAlias = {for (final host in hosts) host.alias: host};
-  final unusable = {...leftOut};
-  while (true) {
-    final routes = {
-      for (final host in hosts)
-        host.alias: unusable.contains(host.alias)
-            ? null
-            : _route(host, byAlias, unusable, {host.alias}),
-    };
-    final failed = [
-      for (final MapEntry(:key, :value) in routes.entries)
-        if (value == null && !unusable.contains(key)) key,
-    ];
-    // Leaving a host out can break the routes that name it, so repeat
-    // until no further route fails.
-    if (failed.isEmpty) return routes;
-    unusable.addAll(failed);
-  }
-}
+  final hops = {
+    for (final host in hosts)
+      host.alias: switch (host.proxyJump) {
+        null => const <_Hop>[],
+        final value => _parseProxyJump(value),
+      },
+  };
 
-List<JumpHop>? _route(
-  ImportedHost host,
-  Map<String, ImportedHost> byAlias,
-  Set<String> unusable,
-  Set<String> visiting,
-) {
-  final value = host.proxyJump;
-  if (value == null) return const [];
+  // The route of [host] in at most [limit] hops, or null. [visiting] holds
+  // the hosts whose first hop led here, to catch a loop.
+  List<JumpHop>? follow(ImportedHost host, Set<String> visiting, int limit) {
+    final own = hops[host.alias];
+    if (own == null || own.length > limit) return null;
 
-  final hops = _parseProxyJump(value);
-  if (hops == null) return null;
+    final route = <JumpHop>[];
+    for (final (index, (:name, :user, host: hopHost, :port)) in own.indexed) {
+      if (leftOut.contains(hopHost)) return null;
 
-  final route = <JumpHop>[];
-  for (final (index, (:name, :user, host: hopHost, :port)) in hops.indexed) {
-    if (unusable.contains(hopHost)) return null;
+      final alias = byAlias[hopHost];
+      if (index == 0 && alias != null) {
+        if (!visiting.add(alias.alias)) return null;
 
-    final alias = byAlias[hopHost];
-    if (index == 0 && alias != null) {
-      if (!visiting.add(alias.alias)) return null;
+        // ssh reaches the first hop through its own ProxyJump, so that
+        // route comes first and leaves room for this host's hops.
+        final upstream = follow(alias, visiting, limit - own.length);
+        if (upstream == null) return null;
+        route.addAll(upstream);
+      }
 
-      final upstream = _route(alias, byAlias, unusable, visiting);
-      if (upstream == null) return null;
-      route.addAll(upstream);
+      final previous = route.lastOrNull;
+      route.add(
+        JumpHop._(
+          id: previous == null ? '$_hopIdPrefix$name' : '${previous.id},$name',
+          name: name,
+          host: alias?.effectiveHost ?? hopHost,
+          port: port ?? alias?.port ?? kSshDefaultPort,
+          user: user ?? alias?.user,
+          identityFile: alias?.identityFile,
+        ),
+      );
     }
-
-    final previous = route.lastOrNull;
-    route.add(
-      JumpHop._(
-        id: previous == null ? '$_hopIdPrefix$name' : '${previous.id},$name',
-        name: name,
-        host: alias?.effectiveHost ?? hopHost,
-        port: port ?? alias?.port ?? kSshDefaultPort,
-        user: user ?? alias?.user,
-        identityFile: alias?.identityFile,
-      ),
-    );
+    return List.unmodifiable(route);
   }
-  return List.unmodifiable(route);
+
+  final routes = {
+    for (final host in hosts)
+      host.alias: follow(host, {host.alias}, _maxJumpHops),
+  };
+
+  // A host whose route is null is left out, so every route that names it
+  // is null too, and so on. Following who names whom reaches each host
+  // once, however long the chain.
+  final namedBy = <String, List<String>>{};
+  for (final MapEntry(key: alias, value: own) in hops.entries) {
+    for (final hop in own ?? const <_Hop>[]) {
+      (namedBy[hop.host] ??= []).add(alias);
+    }
+  }
+  final failed = [
+    for (final MapEntry(:key, :value) in routes.entries)
+      if (value == null) key,
+  ];
+  while (failed.isNotEmpty) {
+    for (final alias in namedBy[failed.removeLast()] ?? const <String>[]) {
+      if (routes[alias] == null) continue;
+
+      routes[alias] = null;
+      failed.add(alias);
+    }
+  }
+  return routes;
 }
 
 typedef _Hop = ({String name, String? user, String host, int? port});

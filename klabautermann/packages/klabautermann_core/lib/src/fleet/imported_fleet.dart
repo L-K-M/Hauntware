@@ -48,16 +48,19 @@ final class ImportedFleet {
     final routes = jumpRoutes(hosts);
     final configs = <String, ServerConfig>{};
 
-    // Each config, keyed by its id. One whose login name is unknown, or
-    // whose route has such a hop, gets none: a connect cannot start.
-    ServerConfig config(String id, ImportedHost host, List<JumpHop> route) {
+    // Each config, keyed by its id, dialed through the hop [through]. One
+    // whose login name is unknown, or whose route has such a hop, gets
+    // none: a connect cannot start. A hop has a config only when every
+    // hop before it has one, so checking [through] covers the route.
+    ServerConfig config(String id, ImportedHost host, JumpHop? through) {
       final user = host.user ?? localUser;
       // Séance's mapping: an IdentityFile is a key read from its path,
       // otherwise the agent signs.
       final mapped = host
           .toServerConfig(id: id, now: 0)
-          .copyWith(username: user ?? '', jumpHostId: route.lastOrNull?.id);
-      if (user != null && route.every((hop) => configs.containsKey(hop.id))) {
+          .copyWith(username: user ?? '', jumpHostId: through?.id);
+      if (user != null &&
+          (through == null || configs.containsKey(through.id))) {
         configs[id] = mapped;
       }
       return mapped;
@@ -78,13 +81,13 @@ final class ImportedFleet {
             user: hop.user,
             identityFile: hop.identityFile,
           ),
-          route.sublist(0, index),
+          index == 0 ? null : route[index - 1],
         );
       }
       mapped.add((
         host: host,
         route: route,
-        config: config('$_importIdPrefix${host.alias}', host, route),
+        config: config('$_importIdPrefix${host.alias}', host, route.lastOrNull),
       ));
     }
 

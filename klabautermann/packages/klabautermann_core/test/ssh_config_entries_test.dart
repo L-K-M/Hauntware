@@ -1,4 +1,5 @@
 import 'package:klabautermann_core/klabautermann_core.dart';
+import 'package:klabautermann_core/src/fleet/imported_fleet.dart';
 import 'package:klabautermann_core/src/fleet/ssh_config_entries.dart';
 import 'package:test/test.dart';
 
@@ -244,6 +245,58 @@ void main() {
       expect(result.hosts.map((h) => h.alias), ['direct', 'jump', 'behind']);
       expect(result.skippedCount, 1);
       expect(result.hosts.first.proxyJump, 'none');
+    });
+
+    test('leaves out a route of more than 16 hops, which Séance refuses '
+        'to dial', () {
+      String names(String prefix, int count) => [
+        for (var index = 1; index <= count; index++) '$prefix$index',
+      ].join(',');
+      // A chain of first hops: c<k> is k hops from c0.
+      final chain = StringBuffer('Host c0\n');
+      for (var k = 1; k <= 17; k++) {
+        chain.write('Host c$k\n  ProxyJump c${k - 1}\n');
+      }
+
+      final result = importedHostsFromSshConfig(
+        'Host t16\n  ProxyJump ${names('j', 16)}\n'
+        'Host t17\n  ProxyJump ${names('j', 17)}\n'
+        '$chain'
+        // c10's ten hops, c10 itself and six more make 17.
+        'Host mixed\n  ProxyJump c10,${names('x', 6)}\n'
+        'Host behind\n  ProxyJump x,c17\n',
+      );
+
+      expect(result.hosts.map((h) => h.alias), [
+        't16',
+        for (var k = 0; k <= 16; k++) 'c$k',
+      ]);
+      expect(result.skippedCount, 4);
+    });
+
+    test('long chains cost linear time', () {
+      // Recomputing a route per host, or taking a pass over every host for
+      // each one left out, made these take about 50 s; the engine isolate
+      // answers nothing meanwhile. A test timeout cannot cut synchronous
+      // work short, so the time is measured instead.
+      String chain(int count, String first, String hop) => [
+        'Host h0\n$first',
+        for (var index = 1; index < count; index++)
+          'Host h$index\n  ProxyJump $hop${index - 1}\n',
+      ].join();
+      final clock = Stopwatch()..start();
+
+      final firstHops = importedHostsFromSshConfig(chain(1000, '', 'h'));
+      expect(firstHops.hosts, hasLength(17));
+      expect(
+        ImportedFleet(firstHops.hosts, localUser: 'me').entries,
+        hasLength(17),
+      );
+      final laterHops = importedHostsFromSshConfig(
+        chain(3000, '  ProxyJump j:0\n', 'x,h'),
+      );
+      expect(laterHops.skippedCount, 3000);
+      expect(clock.elapsed, lessThan(const Duration(seconds: 5)));
     });
   });
 }

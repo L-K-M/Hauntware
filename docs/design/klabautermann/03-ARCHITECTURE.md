@@ -3494,8 +3494,10 @@ the engine in `engine_isolate.dart` beside it):
   the engine hands its lookup to `CredentialResolver.jumpHostResolver`.
   A host is left out when its `ProxyJump` is one ssh rejects, gives a
   port other than a decimal 1 to 65535, holds a `%` token, loops through
-  first hops, or names a host left out (whose settings the engine would
-  lack), rather than dial a route ssh would not take.
+  first hops, makes a route of more than 16 hops (the first hop's own
+  included; Séance's connector refuses a longer one), or names a host
+  left out (whose settings the engine would lack), rather than dial a
+  route ssh would not take or the engine could not follow.
 - **Version 3 (M2 links).** `LinkState(serverId, status)` carries a
   sealed `LinkStatus`: D46's eight states plus `blocked`, each with its
   own typed values: `degraded(reason)`, `backoff(until)`,

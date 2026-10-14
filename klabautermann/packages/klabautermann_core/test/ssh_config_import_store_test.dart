@@ -206,6 +206,14 @@ void main() {
         'a ProxyJump ssh rejects': _document([
           {'alias': 'a', 'host': 'h', 'port': 22, 'proxyJump': 'j:0'},
         ]),
+        'a route of more than 16 hops': _document([
+          {
+            'alias': 'a',
+            'host': 'h',
+            'port': 22,
+            'proxyJump': [for (var hop = 0; hop < 17; hop++) 'j$hop'].join(','),
+          },
+        ]),
         'a ProxyJump loop': _document([
           {'alias': 'a', 'host': 'h', 'port': 22, 'proxyJump': 'b'},
           {'alias': 'b', 'host': 'i', 'port': 22, 'proxyJump': 'a'},

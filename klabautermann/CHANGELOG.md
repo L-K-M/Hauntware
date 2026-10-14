@@ -16,9 +16,10 @@
 - The `~/.ssh/config` import keeps each host's `IdentityFile` and
   `ProxyJump` for the connections to come, and reads `%h` in `HostName`
   as the host's name, as ssh does. A host whose `ProxyJump` ssh would
-  reject, or whose `HostName`, `IdentityFile` or `ProxyJump` needs
-  something Klabautermann cannot fill in as ssh does, is skipped and
-  counted in the import message.
+  reject or Klabautermann cannot follow as ssh does (a route of more than
+  16 hops included), or whose `HostName` or `IdentityFile` needs
+  something Klabautermann cannot fill in, is skipped and counted in the
+  import message.
 - Desktop settings window: on macOS, Linux and Windows, Settings opens in
   a window of its own, and a theme change there applies to the app.
   Phones keep the settings page.
