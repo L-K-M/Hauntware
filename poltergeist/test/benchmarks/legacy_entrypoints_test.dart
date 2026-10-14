@@ -41,7 +41,7 @@ void main() {
     expect(canonicalUnknown.exitCode, 64);
     expect(legacyUnknown.exitCode, canonicalUnknown.exitCode);
     expect(legacyUnknown.stderr, canonicalUnknown.stderr);
-  });
+  }, timeout: _subprocessTimeout);
 
   test(
     'legacy aggregate entrypoint forwards help and error contracts',
@@ -78,6 +78,7 @@ void main() {
       expect(legacyUnknown.exitCode, canonicalUnknown.exitCode);
       expect(legacyUnknown.stderr, canonicalUnknown.stderr);
     },
+    timeout: _subprocessTimeout,
   );
 
   test(
@@ -99,6 +100,11 @@ void main() {
     },
   );
 }
+
+// The two entrypoint tests each start four `dart run` processes, and each
+// compiles its program from source: about 22 s locally, close enough to
+// package:test's default 30 s that a busy CI runner passes it.
+const _subprocessTimeout = Timeout(Duration(minutes: 2));
 
 const _legacyDir = 'tool/bench';
 const _benchPackageDir = 'packages/poltergeist_bench';
