@@ -225,7 +225,39 @@ void main() {
         expect(tester.getTopLeft(_row('nginx.service[812]: second')), second);
         semantics.dispose();
       });
+
+      testWidgets('Enter opens and closes the fields and the row keeps '
+          'focus, wrap ${wrap.name}', (tester) async {
+        final semantics = tester.ensureSemantics();
+        final (logs, search) = _logs();
+        await _pump(tester, logs, search, wrap: wrap);
+        logs.addJournal([for (var i = 0; i < 100; i++) _entry('m $i')]);
+        await tester.pump();
+        final row = _row('nginx.service[812]: m 95');
+        final focus = Focus.of(tester.element(row))..requestFocus();
+        await tester.pump();
+        final id = tester.getSemantics(row).id;
+
+        for (final open in [true, false]) {
+          await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+          await tester.pump();
+          expect(_row('_PID=812'), open ? findsOneWidget : findsNothing);
+          expect(focus.hasPrimaryFocus, isTrue);
+          expect(tester.getSemantics(row).id, id);
+        }
+
+        // The view's own keys still work from the row.
+        final position = tester
+            .state<ScrollableState>(find.byType(Scrollable))
+            .position;
+        final pixels = position.pixels;
+        await tester.sendKeyEvent(LogicalKeyboardKey.pageUp);
+        await tester.pump();
+        expect(position.pixels, lessThan(pixels));
+        semantics.dispose();
+      });
     }
+
   });
 
   testWidgets('a step to a match pauses the view and shows it (LOG-05)', (

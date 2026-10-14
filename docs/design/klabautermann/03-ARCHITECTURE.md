@@ -3600,11 +3600,14 @@ kind of text, the buffer holds about 35 MiB of the 64 MiB budget (11.4).
 The viewer (`app/klabautermann_app/lib/ui/logs/`) forces a strut, so every
 row is a whole number of lines. Without wrap a row is one line, and a long
 line ends in an ellipsis until sideways scrolling lands; that also keeps a
-cut line's note out of sight, though screen readers read it. With wrap,
-the row counts sit in a Fenwick tree and a sliver of the viewer's own
-finds offsets and indexes in O(log n), where `SliverVariedExtentList` sums
-every extent before an index. Only the lines a layout shows, and as many
-rows above its offset so a page up lands on measured lines, are measured,
+cut line's note out of sight, though screen readers read it. The row
+counts sit in a Fenwick tree and a sliver of the viewer's own finds
+offsets and indexes in O(log n), where `SliverVariedExtentList` sums
+every extent before an index. It lays out both modes, so a journal row
+keeps its element, and with it keyboard and accessibility focus, when its
+fields open (M2; K06b used a fixed-extent list without wrap). With wrap,
+only the lines a layout shows, and as many rows above its offset so a
+page up lands on measured lines, are measured,
 once per width, font and locale: one row without a layout when an upper
 bound of its width fits (a monospace advance per Latin-1 code unit, two
 per other unit or tab; a line or paragraph separator never fits),

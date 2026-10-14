@@ -22,8 +22,8 @@ import 'log_view_controller.dart';
 
 /// Whether a [LogView] wraps long lines.
 enum LogWrap {
-  /// One row a line, every row the same extent; a long line is cut at the
-  /// view's edge with an ellipsis.
+  /// One row a line, plus one a field a journal row shows; a long line
+  /// is cut at the view's edge with an ellipsis.
   off,
 
   /// Long lines wrap; a line is measured once per width when a layout
@@ -53,10 +53,9 @@ const int _revealContext = 2;
 final _rowBreaks = RegExp('[\u2028\u2029]');
 
 /// The log viewer of 03 §10.8 over a [LogViewController]: a lazily built
-/// list with a fixed line extent when [wrap] is off and measured row
-/// counts when it is on, follow with pause on scroll (LOG-02), level
-/// colours with a gutter icon, and keyboard operation with a visible
-/// focus ring (03 §10.6, MVP).
+/// list of rows a whole number of lines each, measured when [wrap] is on,
+/// follow with pause on scroll (LOG-02), level colours with a gutter icon,
+/// and keyboard operation with a visible focus ring (03 §10.6, MVP).
 ///
 /// Following keeps the newest line in sight. Scrolling away from it pauses
 /// following, and the view then stays on the lines it shows while new
@@ -218,17 +217,13 @@ class _LogViewState extends State<LogView> {
     if (!position.hasContentDimensions) return;
 
     final line = _text!.lineHeight;
-    final top = (_fixedRows ? index : _rows.rowsBefore(index)) * line;
-    final bottom = top + (_fixedRows ? 1 : _rows.rowsOf(index)) * line;
+    final top = _rows.rowsBefore(index) * line;
+    final bottom = top + _rows.rowsOf(index) * line;
     final viewEnd = position.pixels + position.viewportDimension;
     if (top >= position.pixels && bottom <= viewEnd) return;
 
     _jump(position, top - _revealContext * line - position.pixels);
   }
-
-  /// Whether every row is one line, so the fixed-extent list lays them
-  /// out.
-  bool get _fixedRows => widget.wrap == LogWrap.off && _expanded.isEmpty;
 
   /// Shows or hides [line]'s fields. Showing them pauses following, so
   /// the row holds still while they open beneath it.
@@ -422,16 +417,15 @@ class _LogViewState extends State<LogView> {
       child: CustomScrollView(
         controller: _vertical,
         semanticChildCount: widget.controller.length,
+        // One sliver in both modes: a row whose fields open or close keeps
+        // its element, and with it keyboard and accessibility focus.
         slivers: [
-          if (_fixedRows)
-            SliverFixedExtentList(itemExtent: text.lineHeight, delegate: rows)
-          else
-            _WrappedRows(
-              rows: _rows,
-              revision: _rows.revision,
-              lineHeight: text.lineHeight,
-              delegate: rows,
-            ),
+          _LogRows(
+            rows: _rows,
+            revision: _rows.revision,
+            lineHeight: text.lineHeight,
+            delegate: rows,
+          ),
         ],
       ),
     );
@@ -680,9 +674,9 @@ final class _TextLayout {
 /// The slots a [_RowCounts] starts with.
 const int _minRowSlots = 1024;
 
-/// The row count of every entry a [LogView] holds, for wrap mode, with the
-/// rows before any entry found in O(log n) through a Fenwick tree, so a
-/// frame costs the same however many lines are held (03 §11.4).
+/// The row count of every entry a [LogView] holds, with the rows before
+/// any entry found in O(log n) through a Fenwick tree, so a frame costs
+/// the same however many lines are held (03 §11.4).
 ///
 /// Only the entries a layout shows, and as many rows above its offset, are
 /// measured, once per width, font and locale ([measure]); the others keep
@@ -906,12 +900,12 @@ final class _RowCounts {
 /// How close to a row boundary a scroll offset counts as on it, in rows.
 const double _rowTolerance = 1e-6;
 
-/// The rows of a wrapping [LogView]: a sliver like `SliverVariedExtentList`
-/// whose offsets and indexes come from [_RowCounts] in O(log n), where
-/// that list sums every extent before an index, and which measures the
-/// entries a layout shows before laying them out.
-final class _WrappedRows extends SliverMultiBoxAdaptorWidget {
-  const _WrappedRows({
+/// The rows of a [LogView]: a sliver like `SliverVariedExtentList` whose
+/// offsets and indexes come from [_RowCounts] in O(log n), where that
+/// list sums every extent before an index, and which measures the entries
+/// a layout shows before laying them out.
+final class _LogRows extends SliverMultiBoxAdaptorWidget {
+  const _LogRows({
     required super.delegate,
     required this.rows,
     required this.revision,
@@ -925,19 +919,15 @@ final class _WrappedRows extends SliverMultiBoxAdaptorWidget {
   final double lineHeight;
 
   @override
-  _RenderWrappedRows createRenderObject(BuildContext context) =>
-      _RenderWrappedRows(
-        childManager: context as SliverMultiBoxAdaptorElement,
-        rows: rows,
-        revision: revision,
-        lineHeight: lineHeight,
-      );
+  _RenderLogRows createRenderObject(BuildContext context) => _RenderLogRows(
+    childManager: context as SliverMultiBoxAdaptorElement,
+    rows: rows,
+    revision: revision,
+    lineHeight: lineHeight,
+  );
 
   @override
-  void updateRenderObject(
-    BuildContext context,
-    _RenderWrappedRows renderObject,
-  ) {
+  void updateRenderObject(BuildContext context, _RenderLogRows renderObject) {
     renderObject
       ..rows = rows
       ..revision = revision
@@ -945,8 +935,8 @@ final class _WrappedRows extends SliverMultiBoxAdaptorWidget {
   }
 }
 
-final class _RenderWrappedRows extends RenderSliverFixedExtentBoxAdaptor {
-  _RenderWrappedRows({
+final class _RenderLogRows extends RenderSliverFixedExtentBoxAdaptor {
+  _RenderLogRows({
     required super.childManager,
     required this._rows,
     required this._revision,
