@@ -625,6 +625,54 @@ void main() {
       );
     });
 
+    // A cap of 600 lines evicts from the front until the held entries reach
+    // the 1,024 slots the row counts start with, and the next line moves
+    // them to new slots.
+    LogViewController capped() =>
+        LogViewController(buffer: LogBuffer(maxLines: 600));
+
+    testWidgets('rows stay in place after old lines leave and the counts '
+        'move to new slots', (tester) async {
+      final logs = await _pump(tester, wrap: LogWrap.on, controller: capped());
+      for (var batch = 0; batch < 12; batch++) {
+        logs.add(_lines(batch * 100, 100));
+        await tester.pump();
+      }
+
+      expect(logs.firstSeq, 600);
+      expect(_atEnd(tester), isTrue);
+      final row = tester.getSize(_line(1199)).height;
+      expect(
+        tester.getBottomLeft(_line(1199)).dy,
+        closeTo(_viewSize.height, 0.01),
+      );
+      expect(
+        _position(tester).maxScrollExtent,
+        closeTo(600 * row - _viewSize.height, 0.01),
+      );
+    });
+
+    testWidgets('a paused view keeps its lines while the counts move to '
+        'new slots', (tester) async {
+      final logs = await _pump(tester, wrap: LogWrap.on, controller: capped());
+      logs.add(_lines(0, 600));
+      await tester.pump();
+      await tester.drag(find.byType(LogView), const Offset(0, 300));
+      await tester.pumpAndSettle();
+      expect(logs.following.value, isFalse);
+      final first = _topLine(tester) + 1;
+      final top = tester.getTopLeft(_line(first)).dy;
+
+      // The last batch passes 1,024 lines in all.
+      for (var batch = 6; batch < 11; batch++) {
+        logs.add(_lines(batch * 100, 100));
+        await tester.pump();
+        expect(tester.getTopLeft(_line(first)).dy, top, reason: 'batch $batch');
+      }
+      expect(logs.firstSeq, lessThan(first));
+      expect(logs.following.value, isFalse);
+    });
+
     testWidgets('a text scale change measures the rows again', (tester) async {
       final logs = await _pump(tester, wrap: LogWrap.on);
       final wide = 'x' * 20;
