@@ -49,7 +49,7 @@ final class BookmarkTooLargeException implements Exception {
 }
 
 /// One local mutation observed through [BookmarkStore.changes] — the
-/// store-behind-callback seam (03 §6): M6's `BookmarkCoordinator` marks
+/// store-behind-callback seam (03 §6): M6's sync coordinator marks
 /// dirty on these, and the sidebar re-reads on them, without the store
 /// knowing either exists.
 sealed class BookmarkStoreChange {
@@ -504,8 +504,9 @@ final class FileBookmarkStore implements SyncTrackingBookmarkStore {
   }
 
   /// The tuple a local write materializes: the row's stamp under this
-  /// install's device id — the same tuple [BookmarkCoordinator.onBookmarkSaved]
-  /// seals into the record, so store and record never disagree on authorship.
+  /// install's device id — the same tuple
+  /// `BookmarkRecordWrites.onBookmarkSaved` seals into the record, so store
+  /// and record never disagree on authorship.
   /// Null while sync is unconfigured: tuples exist only to serve the
   /// coordinator, and writing them would change the on-disk shape for
   /// installs that never turn backup on (04 §3.4).

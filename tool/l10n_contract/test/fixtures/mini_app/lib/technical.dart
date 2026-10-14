@@ -1,0 +1,1 @@
+const paneRatioKey = 'layout.paneRatio';

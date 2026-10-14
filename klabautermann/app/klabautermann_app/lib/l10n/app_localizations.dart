@@ -442,6 +442,30 @@ abstract class AppLocalizations {
   /// **'Your imported servers were saved by a newer version of Klabautermann. Servers you import now will not be kept after a restart.'**
   String get importsFileNewer;
 
+  /// Startup notice: the lock that keeps a second copy of the desktop app from starting could not be taken, so a second copy would not be stopped.
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann could not check whether it is already running. If you open it twice, the two copies can overwrite each other\'s settings and imported servers.'**
+  String get instanceLockUnavailable;
+
+  /// Heading of the only screen a second copy of the desktop app shows before it quits.
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann is already running'**
+  String get alreadyRunningTitle;
+
+  /// Body of the screen a second copy of the desktop app shows: where to go instead, and why only one copy runs.
+  ///
+  /// In en, this message translates to:
+  /// **'Switch to the Klabautermann window that is already open. Only one copy runs at a time, so two copies never overwrite each other\'s settings and imported servers.'**
+  String get alreadyRunningBody;
+
+  /// Button on the already-running screen that quits the second copy.
+  ///
+  /// In en, this message translates to:
+  /// **'Quit'**
+  String get alreadyRunningQuit;
+
   /// Shown in the desktop settings window when the app does not answer it.
   ///
   /// In en, this message translates to:
@@ -537,6 +561,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'More'**
   String get serverTabMore;
+
+  /// A table cell as a screen reader hears it within its row: the column's header label, then the cell's value (A11Y-03).
+  ///
+  /// In en, this message translates to:
+  /// **'{column}: {value}'**
+  String tableCellSemantics(String column, String value);
+
+  /// Screen-reader value of the table column header the rows are sorted by, smallest first.
+  ///
+  /// In en, this message translates to:
+  /// **'Sorted ascending'**
+  String get tableSortedAscending;
+
+  /// Screen-reader value of the table column header the rows are sorted by, largest first.
+  ///
+  /// In en, this message translates to:
+  /// **'Sorted descending'**
+  String get tableSortedDescending;
+
+  /// Screen-reader hint of a table column header that sorts the rows when activated.
+  ///
+  /// In en, this message translates to:
+  /// **'Sort by this column'**
+  String get tableSortHint;
+
+  /// Tooltip and screen-reader label of the button at the end of a table row that opens the row's actions.
+  ///
+  /// In en, this message translates to:
+  /// **'Row actions'**
+  String get tableRowActions;
 
   /// Screen-reader name of a log view, the scrolling list of a server's log lines.
   ///

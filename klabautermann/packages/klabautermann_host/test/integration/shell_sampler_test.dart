@@ -1,10 +1,11 @@
 // Real-shell integration test (03 §6.2; 04 App. A, E1, E2, E7).
 //
-// Starts `env LC_ALL=C TZ=UTC SYSTEMD_PAGER= NO_COLOR=1 <shell> -s`, writes
-// the assembled program and two ticks in one write, then an on-demand
-// request, and checks the parsed replies against the local /proc and
-// /etc/os-release. Tagged `shell`; a shell that is not installed is
-// skipped with a reason.
+// Starts kSamplerStartCommand's `env` with `<shell> -s` in place of
+// `sh -s`, writes the assembled program and two ticks in one write, then
+// an on-demand request, and checks the assembled replies against the
+// local /proc and /etc/os-release. Each shell also runs the command
+// itself as the login shell, after printing a startup-file banner.
+// Tagged `shell`; a shell that is not installed is skipped with a reason.
 @Tags(['shell'])
 library;
 
@@ -15,8 +16,14 @@ import 'dart:math';
 import 'package:klabautermann_host/klabautermann_host.dart';
 import 'package:test/test.dart';
 
-/// The sampler environment of 03 §6.2.
-const _env = ['LC_ALL=C', 'TZ=UTC', 'SYSTEMD_PAGER=', 'NO_COLOR=1'];
+/// kSamplerStartCommand's argv with [shell] as the sampler instead of
+/// `sh`, so each installed shell is exercised under the same environment.
+List<String> _samplerCommand(String shell) {
+  final words = kSamplerStartCommand.split(' ');
+  expect(words.first, 'exec');
+  expect(words.sublist(words.length - 2), ['sh', '-s']);
+  return [...words.sublist(1, words.length - 2), shell, '-s'];
+}
 
 /// Quotes a word for the on-demand line; part-1 collectors take no
 /// arguments, so this is only a placeholder for the injected function.
@@ -35,26 +42,26 @@ final _shells = <String, String>{
     if (_shellPath(name) case final p?) name: p,
 };
 
-/// One parsed run: the READY version, the sections grouped by request
+/// One assembled run: the READY version, the replies by request
 /// sequence, the raw reply bytes and the nonce they were framed with.
 final class _Reply {
   _Reply(this.ready, this.ticks, this.raw, this.nonce);
 
   final String? ready;
-  final Map<int, List<HwsSection>> ticks;
+  final Map<int, HwsTick> ticks;
   final List<int> raw;
   final String nonce;
 }
 
 Future<_Reply> _run(
-  String shell,
+  List<String> command,
   SamplerKind kind,
   List<Collector> tickCollectors,
   Collector onDemand,
 ) async {
   final nonce = generateNonce(Random.secure());
   final program = buildSamplerProgram(kind: kind, nonce: nonce);
-  final proc = await Process.start('env', [..._env, shell, '-s']);
+  final proc = await Process.start(command.first, command.sublist(1));
   final out = <int>[];
   final err = StringBuffer();
   final outDone = proc.stdout.forEach(out.addAll);
@@ -75,23 +82,17 @@ Future<_Reply> _run(
   expect(code, 0, reason: 'shell stderr: ${err.toString().trim()}');
 
   String? ready;
-  final ticks = <int, List<HwsSection>>{};
-  int? currentSeq;
-  for (final e in HwsFrameParser(nonce: nonce).push(out)) {
+  final ticks = <int, HwsTick>{};
+  for (final e in HwsTickAssembler(nonce: nonce).push(out)) {
     switch (e) {
-      case HwsReady(:final version):
+      case HwsSessionReady(:final version):
         ready = version;
-      case HwsBegin(:final seq):
-        currentSeq = seq;
-        ticks[seq] = [];
-      case HwsSection():
-        final s = currentSeq;
-        expect(s, isNotNull, reason: 'section before a begin marker');
-        ticks[s]!.add(e);
-      case HwsEnd():
-        break;
-      case HwsFramingError(:final reason):
-        fail('framing error: $reason');
+      case HwsTick(:final seq):
+        ticks[seq] = e;
+      case HwsTickLost(:final seq, :final detail):
+        fail('reply $seq lost: $detail');
+      case HwsSessionFailed(:final fault, :final detail):
+        fail('session failed (${fault.name}): $detail');
     }
   }
   return _Reply(ready, ticks, out, nonce);
@@ -150,7 +151,7 @@ int _indexOf(List<int> bytes, int byte, int from) {
 
 void _expectAllStatusesOkOrMissing(_Reply r) {
   for (final entry in r.ticks.entries) {
-    for (final s in entry.value) {
+    for (final s in entry.value.sections) {
       expect(
         s.status,
         anyOf(SectionStatus.ok, SectionStatus.missing),
@@ -211,7 +212,7 @@ void main() {
   for (final MapEntry(key: name, value: path) in _shells.entries) {
     group(name, () {
       test('fast program: two ticks and an on-demand core', () async {
-        final r = await _run(path, SamplerKind.fast, [
+        final r = await _run(_samplerCommand(path), SamplerKind.fast, [
           Collector.overview,
           Collector.core,
         ], Collector.core);
@@ -219,19 +220,17 @@ void main() {
         expect(r.ticks.keys, containsAll(<int>[1, 2, 3]));
         _expectAllStatusesOkOrMissing(r);
         for (final seq in [1, 2]) {
-          final names = r.ticks[seq]!.map((s) => s.collector).toSet();
+          final names = r.ticks[seq]!.sections.map((s) => s.collector).toSet();
           expect(names, containsAll(<String>['overview', 'core']));
         }
-        expect(r.ticks[3]!.map((s) => s.collector), contains('core'));
+        expect(r.ticks[3]!.sections.map((s) => s.collector), contains('core'));
         _expectDeclaredByteCounts(r.raw, r.nonce);
 
-        final overview = r.ticks[1]!.firstWhere(
-          (s) => s.collector == 'overview',
-        );
+        final overview = r.ticks[1]!.section('overview')!;
         expect(overview.status, SectionStatus.ok);
         _expectMetricBlocks(overview, core: false);
 
-        final core = r.ticks[1]!.firstWhere((s) => s.collector == 'core');
+        final core = r.ticks[1]!.section('core')!;
         expect(core.status, SectionStatus.ok);
         _expectMetricBlocks(core, core: true);
 
@@ -245,7 +244,7 @@ void main() {
       });
 
       test('slow program: two ticks and an on-demand probe', () async {
-        final r = await _run(path, SamplerKind.slow, [
+        final r = await _run(_samplerCommand(path), SamplerKind.slow, [
           Collector.fs,
           Collector.identity,
         ], Collector.probe);
@@ -253,22 +252,21 @@ void main() {
         expect(r.ticks.keys, containsAll(<int>[1, 2, 3]));
         _expectAllStatusesOkOrMissing(r);
         for (final seq in [1, 2]) {
-          final names = r.ticks[seq]!.map((s) => s.collector).toSet();
+          final names = r.ticks[seq]!.sections.map((s) => s.collector).toSet();
           expect(names, containsAll(<String>['fs', 'identity']));
         }
-        expect(r.ticks[3]!.map((s) => s.collector), contains('probe_kernel'));
+        expect(
+          r.ticks[3]!.sections.map((s) => s.collector),
+          contains('probe_kernel'),
+        );
         _expectDeclaredByteCounts(r.raw, r.nonce);
 
-        final identity = r.ticks[1]!.firstWhere(
-          (s) => s.collector == 'identity',
-        );
+        final identity = r.ticks[1]!.section('identity')!;
         expect(identity.status, SectionStatus.ok);
         _expectIdentity(identity);
-        _expectFs(r.ticks[1]!.firstWhere((s) => s.collector == 'fs'));
+        _expectFs(r.ticks[1]!.section('fs')!);
 
-        final kernel = r.ticks[3]!.firstWhere(
-          (s) => s.collector == 'probe_kernel',
-        );
+        final kernel = r.ticks[3]!.section('probe_kernel')!;
         if (kernel.status == SectionStatus.ok) {
           final localUname = Process.runSync('uname', [
             '-s',
@@ -281,14 +279,17 @@ void main() {
         // The probe sections decode into a profile whose kernel fields match
         // the local /proc (03 §6.1).
         final profile = parseProbe(
-          r.ticks[3]!
+          r.ticks[3]!.sections
               .map(ProbeSection.fromEvent)
               .whereType<ProbeSection>()
               .toList(),
           ParseContext.standard,
         ).value;
         expect(profile.kernelSys, isNotNull);
-        expect(profile.tools, isNotEmpty);
+        expect(profile.tools.keys, unorderedEquals(kProbeTools));
+        // LOG-22's file tail relies on tail, which coreutils and BusyBox
+        // both ship.
+        expect(profile.toolPresent('tail'), isTrue);
         final ostype = File('/proc/sys/kernel/ostype');
         if (ostype.existsSync()) {
           expect(profile.kernelSys, ostype.readAsStringSync().trim());
@@ -300,7 +301,7 @@ void main() {
       });
 
       test('slow program: procs, units, timers and cron', () async {
-        final r = await _run(path, SamplerKind.slow, [
+        final r = await _run(_samplerCommand(path), SamplerKind.slow, [
           Collector.procs,
           Collector.units,
           Collector.timers,
@@ -310,7 +311,7 @@ void main() {
         expect(r.ticks.keys, containsAll(<int>[1, 2, 3]));
         _expectAllStatusesOkOrMissing(r);
         for (final seq in [1, 2]) {
-          final names = r.ticks[seq]!.map((s) => s.collector).toSet();
+          final names = r.ticks[seq]!.sections.map((s) => s.collector).toSet();
           expect(
             names,
             containsAll(<String>['procs', 'units', 'timers', 'cron']),
@@ -320,7 +321,7 @@ void main() {
 
         // The local /proc exists, so procs must parse into the process
         // table with pid 1 present and no fabricated framing.
-        final procs = r.ticks[1]!.firstWhere((s) => s.collector == 'procs');
+        final procs = r.ticks[1]!.section('procs')!;
         expect(procs.status, SectionStatus.ok);
         final parsed = parseProcs(
           utf8.decode(procs.payload),
@@ -333,7 +334,7 @@ void main() {
 
         // units and timers are `missing` where systemd is absent; when
         // present their payload parses into a snapshot.
-        final units = r.ticks[1]!.firstWhere((s) => s.collector == 'units');
+        final units = r.ticks[1]!.section('units')!;
         if (units.status == SectionStatus.ok) {
           final u = parseUnits(
             utf8.decode(units.payload),
@@ -341,7 +342,7 @@ void main() {
           );
           expect(u.value.format, isNot(UnitListFormat.none));
         }
-        final timers = r.ticks[1]!.firstWhere((s) => s.collector == 'timers');
+        final timers = r.ticks[1]!.section('timers')!;
         if (timers.status == SectionStatus.ok) {
           final t = parseTimers(
             utf8.decode(timers.payload),
@@ -352,12 +353,27 @@ void main() {
 
         // cron succeeds without a personal crontab; ownCrontabPresent is
         // unknown when the `crontab` tool is absent (03 §7.7).
-        final cron = r.ticks[1]!.firstWhere((s) => s.collector == 'cron');
+        final cron = r.ticks[1]!.section('cron')!;
         expect(cron.status, SectionStatus.ok);
         expect(
           () => parseCron(utf8.decode(cron.payload), ParseContext.standard),
           returnsNormally,
         );
+      });
+
+      test('the start command runs from it as the login shell', () async {
+        // Startup files may print before the command runs; the reply
+        // assembler skips that output up to READY.
+        final r = await _run(
+          [path, '-c', 'printf "banner\\r\\npartial"; $kSamplerStartCommand'],
+          SamplerKind.fast,
+          [Collector.overview],
+          Collector.overview,
+        );
+        expect(r.ready, kCollectorSetVersion);
+        expect(r.ticks.keys, containsAll(<int>[1, 2, 3]));
+        expect(r.ticks[1]!.section('overview')!.status, SectionStatus.ok);
+        expect(r.ticks[1]!.uptimeSeconds, isNotNull);
       });
     });
   }

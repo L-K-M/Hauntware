@@ -732,7 +732,12 @@ void main() {
     test('publishes an empty catalog before sign-out returns', () async {
       await h.enrollSharedDirectly();
       await h.service.saveServer(config('web'));
-      final staleCatalog = h.service.catalog!;
+      // A reload whose catalog rebuild is still reading the store when
+      // the user signs out: the superseded coordinator finishes after.
+      final releaseRebuild = Completer<void>();
+      h.servers.holdNextLoad = releaseRebuild;
+      final staleReload = h.service.load();
+      await pumpEventQueue();
       final snapshots = <List<String>>[];
       var signOutCompleted = false;
       h.catalogPublisher = (snapshot) {
@@ -743,7 +748,8 @@ void main() {
       await h.service.signOut().then((_) {
         signOutCompleted = true;
       });
-      staleCatalog.replace([config('stale')]);
+      releaseRebuild.complete();
+      await staleReload;
 
       expect(snapshots, [<String>[]]);
     });

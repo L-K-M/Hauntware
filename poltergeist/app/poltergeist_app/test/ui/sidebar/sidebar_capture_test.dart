@@ -18,6 +18,7 @@ import 'package:poltergeist_core/poltergeist_core.dart';
 
 import '../../support/fake_bookmark_store.dart';
 import '../../support/fake_connection_state_bridge.dart';
+import '../../support/fake_server_catalog.dart';
 
 /// Real-font captures of the D32 sidebar (10 §5, D33) for visual review:
 /// DEVICES, FAVORITES with remote favorites among them, PINNED, and
@@ -271,7 +272,7 @@ void main() {
       _remote('delta', sortKey: 'mg'),
     ];
 
-  SeanceServerCatalog seededCatalog() => SeanceServerCatalog()
+  FakeServerCatalog seededCatalog() => FakeServerCatalog()
     ..replace([
       _account(
         'prod-db',

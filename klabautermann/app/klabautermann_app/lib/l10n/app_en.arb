@@ -173,6 +173,22 @@
   "@importsFileNewer": {
     "description": "Startup notice: a newer app version wrote the file holding the servers imported from ~/.ssh/config, so this version does not write it."
   },
+  "instanceLockUnavailable": "Klabautermann could not check whether it is already running. If you open it twice, the two copies can overwrite each other's settings and imported servers.",
+  "@instanceLockUnavailable": {
+    "description": "Startup notice: the lock that keeps a second copy of the desktop app from starting could not be taken, so a second copy would not be stopped."
+  },
+  "alreadyRunningTitle": "Klabautermann is already running",
+  "@alreadyRunningTitle": {
+    "description": "Heading of the only screen a second copy of the desktop app shows before it quits."
+  },
+  "alreadyRunningBody": "Switch to the Klabautermann window that is already open. Only one copy runs at a time, so two copies never overwrite each other's settings and imported servers.",
+  "@alreadyRunningBody": {
+    "description": "Body of the screen a second copy of the desktop app shows: where to go instead, and why only one copy runs."
+  },
+  "alreadyRunningQuit": "Quit",
+  "@alreadyRunningQuit": {
+    "description": "Button on the already-running screen that quits the second copy."
+  },
   "settingsWindowUnreachable": "Settings cannot reach Klabautermann. Close this window and open Settings again.",
   "@settingsWindowUnreachable": {
     "description": "Shown in the desktop settings window when the app does not answer it."
@@ -200,6 +216,36 @@
   "workspaceTabSystem": "System",
   "workspaceTabAccess": "Access",
   "serverTabMore": "More",
+  "tableCellSemantics": "{column}: {value}",
+  "@tableCellSemantics": {
+    "description": "A table cell as a screen reader hears it within its row: the column's header label, then the cell's value (A11Y-03).",
+    "placeholders": {
+      "column": {
+        "type": "String",
+        "example": "CPU"
+      },
+      "value": {
+        "type": "String",
+        "example": "4.2 %"
+      }
+    }
+  },
+  "tableSortedAscending": "Sorted ascending",
+  "@tableSortedAscending": {
+    "description": "Screen-reader value of the table column header the rows are sorted by, smallest first."
+  },
+  "tableSortedDescending": "Sorted descending",
+  "@tableSortedDescending": {
+    "description": "Screen-reader value of the table column header the rows are sorted by, largest first."
+  },
+  "tableSortHint": "Sort by this column",
+  "@tableSortHint": {
+    "description": "Screen-reader hint of a table column header that sorts the rows when activated."
+  },
+  "tableRowActions": "Row actions",
+  "@tableRowActions": {
+    "description": "Tooltip and screen-reader label of the button at the end of a table row that opens the row's actions."
+  },
   "logViewLabel": "Log",
   "@logViewLabel": {
     "description": "Screen-reader name of a log view, the scrolling list of a server's log lines."
