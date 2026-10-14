@@ -224,7 +224,10 @@ class SortableTable<R> extends StatefulWidget {
   /// A click or tap on a row, or Enter or Space on the active row.
   final ValueChanged<R>? onRowActivated;
 
-  /// A row's verbs for the row-action slot; null draws no slot.
+  /// A row's verbs for the row-action slot; null draws no slot. Shift+F10
+  /// opens them only when one top-level verb is enabled, so give each row
+  /// one: the keyboard cannot reach verbs kept only in a submenu until
+  /// `ghost_ui`'s `sidebarMenuWidgets` can focus a submenu.
   final List<SidebarMenuEntry> Function(R row)? rowActions;
 
   /// Shown under the header when [rows] is empty.
