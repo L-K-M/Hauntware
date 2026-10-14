@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:klabautermann_app/l10n/app_localizations.dart';
 import 'package:klabautermann_app/ui/desktop_shell.dart';
 import 'package:klabautermann_app/ui/fleet_rail.dart';
 import 'package:klabautermann_app/ui/inspector_pane.dart';
 import 'package:klabautermann_app/ui/server_workspace.dart';
-import 'package:klabautermann_core/klabautermann_core.dart'
-    show LinkPhase, LinkState;
+import 'package:klabautermann_core/klabautermann_core.dart';
 
 import 'support/harness.dart';
 
@@ -56,7 +56,7 @@ void main() {
     expect(find.text('Add a server to start monitoring your fleet.'), findsOne);
   });
 
-  testWidgets('a server row states its link phase in words, not colour alone', (
+  testWidgets('a server row says its link status in words, not colour alone', (
     tester,
   ) async {
     final harness = await pumpApp(
@@ -71,11 +71,54 @@ void main() {
       findsNWidgets(2),
     );
 
-    harness.engine.emit(const LinkState('srv-1', LinkPhase.connected));
+    harness.engine.emit(const LinkState('srv-1', LinkReady()));
     await tester.pumpAndSettle();
 
     expect(find.bySemanticsLabel('Server status: Connected'), findsOneWidget);
     expect(find.bySemanticsLabel('Server status: Disconnected'), findsOne);
+  });
+
+  test('every link status has its word (D46)', () {
+    final l10n = lookupAppLocalizations(const Locale('en'));
+    String word(LinkStatus status) => linkStatusWord(l10n, status);
+
+    expect(word(const LinkIdle()), 'Disconnected');
+    expect(word(const LinkConnecting()), 'Connecting');
+    expect(word(const LinkAuthenticating()), 'Authenticating');
+    expect(word(const LinkReady()), 'Connected');
+    expect(
+      word(const LinkDegraded(LinkDegradedReason.sessionLimitLearned)),
+      'Connected with limits',
+    );
+    expect(word(LinkBackoff(DateTime.utc(2026))), 'Waiting to reconnect');
+    expect(
+      word(const LinkNeedsUser(promptId: 'p-1', kind: PromptKind.hostKey)),
+      'Needs your input',
+    );
+    expect(
+      word(const LinkBlocked(LinkBlockedReason.hostKeyChanged)),
+      'Blocked',
+    );
+    expect(
+      word(const LinkClosed(LinkClosedReason.closedByOwner)),
+      'Disconnected',
+    );
+    expect(
+      word(
+        const LinkClosed(
+          LinkClosedReason.connectFailed,
+          failure: LinkFailureKind.authenticationRejected,
+        ),
+      ),
+      'Failed',
+    );
+    for (final reason in [
+      LinkClosedReason.linkLost,
+      LinkClosedReason.transportError,
+      LinkClosedReason.pingTimeout,
+    ]) {
+      expect(word(LinkClosed(reason)), 'Connection lost', reason: '$reason');
+    }
   });
 
   testWidgets('the bottom bar and section header carry semantics labels', (

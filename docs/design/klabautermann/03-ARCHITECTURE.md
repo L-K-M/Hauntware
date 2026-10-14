@@ -3162,7 +3162,7 @@ localization catalog from the first build:
   full app. Not Séance's monolithic `AppState` (3,027 lines [R: c3 §0]).
 - Per-server and per-series `ValueListenable`s keep sample updates local;
   `MaterialApp` rebuilds only on appearance changes.
-- Engine protocol (plain data, D18), version 2 (`kEngineProtocolVersion`):
+- Engine protocol (plain data, D18), version 3 (`kEngineProtocolVersion`):
 
 | Requests (UI to engine) | Events (engine to UI) |
 |---|---|
@@ -3174,7 +3174,9 @@ localization catalog from the first build:
 | `OpenLogStream(spec)`, `CloseStream(id)` | `LogBatch(streamId, lines, dropped)` (at most 20 per second per stream [E]) |
 | `DockerQuery(serverId, query)` | `DockerResult`, `DockerEvent` |
 | `PlanAction(intent)`, `RunAction(planId, confirmation)` | `ActionPlanned(preview)`, `ActionProgress`, `ActionFinished` |
-| `AnswerPrompt(promptId, answer)` | `Prompt` (host key, keyboard-interactive, credential, elevation) |
+| `AnswerPrompt(promptId, answer)` | `Prompt(promptId, serverId, host, port, request)` (host key, keyboard-interactive, credential, elevation), `PromptWithdrawn(promptId, reason)` |
+| `SetAppActivity(activity)` (foreground or background; D34, D45) | no event: it changes what runs |
+| none: the engine's probe sweeps (5.12) | `Reachability(serverId, status)` (FL-04) |
 | `HandleAlert(alertRef, acknowledge or dismiss)` (v1.x; inbox fetch runs inside `RunSyncRound`) | `AlertsArrived(serverId, alerts)`, `AlertStatusChanged` (D42) |
 | `OpenTerminal(serverId, containerId, shell)` (v1) | `TerminalBytes`, `TerminalClosed` |
 
@@ -3224,6 +3226,52 @@ the engine in `engine_isolate.dart` beside it):
   D13's device-local store (4.10) before it answers; `saved` is false when
   the write failed or the store was left as it is at start, and the fleet
   then shows the import only until the engine stops.
+- **Version 3 (M2 links).** `LinkState(serverId, status)` carries a
+  sealed `LinkStatus`: D46's eight states plus `blocked`, each with its
+  own typed values: `degraded(reason)`, `backoff(until)`,
+  `needsUser(promptId, kind)`, `blocked(reason)` (endpoint changed, host
+  key changed) and `closed(reason, failure)`, whose optional failure kind
+  names 5.3's classifications (unreachable, timed out, credentials
+  rejected or unavailable, host key declined, unsupported or only
+  insecure algorithms, key exchange timed out). `ready` carries no
+  values, because a learned session limit is `degraded` and what the host
+  can do arrives with the sampling protocol; `needsUser` names its prompt
+  by id instead of carrying it (5.1's `needsUser(prompt)`), because the
+  prompt is its own event. Statuses compare by value. `Prompt` replaces
+  v2's engine text with a sealed request per kind: a first-seen host
+  key's type and SHA-256 fingerprint (a changed key blocks the link
+  instead, 4.6), the server's keyboard-interactive name, instruction and
+  questions (without echo flags, which `seance_core`'s challenge does not
+  carry, so every answer is masked), and the login or sudo password of a
+  user with a retry flag. `host` and `port` name the machine that asks,
+  a jump host while the engine connects through it. `PromptWithdrawn`
+  (expired, or the attempt ended) closes a prompt the engine no longer
+  waits on. `FleetEntry` gains the nullable `jumpRoute` (hop names in
+  dial order), `authKind` (agent, identity file, stored key, password),
+  `searchText` (built in the engine with `serverSearchHaystack`, which
+  the app may not import, 3.2) and `locatorConflict` (the ids of entries
+  that share the `host:port` pin locator behind another route, 4.6). The
+  app keeps statuses and probe answers only for servers its fleet lists.
+- **`SetAppActivity(activity)`** is a request of its own and applies to
+  every subscription, link and probe at once: 6.4 pauses everything while
+  the app is in the background, and D34 adds the phones' grace period
+  before links close. Subscriptions stay registered while the app is in
+  the background, so they resume without the app resending them, and the
+  engine knows which pauses are the background's, as 9.5's freshness and
+  gap copy names them ("paused: app in background", "in background").
+  *Rejected:* unsubscribing everything on background (every subscription
+  resent on return, and a background pause indistinguishable from
+  surfaces that closed); a field on `Subscribe` (D45). Until the link
+  supervisor lands, the engine answers it with `RequestRejected`.
+- **`Reachability(serverId, status)`** reports one server's latest probe
+  answer, `online`, `offline` or `unknown` as `seance_core`'s
+  `ProbeStatus` gives it, apart from `LinkState`: a probe is a TCP
+  connect to the SSH port that needs no link (`ProbeService`, 5.12), and
+  `unknown` is not `offline` (a host behind a firewall or a jump host may
+  be up). A server never probed has no answer at all, not `unknown`.
+  *Rejected:* probe answers as link statuses (a status would claim a link
+  that does not exist, and `ghost_servers`' indicator takes session and
+  probe truth as separate inputs).
 
 ### 10.2 Desktop (width of 960 px or more)
 

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:ghost_theme/ghost_theme.dart' show GhostChrome;
-import 'package:klabautermann_core/klabautermann_core.dart' show LinkPhase;
+import 'package:klabautermann_core/klabautermann_core.dart';
 
 import '../controllers/fleet_controller.dart';
 import '../l10n/app_localizations.dart';
@@ -104,14 +104,23 @@ class _FleetRailState extends State<FleetRail> {
   }
 }
 
-/// The localized word for a [LinkPhase]: the text half of the dot
-/// vocabulary (03 §10.3), used wherever the dot's colour needs words.
-String linkPhaseWord(AppLocalizations l10n, LinkPhase phase) {
-  return switch (phase) {
-    LinkPhase.connected => l10n.statusConnected,
-    LinkPhase.connecting => l10n.statusConnecting,
-    LinkPhase.failed => l10n.statusFailed,
-    LinkPhase.disconnected => l10n.statusDisconnected,
+/// The localized word for a [LinkStatus]: the text half of the dot
+/// vocabulary (03 §10.3), used wherever the dot's colour needs words. The
+/// reasons a status carries are worded by the surfaces that explain them.
+String linkStatusWord(AppLocalizations l10n, LinkStatus status) {
+  return switch (status) {
+    LinkIdle() => l10n.statusDisconnected,
+    LinkConnecting() => l10n.statusConnecting,
+    LinkAuthenticating() => l10n.statusAuthenticating,
+    LinkReady() => l10n.statusConnected,
+    LinkDegraded() => l10n.statusLimited,
+    LinkBackoff() => l10n.statusWaitingToReconnect,
+    LinkNeedsUser() => l10n.statusNeedsInput,
+    LinkBlocked() => l10n.statusBlocked,
+    LinkClosed(reason: LinkClosedReason.closedByOwner) =>
+      l10n.statusDisconnected,
+    LinkClosed(reason: LinkClosedReason.connectFailed) => l10n.statusFailed,
+    LinkClosed() => l10n.statusConnectionLost,
   };
 }
 
@@ -130,14 +139,23 @@ class FleetServerRow extends StatelessWidget {
     // The status colours live on ghost_theme's chrome beside the tokens
     // they are held to the same contrast floor with.
     final chrome = GhostChrome.of(context, klabautermannThemeStyle);
-    final phase = fleet.linkPhaseFor(server.id);
-    final statusWord = linkPhaseWord(l10n, phase);
-    final dot = switch (phase) {
-      LinkPhase.connected => SidebarStatusDot(chrome.statusConnected),
-      LinkPhase.connecting => SidebarStatusDot(chrome.statusConnecting),
-      LinkPhase.failed => SidebarStatusDot(chrome.statusFailed),
-      // Nothing observed yet paints no dot; the label still says the word.
-      LinkPhase.disconnected => null,
+    final status = fleet.linkStatusFor(server.id);
+    final statusWord = linkStatusWord(l10n, status);
+    final dot = switch (status) {
+      LinkReady() || LinkDegraded() => SidebarStatusDot(chrome.statusConnected),
+      LinkConnecting() ||
+      LinkAuthenticating() ||
+      LinkBackoff() => SidebarStatusDot(chrome.statusConnecting),
+      // Waiting on the user, for a prompt or a decision, paints the
+      // no-entry dot `ghost_servers` uses for "blocked".
+      LinkNeedsUser() || LinkBlocked() => SidebarStatusDot(
+        chrome.statusFailed,
+        style: SidebarDotStyle.blocked,
+      ),
+      // Nothing observed yet, or a link closed on purpose, paints no dot;
+      // the label still says the word.
+      LinkIdle() || LinkClosed(reason: LinkClosedReason.closedByOwner) => null,
+      LinkClosed() => SidebarStatusDot(chrome.statusFailed),
     };
     return SidebarRow(
       mark: const Icon(Icons.dns_outlined),

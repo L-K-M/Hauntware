@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../controllers/fleet_controller.dart';
 import '../controllers/monitoring_controller.dart';
 import '../l10n/app_localizations.dart';
-import 'fleet_rail.dart' show linkPhaseWord;
+import 'fleet_rail.dart' show linkStatusWord;
 import 'inspector_pane.dart' show PlaceholderPaneBody;
 
 /// The server workspace of 03 §10.2: a header over the panel tab strip.
@@ -86,7 +86,7 @@ class ServerWorkspace extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  linkPhaseWord(l10n, fleet.linkPhaseFor(server.id)),
+                  linkStatusWord(l10n, fleet.linkStatusFor(server.id)),
                   style: Theme.of(context).textTheme.labelMedium,
                 ),
               ],

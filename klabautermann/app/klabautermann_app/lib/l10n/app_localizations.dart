@@ -304,6 +304,42 @@ abstract class AppLocalizations {
   /// **'Failed'**
   String get statusFailed;
 
+  /// No description provided for @statusAuthenticating.
+  ///
+  /// In en, this message translates to:
+  /// **'Authenticating'**
+  String get statusAuthenticating;
+
+  /// No description provided for @statusLimited.
+  ///
+  /// In en, this message translates to:
+  /// **'Connected with limits'**
+  String get statusLimited;
+
+  /// No description provided for @statusWaitingToReconnect.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting to reconnect'**
+  String get statusWaitingToReconnect;
+
+  /// No description provided for @statusNeedsInput.
+  ///
+  /// In en, this message translates to:
+  /// **'Needs your input'**
+  String get statusNeedsInput;
+
+  /// No description provided for @statusBlocked.
+  ///
+  /// In en, this message translates to:
+  /// **'Blocked'**
+  String get statusBlocked;
+
+  /// No description provided for @statusConnectionLost.
+  ///
+  /// In en, this message translates to:
+  /// **'Connection lost'**
+  String get statusConnectionLost;
+
   /// Screen-reader label for a server row's status dot.
   ///
   /// In en, this message translates to:

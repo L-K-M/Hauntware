@@ -8,6 +8,7 @@ import 'package:ghost_ui/ghost_ui.dart'
     show
         FamilyPalette,
         GhostFileTheme,
+        SidebarDotStyle,
         SidebarRow,
         SidebarStatusDot,
         SidebarThemeTokens,
@@ -16,8 +17,7 @@ import 'package:ghost_ui/ghost_ui.dart'
 import 'package:klabautermann_app/controllers/appearance_controller.dart';
 import 'package:klabautermann_app/theme/app_theme.dart';
 import 'package:klabautermann_app/ui/fleet_rail.dart';
-import 'package:klabautermann_core/klabautermann_core.dart'
-    show LinkPhase, LinkState;
+import 'package:klabautermann_core/klabautermann_core.dart';
 
 import 'support/harness.dart';
 
@@ -179,15 +179,35 @@ void main() {
     // Nothing observed yet paints no dot; the label carries the word.
     expect(dotOf('web-1'), isNull);
 
-    final phases = {
-      LinkPhase.connected: chrome.statusConnected,
-      LinkPhase.connecting: chrome.statusConnecting,
-      LinkPhase.failed: chrome.statusFailed,
+    final connected = SidebarStatusDot(chrome.statusConnected);
+    final connecting = SidebarStatusDot(chrome.statusConnecting);
+    final failed = SidebarStatusDot(chrome.statusFailed);
+    final blocked = SidebarStatusDot(
+      chrome.statusFailed,
+      style: SidebarDotStyle.blocked,
+    );
+    final dots = <LinkStatus, SidebarStatusDot?>{
+      const LinkConnecting(): connecting,
+      const LinkAuthenticating(): connecting,
+      const LinkReady(): connected,
+      const LinkDegraded(LinkDegradedReason.sessionLimitLearned): connected,
+      LinkBackoff(DateTime.utc(2026)): connecting,
+      const LinkNeedsUser(promptId: 'p-1', kind: PromptKind.credential):
+          blocked,
+      const LinkBlocked(LinkBlockedReason.endpointChanged): blocked,
+      const LinkClosed(LinkClosedReason.pingTimeout): failed,
+      const LinkClosed(
+        LinkClosedReason.connectFailed,
+        failure: LinkFailureKind.unreachable,
+      ): failed,
+      // A link closed on purpose is no failure: no dot, like idle.
+      const LinkClosed(LinkClosedReason.closedByOwner): null,
+      const LinkIdle(): null,
     };
-    for (final MapEntry(key: phase, value: colour) in phases.entries) {
-      harness.engine.emit(LinkState('srv-1', phase));
+    for (final MapEntry(key: status, value: dot) in dots.entries) {
+      harness.engine.emit(LinkState('srv-1', status));
       await tester.pumpAndSettle();
-      expect(dotOf('web-1'), SidebarStatusDot(colour), reason: phase.name);
+      expect(dotOf('web-1'), dot, reason: '$status');
     }
   });
 

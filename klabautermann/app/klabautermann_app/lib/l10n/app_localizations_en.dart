@@ -154,6 +154,24 @@ class AppLocalizationsEn extends AppLocalizations {
   String get statusFailed => 'Failed';
 
   @override
+  String get statusAuthenticating => 'Authenticating';
+
+  @override
+  String get statusLimited => 'Connected with limits';
+
+  @override
+  String get statusWaitingToReconnect => 'Waiting to reconnect';
+
+  @override
+  String get statusNeedsInput => 'Needs your input';
+
+  @override
+  String get statusBlocked => 'Blocked';
+
+  @override
+  String get statusConnectionLost => 'Connection lost';
+
+  @override
   String statusSemantics(String status) {
     return 'Server status: $status';
   }
