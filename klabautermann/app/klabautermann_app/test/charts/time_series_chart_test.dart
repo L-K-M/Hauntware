@@ -285,6 +285,40 @@ void main() {
     semantics.dispose();
   });
 
+  testWidgets('keeps the summaries when large text leaves no plot', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    tester.platformDispatcher.textScaleFactorTestValue = 2;
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    final ring = TimeSeriesRing(capacity: 2, lanes: 1);
+    addTearDown(ring.dispose);
+    ring.add(_at(500), [50]);
+    await tester.pumpWidget(
+      chartFrame(
+        SizedBox(
+          width: 400,
+          height: 90,
+          child: TimeSeriesChart(
+            data: ring,
+            labels: const ['User'],
+            unit: ChartUnit.percent,
+            strings: testChartStrings,
+            source: 'Here',
+            end: _end,
+          ),
+        ),
+      ),
+    );
+
+    const label = 'User: now 50%, lowest 50%, highest 50%, steady';
+    expect(
+      find.semantics.byLabel(label).evaluate().single,
+      matchesSemantics(label: label),
+    );
+    semantics.dispose();
+  });
+
   testWidgets('scales to the data in view in IEC units', (tester) async {
     final ring = TimeSeriesRing(capacity: 10, lanes: 2);
     addTearDown(ring.dispose);

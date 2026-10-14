@@ -531,7 +531,6 @@ final class TimeSeriesPainter extends CustomPainter {
   @override
   SemanticsBuilderCallback get semanticsBuilder => (size) {
     final plot = _plotFor(size);
-    if (plot.width <= 0 || plot.height <= 0) return const [];
     CustomPainterSemantics node(Rect rect, String label) =>
         CustomPainterSemantics(
           rect: rect,
@@ -540,6 +539,13 @@ final class TimeSeriesPainter extends CustomPainter {
             textDirection: textDirection,
           ),
         );
+    // Large text can leave no room for a plot, and so no bands, but the
+    // summaries still carry the data.
+    if (plot.width <= 0 || plot.height <= 0) {
+      return [
+        for (final summary in summaries) node(Offset.zero & size, summary),
+      ];
+    }
     return [
       for (final summary in summaries) node(plot, summary),
       for (final gap in gaps)
