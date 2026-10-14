@@ -41,7 +41,6 @@ export 'package:klabautermann_host/klabautermann_host.dart'
         DiskRate,
         FsSnapshot,
         HostProfile,
-        IdentitySnapshot,
         LoadAvg,
         NetRate,
         Pressure,

@@ -9,7 +9,6 @@ import 'package:klabautermann_host/klabautermann_host.dart'
         DiskRate,
         FsSnapshot,
         HostProfile,
-        IdentitySnapshot,
         LoadAvg,
         NetRate,
         Pressure,
@@ -1435,11 +1434,23 @@ final class FsResult extends SampleResult {
   final FsSnapshot fs;
 }
 
-/// OS, kernel and host name ([SampleStream.identity], SYS-01).
+/// SYS-01's identity ([SampleStream.identity]); virtualization comes with
+/// [HostProfileChanged]. The engine resolves each value from hostnamectl,
+/// then os-release and `uname`, so the host's JSON never crosses (03
+/// §6.5); what the host did not report stays null.
 final class IdentityResult extends SampleResult {
-  const IdentityResult(this.identity);
+  const IdentityResult({
+    this.hostname,
+    this.osPrettyName,
+    this.kernelName,
+    this.kernelRelease,
+    this.arch,
+  });
 
-  final IdentitySnapshot identity;
+  /// The static host name, which only hostnamectl reports.
+  final String? hostname;
+
+  final String? osPrettyName, kernelName, kernelRelease, arch;
 }
 
 /// The process list ([SampleStream.procs], 7.2).

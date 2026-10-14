@@ -5,7 +5,7 @@ import 'dart:typed_data';
 
 import 'package:klabautermann_core/klabautermann_core.dart';
 import 'package:klabautermann_host/klabautermann_host.dart'
-    show CronJob, FsMount, OsRelease, PressureLine, SystemdTimer;
+    show CronJob, FsMount, PressureLine, SystemdTimer;
 import 'package:test/test.dart';
 
 /// Echoes every message back; protocol values cross a real isolate boundary
@@ -314,16 +314,20 @@ void main() {
       final identity =
           await result(
                 SampleStream.identity,
-                IdentityResult(
-                  IdentitySnapshot(
-                    osRelease: OsRelease({'ID': 'debian'}),
-                    hostnamectl: {'Hostname': 'web-1'},
-                  ),
+                const IdentityResult(
+                  hostname: 'web-1',
+                  osPrettyName: 'Debian GNU/Linux 12 (bookworm)',
+                  kernelName: 'Linux',
+                  kernelRelease: '6.1.0-26-amd64',
+                  arch: 'x86-64',
                 ),
               )
               as IdentityResult;
-      expect(identity.identity.osRelease!.id, 'debian');
-      expect(identity.identity.hostname, 'web-1');
+      expect(identity.hostname, 'web-1');
+      expect(identity.osPrettyName, 'Debian GNU/Linux 12 (bookworm)');
+      expect(identity.kernelName, 'Linux');
+      expect(identity.kernelRelease, '6.1.0-26-amd64');
+      expect(identity.arch, 'x86-64');
 
       final procs =
           await result(
