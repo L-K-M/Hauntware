@@ -61,7 +61,9 @@ final class DisallowedLiteral extends L10nFinding {
 /// A source file that failed to parse.
 ///
 /// The gate fails instead of scanning a partial tree, so a syntax error
-/// cannot hide literals.
+/// cannot hide literals. A scanned directory that is missing or holds no
+/// non-generated Dart file is reported the same way, with the directory
+/// as [path].
 final class UnparseableSource extends L10nFinding {
   const UnparseableSource({required this.path, required this.message});
 
@@ -155,8 +157,12 @@ final class LocalizationContract {
   /// Scans the configured directories and the allowlist itself.
   ///
   /// Returns disallowed literals, unparseable sources and dead allowlist
-  /// entries; an empty list is the contract's success verdict.
+  /// entries; an empty list is the contract's success verdict. Throws
+  /// [ArgumentError] when [config] names no scanned directory or an empty
+  /// generated prefix or suffix, which would exclude every file.
   List<L10nFinding> scan() {
+    _checkConfig();
+
     final findings = <L10nFinding>[];
     for (final directory in config.scannedDirectories) {
       findings.addAll(_scanDirectory(directory));
@@ -196,6 +202,7 @@ final class LocalizationContract {
     }
 
     final findings = <L10nFinding>[];
+    var scannedFiles = 0;
     for (final entity in scanned.listSync(recursive: true)) {
       if (entity is! File || !entity.path.endsWith('.dart')) continue;
 
@@ -204,6 +211,7 @@ final class LocalizationContract {
           .replaceAll('\\', '/');
       if (isGeneratedPath(relativePath)) continue;
 
+      scannedFiles++;
       final String source;
       try {
         source = entity.readAsStringSync();
@@ -225,7 +233,45 @@ final class LocalizationContract {
       }
     }
 
+    // An empty tree would pass vacuously, for example when the generated
+    // suffixes match every file.
+    if (scannedFiles == 0) {
+      findings.add(
+        UnparseableSource(
+          path: directory,
+          message: 'scanned directory holds no non-generated Dart file',
+        ),
+      );
+    }
+
     return findings;
+  }
+
+  void _checkConfig() {
+    if (config.scannedDirectories.isEmpty) {
+      throw ArgumentError.value(
+        config.scannedDirectories,
+        'config.scannedDirectories',
+        'must name at least one directory',
+      );
+    }
+
+    if (config.generatedLocalizationPrefix.isEmpty) {
+      throw ArgumentError.value(
+        config.generatedLocalizationPrefix,
+        'config.generatedLocalizationPrefix',
+        'must not be empty; it would mark every file as generated',
+      );
+    }
+
+    if (config.generatedDartSuffixes.contains('')) {
+      throw ArgumentError.value(
+        config.generatedDartSuffixes,
+        'config.generatedDartSuffixes',
+        'must not contain an empty suffix; it would mark every file as '
+            'generated',
+      );
+    }
   }
 
   Iterable<L10nFinding> _deadAllowlistEntries() {

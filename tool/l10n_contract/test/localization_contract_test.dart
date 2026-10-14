@@ -199,7 +199,7 @@ import 'default.dart'
       config: const L10nContractConfig(
         generatedLocalizationPrefix: 'lib/l10n/app_localizations',
         generatedDartSuffixes: {'.g.dart'},
-        scannedDirectories: [],
+        scannedDirectories: ['bin'],
       ),
       allowedTechnicalLiterals: const {
         'lib/broken.dart': {"'Hidden'"},
@@ -281,5 +281,64 @@ import 'default.dart'
       ),
       contains('packages'),
     );
+  });
+
+  test('fails closed when a scanned directory has nothing to scan', () {
+    final emptyRoot = Directory.systemTemp.createTempSync('l10n_contract_');
+    addTearDown(() => emptyRoot.deleteSync(recursive: true));
+    Directory('${emptyRoot.path}/lib').createSync();
+
+    final contracts = [
+      _contract(appRoot: emptyRoot.path),
+      // A suffix that marks every file under lib/ as generated output.
+      LocalizationContract(
+        appRoot: 'test/fixtures/mini_app',
+        config: const L10nContractConfig(
+          generatedLocalizationPrefix: 'lib/l10n/app_localizations',
+          generatedDartSuffixes: {'.dart'},
+          scannedDirectories: ['lib'],
+        ),
+        allowedTechnicalLiterals: const {},
+      ),
+    ];
+
+    for (final contract in contracts) {
+      expect(
+        contract.scan().whereType<UnparseableSource>().map(
+          (finding) => finding.path,
+        ),
+        equals(['lib']),
+      );
+    }
+  });
+
+  test('rejects a configuration that cannot scan anything', () {
+    const configs = [
+      L10nContractConfig(
+        generatedLocalizationPrefix: 'lib/l10n/app_localizations',
+        generatedDartSuffixes: {'.g.dart'},
+        scannedDirectories: [],
+      ),
+      L10nContractConfig(
+        generatedLocalizationPrefix: '',
+        generatedDartSuffixes: {'.g.dart'},
+        scannedDirectories: ['lib'],
+      ),
+      L10nContractConfig(
+        generatedLocalizationPrefix: 'lib/l10n/app_localizations',
+        generatedDartSuffixes: {''},
+        scannedDirectories: ['lib'],
+      ),
+    ];
+
+    for (final config in configs) {
+      final contract = LocalizationContract(
+        appRoot: 'test/fixtures/mini_app',
+        config: config,
+        allowedTechnicalLiterals: const {},
+      );
+
+      expect(contract.scan, throwsArgumentError);
+    }
   });
 }
