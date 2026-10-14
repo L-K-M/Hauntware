@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:ghost_theme/ghost_theme.dart' show GhostTheme;
 import 'package:klabautermann_core/klabautermann_core.dart'
-    show DeviceSettingsIssue;
+    show DeviceSettingsIssue, ImportStoreIssue;
 
 import 'controllers/appearance_controller.dart';
 import 'controllers/fleet_controller.dart';
@@ -9,8 +9,8 @@ import 'controllers/monitoring_controller.dart';
 import 'l10n/app_localizations.dart';
 import 'theme/app_theme.dart';
 import 'ui/adaptive_shell.dart';
-import 'ui/settings_issue_notice.dart';
 import 'ui/settings_page.dart';
+import 'ui/startup_issue_notice.dart';
 
 /// The settings route's name; desktop gets a second window later (D32),
 /// this stays the mobile and fallback path.
@@ -26,6 +26,7 @@ class KlabautermannApp extends StatelessWidget {
     required this.monitoring,
     required this.appearance,
     this.settingsIssue,
+    this.importStoreIssue,
   });
 
   final FleetController fleet;
@@ -34,6 +35,10 @@ class KlabautermannApp extends StatelessWidget {
 
   /// What went wrong opening `settings.json`, told once at startup.
   final DeviceSettingsIssue? settingsIssue;
+
+  /// What went wrong when the engine loaded `ssh_config_imports.json`,
+  /// told once at startup beside [settingsIssue].
+  final ImportStoreIssue? importStoreIssue;
 
   @override
   Widget build(BuildContext context) {
@@ -56,8 +61,9 @@ class KlabautermannApp extends StatelessWidget {
           // The shell's settings callback needs a context under the
           // MaterialApp's Navigator; the ListenableBuilder's own context
           // sits above it.
-          home: SettingsIssueNotice(
-            issue: settingsIssue,
+          home: StartupIssueNotice(
+            settingsIssue: settingsIssue,
+            importStoreIssue: importStoreIssue,
             child: Builder(
               builder: (context) => AdaptiveShell(
                 fleet: fleet,

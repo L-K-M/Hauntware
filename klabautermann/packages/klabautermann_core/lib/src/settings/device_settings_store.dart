@@ -307,7 +307,7 @@ final class DeviceSettingsStore {
 
     final String preservedAs;
     try {
-      preservedAs = await _unusedCopyPath(file, time);
+      preservedAs = await unusedCorruptCopyPath(file, time);
       await writer(File(preservedAs), raw);
     } on Object catch (copyError) {
       return DeviceSettingsStore._(
@@ -356,23 +356,26 @@ final class DeviceSettingsStore {
       return null;
     }
   }
+}
 
-  /// `settings.json.corrupt-<UTC time>`, with a counter when that name is
-  /// taken, so a copy never replaces an earlier one.
-  static Future<String> _unusedCopyPath(File file, DateTime time) async {
-    final stamp = time
-        .toUtc()
-        .toIso8601String()
-        .replaceAll('-', '')
-        .replaceAll(':', '')
-        .replaceAll('.', '');
-    final base = '${file.path}.corrupt-$stamp';
-    var candidate = base;
-    for (var counter = 2; ; counter++) {
-      final type = await FileSystemEntity.type(candidate, followLinks: false);
-      if (type == FileSystemEntityType.notFound) return candidate;
-      candidate = '$base-$counter';
-    }
+/// `<file>.corrupt-<UTC time>` (`settings.json.corrupt-20261013T230529Z`),
+/// with a counter when that name is taken, so a damaged file kept aside
+/// never replaces an earlier one. The settings store copies its damaged
+/// file there and the engine's import store renames its own. Internal:
+/// the barrel hides it.
+Future<String> unusedCorruptCopyPath(File file, DateTime time) async {
+  final stamp = time
+      .toUtc()
+      .toIso8601String()
+      .replaceAll('-', '')
+      .replaceAll(':', '')
+      .replaceAll('.', '');
+  final base = '${file.path}.corrupt-$stamp';
+  var candidate = base;
+  for (var counter = 2; ; counter++) {
+    final type = await FileSystemEntity.type(candidate, followLinks: false);
+    if (type == FileSystemEntityType.notFound) return candidate;
+    candidate = '$base-$counter';
   }
 }
 
@@ -382,8 +385,8 @@ final class DeviceSettingsStore {
 /// renamed over [target], and the directory synced through `seance_core`'s
 /// [syncLocalDirectory] so the rename survives power loss. A reader, or a
 /// crash, sees the old file or the new one, never a partial one. A failure
-/// deletes the temp file and rethrows.
-@visibleForTesting
+/// deletes the temp file and rethrows. The engine's import store saves
+/// through it too. Internal: the barrel hides it.
 Future<void> writeFileAtomically(File target, List<int> bytes) async {
   await target.parent.create(recursive: true);
   final temporary = File('${target.path}.tmp-${uuidV4()}');
