@@ -1,19 +1,41 @@
+import 'dart:io';
 import 'dart:isolate';
 
+import 'package:meta/meta.dart';
+
 import '../fleet/ssh_config_entries.dart';
+import '../fleet/ssh_config_import_store.dart';
 import 'protocol.dart';
+
+/// What the engine isolate starts with, sent once by `Isolate.spawn`
+/// (D18): the port it answers on and the app's support directory, where it
+/// keeps the files it owns (03 §4.10). Plain data; the app resolves the
+/// directory through Flutter's `path_provider`, which this pure-Dart
+/// package cannot reach.
+@immutable
+final class EngineStart {
+  const EngineStart({required this.uiPort, required this.supportDirectory});
+
+  /// The client isolate's port.
+  final SendPort uiPort;
+
+  /// The absolute path of the app's support directory.
+  final String supportDirectory;
+}
 
 /// The engine isolate's entry point (03 D18): one isolate owns the SSH links,
 /// samplers, parsers, Docker calls, sync and rule evaluation so the UI isolate
 /// never blocks on a host.
 ///
-/// [uiPort] is the client isolate's port. The engine first returns its
-/// command port on it, then answers requests on the same port: [Hello] gets
-/// [EngineReady], [Subscribe]/[Unsubscribe] update the (still silent) stub
-/// sampler's bookkeeping, [ImportSshConfig] gets [CatalogReplaced] and
-/// [SshConfigImported], [Shutdown] exits, and every other 03 §10.1 row
-/// gets [RequestRejected] until its milestone lands.
-void engineMain(SendPort uiPort) {
+/// [start] names the client isolate's port and the support directory. The
+/// engine first returns its command port, then answers requests on the
+/// client's port: [Hello] gets [EngineReady] and the fleet it started with
+/// in a [CatalogReplaced], [Subscribe]/[Unsubscribe] update the (still
+/// silent) stub sampler's bookkeeping, [ImportSshConfig] gets
+/// [CatalogReplaced] and [SshConfigImported], [Shutdown] exits, and every
+/// other 03 §10.1 row gets [RequestRejected] until its milestone lands.
+void engineMain(EngineStart start) {
+  final uiPort = start.uiPort;
   final commands = ReceivePort('klabautermann engine commands');
   uiPort.send(commands.sendPort);
 
@@ -22,20 +44,17 @@ void engineMain(SendPort uiPort) {
   // 03 §6.2 fill this map's consumers in M2.
   final subscriptions = <String, Subscribe>{};
 
-  // FL-02's imported entries, held in memory only: D13's device-local
-  // store arrives with the catalog library in a later PR, so a restarted
-  // engine starts without them. Each import replaces the last; the engine
-  // keeps them so its later fleet snapshots (sync rounds, F3) carry them
-  // after the synced entries. The importer returns them unmodifiable, so
-  // building a snapshot cannot edit this state in place.
-  var imported = const <FleetEntry>[];
+  // FL-02's imported entries, in D13's device-local store (03 §4.10),
+  // opened before the first request is handled. Each import replaces the
+  // last; the engine keeps them so its later fleet snapshots (sync rounds,
+  // F3) carry them after the synced entries. The store hands them out
+  // unmodifiable, so building a snapshot cannot edit them in place.
+  late final SshConfigImportStore imports;
 
-  commands.listen((message) {
+  Future<void> handle(Object? message) async {
     switch (message) {
       case Hello(:final protocolVersion):
-        if (protocolVersion == kEngineProtocolVersion) {
-          uiPort.send(const EngineReady(kEngineProtocolVersion));
-        } else {
+        if (protocolVersion != kEngineProtocolVersion) {
           uiPort.send(
             RequestRejected(
               'Hello',
@@ -43,7 +62,15 @@ void engineMain(SendPort uiPort) {
                   '$kEngineProtocolVersion',
             ),
           );
+          return;
         }
+        uiPort.send(
+          EngineReady(kEngineProtocolVersion, importStoreIssue: imports.issue),
+        );
+        // The fleet as the engine starts: the imports an earlier run saved
+        // (none when the store was empty or unusable), so the rail shows
+        // them before the user does anything.
+        uiPort.send(CatalogReplaced(imports.entries));
       case Subscribe():
         subscriptions[message.serverId] = message;
       case Unsubscribe():
@@ -60,13 +87,17 @@ void engineMain(SendPort uiPort) {
           );
           return;
         }
-        imported = result.entries;
+        // Saved before the fleet changes, so a restart after the answer
+        // finds the import. A failed save still shows it for this run, and
+        // the answer says it was not kept.
+        final saved = await imports.replace(result.entries);
         // Synced entries lead this list once the catalog library lands (F3).
-        uiPort.send(CatalogReplaced(imported));
+        uiPort.send(CatalogReplaced(imports.entries));
         uiPort.send(
           SshConfigImported(
             importedCount: result.entries.length,
             skippedCount: result.skippedCount,
+            saved: saved,
           ),
         );
       case Shutdown():
@@ -87,5 +118,22 @@ void engineMain(SendPort uiPort) {
           ),
         );
     }
+  }
+
+  // One request at a time, in arrival order, each to completion: an
+  // import's save finishes before the next request runs, so answers keep
+  // request order and saves never overlap, and nothing is handled before
+  // the store is open.
+  Future<void> queue =
+      SshConfigImportStore.open(
+        File(
+          '${start.supportDirectory}${Platform.pathSeparator}'
+          '$sshConfigImportsFileName',
+        ),
+      ).then((store) {
+        imports = store;
+      });
+  commands.listen((message) {
+    queue = queue.then((_) => handle(message));
   });
 }

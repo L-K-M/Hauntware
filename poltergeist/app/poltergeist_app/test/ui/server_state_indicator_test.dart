@@ -36,11 +36,10 @@ Future<void> _pump(
 }
 
 void main() {
+  // The adapter's mapping onto this app's glyphs and ARB words. The
+  // precedence between connection and probe truth moved with the list
+  // rule to ghost_servers' server_status_test.dart.
   group('the composed indicator mapping', () {
-    ServerIndicatorGlyph glyphOf({ServerStatus? status, ProbeStatus? probe}) {
-      return serverIndicatorOf(_l10n, status: status, probe: probe).glyph;
-    }
-
     test('no truth paints nothing', () {
       final appearance = serverIndicatorOf(_l10n);
 
@@ -95,82 +94,6 @@ void main() {
         expect(appearance.glyph, glyph, reason: status.state.name);
         expect(appearance.label, label, reason: status.state.name);
       }
-    });
-
-    test('a block outranks a reachable probe', () {
-      // The audit finding: a green "reachable" dot rendered next to a
-      // blocked panel. Live truth outranks probes (02 §4).
-      expect(
-        glyphOf(status: _blocked, probe: ProbeStatus.online),
-        ServerIndicatorGlyph.blocked,
-      );
-    });
-
-    test('a failure the state explains outranks a reachable probe', () {
-      expect(
-        glyphOf(status: _failedConnect, probe: ProbeStatus.online),
-        ServerIndicatorGlyph.failed,
-      );
-    });
-
-    test('a connected server outranks an offline probe', () {
-      // The reverse contradiction of the audit finding: authenticated
-      // transports prove reachability, so a stale offline result cannot
-      // paint beside a session the user is actively using (02 §4).
-      expect(
-        glyphOf(
-          status: const ServerStatus(ServerConnectionState.connected),
-          probe: ProbeStatus.offline,
-        ),
-        ServerIndicatorGlyph.connected,
-      );
-    });
-
-    test('a connected server outranks an unknown probe', () {
-      // "Unknown" reachability beside an authenticated transport is the
-      // same contradiction: the transport proves reachability, so the
-      // glyph answers instead of the grey dot.
-      expect(
-        glyphOf(
-          status: const ServerStatus(ServerConnectionState.connected),
-          probe: ProbeStatus.unknown,
-        ),
-        ServerIndicatorGlyph.connected,
-      );
-    });
-
-    test('a truth that does not contradict leaves the probe dot', () {
-      // 02 §4 gives the favorite row its tri-state probe dot, and 07 §3.3
-      // requires it to render in the interim list: a healthy or pending
-      // connection does not contradict a reachability result.
-      expect(
-        glyphOf(
-          status: const ServerStatus(ServerConnectionState.connected),
-          probe: ProbeStatus.online,
-        ),
-        ServerIndicatorGlyph.probe,
-      );
-      expect(
-        glyphOf(
-          status: const ServerStatus(ServerConnectionState.connecting),
-          probe: ProbeStatus.offline,
-        ),
-        ServerIndicatorGlyph.probe,
-      );
-      expect(
-        glyphOf(
-          status: const ServerStatus(ServerConnectionState.disconnected),
-          probe: ProbeStatus.unknown,
-        ),
-        ServerIndicatorGlyph.probe,
-      );
-    });
-
-    test('connection truth renders when no probe result exists', () {
-      expect(
-        glyphOf(status: const ServerStatus(ServerConnectionState.connected)),
-        ServerIndicatorGlyph.connected,
-      );
     });
   });
 
