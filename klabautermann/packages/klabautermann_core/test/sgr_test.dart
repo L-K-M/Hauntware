@@ -155,10 +155,9 @@ void main() {
         // Without consuming, 300 and the RGB values would be read as
         // attributes; only the trailing 1 (bold) may apply.
         expect(parseSgr('${_sgr('38;5;300;1')}x').spans.single.style, _bold);
-        expect(
-          parseSgr('${_sgr('38;2;256;0;0;1')}x').spans.single.style,
-          _bold,
-        );
+        for (final rgb in ['256;0;0', '0;256;0', '0;0;256']) {
+          expect(parseSgr('${_sgr('38;2;$rgb;1')}x').spans.single.style, _bold);
+        }
         expect(parseSgr('${_sgr('38:5:999;1')}x').spans.single.style, _bold);
       });
 
@@ -206,6 +205,11 @@ void main() {
 
       expect(result.text, 'xy');
       expect(result.spans, [const SgrSpan(0, 2, _bold)]);
+
+      // 2^64 + 1: 64-bit wrapping would read it as 1, bold or palette 1.
+      const wrapsToOne = '18446744073709551617';
+      expect(parseSgr('${_sgr(wrapsToOne)}x').spans, isEmpty);
+      expect(parseSgr('${_sgr('38;5;$wrapsToOne')}x').spans, isEmpty);
     });
 
     group('everything but SGR is dropped', () {

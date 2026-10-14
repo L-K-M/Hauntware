@@ -147,6 +147,12 @@ void main() {
         final cut = buffer[0] as LogLine;
         expect(cut.text, 'abc');
         expect(cut.originalLength, 6);
+
+        // a b <high> <low> d: a cut after four units keeps the pair whole.
+        final kept = LogBuffer(maxLineBytes: 8)..add(['ab😀d']);
+
+        expect((kept[0] as LogLine).text, 'ab😀');
+        expect((kept[0] as LogLine).originalLength, 5);
       });
 
       test('keeps 16,384 Latin-1 or 8,192 other code units by default', () {
