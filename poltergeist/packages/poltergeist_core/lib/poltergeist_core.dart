@@ -39,6 +39,13 @@ export 'package:seance_core/seance_core.dart'
         Argon2Params,
         AuthKind,
         AuthMethod,
+        // The shared credential decision table (F2c): the server editor and
+        // the prompt coordinator's vault-first branch resolve through it
+        // over this app's vault and identity-file reader.
+        CredentialDraft,
+        CredentialResolver,
+        CredentialSource,
+        MissingSecretPolicy,
         Bookmark,
         BookmarkKind,
         BookmarkLocation,

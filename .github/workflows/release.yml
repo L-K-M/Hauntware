@@ -63,13 +63,19 @@ env:
 
 jobs:
   # Gate the release on every pure-Dart suite and tool guard across the
-  # three subtrees, the unified version check, and the dispatch-provenance
+  # four subtrees, the unified version check, and the dispatch-provenance
   # and release-existence guards. A tag on a broken commit must not
   # publish anything; a version/pubspec mismatch must not either.
+  # Klabautermann's packages are gated here although no release ships
+  # its clients before M4 (docs/design/klabautermann, decision 16).
   test:
     name: Test (release gate)
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # The v1.9.0 gate took 10 min for three subtrees (30 was 3x). The
+    # fourth adds under 1 min today but grows with every milestone to v1:
+    # 40 still leaves 2.5x once Klabautermann's suite is as large as
+    # Poltergeist's (about 5 min).
+    timeout-minutes: 40
     permissions:
       # Deliberately NOT scoped down to contents: read: the guard below
       # lists releases, and GitHub shows draft releases only to tokens
@@ -153,7 +159,7 @@ jobs:
       # truth; the tag only names the Release. The root release_version
       # tool owns the lockstep contract: the root `hauntware` manifest is
       # the first RELEASE_PUBSPEC and every owned package/app pubspec
-      # across the three subtrees must carry the shared version — plus
+      # across the four subtrees must carry the shared version — plus
       # the README version markers and Apple bundle metadata (vendored
       # third_party forks and test/fixture trees are excluded by the
       # tool itself).
