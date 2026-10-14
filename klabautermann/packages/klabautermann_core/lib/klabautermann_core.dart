@@ -1,7 +1,7 @@
 /// Klabautermann's pure-Dart engine layer: the D18 engine isolate, its
-/// plain-data protocol and the client the app composes over, and the
-/// device settings store (docs/design/klabautermann/03, sections 3.2, 4.10
-/// and 10.1).
+/// plain-data protocol and the client the app composes over, the device
+/// settings store and the instance lock (docs/design/klabautermann/03,
+/// sections 3.2, 4.10 and 10.1).
 library;
 
 export 'src/engine/engine_client.dart';
@@ -18,6 +18,16 @@ export 'src/settings/device_settings_store.dart'
         deviceSettingsFileName,
         deviceSettingsSchemaVersion,
         writeFileAtomically;
+// One desktop instance per support directory (03 §4.10); the error-code
+// rule stays internal.
+export 'src/settings/instance_lock.dart'
+    show
+        InstanceLock,
+        InstanceLockAcquired,
+        InstanceLockAttempt,
+        InstanceLockHeld,
+        InstanceLockUnavailable,
+        instanceLockFileName;
 
 // 03 §3.2: the app reaches seance_core, klabautermann_host and
 // klabautermann_docker types only through this barrel, each behind an
