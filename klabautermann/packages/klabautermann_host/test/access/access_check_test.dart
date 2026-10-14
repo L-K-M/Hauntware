@@ -21,16 +21,8 @@ _Row _row(AccessRow r) =>
 
 _Row _of(HostProfile p, AccessItem item) => _row(evaluateAccess(p).row(item));
 
-String _sudoers(String user) => [
-  'sudo',
-  'sh',
-  '-c',
-  kSudoersFixScript,
-  'klabautermann-fix',
-  '$user ALL=(ALL) NOPASSWD: ALL',
-  kSudoersDropIn,
-].join(' ');
-
+/// Password sudo: no fix until SAF-17's narrow rules (03 §8.1).
+const _passwordSudo = (_missing, R.sudoNotPasswordless, null, true);
 const _pending = (_unknown, R.pendingDockerSupport, null, false);
 const _noSocket = (_missing, R.noEngineSocket, null, false);
 const _noEngine = (_missing, R.noEngine, null, false);
@@ -39,7 +31,7 @@ const _json = (_ok, R.systemdJson, null, false);
 final _tables = <String, Map<AccessItem, _Row>>{
   // Password sudo, no journal group, no engine, systemd 252.
   'debian-12': {
-    I.sudoNoPassword: (_missing, R.sudoNotPasswordless, _sudoers('anke'), true),
+    I.sudoNoPassword: _passwordSudo,
     I.journal: (
       _missing,
       R.notInJournalGroup,
@@ -64,7 +56,7 @@ final _tables = <String, Map<AccessItem, _Row>>{
   },
   // Password sudo, wheel, no engine, systemd 239 (text fallback, CN-10).
   'rhel-8': {
-    I.sudoNoPassword: (_missing, R.sudoNotPasswordless, _sudoers('ops'), true),
+    I.sudoNoPassword: _passwordSudo,
     I.journal: (_ok, R.journalGroup, null, false),
     I.dockerSocket: _noSocket,
     I.streamlocal: _pending,
@@ -191,28 +183,21 @@ void main() {
       ));
     });
 
-    test('the sudoers fix is a checked drop-in, passed as arguments', () {
-      final fix = evaluateAccess(host(user: 'anke')).row(I.sudoNoPassword).fix!;
-      expect(fix.elevation, FixElevation.sudo);
-      expect(fix.argv, [
-        'sh',
-        '-c',
-        kSudoersFixScript,
-        'klabautermann-fix',
-        'anke ALL=(ALL) NOPASSWD: ALL',
-        '/etc/sudoers.d/klabautermann',
-      ]);
-      // sudo's #includedir skips names with a dot (sudoers(5)), so the
-      // file is inert until visudo accepted it and mv renamed it.
-      expect(kSudoersFixScript, contains('visudo -cf "\$2.new" && mv'));
-      expect(kSudoersFixScript, startsWith('umask 0227 && '));
+    test('password sudo offers no blanket NOPASSWD rule', () {
+      // A broad rule equals root (SAF-08) and password sudo already
+      // reaches admin mode (03 §8.3 rung 3); narrow rules are SAF-17.
+      final row = evaluateAccess(host(user: 'anke')).row(I.sudoNoPassword);
+      expect(_row(row), _passwordSudo);
     });
 
     test('a user name outside the grammar gets no fix', () {
-      final report = evaluateAccess(host(user: 'Bad User;rm'));
-      expect(report.row(I.sudoNoPassword).status, _missing);
-      expect(report.row(I.sudoNoPassword).fix, isNull);
+      final report = evaluateAccess(
+        host(user: 'Bad User;rm', sockets: [socket('/var/run/docker.sock')]),
+      );
+      expect(report.row(I.journal).status, _missing);
       expect(report.row(I.journal).fix, isNull);
+      expect(report.row(I.dockerSocket).status, _missing);
+      expect(report.row(I.dockerSocket).fix, isNull);
     });
 
     test('the fix prefix follows the elevation', () {

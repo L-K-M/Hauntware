@@ -59,7 +59,8 @@ enum AccessReason {
 
   /// `sudo -n true` failed: sudo wants a password, or this user may not
   /// use it; the probe cannot tell which. Admin mode can still use the
-  /// password (03 §8.3 rung 3).
+  /// password (03 §8.3 rung 3). No fix is offered: a blanket NOPASSWD
+  /// rule equals root (SAF-08), and narrow rules are SAF-17 (03 §8.1).
   sudoNotPasswordless,
 
   /// sudo is absent and doas wants a password, which no pipe can feed
@@ -229,17 +230,6 @@ const kSystemdJsonVersion = 246;
 /// RHEL 8's systemd, the oldest on a tier A host (03 §6.6).
 const kSystemdOldestTested = 239;
 
-/// The sudoers drop-in the NOPASSWD fix writes.
-const kSudoersDropIn = '/etc/sudoers.d/klabautermann';
-
-/// The NOPASSWD fix's script; `$1` is the rule and `$2` the drop-in. It
-/// writes a 0440 file under a dotted name, which sudo's `#includedir`
-/// skips (sudoers(5)), and renames it into place only after
-/// `visudo -cf` accepts it, so a bad rule cannot break sudo. sudo-rs
-/// ships its own visudo [U: spike S3].
-const kSudoersFixScript =
-    r'''umask 0227 && printf '%s\n' "$1" >"$2.new" && visudo -cf "$2.new" && mv "$2.new" "$2"''';
-
 /// Evaluates the access check over [profile].
 AccessReport evaluateAccess(HostProfile profile) {
   final engines = [
@@ -249,7 +239,7 @@ AccessReport evaluateAccess(HostProfile profile) {
   final elevation = _fixElevation(profile);
   const pending = AccessReason.pendingDockerSupport;
   return AccessReport._([
-    _sudoRow(profile, elevation),
+    _sudoRow(profile),
     _journalRow(profile, elevation),
     _socketRow(profile, engines, elevation),
     _unknown(AccessItem.streamlocal, pending),
@@ -280,7 +270,7 @@ final _rootlessSocket = RegExp(
   r'^/run/user/\d+/(?:docker\.sock|(podman)/podman\.sock)$',
 );
 
-AccessRow _sudoRow(HostProfile p, FixElevation elevation) {
+AccessRow _sudoRow(HostProfile p) {
   const item = AccessItem.sudoNoPassword;
   if (p.uid == 0) return _ok(item, AccessReason.rootLogin);
 
@@ -298,7 +288,6 @@ AccessRow _sudoRow(HostProfile p, FixElevation elevation) {
     false => _missing(
       item,
       AccessReason.sudoNotPasswordless,
-      fix: _sudoersFix(p, elevation),
       rootEquivalent: true,
     ),
     null => _unknown(item),
@@ -456,19 +445,6 @@ String? _validUser(HostProfile p) {
   final user = p.user;
   if (user == null || ArgValidators.userName(user) != null) return null;
   return user;
-}
-
-AccessFix? _sudoersFix(HostProfile p, FixElevation elevation) {
-  final user = _validUser(p);
-  if (user == null) return null;
-  return AccessFix([
-    'sh',
-    '-c',
-    kSudoersFixScript,
-    'klabautermann-fix',
-    '$user ALL=(ALL) NOPASSWD: ALL',
-    kSudoersDropIn,
-  ], elevation);
 }
 
 /// Group membership takes effect at the next login. BusyBox userlands

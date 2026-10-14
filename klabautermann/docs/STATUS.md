@@ -16,11 +16,11 @@ slice:
   a `HostProfile` (passwordless sudo, journal group with the LOG-04
   notice, Docker socket rights with the SAF-08 flag, systemd version,
   runtimes per host for CN-09), each `ok`, `missing` or `unknown` with
-  an enum reason and a copyable fix argv that is never run; streamlocal
-  and the compose plugin stay unknown until M3. Panel capability
-  declarations for the M2 host panels (the probe now also checks `dmesg`
-  and `tail` for LOG-03 and LOG-22) and an external-monitor rule over the
-  units list. Nothing reads them yet.
+  an enum reason and, except for sudo until SAF-17, a copyable fix argv
+  that is never run; streamlocal and the compose plugin stay unknown
+  until M3. Panel capability declarations for the M2 host panels (the
+  probe now also checks `dmesg` and `tail` for LOG-03 and LOG-22) and an
+  external-monitor rule over the units list. Nothing reads them yet.
 - `klabautermann_docker`: pure-Dart HTTP/1.1 client, NDJSON/JSON-seq
   scanning, stdcopy, versioned API models and negotiation, compose labels
   and grouping.

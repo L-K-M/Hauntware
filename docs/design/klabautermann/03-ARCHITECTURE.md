@@ -2490,6 +2490,11 @@ A panel that needs more than it has shows a lock with the least-privileged
 fix and "enable admin mode"; it never elevates silently (ServerBox rule
 [R]).
 
+The access check's sudo NOPASSWD row (CN-24) offers no fix command until
+SAF-17 generates narrow, validated rules (v1.x): a blanket rule equals root
+(8.4), and password sudo already reaches admin mode through the prelude
+(8.3 rung 3), so the row points to admin mode instead.
+
 ### 8.2 Admin mode (SAF-02)
 
 - Per server, explicit, off by default. Turning it on runs detection, asks
