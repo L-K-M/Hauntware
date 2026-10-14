@@ -214,7 +214,7 @@ Future<List<Map<String, Object?>>> measureProcs(
 ) async {
   final out = <Map<String, Object?>>[];
   for (final extra in [0, ...extraProcesses]) {
-    final sleepers = await spawnSleepers(extra);
+    final sleepers = await Sleepers.spawn(extra);
     try {
       for (final shell in shells) {
         out.add(
@@ -257,44 +257,77 @@ Future<List<Map<String, Object?>>> measureProcs(
         );
       }
     } finally {
-      await killSleepers(sleepers);
+      await sleepers.kill();
     }
   }
   return out;
 }
 
-/// Starts [n] `sleep 600` processes and returns their pids; the caller
-/// kills them by pid, and `sleep` ends them in any case.
-Future<List<int>> spawnSleepers(int n) async {
-  if (n == 0) return const [];
-  final p = await Process.start('sh', [
-    '-c',
-    r'i=0; while [ "$i" -lt "$1" ]; do '
-        r'sleep 600 </dev/null >/dev/null 2>&1 & echo "$!"; i=$((i + 1)); '
-        'done',
-    'spawn',
-    '$n',
-  ]);
-  final pids = await p.stdout
-      .transform(utf8.decoder)
-      .transform(const LineSplitter())
-      .map(int.parse)
-      .toList();
-  await p.exitCode;
-  if (pids.length != n) {
-    await killSleepers(pids);
-    throw StateError('started ${pids.length} of $n sleepers');
+/// How long a sleeper lives unless killed: far past one round of
+/// [measureProcs] (the 3,000-process round took about 3 minutes), so the
+/// process count holds for the whole round.
+const _sleeperSeconds = 3600;
+
+/// Whether [pid] is still a sleeper. Once a sleeper has ended and been
+/// reaped, the kernel can give its pid to an unrelated process.
+bool isSleeper(int pid) {
+  try {
+    return File('/proc/$pid/cmdline').readAsStringSync() ==
+        'sleep\x00$_sleeperSeconds\x00';
+  } on FileSystemException {
+    return false;
   }
-  return pids;
 }
 
-/// Kills [pids] and waits up to 10 s for them to leave `/proc`, so the
-/// next run does not count them (a zombie stays listed until reaped).
-Future<void> killSleepers(List<int> pids) async {
-  pids.forEach(Process.killPid);
-  for (var i = 0; i < 100; i++) {
-    if (!pids.any((p) => Directory('/proc/$p').existsSync())) return;
-    await Future<void>.delayed(const Duration(milliseconds: 100));
+/// Sleeping processes that pad the process list for [measureProcs]. They
+/// are children of one spawner shell that waits for them, so a killed
+/// sleeper is reaped and leaves `/proc` whether or not this machine's
+/// init reaps orphans.
+final class Sleepers {
+  Sleepers._(this._spawner, this.pids);
+
+  final Process? _spawner;
+  final List<int> pids;
+
+  /// Starts [n] sleepers.
+  static Future<Sleepers> spawn(int n) async {
+    if (n == 0) return Sleepers._(null, const []);
+    final p = await Process.start('sh', [
+      '-c',
+      // The spawner closes its stdout once every pid is out, which ends
+      // the stream below, and then waits for the sleepers.
+      'i=0; while [ "\$i" -lt "\$1" ]; do '
+          'sleep $_sleeperSeconds </dev/null >/dev/null 2>&1 & '
+          r'echo "$!"; i=$((i + 1)); done; exec >&-; wait',
+      'spawn',
+      '$n',
+    ]);
+    p.stderr.drain<void>().ignore();
+    final pids = await p.stdout
+        .transform(utf8.decoder)
+        .transform(const LineSplitter())
+        .map(int.parse)
+        .toList();
+    final sleepers = Sleepers._(p, pids);
+    if (pids.length != n) {
+      await sleepers.kill();
+      throw StateError('started ${pids.length} of $n sleepers');
+    }
+    return sleepers;
+  }
+
+  /// Signals each pid that is still a sleeper and waits up to 10 s for
+  /// the spawner to reap them all, so the next round does not count
+  /// them; throws when they outlast that.
+  Future<void> kill() async {
+    pids.where(isSleeper).forEach(Process.killPid);
+    await _spawner?.exitCode.timeout(
+      const Duration(seconds: 10),
+      onTimeout: () => throw StateError(
+        'sleepers still running 10 s after SIGTERM; '
+        'the next process count would include them',
+      ),
+    );
   }
 }
 

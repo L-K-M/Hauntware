@@ -142,24 +142,23 @@ void main() {
     expect(blockSizes(payload), {'stat': 19, 'uptime': 20});
   });
 
-  test('sleepers are started and killed by pid', () async {
-    final pids = await spawnSleepers(3);
-    expect(pids, hasLength(3));
-    expect(pids.every(_alive), isTrue);
-    await killSleepers(pids);
-    // Killed sleepers leave /proc, or stay as zombies until init reaps
-    // them.
-    expect(pids.where(_alive), isEmpty);
+  test('sleepers are started, killed by pid and reaped', () async {
+    final sleepers = await Sleepers.spawn(3);
+    expect(sleepers.pids, hasLength(3));
+    expect(sleepers.pids.every(isSleeper), isTrue);
+    await sleepers.kill();
+    // The spawner reaps them, so they leave /proc without init's help.
+    final listed = sleepers.pids.where(
+      (p) => Directory('/proc/$p').existsSync(),
+    );
+    expect(listed, isEmpty);
   });
-}
 
-/// Whether [pid] exists and is not a zombie (state `Z`, the field after
-/// the comm's closing parenthesis).
-bool _alive(int pid) {
-  try {
-    final text = File('/proc/$pid/stat').readAsStringSync();
-    return text[text.lastIndexOf(')') + 2] != 'Z';
-  } on FileSystemException {
-    return false;
-  }
+  test('a pid that names another process is not a sleeper', () async {
+    // What a sleeper's pid can name once the sleeper has ended.
+    final other = await Process.start('sleep', ['30']);
+    addTearDown(other.kill);
+    expect(isSleeper(other.pid), isFalse);
+    expect(isSleeper(pid), isFalse);
+  });
 }
