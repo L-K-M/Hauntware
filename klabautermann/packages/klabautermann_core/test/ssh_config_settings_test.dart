@@ -545,5 +545,52 @@ void main() {
       expect(resolved.whereType<ResolvedSshSettings>(), hasLength(20000));
       expect(clock.elapsed, lessThan(const Duration(seconds: 5)));
     });
+
+    test('resolves quickly when each host has wildcard patterns of its '
+        'own', () {
+      // 20,000 hosts, each with a pattern that ends or starts with `*`.
+      final config = StringBuffer();
+      for (var host = 0; host < 20000; host++) {
+        config.write(
+          '${host.isEven ? 'Host h$host h$host.*' : 'Host h$host *.h$host'}\n'
+          '  HostName 10.0.${host >> 8}.${host & 255}\n  User u$host\n',
+        );
+      }
+      final clock = Stopwatch()..start();
+
+      final settings = SshConfigSettings.parse(config.toString());
+      final resolved = [
+        for (final alias in settings.aliases) settings.resolve(alias),
+      ];
+
+      expect(resolved.whereType<ResolvedSshSettings>(), hasLength(20000));
+      expect(
+        (resolved[7] as ResolvedSshSettings).host.user,
+        'u7',
+        reason: 'each host keeps its own block',
+      );
+      expect(clock.elapsed, lessThan(const Duration(seconds: 5)));
+    });
+
+    test('a wildcard Host block applies wherever its pattern matches', () {
+      // Blocks reach a name through the literal start or end of their
+      // patterns; patterns with neither reach every name.
+      const config =
+          'Host web*\n  User prefix\n'
+          'Host *.example.com\n  Port 2200\n'
+          'Host *eb*\n  IdentityFile ~/.ssh/middle\n'
+          'Host w?b-*-x\n  ProxyJump gw\n'
+          'Host web-1 web-1.*\n  User own\n';
+
+      expect(_resolve(config, 'web-1.example.com'), (
+        'web-1.example.com',
+        2200,
+        'prefix',
+        '~/.ssh/middle',
+        null,
+      ));
+      expect(_resolve(config, 'wab-1-x'), ('wab-1-x', 22, null, null, 'gw'));
+      expect(_resolve(config, 'db'), ('db', 22, null, null, null));
+    });
   });
 }

@@ -200,8 +200,7 @@ final class SshConfigSettings {
   SshConfigSettings._(
     this.aliases,
     this._read,
-    this._always,
-    this._byName,
+    this._index,
     this._includes,
     this._wantsFinalPass,
   );
@@ -251,34 +250,20 @@ final class SshConfigSettings {
     }
 
     // Only blocks with lines the engine reads can change a setting, and a
-    // Host line ssh rejects leaves out the names it applies to. A Host
-    // block whose patterns hold no wildcard can only match those names, so
-    // a name considers those blocks and the rest, which keeps resolving
-    // every alias of a large config fast.
+    // Host line ssh rejects leaves out the names it applies to.
     final read = <_Block>[];
-    final always = <_Block>[];
-    final byName = <String, List<_Block>>{};
+    final index = _BlockIndex();
     for (final block in blocks) {
       final rejected = block is _HostBlock && block.rejected;
       if (block.lines.isEmpty && !rejected) continue;
 
       read.add(block);
-      switch (block) {
-        case _HostBlock(:final names?):
-          for (final name in names) {
-            (byName[name] ??= []).add(block);
-          }
-        case _HostBlock(wildcard: false):
-          break;
-        default:
-          always.add(block);
-      }
+      index.add(block);
     }
     return SshConfigSettings._(
       List.unmodifiable(aliases),
       read,
-      always,
-      byName,
+      index,
       includes,
       wantsFinalPass,
     );
@@ -293,12 +278,8 @@ final class SshConfigSettings {
   /// order.
   final List<_Block> _read;
 
-  /// The blocks every name considers, in file order.
-  final List<_Block> _always;
-
-  /// For each name, the `Host` blocks only it and other literal names
-  /// match, in file order.
-  final Map<String, List<_Block>> _byName;
+  /// The blocks in [_read] that a known host may apply to.
+  final _BlockIndex _index;
 
   /// Whether a line includes another file.
   final bool _includes;
@@ -356,16 +337,7 @@ final class SshConfigSettings {
   /// the name is unresolved, or null.
   UnresolvedReason? _readPass(_Reading reading, String? host) {
     final target = host == null ? null : _utf8Bytes(host);
-    final own = host == null ? const <_Block>[] : _byName[host] ?? const [];
-    final always = host == null ? _read : _always;
-    var next = 0;
-    var nextOwn = 0;
-    while (next < always.length || nextOwn < own.length) {
-      final takeOwn =
-          next == always.length ||
-          (nextOwn < own.length && own[nextOwn].order < always[next].order);
-      final block = takeOwn ? own[nextOwn++] : always[next++];
-
+    for (final block in target == null ? _read : _index.blocks(target)) {
       final applies = block.applies(target, reading);
       if (applies == _Applies.no) continue;
       if (block case _HostBlock(rejected: true)) {
@@ -423,14 +395,7 @@ final class _HostBlock extends _Block {
             pattern.startsWith('!')
                 ? (negated: true, glob: _Glob(pattern.substring(1)))
                 : (negated: false, glob: _Glob(pattern)),
-      ] {
-    final positive = [
-      for (final (:negated, :glob) in _patterns)
-        if (!negated) glob.pattern,
-    ];
-    wildcard = positive.any((p) => p.contains('*') || p.contains('?'));
-    names = positive.isEmpty || wildcard ? null : positive.toSet();
-  }
+      ];
 
   final List<({bool negated, _Glob glob})> _patterns;
 
@@ -438,13 +403,11 @@ final class _HostBlock extends _Block {
   /// is left open, or a pattern is empty.
   final bool rejected;
 
-  /// Whether a pattern that is not negated holds a wildcard.
-  late final bool wildcard;
-
-  /// The only names the block can apply to, when no pattern that is not
-  /// negated holds a wildcard; null otherwise, and for a block without
-  /// such a pattern, which applies to nothing.
-  late final Set<String>? names;
+  /// The patterns that are not negated, one of which must match.
+  Iterable<_Glob> get positive => [
+    for (final (:negated, :glob) in _patterns)
+      if (!negated) glob,
+  ];
 
   /// `readconf.c`'s `oHost`: a matching negated pattern ends the line and
   /// turns the block off. A pattern that is [_Glob.undecided] may match.
@@ -479,6 +442,101 @@ final class _HostBlock extends _Block {
     return mayActivate ? _Applies.maybe : _Applies.no;
   }
 }
+
+/// The blocks a known host may apply to, found without trying every block,
+/// which keeps resolving every alias and hop of a large config fast. A
+/// `Host` pattern without wildcards matches only itself, and one with a
+/// wildcard only a host that starts with the bytes before its first
+/// wildcard, or ends with those after its last, so a `Host` block is found
+/// through those. Every other block (the lines before the first `Host` or
+/// `Match`, `Match` blocks, and `Host` blocks with a pattern such as `*` or
+/// `*a*` that fixes neither) is tried for every host.
+final class _BlockIndex {
+  final List<_Block> _always = [];
+  final Map<String, List<_Block>> _exact = {};
+  final Map<String, List<_Block>> _byStart = {};
+  final Map<String, List<_Block>> _byEnd = {};
+
+  /// The lengths of the keys in [_byStart] and [_byEnd].
+  final Set<int> _startLengths = {};
+  final Set<int> _endLengths = {};
+
+  /// Adds [block], the next in file order.
+  void add(_Block block) {
+    if (block is! _HostBlock) {
+      _always.add(block);
+      return;
+    }
+
+    final exact = <String>{};
+    final starts = <String>{};
+    final ends = <String>{};
+    for (final glob in block.positive) {
+      if (glob.undecided) {
+        _always.add(block);
+        return;
+      }
+
+      final bytes = glob._bytes;
+      final first = bytes.indexOf(_wildcards);
+      if (first < 0) {
+        exact.add(bytes);
+      } else if (first > 0) {
+        starts.add(bytes.substring(0, first));
+      } else if (bytes.lastIndexOf(_wildcards) case final last
+          when last < bytes.length - 1) {
+        ends.add(bytes.substring(last + 1));
+      } else {
+        _always.add(block);
+        return;
+      }
+    }
+    for (final key in exact) {
+      (_exact[key] ??= []).add(block);
+    }
+    for (final key in starts) {
+      (_byStart[key] ??= []).add(block);
+      _startLengths.add(key.length);
+    }
+    for (final key in ends) {
+      (_byEnd[key] ??= []).add(block);
+      _endLengths.add(key.length);
+    }
+  }
+
+  /// The blocks that may apply to [target], as [_utf8Bytes] gives it, in
+  /// file order.
+  List<_Block> blocks(String target) {
+    final found = <_Block>[
+      ...?_exact[target],
+      for (final length in _startLengths)
+        if (length <= target.length) ...?_byStart[target.substring(0, length)],
+      for (final length in _endLengths)
+        if (length <= target.length)
+          ...?_byEnd[target.substring(target.length - length)],
+    ];
+    if (found.isEmpty) return _always;
+
+    // A block is in [_always] or found through its patterns, maybe more
+    // than one of them.
+    found.sort((a, b) => a.order.compareTo(b.order));
+    final merged = <_Block>[];
+    var next = 0;
+    var nextFound = 0;
+    while (next < _always.length || nextFound < found.length) {
+      final takeFound =
+          next == _always.length ||
+          (nextFound < found.length &&
+              found[nextFound].order < _always[next].order);
+      final block = takeFound ? found[nextFound++] : _always[next++];
+      if (!identical(merged.lastOrNull, block)) merged.add(block);
+    }
+    return merged;
+  }
+}
+
+/// A `match_pattern()` wildcard.
+final RegExp _wildcards = RegExp(r'[*?]');
 
 /// A `Match` criterion, as `match_cfg_line()` reads it.
 enum _Criterion { all, finalPass, host, originalHost, unknown }
