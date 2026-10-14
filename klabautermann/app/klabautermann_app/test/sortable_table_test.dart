@@ -297,6 +297,21 @@ void main() {
       handle.dispose();
     });
 
+    testWidgets('a screen reader\'s tap activates a row as a click does', (
+      tester,
+    ) async {
+      final handle = tester.ensureSemantics();
+      final activated = <int>[];
+      await _pump(tester, activated: activated);
+
+      final row = tester.getSemantics(_row(3));
+      row.owner!.performAction(row.id, SemanticsAction.tap);
+      await tester.pumpAndSettle();
+      expect(activated, [3]);
+      expect(tester.getSemantics(_row(3)), isSemantics(isFocused: true));
+      handle.dispose();
+    });
+
     testWidgets('the row-action slot announces itself and the row exposes '
         'the enabled verbs', (tester) async {
       final handle = tester.ensureSemantics();

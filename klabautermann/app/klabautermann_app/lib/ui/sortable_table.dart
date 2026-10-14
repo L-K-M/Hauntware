@@ -734,9 +734,8 @@ class _SortableTableState<R> extends State<SortableTable<R>> {
       focusable: true,
       focused: active && _hasFocus,
       customSemanticsActions: _semanticsActions(entries),
-      onTap: widget.onRowActivated == null
-          ? null
-          : () => widget.onRowActivated!(row),
+      // A screen reader's tap is a click: the row becomes active too.
+      onTap: widget.onRowActivated == null ? null : () => _onRowTap(index),
       child: InkWell(
         canRequestFocus: false,
         excludeFromSemantics: true,
