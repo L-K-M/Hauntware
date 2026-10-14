@@ -132,6 +132,25 @@ void main() {
     expect(centre.dx, lessThan(receive[2].left));
   });
 
+  testWidgets('widens a gap shorter than a pixel around its centre', (
+    tester,
+  ) async {
+    final ring = TimeSeriesRing(capacity: 10, lanes: 2);
+    addTearDown(ring.dispose);
+    ring.add(_at(290), [1, 1]);
+    ring.openGap(_at(300), ChartGapReason.disconnected);
+    ring.add(_at(300).add(const Duration(milliseconds: 500)), [1, 1]);
+    // A minute-long gap maps times to pixels.
+    ring.openGap(_at(400), ChartGapReason.disconnected);
+    ring.add(_at(460), [1, 1]);
+    await tester.pumpWidget(_chart(ring));
+
+    final [short, long] = _bands(_painterOf(tester), tester.getSize(_plot));
+    expect(short.width, closeTo(TimeSeriesPainter.minGapWidth, 0.01));
+    final perSecond = long.width / 60;
+    expect(short.center.dx, closeTo(long.left - 99.75 * perSecond, 0.01));
+  });
+
   for (final brightness in Brightness.values) {
     testWidgets(
       'every hatch stroke clears 3:1 as drawn at 1x (${brightness.name})',
