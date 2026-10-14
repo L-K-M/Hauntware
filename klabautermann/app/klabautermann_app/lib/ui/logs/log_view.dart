@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart' show precisionErrorTolerance;
 import 'package:flutter/material.dart';
+import 'package:flutter/physics.dart' show nearEqual;
 import 'package:flutter/rendering.dart'
     show
         ItemExtentBuilder,
@@ -1008,12 +1009,42 @@ final class _TailScrollPosition extends ScrollPositionWithSingleContext {
   /// Moves the offset by [delta] as a layout correction does and lays out
   /// again. A drag carries on from the new offset; a fling, whose
   /// simulation sets absolute offsets, starts again from it at its current
-  /// velocity. Sends no scroll notification: the user did not scroll.
+  /// velocity; an animation, which also sets absolute offsets, moves the
+  /// rest of its path with the lines ([_ShiftableScrollAnimation]). Sends
+  /// no scroll notification: the user did not scroll.
   void shiftBy(double delta) {
     correctBy(delta);
     final current = activity;
     if (current is BallisticScrollActivity) goBallistic(current.velocity);
+    if (current is _ShiftableScrollAnimation) current.shiftBy(delta);
     notifyListeners();
+  }
+
+  /// Animates as the inherited animateTo does, but with an animation that
+  /// [shiftBy] can move. The desktop scrollbar's track click animates this
+  /// way.
+  @override
+  Future<void> animateTo(
+    double to, {
+    required Duration duration,
+    required Curve curve,
+  }) {
+    if (nearEqual(to, pixels, physics.toleranceFor(this).distance)) {
+      jumpTo(to);
+      return Future<void>.value();
+    }
+
+    final animation = _ShiftableScrollAnimation(
+      this,
+      from: pixels,
+      to: to,
+      toEnd: hasContentDimensions && to > maxScrollExtent - _endTolerance,
+      duration: duration,
+      curve: curve,
+      vsync: context.vsync,
+    );
+    beginActivity(animation);
+    return animation.done;
   }
 
   @override
@@ -1038,5 +1069,65 @@ final class _TailScrollPosition extends ScrollPositionWithSingleContext {
     correctPixels(maxScrollExtent);
     // The viewport laid out its children for the old offset: lay out again.
     return false;
+  }
+}
+
+/// A scroll animation whose path moves with the lines when old lines leave
+/// the buffer during it, so it ends on the line it was aimed at, or on the
+/// newest line when it was aimed at the end, without a jump on the way.
+///
+/// A plain [DrivenScrollActivity] sets the offsets of its own path each
+/// frame, which would undo the shift and land the view off its target by
+/// as many lines as left. Restarting the animation instead would start its
+/// curve and duration again on every batch.
+final class _ShiftableScrollAnimation extends DrivenScrollActivity {
+  _ShiftableScrollAnimation(
+    super.delegate, {
+    required super.from,
+    required super.to,
+    required this._toEnd,
+    required super.duration,
+    required super.curve,
+    required super.vsync,
+  }) : _to = to,
+       _value = from;
+
+  /// The animation's target, in the offsets it started with.
+  final double _to;
+
+  /// Whether it was aimed at the newest line, which stays at the end as
+  /// lines leave instead of moving with them.
+  final bool _toEnd;
+
+  /// The animation's latest value, in the offsets it started with.
+  double _value;
+
+  /// How far the path is moved at [_to], and how much further for each
+  /// pixel of value before it: the path at value v is moved by
+  /// `_targetShift + (_to - v) * _shiftPerPixelLeft`.
+  double _targetShift = 0;
+  double _shiftPerPixelLeft = 0;
+
+  /// Moves the rest of the path by [delta]: all of it when it ends on a
+  /// line, and when it ends at the newest line, [delta] where it is now
+  /// and less on the way to none at the end.
+  void shiftBy(double delta) {
+    if (!_toEnd) {
+      _targetShift += delta;
+      return;
+    }
+
+    final left = _to - _value;
+    // At its end already: the next frame sets the end, as it should.
+    if (left.abs() < precisionErrorTolerance) return;
+    _shiftPerPixelLeft += delta / left;
+  }
+
+  @override
+  bool applyMoveTo(double value) {
+    _value = value;
+    return super.applyMoveTo(
+      value + _targetShift + (_to - value) * _shiftPerPixelLeft,
+    );
   }
 }

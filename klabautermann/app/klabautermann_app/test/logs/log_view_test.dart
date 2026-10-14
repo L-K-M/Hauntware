@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io' show Platform;
 import 'dart:math' as math;
 
@@ -500,6 +501,69 @@ void main() {
       expect(logs.following.value, isFalse);
       expect(_topLine(tester), lessThanOrEqualTo(top));
     });
+
+    for (final wrap in LogWrap.values) {
+      testWidgets('an animated scroll while paused lands where it was aimed '
+          'as old lines leave, wrap ${wrap.name}', (tester) async {
+        final logs = await _pump(
+          tester,
+          wrap: wrap,
+          controller: LogViewController(buffer: LogBuffer(maxLines: 100)),
+        );
+        // Line 5 wraps to several rows when wrap is on.
+        logs.add([
+          ..._lines(0, 5),
+          'line 5 ${List.filled(40, 'word').join(' ')}',
+          ..._lines(6, 94),
+        ]);
+        await tester.pump();
+        await _pauseAtLineTop(tester, logs);
+        final top = _topLine(tester);
+        final position = _position(tester);
+
+        // Three lines up over 100 ms, as a click on the desktop scrollbar's
+        // track animates, with lines 0 to 19 leaving 40 ms in.
+        unawaited(
+          position.animateTo(
+            position.pixels - 3 * _rowHeight(tester),
+            duration: const Duration(milliseconds: 100),
+            curve: Curves.linear,
+          ),
+        );
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 40));
+        logs.add(_lines(100, 20));
+        await tester.pump(const Duration(milliseconds: 16));
+        expect(logs.firstSeq, 20);
+        expect(
+          _topLine(tester),
+          inInclusiveRange(top - 3, top),
+          reason: 'during the animation',
+        );
+
+        await tester.pumpAndSettle();
+        expect(logs.following.value, isFalse);
+        expect(_topLine(tester), top - 3, reason: 'where the animation ends');
+        expect(_topHold(tester).hidden, closeTo(0, 1e-3));
+
+        // An animation to the newest line still ends on it, following.
+        unawaited(
+          position.animateTo(
+            position.maxScrollExtent,
+            duration: const Duration(milliseconds: 100),
+            curve: Curves.linear,
+          ),
+        );
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 40));
+        logs.add(_lines(120, 20));
+        await tester.pumpAndSettle();
+        expect(logs.firstSeq, 40);
+        expect(logs.following.value, isTrue);
+        expect(_atEnd(tester), isTrue);
+        expect(_shows(tester, 139), isTrue);
+      });
+    }
 
     testWidgets('clearing a paused view follows again', (tester) async {
       final logs = await _pump(tester);
