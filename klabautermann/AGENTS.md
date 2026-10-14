@@ -55,7 +55,10 @@ flutter pub get && flutter analyze && flutter test
 ```
 
 CI (`.github/workflows/ci.yml` at the repository root) analyzes and tests
-the workspace packages and the app on every PR.
+the workspace packages and the app on every PR, and its
+`klabautermann_client` job builds all five clients with release launch
+checks, Linux packaging and the macOS fixtures. No release job ships
+them before M4 (decision 16).
 
 On macOS, after `flutter build macos` (or with `FLUTTER_ROOT` pointing at
 an SDK with its macOS release engine cached), `scripts/test-macos-keyboard.sh`
@@ -104,6 +107,15 @@ after every Flutter upgrade: both fixes rely on private engine selectors.
   does. Release entitlements stay deliberately empty.
 - Platform folders carry identity, icons, and entitlements; commit them
   once `flutter create` scaffolds the app.
+- **The desktop settings window is a second engine** (Séance's lesson,
+  D32): `main` gives it the settings window's app before `settings.json`
+  opens and the engine isolate starts, and it reaches the app only over
+  `klabautermann/settings_link` through `ghost_desktop`'s link engine. A
+  new setting is a `SettingsLinkMethod` and a snapshot key in
+  `lib/services/settings_window/`, never a controller or store in the
+  window's isolate. The runners (copied from Séance, docs/SHARED.md) hide
+  the window on close and never destroy it while the app runs: on Linux,
+  disposing a second engine terminates the EGL display both share.
 
 <!-- shared-rules:start -->
 

@@ -24,6 +24,13 @@ dependencies:
   # value the light and dark themes are built from (03 D9, §10.9).
   ghost_theme:
     path: ../../../planchette/packages/ghost_theme
+  # getApplicationSupportDirectory() for settings.json (03 §4.10); pinned
+  # to Poltergeist's version.
+  path_provider: 2.1.6
+  # The desktop settings window's link engine (03 §10.2, D32). Brings the
+  # window_manager and screen_retriever plugins with it.
+  ghost_desktop:
+    path: ../../../planchette/packages/ghost_desktop
 
 dev_dependencies:
   flutter_test:

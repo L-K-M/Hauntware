@@ -309,6 +309,13 @@ packages:
       relative: true
     source: path
     version: "1.9.0"
+  ghost_servers:
+    dependency: "direct main"
+    description:
+      path: "../../../planchette/packages/ghost_servers"
+      relative: true
+    source: path
+    version: "1.9.0"
   ghost_theme:
     dependency: "direct main"
     description:

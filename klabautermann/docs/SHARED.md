@@ -41,8 +41,6 @@ Not copied, because Klabautermann does not need them yet:
 
 - Séance's terminal Edit-menu routing in `MainFlutterWindow.swift`; the
   app has no terminal.
-- The controller's use in Séance's `SettingsWindow.swift`; the desktop
-  settings window and its runners arrive in their own PR (D32).
 - Poltergeist's multi-view semantics routing in
   `PoltergeistFlutterViewController.m`; Klabautermann shows one Flutter
   view per engine.
@@ -76,9 +74,9 @@ plugin first. Reviewed at the copy commit above:
   drop its controller files,
   bridging-header import and project entries. Every product's fixture
   scripts would compile the plugin's source, the lifecycle test would
-  move to a root include like the keyboard checks, and the existing macOS
-  CI and release legs of all three siblings would have to pass with the
-  plugin in the same change.
+  move to a root include like the keyboard checks, and the macOS CI legs
+  of all four products and the siblings' release legs would have to pass
+  with the plugin in the same change.
 - **Outcome: copy now, extract in a separate suite PR.** M1 needs the
   controller: the 04 §12.1 Packaging row requires the fixtures from M1,
   and they fail on the stock controller. The extraction rewrites four
@@ -89,3 +87,48 @@ plugin first. Reviewed at the copy commit above:
   No fifth copy: the next product that needs the controller does the
   extraction first. Klabautermann's own later windows (the settings
   window, D32) reuse this class and are not copies.
+
+## Desktop settings window runners
+
+Copied at `ddb8cd690891a6967b0b42ae11a30e26e56f2c7e` (M1, A8; the files
+are unchanged at `2e61152e`). Owner: Klabautermann maintains its copy;
+Séance owns the canonical runners, and Poltergeist carries the other copy
+(`poltergeist/docs/PORTS.md`, "Settings window runners"). The Dart side
+is not copied: ghost_desktop's link engine
+([settings-window-link.md](../../docs/design/settings-window-link.md))
+under Klabautermann's own channels, method table and sections in
+`app/klabautermann_app/lib/services/settings_window/`.
+
+Séance's set is the source because it is the closest working copy:
+like Klabautermann it has one main window and one engine, and its view
+keeps the template's background. Poltergeist's differs only in names,
+its transparent Linux view and comments, and it is itself a port of
+Séance's.
+
+| Klabautermann file | Source (last changed) | Divergences |
+|---|---|---|
+| `klabautermann/app/klabautermann_app/macos/Runner/SettingsWindow.swift` | `seance/app/seance_app/macos/Runner/SettingsWindow.swift` (`f9bd1e1`) | Channels `klabautermann/settings_window` and `klabautermann/settings_link`, argument `--klabautermann-settings-window`, `KlabautermannFlutterViewController` (Séance's controller, copied in the section above), provenance note. Comments point at Klabautermann's and ghost_desktop's Dart files, and the ⌘W comment names no terminal tabs, since the app's window binds no ⌘W yet. |
+| `klabautermann/app/klabautermann_app/linux/runner/settings_window.{h,cc}` | `seance/app/seance_app/linux/runner/settings_window.{h,cc}` (`f9bd1e1`) | Channels, argument, title `Klabautermann Settings`, the main window's data key `klabautermann-settings-window`, provenance note. Template background, as Séance's. |
+| `klabautermann/app/klabautermann_app/linux/runner/window_title.{h,cc}` | `seance/app/seance_app/linux/runner/window_title.{h,cc}` (`f9bd1e1`) | Provenance note in the header; the `.cc` is byte-identical. It is the `flutter create` title code that `my_application.cc` carried inline; both windows now call it. |
+| `klabautermann/app/klabautermann_app/windows/runner/settings_window.{h,cpp}` | `seance/app/seance_app/windows/runner/settings_window.{h,cpp}` (`f9bd1e1`) | Channels, argument, title `Klabautermann Settings`, provenance note spelled ASCII for MSVC. |
+| Wiring: `MainFlutterWindow.swift` (the `settingsWindow` property, the host's creation and the `close()` override), `my_application.cc` (`settings_window_install` after the plugins, `window_title_apply`), `flutter_window.{h,cpp}` (the `settings_window_` member, created after the plugins and reset first in `OnDestroy`), both runner `CMakeLists.txt` | The same lines in Séance's files (`f9bd1e1`) | `flutter_window.{h,cpp}` now equal Séance's. The Linux main window keeps its 1280 by 720 size and the macOS window its `flutter create` frame. |
+| `klabautermann/app/klabautermann_app/macos/Runner.xcodeproj/project.pbxproj` (one file reference, the Runner group entry, one Sources build file) | Séance's wiring of `SettingsWindow.swift` (`f9bd1e1`) | Own object ids `D7A6C0DE2F8E4A1B00000005` and `D7A6C0DE2F8E4A1B00000006`. |
+
+The runners are byte relays with a control channel, so nothing native
+sees Klabautermann's method names. What they share with the siblings is
+the shape the link engine relies on: the window is created on the first
+`open` and only hidden on close, because disposing a second engine on
+Linux terminates the EGL display every engine shares; the window's
+engine registers no plugins; and the link handler is set on its engine
+before Dart can say hello. A change to Séance's runners should reach
+both copies.
+
+This is the suite's third copy of the runners (Séance, Poltergeist,
+Klabautermann). A fourth needs the D32 shared-plugin review first;
+settings-window-link.md §4 records why the runners stayed per product
+when the Dart engine moved into `ghost_desktop`.
+
+`klabautermann/app/klabautermann_app/test/settings_window_runner_test.dart`
+checks the native wiring on Linux; only each platform's toolchain
+compiles the runners, and only a person on each desktop OS can open and
+use the window (docs/STATUS.md).

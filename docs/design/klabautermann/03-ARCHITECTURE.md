@@ -850,21 +850,27 @@ re-exports exactly one `seance_core` name, the home rule the app uses to
 find `~/.ssh/config` for the FL-02 import (it also undoes a macOS
 sandbox's container `HOME`). The engine imports the ssh_config parser
 under its own `show` list
-(`klabautermann_core/lib/src/fleet/ssh_config_entries.dart`) and maps
+(`klabautermann/packages/klabautermann_core/lib/src/fleet/ssh_config_entries.dart`) and maps
 its hosts to `FleetEntry` values (10.1), so no `seance_core` type crosses
-the isolate boundary (D18):
+the isolate boundary (D18). The device settings store (4.10) mints the
+device id with `uuidV4` and syncs the directory after each atomic write
+with the catalog library's `syncLocalDirectory`; the barrel exports only
+the store's own types, so neither name reaches the app:
 
 ```dart
 // klabautermann_core.dart: the app's only route to seance_core
 export 'package:seance_core/seance_core.dart' show expandHomePath;
 // src/fleet/ssh_config_entries.dart: engine-side only
 import 'package:seance_core/seance_core.dart' show SshConfigImporter;
+// src/settings/device_settings_store.dart: the app isolate's settings.json
+import 'package:seance_core/catalog.dart' show syncLocalDirectory;
+import 'package:seance_core/seance_core.dart' show uuidV4;
 ```
 
 The barrel's `klabautermann_host` export shows `Collector`, `CoreSnapshot`
 and `OverviewSnapshot`; each list grows only as a milestone wires a type
 in. No `ghost_*` package depends on `seance_core`; `klabautermann_core`
-is a product package, and the two curated lines above are its only
+is a product package, and the curated lines above are its only
 `seance_core` edge. Poltergeist's and
 Séance's edges to the new shared packages appear as each extraction
 switches them (3.5). The Rust workspace
@@ -3189,7 +3195,7 @@ the engine in `engine_isolate.dart` beside it):
   `~/.ssh/config` and decides whether the platform has one, and the
   engine opens no file for it. The engine parses the text off the UI
   isolate (CN-19) with `seance_core`'s `SshConfigImporter`
-  (`klabautermann_core/lib/src/fleet/ssh_config_entries.dart`), replaces
+  (`klabautermann/packages/klabautermann_core/lib/src/fleet/ssh_config_entries.dart`), replaces
   every entry an earlier import produced, and sends `CatalogReplaced`
   before `SshConfigImported`, so the fleet already shows the imports when
   the counts arrive. `skippedCount` counts hosts left out for a `Port`

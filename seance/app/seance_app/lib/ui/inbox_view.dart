@@ -278,12 +278,11 @@ class _ProposalReviewState extends State<ProposalReview> {
     );
     final expired = _proposal.isExpiredAt(DateTime.now());
     final revealed = revealInvisibles(_proposal.script);
-    final findings = <(int, DangerFinding)>[
-      for (final (i, line) in _proposal.script.split('\n').indexed)
-        for (final finding in DangerLinter.scan(line)) (i + 1, finding),
-    ];
+    // Scanned whole, so a command continued over lines is checked as one;
+    // each finding names the line on which its command starts.
+    final findings = DangerLinter.scan(_proposal.script);
     final critical = findings.any(
-      (f) => f.$2.severity == DangerSeverity.critical,
+      (f) => f.severity == DangerSeverity.critical,
     );
     final server = target.server;
 
@@ -356,10 +355,10 @@ class _ProposalReviewState extends State<ProposalReview> {
                   ),
                 ),
               ),
-              for (final (line, finding) in findings)
+              for (final finding in findings)
                 _Row(
                   icon: Icons.warning_amber_rounded,
-                  text: 'Line $line: ${finding.explanation}',
+                  text: 'Line ${finding.line}: ${finding.explanation}',
                   color: finding.severity == DangerSeverity.critical
                       ? scheme.error
                       : null,

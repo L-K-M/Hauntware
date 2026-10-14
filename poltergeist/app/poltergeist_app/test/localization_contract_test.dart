@@ -629,6 +629,8 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   'lib/services/prompt_coordinator.dart': {
     "'No identity-file reader is wired'",
     "'\${data.username}@\${data.host}'",
+    // An unreachable seam's programming-error text, never shown.
+    "'the vault-first branch reads no identity files'",
   },
   // Monospace rendering of machine data (fingerprints, endpoints,
   // transcripts) plus list joins — no authored copy.
@@ -2467,9 +2469,7 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'deleted, or it now holds a different credential. Nothing was created.'",
   },
   'lib/services/server_editor_backend.dart': {
-    // Credential-resolution empty fallbacks and the identity-read audit
-    // label — machine data, never rendered copy.
-    "''",
+    // The identity-read audit label: machine data, never rendered copy.
     r"'${config.username}@${config.host}'",
   },
   'lib/ui/connection_log_view.dart': {

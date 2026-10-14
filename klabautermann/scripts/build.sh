@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 #
 # Build every Klabautermann target this host can build, and print one clear
-# summary. The single local entry point; CI builds the same targets once the
-# client legs are registered in .github/workflows/ci.yml and release.yml
-# (04 §12.1). Klabautermann has no server component, so like Poltergeist's
+# summary. The single local entry point; CI builds the same targets in the
+# klabautermann_client legs of .github/workflows/ci.yml, and release.yml
+# gains them with the preview release job at M4 (04 §12.1, decision 16).
+# Klabautermann has no server component, so like Poltergeist's
 # build.sh (the pattern this follows) there are only client targets:
 #
 #   app    — Flutter desktop app for THIS host (linux/macos/windows); platform

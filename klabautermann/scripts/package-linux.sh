@@ -34,8 +34,8 @@
 # and how the dependency list is derived); this wrapper carries
 # Klabautermann's identities (03 D38), desktop entry and package metadata.
 #
-# CI runs this right after `flutter build linux --release` once the Linux
-# client legs are registered (04 §12.1); scripts/build.sh runs it from its
+# CI's klabautermann_client Linux leg runs this right after
+# `flutter build linux --release`; scripts/build.sh runs it from its
 # `app` target on Linux hosts, and scripts/build-flatpak.sh repacks its
 # .deb as the Flatpak.
 set -euo pipefail
