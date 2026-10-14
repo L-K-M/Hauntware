@@ -104,6 +104,15 @@ after every Flutter upgrade: both fixes rely on private engine selectors.
   does. Release entitlements stay deliberately empty.
 - Platform folders carry identity, icons, and entitlements; commit them
   once `flutter create` scaffolds the app.
+- **The desktop settings window is a second engine** (Séance's lesson,
+  D32): `main` gives it the settings window's app before `settings.json`
+  opens and the engine isolate starts, and it reaches the app only over
+  `klabautermann/settings_link` through `ghost_desktop`'s link engine. A
+  new setting is a `SettingsLinkMethod` and a snapshot key in
+  `lib/services/settings_window/`, never a controller or store in the
+  window's isolate. The runners (copied from Séance, docs/SHARED.md) hide
+  the window on close and never destroy it while the app runs: on Linux,
+  disposing a second engine terminates the EGL display both share.
 
 <!-- shared-rules:start -->
 

@@ -6,50 +6,93 @@ import 'package:ghost_ui/ghost_ui.dart' show showTopToast;
 
 import '../controllers/appearance_controller.dart';
 import '../l10n/app_localizations.dart';
+import '../services/settings_window/settings_window_link.dart';
 import 'inspector_pane.dart' show PlaceholderPaneBody;
 
-/// The settings route (03 §10.2): the seven planned tabs as placeholders,
-/// except Appearance, which already drives [AppearanceController]. On
-/// desktop this becomes a second window through `GhostSettingsWindowHost`
-/// when the native runners land (D32); the route stays the mobile and
-/// fallback path.
-class SettingsPage extends StatelessWidget {
-  const SettingsPage({super.key, required this.appearance});
+/// Settings (03 §10.2): the seven planned tabs as placeholders, except
+/// Appearance, which already drives the app's appearance. A route on
+/// phones (and wherever the desktop window cannot open); on desktop the
+/// same page fills the settings window (`settings_window_app.dart`).
+class SettingsPage extends StatefulWidget {
+  const SettingsPage({
+    super.key,
+    required this.appearance,
+    this.initialTab = SettingsTab.general,
+    this.tabRequests,
+  });
 
-  final AppearanceController appearance;
+  final AppearanceSettings appearance;
 
-  static List<String> _tabLabels(AppLocalizations l10n) => [
-    l10n.settingsTabGeneral,
-    l10n.settingsTabAppearance,
-    l10n.settingsTabSync,
-    l10n.settingsTabServers,
-    l10n.settingsTabDocker,
-    l10n.settingsTabSafety,
-    l10n.settingsTabAlerts,
-  ];
+  /// The tab the page opens on, read once when it is first built: the
+  /// settings window keys each page it shows by generation, so opening on
+  /// another tab makes a new page rather than updating this one.
+  final SettingsTab initialTab;
+
+  /// Tabs the app asks the showing settings window to switch to; null on
+  /// the route. Subscribed once, when the page's state is created, like
+  /// [initialTab].
+  final Stream<SettingsTab>? tabRequests;
+
+  @override
+  State<SettingsPage> createState() => _SettingsPageState();
+}
+
+class _SettingsPageState extends State<SettingsPage>
+    with SingleTickerProviderStateMixin {
+  late final TabController _tabs = TabController(
+    length: SettingsTab.values.length,
+    vsync: this,
+    initialIndex: widget.initialTab.index,
+  );
+  StreamSubscription<SettingsTab>? _tabRequests;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabRequests = widget.tabRequests?.listen(
+      (tab) => _tabs.animateTo(tab.index),
+    );
+  }
+
+  @override
+  void dispose() {
+    unawaited(_tabRequests?.cancel());
+    _tabs.dispose();
+    super.dispose();
+  }
+
+  static String _label(AppLocalizations l10n, SettingsTab tab) => switch (tab) {
+    SettingsTab.general => l10n.settingsTabGeneral,
+    SettingsTab.appearance => l10n.settingsTabAppearance,
+    SettingsTab.sync => l10n.settingsTabSync,
+    SettingsTab.servers => l10n.settingsTabServers,
+    SettingsTab.docker => l10n.settingsTabDocker,
+    SettingsTab.safety => l10n.settingsTabSafety,
+    SettingsTab.alerts => l10n.settingsTabAlerts,
+  };
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final tabs = _tabLabels(l10n);
-    return DefaultTabController(
-      length: tabs.length,
-      child: Scaffold(
-        appBar: AppBar(
-          title: Text(l10n.settingsTitle),
-          bottom: TabBar(
-            isScrollable: true,
-            tabs: [for (final label in tabs) Tab(text: label)],
-          ),
-        ),
-        body: TabBarView(
-          children: [
-            const PlaceholderPaneBody(),
-            AppearanceTab(appearance: appearance),
-            for (var i = 0; i < tabs.length - 2; i++)
-              const PlaceholderPaneBody(),
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(l10n.settingsTitle),
+        bottom: TabBar(
+          controller: _tabs,
+          isScrollable: true,
+          tabs: [
+            for (final tab in SettingsTab.values) Tab(text: _label(l10n, tab)),
           ],
         ),
+      ),
+      body: TabBarView(
+        controller: _tabs,
+        children: [
+          for (final tab in SettingsTab.values)
+            tab == SettingsTab.appearance
+                ? AppearanceTab(appearance: widget.appearance)
+                : const PlaceholderPaneBody(),
+        ],
       ),
     );
   }
@@ -60,19 +103,25 @@ class SettingsPage extends StatelessWidget {
 class AppearanceTab extends StatelessWidget {
   const AppearanceTab({super.key, required this.appearance});
 
-  final AppearanceController appearance;
+  final AppearanceSettings appearance;
 
-  /// The theme changes at once; a save that fails says so in a top toast
-  /// (the suite keeps the bottom edge clear), since the change then lasts
-  /// only until the app restarts.
+  /// The selection shows [AppearanceSettings.value], so it moves only once
+  /// the app has taken the change; a change the app does not take leaves
+  /// it where it was and says so. A change the app took but could not save
+  /// stays, and says that instead, since it then lasts only until the app
+  /// restarts. Both in a top toast: the suite keeps the bottom edge clear.
   Future<void> _setMode(BuildContext context, ThemeModePreference mode) async {
     final overlay = Overlay.of(context, rootOverlay: true);
-    final notSaved = AppLocalizations.of(context).themeNotSaved;
+    final l10n = AppLocalizations.of(context);
     try {
       await appearance.setMode(mode);
-    } on Exception catch (error) {
-      debugPrint('The theme was not saved: $error');
-      if (overlay.mounted) showTopToast(overlay, message: notSaved);
+    } on AppearanceNotSavedException catch (error) {
+      debugPrint('$error');
+      if (overlay.mounted) showTopToast(overlay, message: l10n.themeNotSaved);
+    } on Exception {
+      if (overlay.mounted) {
+        showTopToast(overlay, message: l10n.themeNotChanged);
+      }
     }
   }
 
@@ -105,7 +154,7 @@ class AppearanceTab extends StatelessWidget {
                   label: Text(l10n.themeDark),
                 ),
               ],
-              selected: {appearance.mode},
+              selected: {appearance.value.mode},
               onSelectionChanged: (modes) =>
                   unawaited(_setMode(context, modes.first)),
             ),

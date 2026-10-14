@@ -95,6 +95,10 @@
   "@themeNotSaved": {
     "description": "Top toast after a theme pick that applied but could not be written to the settings file."
   },
+  "themeNotChanged": "The theme could not be changed.",
+  "@themeNotChanged": {
+    "description": "Top toast shown when the app did not take a theme-mode change made in Settings."
+  },
   "settingsFileRecovered": "Your settings file could not be read and was reset. The old file is kept as {fileName}.",
   "@settingsFileRecovered": {
     "description": "Startup notice: the settings file was damaged, set aside under a new name, and replaced with the defaults.",
@@ -126,6 +130,10 @@
   "settingsFileNotSaved": "Your settings could not be saved. Changes you make now may be lost when Klabautermann restarts.",
   "@settingsFileNotSaved": {
     "description": "Startup notice: writing the settings file failed while the app started."
+  },
+  "settingsWindowUnreachable": "Settings cannot reach Klabautermann. Close this window and open Settings again.",
+  "@settingsWindowUnreachable": {
+    "description": "Shown in the desktop settings window when the app does not answer it."
   },
   "workspaceEmptyTitle": "Select a server",
   "workspaceEmptyBody": "Choose a server from the fleet to see its workspace.",

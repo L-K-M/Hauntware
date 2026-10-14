@@ -352,6 +352,12 @@ abstract class AppLocalizations {
   /// **'The theme changed, but it could not be saved, so it will not be kept after a restart.'**
   String get themeNotSaved;
 
+  /// Top toast shown when the app did not take a theme-mode change made in Settings.
+  ///
+  /// In en, this message translates to:
+  /// **'The theme could not be changed.'**
+  String get themeNotChanged;
+
   /// Startup notice: the settings file was damaged, set aside under a new name, and replaced with the defaults.
   ///
   /// In en, this message translates to:
@@ -381,6 +387,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Your settings could not be saved. Changes you make now may be lost when Klabautermann restarts.'**
   String get settingsFileNotSaved;
+
+  /// Shown in the desktop settings window when the app does not answer it.
+  ///
+  /// In en, this message translates to:
+  /// **'Settings cannot reach Klabautermann. Close this window and open Settings again.'**
+  String get settingsWindowUnreachable;
 
   /// No description provided for @workspaceEmptyTitle.
   ///
