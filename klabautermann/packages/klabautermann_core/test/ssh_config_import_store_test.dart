@@ -363,7 +363,7 @@ void main() {
       file.writeAsBytesSync(
         _document([
           {'alias': 'a', 'host': 'h', 'port': 2200, 'user': 'u'},
-        ]),
+        ], version: 1),
       );
 
       final store = await SshConfigImportStore.open(file);
@@ -381,7 +381,10 @@ void main() {
   });
 }
 
+/// A store file of [version], this build's schema unless given.
 List<int> _document(
   List<Map<String, Object?>> entries, {
+  int version = sshConfigImportsSchemaVersion,
   Map<String, Object?> extra = const {},
-}) => utf8.encode(jsonEncode({'version': 1, 'entries': entries, ...extra}));
+}) =>
+    utf8.encode(jsonEncode({'version': version, 'entries': entries, ...extra}));
