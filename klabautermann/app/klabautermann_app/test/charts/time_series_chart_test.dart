@@ -335,6 +335,38 @@ void main() {
     }
   });
 
+  testWidgets('wraps a legend label wider than the chart within its entry', (
+    tester,
+  ) async {
+    tester.platformDispatcher.textScaleFactorTestValue = 2;
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    await tester.pumpWidget(
+      chartFrame(
+        SizedBox(
+          width: 120,
+          height: 200,
+          child: TimeSeriesChart(
+            data: _network(),
+            labels: const ['Receive', 'Transmit'],
+            unit: ChartUnit.bytesPerSecond,
+            strings: testChartStrings,
+            source: 'Sampled by this device while connected',
+            end: _end,
+          ),
+        ),
+      ),
+    );
+
+    // At doubled text each label, with its swatch, is wider than the chart.
+    expect(tester.takeException(), isNull);
+    final chart = tester.getRect(find.byType(TimeSeriesChart));
+    for (final label in ['Receive', 'Transmit', 'disconnected']) {
+      final rect = tester.getRect(find.text(label));
+      expect(rect.left, greaterThanOrEqualTo(chart.left), reason: label);
+      expect(rect.right, lessThanOrEqualTo(chart.right), reason: label);
+    }
+  });
+
   testWidgets('offers series summaries and gap spans, not live regions', (
     tester,
   ) async {

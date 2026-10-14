@@ -191,13 +191,15 @@ class TimeSeriesChart extends StatelessWidget {
     );
   }
 
+  /// A label wider than the chart, such as a long series name or one
+  /// under large text, wraps within its entry.
   static Widget _legendEntry(Widget swatch, String label, TextStyle style) =>
       Row(
         mainAxisSize: MainAxisSize.min,
         spacing: 4,
         children: [
           swatch,
-          Text(label, style: style),
+          Flexible(child: Text(label, style: style)),
         ],
       );
 }
