@@ -3,10 +3,11 @@
 /// `poltergeist_core` or `dartssh2`: Poltergeist consumes this package and
 /// must not inherit the SSH stack.
 ///
-/// The server list's sectioning rules are here now; the status-dot
-/// vocabulary, the host-key, keyboard-interactive and credential prompts,
+/// The server list's sectioning rules and the status-dot vocabulary are
+/// here now; the host-key, keyboard-interactive and credential prompts,
 /// and the connection log view and test report land on this same edge in
 /// the later stages of docs/design/ghost-servers-part1.md.
 library;
 
 export 'src/server_grouping.dart';
+export 'src/server_status.dart';

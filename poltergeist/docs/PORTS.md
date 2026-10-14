@@ -146,7 +146,15 @@ carries the new IEC binary size/rate formatters for Klabautermann;
 2026-10-13 in its own package, `ghost_servers` (over `seance_protocol`
 and `ghost_ui`); the SERVERS section's catalog grouping calls its
 `groupServers` instead of grouping inline, with the `srv:` collapse keys
-unchanged.
+unchanged. The status-dot vocabulary followed the same day in that
+package's `server_status.dart`: `serverIndicatorOf` keeps its name and
+ARB words as a delegate to its list rule (through
+`ui/ghost_servers_adapter.dart`), the sidebar rail resolves the rail
+rule through that adapter directly (so `railIndicatorOf`, left without
+a caller, was removed), the rail's paint map and the
+sidebar's hidden-live header dot draw through `ghostStatusDot` and
+`ghostHiddenLiveIndicator`, and the pane-tab `ServerStateGlyph` paint
+stays here.
 
 ## Cross-app deep links (2026-10-02)
 
@@ -896,7 +904,8 @@ counterpart is ported here.
   `ui/sidebar/sidebar_servers_section.dart` now calls `groupServers`
   with the controller's pinned set; its collapse keys still go through
   `SidebarCollapseKeys.serverGroup`.
-- Port-back candidates: none — Séance owns the source.
+- Port-back candidates: none — the source now lives in the shared
+  `ghost_servers` package, which both apps consume.
 
 ## app/poltergeist_app/lib/ui/server_filter.dart
 
