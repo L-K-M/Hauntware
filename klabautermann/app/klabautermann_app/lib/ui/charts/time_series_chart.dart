@@ -241,7 +241,7 @@ void _paintHatch(Canvas canvas, Rect band, Color ink) {
   for (
     var x = band.left - band.height;
     x < band.right;
-    x += TimeSeriesPainter.gapHatchSpacing
+    x += TimeSeriesPainter._gapHatchSpacing
   ) {
     hatch
       ..moveTo(x, band.bottom)
@@ -250,7 +250,7 @@ void _paintHatch(Canvas canvas, Rect band, Color ink) {
   canvas.drawPath(
     hatch,
     Paint()
-      ..color = ink.withValues(alpha: TimeSeriesPainter.gapHatchAlpha)
+      ..color = ink.withValues(alpha: TimeSeriesPainter._gapHatchAlpha)
       ..style = PaintingStyle.stroke
       ..strokeWidth = TimeSeriesPainter._gapHatchWidth,
   );
@@ -326,7 +326,7 @@ final class TimeSeriesPainter extends CustomPainter {
   static const strokeWidth = 1.5;
 
   /// The value grid is decoration: the labels beside it carry the values.
-  static const gridAlpha = 0.24;
+  static const _gridAlpha = 0.24;
 
   /// A gap band's wash and hatching. The hatching, not the wash, carries
   /// the band. Its strokes are 2 px wide: at one pixel per point a 1 px
@@ -334,9 +334,9 @@ final class TimeSeriesPainter extends CustomPainter {
   /// test holds each stroke, as drawn, to 3:1 against the wash on the
   /// chart surfaces.
   static const gapWashAlpha = 0.06;
-  static const gapHatchAlpha = 0.8;
+  static const _gapHatchAlpha = 0.8;
   static const _gapHatchWidth = 2.0;
-  static const gapHatchSpacing = 8.0;
+  static const _gapHatchSpacing = 8.0;
 
   /// A band narrower than this widens around its centre, so a short gap
   /// still shows.
@@ -424,7 +424,7 @@ final class TimeSeriesPainter extends CustomPainter {
     double yOf(double value) =>
         plot.bottom - value.clamp(0, scaleMax) / scaleMax * plot.height;
 
-    final grid = Paint()..color = _ink.withValues(alpha: gridAlpha);
+    final grid = Paint()..color = _ink.withValues(alpha: _gridAlpha);
     final valueLabels = _valueLabels();
     for (final (index, label) in valueLabels.indexed) {
       final y = yOf(scaleMax * (1 - index / 2));

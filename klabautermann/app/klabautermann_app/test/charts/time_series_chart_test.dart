@@ -105,7 +105,10 @@ void main() {
     final bands = _bands(painter, size);
     expect(bands, hasLength(2));
     // The open gap reaches the right edge.
-    expect(bands.last.right, closeTo(size.width - 0.75, 0.01));
+    expect(
+      bands.last.right,
+      closeTo(size.width - TimeSeriesPainter.strokeWidth / 2, 0.01),
+    );
 
     final receive = _contours(painter, size, palette.series[0]);
     final transmit = _contours(painter, size, palette.series[1]);

@@ -4,7 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 
 /// The most series one time-series chart draws (03 §10.7).
-const maxTimeSeriesLanes = 4;
+const _maxLanes = 4;
 
 /// Why a chart has no data for a while (03 §9.5 item 5).
 enum ChartGapReason {
@@ -37,8 +37,8 @@ final class TimeSeriesRing extends ChangeNotifier {
   TimeSeriesRing({required this.capacity, required this.lanes})
     : assert(capacity > 1, 'a series needs two slots to draw a line'),
       assert(
-        lanes >= 1 && lanes <= maxTimeSeriesLanes,
-        'a chart draws 1 to $maxTimeSeriesLanes series',
+        lanes >= 1 && lanes <= _maxLanes,
+        'a chart draws 1 to $_maxLanes series',
       ),
       _times = Int64List(capacity),
       _values = Float64List(capacity * lanes),
