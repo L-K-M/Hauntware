@@ -501,8 +501,10 @@ void main() {
       tester,
     ) async {
       final killed = <int>[];
+      final activated = <int>[];
       await _pump(
         tester,
+        activated: activated,
         rowActions: (proc) => [
           SidebarMenuAction(
             label: 'Kill',
@@ -531,6 +533,15 @@ void main() {
       await tester.sendKeyEvent(LogicalKeyboardKey.enter);
       await tester.pumpAndSettle();
       expect(killed, [3, 4]);
+
+      // Enter steps in as an arrow does, never activating the row behind.
+      await tester.tap(_row(2), buttons: kSecondaryButton);
+      await tester.pumpAndSettle();
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pumpAndSettle();
+      expect(activated, isEmpty);
+      expect(killed, [3, 4, 2]);
     });
 
     testWidgets('a key over a menu without an enabled verb leaves the '

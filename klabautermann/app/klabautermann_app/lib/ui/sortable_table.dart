@@ -315,9 +315,15 @@ class _SortableTableState<R> extends State<SortableTable<R>> {
       () => _sorted.isNotEmpty,
       (intent) => _move(intent.step),
     ),
+    // Over a menu a pointer opened, Enter steps in as an arrow does
+    // rather than activating the row behind it.
     _ActivateRowIntent: _TableAction<_ActivateRowIntent>(
-      () => widget.onRowActivated != null && _activeIndex != null,
-      (_) => widget.onRowActivated!(_sorted[_activeIndex!]),
+      () =>
+          _menu.isOpen ||
+          (widget.onRowActivated != null && _activeIndex != null),
+      (_) => _menu.isOpen
+          ? _focusMenu()
+          : widget.onRowActivated!(_sorted[_activeIndex!]),
     ),
     _OpenRowActionsIntent: _TableAction<_OpenRowActionsIntent>(
       () =>
