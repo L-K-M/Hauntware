@@ -6,6 +6,7 @@ import 'package:klabautermann_app/theme/app_theme.dart';
 import 'package:klabautermann_app/ui/logs/log_level.dart';
 import 'package:klabautermann_app/ui/logs/log_text.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
+import 'package:planchette_core/planchette_core.dart' show TextMatch;
 
 LogPalette _palette(Brightness brightness) => LogPalette.fromTheme(
   brightness == Brightness.dark
@@ -169,13 +170,103 @@ void main() {
         palette: palette,
         base: base,
         level: LogLevel.error,
-        cutNote: '[cut]',
+        note: '[cut]',
       );
 
       final runs = span.children!.cast<TextSpan>();
       expect(runs.map((run) => run.text), ['abc', ' [cut]']);
       expect(runs.first.style!.color, palette.levelColor(LogLevel.error));
       expect(runs.last.style, palette.markerStyle);
+    });
+
+    test('matches split the runs; the current one is also underlined', () {
+      final span = logLineSpan(
+        const LogLine(0, '\x1b[31mred\x1b[0m text'),
+        palette: palette,
+        base: base,
+        matches: const [
+          TextMatch(start: 1, end: 6),
+          TextMatch(start: 6, end: 7),
+        ],
+        currentMatch: 1,
+      );
+
+      final runs = span.children!.cast<TextSpan>();
+      expect(runs.map((run) => run.text), ['r', 'ed', ' te', 'x', 't']);
+      final red = palette.styleFor(
+        const SgrStyle(foreground: SgrPaletteColor(1)),
+        null,
+      );
+      expect(runs[1].style, palette.matchStyle(red, current: false));
+      expect(runs[1].style!.decoration, TextDecoration.none);
+      expect(runs[3].style!.decoration, TextDecoration.underline);
+      expect(
+        runs[1].style!.backgroundColor,
+        isNot(runs[3].style!.backgroundColor),
+      );
+    });
+  });
+
+  for (final brightness in Brightness.values) {
+    test('match text reads at 4.5:1, ${brightness.name} theme', () {
+      final palette = _palette(brightness);
+      for (final level in [...LogLevel.values, null]) {
+        for (final current in [false, true]) {
+          final style = palette.matchStyle(
+            palette.styleFor(SgrStyle.plain, level),
+            current: current,
+          );
+          expect(_contrast(style, palette), greaterThanOrEqualTo(4.5));
+        }
+      }
+    });
+  }
+
+  group('journal rows (LOG-01)', () {
+    LogLine journal(Map<String, String?> fields) =>
+        (LogBuffer()..addJournal([JournalEntry(fields)]))[0] as LogLine;
+
+    test('start with the unit and PID that logged them', () {
+      expect(
+        logRowText(
+          journal({
+            '_SYSTEMD_UNIT': 'cron.service',
+            '_PID': '7',
+            'MESSAGE': 'hi',
+          }),
+        ),
+        'cron.service[7]: hi',
+      );
+      expect(
+        logRowText(journal({'SYSLOG_IDENTIFIER': 'kernel', 'MESSAGE': 'hi'})),
+        'kernel: hi',
+      );
+      expect(logRowText(journal({'_PID': '7', 'MESSAGE': 'hi'})), '[7]: hi');
+      expect(logRowText(journal({'MESSAGE': 'hi'})), 'hi');
+      expect(
+        logRowText(const LogLine(0, 'cron.service[7]: hi')),
+        'cron.service[7]: hi',
+      );
+    });
+
+    test('a message\'s newlines are marked and break its row', () {
+      expect(
+        logRowText(journal({'MESSAGE': 'one\ntwo\r\n\x1b[1mthree'})),
+        'one\u23ce\u2028two\u23ce\u2028three',
+      );
+      expect(logRowText(const LogLine(0, 'one\ntwo')), 'onetwo');
+    });
+
+    test('the unit and PID are drawn apart from the message', () {
+      final span = logLineSpan(
+        journal({'_SYSTEMD_UNIT': 'cron.service', 'MESSAGE': 'hi'}),
+        palette: _palette(Brightness.light),
+        base: const TextStyle(),
+      );
+
+      final runs = span.children!.cast<TextSpan>();
+      expect(runs.map((run) => run.text), ['cron.service: ', 'hi']);
+      expect(runs.first.style, _palette(Brightness.light).sourceStyle);
     });
   });
 

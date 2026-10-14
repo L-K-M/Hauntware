@@ -16,6 +16,7 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 import '../../l10n/app_localizations.dart';
 import '../../theme/app_theme.dart';
 import 'log_level.dart';
+import 'log_search.dart';
 import 'log_text.dart';
 import 'log_view_controller.dart';
 
@@ -42,6 +43,15 @@ const double _rowPadding = 8;
 /// How far from the newest line still counts as at it, in logical pixels.
 const double _endTolerance = 1;
 
+/// How many glyph advances a journal row's fields are indented by.
+const int _fieldIndent = 2;
+
+/// The rows kept above a search match the view scrolls to.
+const int _revealContext = 2;
+
+/// Line and paragraph separators, which would break a field's row.
+final _rowBreaks = RegExp('[\u2028\u2029]');
+
 /// The log viewer of 03 §10.8 over a [LogViewController]: a lazily built
 /// list with a fixed line extent when [wrap] is off and measured row
 /// counts when it is on, follow with pause on scroll (LOG-02), level
@@ -54,12 +64,19 @@ const double _endTolerance = 1;
 /// newest line, End, or the Follow button resumes it. Keys: Up and Down
 /// move a line, Page Up and Page Down a page, Home goes to the oldest
 /// line, End follows.
+///
+/// A journal line's row (LOG-01) starts with its unit and PID, and a tap,
+/// or Enter on the focused row, pauses following and shows its other
+/// fields beneath it, one row each without wrap. With a [search], its matches are highlighted,
+/// and each step to a match pauses following and scrolls the match into
+/// sight (LOG-05).
 class LogView extends StatefulWidget {
   const LogView({
     super.key,
     required this.controller,
     this.wrap = LogWrap.off,
     this.levelOf,
+    this.search,
   });
 
   final LogViewController controller;
@@ -68,6 +85,9 @@ class LogView extends StatefulWidget {
   /// The level of a line, for its colour and gutter icon. Without it no
   /// line has a level and the view has no gutter.
   final LogLevel? Function(LogLine line)? levelOf;
+
+  /// The search whose matches the view highlights, over [controller].
+  final LogSearch? search;
 
   @override
   State<LogView> createState() => _LogViewState();
@@ -83,14 +103,22 @@ class _LogViewState extends State<LogView> {
   late AppLocalizations _l10n;
   _TextLayout? _text;
 
-  /// The wrapped row count of each held entry, kept in step with the
-  /// controller whether or not [LogView.wrap] is on.
+  /// The row count of each held entry, kept in step with the controller:
+  /// wrapped rows with [LogView.wrap] on, one a line plus its fields' rows
+  /// without it.
   late _RowCounts _rows;
+
+  /// The fields of each journal row that shows them, by seq.
+  final _expanded = <int, List<(String, String?)>>{};
+
+  /// The search's [LogSearch.steps] last brought into sight.
+  int _steps = 0;
 
   @override
   void initState() {
     super.initState();
     _listen(widget.controller);
+    _listenSearch(widget.search);
   }
 
   @override
@@ -109,9 +137,16 @@ class _LogViewState extends State<LogView> {
   @override
   void didUpdateWidget(LogView oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.search != widget.search) {
+      oldWidget.search?.removeListener(_onSearch);
+      _listenSearch(widget.search);
+    }
     if (oldWidget.controller != widget.controller) {
       _unlisten(oldWidget.controller);
       _listen(widget.controller);
+      _expanded.clear();
+      _resetRows();
+    } else if (oldWidget.wrap != widget.wrap) {
       _resetRows();
     } else if ((oldWidget.levelOf == null) != (widget.levelOf == null)) {
       // The gutter came or went, and with it some of every row's width.
@@ -122,6 +157,7 @@ class _LogViewState extends State<LogView> {
   @override
   void dispose() {
     _unlisten(widget.controller);
+    widget.search?.removeListener(_onSearch);
     _vertical.dispose();
     _focusNode.dispose();
     super.dispose();
@@ -137,6 +173,11 @@ class _LogViewState extends State<LogView> {
     controller.following.removeListener(_onFollowing);
   }
 
+  void _listenSearch(LogSearch? search) {
+    search?.addListener(_onSearch);
+    _steps = search?.steps ?? 0;
+  }
+
   void _resetRows() {
     _rows = _RowCounts(_measureRows);
     _rows.sync(widget.controller, _estimateRows);
@@ -144,16 +185,61 @@ class _LogViewState extends State<LogView> {
 
   void _onLines() {
     final removed = _rows.sync(widget.controller, _estimateRows);
+    _expanded.removeWhere((seq, _) => seq < widget.controller.firstSeq);
     // While paused, keep the lines in sight where they are: the entries
     // that left the buffer took their extent from above them.
     if (removed.entries > 0 && !widget.controller.following.value) {
       final position = _vertical.hasClients ? _vertical.position : null;
       if (position is _TailScrollPosition && position.hasPixels) {
-        final rows = widget.wrap == LogWrap.on ? removed.rows : removed.entries;
-        position.shiftBy(-math.min(rows * _text!.lineHeight, position.pixels));
+        position.shiftBy(
+          -math.min(removed.rows * _text!.lineHeight, position.pixels),
+        );
       }
     }
     setState(() {});
+  }
+
+  void _onSearch() {
+    final search = widget.search!;
+    final match = search.current;
+    if (search.steps != _steps && match != null) {
+      _steps = search.steps;
+      widget.controller.pause();
+      _reveal(match.seq - widget.controller.firstSeq);
+    }
+    setState(() {});
+  }
+
+  /// Scrolls entry [index] into sight, with a few rows above it, unless
+  /// all of it is in sight already.
+  void _reveal(int index) {
+    if (!_vertical.hasClients) return;
+    final position = _vertical.position;
+    if (!position.hasContentDimensions) return;
+
+    final line = _text!.lineHeight;
+    final top = (_fixedRows ? index : _rows.rowsBefore(index)) * line;
+    final bottom = top + (_fixedRows ? 1 : _rows.rowsOf(index)) * line;
+    final viewEnd = position.pixels + position.viewportDimension;
+    if (top >= position.pixels && bottom <= viewEnd) return;
+
+    _jump(position, top - _revealContext * line - position.pixels);
+  }
+
+  /// Whether every row is one line, so the fixed-extent list lays them
+  /// out.
+  bool get _fixedRows => widget.wrap == LogWrap.off && _expanded.isEmpty;
+
+  /// Shows or hides [line]'s fields. Showing them pauses following, so
+  /// the row holds still while they open beneath it.
+  void _toggleFields(LogLine line) {
+    setState(() {
+      if (_expanded.remove(line.seq) == null) {
+        _expanded[line.seq] = line.journal!.fields;
+        widget.controller.pause();
+      }
+    });
+    _rows.remeasure(line.seq - widget.controller.firstSeq);
   }
 
   void _onFollowing() {
@@ -180,32 +266,72 @@ class _LogViewState extends State<LogView> {
     return false;
   }
 
-  String? _cutNote(LogLine line) {
+  /// A cut line's note, or the note for a journal MESSAGE not sent.
+  String? _note(LogLine line) {
+    if (line.journal?.messageNotSent ?? false) return _l10n.logJournalNotSent;
+
     final length = line.originalLength;
     return length == null ? null : _l10n.logLineCut(length);
   }
+
+  /// The rows of a journal row's fields: `NAME=value` each, on one row
+  /// without wrap, and a note for the fields the buffer left out.
+  List<String> _fieldLines(LogLine line, List<(String, String?)> fields) => [
+    for (final (name, value) in fields)
+      value == null
+          ? '$name ${_l10n.logJournalNotSent}'
+          : parseSgr(
+              '$name=$value'.replaceAll('\n', ' '),
+            ).text.replaceAll(_rowBreaks, ' '),
+    if (line.journal!.fieldsLeftOut > 0)
+      _l10n.logJournalFieldsLeftOut(line.journal!.fieldsLeftOut),
+  ];
 
   bool get _hasGutter => widget.levelOf != null;
 
   double _textWidth(double rowWidth, _TextLayout text) =>
       rowWidth - 2 * _rowPadding - (_hasGutter ? text.gutter : 0);
 
-  /// The rows entry [index] wraps to in a row [crossAxisExtent] wide: one
-  /// when an upper bound of its width fits, otherwise laid out. A
-  /// dropped-lines record keeps to one row; a cut line is laid out for its
-  /// note.
+  /// The rows entry [index] takes in a row [crossAxisExtent] wide: one a
+  /// line and one a field shown without wrap. With wrap, each wraps to one
+  /// row when an upper bound of its width fits and is laid out otherwise;
+  /// a line with a note is laid out for it. A dropped-lines record keeps
+  /// to one row.
   int _measureRows(int index, double crossAxisExtent) {
     final entry = widget.controller[index];
     if (entry is! LogLine) return 1;
 
+    final fields = switch (_expanded[entry.seq]) {
+      final kept? => _fieldLines(entry, kept),
+      null => const <String>[],
+    };
+    if (widget.wrap == LogWrap.off) return 1 + fields.length;
+
     final text = _text!;
     final width = _textWidth(crossAxisExtent, text);
-    if (!entry.truncated &&
-        logTextCells(parseSgr(entry.text).text) * text.advance <= width) {
-      return 1;
+    bool fits(String plain, double width) =>
+        logTextCells(plain) * text.advance <= width;
+
+    var rows = _note(entry) == null && fits(logRowText(entry), width)
+        ? 1
+        : _layoutRows(_lineSpan(entry, text), width, text);
+    final fieldWidth = width - text.fieldIndent;
+    for (final field in fields) {
+      rows += fits(field, fieldWidth)
+          ? 1
+          : _layoutRows(
+              TextSpan(text: field, style: text.base),
+              fieldWidth,
+              text,
+            );
     }
+    return rows;
+  }
+
+  /// The rows [span] wraps to at [width].
+  int _layoutRows(TextSpan span, double width, _TextLayout text) {
     final painter = TextPainter(
-      text: _lineSpan(entry, text),
+      text: span,
       textDirection: TextDirection.ltr,
       strutStyle: text.strut,
       textScaler: text.scaler,
@@ -215,27 +341,41 @@ class _LogViewState extends State<LogView> {
     return rows;
   }
 
-  /// A guess at the rows of [entry] until a layout measures it: its code
-  /// units, escapes included, at the width last measured, and never more
-  /// rows than code units.
+  /// A guess at the rows of [entry] until a layout measures it, plus one a
+  /// field it shows: one without wrap; with it, its code units, escapes
+  /// included, at the width last measured, and never more rows than code
+  /// units.
   int _estimateRows(LogEntry entry) {
+    if (entry is! LogLine) return 1;
+
+    final fields = switch (_expanded[entry.seq]) {
+      final kept? => _fieldLines(entry, kept).length,
+      null => 0,
+    };
     final crossAxisExtent = _rows.crossAxisExtent;
-    if (entry is! LogLine || crossAxisExtent == null) return 1;
+    if (widget.wrap == LogWrap.off || crossAxisExtent == null) {
+      return 1 + fields;
+    }
 
     final text = _text!;
     final width = _textWidth(crossAxisExtent, text);
-    final units = entry.text.length;
-    if (width <= 0 || units == 0) return 1;
-    return (units * text.advance / width).ceil().clamp(1, units);
+    final units = entry.text.length + (entry.journal?.source?.length ?? 0);
+    if (width <= 0 || units == 0) return 1 + fields;
+    return (units * text.advance / width).ceil().clamp(1, units) + fields;
   }
 
-  TextSpan _lineSpan(LogLine line, _TextLayout text) => logLineSpan(
-    line,
-    palette: text.palette,
-    base: text.base,
-    level: widget.levelOf?.call(line),
-    cutNote: _cutNote(line),
-  );
+  TextSpan _lineSpan(LogLine line, _TextLayout text) {
+    final search = widget.search;
+    return logLineSpan(
+      line,
+      palette: text.palette,
+      base: text.base,
+      level: widget.levelOf?.call(line),
+      note: _note(line),
+      matches: search?.matchesIn(line) ?? const [],
+      currentMatch: search?.currentIndexIn(line),
+    );
+  }
 
   void _scroll(_LogScroll scroll) {
     if (scroll == _LogScroll.end) {
@@ -283,18 +423,15 @@ class _LogViewState extends State<LogView> {
         controller: _vertical,
         semanticChildCount: widget.controller.length,
         slivers: [
-          switch (widget.wrap) {
-            LogWrap.off => SliverFixedExtentList(
-              itemExtent: text.lineHeight,
-              delegate: rows,
-            ),
-            LogWrap.on => _WrappedRows(
+          if (_fixedRows)
+            SliverFixedExtentList(itemExtent: text.lineHeight, delegate: rows)
+          else
+            _WrappedRows(
               rows: _rows,
               revision: _rows.revision,
               lineHeight: text.lineHeight,
               delegate: rows,
             ),
-          },
         ],
       ),
     );
@@ -317,7 +454,10 @@ class _LogViewState extends State<LogView> {
             color: text.palette.background,
             child: Stack(
               children: [
-                Positioned.fill(child: list),
+                // Journal rows' ink and focus draw over the background.
+                Positioned.fill(
+                  child: Material(type: MaterialType.transparency, child: list),
+                ),
                 if (!following)
                   PositionedDirectional(
                     end: 16,
@@ -346,23 +486,43 @@ class _LogViewState extends State<LogView> {
     );
   }
 
+  // RichText, not Text: Text would merge the ambient DefaultTextStyle in,
+  // which the measured extents do not see.
+  Widget _richText(TextSpan span, _TextLayout text) => RichText(
+    text: span,
+    textDirection: TextDirection.ltr,
+    strutStyle: text.strut,
+    textScaler: text.scaler,
+    softWrap: widget.wrap == LogWrap.on,
+    maxLines: widget.wrap == LogWrap.off ? 1 : null,
+    overflow: widget.wrap == LogWrap.off
+        ? TextOverflow.ellipsis
+        : TextOverflow.clip,
+  );
+
   Widget _row(int index, _TextLayout text) {
     final entry = widget.controller[index];
     final level = entry is LogLine ? widget.levelOf?.call(entry) : null;
+    final fields = _expanded[entry.seq];
     final Widget body = switch (entry) {
-      // RichText, not Text: Text would merge the ambient DefaultTextStyle
-      // in, which the measured extents do not see.
-      LogLine() => RichText(
-        text: _lineSpan(entry, text),
-        textDirection: TextDirection.ltr,
-        strutStyle: text.strut,
-        textScaler: text.scaler,
-        softWrap: widget.wrap == LogWrap.on,
-        maxLines: widget.wrap == LogWrap.off ? 1 : null,
-        overflow: widget.wrap == LogWrap.off
-            ? TextOverflow.ellipsis
-            : TextOverflow.clip,
+      LogLine() when fields != null => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _richText(_lineSpan(entry, text), text),
+          for (final field in _fieldLines(entry, fields))
+            Padding(
+              padding: EdgeInsetsDirectional.only(start: text.fieldIndent),
+              child: _richText(
+                TextSpan(
+                  text: field,
+                  style: text.base.merge(text.palette.sourceStyle),
+                ),
+                text,
+              ),
+            ),
+        ],
       ),
+      LogLine() => _richText(_lineSpan(entry, text), text),
       LogDroppedLines(:final count) => Row(
         children: [
           Icon(
@@ -385,21 +545,32 @@ class _LogViewState extends State<LogView> {
       ),
     };
 
+    final Widget row = Padding(
+      padding: const EdgeInsets.symmetric(horizontal: _rowPadding),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (_hasGutter)
+            SizedBox(
+              width: text.gutter,
+              height: text.lineHeight,
+              child: _levelIcon(level, text),
+            ),
+          Expanded(child: body),
+        ],
+      ),
+    );
+    if (entry is! LogLine || entry.journal == null) {
+      return MergeSemantics(child: row);
+    }
+
     return MergeSemantics(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: _rowPadding),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (_hasGutter)
-              SizedBox(
-                width: text.gutter,
-                height: text.lineHeight,
-                child: _levelIcon(level, text),
-              ),
-            Expanded(child: body),
-          ],
-        ),
+      child: Semantics(
+        expanded: fields != null,
+        onTapHint: fields == null
+            ? _l10n.logJournalShowFields
+            : _l10n.logJournalHideFields,
+        child: InkWell(onTap: () => _toggleFields(entry), child: row),
       ),
     );
   }
@@ -501,6 +672,9 @@ final class _TextLayout {
 
   /// The level icon's column.
   double get gutter => iconSize + 6;
+
+  /// How far a journal row's fields are indented.
+  double get fieldIndent => _fieldIndent * advance;
 }
 
 /// The slots a [_RowCounts] starts with.
@@ -603,6 +777,15 @@ final class _RowCounts {
     return (entries: entries, rows: rows);
   }
 
+  /// Measures the entry at [index] again at once, for a change only it
+  /// sees, such as its fields showing. Without wrap its count needs no
+  /// layout, so no width either.
+  void remeasure(int index) {
+    _measuredIn[_front + index] = 0;
+    _measureAt(index);
+    _revision++;
+  }
+
   /// Makes every count an estimate, for a new font, scale, locale or
   /// gutter.
   void invalidate() {
@@ -670,7 +853,7 @@ final class _RowCounts {
     if (_measuredIn[slot] == _generation) return 0;
 
     _measuredIn[slot] = _generation;
-    final change = _measure(index, _crossAxisExtent!) - _counts[slot];
+    final change = _measure(index, _crossAxisExtent ?? 0) - _counts[slot];
     if (change != 0) {
       _counts[slot] += change;
       _total += change;

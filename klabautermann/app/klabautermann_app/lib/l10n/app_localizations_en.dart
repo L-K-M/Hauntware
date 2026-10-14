@@ -358,4 +358,28 @@ class AppLocalizationsEn extends AppLocalizations {
 
     return '[line cut: $totalString characters in all]';
   }
+
+  @override
+  String get logJournalNotSent => '[not sent: over 4,096 bytes]';
+
+  @override
+  String logJournalFieldsLeftOut(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$countString more fields not kept',
+      one: '1 more field not kept',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get logJournalShowFields => 'Show fields';
+
+  @override
+  String get logJournalHideFields => 'Hide fields';
 }

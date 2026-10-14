@@ -243,8 +243,9 @@ password · D42 alert delivery through the sync server · D43 rates in the
 engine · D44 sample sequence · D45 subscriptions · D46 link vocabulary ·
 D47 sampler deadlines · D48 host-side filtering · D49 collector locale ·
 D50 LXC values · D51 Access tab · D52 runtime placement · D53 integration
-placement · D54 runtime override in M3 · D55 no health overlay in the MVP.
-Proposals awaiting the owner close the section; they are not decisions.
+placement · D54 runtime override in M3 · D55 no health overlay in the MVP
+· D56 log search through `planchette_core`. Proposals awaiting the owner
+close the section; they are not decisions.
 
 ### Shape and scope
 
@@ -886,6 +887,19 @@ Proposals awaiting the owner close the section; they are not decisions.
   it would be a shared-package change off the MVP path. Its first planned
   use stays 9.3's health overlay for Séance and Poltergeist (v1.x).
   Supersedes 10.3's overlay for the MVP.
+- **D56. The app searches logs with `planchette_core`.** The log viewer's
+  text search (LOG-05, 7.6) runs `planchette_core`'s `findSearchMatches`
+  over each loaded row's visible text, so `klabautermann_app` gains a
+  path dependency on `planchette_core` (3.2), as the Séance app has
+  (`seance/app/seance_app/pubspec.yaml:13-14` [V]). It is the search
+  behind Planchette's find bar, with tests for case folding and match
+  windows (`planchette/packages/planchette_core/test/editor_syntax_test.dart`
+  [V]). The package is pure Dart; it adds `unorm_dart`, `uuid` and
+  `fixnum` to the app's lockfile, which the Séance and Planchette apps
+  already resolve [V]. `planchette_editor` stays out of the MVP app
+  (10.8). *Rejected:* a search of the app's own (a second copy of the same
+  rules); `planchette_editor`'s find (an editor for one text buffer,
+  10.8).
 
 ### Proposals awaiting the owner
 
@@ -1013,6 +1027,7 @@ graph TD
   APP --> GM
   APP --> GD
   APP --> PE
+  APP --> PCO
   APP --> ST
   CORE --> SC
   CORE --> HOST
@@ -1066,9 +1081,10 @@ import 'package:seance_core/catalog.dart' show syncLocalDirectory;
 import 'package:seance_core/seance_core.dart' show uuidV4;
 ```
 
-The barrel's `klabautermann_host` export shows `Collector`, `CoreSnapshot`
-and `OverviewSnapshot`; each list grows only as a milestone wires a type
-in. No `ghost_*` package depends on `seance_core`; `klabautermann_core`
+The barrel's `klabautermann_host` export shows `Collector`, `CoreSnapshot`,
+`JournalEntry` (the log viewer's journal rows, 10.8) and
+`OverviewSnapshot`; each list grows only as a milestone wires a type in.
+No `ghost_*` package depends on `seance_core`; `klabautermann_core`
 is a product package, and the curated lines above are its only
 `seance_core` edge. Poltergeist's and
 Séance's edges to the new shared packages appear as each extraction
@@ -3607,6 +3623,28 @@ level; journal priorities 0 to 3 are errors, 4 warnings, 5 and 6 plain, 7
 debug, each with a spoken gutter icon. Levels are never guessed from text
 (CTX-05, v1). Its goldens draw with flutter_test's font rather than the
 bundled font of 11.1 until they share K05a's approach.
+
+Journal rows and search (LOG-01, LOG-05, as built in M2): `LogBuffer`
+keeps a journal entry's MESSAGE as the line's text under the same cut,
+and its unit (else its syslog identifier), priority and PID typed beside
+it. Every other field is kept in the order received, encoded once as
+UTF-8 JSON in a byte list, so an entry costs a few objects however many
+fields it has, and those bytes count against the 32 MiB cap. They share
+what the text leaves of the 16 KiB line cap; fields past it are left out
+and counted. A buffer full of typical service entries (15 fields, 671
+bytes each) holds about 42 MiB in the heap test. A row reads `unit[PID]:
+message`, its level from `PRIORITY`. A MESSAGE's newline shows as a
+return mark (⏎) and a line separator: without wrap the row ends at its
+first line, where the text engine draws no ellipsis, and with wrap each
+line takes its own rows. A tap or Enter pauses following and shows the
+fields beneath the row, `NAME=value` on one row each without wrap, and a
+JSON null, which `journalctl -o json` sends for a field over 4,096 bytes
+unless run with `--all`, reads as not sent. Search (D56) reads a row's
+visible text, unit and PID included, and ignores case unless told not
+to. It keeps a match count for each matching line and searches only new
+lines as they arrive; stepping wraps around, pauses following and scrolls
+the match into sight, and the current match is underlined as well as
+coloured. Matches in a line are found again when it is drawn.
 
 ### 10.9 Theme
 
