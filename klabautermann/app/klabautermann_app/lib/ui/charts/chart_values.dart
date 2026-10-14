@@ -69,6 +69,9 @@ String formatChartValue(double value, ChartUnit unit, ChartStrings strings) =>
 /// power of ten, stopping below 1024 so a label never reads "1000 KiB".
 const _scaleSteps = [1, 2, 5, 10, 20, 50, 100, 200, 500];
 
+/// TiB, the largest unit `ghostFormatBinarySize` names: its steps run on.
+const _tebibyte = 1024.0 * 1024 * 1024 * 1024;
+
 /// The top of an automatic scale for a series whose highest known value is
 /// [dataMax]: 100 for a percentage, so hosts compare by eye, and otherwise
 /// the next round IEC figure (500 KiB, 1 MiB, 2 MiB), so the scale label
@@ -77,9 +80,14 @@ double chartScaleMax(double? dataMax, ChartUnit unit) {
   assert(dataMax == null || dataMax.isFinite, 'samples are finite');
   if (unit == ChartUnit.percent) return 100;
   if (dataMax == null || dataMax <= 0) return 1024;
-  for (var unitSize = 1.0; ; unitSize *= 1024) {
+  for (var unitSize = 1.0; unitSize < _tebibyte; unitSize *= 1024) {
     for (final step in _scaleSteps) {
       if (step * unitSize >= dataMax) return step * unitSize;
+    }
+  }
+  for (var decade = _tebibyte; ; decade *= 10) {
+    for (final step in const [1, 2, 5]) {
+      if (step * decade >= dataMax) return step * decade;
     }
   }
 }

@@ -7,8 +7,9 @@ import 'package:klabautermann_app/ui/charts/charts.dart';
 import '../support/charts.dart';
 
 final _iecFigure = RegExp(r'^\d+(\.\d)? (B|KiB|MiB|GiB|TiB)$');
+// Past 500 TiB, the formatter's largest unit, the steps run on in TiB.
 final _roundIecFigure = RegExp(
-  r'^(1|2|5|10|20|50|100|200|500) (B|KiB|MiB|GiB|TiB)$',
+  r'^((1|2|5|10|20|50|100|200|500) (B|KiB|MiB|GiB)|[125]0* TiB)$',
 );
 final _decimalUnit = RegExp(r'\b(kB|KB|MB|GB|TB)\b');
 
@@ -16,11 +17,11 @@ final _decimalUnit = RegExp(r'\b(kB|KB|MB|GB|TB)\b');
 /// summary's statistics and words.
 void main() {
   group('IEC units only', () {
-    // Powers of two and their neighbours up to 256 TiB (the largest unit
-    // the formatter names is TiB), plus rounding boundaries.
+    // Powers of two and their neighbours up to 6 PiB, past the formatter's
+    // largest unit (TiB), plus rounding boundaries.
     final magnitudes = <double>[
       0,
-      for (var power = 0; power <= 48; power++)
+      for (var power = 0; power <= 52; power++)
         for (final factor in [1.0, 1.5]) ...[
           math.pow(2, power).toDouble() * factor - 1,
           math.pow(2, power).toDouble() * factor,
