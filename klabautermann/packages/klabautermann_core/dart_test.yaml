@@ -1,5 +1,6 @@
 # Declares the `shell` tag of the real-shell sampler tests. package:test
-# reads dart_test.yaml from the working directory, so runs from the
-# workspace root (CI) do not load this file and warn about the tag.
+# reads dart_test.yaml from the working directory, so this file serves
+# runs from this package; runs from klabautermann/ (CI) load
+# klabautermann/dart_test.yaml, which repeats the tag.
 tags:
   shell:
