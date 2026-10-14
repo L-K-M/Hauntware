@@ -69,8 +69,9 @@ void main() {
 
     test('the charts never call a decimal size formatter', () {
       final offenders = [
-        for (final file in Directory('lib/ui/charts').listSync())
+        for (final file in Directory('lib/ui/charts').listSync(recursive: true))
           if (file is File &&
+              file.path.endsWith('.dart') &&
               RegExp(
                 r'ghostFormat(FileSize|ByteRate)\s*\(',
               ).hasMatch(file.readAsStringSync()))
