@@ -122,9 +122,9 @@ void main() {
   test('the probe tool list carries the documented tools', () {
     expect(
       kProbeTools,
-      containsAll(<String>['journalctl', 'timeout', 'docker']),
+      containsAll(<String>['journalctl', 'timeout', 'docker', 'dmesg', 'tail']),
     );
-    expect(kProbeTools, hasLength(26));
+    expect(kProbeTools, hasLength(28));
   });
 
   test('the probe tool loop checks exactly kProbeTools, in order', () {

@@ -18,6 +18,16 @@ slice:
   reply lost to a framing error, out-of-order markers ending the
   session), and `kSamplerStartCommand` is the start line. No engine code
   uses them yet; the real-shell test runs on them.
+- Access rules (M2, `klabautermann_host` `access/`): the CN-24 rows from
+  a `HostProfile` (passwordless sudo, journal group with the LOG-04
+  notice, Docker socket rights with the SAF-08 flag, systemd version,
+  runtimes per host for CN-09), each `ok`, `missing` or `unknown` with
+  an enum reason. Only the journal and Docker socket rows can carry a
+  copyable fix argv, which is never run; sudo has none until SAF-17.
+  Streamlocal and the compose plugin stay unknown until M3. Panel
+  capability declarations for the M2 host panels (the probe now also
+  checks `dmesg` and `tail` for LOG-03 and LOG-22) and an
+  external-monitor rule over the units list. Nothing reads them yet.
 - `klabautermann_docker`: pure-Dart HTTP/1.1 client, NDJSON/JSON-seq
   scanning, stdcopy, versioned API models and negotiation, compose labels
   and grouping.
