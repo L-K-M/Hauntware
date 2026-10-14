@@ -52,7 +52,9 @@ Klabautermann, with display name `Klabautermann` and lowercase ASCII stem
 
 Markers: **[V]** verified in the repository at `bf1da58` when this plan was
 written (path and line given; claims added for owner decisions 21 and 22
-were verified at `e29c095`); **[L]** verified by a local experiment when
+were verified at `e29c095`, those added with D43 to D55 and the
+proposals at `7a79e6f1`);
+**[L]** verified by a local experiment when
 this plan was written (Ubuntu 24.04 container with dash 0.5.12, bash 5.2.21
 and sudo 1.9.15p5; Appendix A of 04); **[R]** taken from a research report
 or a review without re-verification; **[U]** unverified, settled by the
@@ -237,7 +239,12 @@ operation plans · D27 host write contract · D28 audit · D29 history and
 alerts · D30 T1 · D31 T2 · D32 native runner code · D33 UI composition ·
 D34 mobile · D35 localization · D36 integration fixtures · D37 CI · D38
 identities · D39 assistant · D40 multi-device · D41 remembered sudo
-password · D42 alert delivery through the sync server
+password · D42 alert delivery through the sync server · D43 rates in the
+engine · D44 sample sequence · D45 subscriptions · D46 link vocabulary ·
+D47 sampler deadlines · D48 host-side filtering · D49 collector locale ·
+D50 LXC values · D51 Access tab · D52 runtime placement · D53 integration
+placement · D54 runtime override in M3 · D55 no health overlay in the MVP.
+Proposals awaiting the owner close the section; they are not decisions.
 
 ### Shape and scope
 
@@ -255,6 +262,14 @@ password · D42 alert delivery through the sync server
 - **D2. The catalog tiers are the scope.** MVP, v1, v1.x and Later follow
   `02-FEATURES.md` §2 to §4 with the deviations in 1.4. Any further
   deviation needs an entry here. *Rejected:* re-cutting scope per architecture.
+- **D54. CN-09's manual runtime override arrives with M3.** M2 detects the
+  runtime per host (Docker or Podman, rootful or rootless) from the probe's
+  tool and socket lines (6.1) and shows it; the manual override arrives
+  with the Docker panels in M3, the first code that uses the choice. Both
+  milestones precede the MVP preview (M4), so CN-09 stays MVP and 1.4
+  needs no row. Changes 04, section 13: M2 carries detection, M3 the
+  override. *Rejected:* the override in M2 (a setting nothing reads until
+  M3).
 
 ### Code sharing
 
@@ -483,6 +498,125 @@ password · D42 alert delivery through the sync server
   exchange timeouts for curve25519 and NIST ECDH (finite-field DH still
   runs in `Isolate.run` and can still time out, 5.3) and adds
   chacha20-poly1305; the other workarounds stay (5.10).
+- **D43. Rates and derived values are computed in the engine.** The engine
+  isolate turns counter deltas into rates with `klabautermann_host`'s rate
+  maths (the wrap and reset rules of 6.4) and computes every derived value
+  (percentages, load per core, the memory breakdown) before an event
+  leaves it; the UI paints values and never holds counters. "Client-side"
+  in 02 CN-04 means the engine isolate. The v2 `Sample` still carries the
+  raw counters of an `OverviewSnapshot`
+  (`klabautermann_core/lib/src/engine/protocol.dart:293-308` [V]); the
+  sampling protocol replaces it. Why: parsing already runs in the engine
+  (6.5), the previous reading and `btime` belong with the sampler session
+  that sees restarts and gaps, and the v1 rollups (D29) need the same
+  values. *Rejected:* rates in the app's controllers (a second owner of
+  the reset and gap rules, and per-tick work on the UI isolate).
+- **D44. The engine owns `Sample.seq`.** A `Sample`'s `seq` is a per-server
+  counter the engine assigns; it rises monotonically for the engine's
+  lifetime, across sampler restarts and reconnects. The HWS/1 request
+  number (`hw_t <seq>`, 6.2) belongs to one sampler session, restarts with
+  it and stays inside the engine. Today `Sample.seq` is that number
+  (`protocol.dart:293-294` [V]), and the UI drops a sample whose `seq` is
+  not above the last one it kept
+  (`klabautermann_app/lib/controllers/monitoring_controller.dart:52-54`
+  [V]), so every sample after a sampler restart would be dropped. The UI
+  resets that floor on `EngineReady`, because a new engine counts from
+  the start. *Rejected:* the request number with a UI reset on restart
+  (the UI does not see sampler restarts).
+- **D45. Subscriptions are keyed by `(serverId, subscriptionId)`.** Each
+  surface that shows a server's data (a fleet row, the overview, a visible
+  panel) holds its own subscription with its own collector set. The engine
+  runs the union of the collector sets subscribed for a server and stops a
+  collector once no subscription names it. Cadence is not a subscription
+  field: the cadence profile (the Desktop, Phone and Cellular saver
+  columns of 6.4) and the app's activity (foreground or background, D34)
+  are requests of their own. One 6.4 cadence depends on the surface:
+  `units` runs every 15 s for the Services panel and every 60 s for the
+  health card, so the engine has to tell those subscriptions apart; the
+  sampling protocol settles how (a surface kind on the subscription, or a
+  separate failed-units collector). Today the engine keeps one
+  subscription per server and a second `Subscribe` replaces the first
+  (`klabautermann_core/lib/src/engine/engine_isolate.dart:45,74-77` [V]),
+  so closing a panel would also stop the fleet row's sampling. *Rejected:*
+  one subscription per server (surfaces overwrite each other); cadence per
+  subscription (the profile and the app's activity hold for every
+  subscription at once, so each change would resend all of them).
+- **D46. Link vocabulary: `SshLinkState` plus `blocked`.** Across the
+  isolate boundary a link is in one of the eight states of `seance_core`'s
+  `SshLinkState` (`idle`, `connecting`, `authenticating`, `ready`,
+  `degraded`, `backoff`, `needsUser`, `closed`;
+  `SC/src/ssh/ssh_link.dart:19-103` [V]), mirrored as engine types so that
+  no `seance_core` type crosses (3.2), or in `blocked(reason)`: the engine
+  does not dial until the user acts, for example after an endpoint change
+  (D16) or a host-key mismatch (4.6). Every reason, for `degraded`,
+  `closed` and `blocked` alike, is an enum the app words through its ARB
+  catalog (D35), never engine text. This replaces v2's four `LinkPhase`
+  values and `String` reason (`protocol.dart:283-291,726` [V]).
+  *Rejected:* reason text from the engine (untranslatable); `blocked`
+  folded into `needsUser` (`needsUser` waits on a prompt the user can
+  answer now, `blocked` on a decision outside the connect flow).
+- **D47. Sampler deadlines follow the request.** A sampler start has its
+  own READY deadline [E], and a fast request keeps 5 s [E]. A slow
+  request's deadline is derived from the guarded commands its collectors
+  can run, each bounded by `timeout 10` (6.2), plus a margin [E], instead
+  of a fixed 30 s: the probe alone can run 17 guarded commands (`hw_qrun` in
+  `klabautermann_host/lib/src/hws/program.dart:340-572` [V]), up to 170 s
+  when each runs into its timeout, and a fixed deadline would keep
+  restarting a slow but working sampler. Without `timeout` on the host
+  (6.3) the commands run unguarded, and the derived deadline still bounds
+  the request. Supersedes the slow figure in 6.2. *Rejected:* one fixed
+  slow deadline (too short for the probe, too long for one `df`).
+- **D48. Core and overview payloads are filtered on the host.** The `core`
+  and `overview` fragments keep only the rows and fields the engine uses
+  before anything crosses the link, as the meminfo subset already does
+  (`hw_meminfo`, `program.dart:192-201` [V]); today both still send all
+  of `/proc/net/dev`, and `core` all of `/proc/diskstats`
+  (`program.dart:248,267-268` [V]). The rules are fixed against spike S2's
+  measurements and the 11.4 tick budget, with builtins only (6.2, fork
+  budget); each change bumps the collector-set version
+  (`kCollectorSetVersion`, `program.dart:21` [V]). *Rejected:* filtering
+  only in the engine (the bytes still cross the link on every tick,
+  against 11.4's 1 KB/s for 10 hosts).
+- **D49. Collector locale.** Collectors that render text for people
+  (A11Y-08) run their command under `LC_ALL=C.UTF-8`, or under the
+  sampler's `LC_ALL=C` when the host lacks `C.UTF-8`. The program decides
+  once at start: it sets `HW_UTF8` from the same `locale -a` check the
+  probe reports (6.1; `program.dart:477-487` [V]), so the program text
+  stays a constant with no host-specific part (6.2). Supersedes 6.2's
+  "when the probe found that locale", which would need the probe's answer
+  inside the program. *Rejected:* substituting the probe's answer into
+  the program (the text would vary per host and depend on a cached
+  profile that may be stale).
+- **D50. LXC values show "unknown" with a reason.** Inside an LXC
+  container, a system-wide `/proc` file (`meminfo`, `stat`, `loadavg`,
+  `uptime`, `diskstats`, `pressure/*`) that is not a `fuse.lxcfs` mount
+  shows the host's figures, so its values are shown as "unknown" with a
+  typed reason, never as the host's numbers, as 02 SYS-04, FL-07 and
+  OV-01 say. Namespaced files show the container's own view and stay as
+  measured: `/proc/net` links to `self/net`, the reader's network
+  namespace, so `/proc/net/dev` is the container's, as is `/proc/<pid>`.
+  6.6 and 7.1 said "virtualized"; the catalog's "unknown" replaces that
+  wording. The probe gains an lxcfs line (6.1): which `/proc` files are
+  `fuse.lxcfs` mounts, because `systemd-detect-virt -c` tells that the
+  host is a container, not which values are its own.
+- **D52. Runtime code lives outside `src/engine/`.** In
+  `klabautermann_core`, links, sampling, logs and capabilities live in
+  `lib/src/links/`, `lib/src/sampling/`, `lib/src/logs/` and
+  `lib/src/capabilities/`. `lib/src/engine/` keeps the protocol, the
+  client and `engine_isolate.dart`, which stays a dispatcher: it routes
+  requests to those services and declares no class with callback fields.
+  Requests and events carry no `klabautermann_host` type that has a
+  function-typed field: `ServerZone.offsetAt`
+  (`klabautermann_host/lib/src/cron/evaluate.dart:30` [V]) stays in the
+  engine, and predicted runs cross as plain `CronRun` values. Why: the
+  protocol guard rejects every class under `src/engine/` with a
+  function-typed field unless `tool/guards.yaml` names it as a callback
+  owner, and Klabautermann names none (`tool/guards.yaml:103-104` [V]);
+  protocol subtypes must stay in that directory; and the guard checks a
+  field's type, its type arguments and record fields, not the fields of a
+  class it names (`tool/protocol_guard/lib/protocol_guard.dart:167-183`
+  [V]), so a `ServerZone` field would pass it. *Rejected:* callback-owner
+  entries in `tool/guards.yaml` (a root-file change for each class).
 
 ### Privilege and safety
 
@@ -718,6 +852,66 @@ password · D42 alert delivery through the sync server
   monitor set is device-local; connects are capped and jittered; alerts may
   fire on more than one device (documented); edits use hash
   compare-and-swap; a host lock file (SAF-15, v1.x) is an inventory row.
+- **D51. The MVP's Access tab is the CN-24 access check.** The server
+  workspace's Access tab (10.2;
+  `klabautermann_app/lib/ui/server_workspace.dart:33` [V]) shows CN-24's
+  rows (sudo NOPASSWD, journal group, Docker socket rights, streamlocal,
+  compose plugin, systemd version), each with a copyable fix command that
+  is never run implicitly, and every panel hidden for a missing capability
+  links to it (10.4). Users, sessions and keys (ACC, 7.9) are v1 and later
+  and are not part of the MVP tab. Why: the tab's name also fits ACC's
+  access audit, and 10.2 did not say which it holds.
+- **D53. Integration test and tool placement.** The fixture's SSH host and
+  client keys are generated when the job starts and never committed, so
+  neither `.gitleaks.toml` nor `scripts/assert-private-keys-scoped.sh`
+  gains an entry (Poltergeist's committed fixture keys are allowlisted in
+  both, `.gitleaks.toml:17-19` and `assert-private-keys-scoped.sh:15-17`
+  [V]). Compose files and `run.sh` live in
+  `klabautermann/test/integration/` (11.3). Engine integration tests live
+  in `klabautermann_core/test/integration/`, tagged and skipped when the
+  fixture is absent, so the package's ordinary test run needs no Docker.
+  The capture tool lives in `klabautermann_core/tool/`, not
+  `klabautermann/tool/` (3.1, 6.5): its SSH mode needs `SshLink` through
+  `klabautermann_core`, and `klabautermann_host` may not depend on
+  `seance_*` (`tool/guards.yaml:92-95` [V]). Supersedes the capture tool
+  path in 3.1 and 6.5. *Rejected:* a standalone package under
+  `klabautermann/tool/` (neither the guards' `scan: [packages, app]`,
+  `tool/guards.yaml:84`, nor `klabautermann_dart`'s package loop,
+  `.github/workflows/ci.yml:263-266` [V], would cover it).
+- **D55. No `HealthMark` overlay in the MVP.** Fleet rows show staleness
+  and threshold state as text and in the pressure bar (grey when stale,
+  the warn colour over a threshold, each with text: FL-07, A11Y-01), not
+  through the optional `HealthMark` overlay of 10.3. `ghost_servers` part 1
+  does not define it (`docs/design/ghost-servers-part1.md` [V]), so adding
+  it would be a shared-package change off the MVP path. Its first planned
+  use stays 9.3's health overlay for Séance and Poltergeist (v1.x).
+  Supersedes 10.3's overlay for the MVP.
+
+### Proposals awaiting the owner
+
+These are not decisions: neither binds anything until the owner answers.
+An accepted proposal becomes a D row; a rejected one is recorded as
+rejected.
+
+- **Imports as confirmed endpoints (proposed, awaiting the owner).** An
+  ssh_config import (FL-02) counts as a confirmed endpoint on the device
+  that imported it, and `EndpointPinStore` pins (D16, 4.7) apply only to
+  synced servers. Why: an import is device-local and never synced (10.1),
+  so the LWW rewrite that 4.7 guards against cannot reach it, and
+  re-importing is the user's own act on that device. Until the owner
+  answers, an import has no confirmed endpoint: it is not probed (FL-04,
+  5.12) and cannot join the monitor set (FL-21) before batch confirmation
+  (4.3) is built.
+- **Encrypted keys and agent order (proposed, awaiting the owner).** An
+  encrypted `IdentityFile` asks for its passphrase through a credential
+  prompt; the passphrase stays in engine memory for the session, and the
+  server stays out of background sampling until it is answered (FL-21).
+  Open: when the agent holds the same key, whether its copy is tried
+  first, as OpenSSH does (a `seance_core` change: `CredentialResolver`
+  resolves one method per server,
+  `SC/src/ssh/credential_resolver.dart:115-117,155-170` [V]); and when an
+  import names no `IdentityFile` and no agent runs, whether OpenSSH's
+  default key files (`~/.ssh/id_*`) are tried.
 
 ---
 
@@ -768,14 +962,16 @@ klabautermann/
     klabautermann_host/          pure Dart; dependencies meta, collection
     klabautermann_docker/        pure Dart; dependencies meta, collection; no dart:io in lib/
     klabautermann_core/          pure Dart; dependencies seance_core, klabautermann_host, klabautermann_docker
+      lib/src/{links,sampling,logs,capabilities}/   runtime services beside lib/src/engine/ (D52)
+      test/integration/          engine tests against the fixture, tagged, skipped without it (D53)
+      tool/capture_fixtures.dart                    fixture capture (6.5, D53)
   app/klabautermann_app/         Flutter, not a workspace member; platform folders committed
   rust/                  Cargo workspace (v1.x, D42): rust-toolchain.toml, Cargo.lock,
                          deny.toml; crates/klabautermann-inbox (sealing, alert
                          format v1, HTTPS posting), crates/klabautermann-notify
                          (T1 helper binary), crates/klabautermann-companion (M9:
                          collectors, parsers, rules, inbox producer)
-  test/integration/      sshd + docker:dind fixture (11.3); sync server (v1.x)
-  tool/capture_fixtures.dart
+  test/integration/      sshd + docker:dind fixture: Compose files, run.sh (11.3, D53); sync server (v1.x)
   scripts/               build.sh, release.sh (forwarder), package-linux.sh (thin
                          wrapper), build-flatpak.sh, test-macos-keyboard.{sh,mm}
   flatpak/ch.lkmc.klabautermann.yml
@@ -881,6 +1077,12 @@ switches them (3.5). The Rust workspace
 code with the Dart packages and is held to them by cross-language test
 vectors (inbox sealing, alert format v1) and, from M9, the parity corpus.
 
+Inside `klabautermann_core`, the runtime services (links, sampling, logs,
+capabilities) sit beside `lib/src/engine/` in directories of their own,
+and `engine_isolate.dart` only dispatches to them (D52). They use
+`klabautermann_host` types freely; a type that holds a function, such as
+`ServerZone`, stays with them and never appears in a request or event.
+
 ### 3.3 Package contents
 
 | Package | Contents | Talks to the host through |
@@ -977,7 +1179,14 @@ products:
    `batchForPush` is exported for the catalog library's push batching (4.4,
    divergence 3), not to remove an existing import.
 4. Engine request and event types carry no function-typed fields
-   (protocol guard, `poltergeist/tool/protocol_guard`).
+   (protocol guard, `tool/protocol_guard`, moved from `poltergeist/tool`
+   in F1a). For Klabautermann the guard checks every class under
+   `klabautermann_core/lib/src/engine/` and allows no callback owner, so
+   classes that hold callbacks live outside that directory and
+   `engine_isolate.dart` only dispatches (D52).
+   The guard does not look inside the class of a field, so keeping a
+   `klabautermann_host` type with a function-typed field (`ServerZone`)
+   out of requests and events rests on review and round-trip tests.
 5. Shared suite packages are local path dependencies, never git or hosted
    (generalized license and local-dependency gate; the
    `SEANCE_LICENSE_GATE_V1` release marker stays on Poltergeist's leg).
@@ -1335,6 +1544,7 @@ platform identities in 04, section 12.3):
 | `ssh_config_imports.json` [E] | D13's device-local store for FL-02 imports from `~/.ssh/config` (alias, host, port, user), replaced whole by each import; never pushed (D14). `IdentityFile` and `ProxyJump` join when links land (M2). Built in M1: the engine isolate loads it at start and saves each import atomically before it answers (10.1). A damaged file is renamed to `ssh_config_imports.json.corrupt-<UTC time>`; a file it cannot read or rename, or one from a newer schema, is left as it is and no import is saved that run | `klabautermann_core` [E] | MVP |
 | `settings.json` | Device settings, `klabautermann.sync.deviceId` (minted once, never regenerated), monitor set, per-server device preferences | app | MVP |
 | `window_state.json` | The desktop main window's last normal frame and its maximized and full-screen flags (10.2), in the shape Séance's file established (`x`, `y`, `width`, `height`, `isMaximized`, `isFullScreen`; physical pixels on Windows); never synced. Added in M1, a deviation from the plan, which listed no window file: kept out of `settings.json`, as Séance and Planchette keep theirs, so debounced drag saves never rewrite the file that holds the device id | app | MVP |
+| `instance.lock` [E] | Empty. One desktop instance per support directory (built in M2): the composition root takes an exclusive, non-blocking advisory lock on it after the settings window's branch and before `settings.json` and `window_state.json` open and the engine isolate starts, so one process mints the device id and writes these files, and holds it for the life of the process; the file is never deleted. A second instance opens no other file and only says it is already running, until the user quits it. A lock that fails for another reason (no write access, no lock support) lets the app run unguarded and says so at startup. Phones run one process per app and take none | app, through `klabautermann_core`'s `InstanceLock` | MVP |
 | `capabilities/<serverId>.json` | Cached probe results, 24 h TTL | `klabautermann_core` | MVP |
 | `audit/<serverId>.jsonl` | Audit log, 90-day retention [E] | `klabautermann_core` | MVP |
 | `history/<serverId>/<tier>.ring` | Fixed-size binary rollups (`RandomAccessFile`, no rewrite per sample) | `klabautermann_core` | v1 |
@@ -1374,7 +1584,7 @@ store, so the name need not decode back to it.
 ```dart
 abstract interface class SshLink {
   ServerConfig get config;
-  Stream<SshLinkState> get states;   // connecting, ready, degraded, lost, closed
+  Stream<SshLinkState> get states;   // the eight States below (D46)
   SshLinkLimits get seen;            // learned session limit, forwarding refused, ...
   Future<RemoteCommandResult> run(String command,
       {Duration timeout, int maxOutputBytes, List<int>? stdin});
@@ -1408,7 +1618,8 @@ abstract interface class RemoteProcess {
   for the user.
 - **States** cross the isolate boundary as plain data: `idle`,
   `connecting`, `authenticating`, `ready(capabilities)`, `degraded(reason)`,
-  `backoff(until)`, `needsUser(prompt)`, `closed(reason)`.
+  `backoff(until)`, `needsUser(prompt)`, `closed(reason)`, plus the
+  engine's own `blocked(reason)`; every reason is an enum (D46).
 - **Mobile.** On background, sampling stops at once and the link closes
   after a 30 s grace period unless a detached operation is being followed.
 - `SshSession.runCommand` is re-implemented on the same exec core, so
@@ -1627,7 +1838,7 @@ the probe returns:
 | Kernel, architecture | `uname -s -r -m` |
 | Distribution | `/etc/os-release` (`ID`, `ID_LIKE`, `VERSION_ID`, `PRETTY_NAME`) |
 | Init and systemd | `/proc/1/comm`, `/run/systemd/system`, `systemctl --version` first line |
-| Virtualization | `systemd-detect-virt`, `systemd-detect-virt -c` (SYS-04) |
+| Virtualization | `systemd-detect-virt`, `systemd-detect-virt -c` (SYS-04); the `fuse.lxcfs` mounts in `/proc/mounts`, which tell which system-wide `/proc` files show the container's own values (D50) |
 | Identity | `id -u`, `id -un`, `id -nG` (journal and docker groups) |
 | Elevation | `sudo -V` first line (sudo or sudo-rs), `sudo -n true` result, `command -v doas run0`, `doas -n true` result when doas exists, `command -V printf` (builtin or not, 8.3) |
 | Tools | `command -v` for about 30 tools: `journalctl`, `crontab`, `ss`, `ip`, `lsblk`, `findmnt`, `smartctl`, `sensors`, `docker`, `podman`, `socat`, `timeout`, `setsid`, `ncdu`, `gdu`, `sadf`, `logger`, `systemd-run`, `apt-get`, `dnf`, `dnf5`, `apk`, `pacman`, `zypper`, `nvidia-smi`, ... |
@@ -1650,12 +1861,13 @@ shown as unknown, never as zero.
   (sh, bash, zsh, fish, tcsh) only parses this constant line; SSH `env`
   requests are never used. The sampler shell runs under `LC_ALL=C` so that
   `${#var}` counts bytes; collectors that need UTF-8 rendering prefix
-  `LC_ALL=C.UTF-8` on their own command when the probe found that locale
-  (A11Y-08). Under `TZ=UTC`, `date +%z` prints `+0000` and
-  `systemd-analyze calendar` evaluates in UTC [L] (04, Appendix A, E12),
-  while cron and PID 1 use the system zone. The clock read of 6.1 and the
-  `OnCalendar` evaluation of 7.7 therefore run as `(unset TZ; ...)`;
-  everything else keeps `TZ=UTC`.
+  `LC_ALL=C.UTF-8` on their own command when the host has that locale,
+  which the program checks once at start and records in `HW_UTF8`, so its
+  text stays a constant (A11Y-08, D49). Under `TZ=UTC`, `date +%z` prints
+  `+0000` and `systemd-analyze calendar` evaluates in UTC [L] (04,
+  Appendix A, E12), while cron and PID 1 use the system zone. The clock
+  read of 6.1 and the `OnCalendar` evaluation of 7.7 therefore run as
+  `(unset TZ; ...)`; everything else keeps `TZ=UTC`.
 - **Program.** The client writes the program (function definitions only) to
   stdin. Its first line sets the per-session 128-bit random nonce, so the nonce
   never appears in argv, where other local users could read it through `ps` or
@@ -1671,7 +1883,8 @@ shown as unknown, never as zero.
   (`SC/src/terminal/shell_command.dart:63`, safe for sh, bash, zsh and fish
   [V]). Nothing else is ever written to the sampler's stdin. At most one
   request is outstanding per sampler; a tick that would overlap is skipped
-  and counted.
+  and counted. `<seq>` numbers one sampler session's requests and restarts
+  with it; the engine's `Sample.seq` is a separate counter (D44).
 - **Why command lines.** dash, the `/bin/sh` of Debian and Ubuntu, reads
   ahead from a pipe: a `read` loop inside a program sent on the same stdin
   loses request lines that arrive in the same write, while command lines are
@@ -1688,6 +1901,14 @@ shown as unknown, never as zero.
   the next `E` marker. A forged marker inside a payload is consumed as
   payload, so forgery fails even if a nonce leaks. Control characters other
   than newline and tab are stripped before display.
+  The login shell's startup files may print before the start command runs,
+  so before READY the reader skips up to 64 KiB of output that starts no
+  marker for the nonce; more output, a malformed READY or another
+  collector-set version fails the start. An empty `<uptime>` (unreadable
+  `/proc/uptime`) is unknown, not a framing error. A reply lost to a
+  framing error is a gap. A well-framed marker out of order, or a reply of
+  more than 32 sections (which bounds one reply's memory), cannot come
+  from the constant program and ends the session.
 - **Fork budget.** Builtin collectors append to a shell variable while
   reading `/proc` and `/sys` with `read`, so the fast path forks nothing.
   Collectors that run an external program capture it with command
@@ -1701,10 +1922,11 @@ shown as unknown, never as zero.
   `timeout 10` when available. A hung slow collector cannot stall CPU
   graphs.
 - **Timeouts.** A request without its `E` marker within its deadline
-  (fast 5 s, slow 30 s [E]) makes the client send `TERM` (OpenSSH 7.9 and
-  later signal the process group [R: r5 §1.2]), close the channel and
-  restart the sampler with backoff. A missed tick is visible on the client
-  as a gap, not as a stale value.
+  (fast 5 s [E]; slow derived from the guarded commands the request can
+  run, D47), or a start without READY within its own deadline [E], makes
+  the client send `TERM` (OpenSSH 7.9 and later signal the process group
+  [R: r5 §1.2]), close the channel and restart the sampler with backoff.
+  A missed tick is visible on the client as a gap, not as a stale value.
 
 ### 6.3 Program sketch
 
@@ -1761,11 +1983,17 @@ and is the single source for every runner, including the T1 scripts (9.3).
 | Docker summary | n/a | `/events` driven | event-driven | event-driven | event-driven |
 
 Everything pauses when its view is hidden or the app is backgrounded; the
-polling budget (SAF-19, v1) caps per-server cadence. Rates are computed
-client-side from counter deltas with wrap detection and reset detection (a
-changed `btime` or a decreasing counter starts a new series); disk
-throughput uses 512-byte sectors (CN-04). A filtered core sample is about
-1.5 to 2.5 KB and an overview sample about 600 B [R: r5 §3.3].
+polling budget (SAF-19, v1) caps per-server cadence. A collector runs
+while at least one subscription for the server names it; the Desktop,
+Phone and Cellular saver columns are cadence profiles, chosen by a request
+of their own rather than per subscription, and the sampling protocol
+settles how the engine tells the two `units` surfaces apart (D45). Rates
+are computed in the engine isolate (D43) from counter deltas with wrap
+detection and reset detection (a changed `btime` or a decreasing counter
+starts a new series); disk throughput uses 512-byte sectors (CN-04). A
+filtered core sample is about 1.5 to 2.5 KB and an overview sample about
+600 B [R: r5 §3.3]; the filtering happens on the host, in the collector
+fragments (D48).
 
 ### 6.5 Parsing and fixtures
 
@@ -1775,9 +2003,10 @@ throughput uses 512-byte sectors (CN-04). A filtered core sample is about
   Parsing runs in the engine isolate; UI code never parses.
 - Fixtures: `klabautermann_host/test/fixtures/<platform-id>/<collector>.txt`
   with a JSON golden per fixture, captured by
-  `klabautermann/tool/capture_fixtures.dart` (runs the real program once per
-  collector) during spike S2 and refreshed from the fixture images. Raw captures
-  are redacted and reviewed for host names before commit.
+  `klabautermann_core/tool/capture_fixtures.dart` (D53; runs the real
+  program once per collector) during spike S2 and refreshed from the
+  fixture images. Raw captures are redacted and reviewed for host names
+  before commit.
 - Hostile-input tests: markers and the nonce inside process names, unit
   descriptions and log lines; embedded newlines and NULs; forged
   `==> <pid>/cmdline <==` lines inside arguments (7.2); 64 KiB lines;
@@ -1791,7 +2020,7 @@ throughput uses 512-byte sectors (CN-04). A filtered core sample is about
 |---|---|---|---|---|---|---|
 | Debian 12/13, Ubuntu 22.04 to 26.04, RHEL 9/10, Fedora, Arch (glibc, systemd >= 246) | A, MVP | full | JSON | journald JSON | cron and timers | full |
 | RHEL/Alma/Rocky 8 (systemd 239 [U]), Ubuntu 20.04 (245 [U]) | A, MVP | full | text fallback (CN-10) | journald | cron and timers | full |
-| LXC and containers | A, marked | `/proc` may be virtualized (lxcfs): affected values shown as "virtualized" (SYS-04) | as host | as host | as host | needs nesting |
+| LXC and containers | A, marked | system-wide `/proc` files that are not lxcfs mounts show the host's figures: those values show "unknown" with a reason; namespaced ones (`/proc/net/dev`, `/proc/<pid>`) are the container's (SYS-04, D50) | as host | as host | as host | needs nesting |
 | Alpine, BusyBox, OpenRC | B, v1.x | reduced (`ps w`, `df -k`, builtins) | `rc-status`, `rc-service` | `/var/log/messages` | `/etc/crontabs/<user>` | full if a socket exists |
 | Non-systemd glibc (Devuan, Void, Gentoo with OpenRC) | B, v1.x | full | per init | syslog files | cron | full |
 | OpenWrt (procd, Dropbear) | B, v1.x | reduced | `/etc/init.d`, `ubus` | `logread` | BusyBox crond | rare |
@@ -1827,7 +2056,8 @@ unless the user enables admin mode for that panel.
   the event-driven container cache plus `/system/df` on demand (slow on
   large hosts). Fleet rows (FL-07) show a three-segment pressure bar for
   monitored servers only, fixed row height, grey when stale. Inside LXC
-  without lxcfs, affected values show "virtualized" (SYS-04).
+  without lxcfs, affected values show "unknown" with a reason (SYS-04,
+  D50).
 - **v1.** CPU breakdown with plain-language hints (iowait called unreliable,
   steal explained), PSI (absence is normal), model and topology, OOM kills
   linked to journal entries, configurable cards, top lists, quick actions,
@@ -2490,6 +2720,11 @@ connecting; a link picks a server and a starting folder, nothing else.
 A panel that needs more than it has shows a lock with the least-privileged
 fix and "enable admin mode"; it never elevates silently (ServerBox rule
 [R]).
+
+The access check's sudo NOPASSWD row (CN-24) offers no fix command until
+SAF-17 generates narrow, validated rules (v1.x): a blanket rule equals root
+(8.4), and password sudo already reaches admin mode through the prelude
+(8.3 rung 3), so the row points to admin mode instead.
 
 ### 8.2 Admin mode (SAF-02)
 
@@ -3169,14 +3404,18 @@ localization catalog from the first build:
 | `EnrollSync`, `RunSyncRound` | `CatalogReplaced(entries)`, `SyncStatus` |
 | `ImportSshConfig(text)` (FL-02, desktop) | `CatalogReplaced(entries)` with the imports, then `SshConfigImported(importedCount, skippedCount, saved)` |
 | `ConfirmEndpoints(ids)`, `SetMonitorSet(ids)` | `EndpointChanged(serverId)` |
-| `Connect(serverId)`, `Disconnect(serverId)` | `LinkState(serverId, state, reason)` |
-| `Subscribe(serverId, collectorSet, cadence)`, `Unsubscribe` | `Sample(serverId, seq, snapshot)` (coalesced per tick) |
+| `Connect(serverId)`, `Disconnect(serverId)` | `LinkState(serverId, state, reason)` (D46's states; typed reasons) |
+| `Subscribe(serverId, subscriptionId, collectorSet)`, `Unsubscribe(serverId, subscriptionId)`; the cadence profile and app activity are separate requests (D45) | `Sample(serverId, seq, snapshot)` (coalesced per tick; engine-owned `seq`, D44; rates and derived values, D43) |
 | `OpenLogStream(spec)`, `CloseStream(id)` | `LogBatch(streamId, lines, dropped)` (at most 20 per second per stream [E]) |
 | `DockerQuery(serverId, query)` | `DockerResult`, `DockerEvent` |
 | `PlanAction(intent)`, `RunAction(planId, confirmation)` | `ActionPlanned(preview)`, `ActionProgress`, `ActionFinished` |
 | `AnswerPrompt(promptId, answer)` | `Prompt` (host key, keyboard-interactive, credential, elevation) |
 | `HandleAlert(alertRef, acknowledge or dismiss)` (v1.x; inbox fetch runs inside `RunSyncRound`) | `AlertsArrived(serverId, alerts)`, `AlertStatusChanged` (D42) |
 | `OpenTerminal(serverId, containerId, shell)` (v1) | `TerminalBytes`, `TerminalClosed` |
+
+The `LinkState`, `Subscribe` and `Sample` rows carry what D43 to D46
+decide; the M2 protocol changes fix their other fields, and the v2 types
+in `protocol.dart` keep their M1 shape until then.
 
 The protocol as built in M1 (PR #151; types in
 `klabautermann/packages/klabautermann_core/lib/src/engine/protocol.dart`,
@@ -3261,18 +3500,20 @@ the engine in `engine_isolate.dart` beside it):
 Fixed-height rows so unreachable hosts do not reflow the list; reachability
 dots from `ProbeService` for confirmed endpoints; pressure bars only for the
 monitor set; the shared dot vocabulary (`connected`, `connecting`, `failed`,
-`blocked`, `reachable`, `unknown`) plus an optional `HealthMark` overlay
-(`ok`, `attention`, `critical`, `stale`) drawn with an icon and text. v1 adds
-density modes, the summary strip, attention-first sort and the faults-only
-filter.
+`blocked`, `reachable`, `unknown`); staleness and threshold state as text
+and in the pressure bar. The optional `HealthMark` overlay (`ok`,
+`attention`, `critical`, `stale`, drawn with an icon and text) is not in
+the MVP (D55). v1 adds density modes, the summary strip, attention-first
+sort and the faults-only filter.
 
 ### 10.4 Server view and panels
 
 Each panel declares the capabilities it needs; missing ones hide the panel
-with the reason and a link to the access check (CN-24), which lists sudo
-NOPASSWD, journal group, Docker socket rights, streamlocal, compose plugin
-and systemd version, each with a copyable fix command that is never run
-implicitly. Unknown values show "unknown", never zero.
+with the reason and a link to the access check (CN-24), the MVP's Access
+tab (10.2, D51), which lists sudo NOPASSWD, journal group, Docker socket
+rights, streamlocal, compose plugin and systemd version, each with a
+copyable fix command that is never run implicitly. Unknown values show
+"unknown", never zero.
 
 ### 10.5 Phone (under 600 dp) and tablet
 
@@ -3340,6 +3581,12 @@ palette) and presets in the preview. v1: paste from Séance and Poltergeist
   threshold-band changes (values refreshing every 1 to 5 s are not live
   regions). v1: text scaling to 200 %, full keyboard reachability, log
   readability. v1.x: more languages, right-to-left layout.
+- Tables (A11Y-03, M2): until F5e lifts it into `ghost_ui`, the app's
+  `SortableTable` gives each row one node whose label is its cells as
+  "column: value" and whose custom semantics actions are the row's
+  verbs. Flutter's table roles are not used: their debug checks require
+  table, row and cell nodes to nest directly, and a virtualized list puts
+  its scroll node between the table and its rows.
 
 ---
 
@@ -3404,6 +3651,11 @@ palette) and presets in the preview. v1: paste from Séance and Poltergeist
   (`poltergeist/test/integration/sshd-modern-base`, published by
   `.github/workflows/fixture-images.yml` [V]) rather than copying it; lift
   the fixture to a shared root location if a second product needs changes.
+- The fixture's host and client keys are generated at job start and never
+  committed. Compose files and `run.sh` live in
+  `klabautermann/test/integration/`; engine tests live in
+  `klabautermann_core/test/integration/`, tagged and skipped without the
+  fixture (D53).
 - `docker` profile: a `docker:<ver>-dind` service pinned by digest,
   privileged, no published ports, TCP listener off, its `/var/run` on a named
   volume shared into an sshd service at `/var/run/docker.sock` and at a
