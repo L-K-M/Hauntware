@@ -310,7 +310,7 @@ class _LogViewState extends State<LogView> {
     if (at + _rowTolerance >= end) return at + change;
 
     final kept = end + change;
-    if (at < kept) return at;
+    if (at + _rowTolerance < kept) return at;
     return kept - 1 + math.max(0.0, at - (at + _rowTolerance).floor());
   }
 

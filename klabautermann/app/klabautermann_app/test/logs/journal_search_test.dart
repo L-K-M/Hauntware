@@ -350,6 +350,26 @@ void main() {
           expect(topOf(tester, 40), moreOrLessEquals(-line / 2));
           expect(logs.following.value, isFalse);
         });
+
+        testWidgets('a field row at the top edge closes to its line there, '
+            'wrap ${wrap.name}', (tester) async {
+          final (logs, _, position, line) = await paused(tester, wrap);
+          position.jumpTo(40 * line);
+          await tester.pump();
+          await tester.tap(_row('nginx.service[812]: m 40'));
+          await tester.pump();
+
+          // The first field at the edge, as repeated Up and Down steps
+          // leave it: a hair below its row's boundary in floating point.
+          position.jumpTo((41 - 1e-9) * line);
+          await tester.pump();
+          await tester.tap(_row('_PID=812'));
+          await tester.pump();
+          expect(_row('_PID=812'), findsNothing);
+          expect(topOf(tester, 40), moreOrLessEquals(0, epsilon: 1e-6));
+          expect(topOf(tester, 41), moreOrLessEquals(line, epsilon: 1e-6));
+          expect(logs.following.value, isFalse);
+        });
       }
 
       testWidgets('wrap turned on and off keeps the line at the top with '
