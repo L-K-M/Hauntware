@@ -65,6 +65,7 @@ void main() {
           'series $index': colour,
         'warning': palette.warning,
         'critical': palette.critical,
+        'muted': palette.muted,
       };
 
       expect(palette.series, hasLength(4));
@@ -77,6 +78,21 @@ void main() {
             reason: '$name $colour on the $surfaceName ($surface)',
           );
         }
+      }
+    });
+
+    test('every bar fill clears 3:1 on the bar track ($label)', () {
+      for (final colour in [
+        ...palette.series,
+        palette.warning,
+        palette.critical,
+        palette.muted,
+      ]) {
+        expect(
+          contrastRatio(colour, palette.track),
+          greaterThanOrEqualTo(_indicatorContrast),
+          reason: '$colour on the track ${palette.track}',
+        );
       }
     });
 

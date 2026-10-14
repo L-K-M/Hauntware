@@ -45,6 +45,11 @@ slice:
   the Flutter SDK's Roboto and compare on Linux only. `Gauge` follows in
   its own PR. Nothing shows a chart yet: the overview and fleet rows that
   feed the rings come later in M2.
+- Bars (03 §10.7, M2): `StackedBar` for the memory breakdown and disks
+  (MEM-01, DSK-01) and the fleet rows' three-cell `PressureBar` (FL-07),
+  with hatching for unknown values, grey when stale, and threshold
+  colours paired with an icon and words (A11Y-01), plus screen-reader
+  summaries and light and dark goldens. Nothing shows them yet.
 - Device settings (03 §4.10): `settings.json` under the app's
   `getApplicationSupportDirectory()`, through `klabautermann_core`'s
   `DeviceSettingsStore`, which the composition root opens before the

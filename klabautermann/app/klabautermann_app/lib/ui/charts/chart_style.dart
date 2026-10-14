@@ -10,7 +10,17 @@ final class ChartThresholds {
 
   final double warning;
   final double critical;
+
+  /// The severity of [value] against these levels.
+  ChartSeverity severityOf(double value) {
+    if (value >= critical) return ChartSeverity.critical;
+    if (value >= warning) return ChartSeverity.warning;
+    return ChartSeverity.normal;
+  }
 }
+
+/// How far a value has crossed its [ChartThresholds].
+enum ChartSeverity { normal, warning, critical }
 
 /// The colours a chart draws with (03 §10.7, A11Y-04): series and severity
 /// tints from the family palette, text from the colour scheme.
@@ -25,6 +35,8 @@ final class ChartPalette {
     required this.warning,
     required this.critical,
     required this.scaleText,
+    required this.muted,
+    required this.track,
   });
 
   /// The palette for [context]'s theme.
@@ -44,6 +56,8 @@ final class ChartPalette {
           ? family.glyph(FamilyHue.red)
           : _lightCritical,
       scaleText: theme.colorScheme.onSurfaceVariant,
+      muted: family.glyph(FamilyHue.graphite),
+      track: theme.colorScheme.surfaceContainerHighest,
     );
   }
 
@@ -72,6 +86,21 @@ final class ChartPalette {
 
   /// The scale label a sparkline shows.
   final Color scaleText;
+
+  /// The grey of a stale bar's fills and of the hatching over a part the
+  /// host did not report: the family's graphite.
+  final Color muted;
+
+  /// The empty part of a bar: decoration, but every fill colour above
+  /// holds 3:1 on it, so where a fill ends stays readable.
+  final Color track;
+
+  /// The fill of a value at [severity], or null for the series colour.
+  Color? severityColor(ChartSeverity severity) => switch (severity) {
+    ChartSeverity.normal => null,
+    ChartSeverity.warning => warning,
+    ChartSeverity.critical => critical,
+  };
 }
 
 /// Whether the platform asks for no motion (A11Y-11): Android's "Remove
