@@ -4,8 +4,8 @@
 /// collector fragments, the request encoder, the incremental frame
 /// parser, the capability-probe model and parsers, the per-collector
 /// payload parsers, the cron evaluator, the validated command builders,
-/// the threshold rules, the access-check and panel capability rules and
-/// the counter-to-rate maths. SSH, quoting and process plumbing are
+/// the threshold rules, the access-check, external-monitor and panel
+/// capability rules and the counter-to-rate maths. SSH, quoting and process plumbing are
 /// injected by `klabautermann_core`.
 library;
 
