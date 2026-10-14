@@ -226,8 +226,11 @@ class _LogViewState extends State<LogView> {
   }
 
   /// Shows or hides [line]'s fields. Showing them pauses following, so
-  /// the row holds still while they open beneath it.
+  /// the row holds still while they open beneath it. A tap that lands
+  /// after [line] left the buffer, before its row is rebuilt, does nothing.
   void _toggleFields(LogLine line) {
+    if (line.seq < widget.controller.firstSeq) return;
+
     setState(() {
       if (_expanded.remove(line.seq) == null) {
         _expanded[line.seq] = line.journal!.fields;

@@ -258,6 +258,29 @@ void main() {
       });
     }
 
+    testWidgets('a tap on a row that just left the buffer does nothing', (
+      tester,
+    ) async {
+      final (logs, search) = _logs(maxLines: 5);
+      await _pump(tester, logs, search);
+      logs.addJournal([for (var i = 0; i < 5; i++) _entry('m $i')]);
+      await tester.pump();
+      final onTap = tester
+          .widget<InkWell>(
+            find.ancestor(
+              of: _row('nginx.service[812]: m 0'),
+              matching: find.byType(InkWell),
+            ),
+          )
+          .onTap!;
+
+      // The row's entry leaves before the next frame rebuilds the row.
+      logs.addJournal([_entry('m 5')]);
+      expect(onTap, returnsNormally);
+      expect(logs.following.value, isTrue);
+      await tester.pump();
+      expect(_row('_PID=812'), findsNothing);
+    });
   });
 
   testWidgets('a step to a match pauses the view and shows it (LOG-05)', (
