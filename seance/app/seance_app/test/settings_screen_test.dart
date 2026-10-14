@@ -81,7 +81,10 @@ class _FakeBackend extends ChangeNotifier implements SettingsBackend {
     required double fontSize,
     required String fontFamily,
     required TerminalPalette palette,
-  }) => _write('setTerminalAppearance($fontSize, $fontFamily, $palette)');
+    required TerminalLigatures ligatures,
+  }) => _write(
+    'setTerminalAppearance($fontSize, $fontFamily, $palette, $ligatures)',
+  );
 
   @override
   Future<void> setEditorFontSize(int size) =>
@@ -362,6 +365,22 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(backend.calls, ['setCheckForUpdates(false)']);
+  });
+
+  testWidgets('the ligature switch writes the terminal appearance', (
+    tester,
+  ) async {
+    await pumpScreen(tester);
+
+    await tester.ensureVisible(find.text('Ligatures'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Ligatures'));
+    await tester.pumpAndSettle();
+
+    expect(backend.calls, [
+      'setTerminalAppearance(${kDefaultTerminalFontSize.toDouble()}, , '
+          '${TerminalPalette.followApp}, ${TerminalLigatures.off})',
+    ]);
   });
 
   testWidgets('the editor text size writes through when the slider settles', (

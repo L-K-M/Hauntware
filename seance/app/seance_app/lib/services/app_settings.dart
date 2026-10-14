@@ -251,6 +251,10 @@ class AppSettings {
   String terminalFontFamily;
   TerminalPalette terminalPalette;
 
+  /// Whether the terminal joins character pairs such as `->` into the
+  /// font's ligatures. Device-local like the rest of its appearance.
+  TerminalLigatures terminalLigatures;
+
   /// The built-in editor's text size, in the range and steps every Ghost
   /// editor shares. Device-local like the terminal's, for the same reason.
   int editorFontSize;
@@ -308,6 +312,7 @@ class AppSettings {
     this.terminalFontSize = kDefaultTerminalFontSize,
     this.terminalFontFamily = '',
     this.terminalPalette = TerminalPalette.followApp,
+    this.terminalLigatures = TerminalLigatures.on,
     this.editorFontSize = EditorTextSize.standard,
     ThemePalette? themePalette,
     this.themeMode = ThemeModePreference.system,
@@ -372,6 +377,7 @@ class AppSettings {
     'terminalFontSize': terminalFontSize,
     'terminalFontFamily': terminalFontFamily,
     'terminalPalette': terminalPalette.name,
+    'terminalLigatures': terminalLigatures.name,
     'editorFontSize': editorFontSize,
     'themePalette': themePalette.toJson(),
     'themeMode': themeMode.name,
@@ -434,6 +440,11 @@ class AppSettings {
     terminalPalette: TerminalPalette.values.firstWhere(
       (p) => p.name == json['terminalPalette'],
       orElse: () => TerminalPalette.followApp,
+    ),
+    // Files from before the switch draw ligatures, the default.
+    terminalLigatures: TerminalLigatures.values.firstWhere(
+      (l) => l.name == json['terminalLigatures'],
+      orElse: () => TerminalLigatures.on,
     ),
     // Clamped on read, like the terminal's; anything but a number is the
     // standard size rather than a failed load.
