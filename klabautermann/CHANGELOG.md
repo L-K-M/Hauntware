@@ -20,10 +20,12 @@
 - On macOS the window's titlebar is part of the app: the traffic lights
   sit in a band above the fleet rail, and full screen gives the band back
   to the content.
-- The desktop window opens where you closed it, at the same size, and
+- The desktop window opens at the size you closed it at and, where the
+  window system lets apps place windows (not Wayland), in the same place;
   maximized or full screen if it was. A window whose display is gone
   opens fully on one that is still connected.
 - Desktop menus: Settings… (⌘, on macOS, Ctrl+, on Linux and Windows),
   Import from ~/.ssh/config, and on Linux and Windows a File menu with
   Quit. On macOS the menu bar also has About, Enter Full Screen and the
-  window commands.
+  window commands, but no longer an Edit or Help menu until commands for
+  them land; ⌘C, ⌘V, ⌘X, ⌘A and ⌘Z still work in text fields.
