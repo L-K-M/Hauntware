@@ -54,6 +54,20 @@ void main() {
       expect(entries['v6']!.host, '2001:db8::1');
     });
 
+    test('a Host line with several names makes an entry for each', () {
+      // A name an earlier block took is skipped, as for a whole block.
+      final result = fleetEntriesFromSshConfig(
+        'Host web db\n  HostName 10.0.0.7\n  Port 2200\n'
+        'Host db\n  HostName other\n',
+      );
+
+      expect(result.entries.map((e) => (e.label, e.host, e.port)), [
+        ('web', '10.0.0.7', 2200),
+        ('db', '10.0.0.7', 2200),
+      ]);
+      expect(result.skippedCount, 1);
+    });
+
     test('drops wildcard-only blocks and ignores Match blocks', () {
       final result = fleetEntriesFromSshConfig(sshConfigFixture);
       final labels = result.entries.map((e) => e.label);
@@ -94,14 +108,12 @@ void main() {
       expect(result.skippedCount, 2);
     });
 
-    test('a negative Port is skipped; an unparsable one reads as 22', () {
+    test('a Port ssh rejects is skipped; a service name resolves', () {
       // ssh rejects the whole config over `Port -1` or `Port 22a`, but it
-      // resolves a service name such as `ssh` to its port, 22. A negative
-      // port is out of range like any other. Séance's SshConfigImporter
-      // reads an unparsable Port, service names included, as absent, so
-      // its host imports with the default port and is not counted: `word`
-      // matches ssh only because that default is 22. This pins the current
-      // behavior, so a change in seance_core surfaces here.
+      // resolves a service name such as `ssh` to its port, 22. Séance's
+      // SshConfigImporter skips and reports a block whose Port ssh would
+      // reject, and resolves `ssh` itself. This pins that behavior, so a
+      // change in seance_core surfaces here.
       final result = fleetEntriesFromSshConfig(
         'Host negative\n  Port -1\n'
         'Host typo\n  Port 22a\n'
@@ -109,10 +121,9 @@ void main() {
       );
 
       expect(result.entries.map((e) => (e.label, e.port)), [
-        ('typo', kSshDefaultPort),
         ('word', kSshDefaultPort),
       ]);
-      expect(result.skippedCount, 1);
+      expect(result.skippedCount, 2);
     });
 
     test('an empty HostName or User counts as absent', () {

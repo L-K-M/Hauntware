@@ -15,6 +15,16 @@ import 'collector.dart';
 /// Protocol tag printed in the READY marker (03 §6.2).
 const kProtocolTag = 'HWS/1';
 
+/// The one command line a sampler's non-PTY exec runs (03 §6.2). The
+/// login shell only parses it, then `sh -s` replaces it and reads the
+/// program from stdin. `LC_ALL=C` makes `${#var}` count bytes for the
+/// section byte counts, `TZ=UTC` fixes time output, and the pager and
+/// colour variables keep tool output plain. Every word is plain, so sh,
+/// bash, zsh, fish and tcsh parse it alike and SSH `env` requests are
+/// never needed.
+const kSamplerStartCommand =
+    'exec env LC_ALL=C TZ=UTC SYSTEMD_PAGER= NO_COLOR=1 sh -s';
+
 /// Collector-set version carried by the READY marker (03 §6.3 "the program
 /// text is versioned"). Bumped whenever the shipped fragment set changes.
 /// Version 2 adds `procs`, `units`, `timers` and `cron` to the slow sampler.

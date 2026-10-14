@@ -19,6 +19,7 @@ export 'src/hws/collector.dart';
 export 'src/hws/frames.dart';
 export 'src/hws/program.dart';
 export 'src/hws/request.dart';
+export 'src/hws/tick_assembler.dart';
 export 'src/parse/cron.dart';
 export 'src/parse/fs.dart';
 export 'src/parse/identity.dart';

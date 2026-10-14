@@ -138,4 +138,36 @@ void main() {
     expect(loop, isNotNull);
     expect(loop![1]!.split(' '), kProbeTools);
   });
+
+  test('the probe tool loop checks exactly kProbeTools, in order', () {
+    // The loop is literal program text, so a tool added to only one side
+    // would change the probe without a collector-set version bump.
+    final program = buildSamplerProgram(
+      kind: SamplerKind.slow,
+      nonce: '0123456789abcdef0123456789abcdef',
+    );
+    final loops = RegExp(
+      r'^\s*for _t in ([^;]*); do$',
+      multiLine: true,
+    ).allMatches(program).toList();
+    expect(loops, hasLength(1), reason: 'one tool loop in _probe_tools');
+    expect(loops.single.group(1)!.split(' '), kProbeTools);
+  });
+
+  group('kSamplerStartCommand', () {
+    test('execs sh -s under the sampler environment', () {
+      expect(
+        kSamplerStartCommand,
+        'exec env LC_ALL=C TZ=UTC SYSTEMD_PAGER= NO_COLOR=1 sh -s',
+      );
+    });
+
+    test('has only words every login shell reads literally', () {
+      // No quotes, globs, expansions or separators: sh, bash, zsh, fish
+      // and tcsh all split it into the same words (03 §6.2).
+      for (final word in kSamplerStartCommand.split(' ')) {
+        expect(word, matches(RegExp(r'^[A-Za-z0-9_=-]+$')), reason: word);
+      }
+    });
+  });
 }

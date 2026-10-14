@@ -12,6 +12,12 @@ slice:
 
 - `klabautermann_host`: HWS/1 program, frame protocol, capability probe,
   parsers and snapshot/rate models with per-platform fixture goldens.
+- HWS/1 reader (M2): the frame parser skips login-shell output before
+  READY up to 64 KiB and reads an empty `B` uptime as unknown;
+  `HwsTickAssembler` turns frames into replies (READY version check, a
+  reply lost to a framing error, out-of-order markers ending the
+  session), and `kSamplerStartCommand` is the start line. No engine code
+  uses them yet; the real-shell test runs on them.
 - Access rules (M2, `klabautermann_host` `access/`): the CN-24 rows from
   a `HostProfile` (passwordless sudo, journal group with the LOG-04
   notice, Docker socket rights with the SAF-08 flag, systemd version,

@@ -538,6 +538,12 @@ abstract class AppLocalizations {
   /// **'Cannot import: port outside 1–65535'**
   String get sshImportLimitInvalidPort;
 
+  /// Chip for an ssh_config row whose Port the importer refuses: not a number from 1 to 65535 or the service name ssh, http or https. ssh, http and https are literal service names; do not translate them.
+  ///
+  /// In en, this message translates to:
+  /// **'Cannot import: port must be 1–65535, ssh, http or https'**
+  String get sshImportLimitUnsupportedPort;
+
   /// Chip for rows whose User/Port/HostName/IdentityFile global defaults the pinned importer drops.
   ///
   /// In en, this message translates to:
