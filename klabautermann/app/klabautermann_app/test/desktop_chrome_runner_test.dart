@@ -134,5 +134,14 @@ void main() {
       expect(runApp, greaterThan(restore));
       expect(main, contains('stateFile: supportFile(windowStateFileName)'));
     });
+
+    test('the macOS window is shown before the engine isolate starts', () {
+      // The engine handshake can throw. Thrown before the restore, it
+      // would leave the macOS app running with no window at all.
+      final restore = main.indexOf('await restoreMainWindow(');
+      final engine = main.indexOf('IsolateEngineClient.spawn(');
+      expect(restore, isNonNegative);
+      expect(engine, greaterThan(restore));
+    });
   });
 }
