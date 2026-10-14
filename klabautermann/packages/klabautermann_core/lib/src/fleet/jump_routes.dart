@@ -1,3 +1,5 @@
+import 'dart:io' show InternetAddress;
+
 import 'package:seance_core/seance_core.dart' show ImportedHost;
 
 import '../engine/protocol.dart' show kSshDefaultPort;
@@ -32,6 +34,7 @@ final class JumpHop {
     required this.port,
     this.user,
     this.identityFile,
+    required this._written,
   });
 
   /// `ssh-config-hop:` and the names of the route up to and including this
@@ -56,6 +59,10 @@ final class JumpHop {
   /// The record's `IdentityFile`, as written; null signs in with the
   /// agent.
   final String? identityFile;
+
+  /// The hop as [name] gives it, which ssh compares with the next host to
+  /// catch a loop.
+  final _Hop _written;
 }
 
 /// The jump route of each of [hosts], keyed by alias: its hops, first hop
@@ -88,6 +95,8 @@ final class JumpHop {
 ///   rejects such a host name or reads it as an option;
 /// - contains `%`, which ssh expands as a token (ssh_config(5), TOKENS);
 /// - loops back through first hops to a host already on the way;
+/// - has a hop, as written, that is the host or hop it leads to, which
+///   ssh refuses as a jumphost loop (see [_isJumpLoop]);
 /// - makes a route of more than 16 hops, the first hop's own route
 ///   included, which Séance's connector refuses to dial;
 /// - names a host in [leftOut], or one whose own route is null: ssh would
@@ -132,23 +141,41 @@ Map<String, List<JumpHop>?> jumpRoutes(
       }
 
       final previous = route.lastOrNull;
-      route.add(
-        JumpHop._(
-          id: previous == null ? '$_hopIdPrefix$name' : '${previous.id},$name',
-          name: name,
-          host: alias?.effectiveHost ?? hopHost,
-          port: port ?? alias?.port ?? kSshDefaultPort,
-          user: user ?? alias?.user,
-          identityFile: alias?.identityFile,
-        ),
+      final hop = JumpHop._(
+        id: previous == null ? '$_hopIdPrefix$name' : '${previous.id},$name',
+        name: name,
+        host: alias?.effectiveHost ?? hopHost,
+        port: port ?? alias?.port ?? kSshDefaultPort,
+        user: user ?? alias?.user,
+        identityFile: alias?.identityFile,
+        written: own[index],
       );
+      if (previous != null &&
+          _isJumpLoop(previous._written, hop.host, hop.port, hop.user)) {
+        return null;
+      }
+      route.add(hop);
     }
     return List.unmodifiable(route);
   }
 
+  // A hop record's own last hop is checked where a route reaches it as a
+  // first hop, with that route's user and port.
   final routes = {
-    for (final host in named)
-      host.alias: follow(host, {host.alias}, _maxJumpHops),
+    for (final hop in hops) hop.alias: follow(hop, {hop.alias}, _maxJumpHops),
+    for (final host in hosts)
+      host.alias: switch (follow(host, {host.alias}, _maxJumpHops)) {
+        final route?
+            when route.isNotEmpty &&
+                _isJumpLoop(
+                  route.last._written,
+                  host.effectiveHost,
+                  host.port ?? kSshDefaultPort,
+                  host.user,
+                ) =>
+          null,
+        final route => route,
+      },
   };
 
   // A host whose route is null is left out, so every route that names it
@@ -183,6 +210,32 @@ List<String>? proxyJumpHosts(String value) => switch (_parseProxyJump(value)) {
 };
 
 typedef _Hop = ({String name, String? user, String host, int? port});
+
+/// Whether ssh refuses to reach [host] on [port] as [user] through the
+/// [jump] before it (`ssh.c`: "jumphost loop"): the jump's host as
+/// written is [host], its port, else 22, is [port], and its user, else
+/// [user], is [user]. ssh writes an address it dials in canonical form,
+/// so addresses compare by value. A jump with its own user, to a host
+/// whose user is the local account's, which the import does not know,
+/// counts as a loop.
+bool _isJumpLoop(_Hop jump, String host, int port, String? user) {
+  if ((jump.port ?? kSshDefaultPort) != port) return false;
+  if (jump.user != null && user != null && jump.user != user) return false;
+  if (jump.host == host) return true;
+
+  final (written, dialed) = (
+    InternetAddress.tryParse(jump.host),
+    InternetAddress.tryParse(host),
+  );
+  if (written == null || dialed == null) return false;
+
+  final (a, b) = (written.rawAddress, dialed.rawAddress);
+  if (a.length != b.length) return false;
+  for (var index = 0; index < a.length; index++) {
+    if (a[index] != b[index]) return false;
+  }
+  return true;
+}
 
 /// The hops a `ProxyJump` [value] names, first hop first: empty for
 /// `none`, null when ssh would reject it or the engine cannot read it.

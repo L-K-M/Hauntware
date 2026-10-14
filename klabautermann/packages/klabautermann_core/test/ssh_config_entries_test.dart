@@ -455,6 +455,64 @@ void main() {
       expect(result.skippedCount, 2);
     });
 
+    test('leaves out a route ssh refuses as a jumphost loop', () {
+      // ssh.c exits when the jump host as written is the host it would
+      // dial next, on the same port (the hop's own, else 22) and as the
+      // same user (the hop's own, else that host's). Every nested ssh
+      // checks its own jump host, so this holds at every hop.
+      List<String> kept(String config) => [
+        for (final host in importedHostsFromSshConfig(config).hosts) host.alias,
+      ];
+
+      expect(kept('Host a\n  HostName 10.0.0.1\n  ProxyJump 10.0.0.1\n'), []);
+      // The hop's port and user as written count, not gw's own Port.
+      expect(
+        kept(
+          'Host gw\n  HostName 10.0.0.1\n  Port 2222\n'
+          'Host a\n  HostName gw\n  ProxyJump gw\n',
+        ),
+        ['gw'],
+      );
+      expect(
+        kept(
+          'Host a\n  HostName 10.0.0.1\n  User root\n'
+          '  ProxyJump root@10.0.0.1:22\n',
+        ),
+        [],
+      );
+      // An address compares by value: ssh writes the host it dials in
+      // canonical form.
+      expect(
+        kept('Host v6\n  HostName 2001:0db8::1\n  ProxyJump [2001:db8::1]\n'),
+        [],
+      );
+      // A hop before the last: the nested ssh for gw jumps through
+      // 10.0.0.1, which is where gw is.
+      expect(
+        kept(
+          'Host gw\n  HostName 10.0.0.1\n'
+          'Host t\n  HostName 10.9.9.9\n  ProxyJump 10.0.0.1,gw\n',
+        ),
+        ['gw'],
+      );
+      // Not loops: another port, another user, or another spelling.
+      expect(
+        kept(
+          'Host port\n  HostName 10.0.0.1\n  ProxyJump 10.0.0.1:2222\n'
+          'Host user\n  HostName 10.0.0.1\n  User root\n'
+          '  ProxyJump admin@10.0.0.1\n'
+          'Host case\n  HostName gw\n  ProxyJump GW\n',
+        ),
+        ['port', 'user', 'case'],
+      );
+      // With no User, ssh compares the hop's user with the local account,
+      // which the import does not know.
+      expect(
+        kept('Host a\n  HostName 10.0.0.1\n  ProxyJump admin@10.0.0.1\n'),
+        [],
+      );
+    });
+
     test('leaves out a host whose route is a ProxyCommand, which the engine '
         'cannot run', () {
       // Whichever of ProxyCommand and ProxyJump ssh reads first is the
