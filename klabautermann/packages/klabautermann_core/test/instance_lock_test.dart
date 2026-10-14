@@ -102,13 +102,17 @@ void main() {
     final lock = await _acquired(directory);
     addTearDown(lock.release);
 
-    // The same file under another spelling too, and no second descriptor
+    // The same file under other spellings too, and no second descriptor
     // opens: under POSIX it would lock without conflict, and closing it
     // would drop the first lock.
     final attempts = await Future.wait([
-      InstanceLock.acquire(directory),
-      InstanceLock.acquire(Directory('${directory.path}/.')),
+      for (final spelling in ['', '/', '//', '/.', '/./'])
+        InstanceLock.acquire(Directory('${directory.path}$spelling')),
     ]);
+    // Released before checking, as the owner of a second lock would.
+    for (final attempt in attempts.whereType<InstanceLockAcquired>()) {
+      await attempt.lock.release();
+    }
     expect(attempts, everyElement(isA<InstanceLockHeld>()));
     expect(await _secondInstance(directory), 'held');
   });

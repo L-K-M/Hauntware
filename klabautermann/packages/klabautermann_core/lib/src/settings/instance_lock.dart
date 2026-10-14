@@ -44,29 +44,28 @@ final class InstanceLockUnavailable extends InstanceLockAttempt {
 /// POSIX record locks (`fcntl`) belong to the process, not the descriptor:
 /// a second descriptor in the same process would lock the file again
 /// without conflict, and closing either one drops both locks. So within
-/// an isolate a second [acquire] of the same file is refused without
-/// opening it, and nothing else in the app may open the file.
+/// an isolate a second [acquire] of the same file, under any spelling but
+/// a symbolic link or another letter case, is refused without opening it,
+/// and nothing else in the app may open the file.
 final class InstanceLock {
   InstanceLock._(this._path, this._handle);
 
   final String _path;
   final RandomAccessFile _handle;
 
-  /// The lock file paths this isolate holds or is acquiring: absolute,
-  /// with `.` and `..` resolved (symbolic links are not). A path is claimed
-  /// before the first await, so two overlapping [acquire] calls cannot both
-  /// open the file. A held lock stays here until [release], which also
-  /// keeps its handle reachable: a handle closed by anything but [release]
-  /// would drop the lock while the app runs.
+  /// The lock file paths this isolate holds or is acquiring, as
+  /// [_lockFilePath] spells them. A path is claimed before the first
+  /// await, so two overlapping [acquire] calls cannot both open the file.
+  /// A held lock stays here until [release], which also keeps its handle
+  /// reachable: a handle closed by anything but [release] would drop the
+  /// lock while the app runs.
   static final Map<String, InstanceLock?> _claimed = {};
 
   /// Takes the lock in [supportDirectory], creating the directory and the
   /// file when they are missing. Never throws and never waits for another
   /// holder.
   static Future<InstanceLockAttempt> acquire(Directory supportDirectory) async {
-    final path = File(
-      '${supportDirectory.path}${Platform.pathSeparator}$instanceLockFileName',
-    ).absolute.uri.normalizePath().toFilePath();
+    final path = _lockFilePath(supportDirectory);
     if (_claimed.containsKey(path)) return const InstanceLockHeld();
     _claimed[path] = null;
 
@@ -98,6 +97,20 @@ final class InstanceLock {
     final lock = InstanceLock._(path, handle);
     _claimed[path] = lock;
     return InstanceLockAcquired(lock);
+  }
+
+  /// The lock file's path in [supportDirectory], one spelling per file:
+  /// absolute, without `.`, `..` or the empty segments that a trailing or
+  /// doubled separator leaves (`normalizePath` keeps those). Symbolic links
+  /// and letter case are not resolved.
+  static String _lockFilePath(Directory supportDirectory) {
+    final uri = File(
+      '${supportDirectory.path}${Platform.pathSeparator}$instanceLockFileName',
+    ).absolute.uri;
+    return uri
+        .replace(pathSegments: uri.pathSegments.where((s) => s.isNotEmpty))
+        .normalizePath()
+        .toFilePath();
   }
 
   /// Unlocks and closes the file, letting the next instance in. The app
