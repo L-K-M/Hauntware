@@ -131,15 +131,15 @@ slice:
   `ghost_desktop`'s window lifecycle wraps. The macOS menu's
   "Preferences…" item is not wired to Settings yet; the menus come from
   the command registry (03 §10.2).
-- Log buffer model (03 §10.8): `klabautermann_core`'s `LogBuffer` holds
-  up to 50,000 entries and 32 MiB of text, counted at two bytes per UTF-16
-  code unit, cuts a line at 16 KiB (8,192 code units) and keeps its full
-  length for the truncation marker, and records a `LogBatch`'s drops as
-  one "dropped N lines" entry. `parseSgr` turns a line's SGR colours and
-  attributes into spans and drops every other escape and control. A heap
-  test keeps a full buffer of two-byte text under the 64 MiB budget (03
-  §11.4). Nothing uses them yet: the viewer and the engine's followers
-  come in later M2 PRs.
+- Log buffer model (03 §10.8): `klabautermann_core`'s `LogBuffer` holds up
+  to 50,000 entries and 32 MiB of text, counted as the VM stores it (one
+  byte a code unit for Latin-1 text, two otherwise), cuts a line at 16 KiB
+  and keeps its full length for the truncation marker, and records a
+  `LogBatch`'s drops as one "dropped N lines" entry. `parseSgr` turns a
+  line's SGR colours and attributes into spans and drops every other
+  escape and control. A heap test keeps a full buffer of either kind under
+  the 64 MiB budget (03 §11.4). Nothing uses them yet: the viewer and the
+  engine's followers come in later M2 PRs.
 
 Pull-only from the start (D14): no surface sends a request that could
 push or write catalog records, and a widget test guards it.

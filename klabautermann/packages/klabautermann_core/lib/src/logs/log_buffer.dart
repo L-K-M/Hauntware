@@ -6,19 +6,16 @@ import 'package:meta/meta.dart';
 const int logBufferMaxLines = 50000;
 
 /// The most text bytes a [LogBuffer] holds by default (03 §10.8), counted
-/// as [logBytesPerCodeUnit] per UTF-16 code unit.
+/// as the VM stores the text (see [LogBuffer]).
 const int logBufferMaxBytes = 32 * 1024 * 1024;
 
-/// The longest line a [LogBuffer] keeps whole by default (03 §10.8): 8,192
-/// UTF-16 code units.
+/// The longest line a [LogBuffer] keeps whole by default (03 §10.8):
+/// 16,384 Latin-1 or 8,192 other UTF-16 code units.
 const int logLineMaxBytes = 16 * 1024;
 
-/// Bytes a [LogBuffer] counts per UTF-16 code unit. A Dart string stores
-/// one or two bytes per code unit, and which one the VM picks is not
-/// visible to Dart code, so the buffer counts the larger: its byte cap then
-/// bounds the text's memory whatever the VM stores, which the 64 MiB
-/// viewer budget (03 §11.4) relies on.
-const int logBytesPerCodeUnit = 2;
+/// The highest code unit the VM's one-byte strings hold: Latin-1, so all
+/// ASCII.
+const int _maxOneByteUnit = 0xff;
 
 /// One entry of a [LogBuffer]: a [LogLine] or a [LogDroppedLines] record.
 @immutable
@@ -59,25 +56,29 @@ final class LogDroppedLines extends LogEntry {
 /// ordinary scrollback loss and leaves no record; lines the engine dropped
 /// before they arrived are recorded as [LogDroppedLines].
 ///
-/// Bytes count only line text, at [logBytesPerCodeUnit] per code unit; a
-/// drop record holds none but counts against [maxLines]. The per-entry
-/// overhead is bounded by [maxLines] and covered by the memory budget
-/// test. Plain Dart with no listeners: the controller that owns it
-/// notifies the view.
+/// Bytes count only line text, as the Dart VM stores it: one byte a code
+/// unit for a line whose units are all Latin-1, two otherwise. Dart code
+/// cannot see that representation, but the VM picks the one-byte form
+/// whenever every unit fits, whether a string is decoded, split or cut, so
+/// the byte cap bounds the text's memory for the 64 MiB viewer budget
+/// (03 §11.4); the memory budget test checks both kinds. A drop record
+/// holds no bytes but counts against [maxLines]. The per-entry overhead is
+/// bounded by [maxLines] and covered by the same test. Plain Dart with no
+/// listeners: the controller that owns it notifies the view.
 final class LogBuffer {
   LogBuffer({
     this.maxLines = logBufferMaxLines,
     this.maxBytes = logBufferMaxBytes,
     this.maxLineBytes = logLineMaxBytes,
-  }) : _maxLineCodeUnits = maxLineBytes ~/ logBytesPerCodeUnit {
+  }) {
     if (maxLines < 1) {
       throw ArgumentError.value(maxLines, 'maxLines', 'must be at least 1');
     }
-    if (_maxLineCodeUnits < 1) {
+    if (maxLineBytes < 2) {
       throw ArgumentError.value(
         maxLineBytes,
         'maxLineBytes',
-        'must hold at least one code unit',
+        'must hold one two-byte code unit',
       );
     }
     if (maxLineBytes > maxBytes) {
@@ -92,7 +93,6 @@ final class LogBuffer {
   final int maxLines;
   final int maxBytes;
   final int maxLineBytes;
-  final int _maxLineCodeUnits;
 
   final _entries = ListQueue<LogEntry>();
   int _bytes = 0;
@@ -146,20 +146,26 @@ final class LogBuffer {
   }
 
   void _addLine(String line) {
-    final entry = line.length <= _maxLineCodeUnits
-        ? LogLine(_nextSeq++, line)
-        : LogLine(
-            _nextSeq++,
-            line.substring(0, _cutIndex(line)),
-            originalLength: line.length,
-          );
-    _append(entry, entry.text.length * logBytesPerCodeUnit);
+    final bytes = _byteLength(line);
+    if (bytes <= maxLineBytes) {
+      _append(LogLine(_nextSeq++, line), bytes);
+      return;
+    }
+
+    final text = line.substring(0, _cutIndex(line));
+    _append(
+      LogLine(_nextSeq++, text, originalLength: line.length),
+      _byteLength(text),
+    );
   }
 
-  /// Where a line longer than the cap is cut: at the cap, or one unit
+  /// Where a line longer than the cap is cut: after [maxLineBytes] units
+  /// when those are all Latin-1, else after half as many, or one unit
   /// earlier rather than keep half of a surrogate pair.
   int _cutIndex(String line) {
-    final cut = _maxLineCodeUnits;
+    final oneByte =
+        line.length >= maxLineBytes && _isOneByte(line, maxLineBytes);
+    final cut = oneByte ? maxLineBytes : maxLineBytes ~/ 2;
     final last = line.codeUnitAt(cut - 1);
     final splitsPair = last >= 0xd800 && last <= 0xdbff;
     return splitsPair ? cut - 1 : cut;
@@ -170,9 +176,18 @@ final class LogBuffer {
     _bytes += bytes;
     while (_entries.length > maxLines || _bytes > maxBytes) {
       final evicted = _entries.removeFirst();
-      if (evicted is LogLine) {
-        _bytes -= evicted.text.length * logBytesPerCodeUnit;
-      }
+      if (evicted is LogLine) _bytes -= _byteLength(evicted.text);
     }
+  }
+
+  static int _byteLength(String text) =>
+      _isOneByte(text, text.length) ? text.length : 2 * text.length;
+
+  /// Whether the first [end] code units of [text] are all Latin-1.
+  static bool _isOneByte(String text, int end) {
+    for (var i = 0; i < end; i++) {
+      if (text.codeUnitAt(i) > _maxOneByteUnit) return false;
+    }
+    return true;
   }
 }

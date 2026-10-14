@@ -17,7 +17,6 @@ void main() {
       expect(logBufferMaxLines, 50000);
       expect(logBufferMaxBytes, 32 * _mib);
       expect(logLineMaxBytes, 16 * 1024);
-      expect(logBytesPerCodeUnit, 2);
 
       final buffer = LogBuffer();
       expect(buffer.maxLines, logBufferMaxLines);
@@ -40,7 +39,7 @@ void main() {
 
         expect(_texts(buffer), ['c', 'd', 'e']);
         expect(buffer.firstSeq, 2);
-        expect(buffer.bytes, 3 * logBytesPerCodeUnit);
+        expect(buffer.bytes, 3);
       });
 
       test('holds exactly 50,000 lines by default', () {
@@ -54,42 +53,46 @@ void main() {
     });
 
     group('byte cap and accounting', () {
-      test('counts two bytes per UTF-16 code unit, whatever the text', () {
-        final buffer = LogBuffer()..add(['abc', 'Жж', '😀', '']);
+      test('counts one byte a code unit for Latin-1 text, two otherwise', () {
+        final buffer = LogBuffer()..add(['abc', 'é', 'Жж', 'a😀', '']);
 
-        // 3 + 2 + 2 (one surrogate pair) + 0 code units.
-        expect(buffer.bytes, 7 * logBytesPerCodeUnit);
+        // One unit above Latin-1 makes the whole line two bytes a unit,
+        // as the VM stores it: 3 + 1 + 2 * 2 + 2 * 3 + 0.
+        expect(buffer.bytes, 14);
       });
 
       test('evicts the oldest lines until the bytes fit', () {
-        final buffer = LogBuffer(maxBytes: 20, maxLineBytes: 8)
+        final buffer = LogBuffer(maxBytes: 10, maxLineBytes: 8)
           ..add(['aaaa', 'bbbb']);
-        expect(buffer.bytes, 16);
+        expect(buffer.bytes, 8);
 
         buffer.add(['ccc']);
         expect(_texts(buffer), ['bbbb', 'ccc']);
-        expect(buffer.bytes, 14);
+        expect(buffer.bytes, 7);
 
         // Exactly at the cap fits.
         buffer.add(['ddd']);
         expect(_texts(buffer), ['bbbb', 'ccc', 'ddd']);
-        expect(buffer.bytes, 20);
+        expect(buffer.bytes, 10);
       });
 
-      test('holds exactly 32 MiB of full-length lines by default', () {
-        const unitsPerLine = logLineMaxBytes ~/ logBytesPerCodeUnit;
-        const fitting = logBufferMaxBytes ~/ logLineMaxBytes;
-        final line = 'x' * unitsPerLine;
-        final buffer = LogBuffer()..add(List.filled(fitting, line));
+      for (final (kind, line) in [
+        ('Latin-1', 'x' * logLineMaxBytes),
+        ('two-byte', 'Ж' * (logLineMaxBytes ~/ 2)),
+      ]) {
+        test('holds exactly 32 MiB of full-length $kind lines by default', () {
+          const fitting = logBufferMaxBytes ~/ logLineMaxBytes;
+          final buffer = LogBuffer()..add(List.filled(fitting, line));
 
-        expect(buffer.length, fitting);
-        expect(buffer.bytes, logBufferMaxBytes);
+          expect(buffer.length, fitting);
+          expect(buffer.bytes, logBufferMaxBytes);
 
-        buffer.add([line]);
-        expect(buffer.length, fitting);
-        expect(buffer.bytes, logBufferMaxBytes);
-        expect(buffer.firstSeq, 1);
-      });
+          buffer.add([line]);
+          expect(buffer.length, fitting);
+          expect(buffer.bytes, logBufferMaxBytes);
+          expect(buffer.firstSeq, 1);
+        });
+      }
 
       test('clear empties the buffer and keeps numbering', () {
         final buffer = LogBuffer()
@@ -108,18 +111,32 @@ void main() {
 
     group('line-length cap', () {
       test('cuts a long line and records its full length', () {
-        final buffer = LogBuffer(maxLineBytes: 8)..add(['abcd', 'abcdef']);
+        final buffer = LogBuffer(maxLineBytes: 8)
+          ..add(['abcdefgh', 'abcdefghij', 'ЖЖЖЖЖ']);
 
         final whole = buffer[0] as LogLine;
-        expect(whole.text, 'abcd');
+        expect(whole.text, 'abcdefgh');
         expect(whole.truncated, isFalse);
         expect(whole.originalLength, isNull);
 
         final cut = buffer[1] as LogLine;
-        expect(cut.text, 'abcd');
+        expect(cut.text, 'abcdefgh');
         expect(cut.truncated, isTrue);
-        expect(cut.originalLength, 6);
-        expect(buffer.bytes, 16);
+        expect(cut.originalLength, 10);
+
+        final cutTwoByte = buffer[2] as LogLine;
+        expect(cutTwoByte.text, 'ЖЖЖЖ');
+        expect(cutTwoByte.originalLength, 5);
+        expect(buffer.bytes, 24);
+      });
+
+      test('keeps the cap in units when they are all Latin-1, else half', () {
+        // Two-byte text after the cap does not shorten the kept part.
+        final buffer = LogBuffer(maxLineBytes: 8)
+          ..add(['abcdefghЖ', 'abcЖefghij']);
+
+        expect(_texts(buffer), ['abcdefgh', 'abcЖ']);
+        expect(buffer.bytes, 8 + 8);
       });
 
       test('never splits a surrogate pair', () {
@@ -132,15 +149,23 @@ void main() {
         expect(cut.originalLength, 6);
       });
 
-      test('keeps 8,192 code units by default', () {
-        const units = logLineMaxBytes ~/ logBytesPerCodeUnit;
-        final buffer = LogBuffer()..add(['y' * units, 'z' * (units + 1)]);
+      test('keeps 16,384 Latin-1 or 8,192 other code units by default', () {
+        const units = logLineMaxBytes;
+        final buffer = LogBuffer()
+          ..add([
+            'y' * units,
+            'z' * (units + 1),
+            'Ж' * (units ~/ 2),
+            'Ж' * (units ~/ 2 + 1),
+          ]);
 
-        expect((buffer[0] as LogLine).truncated, isFalse);
-        final cut = buffer[1] as LogLine;
-        expect(cut.text.length, units);
-        expect(cut.originalLength, units + 1);
-        expect(buffer.bytes, 2 * logLineMaxBytes);
+        expect(
+          [for (var i = 0; i < 4; i++) (buffer[i] as LogLine).originalLength],
+          [null, units + 1, null, units ~/ 2 + 1],
+        );
+        expect((buffer[1] as LogLine).text.length, units);
+        expect((buffer[3] as LogLine).text.length, units ~/ 2);
+        expect(buffer.bytes, 4 * logLineMaxBytes);
       });
     });
 
@@ -151,7 +176,7 @@ void main() {
           ..add(['b', 'c'], dropped: 3);
 
         expect(_texts(buffer), ['a', '<dropped 3>', 'b', 'c']);
-        expect(buffer.bytes, 3 * logBytesPerCodeUnit);
+        expect(buffer.bytes, 3);
       });
 
       test('drops with no line between them merge into one record', () {
@@ -179,7 +204,7 @@ void main() {
           ..add(['b'], dropped: 4);
 
         expect(_texts(buffer), ['<dropped 4>', 'b']);
-        expect(buffer.bytes, logBytesPerCodeUnit);
+        expect(buffer.bytes, 1);
       });
 
       test('a negative count is a programming error', () {

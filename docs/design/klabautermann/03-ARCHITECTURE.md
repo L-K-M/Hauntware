@@ -3317,20 +3317,21 @@ navigation in v1. `planchette_editor` is unsuitable for live logs (one text
 buffer, highlighting off above 200,000 characters [R: c3 §1.5]).
 
 As built in M2 (`klabautermann/packages/klabautermann_core/lib/src/logs/`):
-`LogBuffer` counts two bytes per UTF-16 code unit, a two-byte Dart
-string's size, because Dart code cannot see which representation the VM
-picks; the caps then bound the text's memory either way, and the 16 KiB
-line cap keeps 8,192 code units, never half a surrogate pair. A cut line
-keeps its full length for the marker, which the app words. A `LogBatch`'s
-drops become one "dropped N lines" entry ahead of its lines, merged into
-an adjacent one; it counts against the line cap and holds no bytes, while
-eviction past a cap leaves no entry. Lines are stored as received and
-styled for display by `parseSgr`, each from the plain style, so no style
-carries from one line to the next. It keeps colours, bold, faint, italic,
-underline, inverse and strikethrough, ignores blink and conceal (text is
-never hidden, 8.12) and drops every other escape and control. Full at the
-caps with two-byte text, the buffer holds about 35 MiB of the 64 MiB
-budget (11.4).
+`LogBuffer` counts a line's bytes as the Dart VM stores it: one byte a
+UTF-16 code unit when every unit is Latin-1 (so all ASCII), two otherwise.
+The VM picks that form whether a string is decoded, split or cut, and a
+heap test checks both kinds, so the caps bound the text's memory. The
+16 KiB line cap keeps 16,384 Latin-1 or 8,192 other code units, never half
+a surrogate pair. A cut line keeps its full length for the marker, which
+the app words. A `LogBatch`'s drops become one "dropped N lines" entry
+ahead of its lines, merged into an adjacent one; it counts against the
+line cap and holds no bytes, while eviction past a cap leaves no entry.
+Lines are stored as received and styled for display by `parseSgr`, each
+from the plain style, so no style carries from one line to the next. It
+keeps colours, bold, faint, italic, underline, inverse and strikethrough,
+ignores blink and conceal (text is never hidden, 8.12) and drops every
+other escape and control. Full at the caps with either kind of text, the
+buffer holds about 35 MiB of the 64 MiB budget (11.4).
 
 ### 10.9 Theme
 

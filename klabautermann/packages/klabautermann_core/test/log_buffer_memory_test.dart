@@ -81,46 +81,60 @@ void main() {
   tearDownAll(() => probe.close());
 
   group('LogBuffer memory (03 §11.4)', () {
-    // Two-byte text (Cyrillic), so every byte the buffer counts is a byte
-    // the VM holds: the worst case for a cap counted per code unit.
-    test('a buffer full at the line cap stays under 64 MiB', () async {
+    // Each line is all one kind of text, so every byte the buffer counts
+    // is a byte the VM holds. The Latin-1 cases also check that the VM
+    // stores such text in one byte a unit, as the count assumes; two
+    // bytes a unit would put the full buffer over the budget.
+    for (final (kind, fill) in [
       // 335 code units a line: 50,000 lines fill the byte cap to within
       // 0.2 %, so both caps bind and the per-entry overhead is largest.
-      final fill = 'Ж' * 328;
-      final before = await probe.liveHeapBytes();
+      ('two-byte (Cyrillic)', 'Ж' * 328),
+      // 670 code units, the same 670 bytes a line.
+      ('Latin-1 (ASCII)', 'x' * 663),
+    ]) {
+      test('a buffer full at the 50,000-entry cap of $kind text stays under '
+          '64 MiB', () async {
+        final before = await probe.liveHeapBytes();
 
-      final buffer = LogBuffer();
-      for (var i = 0; i < logBufferMaxLines + 100; i++) {
-        buffer.add(['${_prefix(i)}$fill']);
-      }
-      final retained = await probe.liveHeapBytes() - before;
+        final buffer = LogBuffer();
+        for (var i = 0; i < logBufferMaxLines + 100; i++) {
+          buffer.add(['${_prefix(i)}$fill']);
+        }
+        final retained = await probe.liveHeapBytes() - before;
 
-      expect(buffer.length, logBufferMaxLines);
-      expect(buffer.bytes, greaterThan(logBufferMaxBytes * 0.99));
-      expect(
-        retained,
-        greaterThanOrEqualTo(buffer.bytes),
-        reason: 'the probe must see the text the buffer holds',
-      );
-      expect(retained, lessThan(_budgetBytes));
-    });
+        expect(buffer.length, logBufferMaxLines);
+        expect(buffer.bytes, greaterThan(logBufferMaxBytes * 0.99));
+        expect(
+          retained,
+          greaterThanOrEqualTo(buffer.bytes),
+          reason: 'the probe must see the text the buffer holds',
+        );
+        expect(retained, lessThan(_budgetBytes));
+      });
+    }
 
-    test('lines cut at the line cap hold only what they keep', () async {
+    for (final (kind, fill) in [
       // 20,000 code units a line, each cut to 8,192: 2,048 fill 32 MiB.
-      final fill = 'Ж' * 19993;
-      final before = await probe.liveHeapBytes();
+      ('two-byte', 'Ж' * 19993),
+      // Cut to its first 16,384 units, all Latin-1: the VM copies them
+      // out of the two-byte line into a one-byte string.
+      ('Latin-1 kept from two-byte', '${'x' * 16377}${'Ж' * 3616}'),
+    ]) {
+      test('$kind lines cut at 16 KiB hold only what they keep', () async {
+        final before = await probe.liveHeapBytes();
 
-      final buffer = LogBuffer();
-      for (var i = 0; i < 2100; i++) {
-        buffer.add(['${_prefix(i)}$fill']);
-      }
-      final retained = await probe.liveHeapBytes() - before;
+        final buffer = LogBuffer();
+        for (var i = 0; i < 2100; i++) {
+          buffer.add(['${_prefix(i)}$fill']);
+        }
+        final retained = await probe.liveHeapBytes() - before;
 
-      expect(buffer.length, logBufferMaxBytes ~/ logLineMaxBytes);
-      expect(buffer.bytes, logBufferMaxBytes);
-      expect((buffer[0] as LogLine).originalLength, 20000);
-      expect(retained, greaterThanOrEqualTo(buffer.bytes));
-      expect(retained, lessThan(_budgetBytes));
-    });
+        expect(buffer.length, logBufferMaxBytes ~/ logLineMaxBytes);
+        expect(buffer.bytes, logBufferMaxBytes);
+        expect((buffer[0] as LogLine).originalLength, 20000);
+        expect(retained, greaterThanOrEqualTo(buffer.bytes));
+        expect(retained, lessThan(_budgetBytes));
+      });
+    }
   });
 }
