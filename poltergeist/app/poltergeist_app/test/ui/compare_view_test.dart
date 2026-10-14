@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ghost_fonts/testing.dart';
 import 'package:planchette_editor/planchette_editor.dart';
 import 'package:poltergeist_app/l10n/app_localizations.dart';
 import 'package:poltergeist_app/services/editor_text_size_controller.dart';
@@ -1578,11 +1579,7 @@ Future<void> _loadRealFonts() async {
     if (bold.existsSync()) loader.addFont(_fontBytes(bold.path));
     await loader.load();
   }
-  final mono = File('$directory/DejaVuSansMono.ttf');
-  if (mono.existsSync()) {
-    final loader = FontLoader('JetBrains Mono')..addFont(_fontBytes(mono.path));
-    await loader.load();
-  }
+  await loadBundledMonoFonts();
 }
 
 Future<void> _captureView(WidgetTester tester, String name) async {

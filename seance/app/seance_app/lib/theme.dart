@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:ghost_fonts/ghost_fonts.dart';
 import 'package:ghost_theme/ghost_theme.dart';
 
 import 'theme/theme_presets.dart';
@@ -71,16 +72,10 @@ abstract final class SeanceTheme {
     platform: platform,
   );
 
-  /// Monospace font stack for the terminal and code — the style's
-  /// [GhostThemeStyle.monoFontFamilies].
-  static const List<String> monoFallback = [
-    'JetBrains Mono',
-    'SF Mono',
-    'Menlo',
-    'Consolas',
-    'DejaVu Sans Mono',
-    'monospace',
-  ];
+  /// Monospace font stack for code and the terminal's fallbacks — the
+  /// style's [GhostThemeStyle.monoFontFamilies]: the family's shared stack,
+  /// led by bundled JetBrains Mono.
+  static const List<String> monoFallback = ghostMonoFontFamilies;
 }
 
 /// Colors for the online/offline/connecting/unknown indicator dots, from
