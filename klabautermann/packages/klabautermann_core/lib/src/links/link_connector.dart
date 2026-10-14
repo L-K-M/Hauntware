@@ -150,10 +150,14 @@ final class LinkConnector {
         credentials: await _credentials.resolve(config),
         tofu: _tofu,
         onHostKey: onHostKey,
-        // A withdrawn prompt answers with no responses, which fails any
-        // challenge that asked something.
         onKeyboardInteractive: interactive
             ? (challenge) async {
+                // A round without questions, which OpenSSH's PAM backend
+                // sends to end a successful login, is answered without
+                // asking, as OpenSSH's client does. No event only shows
+                // text, so its name and instruction go unseen.
+                if (challenge.prompts.isEmpty) return const [];
+
                 final answer = await attempt.ask(
                   host: challenge.server.host,
                   port: challenge.server.port,
@@ -163,6 +167,9 @@ final class LinkConnector {
                     questions: challenge.prompts,
                   ),
                 );
+                // A withdrawn prompt answers with no responses: dartssh2
+                // rejects a count other than the question count by closing
+                // the connection, so no made-up answer reaches the server.
                 return answer is PromptResponsesAnswer
                     ? answer.responses
                     : const [];

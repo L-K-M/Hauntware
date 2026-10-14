@@ -3534,7 +3534,9 @@ the engine in `engine_isolate.dart` beside it):
   default `LoginGraceTime` (sshd_config(5)), after which such a server
   has dropped the unauthenticated connection anyway. Its `promptId` is a
   UUID, so an answer meant for an earlier engine's prompt matches
-  nothing. `FleetEntry` gains the nullable `jumpRoute` (hop names in
+  nothing. A keyboard-interactive round without questions never becomes
+  a prompt: the engine answers it, as OpenSSH's client does.
+  `FleetEntry` gains the nullable `jumpRoute` (hop names in
   dial order), `authKind` (agent, identity file, stored key, password),
   `searchText` (built in the engine with `serverSearchHaystack`, which
   the app may not import, 3.2) and `locatorConflict` (the ids of entries

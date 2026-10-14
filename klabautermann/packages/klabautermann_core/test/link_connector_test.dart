@@ -68,6 +68,14 @@ HostKey _key(String host, {String fingerprint = 'SHA256:first'}) => HostKey(
   pinnedAt: 0,
 );
 
+KeyboardInteractiveChallenge _challenge(List<String> questions) =>
+    KeyboardInteractiveChallenge(
+      server: _server(),
+      prompts: questions,
+      name: '',
+      instruction: '',
+    );
+
 SshConnectException _connectError(Object cause) =>
     SshConnectException('failed', cause, SshConnectionLog());
 
@@ -242,6 +250,24 @@ void main() {
         expect(request.questions, ['Code:']);
       },
     );
+
+    test('answers a round without questions without asking', () async {
+      late List<String> responses;
+      // OpenSSH's PAM backend ends a successful login with such a round.
+      onDial = (dial) async {
+        await dial.onKeyboardInteractive!(_challenge(['Password:']));
+        responses = await dial.onKeyboardInteractive!(_challenge([]));
+        return _FakeLink();
+      };
+
+      final result = connect(purpose: ConnectPurpose.interactive);
+      await answerNext(const PromptResponsesAnswer(['secret']));
+      await pumpEventQueue();
+
+      expect(events.whereType<Prompt>(), hasLength(1));
+      expect(await result, isA<LinkConnected>());
+      expect(responses, isEmpty);
+    });
 
     test('withdraws prompts still open when the attempt ends', () async {
       onDial = (dial) async {
