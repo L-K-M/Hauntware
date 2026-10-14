@@ -3310,6 +3310,8 @@ critical its red, deepened to `#A31515` in the light theme, where the
 family red parts too little from the amber under deuteranopia. A test
 holds each to 3:1 on the chart surfaces and each pair in a set to a CIE76
 distance of 10 under simulated protanopia, deuteranopia and tritanopia.
+Lines and each band's threshold rule draw at that strength; the bands'
+washes are decoration.
 Reduced motion is Android's remove-animations flag or iOS's Reduce Motion,
 which Flutter keeps out of `MediaQuery`. Null or non-finite samples are
 gaps; downsampling columns align to running sample indices, and a gap

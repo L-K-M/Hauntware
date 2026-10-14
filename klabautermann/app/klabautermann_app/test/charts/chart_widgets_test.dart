@@ -34,7 +34,9 @@ Widget _sparkline(SeriesRing ring, {ChartThresholds? thresholds}) => chartFrame(
 /// 03 §10.7: the sparkline's painter, its version-counter repaint,
 /// semantics (A11Y-02, A11Y-15) and reduced motion (A11Y-11).
 void main() {
-  testWidgets('paints its threshold bands behind the line', (tester) async {
+  testWidgets('paints its threshold bands and rules behind the line', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       _sparkline(
         _ring([10, 50, 80, 95, 60]),
@@ -49,7 +51,9 @@ void main() {
       _painter,
       paints
         ..rect(color: wash(palette.critical))
+        ..rect(color: palette.critical)
         ..rect(color: wash(palette.warning))
+        ..rect(color: palette.warning)
         ..path(
           color: palette.series.first,
           strokeWidth: SparklinePainter.strokeWidth,

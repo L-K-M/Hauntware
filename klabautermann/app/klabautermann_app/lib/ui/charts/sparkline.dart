@@ -198,7 +198,11 @@ final class SparklinePainter extends CustomPainter {
   static const strokeWidth = 1.5;
 
   /// A band's wash over the plot, light enough to keep the line legible.
+  /// The wash is decoration: the rule at its threshold carries the band's
+  /// colour at the strength the palette test checks.
   static const bandAlpha = 0.16;
+
+  static const _ruleWidth = 1.0;
 
   /// The columns of the last paint, kept while the series' version and the
   /// bucket size stay, so the slide's frames do not downsample again.
@@ -219,9 +223,14 @@ final class SparklinePainter extends CustomPainter {
     for (final band in [criticalBand, warningBand]) {
       if (band == null || band.from >= scaleMax) continue;
       final bottom = yOf(band.from);
+      if (bottom <= bandTop) continue;
       canvas.drawRect(
         Rect.fromLTRB(0, bandTop, size.width, bottom),
         Paint()..color = band.color.withValues(alpha: bandAlpha),
+      );
+      canvas.drawRect(
+        Rect.fromLTRB(0, bottom - _ruleWidth, size.width, bottom),
+        Paint()..color = band.color,
       );
       bandTop = bottom;
     }
