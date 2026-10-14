@@ -107,9 +107,13 @@ void main() {
       expect(_applies('Match !all', 'web'), isFalse);
       // ssh accepts `all` after one other criterion, as a no-op.
       expect(_applies('Match host web all', 'web'), isTrue);
-      // `canonical` and `final` hold only on a second pass.
-      expect(_applies('Match canonical', 'web'), isFalse);
+      // `canonical` and `final` hold only on a second pass, which
+      // /etc/ssh/ssh_config may ask for (below).
       expect(_applies('Match !canonical host web', 'web'), isTrue);
+      expect(
+        _resolve('Match canonical\n  User x\n', 'web'),
+        UnresolvedReason.secondPass,
+      );
     });
 
     test('Match host compares the HostName read so far', () {
@@ -246,8 +250,89 @@ void main() {
       }
     });
 
-    test('a Match final makes every value still unset after the first pass '
-        'unknown', () {
+    test('a final pass that /etc/ssh/ssh_config may ask for leaves out a '
+        'name whose Port, User, key or route it would set', () {
+      // Fedora and RHEL ship `Match final all` there, so ssh reads this
+      // file again, matching Host patterns against the host it dials,
+      // and sets what is still unset; other systems do not.
+      const config =
+          'Host db\n  HostName db.internal.example.com\n'
+          'Host *.internal.example.com\n  User ops\n  ProxyJump bastion\n'
+          'Host bastion\n  HostName bastion.example.com\n  ProxyJump none\n';
+      expect(_resolve(config, 'db'), UnresolvedReason.secondPass);
+      expect(_resolve(config, 'bastion'), (
+        'bastion.example.com',
+        22,
+        null,
+        null,
+        'none',
+      ));
+      for (final block in [
+        'Host 10.0.0.*\n  Port 2200',
+        'Host 10.0.0.5\n  IdentityFile ~/.ssh/k',
+        'Match canonical host 10.0.0.5\n  ProxyCommand none',
+        'Match final\n  User late',
+      ]) {
+        expect(
+          _resolve('Host web\n  HostName 10.0.0.5\n$block\n', 'web'),
+          // A Match final here asks for the pass, and what it sets applies.
+          block.startsWith('Match final')
+              ? ('10.0.0.5', 22, 'late', null, null)
+              : UnresolvedReason.secondPass,
+          reason: block,
+        );
+      }
+
+      // The first pass's values stay, and HostName is fixed by then.
+      expect(
+        _resolve(
+          'Host web\n  HostName web.example.com\n  User u\n'
+              'Host *.example.com\n  User late\n  HostName other\n',
+          'web',
+        ),
+        ('web.example.com', 22, 'u', null, null),
+      );
+      // ssh matches the host lowercased, an address as getnameinfo()
+      // writes it unless only its case differs, and a Match host the same.
+      for (final (hostName, block, changes) in [
+        ('WEB.example.com', 'Host web.*', true),
+        ('WEB.example.com', 'Host WEB.*', false),
+        ('2001:0db8::1', 'Host 2001:db8::1', true),
+        ('2001:DB8::1', 'Host 2001:db8::1', false),
+        ('2001:DB8::1', 'Host 2001:DB8::1', true),
+        ('2001:0db8::1', 'Match host 2001:db8::1', true),
+        ('web.example.com', 'Match host web,!web.example.com', false),
+        ('web.example.com', 'Match originalhost web canonical', true),
+      ]) {
+        final config = 'Host web\n  HostName $hostName\n$block\n  User x\n';
+        expect(
+          _resolve(config, 'web'),
+          changes ? UnresolvedReason.secondPass : isA<Record>(),
+          reason: config,
+        );
+      }
+      // A scoped address's form depends on the device's interfaces, so a
+      // block may then match; `*` matches anything.
+      expect(
+        _resolve(
+          'Host z\n  HostName fe80::1%%eth0\nHost fe80::*\n  User x\n',
+          'z',
+        ),
+        UnresolvedReason.mayApply,
+      );
+      expect(
+        _resolve(
+          'Host z\n  HostName fe80::1%%eth0\nHost *\n  User x\n'
+              'Host web\n  Port 2200\n',
+          'z',
+        ),
+        ('fe80::1%eth0', 22, 'x', null, null),
+        reason: 'an address never looks like `web`',
+      );
+    });
+
+    test('a Match final in the file asks for the final pass, and what it '
+        'sets applies', () {
       const fixed =
           'Host web\n  Port 22\n  User u\n  IdentityFile ~/.ssh/k\n'
           '  ProxyJump none\n';
@@ -260,8 +345,25 @@ void main() {
         'none',
       ));
       expect(
-        _resolve('Host web\n  User u\nMatch final\n  User late\n', 'web'),
-        UnresolvedReason.secondPass,
+        _resolve(
+          'Host web\n  User u\nMatch final\n  User late\n  Port 2200\n',
+          'web',
+        ),
+        ('web', 2200, 'u', null, null),
+      );
+      // Host patterns then match the host ssh dials.
+      expect(
+        _resolve(
+          'Host web\n  HostName 10.0.0.5\nHost 10.0.0.*\n  ProxyJump b\n'
+              'Match final\n',
+          'web',
+        ),
+        ('10.0.0.5', 22, null, null, 'b'),
+      );
+      // A final block that may apply and would set a value first.
+      expect(
+        _resolve('Host web\nMatch final exec "true"\n  User late\n', 'web'),
+        UnresolvedReason.mayApply,
       );
       // `final` read as a host pattern is no attribute.
       expect(_resolve('Host web\nMatch host final\n  User late\n', 'web'), (

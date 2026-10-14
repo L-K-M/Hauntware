@@ -297,7 +297,7 @@ void main() {
   group('every block ssh applies, the first value first (03 §10.1)', () {
     test('a wildcard block with a negated pattern sets the jump host', () {
       const config =
-          'Host * !bastion\n  ProxyJump bastion\n'
+          'Host * !bastion !bastion.example.com\n  ProxyJump bastion\n'
           'Host bastion\n  HostName bastion.example.com\n'
           'Host prod-web\n  HostName 10.0.0.5\n';
 
@@ -306,6 +306,18 @@ void main() {
         'prod-web': ['me@bastion.example.com:22', 'me@10.0.0.5:22'],
       });
       expect(importedHostsFromSshConfig(config).skippedCount, 0);
+
+      // Without the second negation, the final pass that
+      // /etc/ssh/ssh_config may ask for (Fedora's and RHEL's do) matches
+      // `*` against bastion.example.com and routes bastion through
+      // itself, so bastion and the host behind it are left out.
+      final unsure = importedHostsFromSshConfig(
+        'Host * !bastion\n  ProxyJump bastion\n'
+        'Host bastion\n  HostName bastion.example.com\n'
+        'Host prod-web\n  HostName 10.0.0.5\n',
+      );
+      expect(unsure.hosts, isEmpty);
+      expect(unsure.skippedCount, 2);
     });
 
     test('a wildcard block before the host\'s own block comes first', () {

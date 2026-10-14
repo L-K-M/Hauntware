@@ -22,9 +22,12 @@
   file names only in a `ProxyJump`. A host Klabautermann cannot connect
   to as ssh would is skipped and counted in the import message: one
   that uses a `ProxyCommand`, one an `Include` or a `Match` block it
-  cannot evaluate could change, one whose `HostName` or `IdentityFile`
-  needs something it cannot fill in, or one whose `ProxyJump` ssh would
-  refuse or it cannot follow (a route of more than 16 hops included).
+  cannot evaluate could change, one whose port, user, key or jump host
+  would change when ssh reads the file a second time for the name it
+  dials (as Fedora's and RHEL's `/etc/ssh/ssh_config` make it do), one
+  whose `HostName` or `IdentityFile` needs something it cannot fill in,
+  or one whose `ProxyJump` ssh would refuse or it cannot follow (a route
+  of more than 16 hops included).
 - Desktop settings window: on macOS, Linux and Windows, Settings opens in
   a window of its own, and a theme change there applies to the app.
   Phones keep the settings page.

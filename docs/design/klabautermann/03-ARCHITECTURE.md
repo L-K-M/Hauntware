@@ -3486,16 +3486,30 @@ the engine in `engine_isolate.dart` beside it):
   does a host from a store of an older schema (4.10). The engine never
   dials a route ssh would not take, so the import reads each host as
   ssh does (`readconf.c`; `ssh_config_settings.dart` beside the import):
-  - Every block that applies to the name sets each value it names
-    unless an earlier line set it, so the first value wins within a
-    block and across blocks, and a later block for an alias adds only
-    what earlier ones left unset. Lines before the first `Host` or
-    `Match` apply to every name. A `Host` block applies when one of its
-    patterns matches the name (`*` and `?` as `match_pattern()` reads
-    them, on UTF-8 bytes, so `?` is one byte) and no negated one does. A `Match` block applies when all its
-    criteria hold: `all`, `host` (the `HostName` read so far) and
-    `originalhost` are evaluated as ssh does, and `canonical` and
-    `final` hold only on a second pass.
+  - Every block that applies to the name sets each value it names unless
+    an earlier line set it, so the first value wins within a block and
+    across blocks, and a later block for an alias adds only what earlier
+    ones left unset. Lines before the first `Host` or `Match` apply to
+    every name. A `Host` block applies when one of its patterns matches
+    the name (`*` and `?` as `match_pattern()` reads them, on UTF-8
+    bytes, so `?` is one byte) and no negated one does. A `Match` block
+    applies when all its criteria hold: `all`, `host` (the `HostName`
+    read so far) and `originalhost` are evaluated as ssh does, and
+    `canonical` and `final` hold only on the final pass.
+  - A `Match final` makes ssh read its config again, the final pass
+    (`ssh.c`): `HostName` is fixed by then, `Host` and `Match host`
+    match the host ssh dials (lowercased, or an address as
+    `getnameinfo()` writes it unless only its case differs), and blocks
+    that apply set what is still unset. `/etc/ssh/ssh_config` can ask
+    for that pass too (Fedora and RHEL ship `Match final all` in
+    `ssh_config.d`), so the import reads the user's file a second time
+    for every host and hop: with a `Match final` in it, what that pass
+    sets applies; without one, a host whose `Port`, `User`, first
+    `IdentityFile` or route that pass would set is left out, because the
+    outcome depends on a system file the engine cannot see. For a
+    `HostName` whose final form the import cannot know (an address with
+    a scope, or one the system resolver may read where Dart does not), a
+    block whose pattern may match it counts as a `Match` that may apply.
   - The engine keeps `HostName` as ssh dials it (`%h` is the name and
     `%%` is `%`, ssh_config(5), TOKENS; lowercased unless it is an
     address), `Port`, `User`, the first `IdentityFile` that is not
@@ -3509,21 +3523,22 @@ the engine in `engine_isolate.dart` beside it):
     `localuser`, `localnetwork` or `tagged` criterion and none that
     fails, or ssh rejects it; an `Include`, which the engine does not
     follow, applies to it, since the included file could set any value;
-    the config has an `Include` or a `Match final` anywhere, which makes
-    ssh read it again against the canonical name, and the host's `Port`,
-    `User`, `IdentityFile` or route is still unset after the first pass;
+    the config has an `Include` anywhere, since an included file could
+    ask for the final pass and set any value then, and the host's
+    `Port`, `User`, `IdentityFile` or route is still unset after the
+    first pass; the final pass above would set one of those;
     `CanonicalizeHostname` is other than `no`; its `HostName` holds
     another token, on which ssh exits, or its first `IdentityFile` holds
-    a `%` token or a `${VAR}`, which ssh fills in from the connection and
-    the environment; its name holds U+FFFD, which the app decodes in
+    a `%` token or a `${VAR}`, which ssh fills in from the connection
+    and the environment; its name holds U+FFFD, which the app decodes in
     place of bytes that are not UTF-8 (ssh compares the bytes, and
     distinct names decode alike), or a wildcard pattern holding U+FFFD
-    may apply and could set a value first; or a block that applies holds a line ssh rejects (a
-    `Port` other than a decimal 1 to 65535 or `ssh`, `http` or `https`,
-    a value missing or doubled, a quote left open, or a `Host` line with
-    an empty pattern). ssh rejects the whole config over
-    such a line wherever it stands; the import checks only the blocks
-    that apply to a host. It does not read the system-wide
+    may apply and could set a value first; or a block that applies holds
+    a line ssh rejects (a `Port` other than a decimal 1 to 65535 or
+    `ssh`, `http` or `https`, a value missing or doubled, a quote left
+    open, or a `Host` line with an empty pattern). ssh rejects the whole
+    config over such a line wherever it stands; the import checks only
+    the blocks that apply to a host. It does not read the system-wide
     `/etc/ssh/ssh_config`, which ssh reads after the user's file and
     which can set what that file leaves unset.
   - `ProxyJump` follows ssh (`parse_jump()` and `ssh.c`): `a,b` dials

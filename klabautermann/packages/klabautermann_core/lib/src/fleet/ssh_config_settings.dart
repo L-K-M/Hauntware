@@ -96,8 +96,14 @@ enum UnresolvedReason {
   /// opens, could set any value first.
   include,
 
-  /// ssh would read the config a second time, against the canonical host
-  /// name, and that pass could set a value the first left unset.
+  /// ssh may read the config a second time, its final pass, and the
+  /// outcome depends on what the engine cannot see: an `Include` names a
+  /// file that could ask for that pass and set any value there, and the
+  /// `Port`, `User`, `IdentityFile` or route is still unset; without an
+  /// `Include` or a `Match final` here, only `/etc/ssh/ssh_config` can ask
+  /// for the pass, and it would set one of those; or
+  /// `CanonicalizeHostname` is other than `no`, so ssh canonicalizes the
+  /// host through DNS before that pass.
   secondPass,
 
   /// The name holds U+FFFD, which the app's decoding puts in place of
@@ -134,56 +140,78 @@ final class UnresolvedSshSettings extends SshConfigResolution {
 /// could give ssh, the settings ssh would use for it (03 §10.1).
 ///
 /// What ssh does (`readconf.c`), and so what this does: it reads the file
-/// from the top, and every block that applies to the name sets each
-/// setting it names unless an earlier line already set it, so the first
-/// value read wins, in one block as across blocks. Lines before the first
-/// `Host` or `Match` apply to every name. A `Host` block applies when one
-/// of its patterns matches the name and no negated one does (`*` and `?`
-/// are wildcards, matched case-sensitively on UTF-8 bytes, as
-/// `match_pattern()` does). The app decodes the file with U+FFFD for bytes
-/// that are not UTF-8, so a name holding one is unresolved, and a
-/// wildcard pattern holding one may match any name.
-/// Whichever of `ProxyJump` and `ProxyCommand` ssh reads first is the
-/// route. `IdentityFile` adds a key file each time; ssh tries them in
-/// order, and the engine signs in with the first one that is not `none`.
+/// from the top, and every block that applies to the name sets each setting
+/// it names unless an earlier line already set it, so the first value read
+/// wins, in one block as across blocks. Lines before the first `Host` or
+/// `Match` apply to every name. A `Host` block applies when one of its
+/// patterns matches the name and no negated one does (`*` and `?` are
+/// wildcards, matched case-sensitively on UTF-8 bytes, as `match_pattern()`
+/// does). The app decodes the file with U+FFFD for bytes that are not
+/// UTF-8, so a name holding one is unresolved, and a wildcard pattern
+/// holding one may match any name. Whichever of `ProxyJump` and
+/// `ProxyCommand` ssh reads first is the route. `IdentityFile` adds a key
+/// file each time; ssh tries them in order, and the engine signs in with
+/// the first one that is not `none`.
 ///
-/// A `Match` block applies when all its criteria hold. `all`, `host`
-/// (the `HostName` read so far, `%h` expanded) and `originalhost` (the
-/// name) are evaluated as ssh does; `canonical` and `final` hold only on
-/// a second pass. `exec`, `user`, `localuser`, `localnetwork` and
-/// `tagged` depend on the device or the connection, so a block with one
-/// of them, and no criterion that fails, may apply: if it would set a
-/// value still unset, the name is unresolved. So is a malformed `Match`,
-/// on which ssh rejects the whole config.
+/// A `Match` block applies when all its criteria hold. `all`, `host` (the
+/// `HostName` read so far, `%h` expanded) and `originalhost` (the name) are
+/// evaluated as ssh does; `canonical` and `final` hold only on the final
+/// pass (below). `exec`, `user`, `localuser`, `localnetwork` and `tagged`
+/// depend on the device or the connection, so a block with one of them, and
+/// no criterion that fails, may apply: if it would set a value still unset,
+/// the name is unresolved. So is a malformed `Match`, on which ssh rejects
+/// the whole config.
+///
+/// A `Match final` anywhere, in this file or in one it includes, makes ssh
+/// read its config a second time, the final pass (`ssh.c`). `HostName` is
+/// fixed by then, and `Host` and `Match host` match the host ssh dials: the
+/// `HostName` lowercased, or an address as `getnameinfo()` writes it unless
+/// only its case differs. `final` and `canonical` hold, and every block
+/// that applies sets what is still unset. `/etc/ssh/ssh_config` can ask for
+/// that pass too, as Fedora's and RHEL's `Match final all` does, so it may
+/// happen for any config. So the import reads this file a second time for
+/// every name: with a `Match final` here, what that pass sets applies;
+/// without one, a name whose `Port`, `User`, first `IdentityFile` or route
+/// that pass would set is unresolved, since the outcome depends on a file
+/// the engine cannot see. Where the host ssh dials cannot be known (an
+/// address with a scope, whose form depends on the device's interfaces, or
+/// one the system resolver may read where Dart does not), a block with a
+/// pattern other than `*` may apply on that pass.
 ///
 /// `Include` is not followed. A file it names could set any value, so an
 /// `Include` in a block that applies leaves the name unresolved. An
-/// included file could also hold a `Match final`, so a config with an
-/// `Include` or a `Match final` anywhere makes ssh read it a second time,
-/// against the canonical name; a name whose `Port`, `User`,
-/// `IdentityFile` or route is still unset after the first pass is then
-/// unresolved, since that pass could set it. `CanonicalizeHostname` other
-/// than `no` canonicalizes through DNS before that pass, so it leaves the
-/// name unresolved.
+/// included file could also hold a `Match final` and set any value on the
+/// final pass, so in a config with an `Include` anywhere a name whose
+/// `Port`, `User`, `IdentityFile` or route is still unset after the first
+/// pass is unresolved. `CanonicalizeHostname` other than `no` canonicalizes
+/// through DNS before the final pass, so it leaves the name unresolved.
 ///
 /// ssh rejects the whole config over some lines wherever they stand: a
-/// `Port` it cannot read, a directive with no value or more values than
-/// it takes, a quote left open, or an empty `Host` pattern. A `Port` here
-/// is a decimal 1 to 65535 or one of the service names `ssh`, `http` and
+/// `Port` it cannot read, a directive with no value or more values than it
+/// takes, a quote left open, or an empty `Host` pattern. A `Port` here is a
+/// decimal 1 to 65535 or one of the service names `ssh`, `http` and
 /// `https`, as Séance's `SshConfigImporter` reads it (ssh resolves other
 /// names too). Such a line leaves unresolved only the names its block
 /// applies to; lines in other blocks, and directives the engine does not
-/// map, are not checked.
-/// Nor is the system-wide `/etc/ssh/ssh_config`, which ssh reads after
-/// this file and which can set what this file leaves unset, read at all.
+/// map, are not checked. Nor is the system-wide `/etc/ssh/ssh_config`,
+/// which ssh reads after this file and which can set what this file leaves
+/// unset, read at all.
 final class SshConfigSettings {
-  SshConfigSettings._(this.aliases, this._always, this._byName, this._rereads);
+  SshConfigSettings._(
+    this.aliases,
+    this._read,
+    this._always,
+    this._byName,
+    this._includes,
+    this._wantsFinalPass,
+  );
 
   /// Reads [text].
   factory SshConfigSettings.parse(String text) {
     final aliases = <String>{};
     final blocks = <_Block>[_Top()];
-    var rereads = false;
+    var includes = false;
+    var wantsFinalPass = false;
 
     for (final raw in text.split('\n')) {
       final line = SshConfigLine.tryParse(raw);
@@ -206,13 +234,13 @@ final class SshConfigSettings {
             line.arguments,
             openQuote: _hasOpenQuote(rest),
           );
-          rereads |= block.wantsSecondPass;
+          wantsFinalPass |= block.wantsFinalPass;
           blocks.add(block);
         default:
           final keyword = _keywords[line.keyword];
           if (keyword == null) continue;
 
-          rereads |= keyword == _Keyword.include;
+          includes |= keyword == _Keyword.include;
           blocks.last.lines.add((
             keyword: keyword,
             arguments: line.arguments,
@@ -227,12 +255,14 @@ final class SshConfigSettings {
     // block whose patterns hold no wildcard can only match those names, so
     // a name considers those blocks and the rest, which keeps resolving
     // every alias of a large config fast.
+    final read = <_Block>[];
     final always = <_Block>[];
     final byName = <String, List<_Block>>{};
     for (final block in blocks) {
       final rejected = block is _HostBlock && block.rejected;
       if (block.lines.isEmpty && !rejected) continue;
 
+      read.add(block);
       switch (block) {
         case _HostBlock(:final names?):
           for (final name in names) {
@@ -246,9 +276,11 @@ final class SshConfigSettings {
     }
     return SshConfigSettings._(
       List.unmodifiable(aliases),
+      read,
       always,
       byName,
-      rereads,
+      includes,
+      wantsFinalPass,
     );
   }
 
@@ -257,6 +289,10 @@ final class SshConfigSettings {
   /// its line matches it (Séance's `SshConfigImporter.hostAliases`).
   final List<String> aliases;
 
+  /// Every block that can change a setting or leave a name out, in file
+  /// order.
+  final List<_Block> _read;
+
   /// The blocks every name considers, in file order.
   final List<_Block> _always;
 
@@ -264,8 +300,11 @@ final class SshConfigSettings {
   /// match, in file order.
   final Map<String, List<_Block>> _byName;
 
-  /// Whether ssh may read the config a second time.
-  final bool _rereads;
+  /// Whether a line includes another file.
+  final bool _includes;
+
+  /// Whether a `Match final` makes ssh read the config a final time.
+  final bool _wantsFinalPass;
 
   /// The settings ssh would use for [name], the host name you give it.
   SshConfigResolution resolve(String name) {
@@ -274,28 +313,71 @@ final class SshConfigSettings {
     }
 
     final reading = _Reading(name);
-    final target = _utf8Bytes(name);
-    final own = _byName[name] ?? const <_Block>[];
+    if (_readPass(reading, name) case final reason?) {
+      return UnresolvedSshSettings(reason);
+    }
+    if (reading.canonicalization case final value?
+        when !_canonicalizationOff.contains(_asciiLower(value))) {
+      return const UnresolvedSshSettings(UnresolvedReason.secondPass);
+    }
+    final host = reading.matchHost;
+    if (host == null) {
+      return const UnresolvedSshSettings(UnresolvedReason.hostNameToken);
+    }
+
+    if (_includes) {
+      // An included file could ask for the final pass and set anything
+      // then, so only a name that fixes all of them is known.
+      final (:port, :user, :identityFile, :route) = reading.dialing;
+      if (port == null ||
+          user == null ||
+          identityFile == null ||
+          route == null) {
+        return const UnresolvedSshSettings(UnresolvedReason.secondPass);
+      }
+      return reading.finish(host);
+    }
+
+    final firstPass = reading.dialing;
+    reading.startFinalPass(_finalHost(host));
+    if (_readPass(reading, reading.finalHost) case final reason?) {
+      return UnresolvedSshSettings(reason);
+    }
+    // Without a `Match final` here, only /etc/ssh/ssh_config can ask for
+    // the pass, so the outcome must not depend on it.
+    if (!_wantsFinalPass && reading.dialing != firstPass) {
+      return const UnresolvedSshSettings(UnresolvedReason.secondPass);
+    }
+    return reading.finish(host);
+  }
+
+  /// Reads the blocks that apply into [reading], on its pass, with `Host`
+  /// patterns matching [host] (null when it cannot be known); the reason
+  /// the name is unresolved, or null.
+  UnresolvedReason? _readPass(_Reading reading, String? host) {
+    final target = host == null ? null : _utf8Bytes(host);
+    final own = host == null ? const <_Block>[] : _byName[host] ?? const [];
+    final always = host == null ? _read : _always;
     var next = 0;
     var nextOwn = 0;
-    while (next < _always.length || nextOwn < own.length) {
+    while (next < always.length || nextOwn < own.length) {
       final takeOwn =
-          next == _always.length ||
-          (nextOwn < own.length && own[nextOwn].order < _always[next].order);
-      final block = takeOwn ? own[nextOwn++] : _always[next++];
+          next == always.length ||
+          (nextOwn < own.length && own[nextOwn].order < always[next].order);
+      final block = takeOwn ? own[nextOwn++] : always[next++];
 
       final applies = block.applies(target, reading);
       if (applies == _Applies.no) continue;
       if (block case _HostBlock(rejected: true)) {
-        return const UnresolvedSshSettings(UnresolvedReason.rejectedLine);
+        return UnresolvedReason.rejectedLine;
       }
 
       for (final line in block.lines) {
         final reason = reading.read(line, mayApply: applies == _Applies.maybe);
-        if (reason != null) return UnresolvedSshSettings(reason);
+        if (reason != null) return reason;
       }
     }
-    return reading.finish(secondPass: _rereads);
+    return null;
   }
 }
 
@@ -320,9 +402,9 @@ sealed class _Block {
 
   final List<_Line> lines = [];
 
-  /// Whether the block applies to the name [reading] is for; `Host`
-  /// patterns match [target], that name as [_utf8Bytes] gives it.
-  _Applies applies(String target, _Reading reading);
+  /// Whether the block applies on [reading]'s pass; `Host` patterns match
+  /// [target], as [_utf8Bytes] gives it, or may match when it is null.
+  _Applies applies(String? target, _Reading reading);
 }
 
 /// The lines before the first `Host` or `Match`: they apply to every name.
@@ -330,7 +412,7 @@ final class _Top extends _Block {
   _Top() : super(0);
 
   @override
-  _Applies applies(String target, _Reading reading) => _Applies.yes;
+  _Applies applies(String? target, _Reading reading) => _Applies.yes;
 }
 
 final class _HostBlock extends _Block {
@@ -366,18 +448,30 @@ final class _HostBlock extends _Block {
 
   /// `readconf.c`'s `oHost`: a matching negated pattern ends the line and
   /// turns the block off. A pattern that is [_Glob.undecided] may match.
+  /// An unknown target is an address in a form the import cannot tell
+  /// ([_finalHost]): `*` matches it, a pattern without wildcards only if
+  /// it looks like an address, and any other may.
   @override
-  _Applies applies(String target, _Reading reading) {
+  _Applies applies(String? target, _Reading reading) {
     var active = false;
     var mayActivate = false;
     var mayDeactivate = false;
     for (final (:negated, :glob) in _patterns) {
-      if (glob.undecided) {
+      final bool? matches = glob.undecided
+          ? null
+          : target != null
+          ? glob.matches(target)
+          : glob.matchesAll
+          ? true
+          : glob.literal && !_looksLikeAddress(glob.pattern)
+          ? false
+          : null;
+      if (matches == null) {
         mayActivate |= !negated;
         mayDeactivate |= negated;
         continue;
       }
-      if (!glob.matches(target)) continue;
+      if (!matches) continue;
       if (negated) return _Applies.no;
       active = true;
     }
@@ -387,14 +481,14 @@ final class _HostBlock extends _Block {
 }
 
 /// A `Match` criterion, as `match_cfg_line()` reads it.
-enum _Criterion { all, secondPass, host, originalHost, unknown }
+enum _Criterion { all, finalPass, host, originalHost, unknown }
 
 final class _MatchBlock extends _Block {
   _MatchBlock._(
     super.order,
     this._criteria, {
     required this.malformed,
-    required this.wantsSecondPass,
+    required this.wantsFinalPass,
   });
 
   /// `match_cfg_line()`'s reading of a `Match` line's [arguments]; ssh
@@ -405,7 +499,7 @@ final class _MatchBlock extends _Block {
     required bool openQuote,
   }) {
     final criteria = <({_Criterion kind, bool negated, _HostList? list})>[];
-    var wantsSecondPass = false;
+    var wantsFinalPass = false;
     var attributes = 0;
     var index = 0;
 
@@ -413,7 +507,7 @@ final class _MatchBlock extends _Block {
       order,
       criteria,
       malformed: malformed || openQuote,
-      wantsSecondPass: wantsSecondPass,
+      wantsFinalPass: wantsFinalPass,
     );
 
     while (index < arguments.length) {
@@ -436,9 +530,9 @@ final class _MatchBlock extends _Block {
 
       attributes++;
       if (lowered == 'canonical' || lowered == 'final') {
-        wantsSecondPass |= lowered == 'final';
+        wantsFinalPass |= lowered == 'final';
         criteria.add((
-          kind: _Criterion.secondPass,
+          kind: _Criterion.finalPass,
           negated: negated,
           list: null,
         ));
@@ -475,19 +569,18 @@ final class _MatchBlock extends _Block {
   final bool malformed;
 
   /// Whether the line holds `final`, which makes ssh read the config a
-  /// second time, for every name.
-  final bool wantsSecondPass;
+  /// final time, for every name.
+  final bool wantsFinalPass;
 
   @override
-  _Applies applies(String target, _Reading reading) {
+  _Applies applies(String? target, _Reading reading) {
     if (malformed) return _Applies.maybe;
 
     var unknown = false;
     for (final (:kind, :negated, :list) in _criteria) {
       final bool? holds = switch (kind) {
         _Criterion.all => true,
-        // This is the first pass.
-        _Criterion.secondPass => false,
+        _Criterion.finalPass => reading.finalPass,
         _Criterion.host => switch (reading.matchHost) {
           null => null,
           final host => list!.matches(host),
@@ -517,12 +610,40 @@ final class _Reading {
   ({bool command, String value})? route;
   String? canonicalization;
 
-  /// The host a `Match host` compares: the `HostName` read so far with
-  /// `%h` expanded, else the name; null when ssh would exit expanding it.
-  String? get matchHost => switch (hostName) {
-    null => name,
-    final value => _expandHostName(value, name),
-  };
+  /// Whether this is ssh's final pass, on which `HostName` and
+  /// `CanonicalizeHostname` no longer matter.
+  bool finalPass = false;
+
+  /// On the final pass, the host ssh matches `Host` and `Match host`
+  /// against ([_finalHost]); null when it cannot be known.
+  String? finalHost;
+
+  /// Starts the final pass, matching [host].
+  void startFinalPass(String? host) {
+    finalPass = true;
+    finalHost = host;
+  }
+
+  /// The host a `Match host` compares: on the first pass the `HostName`
+  /// read so far with `%h` expanded, else the name, and null when ssh
+  /// would exit expanding it; on the final pass [finalHost].
+  String? get matchHost => finalPass
+      ? finalHost
+      : switch (hostName) {
+          null => name,
+          final value => _expandHostName(value, name),
+        };
+
+  /// The values the engine dials with, which the final pass must not
+  /// change unless the file asks for it.
+  ({
+    int? port,
+    String? user,
+    String? identityFile,
+    ({bool command, String value})? route,
+  })
+  get dialing =>
+      (port: port, user: user, identityFile: identityFile, route: route);
 
   /// Applies [line] from a block that applies, or may apply; the reason
   /// the name is unresolved, or null.
@@ -551,7 +672,10 @@ final class _Reading {
     }
 
     return switch (line.keyword) {
-      _Keyword.hostName => first(hostName == null, () => hostName = single),
+      _Keyword.hostName => first(
+        hostName == null && !finalPass,
+        () => hostName = single,
+      ),
       _Keyword.port => first(port == null, () => port = _parsePort(single!)),
       _Keyword.user => first(user == null, () => user = single),
       // ssh skips `none` when it loads keys, so the next file is first.
@@ -567,35 +691,21 @@ final class _Reading {
         ),
       ),
       _Keyword.canonicalizeHostname => first(
-        canonicalization == null,
+        canonicalization == null && !finalPass,
         () => canonicalization = single,
       ),
       _Keyword.include => UnresolvedReason.include,
     };
   }
 
-  /// The settings, once every block has been read.
-  SshConfigResolution finish({required bool secondPass}) {
-    if (canonicalization case final value?
-        when !_canonicalizationOff.contains(_asciiLower(value))) {
-      return const UnresolvedSshSettings(UnresolvedReason.secondPass);
-    }
+  /// The settings, once every block has been read, for [host], the
+  /// `HostName` with `%h` expanded.
+  SshConfigResolution finish(String host) {
     final route = this.route;
-    if (secondPass &&
-        (port == null ||
-            user == null ||
-            identityFile == null ||
-            route == null)) {
-      return const UnresolvedSshSettings(UnresolvedReason.secondPass);
-    }
     if (route != null &&
         route.command &&
         _asciiLower(route.value) != _noProxyCommand) {
       return const UnresolvedSshSettings(UnresolvedReason.proxyCommand);
-    }
-    final host = matchHost;
-    if (host == null) {
-      return const UnresolvedSshSettings(UnresolvedReason.hostNameToken);
     }
     final key = identityFile;
     if (key != null && !isImportedIdentityFile(key)) {
@@ -721,13 +831,33 @@ String? _expandHostName(String value, String name) {
   return expanded.toString();
 }
 
-/// ssh's `is_addr()`: a `%`, a `:` or nothing but digits and dots, or
-/// a name that parses as an IP address.
+/// The host ssh matches `Host` and `Match host` against on its final pass
+/// (`ssh.c`), for [host], the `HostName` with `%h` expanded: lowercased
+/// unless it is an address, and an address as `getnameinfo()` writes it,
+/// unless only its case differs. Null when the import cannot know it: for
+/// an address with a scope, whose form depends on the device's
+/// interfaces, one Dart does not parse though the system resolver may
+/// (`10.1`), or a host holding U+FFFD.
+String? _finalHost(String host) {
+  if (host.contains(_replacement)) return null;
+  if (!_isAddress(host)) return _asciiLower(host);
+  if (host.contains('%')) return null;
+
+  final address = InternetAddress.tryParse(host);
+  if (address == null) return null;
+  final written = InternetAddress.fromRawAddress(address.rawAddress).address;
+  return _asciiLower(written) == _asciiLower(host) ? host : written;
+}
+
+/// ssh's `is_addr()`: [_looksLikeAddress], or a name that parses as an IP
+/// address.
 bool _isAddress(String host) =>
-    host.contains('%') ||
-    host.contains(':') ||
-    _digitsAndDots.hasMatch(host) ||
-    InternetAddress.tryParse(host) != null;
+    _looksLikeAddress(host) || InternetAddress.tryParse(host) != null;
+
+/// ssh's `is_addr_fast()`: a `%`, a `:` or nothing but digits and dots.
+/// Every form ssh may give an address on its final pass looks like this.
+bool _looksLikeAddress(String host) =>
+    host.contains('%') || host.contains(':') || _digitsAndDots.hasMatch(host);
 
 /// ASCII lowercase, as ssh's `lowercase()` and `tolower()` in the C locale.
 String _asciiLower(String text) {
@@ -804,6 +934,12 @@ final class _Glob {
 
   /// The pieces between the `*`s, or null when the pattern holds a `?`.
   late final List<String>? _pieces;
+
+  /// Whether the pattern is nothing but `*`, which matches any text.
+  bool get matchesAll => _pieces?.every((piece) => piece.isEmpty) ?? false;
+
+  /// Whether the pattern holds no wildcard, so it matches only itself.
+  bool get literal => _pieces?.length == 1;
 
   /// Whether the pattern holds a wildcard and U+FFFD, so what it matches
   /// depends on bytes the import cannot know. Without a wildcard it
