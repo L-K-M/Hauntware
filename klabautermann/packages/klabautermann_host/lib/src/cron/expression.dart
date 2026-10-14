@@ -245,9 +245,10 @@ final class CronExpression {
       } else {
         lo = _value(base.substring(0, dash), names) ?? -1;
         hi = _value(base.substring(dash + 1), names) ?? -1;
-        if (hi < lo) return null;
       }
-      if (lo < min || hi > max) return null;
+      // hi < lo rejects both an inverted a-b and a bare a/n whose start
+      // lies above the maximum, as cronie does.
+      if (lo < min || hi > max || hi < lo) return null;
       final single = dash < 0 && slash < 0;
       out.add(CronFieldItem(start: lo, end: single ? null : hi, step: step));
     }
