@@ -617,6 +617,89 @@ void main() {
       expect(_paragraph(tester, line).size.height, greaterThan(oneRow));
     });
 
+    /// Pauses a 300 px wide wrapped view with [long] across its top edge
+    /// and line 50, the line after it, [below] rows under that edge.
+    Future<LogViewController> straddle(
+      WidgetTester tester,
+      String long, {
+      required int below,
+      LogLevel? Function(LogLine line)? levelOf,
+    }) async {
+      final logs = LogViewController()
+        ..add([..._lines(0, 50), long, ..._lines(50, 50)]);
+      await _pump(
+        tester,
+        controller: logs,
+        wrap: LogWrap.on,
+        levelOf: levelOf,
+        size: const Size(300, 200),
+      );
+      await tester.drag(find.byType(LogView), const Offset(0, 600));
+      await tester.pumpAndSettle();
+      expect(logs.following.value, isFalse);
+
+      // Line 50 is just above the view, built but offstage.
+      final line50 = find.text(
+        'line 50',
+        findRichText: true,
+        skipOffstage: false,
+      );
+      final row = tester.getSize(line50).height;
+      final position = _position(tester);
+      position.jumpTo(
+        position.pixels + tester.getTopLeft(line50).dy - below * row,
+      );
+      await tester.pump();
+      expect(tester.getTopLeft(_line(50)).dy, closeTo(below * row, 0.01));
+      expect(
+        tester.getTopLeft(find.text(long, findRichText: true)).dy,
+        lessThan(-row),
+      );
+      return logs;
+    }
+
+    /// Expects the view to be paused with [long] still across its top
+    /// edge and line 50 wholly in sight below it.
+    void expectHeld(
+      WidgetTester tester,
+      LogViewController logs,
+      String long,
+      String step,
+    ) {
+      final reason = '$step: top line ${_topLine(tester)}';
+      expect(logs.following.value, isFalse, reason: reason);
+      expect(_shows(tester, 50), isTrue, reason: reason);
+      final rect = tester.getRect(find.text(long, findRichText: true));
+      expect(rect.top, lessThanOrEqualTo(0), reason: reason);
+      expect(rect.bottom, greaterThan(0), reason: reason);
+    }
+
+    testWidgets('a paused view keeps the line across its top in sight as '
+        'the width changes', (tester) async {
+      final long = 'long ${List.filled(120, 'word').join(' ')}';
+      final logs = await straddle(tester, long, below: 3);
+
+      for (final width in [900.0, 300.0, 200.0, 400.0]) {
+        tester.view.physicalSize = Size(width, 200);
+        await tester.pump();
+        expectHeld(tester, logs, long, '$width wide');
+      }
+    });
+
+    testWidgets('a paused view keeps the line across its top in sight as '
+        'the gutter goes and comes', (tester) async {
+      // Breaks anywhere, so the gutter's width changes its rows.
+      final long = 'x' * 2000;
+      LogLevel? noLevel(LogLine line) => null;
+      final logs = await straddle(tester, long, below: 2, levelOf: noLevel);
+
+      await tester.pumpWidget(_app(logs, wrap: LogWrap.on));
+      expectHeld(tester, logs, long, 'gutter gone');
+
+      await tester.pumpWidget(_app(logs, wrap: LogWrap.on, levelOf: noLevel));
+      expectHeld(tester, logs, long, 'gutter back');
+    });
+
     for (final width in [300.0, 600.0]) {
       testWidgets('scrolling up through lines not yet measured holds the '
           'view, $width wide', (tester) async {

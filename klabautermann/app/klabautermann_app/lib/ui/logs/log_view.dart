@@ -515,8 +515,8 @@ const int _minRowSlots = 1024;
 /// the count of their last measurement or, before one, an estimate. A
 /// width change therefore lays out only the lines near the view. When
 /// measuring an entry above the scroll offset changes its count, the
-/// layout moves the offset by the difference, so the lines in sight hold
-/// still.
+/// layout moves the offset by the difference, and the offset keeps its
+/// share of the entry it is in, so the lines in sight hold still.
 final class _RowCounts {
   _RowCounts(this._measure);
 
@@ -613,7 +613,7 @@ final class _RowCounts {
   /// Measures the entries a layout of rows [top] to [bottom] shows, with
   /// its scroll offset at row [anchor], and as many rows above that
   /// offset, and returns the rows to move the offset by so the entry at it
-  /// holds still.
+  /// holds still and the offset keeps its share of it.
   int measure(
     double top,
     double anchor,
@@ -632,17 +632,20 @@ final class _RowCounts {
     // counts grew by would cost one, past the viewport's limit of ten.
     final reachesEnd = bottom >= _total;
 
-    // From the entry at the offset down, a new count moves nothing above;
-    // above it, every change moves the offset by as much.
+    // Below the entry at the offset, a new count moves nothing above; above
+    // it, every change moves the offset by as much, and the offset keeps
+    // its share of that entry's own rows.
     final first = indexAtRow((anchor + _rowTolerance).floor());
     final firstRow = rowsBefore(first);
     var end = firstRow;
+    var firstChange = 0;
     for (var i = first; i < _length && end < bottom; i++) {
-      _measureAt(i);
+      final change = _measureAt(i);
+      if (i == first) firstChange = change;
       end += rowsOf(i);
     }
 
-    var correction = 0;
+    var correction = _keepShare(anchor - firstRow, rowsOf(first), firstChange);
     if (reachesEnd) {
       var tail = 0;
       for (var i = _length - 1; i >= 0 && tail < bottom - top; i--) {
@@ -661,6 +664,20 @@ final class _RowCounts {
       above += rowsOf(i);
     }
     return correction;
+  }
+
+  /// The rows to move an offset [into] rows into an entry by when the
+  /// entry's count changed by [change] to [rows], so the offset keeps its
+  /// share of the entry. Kept as many rows in, it would land past the end
+  /// of an entry that a wider row shrank, and the lines in sight below
+  /// would scroll away unseen; an entry that grew would push them out of
+  /// the view instead.
+  static int _keepShare(double into, int rows, int change) {
+    final before = rows - change;
+    final row = (into + _rowTolerance).floor();
+    // An offset past the last entry, as in an overscroll, has no share.
+    if (change == 0 || row < 0 || row >= before) return 0;
+    return ((row + 0.5) * rows / before).floor() - row;
   }
 
   /// Measures the entry at [index] unless this generation did, and returns

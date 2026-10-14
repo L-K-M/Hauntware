@@ -3594,8 +3594,9 @@ bound of its width fits (a monospace advance per Latin-1 code unit, two
 per other unit or tab; a line or paragraph separator never fits),
 otherwise laid out. Other lines keep an earlier count or, once the viewer
 has a width, an estimate from their length, and a measurement above the
-view moves the offset by the difference, so the lines in sight hold
-still and a resize lays out only the lines near them. Tabs
+view moves the offset by the difference while the offset keeps its share
+of the line it is in, so the lines in sight hold still and a resize lays
+out only the lines near them. Tabs
 are not expanded to stops yet. Any scroll that leaves the
 newest line pauses following, and reaching it again, End or Follow resumes
 it; the scroll position holds the end during layout, and while paused it
