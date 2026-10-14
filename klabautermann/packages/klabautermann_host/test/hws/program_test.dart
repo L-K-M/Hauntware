@@ -127,18 +127,6 @@ void main() {
     expect(kProbeTools, hasLength(28));
   });
 
-  test('the probe checks exactly the listed tools', () {
-    final program = buildSamplerProgram(
-      kind: SamplerKind.slow,
-      nonce: '0123456789abcdef0123456789abcdef',
-    );
-    final loop = RegExp(
-      r'_probe_tools\(\) \{\n  _o=.*\n  for _t in ([^;]+); do',
-    ).firstMatch(program);
-    expect(loop, isNotNull);
-    expect(loop![1]!.split(' '), kProbeTools);
-  });
-
   test('the probe tool loop checks exactly kProbeTools, in order', () {
     // The loop is literal program text, so a tool added to only one side
     // would change the probe without a collector-set version bump.
