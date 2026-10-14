@@ -537,6 +537,48 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'More'**
   String get serverTabMore;
+
+  /// Screen-reader name of a log view, the scrolling list of a server's log lines.
+  ///
+  /// In en, this message translates to:
+  /// **'Log'**
+  String get logViewLabel;
+
+  /// Button shown while a log view is paused: scrolls to the newest line and keeps it in sight as lines arrive (LOG-02).
+  ///
+  /// In en, this message translates to:
+  /// **'Follow'**
+  String get logFollow;
+
+  /// Spoken name of the icon beside a log line logged as an error or worse.
+  ///
+  /// In en, this message translates to:
+  /// **'Error'**
+  String get logLevelError;
+
+  /// Spoken name of the icon beside a log line logged as a warning.
+  ///
+  /// In en, this message translates to:
+  /// **'Warning'**
+  String get logLevelWarning;
+
+  /// Spoken name of the icon beside a log line logged as debug output.
+  ///
+  /// In en, this message translates to:
+  /// **'Debug'**
+  String get logLevelDebug;
+
+  /// A row in a log view where lines arrived faster than the view could keep and were left out; count is how many.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 line dropped here} other{{count} lines dropped here}}'**
+  String logDroppedLines(int count);
+
+  /// Note after a log line too long to keep whole; total is the full line's length.
+  ///
+  /// In en, this message translates to:
+  /// **'[line cut: {total} characters in all]'**
+  String logLineCut(int total);
 }
 
 class _AppLocalizationsDelegate

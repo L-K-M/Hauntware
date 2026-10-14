@@ -173,6 +173,15 @@ slice:
   escape and control but tab. A heap test keeps a full buffer of either
   kind under the 64 MiB budget (03 §11.4). Nothing uses them yet: the
   viewer and the engine's followers come in later M2 PRs.
+- Log viewer (03 §10.8, LOG-02): `lib/ui/logs/`'s `LogView` over a
+  `LogViewController` draws fixed one-line rows or wrapped rows with
+  measured, cached extents; follows the newest line, pauses on any scroll
+  away from it and resumes at the end, on End or Follow; colours levels
+  with a spoken gutter icon; holds every span to 4.5:1; and scrolls by
+  keyboard with a focus ring. Light and dark goldens draw with the test
+  font and compare on Linux only. Not yet: sideways scrolling without
+  wrap (a long line ends in an ellipsis) and tab stops. No panel shows it
+  yet: the Logs and Services panels and the followers come later in M2.
 
 Pull-only from the start (D14): no surface sends a request that could
 push or write catalog records, and a widget test guards it.

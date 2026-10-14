@@ -288,4 +288,43 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get serverTabMore => 'More';
+
+  @override
+  String get logViewLabel => 'Log';
+
+  @override
+  String get logFollow => 'Follow';
+
+  @override
+  String get logLevelError => 'Error';
+
+  @override
+  String get logLevelWarning => 'Warning';
+
+  @override
+  String get logLevelDebug => 'Debug';
+
+  @override
+  String logDroppedLines(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$countString lines dropped here',
+      one: '1 line dropped here',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String logLineCut(int total) {
+    final intl.NumberFormat totalNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String totalString = totalNumberFormat.format(total);
+
+    return '[line cut: $totalString characters in all]';
+  }
 }
