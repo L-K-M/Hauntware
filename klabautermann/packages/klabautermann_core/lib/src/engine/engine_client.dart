@@ -86,9 +86,10 @@ final class IsolateEngineClient implements EngineClient {
     // The engine sends its startup fleet right after EngineReady, before
     // spawn's caller can have listened; a broadcast stream would drop it.
     // Events wait here until the first listener arrives, so the
-    // composition root may await between spawn and its controllers. After
-    // that, events go out live and, as on any broadcast stream, reach only
-    // the listeners present.
+    // composition root may await between spawn and its controllers. Only
+    // that first listener gets them, so the controller that needs the
+    // startup fleet must subscribe first. After that, events go out live
+    // and, as on any broadcast stream, reach only the listeners present.
     List<EngineEvent>? held = [];
     late final StreamController<EngineEvent> events;
     events = StreamController<EngineEvent>.broadcast(

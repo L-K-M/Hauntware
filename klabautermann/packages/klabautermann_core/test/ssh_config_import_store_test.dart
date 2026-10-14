@@ -255,12 +255,23 @@ void main() {
       // A directory where the file should be: present, but not readable as
       // a file, whoever runs the test.
       Directory(file.path).createSync();
+      // A write would fail on the directory too; counting shows the store
+      // never tries.
+      var writes = 0;
+      Future<void> countingWriter(File target, List<int> bytes) {
+        writes++;
+        return writeFileAtomically(target, bytes);
+      }
 
-      final store = await SshConfigImportStore.open(file);
+      final store = await SshConfigImportStore.open(
+        file,
+        writer: countingWriter,
+      );
 
       expect(store.issue?.kind, ImportStoreIssueKind.leftAsIs);
       expect(store.issue?.detail, isNotEmpty);
       expect(await store.replace([_web]), isFalse);
+      expect(writes, 0);
       expect(Directory(file.path).existsSync(), isTrue);
       expect(names(), [sshConfigImportsFileName]);
     });

@@ -15,7 +15,7 @@ import 'package:meta/meta.dart';
 /// [SshConfigImported.saved] within v2, without a bump: the app and the
 /// engine compile against these classes in one build, so neither side can
 /// lack a required field and the check has nothing more to catch. 03 §10.1
-/// gains the two fields through the design docs.
+/// lists both fields.
 const int kEngineProtocolVersion = 2;
 
 /// Every message the UI isolate sends the engine (03 §10.1, D18). Plain data

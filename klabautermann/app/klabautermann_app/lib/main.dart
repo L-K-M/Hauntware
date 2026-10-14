@@ -50,6 +50,10 @@ Future<void> main() async {
   }
 
   // FL-02: desktops get the ssh_config import; phones get no source.
+  // FleetController subscribes to engine.events before any other
+  // listener: the client holds the startup CatalogReplaced (the saved
+  // imports) for its first listener only, so another one subscribing
+  // first could take it and leave the rail empty until the next import.
   final fleet = FleetController(
     engine,
     sshConfig: sshConfigSourceFor(defaultTargetPlatform, Platform.environment),

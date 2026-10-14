@@ -6,7 +6,7 @@ import 'dart:isolate';
 import 'package:klabautermann_core/klabautermann_core.dart';
 import 'package:klabautermann_core/src/engine/engine_isolate.dart';
 import 'package:klabautermann_core/src/fleet/ssh_config_import_store.dart'
-    show sshConfigImportsFileName;
+    show sshConfigImportsFileName, sshConfigImportsSchemaVersion;
 import 'package:test/test.dart';
 
 import 'fixtures/ssh_config_fixture.dart';
@@ -276,21 +276,25 @@ void main() {
     });
 
     test('a store the engine leaves as it is saves no import', () async {
-      // A directory where the file should be: unreadable, whoever runs
-      // the test.
-      Directory(importsFile.path).createSync();
+      // A file a newer build wrote. Unlike an unreadable one, it would
+      // take a save, so its unchanged bytes show the engine never tried.
+      final newer = jsonEncode({
+        'version': sshConfigImportsSchemaVersion + 1,
+        'entries': <Object?>[],
+      });
+      importsFile.writeAsStringSync(newer);
 
       final client = await spawnEngine();
 
       expect(
         client.ready.importStoreIssue?.kind,
-        ImportStoreIssueKind.leftAsIs,
+        ImportStoreIssueKind.newerVersion,
       );
       final (:events, fleet: _) = await started(client);
       client.send(const ImportSshConfig('Host web-1\n'));
       expect(((await next(events)) as CatalogReplaced).entries, hasLength(1));
       expect(((await next(events)) as SshConfigImported).saved, isFalse);
-      expect(Directory(importsFile.path).listSync(), isEmpty);
+      expect(importsFile.readAsStringSync(), newer);
     });
   });
 
