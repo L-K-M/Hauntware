@@ -250,6 +250,70 @@
   "@chartUnknownValue": {
     "description": "Shown and read in place of a value the server did not report; never shown as zero."
   },
+  "chartGapAppClosed": "app closed",
+  "@chartGapAppClosed": {
+    "description": "The label on a chart's hatched band for a period without data because Klabautermann was not running (03 §9.5)."
+  },
+  "chartGapBackground": "in background",
+  "@chartGapBackground": {
+    "description": "The label on a chart's hatched band for a period without data because the app was in the background, where it stops sampling."
+  },
+  "chartGapDisconnected": "disconnected",
+  "@chartGapDisconnected": {
+    "description": "The label on a chart's hatched band for a period without data because the connection to the server was down."
+  },
+  "chartGapSummary": "No data from {start} to {end}: {reason}",
+  "@chartGapSummary": {
+    "description": "A screen reader's description of a chart's band without data: when it began and ended, and why, one of chartGapAppClosed, chartGapBackground or chartGapDisconnected.",
+    "placeholders": {
+      "start": {
+        "type": "DateTime",
+        "format": "jms"
+      },
+      "end": {
+        "type": "DateTime",
+        "format": "jms"
+      },
+      "reason": {
+        "type": "String",
+        "example": "in background"
+      }
+    }
+  },
+  "chartGapOngoing": "No data since {start}: {reason}",
+  "@chartGapOngoing": {
+    "description": "A screen reader's description of a chart's band without data that has not ended: when it began and why, one of chartGapAppClosed, chartGapBackground or chartGapDisconnected.",
+    "placeholders": {
+      "start": {
+        "type": "DateTime",
+        "format": "jms"
+      },
+      "reason": {
+        "type": "String",
+        "example": "disconnected"
+      }
+    }
+  },
+  "chartTime": "{time}",
+  "@chartTime": {
+    "description": "A time label on a chart's time axis, to the minute, in the UI locale.",
+    "placeholders": {
+      "time": {
+        "type": "DateTime",
+        "format": "jm"
+      }
+    }
+  },
+  "chartTimeWithSeconds": "{time}",
+  "@chartTimeWithSeconds": {
+    "description": "A time label on a chart's time axis, to the second, in the UI locale, for axes whose ticks are less than a minute apart.",
+    "placeholders": {
+      "time": {
+        "type": "DateTime",
+        "format": "jms"
+      }
+    }
+  },
   "chartTrendRising": "rising",
   "@chartTrendRising": {
     "description": "A series' trend in its screen-reader summary: it has gone up over the chart's window."
