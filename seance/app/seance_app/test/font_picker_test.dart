@@ -244,6 +244,32 @@ void main() {
       }
     });
 
+    testWidgets('installed faces that only repeat them add no section', (
+      tester,
+    ) async {
+      // A host whose only fixed-pitch fonts are the bundled ones: nothing
+      // is filtered, so no "clear the filter" advice and no empty section.
+      await open(
+        tester,
+        bundled: BundledMonoFont.values,
+        available: const [
+          SystemFontFamily(name: 'Fira Code', monospaced: true),
+          SystemFontFamily(name: 'JetBrains Mono', monospaced: true),
+        ],
+      );
+      // Rows below the fold are built but offstage.
+      expect(find.text('Installed', skipOffstage: false), findsNothing);
+      expect(
+        find.textContaining('No font matches', skipOffstage: false),
+        findsNothing,
+      );
+      expect(
+        find.textContaining('could be read', skipOffstage: false),
+        findsNothing,
+      );
+      expect(find.text('Fira Code', skipOffstage: false), findsOneWidget);
+    });
+
     testWidgets('a filter matching none says so', (tester) async {
       await open(tester, bundled: BundledMonoFont.values, supported: false);
       await tester.enterText(find.byType(TextField), 'zzz');

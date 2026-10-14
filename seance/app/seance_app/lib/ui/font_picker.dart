@@ -151,10 +151,6 @@ class _FontPickerDialogState extends State<_FontPickerDialog> {
     final current = widget.current.trim().toLowerCase();
     return [
       for (final family in all)
-        // A stored bundled name always draws the bundled copy, so an
-        // installed face of the same name could not be chosen: offering it
-        // would hand back the bundled one.
-        if (!_bundledNames.contains(family.name.toLowerCase()))
         // The family in force is never filtered out by the pitch chip. The
         // dialog starts filtered, and the flag is the font's own — so a
         // fixed-pitch face that does not declare itself one, typed into the
@@ -223,14 +219,26 @@ class _FontPickerDialogState extends State<_FontPickerDialog> {
                   // fires once), or "no fonts found" and "the scan threw"
                   // would look identical while debugging.
                   final all = snapshot.data ?? const <SystemFontFamily>[];
+                  // A stored bundled name always draws the bundled copy, so
+                  // an installed face of the same name could not be chosen:
+                  // offering it would hand back the bundled one.
+                  final installed = [
+                    for (final family in all)
+                      if (!_bundledNames.contains(family.name.toLowerCase()))
+                        family,
+                  ];
                   return _FontList(
                     bundled: _visibleBundled(),
-                    showInstalled: widget.fonts.isSupported,
-                    families: _visible(all),
+                    // A host whose installed faces all repeat bundled ones
+                    // has nothing more to offer, not an empty section.
+                    showInstalled:
+                        widget.fonts.isSupported &&
+                        (installed.isNotEmpty || all.isEmpty),
+                    families: _visible(installed),
                     current: widget.current,
                     // Distinguishes "this host has none" from "your filter
                     // matched none", which are different things to do next.
-                    emptyBecauseFiltered: all.isNotEmpty,
+                    emptyBecauseFiltered: installed.isNotEmpty,
                     bundledFiltered: widget.bundled.isNotEmpty,
                     onPick: (family) => Navigator.of(context).pop(family),
                   );

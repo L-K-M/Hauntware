@@ -512,10 +512,10 @@ class _SettingsScreenState extends State<SettingsScreen>
             'Settings: ⌘ with +, − or 0 on macOS and iPadOS, Ctrl+Shift with '
             'the same keys elsewhere (plain Ctrl chords belong to the shell). '
             'Leave the font family blank to use Iosevka Term, which ships '
-            'with Séance and draws ligatures. The button in the field lists '
-            'the fonts Séance includes and, on desktop, the ones installed '
-            'here, each previewed in its own face; you can also type any '
-            'family name the system knows.',
+            'with Séance. The button in the field lists the fonts Séance '
+            'includes and, on desktop, the ones installed here, each '
+            'previewed in its own face; you can also type any family name '
+            'the system knows.',
       ),
       Row(
         children: [
