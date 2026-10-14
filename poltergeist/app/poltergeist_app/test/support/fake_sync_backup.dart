@@ -408,6 +408,10 @@ final class FakeSyncTrackingServerStore
   final Map<String, ServerConfig> _servers;
   final tuples = <String, ServerSyncTuple>{};
 
+  /// When set, the next [load] waits for it — holds a catalog rebuild in
+  /// flight so a test can race it against sign-out.
+  Completer<void>? holdNextLoad;
+
   List<ServerConfig> get rows =>
       _servers.values.toList()
         ..sort((a, b) {
@@ -416,7 +420,14 @@ final class FakeSyncTrackingServerStore
         });
 
   @override
-  Future<List<ServerConfig>> load() async => List.unmodifiable(rows);
+  Future<List<ServerConfig>> load() async {
+    final hold = holdNextLoad;
+    if (hold != null) {
+      holdNextLoad = null;
+      await hold.future;
+    }
+    return List.unmodifiable(rows);
+  }
 
   @override
   Future<ServerConfig?> byId(String id) async => _servers[id];
