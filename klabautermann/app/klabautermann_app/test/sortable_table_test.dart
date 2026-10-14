@@ -708,6 +708,25 @@ void main() {
     expect(horizontal, findsOneWidget);
   });
 
+  testWidgets('a narrow table keeps each flex column at its minimum', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      size: const Size(100, 160),
+      columns: [
+        SortableTableColumn(
+          id: 'wide',
+          label: 'Wide',
+          text: (proc) => proc.name,
+          extent: const FlexColumnExtent(3),
+        ),
+        SortableTableColumn(id: 'thin', label: 'Thin', text: (p) => p.state),
+      ],
+    );
+    expect(tester.getSize(_header('thin')).width, 64);
+  });
+
   group('golden', () {
     // Baselines are rendered on Linux, the platform CI's app job runs on;
     // other hosts rasterize text differently.

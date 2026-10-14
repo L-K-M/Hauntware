@@ -38,7 +38,7 @@ final class FixedColumnExtent extends ColumnExtent {
 
 /// A share of the width the fixed columns and the row-action slot leave.
 final class FlexColumnExtent extends ColumnExtent {
-  const FlexColumnExtent([this.flex = 1]);
+  const FlexColumnExtent([this.flex = 1]) : assert(flex > 0);
 
   final int flex;
 }
@@ -512,11 +512,22 @@ class _SortableTableState<R> extends State<SortableTable<R>> {
     final scaler = MediaQuery.textScalerOf(context);
     _rowExtent = scaledGhostFileRowExtent(context);
     var minWidth = widget.rowActions == null ? 0.0 : _rowExtent;
+    final flexes = <int>[];
     for (final column in widget.columns) {
-      minWidth += switch (column.extent) {
-        FixedColumnExtent(:final width) => scaler.scale(width),
-        FlexColumnExtent() => scaler.scale(_minFlexWidth),
-      };
+      switch (column.extent) {
+        case FixedColumnExtent(:final width):
+          minWidth += scaler.scale(width);
+        case FlexColumnExtent(:final flex):
+          flexes.add(flex);
+      }
+    }
+    if (flexes.isNotEmpty) {
+      // The flex columns split their space by flex, so it is sized for
+      // the least of them to reach the minimum.
+      minWidth +=
+          scaler.scale(_minFlexWidth) *
+          flexes.reduce((a, b) => a + b) /
+          flexes.reduce(math.min);
     }
 
     final empty = widget.empty;
