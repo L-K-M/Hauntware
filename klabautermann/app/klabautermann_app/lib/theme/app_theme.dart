@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:ghost_fonts/ghost_fonts.dart';
 import 'package:ghost_theme/ghost_theme.dart';
 
 /// Klabautermann's brand accent: a sea blue (HCT hue 245), apart from
@@ -113,14 +114,7 @@ const GhostThemeStyle klabautermannThemeStyle = GhostThemeStyle(
   dialogTitleOnDesktop: false,
   tooltipUsesInterfaceFont: false,
   visualDensity: VisualDensity.compact,
-  monoFontFamilies: [
-    'JetBrains Mono',
-    'SF Mono',
-    'Menlo',
-    'Consolas',
-    'DejaVu Sans Mono',
-    'monospace',
-  ],
+  monoFontFamilies: ghostMonoFontFamilies,
 );
 
 /// The brand preset followed by the nine looks the family shares, bound to

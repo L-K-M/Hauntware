@@ -347,6 +347,7 @@ jobs:
         run: |
           (cd planchette/packages/planchette_core && dart pub get)
           (cd planchette/packages/ghost_ui && flutter pub get)
+          (cd planchette/packages/ghost_fonts && flutter pub get)
           (cd planchette/packages/planchette_editor && flutter pub get)
           (cd planchette/packages/ghost_desktop && flutter pub get)
           (cd planchette/packages/ghost_marks && flutter pub get)
@@ -356,6 +357,7 @@ jobs:
       - name: Planchette — analyze and test shared packages and app
         run: |
           (cd planchette/packages/ghost_ui && flutter analyze --no-pub && flutter test --no-pub)
+          (cd planchette/packages/ghost_fonts && flutter analyze --no-pub && flutter test --no-pub)
           (cd planchette/packages/planchette_editor && flutter analyze --no-pub && flutter test --no-pub)
           (cd planchette/packages/ghost_desktop && flutter analyze --no-pub && flutter test --no-pub)
           (cd planchette/packages/ghost_marks && flutter analyze --no-pub && flutter test --no-pub)

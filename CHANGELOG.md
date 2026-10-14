@@ -17,6 +17,14 @@
 
 ### Added
 
+- Every app ships four open-source monospace fonts: Iosevka Term,
+  JetBrains Mono, Fira Code and Maple Mono, all with ligatures such as
+  `->` and `!=`. Code and editors in Planchette, Séance and Poltergeist
+  draw in JetBrains Mono on every platform, where they used to fall back
+  to Menlo, Cascadia Mono or DejaVu Sans Mono unless JetBrains Mono was
+  installed. Planchette's settings-file `fontFamily` and Séance's
+  terminal font accept any of the four by name. The fonts are under the
+  SIL Open Font License; each app's licence notices include it.
 - Klabautermann, the fourth product: an agentless manager for servers
   and Docker over SSH, still in development. CI builds its Android, iOS,
   Linux, macOS and Windows clients on every pull request and launches

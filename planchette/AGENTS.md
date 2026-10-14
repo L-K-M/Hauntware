@@ -23,6 +23,9 @@ packages/
                           outside the workspace
   ghost_ui/               shared leaf UI widgets/theme tokens; outside the
                           workspace, no app or host dependencies
+  ghost_fonts/            the monospace fonts every app bundles (OFL; see
+                          its README), their names and the code stack;
+                          outside the workspace, no dependencies
   ghost_marks/            server badges, accents and glyph tables shared by
                           Séance and Poltergeist, over seance_protocol;
                           outside the workspace
@@ -61,6 +64,7 @@ dart test    packages/planchette_core
 # Shared Flutter packages and standalone application
 (cd packages/planchette_editor && flutter pub get && flutter analyze && flutter test)
 (cd packages/ghost_ui && flutter pub get && flutter analyze && flutter test)
+(cd packages/ghost_fonts && flutter pub get && flutter analyze && flutter test)
 (cd packages/ghost_marks && flutter pub get && flutter analyze && flutter test)
 (cd packages/ghost_theme && flutter pub get && flutter analyze && flutter test)
 (cd packages/ghost_servers && flutter pub get && flutter analyze && flutter test)
