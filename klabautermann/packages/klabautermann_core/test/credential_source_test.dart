@@ -133,7 +133,8 @@ void main() {
     expect(await source().identityFile(_config(), null), hasLength(1 << 20));
   });
 
-  test('a key the process may not read fails as access denied', () async {
+  test('a key the process may not read fails as access denied, inside a '
+      'Flatpak too', () async {
     final key = File('$home/.ssh/id_test');
     await key.writeAsString(_pem);
     await Process.run('chmod', ['000', key.path]);
@@ -145,13 +146,19 @@ void main() {
       // Denied, as the test needs.
     }
 
-    expect(
-      (await unavailable(source())).failure,
-      IdentityFileFailure.accessDenied,
-    );
+    for (final extra in [
+      const <String, String>{},
+      // The sandbox hides what it does not grant; a refusal is the file's.
+      const {'FLATPAK_ID': 'ch.lkmc.klabautermann'},
+    ]) {
+      expect(
+        (await unavailable(source(extra: extra))).failure,
+        IdentityFileFailure.accessDenied,
+      );
+    }
   }, testOn: '!windows');
 
-  test('inside a Flatpak a hidden key is a sandbox denial', () async {
+  test('inside a Flatpak a missing key is a sandbox denial', () async {
     final flatpak = source(extra: {'FLATPAK_ID': 'ch.lkmc.klabautermann'});
     expect(
       (await unavailable(flatpak)).failure,

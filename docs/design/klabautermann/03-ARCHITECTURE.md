@@ -1391,9 +1391,11 @@ re-push (c1 §2.4).
   editor drafts including Séance's draft identity bookmark contract, 3.6).
   On mobile, agent auth and `identityFilePath` generally do not work, so the
   prompt offers to import a key into the vault. Inside the Flatpak,
-  which shows only the paths it grants, a key file that is missing or
-  refused counts as hidden by the sandbox, since the two cannot be told
-  apart there; the remedy is a wider grant (04 §12.1), not a new path.
+  which shows only the paths it grants, a missing key file counts as
+  hidden by the sandbox, since a path it does not grant reads as
+  missing; the remedy is a wider grant (04 §12.1), not a new path. A
+  refused file stays access denied: the sandbox hides paths rather than
+  refusing them.
 - **Background rule (FL-21).** Background sampling uses only servers whose
   credentials resolve without a prompt and whose endpoint is confirmed;
   keyboard-interactive servers connect on explicit open only and get exactly

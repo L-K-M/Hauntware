@@ -41,11 +41,12 @@ enum IdentityFileFailure {
   /// The operating system refused the read.
   accessDenied,
 
-  /// The file was missing or refused inside the Flatpak sandbox, which
-  /// shows only the paths it grants (Klabautermann's manifest grants only
+  /// The file was missing inside the Flatpak sandbox, which shows only
+  /// the paths it grants (Klabautermann's manifest grants only
   /// `~/.ssh/config`, 04 §12.1): a key outside them reads as missing
   /// whether or not it exists. The remedy is a wider grant (K46), not
-  /// another path.
+  /// another path. A file the sandbox shows but whose mode or owner
+  /// refuses the read stays [accessDenied].
   sandboxDenied,
 
   /// The path is not a readable file of UTF-8 text within the size bound,
@@ -145,7 +146,7 @@ final class EngineCredentialSource implements CredentialSource {
       _ => IdentityFileFailure.unreadable,
     };
     final inFlatpak = (_environment[_flatpakIdVariable] ?? '').isNotEmpty;
-    return inFlatpak && failure != IdentityFileFailure.unreadable
+    return inFlatpak && failure == IdentityFileFailure.notFound
         ? IdentityFileFailure.sandboxDenied
         : failure;
   }
