@@ -3508,7 +3508,9 @@ the engine in `engine_isolate.dart` beside it):
   `HostProfileChanged` when it first knows a server's profile in a run or
   a later probe finds a different one. The same ids again replace a
   subscription's streams, and an empty set drops it. `SetCadenceProfile`
-  picks the 6.4 column (Desktop until the app sends one). The engine
+  picks the 6.4 column (Desktop until the app sends one); a stream the
+  column reads on demand is read once per `Subscribe` naming it, a
+  repeat included, so a surface refreshes it by resending. The engine
   sends one `Sample` per subscribed stream and reading: `seq` counts per
   server across its streams (D44), `at` is the engine's own clock in UTC,
   since a host's clock may be off, and `result` is a sealed value per

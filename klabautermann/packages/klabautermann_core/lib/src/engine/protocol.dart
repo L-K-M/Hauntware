@@ -145,7 +145,9 @@ final class SetAppActivity extends EngineRequest {
 /// surface never stops another's. Sending the same ids again replaces
 /// that subscription's [streams]; an empty set drops it. Cadence is not a
 /// field: [SetCadenceProfile] and [SetAppActivity] hold for every
-/// subscription at once.
+/// subscription at once. A stream the profile reads on demand (see
+/// [CadenceProfile.cellularSaver]) is read once per [Subscribe] that
+/// names it, a repeat included, so a surface refreshes it by resending.
 final class Subscribe extends EngineRequest {
   const Subscribe({
     required this.serverId,
@@ -1259,7 +1261,8 @@ enum CadenceProfile {
   /// The Phone column.
   phone,
 
-  /// The Cellular saver column.
+  /// The Cellular saver column, which reads `timers` and `cron` on
+  /// demand: once per [Subscribe] that names them.
   cellularSaver,
 }
 
