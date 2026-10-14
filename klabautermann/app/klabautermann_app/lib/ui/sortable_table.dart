@@ -405,7 +405,7 @@ class _SortableTableState<R> extends State<SortableTable<R>> {
   void _move(_Step step) {
     // A menu a pointer opened leaves focus on the body: a key steps in.
     if (_menu.isOpen) {
-      _firstVerbFocus.requestFocus();
+      _focusMenu();
       return;
     }
 
@@ -489,8 +489,15 @@ class _SortableTableState<R> extends State<SortableTable<R>> {
     );
     if (global != null) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && _menu.isOpen) _firstVerbFocus.requestFocus();
+      if (mounted && _menu.isOpen) _focusMenu();
     });
+  }
+
+  /// Focuses the open menu's first enabled verb, if it has one: a request
+  /// on the detached node would wait and seize focus in whichever menu
+  /// next mounts it.
+  void _focusMenu() {
+    if (_firstVerbFocus.parent != null) _firstVerbFocus.requestFocus();
   }
 
   @override

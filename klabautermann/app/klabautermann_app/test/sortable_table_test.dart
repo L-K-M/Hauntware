@@ -533,6 +533,28 @@ void main() {
       expect(killed, [3, 4]);
     });
 
+    testWidgets('a key over a menu without an enabled verb leaves the '
+        'next menu unfocused', (tester) async {
+      await _pump(
+        tester,
+        rowActions: (proc) => [
+          SidebarMenuAction(
+            label: 'Kill',
+            onSelected: proc.pid == 1 ? null : () {},
+          ),
+        ],
+      );
+      await tester.tap(_row(1), buttons: kSecondaryButton);
+      await tester.pumpAndSettle();
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pumpAndSettle();
+
+      await tester.tap(_row(2), buttons: kSecondaryButton);
+      await tester.pumpAndSettle();
+      expect(FocusManager.instance.primaryFocus?.debugLabel, 'SortableTable');
+    });
+
     testWidgets('Esc the table does not use reaches its host', (tester) async {
       await _pump(tester);
       showDialog<void>(
