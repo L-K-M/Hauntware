@@ -75,6 +75,7 @@ abstract class SettingsBackend implements Listenable {
     required double fontSize,
     required String fontFamily,
     required TerminalPalette palette,
+    required TerminalLigatures ligatures,
   });
 
   /// Persists the built-in editor's text size and resizes every open

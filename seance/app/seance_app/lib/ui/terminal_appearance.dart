@@ -9,6 +9,9 @@ import '../theme.dart';
 import '../theme/contrast.dart';
 import '../theme/theme_palette.dart';
 
+// The ligature mode is part of the terminal's look, stored with the rest.
+export 'package:xterm/xterm.dart' show TerminalLigatures;
+
 /// How the terminal picks its colors.
 enum TerminalPalette {
   /// The app theme's terminal colours when it has its own; otherwise dark
@@ -166,7 +169,8 @@ class SeanceTerminalThemes {
 }
 
 /// The terminal's face while [AppSettings.terminalFontFamily] is blank:
-/// narrow, so a window holds more columns.
+/// narrow, so a window holds more columns, and drawn with ligatures
+/// ([AppSettings.terminalLigatures]).
 const BundledMonoFont kDefaultTerminalFont = BundledMonoFont.iosevkaTerm;
 
 /// The resolved terminal look for one build: the text style and the palette.
@@ -201,6 +205,7 @@ class TerminalAppearance {
         fontSize: clampTerminalFontSize(settings.terminalFontSize),
         fontFamily: fallback.first,
         fontFamilyFallback: fallback,
+        ligatures: settings.terminalLigatures,
       ),
       theme: switch (settings.terminalPalette) {
         TerminalPalette.alwaysDark => SeanceTerminalThemes.dark,
