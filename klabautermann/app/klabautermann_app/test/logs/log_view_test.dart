@@ -411,6 +411,47 @@ void main() {
       });
     }
 
+    for (final opened in [true, false]) {
+      testWidgets('Page Up with wrap on passes no line unseen, '
+          '${opened ? 'opened over lines' : 'lines after opening'}', (
+        tester,
+      ) async {
+        const size = Size(400, 600);
+        String text(int i) => 'line $i ${List.filled(6, 'a' * 15).join(' ')}';
+        Finder line(int i) => find.text(text(i), findRichText: true);
+        final lines = [for (var i = 0; i < 300; i++) text(i)];
+        final logs = LogViewController();
+        if (opened) logs.add(lines);
+        await _pump(tester, controller: logs, wrap: LogWrap.on, size: size);
+        if (!opened) {
+          logs.add(lines);
+          await tester.pump();
+        }
+        await tester.tap(find.byType(LogView));
+        await tester.pump();
+
+        for (var step = 0; step < 8; step++) {
+          final top = [
+            for (var i = 0; i < 300; i++)
+              if (line(i).evaluate().isNotEmpty &&
+                  tester.getBottomLeft(line(i)).dy > 0)
+                i,
+          ].first;
+          await tester.sendKeyEvent(LogicalKeyboardKey.pageUp);
+          await tester.pump();
+
+          // A page is one line less than the view, so the line that was
+          // at the top is still partly in sight at the bottom.
+          expect(line(top), findsOneWidget, reason: 'step $step');
+          expect(
+            tester.getTopLeft(line(top)).dy,
+            lessThan(size.height),
+            reason: 'step $step',
+          );
+        }
+      });
+    }
+
     testWidgets('keyboard focus draws a focus ring', (tester) async {
       FocusManager.instance.highlightStrategy =
           FocusHighlightStrategy.alwaysTraditional;

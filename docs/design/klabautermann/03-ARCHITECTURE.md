@@ -3587,14 +3587,16 @@ line ends in an ellipsis until sideways scrolling lands; that also keeps a
 cut line's note out of sight, though screen readers read it. With wrap,
 the row counts sit in a Fenwick tree and a sliver of the viewer's own
 finds offsets and indexes in O(log n), where `SliverVariedExtentList` sums
-every extent before an index. Only the lines a layout shows are measured,
+every extent before an index. Only the lines a layout shows, and as many
+rows above its offset so a page up lands on measured lines, are measured,
 once per width, font and locale: one row without a layout when an upper
 bound of its width fits (a monospace advance per Latin-1 code unit, two
 per other unit or tab; a line or paragraph separator never fits),
-otherwise laid out. Other lines keep an earlier count or an estimate from
-their length, and a measurement above the view moves the offset by the
-difference, so the lines in sight hold still and a resize lays out only
-them. Tabs are not expanded to stops yet. Any scroll that leaves the
+otherwise laid out. Other lines keep an earlier count or, once the viewer
+has a width, an estimate from their length, and a measurement above the
+view moves the offset by the difference, so the lines in sight hold
+still and a resize lays out only the lines near them. Tabs
+are not expanded to stops yet. Any scroll that leaves the
 newest line pauses following, and reaching it again, End or Follow resumes
 it; the scroll position holds the end during layout, and while paused it
 drops the extent of evicted lines from its offset. Every span keeps 4.5:1

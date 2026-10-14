@@ -510,12 +510,13 @@ const int _minRowSlots = 1024;
 /// rows before any entry found in O(log n) through a Fenwick tree, so a
 /// frame costs the same however many lines are held (03 §11.4).
 ///
-/// Only the entries a layout shows are measured, once per width, font and
-/// locale ([measure]); the others keep the count of their last measurement
-/// or, before one, an estimate. A width change therefore lays out only
-/// the lines in sight. When measuring an entry above the scroll offset
-/// changes its count, the layout moves the offset by the difference, so
-/// the lines in sight hold still.
+/// Only the entries a layout shows, and as many rows above its offset, are
+/// measured, once per width, font and locale ([measure]); the others keep
+/// the count of their last measurement or, before one, an estimate. A
+/// width change therefore lays out only the lines near the view. When
+/// measuring an entry above the scroll offset changes its count, the
+/// layout moves the offset by the difference, so the lines in sight hold
+/// still.
 final class _RowCounts {
   _RowCounts(this._measure);
 
@@ -610,8 +611,9 @@ final class _RowCounts {
   }
 
   /// Measures the entries a layout of rows [top] to [bottom] shows, with
-  /// its scroll offset at row [anchor], and returns the rows to move that
-  /// offset by so the entry at it holds still.
+  /// its scroll offset at row [anchor], and as many rows above that
+  /// offset, and returns the rows to move the offset by so the entry at it
+  /// holds still.
   int measure(
     double top,
     double anchor,
@@ -649,8 +651,12 @@ final class _RowCounts {
         tail += rowsOf(i);
       }
     }
+    // Above the offset, as many rows as the layout spans, though its cache
+    // reaches less far: a page up from here then lands on measured rows,
+    // and their counts below the new offset cannot push lines not yet seen
+    // out past the view.
     var above = anchor - firstRow;
-    for (var i = first - 1; i >= 0 && above < anchor - top; i--) {
+    for (var i = first - 1; i >= 0 && above < bottom - top; i--) {
       correction += _measureAt(i);
       above += rowsOf(i);
     }
