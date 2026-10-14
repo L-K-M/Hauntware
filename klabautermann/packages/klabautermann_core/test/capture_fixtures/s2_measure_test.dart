@@ -87,6 +87,33 @@ void main() {
     await sampler.close();
   }, skip: bash == null ? 'bash is not installed' : false);
 
+  test('a relative sampler shell path is taken from the cwd', () async {
+    // What `--sh` passes on for a path with a slash in it. It starts with
+    // `test/`, which exists here but not beside the temporary `sh` link;
+    // past that, `..` stops at the root.
+    final up = '../' * Directory.current.path.split('/').length;
+    final sampler = await LocalSampler.start(
+      SamplerLaunch.stdinShell('test/$up${dash!.substring(1)}'),
+      kind: SamplerKind.fast,
+      environment: env,
+    );
+    addTearDown(sampler.close);
+    await sampler.ready;
+  }, skip: dash == null ? 'dash is not installed' : false);
+
+  test('a login shell that cannot start leaves no HOME behind', () async {
+    Set<String> homes() => {
+      for (final e in Directory.systemTemp.listSync())
+        if (e.path.split('/').last.startsWith('klab-s2-home-')) e.path,
+    };
+    final before = homes();
+    await expectLater(
+      measurePreReady(['/nonexistent/klab-no-such-shell'], user),
+      throwsArgumentError,
+    );
+    expect(homes().difference(before), isEmpty);
+  });
+
   test('a login shell that exits before READY is recorded', () async {
     // `false` exits at once, often while the program is still being
     // written, which once surfaced as an uncaught error.

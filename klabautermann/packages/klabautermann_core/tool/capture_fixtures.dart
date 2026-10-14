@@ -32,21 +32,33 @@ Future<void> main(List<String> args) async {
     (options[name] ??= []).add(args[++i]);
   }
 
+  final ticks =
+      _count(options['ticks']?.last ?? '500', min: 1) ??
+      _usage('--ticks takes a whole number of at least 1');
+  final extraProcesses = [
+    for (final n in (options['procs']?.last ?? '1000,2000,3000').split(','))
+      _count(n, min: 0) ??
+          _usage('--procs takes whole numbers of at least 0, comma-separated'),
+  ];
+
   final user = (await Process.run('id', ['-un'])).stdout.toString().trim();
   final json = await measureAll(
     samplerShells: options['sh'] ?? const ['dash', 'bash'],
     loginShells: options['login-shell'] ?? const ['dash', 'bash'],
     user: user,
-    ticks: int.parse(options['ticks']?.last ?? '500'),
-    extraProcesses: [
-      for (final n in (options['procs']?.last ?? '1000,2000,3000').split(','))
-        int.parse(n),
-    ],
+    ticks: ticks,
+    extraProcesses: extraProcesses,
   );
   final text = '${const JsonEncoder.withIndent('  ').convert(json)}\n';
   final out = options['out']?.last;
   out == null ? stdout.write(text) : File(out).writeAsStringSync(text);
 }
+
+/// [text] as a whole number of at least [min], or null.
+int? _count(String text, {required int min}) => switch (int.tryParse(text)) {
+  final n? when n >= min => n,
+  _ => null,
+};
 
 Never _usage(String message) {
   stderr

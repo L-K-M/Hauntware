@@ -216,7 +216,10 @@ final class LocalSampler {
     switch (launch._mode) {
       case _LaunchMode.stdinShell:
         shDir = Directory.systemTemp.createTempSync('klab-sh-');
-        final sh = Link('${shDir.path}/sh')..createSync(launch.shell);
+        // A relative link target resolves from the link's directory, not
+        // from the cwd that [launch]'s path is relative to.
+        final sh = Link('${shDir.path}/sh')
+          ..createSync(File(launch.shell).absolute.path);
         argv = [..._startEnvWords(), sh.path, '-s'];
       case _LaunchMode.loginShell:
         argv = [_loginArgv0(launch.shell), '-c', kSamplerStartCommand];

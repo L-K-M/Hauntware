@@ -117,36 +117,39 @@ Future<List<Map<String, Object?>>> measurePreReady(
   for (final shell in loginShells) {
     for (final MapEntry(key: name, value: s) in preReadyScenarios().entries) {
       final home = Directory.systemTemp.createTempSync('klab-s2-home-');
-      s.files.forEach((f, text) {
-        File('${home.path}/$f').writeAsStringSync(text);
-      });
-      final sampler = await LocalSampler.start(
-        SamplerLaunch.loginShell(shell),
-        kind: SamplerKind.fast,
-        environment: runEnvironment(
-          home: home.path,
-          user: user,
-          shell: shell,
-          ssh: s.ssh,
-        ),
-      );
+      LocalSampler? sampler;
       var outcome = 'ready';
       bool? tickOk;
       try {
-        await sampler.ready.timeout(const Duration(seconds: 20));
-        final reply = await sampler.request(1, [Collector.overview]);
+        s.files.forEach((f, text) {
+          File('${home.path}/$f').writeAsStringSync(text);
+        });
+        // Inside the try, so that a start that throws (a login shell that
+        // is not the first of its name on kCapturePath) removes the HOME.
+        final started = sampler = await LocalSampler.start(
+          SamplerLaunch.loginShell(shell),
+          kind: SamplerKind.fast,
+          environment: runEnvironment(
+            home: home.path,
+            user: user,
+            shell: shell,
+            ssh: s.ssh,
+          ),
+        );
+        await started.ready.timeout(const Duration(seconds: 20));
+        final reply = await started.request(1, [Collector.overview]);
         tickOk = reply.tick?.section('overview')?.status == SectionStatus.ok;
       } on SamplerFailure catch (e) {
         outcome = e.fault?.name ?? 'exited';
       } finally {
-        await sampler.close();
+        await sampler?.close();
         home.deleteSync(recursive: true);
       }
       out.add({
         'loginShell': shell,
         'scenario': name,
         'sshVariables': s.ssh,
-        'bytesBeforeReady': sampler.bytesBeforeReady,
+        'bytesBeforeReady': sampler!.bytesBeforeReady,
         'outcome': outcome,
         'overviewTickOk': tickOk,
       });
