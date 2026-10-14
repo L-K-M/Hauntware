@@ -117,6 +117,17 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'DejaVu Sans Mono'",
     "'monospace'",
   },
+  // Chart assert messages, a RangeError's argument name and the read-only
+  // ring view's UnsupportedError: programmer diagnostics, never rendered.
+  'lib/ui/charts/chart_style.dart': {"'warning must not exceed critical'"},
+  'lib/ui/charts/chart_values.dart': {"'samples are finite'"},
+  'lib/ui/charts/series_ring.dart': {
+    "'a series needs two slots to draw a line'",
+    "'index'",
+    "'A series ring changes only through add'",
+    "'a column holds at least one sample'",
+  },
+  'lib/ui/charts/sparkline.dart': {"'the scale needs a positive top'"},
   // The command registry's ids, keys of the menus and shortcuts.
   'lib/ui/menus/app_commands.dart': {
     "'app.settings'",
