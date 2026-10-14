@@ -13,13 +13,9 @@ import 'package:test/test.dart';
 import '../../tool/src/local_sampler.dart';
 import '../../tool/src/s2_measure.dart';
 
-String? _which(String name) => [
-  for (final dir in kCapturePath.split(':')) '$dir/$name',
-].where((p) => File(p).existsSync()).firstOrNull;
-
 void main() {
-  final dash = _which('dash');
-  final bash = _which('bash');
+  final dash = findOnCapturePath('dash');
+  final bash = findOnCapturePath('bash');
   final user = Platform.environment['USER'] ?? 'nobody';
   final env = runEnvironment(home: Directory.systemTemp.path, user: user);
 
@@ -47,9 +43,10 @@ void main() {
     }
 
     test('.bashrc output before READY is counted and skipped', () async {
-      final (sampler, error) = await start("printf 'hello\\r\\n'\n");
+      final (sampler, error) = await start("printf '%s\\r\\n' \"\$0\"\n");
       expect(error, isNull);
-      expect(sampler.bytesBeforeReady, 7);
+      // `bash\r\n`: sshd passes the login shell's basename as argv[0].
+      expect(sampler.bytesBeforeReady, 6);
       final reply = await sampler.request(1, [Collector.overview]);
       expect(reply.tick!.section('overview')!.status, SectionStatus.ok);
       expect(
@@ -76,10 +73,24 @@ void main() {
     });
   }, skip: bash == null ? 'bash is not installed' : false);
 
+  test('a sampler shell runs under the name sh', () async {
+    final sampler = await LocalSampler.start(
+      SamplerLaunch.stdinShell(bash!),
+      kind: SamplerKind.fast,
+      environment: env,
+    );
+    await sampler.ready;
+    final argv0 = File(
+      '/proc/${sampler.pid}/cmdline',
+    ).readAsStringSync().split('\x00').first;
+    expect(argv0.split('/').last, 'sh');
+    await sampler.close();
+  }, skip: bash == null ? 'bash is not installed' : false);
+
   test('a login shell that exits before READY is recorded', () async {
     // `false` exits at once, often while the program is still being
     // written, which once surfaced as an uncaught error.
-    final runs = await measurePreReady([_which('false')!], user);
+    final runs = await measurePreReady([findOnCapturePath('false')!], user);
     expect(runs.map((r) => r['outcome']).toSet(), {'exited'});
   });
 

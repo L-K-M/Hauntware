@@ -20,6 +20,11 @@ import 'package:klabautermann_host/klabautermann_host.dart';
 const kCapturePath =
     '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin';
 
+/// The first [name] on [kCapturePath], or null.
+String? findOnCapturePath(String name) => [
+  for (final dir in kCapturePath.split(':')) '$dir/$name',
+].where((p) => File(p).existsSync()).firstOrNull;
+
 /// The environment a local run gets instead of the caller's. With
 /// [ssh] it carries `SSH_CLIENT` and `SSH_CONNECTION`, which sshd sets
 /// for a session (OpenSSH `session.c`, `do_setup_env`), with
@@ -56,20 +61,44 @@ List<String> _startEnvWords() {
   return words.sublist(1, words.length - 2);
 }
 
-/// How the tool starts a sampler: the [argv] to run.
+/// [shell]'s basename, which a login launch passes as argv[0] and the
+/// child looks up on [kCapturePath]; that lookup must find [shell].
+String _loginArgv0(String shell) {
+  final name = shell.substring(shell.lastIndexOf('/') + 1);
+  final found = findOnCapturePath(name);
+  if (found == null ||
+      File(found).resolveSymbolicLinksSync() !=
+          File(shell).resolveSymbolicLinksSync()) {
+    throw ArgumentError.value(
+      shell,
+      'shell',
+      'is not the first $name on $kCapturePath',
+    );
+  }
+  return name;
+}
+
+enum _LaunchMode { stdinShell, loginShell }
+
+/// How the tool starts a sampler.
 final class SamplerLaunch {
   /// `<shell> -s` under the start command's environment (the start line
-  /// with [shell] in place of `sh`), with no login shell in front.
-  SamplerLaunch.stdinShell(String shell)
-    : argv = [..._startEnvWords(), shell, '-s'];
+  /// with [shell] in place of `sh`), with no login shell in front. The
+  /// shell runs through a link named `sh`, as the start line runs
+  /// `/bin/sh`: bash then enters POSIX mode and zsh sh emulation, since
+  /// both choose from argv[0]'s basename. `$0` is the link's path.
+  const SamplerLaunch.stdinShell(this.shell) : _mode = _LaunchMode.stdinShell;
 
   /// `<login shell> -c '<start command>'`, the argv sshd gives a session
-  /// command (OpenSSH `session.c`, `do_child`): the login shell runs its
-  /// startup files and execs the `sh` found on [kCapturePath].
-  SamplerLaunch.loginShell(String shell)
-    : argv = [shell, '-c', kSamplerStartCommand];
+  /// command, with the shell's basename as argv[0] (OpenSSH `session.c`,
+  /// `do_child`): the login shell runs its startup files and execs the
+  /// `sh` found on [kCapturePath]. The child finds [shell] by that
+  /// basename on [kCapturePath], so it must be the first there.
+  const SamplerLaunch.loginShell(this.shell) : _mode = _LaunchMode.loginShell;
 
-  final List<String> argv;
+  /// The shell's path.
+  final String shell;
+  final _LaunchMode _mode;
 }
 
 /// The session could not start or continue.
@@ -134,7 +163,7 @@ Future<int> clockTicksPerSecond() async {
 
 /// A sampler process on this machine.
 final class LocalSampler {
-  LocalSampler._(this._process, String nonce)
+  LocalSampler._(this._process, String nonce, this._shDir)
     : _assembler = HwsTickAssembler(nonce: nonce),
       _readyMarker = '\x1e$nonce READY' {
     // The shell can exit, and fail [_ready], while [start] is still
@@ -149,6 +178,9 @@ final class LocalSampler {
   static const _exitTimeout = Duration(seconds: 30);
 
   final Process _process;
+
+  /// Holds the `sh` link of a stdin launch until [close].
+  final Directory? _shDir;
   final HwsTickAssembler _assembler;
   final String _readyMarker;
   final _ready = Completer<void>();
@@ -163,22 +195,47 @@ final class LocalSampler {
   final _pendingHead = BytesBuilder();
   final _pendingWatch = Stopwatch();
 
-  /// Starts [launch] with [environment] only (no parent variables) and
-  /// writes the [kind] program. Await [ready] before [request].
+  /// Starts [launch] with [environment] only (no parent variables),
+  /// whose PATH must be [kCapturePath], and writes the [kind] program.
+  /// Await [ready] before [request], and [close] in any case.
   static Future<LocalSampler> start(
     SamplerLaunch launch, {
     required SamplerKind kind,
     required Map<String, String> environment,
   }) async {
+    if (environment['PATH'] != kCapturePath) {
+      throw ArgumentError.value(
+        environment['PATH'],
+        'environment',
+        'PATH must be $kCapturePath',
+      );
+    }
     final nonce = generateNonce(Random.secure());
-    final argv = launch.argv;
-    final process = await Process.start(
-      argv.first,
-      argv.sublist(1),
-      environment: environment,
-      includeParentEnvironment: false,
-    );
-    final sampler = LocalSampler._(process, nonce).._listen();
+    Directory? shDir;
+    final List<String> argv;
+    switch (launch._mode) {
+      case _LaunchMode.stdinShell:
+        shDir = Directory.systemTemp.createTempSync('klab-sh-');
+        final sh = Link('${shDir.path}/sh')..createSync(launch.shell);
+        argv = [..._startEnvWords(), sh.path, '-s'];
+      case _LaunchMode.loginShell:
+        argv = [_loginArgv0(launch.shell), '-c', kSamplerStartCommand];
+    }
+    final Process process;
+    try {
+      // Without a slash in argv.first the child looks it up on its own
+      // PATH, and argv[0] stays the bare name.
+      process = await Process.start(
+        argv.first,
+        argv.sublist(1),
+        environment: environment,
+        includeParentEnvironment: false,
+      );
+    } on Object {
+      shDir?.deleteSync(recursive: true);
+      rethrow;
+    }
+    final sampler = LocalSampler._(process, nonce, shDir).._listen();
     // A shell that exits early breaks the pipe; that failure reaches the
     // caller through [ready] or [request] with the shell's stderr.
     unawaited(process.stdin.done.then<void>((_) {}, onError: (_) {}));
@@ -230,6 +287,7 @@ final class LocalSampler {
       },
     );
     await _stdoutDone;
+    _shDir?.deleteSync(recursive: true);
     return _stderr.toString();
   }
 

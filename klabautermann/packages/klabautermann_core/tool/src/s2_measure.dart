@@ -11,14 +11,20 @@ import 'package:klabautermann_host/klabautermann_host.dart';
 
 import 'local_sampler.dart';
 
-/// Every measurement for [shells] (names or paths) as the evidence JSON.
+/// Every measurement as the evidence JSON. [samplerShells] (names or
+/// paths) run the program as `/bin/sh` would ([SamplerLaunch.stdinShell])
+/// for the fast-tick, procs and slow-tick measurements; [loginShells]
+/// start it as sshd runs a command ([SamplerLaunch.loginShell]) for the
+/// output before READY, and that start line execs this machine's `sh`.
 Future<Map<String, Object?>> measureAll({
-  required List<String> shells,
+  required List<String> samplerShells,
+  required List<String> loginShells,
   required String user,
   int ticks = 500,
   List<int> extraProcesses = const [1000, 2000, 3000],
 }) async {
-  final paths = [for (final s in shells) _resolveShell(s)];
+  final paths = [for (final s in samplerShells) _resolveShell(s)];
+  final logins = [for (final s in loginShells) _resolveShell(s)];
   final clockTicks = await clockTicksPerSecond();
   final env = runEnvironment(home: Directory.systemTemp.path, user: user);
   String loadavg() => File('/proc/loadavg').readAsStringSync().trim();
@@ -42,15 +48,17 @@ Future<Map<String, Object?>> measureAll({
       // sd_booted(3): systemd is running when this directory exists.
       'systemdRunning': Directory('/run/systemd/system').existsSync(),
       'clockTicksPerSecond': clockTicks,
+      // What a login shell's start line execs.
+      'sh': File(_resolveShell('sh')).resolveSymbolicLinksSync(),
     },
     'shells': {
-      for (final p in paths)
+      for (final p in {...paths, ...logins})
         p: (await Process.run(p, [
           '-c',
           r'printf %s "${BASH_VERSION:-not bash}"',
         ])).stdout.toString(),
     },
-    'preReady': await measurePreReady(paths, user),
+    'preReady': await measurePreReady(logins, user),
     'fastTick': [
       for (final p in paths)
         for (final c in [Collector.overview, Collector.core])
@@ -413,10 +421,8 @@ Future<(SamplerReply, double)> _timed(
 
 String _resolveShell(String shell) {
   if (shell.contains('/')) return shell;
-  for (final dir in kCapturePath.split(':')) {
-    if (File('$dir/$shell').existsSync()) return '$dir/$shell';
-  }
-  throw ArgumentError.value(shell, 'shell', 'not found on $kCapturePath');
+  return findOnCapturePath(shell) ??
+      (throw ArgumentError.value(shell, 'shell', 'not on $kCapturePath'));
 }
 
 Map<String, num> _stats(List<num> values) {

@@ -5,12 +5,16 @@
 //
 // Run from klabautermann/packages/klabautermann_core:
 //
-//   dart run tool/capture_fixtures.dart measure [--shell <sh>]...
-//       [--ticks <n>] [--procs <n>,<n>,...] [--out <file.json>]
+//   dart run tool/capture_fixtures.dart measure [--sh <shell>]...
+//       [--login-shell <shell>]... [--ticks <n>] [--procs <n>,<n>,...]
+//       [--out <file.json>]
 //
-// measure starts the real program as `<sh> -s` under the start command's
-// environment and as `<sh> -c '<start command>'` (default shells dash
-// and bash) and writes the evidence JSON to --out or stdout.
+// measure runs the real program as `<sh> -s` under the start command's
+// environment, started under the name `sh`, for each --sh shell (fast
+// tick, procs, slow tick), and as `<login shell> -c '<start command>'`
+// for each --login-shell (output before READY; the start command then
+// execs this machine's `sh`). Both default to dash and bash. It writes
+// the evidence JSON to --out or stdout.
 import 'dart:convert';
 import 'dart:io';
 
@@ -21,7 +25,7 @@ Future<void> main(List<String> args) async {
   final options = <String, List<String>>{};
   for (var i = 1; i < args.length; i++) {
     final name = args[i].startsWith('--') ? args[i].substring(2) : '';
-    if (!const {'shell', 'ticks', 'procs', 'out'}.contains(name) ||
+    if (!const {'sh', 'login-shell', 'ticks', 'procs', 'out'}.contains(name) ||
         i + 1 == args.length) {
       _usage('unexpected argument ${args[i]}');
     }
@@ -30,7 +34,8 @@ Future<void> main(List<String> args) async {
 
   final user = (await Process.run('id', ['-un'])).stdout.toString().trim();
   final json = await measureAll(
-    shells: options['shell'] ?? const ['dash', 'bash'],
+    samplerShells: options['sh'] ?? const ['dash', 'bash'],
+    loginShells: options['login-shell'] ?? const ['dash', 'bash'],
     user: user,
     ticks: int.parse(options['ticks']?.last ?? '500'),
     extraProcesses: [
