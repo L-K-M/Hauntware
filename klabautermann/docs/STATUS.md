@@ -18,6 +18,14 @@ slice:
   reply lost to a framing error, out-of-order markers ending the
   session), and `kSamplerStartCommand` is the start line. No engine code
   uses them yet; the real-shell test runs on them.
+- Sampler session (M2): `klabautermann_core`'s `SamplerSession` runs one
+  sampler over an `SshLink`: the start command, the program with a fresh
+  nonce, a READY deadline, one request at a time (an overlap is skipped
+  and counted), slow deadlines from the guarded commands (D47), and on a
+  missed deadline or a broken stream `RemoteProcess.close()` and a
+  restart after 1 s to 30 s of backoff. Tested against a scripted process
+  and local dash and bash (a SIGSTOP stall included); nothing starts it
+  yet, and no SSH fixture test covers it.
 - `klabautermann_docker`: pure-Dart HTTP/1.1 client, NDJSON/JSON-seq
   scanning, stdcopy, versioned API models and negotiation, compose labels
   and grouping.
