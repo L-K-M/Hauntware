@@ -5,6 +5,7 @@
 // tables.
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ghost_fonts/ghost_fonts.dart' show ghostMonoFontFamily;
 import 'package:ghost_ui/ghost_ui.dart' show SidebarThemeTokens;
 import 'package:poltergeist_app/l10n/app_localizations.dart';
 import 'package:poltergeist_app/theme/app_appearance.dart';
@@ -394,7 +395,7 @@ void main() {
       // The desktop ramp survives it.
       expect(theme.textTheme.bodyMedium?.fontSize, 13);
       // Code keeps its monospace stack, which names its own family.
-      expect(poltergeistMonoTextStyle.fontFamily, 'JetBrains Mono');
+      expect(poltergeistMonoTextStyle.fontFamily, ghostMonoFontFamily);
     });
   });
 

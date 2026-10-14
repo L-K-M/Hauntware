@@ -1,6 +1,6 @@
+# Declares the `shell` tag of the real-shell tests: the sampler session's
+# and the capture tool's runs against dash and bash. package:test reads
+# dart_test.yaml from the working directory, so runs from the workspace
+# root (CI) do not load this file and warn about the tag.
 tags:
-  # Runs the capture tool against the real program in dash and bash.
   shell:
-# A wedged shell (an unread pipe or a hung child) would pin the VM; cap
-# every test instead.
-timeout: 60s

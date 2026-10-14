@@ -16,8 +16,18 @@ slice:
   READY up to 64 KiB and reads an empty `B` uptime as unknown;
   `HwsTickAssembler` turns frames into replies (READY version check, a
   reply lost to a framing error, out-of-order markers ending the
-  session), and `kSamplerStartCommand` is the start line. No engine code
-  uses them yet; the real-shell test runs on them.
+  session), and `kSamplerStartCommand` is the start line. The sampler
+  session below and the real-shell test use them.
+- Sampler session (M2): `klabautermann_core`'s `SamplerSession` runs one
+  sampler over an `SshLink`: the start command, the program with a fresh
+  nonce, a READY deadline, one request at a time (an overlapping tick
+  is skipped and counted), slow deadlines from the guarded commands
+  (D47), and on a missed deadline or a broken stream
+  `RemoteProcess.close()` and a restart after a backoff of 1 s doubling
+  to a 30 s cap, less up to 30 % of downward jitter (so the first
+  restart comes after 0.7 s to 1 s). Tested against a scripted process
+  and local dash and bash (a SIGSTOP stall included); nothing starts it
+  yet, and no SSH fixture test covers it.
 - Spike S2 part 1: `klabautermann_core/tool/capture_fixtures.dart
   measure` runs the real program locally under dash and bash (as
   `sh -s`, and as `<login shell> -c '<start command>'` the way sshd
@@ -90,6 +100,12 @@ slice:
   the Flutter SDK's Roboto and compare on Linux only. `Gauge` follows in
   its own PR. Nothing shows a chart yet: the overview and fleet rows that
   feed the rings come later in M2.
+- Bars (03 §10.7, M2): `StackedBar` for the memory breakdown and disks
+  (MEM-01, DSK-01) and the fleet rows' three-cell `PressureBar` (FL-07),
+  with hatching for unknown values, grey when stale, and threshold
+  colours paired with a stripe, an icon and words (A11Y-01), plus
+  screen-reader summaries and light and dark goldens. Nothing shows
+  them yet.
 - Sortable table (M2): the app's `SortableTable`, which the M2 lists
   build on. The caller owns the sort (a header click flips it; ties keep
   the caller's order and unknown values sort last). A screen reader hears

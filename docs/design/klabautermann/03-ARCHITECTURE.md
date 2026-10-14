@@ -1883,8 +1883,10 @@ shown as unknown, never as zero.
   (`SC/src/terminal/shell_command.dart:63`, safe for sh, bash, zsh and fish
   [V]). Nothing else is ever written to the sampler's stdin. At most one
   request is outstanding per sampler; a tick that would overlap is skipped
-  and counted. `<seq>` numbers one sampler session's requests and restarts
-  with it; the engine's `Sample.seq` is a separate counter (D44).
+  and counted, and an on-demand read that would overlap is skipped
+  without being counted, since the user started it. `<seq>` numbers one
+  sampler session's requests and restarts with it; the engine's
+  `Sample.seq` is a separate counter (D44).
 - **Why command lines.** dash, the `/bin/sh` of Debian and Ubuntu, reads
   ahead from a pipe: a `read` loop inside a program sent on the same stdin
   loses request lines that arrive in the same write, while command lines are
@@ -1927,6 +1929,13 @@ shown as unknown, never as zero.
   the client send `TERM` (OpenSSH 7.9 and later signal the process group
   [R: r5 §1.2]), close the channel and restart the sampler with backoff.
   A missed tick is visible on the client as a gap, not as a stale value.
+  The READY deadline is 15 s from the opened channel, which covers the
+  login shell's startup files, and a slow request's margin is 5 s [E].
+  The backoff takes the link's figures (5.1). Its failure count resets
+  on a reply, a lost one included, and not on READY, so a sampler that
+  reaches READY and then fails every request still backs off. A closed
+  link stops the sampler instead of restarting it; the next link starts
+  a new one.
 
 ### 6.3 Program sketch
 
@@ -3623,6 +3632,24 @@ distance of 10 under simulated protanopia, deuteranopia and tritanopia.
 The trend compares the means of the oldest and newest quarters; a change
 under 5 % of the scale is steady. The goldens draw with the pinned Flutter
 SDK's Roboto and compare on Linux only.
+
+`StackedBar` and `PressureBar` do not animate, and they take values
+rather than a ring, so their painter repaints when its runs change
+instead of on a version counter. A value the host did not
+report is hatched over the track, never left empty; in a stacked bar an
+unknown segment hatches everything past the known ones, since it cannot be
+told from free space. A stacked bar's thresholds judge its first
+segment's share of the total (used memory, used disk). Past a threshold
+the fill takes the severity colour with a 2 px stripe of the track
+through it, an icon beside the bar tells warning (triangle) from critical
+(circle) by shape, and the stacked bar's legend, the pressure bar's hover
+tooltip and both summaries name the severity (A11Y-01). The stripe, not
+the colour, shows which segment or cell crossed: the palette test keeps
+pairs apart only within the series and within the severities, and the
+light amber and orange measure a CIE76 distance of 2.0 under
+deuteranopia. Stale values turn every fill the family's graphite and drop
+the severity, since an old reading's may no longer hold. Every fill holds
+3:1 on the track (`surfaceContainerHighest`).
 
 ### 10.8 Log viewer
 

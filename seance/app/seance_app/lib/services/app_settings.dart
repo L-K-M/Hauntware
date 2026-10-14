@@ -245,8 +245,9 @@ class AppSettings {
   /// on the screen in front of you, not on the account, so these never sync.
   double terminalFontSize;
 
-  /// Preferred monospace family for the terminal grid. Empty means "use the
-  /// app's own stack" ([SeanceTheme.monoFallback]).
+  /// Preferred monospace family for the terminal grid, as typed or picked; a
+  /// bundled font is stored by its display name ('Fira Code'). Empty means
+  /// Séance's default, bundled Iosevka Term.
   String terminalFontFamily;
   TerminalPalette terminalPalette;
 
