@@ -1437,7 +1437,11 @@ re-push (c1 §2.4).
   when two servers in the list share a locator with different routes. For
   imports the engine lists the others in each entry's `locatorConflict`
   (10.1), comparing routes by each hop's `host:port`, so one jump host
-  reached as another user is the same route. The fix changes the suite's
+  reached as another user is the same route. Every jump hop's key is
+  pinned under its own `host:port` as well, so a hop counts like a
+  server: two entries conflict when the server or a hop of one shares a
+  locator with the server or a hop of the other behind a different
+  route. The fix changes the suite's
   pin locator convention and is a dedicated suite-wide task after v1,
   together with F7 (owner decision 2026-10-10).
 
@@ -3523,7 +3527,8 @@ the engine in `engine_isolate.dart` beside it):
   dial order), `authKind` (agent, identity file, stored key, password),
   `searchText` (built in the engine with `serverSearchHaystack`, which
   the app may not import, 3.2) and `locatorConflict` (the ids of entries
-  that share the `host:port` pin locator behind another route, 4.6). The
+  that pin a key at one of this entry's `host:port` pin locators, the
+  server's or a jump hop's, behind another route, 4.6). The
   app keeps statuses and probe answers only for servers its fleet lists.
   A closed link reads as failed (10.3's `failed` dot, and
   `ghost_servers`' `GhostSessionState.failed`) unless the engine closed

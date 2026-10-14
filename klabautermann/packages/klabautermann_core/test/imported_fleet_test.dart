@@ -284,6 +284,57 @@ void main() {
       expect(entries['vpn-root']!.locatorConflict, ['ssh-config:lan']);
       expect(entries['other-port']!.locatorConflict, isNull);
     });
+
+    test('flags a jump hop at one locator with a server or hop behind '
+        'another route', () {
+      // Séance checks every hop's host key under its own `host:port`.
+      final entries = _byLabel(
+        _fleet(
+          'Host lan\n  HostName 10.0.0.1\n'
+          'Host t\n  HostName 10.9.9.9\n  ProxyJump gw,10.0.0.1\n'
+          'Host a\n  ProxyJump gw1,10.0.0.2\n'
+          'Host b\n  ProxyJump gw2,10.0.0.2\n'
+          // The same hop behind the same route is one machine.
+          'Host c\n  ProxyJump gw1,10.0.0.2\n'
+          // So is a direct hop and a direct server.
+          'Host jumpbox\n  HostName gw1\n',
+        ),
+      );
+
+      expect(entries['lan']!.locatorConflict, ['ssh-config:t']);
+      expect(entries['t']!.locatorConflict, ['ssh-config:lan']);
+      expect(entries['a']!.locatorConflict, ['ssh-config:b']);
+      expect(entries['b']!.locatorConflict, ['ssh-config:a', 'ssh-config:c']);
+      expect(entries['c']!.locatorConflict, ['ssh-config:b']);
+      expect(entries['jumpbox']!.locatorConflict, isNull);
+    });
+
+    test('finds conflicts in linear time', () {
+      // Comparing every pair took about 35 s for this many hosts, with
+      // the engine isolate answering nothing meanwhile.
+      const count = 40000;
+      final hosts = [
+        for (var index = 0; index < count; index++)
+          ImportedHost(
+            alias: 'h$index',
+            hostName: '10.${index >> 16}.${(index >> 8) & 255}.${index & 255}',
+            port: 22,
+          ),
+        const ImportedHost(
+          alias: 'twin',
+          hostName: '10.0.0.0',
+          proxyJump: 'gw',
+        ),
+      ];
+      final clock = Stopwatch()..start();
+
+      final entries = ImportedFleet(hosts, localUser: 'me').entries;
+
+      expect(clock.elapsed, lessThan(const Duration(seconds: 5)));
+      expect(entries.first.locatorConflict, ['ssh-config:twin']);
+      expect(entries.last.locatorConflict, ['ssh-config:h0']);
+      expect(entries[1].locatorConflict, isNull);
+    });
   });
 
   group('jumpRoutes', () {

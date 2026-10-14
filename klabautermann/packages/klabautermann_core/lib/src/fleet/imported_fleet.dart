@@ -128,31 +128,54 @@ final class ImportedFleet {
   /// with no login name ([localUserName] found none) or behind such a hop.
   ServerConfig? serverConfig(String id) => _configs[id];
 
-  /// For each of [mapped], the ids of the others at the same host-key pin
-  /// locator (`host:port`, 03 §4.6) behind another route, or null. Routes
-  /// compare by each hop's `host:port`: the same jump host as another user
-  /// is the same route.
+  /// For each of [mapped], the ids of the others that pin a host key at
+  /// one of its pin locators (`host:port`, 03 §4.6) behind another route,
+  /// or null. Séance checks every hop's host key under its own locator, so
+  /// an entry pins each hop, behind the hops before it, and the server,
+  /// behind all of them. Routes compare by each hop's `host:port`: the
+  /// same jump host as another user is the same route. Grouping the pins
+  /// by locator and route keeps this linear in the entries and the ids it
+  /// lists.
   static List<List<String>?> _locatorConflicts(List<_Mapped> mapped) {
-    final routes = [
+    final pins = [
       for (final (host: _, :route, :config) in mapped)
-        (
-          locator: (config.host, config.port),
-          route: jsonEncode([
-            for (final hop in route) [hop.host, hop.port],
-          ]),
-        ),
+        [
+          for (final (index, hop) in route.indexed)
+            (locator: (hop.host, hop.port), route: _routeKey(route, index)),
+          (
+            locator: (config.host, config.port),
+            route: _routeKey(route, route.length),
+          ),
+        ],
     ];
+
+    // Each locator, each route to it, and the entries that pin it so.
+    final pinned = <(String, int), Map<String, Set<int>>>{};
+    for (final (index, own) in pins.indexed) {
+      for (final (:locator, :route) in own) {
+        ((pinned[locator] ??= {})[route] ??= {}).add(index);
+      }
+    }
+
     return [
-      for (final (index, own) in routes.indexed)
+      for (final (index, own) in pins.indexed)
         _nonEmpty([
-          for (final (other, theirs) in routes.indexed)
-            if (other != index &&
-                theirs.locator == own.locator &&
-                theirs.route != own.route)
-              mapped[other].config.id,
+          for (final other in ({
+            for (final (:locator, :route) in own)
+              for (final MapEntry(key: theirs, value: others)
+                  in pinned[locator]!.entries)
+                if (theirs != route) ...others,
+          }..remove(index)).toList()..sort())
+            mapped[other].config.id,
         ]),
     ];
   }
+
+  /// The first [length] hops of [route] by `host:port`, as one comparable
+  /// key.
+  static String _routeKey(List<JumpHop> route, int length) => jsonEncode([
+    for (final hop in route.take(length)) [hop.host, hop.port],
+  ]);
 
   static List<String>? _nonEmpty(List<String> ids) =>
       ids.isEmpty ? null : List.unmodifiable(ids);

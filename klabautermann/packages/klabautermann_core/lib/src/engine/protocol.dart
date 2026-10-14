@@ -554,9 +554,10 @@ final class FleetEntry {
   /// import (03 §3.2); null when the engine built none.
   final String? searchText;
 
-  /// The server ids of the other entries that share this entry's host-key
-  /// pin locator (`host:port`) behind a different jump route, whose pins
-  /// would collide (03 §4.6); null when none do. Pass an unmodifiable list.
+  /// The server ids of the other entries that pin a host key at one of
+  /// this entry's pin locators (`host:port`: the server's or a jump hop's)
+  /// behind a different jump route, whose pins would collide (03 §4.6);
+  /// null when none do. Pass an unmodifiable list.
   final List<String>? locatorConflict;
 
   // By value: every CatalogReplaced copies its entries across the isolate
