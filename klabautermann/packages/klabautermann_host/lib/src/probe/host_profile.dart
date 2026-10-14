@@ -438,7 +438,8 @@ final _zoneNamePattern = RegExp(r'^[A-Za-z0-9_+-]+(/[A-Za-z0-9_+-]+)*$');
 
 /// The zone name in a `/etc/localtime` link target such as
 /// `../usr/share/zoneinfo/Europe/Berlin`: the part after `zoneinfo/`,
-/// without the `posix/` subtree prefix. Null for any other target.
+/// without tzdata's `posix/` or `right/` (leap-second) subtree prefix.
+/// Null for any other target.
 String? _zoneFromLocaltime(String? target) {
   if (target == null) return null;
 
@@ -447,7 +448,10 @@ String? _zoneFromLocaltime(String? target) {
   if (at < 0) return null;
 
   final name = target.substring(at + marker.length);
-  return name.startsWith('posix/') ? name.substring('posix/'.length) : name;
+  for (final subtree in const ['posix/', 'right/']) {
+    if (name.startsWith(subtree)) return name.substring(subtree.length);
+  }
+  return name;
 }
 
 E? _byName<E extends Enum>(List<E> values, Object? name) {

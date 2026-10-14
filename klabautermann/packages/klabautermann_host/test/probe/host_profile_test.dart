@@ -79,6 +79,13 @@ void main() {
       expect(
         HostProfile(
           zoneOffset: '+0100',
+          localtimeTarget: '/usr/share/zoneinfo/right/Europe/Paris',
+        ).serverZone?.ianaName,
+        'Europe/Paris',
+      );
+      expect(
+        HostProfile(
+          zoneOffset: '+0100',
           localtimeTarget: '/etc/custom-zone',
           etcTimezone: 'Europe/Rome',
         ).serverZone?.ianaName,
