@@ -11,7 +11,9 @@ import 'protocol.dart';
 /// uses [IsolateEngineClient].
 abstract interface class EngineClient {
   /// Every [EngineEvent] the engine emits, in order. Broadcast so each
-  /// concern's controller can subscribe its own slice (03 §10.1).
+  /// concern's controller can subscribe its own slice (03 §10.1). Events
+  /// that arrive before anything has listened, such as the fleet the
+  /// engine starts with, are held for the first listener.
   Stream<EngineEvent> get events;
 
   /// Queues [request] for the engine.
@@ -26,6 +28,7 @@ abstract interface class EngineClient {
 /// [EngineClient] over a spawned engine isolate.
 final class IsolateEngineClient implements EngineClient {
   IsolateEngineClient._(
+    this.ready,
     this._toEngine,
     this._isolate,
     this._fromEngine,
@@ -33,6 +36,11 @@ final class IsolateEngineClient implements EngineClient {
     this._exited,
     this._events,
   );
+
+  /// The engine's answer to [Hello], with what it met while starting, such
+  /// as [EngineReady.importStoreIssue]. The handshake consumes it, so
+  /// [events] never carries it.
+  final EngineReady ready;
 
   SendPort? _toEngine;
   final Isolate _isolate;
@@ -45,30 +53,54 @@ final class IsolateEngineClient implements EngineClient {
   /// How long [shutdown] waits for a clean exit before killing the isolate.
   static const _shutdownTimeout = Duration(seconds: 2);
 
-  /// Spawns the engine isolate and completes the [Hello]/[EngineReady]
-  /// handshake, so a returned client is ready for feature requests.
+  /// Spawns the engine isolate over [supportDirectory], the app's support
+  /// directory where the engine keeps its files (03 §4.10), and completes
+  /// the [Hello]/[EngineReady] handshake, so a returned client is ready
+  /// for feature requests.
   ///
   /// Throws [StateError] when the engine exits or refuses [Hello] before
   /// it is ready. [entryPoint] lets tests substitute a misbehaving engine.
   static Future<IsolateEngineClient> spawn({
-    @visibleForTesting void Function(SendPort uiPort) entryPoint = engineMain,
+    required String supportDirectory,
+    @visibleForTesting void Function(EngineStart start) entryPoint = engineMain,
   }) async {
     final fromEngine = ReceivePort('klabautermann engine events');
     final exitPort = ReceivePort('klabautermann engine exit');
     final isolate = await Isolate.spawn(
       entryPoint,
-      fromEngine.sendPort,
+      EngineStart(
+        uiPort: fromEngine.sendPort,
+        supportDirectory: supportDirectory,
+      ),
       onExit: exitPort.sendPort,
     );
 
     // One receive port carries the isolate's whole life: first the
     // command-port handshake, then every EngineEvent.
     final handshake = Completer<SendPort>();
-    final ready = Completer<void>();
+    final ready = Completer<EngineReady>();
     // A failed handshake leaves [ready] unawaited; mark its error handled.
     ready.future.ignore();
     final exited = Completer<void>();
-    final events = StreamController<EngineEvent>.broadcast();
+
+    // The engine sends its startup fleet right after EngineReady, before
+    // spawn's caller can have listened; a broadcast stream would drop it.
+    // Events wait here until the first listener arrives, so the
+    // composition root may await between spawn and its controllers. Only
+    // that first listener gets them, so the controller that needs the
+    // startup fleet must subscribe first. After that, events go out live
+    // and, as on any broadcast stream, reach only the listeners present.
+    List<EngineEvent>? held = [];
+    late final StreamController<EngineEvent> events;
+    events = StreamController<EngineEvent>.broadcast(
+      onListen: () {
+        final waiting = held;
+        if (waiting == null) return;
+        held = null;
+        waiting.forEach(events.add);
+      },
+    );
+
     final subscriptions = <StreamSubscription<Object?>>[
       fromEngine.listen((message) {
         if (message is SendPort) {
@@ -77,16 +109,25 @@ final class IsolateEngineClient implements EngineClient {
         }
         if (message is! EngineEvent) return;
 
-        // The first answer to Hello decides the handshake.
+        // The first answer to Hello decides the handshake and is not an
+        // event for the app.
         if (!ready.isCompleted) {
-          if (message is EngineReady) ready.complete();
+          if (message is EngineReady) {
+            ready.complete(message);
+            return;
+          }
           if (message is RequestRejected && message.requestName == 'Hello') {
             ready.completeError(
               StateError('engine refused Hello: ${message.reason}'),
             );
+            return;
           }
         }
-        events.add(message);
+        if (held case final waiting?) {
+          waiting.add(message);
+        } else {
+          events.add(message);
+        }
       }),
       exitPort.listen((_) {
         const reason = 'engine isolate exited before answering Hello';
@@ -106,8 +147,9 @@ final class IsolateEngineClient implements EngineClient {
     try {
       final toEngine = await handshake.future;
       toEngine.send(const Hello());
-      await ready.future;
+      final answer = await ready.future;
       return IsolateEngineClient._(
+        answer,
         toEngine,
         isolate,
         fromEngine,

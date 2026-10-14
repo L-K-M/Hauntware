@@ -1,0 +1,8 @@
+# Analysis options for the l10n_contract package, using the root lints.
+include: package:lints/recommended.yaml
+
+analyzer:
+  # The scanner tests read deliberately broken and generated sources as
+  # fixtures; they are data, not code that has to analyze clean.
+  exclude:
+    - test/fixtures/**

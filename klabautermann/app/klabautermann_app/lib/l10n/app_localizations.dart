@@ -202,10 +202,10 @@ abstract class AppLocalizations {
   /// **'{count, plural, =0{Your ~/.ssh/config names no hosts to import.} =1{Imported 1 server from ~/.ssh/config.} other{Imported {count} servers from ~/.ssh/config.}}'**
   String sshConfigImported(int count);
 
-  /// Shown instead of sshConfigImported when the import left host blocks out; importedCount (0 or more) is the number of servers it added, skippedCount (1 or more) the number of host blocks it left out. One message, so the translation decides how its sentences join.
+  /// Shown instead of sshConfigImported when the import left hosts out; importedCount (0 or more) is the number of servers it added, skippedCount (1 or more) the number of hosts it left out. One message, so the translation decides how its sentences join.
   ///
   /// In en, this message translates to:
-  /// **'{importedCount, plural, =0{No hosts were imported from ~/.ssh/config.} =1{Imported 1 server from ~/.ssh/config.} other{Imported {importedCount} servers from ~/.ssh/config.}} {skippedCount, plural, =1{1 host was skipped because its port is invalid or its name repeats an earlier host.} other{{skippedCount} hosts were skipped because their port is invalid or their name repeats an earlier host.}}'**
+  /// **'{importedCount, plural, =0{No hosts were imported from ~/.ssh/config.} =1{Imported 1 server from ~/.ssh/config.} other{Imported {importedCount} servers from ~/.ssh/config.}} {skippedCount, plural, =1{1 host was skipped because its port is unsupported or its name repeats an earlier host.} other{{skippedCount} hosts were skipped because their port is unsupported or their name repeats an earlier host.}}'**
   String sshConfigImportedWithSkips(int importedCount, int skippedCount);
 
   /// No description provided for @sshConfigMissing.
@@ -232,6 +232,12 @@ abstract class AppLocalizations {
   /// **'The import from ~/.ssh/config failed. Try again, and restart the app if it keeps failing.'**
   String get sshConfigImportFailed;
 
+  /// Second top toast after an ssh_config import whose servers appear in the fleet but could not be written to the device's import file.
+  ///
+  /// In en, this message translates to:
+  /// **'This import could not be saved, so it will not be kept after a restart.'**
+  String get sshConfigImportNotSaved;
+
   /// No description provided for @syncFleet.
   ///
   /// In en, this message translates to:
@@ -243,6 +249,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Settings'**
   String get openSettings;
+
+  /// The menu command that opens Settings: in the macOS application menu, in the File menu on Linux and Windows.
+  ///
+  /// In en, this message translates to:
+  /// **'Settings…'**
+  String get settingsCommand;
+
+  /// The Linux and Windows File menu's Quit row, which closes the main window the way its close button does.
+  ///
+  /// In en, this message translates to:
+  /// **'Quit'**
+  String get appQuitLabel;
+
+  /// Title of the File menu.
+  ///
+  /// In en, this message translates to:
+  /// **'File'**
+  String get menuFile;
+
+  /// Title of the View menu (macOS, where it holds Enter Full Screen).
+  ///
+  /// In en, this message translates to:
+  /// **'View'**
+  String get menuView;
+
+  /// Title of the Window menu (macOS, where it holds Minimize, Zoom and Bring All to Front).
+  ///
+  /// In en, this message translates to:
+  /// **'Window'**
+  String get menuWindow;
 
   /// No description provided for @statusConnected.
   ///
@@ -387,6 +423,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Your settings could not be saved. Changes you make now may be lost when Klabautermann restarts.'**
   String get settingsFileNotSaved;
+
+  /// Startup notice: the file holding the servers imported from ~/.ssh/config was damaged and renamed aside, so the fleet starts without them.
+  ///
+  /// In en, this message translates to:
+  /// **'Your imported servers could not be read and were cleared. The old file is kept as {fileName}. Import ~/.ssh/config again to bring them back.'**
+  String importsFileRecovered(String fileName);
+
+  /// Startup notice: the file holding the servers imported from ~/.ssh/config could not be read or renamed aside, so it is not written this session.
+  ///
+  /// In en, this message translates to:
+  /// **'Your imported servers could not be read, so their file was left as it is. Servers you import now will not be kept after a restart.'**
+  String get importsFileLeftAsIs;
+
+  /// Startup notice: a newer app version wrote the file holding the servers imported from ~/.ssh/config, so this version does not write it.
+  ///
+  /// In en, this message translates to:
+  /// **'Your imported servers were saved by a newer version of Klabautermann. Servers you import now will not be kept after a restart.'**
+  String get importsFileNewer;
 
   /// Shown in the desktop settings window when the app does not answer it.
   ///

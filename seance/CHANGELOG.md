@@ -2,6 +2,35 @@
 
 ## Unreleased
 
+- Import SSH config adds a server for every name on a `Host` line:
+  `Host web db` imports `web` and `db` with the block's settings, where
+  only `web` was imported before. Wildcard and `!` patterns are still not
+  imported, and `Include` is still not followed.
+- Import SSH config skips a host whose `Port` is not a number from 1 to
+  65535 or `ssh`, `http` or `https`, such as `22a`, `0x16`, `0` or
+  `65536`, and the message after the import counts it as an unsupported
+  Port. Such a host used to be imported with port 22 or an impossible
+  port. `Port ssh`, `http` and `https` read as 22, 80 and 443.
+- Import SSH config reads lines as ssh does. `HostName = example.com`
+  imports `example.com`, not `= example.com`. Single and double quotes
+  and backslash escapes are removed, and a `#` inside quotes or inside a
+  value no longer cuts the value short. A directive with no value, such
+  as `HostName=`, counts as absent instead of importing an empty host.
+- Assistant: the danger check looks at one command at a time, in
+  suggested commands and in Command inbox scripts. A flag or path in the
+  next command no longer raises a warning, so
+  `systemctl stop nginx; ssh host` is not flagged. A command continued
+  over lines with a trailing backslash is checked as one, so `userdel \`
+  followed by `-r deploy` on the next line is marked critical.
+- Assistant: the danger check also catches Docker commands with global
+  options such as `--context prod`, `docker volume remove`,
+  `systemctl` with options before the verb, `service ssh stop`,
+  `nft flush table` and `nft flush chain`, and `kill -9 -1`, which
+  signals every process. `deluser --remove-home` and
+  `--remove-all-files` are marked critical like `userdel -r`, and
+  `deluser NAME` asks you to review it like `userdel`. `sshfs` and
+  `ssh-agent` units, `kill --signal 1 42`, `kill --list 1` and
+  `kill -0 1` are no longer flagged.
 - Assistant: the danger check on suggested commands and Command inbox
   scripts covers Docker, systemd, cron, firewall and user commands.
   `docker system prune` with `--all` or `--volumes`,

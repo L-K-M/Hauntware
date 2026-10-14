@@ -17,60 +17,51 @@
 /// leaves open. They draw a hollow red ring: hollow because it is the same
 /// weaker, observed kind of fact as "reachable", red because a solid red dot
 /// already means a session failed.
+///
+/// The vocabulary itself, the rules and the paint map, lives in
+/// Planchette's `ghost_servers` since 2026-10-13
+/// (docs/design/ghost-servers-part1.md, PR 3); [ServerDot] is Séance's
+/// name for its glyphs, and the functions here delegate to it through
+/// `ghost_servers_adapter.dart`.
 library;
 
 import 'package:flutter/material.dart';
+import 'package:ghost_servers/ghost_servers.dart';
 import 'package:seance_core/seance_core.dart';
 
 import '../app_state.dart';
-import '../theme.dart';
+import 'ghost_servers_adapter.dart';
 import 'sidebar/sidebar_kit.dart';
 
 enum ServerDot {
-  none,
-  connected,
-  connecting,
-  failed,
-  blocked,
-  reachable,
-  unreachable;
+  none(GhostServerGlyph.none),
+  connected(GhostServerGlyph.connected),
+  connecting(GhostServerGlyph.connecting),
+  failed(GhostServerGlyph.failed),
+  blocked(GhostServerGlyph.blocked),
+  reachable(GhostServerGlyph.reachable),
+  unreachable(GhostServerGlyph.unreachable);
+
+  const ServerDot(this._glyph);
+
+  final GhostServerGlyph _glyph;
 
   /// What the dot says, folded into the row's tooltip and spoken label
   /// (the row's visuals are excluded from semantics). Null for no dot.
-  String? get description => switch (this) {
-    ServerDot.none => null,
-    ServerDot.connected => 'Connected',
-    ServerDot.connecting => 'Connecting',
-    ServerDot.failed => 'Connection failed',
-    ServerDot.blocked => 'Connection blocked',
-    ServerDot.reachable => 'Host reachable',
-    ServerDot.unreachable => 'Host unreachable',
-  };
+  String? get description => seanceServerStatusStrings.labelOf(_glyph);
 
   /// What to do about the state, where the state alone does not say it:
   /// folded into the tooltip and label after [description].
-  String? get detail => switch (this) {
-    ServerDot.blocked =>
-      'The host key changed. Review it at the next connection attempt.',
-    _ => null,
-  };
+  String? get detail => seanceServerStatusStrings.detailOf(_glyph);
 
   /// Live session truth is solid; a probe's observation is a ring; a
   /// refusal the user has to act on is the no-entry sign.
-  SidebarDotStyle get style => switch (this) {
-    ServerDot.reachable || ServerDot.unreachable => SidebarDotStyle.ring,
-    ServerDot.blocked => SidebarDotStyle.blocked,
-    _ => SidebarDotStyle.solid,
-  };
+  SidebarDotStyle get style => _glyph.style;
 
   /// The colour to paint, or null for no dot.
-  Color? color(BuildContext context) => switch (this) {
-    ServerDot.none => null,
-    ServerDot.connected || ServerDot.reachable => StatusColors.online(context),
-    ServerDot.connecting => StatusColors.connecting(context),
-    ServerDot.failed ||
-    ServerDot.blocked ||
-    ServerDot.unreachable => StatusColors.offline(context),
+  Color? color(BuildContext context) => switch (_glyph.tone) {
+    final tone? => seanceStatusColors(context).colorOf(tone),
+    null => null,
   };
 }
 
@@ -80,41 +71,39 @@ enum ServerDot {
 ///
 /// A live session outranks the probe: a connected server is connected even
 /// if the last probe timed out. A session that ended cleanly is idle, and
-/// the probe speaks again.
+/// the probe speaks again. This is the shared rail rule.
 ServerDot serverDotFor({
   required TerminalStatus? session,
   required ProbeStatus probe,
   bool hostKeyBlocked = false,
 }) {
-  switch (session) {
-    case TerminalStatus.connected:
-      return ServerDot.connected;
-    case TerminalStatus.connecting:
-      return ServerDot.connecting;
-    case TerminalStatus.error:
-      return hostKeyBlocked ? ServerDot.blocked : ServerDot.failed;
-    case TerminalStatus.disconnected || null:
-      return switch (probe) {
-        ProbeStatus.online => ServerDot.reachable,
-        ProbeStatus.offline => ServerDot.unreachable,
-        ProbeStatus.unknown => ServerDot.none,
-      };
-  }
+  final indicator = ghostServerIndicator(
+    seanceServerStatusStrings,
+    GhostIndicatorRule.rail,
+    session: ghostSessionOf(session, hostKeyBlocked: hostKeyBlocked),
+    probe: ghostProbeOf(probe),
+  );
+  return switch (indicator.glyph) {
+    GhostServerGlyph.connected => ServerDot.connected,
+    GhostServerGlyph.connecting => ServerDot.connecting,
+    GhostServerGlyph.failed => ServerDot.failed,
+    GhostServerGlyph.blocked => ServerDot.blocked,
+    GhostServerGlyph.reachable => ServerDot.reachable,
+    GhostServerGlyph.unreachable => ServerDot.unreachable,
+    // Séance always has a probe answer, so the rail rule never comes back
+    // idle here; an unknown answer is no dot, like no truth at all.
+    GhostServerGlyph.none ||
+    GhostServerGlyph.idle ||
+    GhostServerGlyph.reachabilityUnknown => ServerDot.none,
+  };
 }
 
 /// Aggregate a server's terminal tabs into the one state its row shows: any
 /// connecting wins, else any connected, else any error, else disconnected.
 /// Null when the server has no terminal tab at all.
-TerminalStatus? aggregateSessionStatus(Iterable<TerminalSession> tabs) {
-  if (tabs.isEmpty) return null;
-  if (tabs.any((t) => t.status == TerminalStatus.connecting)) {
-    return TerminalStatus.connecting;
-  }
-  if (tabs.any((t) => t.status == TerminalStatus.connected)) {
-    return TerminalStatus.connected;
-  }
-  if (tabs.any((t) => t.status == TerminalStatus.error)) {
-    return TerminalStatus.error;
-  }
-  return TerminalStatus.disconnected;
-}
+TerminalStatus? aggregateSessionStatus(Iterable<TerminalSession> tabs) =>
+    terminalStatusOf(
+      ghostAggregateSession([
+        for (final tab in tabs) ghostSessionOf(tab.status),
+      ]),
+    );

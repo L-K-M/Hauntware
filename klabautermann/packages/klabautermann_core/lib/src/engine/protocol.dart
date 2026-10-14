@@ -10,6 +10,12 @@ import 'package:meta/meta.dart';
 /// v2 types [CatalogReplaced] as a list of [FleetEntry] values (v1 carried
 /// an opaque record map) and adds the FL-02 import: [ImportSshConfig],
 /// answered by [SshConfigImported].
+///
+/// The import store (03 §4.10) added [EngineReady.importStoreIssue] and
+/// [SshConfigImported.saved] within v2, without a bump: the app and the
+/// engine compile against these classes in one build, so neither side can
+/// lack a required field and the check has nothing more to catch. 03 §10.1
+/// lists both fields.
 const int kEngineProtocolVersion = 2;
 
 /// Every message the UI isolate sends the engine (03 §10.1, D18). Plain data
@@ -54,12 +60,12 @@ final class RunSyncRound extends EngineRequest {
 /// which file to read, and whether the platform has one at all, stays the
 /// UI's decision, and the engine opens no file for this request. The engine
 /// parses [text] off the UI isolate (CN-19), replaces every entry an earlier
-/// import produced, and answers [CatalogReplaced] with the whole fleet, then
-/// [SshConfigImported].
+/// import produced, saves the new set to `ssh_config_imports.json` (D13's
+/// device-local store, 03 §4.10), and answers [CatalogReplaced] with the
+/// whole fleet, then [SshConfigImported].
 ///
 /// Not a catalog write under D14: imported entries never become records and
-/// are never pushed. Until the catalog library brings D13's device-local
-/// store, they live in the engine's memory and are gone when it stops.
+/// are never pushed; the store is a device-local file only.
 final class ImportSshConfig extends EngineRequest {
   const ImportSshConfig(this.text);
 
@@ -197,11 +203,18 @@ sealed class EngineEvent {
 }
 
 /// The engine's answer to [Hello]; carries the version it speaks so the
-/// client can refuse a mismatched engine before any feature traffic.
+/// client can refuse a mismatched engine before any feature traffic. The
+/// engine follows it at once with a [CatalogReplaced] holding the fleet it
+/// started with: the imports an earlier run saved.
 final class EngineReady extends EngineEvent {
-  const EngineReady(this.protocolVersion);
+  const EngineReady(this.protocolVersion, {this.importStoreIssue});
 
   final int protocolVersion;
+
+  /// What was wrong with `ssh_config_imports.json` when the engine loaded
+  /// it at start, or null when it was fine or absent. Told once, here, so
+  /// the app can report it with its other startup problems.
+  final ImportStoreIssue? importStoreIssue;
 }
 
 /// The engine refused a request it does not serve (yet). The 03 §10.1 table
@@ -233,15 +246,24 @@ final class SshConfigImported extends EngineEvent {
   const SshConfigImported({
     required this.importedCount,
     required this.skippedCount,
+    required this.saved,
   });
 
   /// Hosts the import added to the fleet; zero when the config names none.
   final int importedCount;
 
-  /// Host blocks the import left out: a `Port` outside 1 to 65535, or an
+  /// Hosts the import left out: a `Port` the importer refuses (one ssh
+  /// rejects, or a service name other than `ssh`, `http` or `https`), or an
   /// alias an earlier block already took. Wildcard-only blocks such as
   /// `Host *` are defaults rather than hosts and do not count.
   final int skippedCount;
+
+  /// Whether `ssh_config_imports.json` now holds this import. False when
+  /// the write failed or this run leaves the file as it is
+  /// ([ImportStoreIssueKind.leftAsIs], [ImportStoreIssueKind.newerVersion]):
+  /// the fleet shows the import until the engine stops, and the next start
+  /// loads whatever the file held before.
+  final bool saved;
 }
 
 /// The sync round's phase changed (03 §10.1).
@@ -422,8 +444,8 @@ enum FleetEntryOrigin {
   synced,
 
   /// Imported on this device from an OpenSSH client config (FL-02, 03
-  /// §4.2). Device-local and never pushed in the MVP; held in the engine's
-  /// memory until the catalog library brings the device-local store.
+  /// §4.2). Device-local and never pushed in the MVP; the engine keeps the
+  /// set in `ssh_config_imports.json` (03 §4.10).
   sshConfig,
 }
 
@@ -483,6 +505,40 @@ final class FleetEntry {
   @override
   int get hashCode =>
       Object.hash(serverId, label, host, port, user, group, origin);
+}
+
+/// What went wrong with `ssh_config_imports.json` when the engine started
+/// (03 §4.10). In every case the engine started without imports.
+enum ImportStoreIssueKind {
+  /// The file was not an import store this build can read. It was renamed
+  /// to [ImportStoreIssue.preservedAs], byte for byte, and the next import
+  /// saves a new file.
+  recovered,
+
+  /// The file could not be read, or it was damaged and could not be
+  /// renamed aside. It is left as it is, and imports are not saved while
+  /// this engine runs, so nothing replaces bytes nobody has kept.
+  leftAsIs,
+
+  /// A newer build wrote the file. It is left as it is, and imports are not
+  /// saved while this engine runs, so the newer build finds its own file.
+  newerVersion,
+}
+
+/// The problem the engine met loading `ssh_config_imports.json`, carried by
+/// [EngineReady]. Plain data: the underlying error crosses as text.
+@immutable
+final class ImportStoreIssue {
+  const ImportStoreIssue(this.kind, {this.preservedAs, this.detail});
+
+  final ImportStoreIssueKind kind;
+
+  /// The damaged file's new path; set for [ImportStoreIssueKind.recovered]
+  /// only.
+  final String? preservedAs;
+
+  /// The failure behind [kind], for diagnostics only.
+  final String? detail;
 }
 
 /// Which log source an [OpenLogStream] follows (03 §7.6).
