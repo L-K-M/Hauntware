@@ -82,6 +82,8 @@ void main() {
     final early = await session.tick([Collector.overview]);
     expect((early as SamplerSkipped).reason, SamplerSkipReason.notReady);
     expect(p.requests, isEmpty);
+    // Only ticks skipped as busy are counted (03 §6.2).
+    expect(session.skippedTicks, 0);
 
     p.ready();
     await _until(() => session.state is SamplerReady);
@@ -91,6 +93,14 @@ void main() {
     final reply = (await outcome as SamplerReplied).reply;
     expect(reply.seq, 1);
     expect(utf8.decode(reply.section('overview')!.payload), 'cpu 1 2 3');
+  });
+
+  test('starts one process however often start() runs', () async {
+    open()
+      ..start()
+      ..start();
+    await link.process(0);
+    expect(link.commands, [kSamplerStartCommand]);
   });
 
   test('skips noise before READY and reads frames split into bytes', () async {
@@ -160,7 +170,9 @@ void main() {
   });
 
   test('gives a slow request its derived deadline', () async {
-    // fs may start 2 guarded commands: 400 + 2 * 300 ms, past fastRequest.
+    // fs may start 2 guarded commands: 400 + 2 * 300 ms, past fastRequest
+    // and past the margin alone.
+    const derived = Duration(milliseconds: 1000);
     open(
       kind: SamplerKind.slow,
       deadlines: const SamplerDeadlines(
@@ -171,14 +183,19 @@ void main() {
     );
     final p = await ready();
     SamplerOutcome? outcome;
+    final sw = Stopwatch()..start();
     unawaited(session.tick([Collector.fs]).then((o) => outcome = o));
-    await Future<void>.delayed(const Duration(milliseconds: 250));
+    // This timer starts after the request's, so a shorter deadline would
+    // have fired first.
+    await Future<void>.delayed(const Duration(milliseconds: 600));
     expect((outcome, p.closeCalls), (null, 0));
 
     await _until(() => outcome != null);
     final gap = outcome! as SamplerGap;
     expect((gap.seq, gap.reason), (1, SamplerGapReason.deadline));
     expect(p.closeCalls, 1);
+    // Timers count whole milliseconds, so the gap may come 1 ms early.
+    expect(sw.elapsed, greaterThan(derived - const Duration(milliseconds: 1)));
   });
 
   test('keeps a healthy sampler running past its deadlines', () async {
@@ -222,6 +239,17 @@ void main() {
     });
   }
 
+  test('backs off longer after a missed deadline despite READY', () async {
+    // The count resets on a reply, not on READY, so a sampler that reaches
+    // READY and then fails every request still backs off (03 §6.2).
+    open(deadlines: _short);
+    await ready();
+    expect(await session.tick([Collector.overview]), isA<SamplerGap>());
+    await ready(1);
+    expect(await session.tick([Collector.overview]), isA<SamplerGap>());
+    expect(delays, [0, 1]);
+  });
+
   test('ends a request as a gap when the process exits', () async {
     open();
     final p = await ready();
@@ -249,6 +277,22 @@ void main() {
     final late = await session.tick([Collector.overview]);
     expect((late as SamplerSkipped).reason, SamplerSkipReason.stopped);
     expect(link.processes, hasLength(1));
+    expect(session.restarts, 0);
+    expect(states.whereType<SamplerBackoff>(), isEmpty);
+  });
+
+  test('restarts when a reply answers another request', () async {
+    open();
+    final p = await ready();
+    final outcome = session.tick([Collector.overview]);
+    p.emitText(p.reply(2, {'overview': ''}));
+    final gap = await outcome as SamplerGap;
+    expect(gap.reason, SamplerGapReason.sessionEnded);
+    await _until(() => states.whereType<SamplerBackoff>().isNotEmpty);
+    expect(
+      states.whereType<SamplerBackoff>().single.cause,
+      SamplerFault.protocolViolation,
+    );
   });
 
   test('reports a reply lost to a framing error as a gap', () async {
@@ -267,9 +311,28 @@ void main() {
       SamplerFault.readyDeadline,
       (p) => p.emitText('a login banner, but no READY\n'),
     ),
+    'more than 64 KiB arrives before READY': (
+      SamplerFault.noReady,
+      (p) => p.emitText('x' * (65 * 1024)),
+    ),
     'READY names another collector-set version': (
       SamplerFault.versionMismatch,
       (p) => p.ready('1'),
+    ),
+    'a marker comes out of order': (
+      SamplerFault.protocolViolation,
+      (p) => p
+        ..ready()
+        ..emitText('\x1e${p.nonce} E 1\n'),
+    ),
+    'a reply holds too many sections': (
+      SamplerFault.protocolViolation,
+      (p) => p
+        ..ready()
+        ..emitText(
+          '\x1e${p.nonce} B 1 1.0\n'
+          '${'\x1e${p.nonce} S core ok 0\n\n' * (kMaxReplySections + 1)}',
+        ),
     ),
     'a reply answers no request': (
       SamplerFault.protocolViolation,
@@ -289,6 +352,23 @@ void main() {
       expect(states.whereType<SamplerBackoff>().single.cause, cause);
     });
   }
+
+  test('counts the READY deadline from the opened channel', () async {
+    const deadlines = SamplerDeadlines(ready: Duration(milliseconds: 300));
+    final hold = link.holdNextStart = Completer<void>();
+    open(deadlines: deadlines).start();
+    // This timer starts after start(), so a READY deadline counted from
+    // start() would fire first.
+    await Future<void>.delayed(deadlines.ready * 2);
+    hold.complete();
+    final p = await link.process(0);
+    await p.firstWrite;
+    p.ready();
+    await _until(() => session.state is SamplerReady);
+    expect(session.restarts, 0);
+    expect(states.whereType<SamplerBackoff>(), isEmpty);
+    expect(link.commands, hasLength(1));
+  });
 
   test('keeps the latest stderr without control characters', () async {
     open();
@@ -312,17 +392,40 @@ void main() {
     expect((late as SamplerSkipped).reason, SamplerSkipReason.stopped);
   });
 
+  test('close completes once the process has closed', () async {
+    open();
+    final p = await ready();
+    final hold = p.holdClose = Completer<void>();
+    var closed = false;
+    unawaited(session.close().then((_) => closed = true));
+    await pumpEventQueue();
+    expect((closed, p.closeCalls), (false, 1));
+
+    hold.complete();
+    await session.close();
+  });
+
   test('close waits for a channel that opens late and closes it', () async {
     final hold = link.holdNextStart = Completer<void>();
     open().start();
-    final closed = session.close();
+    var closed = false;
+    unawaited(session.close().then((_) => closed = true));
+    await pumpEventQueue();
+    expect(closed, isFalse);
+    expect(link.processes, isEmpty);
+
     hold.complete();
-    await closed;
+    await session.close();
     expect(link.processes.single.closeCalls, 1);
   });
 
   test('refuses requests the encoder or the sampler kind rejects', () async {
     open();
+    // Refused before READY too, rather than skipped as not ready.
+    await expectLater(
+      session.onDemand(Collector.core, ['x']),
+      throwsA(isA<HwsRequestError>()),
+    );
     final p = await ready();
     // Part-1 collectors take no arguments (03 §8.8).
     await expectLater(

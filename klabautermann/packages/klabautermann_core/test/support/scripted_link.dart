@@ -57,6 +57,10 @@ final class ScriptedProcess implements RemoteProcess {
   final _firstWrite = Completer<void>();
   int closeCalls = 0;
 
+  /// Holds [close] until completed, to test that a closing session waits
+  /// for it.
+  Completer<void>? holdClose;
+
   /// Everything the client wrote to stdin.
   String get written => utf8.decode(_written);
 
@@ -133,6 +137,7 @@ final class ScriptedProcess implements RemoteProcess {
   @override
   Future<void> close() async {
     closeCalls++;
+    await holdClose?.future;
     end(const RemoteExit(exitSignal: 'TERM'));
   }
 }
