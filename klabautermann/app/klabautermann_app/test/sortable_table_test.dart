@@ -346,8 +346,16 @@ void main() {
       final handle = tester.ensureSemantics();
       await _pump(tester);
 
+      // A focused header says so, or a screen reader would not follow it.
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pumpAndSettle();
+      expect(
+        tester.getSemantics(_header('name')),
+        isSemantics(label: 'Name', isFocusable: true, isFocused: true),
+      );
+
       // Name, PID and CPU sort; State is a plain label.
-      for (var stop = 0; stop < 4; stop++) {
+      for (var stop = 1; stop < 4; stop++) {
         await tester.sendKeyEvent(LogicalKeyboardKey.tab);
       }
       await tester.pumpAndSettle();

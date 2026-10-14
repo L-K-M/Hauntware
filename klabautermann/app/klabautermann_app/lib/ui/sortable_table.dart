@@ -655,19 +655,22 @@ class _SortableTableState<R> extends State<SortableTable<R>> {
           ? (ascending ? l10n.tableSortedAscending : l10n.tableSortedDescending)
           : null,
       hint: onTap == null ? null : l10n.tableSortHint,
-      excludeSemantics: true,
       onTap: onTap,
+      // The InkWell's focus flags merge into this node; only the drawn
+      // label is excluded, which [label] already says.
       child: InkWell(
         onTap: onTap,
         excludeFromSemantics: true,
         hoverColor: fileTheme.hoverFill,
-        child: Padding(
-          padding: _cellPadding,
-          child: Row(
-            mainAxisAlignment: end
-                ? MainAxisAlignment.end
-                : MainAxisAlignment.start,
-            children: end ? [chevron, label] : [label, chevron],
+        child: ExcludeSemantics(
+          child: Padding(
+            padding: _cellPadding,
+            child: Row(
+              mainAxisAlignment: end
+                  ? MainAxisAlignment.end
+                  : MainAxisAlignment.start,
+              children: end ? [chevron, label] : [label, chevron],
+            ),
           ),
         ),
       ),
