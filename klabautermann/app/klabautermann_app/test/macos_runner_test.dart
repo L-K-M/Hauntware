@@ -29,7 +29,17 @@ void main() {
       isNot(contains(RegExp(r'\bFlutterViewController\('))),
       reason: 'a stock controller drops both compatibility fixes',
     );
-    expect(window, contains('contentViewController = flutterViewController'));
+    // macos_window_utils hosts it for the integrated titlebar (03 §10.2).
+    expect(
+      window,
+      contains(
+        RegExp(
+          r'MacOSWindowUtilsViewController\(\s*'
+          r'flutterViewController: flutterViewController\)',
+        ),
+      ),
+    );
+    expect(window, contains('contentViewController = windowUtilsController'));
     expect(
       window,
       contains('RegisterGeneratedPlugins(registry: flutterViewController)'),

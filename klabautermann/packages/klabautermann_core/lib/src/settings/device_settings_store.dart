@@ -382,14 +382,17 @@ Future<String> unusedCorruptCopyPath(File file, DateTime time) async {
   }
 }
 
-/// The store's default [DeviceSettingsWriter]: the catalog stores' write
-/// order (`AtomicFileWriter` in `seance_core`, which its barrel does not
-/// export). A sibling temp file with a random name is written and flushed,
-/// renamed over [target], and the directory synced through `seance_core`'s
-/// [syncLocalDirectory] so the rename survives power loss. A reader, or a
-/// crash, sees the old file or the new one, never a partial one. A failure
-/// deletes the temp file and rethrows. The engine's import store saves
-/// through it too. Internal: the barrel hides it.
+/// The store's default [DeviceSettingsWriter], and the writer for the
+/// other device-local files: the app's `window_state.json` and the
+/// engine's import store. It follows the catalog stores' write order
+/// (`AtomicFileWriter` in `seance_core`, which its barrel does not
+/// export). A sibling temp file with a random name is written and
+/// flushed, renamed over [target], and the directory synced through
+/// `seance_core`'s [syncLocalDirectory] so the rename survives power loss.
+/// A reader, or a crash, sees the old file or the new one, never a partial
+/// one. A failure deletes the temp file and rethrows. Concurrent writes to
+/// one target are the caller's to order: each lands whole, and the last
+/// rename wins.
 Future<void> writeFileAtomically(File target, List<int> bytes) async {
   await target.parent.create(recursive: true);
   final temporary = File('${target.path}.tmp-${uuidV4()}');

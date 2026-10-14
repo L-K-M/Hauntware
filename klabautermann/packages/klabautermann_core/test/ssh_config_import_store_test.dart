@@ -4,8 +4,6 @@ import 'dart:io';
 import 'package:klabautermann_core/klabautermann_core.dart';
 import 'package:klabautermann_core/src/fleet/ssh_config_entries.dart';
 import 'package:klabautermann_core/src/fleet/ssh_config_import_store.dart';
-import 'package:klabautermann_core/src/settings/device_settings_store.dart'
-    show writeFileAtomically;
 import 'package:test/test.dart';
 
 import 'fixtures/ssh_config_fixture.dart';
