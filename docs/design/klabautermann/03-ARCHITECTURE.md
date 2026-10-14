@@ -3492,7 +3492,7 @@ the engine in `engine_isolate.dart` beside it):
     what earlier ones left unset. Lines before the first `Host` or
     `Match` apply to every name. A `Host` block applies when one of its
     patterns matches the name (`*` and `?` as `match_pattern()` reads
-    them) and no negated one does. A `Match` block applies when all its
+    them, on UTF-8 bytes, so `?` is one byte) and no negated one does. A `Match` block applies when all its
     criteria hold: `all`, `host` (the `HostName` read so far) and
     `originalhost` are evaluated as ssh does, and `canonical` and
     `final` hold only on a second pass.
@@ -3515,7 +3515,10 @@ the engine in `engine_isolate.dart` beside it):
     `CanonicalizeHostname` is other than `no`; its `HostName` holds
     another token, on which ssh exits, or its first `IdentityFile` holds
     a `%` token or a `${VAR}`, which ssh fills in from the connection and
-    the environment; or a block that applies holds a line ssh rejects (a
+    the environment; its name holds U+FFFD, which the app decodes in
+    place of bytes that are not UTF-8 (ssh compares the bytes, and
+    distinct names decode alike), or a wildcard pattern holding U+FFFD
+    may apply and could set a value first; or a block that applies holds a line ssh rejects (a
     `Port` other than a decimal 1 to 65535 or `ssh`, `http` or `https`,
     a value missing or doubled, a quote left open, or a `Host` line with
     an empty pattern). ssh rejects the whole config over

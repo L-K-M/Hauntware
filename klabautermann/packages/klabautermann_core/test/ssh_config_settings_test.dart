@@ -44,6 +44,52 @@ void main() {
       expect(_applies('Host Web', 'web'), isFalse);
     });
 
+    test('patterns match UTF-8 bytes, as match_pattern() does', () {
+      // `?` is one byte, and é two.
+      expect(_applies('Host caf?', 'café'), isFalse);
+      expect(_applies('Host caf??', 'café'), isTrue);
+      expect(_applies('Host *é', 'café'), isTrue);
+      expect(_applies('Match originalhost caf?', 'café'), isFalse);
+      expect(_applies('Match originalhost CAF??', 'café'), isTrue);
+      expect(
+        _resolve(
+          'Host caf?\n  HostName 10.0.0.9\nHost café\n  HostName '
+              '10.0.0.5\n',
+          'café',
+        ),
+        ('10.0.0.5', 22, null, null, null),
+      );
+      // A subpattern of 1023 bytes or more matches nothing.
+      final long = 'é' * 512;
+      expect(_applies('Match originalhost $long', long), isFalse);
+      expect(_applies('Match originalhost ${'é' * 511}', 'é' * 511), isTrue);
+    });
+
+    test('U+FFFD, which stands for bytes that are not UTF-8, decides '
+        'nothing', () {
+      // The app decodes the config with replacement characters; ssh
+      // compares the bytes themselves.
+      expect(
+        _resolve('Host caf\u{FFFD}\n  HostName 10.0.0.5\n', 'caf\u{FFFD}'),
+        UnresolvedReason.undecodedName,
+      );
+      // A wildcard pattern holding one may match any name.
+      for (final block in [
+        'Host caf\u{FFFD}*',
+        'Match originalhost caf\u{FFFD}*',
+        'Host * !caf\u{FFFD}*',
+      ]) {
+        expect(
+          _resolve('$block\n  User x\n', 'web'),
+          UnresolvedReason.mayApply,
+          reason: block,
+        );
+      }
+      // Bytes that are not UTF-8 never equal a name that is.
+      expect(_applies('Host caf\u{FFFD} web', 'web'), isTrue);
+      expect(_applies('Host caf\u{FFFD}', 'web'), isFalse);
+    });
+
     test('a negated Host pattern turns the block off wherever it '
         'stands', () {
       expect(_applies('Host * !bastion', 'bastion'), isFalse);

@@ -1,3 +1,4 @@
+import 'dart:convert' show utf8;
 import 'dart:io' show InternetAddress;
 
 import 'package:seance_core/seance_core.dart'
@@ -32,9 +33,13 @@ const String _noProxyCommand = 'none';
 /// The `CanonicalizeHostname` values that leave canonicalization off.
 const Set<String> _canonicalizationOff = {'no', 'false'};
 
-/// The longest subpattern `match_pattern_list()` reads; a longer one makes
-/// the whole list match nothing.
+/// The longest subpattern `match_pattern_list()` reads, in bytes; a longer
+/// one makes the whole list match nothing.
 const int _maximumSubpatternLength = 1023;
+
+/// U+FFFD, which the app's UTF-8 decoding of the config puts in place of
+/// bytes that are not UTF-8.
+const String _replacement = '\u{FFFD}';
 
 /// The directives the engine maps, and `Include`. ssh reads every other
 /// one too, but none of them changes where or as whom the engine dials.
@@ -94,6 +99,11 @@ enum UnresolvedReason {
   /// ssh would read the config a second time, against the canonical host
   /// name, and that pass could set a value the first left unset.
   secondPass,
+
+  /// The name holds U+FFFD, which the app's decoding puts in place of
+  /// bytes that are not UTF-8: ssh compares the bytes themselves, which
+  /// the import cannot know, and distinct names can decode alike.
+  undecodedName,
 }
 
 /// What [SshConfigSettings.resolve] found for a name.
@@ -129,7 +139,10 @@ final class UnresolvedSshSettings extends SshConfigResolution {
 /// value read wins, in one block as across blocks. Lines before the first
 /// `Host` or `Match` apply to every name. A `Host` block applies when one
 /// of its patterns matches the name and no negated one does (`*` and `?`
-/// are wildcards, matched case-sensitively, as `match_pattern()` does).
+/// are wildcards, matched case-sensitively on UTF-8 bytes, as
+/// `match_pattern()` does). The app decodes the file with U+FFFD for bytes
+/// that are not UTF-8, so a name holding one is unresolved, and a
+/// wildcard pattern holding one may match any name.
 /// Whichever of `ProxyJump` and `ProxyCommand` ssh reads first is the
 /// route. `IdentityFile` adds a key file each time; ssh tries them in
 /// order, and the engine signs in with the first one that is not `none`.
@@ -256,7 +269,12 @@ final class SshConfigSettings {
 
   /// The settings ssh would use for [name], the host name you give it.
   SshConfigResolution resolve(String name) {
+    if (name.contains(_replacement)) {
+      return const UnresolvedSshSettings(UnresolvedReason.undecodedName);
+    }
+
     final reading = _Reading(name);
+    final target = _utf8Bytes(name);
     final own = _byName[name] ?? const <_Block>[];
     var next = 0;
     var nextOwn = 0;
@@ -266,7 +284,7 @@ final class SshConfigSettings {
           (nextOwn < own.length && own[nextOwn].order < _always[next].order);
       final block = takeOwn ? own[nextOwn++] : _always[next++];
 
-      final applies = block.applies(name, reading);
+      final applies = block.applies(target, reading);
       if (applies == _Applies.no) continue;
       if (block case _HostBlock(rejected: true)) {
         return const UnresolvedSshSettings(UnresolvedReason.rejectedLine);
@@ -302,7 +320,9 @@ sealed class _Block {
 
   final List<_Line> lines = [];
 
-  _Applies applies(String name, _Reading reading);
+  /// Whether the block applies to the name [reading] is for; `Host`
+  /// patterns match [target], that name as [_utf8Bytes] gives it.
+  _Applies applies(String target, _Reading reading);
 }
 
 /// The lines before the first `Host` or `Match`: they apply to every name.
@@ -310,7 +330,7 @@ final class _Top extends _Block {
   _Top() : super(0);
 
   @override
-  _Applies applies(String name, _Reading reading) => _Applies.yes;
+  _Applies applies(String target, _Reading reading) => _Applies.yes;
 }
 
 final class _HostBlock extends _Block {
@@ -345,16 +365,24 @@ final class _HostBlock extends _Block {
   late final Set<String>? names;
 
   /// `readconf.c`'s `oHost`: a matching negated pattern ends the line and
-  /// turns the block off.
+  /// turns the block off. A pattern that is [_Glob.undecided] may match.
   @override
-  _Applies applies(String name, _Reading reading) {
+  _Applies applies(String target, _Reading reading) {
     var active = false;
+    var mayActivate = false;
+    var mayDeactivate = false;
     for (final (:negated, :glob) in _patterns) {
-      if (!glob.matches(name)) continue;
+      if (glob.undecided) {
+        mayActivate |= !negated;
+        mayDeactivate |= negated;
+        continue;
+      }
+      if (!glob.matches(target)) continue;
       if (negated) return _Applies.no;
       active = true;
     }
-    return active ? _Applies.yes : _Applies.no;
+    if (active) return mayDeactivate ? _Applies.maybe : _Applies.yes;
+    return mayActivate ? _Applies.maybe : _Applies.no;
   }
 }
 
@@ -451,7 +479,7 @@ final class _MatchBlock extends _Block {
   final bool wantsSecondPass;
 
   @override
-  _Applies applies(String name, _Reading reading) {
+  _Applies applies(String target, _Reading reading) {
     if (malformed) return _Applies.maybe;
 
     var unknown = false;
@@ -462,9 +490,9 @@ final class _MatchBlock extends _Block {
         _Criterion.secondPass => false,
         _Criterion.host => switch (reading.matchHost) {
           null => null,
-          final host => list!.match(host) == 1,
+          final host => list!.matches(host),
         },
-        _Criterion.originalHost => list!.match(name) == 1,
+        _Criterion.originalHost => list!.matches(reading.name),
         _Criterion.unknown => null,
       };
       if (holds == null) {
@@ -716,8 +744,18 @@ const int _question = 0x3f;
 const int _bang = 0x21;
 const int _comma = 0x2c;
 
-/// ssh's `match_pattern()`: `*` matches any run of characters, `?` any
-/// one, and every other character itself.
+/// [text] as its UTF-8 bytes, one character for each byte: ssh compares
+/// bytes, so a `?` matches one byte. ASCII is its own bytes.
+String _utf8Bytes(String text) {
+  for (final unit in text.codeUnits) {
+    if (unit >= 0x80) return String.fromCharCodes(utf8.encode(text));
+  }
+  return text;
+}
+
+/// ssh's `match_pattern()` on [text] and [pattern] as [_utf8Bytes] gives
+/// them: `*` matches any run of bytes, `?` any one, and every other byte
+/// itself.
 bool _matchPattern(String text, String pattern, [int t = 0, int p = 0]) {
   while (true) {
     if (p == pattern.length) return t == text.length;
@@ -753,18 +791,31 @@ bool _matchPattern(String text, String pattern, [int t = 0, int p = 0]) {
 /// the start and the last at the end; any other goes through
 /// [_matchPattern].
 final class _Glob {
-  _Glob(this.pattern)
-    : _pieces = pattern.contains('?') ? null : pattern.split('*');
+  _Glob(this.pattern) : _bytes = _utf8Bytes(pattern) {
+    _pieces = _bytes.contains('?') ? null : _bytes.split('*');
+    undecided = pattern.contains(_replacement) && (_pieces?.length ?? 2) > 1;
+  }
 
+  /// The pattern as written.
   final String pattern;
 
-  /// The pieces between the `*`s, or null when the pattern holds a `?`.
-  final List<String>? _pieces;
+  /// [pattern] as [_utf8Bytes] gives it.
+  final String _bytes;
 
+  /// The pieces between the `*`s, or null when the pattern holds a `?`.
+  late final List<String>? _pieces;
+
+  /// Whether the pattern holds a wildcard and U+FFFD, so what it matches
+  /// depends on bytes the import cannot know. Without a wildcard it
+  /// matches no name it resolves: bytes that are not UTF-8 never equal a
+  /// name that is, and a name holding U+FFFD is not resolved.
+  late final bool undecided;
+
+  /// Whether the pattern matches [text], given as [_utf8Bytes] gives it.
   bool matches(String text) {
     final pieces = _pieces;
-    if (pieces == null) return _matchPattern(text, pattern);
-    if (pieces.length == 1) return text == pattern;
+    if (pieces == null) return _matchPattern(text, _bytes);
+    if (pieces.length == 1) return text == _bytes;
 
     final (first, last) = (pieces.first, pieces.last);
     if (text.length < first.length + last.length ||
@@ -788,8 +839,8 @@ final class _Glob {
 
 /// A `Match` criterion's comma-separated list of patterns, each possibly
 /// negated, read once and lowercased, as `match_pattern_list()` reads it
-/// for `match_hostname()`. A subpattern of 1023 characters or more makes
-/// the list match nothing where ssh reaches it, so it is kept as null.
+/// for `match_hostname()`. A subpattern of 1023 bytes or more makes the
+/// list match nothing where ssh reaches it, so it is kept as null.
 final class _HostList {
   _HostList._(this._entries);
 
@@ -804,13 +855,11 @@ final class _HostList {
       while (end < list.length && list.codeUnitAt(end) != _comma) {
         end++;
       }
+      final pattern = _asciiLower(list.substring(index, end));
       entries.add(
-        end - index >= _maximumSubpatternLength
+        _utf8Bytes(pattern).length >= _maximumSubpatternLength
             ? null
-            : (
-                negated: negated,
-                glob: _Glob(_asciiLower(list.substring(index, end))),
-              ),
+            : (negated: negated, glob: _Glob(pattern)),
       );
       index = end < list.length ? end + 1 : end;
     }
@@ -819,17 +868,26 @@ final class _HostList {
 
   final List<({bool negated, _Glob glob})?> _entries;
 
-  /// ssh's `match_hostname()` for [host], lowercased: 1 for a match, -1
-  /// when a negated pattern matches, else 0.
-  int match(String host) {
-    final text = _asciiLower(host);
+  /// Whether ssh's `match_hostname()` for [host], lowercased, is a match:
+  /// a pattern matches and no negated one does. Null when a pattern that
+  /// is [_Glob.undecided] could change that.
+  bool? matches(String host) {
+    final text = _utf8Bytes(_asciiLower(host));
     var positive = false;
+    var mayMatch = false;
+    var mayFail = false;
     for (final entry in _entries) {
-      if (entry == null) return 0;
+      if (entry == null) return false;
+      if (entry.glob.undecided) {
+        mayMatch |= !entry.negated;
+        mayFail |= entry.negated;
+        continue;
+      }
       if (!entry.glob.matches(text)) continue;
-      if (entry.negated) return -1;
+      if (entry.negated) return false;
       positive = true;
     }
-    return positive ? 1 : 0;
+    if (positive) return mayFail ? null : true;
+    return mayMatch ? null : false;
   }
 }
