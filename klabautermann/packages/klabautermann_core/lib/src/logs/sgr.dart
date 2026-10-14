@@ -335,12 +335,15 @@ final class _SgrParser {
 
   /// An OSC, DCS, SOS, PM or APC string from [start]. ST (`ESC \`) ends
   /// it, BEL too for OSC; any other ESC ends it and starts a sequence of
-  /// its own. An unterminated string runs to the end of the line.
+  /// its own. CAN and SUB abort it, as they abort a sequence, and are then
+  /// dropped with the other controls. An unterminated string runs to the
+  /// end of the line.
   int _string(int start, {required bool endsAtBel}) {
     final line = _line;
     for (var i = start; i < line.length; i++) {
       final c = line.codeUnitAt(i);
       if (endsAtBel && c == _bel) return i + 1;
+      if (c == _can || c == _sub) return i;
       if (c != _esc) continue;
 
       final terminatedBySt =

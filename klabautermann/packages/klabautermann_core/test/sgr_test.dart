@@ -320,6 +320,18 @@ void main() {
         }
       });
 
+      test('CAN and SUB cancel a string', () {
+        for (final cancel in ['\x18', '\x1A']) {
+          for (final intro in [']0;title', 'Pq', '_a']) {
+            final line = 'a$_esc$intro${cancel}tail';
+            final result = parseSgr(line);
+
+            expect(result.text, 'atail', reason: line);
+            expect(result.spans, isEmpty, reason: line);
+          }
+        }
+      });
+
       test('an escape before a non-ASCII character drops only itself', () {
         expect(parseSgr('$_escé').text, 'é');
       });
