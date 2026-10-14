@@ -183,9 +183,11 @@ void main() {
     test('fleet entries survive with every field and stay read-only', () async {
       final event =
           await roundTrip(
-                CatalogReplaced(const [
+                // Growable, so the read-only check below proves the event
+                // holds its own copy instead of passing a const list on.
+                CatalogReplaced([
                   _webEntry,
-                  FleetEntry(
+                  const FleetEntry(
                     serverId: '0b9a6f3e-2d1c-4e5f-8a7b-6c5d4e3f2a1b',
                     label: 'db-1',
                     host: '10.0.0.4',
@@ -223,6 +225,45 @@ void main() {
       final request =
           await roundTrip(const ImportSshConfig('Host a\n')) as ImportSshConfig;
       expect(request.text, 'Host a\n');
+    });
+
+    test('fleet entries compare by value, across the boundary too', () async {
+      // Built at run time, so equal entries are never one canonical const.
+      FleetEntry entry({
+        String serverId = 'ssh-config:web-1',
+        String label = 'web-1',
+        String host = 'web-1.example',
+        int port = 2222,
+        String? user = 'deploy',
+        String? group,
+        FleetEntryOrigin origin = FleetEntryOrigin.sshConfig,
+      }) => FleetEntry(
+        serverId: serverId,
+        label: label,
+        host: host,
+        port: port,
+        user: user,
+        group: group,
+        origin: origin,
+      );
+
+      final web = entry();
+      expect(web, entry());
+      expect(web.hashCode, entry().hashCode);
+      // Every SendPort copy is a new object; it still equals the original.
+      expect(await roundTrip(web), web);
+
+      for (final other in [
+        entry(serverId: 'ssh-config:web-2'),
+        entry(label: 'web'),
+        entry(host: 'web-2.example'),
+        entry(port: kSshDefaultPort),
+        entry(user: null),
+        entry(group: 'Production'),
+        entry(origin: FleetEntryOrigin.synced),
+      ]) {
+        expect(web, isNot(other));
+      }
     });
 
     test('sealed answers and typed bytes survive', () async {

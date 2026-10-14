@@ -26,7 +26,8 @@ void engineMain(SendPort uiPort) {
   // store arrives with the catalog library in a later PR, so a restarted
   // engine starts without them. Each import replaces the last; the engine
   // keeps them so its later fleet snapshots (sync rounds, F3) carry them
-  // after the synced entries.
+  // after the synced entries. The importer returns them unmodifiable, so
+  // building a snapshot cannot edit this state in place.
   var imported = const <FleetEntry>[];
 
   commands.listen((message) {

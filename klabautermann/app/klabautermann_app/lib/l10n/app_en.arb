@@ -91,6 +91,14 @@
   "themeSystem": "System",
   "themeLight": "Light",
   "themeDark": "Dark",
+  "themeNotChanged": "The theme could not be changed.",
+  "@themeNotChanged": {
+    "description": "Snack bar shown when the app did not take a theme-mode change made in Settings."
+  },
+  "settingsWindowUnreachable": "Settings cannot reach Klabautermann. Close this window and open Settings again.",
+  "@settingsWindowUnreachable": {
+    "description": "Shown in the desktop settings window when the app does not answer it."
+  },
   "workspaceEmptyTitle": "Select a server",
   "workspaceEmptyBody": "Choose a server from the fleet to see its workspace.",
   "inspectorTitle": "Inspector",

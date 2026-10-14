@@ -98,6 +98,94 @@ class DangerLinter {
       DangerSeverity.warning,
       'Flushes firewall rules; can lock you out of a remote host.',
     ),
+    // Docker, systemd, cron, firewall and account rules (Klabautermann F2d,
+    // docs/design/seance-core-transport.md §3.6). Critical is kept for mass
+    // or unbounded destruction; scoped data loss and lockouts warn, as the
+    // power and iptables rules above do.
+    _Rule(
+      // Plain `docker system prune` removes stopped containers, unused
+      // networks, dangling images and build cache; --all/-a adds every
+      // unused image and --volumes unused volumes. Since Docker 23 (API
+      // 1.42) volume pruning takes only anonymous volumes unless
+      // `docker volume prune` gets --all; older engines take named ones too.
+      RegExp(
+        r'\bdocker\s+system\s+prune\b(?=[^\n]*(--volumes\b|--all\b|\s-\w*a))',
+      ),
+      DangerSeverity.critical,
+      'docker system prune --all deletes every unused image; --volumes also '
+      'deletes unused volumes and their data.',
+    ),
+    _Rule(
+      RegExp(r'\bdocker\s+volume\s+prune\b'),
+      DangerSeverity.critical,
+      'Removes unused volumes and their data (named ones too with --all or '
+      'before Docker 23).',
+    ),
+    _Rule(
+      RegExp(r'\bdocker\s+volume\s+rm\b'),
+      DangerSeverity.warning,
+      'Deletes a named volume and its data.',
+    ),
+    _Rule(
+      // Options may sit between compose and down (`-f f.yaml`, `-p web`);
+      // only -v/--volumes after down drops volumes.
+      RegExp(
+        r'\b(?:docker\s+compose|docker-compose)\b[^\n]*\sdown\b'
+        r'(?=[^\n]*(--volumes\b|\s-\w*v))',
+      ),
+      DangerSeverity.critical,
+      'compose down -v drops the stack\'s volumes.',
+    ),
+    _Rule(
+      // Matches ssh, sshd, ssh.service and ssh.socket; status and restart
+      // leave access intact and are not flagged.
+      RegExp(r'\bsystemctl\s+(?:stop|disable|mask)\b[^\n]*\bssh'),
+      DangerSeverity.warning,
+      'Stopping or masking sshd cuts future SSH access to the host.',
+    ),
+    _Rule(
+      RegExp(r'\bcrontab\b[^\n]*\s-\w*r'),
+      DangerSeverity.warning,
+      'crontab -r deletes the user\'s whole cron table.',
+    ),
+    _Rule(
+      // Skips leading options such as --force before the verb.
+      RegExp(r'\bufw\b(?:\s+--?\w[\w-]*)*\s+(?:reset|disable)\b'),
+      DangerSeverity.warning,
+      'Removes or switches off the firewall.',
+    ),
+    _Rule(
+      RegExp(r'\bnft\s+flush\s+ruleset\b'),
+      DangerSeverity.warning,
+      'Drops the entire nftables ruleset.',
+    ),
+    // The two userdel rules are mutually exclusive: the same -r/--remove
+    // condition is a negative lookahead here and a positive one below, so a
+    // command gets one finding at the right severity. The match is
+    // case-sensitive because -R (--root) names a chroot, not a removal.
+    _Rule(
+      RegExp(r'\buserdel\b(?![^\n]*(\s-\w*r|--remove\b))'),
+      DangerSeverity.warning,
+      'Removes a user account.',
+    ),
+    _Rule(
+      RegExp(r'\buserdel\b(?=[^\n]*(\s-\w*r|--remove\b))'),
+      DangerSeverity.critical,
+      'userdel -r also deletes the home directory.',
+    ),
+    _Rule(
+      // `\s1\b` needs a standalone 1, so PIDs such as 1000 and job specs
+      // such as %1 do not match, and a 1 that is the operand of -s, -n or
+      // -l is a signal, not a PID. The (?<![\w-]) and (?![\w-]) guards
+      // leave pkill, killall and tmux's kill-session alone. PID 1 only
+      // receives signals it handles (pid_namespaces(7)): systemd
+      // re-executes on TERM but reboots on INT (systemd(1)), and a
+      // container's main process usually exits on TERM.
+      RegExp(r'(?<![\w-])kill(?![\w-])[^\n]*(?<!\s-[snl])\s1\b'),
+      DangerSeverity.warning,
+      'Signals PID 1, the init process or a container\'s main process; '
+      'this can reboot the host or stop the container.',
+    ),
   ];
 
   /// Returns all findings for [command] (empty if it looks benign).

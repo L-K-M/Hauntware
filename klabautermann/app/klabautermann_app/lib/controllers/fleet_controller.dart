@@ -231,6 +231,10 @@ final class FleetController extends ChangeNotifier {
         !_servers.any((server) => server.id == _selectedServerId)) {
       _selectedServerId = null;
     }
+    // A phase kept for a dropped server would resurface if its id came
+    // back in a later fleet, and the map would grow with every churn.
+    final ids = {for (final server in _servers) server.id};
+    _linkPhases.removeWhere((serverId, _) => !ids.contains(serverId));
     notifyListeners();
   }
 

@@ -18,6 +18,15 @@ void main() {
       }
     });
 
+    test('returns a list no caller can edit', () {
+      // The engine keeps this list as its import state.
+      final entries = fleetEntriesFromSshConfig(sshConfigFixture).entries;
+
+      expect(() => entries.add(entries.first), throwsUnsupportedError);
+      // A fixed-length list would still allow this; an unmodifiable one not.
+      expect(() => entries[0] = entries[1], throwsUnsupportedError);
+    });
+
     test('reads HostName, Port and User; the first block wins', () {
       final entries = {
         for (final e in fleetEntriesFromSshConfig(sshConfigFixture).entries)
@@ -83,6 +92,27 @@ void main() {
       expect(result.entries.map((e) => e.label), ['top']);
       expect(result.entries.single.port, 65535);
       expect(result.skippedCount, 2);
+    });
+
+    test('a negative Port is skipped; an unparsable one reads as 22', () {
+      // ssh rejects the whole config over `Port -1` or `Port 22a`, but it
+      // resolves a service name such as `ssh` to its port, 22. A negative
+      // port is out of range like any other. Séance's SshConfigImporter
+      // reads an unparsable Port, service names included, as absent, so
+      // its host imports with the default port and is not counted: `word`
+      // matches ssh only because that default is 22. This pins the current
+      // behavior, so a change in seance_core surfaces here.
+      final result = fleetEntriesFromSshConfig(
+        'Host negative\n  Port -1\n'
+        'Host typo\n  Port 22a\n'
+        'Host word\n  Port ssh\n',
+      );
+
+      expect(result.entries.map((e) => (e.label, e.port)), [
+        ('typo', kSshDefaultPort),
+        ('word', kSshDefaultPort),
+      ]);
+      expect(result.skippedCount, 1);
     });
 
     test('an empty HostName or User counts as absent', () {
