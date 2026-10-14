@@ -1044,9 +1044,9 @@ graph TD
 barrel (`klabautermann/packages/klabautermann_core/lib/klabautermann_core.dart`)
 re-exports exactly one `seance_core` name, the home rule the app uses to
 find `~/.ssh/config` for the FL-02 import (it also undoes a macOS
-sandbox's container `HOME`). The engine imports the ssh_config parser
-under its own `show` list
-(`klabautermann/packages/klabautermann_core/lib/src/fleet/ssh_config_entries.dart`) and maps
+sandbox's container `HOME`). The engine imports Séance's ssh_config
+tokenizer and host type under its own `show` lists
+(`klabautermann/packages/klabautermann_core/lib/src/fleet/`) and maps
 its hosts to `FleetEntry` values (10.1), so no `seance_core` type crosses
 the isolate boundary (D18). The device settings store (4.10) mints the
 device id with `uuidV4` and syncs the directory after each atomic write
@@ -1058,8 +1058,12 @@ neither name reaches the app:
 ```dart
 // klabautermann_core.dart: the app's only route to seance_core
 export 'package:seance_core/seance_core.dart' show expandHomePath;
-// src/fleet/ssh_config_entries.dart: engine-side only
-import 'package:seance_core/seance_core.dart' show SshConfigImporter;
+// src/fleet/: engine-side only; the ssh_config reader, and the connect
+// configs the imports map to
+import 'package:seance_core/seance_core.dart'
+    show ImportedHost, SshConfigImporter, SshConfigLine;
+import 'package:seance_core/seance_core.dart'
+    show AuthMethod, ServerConfig, serverSearchHaystack;
 // src/settings/device_settings_store.dart: the app isolate's settings.json
 // and the atomic writer the engine's import store shares
 import 'package:seance_core/catalog.dart' show syncLocalDirectory;
@@ -1548,7 +1552,7 @@ platform identities in 04, section 12.3):
 | `vault.json`, `vault.json.rekey` | Credentials and re-key journal | `SC/src/store/` | MVP |
 | `host_keys.json`, verdict and tripwire files | Pins and quarantine state | catalog library | MVP |
 | `endpoint_pins.json` | Confirmed endpoints | catalog library | MVP |
-| `ssh_config_imports.json` [E] | D13's device-local store for FL-02 imports from `~/.ssh/config` (alias, host, port, user, `IdentityFile`, `ProxyJump`), replaced whole by each import; never pushed (D14). Host and port are the effective ones, `%h` in `HostName` expanded (10.1). Schema 2 (M2) added the last two, as written, except that `IdentityFile none` is stored as none. A schema 1 file kept neither, so whether a host has a key or a jump route is unknown: its hosts are listed with no `jumpRoute`, `authKind` or `locatorConflict` and get no connect config until the next import rewrites the file. Built in M1: the engine isolate loads it at start and saves each import atomically before it answers (10.1). A damaged file is renamed to `ssh_config_imports.json.corrupt-<UTC time>`; a file it cannot read or rename, or one from a newer schema, is left as it is and no import is saved that run | `klabautermann_core` [E] | MVP |
+| `ssh_config_imports.json` [E] | D13's device-local store for FL-02 imports from `~/.ssh/config`, replaced whole by each import; never pushed (D14). Schema 3 (M2) holds each host's alias, host, port, user, `IdentityFile` and `ProxyJump` with the values ssh would use (10.1): the effective host (`%h` expanded, lowercased unless an address) and port, the first `IdentityFile` that is not `none`, and the `ProxyJump` as written; under `hops` it holds the same for each other name a stored route gives. An older file holds addresses only: schema 1 (M1) kept no `IdentityFile` or `ProxyJump` and kept `HostName` as written, `%h` included, and schema 2 read each host's values from its first block alone. Its hosts are listed as stored, with no `jumpRoute`, `authKind` or `locatorConflict`, and get no connect config until the next import rewrites the file. Built in M1: the engine isolate loads it at start and saves each import atomically before it answers (10.1). A damaged file is renamed to `ssh_config_imports.json.corrupt-<UTC time>`; a file it cannot read or rename, or one from a newer schema, is left as it is and no import is saved that run | `klabautermann_core` [E] | MVP |
 | `settings.json` | Device settings, `klabautermann.sync.deviceId` (minted once, never regenerated), monitor set, per-server device preferences | app | MVP |
 | `window_state.json` | The desktop main window's last normal frame and its maximized and full-screen flags (10.2), in the shape Séance's file established (`x`, `y`, `width`, `height`, `isMaximized`, `isFullScreen`; physical pixels on Windows); never synced. Added in M1, a deviation from the plan, which listed no window file: kept out of `settings.json`, as Séance and Planchette keep theirs, so debounced drag saves never rewrite the file that holds the device id | app | MVP |
 | `instance.lock` [E] | Empty. One desktop instance per support directory (built in M2): the composition root takes an exclusive, non-blocking advisory lock on it after the settings window's branch and before `settings.json` and `window_state.json` open and the engine isolate starts, so one process mints the device id and writes these files, and holds it for the life of the process; the file is never deleted. A second instance opens no other file and only says it is already running, until the user quits it. A lock that fails for another reason (no write access, no lock support) lets the app run unguarded and says so at startup. Phones run one process per app and take none | app, through `klabautermann_core`'s `InstanceLock` | MVP |
@@ -3459,17 +3463,16 @@ the engine in `engine_isolate.dart` beside it):
   and never sent to the sync server. Imports carry no group.
 - **`ImportSshConfig(text)`** carries the config's text: the UI reads
   `~/.ssh/config` and decides whether the platform has one, and the
-  engine opens no file for it. The engine parses the text off the UI
-  isolate (CN-19) with `seance_core`'s `SshConfigImporter`
+  engine opens no file for it. The engine reads the text off the UI
+  isolate (CN-19), splitting its lines with `seance_core`'s
+  `SshConfigLine` and taking a host for each name a `Host` line gives,
+  as `SshConfigImporter.hostAliases` does
   (`klabautermann/packages/klabautermann_core/lib/src/fleet/ssh_config_entries.dart`), replaces
   every entry an earlier import produced, and sends `CatalogReplaced`
   before `SshConfigImported`, so the fleet already shows the imports when
-  the counts arrive. `skippedCount` counts hosts left out for a `Port`
-  the importer refuses (one ssh rejects, or a service name other than
-  `ssh`, `http` or `https`; the importer reports them), an alias an
-  earlier block already took, or a `HostName`, `IdentityFile` or
-  `ProxyJump` the engine cannot use as ssh does (below); wildcard-only
-  blocks such as `Host *` are defaults and are not counted.
+  the counts arrive. `skippedCount` counts the hosts left out because
+  the engine cannot dial them as ssh would (below); wildcard-only blocks
+  such as `Host *` name no host and are not counted.
   An import is not a catalog write (D14). The engine saves the new set to
   D13's device-local store (4.10) before it answers; `saved` is false when
   the write failed or the store was left as it is at start, and the fleet
@@ -3480,29 +3483,68 @@ the engine in `engine_isolate.dart` beside it):
   and fills the import's `jumpRoute`, `authKind`, `searchText` and
   `locatorConflict`. A host or hop without `User` signs in as `USER`, or
   `USERNAME` on Windows; with neither set it gets no config, and nor
-  does a host from a schema 1 store (4.10), which kept no `IdentityFile`
-  or `ProxyJump`. The import reads two values as ssh does (ssh_config(5),
-  TOKENS): `%h` in `HostName` is the alias and `%%` is `%`, and a host
-  with any other token, on which ssh exits, is left out; `IdentityFile
-  none`, in any case, is no key file, so the agent signs, and a host
-  whose `IdentityFile` holds a `%` token or a `${VAR}`, which ssh fills
-  in from the connection and the environment, is left out. `ProxyJump`
-  follows ssh (`parse_jump()` and `ssh.c`): `a,b` dials `a`, then `b`
-  through `a`; `none` is direct; a hop that names an alias (exactly, as
-  `Host` patterns match) takes that host's `HostName`, `Port`, `User` and
-  `IdentityFile`, its own user and port first; and only the first hop's
-  own `ProxyJump` applies, since ssh hands every later hop the earlier
-  ones with `-J`. Each hop is a `ServerConfig` with the id
-  `ssh-config-hop:` plus the route's names up to that hop, joined by
-  commas, so the same config yields the same ids and routes that begin
-  alike share hops; each hop's `jumpHostId` names the hop before it, and
-  the engine hands its lookup to `CredentialResolver.jumpHostResolver`.
-  A host is left out when its `ProxyJump` is one ssh rejects, gives a
-  port other than a decimal 1 to 65535, holds a `%` token, loops through
-  first hops, makes a route of more than 16 hops (the first hop's own
-  included; Séance's connector refuses a longer one), or names a host
-  left out (whose settings the engine would lack), rather than dial a
-  route ssh would not take or the engine could not follow.
+  does a host from a store of an older schema (4.10). The engine never
+  dials a route ssh would not take, so the import reads each host as
+  ssh does (`readconf.c`; `ssh_config_settings.dart` beside the import):
+  - Every block that applies to the name sets each value it names
+    unless an earlier line set it, so the first value wins within a
+    block and across blocks, and a later block for an alias adds only
+    what earlier ones left unset. Lines before the first `Host` or
+    `Match` apply to every name. A `Host` block applies when one of its
+    patterns matches the name (`*` and `?` as `match_pattern()` reads
+    them) and no negated one does. A `Match` block applies when all its
+    criteria hold: `all`, `host` (the `HostName` read so far) and
+    `originalhost` are evaluated as ssh does, and `canonical` and
+    `final` hold only on a second pass.
+  - The engine keeps `HostName` as ssh dials it (`%h` is the name and
+    `%%` is `%`, ssh_config(5), TOKENS; lowercased unless it is an
+    address), `Port`, `User`, the first `IdentityFile` that is not
+    `none` (ssh tries the files in order; the engine signs in with that
+    one alone) and the route, whichever of `ProxyJump` and
+    `ProxyCommand` comes first.
+  - A host is left out and counted when ssh would take a route the
+    engine cannot know or follow: its route is a `ProxyCommand` other
+    than `none`, which the engine cannot run; a `Match` block that may
+    apply could set a value first, because it has an `exec`, `user`,
+    `localuser`, `localnetwork` or `tagged` criterion and none that
+    fails, or ssh rejects it; an `Include`, which the engine does not
+    follow, applies to it, since the included file could set any value;
+    the config has an `Include` or a `Match final` anywhere, which makes
+    ssh read it again against the canonical name, and the host's `Port`,
+    `User`, `IdentityFile` or route is still unset after the first pass;
+    `CanonicalizeHostname` is other than `no`; its `HostName` holds
+    another token, on which ssh exits, or its first `IdentityFile` holds
+    a `%` token or a `${VAR}`, which ssh fills in from the connection and
+    the environment; or a block that applies holds a line ssh rejects (a
+    `Port` other than a decimal 1 to 65535 or `ssh`, `http` or `https`,
+    or a value missing or doubled). ssh rejects the whole config over
+    such a line wherever it stands; the import checks only the blocks
+    that apply to a host. It does not read the system-wide
+    `/etc/ssh/ssh_config`, which ssh reads after the user's file and
+    which can set what that file leaves unset.
+  - `ProxyJump` follows ssh (`parse_jump()` and `ssh.c`): `a,b` dials
+    `a`, then `b` through `a`; `none` is direct. ssh reaches each hop
+    with a nested ssh that reads the config for the hop's name, so a hop
+    takes the settings its name resolves to, its own user and port
+    first: an alias's (exactly, as `Host` patterns match), or for any
+    other name a hop record resolved the same way and stored with the
+    hosts. Only the first hop's own `ProxyJump` applies, since ssh hands
+    every later hop the earlier ones with `-J`. A host is also left out
+    when its `ProxyJump` is one ssh rejects, gives a port other than a
+    decimal 1 to 65535, holds a `%` token, has a hop that the shell
+    running the route would read otherwise (whitespace, a quote or
+    another shell character in its user or host, or in a hop before the
+    last as written, or a leading `-`), loops through first hops, makes
+    a route of more than 16 hops (the first hop's own included; Séance's
+    connector refuses a longer one), has a hop that as written is the
+    host or hop it leads to, on that one's port and as its user (ssh's
+    "jumphost loop"), or names a host or hop left out (whose settings
+    the engine would lack).
+  - Each hop is a `ServerConfig` with the id `ssh-config-hop:` plus the
+    route's names up to that hop, joined by commas, so the same config
+    yields the same ids and routes that begin alike share hops; each
+    hop's `jumpHostId` names the hop before it, and the engine hands its
+    lookup to `CredentialResolver.jumpHostResolver`.
 - **Version 3 (M2 links).** `LinkState(serverId, status)` carries a
   sealed `LinkStatus`: D46's eight states plus `blocked`, each with its
   own typed values: `degraded(reason)`, `backoff(until)`,

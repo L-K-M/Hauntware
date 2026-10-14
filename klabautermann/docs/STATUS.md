@@ -120,16 +120,19 @@ slice:
   schema, is left as it is and no import is saved that run. Each case is
   told once in a top toast at startup. As with `settings.json`, no real
   build has run it yet: the tests restart the engine isolate against a
-  temporary folder. `Include` is not followed (`SshConfigImporter` drops
-  it). Since M2 the store keeps each host's `IdentityFile` and
-  `ProxyJump` (schema 2; a schema 1 file's hosts are listed without
-  route, sign-in or connect config until the next import), and the
-  engine maps
+  temporary folder. Since M2 the import reads each host as ssh does:
+  every block that applies gives the values still unset, `Match` blocks
+  count where their criteria can be evaluated, and the store keeps the
+  effective `HostName`, `Port`, `User`, first `IdentityFile` and
+  `ProxyJump`, plus hop records for route names no `Host` line gives
+  (schema 3; a schema 1 or 2 file's hosts are listed without route,
+  sign-in or connect config until the next import). The engine maps
   imports to the `ServerConfig`s and jump-hop configs links will dial
   (03 §10.1), filling the route, sign-in, search text and `host:port`
-  conflict fields; `%h` in `HostName` is expanded, and a host whose
-  `HostName`, `IdentityFile` or `ProxyJump` it cannot use as ssh does is
-  skipped and counted. Nothing dials them yet.
+  conflict fields. A host it cannot dial as ssh would is skipped and
+  counted: a `ProxyCommand`, a `Match` or `Include` that could change
+  it (`Include` is not followed), a token ssh fills in, a line ssh
+  rejects, or a route ssh would refuse. Nothing dials them yet.
 - Packaging: `scripts/build.sh`, `scripts/package-linux.sh` (.deb and
   AppImage through the shared `scripts/package-linux-common.sh`) and
   `scripts/build-flatpak.sh` with `flatpak/ch.lkmc.klabautermann.yml`.
