@@ -36,7 +36,7 @@ class ServerWorkspace extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    // The selection and every link phase arrive through one listenable, so
+    // The selection and every link status arrive through one listenable, so
     // the workspace repaints for its own concern only (03 §10.1).
     return ListenableBuilder(
       listenable: fleet,
