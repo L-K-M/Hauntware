@@ -3526,12 +3526,14 @@ the engine in `engine_isolate.dart` beside it):
   collector's error output, control characters stripped. Requests and
   events name streams instead of `klabautermann_host`'s `Collector`,
   whose argument validators are functions (D52). `SamplingState` says
-  per server whether nothing is watched, the link is not ready, the
-  samplers run or the app's background pauses them, and since when (9.5
-  item 4). `Gap` arrives once readings resume, with both ends and its
-  cause (background, disconnected, or a reading lost to a deadline, a
-  framing error or a sampler restart, 6.2), so a chart labels the band
-  (9.5 item 5); an open gap shows in `SamplingState`. Until the samplers
+  per server whether no subscription names it, the link is not ready,
+  the samplers run or the app's background pauses them, and since when
+  (9.5 item 4); "not watched on this device" follows the app's monitor
+  set (FL-21), since a monitored server's surfaces may all be hidden.
+  `Gap` arrives once readings resume, with both ends and its cause
+  (background, disconnected, or a reading lost to a deadline, a framing
+  error or a sampler restart, 6.2), so a chart labels the band (9.5 item
+  5); an open gap shows in `SamplingState`. Until the samplers
   are wired, the engine records subscriptions and the profile and sends
   none of these events.
 - **`SetAppActivity(activity)`** is a request of its own and applies to

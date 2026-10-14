@@ -1263,9 +1263,11 @@ enum CadenceProfile {
 
 /// What sampling a server is doing, behind [SamplingState].
 enum SamplingPhase {
-  /// No subscription names the server, so nothing runs (03 §9.5's "not
-  /// watched on this device").
-  notWatched,
+  /// No subscription names the server, so nothing runs, such as for a
+  /// monitored server whose surfaces are all hidden. This is not 03
+  /// §9.5's "not watched on this device": the app words that from the
+  /// monitor set it owns (FL-21, [SetMonitorSet]).
+  unsubscribed,
 
   /// Subscribed, but the server's link is not ready; [LinkState] says why.
   waitingForLink,
