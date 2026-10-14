@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:developer' as developer;
 
 import 'package:flutter/material.dart';
+import 'package:ghost_servers/ghost_servers.dart'
+    show GhostServerIndicator, ghostHiddenLiveIndicator, ghostStatusDot;
 import 'package:seance_core/seance_core.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -9,6 +11,7 @@ import '../app_state.dart';
 import '../main.dart';
 import '../theme.dart';
 import 'app_menus.dart';
+import 'ghost_servers_adapter.dart';
 import 'inbox_view.dart';
 import 'server_editor.dart';
 import 'server_filter.dart';
@@ -541,31 +544,26 @@ class _ServerListPaneState extends State<ServerListPane> {
     AppState state,
     List<ServerConfig> servers,
   ) {
-    final dot = _liveDot(state, servers);
-    if (dot == null) return null;
+    final live = _liveDot(state, servers);
+    if (live == null) return null;
     return (
-      dot: SidebarStatusDot(dot.color(context)!, style: dot.style),
+      dot: ghostStatusDot(live, seanceStatusColors(context))!,
       // The row's own word for the state, said of a server out of view.
-      label: '${dot.description} server hidden',
+      label: live.label!,
     );
   }
 
   /// What a header says for [servers] out of view: connected while one of
   /// them is, else connecting while one is, else null, as nothing there is
-  /// live. A failure is left to its row: folding a group is a choice not to
-  /// look, and what must not vanish with it is a connection still open.
-  ServerDot? _liveDot(AppState state, Iterable<ServerConfig> servers) {
-    final live = {
-      for (final server in servers)
-        for (final tab in state.tabsForServer(server.id))
-          if (tab is TerminalSession) tab.status,
-    };
-    return live.contains(TerminalStatus.connected)
-        ? ServerDot.connected
-        : live.contains(TerminalStatus.connecting)
-        ? ServerDot.connecting
-        : null;
-  }
+  /// live (the shared rule, [ghostHiddenLiveIndicator]).
+  GhostServerIndicator? _liveDot(
+    AppState state,
+    Iterable<ServerConfig> servers,
+  ) => ghostHiddenLiveIndicator(seanceServerStatusStrings, [
+    for (final server in servers)
+      for (final tab in state.tabsForServer(server.id))
+        if (tab is TerminalSession) ghostSessionOf(tab.status),
+  ]);
 
   Widget _tile(
     BuildContext context,
