@@ -4,7 +4,7 @@ import 'dart:io';
 
 import 'package:klabautermann_host/klabautermann_host.dart';
 
-/// The four tier A fixture platforms (03 §6.5).
+/// The four fixture platforms (03 §6.5); alpine-322 is tier B (03 §6.6).
 const fixturePlatforms = ['debian-12', 'ubuntu-2404', 'rhel-8', 'alpine-322'];
 
 /// Parses `test/fixtures/<platform>/probe.sections` into a profile. The
