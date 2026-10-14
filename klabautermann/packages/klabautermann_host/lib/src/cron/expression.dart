@@ -25,7 +25,7 @@ enum CronMacro {
 /// although both expand to the same minutes.
 @immutable
 final class CronFieldItem {
-  const CronFieldItem({this.start, this.end, this.step});
+  const CronFieldItem._({this.start, this.end, this.step});
 
   /// The first value; null for `*`. A day-of-week 7 stays 7 (sunday).
   final int? start;
@@ -37,8 +37,8 @@ final class CronFieldItem {
   /// The `/n` step; null when none was written.
   final int? step;
 
-  /// The item in cron syntax (`*`, `*/n`, `a`, `a-b`, `a-b/n`). For the
-  /// items the parser produces it determines every field.
+  /// The item in cron syntax (`*`, `*/n`, `a`, `a-b`, `a-b/n`), which
+  /// determines every field: only the parser builds items.
   String get canonical {
     final base = start == null
         ? '*'
@@ -52,7 +52,7 @@ final class CronFieldItem {
 /// The five fields of a clock schedule as written (03 §7.7).
 @immutable
 final class CronFields {
-  CronFields({
+  CronFields._({
     required List<CronFieldItem> minute,
     required List<CronFieldItem> hour,
     required List<CronFieldItem> dayOfMonth,
@@ -204,7 +204,7 @@ final class CronExpression {
       domStar: parts[2].startsWith('*'),
       dowStar: parts[4].startsWith('*'),
       macro: macro,
-      fields: CronFields(
+      fields: CronFields._(
         minute: minute,
         hour: hour,
         dayOfMonth: dayOfMonth,
@@ -234,7 +234,7 @@ final class CronExpression {
         if (step <= 0) return null;
       }
       if (base == '*') {
-        out.add(CronFieldItem(step: step));
+        out.add(CronFieldItem._(step: step));
         continue;
       }
       int lo, hi;
@@ -250,7 +250,7 @@ final class CronExpression {
       // lies above the maximum, as cronie does.
       if (lo < min || hi > max || hi < lo) return null;
       final single = dash < 0 && slash < 0;
-      out.add(CronFieldItem(start: lo, end: single ? null : hi, step: step));
+      out.add(CronFieldItem._(start: lo, end: single ? null : hi, step: step));
     }
     return out;
   }

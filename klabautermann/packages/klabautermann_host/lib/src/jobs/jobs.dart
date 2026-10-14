@@ -35,7 +35,8 @@ enum JobRunsUnknown {
   noDriver,
 }
 
-/// One row of the unified jobs list (03 §7.7).
+/// One row of the unified jobs list (03 §7.7). Only [mergeJobs] builds
+/// cron and periodic rows, which keeps their invariants internal.
 @immutable
 sealed class JobEntry {
   const JobEntry();
@@ -55,7 +56,7 @@ sealed class JobEntry {
 
 /// A crontab line (03 §7.7).
 final class CronJobEntry extends JobEntry {
-  CronJobEntry({
+  CronJobEntry._({
     required this.id,
     required this.job,
     this.schedule,
@@ -102,7 +103,7 @@ final class CronJobEntry extends JobEntry {
 /// schedules and merged runs of every cron line that runs its directory
 /// through `run-parts` without deferring to anacron.
 final class PeriodicJobEntry extends JobEntry {
-  PeriodicJobEntry({
+  PeriodicJobEntry._({
     required this.entry,
     List<String> driverIds = const [],
     List<CronSchedule> schedules = const [],
@@ -262,7 +263,11 @@ CronJobEntry _cronEntry(
 }) {
   final expression = job.expression;
   if (expression == null) {
-    return CronJobEntry(id: id, job: job, runsUnknown: JobRunsUnknown.unparsed);
+    return CronJobEntry._(
+      id: id,
+      job: job,
+      runsUnknown: JobRunsUnknown.unparsed,
+    );
   }
 
   // An empty `CRON_TZ=` counts as unset, here and in [_cronZone].
@@ -273,7 +278,7 @@ CronJobEntry _cronEntry(
     timeZone: cronTz,
   );
   if (expression.isReboot) {
-    return CronJobEntry(
+    return CronJobEntry._(
       id: id,
       job: job,
       schedule: schedule,
@@ -283,7 +288,7 @@ CronJobEntry _cronEntry(
 
   final runZone = _cronZone(cronTz, zone, zoneFor);
   if (runZone == null) {
-    return CronJobEntry(
+    return CronJobEntry._(
       id: id,
       job: job,
       schedule: schedule,
@@ -297,7 +302,7 @@ CronJobEntry _cronEntry(
     zone: runZone,
     count: runCount,
   );
-  return CronJobEntry(
+  return CronJobEntry._(
     id: id,
     job: job,
     schedule: schedule,
@@ -353,7 +358,7 @@ PeriodicJobEntry _periodicEntry(
     // directories, not the hourly one.
     final byAnacron =
         drivers.isNotEmpty || (anacron && entry.period != CronPeriod.hourly);
-    return PeriodicJobEntry(
+    return PeriodicJobEntry._(
       entry: entry,
       driverIds: driverIds,
       runsUnknown: byAnacron ? JobRunsUnknown.anacron : JobRunsUnknown.noDriver,
@@ -366,7 +371,7 @@ PeriodicJobEntry _periodicEntry(
       .where((r) => instants.add(r.atUtc))
       .take(runCount)
       .toList();
-  return PeriodicJobEntry(
+  return PeriodicJobEntry._(
     entry: entry,
     driverIds: driverIds,
     schedules: [for (final d in direct) ?d.schedule],
