@@ -27,6 +27,8 @@ packages/
 app/
   klabautermann_app/      Flutter client — NOT a workspace member (it needs
                           the Flutter SDK; members must not)
+test/integration/         integration fixture tools and the contract tests of
+                          the CI jobs that run them (03 §11.3, D53)
 docs/STATUS.md            what's done / tested / still open
 media-sources/            the owner-supplied master icon
 ```
@@ -48,6 +50,7 @@ for the app.
 dart pub get
 dart analyze packages/klabautermann_core
 dart test    packages/klabautermann_core
+dart test    test/integration
 
 # Flutter app
 cd app/klabautermann_app

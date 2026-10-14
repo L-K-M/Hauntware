@@ -159,9 +159,12 @@ if [[ "$scope" != flutter ]]; then
       run dart analyze --fatal-infos "$package"
       [[ -d "$package/test" ]] && dirs+=("$package")
     done
-    run dart format --output=none --set-exit-if-changed packages
+    run dart format --output=none --set-exit-if-changed packages test/integration
     ((${#dirs[@]} > 0)) || { echo "no package has a test/ directory" >&2; exit 1; }
     run dart test --reporter expanded "${dirs[@]}"
+    # The integration fixture tools and the CI contract tests of its jobs.
+    run dart analyze --fatal-infos test/integration
+    run dart test --reporter expanded test/integration
   )
 fi
 

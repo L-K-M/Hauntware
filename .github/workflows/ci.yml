@@ -337,8 +337,13 @@ jobs:
             [[ -d "$package" ]] || continue
             dart analyze --fatal-infos "$package"
           done
+      # The integration fixture's Dart tools and the contract tests of the
+      # Klabautermann integration jobs live outside packages/ (03 §11.3,
+      # D53), where the loops do not reach.
+      - name: Analyze integration fixture tools
+        run: dart analyze --fatal-infos test/integration
       - name: Check formatting
-        run: dart format --output=none --set-exit-if-changed packages
+        run: dart format --output=none --set-exit-if-changed packages test/integration
       - name: Test
         run: |
           set -euo pipefail
@@ -351,6 +356,8 @@ jobs:
             echo "no package has a test/ directory yet"; exit 1
           fi
           dart test --reporter expanded "${dirs[@]}"
+      - name: Test integration fixture tools
+        run: dart test --reporter expanded test/integration
 
   # These guards use POSIX tools, Docker, or GNU timeout, not native contracts.
   dart_tools:
@@ -661,6 +668,190 @@ jobs:
       - name: Stop the fixture
         if: always()
         run: docker rm -f seance-sync || true
+
+  # ---- Klabautermann integration (03 §11.3, §11.4, §11.6) --------------
+  # These jobs run entry points that later Klabautermann PRs commit under
+  # klabautermann/, so those PRs need no change to this file (root files
+  # change in one open PR at a time, 06): the sshd fixture's
+  # docker-compose.yml and run.sh (the runner-VM leg and the soak run
+  # from run.sh too), capture.sh beside them for the container shell and
+  # userland captures, and scripts/bench-frame-timing.sh for the S5
+  # frame-timing leg. A leg is
+  # skipped with a notice until its entry point is committed; once
+  # committed, its absence fails the detector on every event. The check
+  # reads the history the run builds on (a PR's base, otherwise HEAD),
+  # hence the full clone.
+  detect_klabautermann_integration:
+    name: Detect Klabautermann integration changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      fixture: ${{ steps.entries.outputs.fixture }}
+      capture: ${{ steps.entries.outputs.capture }}
+      frames: ${{ steps.entries.outputs.frames }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: dorny/paths-filter@v4
+        if: github.event_name == 'pull_request'
+        id: changes
+        with:
+          filters: |
+            integration:
+              - 'klabautermann/**'
+              # Shared code klabautermann_core consumes by path.
+              - 'seance/packages/seance_core/lib/**'
+              - 'seance/packages/seance_core/pubspec.yaml'
+              - 'seance/packages/seance_protocol/lib/**'
+              - 'seance/packages/seance_protocol/pubspec.yaml'
+              # Poltergeist fixture files the sshd fixture builds on
+              # (03 §11.3): the Compose safety checker, the Dockerfile
+              # that pins the base image digest, the common sshd config.
+              - 'poltergeist/test/integration/check_config.dart'
+              - 'poltergeist/test/integration/sshd-modern/Dockerfile'
+              - 'poltergeist/test/integration/sshd-common/**'
+              - '.github/workflows/ci.yml'
+      # Main pushes and dispatch always check; PRs when a path matches.
+      - name: Find committed entry points
+        id: entries
+        if: >-
+          github.event_name != 'pull_request' ||
+          steps.changes.outputs.integration == 'true'
+        env:
+          HISTORY_REV: ${{ github.event.pull_request.base.sha || 'HEAD' }}
+        run: |
+          : "${HISTORY_REV:?names the commit whose history is checked}"
+          # In a shallow clone a deleted entry point would read as not
+          # committed yet and skip its leg instead of failing it.
+          if [[ "$(git rev-parse --is-shallow-repository)" != 'false' ]]; then
+            echo '::error::The entry-point check needs the full history (fetch-depth: 0)'
+            exit 1
+          fi
+
+          failed=0
+          check() {
+            local key="$1" path="$2" last
+            if [[ -f "$path" ]]; then
+              echo "$key=true" >> "$GITHUB_OUTPUT"
+              return 0
+            fi
+
+            if ! last="$(git log --full-history --format=%h -1 "$HISTORY_REV" -- "$path")"; then
+              echo "::error::Cannot read the history of $path at $HISTORY_REV"
+              failed=1
+              return 0
+            fi
+
+            if [[ -z "$last" ]]; then
+              echo "::notice::$path is not committed yet; its leg is skipped"
+              echo "$key=false" >> "$GITHUB_OUTPUT"
+              return 0
+            fi
+
+            echo "::error::Missing $path (last changed in $last): restore it or remove its leg"
+            failed=1
+          }
+
+          check fixture klabautermann/test/integration/docker-compose.yml
+          check capture klabautermann/test/integration/capture.sh
+          check frames klabautermann/scripts/bench-frame-timing.sh
+          exit "$failed"
+
+  # 45 minutes leaves room for the fixture build, the engine suites, the
+  # runner-VM leg and the captures beside the 10-minute soak (03 §11.4).
+  klabautermann_integration:
+    name: Klabautermann integration tests
+    needs: detect_klabautermann_integration
+    if: >-
+      needs.detect_klabautermann_integration.outputs.fixture == 'true' ||
+      needs.detect_klabautermann_integration.outputs.capture == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: klabautermann
+    env:
+      # Where the entry points leave logs, budget numbers and captures
+      # for the artifact below (build/ is ignored by git).
+      KLABAUTERMANN_EVIDENCE_DIR: ${{ github.workspace }}/klabautermann/build/ci-evidence
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+      - name: Resolve workspace
+        run: dart pub get
+      # run.sh owns the keys generated at job start, readiness, the safety
+      # check, serialized tests and teardown on every exit (03 §11.3, D53).
+      - name: Run SSH integration fixture
+        if: needs.detect_klabautermann_integration.outputs.fixture == 'true'
+        run: test/integration/run.sh
+      # Shells and userlands from digest-pinned container images; those no
+      # image provides stay on the manual checklist (06). !cancelled()
+      # keeps the captures when the fixture run failed.
+      - name: Run container shell and userland captures
+        if: ${{ !cancelled() && needs.detect_klabautermann_integration.outputs.capture == 'true' }}
+        run: test/integration/capture.sh
+      - name: Upload integration evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: klabautermann-integration-evidence
+          path: klabautermann/build/ci-evidence
+          if-no-files-found: ignore
+          retention-days: 30
+
+  # Spike S5's provisional UI frame p99 (03 §11.4, 04 §13): the app in
+  # profile mode under Xvfb with Mesa's software GLES, as Poltergeist's
+  # tier-B bench runs. Shared runners give provisional numbers only (the
+  # devices sign off by hand, 06), so the leg runs on main pushes and
+  # dispatch, never on PRs.
+  klabautermann_frame_timing:
+    name: Klabautermann frame timing (S5, Xvfb)
+    needs: detect_klabautermann_integration
+    if: >-
+      github.event_name != 'pull_request' &&
+      needs.detect_klabautermann_integration.outputs.frames == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40   # first run downloads the Flutter toolchain
+    defaults:
+      run:
+        working-directory: klabautermann
+    env:
+      KLABAUTERMANN_EVIDENCE_DIR: ${{ github.workspace }}/klabautermann/build/ci-evidence
+    steps:
+      - uses: actions/checkout@v7
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+      # klabautermann_client's GTK toolchain, plus xvfb and the Mesa stack
+      # for a headless display with real GLES (llvmpipe through
+      # LIBGL_ALWAYS_SOFTWARE).
+      - name: Install Linux desktop and display toolchain
+        run: >-
+          sudo apt-get update && sudo apt-get install -y
+          clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev
+          xvfb libegl1 libgles2 libgl1-mesa-dri
+      - name: Resolve app dependencies
+        working-directory: klabautermann/app/klabautermann_app
+        run: flutter pub get
+      - name: Measure frame timing under Xvfb
+        env:
+          LIBGL_ALWAYS_SOFTWARE: '1'
+        run: scripts/bench-frame-timing.sh
+      - name: Upload frame timing results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: klabautermann-frame-timing
+          path: klabautermann/build/ci-evidence
+          if-no-files-found: error
+          retention-days: 30
 
   detect_bench:
     name: Detect bench-relevant changes
