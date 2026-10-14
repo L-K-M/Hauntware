@@ -365,6 +365,10 @@ enum _Scope {
 /// A command or pipeline and the 1-based line on which it starts.
 typedef _Segment = ({String text, int line});
 
+/// A here-document's delimiter word, with quotes removed, and whether
+/// `<<-` strips leading tabs from its lines.
+typedef _Heredoc = ({String delimiter, bool stripTabs});
+
 /// What [_ShellText.parse] is inside of; quotes and substitutions nest.
 enum _Open {
   singleQuote,
@@ -385,13 +389,17 @@ enum _Open {
 /// escapes. As in bash, quotes nest inside `${...}` even within double
 /// quotes (`"${x:-"a;b"}"`). `>&`, `<&`, `&>` and `>|` are redirections,
 /// and a `#` that starts a word runs to the end of the line without
-/// opening quotes.
+/// opening quotes. Each line of a here-document body (after `<<WORD` or
+/// `<<-WORD`, up to the WORD line) is one command with continuations
+/// joined, since a body may be fed to a shell, but its quotes are not
+/// tracked, so an apostrophe in prose cannot join the commands after it.
 ///
 /// It errs toward keeping a command together: extra text only risks a
 /// false positive, while a wrong split can hide part of a match. Known
 /// gaps: a `case` pattern's `)` inside `$(...)` ends the substitution
-/// early, here-document bodies are split like commands, and aliases,
-/// functions and `eval` are not expanded.
+/// early; a here-document is recognised only outside quotes and
+/// substitutions, and `<<` in an arithmetic `((...))` is taken for one;
+/// aliases, functions and `eval` are not expanded.
 final class _ShellText {
   _ShellText._(this.text, this._lineStarts, this.commands, this.pipelines);
 
@@ -404,8 +412,11 @@ final class _ShellText {
   final List<_Segment> commands;
   final List<_Segment> pipelines;
 
-  /// Characters before which an unquoted `#` starts a comment.
+  /// Blanks and shell metacharacters: an unquoted `#` after one starts a
+  /// comment, and one ends a here-document delimiter.
   static const _wordBreaks = ' \t\n;&|()<>';
+
+  static final _leadingTabs = RegExp(r'^\t+');
 
   factory _ShellText.parse(String input) {
     final out = StringBuffer();
@@ -413,6 +424,8 @@ final class _ShellText {
     final commandBounds = <(int, int)>[];
     final pipelineBounds = <(int, int)>[];
     final open = <_Open>[];
+    // Here-documents whose bodies start after the current line.
+    final heredocs = <_Heredoc>[];
     var commandStart = 0;
     var pipelineStart = 0;
 
@@ -427,6 +440,36 @@ final class _ShellText {
       operator.split('').forEach(emit);
       commandStart = out.length;
       if (!pipe) pipelineStart = out.length;
+    }
+
+    // Copies the pending here-document bodies, which start at [from], one
+    // command per line, and returns the offset after them.
+    int copyBodies(int from) {
+      var i = from;
+      for (final (:delimiter, :stripTabs) in heredocs) {
+        while (i < input.length) {
+          final newline = input.indexOf('\n', i);
+          final end = newline < 0 ? input.length : newline;
+          final line = input.substring(i, end);
+          final last =
+              (stripTabs ? line.replaceFirst(_leadingTabs, '') : line) ==
+              delimiter;
+          final joins = !last && newline >= 0 && _continues(line);
+          out.write(joins ? line.substring(0, line.length - 1) : line);
+          i = end;
+          if (newline < 0) break;
+
+          i++;
+          if (joins) {
+            lineStarts.add(out.length);
+            continue;
+          }
+          separate('\n', pipe: false);
+          if (last) break;
+        }
+      }
+      heredocs.clear();
+      return i;
     }
 
     var i = 0;
@@ -488,9 +531,14 @@ final class _ShellText {
           }
           continue;
         }
+        if (char == '<' && next == '<' && prev != '<') {
+          final heredoc = _heredocAt(input, i + 2);
+          if (heredoc != null) heredocs.add(heredoc);
+        }
         if (char == '\n' || char == ';') {
           separate(char, pipe: false);
           i++;
+          if (char == '\n' && heredocs.isNotEmpty) i = copyBodies(i);
           continue;
         }
         if ((char == '|' || char == '&') && next == char) {
@@ -533,6 +581,50 @@ final class _ShellText {
     collect(commandBounds, shell.commands);
     collect(pipelineBounds, shell.pipelines);
     return shell;
+  }
+
+  /// The here-document whose `<<` ends just before [start], or null for a
+  /// here-string (`<<<`) or a missing delimiter. Quotes and backslashes in
+  /// the delimiter word are removed, as the shell does.
+  static _Heredoc? _heredocAt(String input, int start) {
+    var i = start;
+    if (i < input.length && input[i] == '<') return null;
+
+    final stripTabs = i < input.length && input[i] == '-';
+    if (stripTabs) i++;
+    while (i < input.length && (input[i] == ' ' || input[i] == '\t')) {
+      i++;
+    }
+
+    final delimiter = StringBuffer();
+    while (i < input.length && !_wordBreaks.contains(input[i])) {
+      final char = input[i];
+      final close = char == "'" || char == '"'
+          ? input.indexOf(char, i + 1)
+          : -1;
+      if (close > i) {
+        delimiter.write(input.substring(i + 1, close));
+        i = close + 1;
+      } else if (char == r'\' && i + 1 < input.length) {
+        delimiter.write(input[i + 1]);
+        i += 2;
+      } else {
+        delimiter.write(char);
+        i++;
+      }
+    }
+    if (delimiter.isEmpty) return null;
+    return (delimiter: delimiter.toString(), stripTabs: stripTabs);
+  }
+
+  /// Whether [line] ends in an unescaped backslash, which continues it.
+  static bool _continues(String line) {
+    var backslashes = 0;
+    while (backslashes < line.length &&
+        line[line.length - 1 - backslashes] == r'\') {
+      backslashes++;
+    }
+    return backslashes.isOdd;
   }
 
   /// The 1-based input line of [offset] in [text].

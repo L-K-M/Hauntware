@@ -591,7 +591,12 @@ quotes, `$'...'`, double quotes, backslash escapes, `${...}`, `$(...)`,
 quotes nest inside `${...}` even within double quotes
 (`rm -rf "${D:-"a;b"}" /etc` is one command); `>&`, `<&`, `&>` and `>|`
 are redirections; a `#` that starts a word runs to the end of the line
-without opening quotes. Two rules need a wider view: `curl|sh` is matched
+without opening quotes. Each line of a here-document body (after `<<WORD`
+or `<<-WORD`, up to the WORD line) is one command with continuations
+joined, since the body may be fed to a shell, but its quotes are not
+tracked, so an apostrophe in prose (`Don't panic` in a motd) cannot join
+the commands after the body or move their findings onto its line. Two
+rules need a wider view: `curl|sh` is matched
 per pipeline (commands joined by `|` or `|&` stay together) and the fork
 bomb, which is built from separators, on the whole text. A finding
 carries the line on which its command starts, one finding per rule and
@@ -601,8 +606,9 @@ and a continued command is checked as one.
 The splitter is a scanner, not a shell parser, and errs toward keeping
 text together: extra text can only add a false positive, while a wrong
 split can hide part of a match. Known gaps: a `case` pattern's `)` inside
-`$(...)` ends the substitution early, here-document bodies are split like
-commands, and aliases, functions and `eval` are not expanded. Tests pin
+`$(...)` ends the substitution early; a here-document is recognised only
+outside quotes and substitutions, and `<<` in an arithmetic `((...))` is
+taken for one; aliases, functions and `eval` are not expanded. Tests pin
 that `systemctl stop nginx; ssh deploy@host`, `rm -rf ./build; ls /` and
 `git clean -n && rm -f out.o` raise nothing, that `userdel \` + newline +
 `-r deploy` is critical, and that `rm -rf \` + newline + `/etc` is caught.

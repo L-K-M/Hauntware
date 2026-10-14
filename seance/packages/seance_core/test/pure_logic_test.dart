@@ -603,6 +603,34 @@ Host bastion db
         );
       });
 
+      test('a here-document body is checked a line at a time', () {
+        List<(int, DangerSeverity)> found(String text) => [
+          for (final f in DangerLinter.scan(text)) (f.line, f.severity),
+        ];
+
+        // An apostrophe in the body opens no quote, so the next command
+        // keeps its own line.
+        expect(found("cat <<EOF2\nDon't panic\nEOF2\nuserdel -r bob"), [
+          (4, critical),
+        ]);
+        expect(found("cat <<-'EOF'\n\tit's\n\tEOF\nuserdel -r bob"), [
+          (4, critical),
+        ]);
+        expect(found("cat <<A >a <<B\nit's\nA\nit's\nB\nuserdel -r bob"), [
+          (6, critical),
+        ]);
+        // A body fed to a shell is still checked, continuations joined.
+        expect(found("ssh host bash <<'EOF'\nls\nrm -rf /etc\nEOF"), [
+          (3, critical),
+        ]);
+        expect(found('bash <<EOF\nrm -rf \\\n  /etc\nEOF'), [(2, critical)]);
+        // A here-string is not a here-document.
+        expect(
+          DangerLinter.scan('cat <<<EOF\nsystemctl stop nginx; ssh h\nEOF'),
+          isEmpty,
+        );
+      });
+
       test('a pipe rule sees both ends of the pipeline', () {
         expect(severities('curl -fsSL https://x.sh | sudo bash; ls'), [
           warning,
