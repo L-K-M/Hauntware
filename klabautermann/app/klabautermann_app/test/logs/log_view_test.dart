@@ -279,6 +279,43 @@ void main() {
       expect(newestBottom(tester), closeTo(200, 0.01));
     });
 
+    testWidgets(
+      'a paused view near the end stays paused when the view widens',
+      (tester) async {
+        final logs = LogViewController()
+          ..add([
+            for (var i = 0; i < 2000; i++)
+              'line $i ${List.filled(4 + i % 20, 'token').join(' ')}',
+          ]);
+        await _pump(
+          tester,
+          controller: logs,
+          wrap: LogWrap.on,
+          size: const Size(600, 400),
+        );
+        await tester.pumpAndSettle();
+        await tester.dragFrom(const Offset(300, 200), const Offset(0, 100));
+        await tester.pumpAndSettle();
+        expect(logs.following.value, isFalse);
+
+        // The rows below the view shrink by more than the view is from
+        // the end: the view lands on the end at once, without blank space
+        // or a spring back that would resume following.
+        tester.view.physicalSize = const Size(900, 400);
+        await tester.pump();
+        expect(_atEnd(tester), isTrue);
+
+        await tester.pumpAndSettle();
+        expect(_atEnd(tester), isTrue);
+        expect(logs.following.value, isFalse);
+        expect(find.text('Follow'), findsOneWidget);
+      },
+      variant: TargetPlatformVariant(const {
+        TargetPlatform.linux,
+        TargetPlatform.macOS,
+      }),
+    );
+
     testWidgets('a fling while paused keeps its lines as old ones leave', (
       tester,
     ) async {

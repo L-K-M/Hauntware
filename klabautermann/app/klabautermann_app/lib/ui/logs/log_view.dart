@@ -938,14 +938,14 @@ final class _TailScrollPosition extends ScrollPositionWithSingleContext {
 
   @override
   bool applyContentDimensions(double minScrollExtent, double maxScrollExtent) {
-    // Content that shrank under a following offset (wrapped rows after a
-    // wider layout, a long line leaving) moves the offset to the new end
-    // at once. Past the end during a gesture or fling is a bounce, left to
-    // the physics.
+    // Content that shrank under an idle offset (wrapped rows after a wider
+    // layout, a long line leaving) moves the offset to the new end at once,
+    // following or not. The physics would leave an offset that a layout
+    // correction moved past the end and then spring back, and the scroll
+    // updates of that spring would resume following. Past the end during a
+    // gesture or fling is a bounce, left to the physics.
     final shrank =
-        _following() &&
-        pixels > maxScrollExtent &&
-        !(activity?.isScrolling ?? false);
+        pixels > maxScrollExtent && !(activity?.isScrolling ?? false);
     if (shrank) correctPixels(maxScrollExtent);
     final accepted = super.applyContentDimensions(
       minScrollExtent,
