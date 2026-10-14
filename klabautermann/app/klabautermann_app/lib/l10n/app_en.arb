@@ -63,6 +63,10 @@
   "sshConfigUnreadable": "Your ~/.ssh/config could not be read. Check that it is a regular file you can open.",
   "sshConfigTooLarge": "Your ~/.ssh/config is too large to import.",
   "sshConfigImportFailed": "The import from ~/.ssh/config failed. Try again, and restart the app if it keeps failing.",
+  "sshConfigImportNotSaved": "This import could not be saved, so it will not be kept after a restart.",
+  "@sshConfigImportNotSaved": {
+    "description": "Second top toast after an ssh_config import whose servers appear in the fleet but could not be written to the device's import file."
+  },
   "syncFleet": "Synchronize",
   "openSettings": "Settings",
   "settingsCommand": "Settings…",
@@ -150,6 +154,24 @@
   "settingsFileNotSaved": "Your settings could not be saved. Changes you make now may be lost when Klabautermann restarts.",
   "@settingsFileNotSaved": {
     "description": "Startup notice: writing the settings file failed while the app started."
+  },
+  "importsFileRecovered": "Your imported servers could not be read and were cleared. The old file is kept as {fileName}. Import ~/.ssh/config again to bring them back.",
+  "@importsFileRecovered": {
+    "description": "Startup notice: the file holding the servers imported from ~/.ssh/config was damaged and renamed aside, so the fleet starts without them.",
+    "placeholders": {
+      "fileName": {
+        "type": "String",
+        "example": "ssh_config_imports.json.corrupt-20261014T093005250Z"
+      }
+    }
+  },
+  "importsFileLeftAsIs": "Your imported servers could not be read, so their file was left as it is. Servers you import now will not be kept after a restart.",
+  "@importsFileLeftAsIs": {
+    "description": "Startup notice: the file holding the servers imported from ~/.ssh/config could not be read or renamed aside, so it is not written this session."
+  },
+  "importsFileNewer": "Your imported servers were saved by a newer version of Klabautermann. Servers you import now will not be kept after a restart.",
+  "@importsFileNewer": {
+    "description": "Startup notice: a newer app version wrote the file holding the servers imported from ~/.ssh/config, so this version does not write it."
   },
   "settingsWindowUnreachable": "Settings cannot reach Klabautermann. Close this window and open Settings again.",
   "@settingsWindowUnreachable": {

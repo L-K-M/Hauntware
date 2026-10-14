@@ -6,9 +6,22 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 /// lets a test push events back (03 §10.1's "narrow delegate seams per
 /// surface so widget tests need no full app"). No isolate, no transport.
 final class FakeEngineClient implements EngineClient {
+  FakeEngineClient() {
+    _events = StreamController<EngineEvent>.broadcast(
+      onListen: () {
+        final waiting = _held;
+        _held = null;
+        waiting?.forEach(_events.add);
+      },
+    );
+  }
+
   final List<EngineRequest> sent = [];
-  final StreamController<EngineEvent> _events =
-      StreamController<EngineEvent>.broadcast();
+  late final StreamController<EngineEvent> _events;
+
+  /// Events emitted before anything listened, held for the first listener
+  /// as [EngineClient.events] promises; null once someone has listened.
+  List<EngineEvent>? _held = [];
   bool _closed = false;
 
   @override
@@ -26,7 +39,13 @@ final class FakeEngineClient implements EngineClient {
   Future<void> shutdown() => close();
 
   /// Pushes [event] to every listener, as the engine isolate would.
-  void emit(EngineEvent event) => _events.add(event);
+  void emit(EngineEvent event) {
+    if (_held case final waiting?) {
+      waiting.add(event);
+    } else {
+      _events.add(event);
+    }
+  }
 
   /// The requests of one runtime type, in order.
   List<EngineRequest> sentOfType<T extends EngineRequest>() =>

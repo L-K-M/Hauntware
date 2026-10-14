@@ -69,9 +69,24 @@ Future<void> main(List<String> args) async {
 
   // D18: all SSH, sampling, parsing, Docker, sync and rule evaluation run
   // in the engine isolate; the UI sends plain-data requests and listens.
-  final engine = await IsolateEngineClient.spawn();
+  // The engine keeps its own files in the same support directory (03
+  // §4.10) and reports what it found wrong with them in its handshake.
+  final engine = await IsolateEngineClient.spawn(
+    supportDirectory: supportDirectory.path,
+  );
+  final importStoreIssue = engine.ready.importStoreIssue;
+  if (importStoreIssue != null) {
+    debugPrint(
+      'ssh_config_imports.json: ${importStoreIssue.kind.name} '
+      '${importStoreIssue.detail ?? ''}',
+    );
+  }
 
   // FL-02: desktops get the ssh_config import; phones get no source.
+  // FleetController subscribes to engine.events before any other
+  // listener: the client holds the startup CatalogReplaced (the saved
+  // imports) for its first listener only, so another one subscribing
+  // first could take it and leave the rail empty until the next import.
   final fleet = FleetController(
     engine,
     sshConfig: sshConfigSourceFor(defaultTargetPlatform, Platform.environment),
@@ -92,6 +107,7 @@ Future<void> main(List<String> args) async {
       monitoring: monitoring,
       appearance: appearance,
       settingsIssue: settings.issue,
+      importStoreIssue: importStoreIssue,
       openSettingsWindow: settingsWindow?.open,
       toolbarBand: toolbarBand,
     ),

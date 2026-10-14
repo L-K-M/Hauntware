@@ -22,6 +22,11 @@ Future<void> importSshConfigWithFeedback(
   final outcome = await fleet.importSshConfig();
   if (!overlay.mounted) return;
   showTopToast(overlay, message: sshConfigImportMessage(l10n, outcome));
+  // A toast of its own rather than a variant of each result above: the
+  // counts stay true, and this adds that they will not survive a restart.
+  if (outcome case SshConfigImportSucceeded(saved: false)) {
+    showTopToast(overlay, message: l10n.sshConfigImportNotSaved);
+  }
 }
 
 /// The user-facing sentence for [outcome].

@@ -1909,7 +1909,8 @@ revocation and concurrent login/deletion lifecycle work remain separate.
   updates, deactivates on the last, and honors the enable/disable setting
   (including re-anchoring live sessions on re-enable); the settings field
   round-trips in `app_settings_test.dart`.
-- `app/seance_app/test/server_grouping_test.dart` — sectioning: PINNED
+- `server_grouping_test.dart`, in Planchette's `ghost_servers` package
+  since 2026-10-13 with the library it tests — sectioning: PINNED
   then SERVERS (ungrouped first, groups nested and sorted), case-folded
   keys with the first spelling kept, no empty section headers (unless a
   filter hid a live server there), folding a group, the shortlist or

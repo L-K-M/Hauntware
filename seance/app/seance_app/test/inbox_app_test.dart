@@ -210,6 +210,21 @@ void main() {
       expect(find.text('Stage on prod-db-1'), findsOneWidget);
     });
 
+    testWidgets('a command continued over lines is checked as one',
+        (tester) async {
+      await tester.runAsync(
+        () => seed(script: 'echo ok\nuserdel \\\n  -r deploy'),
+      );
+      addTearDown(() => tester.runAsync(disposeState));
+      await pumpReview(tester);
+
+      // One critical finding, on the line where the command starts.
+      expect(find.textContaining('Line 2:'), findsOneWidget);
+      expect(find.textContaining('home directory'), findsOneWidget);
+      expect(find.text('Line 2: Removes a user account.'), findsNothing);
+      expect(find.textContaining('Line 3:'), findsNothing);
+    });
+
     testWidgets('an unknown host can be read but not run', (tester) async {
       await tester.runAsync(() => seed(host: 'nowhere'));
       addTearDown(() => tester.runAsync(disposeState));

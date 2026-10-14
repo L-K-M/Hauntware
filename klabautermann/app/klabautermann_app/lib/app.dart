@@ -4,7 +4,7 @@ import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 import 'package:ghost_theme/ghost_theme.dart' show GhostTheme;
 import 'package:klabautermann_core/klabautermann_core.dart'
-    show DeviceSettingsIssue;
+    show DeviceSettingsIssue, ImportStoreIssue;
 
 import 'controllers/appearance_controller.dart';
 import 'controllers/fleet_controller.dart';
@@ -16,8 +16,8 @@ import 'ui/adaptive_shell.dart';
 import 'ui/macos_toolbar_band.dart';
 import 'ui/menus/app_commands.dart';
 import 'ui/menus/app_menu_host.dart';
-import 'ui/settings_issue_notice.dart';
 import 'ui/settings_page.dart';
+import 'ui/startup_issue_notice.dart';
 
 /// The settings route's name: Settings on phones, and on a desktop whose
 /// runner cannot open the settings window (D32).
@@ -33,6 +33,7 @@ class KlabautermannApp extends StatelessWidget {
     required this.monitoring,
     required this.appearance,
     this.settingsIssue,
+    this.importStoreIssue,
     this.openSettingsWindow,
     this.toolbarBand,
   });
@@ -43,6 +44,10 @@ class KlabautermannApp extends StatelessWidget {
 
   /// What went wrong opening `settings.json`, told once at startup.
   final DeviceSettingsIssue? settingsIssue;
+
+  /// What went wrong when the engine loaded `ssh_config_imports.json`,
+  /// told once at startup beside [settingsIssue].
+  final ImportStoreIssue? importStoreIssue;
 
   /// Opens Settings in its own window; null on phones, where Settings is
   /// [kSettingsRoute].
@@ -100,8 +105,9 @@ class KlabautermannApp extends StatelessWidget {
           // The shell's settings callback and the menus' commands need a
           // context under the MaterialApp's Navigator; the
           // ListenableBuilder's own context sits above it.
-          home: SettingsIssueNotice(
-            issue: settingsIssue,
+          home: StartupIssueNotice(
+            settingsIssue: settingsIssue,
+            importStoreIssue: importStoreIssue,
             child: Builder(
               builder: (context) {
                 void openSettings() => unawaited(_openSettings(context));

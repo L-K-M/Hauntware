@@ -117,6 +117,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'The import from ~/.ssh/config failed. Try again, and restart the app if it keeps failing.';
 
   @override
+  String get sshConfigImportNotSaved =>
+      'This import could not be saved, so it will not be kept after a restart.';
+
+  @override
   String get syncFleet => 'Synchronize';
 
   @override
@@ -218,6 +222,19 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get settingsFileNotSaved =>
       'Your settings could not be saved. Changes you make now may be lost when Klabautermann restarts.';
+
+  @override
+  String importsFileRecovered(String fileName) {
+    return 'Your imported servers could not be read and were cleared. The old file is kept as $fileName. Import ~/.ssh/config again to bring them back.';
+  }
+
+  @override
+  String get importsFileLeftAsIs =>
+      'Your imported servers could not be read, so their file was left as it is. Servers you import now will not be kept after a restart.';
+
+  @override
+  String get importsFileNewer =>
+      'Your imported servers were saved by a newer version of Klabautermann. Servers you import now will not be kept after a restart.';
 
   @override
   String get settingsWindowUnreachable =>

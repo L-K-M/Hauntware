@@ -147,7 +147,9 @@ void main() {
 
       source.gate!.complete();
       await Future<void>.delayed(Duration.zero);
-      engine.emit(const SshConfigImported(importedCount: 1, skippedCount: 0));
+      engine.emit(
+        const SshConfigImported(importedCount: 1, skippedCount: 0, saved: true),
+      );
       await running;
       expect(import.enabled(), isTrue);
     });
@@ -442,7 +444,7 @@ void main() {
       source.gate!.complete();
       await tester.pump();
       harness.engine.emit(
-        const SshConfigImported(importedCount: 1, skippedCount: 0),
+        const SshConfigImported(importedCount: 1, skippedCount: 0, saved: true),
       );
       await tester.pumpAndSettle();
       expect(importItem().onSelected, isNotNull);

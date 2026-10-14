@@ -217,11 +217,14 @@ final class DeviceSettingsStore {
     _ => null,
   };
 
-  /// Stores [appearance] and writes the document. Throws when the write
-  /// fails or this session is read-only; the value stays in memory either
-  /// way.
+  /// Stores a copy of [appearance] and writes the document. Throws when the
+  /// write fails or this session is read-only; the value stays in memory
+  /// either way. The copy is deep, through JSON, because the write runs
+  /// later from the queue: a caller changing its map afterwards cannot
+  /// change what is saved, and a value JSON cannot hold fails here.
   Future<void> setAppearance(Map<String, Object?> appearance) async {
-    _values[_appearanceKey] = appearance;
+    _values[_appearanceKey] =
+        jsonDecode(jsonEncode(appearance)) as Map<String, Object?>;
     await _save();
   }
 
@@ -307,7 +310,7 @@ final class DeviceSettingsStore {
 
     final String preservedAs;
     try {
-      preservedAs = await _unusedCopyPath(file, time);
+      preservedAs = await unusedCorruptCopyPath(file, time);
       await writer(File(preservedAs), raw);
     } on Object catch (copyError) {
       return DeviceSettingsStore._(
@@ -356,30 +359,34 @@ final class DeviceSettingsStore {
       return null;
     }
   }
+}
 
-  /// `settings.json.corrupt-<UTC time>`, with a counter when that name is
-  /// taken, so a copy never replaces an earlier one.
-  static Future<String> _unusedCopyPath(File file, DateTime time) async {
-    final stamp = time
-        .toUtc()
-        .toIso8601String()
-        .replaceAll('-', '')
-        .replaceAll(':', '')
-        .replaceAll('.', '');
-    final base = '${file.path}.corrupt-$stamp';
-    var candidate = base;
-    for (var counter = 2; ; counter++) {
-      final type = await FileSystemEntity.type(candidate, followLinks: false);
-      if (type == FileSystemEntityType.notFound) return candidate;
-      candidate = '$base-$counter';
-    }
+/// `<file>.corrupt-<UTC time>` (`settings.json.corrupt-20261013T230529Z`),
+/// with a counter when that name is taken, so a damaged file kept aside
+/// never replaces an earlier one. The settings store copies its damaged
+/// file there and the engine's import store renames its own. Internal:
+/// the barrel hides it.
+Future<String> unusedCorruptCopyPath(File file, DateTime time) async {
+  final stamp = time
+      .toUtc()
+      .toIso8601String()
+      .replaceAll('-', '')
+      .replaceAll(':', '')
+      .replaceAll('.', '');
+  final base = '${file.path}.corrupt-$stamp';
+  var candidate = base;
+  for (var counter = 2; ; counter++) {
+    final type = await FileSystemEntity.type(candidate, followLinks: false);
+    if (type == FileSystemEntityType.notFound) return candidate;
+    candidate = '$base-$counter';
   }
 }
 
-/// The store's default [DeviceSettingsWriter], and the app's writer for its
-/// other device-local files (`window_state.json`): the catalog stores'
-/// write order (`AtomicFileWriter` in `seance_core`, which its barrel does
-/// not export). A sibling temp file with a random name is written and
+/// The store's default [DeviceSettingsWriter], and the writer for the
+/// other device-local files: the app's `window_state.json` and the
+/// engine's import store. It follows the catalog stores' write order
+/// (`AtomicFileWriter` in `seance_core`, which its barrel does not
+/// export). A sibling temp file with a random name is written and
 /// flushed, renamed over [target], and the directory synced through
 /// `seance_core`'s [syncLocalDirectory] so the rename survives power loss.
 /// A reader, or a crash, sees the old file or the new one, never a partial
