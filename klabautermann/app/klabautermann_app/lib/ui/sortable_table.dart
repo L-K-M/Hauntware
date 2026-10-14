@@ -253,9 +253,20 @@ final class _OpenRowActionsIntent extends Intent {
   const _OpenRowActionsIntent();
 }
 
+final class _ActivateRowIntent extends Intent {
+  const _ActivateRowIntent();
+}
+
+final class _CloseMenuIntent extends Intent {
+  const _CloseMenuIntent();
+}
+
 /// An action that is enabled only while [enabled] holds, so a key the
 /// table cannot use (Enter without [SortableTable.onRowActivated], an
-/// arrow over no rows) passes on instead of being swallowed.
+/// arrow over no rows) passes on instead of being swallowed. Its intents
+/// are private: under a shared one ([DismissIntent], [ActivateIntent]) a
+/// disabled table action would still be the nearest an ancestor's binding
+/// of the key finds, and the ancestor's own action would never run.
 final class _TableAction<T extends Intent> extends Action<T> {
   _TableAction(this.enabled, this.onInvoke);
 
@@ -282,16 +293,16 @@ class _SortableTableState<R> extends State<SortableTable<R>> {
     SingleActivator(LogicalKeyboardKey.end): _MoveIntent(_Step.last),
     // Repeats may move the active row, never activate it.
     SingleActivator(LogicalKeyboardKey.enter, includeRepeats: false):
-        ActivateIntent(),
+        _ActivateRowIntent(),
     SingleActivator(LogicalKeyboardKey.numpadEnter, includeRepeats: false):
-        ActivateIntent(),
+        _ActivateRowIntent(),
     SingleActivator(LogicalKeyboardKey.space, includeRepeats: false):
-        ActivateIntent(),
+        _ActivateRowIntent(),
     SingleActivator(LogicalKeyboardKey.contextMenu, includeRepeats: false):
         _OpenRowActionsIntent(),
     SingleActivator(LogicalKeyboardKey.f10, shift: true, includeRepeats: false):
         _OpenRowActionsIntent(),
-    SingleActivator(LogicalKeyboardKey.escape): DismissIntent(),
+    SingleActivator(LogicalKeyboardKey.escape): _CloseMenuIntent(),
   };
 
   final _scroll = ScrollController();
@@ -304,7 +315,7 @@ class _SortableTableState<R> extends State<SortableTable<R>> {
       () => _sorted.isNotEmpty,
       (intent) => _move(intent.step),
     ),
-    ActivateIntent: _TableAction<ActivateIntent>(
+    _ActivateRowIntent: _TableAction<_ActivateRowIntent>(
       () => widget.onRowActivated != null && _activeIndex != null,
       (_) => widget.onRowActivated!(_sorted[_activeIndex!]),
     ),
@@ -316,7 +327,7 @@ class _SortableTableState<R> extends State<SortableTable<R>> {
       (_) => _openActions(_activeIndex!),
     ),
     // A menu a pointer opened leaves focus on the body: Esc closes it.
-    DismissIntent: _TableAction<DismissIntent>(
+    _CloseMenuIntent: _TableAction<_CloseMenuIntent>(
       () => _menu.isOpen,
       (_) => _menu.close(),
     ),

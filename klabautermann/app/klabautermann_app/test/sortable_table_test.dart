@@ -533,6 +533,30 @@ void main() {
       expect(killed, [3, 4]);
     });
 
+    testWidgets('Esc the table does not use reaches its host', (tester) async {
+      await _pump(tester);
+      showDialog<void>(
+        context: tester.element(find.byType(_Host)),
+        builder: (context) => Dialog(
+          child: SizedBox(
+            width: 300,
+            height: 120,
+            child: SortableTable<_Proc>(
+              tableId: 'dialog',
+              columns: _columns,
+              rows: _procs,
+              rowKey: (proc) => proc.pid,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('dialog.row.1')));
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pumpAndSettle();
+      expect(find.byType(Dialog), findsNothing);
+    });
+
     testWidgets('the active row follows its key across a re-sort', (
       tester,
     ) async {
