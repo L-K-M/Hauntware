@@ -114,10 +114,17 @@ class _LogViewState extends State<LogView> {
   late AppLocalizations _l10n;
   _TextLayout? _text;
 
-  /// The row count of each held entry, kept in step with the controller:
-  /// wrapped rows with [LogView.wrap] on, one a line plus its fields' rows
-  /// without it.
-  late _RowCounts _rows;
+  /// The row count of each held entry without wrap, one a line plus its
+  /// fields' rows, and with it, wrapped rows, both kept in step with the
+  /// controller and the fields shown, so a wrap toggle keeps the counts
+  /// measured before it.
+  late _RowCounts _lineRows;
+  late _RowCounts _wrappedRows;
+
+  /// The counts [LogView.wrap] lays out with, and the other mode's.
+  _RowCounts get _rows => widget.wrap == LogWrap.on ? _wrappedRows : _lineRows;
+  _RowCounts get _otherRows =>
+      widget.wrap == LogWrap.on ? _lineRows : _wrappedRows;
 
   /// The fields of each journal row that shows them, by seq.
   final _expanded = <int, List<(String, String?)>>{};
@@ -141,7 +148,7 @@ class _LogViewState extends State<LogView> {
     if (previous == null) {
       _resetRows();
     } else if (!identical(previous, _text)) {
-      _rows.invalidate();
+      _invalidateRows();
       // The offset counts lines or rows of the old height.
       final scale = _text!.lineHeight / previous.lineHeight;
       if (scale != 1) _holdLines((pixels) => pixels * scale);
@@ -164,13 +171,13 @@ class _LogViewState extends State<LogView> {
     }
 
     if (oldWidget.wrap != widget.wrap) {
-      // The rows count lines and fields without wrap, wrapped rows with it.
-      final previous = _rows;
-      _resetRows();
+      // The offset counts the old mode's rows, now the other counts.
+      final previous = _otherRows;
       _holdLines((pixels) => _offsetIn(previous, pixels));
-    } else if ((oldWidget.levelOf == null) != (widget.levelOf == null)) {
+    }
+    if ((oldWidget.levelOf == null) != (widget.levelOf == null)) {
       // The gutter came or went, and with it some of every row's width.
-      _rows.invalidate();
+      _invalidateRows();
     }
   }
 
@@ -199,12 +206,22 @@ class _LogViewState extends State<LogView> {
   }
 
   void _resetRows() {
-    _rows = _RowCounts(_measureRows);
-    _rows.sync(widget.controller, _estimateRows);
+    _RowCounts counts(LogWrap wrap) => _RowCounts(
+      (index, crossAxisExtent) => _measureRows(wrap, index, crossAxisExtent),
+      (index, crossAxisExtent) => _estimateRows(wrap, index, crossAxisExtent),
+    )..sync(widget.controller);
+    _lineRows = counts(LogWrap.off);
+    _wrappedRows = counts(LogWrap.on);
+  }
+
+  void _invalidateRows() {
+    _lineRows.invalidate();
+    _wrappedRows.invalidate();
   }
 
   void _onLines() {
-    final removed = _rows.sync(widget.controller, _estimateRows);
+    final removed = _rows.sync(widget.controller);
+    _otherRows.sync(widget.controller);
     _expanded.removeWhere((seq, _) => seq < widget.controller.firstSeq);
     // While paused, keep the lines in sight where they are: the entries
     // that left the buffer took their extent from above them.
@@ -264,6 +281,8 @@ class _LogViewState extends State<LogView> {
     final start = _rows.rowsBefore(index);
     final rows = _rows.rowsOf(index);
     final change = _rows.remeasure(index);
+    // The other mode's count follows, for a wrap toggle to map through.
+    _otherRows.remeasure(index);
     final height = _text!.lineHeight;
     _holdLines(
       (pixels) => _fieldsMoved(pixels / height, start, rows, change) * height,
@@ -364,13 +383,13 @@ class _LogViewState extends State<LogView> {
   double _textWidth(double rowWidth, _TextLayout text) =>
       rowWidth - 2 * _rowPadding - (_hasGutter ? text.gutter : 0);
 
-  /// The rows entry [index] takes in a row [crossAxisExtent] wide: one a
-  /// line and one a field shown without wrap. With wrap, each wraps to one
-  /// row when it is all Latin-1 and an upper bound of its width, the
-  /// engine's rounding included, fits ([logTextCells]), and is laid out
-  /// otherwise; a line with a note is laid out for it. A dropped-lines
-  /// record keeps to one row.
-  int _measureRows(int index, double crossAxisExtent) {
+  /// The rows entry [index] takes in [wrap] mode in a row [crossAxisExtent]
+  /// wide: one a line and one a field shown without wrap. With wrap, each
+  /// wraps to one row when it is all Latin-1 and an upper bound of its
+  /// width, the engine's rounding included, fits ([logTextCells]), and is
+  /// laid out otherwise; a line with a note is laid out for it. A
+  /// dropped-lines record keeps to one row.
+  int _measureRows(LogWrap wrap, int index, double crossAxisExtent) {
     final entry = widget.controller[index];
     if (entry is! LogLine) return 1;
 
@@ -378,7 +397,7 @@ class _LogViewState extends State<LogView> {
       final kept? => _fieldLines(entry, kept),
       null => const <String>[],
     };
-    if (widget.wrap == LogWrap.off) return 1 + fields.length;
+    if (wrap == LogWrap.off) return 1 + fields.length;
 
     final text = _text!;
     final width = _textWidth(crossAxisExtent, text);
@@ -420,21 +439,19 @@ class _LogViewState extends State<LogView> {
     return rows;
   }
 
-  /// A guess at the rows of [entry] until a layout measures it, plus one a
-  /// field it shows: one without wrap; with it, its code units, escapes
-  /// included, at the width last measured, and never more rows than code
-  /// units.
-  int _estimateRows(LogEntry entry) {
+  /// A guess at the rows of entry [index] in [wrap] mode until a layout
+  /// measures it, plus one a field it shows: one without wrap; with it,
+  /// its code units, escapes included, at the [crossAxisExtent] last
+  /// measured at, and never more rows than code units.
+  int _estimateRows(LogWrap wrap, int index, double? crossAxisExtent) {
+    final entry = widget.controller[index];
     if (entry is! LogLine) return 1;
 
     final fields = switch (_expanded[entry.seq]) {
       final kept? => _fieldLines(entry, kept).length,
       null => 0,
     };
-    final crossAxisExtent = _rows.crossAxisExtent;
-    if (widget.wrap == LogWrap.off || crossAxisExtent == null) {
-      return 1 + fields;
-    }
+    if (wrap == LogWrap.off || crossAxisExtent == null) return 1 + fields;
 
     final text = _text!;
     final width = _textWidth(crossAxisExtent, text);
@@ -779,11 +796,15 @@ const int _minRowSlots = 1024;
 /// share of the entry it is in to within a row ([_keepShare]), so the
 /// lines in sight hold still.
 final class _RowCounts {
-  _RowCounts(this._measure);
+  _RowCounts(this._measure, this._estimate);
 
   /// The exact rows of the entry at an index in a row of a cross-axis
   /// extent.
   final int Function(int index, double crossAxisExtent) _measure;
+
+  /// A guess at the rows of the entry at an index until a layout measures
+  /// it, from the cross-axis extent last measured at, if any.
+  final int Function(int index, double? crossAxisExtent) _estimate;
 
   // Entry i lives in slot _front + i; the slots before _front belong to
   // evicted entries, whose rows _frontRows cancels. _tree is the Fenwick
@@ -799,6 +820,8 @@ final class _RowCounts {
 
   /// Counts measured in an older generation are estimates; 0 is never.
   int _generation = 1;
+
+  /// The cross-axis extent last measured at, or null before a layout.
   double? _crossAxisExtent;
 
   /// Changes whenever the rows would lay out differently, so the sliver
@@ -810,9 +833,6 @@ final class _RowCounts {
 
   /// The rows of every held entry.
   int get total => _total;
-
-  /// The cross-axis extent last measured at, or null before a layout.
-  double? get crossAxisExtent => _crossAxisExtent;
 
   int rowsOf(int index) => _counts[_front + index];
 
@@ -837,12 +857,9 @@ final class _RowCounts {
   }
 
   /// Brings the counts in step with [controller], guessing new entries'
-  /// rows with [estimate], and returns the entries that left from the
-  /// front and their rows.
-  ({int entries, int rows}) sync(
-    LogViewController controller,
-    int Function(LogEntry entry) estimate,
-  ) {
+  /// rows, and returns the entries that left from the front and their
+  /// rows.
+  ({int entries, int rows}) sync(LogViewController controller) {
     var entries = 0;
     var rows = 0;
     while (_length > 0 && _firstSeq < controller.firstSeq) {
@@ -858,7 +875,7 @@ final class _RowCounts {
 
     final end = controller.firstSeq + controller.length;
     for (var seq = _firstSeq + _length; seq < end; seq++) {
-      _append(estimate(controller[seq - controller.firstSeq]));
+      _append(_estimate(seq - controller.firstSeq, _crossAxisExtent));
     }
     _revision++;
     return (entries: entries, rows: rows);
@@ -866,10 +883,13 @@ final class _RowCounts {
 
   /// Measures the entry at [index] again at once, for a change only it
   /// sees, such as its fields showing, and returns how its count changed.
-  /// Without wrap its count needs no layout, so no width either.
+  /// Before a layout gives the counts a width, it estimates the entry.
   int remeasure(int index) {
-    _measuredIn[_front + index] = 0;
-    final change = _measureAt(index);
+    final slot = _front + index;
+    _measuredIn[slot] = 0;
+    final change = _crossAxisExtent == null
+        ? _recount(slot, _estimate(index, null))
+        : _measureAt(index);
     _revision++;
     return change;
   }
@@ -961,9 +981,14 @@ final class _RowCounts {
     if (_measuredIn[slot] == _generation) return 0;
 
     _measuredIn[slot] = _generation;
-    final change = _measure(index, _crossAxisExtent ?? 0) - _counts[slot];
+    return _recount(slot, _measure(index, _crossAxisExtent!));
+  }
+
+  /// Sets the count in [slot] to [rows] and returns how it changed.
+  int _recount(int slot, int rows) {
+    final change = rows - _counts[slot];
     if (change != 0) {
-      _counts[slot] += change;
+      _counts[slot] = rows;
       _total += change;
       _add(slot, change);
     }

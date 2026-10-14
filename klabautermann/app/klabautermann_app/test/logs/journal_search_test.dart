@@ -399,6 +399,70 @@ void main() {
           expect(logs.following.value, isFalse);
         }
       });
+
+      testWidgets('wrap turned off and on keeps the wrapped counts and the '
+          'share of a top row with its fields open', (tester) async {
+        // Every row but the newest wraps to several rows.
+        String message(int i) =>
+            i == 99 ? 'm 99' : 'm $i ${'word ' * 30}'.trim();
+        final (logs, search, position, line) = await paused(
+          tester,
+          LogWrap.on,
+          message: message,
+        );
+        final row37 = _row('nginx.service[812]: ${message(37)}');
+        final row40 = _row('nginx.service[812]: ${message(40)}');
+
+        // Row m 40 at the top edge opens its fields, and the edge then
+        // sits halfway down its second field.
+        position.jumpTo(position.maxScrollExtent * 40 / 99);
+        await tester.pump();
+        position.jumpTo(position.pixels + tester.getTopLeft(row40).dy);
+        await tester.pump();
+        await tester.tap(row40);
+        await tester.pump();
+        final wrapped = tester.getSize(row40).height;
+        expect(wrapped, greaterThan(line));
+        position.jumpTo(position.pixels + wrapped + 1.5 * line);
+        await tester.pump();
+        final top = tester.getTopLeft(row40).dy;
+        final extent = position.maxScrollExtent;
+
+        // Without wrap the row keeps its share of its rows: one for its
+        // line and one for each field.
+        await _pump(tester, logs, search);
+        final share = -top / (wrapped + 3 * line);
+        expect(
+          tester.getTopLeft(row40).dy,
+          moreOrLessEquals(-share * 4 * line, epsilon: 1e-6),
+        );
+
+        // Row m 37, above the edge, opens its three fields.
+        final offset = position.pixels;
+        position.jumpTo(37 * line);
+        await tester.pump();
+        final above = Focus.of(tester.element(row37));
+        position.jumpTo(offset);
+        await tester.pump();
+        above.requestFocus();
+        await tester.pump();
+        await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+        await tester.pump();
+        expect(position.pixels, moreOrLessEquals(offset + 3 * line));
+
+        // With wrap again, the counts from before hold, m 37's fields
+        // added, and so does the top row.
+        await _pump(tester, logs, search, wrap: LogWrap.on);
+        expect(
+          tester.getTopLeft(row40).dy,
+          moreOrLessEquals(top, epsilon: 1e-6),
+        );
+        expect(
+          position.maxScrollExtent,
+          moreOrLessEquals(extent + 3 * line, epsilon: 1e-6),
+        );
+        expect(logs.following.value, isFalse);
+      });
     });
 
     testWidgets('a tap on a row that just left the buffer does nothing', (
