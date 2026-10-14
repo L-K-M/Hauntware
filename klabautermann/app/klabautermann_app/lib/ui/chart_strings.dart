@@ -7,6 +7,7 @@ ChartStrings klabautermannChartStrings(AppLocalizations l10n) {
   return ChartStrings(
     seriesSummary: l10n.chartSeriesSummary,
     seriesEmpty: l10n.chartSeriesEmpty,
+    seriesUnknown: l10n.chartSeriesUnknown,
     unknownValue: l10n.chartUnknownValue,
     trendRising: l10n.chartTrendRising,
     trendFalling: l10n.chartTrendFalling,

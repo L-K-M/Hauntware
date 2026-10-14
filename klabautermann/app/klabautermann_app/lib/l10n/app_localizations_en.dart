@@ -291,6 +291,11 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String chartSeriesUnknown(String label) {
+    return '$label: unknown';
+  }
+
+  @override
   String get chartUnknownValue => 'unknown';
 
   @override

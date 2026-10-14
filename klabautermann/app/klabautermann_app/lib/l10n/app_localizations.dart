@@ -526,6 +526,12 @@ abstract class AppLocalizations {
   /// **'{label}: no data yet'**
   String chartSeriesEmpty(String label);
 
+  /// A chart's screen-reader summary of a series whose every sample is a value the server did not report.
+  ///
+  /// In en, this message translates to:
+  /// **'{label}: unknown'**
+  String chartSeriesUnknown(String label);
+
   /// Shown and read in place of a value the server did not report; never shown as zero.
   ///
   /// In en, this message translates to:

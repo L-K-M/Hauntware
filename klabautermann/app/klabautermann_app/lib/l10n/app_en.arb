@@ -216,6 +216,16 @@
       }
     }
   },
+  "chartSeriesUnknown": "{label}: unknown",
+  "@chartSeriesUnknown": {
+    "description": "A chart's screen-reader summary of a series whose every sample is a value the server did not report.",
+    "placeholders": {
+      "label": {
+        "type": "String",
+        "example": "Memory"
+      }
+    }
+  },
   "chartUnknownValue": "unknown",
   "@chartUnknownValue": {
     "description": "Shown and read in place of a value the server did not report; never shown as zero."

@@ -21,6 +21,7 @@ final class ChartStrings {
   const ChartStrings({
     required this.seriesSummary,
     required this.seriesEmpty,
+    required this.seriesUnknown,
     required this.unknownValue,
     required this.trendRising,
     required this.trendFalling,
@@ -39,8 +40,11 @@ final class ChartStrings {
   )
   seriesSummary;
 
-  /// A series that holds no known sample yet.
+  /// A series that holds no sample yet.
   final String Function(String label) seriesEmpty;
+
+  /// A series whose samples are all unknown (03 §10.4).
+  final String Function(String label) seriesUnknown;
 
   /// A value the host did not report; never shown as zero (03 §10.4).
   final String unknownValue;
@@ -82,8 +86,8 @@ double chartScaleMax(double? dataMax, ChartUnit unit) {
 
 /// The screen-reader summary of a series labelled [label] (A11Y-02): its
 /// current, lowest and highest values and its trend on a scale spanning
-/// [span], or that it has no data yet. Charts expose it on demand and never
-/// as a live region (A11Y-15).
+/// [span], that it has no data yet, or that it is unknown. Charts expose it
+/// on demand and never as a live region (A11Y-15).
 String chartSeriesSummary({
   required String label,
   required List<double?> samples,
@@ -91,8 +95,9 @@ String chartSeriesSummary({
   required double span,
   required ChartStrings strings,
 }) {
+  if (samples.isEmpty) return strings.seriesEmpty(label);
   final known = [for (final value in samples) ?value];
-  if (known.isEmpty) return strings.seriesEmpty(label);
+  if (known.isEmpty) return strings.seriesUnknown(label);
 
   String format(double value) => formatChartValue(value, unit, strings);
   final current = samples.last;

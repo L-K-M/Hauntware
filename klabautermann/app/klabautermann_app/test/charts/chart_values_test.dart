@@ -107,7 +107,9 @@ void main() {
         summary([4096, null, 2048, null], unit: ChartUnit.bytesPerSecond),
         'CPU: now unknown, lowest 2 KiB/s, highest 4 KiB/s, steady',
       );
-      expect(summary([null]), 'CPU: no data yet');
+      expect(summary([]), 'CPU: no data yet');
+      // A metric the host never reports is unknown, not still to come.
+      expect(summary([null, null]), 'CPU: unknown');
     });
 
     test('compares the outer quarters against the scale for the trend', () {
