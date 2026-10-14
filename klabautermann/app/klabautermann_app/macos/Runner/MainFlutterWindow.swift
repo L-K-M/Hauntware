@@ -118,7 +118,9 @@ class MainFlutterWindow: NSWindow {
   /// restoreMainWindow() (lib/services/window_state.dart, called from
   /// main.dart before runApp) applies the previous session's frame and
   /// then shows the window, always, even when restoring fails, so the
-  /// default-size window never flashes. Do not remove this without
+  /// default-size window never flashes. A second instance, which must not
+  /// touch the running one's frame, shows it through
+  /// showMainWindowUnrestored() instead. Do not remove this without
   /// removing that contract too.
   override public func order(_ place: NSWindow.OrderingMode, relativeTo otherWin: Int) {
     super.order(place, relativeTo: otherWin)

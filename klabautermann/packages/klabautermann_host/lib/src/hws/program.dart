@@ -15,6 +15,16 @@ import 'collector.dart';
 /// Protocol tag printed in the READY marker (03 §6.2).
 const kProtocolTag = 'HWS/1';
 
+/// The one command line a sampler's non-PTY exec runs (03 §6.2). The
+/// login shell only parses it, then `sh -s` replaces it and reads the
+/// program from stdin. `LC_ALL=C` makes `${#var}` count bytes for the
+/// section byte counts, `TZ=UTC` fixes time output, and the pager and
+/// colour variables keep tool output plain. Every word is plain, so sh,
+/// bash, zsh, fish and tcsh parse it alike and SSH `env` requests are
+/// never needed.
+const kSamplerStartCommand =
+    'exec env LC_ALL=C TZ=UTC SYSTEMD_PAGER= NO_COLOR=1 sh -s';
+
 /// Collector-set version carried by the READY marker (03 §6.3 "the program
 /// text is versioned"). Bumped whenever the shipped fragment set changes.
 /// Version 2 adds `procs`, `units`, `timers` and `cron` to the slow sampler.
@@ -33,7 +43,9 @@ const kTimeoutAbsentMarker = 'hw_timeout=absent';
 final blockHeaderPattern = RegExp(r'^== ([a-z0-9_-]+) ==$');
 
 /// The probe's tool list (03 §6.1 "about 30 tools"): the program checks
-/// each with `command -v` and reports its path or absence.
+/// each with `command -v` and reports its path or absence. `dmesg` and
+/// `tail` back the kernel-log fallback (LOG-03) and the file tail
+/// (LOG-22) panel declarations.
 const kProbeTools = [
   'journalctl',
   'crontab',
@@ -61,6 +73,8 @@ const kProbeTools = [
   'pacman',
   'zypper',
   'nvidia-smi',
+  'dmesg',
+  'tail',
 ];
 
 /// Generates the per-session nonce: 128 bits from a caller-supplied
@@ -450,7 +464,7 @@ _probe_elev() {
 
 _probe_tools() {
   _o=''
-  for _t in journalctl crontab ss ip lsblk findmnt smartctl sensors docker podman socat timeout setsid ncdu gdu sadf logger systemd-run systemd-analyze apt-get dnf dnf5 apk pacman zypper nvidia-smi; do
+  for _t in journalctl crontab ss ip lsblk findmnt smartctl sensors docker podman socat timeout setsid ncdu gdu sadf logger systemd-run systemd-analyze apt-get dnf dnf5 apk pacman zypper nvidia-smi dmesg tail; do
     if command -v "$_t" >/dev/null 2>&1; then
       _o="$_o$NL$_t=$(command -v "$_t" 2>/dev/null)"
     else

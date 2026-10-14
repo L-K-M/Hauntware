@@ -230,11 +230,11 @@ words; system identity, LXC awareness, uptime; access check; coverage UI
 and gap rendering; session rings, charts and the log viewer, with their
 semantics, safe palettes, reduced motion and threshold announcements
 built in (A11Y-01 to A11Y-04, A11Y-11, A11Y-15); IEC units (A11Y-06) and
-`LC_ALL=C.UTF-8` (or `C` when the probe finds no `C.UTF-8`, 6.1, 6.2),
-`TZ=UTC` command environments (A11Y-08); pause,
-backoff and resume, dead-peer detection, runtime per host, old-systemd
-fallbacks and client-limitation errors (CN-05, CN-06, CN-09, CN-10,
-CN-23); safe interpolation for every sampler argument (SAF-10).
+`LC_ALL=C.UTF-8` (or `C` when the host has no `C.UTF-8`, 6.1, 6.2,
+03 D49), `TZ=UTC` command environments (A11Y-08); pause, backoff and
+resume, dead-peer detection, runtime detection per host,
+old-systemd fallbacks and client-limitation errors (CN-05, CN-06, CN-09,
+CN-10, CN-23); safe interpolation for every sampler argument (SAF-10).
 Exit: fixture suites for every MVP collector on tier A platforms;
 integration tests for sampler start, tick, timeout recovery and reconnect
 resume; 11.4 budgets met; coverage copy in ARB.
@@ -248,7 +248,7 @@ event-driven refresh; container list, inspect with masking, health; log
 follow and search; list stats; image list; stack discovery with source
 verification, overview and file view; managed-by badges; Docker summary
 card; low-session mode; the root-equivalence notice per engine
-(SAF-08).
+(SAF-08); the manual runtime override (CN-09, 03 D54).
 Exit: recorded-API tests for 1.41, 1.44, 1.52, 1.55 and Podman compat;
 integration tests on the Docker fixture and the negative variants
 (no streamlocal, `DisableForwarding`, `AllowTcpForwarding no`,

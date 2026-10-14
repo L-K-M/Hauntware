@@ -1,13 +1,17 @@
+import 'dart:async';
 import 'dart:io';
+import 'dart:ui' show AppExitType;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show ServicesBinding;
 import 'package:klabautermann_core/klabautermann_core.dart';
 import 'package:path_provider/path_provider.dart';
 
 import 'app.dart';
 import 'controllers/fleet_controller.dart';
 import 'controllers/monitoring_controller.dart';
+import 'services/instance_guard.dart';
 import 'services/macos_titlebar.dart';
 import 'services/settings_window/settings_window_host.dart';
 import 'services/settings_window/settings_window_link.dart';
@@ -15,12 +19,13 @@ import 'services/ssh_config_source.dart';
 import 'services/stored_appearance.dart';
 import 'services/window_state.dart';
 import 'settings_window_app.dart';
+import 'ui/already_running_app.dart';
 
-/// The composition root (03 §10.1): the settings-window branch, the macOS
-/// titlebar, then the device settings store, the main window's restored
-/// frame, the engine isolate, one `ChangeNotifier` controller per concern
-/// built over them, and `runApp`. The catalog stores and vault join this
-/// list as their milestones land.
+/// The composition root (03 §10.1): the settings-window branch, the
+/// instance lock, the macOS titlebar, then the device settings store, the
+/// main window's restored frame, the engine isolate, one `ChangeNotifier`
+/// controller per concern built over them, and `runApp`. The catalog
+/// stores and vault join this list as their milestones land.
 Future<void> main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -35,6 +40,36 @@ Future<void> main(List<String> args) async {
     return;
   }
 
+  // One desktop instance (03 §4.10): the support directory's lock comes
+  // before settings.json, window_state.json and the engine isolate, so a
+  // second instance never reads or writes any of them, and the device id
+  // below is minted by one process only. The lock lasts as long as this
+  // process. When it cannot be taken at all, the app runs unguarded and
+  // says so after the first frame rather than refusing to start.
+  final supportDirectory = await getApplicationSupportDirectory();
+  InstanceLockUnavailable? instanceLockIssue;
+  switch (await lockInstanceFor(defaultTargetPlatform, supportDirectory)) {
+    case null || InstanceLockAcquired():
+      break;
+    case InstanceLockHeld():
+      debugPrint('Klabautermann is already running; this instance quits.');
+      // The frame is the running instance's to restore and save, so this
+      // window stays where the runner put it, with the standard titlebar;
+      // on macOS it still has to be shown.
+      await showMainWindowUnrestored(platform: defaultTargetPlatform);
+      runApp(
+        AlreadyRunningApp(
+          onQuit: () => unawaited(
+            ServicesBinding.instance.exitApplication(AppExitType.required),
+          ),
+        ),
+      );
+      return;
+    case final InstanceLockUnavailable issue:
+      debugPrint('$instanceLockFileName: ${issue.error}');
+      instanceLockIssue = issue;
+  }
+
   // macOS: the integrated titlebar goes in while the runner still keeps
   // the window hidden, so it never shows the standard one first.
   final toolbarBand = defaultTargetPlatform == TargetPlatform.macOS
@@ -46,7 +81,6 @@ Future<void> main(List<String> args) async {
   // that could read it starts, and so the first frame is drawn in the
   // stored theme. Opening never throws; a file it cannot use is reported
   // after the first frame.
-  final supportDirectory = await getApplicationSupportDirectory();
   File supportFile(String name) =>
       File('${supportDirectory.path}${Platform.pathSeparator}$name');
   final settings = await DeviceSettingsStore.open(
@@ -108,6 +142,7 @@ Future<void> main(List<String> args) async {
       appearance: appearance,
       settingsIssue: settings.issue,
       importStoreIssue: importStoreIssue,
+      instanceLockIssue: instanceLockIssue,
       openSettingsWindow: settingsWindow?.open,
       toolbarBand: toolbarBand,
     ),
