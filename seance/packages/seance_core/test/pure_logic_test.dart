@@ -101,6 +101,12 @@ Host bastion db
       expect(h.user, 'deploy');
       expect(h.port, 2222);
       expect(h.identityFile, '~/.ssh/id');
+
+      // ssh's strdelim() skips one `=`; a second one is an argument.
+      final doubled = SshConfigImporter.parse(
+        'Host y\n  HostName == y.example.com\n',
+      ).hosts.single;
+      expect(doubled.hostName, '=');
     });
 
     test('splits and unquotes arguments as ssh does', () {
@@ -118,6 +124,12 @@ Host bastion db
       expect(h.user, 'ops');
       expect(h.hostName, 'x.example.com');
       expect(h.proxyJump, 'jump#2');
+
+      // A comment ends a Host line too, and a tab separates names.
+      final names = SshConfigImporter.parse(
+        'Host web # prod\nHost a\tb\n',
+      ).hosts;
+      expect(names.map((h) => h.alias), ['web', 'a', 'b']);
 
       // A backslash escapes a space or a quote; any other one is kept.
       final escaped = SshConfigImporter.parse(r'''
@@ -139,6 +151,13 @@ Host y
       ).hosts.single;
       expect(blank.hostName, isNull);
       expect(blank.effectiveHost, 'b');
+
+      // So is an empty quoted one.
+      final empty = SshConfigImporter.parse(
+        'Host e\n  HostName ""\n',
+      ).hosts.single;
+      expect(empty.hostName, isNull);
+      expect(empty.effectiveHost, 'e');
     });
 
     test('reads Port as ssh does: a decimal 1 to 65535 or a service', () {
@@ -194,12 +213,15 @@ Host y
     test('a rejected Port skips its block even beside a valid one', () {
       final result = SshConfigImporter.parse(
         'Host a\n  Port 22a\n  Port 2222\n'
-        'Host b\n  Port 2222\n  Port=\n',
+        'Host b\n  Port 2222\n  Port=\n'
+        // The first rejected Port is the one reported.
+        'Host c\n  Port 22a\n  Port 0x16\n',
       );
       expect(result.hosts, isEmpty);
       expect(result.skipped.map((s) => (s.host.alias, s.value, s.line)), [
         ('a', '22a', 2),
         ('b', '', 6),
+        ('c', '22a', 8),
       ]);
     });
 
