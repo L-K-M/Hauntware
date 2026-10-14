@@ -93,6 +93,9 @@ final class JumpHop {
 ///   a `ProxyCommand` through `/bin/sh`, putting the last hop's user and
 ///   host in it and the hops before as written, and the nested ssh
 ///   rejects such a host name or reads it as an option;
+/// - has a `#` comment holding a comma: ssh hands the hops before the
+///   last on from the value as written, up to its last comma, so the
+///   comment reaches the shell;
 /// - contains `%`, which ssh expands as a token (ssh_config(5), TOKENS);
 /// - loops back through first hops to a host already on the way;
 /// - has a hop, as written, that is the host or hop it leads to, which
@@ -250,6 +253,10 @@ List<_Hop>? _parseProxyJump(String value) {
   if (value.toLowerCase() == 'none') return const [];
 
   final hash = value.indexOf('#');
+  // It cuts the hops it hands the nested ssh with `-J` from the value as
+  // written, at its last comma, so a comma in the comment carries the
+  // comment into the command /bin/sh runs.
+  if (hash >= 0 && value.contains(',', hash)) return null;
   final text = (hash < 0 ? value : value.substring(0, hash)).trimRight();
   if (text.contains('%')) return null;
 

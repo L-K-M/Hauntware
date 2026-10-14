@@ -455,6 +455,22 @@ void main() {
       expect(result.skippedCount, 2);
     });
 
+    test('leaves out a ProxyJump whose comment holds a comma', () {
+      // parse_jump() drops the comment before it splits the hops, but
+      // cuts the hops it hands the nested ssh with -J from the value as
+      // written, at its last comma. `ssh -J bastion # old -W ... bastion`
+      // reaches /bin/sh, which drops the destination with the comment;
+      // `-J a#x` adds a second hop to a.
+      final result = importedHostsFromSshConfig(
+        'Host spaced\n  HostName 10.0.0.5\n  ProxyJump bastion # old,new\n'
+        'Host tight\n  ProxyJump a#x,b\n'
+        'Host fine\n  ProxyJump a,b # two hops\n',
+      );
+
+      expect(result.hosts.map((h) => h.alias), ['fine']);
+      expect(result.skippedCount, 2);
+    });
+
     test('leaves out a route ssh refuses as a jumphost loop', () {
       // ssh.c exits when the jump host as written is the host it would
       // dial next, on the same port (the hop's own, else 22) and as the
