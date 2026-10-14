@@ -3481,13 +3481,12 @@ the engine in `engine_isolate.dart` beside it):
   `locatorConflict`. A host or hop without `User` signs in as `USER`, or
   `USERNAME` on Windows; with neither set it gets no config, and nor
   does a host from a schema 1 store (4.10), which kept no `IdentityFile`
-  or `ProxyJump`. The import
-  reads two values as ssh does (ssh_config(5), TOKENS): `%h` in
-  `HostName` is the alias and `%%` is `%`, and a host with any other
-  token, on which ssh exits, is left out; `IdentityFile none`, in any
-  case, is no key file, so the agent signs, and a host whose
-  `IdentityFile` holds a `%` token or a `${VAR}`, which ssh fills in from
-  the connection and the environment, is left out. `ProxyJump`
+  or `ProxyJump`. The import reads two values as ssh does (ssh_config(5),
+  TOKENS): `%h` in `HostName` is the alias and `%%` is `%`, and a host
+  with any other token, on which ssh exits, is left out; `IdentityFile
+  none`, in any case, is no key file, so the agent signs, and a host
+  whose `IdentityFile` holds a `%` token or a `${VAR}`, which ssh fills
+  in from the connection and the environment, is left out. `ProxyJump`
   follows ssh (`parse_jump()` and `ssh.c`): `a,b` dials `a`, then `b`
   through `a`; `none` is direct; a hop that names an alias (exactly, as
   `Host` patterns match) takes that host's `HostName`, `Port`, `User` and
