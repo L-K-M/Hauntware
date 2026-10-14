@@ -144,9 +144,31 @@ ghost_desktop's `GhostWindowLifecycle`, configured in
 
 | Klabautermann file | Source (last changed) | Divergences |
 |---|---|---|
-| `klabautermann/app/klabautermann_app/macos/Runner/MainFlutterWindow.swift`: `import window_manager` and the `order(_:relativeTo:)` override that calls `hiddenWindowAtLaunch()` | The same lines in `seance/app/seance_app/macos/Runner/MainFlutterWindow.swift` (`f9bd1e1`) | The comment names `restoreMainWindow()` in `lib/services/window_state.dart`. |
+| `klabautermann/app/klabautermann_app/macos/Runner/MainFlutterWindow.swift`: `import window_manager` and the `order(_:relativeTo:)` override that calls `hiddenWindowAtLaunch()` | The same lines in `seance/app/seance_app/macos/Runner/MainFlutterWindow.swift` (`f9bd1e1`); Poltergeist's (`c90eb5a`) and `planchette/app/planchette_app/macos/Runner/MainFlutterWindow.swift` (`d0e978a`) carry them too | The comment names `restoreMainWindow()` in `lib/services/window_state.dart`. |
 | `MainFlutterWindow.swift`, integrated titlebar: `import macos_window_utils`, the `MacOSWindowUtilsViewController` around the compatibility controller, the `setContentSize` and `center()` after it, `MainFlutterWindowManipulator.start`, the `toolbar` override, `inFullScreen`, the `klabautermann/window` channel answering `isToolbarBandVisible`, the will-enter and will-exit full-screen observers and `setInFullScreen`, which sends `toolbarBandChanged` | The same lines in Séance's `MainFlutterWindow.swift` (`f9bd1e1`); Poltergeist's carries them too (`c90eb5a`), apart from the default size, which it passes to its window lifecycle | Channel `klabautermann/window`; the controller inside is `KlabautermannFlutterViewController`; after the controller swap the window takes 1280 by 720, the Linux and Windows runners' size, where Séance's takes 1280 by 800, and centres as Séance's does; the comments name Klabautermann's Dart files and say the band covers the content's top, since no header draws under it yet. Séance's menu, files and bookmark channels are not copied. |
-| `MainFlutterWindow.swift`, menus: `NSWindow.allowsAutomaticWindowTabbing = false` | The same line in Séance's `MainFlutterWindow.swift` (`f9bd1e1`); Poltergeist's sets it too | The comment names the Dart menus in `lib/ui/menus/`, which `PlatformMenuBar` installs; Séance builds its menus natively. |
+| `MainFlutterWindow.swift`, menus: `NSWindow.allowsAutomaticWindowTabbing = false` | The same line in Séance's `MainFlutterWindow.swift` (`f9bd1e1`); Poltergeist's (`c90eb5a`) and Planchette's (`d0e978a`) set it too | The comment names the Dart menus in `lib/ui/menus/`, which `PlatformMenuBar` installs; Séance builds its menus natively. |
+
+### D32 shared-plugin review
+
+The hidden-launch override and the tabbing line are the suite's fourth
+copies, after Séance's, Poltergeist's and Planchette's runners, so D32
+asks for a shared-plugin review. Reviewed at the copy commit above:
+
+- **The hidden-launch override.** The shared plugin already exists:
+  window_manager ships `hiddenWindowAtLaunch()` as an `NSWindow`
+  extension, and the four-line `order(_:relativeTo:)` override that
+  calls it is how window_manager's own example runner hooks it in. The
+  override belongs to the runner's own `NSWindow` subclass; a plugin
+  could only take it over by swizzling AppKit.
+- **The tabbing line.** One AppKit setting, made where the runner
+  configures its window; a plugin would only wrap it.
+- **The integrated titlebar.** Its shared plugin is macos_window_utils;
+  the copied lines are the host setup its README asks for, plus the full-screen
+  toolbar handling and the band channel, whose Dart side is
+  ghost_desktop's `MacosToolbarBandChannel`. Planchette has no
+  integrated titlebar, so this is the third copy.
+- **Outcome: no extraction.** Nothing here is logic a further plugin
+  would own; the rows above stay the record of each copy.
 
 Linux and Windows need no runner code for the window state: the
 window_manager plugin, which their runners already register, carries the
