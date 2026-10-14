@@ -136,6 +136,45 @@ void main() {
       expect(result.hosts.single.user, isNull);
     });
 
+    test('expands %h and %% in HostName, as ssh does, and skips a host '
+        'with another token', () {
+      // ssh_config(5), TOKENS: HostName accepts %% and %h, the name given
+      // to ssh; any other token makes ssh exit.
+      final result = importedHostsFromSshConfig(
+        'Host web1 web2\n  HostName %h.corp.example\n'
+        'Host zone\n  HostName fe80::1%%eth0\n'
+        'Host user-token\n  HostName %r.example\n'
+        'Host trailing\n  HostName host%\n'
+        'Host behind\n  ProxyJump user-token\n',
+      );
+
+      expect(result.hosts.map((h) => (h.alias, h.hostName)), [
+        ('web1', 'web1.corp.example'),
+        ('web2', 'web2.corp.example'),
+        ('zone', 'fe80::1%eth0'),
+      ]);
+      // `behind` names a host left out, whose HostName ssh cannot use.
+      expect(result.skippedCount, 3);
+    });
+
+    test('IdentityFile none is no key file, and a host whose IdentityFile '
+        'ssh would expand is skipped', () {
+      final result = importedHostsFromSshConfig(
+        'Host none\n  IdentityFile NONE\n'
+        'Host token\n  IdentityFile ~/.ssh/%r@%h\n'
+        'Host variable\n  IdentityFile \${HOME}/.ssh/key\n'
+        'Host dollar\n  IdentityFile ~/.ssh/a\$b\n'
+        'Host behind\n  ProxyJump token\n',
+      );
+
+      expect(result.hosts.map((h) => (h.alias, h.identityFile)), [
+        ('none', null),
+        // ssh expands only `\${`, so a lone `\$` is part of the path.
+        ('dollar', '~/.ssh/a\$b'),
+      ]);
+      expect(result.skippedCount, 3);
+    });
+
     test('reads CRLF configs', () {
       final result = importedHostsFromSshConfig(
         'Host win\r\n  HostName win.example\r\n  Port 2200\r\n',

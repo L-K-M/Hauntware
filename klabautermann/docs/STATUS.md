@@ -125,8 +125,9 @@ slice:
   `ProxyJump` (schema 2, which reads schema 1), and the engine maps
   imports to the `ServerConfig`s and jump-hop configs links will dial
   (03 §10.1), filling the route, sign-in, search text and `host:port`
-  conflict fields; a host whose `ProxyJump` it cannot follow is skipped
-  and counted. Nothing dials them yet.
+  conflict fields; `%h` in `HostName` is expanded, and a host whose
+  `HostName`, `IdentityFile` or `ProxyJump` it cannot use as ssh does is
+  skipped and counted. Nothing dials them yet.
 - Packaging: `scripts/build.sh`, `scripts/package-linux.sh` (.deb and
   AppImage through the shared `scripts/package-linux-common.sh`) and
   `scripts/build-flatpak.sh` with `flatpak/ch.lkmc.klabautermann.yml`.

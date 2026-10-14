@@ -179,6 +179,41 @@ void main() {
       expect(entries['inner']!.jumpRoute, ['other']);
     });
 
+    test('HostName %h dials each alias, for the host, its hops and its '
+        'locator', () {
+      final fleet = _fleet(
+        'Host web1\n  HostName %h.example.com\n'
+        'Host web2\n  HostName %h.example.com\n  ProxyJump gw\n'
+        'Host t\n  ProxyJump web1\n',
+      );
+      final entries = _byLabel(fleet);
+
+      expect(fleet.serverConfig('ssh-config:web1')!.host, 'web1.example.com');
+      expect(entries['web2']!.host, 'web2.example.com');
+      expect(entries['web1']!.searchText, contains('me@web1.example.com:22'));
+      expect(
+        fleet.serverConfig('ssh-config-hop:web1')!.host,
+        'web1.example.com',
+      );
+      // Different machines, so no shared pin.
+      expect(entries['web1']!.locatorConflict, isNull);
+      expect(entries['web2']!.locatorConflict, isNull);
+    });
+
+    test('IdentityFile none signs in with the agent', () {
+      final fleet = _fleet(
+        'Host n\n  IdentityFile NONE\n'
+        'Host t\n  ProxyJump n\n',
+      );
+
+      expect(_byLabel(fleet)['n']!.authKind, FleetAuthKind.agent);
+      for (final id in ['ssh-config:n', 'ssh-config-hop:n']) {
+        final config = fleet.serverConfig(id)!;
+        expect(config.authMethod, AuthMethod.agent, reason: id);
+        expect(config.identityFilePath, isNull, reason: id);
+      }
+    });
+
     test('ProxyJump none is a direct connection', () {
       final fleet = _fleet('Host d\n  ProxyJump NONE\n');
 

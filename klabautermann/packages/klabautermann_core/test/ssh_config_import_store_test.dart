@@ -194,6 +194,12 @@ void main() {
         'an empty identity file': _document([
           {'alias': 'a', 'host': 'h', 'port': 22, 'identityFile': ''},
         ]),
+        'an identity file of none': _document([
+          {'alias': 'a', 'host': 'h', 'port': 22, 'identityFile': 'None'},
+        ]),
+        'an identity file ssh would expand': _document([
+          {'alias': 'a', 'host': 'h', 'port': 22, 'identityFile': '~/k/%h'},
+        ]),
         'a ProxyJump that is no string': _document([
           {'alias': 'a', 'host': 'h', 'port': 22, 'proxyJump': 7},
         ]),

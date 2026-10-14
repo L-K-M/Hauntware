@@ -154,8 +154,8 @@ void main() {
     expect(
       find.text(
         'Imported 1 server from ~/.ssh/config. 2 hosts were skipped '
-        'because their port or ProxyJump is unsupported, or their name '
-        'repeats an earlier host.',
+        'because their port, HostName, IdentityFile or ProxyJump is '
+        'unsupported, or their name repeats an earlier host.',
       ),
       findsOneWidget,
     );
@@ -193,8 +193,8 @@ void main() {
     expect(
       find.text(
         'No hosts were imported from ~/.ssh/config. 2 hosts were skipped '
-        'because their port or ProxyJump is unsupported, or their name '
-        'repeats an earlier host.',
+        'because their port, HostName, IdentityFile or ProxyJump is '
+        'unsupported, or their name repeats an earlier host.',
       ),
       findsOneWidget,
     );

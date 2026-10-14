@@ -1544,7 +1544,7 @@ platform identities in 04, section 12.3):
 | `vault.json`, `vault.json.rekey` | Credentials and re-key journal | `SC/src/store/` | MVP |
 | `host_keys.json`, verdict and tripwire files | Pins and quarantine state | catalog library | MVP |
 | `endpoint_pins.json` | Confirmed endpoints | catalog library | MVP |
-| `ssh_config_imports.json` [E] | D13's device-local store for FL-02 imports from `~/.ssh/config` (alias, host, port, user, `IdentityFile`, `ProxyJump`), replaced whole by each import; never pushed (D14). Schema 2 (M2) added the last two, as written; a schema 1 file reads as hosts with neither, and the next import rewrites it. Built in M1: the engine isolate loads it at start and saves each import atomically before it answers (10.1). A damaged file is renamed to `ssh_config_imports.json.corrupt-<UTC time>`; a file it cannot read or rename, or one from a newer schema, is left as it is and no import is saved that run | `klabautermann_core` [E] | MVP |
+| `ssh_config_imports.json` [E] | D13's device-local store for FL-02 imports from `~/.ssh/config` (alias, host, port, user, `IdentityFile`, `ProxyJump`), replaced whole by each import; never pushed (D14). Host and port are the effective ones, `%h` in `HostName` expanded (10.1). Schema 2 (M2) added the last two, as written, except that `IdentityFile none` is stored as none; a schema 1 file reads as hosts with neither, and the next import rewrites it. Built in M1: the engine isolate loads it at start and saves each import atomically before it answers (10.1). A damaged file is renamed to `ssh_config_imports.json.corrupt-<UTC time>`; a file it cannot read or rename, or one from a newer schema, is left as it is and no import is saved that run | `klabautermann_core` [E] | MVP |
 | `settings.json` | Device settings, `klabautermann.sync.deviceId` (minted once, never regenerated), monitor set, per-server device preferences | app | MVP |
 | `window_state.json` | The desktop main window's last normal frame and its maximized and full-screen flags (10.2), in the shape Séance's file established (`x`, `y`, `width`, `height`, `isMaximized`, `isFullScreen`; physical pixels on Windows); never synced. Added in M1, a deviation from the plan, which listed no window file: kept out of `settings.json`, as Séance and Planchette keep theirs, so debounced drag saves never rewrite the file that holds the device id | app | MVP |
 | `instance.lock` [E] | Empty. One desktop instance per support directory (built in M2): the composition root takes an exclusive, non-blocking advisory lock on it after the settings window's branch and before `settings.json` and `window_state.json` open and the engine isolate starts, so one process mints the device id and writes these files, and holds it for the life of the process; the file is never deleted. A second instance opens no other file and only says it is already running, until the user quits it. A lock that fails for another reason (no write access, no lock support) lets the app run unguarded and says so at startup. Phones run one process per app and take none | app, through `klabautermann_core`'s `InstanceLock` | MVP |
@@ -3463,9 +3463,9 @@ the engine in `engine_isolate.dart` beside it):
   the counts arrive. `skippedCount` counts hosts left out for a `Port`
   the importer refuses (one ssh rejects, or a service name other than
   `ssh`, `http` or `https`; the importer reports them), an alias an
-  earlier block already took, or a `ProxyJump` the engine cannot follow
-  (below); wildcard-only blocks such as `Host *` are defaults and are
-  not counted.
+  earlier block already took, or a `HostName`, `IdentityFile` or
+  `ProxyJump` the engine cannot use as ssh does (below); wildcard-only
+  blocks such as `Host *` are defaults and are not counted.
   An import is not a catalog write (D14). The engine saves the new set to
   D13's device-local store (4.10) before it answers; `saved` is false when
   the write failed or the store was left as it is at start, and the fleet
@@ -3475,7 +3475,13 @@ the engine in `engine_isolate.dart` beside it):
   `IdentityFile` is a key read from its path, otherwise the agent signs)
   and fills the import's `jumpRoute`, `authKind`, `searchText` and
   `locatorConflict`. A host or hop without `User` signs in as `USER`, or
-  `USERNAME` on Windows; with neither set it gets no config. `ProxyJump`
+  `USERNAME` on Windows; with neither set it gets no config. The import
+  reads two values as ssh does (ssh_config(5), TOKENS): `%h` in
+  `HostName` is the alias and `%%` is `%`, and a host with any other
+  token, on which ssh exits, is left out; `IdentityFile none`, in any
+  case, is no key file, so the agent signs, and a host whose
+  `IdentityFile` holds a `%` token or a `${VAR}`, which ssh fills in from
+  the connection and the environment, is left out. `ProxyJump`
   follows ssh (`parse_jump()` and `ssh.c`): `a,b` dials `a`, then `b`
   through `a`; `none` is direct; a hop that names an alias (exactly, as
   `Host` patterns match) takes that host's `HostName`, `Port`, `User` and

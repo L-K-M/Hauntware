@@ -47,7 +47,7 @@
       }
     }
   },
-  "sshConfigImportedWithSkips": "{importedCount, plural, =0{No hosts were imported from ~/.ssh/config.} =1{Imported 1 server from ~/.ssh/config.} other{Imported {importedCount} servers from ~/.ssh/config.}} {skippedCount, plural, =1{1 host was skipped because its port or ProxyJump is unsupported, or its name repeats an earlier host.} other{{skippedCount} hosts were skipped because their port or ProxyJump is unsupported, or their name repeats an earlier host.}}",
+  "sshConfigImportedWithSkips": "{importedCount, plural, =0{No hosts were imported from ~/.ssh/config.} =1{Imported 1 server from ~/.ssh/config.} other{Imported {importedCount} servers from ~/.ssh/config.}} {skippedCount, plural, =1{1 host was skipped because its port, HostName, IdentityFile or ProxyJump is unsupported, or its name repeats an earlier host.} other{{skippedCount} hosts were skipped because their port, HostName, IdentityFile or ProxyJump is unsupported, or their name repeats an earlier host.}}",
   "@sshConfigImportedWithSkips": {
     "description": "Shown instead of sshConfigImported when the import left hosts out; importedCount (0 or more) is the number of servers it added, skippedCount (1 or more) the number of hosts it left out. One message, so the translation decides how its sentences join.",
     "placeholders": {

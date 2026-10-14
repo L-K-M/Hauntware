@@ -182,9 +182,10 @@ final class SshConfigImportStore {
 
   /// The hosts of a version 1 or 2 document, or a [FormatException] naming
   /// the first entry the import could not have produced: it needs a
-  /// non-empty alias and host, a TCP port, a non-empty user, identity file
-  /// and `ProxyJump` or none, an alias no earlier entry took, and a route
-  /// [jumpRoutes] can follow. Keys this build does not know are ignored.
+  /// non-empty alias and host, a TCP port, a non-empty user and
+  /// `ProxyJump` or none, an identity file [isImportedIdentityFile] keeps
+  /// or none, an alias no earlier entry took, and a route [jumpRoutes] can
+  /// follow. Keys this build does not know are ignored.
   static List<ImportedHost> _decodeHosts(Map<String, Object?> json) {
     final list = json[_entriesKey];
     if (list is! List<Object?>) {
@@ -210,11 +211,14 @@ final class SshConfigImportStore {
       if (port is! int || !isTcpPort(port)) {
         throw FormatException('entry $index has no usable port');
       }
-      String? optional(String key) => switch (item[key]) {
-        null => null,
-        final String value when value.isNotEmpty => value,
-        _ => throw FormatException('entry $index has an unusable $key'),
-      };
+      String? optional(String key, {bool Function(String)? usable}) =>
+          switch (item[key]) {
+            null => null,
+            final String value
+                when value.isNotEmpty && (usable?.call(value) ?? true) =>
+              value,
+            _ => throw FormatException('entry $index has an unusable $key'),
+          };
 
       hosts.add(
         ImportedHost(
@@ -222,7 +226,10 @@ final class SshConfigImportStore {
           hostName: host,
           port: port,
           user: optional(_userKey),
-          identityFile: optional(_identityFileKey),
+          identityFile: optional(
+            _identityFileKey,
+            usable: isImportedIdentityFile,
+          ),
           proxyJump: optional(_proxyJumpKey),
         ),
       );
