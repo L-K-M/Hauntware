@@ -221,6 +221,19 @@ void main() {
       expect(await pins.all(), isEmpty);
     });
 
+    test('fails as declined when the key prompt expires', () async {
+      broker = PromptBroker(emit: events.add, expiry: Duration.zero);
+      presenting(_key('192.0.2.10'));
+
+      final result = await connect(purpose: ConnectPurpose.interactive);
+
+      expect(_failure(result), LinkFailureKind.hostKeyDeclined);
+      expect(
+        (events.last as PromptWithdrawn).reason,
+        PromptWithdrawnReason.expired,
+      );
+    });
+
     test(
       'asks a keyboard-interactive challenge from the asking machine',
       () async {
@@ -267,6 +280,20 @@ void main() {
       expect(events.whereType<Prompt>(), hasLength(1));
       expect(await result, isA<LinkConnected>());
       expect(responses, isEmpty);
+    });
+
+    test('answers an expired challenge with no responses', () async {
+      broker = PromptBroker(emit: events.add, expiry: Duration.zero);
+      late List<String> responses;
+      onDial = (dial) async {
+        responses = await dial.onKeyboardInteractive!(_challenge(['Code:']));
+        return _FakeLink();
+      };
+
+      await connect(purpose: ConnectPurpose.interactive);
+
+      expect(responses, isEmpty);
+      expect(events.last, isA<PromptWithdrawn>());
     });
 
     test('withdraws prompts still open when the attempt ends', () async {
