@@ -80,9 +80,15 @@ slice:
   `scripts/build-flatpak.sh` with `flatpak/ch.lkmc.klabautermann.yml`.
   The flatpak grants read-only `~/.ssh/config` for the FL-02 import and
   nothing else under `~/.ssh` (04 §12.1); widening it waits for M2's
-  identity-file reads and the owner's sign-off. The scripts have only run
-  on stub bundles so far; a real Flutter bundle, appimagetool and
-  flatpak-builder first run in the client CI legs.
+  identity-file reads and the owner's sign-off. Locally the scripts have
+  only run on stub bundles; CI's Linux client leg runs them on the real
+  release bundle, with appimagetool and flatpak-builder.
+- Client CI legs: `klabautermann_client` in the root `ci.yml` builds
+  Android, Linux, macOS, iOS and Windows on every PR, launches the three
+  desktop release builds, checks the APK's version code and the macOS
+  bundle's signature, packages the .deb, AppImage and Flatpak, and runs
+  the macOS fixtures. No release job ships these builds before M4
+  (decision 16).
 - Desktop settings window (03 §10.2, D32): on macOS, Linux and Windows,
   Settings opens in a native window of its own through `ghost_desktop`'s
   `GhostSettingsWindowHost`; phones, and a desktop runner that cannot
@@ -94,18 +100,17 @@ slice:
   `klabautermann/settings_link` (the Appearance tab's theme switch acts
   on the app's `AppearanceController` and both windows re-theme). The
   three runners are copies of Séance's, ledgered in
-  [SHARED.md](SHARED.md). No CI job compiles the client runners yet, so
-  `SettingsWindow.swift`, `settings_window.cc` and `settings_window.cpp`
-  are unbuilt until the client legs land;
-  `app/klabautermann_app/test/settings_window_runner_test.dart` guards
-  their wiring on Linux. `ghost_desktop` brings the `window_manager` and
-  `screen_retriever` plugins, which the main window's state now uses
-  (below). On Linux `window_manager`'s registration replaces the main
-  view's delete-event hook, so closing the main window does not ask Dart
-  whether to quit; the window lifecycle observes the close and never
-  holds it, and a later exit hook must use `window_manager`'s
-  prevent-close path, which `ghost_desktop`'s lifecycle wraps
-  (`GhostClosePolicy.intercept`).
+  [SHARED.md](SHARED.md). The client CI legs compile
+  `SettingsWindow.swift`, `settings_window.cc` and `settings_window.cpp`;
+  `app/klabautermann_app/test/settings_window_runner_test.dart` also
+  guards their wiring on Linux. `ghost_desktop` brings the
+  `window_manager` and `screen_retriever` plugins, which the main
+  window's state now uses (below). On Linux `window_manager`'s
+  registration replaces the main view's delete-event hook, so closing the
+  main window does not ask Dart whether to quit; the window lifecycle
+  observes the close and never holds it, and a later exit hook must use
+  `window_manager`'s prevent-close path, which `ghost_desktop`'s
+  lifecycle wraps (`GhostClosePolicy.intercept`).
 - Desktop chrome (03 §10.2), all three parts modelled on the siblings:
   - macOS integrated titlebar: content under a transparent titlebar with
     an empty unified toolbar, so the traffic lights sit in a 52 pt band
@@ -139,9 +144,9 @@ slice:
     `klabautermann/menu_checks` stays reserved.
 
   The macOS runner lines are copied from Séance and ledgered in
-  [SHARED.md](SHARED.md); Linux and Windows need no runner code. No CI
-  job compiles the macOS runner yet, so the Swift is unbuilt until the
-  client legs land; `app/klabautermann_app/test/desktop_chrome_runner_test.dart`
+  [SHARED.md](SHARED.md); Linux and Windows need no runner code. The
+  client CI legs compile the macOS runner;
+  `app/klabautermann_app/test/desktop_chrome_runner_test.dart` also
   guards its wiring on Linux.
 
 Pull-only from the start (D14): no surface sends a request that could
@@ -151,7 +156,15 @@ Not in yet (later PRs): pull-only enrollment and the catalog (F3),
 persistence for imported ssh_config entries (with the catalog library),
 reachability dots and the `ghost_servers` rail (F4), theme editing and
 presets (F4b's editor), the monitor set and per-server device preferences
-in `settings.json`, and the five client CI legs and release job.
+in `settings.json`, and the release job (M4).
+
+The macOS runner now keeps its window hidden until Dart has placed it,
+so the CI launch check's wait for a visible window also proves that
+startup reached the window restore. The check does not yet pass
+`--menu File` as Planchette's and Poltergeist's do, and the `ci.yml`
+comment above it still describes the template runner; both are a
+root-lane follow-up. The Linux and Windows runners show their window on
+the first frame, so a startup that never reaches `runApp` fails there.
 
 ## Open manual gates
 
@@ -235,12 +248,11 @@ controller (`KlabautermannFlutterViewController`, ledgered in
 `scripts/test-macos-accessibility.sh` compile it against the cached
 Flutter engine and run the native fixtures modelled on Séance's. With
 `--stock-engine` they test the stock controller instead and are expected
-to fail. They need macOS and have not run yet. No CI job builds
-Klabautermann for macOS yet either, so nothing has compiled the copied
-Objective-C or the Swift bridging: both wait for the Klabautermann client
-legs in the root workflows. Until then
-`app/klabautermann_app/test/macos_runner_test.dart` guards the wiring on
-Linux.
+to fail. They need macOS: CI's `klabautermann_client` macOS leg runs
+both after building the release app, and that build is the first to
+compile the copied Objective-C and the Swift bridging.
+`app/klabautermann_app/test/macos_runner_test.dart` also guards the
+wiring on Linux.
 
 Follow-up: this is the suite's fourth copy of the controller. The D32
 review in [SHARED.md](SHARED.md) defers a shared macOS plugin to a

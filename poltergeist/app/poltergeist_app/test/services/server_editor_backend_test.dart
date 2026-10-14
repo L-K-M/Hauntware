@@ -49,6 +49,9 @@ final class _RecordingIdentityReader extends IdentityFileReader {
 
   final reads = <String>[];
 
+  /// The audit subject of each read: (serverId, serverLabel).
+  final subjects = <(String, String)>[];
+
   @override
   Future<String> read({
     required String serverId,
@@ -56,6 +59,7 @@ final class _RecordingIdentityReader extends IdentityFileReader {
     required String identityFilePath,
   }) async {
     reads.add(identityFilePath);
+    subjects.add((serverId, serverLabel));
     return 'PRIVATE KEY';
   }
 }
@@ -260,6 +264,107 @@ void main() {
 
     expect(result.ok, isFalse);
     expect(result.summary, contains('old snapshot'));
+    expect(vault.reads, [_targetSecretId, _oldHopSecretId]);
+  });
+
+  // The cases below stop at the hop's vault read, which throws a sentinel,
+  // so the test reaches no network while proving how the target resolved.
+
+  test('a named vault entry this device lacks resolves empty', () async {
+    final target = _server(
+      'target',
+      jumpHostId: 'hop',
+      secretRef: _targetSecretId,
+    );
+    final backups = _BackupHarness([
+      _server('hop', secretRef: _oldHopSecretId),
+    ]);
+    await backups.load();
+    final vault = _ScriptedVault()
+      ..onRead = (id) async {
+        if (id == _targetSecretId) return null;
+        throw StateError('hop reached');
+      };
+
+    final result = await _backend(
+      backups.service,
+      vault,
+      _RecordingIdentityReader(),
+    ).testConnection(target);
+
+    // An empty credential, not CredentialMissingException: the editor path
+    // keeps substituting until Poltergeist adopts the fail-loud policy.
+    expect(result.ok, isFalse);
+    expect(result.summary, contains('hop reached'));
+    expect(vault.reads, [_targetSecretId, _oldHopSecretId]);
+  });
+
+  test('a typed password skips the target vault read', () async {
+    final target = _server(
+      'target',
+      jumpHostId: 'hop',
+      secretRef: _targetSecretId,
+    );
+    final backups = _BackupHarness([
+      _server('hop', secretRef: _oldHopSecretId),
+    ]);
+    await backups.load();
+    final vault = _ScriptedVault()
+      ..onRead = (id) async => throw StateError('read $id');
+
+    final result = await _backend(
+      backups.service,
+      vault,
+      _RecordingIdentityReader(),
+    ).testConnection(target, draftPassword: 'typed');
+
+    expect(result.ok, isFalse);
+    expect(result.summary, contains('read $_oldHopSecretId'));
+    expect(vault.reads, [_oldHopSecretId]);
+  });
+
+  test('a key file reads through the audited reader, then the stored '
+      'passphrase', () async {
+    final target = ServerConfig(
+      id: 'target',
+      label: 'Target',
+      host: 'target.example.com',
+      username: 'deploy',
+      authMethod: AuthMethod.privateKey,
+      identityFilePath: '/keys/target',
+      secretRef: _targetSecretId,
+      jumpHostId: 'hop',
+      createdAt: 1,
+      updatedAt: 1,
+    );
+    final backups = _BackupHarness([
+      _server('hop', secretRef: _oldHopSecretId),
+    ]);
+    await backups.load();
+    final vault = _ScriptedVault()
+      ..onRead = (id) async {
+        if (id == _targetSecretId) {
+          return const Secret(
+            id: _targetSecretId,
+            kind: SecretKind.privateKey,
+            value: '',
+            keyPassphrase: 'phrase',
+          );
+        }
+        throw StateError('hop reached');
+      };
+    final identityReader = _RecordingIdentityReader();
+
+    final result = await _backend(
+      backups.service,
+      vault,
+      identityReader,
+    ).testConnection(target);
+
+    expect(result.ok, isFalse);
+    expect(result.summary, contains('hop reached'));
+    expect(identityReader.reads, ['/keys/target']);
+    expect(identityReader.subjects, [('target', 'deploy@target.example.com')]);
     expect(vault.reads, [_targetSecretId, _oldHopSecretId]);
   });
 }

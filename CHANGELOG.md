@@ -15,6 +15,15 @@
   `diffie-hellman-group1-sha1`, `hmac-md5` or truncated `hmac-sha2-*-96`
   MACs no longer connect. Each product's changelog has the details.
 
+### Added
+
+- Klabautermann, the fourth product: an agentless manager for servers
+  and Docker over SSH, still in development. CI builds its Android, iOS,
+  Linux, macOS and Windows clients on every pull request and launches
+  the desktop ones, and `scripts/build.sh` builds it with the other
+  products. Suite releases do not ship it until its preview milestone;
+  its [changelog](klabautermann/CHANGELOG.md) tracks the work so far.
+
 ## 1.9.0 (2026-10-04)
 
 First Hauntware suite release. Product changes since the last standalone

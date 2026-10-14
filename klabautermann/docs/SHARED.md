@@ -74,9 +74,9 @@ plugin first. Reviewed at the copy commit above:
   drop its controller files,
   bridging-header import and project entries. Every product's fixture
   scripts would compile the plugin's source, the lifecycle test would
-  move to a root include like the keyboard checks, and the existing macOS
-  CI and release legs of all three siblings would have to pass with the
-  plugin in the same change.
+  move to a root include like the keyboard checks, and the macOS CI legs
+  of all four products and the siblings' release legs would have to pass
+  with the plugin in the same change.
 - **Outcome: copy now, extract in a separate suite PR.** M1 needs the
   controller: the 04 §12.1 Packaging row requires the fixtures from M1,
   and they fail on the stock controller. The extraction rewrites four
