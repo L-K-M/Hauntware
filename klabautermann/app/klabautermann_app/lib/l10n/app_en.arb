@@ -34,6 +34,35 @@
   "sidebarCompactRows": "Compact rows",
   "sidebarComfortableRows": "Comfortable rows",
   "addServer": "Add server",
+  "importSshConfig": "Import from ~/.ssh/config",
+  "@importSshConfig": {
+    "description": "Desktop-only menu entry and button that imports the hosts of the user's OpenSSH client config file into the fleet (FL-02). The path stays literal."
+  },
+  "sshConfigImported": "{count, plural, =0{Your ~/.ssh/config names no hosts to import.} =1{Imported 1 server from ~/.ssh/config.} other{Imported {count} servers from ~/.ssh/config.}}",
+  "@sshConfigImported": {
+    "description": "Shown after an ssh_config import finished; count is the number of servers it added.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "sshConfigImportedWithSkips": "{importedCount, plural, =0{No hosts were imported from ~/.ssh/config.} =1{Imported 1 server from ~/.ssh/config.} other{Imported {importedCount} servers from ~/.ssh/config.}} {skippedCount, plural, =1{1 host was skipped because its port is invalid or its name repeats an earlier host.} other{{skippedCount} hosts were skipped because their port is invalid or their name repeats an earlier host.}}",
+  "@sshConfigImportedWithSkips": {
+    "description": "Shown instead of sshConfigImported when the import left host blocks out; importedCount (0 or more) is the number of servers it added, skippedCount (1 or more) the number of host blocks it left out. One message, so the translation decides how its sentences join.",
+    "placeholders": {
+      "importedCount": {
+        "type": "int"
+      },
+      "skippedCount": {
+        "type": "int"
+      }
+    }
+  },
+  "sshConfigMissing": "There is no ~/.ssh/config on this computer.",
+  "sshConfigUnreadable": "Your ~/.ssh/config could not be read. Check that it is a regular file you can open.",
+  "sshConfigTooLarge": "Your ~/.ssh/config is too large to import.",
+  "sshConfigImportFailed": "The import from ~/.ssh/config failed. Try again, and restart the app if it keeps failing.",
   "syncFleet": "Synchronize",
   "openSettings": "Settings",
   "statusConnected": "Connected",
@@ -62,6 +91,50 @@
   "themeSystem": "System",
   "themeLight": "Light",
   "themeDark": "Dark",
+  "themeNotSaved": "The theme changed, but it could not be saved, so it will not be kept after a restart.",
+  "@themeNotSaved": {
+    "description": "Top toast after a theme pick, in Settings or the desktop settings window, that applied but could not be written to the settings file."
+  },
+  "themeNotChanged": "The theme could not be changed.",
+  "@themeNotChanged": {
+    "description": "Top toast shown when the app did not take a theme-mode change made in Settings."
+  },
+  "settingsFileRecovered": "Your settings file could not be read and was reset. The old file is kept as {fileName}.",
+  "@settingsFileRecovered": {
+    "description": "Startup notice: the settings file was damaged, set aside under a new name, and replaced with the defaults.",
+    "placeholders": {
+      "fileName": {
+        "type": "String",
+        "example": "settings.json.corrupt-20261013T230529123456Z"
+      }
+    }
+  },
+  "settingsFileRecoveredNotSaved": "Your settings file could not be read or reset. The old file is kept as {fileName}. Changes you make now may be lost when Klabautermann restarts.",
+  "@settingsFileRecoveredNotSaved": {
+    "description": "Startup notice: the settings file was damaged and set aside under a new name, but writing the defaults over it failed.",
+    "placeholders": {
+      "fileName": {
+        "type": "String",
+        "example": "settings.json.corrupt-20261013T230529123456Z"
+      }
+    }
+  },
+  "settingsFileLeftAsIs": "Your settings file could not be read, so it was left as it is. Changes you make now are not saved.",
+  "@settingsFileLeftAsIs": {
+    "description": "Startup notice: the settings file could not be read or set aside, so the app does not write it this session."
+  },
+  "settingsFileNewer": "Your settings were saved by a newer version of Klabautermann. Changes you make now are not saved.",
+  "@settingsFileNewer": {
+    "description": "Startup notice: a newer app version wrote the settings file, so this version does not write it."
+  },
+  "settingsFileNotSaved": "Your settings could not be saved. Changes you make now may be lost when Klabautermann restarts.",
+  "@settingsFileNotSaved": {
+    "description": "Startup notice: writing the settings file failed while the app started."
+  },
+  "settingsWindowUnreachable": "Settings cannot reach Klabautermann. Close this window and open Settings again.",
+  "@settingsWindowUnreachable": {
+    "description": "Shown in the desktop settings window when the app does not answer it."
+  },
   "workspaceEmptyTitle": "Select a server",
   "workspaceEmptyBody": "Choose a server from the fleet to see its workspace.",
   "inspectorTitle": "Inspector",

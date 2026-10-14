@@ -18,6 +18,9 @@ dependencies:
     path: ../../../planchette/packages/ghost_desktop
   ghost_marks:
     path: ../../../planchette/packages/ghost_marks
+  # The server list's sectioning, shared with Poltergeist.
+  ghost_servers:
+    path: ../../../planchette/packages/ghost_servers
   # The theme model: the editable palette and its stored/pasted JSON form,
   # the shipped presets and the codec, shared with the Ghost app family.
   ghost_theme:

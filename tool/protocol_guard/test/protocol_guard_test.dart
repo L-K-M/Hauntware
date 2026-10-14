@@ -35,6 +35,18 @@ products:
         [EngineProbes]
 ''';
 
+// A product with no engine, as Séance and Planchette declare it.
+const _noEngineConfig = '''
+products:
+  seance:
+    scan: [packages, app]
+    pure_packages: [packages/seance_core]
+    dartssh2_imports: []
+    dartssh2_dependents: []
+    engine_protocol: null
+    engine_protocol_callback_owners: {}
+''';
+
 void main() {
   late _Fixture fixture;
   setUp(() async => fixture = await _Fixture._create());
@@ -335,6 +347,33 @@ mixin Hooks { final callback = () {}; }
       await expectLater(fixture._check(), throwsA(isA<FileSystemException>()));
     });
   }
+
+  test('a product with no engine has no protocol to enforce', () async {
+    final seance = GuardsConfig.parse(
+      loadYaml(_noEngineConfig),
+      source: 'guards.yaml',
+    ).product('seance');
+    expect(await checkProtocol(fixture._root.path, seance), isEmpty);
+  });
+
+  test('a guards config omitting engine_protocol fails closed at parse', () {
+    const missingKey = '''
+products:
+  seance:
+    scan: [packages, app]
+    pure_packages: [packages/seance_core]
+    dartssh2_imports: []
+    dartssh2_dependents: []
+    engine_protocol_callback_owners: {}
+''';
+    expect(
+      () => GuardsConfig.parse(
+        loadYaml(missingKey),
+        source: 'guards.yaml',
+      ).product('seance'),
+      throwsFormatException,
+    );
+  });
 
   test('fails closed on an empty engine directory', () async {
     await File(p.join(fixture._root.path, '$_engine/protocol.dart')).delete();

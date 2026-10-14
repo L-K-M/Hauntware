@@ -1,0 +1,31 @@
+name: ghost_servers
+description: >-
+  Shared server surfaces for Seance, Poltergeist and Klabautermann over
+  seance_protocol and ghost_ui. Today it holds the server list's
+  sectioning rules; the status dots, prompts and connection log views
+  follow in later stages.
+version: 1.9.0
+publish_to: none
+
+environment:
+  sdk: ^3.12.0
+  flutter: '>=3.47.2'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  # The sidebar dot vocabulary and the toast helper the status dots and
+  # connection log views draw with (later stages of
+  # docs/design/ghost-servers-part1.md); the sectioning does not use it.
+  ghost_ui:
+    path: ../ghost_ui
+  # The server record types (ServerConfig, normalizeServerGroup,
+  # serverGroupKey). The protocol package, never seance_core: Poltergeist
+  # consumes this package and must not inherit dartssh2.
+  seance_protocol:
+    path: ../../../seance/packages/seance_protocol
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0

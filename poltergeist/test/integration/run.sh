@@ -83,7 +83,7 @@ trap on_exit EXIT
 down
 "$integration_dir/test-fixture-safety.sh"
 check_rendered_config
-"$integration_dir/assert-private-keys-scoped.sh"
+"$integration_dir/../../../scripts/assert-private-keys-scoped.sh"
 "$integration_dir/generate-data.sh"
 
 mkdir -p "$runtime_dir"
