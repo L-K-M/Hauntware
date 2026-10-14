@@ -3316,7 +3316,9 @@ The trend compares the means of the oldest and newest quarters; a change
 under 5 % of the scale is steady. The goldens draw with the pinned Flutter
 SDK's Roboto and compare on Linux only.
 
-`StackedBar` and `PressureBar` do not animate. A value the host did not
+`StackedBar` and `PressureBar` do not animate, and they take values
+rather than a ring, so their painter repaints when its runs change
+instead of on a version counter. A value the host did not
 report is hatched over the track, never left empty; in a stacked bar an
 unknown segment hatches everything past the known ones, since it cannot be
 told from free space. A stacked bar's thresholds judge its first

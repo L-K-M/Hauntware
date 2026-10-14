@@ -85,7 +85,9 @@ class StackedBar extends StatelessWidget {
 
   /// Shows each segment's colour, label and value under the bar. A caller
   /// that shows the figures elsewhere, such as a disk table's columns, can
-  /// leave it out.
+  /// leave it out; with [thresholds] it must then show the severity in
+  /// words beside the bar itself (A11Y-01), because the legend carries the
+  /// only visible ones. The summary names it for screen readers either way.
   final bool showLegend;
 
   static const _barHeight = 8.0;
