@@ -58,10 +58,9 @@ slice:
   expects), minted and saved on the first launch and never regenerated
   while the file can be read; a damaged file whose text shows no id gets
   a new one (the old bytes stay in the corrupt copy). Nothing reads it
-  yet. Only one process is guarded: two instances that start together on
-  a first launch (the Linux runner allows several) each mint an id, and
-  the last write wins. An advisory lock across read, mint and write, or
-  a single desktop instance, must land before enrollment reads the id.
+  yet. A second desktop instance stops at the instance lock (below)
+  before the store opens, so two launches no longer race to mint it
+  unless the lock cannot be taken.
   The theme is restored at startup and saved on every change; the
   desktop settings window (D32) reaches the same `AppearanceController`
   over the settings link, so its changes are saved by the app, not by
@@ -177,6 +176,24 @@ slice:
   client CI legs compile the macOS runner;
   `app/klabautermann_app/test/desktop_chrome_runner_test.dart` also
   guards its wiring on Linux.
+- Single desktop instance (03 §4.10): on macOS, Linux and Windows the
+  composition root takes an exclusive, non-blocking advisory lock on
+  `instance.lock` in the support directory (`klabautermann_core`'s
+  `InstanceLock`) after the settings window's branch and before the
+  macOS titlebar, `settings.json`, `window_state.json` and the engine
+  isolate, and holds it while the process lives; the system drops it when
+  the process ends, a crash included. A second instance touches none of
+  them: its window keeps the runner's frame and standard titlebar (on
+  macOS Dart shows it, since the runner keeps it hidden) and shows only
+  that Klabautermann is already running, with a Quit button, which closes
+  the first-launch device-id race. A lock that cannot be taken for another
+  reason (an unwritable support directory, a file system without locks)
+  lets the app run unguarded and says so in a startup toast. Phones take
+  no lock. A relaunch does not bring the running window forward (the
+  Linux runner stays non-unique, the Windows runner has no mutex), and
+  only Linux's lock conflict is exercised across two processes; the
+  macOS and Windows error codes are unit-tested. No real build has run it
+  yet.
 
 Pull-only from the start (D14): no surface sends a request that could
 push or write catalog records, and a widget test guards it.
@@ -267,6 +284,17 @@ between PRs. M1 adds gates of its own:
   The import item is dimmed while an import runs. Phones and tablets show
   no menu. Open: needs a person on each OS; the widget tests check the
   model and the Flutter side of `PlatformMenuBar`, not AppKit's menu.
+- Single desktop instance (03 §4.10), once per desktop OS from a build
+  that includes the lock. With Klabautermann running, launch it again
+  (on macOS with `open -n`, since Finder would only activate the first):
+  the second window shows only that Klabautermann is already running,
+  keeps the standard titlebar and size on macOS, and Quit closes it while
+  the first keeps running with its settings and window state untouched.
+  Quit the first, then launch again: it starts normally. Kill the first
+  with SIGKILL (Task Manager on Windows) and launch again: it starts
+  normally, because the system dropped the lock. Open: needs a person on
+  each OS; the tests take the lock from Dart processes, not from two
+  native app instances.
 
 ## macOS native fixtures
 
