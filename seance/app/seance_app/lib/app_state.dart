@@ -1247,10 +1247,13 @@ class AppState extends ChangeNotifier {
     await services.saveSettings();
   }
 
-  /// Import hosts from an OpenSSH config file's text.
-  Future<int> importSshConfig(String text) async {
+  /// Import hosts from an OpenSSH config file's text. `skipped` counts the
+  /// hosts left out because their block is invalid, such as a `Port` the
+  /// importer refuses.
+  Future<({int imported, int skipped})> importSshConfig(String text) async {
     final now = DateTime.now().millisecondsSinceEpoch;
-    final hosts = SshConfigImporter.parse(text);
+    final result = SshConfigImporter.parse(text);
+    final hosts = result.hosts;
     for (final h in hosts) {
       await services.configStore.putServer(
         h.toServerConfig(id: uuidV4(), now: now),
@@ -1260,7 +1263,7 @@ class AppState extends ChangeNotifier {
     services.probe.updateServers(servers);
     notifyListeners();
     _scheduleAutoSync();
-    return hosts.length;
+    return (imported: hosts.length, skipped: result.skipped.length);
   }
 
   /// Open [config]'s terminal from the server list. If the server already has

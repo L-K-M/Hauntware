@@ -355,6 +355,10 @@
   "@sshImportLimitInvalidPort": {
     "description": "Chip for a row whose Port directive is out of range."
   },
+  "sshImportLimitUnsupportedPort": "Cannot import: port must be 1–65535, ssh, http or https",
+  "@sshImportLimitUnsupportedPort": {
+    "description": "Chip for an ssh_config row whose Port the importer refuses: not a number from 1 to 65535 or the service name ssh, http or https. ssh, http and https are literal service names; do not translate them."
+  },
   "sshImportLimitWildcardDefaults": "Won’t behave as in ssh: defaults from a top-level or Host * block are not inherited",
   "@sshImportLimitWildcardDefaults": {
     "description": "Chip for rows whose User/Port/HostName/IdentityFile global defaults the pinned importer drops."

@@ -3215,9 +3215,11 @@ the engine in `engine_isolate.dart` beside it):
   (`klabautermann/packages/klabautermann_core/lib/src/fleet/ssh_config_entries.dart`), replaces
   every entry an earlier import produced, and sends `CatalogReplaced`
   before `SshConfigImported`, so the fleet already shows the imports when
-  the counts arrive. `skippedCount` counts host blocks left out for a
-  `Port` outside 1 to 65535 or an alias an earlier block already took;
-  wildcard-only blocks such as `Host *` are defaults and are not counted.
+  the counts arrive. `skippedCount` counts hosts left out for a `Port`
+  the importer refuses (one ssh rejects, or a service name other than
+  `ssh`, `http` or `https`; the importer reports them) or an alias an
+  earlier block already took; wildcard-only blocks such as `Host *` are
+  defaults and are not counted.
   An import is not a catalog write (D14). The engine saves the new set to
   D13's device-local store (4.10) before it answers; `saved` is false when
   the write failed or the store was left as it is at start, and the fleet
