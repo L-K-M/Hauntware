@@ -223,9 +223,15 @@ final class _ChartLayout extends MultiChildLayoutDelegate {
 
   @override
   void performLayout(Size size) {
+    // At the full width the legend's column puts its rows at the start
+    // edge, on the right in right-to-left text.
     final legend = layoutChild(
       _ChartPart.legend,
-      BoxConstraints(maxWidth: size.width, maxHeight: size.height / 2),
+      BoxConstraints(
+        minWidth: size.width,
+        maxWidth: size.width,
+        maxHeight: size.height / 2,
+      ),
     );
     positionChild(_ChartPart.legend, Offset(0, size.height - legend.height));
     final plotHeight = size.height - legend.height - _legendGap;

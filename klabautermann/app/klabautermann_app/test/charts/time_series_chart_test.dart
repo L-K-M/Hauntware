@@ -291,6 +291,50 @@ void main() {
     }
   });
 
+  testWidgets('starts the legend at the start edge in either direction', (
+    tester,
+  ) async {
+    // Wide enough that the source fits on one line, so the legend is
+    // narrower than the chart.
+    for (final direction in TextDirection.values) {
+      await tester.pumpWidget(
+        chartFrame(
+          Directionality(
+            textDirection: direction,
+            child: SizedBox(
+              width: 600,
+              height: 200,
+              child: TimeSeriesChart(
+                data: _network(),
+                labels: const ['Receive', 'Transmit'],
+                unit: ChartUnit.bytesPerSecond,
+                strings: testChartStrings,
+                source: 'Sampled by this device while connected',
+                end: _end,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final chart = tester.getRect(find.byType(TimeSeriesChart));
+      final firstEntry = find
+          .ancestor(of: find.text('Receive'), matching: find.byType(Row))
+          .first;
+      for (final part in [
+        firstEntry,
+        find.text('Sampled by this device while connected'),
+      ]) {
+        final rect = tester.getRect(part);
+        expect(
+          direction == TextDirection.rtl ? rect.right : rect.left,
+          direction == TextDirection.rtl ? chart.right : chart.left,
+          reason: '$part in $direction',
+        );
+      }
+    }
+  });
+
   testWidgets('offers series summaries and gap spans, not live regions', (
     tester,
   ) async {
