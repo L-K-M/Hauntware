@@ -234,17 +234,22 @@ final class LocalizationContract {
       Set<String>? present;
       final file = File(p.join(_absoluteRoot, entry.key));
       if (file.existsSync()) {
+        String? failure;
         try {
           present = scanStringLiterals(
             file.readAsStringSync(),
           ).map((literal) => literal.lexeme).toSet();
+        } on FileSystemException catch (error) {
+          failure = error.message;
         } on LocalizationParseException catch (error) {
-          // Do not declare every entry in an unparseable file dead. Report
-          // the file itself unless the tree scan already does.
+          failure = error.message;
+        }
+
+        if (failure != null) {
+          // Do not declare every entry in an unreadable or unparseable file
+          // dead. Report the file itself unless the tree scan already does.
           if (!_coveredByTreeScan(entry.key)) {
-            findings.add(
-              UnparseableSource(path: entry.key, message: error.message),
-            );
+            findings.add(UnparseableSource(path: entry.key, message: failure));
           }
           continue;
         }

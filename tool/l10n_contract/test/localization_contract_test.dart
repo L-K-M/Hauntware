@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:l10n_contract/l10n_contract.dart';
 import 'package:test/test.dart';
 
@@ -221,6 +223,31 @@ import 'default.dart'
     ).scan();
 
     expect(findings.whereType<UnparseableSource>(), hasLength(1));
+    expect(findings.whereType<DeadAllowlistEntry>(), isEmpty);
+  });
+
+  test('reports an unreadable allowlisted file instead of throwing', () {
+    final appRoot = Directory.systemTemp.createTempSync('l10n_contract_');
+    addTearDown(() => appRoot.deleteSync(recursive: true));
+    // Bytes that are not valid UTF-8, inside and outside the scan.
+    for (final path in ['lib/bad.dart', 'tool/bad.dart']) {
+      File('${appRoot.path}/$path')
+        ..createSync(recursive: true)
+        ..writeAsBytesSync([0xff, 0xfe]);
+    }
+
+    final findings = _contract(
+      appRoot: appRoot.path,
+      allowed: {
+        'lib/bad.dart': {"'x'"},
+        'tool/bad.dart': {"'y'"},
+      },
+    ).scan();
+
+    expect(
+      findings.whereType<UnparseableSource>().map((finding) => finding.path),
+      equals(['lib/bad.dart', 'tool/bad.dart']),
+    );
     expect(findings.whereType<DeadAllowlistEntry>(), isEmpty);
   });
 
