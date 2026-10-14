@@ -1,5 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:klabautermann_app/services/macos_titlebar.dart';
+import 'package:klabautermann_app/ui/adaptive_shell.dart'
+    show kDesktopShellMinWidth;
 
 import 'support/native_sources.dart';
 
@@ -133,6 +135,45 @@ void main() {
       expect(restore, greaterThan(branch));
       expect(runApp, greaterThan(restore));
       expect(main, contains('stateFile: supportFile(windowStateFileName)'));
+    });
+
+    test('the macOS window opens at the Linux and Windows runners\' size '
+        'until a frame is saved', () {
+      // MainMenu.xib's 800 by 600 is below the desktop shell's width, so
+      // a first launch kept at it would open the phone layout.
+      List<int>? sizeIn(String source, String pattern) {
+        final match = RegExp(pattern).firstMatch(source);
+        if (match == null) return null;
+        return [int.parse(match[1]!), int.parse(match[2]!)];
+      }
+
+      final mac = sizeIn(
+        mainWindow,
+        r'self\.setContentSize\(NSSize\(width: (\d+), height: (\d+)\)\)\s*'
+        r'self\.center\(\)',
+      );
+      final linux = sizeIn(
+        readSource('linux/runner/my_application.cc'),
+        r'gtk_window_set_default_size\(window, (\d+), (\d+)\)',
+      );
+      final windows = sizeIn(
+        readSource('windows/runner/main.cpp'),
+        r'Win32Window::Size size\((\d+), (\d+)\)',
+      );
+      expect(mac, isNotNull);
+      expect(mac, linux);
+      expect(mac, windows);
+      expect(mac!.first, greaterThanOrEqualTo(kDesktopShellMinWidth));
+      // Swapping in the titlebar's controller resizes the window to its
+      // view, so the default size goes in after the swap.
+      expect(
+        mainWindow.indexOf('self.setContentSize('),
+        greaterThan(
+          mainWindow.indexOf(
+            'self.contentViewController = windowUtilsController',
+          ),
+        ),
+      );
     });
 
     test('the macOS window is shown before the engine isolate starts', () {

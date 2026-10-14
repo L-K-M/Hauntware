@@ -42,9 +42,13 @@ class MainFlutterWindow: NSWindow {
     // compatibility controller above.
     let windowUtilsController = MacOSWindowUtilsViewController(
       flutterViewController: flutterViewController)
-    let windowFrame = self.frame
     self.contentViewController = windowUtilsController
-    self.setFrame(windowFrame, display: true)
+    // The size and place a launch with no saved frame opens at, matching
+    // the Linux and Windows runners; restoreMainWindow() replaces it with
+    // the saved frame. MainMenu.xib's 800 by 600 is narrower than the
+    // desktop shell and would open the phone layout.
+    self.setContentSize(NSSize(width: 1280, height: 720))
+    self.center()
     // Starts from a standard titlebar; Dart makes it transparent and adds
     // the unified toolbar before the window is first shown.
     MainFlutterWindowManipulator.start(mainFlutterWindow: self)
