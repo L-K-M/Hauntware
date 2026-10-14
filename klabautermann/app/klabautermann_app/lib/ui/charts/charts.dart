@@ -5,6 +5,6 @@
 library;
 
 export 'chart_style.dart';
-export 'chart_values.dart';
+export 'chart_values.dart' hide uncheckedChartScaleMax;
 export 'series_ring.dart';
 export 'sparkline.dart' show Sparkline;
