@@ -181,7 +181,10 @@ class TimeSeriesChart extends StatelessWidget {
           LayoutId(id: _ChartPart.plot, child: plot),
           LayoutId(
             id: _ChartPart.legend,
-            child: SingleChildScrollView(child: legend),
+            // On a phone it would otherwise take the route's primary
+            // controller, which only one scroll view may hold, and scroll
+            // on a status-bar tap.
+            child: SingleChildScrollView(primary: false, child: legend),
           ),
         ],
       ),

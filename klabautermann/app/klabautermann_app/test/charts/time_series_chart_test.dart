@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart' show defaultTargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RenderRepaintBoundary;
 import 'package:flutter_test/flutter_test.dart';
@@ -380,6 +381,44 @@ void main() {
     expect(tester.getSize(find.byType(TimeSeriesChart)).height, 200);
     expect(tester.getSize(_plot).height, greaterThan(100));
   });
+
+  testWidgets(
+    "keeps the legend off the page's primary scroll controller",
+    (tester) async {
+      // The app's theme takes the host platform, and Material's scroll
+      // behaviour reads the platform from the theme.
+      final theme = chartTheme(Brightness.light);
+      await tester.pumpWidget(
+        chartFrame(
+          Theme(
+            data: theme.copyWith(platform: defaultTargetPlatform),
+            child: SizedBox(
+              width: 400,
+              height: 200,
+              child: TimeSeriesChart(
+                data: _network(),
+                labels: const ['Receive', 'Transmit'],
+                unit: ChartUnit.bytesPerSecond,
+                strings: testChartStrings,
+                source: '',
+                end: _end,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      // On a phone a status-bar tap would scroll the legend, and two charts
+      // on one page would attach two positions to one controller.
+      final primary = PrimaryScrollController.maybeOf(tester.element(_plot));
+      expect(primary, isNotNull);
+      expect(primary!.hasClients, isFalse);
+    },
+    variant: TargetPlatformVariant({
+      TargetPlatform.android,
+      TargetPlatform.iOS,
+    }),
+  );
 
   test('puts time ticks on round local times in any zone', () {
     int utc(int hour, int minute) =>
