@@ -136,7 +136,13 @@ Future<int> clockTicksPerSecond() async {
 final class LocalSampler {
   LocalSampler._(this._process, String nonce)
     : _assembler = HwsTickAssembler(nonce: nonce),
-      _readyMarker = '\x1e$nonce READY';
+      _readyMarker = '\x1e$nonce READY' {
+    // The shell can exit, and fail [_ready], while [start] is still
+    // writing the program and before any caller listens; without this
+    // the failure would also surface as an uncaught error. Listeners
+    // added later through [ready] still receive it.
+    _ready.future.ignore();
+  }
 
   static const _rawPrefixCap = 1 << 20;
   static const _headBytes = 1024;

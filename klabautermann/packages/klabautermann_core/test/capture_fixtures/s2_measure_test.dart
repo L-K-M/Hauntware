@@ -76,6 +76,13 @@ void main() {
     });
   }, skip: bash == null ? 'bash is not installed' : false);
 
+  test('a login shell that exits before READY is recorded', () async {
+    // `false` exits at once, often while the program is still being
+    // written, which once surfaced as an uncaught error.
+    final runs = await measurePreReady([_which('false')!], user);
+    expect(runs.map((r) => r['outcome']).toSet(), {'exited'});
+  });
+
   test('fast-tick measurement reports bytes, blocks and CPU', () async {
     final m = await measureFastTick(
       dash!,
