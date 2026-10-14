@@ -2,7 +2,9 @@ import 'package:meta/meta.dart';
 
 /// A colour an SGR sequence selects. The app maps it to the theme: palette
 /// entries 0 to 15 to its safe palette, 16 to 255 to the xterm cube and
-/// grey ramp, and RGB values as given.
+/// grey ramp, and RGB values as given. Matching colours (`30;40`) would
+/// hide text, so the view must hold each span's foreground and background
+/// to a minimum contrast, RGB included (03 §10.8).
 sealed class SgrColor {
   const SgrColor();
 }
@@ -51,7 +53,8 @@ final class SgrRgbColor extends SgrColor {
 }
 
 /// The attributes [parseSgr] keeps. Blink (5, 6) and conceal (8) are left
-/// out on purpose: log text never animates and is never hidden (03 §8.12).
+/// out on purpose: log text never animates or hides behind an attribute.
+/// Colours can still hide it; see [SgrColor].
 /// [inverse] is kept as a flag; the renderer swaps the colours.
 @immutable
 final class SgrStyle {
@@ -206,7 +209,8 @@ bool _isSkippedInSequence(int c) =>
 /// Each line starts from [SgrStyle.plain]: no style carries over from the
 /// line before, which would also let one line restyle every line after it.
 /// A sequence cut off by the end of the line, as the buffer's line cap can
-/// leave it, is dropped. Never throws.
+/// leave it, is dropped, so an unterminated OSC, DCS, SOS, PM or APC
+/// string hides the rest of its own line, never the next. Never throws.
 SgrText parseSgr(String line) {
   if (!_needsParsing(line)) return SgrText(line, const []);
 

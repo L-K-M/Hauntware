@@ -190,7 +190,7 @@ void main() {
       ]);
     });
 
-    test('blink and conceal are ignored, so text is never hidden', () {
+    test('blink and conceal are ignored', () {
       final result = parseSgr('${_sgr('5;6;8')}secret${_sgr('28;25')}');
 
       expect(result.text, 'secret');

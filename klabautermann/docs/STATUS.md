@@ -137,9 +137,9 @@ slice:
   and keeps its full length for the truncation marker, and records a
   `LogBatch`'s drops as one "dropped N lines" entry. `parseSgr` turns a
   line's SGR colours and attributes into spans and drops every other
-  escape and control. A heap test keeps a full buffer of either kind under
-  the 64 MiB budget (03 §11.4). Nothing uses them yet: the viewer and the
-  engine's followers come in later M2 PRs.
+  escape and control but tab. A heap test keeps a full buffer of either
+  kind under the 64 MiB budget (03 §11.4). Nothing uses them yet: the
+  viewer and the engine's followers come in later M2 PRs.
 
 Pull-only from the start (D14): no surface sends a request that could
 push or write catalog records, and a widget test guards it.

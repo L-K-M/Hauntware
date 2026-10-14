@@ -33,7 +33,7 @@ void main() {
       expect(() => buffer[2], throwsRangeError);
     });
 
-    group('line cap', () {
+    group('entry cap', () {
       test('evicts the oldest entries and advances firstSeq', () {
         final buffer = LogBuffer(maxLines: 3)..add(['a', 'b', 'c', 'd', 'e']);
 
@@ -204,7 +204,7 @@ void main() {
         expect(_texts(buffer), ['a']);
       });
 
-      test('a record counts against the line cap but holds no bytes', () {
+      test('a record counts against the entry cap but holds no bytes', () {
         final buffer = LogBuffer(maxLines: 2)
           ..add(['a'])
           ..add(['b'], dropped: 4);
