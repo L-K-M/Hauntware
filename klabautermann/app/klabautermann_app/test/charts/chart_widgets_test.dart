@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:klabautermann_app/ui/charts/charts.dart';
+import 'package:klabautermann_app/ui/charts/sparkline.dart'
+    show SparklinePainter;
 
 import '../support/charts.dart';
 

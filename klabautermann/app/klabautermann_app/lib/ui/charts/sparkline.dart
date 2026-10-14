@@ -168,8 +168,9 @@ class _SparklineState extends State<Sparkline>
 /// A threshold band: the value it starts at and its colour.
 typedef SparklineBand = ({double from, Color color});
 
-/// Paints a [Sparkline]'s plot; public so painter tests can check what it
-/// draws.
+/// Paints a [Sparkline]'s plot; visible so painter tests can check what it
+/// draws, and kept out of the charts' barrel.
+@visibleForTesting
 final class SparklinePainter extends CustomPainter {
   SparklinePainter({
     required this.series,
