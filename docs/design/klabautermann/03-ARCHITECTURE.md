@@ -52,7 +52,8 @@ Klabautermann, with display name `Klabautermann` and lowercase ASCII stem
 
 Markers: **[V]** verified in the repository at `bf1da58` when this plan was
 written (path and line given; claims added for owner decisions 21 and 22
-were verified at `e29c095`, those added with D43 to D55 at `7a79e6f1`);
+were verified at `e29c095`, those added with D43 to D55 and the
+proposals at `7a79e6f1`);
 **[L]** verified by a local experiment when
 this plan was written (Ubuntu 24.04 container with dash 0.5.12, bash 5.2.21
 and sudo 1.9.15p5; Appendix A of 04); **[R]** taken from a research report
@@ -502,8 +503,8 @@ Proposals awaiting the owner close the section; they are not decisions.
   maths (the wrap and reset rules of 6.4) and computes every derived value
   (percentages, load per core, the memory breakdown) before an event
   leaves it; the UI paints values and never holds counters. "Client-side"
-  in 6.4 means the engine isolate. The v2 `Sample` still carries the raw
-  counters of an `OverviewSnapshot`
+  in 02 CN-04 means the engine isolate. The v2 `Sample` still carries the
+  raw counters of an `OverviewSnapshot`
   (`klabautermann_core/lib/src/engine/protocol.dart:293-308` [V]); the
   sampling protocol replaces it. Why: parsing already runs in the engine
   (6.5), the previous reading and `btime` belong with the sampler session
@@ -529,12 +530,17 @@ Proposals awaiting the owner close the section; they are not decisions.
   collector once no subscription names it. Cadence is not a subscription
   field: the cadence profile (the Desktop, Phone and Cellular saver
   columns of 6.4) and the app's activity (foreground or background, D34)
-  are requests of their own. Today the engine keeps one subscription per
-  server and a second `Subscribe` replaces the first
+  are requests of their own. One 6.4 cadence depends on the surface:
+  `units` runs every 15 s for the Services panel and every 60 s for the
+  health card, so the engine has to tell those subscriptions apart; the
+  sampling protocol settles how (a surface kind on the subscription, or a
+  separate failed-units collector). Today the engine keeps one
+  subscription per server and a second `Subscribe` replaces the first
   (`klabautermann_core/lib/src/engine/engine_isolate.dart:45,74-77` [V]),
   so closing a panel would also stop the fleet row's sampling. *Rejected:*
   one subscription per server (surfaces overwrite each other); cadence per
-  subscription (two surfaces would ask one collector for two cadences).
+  subscription (the profile and the app's activity hold for every
+  subscription at once, so each change would resend all of them).
 - **D46. Link vocabulary: `SshLinkState` plus `blocked`.** Across the
   isolate boundary a link is in one of the eight states of `seance_core`'s
   `SshLinkState` (`idle`, `connecting`, `authenticating`, `ready`,
@@ -582,9 +588,13 @@ Proposals awaiting the owner close the section; they are not decisions.
   the program (the text would vary per host and depend on a cached
   profile that may be stale).
 - **D50. LXC values show "unknown" with a reason.** Inside an LXC
-  container, a `/proc` source that lxcfs does not virtualize shows the
-  host's figures, so its values are shown as "unknown" with a typed
-  reason, never as the host's numbers, as 02 SYS-04, FL-07 and OV-01 say.
+  container, a system-wide `/proc` file (`meminfo`, `stat`, `loadavg`,
+  `uptime`, `diskstats`, `pressure/*`) that is not a `fuse.lxcfs` mount
+  shows the host's figures, so its values are shown as "unknown" with a
+  typed reason, never as the host's numbers, as 02 SYS-04, FL-07 and
+  OV-01 say. Namespaced files show the container's own view and stay as
+  measured: `/proc/net` links to `self/net`, the reader's network
+  namespace, so `/proc/net/dev` is the container's, as is `/proc/<pid>`.
   6.6 and 7.1 said "virtualized"; the catalog's "unknown" replaces that
   wording. The probe gains an lxcfs line (6.1): which `/proc` files are
   `fuse.lxcfs` mounts, because `systemd-detect-virt -c` tells that the
@@ -1169,10 +1179,11 @@ products:
    `batchForPush` is exported for the catalog library's push batching (4.4,
    divergence 3), not to remove an existing import.
 4. Engine request and event types carry no function-typed fields
-   (protocol guard, `poltergeist/tool/protocol_guard`). For Klabautermann
-   the guard checks every class under `klabautermann_core/lib/src/engine/`
-   and allows no callback owner, so classes that hold callbacks live
-   outside that directory and `engine_isolate.dart` only dispatches (D52).
+   (protocol guard, `tool/protocol_guard`, moved from `poltergeist/tool`
+   in F1a). For Klabautermann the guard checks every class under
+   `klabautermann_core/lib/src/engine/` and allows no callback owner, so
+   classes that hold callbacks live outside that directory and
+   `engine_isolate.dart` only dispatches (D52).
    The guard does not look inside the class of a field, so keeping a
    `klabautermann_host` type with a function-typed field (`ServerZone`)
    out of requests and events rests on review and round-trip tests.
@@ -1572,7 +1583,7 @@ store, so the name need not decode back to it.
 ```dart
 abstract interface class SshLink {
   ServerConfig get config;
-  Stream<SshLinkState> get states;   // connecting, ready, degraded, lost, closed
+  Stream<SshLinkState> get states;   // the eight States below (D46)
   SshLinkLimits get seen;            // learned session limit, forwarding refused, ...
   Future<RemoteCommandResult> run(String command,
       {Duration timeout, int maxOutputBytes, List<int>? stdin});
@@ -1826,7 +1837,7 @@ the probe returns:
 | Kernel, architecture | `uname -s -r -m` |
 | Distribution | `/etc/os-release` (`ID`, `ID_LIKE`, `VERSION_ID`, `PRETTY_NAME`) |
 | Init and systemd | `/proc/1/comm`, `/run/systemd/system`, `systemctl --version` first line |
-| Virtualization | `systemd-detect-virt`, `systemd-detect-virt -c` (SYS-04); the `fuse.lxcfs` mounts in `/proc/mounts`, which tell the container's own values from the host's (D50) |
+| Virtualization | `systemd-detect-virt`, `systemd-detect-virt -c` (SYS-04); the `fuse.lxcfs` mounts in `/proc/mounts`, which tell which system-wide `/proc` files show the container's own values (D50) |
 | Identity | `id -u`, `id -un`, `id -nG` (journal and docker groups) |
 | Elevation | `sudo -V` first line (sudo or sudo-rs), `sudo -n true` result, `command -v doas run0`, `doas -n true` result when doas exists, `command -V printf` (builtin or not, 8.3) |
 | Tools | `command -v` for about 30 tools: `journalctl`, `crontab`, `ss`, `ip`, `lsblk`, `findmnt`, `smartctl`, `sensors`, `docker`, `podman`, `socat`, `timeout`, `setsid`, `ncdu`, `gdu`, `sadf`, `logger`, `systemd-run`, `apt-get`, `dnf`, `dnf5`, `apk`, `pacman`, `zypper`, `nvidia-smi`, ... |
@@ -1966,13 +1977,14 @@ Everything pauses when its view is hidden or the app is backgrounded; the
 polling budget (SAF-19, v1) caps per-server cadence. A collector runs
 while at least one subscription for the server names it; the Desktop,
 Phone and Cellular saver columns are cadence profiles, chosen by a request
-of their own rather than per subscription (D45). Rates are computed in
-the engine isolate (D43) from counter deltas with wrap detection and
-reset detection (a changed `btime` or a decreasing counter starts a new
-series); disk throughput uses 512-byte sectors (CN-04). A filtered core
-sample is about 1.5 to 2.5 KB and an overview sample about 600 B [R: r5
-§3.3]; the filtering happens on the host, in the collector fragments
-(D48).
+of their own rather than per subscription, and the sampling protocol
+settles how the engine tells the two `units` surfaces apart (D45). Rates
+are computed in the engine isolate (D43) from counter deltas with wrap
+detection and reset detection (a changed `btime` or a decreasing counter
+starts a new series); disk throughput uses 512-byte sectors (CN-04). A
+filtered core sample is about 1.5 to 2.5 KB and an overview sample about
+600 B [R: r5 §3.3]; the filtering happens on the host, in the collector
+fragments (D48).
 
 ### 6.5 Parsing and fixtures
 
@@ -1999,7 +2011,7 @@ sample is about 1.5 to 2.5 KB and an overview sample about 600 B [R: r5
 |---|---|---|---|---|---|---|
 | Debian 12/13, Ubuntu 22.04 to 26.04, RHEL 9/10, Fedora, Arch (glibc, systemd >= 246) | A, MVP | full | JSON | journald JSON | cron and timers | full |
 | RHEL/Alma/Rocky 8 (systemd 239 [U]), Ubuntu 20.04 (245 [U]) | A, MVP | full | text fallback (CN-10) | journald | cron and timers | full |
-| LXC and containers | A, marked | `/proc` shows the host's figures where lxcfs does not virtualize it: those values show "unknown" with a reason (SYS-04, D50) | as host | as host | as host | needs nesting |
+| LXC and containers | A, marked | system-wide `/proc` files that are not lxcfs mounts show the host's figures: those values show "unknown" with a reason; namespaced ones (`/proc/net/dev`, `/proc/<pid>`) are the container's (SYS-04, D50) | as host | as host | as host | needs nesting |
 | Alpine, BusyBox, OpenRC | B, v1.x | reduced (`ps w`, `df -k`, builtins) | `rc-status`, `rc-service` | `/var/log/messages` | `/etc/crontabs/<user>` | full if a socket exists |
 | Non-systemd glibc (Devuan, Void, Gentoo with OpenRC) | B, v1.x | full | per init | syslog files | cron | full |
 | OpenWrt (procd, Dropbear) | B, v1.x | reduced | `/etc/init.d`, `ubus` | `logread` | BusyBox crond | rare |
@@ -3387,9 +3399,9 @@ localization catalog from the first build:
 | `HandleAlert(alertRef, acknowledge or dismiss)` (v1.x; inbox fetch runs inside `RunSyncRound`) | `AlertsArrived(serverId, alerts)`, `AlertStatusChanged` (D42) |
 | `OpenTerminal(serverId, containerId, shell)` (v1) | `TerminalBytes`, `TerminalClosed` |
 
-The `LinkState`, `Subscribe` and `Sample` rows show their M2 shape (D43
-to D46); the v2 types in `protocol.dart` keep their M1 shape until the
-M2 protocol changes replace them.
+The `LinkState`, `Subscribe` and `Sample` rows carry what D43 to D46
+decide; the M2 protocol changes fix their other fields, and the v2 types
+in `protocol.dart` keep their M1 shape until then.
 
 The protocol as built in M1 (PR #151; types in
 `klabautermann/packages/klabautermann_core/lib/src/engine/protocol.dart`,
