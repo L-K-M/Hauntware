@@ -437,6 +437,11 @@ Host bastion db
             'kill -TERM -1',
             'kill -1 -1',
             'sudo kill -HUP -1',
+            // A quote or parenthesis may follow the -1.
+            "sudo sh -c 'kill -9 -1'",
+            'ssh host "kill -9 -1"',
+            '(kill -9 -1)',
+            r'x=$(kill -s KILL -1)',
           ],
           // A leading -1 is the signal (HUP); -12345 is a process group.
           misses: [

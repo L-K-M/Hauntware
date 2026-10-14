@@ -273,14 +273,15 @@ class DangerLinter {
     ),
     _Rule(
       // PID -1 is every process the caller may signal (kill(2)). Only a
-      // -1 after the first argument is a PID: a leading -1 is SIGHUP. This
-      // warns like the PID 1 and power rules: processes stop, stored data
-      // stays.
+      // -1 after the first argument is a PID: a leading -1 is SIGHUP.
+      // `\b` rejects -12345 but accepts a closing quote or parenthesis.
+      // This warns like the PID 1 and power rules: processes stop, stored
+      // data stays.
       RegExp(
         '$_kill'
         r'\s+\S+[^\n]*'
         '$_notOptionOperand'
-        r'\s-1(?=\s|$)',
+        r'\s-1\b',
       ),
       DangerSeverity.warning,
       'Signals every process you are allowed to signal; as root that ends '
