@@ -334,6 +334,24 @@ void main() {
       expect(entries['jumpbox']!.locatorConflict, isNull);
     });
 
+    test('routes differ by a hop\'s port, and an entry never conflicts with '
+        'itself', () {
+      final entries = _byLabel(
+        _fleet(
+          // Two machines behind one address, reached through two ports.
+          'Host a\n  HostName 10.0.0.5\n  ProxyJump gw\n'
+          'Host b\n  HostName 10.0.0.5\n  ProxyJump gw:2222\n'
+          // jump:22 is this entry's first hop and, behind it and h, its
+          // server: one entry, so no conflict.
+          'Host loop\n  HostName jump\n  ProxyJump jump,h\n',
+        ),
+      );
+
+      expect(entries['a']!.locatorConflict, ['ssh-config:b']);
+      expect(entries['b']!.locatorConflict, ['ssh-config:a']);
+      expect(entries['loop']!.locatorConflict, isNull);
+    });
+
     test('finds conflicts in linear time', () {
       // Comparing every pair took about 35 s for this many hosts, with
       // the engine isolate answering nothing meanwhile.
