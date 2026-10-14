@@ -294,18 +294,17 @@ void main() {
     });
   });
 
-  test('logTextCells bounds the drawn width in advances', () {
+  test('logTextCells bounds the drawn width of Latin-1 text in advances', () {
     expect(logTextCells(''), 0);
-    expect(logTextCells('abc é'), 5);
+    expect(logTextCells('abc é\u00ff'), 6);
     expect(logTextCells('a\tb'), 4);
-    expect(logTextCells('日本'), 4, reason: 'wide characters');
-    expect(logTextCells('😀'), 4, reason: 'two code units');
   });
 
-  test('logTextCells never fits a line or paragraph separator', () {
-    // The text engine breaks the row there, so no width bound holds.
-    for (final separator in ['\u2028', '\u2029']) {
-      expect(logTextCells('a${separator}b'), greaterThan(1 << 20));
+  test('logTextCells gives no bound for any other unit', () {
+    // A fallback font may draw these wider than any count of advances,
+    // and the text engine breaks the row at a line or paragraph separator.
+    for (final text in ['日本', '😀', 'ok \u2705', 'a\u2e3bb', 'a\u2028b']) {
+      expect(logTextCells(text), isNull, reason: text);
     }
   });
 }

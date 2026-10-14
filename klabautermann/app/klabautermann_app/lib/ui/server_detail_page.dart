@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../controllers/fleet_controller.dart';
 import '../controllers/monitoring_controller.dart';
 import '../l10n/app_localizations.dart';
-import 'fleet_rail.dart' show linkPhaseWord;
+import 'fleet_rail.dart' show linkStatusWord;
 import 'inspector_pane.dart' show PlaceholderPaneBody;
 
 /// The pushed server screen of 03 §10.5: the server's title, its link
@@ -34,7 +34,7 @@ class _ServerDetailPageState extends State<ServerDetailPage> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    // Link phases arrive through the fleet listenable, so the pushed screen
+    // Link statuses arrive through the fleet listenable, so the pushed screen
     // follows its own concern (03 §10.1) without the shell rebuilding.
     return ListenableBuilder(
       listenable: widget.fleet,
@@ -43,7 +43,7 @@ class _ServerDetailPageState extends State<ServerDetailPage> {
   }
 
   Widget _build(BuildContext context, AppLocalizations l10n) {
-    final phase = widget.fleet.linkPhaseFor(widget.server.id);
+    final status = widget.fleet.linkStatusFor(widget.server.id);
     return Scaffold(
       appBar: AppBar(
         title: Text(l10n.serverTitle(widget.server.displayName)),
@@ -51,7 +51,7 @@ class _ServerDetailPageState extends State<ServerDetailPage> {
           preferredSize: const Size.fromHeight(20),
           child: Padding(
             padding: const EdgeInsets.only(bottom: 8),
-            child: Text(linkPhaseWord(l10n, phase)),
+            child: Text(linkStatusWord(l10n, status)),
           ),
         ),
       ),

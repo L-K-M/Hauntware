@@ -20,14 +20,6 @@ const int _maxNarrowUnit = 0xff;
 
 const int _tab = 0x09;
 
-/// U+2028 LINE SEPARATOR and U+2029 PARAGRAPH SEPARATOR: not controls, so
-/// `parseSgr` keeps them, but the text engine breaks the row at either.
-const int _lineSeparator = 0x2028;
-const int _paragraphSeparator = 0x2029;
-
-/// What [logTextCells] counts a row break as: wider than any view.
-const int _rowBreakCells = 1 << 24;
-
 /// What separates a cut line from its note.
 const String _noteGap = ' ';
 
@@ -350,20 +342,17 @@ TextSpan logLineSpan(
 }
 
 /// An upper bound of the width [text] takes once styled, in Latin-1 glyph
-/// advances of a monospace font: one for a Latin-1 code unit, two for any
-/// other (a wide character, half of a pair) and for a tab. A line or
-/// paragraph separator breaks the row, so it counts as wider than any
-/// view. It lets the view size its rows without laying out every line.
-int logTextCells(String text) {
+/// advances of a monospace font, when every code unit is Latin-1: one a
+/// unit, two for a tab. Null when any unit is not: a fallback font may
+/// draw its glyph wider than any fixed count of advances (an emoji, a
+/// three-em dash), and a line or paragraph separator breaks the row. It
+/// lets the view size most rows without laying their lines out.
+int? logTextCells(String text) {
   var cells = 0;
   for (var i = 0; i < text.length; i++) {
     final unit = text.codeUnitAt(i);
-    cells += switch (unit) {
-      _tab => 2,
-      _lineSeparator || _paragraphSeparator => _rowBreakCells,
-      _ when unit <= _maxNarrowUnit => 1,
-      _ => 2,
-    };
+    if (unit > _maxNarrowUnit) return null;
+    cells += unit == _tab ? 2 : 1;
   }
   return cells;
 }

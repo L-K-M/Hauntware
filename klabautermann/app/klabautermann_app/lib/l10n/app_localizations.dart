@@ -304,6 +304,42 @@ abstract class AppLocalizations {
   /// **'Failed'**
   String get statusFailed;
 
+  /// No description provided for @statusAuthenticating.
+  ///
+  /// In en, this message translates to:
+  /// **'Authenticating'**
+  String get statusAuthenticating;
+
+  /// No description provided for @statusLimited.
+  ///
+  /// In en, this message translates to:
+  /// **'Connected with limits'**
+  String get statusLimited;
+
+  /// No description provided for @statusWaitingToReconnect.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting to reconnect'**
+  String get statusWaitingToReconnect;
+
+  /// No description provided for @statusNeedsInput.
+  ///
+  /// In en, this message translates to:
+  /// **'Needs your input'**
+  String get statusNeedsInput;
+
+  /// No description provided for @statusBlocked.
+  ///
+  /// In en, this message translates to:
+  /// **'Blocked'**
+  String get statusBlocked;
+
+  /// No description provided for @statusConnectionLost.
+  ///
+  /// In en, this message translates to:
+  /// **'Connection lost'**
+  String get statusConnectionLost;
+
   /// Screen-reader label for a server row's status dot.
   ///
   /// In en, this message translates to:
@@ -561,6 +597,102 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'More'**
   String get serverTabMore;
+
+  /// A chart's screen-reader summary of one series: what it measures, its current, lowest and highest values (already formatted with their units) and its trend, one of chartTrendRising, chartTrendFalling or chartTrendSteady.
+  ///
+  /// In en, this message translates to:
+  /// **'{label}: now {current}, lowest {lowest}, highest {highest}, {trend}'**
+  String chartSeriesSummary(
+    String label,
+    String current,
+    String lowest,
+    String highest,
+    String trend,
+  );
+
+  /// A chart's screen-reader summary of a series that has no sample yet.
+  ///
+  /// In en, this message translates to:
+  /// **'{label}: no data yet'**
+  String chartSeriesEmpty(String label);
+
+  /// A chart's screen-reader summary of a series whose every sample is a value the server did not report.
+  ///
+  /// In en, this message translates to:
+  /// **'{label}: unknown'**
+  String chartSeriesUnknown(String label);
+
+  /// Shown and read in place of a value the server did not report; never shown as zero.
+  ///
+  /// In en, this message translates to:
+  /// **'unknown'**
+  String get chartUnknownValue;
+
+  /// A series' trend in its screen-reader summary: it has gone up over the chart's window.
+  ///
+  /// In en, this message translates to:
+  /// **'rising'**
+  String get chartTrendRising;
+
+  /// A series' trend in its screen-reader summary: it has gone down over the chart's window.
+  ///
+  /// In en, this message translates to:
+  /// **'falling'**
+  String get chartTrendFalling;
+
+  /// A series' trend in its screen-reader summary: it has stayed about level over the chart's window.
+  ///
+  /// In en, this message translates to:
+  /// **'steady'**
+  String get chartTrendSteady;
+
+  /// A chart value in percent, such as a CPU or memory share; the share arrives as a fraction from 0 to 1 and is formatted in the UI locale.
+  ///
+  /// In en, this message translates to:
+  /// **'{share}'**
+  String chartPercent(double share);
+
+  /// A bar chart's screen-reader summary, such as a memory breakdown: what it measures, its parts (each a chartBarPart, joined by chartListSeparator) and the total they are part of, already formatted with its unit.
+  ///
+  /// In en, this message translates to:
+  /// **'{label}: {parts} of {total}'**
+  String chartBarSummary(String label, String parts, String total);
+
+  /// One part of a bar chart in its legend and screen-reader summary: what the part measures and its value, already formatted with its unit, or chartUnknownValue.
+  ///
+  /// In en, this message translates to:
+  /// **'{label} {value}'**
+  String chartBarPart(String label, String value);
+
+  /// Joins the parts of a bar chart's screen-reader summary, such as "CPU 42%, Memory 71%".
+  ///
+  /// In en, this message translates to:
+  /// **', '**
+  String get chartListSeparator;
+
+  /// A bar chart part whose value has crossed a threshold, so its colour changed: the part (a chartBarPart) and chartSeverityWarning or chartSeverityCritical.
+  ///
+  /// In en, this message translates to:
+  /// **'{part} ({severity})'**
+  String chartWithSeverity(String part, String severity);
+
+  /// A value past its warning threshold, shown in the warning colour with a warning icon.
+  ///
+  /// In en, this message translates to:
+  /// **'warning'**
+  String get chartSeverityWarning;
+
+  /// A value past its critical threshold, shown in the critical colour with an error icon.
+  ///
+  /// In en, this message translates to:
+  /// **'critical'**
+  String get chartSeverityCritical;
+
+  /// A bar chart's screen-reader summary while its values are stale: no new sample has arrived in time, so the bar is grey and shows the last values the server reported.
+  ///
+  /// In en, this message translates to:
+  /// **'{summary}, stale'**
+  String chartStale(String summary);
 
   /// A table cell as a screen reader hears it within its row: the column's header label, then the cell's value (A11Y-03).
   ///

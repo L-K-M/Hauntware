@@ -1,5 +1,29 @@
 # Séance ports and pin audits
 
+## Catalog library move, PR 1c (2026-10-13)
+
+The shared coordinator gains the pull-only policy Klabautermann's MVP
+needs (`../../docs/design/catalog-library.md` sections 4, 5.1 item 4, 11
+and 12(c); decision D14). No Poltergeist code moves: Poltergeist passes
+`PushPolicy.normal`, under which every path runs as before, and its
+suite is unchanged.
+
+- `PushPolicy.none`: every `CatalogWriter` mutation (`saveServer`,
+  `deleteServer`, `secretSaved`, `publishPin`, `forgetPin`) returns
+  `WriteOutcome.refusedPullOnly` before touching a store; `sealLocal`
+  refuses before `crypto.seal`; a round skips its push half; both re-seal
+  passes return 0; credential publication stops before its vault bump;
+  and an own-device `serverConfig` tombstone applies instead of reviving
+  the row, since the revive is a local write. Pulling, applying and the
+  pin-conflict resolutions still run; keep-local's re-push stops at
+  `sealLocal`.
+- The writer's mutations now return `WriteOutcome` (`written` under
+  `normal`), and so do Poltergeist's `onBookmarkSaved` and
+  `onBookmarkDeleted`; the app ignores the result.
+- Tests: `seance_core/test/catalog/push_policy_test.dart` (the design's
+  pull-only test plus the re-seal, catch-up, dirty-record and revive
+  paths) counts seals through the codec.
+
 ## Catalog library move, PR 1b (2026-10-13)
 
 The sync coordinator follows the leaf files into

@@ -1856,7 +1856,7 @@ the probe returns:
 | Init and systemd | `/proc/1/comm`, `/run/systemd/system`, `systemctl --version` first line |
 | Virtualization | `systemd-detect-virt`, `systemd-detect-virt -c` (SYS-04); the `fuse.lxcfs` mounts in `/proc/mounts`, which tell which system-wide `/proc` files show the container's own values (D50) |
 | Identity | `id -u`, `id -un`, `id -nG` (journal and docker groups) |
-| Elevation | `sudo -V` first line (sudo or sudo-rs), `sudo -n true` result, `command -v doas run0`, `doas -n true` result when doas exists, `command -V printf` (builtin or not, 8.3) |
+| Elevation | `sudo -V` first line (sudo or sudo-rs), `sudo -n true` result, `command -v doas run0`, `doas -n true` result when doas exists, `run0 --no-ask-password true` result when run0 exists (8.3 rung 6), `command -V printf` (builtin or not, 8.3); the Identity row's `id -u` decides the root-login rung |
 | Tools | `command -v` for about 30 tools: `journalctl`, `crontab`, `ss`, `ip`, `lsblk`, `findmnt`, `smartctl`, `sensors`, `docker`, `podman`, `socat`, `timeout`, `setsid`, `ncdu`, `gdu`, `sadf`, `logger`, `systemd-run`, `apt-get`, `dnf`, `dnf5`, `apk`, `pacman`, `zypper`, `nvidia-smi`, ... |
 | Kernel features | `/proc/pressure/cpu` readable; `/sys/fs/cgroup/cgroup.controllers` (cgroup v2) |
 | Locale | `locale -a` contains `C.UTF-8` |
@@ -2207,7 +2207,18 @@ unless the user enables admin mode for that panel.
   (`--iterations` from systemd 242 [R: systemd NEWS]; below that, one next
   run without `--iterations`, so RHEL 8 shows one run),
   because PID 1 evaluates zone-less expressions in the system zone [R:
-  systemd.time(7)] (6.2); phrases come from ARB templates. Other
+  systemd.time(7)] (6.2); phrases come from ARB templates, worded from
+  the cron fields as written (`*/15` and `0,15,30,45` read differently).
+  A `cron.<period>` script takes the schedules and merged next runs of
+  every `run-parts` line for its directory that does not defer to anacron.
+  When the payload shows anacron installed (a `0anacron` hook or
+  `/etc/cron.d/anacron`), Debian's `test -x /usr/sbin/anacron ||` lines
+  defer to it, and daily, weekly and monthly scripts with no line run
+  under cronie-anacron; their runs show as unknown with that reason
+  until JOB-04 (v1). Without that evidence a guarded line runs the
+  directory itself, and a script with no line has no driver. A
+  `CRON_TZ` the client cannot resolve keeps the schedule without next
+  runs, also with a reason. Other
   users' crontabs (JOB-03): `crontab -l -u <user>` through elevation, read-only.
   Run timer now (JOB-08): `systemctl start <service>` with SVC-03's guards,
   output followed from the journal.
@@ -3413,25 +3424,28 @@ localization catalog from the first build:
   full app. Not Séance's monolithic `AppState` (3,027 lines [R: c3 §0]).
 - Per-server and per-series `ValueListenable`s keep sample updates local;
   `MaterialApp` rebuilds only on appearance changes.
-- Engine protocol (plain data, D18), version 2 (`kEngineProtocolVersion`):
+- Engine protocol (plain data, D18), version 3 (`kEngineProtocolVersion`):
 
 | Requests (UI to engine) | Events (engine to UI) |
 |---|---|
 | `EnrollSync`, `RunSyncRound` | `CatalogReplaced(entries)`, `SyncStatus` |
 | `ImportSshConfig(text)` (FL-02, desktop) | `CatalogReplaced(entries)` with the imports, then `SshConfigImported(importedCount, skippedCount, saved)` |
 | `ConfirmEndpoints(ids)`, `SetMonitorSet(ids)` | `EndpointChanged(serverId)` |
-| `Connect(serverId)`, `Disconnect(serverId)` | `LinkState(serverId, state, reason)` (D46's states; typed reasons) |
+| `Connect(serverId)`, `Disconnect(serverId)` | `LinkState(serverId, status)` (D46's states plus `blocked`; typed reasons inside the status) |
 | `Subscribe(serverId, subscriptionId, collectorSet)`, `Unsubscribe(serverId, subscriptionId)`; the cadence profile and app activity are separate requests (D45) | `Sample(serverId, seq, snapshot)` (coalesced per tick; engine-owned `seq`, D44; rates and derived values, D43) |
 | `OpenLogStream(spec)`, `CloseStream(id)` | `LogBatch(streamId, lines, dropped)` (at most 20 per second per stream [E]) |
 | `DockerQuery(serverId, query)` | `DockerResult`, `DockerEvent` |
 | `PlanAction(intent)`, `RunAction(planId, confirmation)` | `ActionPlanned(preview)`, `ActionProgress`, `ActionFinished` |
-| `AnswerPrompt(promptId, answer)` | `Prompt` (host key, keyboard-interactive, credential, elevation) |
+| `AnswerPrompt(promptId, answer)` | `Prompt(promptId, serverId, host, port, request)` (host key, keyboard-interactive, credential, elevation), `PromptWithdrawn(promptId, reason)` |
+| `SetAppActivity(activity)` (foreground or background; D34, D45) | no event: it changes what runs |
+| none: the engine's probe sweeps (5.12) | `Reachability(serverId, status)` (FL-04) |
 | `HandleAlert(alertRef, acknowledge or dismiss)` (v1.x; inbox fetch runs inside `RunSyncRound`) | `AlertsArrived(serverId, alerts)`, `AlertStatusChanged` (D42) |
 | `OpenTerminal(serverId, containerId, shell)` (v1) | `TerminalBytes`, `TerminalClosed` |
 
 The `LinkState`, `Subscribe` and `Sample` rows carry what D43 to D46
-decide; the M2 protocol changes fix their other fields, and the v2 types
-in `protocol.dart` keep their M1 shape until then.
+decide. `LinkState` took its version 3 shape with the links protocol
+(below); the M2 sampling changes fix the other fields of `Subscribe` and
+`Sample`, which keep their M1 shape in `protocol.dart` until then.
 
 The protocol as built in M1 (PR #151; types in
 `klabautermann/packages/klabautermann_core/lib/src/engine/protocol.dart`,
@@ -3479,6 +3493,57 @@ the engine in `engine_isolate.dart` beside it):
   D13's device-local store (4.10) before it answers; `saved` is false when
   the write failed or the store was left as it is at start, and the fleet
   then shows the import only until the engine stops.
+- **Version 3 (M2 links).** `LinkState(serverId, status)` carries a
+  sealed `LinkStatus`: D46's eight states plus `blocked`, each with its
+  own typed values: `degraded(reason)`, `backoff(until)`,
+  `needsUser(promptId, kind)`, `blocked(reason)` (endpoint changed, host
+  key changed) and `closed(reason, failure)`, whose optional failure kind
+  names this version's connect failures (unreachable, timed out,
+  credentials rejected or unavailable, host key declined) and 5.3's
+  three client limitations (unsupported or only insecure algorithms, key
+  exchange timed out). `ready` carries no
+  values, because a learned session limit is `degraded` and what the host
+  can do arrives with the sampling protocol; `needsUser` names its prompt
+  by id instead of carrying it (5.1's `needsUser(prompt)`), because the
+  prompt is its own event. Statuses compare by value. `Prompt` replaces
+  v2's engine text with a sealed request per kind: a first-seen host
+  key's type and SHA-256 fingerprint (a changed key blocks the link
+  instead, 4.6), the server's keyboard-interactive name, instruction and
+  questions (without echo flags, which `seance_core`'s challenge does not
+  carry, so every answer is masked), and the login or sudo password of a
+  user with a retry flag. `host` and `port` name the machine that asks,
+  a jump host while the engine connects through it. `PromptWithdrawn`
+  (expired, or the attempt ended) closes a prompt the engine no longer
+  waits on. `FleetEntry` gains the nullable `jumpRoute` (hop names in
+  dial order), `authKind` (agent, identity file, stored key, password),
+  `searchText` (built in the engine with `serverSearchHaystack`, which
+  the app may not import, 3.2) and `locatorConflict` (the ids of entries
+  that share the `host:port` pin locator behind another route, 4.6). The
+  app keeps statuses and probe answers only for servers its fleet lists.
+  A closed link reads as failed (10.3's `failed` dot, and
+  `ghost_servers`' `GhostSessionState.failed`) unless the engine closed
+  it on purpose with no failure kind: the kinds name only what the
+  engine classified, and a lost link is a failure its reason explains.
+- **`SetAppActivity(activity)`** is a request of its own and applies to
+  every subscription, link and probe at once: 6.4 pauses everything while
+  the app is in the background, and D34 adds the phones' grace period
+  before links close. Subscriptions stay registered while the app is in
+  the background, so they resume without the app resending them, and the
+  engine knows which pauses are the background's, as 9.5's freshness and
+  gap copy names them ("paused: app in background", "in background").
+  *Rejected:* unsubscribing everything on background (every subscription
+  resent on return, and a background pause indistinguishable from
+  surfaces that closed); a field on `Subscribe` (D45). Until the link
+  supervisor lands, the engine answers it with `RequestRejected`.
+- **`Reachability(serverId, status)`** reports one server's latest probe
+  answer, `online`, `offline` or `unknown` as `seance_core`'s
+  `ProbeStatus` gives it, apart from `LinkState`: a probe is a TCP
+  connect to the SSH port that needs no link (`ProbeService`, 5.12), and
+  `unknown` is not `offline` (a host behind a firewall or a jump host may
+  be up). A server never probed has no answer at all, not `unknown`.
+  *Rejected:* probe answers as link statuses (a status would claim a link
+  that does not exist, and `ghost_servers`' indicator takes session and
+  probe truth as separate inputs).
 
 ### 10.2 Desktop (width of 960 px or more)
 
@@ -3564,6 +3629,35 @@ colours from the theme and `FamilyPalette`, checked with `contrastRatio`;
 a semantics summary per series (current, min, max, trend); no animation
 under reduced motion.
 
+As built in M2 (`app/klabautermann_app/lib/ui/charts/`): series take the
+family's blue, orange, teal and brown; warning is its yellow and critical
+its red, deepened to `#A31515` in the light theme, where the family red
+parts too little from the amber under deuteranopia. Lines and threshold
+rules draw these at full strength (band washes are decoration), and a test
+holds each to 3:1 on the chart surfaces and each pair in a set to a CIE76
+distance of 10 under simulated protanopia, deuteranopia and tritanopia.
+The trend compares the means of the oldest and newest quarters; a change
+under 5 % of the scale is steady. The goldens draw with the pinned Flutter
+SDK's Roboto and compare on Linux only.
+
+`StackedBar` and `PressureBar` do not animate, and they take values
+rather than a ring, so their painter repaints when its runs change
+instead of on a version counter. A value the host did not
+report is hatched over the track, never left empty; in a stacked bar an
+unknown segment hatches everything past the known ones, since it cannot be
+told from free space. A stacked bar's thresholds judge its first
+segment's share of the total (used memory, used disk). Past a threshold
+the fill takes the severity colour with a 2 px stripe of the track
+through it, an icon beside the bar tells warning (triangle) from critical
+(circle) by shape, and the stacked bar's legend, the pressure bar's hover
+tooltip and both summaries name the severity (A11Y-01). The stripe, not
+the colour, shows which segment or cell crossed: the palette test keeps
+pairs apart only within the series and within the severities, and the
+light amber and orange measure a CIE76 distance of 2.0 under
+deuteranopia. Stale values turn every fill the family's graphite and drop
+the severity, since an old reading's may no longer hold. Every fill holds
+3:1 on the track (`surfaceContainerHighest`).
+
 ### 10.8 Log viewer
 
 A ring buffer capped by lines (50,000) and bytes (32 MiB) with a 16 KiB line
@@ -3608,17 +3702,25 @@ keeps its element, and with it keyboard and accessibility focus, when its
 fields open (M2; K06b used a fixed-extent list without wrap). With wrap,
 only the lines a layout shows, and as many rows above its offset so a
 page up lands on measured lines, are measured,
-once per width, font and locale: one row without a layout when an upper
-bound of its width fits (a monospace advance per Latin-1 code unit, two
-per other unit or tab; a line or paragraph separator never fits),
-otherwise laid out. Other lines keep an earlier count or, once the viewer
+once per width, font and locale: one row without a layout when the line
+is all Latin-1 and fits at a monospace advance per code unit (two per
+tab), allowing for the rounding of the engine's single-precision sum,
+otherwise laid out, since a fallback font can draw any other glyph
+wider than a fixed count of advances and a line or paragraph separator
+breaks the row. Other lines keep an earlier count or, once the viewer
 has a width, an estimate from their length, and a measurement above the
-view moves the offset by the difference, so the lines in sight hold
-still and a resize lays out only the lines near them. Tabs
+view moves the offset by the difference while the offset, moving by
+whole rows, keeps its share of the line it is in to within a row, so a
+line that starts at the offset still does; the lines in sight hold still
+and a resize lays out only the lines near them. Tabs
 are not expanded to stops yet. Any scroll that leaves the
 newest line pauses following, and reaching it again, End or Follow resumes
 it; the scroll position holds the end during layout, and while paused it
-drops the extent of evicted lines from its offset. Every span keeps 4.5:1
+drops the extent of evicted lines from its offset and converts the
+offset when the line height or wrap changes, keeping the line at the top
+and, to within a row, its share above the edge. Content that no longer
+fills the view below the offset ends the view at the newest line
+instead, still paused. Every span keeps 4.5:1
 on its background, moved toward black or white as little as needed. SGR
 colours 1 to 6 and 9 to 14 take the family's glyph hues, 8 its graphite;
 0, 7 and 15 stay black, light grey and white. The caller supplies a line's
@@ -3643,7 +3745,9 @@ first line, where the text engine draws no ellipsis, and with wrap each
 line takes its own rows. A tap or Enter pauses following and shows the
 fields beneath the row, `NAME=value` on one row each without wrap, and a
 JSON null, which `journalctl -o json` sends for a field over 4,096 bytes
-unless run with `--all`, reads as not sent. Search (D56) reads a row's
+unless run with `--all`, reads as not sent. In a paused view, fields that
+open or close above the top edge move no line in sight, and a row in
+sight keeps its place while its fields open. Search (D56) reads a row's
 visible text, unit and PID included, and ignores case unless told not
 to. It keeps a match count for each matching line and searches only new
 lines as they arrive; stepping wraps around, pauses following and scrolls

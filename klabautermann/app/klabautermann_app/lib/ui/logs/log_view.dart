@@ -43,6 +43,11 @@ const double _rowPadding = 8;
 /// How far from the newest line still counts as at it, in logical pixels.
 const double _endTolerance = 1;
 
+/// Single precision's unit roundoff: the engine adds a line's glyph
+/// advances in it, so n advances can sum to n times one advance plus up
+/// to n of these of the total.
+const double _singlePrecisionRoundoff = 1 / (1 << 24);
+
 /// How many glyph advances a journal row's fields are indented by.
 const int _fieldIndent = 2;
 
@@ -59,17 +64,23 @@ final _rowBreaks = RegExp('[\u2028\u2029]');
 ///
 /// Following keeps the newest line in sight. Scrolling away from it pauses
 /// following, and the view then stays on the lines it shows while new
-/// lines arrive and old ones leave the buffer; scrolling back to the
-/// newest line, End, or the Follow button resumes it. Keys: Up and Down
-/// move a line, Page Up and Page Down a page, Home goes to the oldest
-/// line, End follows.
+/// lines arrive and old ones leave the buffer. When rows change, as when
+/// the width, the level gutter, the text scale or [wrap] changes, the line
+/// at the top stays there with its share above the edge kept to within a
+/// row, so a line that starts at the edge still does; when the content
+/// below no longer fills the view, the view ends at the newest line
+/// instead, still paused. Scrolling back to the newest line, End, or the
+/// Follow button resumes following. Keys: Up and Down move a line, Page
+/// Up and Page Down a page, Home goes to the oldest line, End follows.
 ///
 /// A journal line's row (LOG-01) starts with its unit and PID, and a tap,
 /// or Enter on the focused row, pauses following and shows its other
-/// fields beneath it, one row each without wrap. With a [search], its
-/// matches are highlighted, and each step to a match pauses following and
-/// scrolls the match's row into sight (LOG-05). Without wrap a match
-/// after the row's first line or past its ellipsis stays out of sight.
+/// fields beneath it, one row each without wrap. Fields that open or close
+/// above the top edge move no line in sight, and a row in sight keeps its
+/// place while its fields open. With a [search], its matches are
+/// highlighted, and each step to a match pauses following and scrolls the
+/// match's row into sight (LOG-05). Without wrap a match after the row's
+/// first line or past its ellipsis stays out of sight.
 class LogView extends StatefulWidget {
   const LogView({
     super.key,
@@ -131,6 +142,9 @@ class _LogViewState extends State<LogView> {
       _resetRows();
     } else if (!identical(previous, _text)) {
       _rows.invalidate();
+      // The offset counts lines or rows of the old height.
+      final scale = _text!.lineHeight / previous.lineHeight;
+      if (scale != 1) _holdLines((pixels) => pixels * scale);
     }
   }
 
@@ -146,8 +160,14 @@ class _LogViewState extends State<LogView> {
       _listen(widget.controller);
       _expanded.clear();
       _resetRows();
-    } else if (oldWidget.wrap != widget.wrap) {
+      return;
+    }
+
+    if (oldWidget.wrap != widget.wrap) {
+      // The rows count lines and fields without wrap, wrapped rows with it.
+      final previous = _rows;
       _resetRows();
+      _holdLines((pixels) => _offsetIn(previous, pixels));
     } else if ((oldWidget.levelOf == null) != (widget.levelOf == null)) {
       // The gutter came or went, and with it some of every row's width.
       _rows.invalidate();
@@ -227,8 +247,10 @@ class _LogViewState extends State<LogView> {
   }
 
   /// Shows or hides [line]'s fields. Showing them pauses following, so
-  /// the row holds still while they open beneath it. A tap that lands
-  /// after [line] left the buffer, before its row is rebuilt, does nothing.
+  /// the row holds still while they open beneath it, and in a paused view
+  /// fields above the top edge move no line in sight ([_fieldsMoved]). A
+  /// tap that lands after [line] left the buffer, before its row is
+  /// rebuilt, does nothing.
   void _toggleFields(LogLine line) {
     if (line.seq < widget.controller.firstSeq) return;
 
@@ -238,7 +260,58 @@ class _LogViewState extends State<LogView> {
         widget.controller.pause();
       }
     });
-    _rows.remeasure(line.seq - widget.controller.firstSeq);
+    final index = line.seq - widget.controller.firstSeq;
+    final start = _rows.rowsBefore(index);
+    final rows = _rows.rowsOf(index);
+    final change = _rows.remeasure(index);
+    final height = _text!.lineHeight;
+    _holdLines(
+      (pixels) => _fieldsMoved(pixels / height, start, rows, change) * height,
+    );
+  }
+
+  /// Moves a paused view's offset to [convert] of it when what the offset
+  /// counts changes, or rows above it come or go, so the same lines stay
+  /// in sight; a following view moves to the newest line anyway.
+  void _holdLines(double Function(double pixels) convert) {
+    if (widget.controller.following.value || !_vertical.hasClients) return;
+
+    final position = _vertical.position;
+    if (position is! _TailScrollPosition || !position.hasPixels) return;
+    position.shiftBy(convert(position.pixels) - position.pixels);
+  }
+
+  /// The offset [pixels] into the rows of [previous] as an offset into
+  /// [_rows] on the same entry and as far into its rows, for when what the
+  /// rows count changes: lines and fields without wrap, wrapped rows with
+  /// it.
+  double _offsetIn(_RowCounts previous, double pixels) {
+    if (previous.length == 0 || _rows.length == 0) return pixels;
+
+    final line = _text!.lineHeight;
+    final at = math.max(0.0, pixels / line);
+    final index = previous.indexAtRow((at + _rowTolerance).floor());
+    final into = (at - previous.rowsBefore(index)) / previous.rowsOf(index);
+    return (_rows.rowsBefore(index) +
+            into.clamp(0.0, 1.0) * _rows.rowsOf(index)) *
+        line;
+  }
+
+  /// Where an offset [at] rows down goes when the entry from row [start]
+  /// changes by [change] rows from [rows] as its fields open or close
+  /// beneath its line. Past the entry it moves by as much, so the lines in
+  /// sight hold still. In the rows the entry keeps it stays, so a row in
+  /// sight keeps its place: keeping its share, as [_offsetIn] does, would
+  /// push the line of a row partly above the edge out of sight. In fields
+  /// that closed it moves to the entry's last row, keeping its place in
+  /// its row.
+  static double _fieldsMoved(double at, int start, int rows, int change) {
+    final end = start + rows;
+    if (at + _rowTolerance >= end) return at + change;
+
+    final kept = end + change;
+    if (at < kept) return at;
+    return kept - 1 + math.max(0.0, at - (at + _rowTolerance).floor());
   }
 
   void _onFollowing() {
@@ -293,9 +366,10 @@ class _LogViewState extends State<LogView> {
 
   /// The rows entry [index] takes in a row [crossAxisExtent] wide: one a
   /// line and one a field shown without wrap. With wrap, each wraps to one
-  /// row when an upper bound of its width fits and is laid out otherwise;
-  /// a line with a note is laid out for it. A dropped-lines record keeps
-  /// to one row.
+  /// row when it is all Latin-1 and an upper bound of its width, the
+  /// engine's rounding included, fits ([logTextCells]), and is laid out
+  /// otherwise; a line with a note is laid out for it. A dropped-lines
+  /// record keeps to one row.
   int _measureRows(int index, double crossAxisExtent) {
     final entry = widget.controller[index];
     if (entry is! LogLine) return 1;
@@ -308,8 +382,14 @@ class _LogViewState extends State<LogView> {
 
     final text = _text!;
     final width = _textWidth(crossAxisExtent, text);
-    bool fits(String plain, double width) =>
-        logTextCells(plain) * text.advance <= width;
+    bool fits(String plain, double width) {
+      final cells = logTextCells(plain);
+      if (cells == null) return false;
+      // One roundoff more than the cells, for the width's own rounding.
+      final bound =
+          cells * text.advance * (1 + (cells + 1) * _singlePrecisionRoundoff);
+      return bound <= width;
+    }
 
     var rows = _note(entry) == null && fits(logRowText(entry), width)
         ? 1
@@ -695,8 +775,9 @@ const int _minRowSlots = 1024;
 /// the count of their last measurement or, before one, an estimate. A
 /// width change therefore lays out only the lines near the view. When
 /// measuring an entry above the scroll offset changes its count, the
-/// layout moves the offset by the difference, so the lines in sight hold
-/// still.
+/// layout moves the offset by the difference, and the offset keeps its
+/// share of the entry it is in to within a row ([_keepShare]), so the
+/// lines in sight hold still.
 final class _RowCounts {
   _RowCounts(this._measure);
 
@@ -784,12 +865,13 @@ final class _RowCounts {
   }
 
   /// Measures the entry at [index] again at once, for a change only it
-  /// sees, such as its fields showing. Without wrap its count needs no
-  /// layout, so no width either.
-  void remeasure(int index) {
+  /// sees, such as its fields showing, and returns how its count changed.
+  /// Without wrap its count needs no layout, so no width either.
+  int remeasure(int index) {
     _measuredIn[_front + index] = 0;
-    _measureAt(index);
+    final change = _measureAt(index);
     _revision++;
+    return change;
   }
 
   /// Makes every count an estimate, for a new font, scale, locale or
@@ -802,7 +884,7 @@ final class _RowCounts {
   /// Measures the entries a layout of rows [top] to [bottom] shows, with
   /// its scroll offset at row [anchor], and as many rows above that
   /// offset, and returns the rows to move the offset by so the entry at it
-  /// holds still.
+  /// stays there and the offset keeps its share of it to within a row.
   int measure(
     double top,
     double anchor,
@@ -821,17 +903,20 @@ final class _RowCounts {
     // counts grew by would cost one, past the viewport's limit of ten.
     final reachesEnd = bottom >= _total;
 
-    // From the entry at the offset down, a new count moves nothing above;
-    // above it, every change moves the offset by as much.
+    // Below the entry at the offset, a new count moves nothing above; above
+    // it, every change moves the offset by as much, and the offset keeps
+    // its share of that entry's own rows to within a row.
     final first = indexAtRow((anchor + _rowTolerance).floor());
     final firstRow = rowsBefore(first);
     var end = firstRow;
+    var firstChange = 0;
     for (var i = first; i < _length && end < bottom; i++) {
-      _measureAt(i);
+      final change = _measureAt(i);
+      if (i == first) firstChange = change;
       end += rowsOf(i);
     }
 
-    var correction = 0;
+    var correction = _keepShare(anchor - firstRow, rowsOf(first), firstChange);
     if (reachesEnd) {
       var tail = 0;
       for (var i = _length - 1; i >= 0 && tail < bottom - top; i--) {
@@ -850,6 +935,23 @@ final class _RowCounts {
       above += rowsOf(i);
     }
     return correction;
+  }
+
+  /// The whole rows to move an offset [into] rows into an entry by when
+  /// the entry's count changed by [change] to [rows], so the offset keeps
+  /// its share of the entry to within a row: it keeps its place in its
+  /// row and moves to the row of the entry nearest its old share, so an
+  /// offset at the entry's start stays there. Kept as many rows in, the
+  /// offset would land past the end of an entry that a wider row shrank,
+  /// and the lines in sight below would scroll away unseen; an entry that
+  /// grew would push them out of the view instead.
+  static int _keepShare(double into, int rows, int change) {
+    final before = rows - change;
+    final row = (into + _rowTolerance).floor();
+    // An offset past the last entry, as in an overscroll, has no share.
+    if (change == 0 || row < 0 || row >= before) return 0;
+    final target = (into * rows / before - (into - row)).round();
+    return target.clamp(0, rows - 1) - row;
   }
 
   /// Measures the entry at [index] unless this generation did, and returns

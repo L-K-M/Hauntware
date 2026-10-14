@@ -258,6 +258,129 @@ void main() {
       });
     }
 
+    group('a paused view holds its lines as fields open and close', () {
+      Future<(LogViewController, LogSearch, ScrollPosition, double)> paused(
+        WidgetTester tester,
+        LogWrap wrap, {
+        String Function(int i)? message,
+      }) async {
+        final (logs, search) = _logs();
+        await _pump(tester, logs, search, wrap: wrap);
+        logs.addJournal([
+          for (var i = 0; i < 100; i++) _entry(message?.call(i) ?? 'm $i'),
+        ]);
+        await tester.pump();
+        logs.pause();
+        final position = tester
+            .state<ScrollableState>(find.byType(Scrollable))
+            .position;
+        // The newest row, one line high when it does not wrap.
+        final newest = message?.call(99) ?? 'm 99';
+        final line = tester.getSize(_row('nginx.service[812]: $newest')).height;
+        return (logs, search, position, line);
+      }
+
+      double topOf(WidgetTester tester, int i) =>
+          tester.getTopLeft(_row('nginx.service[812]: m $i')).dy;
+
+      for (final wrap in LogWrap.values) {
+        testWidgets('above and at the top edge, wrap ${wrap.name}', (
+          tester,
+        ) async {
+          final (logs, _, position, line) = await paused(tester, wrap);
+          // Focus row m 37, then put row m 40 at the top edge, so m 37
+          // is three rows above it.
+          position.jumpTo(37 * line);
+          await tester.pump();
+          final above = Focus.of(
+            tester.element(_row('nginx.service[812]: m 37')),
+          );
+          position.jumpTo(40 * line);
+          await tester.pump();
+          above.requestFocus();
+          await tester.pump();
+          expect(topOf(tester, 40), 0);
+
+          // Row m 37 opens its three fields above the edge.
+          await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+          await tester.pump();
+          expect(position.pixels, moreOrLessEquals(43 * line));
+          expect(topOf(tester, 40), moreOrLessEquals(0));
+          expect(topOf(tester, 41), moreOrLessEquals(line));
+
+          // Row m 40 opens its fields beneath it and stays at the edge.
+          await tester.tap(_row('nginx.service[812]: m 40'));
+          await tester.pump();
+          expect(topOf(tester, 40), moreOrLessEquals(0));
+          expect(topOf(tester, 41), moreOrLessEquals(4 * line));
+
+          // Both close again, and the lines in sight hold still.
+          await tester.tap(_row('nginx.service[812]: m 40'));
+          await tester.pump();
+          above.requestFocus();
+          await tester.pump();
+          await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+          await tester.pump();
+          expect(_row('_PID=812'), findsNothing);
+          expect(position.pixels, moreOrLessEquals(40 * line));
+          expect(topOf(tester, 40), moreOrLessEquals(0));
+          expect(topOf(tester, 41), moreOrLessEquals(line));
+          expect(logs.following.value, isFalse);
+        });
+
+        testWidgets('a row partly above the edge keeps its place, '
+            'wrap ${wrap.name}', (tester) async {
+          final (logs, _, position, line) = await paused(tester, wrap);
+          position.jumpTo(40.5 * line);
+          await tester.pump();
+
+          // Its line stays half above the edge, its fields beneath it.
+          await tester.tap(_row('nginx.service[812]: m 40'));
+          await tester.pump();
+          expect(topOf(tester, 40), moreOrLessEquals(-line / 2));
+          expect(topOf(tester, 41), moreOrLessEquals(3.5 * line));
+
+          // A tap on the second field, half above the edge, closes them,
+          // and the row's line takes the top again, as far above it.
+          position.jumpTo(42.5 * line);
+          await tester.pump();
+          await tester.tap(_row('_SYSTEMD_UNIT=nginx.service'));
+          await tester.pump();
+          expect(_row('_PID=812'), findsNothing);
+          expect(topOf(tester, 40), moreOrLessEquals(-line / 2));
+          expect(logs.following.value, isFalse);
+        });
+      }
+
+      testWidgets('wrap turned on and off keeps the line at the top with '
+          'fields open above it and at it', (tester) async {
+        // Every row but m 37's and m 40's wraps to several rows.
+        final (logs, search, position, line) = await paused(
+          tester,
+          LogWrap.off,
+          message: (i) =>
+              i == 37 || i == 40 ? 'm $i' : 'm $i ${'word ' * 30}'.trim(),
+        );
+        position.jumpTo(37 * line);
+        await tester.pump();
+        await tester.tap(_row('nginx.service[812]: m 37'));
+        await tester.pump();
+        // Row m 37 takes four rows, so m 40 starts at row 43.
+        position.jumpTo(43 * line);
+        await tester.pump();
+        await tester.tap(_row('nginx.service[812]: m 40'));
+        await tester.pump();
+        expect(topOf(tester, 40), moreOrLessEquals(0));
+
+        for (final wrap in [LogWrap.on, LogWrap.off]) {
+          await _pump(tester, logs, search, wrap: wrap);
+          expect(topOf(tester, 40), moreOrLessEquals(0), reason: wrap.name);
+          expect(_row('_PID=812'), findsOneWidget, reason: wrap.name);
+          expect(logs.following.value, isFalse);
+        }
+      });
+    });
+
     testWidgets('a tap on a row that just left the buffer does nothing', (
       tester,
     ) async {

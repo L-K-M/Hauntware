@@ -127,7 +127,10 @@ jobs:
   # ---- Séance -----------------------------------------------------------
   seance_dart:
     name: Séance pure-Dart packages (analyze + test)
-    runs-on: ubuntu-latest
+    # Pinned for the real-sudo step: its wrong-password test expects
+    # classic sudo's texts. Ubuntu 26.04 makes sudo-rs the default
+    # sudo, so moving this job there needs sudo-rs texts recorded.
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     defaults:
       run:
@@ -154,6 +157,76 @@ jobs:
           packages/seance_protocol
           packages/seance_core
           packages/seance_sync_server
+      # elevation_sudo_test.dart skips every test whose SEANCE_SUDO_TEST_*
+      # accounts are missing, so the Test step above skips all of them.
+      # Create the accounts and sudoers rules it documents on this
+      # throwaway runner and run it again. The runner user has NOPASSWD
+      # sudo, so the suite runs each exec as an account through
+      # `setsid -w sudo -n -u`. Skips are counted from a JSON file report:
+      # the console reporter on Actions (github) has its own summary
+      # format, and a group skipped for a missing variable reports each
+      # of its tests as skipped.
+      - name: Test elevation against a real sudo
+        env:
+          SEANCE_SUDO_TEST_USER: seance-elev
+          SEANCE_SUDO_TEST_NOCACHE_USER: seance-elev-nocache
+          SEANCE_SUDO_TEST_NOPASSWD_USER: seance-elev-nopw
+        run: |
+          set -euo pipefail
+          password="$(openssl rand -hex 24)"
+          echo "::add-mask::$password"
+          for account in "$SEANCE_SUDO_TEST_USER" \
+            "$SEANCE_SUDO_TEST_NOCACHE_USER" "$SEANCE_SUDO_TEST_NOPASSWD_USER"; do
+            sudo useradd -M -s /bin/sh "$account"
+          done
+          printf '%s:%s\n' \
+            "$SEANCE_SUDO_TEST_USER" "$password" \
+            "$SEANCE_SUDO_TEST_NOCACHE_USER" "$password" | sudo chpasswd
+
+          rules="$RUNNER_TEMP/seance-elev.sudoers"
+          printf '%s\n' \
+            "$SEANCE_SUDO_TEST_USER ALL=(ALL) ALL" \
+            "Defaults:$SEANCE_SUDO_TEST_NOCACHE_USER timestamp_timeout=0" \
+            "$SEANCE_SUDO_TEST_NOCACHE_USER ALL=(ALL) ALL" \
+            "$SEANCE_SUDO_TEST_NOPASSWD_USER ALL=(ALL) NOPASSWD: ALL" \
+            > "$rules"
+          # Check the drop-in before installing it: a broken one disables
+          # sudo for the rest of the job.
+          sudo visudo -cf "$rules"
+          sudo install -o root -g root -m 0440 "$rules" \
+            /etc/sudoers.d/seance-elev
+          # A whole-configuration `visudo -c` fails on the runner image's
+          # own /etc/sudoers.d/runner ("bad permissions, should be mode
+          # 0440"), which sudo itself accepts. Check the installed copy
+          # and that sudo still runs instead.
+          sudo visudo -cf /etc/sudoers.d/seance-elev
+          sudo -n true
+
+          report="$RUNNER_TEMP/elevation-sudo.json"
+          SEANCE_SUDO_TEST_PASSWORD="$password" dart test \
+            --file-reporter "json:$report" \
+            packages/seance_core/test/elevation_sudo_test.dart
+          python3 - "$report" <<'EOF'
+          import json
+          import sys
+
+          names, ran, skipped = {}, [], []
+          with open(sys.argv[1], encoding='utf-8') as report:
+              for line in report:
+                  if not line.strip():
+                      continue
+                  event = json.loads(line)
+                  if event['type'] == 'testStart':
+                      names[event['test']['id']] = event['test']['name']
+                  elif event['type'] == 'testDone' and not event['hidden']:
+                      name = names[event['testID']]
+                      (skipped if event['skipped'] else ran).append(name)
+          for name in skipped:
+              print(f'::error::real-sudo test skipped: {name}')
+          if skipped or not ran:
+              sys.exit(f'{len(ran)} real-sudo tests ran, {len(skipped)} skipped')
+          print(f'{len(ran)} real-sudo tests ran, none skipped')
+          EOF
 
   # The catalog library's stores write user data on every desktop
   # platform, and their suites ran in poltergeist_dart's three-OS matrix
@@ -1578,17 +1651,15 @@ jobs:
         working-directory: klabautermann
         run: scripts/test-macos-keyboard.sh
       # A release-only startup failure leaves a running app without its UI;
-      # unit tests run with asserts on and never see one. The Linux and
-      # Windows runners show the window on the first frame, so a startup
-      # that never reaches runApp fails there. The macOS runner is still
-      # the template's, whose window is visible before Dart runs and which
-      # has no Dart menu yet, so that launch proves only that the app stays
-      # up without an unhandled Dart exception. Nothing reads the keychain
-      # yet, so every launch gets the script's throwaway home.
+      # unit tests run with asserts on and never see one. The window shows
+      # after Dart places it (macOS, where File is a Dart menu) or on the
+      # first frame (Linux, Windows). Nothing reads the keychain yet, so
+      # every launch gets the script's throwaway home, whose HOME also
+      # gives File its ssh_config import entry.
       - name: Release app launch (macOS)
         if: matrix.target == 'macos'
         working-directory: klabautermann/app/klabautermann_app
-        run: python3 "$GITHUB_WORKSPACE/scripts/test-desktop-launch.py" build/macos/Build/Products/Release/Klabautermann.app
+        run: python3 "$GITHUB_WORKSPACE/scripts/test-desktop-launch.py" build/macos/Build/Products/Release/Klabautermann.app --menu File
       - name: Release app launch (Linux)
         if: matrix.target == 'linux'
         working-directory: klabautermann/app/klabautermann_app
