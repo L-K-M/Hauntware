@@ -34,6 +34,14 @@ slice:
   built through `ghost_theme` from the Klabautermann brand preset (D9;
   the appearance persists in `settings.json`, below), and the English
   ARB catalogue (D35, A11Y-05).
+- Localization contract (D35, A11Y-05):
+  `app/klabautermann_app/test/localization_contract_test.dart` runs the
+  suite's shared scanner (`tool/l10n_contract`, 03 §3.5 F1b) over `lib/`
+  with a per-file allowlist of reviewed technical literals (such as
+  channel and file names, command ids and diagnostics), as Poltergeist's
+  contract does. It replaces the interim `localization_test.dart` and
+  keeps the two checks the scanner does not make: every ARB key is
+  referenced from `lib/`, and no user-facing slot takes a literal.
 - Device settings (03 §4.10): `settings.json` under the app's
   `getApplicationSupportDirectory()`, through `klabautermann_core`'s
   `DeviceSettingsStore`, which the composition root opens before the
