@@ -97,6 +97,9 @@ after every Flutter upgrade: both fixes rely on private engine selectors.
   pass explicit package paths.
 - The Flutter app must stay **out** of the root `workspace:` list; it
   path-depends on the workspace members instead.
+- **`dart test` reads `dart_test.yaml` from the directory it runs in.**
+  CI and `scripts/test.sh` run the suites from `klabautermann/`, so a tag
+  or timeout a package declares must also be in `klabautermann/dart_test.yaml`.
 - **`pkill -f <name>` kills your own shell** when the pattern matches the
   bash command line running it. Kill by PID.
 - **file_picker ≥11 breaks APK builds** on AGP 9+ unless Kotlin is
