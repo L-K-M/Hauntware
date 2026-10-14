@@ -1544,6 +1544,7 @@ platform identities in 04, section 12.3):
 | `ssh_config_imports.json` [E] | D13's device-local store for FL-02 imports from `~/.ssh/config` (alias, host, port, user), replaced whole by each import; never pushed (D14). `IdentityFile` and `ProxyJump` join when links land (M2). Built in M1: the engine isolate loads it at start and saves each import atomically before it answers (10.1). A damaged file is renamed to `ssh_config_imports.json.corrupt-<UTC time>`; a file it cannot read or rename, or one from a newer schema, is left as it is and no import is saved that run | `klabautermann_core` [E] | MVP |
 | `settings.json` | Device settings, `klabautermann.sync.deviceId` (minted once, never regenerated), monitor set, per-server device preferences | app | MVP |
 | `window_state.json` | The desktop main window's last normal frame and its maximized and full-screen flags (10.2), in the shape Séance's file established (`x`, `y`, `width`, `height`, `isMaximized`, `isFullScreen`; physical pixels on Windows); never synced. Added in M1, a deviation from the plan, which listed no window file: kept out of `settings.json`, as Séance and Planchette keep theirs, so debounced drag saves never rewrite the file that holds the device id | app | MVP |
+| `instance.lock` [E] | Empty. One desktop instance per support directory (built in M2): the composition root takes an exclusive, non-blocking advisory lock on it after the settings window's branch and before `settings.json` and `window_state.json` open and the engine isolate starts, so one process mints the device id and writes these files, and holds it for the life of the process; the file is never deleted. A second instance opens no other file and only says it is already running, until the user quits it. A lock that fails for another reason (no write access, no lock support) lets the app run unguarded and says so at startup. Phones run one process per app and take none | app, through `klabautermann_core`'s `InstanceLock` | MVP |
 | `capabilities/<serverId>.json` | Cached probe results, 24 h TTL | `klabautermann_core` | MVP |
 | `audit/<serverId>.jsonl` | Audit log, 90-day retention [E] | `klabautermann_core` | MVP |
 | `history/<serverId>/<tier>.ring` | Fixed-size binary rollups (`RandomAccessFile`, no rewrite per sample) | `klabautermann_core` | v1 |
@@ -1839,7 +1840,7 @@ the probe returns:
 | Init and systemd | `/proc/1/comm`, `/run/systemd/system`, `systemctl --version` first line |
 | Virtualization | `systemd-detect-virt`, `systemd-detect-virt -c` (SYS-04); the `fuse.lxcfs` mounts in `/proc/mounts`, which tell which system-wide `/proc` files show the container's own values (D50) |
 | Identity | `id -u`, `id -un`, `id -nG` (journal and docker groups) |
-| Elevation | `sudo -V` first line (sudo or sudo-rs), `sudo -n true` result, `command -v doas run0`, `doas -n true` result when doas exists, `command -V printf` (builtin or not, 8.3) |
+| Elevation | `sudo -V` first line (sudo or sudo-rs), `sudo -n true` result, `command -v doas run0`, `doas -n true` result when doas exists, `run0 --no-ask-password true` result when run0 exists (8.3 rung 6), `command -V printf` (builtin or not, 8.3); the Identity row's `id -u` decides the root-login rung |
 | Tools | `command -v` for about 30 tools: `journalctl`, `crontab`, `ss`, `ip`, `lsblk`, `findmnt`, `smartctl`, `sensors`, `docker`, `podman`, `socat`, `timeout`, `setsid`, `ncdu`, `gdu`, `sadf`, `logger`, `systemd-run`, `apt-get`, `dnf`, `dnf5`, `apk`, `pacman`, `zypper`, `nvidia-smi`, ... |
 | Kernel features | `/proc/pressure/cpu` readable; `/sys/fs/cgroup/cgroup.controllers` (cgroup v2) |
 | Locale | `locale -a` contains `C.UTF-8` |
@@ -2190,7 +2191,18 @@ unless the user enables admin mode for that panel.
   (`--iterations` from systemd 242 [R: systemd NEWS]; below that, one next
   run without `--iterations`, so RHEL 8 shows one run),
   because PID 1 evaluates zone-less expressions in the system zone [R:
-  systemd.time(7)] (6.2); phrases come from ARB templates. Other
+  systemd.time(7)] (6.2); phrases come from ARB templates, worded from
+  the cron fields as written (`*/15` and `0,15,30,45` read differently).
+  A `cron.<period>` script takes the schedules and merged next runs of
+  every `run-parts` line for its directory that does not defer to anacron.
+  When the payload shows anacron installed (a `0anacron` hook or
+  `/etc/cron.d/anacron`), Debian's `test -x /usr/sbin/anacron ||` lines
+  defer to it, and daily, weekly and monthly scripts with no line run
+  under cronie-anacron; their runs show as unknown with that reason
+  until JOB-04 (v1). Without that evidence a guarded line runs the
+  directory itself, and a script with no line has no driver. A
+  `CRON_TZ` the client cannot resolve keeps the schedule without next
+  runs, also with a reason. Other
   users' crontabs (JOB-03): `crontab -l -u <user>` through elevation, read-only.
   Run timer now (JOB-08): `systemctl start <service>` with SVC-03's guards,
   output followed from the journal.
@@ -2719,6 +2731,11 @@ connecting; a link picks a server and a starting folder, nothing else.
 A panel that needs more than it has shows a lock with the least-privileged
 fix and "enable admin mode"; it never elevates silently (ServerBox rule
 [R]).
+
+The access check's sudo NOPASSWD row (CN-24) offers no fix command until
+SAF-17 generates narrow, validated rules (v1.x): a blanket rule equals root
+(8.4), and password sudo already reaches admin mode through the prelude
+(8.3 rung 3), so the row points to admin mode instead.
 
 ### 8.2 Admin mode (SAF-02)
 
@@ -3407,25 +3424,28 @@ so that cue is still open.
   full app. Not Séance's monolithic `AppState` (3,027 lines [R: c3 §0]).
 - Per-server and per-series `ValueListenable`s keep sample updates local;
   `MaterialApp` rebuilds only on appearance changes.
-- Engine protocol (plain data, D18), version 2 (`kEngineProtocolVersion`):
+- Engine protocol (plain data, D18), version 3 (`kEngineProtocolVersion`):
 
 | Requests (UI to engine) | Events (engine to UI) |
 |---|---|
 | `EnrollSync`, `RunSyncRound` | `CatalogReplaced(entries)`, `SyncStatus` |
 | `ImportSshConfig(text)` (FL-02, desktop) | `CatalogReplaced(entries)` with the imports, then `SshConfigImported(importedCount, skippedCount, saved)` |
 | `ConfirmEndpoints(ids)`, `SetMonitorSet(ids)` | `EndpointChanged(serverId)` |
-| `Connect(serverId)`, `Disconnect(serverId)` | `LinkState(serverId, state, reason)` (D46's states; typed reasons) |
+| `Connect(serverId)`, `Disconnect(serverId)` | `LinkState(serverId, status)` (D46's states plus `blocked`; typed reasons inside the status) |
 | `Subscribe(serverId, subscriptionId, collectorSet)`, `Unsubscribe(serverId, subscriptionId)`; the cadence profile and app activity are separate requests (D45) | `Sample(serverId, seq, snapshot)` (coalesced per tick; engine-owned `seq`, D44; rates and derived values, D43) |
 | `OpenLogStream(spec)`, `CloseStream(id)` | `LogBatch(streamId, lines, dropped)` (at most 20 per second per stream [E]) |
 | `DockerQuery(serverId, query)` | `DockerResult`, `DockerEvent` |
 | `PlanAction(intent)`, `RunAction(planId, confirmation)` | `ActionPlanned(preview)`, `ActionProgress`, `ActionFinished` |
-| `AnswerPrompt(promptId, answer)` | `Prompt` (host key, keyboard-interactive, credential, elevation) |
+| `AnswerPrompt(promptId, answer)` | `Prompt(promptId, serverId, host, port, request)` (host key, keyboard-interactive, credential, elevation), `PromptWithdrawn(promptId, reason)` |
+| `SetAppActivity(activity)` (foreground or background; D34, D45) | no event: it changes what runs |
+| none: the engine's probe sweeps (5.12) | `Reachability(serverId, status)` (FL-04) |
 | `HandleAlert(alertRef, acknowledge or dismiss)` (v1.x; inbox fetch runs inside `RunSyncRound`) | `AlertsArrived(serverId, alerts)`, `AlertStatusChanged` (D42) |
 | `OpenTerminal(serverId, containerId, shell)` (v1) | `TerminalBytes`, `TerminalClosed` |
 
 The `LinkState`, `Subscribe` and `Sample` rows carry what D43 to D46
-decide; the M2 protocol changes fix their other fields, and the v2 types
-in `protocol.dart` keep their M1 shape until then.
+decide. `LinkState` took its version 3 shape with the links protocol
+(below); the M2 sampling changes fix the other fields of `Subscribe` and
+`Sample`, which keep their M1 shape in `protocol.dart` until then.
 
 The protocol as built in M1 (PR #151; types in
 `klabautermann/packages/klabautermann_core/lib/src/engine/protocol.dart`,
@@ -3473,6 +3493,57 @@ the engine in `engine_isolate.dart` beside it):
   D13's device-local store (4.10) before it answers; `saved` is false when
   the write failed or the store was left as it is at start, and the fleet
   then shows the import only until the engine stops.
+- **Version 3 (M2 links).** `LinkState(serverId, status)` carries a
+  sealed `LinkStatus`: D46's eight states plus `blocked`, each with its
+  own typed values: `degraded(reason)`, `backoff(until)`,
+  `needsUser(promptId, kind)`, `blocked(reason)` (endpoint changed, host
+  key changed) and `closed(reason, failure)`, whose optional failure kind
+  names this version's connect failures (unreachable, timed out,
+  credentials rejected or unavailable, host key declined) and 5.3's
+  three client limitations (unsupported or only insecure algorithms, key
+  exchange timed out). `ready` carries no
+  values, because a learned session limit is `degraded` and what the host
+  can do arrives with the sampling protocol; `needsUser` names its prompt
+  by id instead of carrying it (5.1's `needsUser(prompt)`), because the
+  prompt is its own event. Statuses compare by value. `Prompt` replaces
+  v2's engine text with a sealed request per kind: a first-seen host
+  key's type and SHA-256 fingerprint (a changed key blocks the link
+  instead, 4.6), the server's keyboard-interactive name, instruction and
+  questions (without echo flags, which `seance_core`'s challenge does not
+  carry, so every answer is masked), and the login or sudo password of a
+  user with a retry flag. `host` and `port` name the machine that asks,
+  a jump host while the engine connects through it. `PromptWithdrawn`
+  (expired, or the attempt ended) closes a prompt the engine no longer
+  waits on. `FleetEntry` gains the nullable `jumpRoute` (hop names in
+  dial order), `authKind` (agent, identity file, stored key, password),
+  `searchText` (built in the engine with `serverSearchHaystack`, which
+  the app may not import, 3.2) and `locatorConflict` (the ids of entries
+  that share the `host:port` pin locator behind another route, 4.6). The
+  app keeps statuses and probe answers only for servers its fleet lists.
+  A closed link reads as failed (10.3's `failed` dot, and
+  `ghost_servers`' `GhostSessionState.failed`) unless the engine closed
+  it on purpose with no failure kind: the kinds name only what the
+  engine classified, and a lost link is a failure its reason explains.
+- **`SetAppActivity(activity)`** is a request of its own and applies to
+  every subscription, link and probe at once: 6.4 pauses everything while
+  the app is in the background, and D34 adds the phones' grace period
+  before links close. Subscriptions stay registered while the app is in
+  the background, so they resume without the app resending them, and the
+  engine knows which pauses are the background's, as 9.5's freshness and
+  gap copy names them ("paused: app in background", "in background").
+  *Rejected:* unsubscribing everything on background (every subscription
+  resent on return, and a background pause indistinguishable from
+  surfaces that closed); a field on `Subscribe` (D45). Until the link
+  supervisor lands, the engine answers it with `RequestRejected`.
+- **`Reachability(serverId, status)`** reports one server's latest probe
+  answer, `online`, `offline` or `unknown` as `seance_core`'s
+  `ProbeStatus` gives it, apart from `LinkState`: a probe is a TCP
+  connect to the SSH port that needs no link (`ProbeService`, 5.12), and
+  `unknown` is not `offline` (a host behind a firewall or a jump host may
+  be up). A server never probed has no answer at all, not `unknown`.
+  *Rejected:* probe answers as link statuses (a status would claim a link
+  that does not exist, and `ghost_servers`' indicator takes session and
+  probe truth as separate inputs).
 
 ### 10.2 Desktop (width of 960 px or more)
 
@@ -3569,6 +3640,24 @@ The trend compares the means of the oldest and newest quarters; a change
 under 5 % of the scale is steady. The goldens draw with the pinned Flutter
 SDK's Roboto and compare on Linux only.
 
+`StackedBar` and `PressureBar` do not animate, and they take values
+rather than a ring, so their painter repaints when its runs change
+instead of on a version counter. A value the host did not
+report is hatched over the track, never left empty; in a stacked bar an
+unknown segment hatches everything past the known ones, since it cannot be
+told from free space. A stacked bar's thresholds judge its first
+segment's share of the total (used memory, used disk). Past a threshold
+the fill takes the severity colour with a 2 px stripe of the track
+through it, an icon beside the bar tells warning (triangle) from critical
+(circle) by shape, and the stacked bar's legend, the pressure bar's hover
+tooltip and both summaries name the severity (A11Y-01). The stripe, not
+the colour, shows which segment or cell crossed: the palette test keeps
+pairs apart only within the series and within the severities, and the
+light amber and orange measure a CIE76 distance of 2.0 under
+deuteranopia. Stale values turn every fill the family's graphite and drop
+the severity, since an old reading's may no longer hold. Every fill holds
+3:1 on the track (`surfaceContainerHighest`).
+
 ### 10.8 Log viewer
 
 A ring buffer capped by lines (50,000) and bytes (32 MiB) with a 16 KiB line
@@ -3580,6 +3669,27 @@ journal rows (priority, unit, PID, message, expandable fields); search with
 match stepping; font size 10 to 18 px and line-by-line screen-reader
 navigation in v1. `planchette_editor` is unsuitable for live logs (one text
 buffer, highlighting off above 200,000 characters [R: c3 §1.5]).
+
+As built in M2 (`klabautermann/packages/klabautermann_core/lib/src/logs/`):
+`LogBuffer` counts a line's bytes as the Dart VM stores it: one byte a
+UTF-16 code unit when every unit is Latin-1 (so all ASCII), two otherwise.
+The VM picks that form whether a string is decoded, split or cut, and a
+heap test checks both kinds, so the caps bound the text's memory. The
+16 KiB line cap keeps 16,384 Latin-1 or 8,192 other code units, never half
+a surrogate pair. A cut line keeps its full length for the marker, which
+the app words. A `LogBatch`'s drops become one "dropped N lines" entry
+ahead of its lines, merged into an adjacent one; it counts against the
+50,000-entry cap and holds no bytes, while eviction past a cap leaves no
+entry. Lines are stored as received and styled for display by `parseSgr`,
+each from the plain style, so no style carries from one line to the next.
+It keeps colours, bold, faint, italic, underline, inverse and
+strikethrough, ignores blink and conceal, and drops every other escape and
+control but tab. An unterminated OSC, DCS, SOS, PM or APC string hides the
+rest of its own line. The parser does not keep text visible: matching
+colours (`30;40`, or equal RGB values) still hide it, so the viewer must
+hold each span's foreground and background to a minimum contrast
+(`contrastRatio`, A11Y-04), RGB included. Full at the caps with either
+kind of text, the buffer holds about 35 MiB of the 64 MiB budget (11.4).
 
 ### 10.9 Theme
 

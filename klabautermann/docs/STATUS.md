@@ -18,6 +18,24 @@ slice:
   reply lost to a framing error, out-of-order markers ending the
   session), and `kSamplerStartCommand` is the start line. No engine code
   uses them yet; the real-shell test runs on them.
+- Jobs model (JOB-01, JOB-02 data): `klabautermann_host`'s `mergeJobs`
+  turns a `cron` and a `timers` tick into one list of cron lines,
+  periodic scripts and timers, each with an English-free
+  `ScheduleDescription` and, for cron, next runs with DST annotations
+  in the server zone or the line's `CRON_TZ`. Timer triggers and
+  `RandomizedDelaySec` have fields but no source yet, `CRON_TZ` zones
+  other than the server's and UTC need a resolver, and nothing in the
+  engine or app consumes the list yet.
+- Access rules (M2, `klabautermann_host` `access/`): the CN-24 rows from
+  a `HostProfile` (passwordless sudo, journal group with the LOG-04
+  notice, Docker socket rights with the SAF-08 flag, systemd version,
+  runtimes per host for CN-09), each `ok`, `missing` or `unknown` with
+  an enum reason. Only the journal and Docker socket rows can carry a
+  copyable fix argv, which is never run; sudo has none until SAF-17.
+  Streamlocal and the compose plugin stay unknown until M3. Panel
+  capability declarations for the M2 host panels (the probe now also
+  checks `dmesg` and `tail` for LOG-03 and LOG-22) and an
+  external-monitor rule over the units list. Nothing reads them yet.
 - `klabautermann_docker`: pure-Dart HTTP/1.1 client, NDJSON/JSON-seq
   scanning, stdcopy, versioned API models and negotiation, compose labels
   and grouping.
@@ -32,6 +50,16 @@ slice:
   the engine keeps the imports (below); `EngineReady` reports a problem
   with that file and `SshConfigImported` says whether the import was
   saved, both added within v2.
+- Protocol v3 (M2 links, 03 §10.1): `LinkState` carries a sealed
+  `LinkStatus` (D46's eight states plus `blocked`, typed reasons and an
+  optional failure kind), `Prompt` a sealed request per kind, and
+  `PromptWithdrawn`, `SetAppActivity` and `Reachability` join; `FleetEntry`
+  gains the nullable `jumpRoute`, `authKind`, `searchText` and
+  `locatorConflict`. The fleet controller keeps link statuses and probe
+  answers only for listed servers, and the rail words every status.
+  Nothing produces them yet: the engine still rejects `Connect` and
+  `SetAppActivity`, sends no prompts or probe answers, and fills none of
+  the new fleet fields.
 - `klabautermann_app`: `flutter create`d for the five platforms with the
   04 §12.3 identities, generated launcher icons, the desktop three-pane
   shell (fleet rail, workspace, inspector) at 960 px and up, the phone
@@ -51,6 +79,12 @@ slice:
   the Flutter SDK's Roboto and compare on Linux only. `Gauge` follows in
   its own PR. Nothing shows a chart yet: the overview and fleet rows that
   feed the rings come later in M2.
+- Bars (03 §10.7, M2): `StackedBar` for the memory breakdown and disks
+  (MEM-01, DSK-01) and the fleet rows' three-cell `PressureBar` (FL-07),
+  with hatching for unknown values, grey when stale, and threshold
+  colours paired with a stripe, an icon and words (A11Y-01), plus
+  screen-reader summaries and light and dark goldens. Nothing shows
+  them yet.
 - Sortable table (M2): the app's `SortableTable`, which the M2 lists
   build on. The caller owns the sort (a header click flips it; ties keep
   the caller's order and unknown values sort last). A screen reader hears
@@ -69,10 +103,9 @@ slice:
   expects), minted and saved on the first launch and never regenerated
   while the file can be read; a damaged file whose text shows no id gets
   a new one (the old bytes stay in the corrupt copy). Nothing reads it
-  yet. Only one process is guarded: two instances that start together on
-  a first launch (the Linux runner allows several) each mint an id, and
-  the last write wins. An advisory lock across read, mint and write, or
-  a single desktop instance, must land before enrollment reads the id.
+  yet. A second desktop instance stops at the instance lock (below)
+  before the store opens, so two launches no longer race to mint it
+  unless the lock cannot be taken.
   The theme is restored at startup and saved on every change; the
   desktop settings window (D32) reaches the same `AppearanceController`
   over the settings link, so its changes are saved by the app, not by
@@ -188,6 +221,33 @@ slice:
   client CI legs compile the macOS runner;
   `app/klabautermann_app/test/desktop_chrome_runner_test.dart` also
   guards its wiring on Linux.
+- Single desktop instance (03 §4.10): on macOS, Linux and Windows the
+  composition root takes an exclusive, non-blocking advisory lock on
+  `instance.lock` in the support directory (`klabautermann_core`'s
+  `InstanceLock`) after the settings window's branch and before the
+  macOS titlebar, `settings.json`, `window_state.json` and the engine
+  isolate, and holds it while the process lives; the system drops it when
+  the process ends, a crash included. A second instance touches none of
+  them: its window keeps the runner's frame and standard titlebar (on
+  macOS Dart shows it, since the runner keeps it hidden) and shows only
+  that Klabautermann is already running, with a Quit button, which closes
+  the first-launch device-id race. A lock that cannot be taken for another
+  reason (an unwritable support directory, a file system without locks)
+  lets the app run unguarded and says so in a startup toast. Phones take
+  no lock. A relaunch does not bring the running window forward (the
+  Linux runner stays non-unique, the Windows runner has no mutex), and
+  only Linux's lock conflict is exercised across two processes; the
+  macOS and Windows error codes are unit-tested. No real build has run it
+  yet.
+- Log buffer model (03 §10.8): `klabautermann_core`'s `LogBuffer` holds up
+  to 50,000 entries and 32 MiB of text, counted as the VM stores it (one
+  byte a code unit for Latin-1 text, two otherwise), cuts a line at 16 KiB
+  and keeps its full length for the truncation marker, and records a
+  `LogBatch`'s drops as one "dropped N lines" entry. `parseSgr` turns a
+  line's SGR colours and attributes into spans and drops every other
+  escape and control but tab. A heap test keeps a full buffer of either
+  kind under the 64 MiB budget (03 §11.4). Nothing uses them yet: the
+  viewer and the engine's followers come in later M2 PRs.
 
 Pull-only from the start (D14): no surface sends a request that could
 push or write catalog records, and a widget test guards it.
@@ -199,11 +259,10 @@ in `settings.json`, and the release job (M4).
 
 The macOS runner now keeps its window hidden until Dart has placed it,
 so the CI launch check's wait for a visible window also proves that
-startup reached the window restore. The check does not yet pass
-`--menu File` as Planchette's and Poltergeist's do, and the `ci.yml`
-comment above it still describes the template runner; both are a
-root-lane follow-up. The Linux and Windows runners show their window on
-the first frame, so a startup that never reaches `runApp` fails there.
+startup reached the window restore. It also passes `--menu File`, as
+Planchette's and Poltergeist's do, so the Dart menu bar must be
+installed. The Linux and Windows runners show their window on the first
+frame, so a startup that never reaches `runApp` fails there.
 
 ## Open manual gates
 
@@ -278,6 +337,17 @@ between PRs. M1 adds gates of its own:
   The import item is dimmed while an import runs. Phones and tablets show
   no menu. Open: needs a person on each OS; the widget tests check the
   model and the Flutter side of `PlatformMenuBar`, not AppKit's menu.
+- Single desktop instance (03 §4.10), once per desktop OS from a build
+  that includes the lock. With Klabautermann running, launch it again
+  (on macOS with `open -n`, since Finder would only activate the first):
+  the second window shows only that Klabautermann is already running,
+  keeps the standard titlebar and size on macOS, and Quit closes it while
+  the first keeps running with its settings and window state untouched.
+  Quit the first, then launch again: it starts normally. Kill the first
+  with SIGKILL (Task Manager on Windows) and launch again: it starts
+  normally, because the system dropped the lock. Open: needs a person on
+  each OS; the tests take the lock from Dart processes, not from two
+  native app instances.
 
 ## macOS native fixtures
 

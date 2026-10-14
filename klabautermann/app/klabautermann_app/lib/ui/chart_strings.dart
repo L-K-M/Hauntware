@@ -21,5 +21,12 @@ ChartStrings klabautermannChartStrings(AppLocalizations l10n) {
     trendSteady: l10n.chartTrendSteady,
     // The catalogue formats a fraction; chart percentages run 0 to 100.
     percent: (value) => l10n.chartPercent(value / 100),
+    barSummary: l10n.chartBarSummary,
+    barPart: l10n.chartBarPart,
+    listSeparator: l10n.chartListSeparator,
+    withSeverity: l10n.chartWithSeverity,
+    severityWarning: l10n.chartSeverityWarning,
+    severityCritical: l10n.chartSeverityCritical,
+    stale: l10n.chartStale,
   );
 }

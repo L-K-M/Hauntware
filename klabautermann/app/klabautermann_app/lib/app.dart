@@ -4,7 +4,7 @@ import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 import 'package:ghost_theme/ghost_theme.dart' show GhostTheme;
 import 'package:klabautermann_core/klabautermann_core.dart'
-    show DeviceSettingsIssue, ImportStoreIssue;
+    show DeviceSettingsIssue, ImportStoreIssue, InstanceLockUnavailable;
 
 import 'controllers/appearance_controller.dart';
 import 'controllers/fleet_controller.dart';
@@ -34,6 +34,7 @@ class KlabautermannApp extends StatelessWidget {
     required this.appearance,
     this.settingsIssue,
     this.importStoreIssue,
+    this.instanceLockIssue,
     this.openSettingsWindow,
     this.toolbarBand,
   });
@@ -48,6 +49,10 @@ class KlabautermannApp extends StatelessWidget {
   /// What went wrong when the engine loaded `ssh_config_imports.json`,
   /// told once at startup beside [settingsIssue].
   final ImportStoreIssue? importStoreIssue;
+
+  /// Why the instance lock could not be taken, told once at startup: this
+  /// desktop instance runs without the guard against a second one.
+  final InstanceLockUnavailable? instanceLockIssue;
 
   /// Opens Settings in its own window; null on phones, where Settings is
   /// [kSettingsRoute].
@@ -108,6 +113,7 @@ class KlabautermannApp extends StatelessWidget {
           home: StartupIssueNotice(
             settingsIssue: settingsIssue,
             importStoreIssue: importStoreIssue,
+            instanceLockIssue: instanceLockIssue,
             child: Builder(
               builder: (context) {
                 void openSettings() => unawaited(_openSettings(context));

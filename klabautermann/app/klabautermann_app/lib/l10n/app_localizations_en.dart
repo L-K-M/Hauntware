@@ -154,6 +154,24 @@ class AppLocalizationsEn extends AppLocalizations {
   String get statusFailed => 'Failed';
 
   @override
+  String get statusAuthenticating => 'Authenticating';
+
+  @override
+  String get statusLimited => 'Connected with limits';
+
+  @override
+  String get statusWaitingToReconnect => 'Waiting to reconnect';
+
+  @override
+  String get statusNeedsInput => 'Needs your input';
+
+  @override
+  String get statusBlocked => 'Blocked';
+
+  @override
+  String get statusConnectionLost => 'Connection lost';
+
+  @override
   String statusSemantics(String status) {
     return 'Server status: $status';
   }
@@ -235,6 +253,20 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get importsFileNewer =>
       'Your imported servers were saved by a newer version of Klabautermann. Servers you import now will not be kept after a restart.';
+
+  @override
+  String get instanceLockUnavailable =>
+      'Klabautermann could not check whether it is already running. If you open it twice, the two copies can overwrite each other\'s settings and imported servers.';
+
+  @override
+  String get alreadyRunningTitle => 'Klabautermann is already running';
+
+  @override
+  String get alreadyRunningBody =>
+      'Switch to the Klabautermann window that is already open. Only one copy runs at a time, so two copies never overwrite each other\'s settings and imported servers.';
+
+  @override
+  String get alreadyRunningQuit => 'Quit';
 
   @override
   String get settingsWindowUnreachable =>
@@ -375,6 +407,35 @@ class AppLocalizationsEn extends AppLocalizations {
     final String shareString = shareNumberFormat.format(share);
 
     return '$shareString';
+  }
+
+  @override
+  String chartBarSummary(String label, String parts, String total) {
+    return '$label: $parts of $total';
+  }
+
+  @override
+  String chartBarPart(String label, String value) {
+    return '$label $value';
+  }
+
+  @override
+  String get chartListSeparator => ', ';
+
+  @override
+  String chartWithSeverity(String part, String severity) {
+    return '$part ($severity)';
+  }
+
+  @override
+  String get chartSeverityWarning => 'warning';
+
+  @override
+  String get chartSeverityCritical => 'critical';
+
+  @override
+  String chartStale(String summary) {
+    return '$summary, stale';
   }
 
   @override

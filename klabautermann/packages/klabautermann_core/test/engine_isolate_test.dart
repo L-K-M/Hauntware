@@ -85,13 +85,20 @@ void main() {
       client
         ..send(const EnrollSync())
         ..send(const RunSyncRound())
-        ..send(const PlanAction(ActionIntent(serverId: 'srv-1', action: 'x')));
+        ..send(const PlanAction(ActionIntent(serverId: 'srv-1', action: 'x')))
+        // Accepted once links land; until then nothing would act on it.
+        ..send(const SetAppActivity(AppActivity.background));
 
       final names = [
-        for (var i = 0; i < 3; i++)
+        for (var i = 0; i < 4; i++)
           ((await next(events)) as RequestRejected).requestName,
       ];
-      expect(names, ['EnrollSync', 'RunSyncRound', 'PlanAction']);
+      expect(names, [
+        'EnrollSync',
+        'RunSyncRound',
+        'PlanAction',
+        'SetAppActivity',
+      ]);
     });
 
     test('Subscribe/Unsubscribe are accepted without a reply', () async {

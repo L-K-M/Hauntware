@@ -7,6 +7,7 @@ library;
 import 'package:seance_protocol/seance_protocol.dart';
 
 import 'catalog_writer.dart';
+import 'push_policy.dart';
 import 'record_handler.dart';
 import 'server_config_store.dart';
 
@@ -114,9 +115,11 @@ final class ServerConfigHandler implements RecordHandler {
   /// a locally excluded row never drops (the tombstone is this device's
   /// own retraction echoing back), and an own-deviceId tombstone over a
   /// live local row is a reversed exclusion — the live record re-dates
-  /// past it rather than honouring a decision the user undid. Configs
-  /// already carry the breach-tolerant exposure of an envelope a sync
-  /// server can assert on its own; Séance applies them the same way.
+  /// past it rather than honouring a decision the user undid. A pull-only
+  /// coordinator makes no local decisions to undo and seals no revive, so
+  /// there the tombstone applies like any other. Configs already carry
+  /// the breach-tolerant exposure of an envelope a sync server can assert
+  /// on its own; Séance applies them the same way.
   @override
   Future<ApplyOutcome> applyTombstone(
     EncryptedRecord record,
@@ -129,7 +132,8 @@ final class ServerConfigHandler implements RecordHandler {
       return ApplyOutcome.skipped;
     }
     final deviceId = context.writer.deviceId;
-    if (local != null && record.deviceId == deviceId) {
+    final pullOnly = context.writer.pushPolicy == PushPolicy.none;
+    if (local != null && record.deviceId == deviceId && !pullOnly) {
       // A row that already outranks its own old retraction (the edit that
       // re-included it) needs no revive — re-dating it to the tombstone's
       // stamp + 1 would regress it.

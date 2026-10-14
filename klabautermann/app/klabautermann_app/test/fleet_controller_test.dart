@@ -112,22 +112,106 @@ void main() {
       },
     );
 
-    test('forgets the link phase of a server the new fleet drops', () async {
+    test('forgets the link status and reachability of a server the new '
+        'fleet drops', () async {
+      const failed = LinkClosed(
+        LinkClosedReason.connectFailed,
+        failure: LinkFailureKind.unreachable,
+      );
       final fleet = controller();
       engine
         ..emit(CatalogReplaced([_entry('web-1'), _entry('db-1')]))
-        ..emit(const LinkState('ssh-config:web-1', LinkPhase.connected))
-        ..emit(const LinkState('ssh-config:db-1', LinkPhase.failed));
+        ..emit(const LinkState('ssh-config:web-1', LinkReady()))
+        ..emit(
+          const Reachability('ssh-config:web-1', ReachabilityStatus.online),
+        )
+        ..emit(const LinkState('ssh-config:db-1', failed));
       await settle();
 
       engine.emit(CatalogReplaced([_entry('db-1')]));
       await settle();
-      expect(fleet.linkPhaseFor('ssh-config:db-1'), LinkPhase.failed);
+      expect(fleet.linkStatusFor('ssh-config:db-1'), failed);
 
-      // A re-added server starts disconnected, not in its old phase.
+      // A re-added server starts idle and unprobed, not as it was.
       engine.emit(CatalogReplaced([_entry('web-1'), _entry('db-1')]));
       await settle();
-      expect(fleet.linkPhaseFor('ssh-config:web-1'), LinkPhase.disconnected);
+      expect(fleet.linkStatusFor('ssh-config:web-1'), const LinkIdle());
+      expect(fleet.reachabilityFor('ssh-config:web-1'), isNull);
+    });
+  });
+
+  group('LinkState and Reachability (03 §10.1, D46)', () {
+    test('keep the last value per server and notify once per change', () async {
+      final fleet = controller();
+      engine.emit(CatalogReplaced([_entry('web-1')]));
+      await settle();
+      var notified = 0;
+      fleet.addListener(() => notified++);
+
+      expect(fleet.linkStatusFor('ssh-config:web-1'), const LinkIdle());
+      expect(fleet.reachabilityFor('ssh-config:web-1'), isNull);
+
+      final until = DateTime.utc(2026, 10, 14, 12);
+      engine
+        ..emit(LinkState('ssh-config:web-1', LinkBackoff(until)))
+        // Each event is a new copy; an equal one is no change.
+        ..emit(
+          LinkState(
+            'ssh-config:web-1',
+            LinkBackoff(DateTime.utc(2026, 10, 14, 12)),
+          ),
+        )
+        ..emit(
+          const Reachability('ssh-config:web-1', ReachabilityStatus.unknown),
+        )
+        ..emit(
+          const Reachability('ssh-config:web-1', ReachabilityStatus.unknown),
+        );
+      await settle();
+
+      expect(fleet.linkStatusFor('ssh-config:web-1'), LinkBackoff(until));
+      expect(
+        fleet.reachabilityFor('ssh-config:web-1'),
+        ReachabilityStatus.unknown,
+      );
+      expect(notified, 2);
+    });
+
+    test('ignore servers the fleet does not list', () async {
+      final fleet = controller();
+      engine.emit(CatalogReplaced([_entry('web-1')]));
+      await settle();
+      var notified = 0;
+      fleet.addListener(() => notified++);
+
+      engine
+        ..emit(const LinkState('ssh-config:db-1', LinkReady()))
+        ..emit(
+          const Reachability('ssh-config:db-1', ReachabilityStatus.online),
+        );
+      await settle();
+      expect(notified, 0);
+
+      // Listed later, the server starts idle and unprobed: nothing that
+      // arrived before it was in the fleet resurfaces.
+      engine.emit(CatalogReplaced([_entry('web-1'), _entry('db-1')]));
+      await settle();
+      expect(fleet.linkStatusFor('ssh-config:db-1'), const LinkIdle());
+      expect(fleet.reachabilityFor('ssh-config:db-1'), isNull);
+    });
+
+    test('count the seeded servers as the fleet', () async {
+      final fleet = controller(
+        servers: const [FleetServer(id: 'seed', displayName: 'seed')],
+      );
+
+      engine
+        ..emit(const LinkState('seed', LinkConnecting()))
+        ..emit(const LinkState('other', LinkConnecting()));
+      await settle();
+
+      expect(fleet.linkStatusFor('seed'), const LinkConnecting());
+      expect(fleet.linkStatusFor('other'), const LinkIdle());
     });
   });
 

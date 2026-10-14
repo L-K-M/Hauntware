@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- The terminal draws in Iosevka Term, which ships with Séance, unless
+  you chose a font. It is narrower than the fonts used before, so a
+  window fits more columns at the same size. The font button beside the
+  terminal font field lists the four fonts Séance includes, also on
+  iPhone, iPad and Android, above the installed ones on desktop. An
+  installed font with the same name as an included one is not listed:
+  the name always selects the included copy.
 - Import SSH config adds a server for every name on a `Host` line:
   `Host web db` imports `web` and `db` with the block's settings, where
   only `web` was imported before. Wildcard and `!` patterns are still not

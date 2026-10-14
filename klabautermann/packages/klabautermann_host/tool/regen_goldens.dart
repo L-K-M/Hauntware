@@ -44,8 +44,41 @@ void main() {
       '${dir.path}/probe.golden.json',
       parseProbe(sections, _ctx).toJsonResult(),
     );
+    _write('${dir.path}/jobs.golden.json', _jobsJson(dir.path));
     stdout.writeln('$platform: goldens rewritten');
   }
+}
+
+/// Mirrors `_jobsJson` in `test/fixtures_test.dart`.
+Map<String, Object?> _jobsJson(String dir) {
+  final now = DateTime.utc(2026, 10, 14, 12);
+  final profile = parseProbe(
+    _probeSections(File('$dir/probe.sections').readAsStringSync()),
+    _ctx,
+  ).value;
+  final offset = RegExp(
+    r'^([+-])(\d\d)(\d\d)$',
+  ).firstMatch(profile.zoneOffset ?? '');
+  final minutes = offset == null
+      ? 0
+      : (int.parse(offset[2]!) * 60 + int.parse(offset[3]!)) *
+            (offset[1] == '-' ? -1 : 1);
+  final jobs = mergeJobs(
+    cron: parseCron(File('$dir/cron.txt').readAsStringSync(), _ctx).value,
+    timers: parseTimers(File('$dir/timers.txt').readAsStringSync(), _ctx).value,
+    nowUtc: now,
+    zone: ServerZone(
+      offset: Duration(minutes: minutes),
+      ianaName: profile.timezone,
+    ),
+    runCount: 2,
+  );
+  return {
+    'nowUtc': now.toIso8601String(),
+    'zoneOffsetMinutes': minutes,
+    'zoneName': profile.timezone,
+    'jobs': jobs.map((j) => j.toJson()).toList(),
+  };
 }
 
 void _write(String path, Object? json) {

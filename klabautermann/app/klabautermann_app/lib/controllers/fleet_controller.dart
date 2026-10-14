@@ -83,8 +83,9 @@ final class SshConfigImportRejected extends SshConfigImportOutcome {
 }
 
 /// The fleet concern (03 §10.1): the server list from [CatalogReplaced]
-/// snapshots, per-server link phases from [LinkState] events, the
-/// workspace's selection, and the desktop ssh_config import (FL-02).
+/// snapshots, per-server link statuses from [LinkState] and probe results
+/// from [Reachability] events, the workspace's selection, and the desktop
+/// ssh_config import (FL-02).
 /// Pull-only by construction (D14): the one request it sends,
 /// [ImportSshConfig], changes the engine's device-local import store and
 /// never a catalog record.
@@ -96,7 +97,8 @@ final class FleetController extends ChangeNotifier {
     this._engine, {
     List<FleetServer> servers = const [],
     this._sshConfig,
-  }) : _servers = List.unmodifiable(servers) {
+  }) : _servers = List.unmodifiable(servers),
+       _serverIds = {for (final server in servers) server.id} {
     _events = _engine.events.listen(_onEngineEvent, onDone: _onEngineDone);
   }
 
@@ -105,7 +107,12 @@ final class FleetController extends ChangeNotifier {
   late final StreamSubscription<EngineEvent> _events;
 
   List<FleetServer> _servers;
-  final Map<String, LinkPhase> _linkPhases = {};
+
+  /// The ids [_servers] lists: the only servers statuses are kept for.
+  Set<String> _serverIds;
+
+  final Map<String, LinkStatus> _linkStatuses = {};
+  final Map<String, ReachabilityStatus> _reachability = {};
   String? _selectedServerId;
 
   /// The running import, from reading the file to the engine's answer.
@@ -131,11 +138,15 @@ final class FleetController extends ChangeNotifier {
     return null;
   }
 
-  /// The last link phase the engine reported for [serverId]; unknown and
-  /// never-connected servers read as [LinkPhase.disconnected] (03 §10.3's
-  /// "unknown stays unknown" falls out of having no dot at all).
-  LinkPhase linkPhaseFor(String serverId) =>
-      _linkPhases[serverId] ?? LinkPhase.disconnected;
+  /// The last link status the engine reported for [serverId]; a server
+  /// with none, listed or not, reads as [LinkIdle].
+  LinkStatus linkStatusFor(String serverId) =>
+      _linkStatuses[serverId] ?? const LinkIdle();
+
+  /// The last probe answer for [serverId], or null when it has none (the
+  /// engine probes only confirmed endpoints, 03 §5.12).
+  ReachabilityStatus? reachabilityFor(String serverId) =>
+      _reachability[serverId];
 
   /// Whether this device offers the ssh_config import: desktops do, phones
   /// have no ssh_config (FL-02).
@@ -204,10 +215,10 @@ final class FleetController extends ChangeNotifier {
 
   void _onEngineEvent(EngineEvent event) {
     switch (event) {
-      case LinkState(:final serverId, :final phase):
-        if (_linkPhases[serverId] == phase) return;
-        _linkPhases[serverId] = phase;
-        notifyListeners();
+      case LinkState(:final serverId, :final status):
+        _keep(_linkStatuses, serverId, status);
+      case Reachability(:final serverId, :final status):
+        _keep(_reachability, serverId, status);
       case CatalogReplaced(:final entries):
         _replaceFleet(entries);
       case SshConfigImported(
@@ -241,10 +252,22 @@ final class FleetController extends ChangeNotifier {
         !_servers.any((server) => server.id == _selectedServerId)) {
       _selectedServerId = null;
     }
-    // A phase kept for a dropped server would resurface if its id came
-    // back in a later fleet, and the map would grow with every churn.
-    final ids = {for (final server in _servers) server.id};
-    _linkPhases.removeWhere((serverId, _) => !ids.contains(serverId));
+    // A status kept for a dropped server would resurface if its id came
+    // back in a later fleet, and the maps would grow with every churn.
+    final ids = _serverIds = {for (final server in _servers) server.id};
+    _linkStatuses.removeWhere((serverId, _) => !ids.contains(serverId));
+    _reachability.removeWhere((serverId, _) => !ids.contains(serverId));
+    notifyListeners();
+  }
+
+  /// Records [value] as [serverId]'s latest in [values], notifying only on
+  /// a change. A server the fleet does not list is ignored: its value
+  /// would otherwise wait in the map and surface if a later fleet listed
+  /// that id.
+  void _keep<T>(Map<String, T> values, String serverId, T value) {
+    if (!_serverIds.contains(serverId)) return;
+    if (values[serverId] == value) return;
+    values[serverId] = value;
     notifyListeners();
   }
 

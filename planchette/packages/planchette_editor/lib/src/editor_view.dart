@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
+import 'package:ghost_fonts/ghost_fonts.dart';
 import 'package:planchette_core/planchette_core.dart';
 
 import 'code_editing_controller.dart';
@@ -50,11 +51,13 @@ class PlanchetteEditor extends StatefulWidget {
   final EditorController controller;
   final EditorStrings strings;
 
-  /// Merged over the platform's monospace family ([editorMonospaceFor]), a
+  /// Merged over the editor's monospace family ([editorMonospaceFor]), a
   /// 14 px size and 1.35 line height. A `fontFamily` here is tried first,
-  /// except the generic `monospace`, which selects the platform family;
-  /// the platform stack stays as its fallback unless `fontFamilyFallback`
-  /// is set too, so a missing host font still lands on a monospace face.
+  /// except the generic `monospace`, which selects the editor's family; a
+  /// bundled font's name ([BundledMonoFont.displayName]) draws the bundled
+  /// copy. The editor's stack stays as its fallback unless
+  /// `fontFamilyFallback` is set too, so a missing host font still lands
+  /// on a monospace face.
   final TextStyle textStyle;
   final EditorSyntaxTheme? syntaxTheme;
   final bool isActive;
@@ -143,11 +146,17 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
       defaultTargetPlatform,
     ).merge(const TextStyle(fontSize: 14, height: 1.35));
     final style = base.merge(widget.textStyle);
+    final family = style.fontFamily!;
+
     // Hosts written for the old default pass the generic name, which only
-    // fontconfig and Android resolve; it means the platform's own family.
-    return style.fontFamily?.toLowerCase() == 'monospace'
-        ? style.copyWith(fontFamily: base.fontFamily)
-        : style;
+    // fontconfig and Android resolve; it means the editor's own family.
+    if (family.toLowerCase() == 'monospace') {
+      return style.copyWith(fontFamily: base.fontFamily);
+    }
+
+    // A bundled font's name, as a settings file stores it ('Fira Code'),
+    // draws the bundled copy whether or not one is installed.
+    return style.copyWith(fontFamily: resolveMonoFamily(family));
   }
 
   /// Find-bar fields show a pattern in the document's own face, shaped the
