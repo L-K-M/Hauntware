@@ -4,6 +4,7 @@
 /// section cap, and slow-tick wall time.
 library;
 
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -141,6 +142,10 @@ Future<List<Map<String, Object?>>> measurePreReady(
         tickOk = reply.tick?.section('overview')?.status == SectionStatus.ok;
       } on SamplerFailure catch (e) {
         outcome = e.fault?.name ?? 'exited';
+      } on TimeoutException {
+        // A startup file that blocks: no READY and no exit. Recorded as a
+        // row like the other non-READY outcomes, not an aborted run.
+        outcome = 'timeout';
       } finally {
         await sampler?.close();
         home.deleteSync(recursive: true);
