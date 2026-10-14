@@ -16,17 +16,18 @@ slice:
   READY up to 64 KiB and reads an empty `B` uptime as unknown;
   `HwsTickAssembler` turns frames into replies (READY version check, a
   reply lost to a framing error, out-of-order markers ending the
-  session), and `kSamplerStartCommand` is the start line. No engine code
-  uses them yet; the real-shell test runs on them.
+  session), and `kSamplerStartCommand` is the start line. The sampler
+  session below and the real-shell test use them.
 - Sampler session (M2): `klabautermann_core`'s `SamplerSession` runs one
   sampler over an `SshLink`: the start command, the program with a fresh
   nonce, a READY deadline, one request at a time (an overlapping tick
   is skipped and counted), slow deadlines from the guarded commands
   (D47), and on a missed deadline or a broken stream
-  `RemoteProcess.close()` and a restart after 1 s to 30 s of backoff.
-  Tested against a scripted process and local dash and bash (a SIGSTOP
-  stall included); nothing starts it yet, and no SSH fixture test
-  covers it.
+  `RemoteProcess.close()` and a restart after a backoff of 1 s doubling
+  to a 30 s cap, less up to 30 % of downward jitter (so the first
+  restart comes after 0.7 s to 1 s). Tested against a scripted process
+  and local dash and bash (a SIGSTOP stall included); nothing starts it
+  yet, and no SSH fixture test covers it.
 - Access rules (M2, `klabautermann_host` `access/`): the CN-24 rows from
   a `HostProfile` (passwordless sudo, journal group with the LOG-04
   notice, Docker socket rights with the SAF-08 flag, systemd version,
