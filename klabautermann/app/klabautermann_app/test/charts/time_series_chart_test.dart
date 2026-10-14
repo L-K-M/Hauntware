@@ -166,16 +166,7 @@ void main() {
         addTearDown(ring.dispose);
         ring.openGap(_at(100), ChartGapReason.disconnected);
         const scene = ValueKey('hatch');
-
-        for (final surface in [
-          theme.colorScheme.surface,
-          theme.colorScheme.surfaceContainerLow,
-          theme.colorScheme.surfaceContainer,
-          theme.colorScheme.surfaceContainerHigh,
-          chrome.paneBackground,
-          chrome.inspectorBackground,
-          chrome.sidebarBackground,
-        ]) {
+        Future<Rect> pump(Color surface, DateTime end) async {
           await tester.pumpWidget(
             chartFrame(
               brightness: brightness,
@@ -192,14 +183,39 @@ void main() {
                       unit: ChartUnit.percent,
                       strings: testChartStrings,
                       source: '',
-                      end: _end,
+                      end: end,
                     ),
                   ),
                 ),
               ),
             ),
           );
-          final band = _bands(_painterOf(tester), tester.getSize(_plot)).single;
+          return _bands(_painterOf(tester), tester.getSize(_plot)).single;
+        }
+
+        // Antialiasing depends on where the band falls between pixels, so
+        // each surface is checked with the band moved by quarter pixels.
+        final open = _end.difference(_at(100)).inMicroseconds;
+        final first = await pump(Colors.white, _end);
+        final pixelTime = open / first.width;
+        for (final (surface, quarter) in [
+          for (final surface in [
+            theme.colorScheme.surface,
+            theme.colorScheme.surfaceContainerLow,
+            theme.colorScheme.surfaceContainer,
+            theme.colorScheme.surfaceContainerHigh,
+            chrome.paneBackground,
+            chrome.inspectorBackground,
+            chrome.sidebarBackground,
+          ])
+            for (var quarter = 0; quarter < 4; quarter++) (surface, quarter),
+        ]) {
+          final shift = Duration(
+            microseconds: (pixelTime * quarter / 4).round(),
+          );
+          final band = await pump(surface, _end.add(shift));
+          expect(band.left, closeTo(first.left - quarter / 4, 0.001));
+          final where = '$surface, band moved $quarter/4 px';
           // A desktop at 100 % scaling rasterizes at one pixel per point,
           // where a thin diagonal stroke never reaches its full colour.
           final pixels = (await tester.runAsync(() async {
@@ -241,14 +257,14 @@ void main() {
                 continue;
               }
               if (start > left) {
-                expect(peak, greaterThanOrEqualTo(3), reason: '$surface');
+                expect(peak, greaterThanOrEqualTo(3), reason: where);
                 strokes++;
               }
               start = -1;
               peak = 0;
             }
           }
-          expect(strokes, greaterThan(100), reason: '$surface');
+          expect(strokes, greaterThan(100), reason: where);
         }
       },
     );
