@@ -110,9 +110,19 @@ void main() {
       final job = jobs[_integration] as YamlMap;
       expect(job['needs'], _detector);
       expect(job['runs-on'], 'ubuntu-latest');
-      expect(job['if'], contains('outputs.fixture'));
-      expect(job['if'], contains('outputs.capture'));
-      expect(job['if'], isNot(contains('github.event_name')));
+      expect(
+        job['if'],
+        "needs.$_detector.outputs.fixture == 'true' || "
+        "needs.$_detector.outputs.capture == 'true'",
+      );
+      expect(
+        _step(job, name: 'Run SSH integration fixture')['if'],
+        "needs.$_detector.outputs.fixture == 'true'",
+      );
+      expect(
+        _step(job, name: 'Run container shell and userland captures')['if'],
+        "\${{ !cancelled() && needs.$_detector.outputs.capture == 'true' }}",
+      );
       expect(job['continue-on-error'], isNull);
       expect(job['timeout-minutes'], greaterThan(_soakMinutes));
     });
@@ -120,8 +130,11 @@ void main() {
     test('frame timing runs on main pushes and dispatch only', () {
       final job = jobs[_frameTiming] as YamlMap;
       expect(job['needs'], _detector);
-      expect(job['if'], contains("github.event_name != 'pull_request'"));
-      expect(job['if'], contains('outputs.frames'));
+      expect(
+        job['if'],
+        "github.event_name != 'pull_request' && "
+        "needs.$_detector.outputs.frames == 'true'",
+      );
       final flutter = _step(job, uses: 'subosito/flutter-action@');
       expect(flutter['with']['flutter-version'], r'${{ env.FLUTTER_VERSION }}');
       final measure = _step(job, name: 'Measure frame timing under Xvfb');
