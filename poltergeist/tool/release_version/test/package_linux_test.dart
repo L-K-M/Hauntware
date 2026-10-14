@@ -95,6 +95,16 @@ void main() {
     });
 
     test('every Linux packager loads the shared table', () async {
+      // The shared packager loads the table itself; a wrapper loads it by
+      // sourcing the shared packager.
+      expect(
+        RegExp(
+          r'^source .*package-linux-gcc-floors\.sh"$',
+          multiLine: true,
+        ).hasMatch(_sharedPackager.readAsStringSync()),
+        isTrue,
+      );
+
       for (final product in _packagerProducts) {
         final packager = File(
           p.join(
@@ -104,7 +114,7 @@ void main() {
           ),
         );
         final stanza = RegExp(
-          r'^source .*package-linux-gcc-floors\.sh"$',
+          r'^source .*package-linux-(gcc-floors|common)\.sh"$',
           multiLine: true,
         ).firstMatch(packager.readAsStringSync())?[0];
         expect(stanza, isNotNull, reason: product);
@@ -122,13 +132,7 @@ void main() {
 
     test('every packager maps floors through the table, never the raw tag', () {
       for (final product in _packagerProducts) {
-        final script = File(
-          p.join(
-            _repositoryRoot.parent.path,
-            product,
-            'scripts/package-linux.sh',
-          ),
-        ).readAsStringSync();
+        final script = _packagerSource(product);
         expect(script, contains(r'no GCC mapping for GLIBCXX_$'), reason: product);
         expect(script, contains(r'no GCC mapping for GCC_$'), reason: product);
         expect(script, isNot(contains(r'(>= $GLIBCXX')), reason: product);
@@ -196,7 +200,11 @@ void main() {
   });
 
   group('Debian copyright file', () {
-    final block = _markerBlock(script, 'copyright file writer');
+    // The writer is shared; the wrapper supplies the title line.
+    final block = _markerBlock(
+      _sharedPackager.readAsStringSync(),
+      'copyright file writer',
+    );
 
     test('embeds the license verbatim under the header', () async {
       final sandbox = Directory.systemTemp.createTempSync(
@@ -213,11 +221,16 @@ void main() {
       final result = await _sourceAndCall(
         block,
         'write_copyright ${_shellQuote(out.path)}',
-        environment: {'VERSION': '9.9.9', 'LICENSE_FILE': license.path},
+        environment: {
+          'DEB_COPYRIGHT_TITLE': 'Fake: a title line',
+          'VERSION': '9.9.9',
+          'LICENSE_FILE': license.path,
+        },
       );
 
       expect(result.exitCode, 0, reason: result.stderr as String);
       final text = out.readAsStringSync();
+      expect(text, startsWith('Fake: a title line\n'));
       expect(text, contains('Upstream-Version: 9.9.9'));
       expect(text, contains('License: Unlicense'));
       expect(text, contains('FAKE LICENSE TEXT\nline two\n'));
@@ -236,7 +249,11 @@ void main() {
       final result = await _sourceAndCall(
         block,
         'write_copyright ${_shellQuote(out.path)}',
-        environment: {'VERSION': '0.1.0', 'LICENSE_FILE': license.path},
+        environment: {
+          'DEB_COPYRIGHT_TITLE': 'Poltergeist',
+          'VERSION': '0.1.0',
+          'LICENSE_FILE': license.path,
+        },
       );
 
       expect(result.exitCode, 0, reason: result.stderr as String);
@@ -245,13 +262,27 @@ void main() {
 
     test('the .deb build writes its copyright through the writer', () {
       expect(
-        script,
-        contains(
-          r'write_copyright "$DEBROOT/usr/share/doc/poltergeist/copyright"',
+        _sharedPackager.readAsStringSync(),
+        allOf(
+          contains(
+            r'write_copyright "$DEBROOT/usr/share/doc/$PACKAGE_NAME/copyright"',
+          ),
+          // A missing LICENSE must fail the build, not ship a pointerless
+          // file.
+          contains('LICENSE not found at'),
         ),
       );
-      // A missing LICENSE must fail the build, not ship a pointerless file.
-      expect(script, contains('LICENSE not found at'));
+      expect(
+        script,
+        allOf(
+          contains('PACKAGE_NAME="poltergeist"'),
+          contains(r'LICENSE_FILE="$ROOT/LICENSE"'),
+          contains(
+            'DEB_COPYRIGHT_TITLE="Poltergeist — a cross-platform two-pane '
+            'file transfer client"',
+          ),
+        ),
+      );
     });
   });
 }
@@ -316,6 +347,22 @@ const _packagerExecutables = {
 };
 
 final _packagerProducts = _packagerExecutables.keys;
+
+/// The suite's shared Linux packager, which the product wrappers source.
+final _sharedPackager = File(
+  p.join(_repositoryRoot.parent.path, 'scripts/package-linux-common.sh'),
+);
+
+/// [product]'s packager source, followed by the shared packager's when the
+/// product's script is a wrapper over it: the code that runs either way.
+String _packagerSource(String product) {
+  final script = File(
+    p.join(_repositoryRoot.parent.path, product, 'scripts/package-linux.sh'),
+  ).readAsStringSync();
+  if (!script.contains('package-linux-common.sh"')) return script;
+
+  return '$script\n${_sharedPackager.readAsStringSync()}';
+}
 
 /// scripts/package-linux.sh delimits the units its tests execute with
 /// `# --- <name> (…)` … `# --- end <name>` comment markers; keep them.

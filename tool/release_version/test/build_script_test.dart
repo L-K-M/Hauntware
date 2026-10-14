@@ -30,6 +30,7 @@ void main() {
     expect(result.stdout, contains('planchette'));
     expect(result.stdout, contains('seance'));
     expect(result.stdout, contains('poltergeist'));
+    expect(result.stdout, contains('klabautermann'));
     expect(result.stdout, contains('ready'));
     expect(result.stdout, contains('missing'));
     // --check builds nothing.
@@ -65,8 +66,10 @@ void main() {
         File(p.join(sandbox.path, 'dist', 'seance-artifact')).existsSync(),
         isTrue,
       );
-      // poltergeist has no build script in this fixture — skipped.
+      // poltergeist and klabautermann have no build script in this
+      // fixture: skipped.
       expect(result.stdout, contains('skip poltergeist'));
+      expect(result.stdout, contains('skip klabautermann'));
       expect(result.stdout, contains('Build summary'));
     },
   );
@@ -76,6 +79,30 @@ void main() {
 
     expect(result.exitCode, isNot(0));
     expect(result.stderr, contains('poltergeist'));
+  });
+
+  test('klabautermann can be named explicitly', () async {
+    final script = File(
+      p.join(sandbox.path, 'klabautermann', 'scripts', 'build.sh'),
+    )..parent.createSync(recursive: true);
+    script.writeAsStringSync('''#!/usr/bin/env bash
+set -euo pipefail
+dist="\$(cd "\$(dirname "\${BASH_SOURCE[0]}")/.." && pwd)/dist"
+mkdir -p "\$dist"
+touch "\$dist/klabautermann-artifact"
+''');
+    Process.runSync('chmod', ['+x', script.path]);
+
+    final result = await _runBuild(sandbox, ['klabautermann']);
+
+    expect(result.exitCode, 0, reason: result.stderr as String);
+    expect(result.stdout, contains('klabautermann  built'));
+    expect(
+      File(p.join(sandbox.path, 'dist', 'klabautermann-artifact')).existsSync(),
+      isTrue,
+    );
+    // Only the named product runs.
+    expect(result.stdout, isNot(contains('planchette')));
   });
 
   test('a failing product build propagates a nonzero exit', () async {
@@ -208,6 +235,7 @@ printf '%s\\n' "\$*" >> "${flutterLog.path}"
       ('planchette', 'planchette_app', 'Planchette.app'),
       ('seance', 'seance_app', 'Seance.app'),
       ('poltergeist', 'poltergeist_app', 'Poltergeist.app'),
+      ('klabautermann', 'klabautermann_app', 'Klabautermann.app'),
     ]) {
       test(product, () async {
         final root = Directory(p.join(sandbox.path, '$product-real'));
@@ -263,6 +291,7 @@ fi
     for (final (product, appDir) in const [
       ('seance', 'seance_app'),
       ('poltergeist', 'poltergeist_app'),
+      ('klabautermann', 'klabautermann_app'),
     ]) {
       test('$product: the app cannot be copied into dist/', () async {
         final build = _realProductBuild(sandbox, product, appDir, 'Linux');
@@ -437,7 +466,8 @@ printf '%s\\n' "\$*" >> "${log.path}"
 
 /// Fake product scripts: planchette and seance build (each emits a dist
 /// marker and records its args in mode.marker), seance fails on demand via
-/// FAKE_BUILD_FAIL, and poltergeist has no script at all.
+/// FAKE_BUILD_FAIL, and poltergeist and klabautermann have no script at
+/// all.
 void _writeProducts(Directory root) {
   void writeScript(String product, String body) {
     final script = File(p.join(root.path, product, 'scripts', 'build.sh'))

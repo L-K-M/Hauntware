@@ -5,17 +5,6 @@ part of 'sidebar_view.dart';
 bool _isServerKind(Bookmark bookmark) =>
     bookmark.kind == BookmarkKind.remotePath;
 
-/// One SERVERS group: the shared account's catalog servers (by label)
-/// under one disclosure row.
-final class _ServerGroup {
-  _ServerGroup(this.name);
-
-  final String name;
-  final catalog = <ServerConfig>[];
-
-  int get length => catalog.length;
-}
-
 /// SERVERS (10 §5, D33): live Quick Connect sessions (italic, top), then
 /// the shared account's server list, grouped by Séance's rules, each
 /// row carrying its live state as its one dot. Saved remote locations
@@ -27,27 +16,12 @@ List<Widget> _serversSection(_SidebarData data) {
   final controller = data.controller;
   final sectionKey = SidebarCollapseKeys.section(SidebarSection.servers);
 
-  final loose = _ServerGroup('');
-  final groups = <String, _ServerGroup>{};
   final catalog = view.catalog?.servers ?? const <ServerConfig>[];
-  // A pinned server leaves its group for PINNED rather than showing
-  // twice (Séance's rule): its group's count drops with it.
-  var pinned = 0;
-  for (final server in catalog) {
-    if (controller.isPinned(server.id)) {
-      pinned++;
-      continue;
-    }
-    final name = normalizeServerGroup(server.group);
-    (name == null
-            ? loose
-            : groups.putIfAbsent(
-                serverGroupKey(name),
-                () => _ServerGroup(name),
-              ))
-        .catalog
-        .add(server);
-  }
+  // Séance's sectioning (ghost_servers): a pinned server leaves its group
+  // for PINNED rather than showing twice, and its group's count drops
+  // with it. PINNED draws in its own section beside the pinned
+  // favorites, so here the pinned servers only leave SERVERS' count.
+  final sections = groupServers(catalog, pinnedIds: controller.pinnedServers);
   final remoteFavorites = controller.bookmarks.where(_isServerKind).toList();
   // A saved endpoint is the session's saved row: once "Save to
   // Favorites…" (or the pane's save bar) lands, the italic duplicate
@@ -62,7 +36,7 @@ List<Widget> _serversSection(_SidebarData data) {
       if (!saved.contains(_endpointKeyOf(session.bookmark))) session,
   ];
 
-  final total = sessions.length + catalog.length - pinned;
+  final total = sessions.length + catalog.length - sections.pinned.length;
   // The filter's threshold counts every server the rail lists once, the
   // remote favorites included (without the shared account they are the
   // user's servers), wherever PINNED put them.
@@ -93,15 +67,15 @@ List<Widget> _serversSection(_SidebarData data) {
     );
   }
   final looseHidden = <ServerConfig>[];
-  body.addAll(_serverRows(data, loose, depth: 0, hidden: looseHidden));
+  body.addAll(
+    _serverRows(data, sections.ungrouped, depth: 0, hidden: looseHidden),
+  );
   hiddenLoose.addAll(_catalogStatuses(data, looseHidden));
 
-  final sortedKeys = groups.keys.toList()..sort();
-  for (final key in sortedKeys) {
-    final group = groups[key]!;
-    final collapseKey = SidebarCollapseKeys.serverGroup(key);
+  for (final group in sections.groups) {
+    final collapseKey = SidebarCollapseKeys.serverGroup(group.key);
     final filtered = <ServerConfig>[];
-    final rows = _serverRows(data, group, depth: 1, hidden: filtered);
+    final rows = _serverRows(data, group.servers, depth: 1, hidden: filtered);
     if (data.filtering && rows.isEmpty) {
       hiddenLoose.addAll(_catalogStatuses(data, filtered));
       continue;
@@ -109,7 +83,7 @@ List<Widget> _serversSection(_SidebarData data) {
     final collapsed = data.collapsed(collapseKey);
     final hidden = _hiddenLive(
       data,
-      _catalogStatuses(data, collapsed ? group.catalog : filtered),
+      _catalogStatuses(data, collapsed ? group.servers : filtered),
     );
     // The account's groups take no bookmark drops: a catalog server's
     // group is edited in the server editor, and bookmarks file under
@@ -120,7 +94,7 @@ List<Widget> _serversSection(_SidebarData data) {
         headerKey: ValueKey('sidebar.section.$collapseKey'),
         nested: true,
         title: group.name,
-        count: group.length,
+        count: group.servers.length,
         collapsed: collapsed,
         status: hidden?.dot,
         statusLabel: hidden?.label,
@@ -162,8 +136,8 @@ List<Widget> _serversSection(_SidebarData data) {
             for (final session in sessions)
               _liveStatus(data, session.bookmark.id),
             ..._catalogStatuses(data, [
-              ...loose.catalog,
-              for (final group in groups.values) ...group.catalog,
+              ...sections.ungrouped,
+              for (final group in sections.groups) ...group.servers,
             ]),
           ]
         : hiddenLoose,
@@ -241,12 +215,12 @@ bool _catalogShows(_SidebarData data, ServerConfig server) {
 /// [hidden], for a header to show their live state.
 List<Widget> _serverRows(
   _SidebarData data,
-  _ServerGroup members, {
+  List<ServerConfig> members, {
   required int depth,
   required List<ServerConfig> hidden,
 }) {
   final rows = <Widget>[];
-  for (final server in members.catalog) {
+  for (final server in members) {
     if (!_catalogShows(data, server)) {
       hidden.add(server);
       continue;

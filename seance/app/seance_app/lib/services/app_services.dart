@@ -70,34 +70,6 @@ class IdentityFileException implements Exception {
   }
 }
 
-/// A server names a vault entry this device does not have: its config was
-/// saved on another device, which kept the password or key local. Connecting
-/// with an empty credential instead would only fail later with a misleading
-/// authentication error, so resolving refuses up front (CRED-05).
-class CredentialMissingException implements Exception {
-  const CredentialMissingException({
-    required this.serverId,
-    required this.serverLabel,
-    required this.authMethod,
-  });
-
-  /// The server whose credential is missing: the one connecting, or a jump
-  /// host on its path.
-  final String serverId;
-  final String serverLabel;
-  final AuthMethod authMethod;
-
-  @override
-  String toString() {
-    final what = authMethod == AuthMethod.privateKey
-        ? 'private key'
-        : 'password';
-    return 'Credential required on this device: the $what for '
-        '"$serverLabel" was saved on another device and is not here. Enter '
-        'it on this device, or switch the server to the SSH agent.';
-  }
-}
-
 /// A vault without its key: the OS keystore was unavailable at bootstrap, so
 /// no key exists this session. Reads and writes fail with a clear message
 /// instead of decrypting with a wrong key (which would look like corruption)
@@ -1072,101 +1044,28 @@ class AppServices {
   /// failure for a configuration that is correct, and saving would store the
   /// same stale passphrase. `docs/STATUS.md` follow-up 16 tracks the explicit
   /// "no passphrase" affordance that closes it in both places at once.
+  ///
+  /// The decision table lives in the shared [CredentialResolver]; this app
+  /// supplies only its vault and identity-file reads ([_AppCredentialSource]).
   Future<SshCredentials> resolveCredentials(
     ServerConfig config, {
     String? draftPassword,
     String? draftPrivateKey,
     String? draftKeyPassphrase,
     IdentityFileBookmark? draftIdentityBookmark,
-  }) async {
-    String? draft(String? value) =>
-        (value == null || value.isEmpty) ? null : value;
-    if (config.authMethod == AuthMethod.agent) {
-      return const SshCredentials.agent();
-    }
+  }) => _credentialResolver.resolve(
+    config,
+    draft: CredentialDraft(
+      password: draftPassword,
+      privateKeyPem: draftPrivateKey,
+      keyPassphrase: draftKeyPassphrase,
+      identityBookmark: draftIdentityBookmark,
+    ),
+  );
 
-    // A cross-file contract with the editor, which builds the grant from the
-    // path it is about (`_bookmarkFor` returns null without one). Without the
-    // path this branch never runs, so a bookmark passed alone would be
-    // silently dropped and the test would resolve the vault credential
-    // instead — a green result for a key nobody asked it to try.
-    // A throw, not an assert: stripped from the build users run, the only
-    // symptom of a caller getting this wrong is a green "authenticated" for a
-    // credential nobody asked to test — the same reason the exclusion guard in
-    // `ServerConfig.copyWith` throws.
-    // Only under key auth: for a password or the agent the bookmark is never
-    // consulted, so a stale one left over from an auth-method switch cannot
-    // change what is tested, and throwing would turn a harmless leftover
-    // into a failed test. A typed PEM is the same case under key auth: it is
-    // returned before anything consults a path or a grant.
-    if (config.authMethod == AuthMethod.privateKey &&
-        config.identityFilePath == null &&
-        draft(draftPrivateKey) == null &&
-        draftIdentityBookmark != null) {
-      throw ArgumentError.value(
-        draftIdentityBookmark,
-        'draftIdentityBookmark',
-        'only honoured alongside identityFilePath: without the path the '
-            'grant is dropped and the vault credential is tested instead',
-      );
-    }
-    switch (config.authMethod) {
-      case AuthMethod.agent:
-        return const SshCredentials.agent();
-      case AuthMethod.password:
-        final typed = draft(draftPassword);
-        if (typed != null) return SshCredentials.password(typed);
-        final secret = await _savedSecret(config);
-        return SshCredentials.password(secret?.value ?? '');
-      case AuthMethod.privateKey:
-        // "Reference, don't store": read the key from disk at connect time.
-        if (config.identityFilePath != null) {
-          final pem = await _readIdentityFile(
-            config,
-            bookmarkOverride: draftIdentityBookmark,
-          );
-          return SshCredentials.privateKey(
-            pem,
-            // A typed passphrase needs no stored-passphrase read or unlock.
-            keyPassphrase:
-                draft(draftKeyPassphrase) ??
-                (config.secretRef == null
-                    ? null
-                    : (await _readSavedSecret(
-                        config.secretRef!,
-                      ))?.keyPassphrase),
-          );
-        }
-        final typedPem = draft(draftPrivateKey);
-        if (typedPem != null) {
-          return SshCredentials.privateKey(
-            typedPem,
-            keyPassphrase: draft(draftKeyPassphrase),
-          );
-        }
-        final secret = await _savedSecret(config);
-        return SshCredentials.privateKey(
-          secret?.value ?? '',
-          keyPassphrase: draft(draftKeyPassphrase) ?? secret?.keyPassphrase,
-        );
-    }
-  }
-
-  /// The vault entry [config] names, or null when it names none. A named
-  /// entry this device does not have throws [CredentialMissingException]
-  /// rather than resolving to an empty credential.
-  Future<Secret?> _savedSecret(ServerConfig config) async {
-    final ref = config.secretRef;
-    if (ref == null) return null;
-
-    final secret = await _readSavedSecret(ref);
-    if (secret != null) return secret;
-    throw CredentialMissingException(
-      serverId: config.id,
-      serverLabel: config.label,
-      authMethod: config.authMethod,
-    );
-  }
+  late final _credentialResolver = CredentialResolver(
+    _AppCredentialSource(this),
+  );
 
   /// Re-probe only for stored material. Typed drafts need no saved-key read.
   Future<Secret?> _readSavedSecret(String ref) async {
@@ -1175,12 +1074,8 @@ class AppServices {
   }
 
   /// Resolves a saved jump host at connection time, including its credential.
-  Future<ResolvedSshHost?> resolveJumpHost(String id) async {
-    final config = await configStore.getServer(id);
-    if (config == null) return null;
-
-    return ResolvedSshHost(config, await resolveCredentials(config));
-  }
+  Future<ResolvedSshHost?> resolveJumpHost(String id) =>
+      _credentialResolver.jumpHostResolver(configStore.getServer)(id);
 
   /// Read a "reference, don't store" identity file for [config], through the
   /// server's security-scoped bookmark when one exists (a Browse…-picked key
@@ -1389,6 +1284,28 @@ class AppServices {
     if (backends.isEmpty) return null;
     return backends.length == 1 ? backends.single : CompositeSearch(backends);
   }
+}
+
+/// [AppServices]' own reads as the shared resolver's seam: the vault read
+/// unlocks from the keystore on demand, and the identity-file read keeps
+/// [AppLock], security-scoped bookmarks and the audit log.
+final class _AppCredentialSource implements CredentialSource {
+  const _AppCredentialSource(this._services);
+
+  final AppServices _services;
+
+  @override
+  Future<Secret?> storedSecret(String secretRef) =>
+      _services._readSavedSecret(secretRef);
+
+  /// [AppServices.resolveCredentials] builds every draft, so the opaque
+  /// bookmark is always an [IdentityFileBookmark] or null.
+  @override
+  Future<String> identityFile(ServerConfig config, CredentialDraft? draft) =>
+      _services._readIdentityFile(
+        config,
+        bookmarkOverride: draft?.identityBookmark as IdentityFileBookmark?,
+      );
 }
 
 const String _plainNotFound = 'http_404';

@@ -16,11 +16,18 @@ export 'src/terminal/local_shell.dart';
 export 'src/terminal/paste_sanitizer.dart';
 export 'src/terminal/shell_command.dart';
 
+export 'src/ssh/byte_duplex.dart' show ByteDuplex;
+export 'src/ssh/channel_budget.dart'
+    show ChannelRefusal, ChannelOpenException, SshLinkSeen;
+export 'src/ssh/credential_resolver.dart';
 export 'src/ssh/executable_launch.dart';
 export 'src/ssh/home_path.dart';
 export 'src/ssh/identity_audit_log.dart';
 export 'src/ssh/remote_command.dart';
 export 'src/ssh/remote_git.dart';
+export 'src/ssh/remote_process.dart'
+    show PtyRequest, RemoteExit, RemoteSignal, RemoteProcess;
+export 'src/ssh/ssh_link.dart';
 export 'src/ssh/ssh_session.dart';
 // Named `test_connection` rather than `connection_test`: `dart test <package>`
 // globs `**_test.dart`, so the latter would be collected as a test file and

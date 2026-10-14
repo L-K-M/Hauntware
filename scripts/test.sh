@@ -123,9 +123,12 @@ if [[ "$scope" != flutter ]]; then
   )
 
   # ---- Suite guards (F1a): they live at the root, resolve through the
-  # root manifest and check every product in tool/guards.yaml — today
-  # Poltergeist only, whose workspace the block above just resolved.
+  # root manifest and check every product in tool/guards.yaml — Séance,
+  # Planchette, Poltergeist and Klabautermann. The guards read each
+  # workspace's package_config.json, so Klabautermann resolves here, ahead
+  # of its own block below.
   (
+    (cd klabautermann && run dart pub get)
     run dart analyze tool/import_guard tool/protocol_guard tool/license_gate
     run dart test tool/import_guard/test
     run dart test tool/protocol_guard/test
@@ -160,18 +163,18 @@ if [[ "$scope" != dart ]]; then
     (cd packages/planchette_core && run dart pub get)
     for dir in packages/ghost_ui packages/planchette_editor \
                packages/ghost_desktop packages/ghost_marks packages/ghost_theme \
-               app/planchette_app; do
+               packages/ghost_servers app/planchette_app; do
       (cd "$dir" && run flutter pub get)
     done
     for dir in packages/ghost_ui packages/planchette_editor \
                packages/ghost_desktop packages/ghost_marks packages/ghost_theme \
-               app/planchette_app; do
+               packages/ghost_servers app/planchette_app; do
       (cd "$dir" && run flutter analyze && run flutter test)
     done
     run dart format --set-exit-if-changed --output=none \
       packages/planchette_core packages/planchette_editor \
       packages/ghost_ui packages/ghost_desktop packages/ghost_marks \
-      packages/ghost_theme app/planchette_app
+      packages/ghost_theme packages/ghost_servers app/planchette_app
   )
 
   # ---- Séance: app plus the vendored xterm fork (its tests are not

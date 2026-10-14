@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:seance_app/ui/server_grouping.dart';
-import 'package:seance_core/seance_core.dart';
+import 'package:ghost_servers/ghost_servers.dart';
+import 'package:seance_protocol/seance_protocol.dart';
 
 ServerConfig _server(String label, {String? group}) => ServerConfig(
   id: label,

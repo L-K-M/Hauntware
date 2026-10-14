@@ -1,15 +1,22 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:ghost_theme/ghost_theme.dart' show GhostTheme;
+import 'package:klabautermann_core/klabautermann_core.dart'
+    show DeviceSettingsIssue;
 
 import 'controllers/appearance_controller.dart';
 import 'controllers/fleet_controller.dart';
 import 'controllers/monitoring_controller.dart';
 import 'l10n/app_localizations.dart';
+import 'services/settings_window/settings_window_link.dart';
 import 'theme/app_theme.dart';
 import 'ui/adaptive_shell.dart';
+import 'ui/settings_issue_notice.dart';
 import 'ui/settings_page.dart';
 
-/// The settings route's name; desktop gets a second window later (D32),
-/// this stays the mobile and fallback path.
+/// The settings route's name: Settings on phones, and on a desktop whose
+/// runner cannot open the settings window (D32).
 const String kSettingsRoute = '/settings';
 
 /// The composition root's view (03 §10.1): one `MaterialApp` whose only
@@ -21,39 +28,72 @@ class KlabautermannApp extends StatelessWidget {
     required this.fleet,
     required this.monitoring,
     required this.appearance,
+    this.settingsIssue,
+    this.openSettingsWindow,
   });
 
   final FleetController fleet;
   final MonitoringController monitoring;
   final AppearanceController appearance;
 
+  /// What went wrong opening `settings.json`, told once at startup.
+  final DeviceSettingsIssue? settingsIssue;
+
+  /// Opens Settings in its own window; null on phones, where Settings is
+  /// [kSettingsRoute].
+  final OpenSettingsWindow? openSettingsWindow;
+
+  /// The settings window where there is one, otherwise the route. A window
+  /// that cannot open falls back to the route, so Settings stays reachable,
+  /// whatever it fails with (an error too, as Séance's fallback does).
+  Future<void> _openSettings(BuildContext context) async {
+    final openWindow = openSettingsWindow;
+    if (openWindow != null) {
+      try {
+        if (await openWindow(SettingsTab.general)) return;
+      } on Object catch (error, stackTrace) {
+        FlutterError.reportError(
+          FlutterErrorDetails(
+            exception: error,
+            stack: stackTrace,
+            context: ErrorDescription('while opening the settings window'),
+          ),
+        );
+      }
+    }
+    if (!context.mounted) return;
+    unawaited(Navigator.of(context).pushNamed(kSettingsRoute));
+  }
+
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
       listenable: appearance,
       builder: (context, _) {
+        // Built through ghost_theme the way Séance draws its MaterialApp
+        // (03 D9): the extensions shared widgets read come with it.
+        final themes = GhostTheme.forAppearance(
+          klabautermannThemeStyle,
+          appearance.value,
+        );
         return MaterialApp(
           onGenerateTitle: (context) => AppLocalizations.of(context).appTitle,
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
-          theme: klabautermannTheme(
-            Brightness.light,
-            Theme.of(context).platform,
-          ),
-          darkTheme: klabautermannTheme(
-            Brightness.dark,
-            Theme.of(context).platform,
-          ),
-          themeMode: appearance.themeMode,
+          theme: themes.theme,
+          darkTheme: themes.darkTheme,
+          themeMode: themes.themeMode,
           // The shell's settings callback needs a context under the
           // MaterialApp's Navigator; the ListenableBuilder's own context
           // sits above it.
-          home: Builder(
-            builder: (context) => AdaptiveShell(
-              fleet: fleet,
-              monitoring: monitoring,
-              onOpenSettings: () =>
-                  Navigator.of(context).pushNamed(kSettingsRoute),
+          home: SettingsIssueNotice(
+            issue: settingsIssue,
+            child: Builder(
+              builder: (context) => AdaptiveShell(
+                fleet: fleet,
+                monitoring: monitoring,
+                onOpenSettings: () => unawaited(_openSettings(context)),
+              ),
             ),
           ),
           routes: {kSettingsRoute: (_) => SettingsPage(appearance: appearance)},
