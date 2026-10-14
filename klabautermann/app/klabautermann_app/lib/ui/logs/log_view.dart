@@ -415,6 +415,12 @@ class _LogViewState extends State<LogView> {
     final rows = SliverChildBuilderDelegate(
       (context, index) => _row(index, text),
       childCount: widget.controller.length,
+      // Rows are keyed by seq, so a row keeps its element, and with it
+      // focus, while entries leave the buffer and every index shifts.
+      findChildIndexCallback: (key) {
+        final index = (key as ValueKey<int>).value - widget.controller.firstSeq;
+        return index >= 0 && index < widget.controller.length ? index : null;
+      },
     );
     final list = NotificationListener<ScrollUpdateNotification>(
       onNotification: _onScrollUpdate,
@@ -558,11 +564,13 @@ class _LogViewState extends State<LogView> {
         ],
       ),
     );
+    final key = ValueKey(entry.seq);
     if (entry is! LogLine || entry.journal == null) {
-      return MergeSemantics(child: row);
+      return MergeSemantics(key: key, child: row);
     }
 
     return MergeSemantics(
+      key: key,
       child: Semantics(
         expanded: fields != null,
         onTapHint: fields == null

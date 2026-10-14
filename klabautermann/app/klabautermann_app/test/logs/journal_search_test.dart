@@ -281,6 +281,24 @@ void main() {
       await tester.pump();
       expect(_row('_PID=812'), findsNothing);
     });
+
+    testWidgets('a focused row keeps focus while lines leave the buffer', (
+      tester,
+    ) async {
+      final (logs, search) = _logs(maxLines: 50);
+      await _pump(tester, logs, search);
+      logs.addJournal([for (var i = 0; i < 50; i++) _entry('m $i')]);
+      await tester.pump();
+      logs.pause();
+      final row = _row('nginx.service[812]: m 45');
+      final focus = Focus.of(tester.element(row))..requestFocus();
+      await tester.pump();
+
+      logs.addJournal([for (var i = 50; i < 55; i++) _entry('m $i')]);
+      await tester.pump();
+      expect(Focus.of(tester.element(row)), same(focus));
+      expect(focus.hasPrimaryFocus, isTrue);
+    });
   });
 
   testWidgets('a step to a match pauses the view and shows it (LOG-05)', (
