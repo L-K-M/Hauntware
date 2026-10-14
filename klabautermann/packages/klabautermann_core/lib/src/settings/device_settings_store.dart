@@ -217,11 +217,14 @@ final class DeviceSettingsStore {
     _ => null,
   };
 
-  /// Stores [appearance] and writes the document. Throws when the write
-  /// fails or this session is read-only; the value stays in memory either
-  /// way.
+  /// Stores a copy of [appearance] and writes the document. Throws when the
+  /// write fails or this session is read-only; the value stays in memory
+  /// either way. The copy is deep, through JSON, because the write runs
+  /// later from the queue: a caller changing its map afterwards cannot
+  /// change what is saved, and a value JSON cannot hold fails here.
   Future<void> setAppearance(Map<String, Object?> appearance) async {
-    _values[_appearanceKey] = appearance;
+    _values[_appearanceKey] =
+        jsonDecode(jsonEncode(appearance)) as Map<String, Object?>;
     await _save();
   }
 
