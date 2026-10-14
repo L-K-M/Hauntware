@@ -5,9 +5,11 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ghost_ui/ghost_ui.dart';
 import 'package:klabautermann_app/controllers/fleet_controller.dart';
+import 'package:klabautermann_app/l10n/app_localizations.dart';
 import 'package:klabautermann_app/l10n/app_localizations_en.dart';
 import 'package:klabautermann_app/services/settings_window/settings_window_link.dart';
 import 'package:klabautermann_app/ui/menus/app_commands.dart';
+import 'package:klabautermann_app/ui/menus/app_menu_host.dart';
 import 'package:klabautermann_app/ui/menus/app_menus.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 
@@ -445,6 +447,64 @@ void main() {
       await tester.pumpAndSettle();
       expect(importItem().onSelected, isNotNull);
     }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
+
+    testWidgets('a disabled command never runs from its shortcut', (
+      tester,
+    ) async {
+      // No registered command is both disableable and bound to a chord
+      // yet, so the host's own check is all that stands between a chord
+      // and a disabled command.
+      final runs = <String>[];
+      AppCommand command(
+        String id,
+        LogicalKeyboardKey key, {
+        required bool enabled,
+        required int order,
+      }) => AppCommand(
+        id: id,
+        label: (_) => id,
+        menuPlacement: CommandMenuPlacement(menu: AppMenuId.file, order: order),
+        enabled: () => enabled,
+        activators: (_) => [SingleActivator(key, control: true)],
+        run: (_) async => runs.add(id),
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: AppMenuHost(
+            commands: [
+              command(
+                'test.disabled',
+                LogicalKeyboardKey.keyK,
+                enabled: false,
+                order: 0,
+              ),
+              command(
+                'test.enabled',
+                LogicalKeyboardKey.keyJ,
+                enabled: true,
+                order: 10,
+              ),
+            ],
+            child: const SizedBox.expand(),
+          ),
+        ),
+      );
+
+      Future<void> press(LogicalKeyboardKey key) async {
+        await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+        await tester.sendKeyEvent(key);
+        await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+        await tester.pumpAndSettle();
+      }
+
+      await press(LogicalKeyboardKey.keyK);
+      await press(LogicalKeyboardKey.keyJ);
+
+      // The enabled command shows the chords reach the host.
+      expect(runs, ['test.enabled']);
+    }, variant: TargetPlatformVariant.only(TargetPlatform.linux));
 
     testWidgets(
       'phones and tablets have no menus',
