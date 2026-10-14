@@ -247,7 +247,9 @@ final class CronExpression {
         hi = _value(base.substring(dash + 1), names) ?? -1;
       }
       // hi < lo rejects both an inverted a-b and a bare a/n whose start
-      // lies above the maximum, as cronie does.
+      // lies above the maximum. cronie rejects every bare a/n (its
+      // get_range accepts no step after a single number); this parser
+      // keeps reading an in-range a/n as a-max/n.
       if (lo < min || hi > max || hi < lo) return null;
       final single = dash < 0 && slash < 0;
       out.add(CronFieldItem._(start: lo, end: single ? null : hi, step: step));
