@@ -34,8 +34,8 @@ slice:
   `locatorConflict`. The fleet controller keeps link statuses and probe
   answers only for listed servers, and the rail words every status.
   Nothing produces them yet: the engine still rejects `Connect` and
-  `SetAppActivity`, sends no prompts or probe answers, and fills none of
-  the new fleet fields.
+  `SetAppActivity`, sends no prompts or probe answers, and fills the new
+  fleet fields only for imports (below).
 - `klabautermann_app`: `flutter create`d for the five platforms with the
   04 §12.3 identities, generated launcher icons, the desktop three-pane
   shell (fleet rail, workspace, inspector) at 960 px and up, the phone
@@ -99,8 +99,12 @@ slice:
   told once in a top toast at startup. As with `settings.json`, no real
   build has run it yet: the tests restart the engine isolate against a
   temporary folder. `Include` is not followed (`SshConfigImporter` drops
-  it), and `ProxyJump` and `IdentityFile` are not carried or stored yet:
-  the rail needs neither until links land (M2).
+  it). Since M2 the store keeps each host's `IdentityFile` and
+  `ProxyJump` (schema 2, which reads schema 1), and the engine maps
+  imports to the `ServerConfig`s and jump-hop configs links will dial
+  (03 §10.1), filling the route, sign-in, search text and `host:port`
+  conflict fields; a host whose `ProxyJump` it cannot follow is skipped
+  and counted. Nothing dials them yet.
 - Packaging: `scripts/build.sh`, `scripts/package-linux.sh` (.deb and
   AppImage through the shared `scripts/package-linux-common.sh`) and
   `scripts/build-flatpak.sh` with `flatpak/ch.lkmc.klabautermann.yml`.

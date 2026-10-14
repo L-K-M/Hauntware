@@ -2,7 +2,9 @@ import 'dart:io';
 import 'dart:isolate';
 
 import 'package:meta/meta.dart';
+import 'package:seance_core/seance_core.dart' show ImportedHost;
 
+import '../fleet/imported_fleet.dart';
 import '../fleet/ssh_config_entries.dart';
 import '../fleet/ssh_config_import_store.dart';
 import 'protocol.dart';
@@ -44,12 +46,20 @@ void engineMain(EngineStart start) {
   // 03 §6.2 fill this map's consumers in M2.
   final subscriptions = <String, Subscribe>{};
 
-  // FL-02's imported entries, in D13's device-local store (03 §4.10),
+  // FL-02's imported hosts, in D13's device-local store (03 §4.10),
   // opened before the first request is handled. Each import replaces the
   // last; the engine keeps them so its later fleet snapshots (sync rounds,
   // F3) carry them after the synced entries. The store hands them out
   // unmodifiable, so building a snapshot cannot edit them in place.
   late final SshConfigImportStore imports;
+
+  // The login name for imported hosts and hops that name no user.
+  final localUser = localUserName(Platform.environment);
+
+  // Synced entries lead this list once the catalog library lands (F3).
+  CatalogReplaced fleet() => CatalogReplaced(
+    ImportedFleet(imports.hosts, localUser: localUser).entries,
+  );
 
   Future<void> handle(Object? message) async {
     switch (message) {
@@ -70,15 +80,15 @@ void engineMain(EngineStart start) {
         // The fleet as the engine starts: the imports an earlier run saved
         // (none when the store was empty or unusable), so the rail shows
         // them before the user does anything.
-        uiPort.send(CatalogReplaced(imports.entries));
+        uiPort.send(fleet());
       case Subscribe():
         subscriptions[message.serverId] = message;
       case Unsubscribe():
         subscriptions.remove(message.serverId);
       case ImportSshConfig(:final text):
-        final ({List<FleetEntry> entries, int skippedCount}) result;
+        final ({List<ImportedHost> hosts, int skippedCount}) result;
         try {
-          result = fleetEntriesFromSshConfig(text);
+          result = importedHostsFromSshConfig(text);
         } on Object catch (error) {
           // The importer is tolerant and is not expected to throw. If it
           // does, the engine answers rather than dying with every link.
@@ -90,12 +100,11 @@ void engineMain(EngineStart start) {
         // Saved before the fleet changes, so a restart after the answer
         // finds the import. A failed save still shows it for this run, and
         // the answer says it was not kept.
-        final saved = await imports.replace(result.entries);
-        // Synced entries lead this list once the catalog library lands (F3).
-        uiPort.send(CatalogReplaced(imports.entries));
+        final saved = await imports.replace(result.hosts);
+        uiPort.send(fleet());
         uiPort.send(
           SshConfigImported(
-            importedCount: result.entries.length,
+            importedCount: result.hosts.length,
             skippedCount: result.skippedCount,
             saved: saved,
           ),

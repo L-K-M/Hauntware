@@ -270,8 +270,9 @@ final class SshConfigImported extends EngineEvent {
   final int importedCount;
 
   /// Hosts the import left out: a `Port` the importer refuses (one ssh
-  /// rejects, or a service name other than `ssh`, `http` or `https`), or an
-  /// alias an earlier block already took. Wildcard-only blocks such as
+  /// rejects, or a service name other than `ssh`, `http` or `https`), an
+  /// alias an earlier block already took, or a `ProxyJump` the engine
+  /// cannot follow as ssh would (03 §10.1). Wildcard-only blocks such as
   /// `Host *` are defaults rather than hosts and do not count.
   final int skippedCount;
 
@@ -529,8 +530,8 @@ final class FleetEntry {
   /// The SSH port, [kSshDefaultPort] unless the source names another.
   final int port;
 
-  /// The login name; null leaves it to SSH, which uses the local account
-  /// name when the config names no `User`.
+  /// The login name the source names; null when it names none, and the
+  /// engine then signs in as the local account (`USER` or `USERNAME`).
   final String? user;
 
   /// The group the rail files the entry under, or null for none. An

@@ -145,6 +145,10 @@ void main() {
       // and the block that names one keeps its own HostName.
       expect(byLabel['legacy']!.host, 'legacy.example.com');
       expect(byLabel['v6']!.host, '2001:db8::1');
+      // The fields links need: the route, the sign-in and the filter text.
+      expect(byLabel['bastion']!.jumpRoute, ['jump.example']);
+      expect(byLabel['web-1']!.authKind, FleetAuthKind.identityFile);
+      expect(byLabel['web-1']!.searchText, contains('web-1.example.com:2222'));
       expect(await events.moveNext(), isTrue);
       final answer = events.current as SshConfigImported;
       expect(answer.importedCount, sshConfigFixtureEntries.length);

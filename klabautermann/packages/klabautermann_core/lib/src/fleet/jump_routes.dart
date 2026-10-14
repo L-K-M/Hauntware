@@ -1,0 +1,253 @@
+import 'package:seance_core/seance_core.dart' show ImportedHost;
+
+import '../engine/protocol.dart' show kSshDefaultPort;
+
+/// Prefixes a [JumpHop.id]. Import ids are `ssh-config:<alias>` and synced
+/// ids bare UUIDs, so a hop id collides with neither.
+const String _hopIdPrefix = 'ssh-config-hop:';
+
+/// A decimal TCP port, as the engine reads one in a `ProxyJump`.
+final RegExp _decimal = RegExp(r'^[0-9]+$');
+
+/// What ssh's `valid_domain()` accepts as an ssh URI's host: a letter,
+/// digit or `_`, then letters, digits, `.`, `-` and `_`.
+final RegExp _domain = RegExp(r'^[A-Za-z0-9_][A-Za-z0-9_.-]*$');
+
+/// One jump host on an imported server's route (03 §10.1): the hop as its
+/// `ProxyJump` names it and the endpoint ssh would dial for it.
+final class JumpHop {
+  const JumpHop._({
+    required this.id,
+    required this.name,
+    required this.host,
+    required this.port,
+    this.user,
+    this.identityFile,
+  });
+
+  /// `ssh-config-hop:` and the names of the route up to and including this
+  /// hop, joined by commas: the same config gives the same ids on every
+  /// import and start, and servers that share the start of a route share
+  /// its hops.
+  final String id;
+
+  /// The hop as written: an alias, `[user@]host[:port]` or an ssh URI.
+  final String name;
+
+  /// The address to dial: the alias's `HostName` (or the alias itself)
+  /// when [name] names an imported host, else the host [name] gives.
+  final String host;
+
+  final int port;
+
+  /// The hop's own user, else the alias's `User`; null leaves the login
+  /// name to the local account, as for a host without `User`.
+  final String? user;
+
+  /// The alias's `IdentityFile`, as written; null signs in with the agent.
+  final String? identityFile;
+}
+
+/// The jump route of each of [hosts], keyed by alias: its hops, first hop
+/// first, empty for a direct connection, or null when the engine cannot
+/// follow its `ProxyJump` the way ssh would. [hosts] holds one host per
+/// alias; [leftOut] names hosts of the config that are not in [hosts].
+///
+/// What ssh does, and so what this does (ssh_config(5) and OpenSSH's
+/// `parse_jump()` and `ssh.c`): a `ProxyJump` of `a,b` dials `a`, then `b`
+/// through `a`, then the host through `b`, and `none` means direct. ssh
+/// reaches each hop with a nested ssh that reads the config for the hop's
+/// name, so a hop that names an imported alias (case-sensitively, as
+/// `Host` patterns match) takes that host's `HostName`, `Port`, `User` and
+/// `IdentityFile`, with the hop's own user and port first. Only the first
+/// hop's own `ProxyJump` applies: the nested ssh for every later hop gets
+/// the hops before it with `-J`, which overrides the hop's own.
+///
+/// A host's route is null when its `ProxyJump`:
+///
+/// - is one ssh rejects, or names a port other than a decimal 1 to 65535
+///   (ssh also resolves service names);
+/// - contains `%`, which ssh expands as a token (ssh_config(5), TOKENS);
+/// - loops back through first hops to a host already on the way;
+/// - names a host in [leftOut], or one whose own route is null: ssh would
+///   take that host's settings from a block the engine does not have.
+Map<String, List<JumpHop>?> jumpRoutes(
+  List<ImportedHost> hosts, {
+  Set<String> leftOut = const {},
+}) {
+  final byAlias = {for (final host in hosts) host.alias: host};
+  final unusable = {...leftOut};
+  while (true) {
+    final routes = {
+      for (final host in hosts)
+        host.alias: unusable.contains(host.alias)
+            ? null
+            : _route(host, byAlias, unusable, {host.alias}),
+    };
+    final failed = [
+      for (final MapEntry(:key, :value) in routes.entries)
+        if (value == null && !unusable.contains(key)) key,
+    ];
+    // Leaving a host out can break the routes that name it, so repeat
+    // until no further route fails.
+    if (failed.isEmpty) return routes;
+    unusable.addAll(failed);
+  }
+}
+
+List<JumpHop>? _route(
+  ImportedHost host,
+  Map<String, ImportedHost> byAlias,
+  Set<String> unusable,
+  Set<String> visiting,
+) {
+  final value = host.proxyJump;
+  if (value == null) return const [];
+
+  final hops = _parseProxyJump(value);
+  if (hops == null) return null;
+
+  final route = <JumpHop>[];
+  for (final (index, (:name, :user, host: hopHost, :port)) in hops.indexed) {
+    if (unusable.contains(hopHost)) return null;
+
+    final alias = byAlias[hopHost];
+    if (index == 0 && alias != null) {
+      if (!visiting.add(alias.alias)) return null;
+
+      final upstream = _route(alias, byAlias, unusable, visiting);
+      if (upstream == null) return null;
+      route.addAll(upstream);
+    }
+
+    final previous = route.lastOrNull;
+    route.add(
+      JumpHop._(
+        id: previous == null ? '$_hopIdPrefix$name' : '${previous.id},$name',
+        name: name,
+        host: alias?.effectiveHost ?? hopHost,
+        port: port ?? alias?.port ?? kSshDefaultPort,
+        user: user ?? alias?.user,
+        identityFile: alias?.identityFile,
+      ),
+    );
+  }
+  return List.unmodifiable(route);
+}
+
+typedef _Hop = ({String name, String? user, String host, int? port});
+
+/// The hops a `ProxyJump` [value] names, first hop first: empty for
+/// `none`, null when ssh would reject it or the engine cannot read it.
+List<_Hop>? _parseProxyJump(String value) {
+  // ssh compares the whole value with `none`, then drops a `#` comment and
+  // trailing whitespace before it splits the hops.
+  if (value.toLowerCase() == 'none') return const [];
+
+  final hash = value.indexOf('#');
+  final text = (hash < 0 ? value : value.substring(0, hash)).trimRight();
+  if (text.contains('%')) return null;
+
+  final hops = <_Hop>[];
+  for (final name in text.split(',')) {
+    final hop = name.startsWith('ssh://')
+        ? _parseSshUri(name.substring('ssh://'.length))
+        : _parseUserHostPort(name);
+    if (hop == null) return null;
+    hops.add((name: name, user: hop.user, host: hop.host, port: hop.port));
+  }
+  return hops;
+}
+
+/// `[user@]host[:port]` as ssh's `parse_user_host_port()` reads it: the
+/// user ends at the last `@`, and a host in brackets may hold colons.
+({String? user, String host, int? port})? _parseUserHostPort(String text) {
+  String? user;
+  var rest = text;
+  final at = text.lastIndexOf('@');
+  if (at >= 0) {
+    if (at == 0) return null;
+    user = text.substring(0, at);
+    rest = text.substring(at + 1);
+  }
+
+  final split = _splitHost(rest);
+  if (split == null || split.host.isEmpty || split.delimiter == '/') {
+    return null;
+  }
+  if (split.rest.isEmpty) return (user: user, host: split.host, port: null);
+
+  final port = _port(split.rest);
+  return port == null ? null : (user: user, host: split.host, port: port);
+}
+
+/// An ssh URI after `ssh://`, as ssh's `parse_ssh_uri()` reads it: the
+/// user ends at the first `@` and drops `;` parameters, the host must be a
+/// domain name or IPv4 address, and no path may follow. The value holds no
+/// `%` by now, so decoding the user only turns `+` into a space.
+({String? user, String host, int? port})? _parseSshUri(String text) {
+  String? user;
+  var rest = text;
+  final at = text.indexOf('@');
+  if (at >= 0) {
+    final info = text.substring(0, at).split(';').first;
+    if (info.isEmpty) return null;
+    user = info.replaceAll('+', ' ');
+    rest = text.substring(at + 1);
+  }
+
+  final split = _splitHost(rest);
+  if (split == null ||
+      !_domain.hasMatch(split.host) ||
+      split.host.contains('..')) {
+    return null;
+  }
+
+  var path = split.rest;
+  int? port;
+  if (split.delimiter == ':' && path.isNotEmpty) {
+    final slash = path.indexOf('/');
+    port = _port(slash < 0 ? path : path.substring(0, slash));
+    if (port == null) return null;
+    path = slash < 0 ? '' : path.substring(slash + 1);
+  }
+  if (path.isNotEmpty) return null;
+
+  // ssh drops one trailing dot from the host.
+  final host = split.host.endsWith('.')
+      ? split.host.substring(0, split.host.length - 1)
+      : split.host;
+  return (user: user, host: host, port: port);
+}
+
+/// ssh's `hpdelim2()` and `cleanhostname()`: the host at the start of
+/// [text], without brackets, the `:` or `/` after it (null at the end)
+/// and what follows; null when a bracket is not closed or another
+/// character follows it.
+({String host, String? delimiter, String rest})? _splitHost(String text) {
+  final String host;
+  final int end;
+  if (text.startsWith('[')) {
+    final close = text.indexOf(']');
+    if (close < 0) return null;
+    host = text.substring(1, close);
+    end = close + 1;
+  } else {
+    final at = text.indexOf(RegExp('[:/]'));
+    end = at < 0 ? text.length : at;
+    host = text.substring(0, end);
+  }
+
+  if (end == text.length) return (host: host, delimiter: null, rest: '');
+  final delimiter = text[end];
+  if (delimiter != ':' && delimiter != '/') return null;
+  return (host: host, delimiter: delimiter, rest: text.substring(end + 1));
+}
+
+/// A decimal port in the TCP range 1 to 65535, or null.
+int? _port(String text) {
+  if (!_decimal.hasMatch(text)) return null;
+
+  final port = int.tryParse(text);
+  return port == null || port < 1 || port > 65535 ? null : port;
+}

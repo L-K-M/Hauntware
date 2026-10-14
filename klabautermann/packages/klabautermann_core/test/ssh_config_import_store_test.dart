@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:klabautermann_core/klabautermann_core.dart';
 import 'package:klabautermann_core/src/fleet/ssh_config_entries.dart';
 import 'package:klabautermann_core/src/fleet/ssh_config_import_store.dart';
+import 'package:seance_core/seance_core.dart' show ImportedHost;
 import 'package:test/test.dart';
 
 import 'fixtures/ssh_config_fixture.dart';
@@ -12,17 +13,25 @@ import 'fixtures/ssh_config_fixture.dart';
 final _time = DateTime.utc(2026, 10, 14, 9, 30, 5, 250);
 const _stamp = '20261014T093005250Z';
 
-final _web = importedFleetEntry(
+const _web = ImportedHost(
   alias: 'web-1',
-  host: 'web-1.example.com',
+  hostName: 'web-1.example.com',
   port: 2222,
   user: 'deploy',
+  identityFile: '~/.ssh/id_ed25519',
+  proxyJump: 'ops@bastion:2200',
 );
-final _bastion = importedFleetEntry(
+const _bastion = ImportedHost(
   alias: 'bastion',
-  host: 'bastion',
+  hostName: 'bastion',
   port: kSshDefaultPort,
 );
+
+/// What a stored host holds, comparable by value.
+List<Object?> _fields(Iterable<ImportedHost> hosts) => [
+  for (final h in hosts)
+    (h.alias, h.effectiveHost, h.port, h.user, h.identityFile, h.proxyJump),
+];
 
 void main() {
   late Directory directory;
@@ -47,7 +56,7 @@ void main() {
       final store = await SshConfigImportStore.open(file);
 
       expect(store.issue, isNull);
-      expect(store.entries, isEmpty);
+      expect(store.hosts, isEmpty);
       expect(names(), isEmpty);
     });
 
@@ -64,8 +73,10 @@ void main() {
             'host': 'web-1.example.com',
             'port': 2222,
             'user': 'deploy',
+            'identityFile': '~/.ssh/id_ed25519',
+            'proxyJump': 'ops@bastion:2200',
           },
-          // No `User` in the config, no key in the file.
+          // Nothing the config does not name gets a key in the file.
           {'alias': 'bastion', 'host': 'bastion', 'port': 22},
         ],
       });
@@ -73,33 +84,34 @@ void main() {
 
       final reopened = await SshConfigImportStore.open(file);
       expect(reopened.issue, isNull);
-      // By value, ids and origin included: they derive from the alias.
-      expect(reopened.entries, [_web, _bastion]);
-      expect(reopened.entries.first.serverId, 'ssh-config:web-1');
-      expect(() => reopened.entries.add(_web), throwsUnsupportedError);
+      expect(_fields(reopened.hosts), _fields([_web, _bastion]));
+      expect(() => reopened.hosts.add(_web), throwsUnsupportedError);
     });
 
     test('what the importer produces survives a save and a reload', () async {
-      final imported = fleetEntriesFromSshConfig(sshConfigFixture).entries;
+      final imported = importedHostsFromSshConfig(sshConfigFixture).hosts;
       final store = await SshConfigImportStore.open(file);
       await store.replace(imported);
 
       final reopened = await SshConfigImportStore.open(file);
-      expect(reopened.entries, imported);
-      expect(reopened.entries.map((e) => e.label), sshConfigFixtureEntries);
+      expect(_fields(reopened.hosts), _fields(imported));
+      expect(reopened.hosts.map((h) => h.alias), sshConfigFixtureEntries);
     });
 
     test('each replace drops the previous set, an empty one too', () async {
       final store = await SshConfigImportStore.open(file);
       await store.replace([_web, _bastion]);
       await store.replace([_bastion]);
-      expect((await SshConfigImportStore.open(file)).entries, [_bastion]);
+      expect(
+        _fields((await SshConfigImportStore.open(file)).hosts),
+        _fields([_bastion]),
+      );
 
       await store.replace(const []);
-      expect(store.entries, isEmpty);
-      expect((await SshConfigImportStore.open(file)).entries, isEmpty);
+      expect(store.hosts, isEmpty);
+      expect((await SshConfigImportStore.open(file)).hosts, isEmpty);
       expect(jsonDecode(file.readAsStringSync()), {
-        'version': 1,
+        'version': sshConfigImportsSchemaVersion,
         'entries': <Object?>[],
       });
     });
@@ -137,9 +149,12 @@ void main() {
       );
       expect(await store.replace([_bastion]), isFalse);
 
-      expect(store.entries, [_bastion], reason: 'shown for this run');
+      expect(_fields(store.hosts), _fields([_bastion]), reason: 'this run');
       expect(file.readAsBytesSync(), bytes);
-      expect((await SshConfigImportStore.open(file)).entries, [_web]);
+      expect(
+        _fields((await SshConfigImportStore.open(file)).hosts),
+        _fields([_web]),
+      );
     });
 
     group('a damaged file', () {
@@ -176,6 +191,19 @@ void main() {
         'an empty user': _document([
           {'alias': 'a', 'host': 'h', 'port': 22, 'user': ''},
         ]),
+        'an empty identity file': _document([
+          {'alias': 'a', 'host': 'h', 'port': 22, 'identityFile': ''},
+        ]),
+        'a ProxyJump that is no string': _document([
+          {'alias': 'a', 'host': 'h', 'port': 22, 'proxyJump': 7},
+        ]),
+        'a ProxyJump ssh rejects': _document([
+          {'alias': 'a', 'host': 'h', 'port': 22, 'proxyJump': 'j:0'},
+        ]),
+        'a ProxyJump loop': _document([
+          {'alias': 'a', 'host': 'h', 'port': 22, 'proxyJump': 'b'},
+          {'alias': 'b', 'host': 'i', 'port': 22, 'proxyJump': 'a'},
+        ]),
       };
 
       for (final MapEntry(key: name, value: bytes) in damaged.entries) {
@@ -190,7 +218,7 @@ void main() {
           expect(issue.detail, isNotEmpty);
           expect(File(issue.preservedAs!).readAsBytesSync(), bytes);
           expect(file.existsSync(), isFalse);
-          expect(store.entries, isEmpty, reason: 'all or nothing');
+          expect(store.hosts, isEmpty, reason: 'all or nothing');
         });
       }
 
@@ -202,7 +230,7 @@ void main() {
 
         final reopened = await SshConfigImportStore.open(file);
         expect(reopened.issue, isNull);
-        expect(reopened.entries, [_web]);
+        expect(_fields(reopened.hosts), _fields([_web]));
         expect(names(), [
           sshConfigImportsFileName,
           '$sshConfigImportsFileName.corrupt-$_stamp',
@@ -243,7 +271,7 @@ void main() {
         expect(store.issue?.kind, ImportStoreIssueKind.leftAsIs);
         expect(store.issue?.preservedAs, isNull);
         expect(await store.replace([_web]), isFalse);
-        expect(store.entries, [_web], reason: 'shown for this run');
+        expect(_fields(store.hosts), _fields([_web]), reason: 'this run');
         expect(writes, 0);
         expect(longName.readAsStringSync(), 'not json');
       });
@@ -288,7 +316,7 @@ void main() {
       final store = await SshConfigImportStore.open(file);
 
       expect(store.issue?.kind, ImportStoreIssueKind.newerVersion);
-      expect(store.entries, isEmpty);
+      expect(store.hosts, isEmpty);
       expect(await store.replace([_web]), isFalse);
       expect(file.readAsBytesSync(), bytes);
       expect(names(), [sshConfigImportsFileName]);
@@ -307,9 +335,26 @@ void main() {
       final store = await SshConfigImportStore.open(file);
 
       expect(store.issue, isNull);
-      expect(store.entries, [
-        importedFleetEntry(alias: 'a', host: 'h', port: 22),
-      ]);
+      expect(_fields(store.hosts), [('a', 'h', 22, null, null, null)]);
+    });
+
+    test('reads a version 1 file, which the next import rewrites', () async {
+      // Version 1 kept neither IdentityFile nor ProxyJump.
+      file.writeAsBytesSync(
+        _document([
+          {'alias': 'a', 'host': 'h', 'port': 2200, 'user': 'u'},
+        ]),
+      );
+
+      final store = await SshConfigImportStore.open(file);
+
+      expect(store.issue, isNull);
+      expect(_fields(store.hosts), [('a', 'h', 2200, 'u', null, null)]);
+      expect(await store.replace([_web]), isTrue);
+      expect(
+        (jsonDecode(file.readAsStringSync()) as Map)['version'],
+        sshConfigImportsSchemaVersion,
+      );
     });
   });
 }

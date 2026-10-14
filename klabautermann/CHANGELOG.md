@@ -13,6 +13,10 @@
   damaged file is kept aside as `ssh_config_imports.json.corrupt-<time>`
   and you are told at startup; an import that cannot be saved still shows
   until you quit, and you are told it will not be kept.
+- The `~/.ssh/config` import keeps each host's `IdentityFile` and
+  `ProxyJump` for the connections to come. A host whose `ProxyJump` ssh
+  would reject, or that Klabautermann cannot follow as ssh does, is
+  skipped and counted in the import message.
 - Desktop settings window: on macOS, Linux and Windows, Settings opens in
   a window of its own, and a theme change there applies to the app.
   Phones keep the settings page.

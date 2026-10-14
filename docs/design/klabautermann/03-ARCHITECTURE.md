@@ -1225,9 +1225,12 @@ re-push (c1 §2.4).
   unchecked.
 - Known limitation: pins are keyed by `host:port`, so identical private
   addresses behind different jump routes collide (c2 R8). The app warns
-  when two servers in the list share a locator with different routes. The
-  fix changes the suite's pin locator convention and is a dedicated
-  suite-wide task after v1, together with F7 (owner decision 2026-10-10).
+  when two servers in the list share a locator with different routes. For
+  imports the engine lists the others in each entry's `locatorConflict`
+  (10.1), comparing routes by each hop's `host:port`, so one jump host
+  reached as another user is the same route. The fix changes the suite's
+  pin locator convention and is a dedicated suite-wide task after v1,
+  together with F7 (owner decision 2026-10-10).
 
 ### 4.7 Endpoint confirmation (SAF-09)
 
@@ -1332,7 +1335,7 @@ platform identities in 04, section 12.3):
 | `vault.json`, `vault.json.rekey` | Credentials and re-key journal | `SC/src/store/` | MVP |
 | `host_keys.json`, verdict and tripwire files | Pins and quarantine state | catalog library | MVP |
 | `endpoint_pins.json` | Confirmed endpoints | catalog library | MVP |
-| `ssh_config_imports.json` [E] | D13's device-local store for FL-02 imports from `~/.ssh/config` (alias, host, port, user), replaced whole by each import; never pushed (D14). `IdentityFile` and `ProxyJump` join when links land (M2). Built in M1: the engine isolate loads it at start and saves each import atomically before it answers (10.1). A damaged file is renamed to `ssh_config_imports.json.corrupt-<UTC time>`; a file it cannot read or rename, or one from a newer schema, is left as it is and no import is saved that run | `klabautermann_core` [E] | MVP |
+| `ssh_config_imports.json` [E] | D13's device-local store for FL-02 imports from `~/.ssh/config` (alias, host, port, user, `IdentityFile`, `ProxyJump`), replaced whole by each import; never pushed (D14). Schema 2 (M2) added the last two, as written; a schema 1 file reads as hosts with neither, and the next import rewrites it. Built in M1: the engine isolate loads it at start and saves each import atomically before it answers (10.1). A damaged file is renamed to `ssh_config_imports.json.corrupt-<UTC time>`; a file it cannot read or rename, or one from a newer schema, is left as it is and no import is saved that run | `klabautermann_core` [E] | MVP |
 | `settings.json` | Device settings, `klabautermann.sync.deviceId` (minted once, never regenerated), monitor set, per-server device preferences | app | MVP |
 | `window_state.json` | The desktop main window's last normal frame and its maximized and full-screen flags (10.2), in the shape Séance's file established (`x`, `y`, `width`, `height`, `isMaximized`, `isFullScreen`; physical pixels on Windows); never synced. Added in M1, a deviation from the plan, which listed no window file: kept out of `settings.json`, as Séance and Planchette keep theirs, so debounced drag saves never rewrite the file that holds the device id | app | MVP |
 | `capabilities/<serverId>.json` | Cached probe results, 24 h TTL | `klabautermann_core` | MVP |
@@ -3219,13 +3222,34 @@ the engine in `engine_isolate.dart` beside it):
   before `SshConfigImported`, so the fleet already shows the imports when
   the counts arrive. `skippedCount` counts hosts left out for a `Port`
   the importer refuses (one ssh rejects, or a service name other than
-  `ssh`, `http` or `https`; the importer reports them) or an alias an
-  earlier block already took; wildcard-only blocks such as `Host *` are
-  defaults and are not counted.
+  `ssh`, `http` or `https`; the importer reports them), an alias an
+  earlier block already took, or a `ProxyJump` the engine cannot follow
+  (below); wildcard-only blocks such as `Host *` are defaults and are
+  not counted.
   An import is not a catalog write (D14). The engine saves the new set to
   D13's device-local store (4.10) before it answers; `saved` is false when
   the write failed or the store was left as it is at start, and the fleet
   then shows the import only until the engine stops.
+- **Imports as connect targets (M2).** The engine maps each import to a
+  `ServerConfig` with Séance's `ImportedHost.toServerConfig` (an
+  `IdentityFile` is a key read from its path, otherwise the agent signs)
+  and fills the import's `jumpRoute`, `authKind`, `searchText` and
+  `locatorConflict`. A host or hop without `User` signs in as `USER`, or
+  `USERNAME` on Windows; with neither set it gets no config. `ProxyJump`
+  follows ssh (`parse_jump()` and `ssh.c`): `a,b` dials `a`, then `b`
+  through `a`; `none` is direct; a hop that names an alias (exactly, as
+  `Host` patterns match) takes that host's `HostName`, `Port`, `User` and
+  `IdentityFile`, its own user and port first; and only the first hop's
+  own `ProxyJump` applies, since ssh hands every later hop the earlier
+  ones with `-J`. Each hop is a `ServerConfig` with the id
+  `ssh-config-hop:` plus the route's names up to that hop, joined by
+  commas, so the same config yields the same ids and routes that begin
+  alike share hops; each hop's `jumpHostId` names the hop before it, and
+  the engine hands its lookup to `CredentialResolver.jumpHostResolver`.
+  A host is left out when its `ProxyJump` is one ssh rejects, gives a
+  port other than a decimal 1 to 65535, holds a `%` token, loops through
+  first hops, or names a host left out (whose settings the engine would
+  lack), rather than dial a route ssh would not take.
 - **Version 3 (M2 links).** `LinkState(serverId, status)` carries a
   sealed `LinkStatus`: D46's eight states plus `blocked`, each with its
   own typed values: `degraded(reason)`, `backoff(until)`,

@@ -1,19 +1,24 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:seance_core/seance_core.dart' show ImportedHost;
+
 import '../engine/protocol.dart';
 import '../settings/device_settings_store.dart'
     show unusedCorruptCopyPath, writeFileAtomically;
+import 'jump_routes.dart';
 import 'ssh_config_entries.dart';
 
 /// D13's device-local store for FL-02 imports, under the app's support
 /// directory (03 §4.10).
 const String sshConfigImportsFileName = 'ssh_config_imports.json';
 
-/// The schema this build reads and writes. A file with a higher version
-/// came from a newer build and is never rewritten by this one
-/// ([ImportStoreIssueKind.newerVersion]).
-const int sshConfigImportsSchemaVersion = 1;
+/// The schema this build writes. A file with a higher version came from
+/// a newer build and is never rewritten by this one
+/// ([ImportStoreIssueKind.newerVersion]). Version 2 added `identityFile`
+/// and `proxyJump`; a version 1 file, written before either was kept,
+/// reads as hosts with neither, and the next import rewrites it.
+const int sshConfigImportsSchemaVersion = 2;
 
 const String _versionKey = 'version';
 const String _entriesKey = 'entries';
@@ -21,16 +26,20 @@ const String _aliasKey = 'alias';
 const String _hostKey = 'host';
 const String _portKey = 'port';
 const String _userKey = 'user';
+const String _identityFileKey = 'identityFile';
+const String _proxyJumpKey = 'proxyJump';
 
 /// Replaces a file's contents: [writeFileAtomically] outside tests.
 typedef SshConfigImportsWriter =
     Future<void> Function(File target, List<int> bytes);
 
-/// The imported ssh_config entries on disk (03 §4.10, D13): one JSON file,
-/// `{"version": 1, "entries": [{"alias", "host", "port", "user"}, ...]}`,
-/// in import (file) order, `user` left out when the config names none. The
-/// entry's id and origin are derived from the alias on load, so the file
-/// holds only what the config said. Device-local and never pushed (D14).
+/// The imported ssh_config hosts on disk (03 §4.10, D13): one JSON file,
+/// `{"version": 2, "entries": [{"alias", "host", "port", "user",
+/// "identityFile", "proxyJump"}, ...]}`, in import (file) order, `host` and
+/// `port` the effective ones, and the last three left out when the config
+/// names none. The engine derives the fleet entry, its id and its route
+/// from these (`ImportedFleet`), so the file holds only what the config
+/// said. Device-local and never pushed (D14).
 ///
 /// The engine isolate owns it (D18): it opens the store when it starts and
 /// replaces the whole set on each import. Every save writes the whole file
@@ -43,12 +52,12 @@ final class SshConfigImportStore {
     this._file,
     this._writer,
     this.issue, [
-    this._entries = const [],
+    this._hosts = const [],
   ]);
 
   final File _file;
   final SshConfigImportsWriter _writer;
-  List<FleetEntry> _entries;
+  List<ImportedHost> _hosts;
 
   /// The problem met while opening, or null when the file was fine or
   /// absent.
@@ -86,7 +95,7 @@ final class SshConfigImportStore {
       );
     }
 
-    final List<FleetEntry> entries;
+    final List<ImportedHost> hosts;
     try {
       final document = _decodeDocument(raw);
       if (document.version > sshConfigImportsSchemaVersion) {
@@ -99,26 +108,27 @@ final class SshConfigImportStore {
           ),
         );
       }
-      entries = _decodeEntries(document.json);
+      hosts = _decodeHosts(document.json);
     } on FormatException catch (error) {
       return _setAside(file, writer, error, now());
     }
 
-    return SshConfigImportStore._(file, writer, null, entries);
+    return SshConfigImportStore._(file, writer, null, hosts);
   }
 
   /// The stored imports in file order; unmodifiable.
-  List<FleetEntry> get entries => _entries;
+  List<ImportedHost> get hosts => _hosts;
 
-  /// Replaces every stored import with [entries] and saves the set.
+  /// Replaces every stored import with [hosts], as
+  /// `importedHostsFromSshConfig` returns them, and saves the set.
   /// Completes with whether the file now holds it: false when this store
   /// leaves the file as it is ([ImportStoreIssueKind.leftAsIs],
   /// [ImportStoreIssueKind.newerVersion]) or the write failed, in which
-  /// case the file keeps its previous contents. [entries] replaces the
+  /// case the file keeps its previous contents. [hosts] replaces the
   /// in-memory set either way, so the running engine shows what the user
   /// imported. Never throws.
-  Future<bool> replace(List<FleetEntry> entries) async {
-    _entries = List.unmodifiable(entries);
+  Future<bool> replace(List<ImportedHost> hosts) async {
+    _hosts = List.unmodifiable(hosts);
     switch (issue?.kind) {
       case ImportStoreIssueKind.leftAsIs || ImportStoreIssueKind.newerVersion:
         return false;
@@ -127,7 +137,7 @@ final class SshConfigImportStore {
     }
 
     try {
-      await _writer(_file, _encode(_entries));
+      await _writer(_file, _encode(_hosts));
       return true;
     } on Object {
       // The caller reports the import as not saved; the write's own error
@@ -136,16 +146,18 @@ final class SshConfigImportStore {
     }
   }
 
-  static List<int> _encode(List<FleetEntry> entries) => utf8.encode(
+  static List<int> _encode(List<ImportedHost> hosts) => utf8.encode(
     jsonEncode({
       _versionKey: sshConfigImportsSchemaVersion,
       _entriesKey: [
-        for (final entry in entries)
+        for (final host in hosts)
           {
-            _aliasKey: entry.label,
-            _hostKey: entry.host,
-            _portKey: entry.port,
-            _userKey: ?entry.user,
+            _aliasKey: host.alias,
+            _hostKey: host.effectiveHost,
+            _portKey: host.port ?? kSshDefaultPort,
+            _userKey: ?host.user,
+            _identityFileKey: ?host.identityFile,
+            _proxyJumpKey: ?host.proxyJump,
           },
       ],
     }),
@@ -168,18 +180,19 @@ final class SshConfigImportStore {
     return (json: decoded, version: version);
   }
 
-  /// The entries of a version-1 document, or a [FormatException] naming the
-  /// first one that is not an entry the importer could have produced: a
-  /// non-empty alias and host, a TCP port, a non-empty user or none, and an
-  /// alias no earlier entry took. Keys this build does not know are ignored.
-  static List<FleetEntry> _decodeEntries(Map<String, Object?> json) {
+  /// The hosts of a version 1 or 2 document, or a [FormatException] naming
+  /// the first entry the import could not have produced: it needs a
+  /// non-empty alias and host, a TCP port, a non-empty user, identity file
+  /// and `ProxyJump` or none, an alias no earlier entry took, and a route
+  /// [jumpRoutes] can follow. Keys this build does not know are ignored.
+  static List<ImportedHost> _decodeHosts(Map<String, Object?> json) {
     final list = json[_entriesKey];
     if (list is! List<Object?>) {
       throw const FormatException('the import store has no entries list');
     }
 
     final aliases = <String>{};
-    final entries = <FleetEntry>[];
+    final hosts = <ImportedHost>[];
     for (final (index, item) in list.indexed) {
       if (item is! Map<String, Object?>) {
         throw FormatException('entry $index is not a JSON object');
@@ -197,17 +210,33 @@ final class SshConfigImportStore {
       if (port is! int || !isTcpPort(port)) {
         throw FormatException('entry $index has no usable port');
       }
-      final user = switch (item[_userKey]) {
+      String? optional(String key) => switch (item[key]) {
         null => null,
-        final String user when user.isNotEmpty => user,
-        _ => throw FormatException('entry $index has an unusable user'),
+        final String value when value.isNotEmpty => value,
+        _ => throw FormatException('entry $index has an unusable $key'),
       };
 
-      entries.add(
-        importedFleetEntry(alias: alias, host: host, port: port, user: user),
+      hosts.add(
+        ImportedHost(
+          alias: alias,
+          hostName: host,
+          port: port,
+          user: optional(_userKey),
+          identityFile: optional(_identityFileKey),
+          proxyJump: optional(_proxyJumpKey),
+        ),
       );
     }
-    return List.unmodifiable(entries);
+
+    final routes = jumpRoutes(hosts);
+    for (final (index, host) in hosts.indexed) {
+      if (routes[host.alias] == null) {
+        throw FormatException(
+          'entry $index has a ProxyJump the engine cannot follow',
+        );
+      }
+    }
+    return List.unmodifiable(hosts);
   }
 
   /// Renames a damaged [file] aside and opens an empty store over the
