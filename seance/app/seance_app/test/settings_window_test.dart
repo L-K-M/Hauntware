@@ -187,12 +187,15 @@ void main() {
       fontSize: 20,
       fontFamily: 'Mono Test',
       palette: TerminalPalette.alwaysDark,
+      ligatures: TerminalLigatures.off,
     );
 
     expect(services.settings.terminalFontSize, 20);
     expect(services.settings.terminalFontFamily, 'Mono Test');
+    expect(services.settings.terminalLigatures, TerminalLigatures.off);
     final reread = await services.settingsStore.load();
     expect(reread.terminalPalette, TerminalPalette.alwaysDark);
+    expect(reread.terminalLigatures, TerminalLigatures.off);
   });
 
   test('an editor text size set in the window resizes the app\'s editors', () async {
