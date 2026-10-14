@@ -382,6 +382,9 @@ class _SortableTableState<R> extends State<SortableTable<R>> {
         _setActive(0);
       }
     });
+    // Tab may return to a row a wheel or a re-sort moved out of view,
+    // where it would be neither built nor ringed.
+    if (focused) _reveal();
   }
 
   void _move(_Step step) {
@@ -403,13 +406,19 @@ class _SortableTableState<R> extends State<SortableTable<R>> {
       _Step.last => _sorted.length - 1,
     };
     setState(() => _setActive(target.clamp(0, _sorted.length - 1)));
+    _reveal();
+  }
 
-    // The least scroll that shows the row whole; the fixed extent makes
-    // its offset exact without building it.
+  /// Scrolls the least distance that shows the active row whole; the
+  /// fixed extent makes its offset exact without building it.
+  void _reveal() {
+    final index = _activeIndex;
+    if (index == null || !_scroll.hasClients) return;
+
     final position = _scroll.position;
-    final top = _activeIndex! * _rowExtent;
+    final top = index * _rowExtent;
     final shown = position.pixels.clamp(
-      math.min(top, top + _rowExtent - viewport),
+      math.min(top, top + _rowExtent - position.viewportDimension),
       top,
     );
     _scroll.jumpTo(
@@ -452,6 +461,8 @@ class _SortableTableState<R> extends State<SortableTable<R>> {
       return;
     }
 
+    // The keyboard's menu opens under the row, which may be scrolled away.
+    if (global == null) _reveal();
     final body = _bodyKey.currentContext!.findRenderObject()! as RenderBox;
     _menu.open(
       position: global == null

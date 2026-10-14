@@ -34,6 +34,9 @@ const _procs = [
   _Proc(4, 'sshd', 0.1, 'sleeping'),
 ];
 
+/// More rows than a 132 px tall table shows.
+final _many = [for (var pid = 1; pid <= 40; pid++) _Proc(pid, 'p$pid', 0, '')];
+
 final _columns = <SortableTableColumn<_Proc>>[
   SortableTableColumn(
     id: 'name',
@@ -355,13 +358,44 @@ void main() {
       handle.dispose();
     });
 
+    testWidgets('Tab and Shift+F10 scroll the active row back into view', (
+      tester,
+    ) async {
+      final handle = tester.ensureSemantics();
+      await _pump(
+        tester,
+        rows: _many,
+        size: const Size(400, 132),
+        rowActions: (proc) => [
+          SidebarMenuAction(label: 'Kill', onSelected: () {}),
+        ],
+      );
+      final scroll = tester.widget<ListView>(find.byType(ListView)).controller!;
+      scroll.jumpTo(scroll.position.maxScrollExtent);
+      await tester.pumpAndSettle();
+
+      for (var stop = 0; stop < 4; stop++) {
+        await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      }
+      await tester.pumpAndSettle();
+      expect(_ringed(tester, _row(1)), isTrue);
+      expect(tester.getSemantics(_row(1)), isSemantics(isFocused: true));
+
+      // The menu opens under the active row, so the row must show.
+      scroll.jumpTo(scroll.position.maxScrollExtent);
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.f10);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.pumpAndSettle();
+      expect(tester.getTopLeft(_row(1)).dy, 22);
+      expect(find.widgetWithText(MenuItemButton, 'Kill'), findsOneWidget);
+      handle.dispose();
+    });
+
     testWidgets('the arrows, paging, Home and End move the active row and '
         'scroll it into view', (tester) async {
-      final many = [
-        for (var pid = 1; pid <= 40; pid++) _Proc(pid, 'p$pid', 0, ''),
-      ];
       // A 22 px header over a 110 px body: five rows show, a page is four.
-      await _pump(tester, rows: many, size: const Size(400, 132));
+      await _pump(tester, rows: _many, size: const Size(400, 132));
       await tester.tap(_row(1));
       await tester.pumpAndSettle();
       // A click focuses without a ring; the first key shows it.
