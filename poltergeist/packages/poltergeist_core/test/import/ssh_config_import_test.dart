@@ -1004,19 +1004,26 @@ Host web
     }
   });
 
-  test('multi-pattern Host blocks surface one row per the pin', () async {
+  test('multi-pattern Host blocks surface one row per name', () async {
     final preview = await _load('''
-Host alpha beta
+Host alpha beta *.corp !gamma
   ProxyCommand nc %h %p
+  Include extra.conf
 ''');
 
-    // The pinned importer keeps only the first concrete pattern as the
-    // alias (one row); the badge follows that row.
-    expect(preview.rows.map((r) => r.host.alias).toList(), ['alpha']);
-    expect(
-      preview.rows.single.limitations,
-      contains(SshConfigImportLimitation.proxyCommand),
-    );
+    // The pinned importer makes a host of every name the line gives;
+    // the block's badges follow each of those rows.
+    expect(preview.rows.map((r) => r.host.alias).toList(), ['alpha', 'beta']);
+    for (final row in preview.rows) {
+      expect(
+        row.limitations,
+        containsAll([
+          SshConfigImportLimitation.proxyCommand,
+          SshConfigImportLimitation.hostInclude,
+        ]),
+        reason: row.host.alias,
+      );
+    }
   });
 
   test('Host pattern separators agree with the pin for every whitespace kind',
@@ -1040,17 +1047,19 @@ Host alpha beta
     for (final separator in separators.entries) {
       final text = 'Host alpha${separator.value}beta\n'
           '  ProxyCommand nc %h %p\n';
-      // The pinned importer is the oracle: the preview row must carry
-      // the same alias the pin minted, not a second host parser.
-      final pinnedAlias = SshConfigImporter.parse(text).hosts.single.alias;
+      // The pinned importer is the oracle: the preview rows must carry
+      // the aliases the pin minted, not a second host parser's.
+      final pinnedAliases =
+          SshConfigImporter.parse(text).hosts.map((h) => h.alias).toList();
       final preview = await _load(text);
 
-      expect(preview.rows, hasLength(1), reason: separator.key);
-      expect(preview.rows.single.host.alias, pinnedAlias,
+      expect(preview.rows.map((r) => r.host.alias).toList(), pinnedAliases,
           reason: separator.key);
-      expect(preview.rows.single.limitations,
-          contains(SshConfigImportLimitation.proxyCommand),
-          reason: separator.key);
+      for (final row in preview.rows) {
+        expect(row.limitations,
+            contains(SshConfigImportLimitation.proxyCommand),
+            reason: separator.key);
+      }
     }
   });
 
@@ -1075,12 +1084,16 @@ Host alpha beta
     // pin never minted.
     final text = 'Host "alpha" "beta"\n'
         '  ProxyCommand nc %h %p\n';
-    final pinnedAlias = SshConfigImporter.parse(text).hosts.single.alias;
+    final pinnedAliases =
+        SshConfigImporter.parse(text).hosts.map((h) => h.alias).toList();
     final preview = await _load(text);
 
-    expect(preview.rows.single.host.alias, pinnedAlias);
-    expect(preview.rows.single.limitations,
-        contains(SshConfigImportLimitation.proxyCommand));
+    expect(pinnedAliases, ['alpha', 'beta']);
+    expect(preview.rows.map((r) => r.host.alias).toList(), pinnedAliases);
+    for (final row in preview.rows) {
+      expect(row.limitations,
+          contains(SshConfigImportLimitation.proxyCommand));
+    }
   });
 
   test('Host * connection defaults badge every row', () async {

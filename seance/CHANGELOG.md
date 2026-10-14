@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Import SSH config adds a server for every name on a `Host` line:
+  `Host web db` imports `web` and `db` with the block's settings, where
+  only `web` was imported before. Wildcard and `!` patterns are still not
+  imported, and `Include` is still not followed.
 - Import SSH config skips a host whose `Port` ssh would reject, such as
   `22a`, `0x16`, `0` or `65536`, and the message after the import counts
   it. Such a host used to be imported with port 22 or an impossible

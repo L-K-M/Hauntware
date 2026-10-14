@@ -36,7 +36,7 @@ void main() {
 
   test('saves valid hosts and counts the ones with a bad Port', () async {
     final result = await state.importSshConfig('''
-Host web
+Host web www
   HostName = web.example.com
   Port ssh
 
@@ -45,9 +45,13 @@ Host typo
   Port 22a
 ''');
 
-    expect(result, (imported: 1, skipped: 1));
-    expect(state.servers.map((s) => (s.label, s.host, s.port)), [
-      ('web', 'web.example.com', 22),
-    ]);
+    expect(result, (imported: 2, skipped: 1));
+    expect(
+      state.servers.map((s) => (s.label, s.host, s.port)),
+      unorderedEquals([
+        ('web', 'web.example.com', 22),
+        ('www', 'web.example.com', 22),
+      ]),
+    );
   });
 }

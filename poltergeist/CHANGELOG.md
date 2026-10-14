@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- **Every name on an ssh_config `Host` line gets a row.** `Host web db`
+  offers `web` and `db` with the block's settings and notes, where only
+  `web` appeared before. Wildcard and `!` patterns still get no row.
 - **A typo in an ssh_config `Port` no longer imports as port 22.** A
   `Port` ssh would reject, such as `22a` or `0x16`, makes the row
   unimportable, as a port outside 1–65535 already did, and the preview

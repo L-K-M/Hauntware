@@ -380,7 +380,8 @@ class _Resolver {
   /// ProxyCommand/ProxyJump defaults, and wildcard-block defaults.
   final Set<SshConfigImportLimitation> globalLimitations = {};
 
-  /// Per-alias limitations from the alias's own host block.
+  /// Per-alias limitations from the alias's own host block, which gives
+  /// them to every alias it names.
   final Map<String, Set<SshConfigImportLimitation>> hostLimitations = {};
 
   final List<SshConfigUnresolvedInclude> notices = [];
@@ -524,11 +525,13 @@ class _Resolver {
               if (promoteTopLevelDefaults) {
                 globalLimitations.add(limitation);
               }
-            case _BlockContextHost(alias: final alias):
+            case _BlockContextHost(aliases: final aliases):
               // Host-block ProxyJump arrives via ImportedHost.proxyJump;
               // the scan still covers ProxyCommand there.
               if (key == 'proxycommand') {
-                _hostLimitations(alias).add(limitation);
+                for (final alias in aliases) {
+                  _hostLimitations(alias).add(limitation);
+                }
               }
             case _BlockContextWildcard():
               // A wildcard block matches every connection, so its
@@ -539,8 +542,11 @@ class _Resolver {
               break; // the matchBlock badge already covers the row
           }
         case 'include':
-          if (context case _BlockContextHost(alias: final alias)) {
-            _hostLimitations(alias).add(SshConfigImportLimitation.hostInclude);
+          if (context case _BlockContextHost(aliases: final aliases)) {
+            const limitation = SshConfigImportLimitation.hostInclude;
+            for (final alias in aliases) {
+              _hostLimitations(alias).add(limitation);
+            }
           }
           // Top-level includes resolve (the chunker cut them out); a
           // Match-block include is covered by the matchBlock badge.
@@ -794,11 +800,13 @@ class _Chunk {
 sealed class _BlockContext {
   const _BlockContext();
 
+  /// Names the block's aliases with the pin's own rule, so an alias has
+  /// badges here exactly when it has a row there.
   factory _BlockContext.fromHostPatterns(List<String> patterns) {
-    final alias = patterns.firstWhere(_isConcretePattern, orElse: () => '');
-    return alias.isEmpty
+    final aliases = SshConfigImporter.hostAliases(patterns);
+    return aliases.isEmpty
         ? const _BlockContextWildcard()
-        : _BlockContextHost(alias);
+        : _BlockContextHost(aliases);
   }
 }
 
@@ -807,9 +815,9 @@ class _BlockContextTop extends _BlockContext {
 }
 
 class _BlockContextHost extends _BlockContext {
-  final String alias;
+  final List<String> aliases;
 
-  const _BlockContextHost(this.alias);
+  const _BlockContextHost(this.aliases);
 }
 
 class _BlockContextWildcard extends _BlockContext {
@@ -831,10 +839,3 @@ _BlockContext _advanceContext(_BlockContext context, SshConfigLine? line) {
       return context;
   }
 }
-
-/// Mirrors the pinned importer's wildcard test so an alias exists here
-/// exactly when a row exists there.
-bool _isConcretePattern(String pattern) =>
-    !pattern.contains('*') &&
-    !pattern.contains('?') &&
-    !pattern.startsWith('!');

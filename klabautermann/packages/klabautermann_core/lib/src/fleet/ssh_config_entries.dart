@@ -12,9 +12,10 @@ const String _importIdPrefix = 'ssh-config:';
 /// config exactly as Séance does. What the importer does, and so what this
 /// does:
 ///
-/// - one entry per `Host` block, named by its first non-wildcard pattern;
-///   wildcard-only blocks such as `Host *` describe defaults, not hosts,
-///   and are dropped (their defaults are not applied to other hosts);
+/// - one entry per name a `Host` line gives, with its block's settings:
+///   `Host a b` makes `a` and `b`. Wildcard and negated patterns are not
+///   names, so blocks such as `Host *` describe defaults, not hosts, and
+///   are dropped (their defaults are not applied to other hosts);
 /// - `HostName`, `Port` and `User` are read, a missing `HostName` falls back
 ///   to the alias as ssh does, and every other directive is ignored;
 /// - `Match` blocks are ignored, and `Include` is not followed: the importer
@@ -24,7 +25,7 @@ const String _importIdPrefix = 'ssh-config:';
 ///   `https`; a block with any other `Port` is skipped, where ssh would
 ///   reject the whole config, and its hosts are counted.
 ///
-/// On top of the importer, a block is skipped and counted when an earlier
+/// On top of the importer, a host is skipped and counted when an earlier
 /// block already took its alias (the alias is the entry's id; ssh would
 /// merge the two blocks, this keeps the first). The text is parsed in the
 /// calling isolate: the engine's, so a large config never stalls the UI

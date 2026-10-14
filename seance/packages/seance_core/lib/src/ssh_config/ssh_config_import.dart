@@ -1,6 +1,7 @@
 import 'package:seance_protocol/seance_protocol.dart';
 
-/// One `Host` block parsed from an OpenSSH `config` file.
+/// One host name from a `Host` line of an OpenSSH `config` file, with the
+/// settings of its block.
 class ImportedHost {
   final String alias;
   final String? hostName;
@@ -82,10 +83,16 @@ class SshConfigImport {
 
 /// A read-only importer for `~/.ssh/config`. Parses the common directives
 /// (`Host`, `HostName`, `Port`, `User`, `IdentityFile`, `ProxyJump`) and skips
-/// everything else. Wildcard-only host patterns (e.g. `Host *`) are dropped,
-/// since they describe defaults rather than a connectable server. Lines are
-/// split as ssh splits them ([SshConfigLine]): `Key value`, `Key=value` and
+/// everything else, including `Match` blocks; `Include` is not followed, so
+/// hosts defined only in an included file are not imported. Lines are split
+/// as ssh splits them ([SshConfigLine]): `Key value`, `Key=value` and
 /// `Key = value` are equivalent, and quoted arguments are unquoted.
+///
+/// Every name a `Host` line gives ([hostAliases]) becomes its own host with
+/// the block's settings, since `Host a b` applies to both `ssh a` and
+/// `ssh b`. Wildcard and negated patterns are not names, so a block with
+/// only those (e.g. `Host *`) describes defaults rather than a connectable
+/// server and is dropped.
 ///
 /// `Port` is read as ssh's `a2port()` reads it: a decimal 1 to 65535, or a
 /// service name. ssh resolves names with `getservbyname(3)`, which Dart
@@ -151,32 +158,30 @@ class SshConfigImporter {
     final hosts = <ImportedHost>[];
     final skipped = <SkippedHost>[];
     for (final block in blocks) {
-      final alias = block.patterns.firstWhere(
-        (p) => !_isWildcard(p),
-        orElse: () => '',
-      );
-      if (alias.isEmpty) continue; // wildcard-only block: defaults, not a host
       final d = block.directives;
       final badPort = block.badPort;
-      final host = ImportedHost(
-        alias: alias,
-        hostName: d['hostname'],
-        port: badPort == null ? block.port : null,
-        user: d['user'],
-        identityFile: _expandTilde(d['identityfile']),
-        proxyJump: d['proxyjump'],
-      );
-      if (badPort == null) {
-        hosts.add(host);
-      } else {
-        skipped.add(
-          SkippedHost(
-            host: host,
-            reason: SkippedHostReason.invalidPort,
-            value: badPort.value,
-            line: badPort.line,
-          ),
+      // A block without names (e.g. `Host *`) holds defaults, not a host.
+      for (final alias in hostAliases(block.patterns)) {
+        final host = ImportedHost(
+          alias: alias,
+          hostName: d['hostname'],
+          port: badPort == null ? block.port : null,
+          user: d['user'],
+          identityFile: _expandTilde(d['identityfile']),
+          proxyJump: d['proxyjump'],
         );
+        if (badPort == null) {
+          hosts.add(host);
+        } else {
+          skipped.add(
+            SkippedHost(
+              host: host,
+              reason: SkippedHostReason.invalidPort,
+              value: badPort.value,
+              line: badPort.line,
+            ),
+          );
+        }
       }
     }
     return SshConfigImport(
@@ -198,8 +203,42 @@ class SshConfigImporter {
     return port;
   }
 
+  /// The names in a `Host` line's [patterns] that you could give ssh to
+  /// use the block: each pattern without a wildcard (`*`, `?`) or negation
+  /// (`!`), in order and once. A name a negated pattern on the same line
+  /// matches is left out, since ssh skips the block for it.
+  static List<String> hostAliases(List<String> patterns) {
+    final negated = [
+      for (final pattern in patterns)
+        if (pattern.startsWith('!')) pattern.substring(1),
+    ];
+    final aliases = <String>[];
+    for (final pattern in patterns) {
+      if (pattern.isEmpty || _isWildcard(pattern)) continue;
+      if (aliases.contains(pattern)) continue;
+      if (negated.any((n) => _matchesPattern(pattern, n))) continue;
+      aliases.add(pattern);
+    }
+    return aliases;
+  }
+
   static bool _isWildcard(String pattern) =>
       pattern.contains('*') || pattern.contains('?') || pattern.startsWith('!');
+
+  /// ssh's `match_pattern()`: `*` matches any run of characters, `?` any
+  /// one character, and every other character itself, case-sensitively.
+  static bool _matchesPattern(String name, String pattern) {
+    final regex = StringBuffer('^');
+    for (final c in pattern.split('')) {
+      regex.write(switch (c) {
+        '*' => '.*',
+        '?' => '.',
+        _ => RegExp.escape(c),
+      });
+    }
+    regex.write(r'$');
+    return RegExp(regex.toString(), dotAll: true).hasMatch(name);
+  }
 
   static String? _expandTilde(String? path) {
     if (path == null) return null;

@@ -54,6 +54,20 @@ void main() {
       expect(entries['v6']!.host, '2001:db8::1');
     });
 
+    test('a Host line with several names makes an entry for each', () {
+      // A name an earlier block took is skipped, as for a whole block.
+      final result = fleetEntriesFromSshConfig(
+        'Host web db\n  HostName 10.0.0.7\n  Port 2200\n'
+        'Host db\n  HostName other\n',
+      );
+
+      expect(result.entries.map((e) => (e.label, e.host, e.port)), [
+        ('web', '10.0.0.7', 2200),
+        ('db', '10.0.0.7', 2200),
+      ]);
+      expect(result.skippedCount, 1);
+    });
+
     test('drops wildcard-only blocks and ignores Match blocks', () {
       final result = fleetEntriesFromSshConfig(sshConfigFixture);
       final labels = result.entries.map((e) => e.label);

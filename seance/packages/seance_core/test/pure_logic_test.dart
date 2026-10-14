@@ -44,7 +44,7 @@ Host bastion db
   ProxyJump prod
 ''';
       final hosts = SshConfigImporter.parse(text).hosts;
-      expect(hosts.map((h) => h.alias), ['prod', 'bastion']);
+      expect(hosts.map((h) => h.alias), ['prod', 'bastion', 'db']);
 
       final prod = hosts.first;
       expect(prod.hostName, 'prod.example.com');
@@ -52,9 +52,33 @@ Host bastion db
       expect(prod.user, 'deploy');
       expect(prod.identityFile, '~/.ssh/prod_ed25519');
 
-      final bastion = hosts[1];
-      expect(bastion.effectiveHost, '10.0.0.5');
-      expect(bastion.proxyJump, 'prod');
+      // `ssh bastion` and `ssh db` both use the block, so each is a host
+      // with its settings.
+      for (final alias in ['bastion', 'db']) {
+        final host = hosts.singleWhere((h) => h.alias == alias);
+        expect(host.effectiveHost, '10.0.0.5', reason: alias);
+        expect(host.proxyJump, 'prod', reason: alias);
+      }
+    });
+
+    test('imports each name a Host line gives, not its patterns', () {
+      // ssh skips the block for a name a negated pattern matches, so
+      // `db-old` and `web-1` are not hosts here; `db` counts once.
+      final hosts = SshConfigImporter.parse(
+        'Host web-* db !db-old db-old app db web-1 !web-? ""\n'
+        '  HostName 10.0.0.9\n',
+      ).hosts;
+      expect(hosts.map((h) => h.alias), ['db', 'app']);
+      expect(hosts.map((h) => h.hostName), ['10.0.0.9', '10.0.0.9']);
+    });
+
+    test('reports every name of a block it skips', () {
+      final result = SshConfigImporter.parse('Host a b *.c\n  Port 22a\n');
+      expect(result.hosts, isEmpty);
+      expect(result.skipped.map((s) => (s.host.alias, s.value, s.line)), [
+        ('a', '22a', 2),
+        ('b', '22a', 2),
+      ]);
     });
 
     test('supports Key=value form and quoted values', () {
