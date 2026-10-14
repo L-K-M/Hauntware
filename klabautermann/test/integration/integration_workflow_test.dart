@@ -164,12 +164,14 @@ void main() {
         '$event skips every leg before its entry point is committed',
         () async {
           final repo = await _Repo.create();
-          final base = await repo.commit({'README.md': 'base'});
+          await repo.commit({'README.md': 'base'});
+          if (event == 'pull_request') {
+            await repo.mergeBranch('pr', [
+              {'README.md': 'change'},
+            ]);
+          }
 
-          final result = await repo.guard(
-            guard,
-            historyRev: event == 'push' ? 'HEAD' : base,
-          );
+          final result = await repo.guard(guard);
 
           expect(result.exitCode, 0, reason: result.stdout);
           expect(result.outputs, {
@@ -187,7 +189,7 @@ void main() {
         final repo = await _Repo.create();
         await repo.commit({path: 'entry'});
 
-        final result = await repo.guard(guard, historyRev: 'HEAD');
+        final result = await repo.guard(guard);
 
         expect(result.exitCode, 0, reason: result.stdout);
         expect(result.outputs, {
@@ -201,7 +203,7 @@ void main() {
         await repo.commit({path: 'entry'});
         await repo.commit({path: null});
 
-        final result = await repo.guard(guard, historyRev: 'HEAD');
+        final result = await repo.guard(guard);
 
         expect(result.exitCode, isNonZero);
         expect(result.stdout, contains('::error::Missing $path'));
@@ -213,10 +215,12 @@ void main() {
       'fails a pull request that deletes an entry point of its base',
       () async {
         final repo = await _Repo.create();
-        final base = await repo.commit({_entries['fixture']!: 'entry'});
-        await repo.commit({_entries['fixture']!: null});
+        await repo.commit({_entries['fixture']!: 'entry'});
+        await repo.mergeBranch('pr', [
+          {_entries['fixture']!: null},
+        ]);
 
-        final result = await repo.guard(guard, historyRev: base);
+        final result = await repo.guard(guard);
 
         expect(result.exitCode, isNonZero);
         expect(
@@ -226,22 +230,26 @@ void main() {
       },
     );
 
+    // The merge commit is both the test merge a pull request's run checks
+    // out and the commit that lands the pull request on main.
     test(
-      'ignores an entry point a pull request adds and removes again',
+      'skips an entry point a merged branch added and removed again',
       () async {
         final repo = await _Repo.create();
-        final base = await repo.commit({'README.md': 'base'});
-        await repo.commit({_entries['capture']!: 'entry'});
-        await repo.commit({_entries['capture']!: null});
+        await repo.commit({'README.md': 'base'});
+        await repo.mergeBranch('pr', [
+          {_entries['capture']!: 'entry'},
+          {_entries['capture']!: null},
+        ]);
 
-        final result = await repo.guard(guard, historyRev: base);
+        final result = await repo.guard(guard);
 
         expect(result.exitCode, 0, reason: result.stdout);
         expect(result.outputs['capture'], 'false');
       },
     );
 
-    test('fails when a merge drops an entry point one parent had', () async {
+    test('fails when a merge on the main line drops an entry point', () async {
       final path = _entries['fixture']!;
       final repo = await _Repo.create();
       await repo.commit({'README.md': 'base'});
@@ -249,12 +257,12 @@ void main() {
       await repo.commit({path: 'entry'});
       await repo.git(['checkout', '-q', 'side']);
       await repo.commit({'other.txt': 'side'});
-      // The merge resolution drops the file: without --full-history,
-      // git log follows only the parent that never had it.
-      await repo.git(['merge', '-q', '--no-commit', 'main']);
+      await repo.git(['checkout', '-q', 'main']);
+      // The merge resolution drops the file its first parent has.
+      await repo.git(['merge', '-q', '--no-commit', 'side']);
       await repo.commit({path: null});
 
-      final result = await repo.guard(guard, historyRev: 'HEAD');
+      final result = await repo.guard(guard);
 
       expect(result.exitCode, isNonZero);
       expect(result.stdout, contains('::error::Missing $path'));
@@ -266,7 +274,7 @@ void main() {
       await repo.commit({_entries['frames']!: null});
       final shallow = await repo.shallowClone();
 
-      final result = await shallow.guard(guard, historyRev: 'HEAD');
+      final result = await shallow.guard(guard);
 
       expect(result.exitCode, isNonZero);
       expect(result.stdout, contains('fetch-depth: 0'));
@@ -274,10 +282,10 @@ void main() {
     });
 
     test('fails closed when the history cannot be read', () async {
+      // A repository without commits has no HEAD to read.
       final repo = await _Repo.create();
-      await repo.commit({'README.md': 'base'});
 
-      final result = await repo.guard(guard, historyRev: 'f' * 40);
+      final result = await repo.guard(guard);
 
       expect(result.exitCode, isNonZero);
       expect(result.stdout, contains('::error::Cannot read the history'));
@@ -347,6 +355,23 @@ final class _Repo {
     return git(['rev-parse', 'HEAD']);
   }
 
+  /// Commits each change set on a new branch [name] off HEAD and merges it
+  /// back with a merge commit whose first parent is the old HEAD: how main
+  /// lands a pull request, and how GitHub builds the test merge that a
+  /// pull request's run checks out.
+  Future<void> mergeBranch(
+    String name,
+    List<Map<String, String?>> changes,
+  ) async {
+    final target = await git(['rev-parse', '--abbrev-ref', 'HEAD']);
+    await git(['checkout', '-q', '-b', name]);
+    for (final files in changes) {
+      await commit(files);
+    }
+    await git(['checkout', '-q', target]);
+    await git(['merge', '-q', '--no-ff', '--no-edit', name]);
+  }
+
   /// A depth-1 clone of this repository beside it.
   Future<_Repo> shallowClone() async {
     final clone = _Repo._(_root, Directory('${_root.path}/shallow'));
@@ -362,10 +387,7 @@ final class _Repo {
   }
 
   /// Runs [script] as the Actions runner runs a bash `run:` step.
-  Future<_GuardResult> guard(
-    String script, {
-    required String historyRev,
-  }) async {
+  Future<_GuardResult> guard(String script) async {
     final output = File('${directory.path}.output');
     await output.writeAsString('');
     final result = await Process.run(
@@ -373,11 +395,7 @@ final class _Repo {
       ['--noprofile', '--norc', '-eo', 'pipefail', '-c', script],
       workingDirectory: directory.path,
       includeParentEnvironment: false,
-      environment: {
-        ..._environment,
-        'HISTORY_REV': historyRev,
-        'GITHUB_OUTPUT': output.path,
-      },
+      environment: {..._environment, 'GITHUB_OUTPUT': output.path},
     );
     return (
       exitCode: result.exitCode,

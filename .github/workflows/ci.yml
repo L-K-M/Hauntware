@@ -679,8 +679,7 @@ jobs:
   # frame-timing leg. A leg is
   # skipped with a notice until its entry point is committed; once
   # committed, its absence fails the detector on every event. The check
-  # reads the history the run builds on (a PR's base, otherwise HEAD),
-  # hence the full clone.
+  # reads the first-parent history of HEAD, hence the full clone.
   detect_klabautermann_integration:
     name: Detect Klabautermann integration changes
     runs-on: ubuntu-latest
@@ -721,10 +720,7 @@ jobs:
         if: >-
           github.event_name != 'pull_request' ||
           steps.changes.outputs.integration == 'true'
-        env:
-          HISTORY_REV: ${{ github.event.pull_request.base.sha || 'HEAD' }}
         run: |
-          : "${HISTORY_REV:?names the commit whose history is checked}"
           # In a shallow clone a deleted entry point would read as not
           # committed yet and skip its leg instead of failing it.
           if [[ "$(git rev-parse --is-shallow-repository)" != 'false' ]]; then
@@ -740,8 +736,13 @@ jobs:
               return 0
             fi
 
-            if ! last="$(git log --full-history --format=%h -1 "$HISTORY_REV" -- "$path")"; then
-              echo "::error::Cannot read the history of $path at $HISTORY_REV"
+            # Only the main line counts. On a pull request HEAD is GitHub's
+            # test merge, whose first parent is the base, so the PR reads
+            # the history main gets when a merge commit or a squash lands
+            # it. A file only a merged branch ever had counts as never
+            # committed.
+            if ! last="$(git log --first-parent --format=%h -1 HEAD -- "$path")"; then
+              echo "::error::Cannot read the history of $path"
               failed=1
               return 0
             fi
