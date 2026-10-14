@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart'
     show debugPrint, defaultTargetPlatform, kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:ghost_fonts/ghost_fonts.dart';
 
 import '../services/system_fonts.dart';
 import '../theme.dart';
@@ -26,8 +27,8 @@ SystemFonts hostSystemFonts() {
 
 SystemFonts? _hostFonts;
 
-/// What [showFontPicker] returns for "no family — use the app's own monospace
-/// stack", which is what an empty `AppSettings.terminalFontFamily` means.
+/// What [showFontPicker] returns for "no family — use Séance's default",
+/// which is what an empty `AppSettings.terminalFontFamily` means.
 /// For the interface font, the same empty answer means the platform's own
 /// face.
 const String kBuiltInFontStack = '';
@@ -41,7 +42,9 @@ enum FontPickerFilter {
   all,
 }
 
-/// Picks an installed font family, previewing each one in its own face.
+/// Picks a font family, previewing each one in its own face: the [bundled]
+/// fonts first (by display name, which is what settings store), then the
+/// installed ones where [fonts] can read them.
 ///
 /// Returns the chosen family, [kBuiltInFontStack] for the built-in choice
 /// ([builtInLabel]), or null if the picker was dismissed. Deliberately a
@@ -56,6 +59,7 @@ Future<String?> showFontPicker(
   String title = 'Terminal font',
   FontPickerFilter filter = FontPickerFilter.monospace,
   String builtInLabel = 'Use built-in stack',
+  List<BundledMonoFont> bundled = const [],
 }) {
   return showDialog<String>(
     context: context,
@@ -65,6 +69,7 @@ Future<String?> showFontPicker(
       title: title,
       filter: filter,
       builtInLabel: builtInLabel,
+      bundled: bundled,
     ),
   );
 }
@@ -75,6 +80,7 @@ class _FontPickerDialog extends StatefulWidget {
   final String title;
   final FontPickerFilter filter;
   final String builtInLabel;
+  final List<BundledMonoFont> bundled;
 
   const _FontPickerDialog({
     required this.fonts,
@@ -82,6 +88,7 @@ class _FontPickerDialog extends StatefulWidget {
     required this.title,
     required this.filter,
     required this.builtInLabel,
+    required this.bundled,
   });
 
   @override
@@ -125,11 +132,29 @@ class _FontPickerDialogState extends State<_FontPickerDialog> {
     super.dispose();
   }
 
+  late final Set<String> _bundledNames = {
+    for (final font in widget.bundled) font.displayName.toLowerCase(),
+  };
+
+  /// The bundled fonts the filter field matches. Always fixed-pitch, so the
+  /// chip never hides them.
+  List<BundledMonoFont> _visibleBundled() {
+    final query = _search.text.trim().toLowerCase();
+    return [
+      for (final font in widget.bundled)
+        if (font.displayName.toLowerCase().contains(query)) font,
+    ];
+  }
+
   List<SystemFontFamily> _visible(List<SystemFontFamily> all) {
     final query = _search.text.trim().toLowerCase();
     final current = widget.current.trim().toLowerCase();
     return [
       for (final family in all)
+        // A stored bundled name always draws the bundled copy, so an
+        // installed face of the same name could not be chosen: offering it
+        // would hand back the bundled one.
+        if (!_bundledNames.contains(family.name.toLowerCase()))
         // The family in force is never filtered out by the pitch chip. The
         // dialog starts filtered, and the flag is the font's own — so a
         // fixed-pitch face that does not declare itself one, typed into the
@@ -167,17 +192,21 @@ class _FontPickerDialogState extends State<_FontPickerDialog> {
                 border: OutlineInputBorder(),
               ),
             ),
-            const SizedBox(height: 8),
-            Align(
-              alignment: AlignmentDirectional.centerStart,
-              child: FilterChip(
-                label: const Text('Monospace only'),
-                selected: _monospaceOnly,
-                visualDensity: VisualDensity.compact,
-                onSelected: (value) =>
-                    setState(() => _monospaceOnly = value),
+            // The chip filters installed fonts; with none to read (mobile)
+            // there is nothing for it to do.
+            if (widget.fonts.isSupported) ...[
+              const SizedBox(height: 8),
+              Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: FilterChip(
+                  label: const Text('Monospace only'),
+                  selected: _monospaceOnly,
+                  visualDensity: VisualDensity.compact,
+                  onSelected: (value) =>
+                      setState(() => _monospaceOnly = value),
+                ),
               ),
-            ),
+            ],
             const Divider(),
             Expanded(
               child: FutureBuilder<List<SystemFontFamily>>(
@@ -195,11 +224,14 @@ class _FontPickerDialogState extends State<_FontPickerDialog> {
                   // would look identical while debugging.
                   final all = snapshot.data ?? const <SystemFontFamily>[];
                   return _FontList(
+                    bundled: _visibleBundled(),
+                    showInstalled: widget.fonts.isSupported,
                     families: _visible(all),
                     current: widget.current,
                     // Distinguishes "this host has none" from "your filter
                     // matched none", which are different things to do next.
                     emptyBecauseFiltered: all.isNotEmpty,
+                    bundledFiltered: widget.bundled.isNotEmpty,
                     onPick: (family) => Navigator.of(context).pop(family),
                   );
                 },
@@ -223,76 +255,116 @@ class _FontPickerDialogState extends State<_FontPickerDialog> {
 }
 
 class _FontList extends StatelessWidget {
+  final List<BundledMonoFont> bundled;
+
+  /// Whether the installed fonts have a section: false where the host has
+  /// no collection to read, so mobile lists only what ships with the app.
+  final bool showInstalled;
   final List<SystemFontFamily> families;
   final String current;
+
+  /// Whether an empty installed list is the filter's doing rather than the
+  /// host having none.
   final bool emptyBecauseFiltered;
+
+  /// Whether an empty [bundled] is the filter's doing: there were some.
+  final bool bundledFiltered;
   final ValueChanged<String> onPick;
 
   const _FontList({
+    required this.bundled,
+    required this.showInstalled,
     required this.families,
     required this.current,
     required this.emptyBecauseFiltered,
+    required this.bundledFiltered,
     required this.onPick,
   });
 
   @override
   Widget build(BuildContext context) {
-    if (families.isEmpty) {
+    final installedEmpty = showInstalled && families.isEmpty;
+    if (bundled.isEmpty && (!showInstalled || installedEmpty)) {
       return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Text(
-            emptyBecauseFiltered
-                ? 'No font matches. Clear the filter, or turn off '
-                      '“Monospace only” — not every fixed-pitch font declares '
-                      'itself as one.'
-                : 'No installed fonts could be read on this device. Type the '
-                      'family name into the field instead.',
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
+        child: _emptyMessage(
+          context,
+          filtered: emptyBecauseFiltered || bundledFiltered,
         ),
       );
     }
+
+    // Built lazily: each row previews its family, and a host may have
+    // hundreds. Headings only when both sections are there to tell apart.
+    final headed = bundled.isNotEmpty && showInstalled;
+    final rows = <Widget Function()>[
+      if (headed) () => _heading(context, 'Included with Séance'),
+      for (final font in bundled) () => _row(font.displayName, font.family),
+      if (headed) () => _heading(context, 'Installed'),
+      if (installedEmpty)
+        () => _emptyMessage(context, filtered: emptyBecauseFiltered),
+      if (showInstalled)
+        for (final family in families) () => _row(family.name, family.name),
+    ];
     return ListView.builder(
-      itemCount: families.length,
-      itemBuilder: (context, i) {
-        final family = families[i];
-        // Case-insensitively, like the scan's dedupe key and the sort: a user
-        // who typed "menlo" into the field should still see Menlo ticked.
-        // Trimmed on both sides, like the filter's own match: a typed name
-        // with stray whitespace would otherwise be listed without its tick.
-        final selected =
-            family.name.toLowerCase() == current.trim().toLowerCase();
-        return ListTile(
-          dense: true,
-          selected: selected,
-          // The point of the preview: the name drawn in the face it names, so
-          // a family is judged rather than guessed at from its name. Fallbacks
-          // behind it so a family the engine declines still reads as text.
-          title: Text(
-            family.name,
-            style: TextStyle(
-              fontFamily: family.name,
-              fontFamilyFallback: SeanceTheme.monoFallback,
-            ),
-          ),
-          subtitle: Text(
-            // A sample rather than more prose: what a terminal shows is
-            // columns of these, and whether they line up is the question.
-            'ILl1 0OQ {}[]()<> —— 123',
-            // The glyphs are chosen to be told apart by eye; read aloud they
-            // are a minute of punctuation on every row of the list.
-            semanticsLabel: 'Sample text',
-            style: TextStyle(
-              fontFamily: family.name,
-              fontFamilyFallback: SeanceTheme.monoFallback,
-            ),
-          ),
-          trailing: selected ? const Icon(Icons.check) : null,
-          onTap: () => onPick(family.name),
-        );
-      },
+      itemCount: rows.length,
+      itemBuilder: (context, i) => rows[i](),
+    );
+  }
+
+  Widget _emptyMessage(BuildContext context, {required bool filtered}) =>
+      Padding(
+        padding: const EdgeInsets.all(24),
+        child: Text(
+          switch ((filtered, showInstalled)) {
+            (true, true) =>
+              'No font matches. Clear the filter, or turn off '
+                  '“Monospace only” — not every fixed-pitch font declares '
+                  'itself as one.',
+            (true, false) => 'No font matches. Clear the filter.',
+            (false, _) =>
+              'No installed fonts could be read on this device. Type the '
+                  'family name into the field instead.',
+          },
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+      );
+
+  Widget _heading(BuildContext context, String title) => Padding(
+    padding: const EdgeInsetsDirectional.fromSTEB(16, 12, 16, 4),
+    child: Text(title, style: Theme.of(context).textTheme.labelMedium),
+  );
+
+  /// A row named [name] (what a pick returns) previewed in [family].
+  Widget _row(String name, String family) {
+    // Case-insensitively, like the scan's dedupe key and the sort: a user
+    // who typed "menlo" into the field should still see Menlo ticked.
+    // Trimmed on both sides, like the filter's own match: a typed name
+    // with stray whitespace would otherwise be listed without its tick.
+    final selected = name.toLowerCase() == current.trim().toLowerCase();
+    // The point of the preview: the name drawn in the face it names, so
+    // a family is judged rather than guessed at from its name. Fallbacks
+    // behind it so a family the engine declines still reads as text.
+    final style = TextStyle(
+      fontFamily: family,
+      fontFamilyFallback: SeanceTheme.monoFallback,
+    );
+    return ListTile(
+      dense: true,
+      selected: selected,
+      title: Text(name, style: style),
+      subtitle: Text(
+        // A sample rather than more prose: what a terminal shows is
+        // columns of these, and whether they line up is the question.
+        // The arrows show whether the face joins them into ligatures.
+        'ILl1 0OQ {}[]()<> -> != —— 123',
+        // The glyphs are chosen to be told apart by eye; read aloud they
+        // are a minute of punctuation on every row of the list.
+        semanticsLabel: 'Sample text',
+        style: style,
+      ),
+      trailing: selected ? const Icon(Icons.check) : null,
+      onTap: () => onPick(name),
     );
   }
 }

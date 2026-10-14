@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ghost_fonts/ghost_fonts.dart';
 import 'package:seance_app/services/system_fonts.dart';
 import 'package:seance_app/ui/font_picker.dart';
 
@@ -25,6 +26,8 @@ void main() {
     WidgetTester tester, {
     List<SystemFontFamily> available = families,
     String current = '',
+    List<BundledMonoFont> bundled = const [],
+    bool supported = true,
   }) async {
     await tester.pumpWidget(
       MaterialApp(
@@ -34,8 +37,9 @@ void main() {
               onPressed: () async => picked.add(
                 await showFontPicker(
                   context,
-                  fonts: _FakeFonts(available),
+                  fonts: _FakeFonts(available, isSupported: supported),
                   current: current,
+                  bundled: bundled,
                 ),
               ),
               child: const Text('open'),
@@ -72,7 +76,7 @@ void main() {
     expect(label.style?.fontFamily, 'Hack');
     // …with the app's own stack behind it, so a family the engine declines
     // still reads as text instead of as missing-glyph boxes.
-    expect(label.style?.fontFamilyFallback, contains('JetBrains Mono'));
+    expect(label.style?.fontFamilyFallback, contains(ghostMonoFontFamily));
   });
 
   testWidgets('the search field narrows the list', (tester) async {
@@ -175,14 +179,86 @@ void main() {
     await open(tester, available: const []);
     expect(find.textContaining('Type the family name'), findsOneWidget);
   });
+
+  group('bundled fonts', () {
+    testWidgets('lead the list, previewed in the bundled copy', (tester) async {
+      await open(tester, bundled: BundledMonoFont.values);
+
+      // Below the fold with the test font's tall rows: built, not visible.
+      Finder text(String s) => find.text(s, skipOffstage: false);
+      final included = tester.getTopLeft(text('Included with Séance')).dy;
+      final installed = tester.getTopLeft(text('Installed')).dy;
+      final fira = text('Fira Code');
+      expect(tester.getTopLeft(fira).dy, inExclusiveRange(included, installed));
+      expect(tester.getTopLeft(text('Hack')).dy, greaterThan(installed));
+      // Once: the stored name draws the bundled copy, so the installed
+      // face of the same name is not offered.
+      expect(text('Iosevka Term'), findsOneWidget);
+      expect(
+        tester.getTopLeft(text('Iosevka Term')).dy,
+        inExclusiveRange(included, installed),
+      );
+      expect(
+        tester.widget<Text>(fira).style?.fontFamily,
+        BundledMonoFont.firaCode.family,
+      );
+    });
+
+    testWidgets('picking one returns its display name', (tester) async {
+      await open(tester, bundled: BundledMonoFont.values);
+      await tester.tap(find.text('Maple Mono'));
+      await tester.pumpAndSettle();
+      // What settings store, resolved to the bundled copy when drawn.
+      expect(picked, ['Maple Mono']);
+    });
+
+    testWidgets('marks the bundled font in force', (tester) async {
+      await open(tester, bundled: BundledMonoFont.values, current: 'fira code');
+      final row = find.ancestor(
+        of: find.text('Fira Code'),
+        matching: find.byType(ListTile),
+      );
+      expect(tester.widget<ListTile>(row).selected, isTrue);
+    });
+
+    testWidgets('the filter narrows them too', (tester) async {
+      await open(tester, bundled: BundledMonoFont.values);
+      await tester.enterText(find.byType(TextField), 'jet');
+      await tester.pumpAndSettle();
+      expect(find.text('JetBrains Mono'), findsOneWidget);
+      expect(find.text('Fira Code'), findsNothing);
+    });
+
+    testWidgets('are all a host without installed fonts offers', (
+      tester,
+    ) async {
+      // Mobile: no collection to read, so neither the installed section nor
+      // the chip that filters it.
+      await open(tester, bundled: BundledMonoFont.values, supported: false);
+      expect(find.text('Installed'), findsNothing);
+      expect(find.text('Included with Séance'), findsNothing);
+      expect(find.byType(FilterChip), findsNothing);
+      expect(find.text('Hack'), findsNothing);
+      for (final font in BundledMonoFont.values) {
+        expect(find.text(font.displayName), findsOneWidget);
+      }
+    });
+
+    testWidgets('a filter matching none says so', (tester) async {
+      await open(tester, bundled: BundledMonoFont.values, supported: false);
+      await tester.enterText(find.byType(TextField), 'zzz');
+      await tester.pumpAndSettle();
+      expect(find.text('No font matches. Clear the filter.'), findsOneWidget);
+    });
+  });
 }
 
 class _FakeFonts implements SystemFonts {
   final List<SystemFontFamily> available;
-  const _FakeFonts(this.available);
+  const _FakeFonts(this.available, {this.isSupported = true});
 
   @override
-  bool get isSupported => true;
+  final bool isSupported;
 
   @override
   Future<List<SystemFontFamily>> families() async => available;
