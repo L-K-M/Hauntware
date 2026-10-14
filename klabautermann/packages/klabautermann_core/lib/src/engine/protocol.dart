@@ -148,6 +148,10 @@ final class SetAppActivity extends EngineRequest {
 /// subscription at once. A stream the profile reads on demand (see
 /// [CadenceProfile.cellularSaver]) is read once per [Subscribe] that
 /// names it, a repeat included, so a surface refreshes it by resending.
+/// While the server is [SamplingPhase.waitingForLink] or
+/// [SamplingPhase.pausedInBackground], that reading waits until the link
+/// is ready and the app is in the foreground, and resends in the meantime
+/// add no further reading.
 final class Subscribe extends EngineRequest {
   const Subscribe({
     required this.serverId,
@@ -1281,7 +1285,8 @@ enum CadenceProfile {
   phone,
 
   /// The Cellular saver column, which reads `timers` and `cron` on
-  /// demand: once per [Subscribe] that names them.
+  /// demand: once per [Subscribe] that names them, as soon as the link is
+  /// ready and the app is in the foreground (see [Subscribe]).
   cellularSaver,
 }
 

@@ -3524,7 +3524,10 @@ the engine in `engine_isolate.dart` beside it):
   subscription's streams, and an empty set drops it. `SetCadenceProfile`
   picks the 6.4 column (Desktop until the app sends one); a stream the
   column reads on demand is read once per `Subscribe` naming it, a
-  repeat included, so a surface refreshes it by resending. The engine
+  repeat included, so a surface refreshes it by resending. While the
+  server is `waitingForLink` or `pausedInBackground`, that reading waits
+  until the link is ready and the app is in the foreground, and resends
+  in the meantime add no further reading. The engine
   sends one `Sample` per subscribed stream and reading: `seq` counts per
   server across its streams (D44), `at` is the engine's own clock in UTC,
   since a host's clock may be off, and `result` is a sealed value per
