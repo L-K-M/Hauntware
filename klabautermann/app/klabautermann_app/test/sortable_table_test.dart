@@ -672,6 +672,14 @@ void main() {
       handle.dispose();
     });
 
+    testWidgets('a header takes taps across the full row height', (
+      tester,
+    ) async {
+      await _pump(tester, platform: TargetPlatform.android);
+      // The touch target minimum, 48 dp.
+      expect(tester.getSize(_header('pid')).height, _touchRowExtent);
+    });
+
     testWidgets('rows grow with the text scale; touch rows are taller', (
       tester,
     ) async {

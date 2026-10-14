@@ -240,6 +240,7 @@ const _cellPadding = EdgeInsets.symmetric(horizontal: 8);
 const _chevronSize = 14.0;
 const _actionIconSize = 16.0;
 const _focusRingWidth = 2.0;
+const _separatorWidth = 1.0;
 
 enum _Step { previous, next, pageUp, pageDown, first, last }
 
@@ -577,9 +578,15 @@ class _SortableTableState<R> extends State<SortableTable<R>> {
 
   /// [cells] in the columns' extents, then the row-action slot (empty
   /// when [slot] is null), so the header and every row line up.
-  Widget _laidOut(BuildContext context, List<Widget> cells, {Widget? slot}) {
+  Widget _laidOut(
+    BuildContext context,
+    List<Widget> cells, {
+    Widget? slot,
+    CrossAxisAlignment cross = CrossAxisAlignment.center,
+  }) {
     final scaler = MediaQuery.textScalerOf(context);
     return Row(
+      crossAxisAlignment: cross,
       children: [
         for (var index = 0; index < cells.length; index++)
           switch (widget.columns[index].extent) {
@@ -602,14 +609,19 @@ class _SortableTableState<R> extends State<SortableTable<R>> {
     return Container(
       key: ValueKey('${widget.tableId}.columns'),
       height: _rowExtent,
-      decoration: BoxDecoration(
+      // Full-height cells under the separator, not above it: a header
+      // takes taps across the whole row (48 dp on touch).
+      foregroundDecoration: BoxDecoration(
         border: Border(
-          bottom: BorderSide(color: GhostFileTheme.of(context).separator),
+          bottom: BorderSide(
+            color: GhostFileTheme.of(context).separator,
+            width: _separatorWidth,
+          ),
         ),
       ),
       child: _laidOut(context, [
         for (final column in widget.columns) _headerCell(context, column),
-      ]),
+      ], cross: CrossAxisAlignment.stretch),
     );
   }
 
@@ -664,7 +676,8 @@ class _SortableTableState<R> extends State<SortableTable<R>> {
         hoverColor: fileTheme.hoverFill,
         child: ExcludeSemantics(
           child: Padding(
-            padding: _cellPadding,
+            // The label centres clear of the separator.
+            padding: _cellPadding.copyWith(bottom: _separatorWidth),
             child: Row(
               mainAxisAlignment: end
                   ? MainAxisAlignment.end
