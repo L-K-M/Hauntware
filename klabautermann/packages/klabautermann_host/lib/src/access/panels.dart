@@ -20,8 +20,12 @@ enum Capability {
   /// The whole journal is readable (the access check's journal row).
   journalAccess,
 
-  /// The probe found `dmesg`, LOG-03's fallback. `kernel.dmesg_restrict`
-  /// is not probed: a restricted read reports `denied` when it runs.
+  /// `dmesg` can read the kernel ring, LOG-03's fallback. Missing when
+  /// the probe found no `dmesg`, otherwise unknown: reading needs
+  /// CAP_SYSLOG under `kernel.dmesg_restrict=1` (the Debian and Ubuntu
+  /// default; containers drop it even for root), and 03 §7.6's
+  /// `dmesg --json` is absent from BusyBox and util-linux 2.32 (RHEL 8).
+  /// LOG-03 probes both before this can be ok.
   dmesg,
 
   /// The probe found `tail` (LOG-22).
@@ -92,7 +96,8 @@ final class PanelAvailability {
   final AccessStatus status;
 
   /// The alternative that works, when [status] is ok: for the kernel log
-  /// it says whether to read `journalctl -k -b` or fall back to `dmesg`.
+  /// it says whether to read `journalctl -k -b` or fall back to `dmesg`
+  /// (once LOG-03 probes it, [Capability.dmesg]).
   final List<Capability> route;
 
   /// What keeps the panel from working: the unknown capabilities of the
@@ -114,13 +119,14 @@ AccessStatus capabilityStatus(
   switch (capability) {
     case Capability.journalAccess:
       return access.row(AccessItem.journal).status;
+    case Capability.dmesg:
+      return profile.toolPresent('dmesg') == false
+          ? AccessStatus.missing
+          : AccessStatus.unknown;
     case Capability.systemd:
       present = profile.systemdDir;
     // Tool capabilities are named after the probed tool.
-    case Capability.journalctl ||
-        Capability.dmesg ||
-        Capability.tail ||
-        Capability.crontab:
+    case Capability.journalctl || Capability.tail || Capability.crontab:
       present = profile.toolPresent(capability.name);
   }
 

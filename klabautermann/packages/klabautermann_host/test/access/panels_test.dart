@@ -82,10 +82,23 @@ void main() {
       expect(a.blocking, isEmpty);
     });
 
-    test('falls back to dmesg without journal access', () {
-      final a = _panel(HostPanel.kernelLog, host());
-      expect(a.status, _ok);
-      expect(a.route, [Capability.dmesg]);
+    test('a present dmesg stays unknown until its access is probed', () {
+      // Debian and Ubuntu set kernel.dmesg_restrict=1, containers drop
+      // CAP_SYSLOG even for root, and BusyBox and util-linux 2.32 lack
+      // `dmesg --json`; none of that is probed yet.
+      for (final p in [
+        host(),
+        host(
+          uid: 0,
+          user: 'root',
+          tools: const {'journalctl': null, 'dmesg': '/bin/dmesg'},
+        ),
+      ]) {
+        final a = _panel(HostPanel.kernelLog, p);
+        expect(a.status, _unknown);
+        expect(a.route, isEmpty);
+        expect(a.blocking, [Capability.dmesg]);
+      }
     });
 
     test('names the journal fix when neither route works', () {
