@@ -42,6 +42,10 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "''",
     r"'ssh_config_imports.json: ${importStoreIssue.kind.name} '",
     r"'${importStoreIssue.detail ?? ''}'",
+    // Instance-lock debugPrint diagnostics; AlreadyRunningApp and
+    // StartupIssueNotice tell the user in ARB text.
+    "'Klabautermann is already running; this instance quits.'",
+    r"'$instanceLockFileName: ${issue.error}'",
   },
   // The not-saved diagnostic; the Appearance tab prints it and shows its
   // own ARB text (themeNotSaved).
@@ -134,6 +138,16 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   },
   // debugPrint of a failed theme change; the toast is ARB text.
   'lib/ui/settings_page.dart': {r"'$error'"},
+  'lib/ui/sortable_table.dart': {
+    // FocusNode debug labels.
+    "'SortableTable'",
+    "'SortableTable menu'",
+    // Widget keys built from the caller's table, column and row ids.
+    r"'${widget.tableId}.columns'",
+    r"'${widget.tableId}.column.${column.id}'",
+    r"'${widget.tableId}.rowActions.$key'",
+    r"'${widget.tableId}.row.$key'",
+  },
 };
 
 const _config = L10nContractConfig(
