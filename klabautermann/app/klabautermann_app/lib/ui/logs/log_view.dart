@@ -1073,8 +1073,9 @@ final class _TailScrollPosition extends ScrollPositionWithSingleContext {
 }
 
 /// A scroll animation whose path moves with the lines when old lines leave
-/// the buffer during it, so it ends on the line it was aimed at, or on the
-/// newest line when it was aimed at the end, without a jump on the way.
+/// the buffer during it, so it ends on the line it was aimed at (the
+/// oldest line left, if that one left too), or on the newest line when it
+/// was aimed at the end, without a jump on the way.
 ///
 /// A plain [DrivenScrollActivity] sets the offsets of its own path each
 /// frame, which would undo the shift and land the view off its target by
@@ -1102,11 +1103,12 @@ final class _ShiftableScrollAnimation extends DrivenScrollActivity {
   /// The animation's latest value, in the offsets it started with.
   double _value;
 
-  /// How far the path is moved at [_to], and how much further for each
-  /// pixel of value before it: the path at value v is moved by
-  /// `_targetShift + (_to - v) * _shiftPerPixelLeft`.
+  /// How far the whole path is moved when it ends on a line.
   double _targetShift = 0;
-  double _shiftPerPixelLeft = 0;
+
+  /// The shifts of a path that ends at the newest line, each with how far
+  /// the value was from [_to] when it came.
+  final _endShifts = <({double left, double delta})>[];
 
   /// Moves the rest of the path by [delta]: all of it when it ends on a
   /// line, and when it ends at the newest line, [delta] where it is now
@@ -1120,14 +1122,27 @@ final class _ShiftableScrollAnimation extends DrivenScrollActivity {
     final left = _to - _value;
     // At its end already: the next frame sets the end, as it should.
     if (left.abs() < precisionErrorTolerance) return;
-    _shiftPerPixelLeft += delta / left;
+    _endShifts.add((left: left, delta: delta));
   }
 
   @override
   bool applyMoveTo(double value) {
     _value = value;
+    // An end shift fades in proportion to the distance left. A curve that
+    // turns back from the end or runs past it would scale the shift up or
+    // reverse it, so it never takes more than all of it, nor any past the
+    // end.
+    var shift = _targetShift;
+    for (final (:left, :delta) in _endShifts) {
+      shift += delta * ((_to - value) / left).clamp(0.0, 1.0);
+    }
+    // A line aimed at may have left the buffer, which would put the end of
+    // the path above the oldest line left. Bouncing physics would show the
+    // blank space there, so the path goes no further above the oldest line
+    // than its curve does.
+    final minExtent = (delegate as ScrollPosition).minScrollExtent;
     return super.applyMoveTo(
-      value + _targetShift + (_to - value) * _shiftPerPixelLeft,
+      math.max(value + shift, math.min(value, minExtent)),
     );
   }
 }
