@@ -51,6 +51,7 @@ final class SettingsWindowHost {
         handleCall: _handleCall,
         changes: [appearance],
       ),
+      encodeError: encodeLinkError,
       requestAppExit: requestAppExit,
     );
   }

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:ghost_theme/ghost_theme.dart' show ThemeModePreference;
+import 'package:ghost_ui/ghost_ui.dart' show showTopToast;
 
 import '../controllers/appearance_controller.dart';
 import '../l10n/app_localizations.dart';
@@ -106,14 +107,21 @@ class AppearanceTab extends StatelessWidget {
 
   /// The selection shows [AppearanceSettings.value], so it moves only once
   /// the app has taken the change; a change the app does not take leaves
-  /// it where it was and says so.
+  /// it where it was and says so. A change the app took but could not save
+  /// stays, and says that instead, since it then lasts only until the app
+  /// restarts. Both in a top toast: the suite keeps the bottom edge clear.
   Future<void> _setMode(BuildContext context, ThemeModePreference mode) async {
-    final messenger = ScaffoldMessenger.of(context);
-    final failed = AppLocalizations.of(context).themeNotChanged;
+    final overlay = Overlay.of(context, rootOverlay: true);
+    final l10n = AppLocalizations.of(context);
     try {
       await appearance.setMode(mode);
+    } on AppearanceNotSavedException catch (error) {
+      debugPrint('$error');
+      if (overlay.mounted) showTopToast(overlay, message: l10n.themeNotSaved);
     } on Exception {
-      messenger.showSnackBar(SnackBar(content: Text(failed)));
+      if (overlay.mounted) {
+        showTopToast(overlay, message: l10n.themeNotChanged);
+      }
     }
   }
 

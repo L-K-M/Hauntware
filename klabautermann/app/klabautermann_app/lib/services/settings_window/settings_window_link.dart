@@ -12,6 +12,8 @@
 import 'package:flutter/services.dart';
 import 'package:ghost_theme/ghost_theme.dart';
 
+import '../../controllers/appearance_controller.dart'
+    show AppearanceNotSavedException;
 import '../../theme/app_theme.dart';
 
 /// On the app's engine only: `open` in, `closed` out.
@@ -68,6 +70,37 @@ AppAppearance decodeAppearance(Map<String, Object?> json) => AppAppearance(
     json[SettingsLinkKey.mode.name]! as String,
   ),
 );
+
+/// Why a call failed in the app's isolate, as the code of the
+/// [PlatformException] that carries it.
+enum SettingsLinkError {
+  /// The change applied but the app could not save it. It crosses as
+  /// itself, and the window rebuilds the [AppearanceNotSavedException], so
+  /// the Appearance tab words it the same in both places.
+  notSaved,
+
+  /// Anything else: the change did not happen.
+  failed,
+}
+
+/// [error] as the link carries it: a [PlatformException] whose code is a
+/// [SettingsLinkError] and whose message is what the error printed.
+PlatformException encodeLinkError(Object error) => PlatformException(
+  code: switch (error) {
+    AppearanceNotSavedException() => SettingsLinkError.notSaved.name,
+    _ => SettingsLinkError.failed.name,
+  },
+  message: '$error',
+);
+
+/// The inverse of [encodeLinkError], in the window.
+Exception decodeLinkError(PlatformException error) {
+  final message = error.message ?? error.code;
+  return switch (SettingsLinkError.values.asNameMap()[error.code]) {
+    SettingsLinkError.notSaved => AppearanceNotSavedException(message),
+    SettingsLinkError.failed || null => SettingsLinkException(message),
+  };
+}
 
 /// A failure the app reported for a call from the window, or the window's
 /// own when no app answers.

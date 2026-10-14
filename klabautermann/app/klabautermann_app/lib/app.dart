@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:ghost_theme/ghost_theme.dart' show GhostTheme;
+import 'package:klabautermann_core/klabautermann_core.dart'
+    show DeviceSettingsIssue;
 
 import 'controllers/appearance_controller.dart';
 import 'controllers/fleet_controller.dart';
@@ -10,6 +12,7 @@ import 'l10n/app_localizations.dart';
 import 'services/settings_window/settings_window_link.dart';
 import 'theme/app_theme.dart';
 import 'ui/adaptive_shell.dart';
+import 'ui/settings_issue_notice.dart';
 import 'ui/settings_page.dart';
 
 /// The settings route's name: Settings on phones, and on a desktop whose
@@ -25,12 +28,16 @@ class KlabautermannApp extends StatelessWidget {
     required this.fleet,
     required this.monitoring,
     required this.appearance,
+    this.settingsIssue,
     this.openSettingsWindow,
   });
 
   final FleetController fleet;
   final MonitoringController monitoring;
   final AppearanceController appearance;
+
+  /// What went wrong opening `settings.json`, told once at startup.
+  final DeviceSettingsIssue? settingsIssue;
 
   /// Opens Settings in its own window; null on phones, where Settings is
   /// [kSettingsRoute].
@@ -79,11 +86,14 @@ class KlabautermannApp extends StatelessWidget {
           // The shell's settings callback needs a context under the
           // MaterialApp's Navigator; the ListenableBuilder's own context
           // sits above it.
-          home: Builder(
-            builder: (context) => AdaptiveShell(
-              fleet: fleet,
-              monitoring: monitoring,
-              onOpenSettings: () => unawaited(_openSettings(context)),
+          home: SettingsIssueNotice(
+            issue: settingsIssue,
+            child: Builder(
+              builder: (context) => AdaptiveShell(
+                fleet: fleet,
+                monitoring: monitoring,
+                onOpenSettings: () => unawaited(_openSettings(context)),
+              ),
             ),
           ),
           routes: {kSettingsRoute: (_) => SettingsPage(appearance: appearance)},
