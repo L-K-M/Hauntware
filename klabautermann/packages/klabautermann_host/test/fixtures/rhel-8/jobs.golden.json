@@ -198,20 +198,36 @@
         "cron|/etc/crontab|0",
         "cron|/etc/cron.d/0hourly|0"
       ],
-      "schedule": {
-        "type": "cron",
-        "text": "01 * * * *",
-        "macro": null,
-        "fields": {
-          "minute": "1",
-          "hour": "*",
-          "dayOfMonth": "*",
-          "month": "*",
-          "dayOfWeek": "*"
+      "schedules": [
+        {
+          "type": "cron",
+          "text": "01 * * * *",
+          "macro": null,
+          "fields": {
+            "minute": "1",
+            "hour": "*",
+            "dayOfMonth": "*",
+            "month": "*",
+            "dayOfWeek": "*"
+          },
+          "dayMatch": "both",
+          "timeZone": null
         },
-        "dayMatch": "both",
-        "timeZone": null
-      },
+        {
+          "type": "cron",
+          "text": "01 * * * *",
+          "macro": null,
+          "fields": {
+            "minute": "1",
+            "hour": "*",
+            "dayOfMonth": "*",
+            "month": "*",
+            "dayOfWeek": "*"
+          },
+          "dayMatch": "both",
+          "timeZone": null
+        }
+      ],
       "nextRuns": [
         {
           "atUtc": "2026-10-14T12:01:00.000Z",
@@ -238,20 +254,36 @@
         "cron|/etc/crontab|0",
         "cron|/etc/cron.d/0hourly|0"
       ],
-      "schedule": {
-        "type": "cron",
-        "text": "01 * * * *",
-        "macro": null,
-        "fields": {
-          "minute": "1",
-          "hour": "*",
-          "dayOfMonth": "*",
-          "month": "*",
-          "dayOfWeek": "*"
+      "schedules": [
+        {
+          "type": "cron",
+          "text": "01 * * * *",
+          "macro": null,
+          "fields": {
+            "minute": "1",
+            "hour": "*",
+            "dayOfMonth": "*",
+            "month": "*",
+            "dayOfWeek": "*"
+          },
+          "dayMatch": "both",
+          "timeZone": null
         },
-        "dayMatch": "both",
-        "timeZone": null
-      },
+        {
+          "type": "cron",
+          "text": "01 * * * *",
+          "macro": null,
+          "fields": {
+            "minute": "1",
+            "hour": "*",
+            "dayOfMonth": "*",
+            "month": "*",
+            "dayOfWeek": "*"
+          },
+          "dayMatch": "both",
+          "timeZone": null
+        }
+      ],
       "nextRuns": [
         {
           "atUtc": "2026-10-14T12:01:00.000Z",
@@ -277,20 +309,22 @@
       "driverIds": [
         "cron|/etc/crontab|1"
       ],
-      "schedule": {
-        "type": "cron",
-        "text": "02 4 * * *",
-        "macro": null,
-        "fields": {
-          "minute": "2",
-          "hour": "4",
-          "dayOfMonth": "*",
-          "month": "*",
-          "dayOfWeek": "*"
-        },
-        "dayMatch": "both",
-        "timeZone": null
-      },
+      "schedules": [
+        {
+          "type": "cron",
+          "text": "02 4 * * *",
+          "macro": null,
+          "fields": {
+            "minute": "2",
+            "hour": "4",
+            "dayOfMonth": "*",
+            "month": "*",
+            "dayOfWeek": "*"
+          },
+          "dayMatch": "both",
+          "timeZone": null
+        }
+      ],
       "nextRuns": [
         {
           "atUtc": "2026-10-15T08:02:00.000Z",
@@ -316,20 +350,22 @@
       "driverIds": [
         "cron|/etc/crontab|2"
       ],
-      "schedule": {
-        "type": "cron",
-        "text": "22 4 * * 0",
-        "macro": null,
-        "fields": {
-          "minute": "22",
-          "hour": "4",
-          "dayOfMonth": "*",
-          "month": "*",
-          "dayOfWeek": "0"
-        },
-        "dayMatch": "both",
-        "timeZone": null
-      },
+      "schedules": [
+        {
+          "type": "cron",
+          "text": "22 4 * * 0",
+          "macro": null,
+          "fields": {
+            "minute": "22",
+            "hour": "4",
+            "dayOfMonth": "*",
+            "month": "*",
+            "dayOfWeek": "0"
+          },
+          "dayMatch": "both",
+          "timeZone": null
+        }
+      ],
       "nextRuns": [
         {
           "atUtc": "2026-10-18T08:22:00.000Z",

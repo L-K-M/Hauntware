@@ -1957,8 +1957,8 @@ unless the user enables admin mode for that panel.
   because PID 1 evaluates zone-less expressions in the system zone [R:
   systemd.time(7)] (6.2); phrases come from ARB templates, worded from
   the cron fields as written (`*/15` and `0,15,30,45` read differently).
-  A `cron.<period>` script takes the schedule and next runs of the first
-  `run-parts` line for its directory that does not defer to anacron;
+  A `cron.<period>` script takes the schedules and merged next runs of
+  every `run-parts` line for its directory that does not defer to anacron;
   behind Debian's `test -x /usr/sbin/anacron ||` lines, or with no such
   line, its runs show as unknown with that reason until JOB-04 (v1). A
   `CRON_TZ` the client cannot resolve keeps the schedule without next

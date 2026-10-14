@@ -197,20 +197,22 @@
       "driverIds": [
         "cron|/etc/crontab|0"
       ],
-      "schedule": {
-        "type": "cron",
-        "text": "17 * * * *",
-        "macro": null,
-        "fields": {
-          "minute": "17",
-          "hour": "*",
-          "dayOfMonth": "*",
-          "month": "*",
-          "dayOfWeek": "*"
-        },
-        "dayMatch": "both",
-        "timeZone": null
-      },
+      "schedules": [
+        {
+          "type": "cron",
+          "text": "17 * * * *",
+          "macro": null,
+          "fields": {
+            "minute": "17",
+            "hour": "*",
+            "dayOfMonth": "*",
+            "month": "*",
+            "dayOfWeek": "*"
+          },
+          "dayMatch": "both",
+          "timeZone": null
+        }
+      ],
       "nextRuns": [
         {
           "atUtc": "2026-10-14T12:17:00.000Z",
@@ -236,7 +238,7 @@
       "driverIds": [
         "cron|/etc/crontab|1"
       ],
-      "schedule": null,
+      "schedules": [],
       "nextRuns": [],
       "runsUnknown": "anacron"
     },
@@ -249,7 +251,7 @@
       "driverIds": [
         "cron|/etc/crontab|2"
       ],
-      "schedule": null,
+      "schedules": [],
       "nextRuns": [],
       "runsUnknown": "anacron"
     },
@@ -262,7 +264,7 @@
       "driverIds": [
         "cron|/etc/crontab|3"
       ],
-      "schedule": null,
+      "schedules": [],
       "nextRuns": [],
       "runsUnknown": "anacron"
     },

@@ -250,7 +250,7 @@ void main() {
       final script = jobs.whereType<PeriodicJobEntry>().single;
       expect(script.directory, '/etc/cron.hourly');
       expect(script.driverIds, ['cron|/etc/crontab|0']);
-      expect(script.schedule!.text, '17 * * * *');
+      expect(script.schedules.single.text, '17 * * * *');
       expect(script.nextRuns.map((r) => r.atUtc), [
         DateTime.utc(2026, 6, 1, 12, 17),
         DateTime.utc(2026, 6, 1, 13, 17),
@@ -262,7 +262,7 @@ void main() {
       final jobs = _merge(_cron(etc: debianEtc, dirs: 'daily apt-compat'));
       final script = jobs.whereType<PeriodicJobEntry>().single;
       expect(script.driverIds, ['cron|/etc/crontab|1']);
-      expect(script.schedule, isNull);
+      expect(script.schedules, isEmpty);
       expect(script.nextRuns, isEmpty);
       expect(script.runsUnknown, JobRunsUnknown.anacron);
     });
@@ -274,20 +274,46 @@ void main() {
       expect(script.runsUnknown, JobRunsUnknown.noDriver);
     });
 
-    test('every driver is listed and the first direct one wins', () {
+    test('direct drivers merge their schedules and runs', () {
       final jobs = _merge(
         _cron(
-          etc: '01 * * * * root run-parts /etc/cron.hourly/',
-          cronD: '0hourly\t02 * * * * root /usr/bin/run-parts /etc/cron.hourly',
-          dirs: 'hourly 0yum-hourly.cron',
+          etc: '0 3 * * * root run-parts /etc/cron.daily/',
+          cronD: 'extra\t0 1 * * * root /usr/bin/run-parts /etc/cron.daily',
+          dirs: 'daily logrotate',
         ),
+        runCount: 3,
       );
       final script = jobs.whereType<PeriodicJobEntry>().single;
       expect(script.driverIds, [
         'cron|/etc/crontab|0',
-        'cron|/etc/cron.d/0hourly|0',
+        'cron|/etc/cron.d/extra|0',
       ]);
-      expect(script.schedule!.text, '01 * * * *');
+      expect(script.schedules.map((s) => s.text), ['0 3 * * *', '0 1 * * *']);
+      expect(script.nextRuns.map((r) => r.atUtc), [
+        DateTime.utc(2026, 6, 2, 1),
+        DateTime.utc(2026, 6, 2, 3),
+        DateTime.utc(2026, 6, 3, 1),
+      ]);
+    });
+
+    test('a driver without runs yields to one with runs', () {
+      final jobs = _merge(
+        _cron(
+          etc:
+              '@reboot root run-parts /etc/cron.daily\n'
+              '0 3 * * * root run-parts /etc/cron.daily\n'
+              '0 3 * * * root run-parts /etc/cron.daily',
+          dirs: 'daily x',
+        ),
+      );
+      final script = jobs.whereType<PeriodicJobEntry>().single;
+      expect(script.schedules, hasLength(3));
+      expect(script.runsUnknown, isNull);
+      // Two drivers firing at the same instant list one run.
+      expect(script.nextRuns.map((r) => r.atUtc), [
+        DateTime.utc(2026, 6, 2, 3),
+        DateTime.utc(2026, 6, 3, 3),
+      ]);
     });
 
     test('a driver without runs passes its reason on', () {
@@ -298,7 +324,7 @@ void main() {
         ),
       );
       final script = jobs.whereType<PeriodicJobEntry>().single;
-      expect(script.schedule!.timeZone, 'Asia/Tokyo');
+      expect(script.schedules.single.timeZone, 'Asia/Tokyo');
       expect(script.runsUnknown, JobRunsUnknown.timeZoneUnresolved);
     });
   });

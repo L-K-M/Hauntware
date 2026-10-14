@@ -97,16 +97,17 @@ final class CronJobEntry extends JobEntry {
 }
 
 /// A script in a `cron.<period>` directory (JOB-01). It takes the
-/// schedule and runs of the first cron line that runs its directory
+/// schedules and merged runs of every cron line that runs its directory
 /// through `run-parts` without deferring to anacron.
 final class PeriodicJobEntry extends JobEntry {
   PeriodicJobEntry({
     required this.entry,
     List<String> driverIds = const [],
-    this.schedule,
+    List<CronSchedule> schedules = const [],
     List<CronRun> nextRuns = const [],
     this.runsUnknown,
   }) : driverIds = List.unmodifiable(driverIds),
+       schedules = List.unmodifiable(schedules),
        nextRuns = List.unmodifiable(nextRuns),
        assert(nextRuns.isEmpty != (runsUnknown == null));
 
@@ -116,10 +117,11 @@ final class PeriodicJobEntry extends JobEntry {
   /// directory, in source order.
   final List<String> driverIds;
 
-  /// The driving line's schedule, when one runs the directory itself.
-  final CronSchedule? schedule;
+  /// The schedules of the lines that run the directory themselves.
+  @override
+  final List<CronSchedule> schedules;
 
-  /// The driving line's upcoming runs.
+  /// Those lines' upcoming runs merged in order, one per instant.
   final List<CronRun> nextRuns;
 
   /// Why [nextRuns] is empty; null when it is not.
@@ -132,9 +134,6 @@ final class PeriodicJobEntry extends JobEntry {
   String get id => 'periodic|${entry.period.name}|${entry.name}';
 
   @override
-  List<ScheduleDescription> get schedules => [?schedule];
-
-  @override
   DateTime? get nextRunUtc => nextRuns.firstOrNull?.atUtc;
 
   @override
@@ -145,7 +144,7 @@ final class PeriodicJobEntry extends JobEntry {
     'name': entry.name,
     'directory': directory,
     'driverIds': driverIds,
-    'schedule': schedule?.toJson(),
+    'schedules': schedules.map((s) => s.toJson()).toList(),
     'nextRuns': nextRuns.map((r) => r.toJson()).toList(),
     'runsUnknown': runsUnknown?.name,
   };
@@ -233,7 +232,7 @@ List<JobEntry> mergeJobs({
 
   final periodic = [
     for (final entry in cron?.dirEntries ?? const <CronDirEntry>[])
-      _periodicEntry(entry, cronEntries),
+      _periodicEntry(entry, cronEntries, runCount),
   ];
 
   return [
@@ -319,13 +318,15 @@ ServerZone? _cronZone(
   return null;
 }
 
-/// A periodic script with the schedule of the first `run-parts` line for
-/// its directory that does not defer to anacron. Debian's
-/// `test -x /usr/sbin/anacron || run-parts ...` lines do nothing while
-/// anacron is installed, and anacron's own delays are v1 (JOB-04).
+/// A periodic script with the schedules of the `run-parts` lines for its
+/// directory that do not defer to anacron, and the first [runCount] of
+/// their runs. Debian's `test -x /usr/sbin/anacron || run-parts ...`
+/// lines do nothing while anacron is installed, and anacron's own delays
+/// are v1 (JOB-04). Without runs, the first direct line's reason stands.
 PeriodicJobEntry _periodicEntry(
   CronDirEntry entry,
   List<CronJobEntry> cronEntries,
+  int runCount,
 ) {
   final directory = _periodDirectory(entry.period);
   final drivers = cronEntries
@@ -334,9 +335,9 @@ PeriodicJobEntry _periodicEntry(
   final driverIds = [for (final d in drivers) d.id];
   final direct = drivers
       .where((d) => !d.job.command.contains('anacron'))
-      .firstOrNull;
+      .toList();
 
-  if (direct == null) {
+  if (direct.isEmpty) {
     return PeriodicJobEntry(
       entry: entry,
       driverIds: driverIds,
@@ -345,12 +346,19 @@ PeriodicJobEntry _periodicEntry(
           : JobRunsUnknown.anacron,
     );
   }
+  final instants = <DateTime>{};
+  final runs = [for (final d in direct) ...d.nextRuns]
+    ..sort((a, b) => a.atUtc.compareTo(b.atUtc));
+  final merged = runs
+      .where((r) => instants.add(r.atUtc))
+      .take(runCount)
+      .toList();
   return PeriodicJobEntry(
     entry: entry,
     driverIds: driverIds,
-    schedule: direct.schedule,
-    nextRuns: direct.nextRuns,
-    runsUnknown: direct.runsUnknown,
+    schedules: [for (final d in direct) ?d.schedule],
+    nextRuns: merged,
+    runsUnknown: merged.isEmpty ? direct.first.runsUnknown : null,
   );
 }
 

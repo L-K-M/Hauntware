@@ -195,7 +195,7 @@
       "name": "0anacron",
       "directory": "/etc/cron.hourly",
       "driverIds": [],
-      "schedule": null,
+      "schedules": [],
       "nextRuns": [],
       "runsUnknown": "noDriver"
     },
@@ -206,7 +206,7 @@
       "name": "0anacron",
       "directory": "/etc/cron.daily",
       "driverIds": [],
-      "schedule": null,
+      "schedules": [],
       "nextRuns": [],
       "runsUnknown": "noDriver"
     },
@@ -217,7 +217,7 @@
       "name": "0anacron",
       "directory": "/etc/cron.weekly",
       "driverIds": [],
-      "schedule": null,
+      "schedules": [],
       "nextRuns": [],
       "runsUnknown": "noDriver"
     },
@@ -228,7 +228,7 @@
       "name": "0anacron",
       "directory": "/etc/cron.monthly",
       "driverIds": [],
-      "schedule": null,
+      "schedules": [],
       "nextRuns": [],
       "runsUnknown": "noDriver"
     }
