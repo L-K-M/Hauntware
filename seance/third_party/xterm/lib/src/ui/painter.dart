@@ -1,5 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/painting.dart';
+import 'package:quiver/collection.dart';
 
 import 'package:xterm/src/ui/palette_builder.dart';
 import 'package:xterm/src/ui/paragraph_cache.dart';
@@ -26,6 +27,25 @@ class TerminalPainter {
   /// [_textStyle] is changed, or when the system font changes.
   final _paragraphCache = ParagraphCache(10240);
 
+  /// [seance fork] Laid-out runs for ligature drawing (see [paintLine]),
+  /// keyed by the run's text and painted style exactly: runs vary far more
+  /// than single glyphs, so an int hash like [_paragraphCache]'s would
+  /// collide. Cleared wherever that cache is.
+  final _runCache = LruMap<String, _RunLayout>(maximumSize: _runCacheSize);
+
+  static const _runCacheSize = 4096;
+
+  /// [seance fork] The longest run shaped as one. Ligatures span two to
+  /// four characters; the cap bounds the layout a long unbroken token
+  /// (a hash, base64) costs, at the price of a ligature cut at the seam.
+  static const _maxRunLength = 64;
+
+  /// [seance fork] How far, in logical pixels, a run's laid-out width may
+  /// stray from its cells' before it is drawn cell by cell instead. A
+  /// fixed-pitch face lands within rounding; a proportional one or a
+  /// fallback glyph does not, and would drift off the grid.
+  static const _runWidthTolerance = 0.5;
+
   TerminalStyle get textStyle => _textStyle;
   TerminalStyle _textStyle;
   set textStyle(TerminalStyle value) {
@@ -33,6 +53,7 @@ class TerminalPainter {
     _textStyle = value;
     _cellSize = _measureCharSize();
     _paragraphCache.clear();
+    _runCache.clear();
   }
 
   TextScaler get textScaler => _textScaler;
@@ -42,6 +63,7 @@ class TerminalPainter {
     _textScaler = value;
     _cellSize = _measureCharSize();
     _paragraphCache.clear();
+    _runCache.clear();
   }
 
   TerminalTheme get theme => _theme;
@@ -51,6 +73,7 @@ class TerminalPainter {
     _theme = value;
     _colorPalette = PaletteBuilder(value).build();
     _paragraphCache.clear();
+    _runCache.clear();
   }
 
   Size _measureCharSize() {
@@ -83,6 +106,7 @@ class TerminalPainter {
   void clearFontCache() {
     _cellSize = _measureCharSize();
     _paragraphCache.clear();
+    _runCache.clear();
   }
 
   /// Paints the cursor based on the current cursor type.
@@ -145,6 +169,15 @@ class TerminalPainter {
   ///
   /// [seance fork] Cells inside one of [recolor]'s spans are painted in that
   /// span's colours instead of their own.
+  ///
+  /// [seance fork] With [TerminalStyle.ligatures] on, a run of neighbouring
+  /// cells that can join ([_joinable]) and share their painted style is
+  /// shaped as one paragraph, so the font can draw `->` as an arrow. The
+  /// fonts that ligate this way keep every character one cell wide, so the
+  /// run lands on the grid; one that does not is drawn cell by cell:
+  ///
+  ///     cells   | a |   | - | > |   | b |
+  ///     drawn     a       ->(one run)  b
   void paintLine(
     Canvas canvas,
     Offset offset,
@@ -153,10 +186,19 @@ class TerminalPainter {
   ]) {
     final cellData = CellData.empty();
     final cellWidth = _cellSize.width;
+    final joinRuns = _textStyle.ligatures == TerminalLigatures.on;
 
     for (var i = 0; i < line.length; i++) {
       line.getCellData(i, cellData);
       if (recolor != null) _recolorCell(cellData, i, recolor);
+
+      if (joinRuns && _joinable(cellData)) {
+        final end = _paintRun(canvas, offset, line, i, cellData, recolor);
+        if (end != null) {
+          i = end - 1;
+          continue;
+        }
+      }
 
       final charWidth = cellData.content >> CellContent.widthShift;
       final cellOffset = offset.translate(i * cellWidth, 0);
@@ -167,6 +209,93 @@ class TerminalPainter {
         i++;
       }
     }
+  }
+
+  /// [seance fork] Whether [cell] can be part of a ligature run: printable
+  /// ASCII other than the space, one cell wide. Every ligature the bundled
+  /// fonts draw is made of these. Spaces stay out so the underline
+  /// workaround in [paintCellForeground] still applies to them; wide,
+  /// combining and non-ASCII characters keep the cell-by-cell path.
+  @pragma('vm:prefer-inline')
+  static bool _joinable(CellData cell) {
+    final charCode = cell.content & CellContent.codepointMask;
+    final charWidth = cell.content >> CellContent.widthShift;
+    return charWidth == 1 && charCode > 0x20 && charCode < 0x7F;
+  }
+
+  /// [seance fork] Paints the run of joinable cells that starts at column
+  /// [start] (whose data, recoloured, is [first]) and returns the column
+  /// after it, or null for a lone cell, which the caller paints. Cells join
+  /// while they share colours and painted flags; the hyperlink id in the
+  /// attribute word changes nothing on screen and does not split a run. A
+  /// run whose shaped width is off the grid is painted cell by cell, whole,
+  /// so its tail is not shaped again as a shorter run.
+  int? _paintRun(
+    Canvas canvas,
+    Offset offset,
+    BufferLine line,
+    int start,
+    CellData first,
+    List<CellRecolor>? recolor,
+  ) {
+    final flags = first.flags & CellAttr.styleMask;
+    final codes = <int>[first.content & CellContent.codepointMask];
+    final next = CellData.empty();
+    final limit = (start + _maxRunLength).clamp(0, line.length);
+    var end = start + 1;
+    for (; end < limit; end++) {
+      line.getCellData(end, next);
+      if (recolor != null) _recolorCell(next, end, recolor);
+      if (!_joinable(next) ||
+          next.foreground != first.foreground ||
+          next.background != first.background ||
+          next.flags & CellAttr.styleMask != flags) {
+        break;
+      }
+      codes.add(next.content & CellContent.codepointMask);
+    }
+    if (codes.length < 2) return null;
+
+    final text = String.fromCharCodes(codes);
+    final key = '${first.foreground}:${first.background}:$flags:$text';
+    final layout = _runCache[key] ??= _layoutRun(text, first, codes.length);
+    final paragraph = layout.paragraph;
+    final cellWidth = _cellSize.width;
+
+    if (paragraph == null) {
+      for (var x = start; x < end; x++) {
+        line.getCellData(x, next);
+        if (recolor != null) _recolorCell(next, x, recolor);
+        paintCell(canvas, offset.translate(x * cellWidth, 0), next);
+      }
+      return end;
+    }
+
+    // Backgrounds before the text, all of them: one cell's background
+    // painted after the run would cover the glyphs that reach into it.
+    for (var x = start; x < end; x++) {
+      paintCellBackground(canvas, offset.translate(x * cellWidth, 0), first);
+    }
+    canvas.drawParagraph(paragraph, offset.translate(start * cellWidth, 0));
+    return end;
+  }
+
+  /// [seance fork] Shapes [text], [length] cells styled like [cell], or
+  /// records that its width is off the grid.
+  _RunLayout _layoutRun(String text, CellData cell, int length) {
+    // Built as [ParagraphCache.performAndCacheLayout] builds a cell's.
+    final style = _foregroundStyle(cell);
+    final builder = ParagraphBuilder(style.getParagraphStyle())
+      ..pushStyle(style.getTextStyle(textScaler: _textScaler))
+      ..addText(text);
+    final paragraph = builder.build()
+      ..layout(ParagraphConstraints(width: double.infinity));
+
+    final drift = paragraph.maxIntrinsicWidth - length * _cellSize.width;
+    if (drift.abs() <= _runWidthTolerance) return _RunLayout(paragraph);
+
+    paragraph.dispose();
+    return const _RunLayout(null);
   }
 
   /// [seance fork] Gives [cellData] (the cell at column [x]) the colours of
@@ -205,21 +334,7 @@ class TerminalPainter {
 
     if (paragraph == null) {
       final cellFlags = cellData.flags;
-
-      var color = cellFlags & CellFlags.inverse == 0
-          ? resolveForegroundColor(cellData.foreground)
-          : resolveBackgroundColor(cellData.background);
-
-      if (cellData.flags & CellFlags.faint != 0) {
-        color = color.withOpacity(0.5);
-      }
-
-      final style = _textStyle.toTextStyle(
-        color: color,
-        bold: cellFlags & CellFlags.bold != 0,
-        italic: cellFlags & CellFlags.italic != 0,
-        underline: cellFlags & CellFlags.underline != 0,
-      );
+      final style = _foregroundStyle(cellData);
 
       // Flutter does not draw an underline below a space which is not between
       // other regular characters. As only single characters are drawn, this
@@ -241,6 +356,29 @@ class TerminalPainter {
     }
 
     canvas.drawParagraph(paragraph, offset);
+  }
+
+  /// The text style [cellData]'s character is drawn in: its colour (the
+  /// background's when inverse, halved when faint) and its weight, slant and
+  /// underline. [seance fork] Factored out of [paintCellForeground] so the
+  /// ligature runs style their text the same way.
+  TextStyle _foregroundStyle(CellData cellData) {
+    final cellFlags = cellData.flags;
+
+    var color = cellFlags & CellFlags.inverse == 0
+        ? resolveForegroundColor(cellData.foreground)
+        : resolveBackgroundColor(cellData.background);
+
+    if (cellData.flags & CellFlags.faint != 0) {
+      color = color.withOpacity(0.5);
+    }
+
+    return _textStyle.toTextStyle(
+      color: color,
+      bold: cellFlags & CellFlags.bold != 0,
+      italic: cellFlags & CellFlags.italic != 0,
+      underline: cellFlags & CellFlags.underline != 0,
+    );
   }
 
   /// Paints the background of a cell represented by [cellData] to [canvas] at
@@ -315,4 +453,12 @@ class CellRecolor {
   final int end;
   final int background;
   final int foreground;
+}
+
+/// [seance fork] A shaped ligature run, or none when its width was off the
+/// grid; caching the refusal spares re-shaping it every frame.
+class _RunLayout {
+  const _RunLayout(this.paragraph);
+
+  final Paragraph? paragraph;
 }

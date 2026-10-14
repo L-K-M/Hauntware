@@ -120,6 +120,7 @@ class _SettingsScreenState extends State<SettingsScreen>
   late double _terminalFontSize;
   late int _editorFontSize;
   late TerminalPalette _terminalPalette;
+  late TerminalLigatures _terminalLigatures;
   final _terminalFont = TextEditingController();
   SyncEnrollmentMode _syncMode = SyncEnrollmentMode.login;
   bool _saving = false;
@@ -175,6 +176,7 @@ class _SettingsScreenState extends State<SettingsScreen>
     _terminalFontSize = clampTerminalFontSize(s.terminalFontSize);
     _editorFontSize = EditorTextSize.clamp(s.editorFontSize);
     _terminalPalette = s.terminalPalette;
+    _terminalLigatures = s.terminalLigatures;
     _terminalFont.text = s.terminalFontFamily;
     _syncUrl.text = s.syncBaseUrl ?? '';
     _syncUser.text = s.syncUsername ?? '';
@@ -507,10 +509,11 @@ class _SettingsScreenState extends State<SettingsScreen>
         'Terminal',
         helpTitle: 'Terminal appearance',
         help:
-            'Font size, family, and colors apply to every session on this '
-            'device. With the terminal focused you can zoom without opening '
-            'Settings: ⌘ with +, − or 0 on macOS and iPadOS, Ctrl+Shift with '
-            'the same keys elsewhere (plain Ctrl chords belong to the shell). '
+            'Font size, family, colors and ligatures apply to every session '
+            'on this device. With the terminal focused you can zoom without '
+            'opening Settings: ⌘ with +, − or 0 on macOS and iPadOS, '
+            'Ctrl+Shift with the same keys elsewhere (plain Ctrl chords belong '
+            'to the shell). '
             'Leave the font family blank to use Iosevka Term, which ships '
             'with Séance and draws ligatures. The button in the field lists '
             'the fonts Séance includes and, on desktop, the ones installed '
@@ -591,6 +594,23 @@ class _SettingsScreenState extends State<SettingsScreen>
         onChanged: (value) {
           if (value == null) return;
           setState(() => _terminalPalette = value);
+          _persistTerminalAppearance();
+        },
+      ),
+      SwitchListTile(
+        contentPadding: EdgeInsets.zero,
+        title: const Text('Ligatures'),
+        subtitle: const Text(
+          'Join character pairs such as -> and != into one symbol, in fonts '
+          'that draw them.',
+        ),
+        value: _terminalLigatures == TerminalLigatures.on,
+        onChanged: (on) {
+          setState(
+            () => _terminalLigatures = on
+                ? TerminalLigatures.on
+                : TerminalLigatures.off,
+          );
           _persistTerminalAppearance();
         },
       ),
@@ -1263,6 +1283,7 @@ class _SettingsScreenState extends State<SettingsScreen>
       fontSize: _terminalFontSize,
       fontFamily: _terminalFont.text.trim(),
       palette: _terminalPalette,
+      ligatures: _terminalLigatures,
     ),
   );
 

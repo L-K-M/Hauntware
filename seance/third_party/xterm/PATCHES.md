@@ -484,6 +484,26 @@ Regressions: `test/src/ui/selection_gesture_test.dart`, "void past the content".
     so its wrapped lines start and end where the grid's rows do. Such a
     phone loses the columns the insets cover.
 
+### Ligatures (regressions: `test/src/ui/ligature_paint_test.dart`)
+
+38. **Runs of text can be shaped together** (`ui/terminal_text_style.dart`
+    `TerminalLigatures`, `ui/painter.dart#paintLine`/`_paintRun`): upstream
+    shapes every cell as its own one-character paragraph, so a font's
+    ligatures (`->`, `!=`) can never form. With
+    `TerminalStyle.ligatures` on (off by default, which keeps upstream's
+    drawing), adjacent cells holding printable ASCII other than the space
+    that share colours and painted flags (the hyperlink id does not
+    split them) are shaped as one paragraph of up to 64 cells, after all
+    of their backgrounds. Ligature fonts keep each character one cell
+    wide, so the run lands on the grid; a run whose width strays more
+    than 0.5 px from its cells' (a proportional face, a fallback glyph)
+    is drawn cell by cell instead, and that verdict is cached with the
+    run. Runs are cached by exact text and style in their own LRU,
+    cleared wherever the cell cache is. Spaces, wide, combining and
+    non-ASCII characters keep the cell path, so the underline-under-space
+    workaround still applies. Cursor, selection and highlights are
+    overlays and are unchanged.
+
 ### App-layer notes (outside this package)
 
 - The app passes `shortcuts: {}` and instead routes ⌘C/⌘V/⌘A on
