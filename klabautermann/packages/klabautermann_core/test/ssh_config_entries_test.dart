@@ -24,7 +24,7 @@ void main() {
     });
 
     test('reads HostName, Port, User, IdentityFile and ProxyJump; the first '
-        'block wins', () {
+        'value wins', () {
       final entries = {
         for (final h in importedHostsFromSshConfig(sshConfigFixture).hosts)
           h.alias: h,
@@ -33,14 +33,15 @@ void main() {
       final web = entries['web-1']!;
       expect(web.hostName, 'web-1.example.com');
       expect(web.port, 2222);
-      // The later `Host web-1` block's `User someone-else` is not merged.
+      // The later `Host web-1` block's `User someone-else` comes too late,
+      // but its ProxyJump fills what the first block left unset.
       expect(web.user, 'deploy');
+      expect(web.proxyJump, 'none');
       // As written: the engine expands `~` when it reads the key.
       expect(web.identityFile, '~/.ssh/id_ed25519');
-      expect(web.proxyJump, isNull);
 
       // A trailing comment is stripped; no Port means 22; no User leaves
-      // the login name to ssh rather than the top-level default.
+      // the login name to ssh.
       final db = entries['db-1']!;
       expect(db.hostName, '10.0.0.4');
       expect(db.port, kSshDefaultPort);
@@ -57,7 +58,7 @@ void main() {
     });
 
     test('a Host line with several names makes an entry for each', () {
-      // A name an earlier block took is skipped, as for a whole block.
+      // A later block for a name adds only what earlier ones left unset.
       final result = importedHostsFromSshConfig(
         'Host web db\n  HostName 10.0.0.7\n  Port 2200\n'
         'Host db\n  HostName other\n',
@@ -67,10 +68,11 @@ void main() {
         ('web', '10.0.0.7', 2200),
         ('db', '10.0.0.7', 2200),
       ]);
-      expect(result.skippedCount, 1);
+      expect(result.skippedCount, 0);
     });
 
-    test('drops wildcard-only blocks and ignores Match blocks', () {
+    test('wildcard-only blocks name no host, and a Match block whose '
+        'criteria fail applies to none', () {
       final result = importedHostsFromSshConfig(sshConfigFixture);
       final labels = result.hosts.map((h) => h.alias);
 
@@ -79,23 +81,8 @@ void main() {
       expect(
         result.hosts.map((h) => h.user),
         isNot(contains('matched')),
-        reason: 'a Match block\'s directives apply to no imported host',
+        reason: 'the Match block\'s `host` criterion fails for every host',
       );
-    });
-
-    test('does not follow Include, at top level or inside a block', () {
-      // The engine opens no file; the included hosts simply do not exist
-      // for the importer. A block with an Include keeps its own values.
-      final result = importedHostsFromSshConfig(
-        'Include ~/.ssh/config.d/*\n'
-        'Host legacy\n'
-        '  Include legacy.conf\n'
-        '  HostName legacy.example.com\n',
-      );
-
-      expect(result.hosts, hasLength(1));
-      expect(result.hosts.single.hostName, 'legacy.example.com');
-      expect(result.skippedCount, 0);
     });
 
     test('skips ports outside 1 to 65535 and counts them', () {
@@ -112,10 +99,9 @@ void main() {
 
     test('a Port ssh rejects is skipped; a service name resolves', () {
       // ssh rejects the whole config over `Port -1` or `Port 22a`, but it
-      // resolves a service name such as `ssh` to its port, 22. Séance's
-      // SshConfigImporter skips and reports a block whose Port ssh would
-      // reject, and resolves `ssh` itself. This pins that behavior, so a
-      // change in seance_core surfaces here.
+      // resolves a service name such as `ssh` to its port, 22. The import
+      // leaves out the hosts such a Port applies to, and knows the
+      // service names Séance's SshConfigImporter knows.
       final result = importedHostsFromSshConfig(
         'Host negative\n  Port -1\n'
         'Host typo\n  Port 22a\n'
@@ -128,13 +114,20 @@ void main() {
       expect(result.skippedCount, 2);
     });
 
-    test('an empty HostName or User counts as absent', () {
+    test('leaves out a host with a line ssh rejects', () {
+      // ssh rejects a directive with no value, or with more than the one
+      // it takes, and with it the whole config.
       final result = importedHostsFromSshConfig(
-        'Host blank\n  HostName=\n  User=\n',
+        'Host blank\n  HostName=\n'
+        'Host nobody\n  User\n'
+        'Host two\n  IdentityFile ~/.ssh/a ~/.ssh/b\n'
+        'Host *.example\n  ProxyJump\n'
+        'Host db.example\n'
+        'Host fine\n  User u\n',
       );
 
-      expect(result.hosts.single.hostName, 'blank');
-      expect(result.hosts.single.user, isNull);
+      expect(result.hosts.map((h) => h.alias), ['fine']);
+      expect(result.skippedCount, 4);
     });
 
     test('expands %h and %% in HostName, as ssh does, and skips a host '
@@ -234,7 +227,8 @@ void main() {
       expect(refused.skippedCount, 2);
     });
 
-    test('keeps ProxyJump none and an alias refused only in a later block', () {
+    test('keeps ProxyJump none; a Port ssh rejects in any block of a host '
+        'leaves it out', () {
       final result = importedHostsFromSshConfig(
         'Host direct\n  ProxyJump none\n'
         'Host jump\n  HostName 10.0.0.1\n'
@@ -242,8 +236,8 @@ void main() {
         'Host behind\n  ProxyJump jump\n',
       );
 
-      expect(result.hosts.map((h) => h.alias), ['direct', 'jump', 'behind']);
-      expect(result.skippedCount, 1);
+      expect(result.hosts.map((h) => h.alias), ['direct']);
+      expect(result.skippedCount, 2);
       expect(result.hosts.first.proxyJump, 'none');
     });
 
@@ -299,4 +293,221 @@ void main() {
       expect(clock.elapsed, lessThan(const Duration(seconds: 5)));
     });
   });
+
+  group('every block ssh applies, the first value first (03 §10.1)', () {
+    test('a wildcard block with a negated pattern sets the jump host', () {
+      const config =
+          'Host * !bastion\n  ProxyJump bastion\n'
+          'Host bastion\n  HostName bastion.example.com\n'
+          'Host prod-web\n  HostName 10.0.0.5\n';
+
+      expect(_dials(config), {
+        'bastion': ['me@bastion.example.com:22'],
+        'prod-web': ['me@bastion.example.com:22', 'me@10.0.0.5:22'],
+      });
+      expect(importedHostsFromSshConfig(config).skippedCount, 0);
+    });
+
+    test('a wildcard block before the host\'s own block comes first', () {
+      expect(
+        _dials(
+          'Host prod-*\n  ProxyJump bastion\n  Port 2200\n'
+          'Host prod-web\n  HostName 10.0.0.5\n  Port 2222\n',
+        ),
+        {
+          'prod-web': ['me@bastion:22', 'me@10.0.0.5:2200'],
+        },
+      );
+    });
+
+    test('a later block for an alias adds what the first left unset', () {
+      const config =
+          'Host web\n  HostName 10.0.0.5\n'
+          'Host web\n  HostName 10.9.9.9\n  ProxyJump bastion\n';
+
+      expect(_dials(config), {
+        'web': ['me@bastion:22', 'me@10.0.0.5:22'],
+      });
+      expect(importedHostsFromSshConfig(config).skippedCount, 0);
+    });
+
+    test('a directive repeated in one block keeps its first value', () {
+      expect(
+        _dials(
+          'Host web\n  HostName 10.0.0.5\n  HostName 10.9.9.9\n'
+          '  ProxyJump a\n  ProxyJump b\n  User first\n  User second\n',
+        ),
+        {
+          // The hop takes a's own settings, not web's User.
+          'web': ['me@a:22', 'first@10.0.0.5:22'],
+        },
+      );
+    });
+
+    test('User and IdentityFile come from Host * and top-level lines', () {
+      final hosts = {
+        for (final host in importedHostsFromSshConfig(
+          'Host web\n  HostName 10.0.0.5\n  IdentityFile ~/.ssh/web\n'
+          'Host agent\n  IdentityFile none\n'
+          'Host plain\n'
+          'Host *\n  User admin\n  IdentityFile ~/.ssh/id_ed25519\n',
+        ).hosts)
+          host.alias: (host.user, host.identityFile),
+      };
+
+      expect(hosts, {
+        // ssh tries the files in the order it read them; the engine
+        // signs in with the first.
+        'web': ('admin', '~/.ssh/web'),
+        // `none` names no file, so the next one is the first ssh loads.
+        'agent': ('admin', '~/.ssh/id_ed25519'),
+        'plain': ('admin', '~/.ssh/id_ed25519'),
+      });
+
+      // Lines before the first Host apply to every host, before its own.
+      expect(
+        importedHostsFromSshConfig(
+          'User everyone\nHost web\n  User deploy\n',
+        ).hosts.single.user,
+        'everyone',
+      );
+    });
+
+    test('a Match block applies when its criteria hold', () {
+      // `host` compares the HostName read so far, `originalhost` the
+      // name given to ssh.
+      expect(
+        _dials(
+          'Match host web\n  ProxyJump bastion\n'
+          'Host web\n  HostName 10.0.0.5\n',
+        ),
+        {
+          'web': ['me@bastion:22', 'me@10.0.0.5:22'],
+        },
+      );
+      expect(
+        _dials(
+          'Host web\n  HostName 10.0.0.5\n'
+          'Match host web\n  ProxyJump bastion\n'
+          'Match originalhost WEB,!db\n  User original\n'
+          'Match all\n  Port 2200\n',
+        ),
+        {
+          'web': ['original@10.0.0.5:2200'],
+        },
+      );
+    });
+
+    test('a Match block that may apply and could set a value first leaves '
+        'the host out', () {
+      final result = importedHostsFromSshConfig(
+        'Host fixed\n  ProxyJump none\n'
+        'Host open\n'
+        // ssh reads the config for gw too, where the Match may apply.
+        'Host via\n  ProxyJump none\n  HostName %h.example\n'
+        'Host behind-gw\n  ProxyJump gw\n'
+        'Match exec "test -f /tmp/vpn"\n  ProxyJump bastion\n'
+        // A criterion that fails settles it, whatever the others say.
+        'Match host none.example localnetwork 10.0.0.0/8\n  Port 2222\n'
+        // Settings the engine does not map change nothing.
+        'Match user root\n  ServerAliveInterval 5\n',
+      );
+
+      expect(result.hosts.map((h) => h.alias), ['fixed', 'via']);
+      expect(result.skippedCount, 2);
+    });
+
+    test('a hop that names no alias takes the blocks that match its name', () {
+      expect(
+        _dials(
+          'Host *.corp\n  HostName %h\n  Port 2222\n  User admin\n'
+          'Host web\n  HostName 10.0.0.5\n  ProxyJump gw.corp\n',
+        ),
+        {
+          'web': ['admin@gw.corp:2222', 'me@10.0.0.5:22'],
+        },
+      );
+      // A first hop's own ProxyJump applies, from whichever block.
+      expect(
+        _dials(
+          'Host *.internal\n  ProxyJump gw\n'
+          'Host web\n  ProxyJump db.internal\n',
+        ),
+        {
+          'web': ['me@gw:22', 'me@db.internal:22', 'me@web:22'],
+        },
+      );
+    });
+
+    test('leaves out a host whose route is a ProxyCommand, which the engine '
+        'cannot run', () {
+      // Whichever of ProxyCommand and ProxyJump ssh reads first is the
+      // route, and `none` is direct.
+      final result = importedHostsFromSshConfig(
+        'Host command\n  HostName 10.0.0.5\n'
+        '  ProxyCommand ssh -W %h:%p bastion\n'
+        'Host command-first\n  ProxyCommand nc -X connect %h %p\n'
+        '  ProxyJump gw\n'
+        'Host jump-first\n  ProxyJump gw\n  ProxyCommand nc %h %p\n'
+        'Host none\n  ProxyCommand none\n'
+        'Host behind\n  ProxyJump command\n'
+        'Host *.ssm\n  ProxyCommand aws ssm start-session --target %h\n'
+        'Host db.ssm\n',
+      );
+
+      expect(result.hosts.map((h) => (h.alias, h.proxyJump)), [
+        ('jump-first', 'gw'),
+        ('none', null),
+      ]);
+      // command, command-first, behind (through command) and db.ssm.
+      expect(result.skippedCount, 4);
+    });
+
+    test('an Include leaves out every host whose settings it could '
+        'change', () {
+      // The engine opens no included file. One could set any value a
+      // host has not fixed when ssh reads it, or hold a `Match final`,
+      // after which ssh reads the config again for every host.
+      final top = importedHostsFromSshConfig(
+        'Include ~/.ssh/config.d/*\n'
+        'Host web\n  HostName 10.0.0.5\n',
+      );
+      expect(top.hosts, isEmpty);
+      expect(top.skippedCount, 1);
+
+      final inside = importedHostsFromSshConfig(
+        'Host legacy\n  HostName legacy.example.com\n  Include legacy.conf\n'
+        'Host partial\n  HostName p.example\n'
+        'Host fixed\n  HostName f.example\n  Port 22\n  User u\n'
+        '  IdentityFile ~/.ssh/k\n  ProxyJump none\n',
+      );
+      expect(inside.hosts.map((h) => h.alias), ['fixed']);
+      expect(inside.skippedCount, 2);
+    });
+  });
+}
+
+/// What the engine would dial for each imported host, keyed by alias:
+/// its hops, first hop first, then the host, each as `user@host:port`.
+Map<String, List<String>> _dials(String config) {
+  final imported = importedHostsFromSshConfig(config);
+  final fleet = ImportedFleet(
+    imported.hosts,
+    hops: imported.hops,
+    localUser: 'me',
+  );
+  List<String> chain(String id) {
+    final config = fleet.serverConfig(id);
+    if (config == null) return ['no config for $id'];
+
+    final hop = config.jumpHostId;
+    return [
+      if (hop != null) ...chain(hop),
+      '${config.username}@${config.host}:${config.port}',
+    ];
+  }
+
+  return {
+    for (final entry in fleet.entries) entry.label: chain(entry.serverId),
+  };
 }

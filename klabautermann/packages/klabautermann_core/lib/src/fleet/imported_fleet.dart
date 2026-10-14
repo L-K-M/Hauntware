@@ -23,13 +23,14 @@ typedef _Mapped = ({
 
 /// How much of each host's config an import holds.
 enum ImportedHostDetail {
-  /// All the engine maps: a fresh import, or a schema 2 store, which keeps
-  /// each host's `IdentityFile` and `ProxyJump`.
+  /// All the engine maps: a fresh import, or a schema 3 store, which keeps
+  /// the values ssh would use for each host and hop.
   full,
 
-  /// Alias, address, port and user only: a schema 1 store, written before
-  /// `IdentityFile` and `ProxyJump` were kept. Whether a host signs in
-  /// with a key or sits behind a jump host is unknown, so its entry names
+  /// Alias, address, port and user only: a store of an older schema,
+  /// which kept no `IdentityFile` or `ProxyJump` (1) or read each host's
+  /// values from its first block alone (2). Whether a host signs in with
+  /// a key or sits behind a jump host is unknown, so its entry names
   /// neither and it gets no config until the next import.
   addressOnly,
 }
@@ -54,20 +55,21 @@ String? localUserName(Map<String, String> environment) {
 final class ImportedFleet {
   ImportedFleet._(this.entries, this._configs);
 
-  /// Maps [hosts], in order, logging in as [localUser] wherever a host or
-  /// hop names no user. A host whose `ProxyJump` [jumpRoutes] cannot
-  /// follow is left out; the import never stores one. Hosts with
-  /// [ImportedHostDetail.addressOnly] are listed, but with no route,
-  /// sign-in, conflict or config.
+  /// Maps [hosts], in order, through the hop records [hops], logging in
+  /// as [localUser] wherever a host or hop names no user. A host whose
+  /// `ProxyJump` [jumpRoutes] cannot follow is left out; the import never
+  /// stores one. Hosts with [ImportedHostDetail.addressOnly] are listed,
+  /// but with no route, sign-in, conflict or config.
   factory ImportedFleet(
     List<ImportedHost> hosts, {
+    List<ImportedHost> hops = const [],
     String? localUser,
     ImportedHostDetail detail = ImportedHostDetail.full,
   }) {
     final full = detail == ImportedHostDetail.full;
     // Without detail no route is claimed, so no locator conflicts either.
     final routes = full
-        ? jumpRoutes(hosts)
+        ? jumpRoutes(hosts, hops: hops)
         : {for (final host in hosts) host.alias: const <JumpHop>[]};
     final configs = <String, ServerConfig>{};
 

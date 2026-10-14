@@ -16,11 +16,14 @@ import 'package:test/test.dart';
 
 import 'fixtures/ssh_config_fixture.dart';
 
-ImportedFleet _fleet(String config, {String? localUser = 'me'}) =>
-    ImportedFleet(
-      importedHostsFromSshConfig(config).hosts,
-      localUser: localUser,
-    );
+ImportedFleet _fleet(String config, {String? localUser = 'me'}) {
+  final imported = importedHostsFromSshConfig(config);
+  return ImportedFleet(
+    imported.hosts,
+    hops: imported.hops,
+    localUser: localUser,
+  );
+}
 
 Map<String, FleetEntry> _byLabel(ImportedFleet fleet) => {
   for (final entry in fleet.entries) entry.label: entry,

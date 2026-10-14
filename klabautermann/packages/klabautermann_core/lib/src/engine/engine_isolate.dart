@@ -60,6 +60,7 @@ void engineMain(EngineStart start) {
   CatalogReplaced fleet() => CatalogReplaced(
     ImportedFleet(
       imports.hosts,
+      hops: imports.hops,
       localUser: localUser,
       detail: imports.detail,
     ).entries,
@@ -90,7 +91,12 @@ void engineMain(EngineStart start) {
       case Unsubscribe():
         subscriptions.remove(message.serverId);
       case ImportSshConfig(:final text):
-        final ({List<ImportedHost> hosts, int skippedCount}) result;
+        final ({
+          List<ImportedHost> hosts,
+          List<ImportedHost> hops,
+          int skippedCount,
+        })
+        result;
         try {
           result = importedHostsFromSshConfig(text);
         } on Object catch (error) {
@@ -104,7 +110,7 @@ void engineMain(EngineStart start) {
         // Saved before the fleet changes, so a restart after the answer
         // finds the import. A failed save still shows it for this run, and
         // the answer says it was not kept.
-        final saved = await imports.replace(result.hosts);
+        final saved = await imports.replace(result.hosts, hops: result.hops);
         uiPort.send(fleet());
         uiPort.send(
           SshConfigImported(

@@ -39,34 +39,38 @@ final class JumpHop {
   /// The hop as written: an alias, `[user@]host[:port]` or an ssh URI.
   final String name;
 
-  /// The address to dial: the alias's `HostName` (or the alias itself)
-  /// when [name] names an imported host, else the host [name] gives.
+  /// The address to dial: the `HostName` of the host or hop record
+  /// [name] names, else the host [name] gives.
   final String host;
 
   final int port;
 
-  /// The hop's own user, else the alias's `User`; null leaves the login
+  /// The hop's own user, else the record's `User`; null leaves the login
   /// name to the local account, as for a host without `User`.
   final String? user;
 
-  /// The alias's `IdentityFile`, as written; null signs in with the agent.
+  /// The record's `IdentityFile`, as written; null signs in with the
+  /// agent.
   final String? identityFile;
 }
 
 /// The jump route of each of [hosts], keyed by alias: its hops, first hop
 /// first, empty for a direct connection, or null when the engine cannot
 /// follow its `ProxyJump` the way ssh would. [hosts] holds one host per
-/// alias; [leftOut] names hosts of the config that are not in [hosts].
+/// alias, and [hops] the settings ssh would use for each other name a
+/// route gives, keyed by that name as the alias; [leftOut] names hosts
+/// and hop names of the config that are in neither.
 ///
 /// What ssh does, and so what this does (ssh_config(5) and OpenSSH's
 /// `parse_jump()` and `ssh.c`): a `ProxyJump` of `a,b` dials `a`, then `b`
 /// through `a`, then the host through `b`, and `none` means direct. ssh
 /// reaches each hop with a nested ssh that reads the config for the hop's
-/// name, so a hop that names an imported alias (case-sensitively, as
-/// `Host` patterns match) takes that host's `HostName`, `Port`, `User` and
-/// `IdentityFile`, with the hop's own user and port first. Only the first
-/// hop's own `ProxyJump` applies: the nested ssh for every later hop gets
-/// the hops before it with `-J`, which overrides the hop's own.
+/// name, so a hop takes the `HostName`, `Port`, `User` and `IdentityFile`
+/// of the host or hop record its name gives (exactly, as `Host` patterns
+/// match), with the hop's own user and port first; a name with neither
+/// is dialed as written. Only the first hop's own `ProxyJump` applies:
+/// the nested ssh for every later hop gets the hops before it with `-J`,
+/// which overrides the hop's own.
 ///
 /// A host's route is null when its `ProxyJump`:
 ///
@@ -83,11 +87,13 @@ final class JumpHop {
 /// and each null route reaches the hosts that name it once.
 Map<String, List<JumpHop>?> jumpRoutes(
   List<ImportedHost> hosts, {
+  List<ImportedHost> hops = const [],
   Set<String> leftOut = const {},
 }) {
-  final byAlias = {for (final host in hosts) host.alias: host};
-  final hops = {
-    for (final host in hosts)
+  final named = [...hosts, ...hops];
+  final byAlias = {for (final host in named) host.alias: host};
+  final parsed = {
+    for (final host in named)
       host.alias: switch (host.proxyJump) {
         null => const <_Hop>[],
         final value => _parseProxyJump(value),
@@ -97,7 +103,7 @@ Map<String, List<JumpHop>?> jumpRoutes(
   // The route of [host] in at most [limit] hops, or null. [visiting] holds
   // the hosts whose first hop led here, to catch a loop.
   List<JumpHop>? follow(ImportedHost host, Set<String> visiting, int limit) {
-    final own = hops[host.alias];
+    final own = parsed[host.alias];
     if (own == null || own.length > limit) return null;
 
     final route = <JumpHop>[];
@@ -131,7 +137,7 @@ Map<String, List<JumpHop>?> jumpRoutes(
   }
 
   final routes = {
-    for (final host in hosts)
+    for (final host in named)
       host.alias: follow(host, {host.alias}, _maxJumpHops),
   };
 
@@ -139,7 +145,7 @@ Map<String, List<JumpHop>?> jumpRoutes(
   // is null too, and so on. Following who names whom reaches each host
   // once, however long the chain.
   final namedBy = <String, List<String>>{};
-  for (final MapEntry(key: alias, value: own) in hops.entries) {
+  for (final MapEntry(key: alias, value: own) in parsed.entries) {
     for (final hop in own ?? const <_Hop>[]) {
       (namedBy[hop.host] ??= []).add(alias);
     }
@@ -156,8 +162,15 @@ Map<String, List<JumpHop>?> jumpRoutes(
       failed.add(alias);
     }
   }
-  return routes;
+  return {for (final host in hosts) host.alias: routes[host.alias]};
 }
+
+/// The name each hop of a `ProxyJump` [value] gives, as [jumpRoutes] looks
+/// it up: empty for `none`, null when the engine cannot read [value].
+List<String>? proxyJumpHosts(String value) => switch (_parseProxyJump(value)) {
+  null => null,
+  final hops => [for (final hop in hops) hop.host],
+};
 
 typedef _Hop = ({String name, String? user, String host, int? port});
 

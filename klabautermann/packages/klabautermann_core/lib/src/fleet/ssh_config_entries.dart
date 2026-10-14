@@ -1,159 +1,105 @@
-import 'package:seance_core/seance_core.dart'
-    show ImportedHost, SshConfigImporter;
+import 'package:seance_core/seance_core.dart' show ImportedHost;
 
-import '../engine/protocol.dart';
 import 'jump_routes.dart';
-
-/// The TCP port range; a stored `Port` outside it names no reachable
-/// endpoint.
-const int _minimumPort = 1;
-const int _maximumPort = 65535;
-
-/// The `IdentityFile` that names no key file: ssh skips it in any case
-/// (`ssh.c`, `load_public_identity_files()`), and since the config names
-/// one, adds no default key file either (`readconf.c`), so only the agent
-/// signs.
-const String _noIdentityFile = 'none';
+import 'ssh_config_settings.dart';
 
 /// Reads an OpenSSH client config's [text] into the hosts FL-02 imports,
-/// through Séance's `SshConfigImporter`, so Klabautermann reads a config
-/// exactly as Séance does. What the importer does, and so what this does:
+/// each with the settings ssh would use for it ([SshConfigSettings]), and
+/// the settings of every other name their routes give.
 ///
-/// - one host per name a `Host` line gives, with its block's settings:
-///   `Host a b` makes `a` and `b`. Wildcard and negated patterns are not
-///   names, so blocks such as `Host *` describe defaults, not hosts, and
-///   are dropped (their defaults are not applied to other hosts);
-/// - `HostName`, `Port`, `User`, `IdentityFile` and `ProxyJump` are read,
-///   a missing `HostName` falls back to the alias as ssh does, and every
-///   other directive is ignored;
-/// - `Match` blocks are ignored, and `Include` is not followed: the importer
-///   drops the directive and the engine opens no file, so hosts defined only
-///   in an included file are not imported;
-/// - `Port` is a decimal 1 to 65535 or the service name `ssh`, `http` or
-///   `https`; a block with any other `Port` is skipped and its hosts are
-///   counted. ssh rejects the whole config over such a `Port`, unless it is
-///   another service name ssh resolves.
-///
-/// On top of the importer:
-///
-/// - `%h` in `HostName` becomes the alias, the name ssh is given for the
-///   host and for a hop that names it, and `%%` becomes `%` (ssh_config(5),
-///   TOKENS). ssh exits on any other token, so such a host is skipped and
-///   counted;
-/// - `IdentityFile none`, in any case, names no key file, so the host
-///   signs in with the agent. A host whose `IdentityFile` holds a `%`
-///   token or a `${VAR}` is skipped and counted: ssh fills those in from
-///   the connection and the environment (ssh_config(5), TOKENS and
-///   ENVIRONMENT VARIABLES), as for `%` in `ProxyJump`;
-/// - a host is skipped and counted when an earlier block already took its
-///   alias (the alias is the entry's id; ssh would merge the two blocks,
-///   this keeps the first), or when [jumpRoutes] cannot follow its
-///   `ProxyJump` (a host skipped for any reason counts as left out there).
+/// - Each name a `Host` line gives is one host, in the order the names
+///   first appear (`Host a b` makes `a` and `b`, as Séance's
+///   `SshConfigImporter` reads it). Wildcard and negated patterns name no
+///   host, so a block such as `Host *` only sets values for the hosts it
+///   matches, and an alias's later blocks only add what its earlier ones
+///   left unset. Hosts defined only in an included file are not
+///   imported, since `Include` is not followed.
+/// - Each host carries its effective `HostName` (`%h` expanded, and
+///   lowercased unless it is an address), `Port`, `User`, first
+///   `IdentityFile` and `ProxyJump`. A name with no `HostName` is its
+///   own address, as in ssh, and `IdentityFile none` names no key file.
+/// - ssh reaches a hop with a nested ssh that reads the config for the
+///   hop's name, so each name a route gives that is no alias is resolved
+///   the same way into a hop record, which [jumpRoutes] reads.
+/// - A host is left out and counted when [SshConfigSettings] cannot
+///   resolve it or [jumpRoutes] cannot follow its route: one ssh would
+///   take through a `ProxyCommand`, a `Match` or `Include` the engine
+///   cannot evaluate, a `HostName` or `IdentityFile` token, or a line ssh
+///   rejects, all of which apply to the hops it names too.
 ///
 /// The text is parsed in the calling isolate: the engine's, so a large
-/// config never stalls the UI (CN-19). Each host carries its effective
-/// `HostName` and `Port`, and the list is unmodifiable: the engine stores
-/// it as its import state.
-({List<ImportedHost> hosts, int skippedCount}) importedHostsFromSshConfig(
-  String text,
-) {
+/// config never stalls the UI (CN-19). Both lists are unmodifiable, in
+/// file order and in the order the routes first name them: the engine
+/// stores them as its import state. The hop records are only those a
+/// kept host's route reaches.
+({List<ImportedHost> hosts, List<ImportedHost> hops, int skippedCount})
+importedHostsFromSshConfig(String text) {
+  final config = SshConfigSettings.parse(text);
+  final aliases = config.aliases.toSet();
+  final leftOut = <String>{};
   final hosts = <ImportedHost>[];
-  final aliases = <String>{};
-  final refused = <String>{};
-  final parsed = SshConfigImporter.parse(text);
-  var skipped = parsed.skipped.length;
-
-  for (final host in parsed.hosts) {
-    if (!aliases.add(host.alias)) {
-      skipped++;
-      continue;
+  for (final alias in config.aliases) {
+    switch (config.resolve(alias)) {
+      case ResolvedSshSettings(:final host):
+        hosts.add(host);
+      case UnresolvedSshSettings():
+        leftOut.add(alias);
     }
+  }
 
-    // `HostName=` with no value is as good as absent, and ssh expands
-    // only a HostName the config gives.
-    final hostName = switch (_nonEmpty(host.hostName)) {
-      null => host.alias,
-      final written => _expandHostName(written, host.alias),
-    };
-    final identityFile = switch (_nonEmpty(host.identityFile)) {
-      final path? when path.toLowerCase() == _noIdentityFile => null,
-      final path => path,
-    };
-    if (hostName == null ||
-        (identityFile != null && !isImportedIdentityFile(identityFile))) {
-      skipped++;
-      refused.add(host.alias);
-      continue;
+  // Every name a route gives that no Host line does, through the hop
+  // records' own routes too.
+  final hops = <String, ImportedHost>{};
+  final named = [...hosts];
+  for (var index = 0; index < named.length; index++) {
+    for (final name in _hopNames(named[index])) {
+      if (aliases.contains(name) ||
+          leftOut.contains(name) ||
+          hops.containsKey(name)) {
+        continue;
+      }
+      switch (config.resolve(name)) {
+        case ResolvedSshSettings(:final host):
+          hops[name] = host;
+          named.add(host);
+        case UnresolvedSshSettings():
+          leftOut.add(name);
+      }
     }
-
-    hosts.add(
-      ImportedHost(
-        alias: host.alias,
-        hostName: hostName,
-        port: host.port ?? kSshDefaultPort,
-        user: _nonEmpty(host.user),
-        identityFile: identityFile,
-        proxyJump: _nonEmpty(host.proxyJump),
-      ),
-    );
   }
 
   final routes = jumpRoutes(
     hosts,
-    leftOut: {
-      ...{
-        for (final invalid in parsed.skipped) invalid.host.alias,
-      }.difference(aliases),
-      ...refused,
-    },
+    hops: hops.values.toList(),
+    leftOut: leftOut,
   );
   final followed = [
     for (final host in hosts)
       if (routes[host.alias] != null) host,
   ];
+
+  // The hop records the kept hosts' routes reach.
+  final reached = <String, ImportedHost>{};
+  final reaching = [...followed];
+  for (var index = 0; index < reaching.length; index++) {
+    for (final name in _hopNames(reaching[index])) {
+      final hop = hops[name];
+      if (hop == null || reached.containsKey(name)) continue;
+
+      reached[name] = hop;
+      reaching.add(hop);
+    }
+  }
   return (
     hosts: List.unmodifiable(followed),
-    skippedCount: skipped + hosts.length - followed.length,
+    hops: List.unmodifiable(reached.values),
+    skippedCount: config.aliases.length - followed.length,
   );
 }
 
-/// Whether [port] is in the TCP port range, so it can name an endpoint.
-bool isTcpPort(int port) => port >= _minimumPort && port <= _maximumPort;
-
-/// Whether the import keeps [path] as a host's `IdentityFile`: not empty,
-/// not `none` in any case (which means no key file), and holding neither
-/// a `%` token nor a `${VAR}`, which ssh would expand.
-bool isImportedIdentityFile(String path) =>
-    path.isNotEmpty &&
-    path.toLowerCase() != _noIdentityFile &&
-    !path.contains('%') &&
-    !path.contains(r'${');
-
-/// ssh's expansion of a `HostName` [value] for [alias] (`ssh.c` calls
-/// `percent_expand()` with `h` alone): `%h` is the alias and `%%` is `%`.
-/// Null for any other token or a trailing `%`, on which ssh exits.
-String? _expandHostName(String value, String alias) {
-  final expanded = StringBuffer();
-  for (var index = 0; index < value.length; index++) {
-    final character = value[index];
-    if (character != '%') {
-      expanded.write(character);
-      continue;
-    }
-
-    index++;
-    if (index == value.length) return null;
-    switch (value[index]) {
-      case 'h':
-        expanded.write(alias);
-      case '%':
-        expanded.write('%');
-      default:
-        return null;
-    }
-  }
-  return expanded.toString();
-}
-
-String? _nonEmpty(String? value) =>
-    value == null || value.isEmpty ? null : value;
+/// The names [host]'s `ProxyJump` gives; none when it has none or the
+/// engine cannot read it.
+List<String> _hopNames(ImportedHost host) => switch (host.proxyJump) {
+  null => const [],
+  final value => proxyJumpHosts(value) ?? const [],
+};
