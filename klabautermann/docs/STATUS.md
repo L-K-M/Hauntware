@@ -20,12 +20,14 @@ slice:
   uses them yet; the real-shell test runs on them.
 - Spike S2 part 1: `klabautermann_core/tool/capture_fixtures.dart
   measure` runs the real program locally under dash and bash (as
-  `<sh> -s`, and as `<sh> -c '<start command>'` the way sshd runs a
-  command) and records [the evidence](evidence/s2/README.md): output
-  before READY, fast-tick bytes and CPU, `procs` beyond 1,000 processes
-  and slow-tick times. Fixture capture with its redaction review, SSH
-  mode, the other shells (CI images, else the manual list) and systemd
-  collectors (runner VM) remain.
+  `sh -s`, and as `<login shell> -c '<start command>'` the way sshd
+  runs a command) and records [the evidence](evidence/s2/README.md):
+  output before READY, fast-tick bytes and CPU, `procs` beyond 1,000
+  processes and slow-tick times. The unguarded `procs` loops pass the
+  D47 deadline near 2,000 processes under dash and 1,000 under bash,
+  which K15 has to resolve. Fixture capture with its redaction review,
+  SSH mode, the other shells (CI images, else the manual list) and
+  systemd collectors (runner VM) remain.
 - `klabautermann_docker`: pure-Dart HTTP/1.1 client, NDJSON/JSON-seq
   scanning, stdcopy, versioned API models and negotiation, compose labels
   and grouping.
