@@ -156,6 +156,8 @@ final class SgrText {
 
 const int _bel = 0x07;
 const int _tab = 0x09;
+const int _can = 0x18;
+const int _sub = 0x1a;
 const int _esc = 0x1b;
 const int _space = 0x20;
 const int _del = 0x7f;
@@ -176,6 +178,7 @@ const Set<int> _stStringIntroducers = {0x50, 0x58, 0x5e, 0x5f}; // P X ^ _
 const int _maxParameter = 65535;
 
 bool _isParameterByte(int c) => c >= 0x30 && c <= 0x3f;
+bool _isDigit(int c) => c >= 0x30 && c <= 0x39;
 bool _isIntermediateByte(int c) => c >= 0x20 && c <= 0x2f;
 bool _isFinalByte(int c) => c >= 0x40 && c <= 0x7e;
 
@@ -185,6 +188,12 @@ bool _isEscapeFinalByte(int c) => c >= 0x30 && c <= 0x7e;
 /// C0 controls but tab, DEL, and the C1 range.
 bool _isDropped(int c) =>
     (c < _space && c != _tab) || (c >= _del && c <= _lastC1);
+
+/// A C0 control other than CAN, SUB and ESC, or DEL: inside an escape or
+/// CSI sequence, xterm and VTE execute or ignore it and go on with the
+/// sequence. The parser drops it as it does anywhere else.
+bool _isSkippedInSequence(int c) =>
+    (c < _space && c != _can && c != _sub && c != _esc) || c == _del;
 
 /// Reads the ANSI SGR colours and attributes in one log [line] into spans
 /// over its visible text (03 §10.8). Everything else is dropped: other CSI
@@ -251,35 +260,46 @@ final class _SgrParser {
   /// returns where ordinary text resumes.
   int _escape(int start) {
     final line = _line;
-    if (start >= line.length) return start;
+    var i = _skipInSequence(start);
+    if (i >= line.length) return i;
 
-    final c = line.codeUnitAt(start);
-    if (c == _csiIntroducer) return _csi(start + 1);
-    if (c == _oscIntroducer) return _string(start + 1, endsAtBel: true);
+    final c = line.codeUnitAt(i);
+    if (c == _csiIntroducer) return _csi(i + 1);
+    if (c == _oscIntroducer) return _string(i + 1, endsAtBel: true);
     if (_stStringIntroducers.contains(c)) {
-      return _string(start + 1, endsAtBel: false);
+      return _string(i + 1, endsAtBel: false);
     }
 
     if (_isIntermediateByte(c)) {
       // ESC, intermediates, then one final byte (charset designations
       // such as `ESC ( B`).
-      var i = start;
       while (i < line.length && _isIntermediateByte(line.codeUnitAt(i))) {
-        i++;
+        i = _skipInSequence(i + 1);
       }
       if (i >= line.length) return i;
       return _isEscapeFinalByte(line.codeUnitAt(i)) ? i + 1 : i;
     }
 
     // Two-character escapes such as `ESC 7` or `ESC c`. Anything else
-    // (a control, a non-ASCII character) drops only the ESC.
-    return _isEscapeFinalByte(c) ? start + 1 : start;
+    // (CAN, SUB, ESC, a non-ASCII character) ends the escape and is read
+    // again.
+    return _isEscapeFinalByte(c) ? i + 1 : i;
+  }
+
+  /// The first index from [start] not [_isSkippedInSequence].
+  int _skipInSequence(int start) {
+    var i = start;
+    while (i < _line.length && _isSkippedInSequence(_line.codeUnitAt(i))) {
+      i++;
+    }
+    return i;
   }
 
   /// A CSI from its parameters at [start]: parameter bytes, then
   /// intermediates, then a final byte. Only a final `m` with plain
-  /// parameters and no intermediates is SGR. A character no CSI can hold
-  /// abandons the sequence and is read again as text or a new escape.
+  /// parameters and no intermediates is SGR. CAN, SUB, ESC or a non-ASCII
+  /// character abandons the sequence and is read again as text or a new
+  /// escape.
   int _csi(int start) {
     final line = _line;
     var i = start;
@@ -300,6 +320,8 @@ final class _SgrParser {
           _applySgr(_parameters(start, i));
         }
         return i + 1;
+      } else if (_isSkippedInSequence(c)) {
+        i++;
       } else {
         return i;
       }
@@ -325,7 +347,8 @@ final class _SgrParser {
   }
 
   /// The `;`-separated parameters in `[start, end)`, each with its
-  /// `:`-separated sub-parameters; an empty one is null.
+  /// `:`-separated sub-parameters; an empty one is null. Controls skipped
+  /// inside the sequence are not part of them.
   List<List<int?>> _parameters(int start, int end) {
     final line = _line;
     final parameters = <List<int?>>[];
@@ -340,7 +363,7 @@ final class _SgrParser {
       } else if (c == _colon) {
         current.add(value);
         value = null;
-      } else {
+      } else if (_isDigit(c)) {
         final digit = c - 0x30;
         final next = (value ?? 0) * 10 + digit;
         value = next > _maxParameter ? _maxParameter : next;

@@ -290,6 +290,32 @@ void main() {
         expect(result.spans, [const SgrSpan(4, 8, _bold)]);
       });
 
+      test('a C0 control or DEL inside a sequence is dropped and the '
+          'sequence goes on', () {
+        // As in xterm and VTE, which execute the control (DEL is ignored)
+        // without leaving the sequence.
+        for (final (line, style) in [
+          ('$_esc[3\b1mX', _red),
+          ('$_esc\b[31mX', _red),
+          ('$_esc[31\rmX', _red),
+          ('$_esc[1\x7FmX', _bold),
+        ]) {
+          final result = parseSgr(line);
+          expect(result.text, 'X', reason: line);
+          expect(result.spans, [SgrSpan(0, 1, style)], reason: line);
+        }
+        expect(parseSgr('a$_esc(\nBb').text, 'ab');
+      });
+
+      test('CAN and SUB cancel a sequence', () {
+        for (final cancel in ['\x18', '\x1A']) {
+          final result = parseSgr('$_esc[31${cancel}mX');
+
+          expect(result.text, 'mX');
+          expect(result.spans, isEmpty);
+        }
+      });
+
       test('an escape before a non-ASCII character drops only itself', () {
         expect(parseSgr('$_escé').text, 'é');
       });
