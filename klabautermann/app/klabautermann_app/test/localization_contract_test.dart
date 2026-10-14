@@ -9,8 +9,10 @@ import 'package:l10n_contract/l10n_contract.dart';
 // authored literal in lib/ outside the ARB catalogue and this reviewed
 // allowlist, as in Poltergeist's localization_contract_test.dart. Two
 // checks the scanner does not make stay from the app's interim test: every
-// ARB key is referenced from lib/, and no user-facing slot takes a literal,
-// which also catches a reviewed literal reused in a slot of its own file.
+// ARB key is referenced from lib/, and no literal fills a slot that
+// _userFacingSlotLiteral lists, so a reviewed literal reused in such a slot
+// of its own file fails too. Other parameters a surface shows, such as
+// Tooltip's message or InputDecoration's labelText, are not checked.
 
 const _generatedLocalizationPrefix = 'lib/l10n/app_localizations';
 const _generatedLocalizationPaths = {
@@ -140,7 +142,8 @@ const _config = L10nContractConfig(
   scannedDirectories: ['lib'],
 );
 
-/// The parameters and widgets a screen reader or the paint path reaches.
+/// Text and some of the parameters a screen reader or the paint path
+/// reaches; not every user-facing parameter (see above).
 final _userFacingSlotLiteral = RegExp(
   r'''\b(Text|text|title|subtitle|label|tooltip|hintText|semanticLabel)\s*[(=:]\s*['"][^'"]''',
 );
@@ -220,7 +223,7 @@ void main() {
     }
   });
 
-  test('no user-facing slot takes a string literal', () {
+  test('no listed user-facing slot takes a string literal', () {
     for (final MapEntry(key: path, value: source)
         in authoredSources().entries) {
       final match = _userFacingSlotLiteral.firstMatch(source);

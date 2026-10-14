@@ -41,7 +41,9 @@ slice:
   channel and file names, command ids and diagnostics), as Poltergeist's
   contract does. It replaces the interim `localization_test.dart` and
   keeps the two checks the scanner does not make: every ARB key is
-  referenced from `lib/`, and no user-facing slot takes a literal.
+  referenced from `lib/`, and no `Text`, `text`, `title`, `subtitle`,
+  `label`, `tooltip`, `hintText` or `semanticLabel` slot takes a literal
+  (other parameters, such as `message`, are not checked).
 - Device settings (03 §4.10): `settings.json` under the app's
   `getApplicationSupportDirectory()`, through `klabautermann_core`'s
   `DeviceSettingsStore`, which the composition root opens before the
