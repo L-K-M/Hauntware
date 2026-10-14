@@ -345,6 +345,7 @@ Host bastion db
             "ssh host 'deluser bob; rm -f x'",
             'ssh host "deluser bob && echo ok"',
             "ssh host 'deluser bob --quiet; echo ok'",
+            "ssh host 'deluser bob\n-f x'",
             r'x=$(deluser bob; echo)',
             "cat <<EOF\nDon't panic\nEOF\ndeluser bob\necho done",
           ],
@@ -421,6 +422,10 @@ Host bastion db
             'kill -0 1',
             'kill -s 0 1',
             'kill --signal 0 1',
+            // A sigqueue value or a timeout is not a PID.
+            'kill -q 1 42',
+            'kill --queue 1 42',
+            'kill --timeout 1 KILL 42',
             // PID -1 is the next rule.
             'kill -9 -1',
           ],
@@ -451,6 +456,9 @@ Host bastion db
             'kill -0 -1',
             'kill -l -1',
             'pkill -9 -1',
+            // A sigqueue value of -1 is not a PID.
+            'kill -q -1 42',
+            'kill --queue -1 42',
           ],
         ),
       ];
@@ -559,6 +567,8 @@ Host bastion db
           'docker compose down && ls -v',
           'crontab -l | grep -r job',
           'kill 42; echo 1',
+          // A `#` inside a word starts no comment.
+          'systemctl stop web#1; ssh deploy@host',
         ];
         for (final command in separate) {
           expect(DangerLinter.scan(command), isEmpty, reason: command);
@@ -578,6 +588,7 @@ Host bastion db
           "rm -rf 'a|b' /etc",
           r'rm -rf a\;b /etc',
           r'rm -rf $(true; echo x) /etc',
+          r'rm -rf $( (true); echo x) /etc',
           r'rm -rf "$(echo "a;b")" /etc',
           r"rm -rf $'a\';' /etc",
           'rm -rf `true; echo x` /etc',
@@ -590,6 +601,7 @@ Host bastion db
           'rm -rf 2>&1 /etc',
           'rm -rf &>/dev/null /etc',
           'rm -rf >|log /etc',
+          'rm -rf 0<&3 /etc',
         ];
         for (final command in together) {
           expect(severities(command), [critical], reason: command);
@@ -613,9 +625,14 @@ Host bastion db
         expect(found("cat <<EOF2\nDon't panic\nEOF2\nuserdel -r bob"), [
           (4, critical),
         ]);
-        expect(found("cat <<-'EOF'\n\tit's\n\tEOF\nuserdel -r bob"), [
-          (4, critical),
-        ]);
+        // <<- strips the tabs before the delimiter, so the body ends there.
+        expect(
+          found(
+            "cat <<-'EOF'\n\tit's\n\tEOF\n"
+            'systemctl stop nginx; ssh h\nuserdel -r bob',
+          ),
+          [(5, critical)],
+        );
         expect(found("cat <<A >a <<B\nit's\nA\nit's\nB\nuserdel -r bob"), [
           (6, critical),
         ]);
@@ -665,6 +682,13 @@ Host bastion db
           (6, warning),
           (7, critical),
         ]);
+      });
+
+      test('a command after a continuation starts on the next line', () {
+        final lines = [
+          for (final f in DangerLinter.scan('ls; \\\nrm -rf /etc')) f.line,
+        ];
+        expect(lines, [2]);
       });
 
       test('reports a rule once per line', () {

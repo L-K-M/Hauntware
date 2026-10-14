@@ -583,13 +583,11 @@ final class _ShellText {
     return shell;
   }
 
-  /// The here-document whose `<<` ends just before [start], or null for a
-  /// here-string (`<<<`) or a missing delimiter. Quotes and backslashes in
-  /// the delimiter word are removed, as the shell does.
+  /// The here-document whose `<<` ends just before [start], or null if no
+  /// delimiter word follows, as in a here-string (`<<<`). Quotes and
+  /// backslashes in the delimiter word are removed, as the shell does.
   static _Heredoc? _heredocAt(String input, int start) {
     var i = start;
-    if (i < input.length && input[i] == '<') return null;
-
     final stripTabs = i < input.length && input[i] == '-';
     if (stripTabs) i++;
     while (i < input.length && (input[i] == ' ' || input[i] == '\t')) {
