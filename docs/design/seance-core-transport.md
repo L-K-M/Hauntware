@@ -766,9 +766,13 @@ identically today (`app_services.dart:1178-1183`,
 `server_editor_backend.dart:193-201`). Prompting, dismissal propagation
 and `CredentialOrigin` tagging stay in Poltergeist's
 `_PromptBroker`/`PromptCoordinator`; the coordinator's vault-first
-branch calls the shared resolver over `CredentialPromptData`'s fields
-(authMethod, secretRef, identityFilePath), preserving
-auto-answer-on-agent and cancel-to-`RemoteFileException` behaviour.
+branch calls the shared resolver over `CredentialPromptData`'s
+authMethod and secretRef only, preserving auto-answer-on-agent and
+cancel-to-`RemoteFileException` behaviour. It omits identityFilePath:
+that branch has never read key files (the dialog does), and with the
+path set the resolver reads the key file instead of answering with the
+stored key. Passing it is a behaviour change, so it moves to the later
+`fail` PR (§10).
 
 ## 5. Migration plan (staged PRs)
 
