@@ -29,8 +29,42 @@ slice:
   master-detail stack below 600 dp, the settings route with its seven
   planned tabs (Appearance's theme switch works), light and dark themes
   built through `ghost_theme` from the Klabautermann brand preset (D9;
-  the appearance is held in memory), and the English ARB catalogue (D35,
-  A11Y-05).
+  the appearance persists in `settings.json`, below), and the English
+  ARB catalogue (D35, A11Y-05).
+- Device settings (03 §4.10): `settings.json` under the app's
+  `getApplicationSupportDirectory()`, through `klabautermann_core`'s
+  `DeviceSettingsStore`, which the composition root opens before the
+  engine isolate starts (and never in the settings window's engine). It
+  holds `klabautermann.settings.version` (1),
+  `klabautermann.sync.deviceId` and `klabautermann.appearance`; keys it
+  does not know are kept on every write. The device id is a UUID v4
+  (`seance_core`'s `uuidV4`, as the catalog library's enrollment
+  expects), minted and saved on the first launch and never regenerated
+  while the file can be read; a damaged file whose text shows no id gets
+  a new one (the old bytes stay in the corrupt copy). Nothing reads it
+  yet. Only one process is guarded: two instances that start together on
+  a first launch (the Linux runner allows several) each mint an id, and
+  the last write wins. An advisory lock across read, mint and write, or
+  a single desktop instance, must land before enrollment reads the id.
+  The theme is restored at startup and saved on every change; the
+  desktop settings window (D32) reaches the same `AppearanceController`
+  over the settings link, so its changes are saved by the app, not by
+  the window. Writes are atomic (temp file, flush, rename, directory
+  sync). A damaged file is copied aside as
+  `settings.json.corrupt-<UTC time>` before the defaults replace it,
+  keeping its device id when the text still shows one (Séance's
+  recovery, Poltergeist's copy name; when the defaults cannot be written,
+  the toast says the copy was kept but the file was not reset); an
+  unreadable file, one whose copy fails, or one from a newer schema is
+  left untouched and nothing is saved that session. Each case is told once
+  in a top toast at startup; a theme change that cannot be saved stays for
+  the session and says so, in the settings window too: the app answers the
+  window's call as applied but not saved (`SettingsLinkError.notSaved`),
+  which the window words apart from a change the app did not take. The
+  monitor set and per-server device preferences have no consumers yet and
+  are not stored. No real build has run it yet: the tests restart against
+  a temporary folder, not the platform's support directory (a sandboxed
+  macOS container, the Flatpak's `~/.var/app`).
 - Local-only import (FL-02, first part): desktops offer "Import from
   ~/.ssh/config" in the rail's add menu (in the app bar when the window
   is narrower than the desktop breakpoint); phones have no ssh_config and
@@ -60,8 +94,9 @@ slice:
   `GhostSettingsWindowHost`; phones, and a desktop runner that cannot
   open the window, keep the settings route. The window is a second
   Flutter engine: `main` hands it the settings window's app before the
-  engine isolate starts, so it runs no engine isolate (D18), store or
-  sync, and everything it shows or changes crosses
+  device settings store opens and the engine isolate starts, so it never
+  opens `settings.json` and runs no engine isolate (D18), store or sync,
+  and everything it shows or changes crosses
   `klabautermann/settings_link` (the Appearance tab's theme switch acts
   on the app's `AppearanceController` and both windows re-theme). The
   three runners are copies of Séance's, ledgered in
@@ -87,9 +122,9 @@ push or write catalog records, and a widget test guards it.
 Not in yet (later PRs): pull-only enrollment and the catalog (F3),
 persistence for imported ssh_config entries (with the catalog library),
 reachability dots and the `ghost_servers` rail (F4), theme editing and
-presets (F4b's editor), persisting the appearance (the device settings
-store), the macOS integrated titlebar, window-state restore and menus
-through `ghost_desktop` (03 §10.2), and the release job (M4).
+presets (F4b's editor), the monitor set and per-server device preferences
+in `settings.json`, the macOS integrated titlebar, window-state restore
+and menus through `ghost_desktop` (03 §10.2), and the release job (M4).
 
 The macOS launch check is weaker than the siblings': the runner's window
 is still the template's, visible before Dart runs, and the app installs
@@ -121,7 +156,8 @@ between PRs. M1 adds one gate of its own:
   that includes the window. Open Settings from the rail's gear: a
   separate settings window opens on General, and the main window shows
   no settings page. Switch Appearance to Dark, Light and System: both
-  windows follow each time. Close the window (close button; on macOS
+  windows follow each time; quit and relaunch, and the app starts in the
+  mode last chosen there. Close the window (close button; on macOS
   also ⌘W and ⌘⇧W) and open Settings again: it reappears at once on a
   fresh screen, and the app keeps running. Choose Settings while the
   window shows: it comes forward. Close the main window with Settings

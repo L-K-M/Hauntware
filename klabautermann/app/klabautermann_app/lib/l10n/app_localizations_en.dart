@@ -176,7 +176,33 @@ class AppLocalizationsEn extends AppLocalizations {
   String get themeDark => 'Dark';
 
   @override
+  String get themeNotSaved =>
+      'The theme changed, but it could not be saved, so it will not be kept after a restart.';
+
+  @override
   String get themeNotChanged => 'The theme could not be changed.';
+
+  @override
+  String settingsFileRecovered(String fileName) {
+    return 'Your settings file could not be read and was reset. The old file is kept as $fileName.';
+  }
+
+  @override
+  String settingsFileRecoveredNotSaved(String fileName) {
+    return 'Your settings file could not be read or reset. The old file is kept as $fileName. Changes you make now may be lost when Klabautermann restarts.';
+  }
+
+  @override
+  String get settingsFileLeftAsIs =>
+      'Your settings file could not be read, so it was left as it is. Changes you make now are not saved.';
+
+  @override
+  String get settingsFileNewer =>
+      'Your settings were saved by a newer version of Klabautermann. Changes you make now are not saved.';
+
+  @override
+  String get settingsFileNotSaved =>
+      'Your settings could not be saved. Changes you make now may be lost when Klabautermann restarts.';
 
   @override
   String get settingsWindowUnreachable =>

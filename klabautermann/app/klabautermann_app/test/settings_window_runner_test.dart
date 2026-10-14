@@ -41,12 +41,16 @@ void main() {
     final main = readSource('lib/main.dart');
     final branch = main.indexOf('if (args.contains(settingsWindowArgument))');
     final engine = main.indexOf('IsolateEngineClient.spawn(');
+    final settings = main.indexOf('DeviceSettingsStore.open(');
     expect(main, contains('Future<void> main(List<String> args)'));
     expect(branch, isNonNegative);
-    // D18: the window's engine returns before an engine isolate exists.
+    // D18: the window's engine returns before an engine isolate exists,
+    // and before settings.json opens, which only the app's isolate owns
+    // (03 §4.10).
     expect(engine, greaterThan(branch));
+    expect(settings, greaterThan(branch));
     expect(
-      main.substring(branch, engine),
+      main.substring(branch, settings < engine ? settings : engine),
       contains(RegExp(r'await runSettingsWindow\(\);\s*return;')),
     );
 

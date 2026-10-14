@@ -20,8 +20,7 @@ final class RemoteSettings extends GhostSettingsWindowClient<SettingsTab> {
     : super(
         link: link,
         tabs: SettingsTab.values,
-        decodeError: (error) =>
-            SettingsLinkException(error.message ?? error.code),
+        decodeError: decodeLinkError,
         lostError: () => const SettingsLinkException(_linkClosed),
       );
 

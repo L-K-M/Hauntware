@@ -108,8 +108,8 @@ after every Flutter upgrade: both fixes rely on private engine selectors.
 - Platform folders carry identity, icons, and entitlements; commit them
   once `flutter create` scaffolds the app.
 - **The desktop settings window is a second engine** (Séance's lesson,
-  D32): `main` gives it the settings window's app before the engine
-  isolate starts, and it reaches the app only over
+  D32): `main` gives it the settings window's app before `settings.json`
+  opens and the engine isolate starts, and it reaches the app only over
   `klabautermann/settings_link` through `ghost_desktop`'s link engine. A
   new setting is a `SettingsLinkMethod` and a snapshot key in
   `lib/services/settings_window/`, never a controller or store in the

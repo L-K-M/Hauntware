@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io' show FileSystemException;
 import 'dart:ui' show AppExitResponse;
 
 import 'package:flutter/material.dart';
@@ -251,6 +252,58 @@ void main() {
       ),
     );
 
+    MaterialApp mainApp(WidgetTester tester) => tester.widget<MaterialApp>(
+      find.descendant(
+        of: find.byType(KlabautermannApp),
+        matching: find.byType(MaterialApp),
+      ),
+    );
+
+    ThemeModePreference windowSwitch(WidgetTester tester) => tester
+        .widget<SegmentedButton<ThemeModePreference>>(
+          find.byType(SegmentedButton<ThemeModePreference>),
+        )
+        .selected
+        .single;
+
+    /// The main window over [main], the app's controller, and the window
+    /// beside it on the Appearance tab: two engines in the product, one
+    /// tree here, joined only by the relayed link.
+    Future<RemoteSettings> pumpBothWindows(
+      WidgetTester tester,
+      AppearanceController main,
+    ) async {
+      tester.view.physicalSize = const Size(2560, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final engine = FakeEngineClient();
+      final fleet = FleetController(engine);
+      final monitoring = MonitoringController(engine);
+      addTearDown(() async {
+        fleet.dispose();
+        monitoring.dispose();
+        await engine.close();
+      });
+      final remote = await connectWindow(tester, SettingsTab.appearance);
+      await tester.pumpWidget(
+        Row(
+          textDirection: TextDirection.ltr,
+          children: [
+            Expanded(
+              child: KlabautermannApp(
+                fleet: fleet,
+                monitoring: monitoring,
+                appearance: main,
+              ),
+            ),
+            Expanded(child: SettingsWindowApp(remote: remote)),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+      return remote;
+    }
+
     testWidgets('opens on the tab asked for, with the seven tabs', (
       tester,
     ) async {
@@ -278,63 +331,55 @@ void main() {
 
     testWidgets('an appearance change in the window applies to the main '
         'window through the link', (tester) async {
-      tester.view.physicalSize = const Size(2560, 800);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.reset);
-      final engine = FakeEngineClient();
-      final fleet = FleetController(engine);
-      final monitoring = MonitoringController(engine);
-      addTearDown(() async {
-        fleet.dispose();
-        monitoring.dispose();
-        await engine.close();
-      });
-      final remote = await connectWindow(tester, SettingsTab.appearance);
-      // The main window over the app's controller, and the window beside
-      // it: two engines in the product, one tree here, joined only by the
-      // relayed link.
-      await tester.pumpWidget(
-        Row(
-          textDirection: TextDirection.ltr,
-          children: [
-            Expanded(
-              child: KlabautermannApp(
-                fleet: fleet,
-                monitoring: monitoring,
-                appearance: appearance,
-              ),
-            ),
-            Expanded(child: SettingsWindowApp(remote: remote)),
-          ],
-        ),
-      );
-      await tester.pumpAndSettle();
-      MaterialApp mainApp() => tester.widget<MaterialApp>(
-        find.descendant(
-          of: find.byType(KlabautermannApp),
-          matching: find.byType(MaterialApp),
-        ),
-      );
-      expect(mainApp().themeMode, ThemeMode.system);
+      final remote = await pumpBothWindows(tester, appearance);
+      expect(mainApp(tester).themeMode, ThemeMode.system);
 
       await tester.tap(find.text('Dark'));
       await tester.runAsync(pumpEventQueue);
       await tester.pumpAndSettle();
 
       expect(appearance.mode, ThemeModePreference.dark);
-      expect(mainApp().themeMode, ThemeMode.dark);
+      expect(mainApp(tester).themeMode, ThemeMode.dark);
       // The snapshot that came back re-themed the window too, and its
       // switch shows the app's mode.
       expect(remote.appearance.value, appearance.value);
       expect(windowApp(tester).themeMode, ThemeMode.dark);
+      expect(windowSwitch(tester), ThemeModePreference.dark);
+    });
+
+    testWidgets('a change in the window the app applies but cannot save '
+        'stays in both windows and says it was not saved', (tester) async {
+      host.dispose();
+      // Built off the test's fake clock, as the refusing app below is.
+      final unsaved = (await tester.runAsync(() async {
+        final unsaved = AppearanceController(
+          save: (_) async => throw const FileSystemException('disk full'),
+        );
+        addTearDown(unsaved.dispose);
+        host = newHost(unsaved);
+        return unsaved;
+      }))!;
+      final remote = await pumpBothWindows(tester, unsaved);
+
+      await tester.tap(find.text('Dark'));
+      await tester.runAsync(pumpEventQueue);
+      await tester.pumpAndSettle();
+
+      // The app reported the failed save where it happened.
+      expect(tester.takeException(), isA<AppearanceNotSavedException>());
       expect(
-        tester
-            .widget<SegmentedButton<ThemeModePreference>>(
-              find.byType(SegmentedButton<ThemeModePreference>),
-            )
-            .selected,
-        {ThemeModePreference.dark},
+        find.text(
+          'The theme changed, but it could not be saved, so it will not be '
+          'kept after a restart.',
+        ),
+        findsOneWidget,
       );
+      expect(find.text('The theme could not be changed.'), findsNothing);
+      expect(unsaved.mode, ThemeModePreference.dark);
+      expect(mainApp(tester).themeMode, ThemeMode.dark);
+      expect(remote.appearance.value, unsaved.value);
+      expect(windowApp(tester).themeMode, ThemeMode.dark);
+      expect(windowSwitch(tester), ThemeModePreference.dark);
     });
 
     testWidgets('a theme change in the app re-themes the showing window', (
@@ -385,14 +430,8 @@ void main() {
       // The app reported the failure where it happened.
       expect(tester.takeException(), isA<StateError>());
       expect(find.text('The theme could not be changed.'), findsOneWidget);
-      expect(
-        tester
-            .widget<SegmentedButton<ThemeModePreference>>(
-              find.byType(SegmentedButton<ThemeModePreference>),
-            )
-            .selected,
-        {ThemeModePreference.system},
-      );
+      expect(find.textContaining('could not be saved'), findsNothing);
+      expect(windowSwitch(tester), ThemeModePreference.system);
     });
 
     testWidgets('a window that loses the app says so', (tester) async {
@@ -446,6 +485,34 @@ void main() {
           );
         }
       }
+    });
+
+    test('a change the app applied but did not save crosses as itself; any '
+        'other failure as what it printed', () {
+      Exception roundTrip(Object error) =>
+          decodeLinkError(encodeLinkError(error));
+
+      expect(
+        roundTrip(const AppearanceNotSavedException('disk full')),
+        isA<AppearanceNotSavedException>().having(
+          (error) => error.message,
+          'message',
+          'disk full',
+        ),
+      );
+      expect(
+        roundTrip(StateError('read-only appearance')),
+        isA<SettingsLinkException>().having(
+          (error) => error.message,
+          'message',
+          contains('read-only appearance'),
+        ),
+      );
+      // A code this build does not know reads as a plain failure.
+      expect(
+        decodeLinkError(PlatformException(code: 'settings-failed')),
+        isA<SettingsLinkException>(),
+      );
     });
 
     test('uses the channel names 04 §12.3 fixes', () {
