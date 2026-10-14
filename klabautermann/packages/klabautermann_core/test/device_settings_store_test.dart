@@ -2,8 +2,6 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:klabautermann_core/klabautermann_core.dart';
-import 'package:klabautermann_core/src/settings/device_settings_store.dart'
-    show writeFileAtomically;
 import 'package:test/test.dart';
 
 const _versionKey = 'klabautermann.settings.version';

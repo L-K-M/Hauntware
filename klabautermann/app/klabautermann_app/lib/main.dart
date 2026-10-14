@@ -12,13 +12,14 @@ import 'services/settings_window/settings_window_host.dart';
 import 'services/settings_window/settings_window_link.dart';
 import 'services/ssh_config_source.dart';
 import 'services/stored_appearance.dart';
+import 'services/window_state.dart';
 import 'settings_window_app.dart';
 
 /// The composition root (03 §10.1): the settings-window branch, then the
 /// device settings store, the engine isolate, one `ChangeNotifier`
-/// controller per concern built over them, and `runApp`. The catalog
-/// stores, vault and the macOS titlebar join this list as their
-/// milestones land.
+/// controller per concern built over them, the main window's restored
+/// frame, and `runApp`. The catalog stores and vault join this list as
+/// their milestones land.
 Future<void> main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -39,11 +40,10 @@ Future<void> main(List<String> args) async {
   // stored theme. Opening never throws; a file it cannot use is reported
   // after the first frame.
   final supportDirectory = await getApplicationSupportDirectory();
+  File supportFile(String name) =>
+      File('${supportDirectory.path}${Platform.pathSeparator}$name');
   final settings = await DeviceSettingsStore.open(
-    File(
-      '${supportDirectory.path}${Platform.pathSeparator}'
-      '$deviceSettingsFileName',
-    ),
+    supportFile(deviceSettingsFileName),
   );
   if (settings.issue case final issue?) {
     debugPrint('settings.json: ${issue.kind.name} ${issue.error ?? ''}');
@@ -66,6 +66,15 @@ Future<void> main(List<String> args) async {
   final settingsWindow = settingsWindowHostFor(
     defaultTargetPlatform,
     appearance: appearance,
+  );
+
+  // Desktop only: put the main window back where it was closed (size,
+  // monitor, maximized or full screen) before the first frame, and keep
+  // tracking it. On macOS this is also what shows the window, which the
+  // runner keeps hidden until it is placed.
+  await restoreMainWindow(
+    stateFile: supportFile(windowStateFileName),
+    platform: defaultTargetPlatform,
   );
 
   runApp(

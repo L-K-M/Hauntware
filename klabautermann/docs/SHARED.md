@@ -132,3 +132,25 @@ when the Dart engine moved into `ghost_desktop`.
 checks the native wiring on Linux; only each platform's toolchain
 compiles the runners, and only a person on each desktop OS can open and
 use the window (docs/STATUS.md).
+
+## Main window chrome
+
+Copied at `9354e623733c38219ffd2e0d7d0943d04332ea80` (M1, the desktop
+chrome of 03 §10.2). Owner: Klabautermann maintains its copy; Séance owns
+the canonical runner, and Poltergeist's `MainFlutterWindow.swift` carries
+the same lines. The Dart side is not copied: the window lifecycle is
+ghost_desktop's `GhostWindowLifecycle`, configured in
+`app/klabautermann_app/lib/services/window_state.dart`.
+
+| Klabautermann file | Source (last changed) | Divergences |
+|---|---|---|
+| `klabautermann/app/klabautermann_app/macos/Runner/MainFlutterWindow.swift`: `import window_manager` and the `order(_:relativeTo:)` override that calls `hiddenWindowAtLaunch()` | The same lines in `seance/app/seance_app/macos/Runner/MainFlutterWindow.swift` (`f9bd1e1`) | The comment names `restoreMainWindow()` in `lib/services/window_state.dart`. |
+
+Linux and Windows need no runner code for the window state: the
+window_manager plugin, which their runners already register, carries the
+restore, as in Séance's runners. Only the main window waits hidden for
+Dart; the settings window's runner is unchanged.
+
+`klabautermann/app/klabautermann_app/test/desktop_chrome_runner_test.dart`
+checks the wiring on Linux; only macOS compiles it, and only a person can
+check a restore on a real desktop (docs/STATUS.md).

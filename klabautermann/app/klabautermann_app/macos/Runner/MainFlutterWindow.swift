@@ -1,5 +1,6 @@
 import Cocoa
 import FlutterMacOS
+import window_manager
 
 class MainFlutterWindow: NSWindow {
   /// Settings in a window of its own (SettingsWindow.swift).
@@ -30,5 +31,16 @@ class MainFlutterWindow: NSWindow {
   override func close() {
     settingsWindow?.close()
     super.close()
+  }
+
+  /// Keep the window invisible while Dart puts it back where it was closed:
+  /// restoreMainWindow() (lib/services/window_state.dart, called from
+  /// main.dart before runApp) applies the previous session's frame and
+  /// then shows the window, always, even when restoring fails, so the
+  /// default-size window never flashes. Do not remove this without
+  /// removing that contract too.
+  override public func order(_ place: NSWindow.OrderingMode, relativeTo otherWin: Int) {
+    super.order(place, relativeTo: otherWin)
+    hiddenWindowAtLaunch()
   }
 }
