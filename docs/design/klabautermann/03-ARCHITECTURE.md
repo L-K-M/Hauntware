@@ -3539,7 +3539,11 @@ the engine in `engine_isolate.dart` beside it):
     connector refuses a longer one), has a hop that as written is the
     host or hop it leads to, on that one's port and as its user (ssh's
     "jumphost loop"), or names a host or hop left out (whose settings
-    the engine would lack).
+    the engine would lack). That last rule also covers a later hop left
+    out only for its own route (a `ProxyCommand`, a `ProxyJump` the
+    engine cannot follow, or a `Match` that could set the route), which
+    ssh ignores: the import is conservative there and leaves out every
+    host behind such a hop, although ssh would reach them.
   - Each hop is a `ServerConfig` with the id `ssh-config-hop:` plus the
     route's names up to that hop, joined by commas, so the same config
     yields the same ids and routes that begin alike share hops; each

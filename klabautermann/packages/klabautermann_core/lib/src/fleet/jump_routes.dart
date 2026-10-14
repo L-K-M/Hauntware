@@ -100,7 +100,12 @@ final class JumpHop {
 /// - makes a route of more than 16 hops, the first hop's own route
 ///   included, which Séance's connector refuses to dial;
 /// - names a host in [leftOut], or one whose own route is null: ssh would
-///   take that host's settings from a block the engine does not have.
+///   take that host's settings, or as a first hop its route, from what
+///   the engine cannot evaluate or follow. This holds for a later hop
+///   too, although ssh ignores a later hop's own route: a hop left out
+///   only for its `ProxyCommand`, its `ProxyJump` or a `Match` that could
+///   set its route leaves out every host behind it, where ssh would
+///   still reach them. That is conservative, not what ssh does.
 ///
 /// The work is linear in the hosts: following a route stops past 16 hops,
 /// and each null route reaches the hosts that name it once.
