@@ -1,8 +1,15 @@
-import 'dart:collection';
 import 'dart:math' as math;
+import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart' show precisionErrorTolerance;
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart' show SliverLayoutDimensions;
+import 'package:flutter/rendering.dart'
+    show
+        ItemExtentBuilder,
+        RenderSliverFixedExtentBoxAdaptor,
+        SliverConstraints,
+        SliverGeometry,
+        SliverLayoutDimensions;
 import 'package:flutter/services.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 
@@ -18,8 +25,8 @@ enum LogWrap {
   /// view's edge with an ellipsis.
   off,
 
-  /// Long lines wrap; each line's extent is measured once per width and
-  /// cached.
+  /// Long lines wrap; a line is measured once per width when a layout
+  /// shows it, and keeps an earlier count or an estimate until then.
   on,
 }
 
@@ -35,11 +42,11 @@ const double _rowPadding = 8;
 /// How far from the newest line still counts as at it, in logical pixels.
 const double _endTolerance = 1;
 
-/// The log viewer of 03 §10.8 over a [LogViewController]: a
-/// `ListView.builder` with a fixed line extent when [wrap] is off and a
-/// measured extent cache when it is on, follow with pause on scroll
-/// (LOG-02), level colours with a gutter icon, and keyboard operation
-/// with a visible focus ring (03 §10.6, MVP).
+/// The log viewer of 03 §10.8 over a [LogViewController]: a lazily built
+/// list with a fixed line extent when [wrap] is off and measured row
+/// counts when it is on, follow with pause on scroll (LOG-02), level
+/// colours with a gutter icon, and keyboard operation with a visible
+/// focus ring (03 §10.6, MVP).
 ///
 /// Following keeps the newest line in sight. Scrolling away from it pauses
 /// following, and the view then stays on the lines it shows while new
@@ -76,10 +83,9 @@ class _LogViewState extends State<LogView> {
   late AppLocalizations _l10n;
   _TextLayout? _text;
 
-  /// The width estimate and wrapped row count of each held entry, from
-  /// [_metricsFirstSeq] on, kept in step with the controller.
-  final _metrics = ListQueue<_EntryMetrics>();
-  int _metricsFirstSeq = 0;
+  /// The wrapped row count of each held entry, kept in step with the
+  /// controller whether or not [LogView.wrap] is on.
+  late _RowCounts _rows;
 
   @override
   void initState() {
@@ -91,9 +97,13 @@ class _LogViewState extends State<LogView> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     _l10n = AppLocalizations.of(context);
-    final first = _text == null;
-    _text = _TextLayout.of(context, _text);
-    if (first) _resetMetrics();
+    final previous = _text;
+    _text = _TextLayout.of(context, previous);
+    if (previous == null) {
+      _resetRows();
+    } else if (!identical(previous, _text)) {
+      _rows.invalidate();
+    }
   }
 
   @override
@@ -102,7 +112,10 @@ class _LogViewState extends State<LogView> {
     if (oldWidget.controller != widget.controller) {
       _unlisten(oldWidget.controller);
       _listen(widget.controller);
-      _resetMetrics();
+      _resetRows();
+    } else if ((oldWidget.levelOf == null) != (widget.levelOf == null)) {
+      // The gutter came or went, and with it some of every row's width.
+      _rows.invalidate();
     }
   }
 
@@ -124,39 +137,20 @@ class _LogViewState extends State<LogView> {
     controller.following.removeListener(_onFollowing);
   }
 
-  void _resetMetrics() {
-    _metrics.clear();
-    _metricsFirstSeq = widget.controller.firstSeq;
-    _syncMetrics();
-  }
-
-  /// Brings [_metrics] in step with the controller and returns the extent
-  /// of the entries that left from the front.
-  double _syncMetrics() {
-    final controller = widget.controller;
-    var removed = 0.0;
-    while (_metrics.isNotEmpty && _metricsFirstSeq < controller.firstSeq) {
-      final gone = _metrics.removeFirst();
-      _metricsFirstSeq++;
-      removed += _extentOf(gone);
-    }
-    if (_metrics.isEmpty) _metricsFirstSeq = controller.firstSeq;
-
-    final end = controller.firstSeq + controller.length;
-    for (var seq = _metricsFirstSeq + _metrics.length; seq < end; seq++) {
-      _metrics.addLast(_EntryMetrics());
-    }
-    return removed;
+  void _resetRows() {
+    _rows = _RowCounts(_measureRows);
+    _rows.sync(widget.controller, _estimateRows);
   }
 
   void _onLines() {
-    final removed = _syncMetrics();
+    final removed = _rows.sync(widget.controller, _estimateRows);
     // While paused, keep the lines in sight where they are: the entries
     // that left the buffer took their extent from above them.
-    if (removed > 0 && !widget.controller.following.value) {
+    if (removed.entries > 0 && !widget.controller.following.value) {
       final position = _vertical.hasClients ? _vertical.position : null;
       if (position is _TailScrollPosition && position.hasPixels) {
-        position.shiftBy(-math.min(removed, position.pixels));
+        final rows = widget.wrap == LogWrap.on ? removed.rows : removed.entries;
+        position.shiftBy(-math.min(rows * _text!.lineHeight, position.pixels));
       }
     }
     setState(() {});
@@ -196,51 +190,44 @@ class _LogViewState extends State<LogView> {
   double _textWidth(double rowWidth, _TextLayout text) =>
       rowWidth - 2 * _rowPadding - (_hasGutter ? text.gutter : 0);
 
-  double _extentOf(_EntryMetrics metrics) {
-    final text = _text!;
-    if (widget.wrap == LogWrap.off || metrics.rowsFor != text) {
-      return text.lineHeight;
-    }
-    return metrics.rows * text.lineHeight;
-  }
-
-  /// The measured extent cache: a line whose width bound fits is one row;
-  /// a longer one is laid out once per width and [_TextLayout].
-  double? _wrappedExtent(int index, SliverLayoutDimensions dimensions) {
-    final controller = widget.controller;
-    if (index >= controller.length) return null;
+  /// The rows entry [index] wraps to in a row [crossAxisExtent] wide: one
+  /// when an upper bound of its width fits, otherwise laid out. A
+  /// dropped-lines record keeps to one row; a cut line is laid out for its
+  /// note.
+  int _measureRows(int index, double crossAxisExtent) {
+    final entry = widget.controller[index];
+    if (entry is! LogLine) return 1;
 
     final text = _text!;
-    final entry = controller[index];
-    final metrics = _metrics.elementAt(index);
-    final width = _textWidth(dimensions.crossAxisExtent, text);
-    if (metrics.rowsFor == text && metrics.rowsWidth == width) {
-      return metrics.rows * text.lineHeight;
+    final width = _textWidth(crossAxisExtent, text);
+    if (!entry.truncated &&
+        logTextCells(parseSgr(entry.text).text) * text.advance <= width) {
+      return 1;
     }
-
-    // A dropped-lines record keeps to one row; a cut line is laid out for
-    // its note.
-    var rows = 1;
-    if (entry is LogLine &&
-        (entry.truncated || _widthBound(entry, metrics, text) > width)) {
-      final painter = TextPainter(
-        text: _lineSpan(entry, text),
-        textDirection: TextDirection.ltr,
-        strutStyle: text.strut,
-        textScaler: text.scaler,
-      )..layout(maxWidth: math.max(0, width));
-      rows = math.max(1, (painter.height / text.lineHeight).round());
-      painter.dispose();
-    }
-    metrics
-      ..rows = rows
-      ..rowsFor = text
-      ..rowsWidth = width;
-    return rows * text.lineHeight;
+    final painter = TextPainter(
+      text: _lineSpan(entry, text),
+      textDirection: TextDirection.ltr,
+      strutStyle: text.strut,
+      textScaler: text.scaler,
+    )..layout(maxWidth: math.max(0, width));
+    final rows = math.max(1, (painter.height / text.lineHeight).round());
+    painter.dispose();
+    return rows;
   }
 
-  double _widthBound(LogLine line, _EntryMetrics metrics, _TextLayout text) =>
-      (metrics.cells ??= logTextCells(parseSgr(line.text).text)) * text.advance;
+  /// A guess at the rows of [entry] until a layout measures it: its code
+  /// units, escapes included, at the width last measured, and never more
+  /// rows than code units.
+  int _estimateRows(LogEntry entry) {
+    final crossAxisExtent = _rows.crossAxisExtent;
+    if (entry is! LogLine || crossAxisExtent == null) return 1;
+
+    final text = _text!;
+    final width = _textWidth(crossAxisExtent, text);
+    final units = entry.text.length;
+    if (width <= 0 || units == 0) return 1;
+    return (units * text.advance / width).ceil().clamp(1, units);
+  }
 
   TextSpan _lineSpan(LogLine line, _TextLayout text) => logLineSpan(
     line,
@@ -286,14 +273,29 @@ class _LogViewState extends State<LogView> {
     final following = widget.controller.following.value;
     final colors = Theme.of(context).colorScheme;
 
+    final rows = SliverChildBuilderDelegate(
+      (context, index) => _row(index, text),
+      childCount: widget.controller.length,
+    );
     final list = NotificationListener<ScrollUpdateNotification>(
       onNotification: _onScrollUpdate,
-      child: ListView.builder(
+      child: CustomScrollView(
         controller: _vertical,
-        itemCount: widget.controller.length,
-        itemExtent: widget.wrap == LogWrap.off ? text.lineHeight : null,
-        itemExtentBuilder: widget.wrap == LogWrap.on ? _wrappedExtent : null,
-        itemBuilder: (context, index) => _row(index, text),
+        semanticChildCount: widget.controller.length,
+        slivers: [
+          switch (widget.wrap) {
+            LogWrap.off => SliverFixedExtentList(
+              itemExtent: text.lineHeight,
+              delegate: rows,
+            ),
+            LogWrap.on => _WrappedRows(
+              rows: _rows,
+              revision: _rows.revision,
+              lineHeight: text.lineHeight,
+              delegate: rows,
+            ),
+          },
+        ],
       ),
     );
 
@@ -501,14 +503,363 @@ final class _TextLayout {
   double get gutter => iconSize + 6;
 }
 
-/// One entry's width estimate ([logTextCells]), taken when wrap first
-/// needs it, and its row count when wrapped, valid for [rowsFor] at
-/// [rowsWidth].
-final class _EntryMetrics {
-  int? cells;
-  int rows = 1;
-  _TextLayout? rowsFor;
-  double rowsWidth = 0;
+/// The slots a [_RowCounts] starts with.
+const int _minRowSlots = 1024;
+
+/// The row count of every entry a [LogView] holds, for wrap mode, with the
+/// rows before any entry found in O(log n) through a Fenwick tree, so a
+/// frame costs the same however many lines are held (03 §11.4).
+///
+/// Only the entries a layout shows are measured, once per width, font and
+/// locale ([measure]); the others keep the count of their last measurement
+/// or, before one, an estimate. A width change therefore lays out only
+/// the lines in sight. When measuring an entry above the scroll offset
+/// changes its count, the layout moves the offset by the difference, so
+/// the lines in sight hold still.
+final class _RowCounts {
+  _RowCounts(this._measure);
+
+  /// The exact rows of the entry at an index in a row of a cross-axis
+  /// extent.
+  final int Function(int index, double crossAxisExtent) _measure;
+
+  // Entry i lives in slot _front + i; the slots before _front belong to
+  // evicted entries, whose rows _frontRows cancels. _tree is the Fenwick
+  // tree over _counts, 1-based.
+  var _counts = Int32List(_minRowSlots);
+  var _measuredIn = Int32List(_minRowSlots);
+  var _tree = Int32List(_minRowSlots + 1);
+  int _front = 0;
+  int _frontRows = 0;
+  int _length = 0;
+  int _total = 0;
+  int _firstSeq = 0;
+
+  /// Counts measured in an older generation are estimates; 0 is never.
+  int _generation = 1;
+  double? _crossAxisExtent;
+
+  /// Changes whenever the rows would lay out differently, so the sliver
+  /// lays out again even when the entry count stays the same.
+  int get revision => _revision;
+  int _revision = 0;
+
+  int get length => _length;
+
+  /// The rows of every held entry.
+  int get total => _total;
+
+  /// The cross-axis extent last measured at, or null before a layout.
+  double? get crossAxisExtent => _crossAxisExtent;
+
+  int rowsOf(int index) => _counts[_front + index];
+
+  int rowsBefore(int index) => _prefix(_front + index) - _frontRows;
+
+  /// The entry holding [row], clamped to the held entries.
+  int indexAtRow(int row) {
+    if (_length == 0 || row <= 0) return 0;
+
+    // The most slots whose rows end at or before row: the next one holds
+    // it.
+    var rest = row + _frontRows;
+    var slots = 0;
+    for (var step = 1 << (_counts.length.bitLength - 1); step > 0; step >>= 1) {
+      final next = slots + step;
+      if (next <= _counts.length && _tree[next] <= rest) {
+        slots = next;
+        rest -= _tree[next];
+      }
+    }
+    return (slots - _front).clamp(0, _length - 1);
+  }
+
+  /// Brings the counts in step with [controller], guessing new entries'
+  /// rows with [estimate], and returns the entries that left from the
+  /// front and their rows.
+  ({int entries, int rows}) sync(
+    LogViewController controller,
+    int Function(LogEntry entry) estimate,
+  ) {
+    var entries = 0;
+    var rows = 0;
+    while (_length > 0 && _firstSeq < controller.firstSeq) {
+      final gone = _counts[_front++];
+      _frontRows += gone;
+      _total -= gone;
+      _length--;
+      _firstSeq++;
+      entries++;
+      rows += gone;
+    }
+    if (_length == 0) _firstSeq = controller.firstSeq;
+
+    final end = controller.firstSeq + controller.length;
+    for (var seq = _firstSeq + _length; seq < end; seq++) {
+      _append(estimate(controller[seq - controller.firstSeq]));
+    }
+    _revision++;
+    return (entries: entries, rows: rows);
+  }
+
+  /// Makes every count an estimate, for a new font, scale, locale or
+  /// gutter.
+  void invalidate() {
+    _generation++;
+    _revision++;
+  }
+
+  /// Measures the entries a layout of rows [top] to [bottom] shows, with
+  /// its scroll offset at row [anchor], and returns the rows to move that
+  /// offset by so the entry at it holds still.
+  int measure(
+    double top,
+    double anchor,
+    double bottom,
+    double crossAxisExtent,
+  ) {
+    if (crossAxisExtent != _crossAxisExtent) {
+      _crossAxisExtent = crossAxisExtent;
+      _generation++;
+    }
+    if (_length == 0) return 0;
+
+    // A layout that reaches the newest entry may be a following view's,
+    // which then moves to the new end. Measuring the rows the end shows
+    // now keeps that to one more pass; otherwise every screenful the
+    // counts grew by would cost one, past the viewport's limit of ten.
+    final reachesEnd = bottom >= _total;
+
+    // From the entry at the offset down, a new count moves nothing above;
+    // above it, every change moves the offset by as much.
+    final first = indexAtRow((anchor + _rowTolerance).floor());
+    final firstRow = rowsBefore(first);
+    var end = firstRow;
+    for (var i = first; i < _length && end < bottom; i++) {
+      _measureAt(i);
+      end += rowsOf(i);
+    }
+
+    var correction = 0;
+    if (reachesEnd) {
+      var tail = 0;
+      for (var i = _length - 1; i >= 0 && tail < bottom - top; i--) {
+        final change = _measureAt(i);
+        if (i < first) correction += change;
+        tail += rowsOf(i);
+      }
+    }
+    var above = anchor - firstRow;
+    for (var i = first - 1; i >= 0 && above < anchor - top; i--) {
+      correction += _measureAt(i);
+      above += rowsOf(i);
+    }
+    return correction;
+  }
+
+  /// Measures the entry at [index] unless this generation did, and returns
+  /// how its count changed.
+  int _measureAt(int index) {
+    final slot = _front + index;
+    if (_measuredIn[slot] == _generation) return 0;
+
+    _measuredIn[slot] = _generation;
+    final change = _measure(index, _crossAxisExtent!) - _counts[slot];
+    if (change != 0) {
+      _counts[slot] += change;
+      _total += change;
+      _add(slot, change);
+    }
+    return change;
+  }
+
+  void _append(int rows) {
+    if (_front + _length == _counts.length) _compact();
+    final slot = _front + _length++;
+    _counts[slot] = rows;
+    _measuredIn[slot] = 0;
+    _total += rows;
+    _add(slot, rows);
+  }
+
+  /// Moves the held entries to the start of new slots, twice as many as
+  /// they need, so moving costs O(1) a line over time.
+  void _compact() {
+    final size = math.max(_minRowSlots, 2 * (_length + 1));
+    _counts = Int32List(size)..setRange(0, _length, _counts, _front);
+    _measuredIn = Int32List(size)..setRange(0, _length, _measuredIn, _front);
+    _tree = Int32List(size + 1);
+    for (var k = 1; k <= size; k++) {
+      _tree[k] += _counts[k - 1];
+      final parent = k + (k & -k);
+      if (parent <= size) _tree[parent] += _tree[k];
+    }
+    _front = 0;
+    _frontRows = 0;
+  }
+
+  void _add(int slot, int change) {
+    for (var k = slot + 1; k < _tree.length; k += k & -k) {
+      _tree[k] += change;
+    }
+  }
+
+  /// The rows of slots 0 to [slots] - 1.
+  int _prefix(int slots) {
+    var sum = 0;
+    for (var k = slots; k > 0; k -= k & -k) {
+      sum += _tree[k];
+    }
+    return sum;
+  }
+}
+
+/// How close to a row boundary a scroll offset counts as on it, in rows.
+const double _rowTolerance = 1e-6;
+
+/// The rows of a wrapping [LogView]: a sliver like `SliverVariedExtentList`
+/// whose offsets and indexes come from [_RowCounts] in O(log n), where
+/// that list sums every extent before an index, and which measures the
+/// entries a layout shows before laying them out.
+final class _WrappedRows extends SliverMultiBoxAdaptorWidget {
+  const _WrappedRows({
+    required super.delegate,
+    required this.rows,
+    required this.revision,
+    required this.lineHeight,
+  });
+
+  final _RowCounts rows;
+
+  /// [rows]' revision when built: a new one lays the sliver out again.
+  final int revision;
+  final double lineHeight;
+
+  @override
+  _RenderWrappedRows createRenderObject(BuildContext context) =>
+      _RenderWrappedRows(
+        childManager: context as SliverMultiBoxAdaptorElement,
+        rows: rows,
+        revision: revision,
+        lineHeight: lineHeight,
+      );
+
+  @override
+  void updateRenderObject(
+    BuildContext context,
+    _RenderWrappedRows renderObject,
+  ) {
+    renderObject
+      ..rows = rows
+      ..revision = revision
+      ..lineHeight = lineHeight;
+  }
+}
+
+final class _RenderWrappedRows extends RenderSliverFixedExtentBoxAdaptor {
+  _RenderWrappedRows({
+    required super.childManager,
+    required this._rows,
+    required this._revision,
+    required this._lineHeight,
+  });
+
+  _RowCounts _rows;
+  set rows(_RowCounts value) {
+    if (identical(value, _rows)) return;
+    _rows = value;
+    markNeedsLayout();
+  }
+
+  int _revision;
+  set revision(int value) {
+    if (value == _revision) return;
+    _revision = value;
+    markNeedsLayout();
+  }
+
+  double _lineHeight;
+  set lineHeight(double value) {
+    if (value == _lineHeight) return;
+    _lineHeight = value;
+    markNeedsLayout();
+  }
+
+  @override
+  double? get itemExtent => null;
+
+  @override
+  ItemExtentBuilder get itemExtentBuilder => _extentOf;
+
+  double? _extentOf(int index, SliverLayoutDimensions dimensions) =>
+      index < _rows.length ? _rows.rowsOf(index) * _lineHeight : null;
+
+  /// The row [offset] falls in, an offset on a boundary taking the row
+  /// after it, as the fixed-extent list rounds.
+  int _rowAt(double offset) {
+    final rows = offset / _lineHeight;
+    final nearest = rows.round();
+    if ((rows - nearest).abs() * _lineHeight < precisionErrorTolerance) {
+      return nearest;
+    }
+    return rows.floor();
+  }
+
+  /// The last row before [offset].
+  int _rowBefore(double offset) {
+    final rows = offset / _lineHeight - 1;
+    final nearest = rows.round();
+    if ((rows - nearest).abs() * _lineHeight < precisionErrorTolerance) {
+      return math.max(0, nearest);
+    }
+    return math.max(0, rows.ceil());
+  }
+
+  @override
+  double indexToLayoutOffset(double itemExtent, int index) =>
+      _rows.rowsBefore(math.min(index, _rows.length)) * _lineHeight;
+
+  @override
+  int getMinChildIndexForScrollOffset(double scrollOffset, double itemExtent) =>
+      _rows.indexAtRow(_rowAt(scrollOffset));
+
+  @override
+  int getMaxChildIndexForScrollOffset(double scrollOffset, double itemExtent) =>
+      _rows.indexAtRow(_rowBefore(scrollOffset));
+
+  @override
+  double computeMaxScrollOffset(
+    SliverConstraints constraints,
+    double itemExtent,
+  ) => _rows.total * _lineHeight;
+
+  @override
+  double estimateMaxScrollOffset(
+    SliverConstraints constraints, {
+    int? firstIndex,
+    int? lastIndex,
+    double? leadingScrollOffset,
+    double? trailingScrollOffset,
+  }) => _rows.total * _lineHeight;
+
+  @override
+  void performLayout() {
+    final constraints = this.constraints;
+    final top = constraints.scrollOffset + constraints.cacheOrigin;
+    final correction = _rows.measure(
+      top / _lineHeight,
+      constraints.scrollOffset / _lineHeight,
+      (top + constraints.remainingCacheExtent) / _lineHeight,
+      constraints.crossAxisExtent,
+    );
+    if (correction != 0) {
+      geometry = SliverGeometry(
+        scrollOffsetCorrection: correction * _lineHeight,
+      );
+      return;
+    }
+    super.performLayout();
+  }
 }
 
 /// The view's keys and what each does.

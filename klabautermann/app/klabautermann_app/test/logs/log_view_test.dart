@@ -63,6 +63,17 @@ Future<LogViewController> _pump(
   return logs;
 }
 
+/// Counts reads of its entries, so a test can bound the work a frame does.
+final class _CountingController extends LogViewController {
+  int reads = 0;
+
+  @override
+  LogEntry operator [](int index) {
+    reads++;
+    return super[index];
+  }
+}
+
 ScrollPosition _position(WidgetTester tester) =>
     tester.state<ScrollableState>(find.byType(Scrollable)).position;
 
@@ -95,6 +106,17 @@ int _topLine(WidgetTester tester) {
     if (top < 0 || line < top) top = line;
   }
   return top;
+}
+
+RenderParagraph _paragraph(WidgetTester tester, String text) =>
+    tester.renderObject<RenderParagraph>(find.text(text, findRichText: true));
+
+/// Expects [text]'s row to be exactly as tall as its wrapped text, so no
+/// part of it is clipped and no row has slack.
+void _expectWholeRows(WidgetTester tester, String text) {
+  final paragraph = _paragraph(tester, text);
+  expect(paragraph.size.height, closeTo(paragraph.textSize.height, 0.01));
+  expect(paragraph.didExceedMaxLines, isFalse);
 }
 
 Future<void> _wheel(WidgetTester tester, double dy) async {
@@ -305,8 +327,11 @@ void main() {
   });
 
   group('keyboard', () {
-    Future<LogViewController> focused(WidgetTester tester) async {
-      final logs = await _pump(tester);
+    Future<LogViewController> focused(
+      WidgetTester tester, {
+      LogWrap wrap = LogWrap.off,
+    }) async {
+      final logs = await _pump(tester, wrap: wrap);
       logs.add(_lines(0, 100));
       await tester.pump();
       await tester.tap(find.byType(LogView));
@@ -314,37 +339,40 @@ void main() {
       return logs;
     }
 
-    testWidgets('Home, arrows and pages scroll; End follows', (tester) async {
-      final logs = await focused(tester);
+    for (final wrap in LogWrap.values) {
+      testWidgets('Home, arrows and pages scroll; End follows, '
+          'wrap ${wrap.name}', (tester) async {
+        final logs = await focused(tester, wrap: wrap);
 
-      await tester.sendKeyEvent(LogicalKeyboardKey.home);
-      await tester.pump();
-      expect(_position(tester).pixels, 0);
-      expect(logs.following.value, isFalse);
-      expect(_shows(tester, 0), isTrue);
+        await tester.sendKeyEvent(LogicalKeyboardKey.home);
+        await tester.pump();
+        expect(_position(tester).pixels, 0);
+        expect(logs.following.value, isFalse);
+        expect(_shows(tester, 0), isTrue);
 
-      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
-      await tester.pump();
-      expect(_position(tester).pixels, closeTo(_lineHeight(tester), 0.01));
+        await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+        await tester.pump();
+        expect(_position(tester).pixels, closeTo(_lineHeight(tester), 0.01));
 
-      await tester.sendKeyEvent(LogicalKeyboardKey.pageDown);
-      await tester.pump();
-      expect(_position(tester).pixels, closeTo(200, 0.01), reason: 'a page');
+        await tester.sendKeyEvent(LogicalKeyboardKey.pageDown);
+        await tester.pump();
+        expect(_position(tester).pixels, closeTo(200, 0.01), reason: 'a page');
 
-      await tester.sendKeyEvent(LogicalKeyboardKey.pageUp);
-      await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
-      await tester.pump();
-      expect(_position(tester).pixels, 0);
+        await tester.sendKeyEvent(LogicalKeyboardKey.pageUp);
+        await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+        await tester.pump();
+        expect(_position(tester).pixels, 0);
 
-      await tester.sendKeyEvent(LogicalKeyboardKey.end);
-      await tester.pump();
-      expect(logs.following.value, isTrue);
-      expect(_atEnd(tester), isTrue);
+        await tester.sendKeyEvent(LogicalKeyboardKey.end);
+        await tester.pump();
+        expect(logs.following.value, isTrue);
+        expect(_atEnd(tester), isTrue);
 
-      await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
-      await tester.pump();
-      expect(logs.following.value, isFalse);
-    });
+        await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+        await tester.pump();
+        expect(logs.following.value, isFalse);
+      });
+    }
 
     testWidgets('keyboard focus draws a focus ring', (tester) async {
       FocusManager.instance.highlightStrategy =
@@ -404,6 +432,178 @@ void main() {
       final narrow = paragraph(long);
       expect(narrow.size.height, greaterThan(rowsAt400));
       expect(narrow.size.height, closeTo(narrow.textSize.height, 0.01));
+    });
+
+    testWidgets('a long line arriving at the line cap takes its rows', (
+      tester,
+    ) async {
+      final long = 'long ${List.filled(40, 'word').join(' ')}';
+      final logs = await _pump(
+        tester,
+        wrap: LogWrap.on,
+        controller: LogViewController(buffer: LogBuffer(maxLines: 30)),
+      );
+      logs.add(_lines(0, 30));
+      await tester.pump();
+
+      // One line arrives and one leaves: the count stays at the cap.
+      logs.add([long]);
+      await tester.pump();
+      _expectWholeRows(tester, long);
+      expect(
+        _paragraph(tester, long).size.height,
+        greaterThan(2 * _paragraph(tester, 'line 29').size.height),
+      );
+      expect(_atEnd(tester), isTrue);
+      expect(
+        tester.getBottomLeft(find.text(long, findRichText: true)).dy,
+        closeTo(_viewSize.height, 0.01),
+      );
+
+      // When it leaves, its rows go with it.
+      logs.add(_lines(30, 30));
+      await tester.pump();
+      expect(_atEnd(tester), isTrue);
+      expect(_shows(tester, 59), isTrue);
+      expect(
+        tester.getBottomLeft(_line(59)).dy,
+        closeTo(_viewSize.height, 0.01),
+      );
+    });
+
+    testWidgets('a text scale change measures the rows again', (tester) async {
+      final logs = await _pump(tester, wrap: LogWrap.on);
+      final wide = 'x' * 20;
+      logs.add(['short', wide]);
+      await tester.pump();
+
+      tester.platformDispatcher.textScaleFactorTestValue = 2;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      await tester.pump();
+
+      _expectWholeRows(tester, 'short');
+      _expectWholeRows(tester, wide);
+      expect(
+        _paragraph(tester, wide).size.height,
+        greaterThan(_paragraph(tester, 'short').size.height),
+      );
+    });
+
+    testWidgets('the level gutter appearing measures the rows again', (
+      tester,
+    ) async {
+      tester.view.physicalSize = _viewSize;
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final logs = LogViewController();
+      addTearDown(logs.dispose);
+      // Fits the row's width until the gutter takes some of it.
+      final line = 'a' * 29;
+      logs.add([line]);
+      await tester.pumpWidget(_app(logs, wrap: LogWrap.on));
+      final oneRow = _paragraph(tester, line).size.height;
+
+      await tester.pumpWidget(
+        _app(logs, wrap: LogWrap.on, levelOf: (_) => LogLevel.error),
+      );
+
+      _expectWholeRows(tester, line);
+      expect(_paragraph(tester, line).size.height, greaterThan(oneRow));
+    });
+
+    for (final width in [300.0, 600.0]) {
+      testWidgets('scrolling up through lines not yet measured holds the '
+          'view, $width wide', (tester) async {
+        final logs = LogViewController()
+          ..add([
+            for (var i = 0; i < 300; i++)
+              'line $i${i.isEven ? '' : ' ${List.filled(i % 7 * 4, 'word').join(' ')}'}',
+          ]);
+        await _pump(tester, controller: logs, wrap: LogWrap.on);
+        // A new width leaves every row measured for the old one.
+        tester.view.physicalSize = Size(width, 200);
+        await tester.pump();
+
+        for (var step = 0; step < 20; step++) {
+          // A one-row line that stays in the view after the drag.
+          final probe = [
+            for (var i = 0; i < 300; i += 2)
+              if (_line(i).evaluate().isNotEmpty &&
+                  tester.getTopLeft(_line(i)).dy >= 0 &&
+                  tester.getBottomLeft(_line(i)).dy <= 150)
+                i,
+          ].first;
+          final before = tester.getTopLeft(_line(probe)).dy;
+          await tester.dragFrom(const Offset(150, 100), const Offset(0, 40));
+          await tester.pump();
+          expect(
+            tester.getTopLeft(_line(probe)).dy,
+            closeTo(before + 40, 0.01),
+            reason: 'step $step',
+          );
+        }
+      });
+    }
+
+    testWidgets('a large width change while following settles in a frame', (
+      tester,
+    ) async {
+      final logs = LogViewController()
+        ..add([
+          for (var i = 0; i < 3000; i++)
+            'line $i ${List.filled(i % 13 * 3, 'word').join(' ')}',
+        ]);
+      await _pump(
+        tester,
+        controller: logs,
+        wrap: LogWrap.on,
+        size: const Size(120, 600),
+      );
+
+      for (final width in [1600.0, 120.0]) {
+        tester.view.physicalSize = Size(width, 600);
+        await tester.pump();
+        expect(_atEnd(tester), isTrue);
+        expect(
+          tester
+              .getBottomLeft(
+                find.textContaining('line 2999', findRichText: true),
+              )
+              .dy,
+          closeTo(600, 0.01),
+        );
+      }
+    });
+
+    testWidgets('a new line reads only the entries near the view', (
+      tester,
+    ) async {
+      final logs = _CountingController()..add(_lines(0, 5000));
+      await _pump(tester, controller: logs, wrap: LogWrap.on);
+
+      logs.reads = 0;
+      logs.add(['line 5000']);
+      await tester.pump();
+
+      expect(_shows(tester, 5000), isTrue);
+      expect(logs.reads, lessThan(500));
+    });
+
+    testWidgets('a resize measures only the entries near the view', (
+      tester,
+    ) async {
+      final wordy = List.filled(30, 'word').join(' ');
+      final logs = _CountingController()
+        ..add([for (var i = 0; i < 5000; i++) '$i $wordy']);
+      await _pump(tester, controller: logs, wrap: LogWrap.on);
+
+      logs.reads = 0;
+      tester.view.physicalSize = const Size(390, 200);
+      await tester.pump();
+
+      _expectWholeRows(tester, '4999 $wordy');
+      expect(_atEnd(tester), isTrue);
+      expect(logs.reads, lessThan(500));
     });
   });
 

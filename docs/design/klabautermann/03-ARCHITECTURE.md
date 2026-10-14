@@ -3583,14 +3583,20 @@ kind of text, the buffer holds about 35 MiB of the 64 MiB budget (11.4).
 
 The viewer (`app/klabautermann_app/lib/ui/logs/`) forces a strut, so every
 row is a whole number of lines. Without wrap a row is one line, and a long
-line ends in an ellipsis until sideways scrolling lands. With wrap, a line
-is one row without a layout when an upper bound of its width fits (a
-monospace advance per Latin-1 code unit, two per other unit or tab), and
-is otherwise laid out once per width, font and locale. Tabs are not
-expanded to stops yet. Any scroll that leaves the newest line pauses
-following, and reaching it again, End or Follow resumes it; the scroll
-position holds the end during layout, and while paused it drops the extent
-of evicted lines from its offset. Every span keeps 4.5:1 on its
+line ends in an ellipsis until sideways scrolling lands. With wrap, the
+row counts sit in a Fenwick tree and a sliver of the viewer's own finds
+offsets and indexes in O(log n), where `SliverVariedExtentList` sums every
+extent before an index. Only the lines a layout shows are measured, once
+per width, font and locale: one row without a layout when an upper bound
+of its width fits (a monospace advance per Latin-1 code unit, two per
+other unit or tab), otherwise laid out. Other lines keep an earlier count
+or an estimate from their length, and a measurement above the view moves
+the offset by the difference, so the lines in sight hold still and a
+resize lays out only them. Tabs are not expanded to stops yet. Any
+scroll that leaves the newest line pauses following, and reaching it
+again, End or Follow resumes it; the scroll position holds the end during
+layout, and while paused it drops the extent of evicted lines from its
+offset. Every span keeps 4.5:1 on its
 background, moved toward black or white as little as needed. SGR colours 1
 to 6 and 9 to 14 take the family's glyph hues, 8 its graphite; 0, 7 and 15
 stay black, light grey and white. The caller supplies a line's level;
