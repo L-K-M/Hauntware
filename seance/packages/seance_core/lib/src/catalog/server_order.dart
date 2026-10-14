@@ -1,4 +1,4 @@
-import 'package:seance_core/seance_core.dart';
+import 'package:seance_protocol/seance_protocol.dart';
 
 /// The order servers are listed and stored in: label without regard to
 /// case, then id, so equal labels still sort the same way every time.

@@ -15,6 +15,13 @@ products:
     dartssh2_dependents:
       - packages/poltergeist_core
       - packages/poltergeist_bench
+    # seance_core implementation imports (package:seance_core/src/...) are
+    # forbidden outside seance/ except for these encoded exceptions: core's
+    # connection layer and its tests, and the bench package's SSH driver.
+    seance_core_implementation_imports:
+      - packages/poltergeist_core/lib/src/connection
+      - packages/poltergeist_core/test/connection
+      - packages/poltergeist_bench
     # Packages resolving through their own .dart_tool/package_config.json
     # outside the product workspace lock.
     standalone_resolutions:
@@ -27,3 +34,71 @@ products:
         [ConnectLogCoalescer]
       packages/poltergeist_core/lib/src/engine/engine_probes.dart:
         [EngineProbes]
+  seance:
+    scan: [packages, app]
+    pure_packages:
+      - packages/seance_protocol
+      - packages/seance_core
+      - packages/seance_sync_server
+    # dartssh2 stays in core's SSH layer and its tests.
+    dartssh2_imports:
+      - packages/seance_core/lib/src/ssh
+      - packages/seance_core/test
+    dartssh2_dependents:
+      - packages/seance_core
+    # The app uses dartssh2 only to replay handshake failures in tests.
+    dartssh2_dev_dependents:
+      - app/seance_app
+    import_exemptions:
+      - app/seance_app/test/host_key_blocked_test.dart
+    # seance_protocol is shared verbatim with the sync server and imports
+    # no dart:io.
+    no_dart_io:
+      - packages/seance_protocol/lib
+    # seance_core's own sources and tests may import package:seance_core/src/...;
+    # every other Séance file may not. The sketch omits this key because
+    # within seance/ the imports are normal; encoding the package keeps the
+    # rule active for the rest of the product.
+    seance_core_implementation_imports:
+      - packages/seance_core
+    engine_protocol: null
+    engine_protocol_callback_owners: {}
+  planchette:
+    scan: [packages, app]
+    pure_packages: [packages/planchette_core]
+    dartssh2_imports: []
+    dartssh2_dependents: []
+    # The ghost_* Flutter packages are shared with Séance and Poltergeist;
+    # none may pull in seance_core (and with it dartssh2), and ghost_ui
+    # stays below ghost_theme in the package stack. Every matching key
+    # applies, so ghost_ui gets both lists.
+    forbidden_dependencies:
+      "ghost_*": [seance_core]
+      ghost_ui: [ghost_theme]
+    engine_protocol: null
+    engine_protocol_callback_owners: {}
+  # Klabautermann declares no exceptions: its pure packages take no dartssh2
+  # or Flutter dependency, and the engine protocol is the one the app and
+  # the isolate share (03 §3.4, 03 D18).
+  klabautermann:
+    scan: [packages, app]
+    pure_packages:
+      - packages/klabautermann_host
+      - packages/klabautermann_docker
+      - packages/klabautermann_core
+    dartssh2_imports: []
+    dartssh2_dependents: []
+    forbidden_dependencies:
+      klabautermann_host:
+        - "seance_*"
+        - dartssh2
+        - flutter
+      klabautermann_docker:
+        - "seance_*"
+        - dartssh2
+        - flutter
+    no_dart_io:
+      - packages/klabautermann_host/lib
+      - packages/klabautermann_docker/lib
+    engine_protocol: packages/klabautermann_core/lib/src/engine
+    engine_protocol_callback_owners: {}

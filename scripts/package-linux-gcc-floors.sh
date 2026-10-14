@@ -1,5 +1,6 @@
 # The ABI-tag → GCC mapping the Linux packagers use for their Depends
-# floors. Sourced by planchette/, seance/ and poltergeist/
+# floors. Sourced by scripts/package-linux-common.sh (for the Poltergeist
+# and Klabautermann wrappers) and by planchette/ and seance/
 # scripts/package-linux.sh; their tests source it directly.
 
 # A Depends floor must be a Debian package version: dpkg compares versions

@@ -123,7 +123,21 @@ void main() {
         contains(r'LINUX_STARTUP_WM_CLASS="${LINUX_APPLICATION_ID^}"'),
         contains(r'LINUX_DESKTOP_FILE="$LINUX_APPLICATION_ID.desktop"'),
         contains('StartupWMClass=\$LINUX_STARTUP_WM_CLASS'),
-        contains(r'$LINUX_DESKTOP_FILE'),
+        contains(
+          r'source "$(dirname "$SELF")/../../scripts/package-linux-common.sh"',
+        ),
+      ),
+    );
+    // The shared packager names both installed desktop entries (.deb and
+    // AppImage) after the wrapper's LINUX_DESKTOP_FILE.
+    expect(
+      _read('../../../scripts/package-linux-common.sh'),
+      allOf(
+        contains(
+          r'write_desktop_file "$DEBROOT/usr/share/applications/'
+          r'$LINUX_DESKTOP_FILE"',
+        ),
+        contains(r'write_desktop_file "$appdir/$LINUX_DESKTOP_FILE" "AppRun"'),
       ),
     );
   });

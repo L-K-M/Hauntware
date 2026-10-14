@@ -28,6 +28,24 @@ products:
         [EngineProbes]
 ''';
 
+const _extended = '''
+products:
+  seance:
+    scan: [packages, app]
+    pure_packages: [packages/seance_protocol]
+    dartssh2_imports: [packages/seance_core/lib/src/ssh]
+    dartssh2_dependents: [packages/seance_core]
+    dartssh2_dev_dependents: [app/seance_app]
+    import_exemptions: [app/seance_app/test/host_key_blocked_test.dart]
+    no_dart_io: [packages/seance_protocol/lib]
+    forbidden_dependencies:
+      "ghost_*": [seance_core]
+      ghost_ui: [ghost_theme]
+    seance_core_implementation_imports: [packages/seance_core]
+    engine_protocol: null
+    engine_protocol_callback_owners: {}
+''';
+
 GuardsConfig _parse(String yaml) =>
     GuardsConfig.parse(loadYaml(yaml), source: 'guards.yaml');
 
@@ -56,6 +74,37 @@ void main() {
           .engineProtocolCallbackOwners['packages/poltergeist_core/lib/src/engine/engine_probes.dart'],
       ['EngineProbes'],
     );
+    expect(
+      product.seanceCoreImplementationImports,
+      containsAll([
+        'packages/poltergeist_core/lib/src/connection',
+        'packages/poltergeist_core/test/connection',
+        'packages/poltergeist_bench',
+      ]),
+    );
+
+    final seance = config.product('seance');
+    expect(seance.scan, ['packages', 'app']);
+    expect(seance.purePackages, [
+      'packages/seance_protocol',
+      'packages/seance_core',
+      'packages/seance_sync_server',
+    ]);
+    expect(seance.dartssh2DevDependents, ['app/seance_app']);
+    expect(seance.importExemptions, [
+      'app/seance_app/test/host_key_blocked_test.dart',
+    ]);
+    expect(seance.noDartIo, ['packages/seance_protocol/lib']);
+    expect(seance.engineProtocol, isNull);
+
+    final planchette = config.product('planchette');
+    expect(planchette.scan, ['packages', 'app']);
+    expect(planchette.purePackages, ['packages/planchette_core']);
+    expect(planchette.forbiddenDependenciesFor('ghost_ui'), {
+      'seance_core',
+      'ghost_theme',
+    });
+    expect(planchette.forbiddenDependenciesFor('ghost_marks'), {'seance_core'});
   });
 
   test('matches pure packages through a directory wildcard', () {
@@ -288,6 +337,103 @@ products:
     expect(product.engineProtocol, isNull);
     expect(product.scanAreas, {'packages'});
   });
+
+  test('defaults every optional rule key to empty', () {
+    final product = _parse(_valid).product('poltergeist');
+    expect(product.dartssh2DevDependents, isEmpty);
+    expect(product.importExemptions, isEmpty);
+    expect(product.noDartIo, isEmpty);
+    expect(product.forbiddenDependencies, isEmpty);
+    expect(product.seanceCoreImplementationImports, isEmpty);
+  });
+
+  test('parses the extended rule keys', () {
+    final product = _parse(_extended).product('seance');
+    expect(product.dartssh2DevDependents, ['app/seance_app']);
+    expect(product.importExemptions, [
+      'app/seance_app/test/host_key_blocked_test.dart',
+    ]);
+    expect(product.noDartIo, ['packages/seance_protocol/lib']);
+    expect(product.seanceCoreImplementationImports, ['packages/seance_core']);
+    expect(product.forbiddenDependencies, {
+      'ghost_*': ['seance_core'],
+      'ghost_ui': ['ghost_theme'],
+    });
+  });
+
+  test('unions every matching forbidden-dependency key', () {
+    final product = _parse(_extended).product('seance');
+    expect(product.forbiddenDependenciesFor('ghost_ui'), {
+      'seance_core',
+      'ghost_theme',
+    });
+    expect(product.forbiddenDependenciesFor('ghost_marks'), {'seance_core'});
+    expect(product.forbiddenDependenciesFor('planchette_core'), isEmpty);
+  });
+
+  test('matches package-name globs', () {
+    expect(packageNameMatches('ghost_*', 'ghost_ui'), isTrue);
+    expect(packageNameMatches('ghost_*', 'ghost_'), isTrue);
+    expect(packageNameMatches('ghost_*', 'ghost'), isFalse);
+    expect(packageNameMatches('ghost_ui', 'ghost_ui'), isTrue);
+    expect(packageNameMatches('ghost_ui', 'ghost_uis'), isFalse);
+    expect(packageNameMatches('seance_*', 'seance_core'), isTrue);
+  });
+
+  test('resolves rule paths by directory containment', () {
+    final product = _parse(_extended).product('seance');
+    expect(
+      product.forbidsDartIo('packages/seance_protocol/lib/src/inbox.dart'),
+      isTrue,
+    );
+    expect(
+      product.forbidsDartIo('packages/seance_core/lib/src/inbox.dart'),
+      isFalse,
+    );
+    expect(
+      product.allowsSeanceCoreImplementationImport(
+        'packages/seance_core/test/sync_test.dart',
+      ),
+      isTrue,
+    );
+    expect(
+      product.allowsSeanceCoreImplementationImport(
+        'app/seance_app/lib/main.dart',
+      ),
+      isFalse,
+    );
+    expect(
+      product.isImportExempt('app/seance_app/test/host_key_blocked_test.dart'),
+      isTrue,
+    );
+    expect(
+      product.isImportExempt('app/seance_app/test/other_test.dart'),
+      isFalse,
+    );
+    expect(product.allowsDartssh2DevDependency('app/seance_app'), isTrue);
+    expect(product.allowsDartssh2Dependency('app/seance_app'), isFalse);
+  });
+
+  for (final entry in [
+    'forbidden_dependencies: {"*": [seance_core]}',
+    'forbidden_dependencies: {ghost_*: ["*bad"]}',
+    'forbidden_dependencies: {"ghost ui": [seance_core]}',
+    'forbidden_dependencies: {ghost_ui: [""]}',
+  ]) {
+    test('rejects an invalid forbidden dependency entry: $entry', () {
+      expect(
+        () => _parse(
+          _extended.replaceFirst(
+            '    forbidden_dependencies:\n'
+                '      "ghost_*": [seance_core]\n'
+                '      ghost_ui: [ghost_theme]',
+            '    $entry',
+          ),
+        ),
+        throwsFormatException,
+      );
+    });
+  }
 }
 
 /// Drops the indented list or map lines that followed [key] once its value
@@ -296,15 +442,19 @@ String _withoutDanglingEntries(String yaml, String key) {
   final lines = yaml.split('\n');
   final out = <String>[];
   var skipping = false;
+
   for (final line in lines) {
     if (line == '    $key: null') {
       skipping = true;
       out.add(line);
       continue;
     }
-    if (skipping && line.startsWith('      ')) continue;
+    if (skipping && (line.trim().isEmpty || line.startsWith('      '))) {
+      continue;
+    }
     skipping = false;
     out.add(line);
   }
+
   return out.join('\n');
 }

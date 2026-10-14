@@ -34,6 +34,35 @@
   "sidebarCompactRows": "Compact rows",
   "sidebarComfortableRows": "Comfortable rows",
   "addServer": "Add server",
+  "importSshConfig": "Import from ~/.ssh/config",
+  "@importSshConfig": {
+    "description": "Desktop-only menu entry and button that imports the hosts of the user's OpenSSH client config file into the fleet (FL-02). The path stays literal."
+  },
+  "sshConfigImported": "{count, plural, =0{Your ~/.ssh/config names no hosts to import.} =1{Imported 1 server from ~/.ssh/config.} other{Imported {count} servers from ~/.ssh/config.}}",
+  "@sshConfigImported": {
+    "description": "Shown after an ssh_config import finished; count is the number of servers it added.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "sshConfigImportedWithSkips": "{importedCount, plural, =0{No hosts were imported from ~/.ssh/config.} =1{Imported 1 server from ~/.ssh/config.} other{Imported {importedCount} servers from ~/.ssh/config.}} {skippedCount, plural, =1{1 host was skipped because its port is invalid or its name repeats an earlier host.} other{{skippedCount} hosts were skipped because their port is invalid or their name repeats an earlier host.}}",
+  "@sshConfigImportedWithSkips": {
+    "description": "Shown instead of sshConfigImported when the import left host blocks out; importedCount (0 or more) is the number of servers it added, skippedCount (1 or more) the number of host blocks it left out. One message, so the translation decides how its sentences join.",
+    "placeholders": {
+      "importedCount": {
+        "type": "int"
+      },
+      "skippedCount": {
+        "type": "int"
+      }
+    }
+  },
+  "sshConfigMissing": "There is no ~/.ssh/config on this computer.",
+  "sshConfigUnreadable": "Your ~/.ssh/config could not be read. Check that it is a regular file you can open.",
+  "sshConfigTooLarge": "Your ~/.ssh/config is too large to import.",
+  "sshConfigImportFailed": "The import from ~/.ssh/config failed. Try again, and restart the app if it keeps failing.",
   "syncFleet": "Synchronize",
   "openSettings": "Settings",
   "statusConnected": "Connected",
@@ -62,6 +91,14 @@
   "themeSystem": "System",
   "themeLight": "Light",
   "themeDark": "Dark",
+  "themeNotChanged": "The theme could not be changed.",
+  "@themeNotChanged": {
+    "description": "Snack bar shown when the app did not take a theme-mode change made in Settings."
+  },
+  "settingsWindowUnreachable": "Settings cannot reach Klabautermann. Close this window and open Settings again.",
+  "@settingsWindowUnreachable": {
+    "description": "Shown in the desktop settings window when the app does not answer it."
+  },
   "workspaceEmptyTitle": "Select a server",
   "workspaceEmptyBody": "Choose a server from the fleet to see its workspace.",
   "inspectorTitle": "Inspector",

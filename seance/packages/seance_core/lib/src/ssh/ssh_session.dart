@@ -13,6 +13,7 @@ import '../terminal/session_transport.dart';
 import '../terminal/terminal_engine.dart';
 import 'remote_command.dart';
 import 'remote_file_system.dart';
+import 'remote_process.dart';
 import 'sequential_cleanup.dart';
 import 'ssh_agent.dart';
 import 'ssh_algorithms.dart';
@@ -414,6 +415,10 @@ class SshSession implements SessionTransport {
   final Completer<void> _stdoutDone = Completer<void>();
   final Completer<void> _stderrDone = Completer<void>();
   final SingleFlightCleanup _cleanup = SingleFlightCleanup();
+  late final ExecCore _execCore = ExecCore(
+    isDisconnected: () => _closed || client.isClosed,
+    disconnectedMessage: 'The SSH session is disconnected.',
+  );
   bool _closed = false;
   SftpClient? _sftpClient;
   Future<RemoteFileSystem>? _remoteFileSystem;
@@ -525,101 +530,13 @@ class SshSession implements SessionTransport {
     String command, {
     Duration? timeout,
     int maxOutputBytes = 256 * 1024,
-  }) async {
-    final effectiveTimeout = timeout ?? const Duration(seconds: 30);
-    if (_closed || client.isClosed) {
-      throw const RemoteCommandException('The SSH session is disconnected.');
-    }
-    final SSHSession channel;
-    try {
-      channel = await client.execute(command);
-    } catch (e) {
-      if (_closed || client.isClosed) {
-        throw const RemoteCommandException('The SSH session is disconnected.');
-      }
-      throw RemoteCommandException('Could not open a command channel: $e');
-    }
-
-    final stdout = BytesBuilder(copy: false);
-    final stderr = BytesBuilder(copy: false);
-    var truncated = false;
-    final stdoutDone = Completer<void>();
-    final stderrDone = Completer<void>();
-
-    void collect(Uint8List data, BytesBuilder into) {
-      final remaining = maxOutputBytes - into.length;
-      if (data.length <= remaining) {
-        into.add(data);
-      } else {
-        if (remaining > 0) {
-          into.add(Uint8List.sublistView(data, 0, remaining));
-        }
-        truncated = true;
-      }
-    }
-
-    final subscriptions = <StreamSubscription<Uint8List>>[
-      channel.stdout.listen(
-        (data) => collect(data, stdout),
-        onDone: stdoutDone.complete,
-        onError: stdoutDone.completeError,
-        cancelOnError: true,
-      ),
-      channel.stderr.listen(
-        (data) => collect(data, stderr),
-        onDone: stderrDone.complete,
-        onError: stderrDone.completeError,
-        cancelOnError: true,
-      ),
-    ];
-
-    Future<void> abort() async {
-      for (final subscription in subscriptions) {
-        await subscription.cancel();
-      }
-      channel.done.ignore();
-      channel.close();
-    }
-
-    // One deadline across both waits: two independent effectiveTimeout
-    // windows could otherwise hold the caller for twice the configured time.
-    // A stopwatch keeps the arithmetic monotonic where DateTime would
-    // inherit wall-clock adjustments.
-    final stopwatch = Stopwatch()..start();
-    try {
-      // Both stream completions are awaited together: awaiting them one after
-      // the other would leave the second without an error handler until the
-      // first finished.
-      await Future.wait([
-        stdoutDone.future,
-        stderrDone.future,
-      ], eagerError: true).timeout(effectiveTimeout);
-      final remaining = effectiveTimeout - stopwatch.elapsed;
-      await channel.done.timeout(
-        remaining.isNegative ? Duration.zero : remaining,
+  }) =>
+      _execCore.run(
+        command,
+        open: () => client.execute(command),
+        timeout: timeout,
+        maxOutputBytes: maxOutputBytes,
       );
-      for (final subscription in subscriptions) {
-        await subscription.cancel();
-      }
-      return RemoteCommandResult(
-        stdout: utf8.decode(stdout.takeBytes(), allowMalformed: true),
-        stderr: utf8.decode(stderr.takeBytes(), allowMalformed: true),
-        exitCode: channel.exitCode,
-        truncated: truncated,
-      );
-    } on TimeoutException {
-      await abort();
-      throw RemoteCommandException(
-        'The command did not finish within ${effectiveTimeout.inSeconds}s.',
-      );
-    } catch (e) {
-      await abort();
-      if (_closed || client.isClosed) {
-        throw const RemoteCommandException('The SSH session is disconnected.');
-      }
-      throw RemoteCommandException('The command channel failed: $e', cause: e);
-    }
-  }
 
   @override
   void resize(TerminalSize size) {

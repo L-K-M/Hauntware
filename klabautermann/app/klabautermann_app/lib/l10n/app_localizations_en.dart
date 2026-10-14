@@ -68,6 +68,55 @@ class AppLocalizationsEn extends AppLocalizations {
   String get addServer => 'Add server';
 
   @override
+  String get importSshConfig => 'Import from ~/.ssh/config';
+
+  @override
+  String sshConfigImported(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Imported $count servers from ~/.ssh/config.',
+      one: 'Imported 1 server from ~/.ssh/config.',
+      zero: 'Your ~/.ssh/config names no hosts to import.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String sshConfigImportedWithSkips(int importedCount, int skippedCount) {
+    String _temp0 = intl.Intl.pluralLogic(
+      importedCount,
+      locale: localeName,
+      other: 'Imported $importedCount servers from ~/.ssh/config.',
+      one: 'Imported 1 server from ~/.ssh/config.',
+      zero: 'No hosts were imported from ~/.ssh/config.',
+    );
+    String _temp1 = intl.Intl.pluralLogic(
+      skippedCount,
+      locale: localeName,
+      other:
+          '$skippedCount hosts were skipped because their port is invalid or their name repeats an earlier host.',
+      one:
+          '1 host was skipped because its port is invalid or its name repeats an earlier host.',
+    );
+    return '$_temp0 $_temp1';
+  }
+
+  @override
+  String get sshConfigMissing => 'There is no ~/.ssh/config on this computer.';
+
+  @override
+  String get sshConfigUnreadable =>
+      'Your ~/.ssh/config could not be read. Check that it is a regular file you can open.';
+
+  @override
+  String get sshConfigTooLarge => 'Your ~/.ssh/config is too large to import.';
+
+  @override
+  String get sshConfigImportFailed =>
+      'The import from ~/.ssh/config failed. Try again, and restart the app if it keeps failing.';
+
+  @override
   String get syncFleet => 'Synchronize';
 
   @override
@@ -125,6 +174,13 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get themeDark => 'Dark';
+
+  @override
+  String get themeNotChanged => 'The theme could not be changed.';
+
+  @override
+  String get settingsWindowUnreachable =>
+      'Settings cannot reach Klabautermann. Close this window and open Settings again.';
 
   @override
   String get workspaceEmptyTitle => 'Select a server';
