@@ -44,6 +44,8 @@ final class SamplerDeadlines {
   const SamplerDeadlines({
     this.ready = kSamplerReadyDeadline,
     this.fastRequest = kFastRequestDeadline,
+    this.slowMargin = kSlowRequestMargin,
+    this.perGuardedCommand = const Duration(seconds: kCollectorTimeoutSeconds),
   });
 
   /// From the started channel to READY.
@@ -53,17 +55,22 @@ final class SamplerDeadlines {
   /// and `/sys` with builtins.
   final Duration fastRequest;
 
+  /// What a slow request may take on top of its guarded commands.
+  final Duration slowMargin;
+
+  /// The bound of one guarded command: its `timeout` on the host.
+  final Duration perGuardedCommand;
+
   /// The deadline for one request naming [collectors] on a [kind]
-  /// sampler. A slow request gets [kSlowRequestMargin] plus the `timeout`
-  /// bound for every guarded command its collectors can start, instead of
+  /// sampler. A slow request gets [slowMargin] plus [perGuardedCommand]
+  /// for every guarded command its collectors can start, instead of
   /// one fixed figure: the probe alone may need 17 of them (D47). Without
   /// `timeout` on the host the commands run unguarded, and this deadline
   /// still bounds the request.
   Duration forRequest(SamplerKind kind, Iterable<Collector> collectors) {
     if (kind == SamplerKind.fast) return fastRequest;
     final commands = collectors.fold(0, (n, c) => n + guardedCommandBound(c));
-    return kSlowRequestMargin +
-        const Duration(seconds: kCollectorTimeoutSeconds) * commands;
+    return slowMargin + perGuardedCommand * commands;
   }
 }
 

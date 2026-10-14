@@ -32,10 +32,13 @@ void main() {
   late List<SamplerState> states;
   late SamplerSession session;
 
-  SamplerSession open({SamplerDeadlines deadlines = const SamplerDeadlines()}) {
+  SamplerSession open({
+    SamplerDeadlines deadlines = const SamplerDeadlines(),
+    SamplerKind kind = SamplerKind.fast,
+  }) {
     session = SamplerSession(
       link: link,
-      kind: SamplerKind.fast,
+      kind: kind,
       quote: quoteShellWord,
       deadlines: deadlines,
       restartDelay: (failures) {
@@ -154,6 +157,28 @@ void main() {
     next.emitText(next.reply(1, {'overview': ''}));
     expect(await outcome, isA<SamplerReplied>());
     expect(session.restarts, 1);
+  });
+
+  test('gives a slow request its derived deadline', () async {
+    // fs may start 2 guarded commands: 400 + 2 * 300 ms, past fastRequest.
+    open(
+      kind: SamplerKind.slow,
+      deadlines: const SamplerDeadlines(
+        fastRequest: Duration(milliseconds: 100),
+        slowMargin: Duration(milliseconds: 400),
+        perGuardedCommand: Duration(milliseconds: 300),
+      ),
+    );
+    final p = await ready();
+    SamplerOutcome? outcome;
+    unawaited(session.tick([Collector.fs]).then((o) => outcome = o));
+    await Future<void>.delayed(const Duration(milliseconds: 250));
+    expect((outcome, p.closeCalls), (null, 0));
+
+    await _until(() => outcome != null);
+    final gap = outcome! as SamplerGap;
+    expect((gap.seq, gap.reason), (1, SamplerGapReason.deadline));
+    expect(p.closeCalls, 1);
   });
 
   test('keeps a healthy sampler running past its deadlines', () async {
