@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:klabautermann_app/app.dart';
@@ -41,7 +42,8 @@ final class AppHarness {
 /// (null, the default, is a phone's route). [appearance] replaces the
 /// in-memory controller, for a test that builds one over a settings store
 /// or under a settings window host (the harness disposes it), and
-/// [settingsIssue] is what opening that store reported.
+/// [settingsIssue] is what opening that store reported. [toolbarBand]
+/// stands in for the macOS integrated titlebar's band state.
 Future<AppHarness> pumpApp(
   WidgetTester tester, {
   Size size = const Size(1280, 800),
@@ -50,6 +52,7 @@ Future<AppHarness> pumpApp(
   AppearanceController? appearance,
   DeviceSettingsIssue? settingsIssue,
   OpenSettingsWindow? openSettingsWindow,
+  ValueListenable<bool>? toolbarBand,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -74,6 +77,7 @@ Future<AppHarness> pumpApp(
       appearance: harness.appearance,
       settingsIssue: settingsIssue,
       openSettingsWindow: openSettingsWindow,
+      toolbarBand: toolbarBand,
     ),
   );
   await tester.pumpAndSettle();
