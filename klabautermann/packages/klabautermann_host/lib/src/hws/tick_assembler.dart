@@ -3,9 +3,11 @@
 /// [HwsFrameParser] checks bytes; this layer checks the session: READY
 /// comes first and carries this client's collector-set version, and each
 /// reply is a `B`, its sections and the `E` with the same sequence
-/// number. A framing error loses only the reply the parser resynchronizes
-/// on. A well-framed marker out of order cannot come from the constant
-/// program, so it ends the session and the engine restarts the sampler.
+/// number. A framing error loses the reply it interrupted, if any, and
+/// the reply whose end marker the parser resynchronizes on (one loss when
+/// they are the same). A well-framed marker out of order cannot come from
+/// the constant program, so it ends the session and the engine restarts
+/// the sampler.
 library;
 
 import 'frames.dart';
@@ -65,9 +67,9 @@ final class HwsTick extends HwsTickEvent {
   }
 }
 
-/// A reply lost to a framing error. Resynchronization found its `E`
-/// marker, so the request is finished, but its data is gone and the
-/// client shows a gap (03 §6.2).
+/// A reply lost to a framing error. Resynchronization reached its `E`
+/// marker or a later reply's, so the request is finished, but its data is
+/// gone and the client shows a gap (03 §6.2).
 final class HwsTickLost extends HwsTickEvent {
   const HwsTickLost(this.seq, this.detail);
 
