@@ -194,8 +194,8 @@ void main() {
 
   group('begin marker uptime', () {
     test('an empty uptime reads as null', () {
-      // `read -r up _ </proc/uptime` leaves `up` empty when the file
-      // cannot be read; the tick itself is still valid.
+      // The program prints an empty uptime when `/proc/uptime` has not
+      // been readable yet in the session; the tick itself is still valid.
       expect(_parseAll(_marker('B 3 ')), ['begin 3 null']);
     });
 
