@@ -495,10 +495,13 @@ Regressions: `test/src/ui/selection_gesture_test.dart`, "void past the content".
     that share colours and painted flags (the hyperlink id does not
     split them) are shaped as one paragraph of up to 64 cells, after all
     of their backgrounds. Ligature fonts keep each character one cell
-    wide, so the run lands on the grid; a run whose width strays more
-    than 0.5 px from its cells' (a proportional face, a fallback glyph)
-    is drawn cell by cell instead, and that verdict is cached with the
-    run. Runs are cached by exact text and style in their own LRU,
+    wide, so the run lands on the grid; a run whose width, or where one
+    of its characters starts, strays more than 0.5 px from its cells' (a
+    proportional face, a fallback glyph) is drawn cell by cell instead,
+    and that verdict is cached with the run. One visible difference on a
+    coloured background: a bold or italic glyph that reaches past its
+    cell is drawn whole over the run's shared background, where cell by
+    cell the next cell's background cut it off. Runs are cached by exact text and style in their own LRU,
     cleared wherever the cell cache is. Spaces, wide, combining and
     non-ASCII characters keep the cell path, so the underline-under-space
     workaround still applies. Cursor, selection and highlights are

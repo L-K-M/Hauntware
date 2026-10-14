@@ -40,10 +40,11 @@ class TerminalPainter {
   /// (a hash, base64) costs, at the price of a ligature cut at the seam.
   static const _maxRunLength = 64;
 
-  /// [seance fork] How far, in logical pixels, a run's laid-out width may
-  /// stray from its cells' before it is drawn cell by cell instead. A
-  /// fixed-pitch face lands within rounding; a proportional one or a
-  /// fallback glyph does not, and would drift off the grid.
+  /// [seance fork] How far, in logical pixels, a run's laid-out width, or
+  /// where one of its characters starts, may stray from its cells' before
+  /// it is drawn cell by cell instead. A fixed-pitch face lands within
+  /// rounding; a proportional one or a fallback glyph does not, and would
+  /// drift off the grid.
   static const _runWidthTolerance = 0.5;
 
   TerminalStyle get textStyle => _textStyle;
@@ -291,11 +292,29 @@ class TerminalPainter {
     final paragraph = builder.build()
       ..layout(ParagraphConstraints(width: double.infinity));
 
-    final drift = paragraph.maxIntrinsicWidth - length * _cellSize.width;
-    if (drift.abs() <= _runWidthTolerance) return _RunLayout(paragraph);
+    if (_onGrid(paragraph, length)) return _RunLayout(paragraph);
 
     paragraph.dispose();
     return const _RunLayout(null);
+  }
+
+  /// [seance fork] Whether [paragraph], [length] one-cell characters, puts
+  /// each character on its own cell. The total width alone can hide glyphs
+  /// off the grid in opposite directions (slightly wide ones, then a narrow
+  /// one), so where each character starts is checked too.
+  bool _onGrid(Paragraph paragraph, int length) {
+    final cellWidth = _cellSize.width;
+    final drift = paragraph.maxIntrinsicWidth - length * cellWidth;
+    if (drift.abs() > _runWidthTolerance) return false;
+
+    for (var i = 1; i < length; i++) {
+      final boxes = paragraph.getBoxesForRange(i, i + 1);
+      if (boxes.isEmpty) return false;
+
+      final start = boxes.first.left - i * cellWidth;
+      if (start.abs() > _runWidthTolerance) return false;
+    }
+    return true;
   }
 
   /// [seance fork] Gives [cellData] (the cell at column [x]) the colours of
