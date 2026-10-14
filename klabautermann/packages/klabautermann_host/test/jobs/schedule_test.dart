@@ -18,7 +18,24 @@ void main() {
       expect(_items(s.fields!.dayOfMonth), ['*']);
       expect(s.dayMatch, CronDayMatch.both);
       expect(CronSchedule.parse('@ANNUALLY')!.macro, CronMacro.annually);
-      expect(CronSchedule.parse('@midnight')!.macro, CronMacro.midnight);
+    });
+
+    test('every clock macro maps to its name and crontab(5) fields', () {
+      const macros = {
+        '@yearly': (CronMacro.yearly, '0 0 1 1 *'),
+        '@annually': (CronMacro.annually, '0 0 1 1 *'),
+        '@monthly': (CronMacro.monthly, '0 0 1 * *'),
+        '@weekly': (CronMacro.weekly, '0 0 * * 0'),
+        '@daily': (CronMacro.daily, '0 0 * * *'),
+        '@midnight': (CronMacro.midnight, '0 0 * * *'),
+        '@hourly': (CronMacro.hourly, '0 * * * *'),
+      };
+      for (final MapEntry(key: text, value: (macro, fields))
+          in macros.entries) {
+        final s = CronSchedule.parse(text)!;
+        expect(s.macro, macro, reason: text);
+        expect(s.fields!.toJson().values.join(' '), fields, reason: text);
+      }
     });
 
     test('@reboot has a macro but no fields or day rule', () {

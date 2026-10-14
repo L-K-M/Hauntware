@@ -178,6 +178,8 @@ void main() {
         _merge(
           _cron(crontab: 'CRON_TZ=Europe/Berlin\n30 2 * * * a'),
           now: DateTime.utc(2026, 3, 28, 12),
+          // The resolver's rules win over a same-named fixed server zone.
+          zone: _fixed(1, 'Europe/Berlin'),
           zoneFor: (name) => name == 'Europe/Berlin' ? _berlin() : null,
         ),
       );
