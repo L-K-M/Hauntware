@@ -11,7 +11,7 @@ Shmem:             16384 kB
 SwapTotal:        524288 kB
 SwapFree:         524288 kB
 == loadavg ==
-0.08 0.05 0.01 1/64 2318
+1.42 1.37 1.30 3/1876 912345
 == netdev ==
 Inter-|   Receive                                                |  Transmit
  face |bytes    packets errs drop fifo frame compressed multicast|bytes    packets errs drop fifo colls carrier compressed

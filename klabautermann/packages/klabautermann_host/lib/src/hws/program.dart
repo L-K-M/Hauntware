@@ -438,10 +438,11 @@ _probe_virt() {
   psec virt ok "virt_rc=$_vr${NL}virt=$_v${NL}container_rc=$_cr${NL}container=$_c"
 }
 
-# The system-wide /proc files that are fuse.lxcfs mounts (D50): inside
-# a container lxcfs serves the container's own figures there. Builtins
-# read /proc/mounts (`<source> <mount point> <type> ...`); mount points
-# escape blanks as \040, so the space-joined list splits cleanly.
+# The /proc paths that are fuse.lxcfs mounts (D50): inside a container
+# lxcfs serves the container's own figures for most of them, and
+# HostProfile.showsHostFigures names the exceptions. Builtins read
+# /proc/mounts (`<source> <mount point> <type> ...`); mount points escape
+# blanks as \040, so the space-joined list splits cleanly.
 _probe_lxcfs() {
   if [ ! -r /proc/mounts ]; then
     psec lxcfs error ''

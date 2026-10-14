@@ -31,12 +31,12 @@
       }
     },
     "loadavg": {
-      "load1": 0.08,
-      "load5": 0.05,
-      "load15": 0.01,
-      "running": 1,
-      "total": 64,
-      "lastPid": 2318
+      "load1": 1.42,
+      "load5": 1.37,
+      "load15": 1.3,
+      "running": 3,
+      "total": 1876,
+      "lastPid": 912345
     },
     "netdev": [
       {

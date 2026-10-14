@@ -54,7 +54,7 @@ void main() {
       }
     });
 
-    test('with lxcfs only the files it does not serve do', () {
+    test('with lxcfs only meminfo, stat and uptime are its own', () {
       final p = _profile(root, 'debian-12-lxc-lxcfs');
       expect(
         [
@@ -62,6 +62,8 @@ void main() {
             if (p.showsHostFigures(f)!) f,
         ],
         [
+          SystemWideProcFile.loadavg,
+          SystemWideProcFile.diskstats,
           SystemWideProcFile.pressureCpu,
           SystemWideProcFile.pressureIo,
           SystemWideProcFile.pressureMemory,

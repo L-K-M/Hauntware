@@ -61,23 +61,31 @@ final class EngineSocket {
 }
 
 /// The system-wide `/proc` files of D50: inside a container each shows
-/// the host's figures unless it is a `fuse.lxcfs` mount. Namespaced files
-/// such as `/proc/net/dev` and `/proc/<pid>` are the container's own and
-/// are deliberately not listed.
+/// the host's figures unless lxcfs serves the container's own there.
+/// Namespaced files such as `/proc/net/dev` and `/proc/<pid>` are the
+/// container's own and are deliberately not listed.
 enum SystemWideProcFile {
-  meminfo('/proc/meminfo'),
-  stat('/proc/stat'),
-  loadavg('/proc/loadavg'),
-  uptime('/proc/uptime'),
-  diskstats('/proc/diskstats'),
-  pressureCpu('/proc/pressure/cpu'),
-  pressureIo('/proc/pressure/io'),
-  pressureMemory('/proc/pressure/memory');
+  meminfo('/proc/meminfo', lxcfsShowsOwn: true),
+  stat('/proc/stat', lxcfsShowsOwn: true),
+  loadavg('/proc/loadavg', lxcfsShowsOwn: false),
+  uptime('/proc/uptime', lxcfsShowsOwn: true),
+  diskstats('/proc/diskstats', lxcfsShowsOwn: false),
+  pressureCpu('/proc/pressure/cpu', lxcfsShowsOwn: true),
+  pressureIo('/proc/pressure/io', lxcfsShowsOwn: false),
+  pressureMemory('/proc/pressure/memory', lxcfsShowsOwn: true);
 
-  const SystemWideProcFile(this.path);
+  const SystemWideProcFile(this.path, {required this._lxcfsShowsOwn});
 
   /// The absolute path, as `/proc/mounts` names a mount point.
   final String path;
+
+  /// Whether a `fuse.lxcfs` mount over this file shows the container's
+  /// own figures. False where lxcfs can pass the host's file through
+  /// without a sign inside the container (D50): `loadavg` unless lxcfs
+  /// runs with `-l`, and `diskstats` and `pressure/io`, for which lxcfs
+  /// looks up a cgroup controller named `blkio`, which cgroup v2 calls
+  /// `io`.
+  final bool _lxcfsShowsOwn;
 }
 
 /// The probe's findings (03 §6.1), keyed by area; unknown stays null.
@@ -155,7 +163,7 @@ final class HostProfile {
   // tool is absent (unknown stays unknown).
   final String? virtualization, container;
 
-  /// The `/proc` files that are `fuse.lxcfs` mounts, in `/proc/mounts`
+  /// The `/proc` paths that are `fuse.lxcfs` mounts, in `/proc/mounts`
   /// order (D50): empty when there are none, null when unknown.
   final List<String>? lxcfsMounts;
 
@@ -222,22 +230,28 @@ final class HostProfile {
   bool? toolPresent(String tool) =>
       tools.containsKey(tool) ? tools[tool] != null : null;
 
-  /// Whether [file] shows the container host's figures rather than this
-  /// system's own (D50, SYS-04), so its values must show as unknown with
-  /// that reason. False when lxcfs serves the file or
-  /// `systemd-detect-virt -c` found no container; true inside a named
-  /// container; null when neither is known, as on a host without
-  /// `systemd-detect-virt` and without lxcfs mounts. An lxcfs mount over
-  /// any `/proc` file also tells that this is a container.
+  /// Whether [file] may show the container host's figures rather than
+  /// this system's own (D50, SYS-04), so its values must show as unknown
+  /// with that reason. False when lxcfs serves the container's own
+  /// figures there, which it does not do reliably for `loadavg`,
+  /// `diskstats` and `pressure/io`, or when `systemd-detect-virt -c`
+  /// found no container; true inside a container otherwise; null when
+  /// neither is known, as on a host without `systemd-detect-virt` and
+  /// without lxcfs mounts. An lxcfs mount over any `/proc` path tells
+  /// that this is a container, even when `systemd-detect-virt -c`
+  /// answered `none`; a mount over a directory such as `/proc/pressure`
+  /// covers the files below it.
   bool? showsHostFigures(SystemWideProcFile file) {
     final mounts = lxcfsMounts;
-    if (mounts != null && mounts.contains(file.path)) return false;
+    if (mounts != null && mounts.isNotEmpty) {
+      final served = mounts.any(
+        (m) => file.path == m || file.path.startsWith('$m/'),
+      );
+      return !(served && file._lxcfsShowsOwn);
+    }
 
     final c = container;
-    if (c != null) return c != 'none';
-
-    if (mounts == null || mounts.isEmpty) return null;
-    return true;
+    return c == null ? null : c != 'none';
   }
 
   /// The width of this kernel's `/proc` counters (CN-04): 32 bits when

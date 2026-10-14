@@ -14,14 +14,15 @@ Shmem:             16384 kB
 SwapTotal:        524288 kB
 SwapFree:         524288 kB
 == loadavg ==
-0.08 0.05 0.01 1/64 2318
+1.42 1.37 1.30 3/1876 912345
 == netdev ==
 Inter-|   Receive                                                |  Transmit
  face |bytes    packets errs drop fifo frame compressed multicast|bytes    packets errs drop fifo colls carrier compressed
     lo:   48210     612    0    0    0     0          0         0    48210     612    0    0    0     0       0        0
   eth0: 734002111  512340    0    0    0     0          0      1022 41234567  198765    0    0    0     0       0        0
 == diskstats ==
- 259       0 nvme0n1 41234 0 2345678 12345 98765 0 4567890 54321 0 76543 66666 0 0 0 0 0 0
+ 259       0 nvme0n1 22345678 2345 1187654320 17654321 33456789 3456 2234567890 19876543 0 22345678 39876543 0 0 0 0 0 0
+ 259       1 nvme1n1 22301234 2301 1186543210 17601234 33401234 3401 2233456789 19801234 0 22301234 39801234 0 0 0 0 0 0
 == pressure_cpu ==
 some avg10=1.25 avg60=0.98 avg300=0.80 total=987654321
 full avg10=0.00 avg60=0.00 avg300=0.00 total=0

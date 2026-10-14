@@ -598,7 +598,26 @@ Proposals awaiting the owner close the section; they are not decisions.
   6.6 and 7.1 said "virtualized"; the catalog's "unknown" replaces that
   wording. The probe gains an lxcfs line (6.1): which `/proc` files are
   `fuse.lxcfs` mounts, because `systemd-detect-virt -c` tells that the
-  host is a container, not which values are its own.
+  host is a container, not which values are its own. K09 refines this:
+  an lxcfs mount is not proof for every file. lxcfs passes the host's
+  `/proc/loadavg` through unless it runs with `-l`, which its upstream
+  systemd unit does not pass, and it reads `diskstats` and `pressure/io`
+  through a cgroup controller named `blkio`, which cgroup v2 calls `io`,
+  so on cgroup v2 it passes those host files through too [R: lxcfs
+  `src/proc_loadavg.c`, `src/proc_fuse.c`, `src/cgroups/cgfsng.c` and
+  `config/init/systemd/lxcfs.service.in`, main and 5.0.4]. Neither the
+  flag nor, reliably, the host's cgroup version shows inside the
+  container, so these three files count as the host's there even as
+  lxcfs mounts; `meminfo`, `stat`, `uptime`, `pressure/cpu` and
+  `pressure/memory` under lxcfs are the container's. Any lxcfs mount
+  over `/proc` also marks a container when `systemd-detect-virt -c`
+  answers `none`. *Rejected:* trusting every lxcfs mount (a default
+  lxcfs container would show the host's load and disk I/O as its own);
+  trusting `diskstats` when the container sees no cgroup v2 (a container
+  without a cgroup2 mount on a cgroup v2 host looks the same), at the
+  cost of hiding the container's own `diskstats` that lxcfs 5.0 serves
+  on cgroup v1 hosts; an unknown answer for those files (unknown already
+  means that the container question is open, which it is not here).
 - **D52. Runtime code lives outside `src/engine/`.** In
   `klabautermann_core`, links, sampling, logs and capabilities live in
   `lib/src/links/`, `lib/src/sampling/`, `lib/src/logs/` and
@@ -2020,7 +2039,7 @@ fragments (D48).
 |---|---|---|---|---|---|---|
 | Debian 12/13, Ubuntu 22.04 to 26.04, RHEL 9/10, Fedora, Arch (glibc, systemd >= 246) | A, MVP | full | JSON | journald JSON | cron and timers | full |
 | RHEL/Alma/Rocky 8 (systemd 239 [U]), Ubuntu 20.04 (245 [U]) | A, MVP | full | text fallback (CN-10) | journald | cron and timers | full |
-| LXC and containers | A, marked | system-wide `/proc` files that are not lxcfs mounts show the host's figures: those values show "unknown" with a reason; namespaced ones (`/proc/net/dev`, `/proc/<pid>`) are the container's (SYS-04, D50) | as host | as host | as host | needs nesting |
+| LXC and containers | A, marked | system-wide `/proc` files show the host's figures unless lxcfs serves the container's own: those values show "unknown" with a reason; namespaced ones (`/proc/net/dev`, `/proc/<pid>`) are the container's (SYS-04, D50) | as host | as host | as host | needs nesting |
 | Alpine, BusyBox, OpenRC | B, v1.x | reduced (`ps w`, `df -k`, builtins) | `rc-status`, `rc-service` | `/var/log/messages` | `/etc/crontabs/<user>` | full if a socket exists |
 | Non-systemd glibc (Devuan, Void, Gentoo with OpenRC) | B, v1.x | full | per init | syslog files | cron | full |
 | OpenWrt (procd, Dropbear) | B, v1.x | reduced | `/etc/init.d`, `ubus` | `logread` | BusyBox crond | rare |
@@ -2055,9 +2074,9 @@ unless the user enables admin mode for that panel.
   Staleness text and grey values (OV-04). Docker summary card (OV-05) from
   the event-driven container cache plus `/system/df` on demand (slow on
   large hosts). Fleet rows (FL-07) show a three-segment pressure bar for
-  monitored servers only, fixed row height, grey when stale. Inside LXC
-  without lxcfs, affected values show "unknown" with a reason (SYS-04,
-  D50).
+  monitored servers only, fixed row height, grey when stale. Inside LXC,
+  values from files that show the host's figures show "unknown" with a
+  reason (SYS-04, D50).
 - **v1.** CPU breakdown with plain-language hints (iowait called unreliable,
   steal explained), PSI (absence is normal), model and topology, OOM kills
   linked to journal entries, configurable cards, top lists, quick actions,

@@ -177,6 +177,49 @@ void main() {
       expect(p.showsHostFigures(SystemWideProcFile.pressureCpu), isTrue);
     });
 
+    test('lxcfs passes the host figures through for three files', () {
+      // A default lxcfs serves loadavg without -l, and diskstats and
+      // pressure/io under cgroup v2, from the host's files.
+      final p = HostProfile(
+        container: 'lxc',
+        lxcfsMounts: const [
+          '/proc/diskstats',
+          '/proc/loadavg',
+          '/proc/meminfo',
+          '/proc/pressure',
+          '/proc/stat',
+          '/proc/uptime',
+        ],
+      );
+      expect(
+        [
+          for (final f in SystemWideProcFile.values)
+            if (p.showsHostFigures(f)!) f,
+        ],
+        [
+          SystemWideProcFile.loadavg,
+          SystemWideProcFile.diskstats,
+          SystemWideProcFile.pressureIo,
+        ],
+      );
+    });
+
+    test('a directory mount covers the files below it, and only those', () {
+      final p = HostProfile(
+        container: 'lxc',
+        lxcfsMounts: const ['/proc/pressure', '/proc/up'],
+      );
+      expect(p.showsHostFigures(SystemWideProcFile.pressureCpu), isFalse);
+      expect(p.showsHostFigures(SystemWideProcFile.pressureMemory), isFalse);
+      expect(p.showsHostFigures(SystemWideProcFile.uptime), isTrue);
+    });
+
+    test('lxcfs mounts outweigh a detect-virt answer of none', () {
+      final p = HostProfile(container: 'none', lxcfsMounts: lxcfs);
+      expect(p.showsHostFigures(SystemWideProcFile.meminfo), isFalse);
+      expect(p.showsHostFigures(SystemWideProcFile.diskstats), isTrue);
+    });
+
     test('an lxcfs mount tells a container when detect-virt is absent', () {
       final p = HostProfile(lxcfsMounts: lxcfs);
       expect(p.showsHostFigures(SystemWideProcFile.meminfo), isFalse);
