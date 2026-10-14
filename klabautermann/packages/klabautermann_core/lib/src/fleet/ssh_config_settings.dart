@@ -69,6 +69,8 @@ const Map<String, _Keyword> _keywords = {
   'port': _Keyword.port,
   'user': _Keyword.user,
   'identityfile': _Keyword.identityFile,
+  // Obsolete, but `readconf.c` still reads it as `IdentityFile`.
+  'identityfile2': _Keyword.identityFile,
   'proxyjump': _Keyword.proxyJump,
   'proxycommand': _Keyword.proxyCommand,
   'canonicalizehostname': _Keyword.canonicalizeHostname,

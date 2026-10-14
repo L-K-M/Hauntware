@@ -3531,7 +3531,8 @@ the engine in `engine_isolate.dart` beside it):
     `%%` is `%`, ssh_config(5), TOKENS; lowercased unless it is an
     address), `Port`, `User`, the first `IdentityFile` that is not
     `none` (ssh tries the files in order; the engine signs in with that
-    one alone) and the route, whichever of `ProxyJump` and
+    one alone; `IdentityFile2`, an obsolete name ssh still reads, adds a
+    file too) and the route, whichever of `ProxyJump` and
     `ProxyCommand` comes first. So an `IdentityFile` that a `Host *`
     block or a line at the top of the file gives is the only key for
     every host it reaches, though ssh would offer the host's own key

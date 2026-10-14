@@ -281,6 +281,34 @@ void main() {
       );
     });
 
+    test('IdentityFile2, an obsolete name, adds a key file too', () {
+      // readconf.c still maps identityfile2 to oIdentityFile.
+      expect(
+        _resolve(
+          'Host web\n  HostName 10.0.0.5\n  IdentityFile2 ~/.ssh/old\n'
+              '  IdentityFile ~/.ssh/new\n',
+          'web',
+        ),
+        ('10.0.0.5', 22, null, '~/.ssh/old', null),
+      );
+      expect(_resolve('Host web\n  identityfile2 ~/.ssh/only\n', 'web'), (
+        'web',
+        22,
+        null,
+        '~/.ssh/only',
+        null,
+      ));
+      // The final pass that /etc/ssh/ssh_config may ask for would set it.
+      expect(
+        _resolve(
+          'Host web\n  HostName 10.0.0.5\n'
+              'Host 10.0.0.*\n  IdentityFile2 ~/.ssh/k\n',
+          'web',
+        ),
+        UnresolvedReason.secondPass,
+      );
+    });
+
     test('the host ssh dials is lowercased unless it is an address', () {
       expect(_resolve('Host Web\n', 'Web'), ('web', 22, null, null, null));
       expect(_resolve('Host web\n  HostName Web.Example.COM\n', 'web'), (
