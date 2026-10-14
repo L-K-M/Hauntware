@@ -3595,15 +3595,18 @@ tab), otherwise laid out, since a fallback font can draw any other glyph
 wider than a fixed count of advances and a line or paragraph separator
 breaks the row. Other lines keep an earlier count or, once the viewer
 has a width, an estimate from their length, and a measurement above the
-view moves the offset by the difference while the offset keeps its share
-of the line it is in, so the lines in sight hold still and a resize lays
-out only the lines near them. Tabs
+view moves the offset by the difference while the offset, moving by
+whole rows, keeps its share of the line it is in to within a row, so a
+line that starts at the offset still does; the lines in sight hold still
+and a resize lays out only the lines near them. Tabs
 are not expanded to stops yet. Any scroll that leaves the
 newest line pauses following, and reaching it again, End or Follow resumes
 it; the scroll position holds the end during layout, and while paused it
 drops the extent of evicted lines from its offset and converts the
 offset when the line height or wrap changes, keeping the line at the top
-and its share above the edge. Every span keeps 4.5:1
+and, to within a row, its share above the edge. Content that no longer
+fills the view below the offset ends the view at the newest line
+instead, still paused. Every span keeps 4.5:1
 on its background, moved toward black or white as little as needed. SGR
 colours 1 to 6 and 9 to 14 take the family's glyph hues, 8 its graphite;
 0, 7 and 15 stay black, light grey and white. The caller supplies a line's

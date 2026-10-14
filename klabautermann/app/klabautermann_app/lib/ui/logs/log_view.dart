@@ -50,9 +50,13 @@ const double _endTolerance = 1;
 ///
 /// Following keeps the newest line in sight. Scrolling away from it pauses
 /// following, and the view then stays on the lines it shows while new
-/// lines arrive and old ones leave the buffer, and when the width, the
-/// text scale or [wrap] changes; scrolling back to the newest line, End,
-/// or the Follow button resumes it. Keys: Up and Down move a line, Page
+/// lines arrive and old ones leave the buffer. When rows change, as when
+/// the width, the level gutter, the text scale or [wrap] changes, the line
+/// at the top stays there with its share above the edge kept to within a
+/// row, so a line that starts at the edge still does; when the content
+/// below no longer fills the view, the view ends at the newest line
+/// instead, still paused. Scrolling back to the newest line, End, or the
+/// Follow button resumes following. Keys: Up and Down move a line, Page
 /// Up and Page Down a page, Home goes to the oldest line, End follows.
 class LogView extends StatefulWidget {
   const LogView({
@@ -555,7 +559,8 @@ const int _minRowSlots = 1024;
 /// width change therefore lays out only the lines near the view. When
 /// measuring an entry above the scroll offset changes its count, the
 /// layout moves the offset by the difference, and the offset keeps its
-/// share of the entry it is in, so the lines in sight hold still.
+/// share of the entry it is in to within a row ([_keepShare]), so the
+/// lines in sight hold still.
 final class _RowCounts {
   _RowCounts(this._measure);
 
@@ -652,7 +657,7 @@ final class _RowCounts {
   /// Measures the entries a layout of rows [top] to [bottom] shows, with
   /// its scroll offset at row [anchor], and as many rows above that
   /// offset, and returns the rows to move the offset by so the entry at it
-  /// holds still and the offset keeps its share of it.
+  /// stays there and the offset keeps its share of it to within a row.
   int measure(
     double top,
     double anchor,
@@ -673,7 +678,7 @@ final class _RowCounts {
 
     // Below the entry at the offset, a new count moves nothing above; above
     // it, every change moves the offset by as much, and the offset keeps
-    // its share of that entry's own rows.
+    // its share of that entry's own rows to within a row.
     final first = indexAtRow((anchor + _rowTolerance).floor());
     final firstRow = rowsBefore(first);
     var end = firstRow;
@@ -705,12 +710,14 @@ final class _RowCounts {
     return correction;
   }
 
-  /// The rows to move an offset [into] rows into an entry by when the
-  /// entry's count changed by [change] to [rows], so the offset keeps its
-  /// share of the entry. Kept as many rows in, it would land past the end
-  /// of an entry that a wider row shrank, and the lines in sight below
-  /// would scroll away unseen; an entry that grew would push them out of
-  /// the view instead.
+  /// The whole rows to move an offset [into] rows into an entry by when
+  /// the entry's count changed by [change] to [rows], so the offset keeps
+  /// its share of the entry to within a row: it keeps its place in its
+  /// row and moves to the row of the entry nearest its old share, so an
+  /// offset at the entry's start stays there. Kept as many rows in, the
+  /// offset would land past the end of an entry that a wider row shrank,
+  /// and the lines in sight below would scroll away unseen; an entry that
+  /// grew would push them out of the view instead.
   static int _keepShare(double into, int rows, int change) {
     final before = rows - change;
     final row = (into + _rowTolerance).floor();
