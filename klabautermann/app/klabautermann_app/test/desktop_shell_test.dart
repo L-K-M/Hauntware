@@ -112,6 +112,15 @@ void main() {
       ),
       'Failed',
     );
+    expect(
+      word(
+        const LinkClosed(
+          LinkClosedReason.closedByOwner,
+          failure: LinkFailureKind.credentialUnavailable,
+        ),
+      ),
+      'Failed',
+    );
     for (final reason in [
       LinkClosedReason.linkLost,
       LinkClosedReason.transportError,

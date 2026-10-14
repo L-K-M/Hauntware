@@ -23,7 +23,7 @@ class InspectorPane extends StatelessWidget {
           children: [
             Text(l10n.inspectorTitle, style: theme.textTheme.titleSmall),
             const SizedBox(height: 12),
-            // The inspector fills in as link phases and operations arrive;
+            // The inspector fills in as link statuses and operations arrive;
             // it listens for its own concern only (03 §10.1).
             Expanded(
               child: ListenableBuilder(

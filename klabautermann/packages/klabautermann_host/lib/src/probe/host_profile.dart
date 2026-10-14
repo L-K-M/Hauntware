@@ -174,8 +174,13 @@ final class HostProfile {
   final Map<String, SectionStatus> areaStatuses;
 
   /// Whether the host has `timeout` for the slow sampler's guard.
-  bool? get timeoutPresent =>
-      tools.containsKey('timeout') ? tools['timeout'] != null : null;
+  bool? get timeoutPresent => toolPresent('timeout');
+
+  /// Whether the probe found [tool]: null when the probe did not report
+  /// it (the tools area failed, or a profile from before the tool joined
+  /// the list), so unknown stays unknown.
+  bool? toolPresent(String tool) =>
+      tools.containsKey(tool) ? tools[tool] != null : null;
 
   Map<String, Object?> toJson() => {
     'kernelSys': kernelSys,

@@ -7,7 +7,8 @@
 /// newline, and `E seq` closes the tick. A forged marker inside a payload
 /// is consumed as payload, so forgery fails even if a nonce leaks. Any
 /// framing mismatch resynchronizes on the next `E` marker carrying this
-/// parser's nonce.
+/// parser's nonce. Before READY, output that does not start a marker for
+/// this nonce is skipped up to [kMaxPreambleBytes].
 library;
 
 import 'dart:convert';
@@ -26,6 +27,12 @@ const kMaxSectionBytes = 1 << 20;
 /// Upper bound on a marker line. Markers carry a nonce, one letter and a
 /// few small fields; a longer line is a framing error.
 const kMaxMarkerBytes = 256;
+
+/// Upper bound on the output skipped before the READY marker. The login
+/// shell runs its startup files before it parses the start command, and
+/// some print banners even when not interactive; more output than this
+/// fails the start instead of being read indefinitely.
+const kMaxPreambleBytes = 64 * 1024;
 
 /// The status a section reports (03 §6.2).
 enum SectionStatus {
@@ -66,8 +73,9 @@ final class HwsBegin extends HwsEvent {
   final int seq;
 
   /// `/proc/uptime` field 1 on the host at tick start; the client derives
-  /// rate intervals from the delta between two ticks' uptimes.
-  final double uptimeSeconds;
+  /// rate intervals from the delta between two ticks' uptimes. Null when
+  /// the host could not read `/proc/uptime` and printed an empty field.
+  final double? uptimeSeconds;
 }
 
 /// `S <collector> <status> <bytes>` plus the payload that followed it.
@@ -102,9 +110,13 @@ final class HwsFramingError extends HwsEvent {
   final String reason;
 }
 
-enum _State { marker, payload, payloadNewline, resync }
+enum _State { preReady, marker, payload, payloadNewline, resync }
 
 final _noncePattern = RegExp(r'^[0-9a-f]{32}$');
+
+/// `/proc/uptime` prints seconds with two decimals; `double.tryParse`
+/// alone would also accept `NaN`, `Infinity` and exponents.
+final _uptimePattern = RegExp(r'^[0-9]+(\.[0-9]+)?$');
 
 /// Incremental parser for one session's reply stream. Accepts byte chunks
 /// of any size; [push] returns the events the new bytes complete (possibly
@@ -114,17 +126,22 @@ final class HwsFrameParser {
     if (!_noncePattern.hasMatch(nonce)) {
       throw ArgumentError.value(nonce, 'nonce', 'must be 32 hex digits');
     }
-    _needle = Uint8List.fromList(
-      [kMarkerByte, ..._nonceBytes, 0x20, 0x45, 0x20], // \036<nonce> 'E' ' '
-    );
+    _prefix = Uint8List.fromList([kMarkerByte, ..._nonceBytes, 0x20]);
+    _needle = Uint8List.fromList([..._prefix, 0x45, 0x20]); // 'E' ' '
   }
 
   final List<int> _nonceBytes;
 
+  /// `\036<nonce> ` — the start of every marker for this nonce.
+  late final Uint8List _prefix;
+
   /// `\036<nonce> E ` — the resynchronization needle (03 §6.2).
   late final Uint8List _needle;
 
-  _State _state = _State.marker;
+  _State _state = _State.preReady;
+
+  /// Bytes dropped before READY, bounded by [kMaxPreambleBytes].
+  int _preambleBytes = 0;
 
   /// Unconsumed input; bounded by [kMaxMarkerBytes] while seeking markers
   /// and by the resync logic otherwise.
@@ -144,6 +161,8 @@ final class HwsFrameParser {
     while (progress) {
       progress = false;
       switch (_state) {
+        case _State.preReady:
+          progress = _preReadyStep(events);
         case _State.marker:
           progress = _markerStep(events);
         case _State.payload:
@@ -158,6 +177,42 @@ final class HwsFrameParser {
   }
 
   // -- state handlers -------------------------------------------------
+
+  /// Drops everything before the first marker for this nonce, which must
+  /// be READY (03 §6.2). The login shell's startup files may print
+  /// partial lines, carriage returns or stray `\036` bytes, so the scan
+  /// is byte-wise rather than line-wise.
+  bool _preReadyStep(List<HwsEvent> events) {
+    final at = _prefixCandidate();
+    final noise = at < 0 ? _buf.length : at;
+    if (noise > 0) {
+      _take(noise);
+      _preambleBytes += noise;
+    }
+    if (_preambleBytes > kMaxPreambleBytes) {
+      _fail(events, 'no READY marker within $kMaxPreambleBytes bytes');
+      return true;
+    }
+    if (_buf.length < _prefix.length) return false; // none yet, or partial
+
+    final nl = _buf.indexOf(0x0a, _prefix.length);
+    if (nl > kMaxMarkerBytes || (nl < 0 && _buf.length > kMaxMarkerBytes)) {
+      _fail(events, 'marker line exceeds $kMaxMarkerBytes bytes');
+      return true;
+    }
+    if (nl < 0) return false;
+
+    final line = _take(nl + 1);
+    final body = latin1.decode(line.sublist(_prefix.length, nl));
+    const readyKind = 'READY ';
+    if (!body.startsWith(readyKind)) {
+      _fail(events, 'marker before READY');
+      return true;
+    }
+    _state = _State.marker;
+    _parseReady(body.substring(readyKind.length), events);
+    return true;
+  }
 
   bool _markerStep(List<HwsEvent> events) {
     final nl = _buf.indexOf(0x0a);
@@ -294,15 +349,18 @@ final class HwsFrameParser {
   }
 
   void _parseBegin(String rest, List<HwsEvent> events) {
+    // `B <seq> <uptime>`; an empty uptime is valid (see [HwsBegin]).
     final parts = rest.split(' ');
     final seq = parts.length == 2 ? _parseUintStr(parts[0]) : null;
-    final uptime = parts.length == 2 ? double.tryParse(parts[1]) : null;
-    if (seq == null || uptime == null || uptime < 0) {
+    final uptimeText = parts.length == 2 ? parts[1] : '';
+    final uptimeValid =
+        uptimeText.isEmpty || _uptimePattern.hasMatch(uptimeText);
+    if (seq == null || !uptimeValid) {
       _fail(events, 'malformed B marker');
       return;
     }
+    final uptime = uptimeText.isEmpty ? null : double.parse(uptimeText);
     events.add(HwsBegin(seq, uptime));
-    return;
   }
 
   void _parseSection(String rest, List<HwsEvent> events) {
@@ -353,6 +411,21 @@ final class HwsFrameParser {
   void _fail(List<HwsEvent> events, String reason) {
     events.add(HwsFramingError(reason));
     _state = _State.resync;
+  }
+
+  /// Index of the first `\036` that starts [_prefix], fully or cut off by
+  /// the end of the buffer; -1 when there is none.
+  int _prefixCandidate() {
+    for (var i = _buf.indexOf(kMarkerByte); i >= 0;) {
+      final n = min(_prefix.length, _buf.length - i);
+      var j = 0;
+      while (j < n && _buf[i + j] == _prefix[j]) {
+        j++;
+      }
+      if (j == n) return i;
+      i = _buf.indexOf(kMarkerByte, i + 1);
+    }
+    return -1;
   }
 
   List<int> _take(int n) {

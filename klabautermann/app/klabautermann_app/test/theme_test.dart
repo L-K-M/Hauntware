@@ -200,6 +200,11 @@ void main() {
         LinkClosedReason.connectFailed,
         failure: LinkFailureKind.unreachable,
       ): failed,
+      // An owner close the engine found a failure behind is failed too.
+      const LinkClosed(
+        LinkClosedReason.closedByOwner,
+        failure: LinkFailureKind.credentialUnavailable,
+      ): failed,
       // A link closed on purpose is no failure: no dot, like idle.
       const LinkClosed(LinkClosedReason.closedByOwner): null,
       const LinkIdle(): null,

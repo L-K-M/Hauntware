@@ -1,6 +1,7 @@
 // Frame-parser tests (03 §6.2): every chunk split point of a recorded
-// multi-section reply, forged markers and wrong nonces inside payloads,
-// truncated payloads, oversize sections and resynchronization.
+// multi-section reply, output before READY, forged markers and wrong
+// nonces inside payloads, truncated payloads, oversize sections and
+// resynchronization.
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -47,12 +48,20 @@ String _describe(HwsEvent e) {
   throw ArgumentError.value(e, 'e', 'unknown event');
 }
 
-List<String> _parseAll(List<int> bytes) =>
+/// Parses [bytes] from a fresh parser, which starts before READY.
+List<String> _parseRaw(List<int> bytes) =>
     HwsFrameParser(nonce: nonce).push(bytes).map(_describe).toList();
+
+/// Parses [bytes] on a parser that has already read READY.
+List<String> _parseAll(List<int> bytes) {
+  final parser = HwsFrameParser(nonce: nonce)
+    ..push(_marker('READY HWS/1 $kCollectorSetVersion'));
+  return parser.push(bytes).map(_describe).toList();
+}
 
 void main() {
   test('parses the whole reply in one push', () {
-    final events = _parseAll(_reply);
+    final events = _parseRaw(_reply);
     expect(events, [
       'ready 1',
       'begin 7 12345.67',
@@ -70,11 +79,11 @@ void main() {
     for (final b in _reply) {
       events.addAll(parser.push([b]));
     }
-    expect(events.map(_describe), _parseAll(_reply));
+    expect(events.map(_describe), _parseRaw(_reply));
   });
 
   test('parses at every split point of a two-chunk feed', () {
-    final expected = _parseAll(_reply);
+    final expected = _parseRaw(_reply);
     for (var split = 1; split < _reply.length; split++) {
       final parser = HwsFrameParser(nonce: nonce);
       final events = <HwsEvent>[
@@ -86,7 +95,7 @@ void main() {
   });
 
   test('parses at random chunk boundaries', () {
-    final expected = _parseAll(_reply);
+    final expected = _parseRaw(_reply);
     final randomSizes = [1, 2, 3, 5, 7, 13, 40, 97];
     var i = 0;
     while (true) {
@@ -103,6 +112,100 @@ void main() {
       i++;
       if (i >= randomSizes.length) break;
     }
+  });
+
+  group('before READY', () {
+    // The login shell's startup files may print before the sampler shell
+    // starts, so everything up to the READY marker is skipped.
+    final expected = _parseRaw(_reply);
+
+    List<String> withPreamble(String preamble) =>
+        _parseRaw([...latin1.encode(preamble), ..._reply]);
+
+    test('skips banner lines', () {
+      expect(withPreamble('Welcome to host\nhave a nice day\n'), expected);
+    });
+
+    test('finds READY after a partial line', () {
+      expect(withPreamble('no newline before the marker'), expected);
+    });
+
+    test('skips carriage returns and bare-CR progress output', () {
+      expect(withPreamble('line one\r\nspin\r|\r/\r-\r\n'), expected);
+    });
+
+    test('skips control bytes and markers for other nonces', () {
+      const other = 'ffffffffffffffffffffffffffffffff';
+      expect(
+        withPreamble(
+          '\x1e\x1e$other READY HWS/1 2\n\x1e${nonce}X\n\x1e$nonce\x1e',
+        ),
+        expected,
+      );
+    });
+
+    test('parses a banner and reply at every split point', () {
+      final bytes = [...latin1.encode('motd\r\npartial'), ..._reply];
+      for (var split = 1; split < bytes.length; split++) {
+        final parser = HwsFrameParser(nonce: nonce);
+        final events = [
+          ...parser.push(bytes.sublist(0, split)),
+          ...parser.push(bytes.sublist(split)),
+        ];
+        expect(events.map(_describe), expected, reason: 'split at $split');
+      }
+    });
+
+    test('skips output up to the cap', () {
+      expect(withPreamble('x' * kMaxPreambleBytes), expected);
+    });
+
+    test('fails past the cap and never reports a later READY', () {
+      final parser = HwsFrameParser(nonce: nonce);
+      final half = List.filled(kMaxPreambleBytes ~/ 2, 0x78);
+      final events = [
+        ...parser.push(half),
+        ...parser.push(half),
+        ...parser.push([0x0a]),
+      ].map(_describe);
+      expect(events, [startsWith('error')]);
+      expect(parser.push(_reply).map(_describe), ['end 7']);
+    });
+
+    test('a marker other than READY is a framing error', () {
+      // Bodies shorter than `READY ` and ones whose tail parses as a READY
+      // payload must both fail on the kind, not later.
+      for (final body in ['E 7', 'B 1 1.0', 'XXXXXXHWS/1 2']) {
+        expect(_parseRaw(_marker(body)), [
+          'error marker before READY',
+        ], reason: body);
+      }
+    });
+
+    test('a malformed READY marker is a framing error', () {
+      expect(_parseRaw(_marker('READY HWS/2 1')), [startsWith('error')]);
+    });
+
+    test('an over-long line for this nonce is a framing error', () {
+      final events = _parseRaw(utf8.encode('\x1e$nonce READY ${'x' * 300}'));
+      expect(events, [startsWith('error')]);
+    });
+  });
+
+  group('begin marker uptime', () {
+    test('an empty uptime reads as null', () {
+      // The program prints an empty uptime when `/proc/uptime` has not
+      // been readable yet in the session; the tick itself is still valid.
+      expect(_parseAll(_marker('B 3 ')), ['begin 3 null']);
+    });
+
+    test('a non-decimal uptime is a framing error', () {
+      for (final bad in ['NaN', 'Infinity', '-1.0', '1e3', '1.', '.5']) {
+        expect(_parseAll(_marker('B 3 $bad')), [
+          startsWith('error'),
+        ], reason: bad);
+      }
+    });
   });
 
   group('forgery', () {
