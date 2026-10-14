@@ -37,6 +37,11 @@ dependencies:
   # Pinned to the version Séance and Poltergeist run, whose titlebar this
   # one follows.
   macos_window_utils: 1.9.1
+  # File > Quit on Linux and Windows asks the main window to close, the
+  # path its close button takes (lib/ui/menus/app_commands.dart). Already
+  # resolved through ghost_desktop; pinned to that version, as Poltergeist
+  # pins it.
+  window_manager: 0.5.2
 
 dev_dependencies:
   flutter_test:

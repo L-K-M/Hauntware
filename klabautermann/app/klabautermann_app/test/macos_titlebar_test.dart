@@ -115,9 +115,16 @@ void main() {
         .ancestor(of: find.byType(pane), matching: find.byType(ColoredBox))
         .first;
 
+    /// Measured from the shell's top: on Linux and Windows the menu strip
+    /// sits above the shell.
     void expectPanesBelow(WidgetTester tester, double top) {
+      final shell = tester.getTopLeft(find.byType(DesktopShell)).dy;
       for (final pane in [FleetRail, ServerWorkspace, InspectorPane]) {
-        expect(tester.getTopLeft(find.byType(pane)).dy, top, reason: '$pane');
+        expect(
+          tester.getTopLeft(find.byType(pane)).dy - shell,
+          top,
+          reason: '$pane',
+        );
       }
     }
 

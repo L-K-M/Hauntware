@@ -123,6 +123,21 @@ class AppLocalizationsEn extends AppLocalizations {
   String get openSettings => 'Settings';
 
   @override
+  String get settingsCommand => 'Settings…';
+
+  @override
+  String get appQuitLabel => 'Quit';
+
+  @override
+  String get menuFile => 'File';
+
+  @override
+  String get menuView => 'View';
+
+  @override
+  String get menuWindow => 'Window';
+
+  @override
   String get statusConnected => 'Connected';
 
   @override

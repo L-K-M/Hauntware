@@ -4,8 +4,8 @@ import 'package:klabautermann_app/services/macos_titlebar.dart';
 import 'support/native_sources.dart';
 
 /// The desktop chrome's native side (03 §10.2): the macOS runner code
-/// copied from Séance for the window state and the integrated titlebar
-/// (docs/SHARED.md). Only a Mac compiles it, so these checks keep the
+/// copied from Séance for the window state, the integrated titlebar and
+/// the menus (docs/SHARED.md). Only a Mac compiles it, so these checks keep the
 /// wiring from silently regressing on Linux CI, and keep the settings
 /// window's second engine (D32) free of the main window's handlers.
 void main() {
@@ -82,6 +82,26 @@ void main() {
       expect(install, greaterThan(branch));
       expect(restore, greaterThan(install));
       expect(main, contains('toolbarBand: toolbarBand,'));
+    });
+  });
+
+  group('menus', () {
+    test('AppKit adds no window-tab commands to the menus Dart builds', () {
+      expect(
+        mainWindow,
+        contains('NSWindow.allowsAutomaticWindowTabbing = false'),
+      );
+      expect(settingsWindow, contains('window.tabbingMode = .disallowed'));
+    });
+
+    test('only the app\'s engine builds the menu bar', () {
+      // Flutter's menu bar is one per process on macOS: the settings
+      // window's engine must never push its own over the app's.
+      final settingsApp = readSource('lib/settings_window_app.dart');
+      for (final name in ['AppMenuHost', 'PlatformMenuBar', 'MenuBar(']) {
+        expect(settingsApp, isNot(contains(name)), reason: name);
+      }
+      expect(readSource('lib/app.dart'), contains('return AppMenuHost('));
     });
   });
 

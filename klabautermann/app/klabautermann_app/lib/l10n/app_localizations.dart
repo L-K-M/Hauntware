@@ -244,6 +244,36 @@ abstract class AppLocalizations {
   /// **'Settings'**
   String get openSettings;
 
+  /// The menu command that opens Settings: in the macOS application menu, in the File menu on Linux and Windows.
+  ///
+  /// In en, this message translates to:
+  /// **'Settings…'**
+  String get settingsCommand;
+
+  /// The Linux and Windows File menu's Quit row, which closes the main window the way its close button does.
+  ///
+  /// In en, this message translates to:
+  /// **'Quit'**
+  String get appQuitLabel;
+
+  /// Title of the File menu.
+  ///
+  /// In en, this message translates to:
+  /// **'File'**
+  String get menuFile;
+
+  /// Title of the View menu (macOS, where it holds Enter Full Screen).
+  ///
+  /// In en, this message translates to:
+  /// **'View'**
+  String get menuView;
+
+  /// Title of the Window menu (macOS, where it holds Minimize, Zoom and Bring All to Front).
+  ///
+  /// In en, this message translates to:
+  /// **'Window'**
+  String get menuWindow;
+
   /// No description provided for @statusConnected.
   ///
   /// In en, this message translates to:

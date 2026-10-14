@@ -14,6 +14,8 @@ import 'services/settings_window/settings_window_link.dart';
 import 'theme/app_theme.dart';
 import 'ui/adaptive_shell.dart';
 import 'ui/macos_toolbar_band.dart';
+import 'ui/menus/app_commands.dart';
+import 'ui/menus/app_menu_host.dart';
 import 'ui/settings_issue_notice.dart';
 import 'ui/settings_page.dart';
 
@@ -95,17 +97,30 @@ class KlabautermannApp extends StatelessWidget {
           // interactive lands under the traffic lights.
           builder: (context, child) =>
               withMacosToolbarBand(toolbarBand, child: child!),
-          // The shell's settings callback needs a context under the
-          // MaterialApp's Navigator; the ListenableBuilder's own context
-          // sits above it.
+          // The shell's settings callback and the menus' commands need a
+          // context under the MaterialApp's Navigator; the
+          // ListenableBuilder's own context sits above it.
           home: SettingsIssueNotice(
             issue: settingsIssue,
             child: Builder(
-              builder: (context) => AdaptiveShell(
-                fleet: fleet,
-                monitoring: monitoring,
-                onOpenSettings: () => unawaited(_openSettings(context)),
-              ),
+              builder: (context) {
+                void openSettings() => unawaited(_openSettings(context));
+                // The desktop menus and their shortcuts (03 §10.2), from
+                // the one command registry.
+                return AppMenuHost(
+                  listenable: fleet,
+                  commands: buildAppCommands(
+                    platform: Theme.of(context).platform,
+                    fleet: fleet,
+                    onOpenSettings: openSettings,
+                  ),
+                  child: AdaptiveShell(
+                    fleet: fleet,
+                    monitoring: monitoring,
+                    onOpenSettings: openSettings,
+                  ),
+                );
+              },
             ),
           ),
           routes: {kSettingsRoute: (_) => SettingsPage(appearance: appearance)},

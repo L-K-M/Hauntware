@@ -25,6 +25,12 @@ class MainFlutterWindow: NSWindow {
   }
 
   override func awakeFromNib() {
+    // The app's windows never tab (this one, and Settings with its own
+    // `tabbingMode`); disabling automatic window tabbing stops AppKit from
+    // adding tab commands ("Show Tab Bar", etc.) to the menus the Dart
+    // side builds (lib/ui/menus/).
+    NSWindow.allowsAutomaticWindowTabbing = false
+
     // Séance's keyboard and accessibility compatibility controller
     // (KlabautermannFlutterViewController.m, docs/SHARED.md): it keeps
     // injected Command shortcuts intact and invalidates native text fields
