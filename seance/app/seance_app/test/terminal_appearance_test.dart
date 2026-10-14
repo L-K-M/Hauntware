@@ -28,6 +28,22 @@ void main() {
       ]);
     });
 
+    test('ligatures follow the setting, on by default', () {
+      expect(
+        TerminalAppearance.resolve(AppSettings(), Brightness.dark)
+            .style
+            .ligatures,
+        TerminalLigatures.on,
+      );
+      expect(
+        TerminalAppearance.resolve(
+          AppSettings(terminalLigatures: TerminalLigatures.off),
+          Brightness.dark,
+        ).style.ligatures,
+        TerminalLigatures.off,
+      );
+    });
+
     test("a bundled font's name draws the bundled copy", () {
       final appearance = TerminalAppearance.resolve(
         AppSettings(terminalFontFamily: ' fira code'),
@@ -247,6 +263,7 @@ void main() {
         terminalFontSize: 17,
         terminalFontFamily: 'Fira Code',
         terminalPalette: TerminalPalette.alwaysLight,
+        terminalLigatures: TerminalLigatures.off,
       );
       final restored = AppSettings.fromJson(
         jsonDecode(jsonEncode(settings.toJson())) as Map<String, dynamic>,
@@ -254,15 +271,18 @@ void main() {
       expect(restored.terminalFontSize, 17);
       expect(restored.terminalFontFamily, 'Fira Code');
       expect(restored.terminalPalette, TerminalPalette.alwaysLight);
+      expect(restored.terminalLigatures, TerminalLigatures.off);
     });
 
     test('an out-of-range or unknown stored value falls back safely', () {
       final restored = AppSettings.fromJson({
         'terminalFontSize': 400,
         'terminalPalette': 'nonsense',
+        'terminalLigatures': 'nonsense',
       });
       expect(restored.terminalFontSize, kMaxTerminalFontSize);
       expect(restored.terminalPalette, TerminalPalette.followApp);
+      expect(restored.terminalLigatures, TerminalLigatures.on);
     });
 
     test('the editor text size round-trips and is clamped on read', () {
@@ -287,6 +307,8 @@ void main() {
       expect(restored.terminalFontSize, kDefaultTerminalFontSize);
       expect(restored.terminalFontFamily, isEmpty);
       expect(restored.terminalPalette, TerminalPalette.followApp);
+      // Ligatures on: the bundled fonts draw them, and nobody turned them off.
+      expect(restored.terminalLigatures, TerminalLigatures.on);
     });
   });
 }

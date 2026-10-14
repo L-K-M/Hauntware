@@ -28,6 +28,17 @@ slice:
   restart comes after 0.7 s to 1 s). Tested against a scripted process
   and local dash and bash (a SIGSTOP stall included); nothing starts it
   yet, and no SSH fixture test covers it.
+- Spike S2 part 1: `klabautermann_core/tool/capture_fixtures.dart
+  measure` runs the real program locally under dash and bash (as
+  `sh -s`, and as `<login shell> -c '<start command>'` the way sshd
+  runs a command) and records [the evidence](evidence/s2/README.md):
+  output before READY, fast-tick bytes and CPU, `procs` beyond 1,000
+  processes and slow-tick times. The unguarded `procs` loops reach the
+  10 s guarded budget near 2,000 processes under dash, where passing
+  the D47 deadline depends on its margin, not yet fixed, and pass it by
+  1,079 under bash; K15 has to resolve that. Fixture capture with its
+  redaction review, SSH mode, the other shells (CI images, else the
+  manual list) and systemd collectors (runner VM) remain.
 - Jobs model (JOB-01, JOB-02 data): `klabautermann_host`'s `mergeJobs`
   turns a `cron` and a `timers` tick into one list of cron lines,
   periodic scripts and timers, each with an English-free
