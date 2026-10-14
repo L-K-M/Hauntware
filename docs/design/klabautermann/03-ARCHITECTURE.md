@@ -3591,7 +3591,8 @@ every extent before an index. Only the lines a layout shows, and as many
 rows above its offset so a page up lands on measured lines, are measured,
 once per width, font and locale: one row without a layout when the line
 is all Latin-1 and fits at a monospace advance per code unit (two per
-tab), otherwise laid out, since a fallback font can draw any other glyph
+tab), allowing for the rounding of the engine's single-precision sum,
+otherwise laid out, since a fallback font can draw any other glyph
 wider than a fixed count of advances and a line or paragraph separator
 breaks the row. Other lines keep an earlier count or, once the viewer
 has a width, an estimate from their length, and a measurement above the

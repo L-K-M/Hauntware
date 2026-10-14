@@ -10,9 +10,10 @@ import 'package:klabautermann_app/ui/logs/log_view_controller.dart';
 
 // flutter_test's font draws every glyph one advance wide, so a glyph
 // wider than the two advances the view once allowed for any non-Latin-1
-// unit cannot be drawn with it. This file loads a font of its own as the
-// monospace stack's first family, which every later test in the same
-// process would see, so it lives apart from the other log view tests.
+// unit cannot be drawn with it, and its advances add up without rounding
+// error. This file loads a font of its own as the monospace stack's
+// first family, which every later test in the same process would see,
+// so it lives apart from the other log view tests.
 
 /// U+2E3B THREE-EM DASH: 3 em, five advances of [_wideDashFont].
 const String _dash = '⸻';
@@ -159,6 +160,18 @@ ByteData _wideDashFont() {
   return font;
 }
 
+Widget _app(LogViewController logs) => MaterialApp(
+  theme: GhostTheme.light(
+    klabautermannThemeStyle,
+    platform: TargetPlatform.linux,
+  ),
+  localizationsDelegates: AppLocalizations.localizationsDelegates,
+  supportedLocales: AppLocalizations.supportedLocales,
+  home: Material(
+    child: LogView(controller: logs, wrap: LogWrap.on),
+  ),
+);
+
 void main() {
   setUpAll(() async {
     final loader = FontLoader(klabautermannThemeStyle.monoFontFamilies.first)
@@ -178,19 +191,7 @@ void main() {
     final line = 'abc ${_dash * 10} end';
     logs.add([line, 'after']);
 
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: GhostTheme.light(
-          klabautermannThemeStyle,
-          platform: TargetPlatform.linux,
-        ),
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
-        home: Material(
-          child: LogView(controller: logs, wrap: LogWrap.on),
-        ),
-      ),
-    );
+    await tester.pumpWidget(_app(logs));
 
     final paragraph = tester.renderObject<RenderParagraph>(
       find.text(line, findRichText: true),
@@ -203,4 +204,51 @@ void main() {
     );
     expect(paragraph.size.height, closeTo(paragraph.textSize.height, 0.01));
   });
+
+  // flutter_test's font sums its advances without error. This font's
+  // advance of 0.6 em is a fraction of a pixel at these scales, and the
+  // engine's single-precision sum of a line's advances exceeds the advance
+  // times its cells, by more as the line grows. Each row is wider than
+  // that product by less than the excess, so the engine wraps the line;
+  // the last row is wider by more than a fixed slack of 0.01 px.
+  for (final (scale, cells, past) in [
+    (1.15, 49, 0.0),
+    (1.0, 500, 0.0),
+    (2.45, 300, 0.015),
+  ]) {
+    testWidgets('a Latin-1 line a rounding error wider than its row is not '
+        'clipped, $cells cells at text scale $scale, row $past px wider', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(400, 200);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      tester.platformDispatcher.textScaleFactorTestValue = scale;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      final logs = LogViewController();
+      addTearDown(logs.dispose);
+      logs.add(['W']);
+      await tester.pumpWidget(_app(logs));
+      final advance = tester
+          .renderObject<RenderParagraph>(find.text('W', findRichText: true))
+          .getMaxIntrinsicWidth(double.infinity);
+
+      // The text width is the row less its padding of 8 px a side.
+      tester.view.physicalSize = Size(cells * advance + past + 2 * 8, 200);
+      final line = 'a' * cells;
+      logs.add([line]);
+      await tester.pump();
+
+      final paragraph = tester.renderObject<RenderParagraph>(
+        find.text(line, findRichText: true),
+      );
+      expect(
+        paragraph.textSize.height,
+        greaterThan(tester.getSize(find.text('W', findRichText: true)).height),
+        reason: 'the engine wraps the line',
+      );
+      expect(paragraph.size.height, closeTo(paragraph.textSize.height, 0.01));
+      expect(paragraph.didExceedMaxLines, isFalse);
+    });
+  }
 }

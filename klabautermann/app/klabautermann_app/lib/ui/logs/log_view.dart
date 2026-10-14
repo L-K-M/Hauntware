@@ -42,6 +42,11 @@ const double _rowPadding = 8;
 /// How far from the newest line still counts as at it, in logical pixels.
 const double _endTolerance = 1;
 
+/// Single precision's unit roundoff: the engine adds a line's glyph
+/// advances in it, so n advances can sum to n times one advance plus up
+/// to n of these of the total.
+const double _singlePrecisionRoundoff = 1 / (1 << 24);
+
 /// The log viewer of 03 §10.8 over a [LogViewController]: a lazily built
 /// list with a fixed line extent when [wrap] is off and measured row
 /// counts when it is on, follow with pause on scroll (LOG-02), level
@@ -233,9 +238,10 @@ class _LogViewState extends State<LogView> {
       rowWidth - 2 * _rowPadding - (_hasGutter ? text.gutter : 0);
 
   /// The rows entry [index] wraps to in a row [crossAxisExtent] wide: one
-  /// when it is all Latin-1 and an upper bound of its width fits
-  /// ([logTextCells]), otherwise laid out. A dropped-lines record keeps to
-  /// one row; a cut line is laid out for its note.
+  /// when it is all Latin-1 and an upper bound of its width, the engine's
+  /// rounding included, fits ([logTextCells]), otherwise laid out. A
+  /// dropped-lines record keeps to one row; a cut line is laid out for its
+  /// note.
   int _measureRows(int index, double crossAxisExtent) {
     final entry = widget.controller[index];
     if (entry is! LogLine) return 1;
@@ -245,7 +251,11 @@ class _LogViewState extends State<LogView> {
     final cells = entry.truncated
         ? null
         : logTextCells(parseSgr(entry.text).text);
-    if (cells != null && cells * text.advance <= width) return 1;
+    // One roundoff more than the cells, for the width's own rounding.
+    final bound = cells == null
+        ? null
+        : cells * text.advance * (1 + (cells + 1) * _singlePrecisionRoundoff);
+    if (bound != null && bound <= width) return 1;
 
     final painter = TextPainter(
       text: _lineSpan(entry, text),
