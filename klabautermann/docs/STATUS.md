@@ -37,8 +37,9 @@ slice:
   milestones have not landed, and `IsolateEngineClient` for the UI side.
   Protocol v2 types `CatalogReplaced` as a list of plain `FleetEntry`
   values and adds `ImportSshConfig`/`SshConfigImported`: the engine
-  parses ssh_config text with `seance_core`'s `SshConfigImporter` off the
-  UI isolate (CN-19). Spawning takes the app's support directory, where
+  reads ssh_config text off the UI isolate (CN-19), splitting its lines
+  with `seance_core`'s `SshConfigLine` and taking a host for each name a
+  `Host` line gives, as `SshConfigImporter.hostAliases` does. Spawning takes the app's support directory, where
   the engine keeps the imports (below); `EngineReady` reports a problem
   with that file and `SshConfigImported` says whether the import was
   saved, both added within v2.
