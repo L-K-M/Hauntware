@@ -1,0 +1,6 @@
+tags:
+  # Runs the capture tool against the real program in dash and bash.
+  shell:
+# A wedged shell (an unread pipe or a hung child) would pin the VM; cap
+# every test instead.
+timeout: 60s

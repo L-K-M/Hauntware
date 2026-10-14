@@ -18,6 +18,14 @@ slice:
   reply lost to a framing error, out-of-order markers ending the
   session), and `kSamplerStartCommand` is the start line. No engine code
   uses them yet; the real-shell test runs on them.
+- Spike S2 part 1: `klabautermann_core/tool/capture_fixtures.dart
+  measure` runs the real program locally under dash and bash (as
+  `<sh> -s`, and as `<sh> -c '<start command>'` the way sshd runs a
+  command) and records [the evidence](evidence/s2/README.md): output
+  before READY, fast-tick bytes and CPU, `procs` beyond 1,000 processes
+  and slow-tick times. Fixture capture with its redaction review, SSH
+  mode, the other shells (CI images, else the manual list) and systemd
+  collectors (runner VM) remain.
 - `klabautermann_docker`: pure-Dart HTTP/1.1 client, NDJSON/JSON-seq
   scanning, stdcopy, versioned API models and negotiation, compose labels
   and grouping.
