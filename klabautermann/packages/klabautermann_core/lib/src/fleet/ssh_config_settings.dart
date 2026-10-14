@@ -103,7 +103,9 @@ sealed class SshConfigResolution {
 /// The settings ssh would use, as an [ImportedHost] whose alias is the
 /// name. Its `HostName` is the one ssh dials: `%h` expanded, and
 /// lowercased unless it is an address. Its `ProxyJump` is the value ssh
-/// would read, as written, or null for a direct connection.
+/// would read, as written (`none`, in any case, for a direct connection),
+/// or null when no `ProxyJump` applies or the route is `ProxyCommand
+/// none`; both of those are direct too.
 final class ResolvedSshSettings extends SshConfigResolution {
   const ResolvedSshSettings(this.host);
 
