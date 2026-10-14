@@ -195,7 +195,7 @@ void main() {
     });
 
     test('keeps tied rows in the caller order in both directions', () {
-      // Over 32 rows: `List.sort` insertion-sorts shorter lists, which is
+      // Over 33 rows: `List.sort` insertion-sorts shorter lists, which is
       // stable by itself and would hide a missing tie-break.
       final tied = [
         for (var pid = 0; pid < 100; pid++)
