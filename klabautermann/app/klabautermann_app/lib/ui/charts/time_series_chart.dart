@@ -261,6 +261,8 @@ int firstTimeSeriesTick({
   return tick < from ? tick + step : tick;
 }
 
+Duration _deviceZoneOffset(DateTime time) => time.toLocal().timeZoneOffset;
+
 void _paintHatch(Canvas canvas, Rect band, Color ink) {
   canvas.save();
   canvas.clipRect(band);
@@ -320,6 +322,7 @@ final class TimeSeriesPainter extends CustomPainter {
     required this.textScaler,
     required this.textDirection,
     required this.background,
+    this.zoneOffsetOf = _deviceZoneOffset,
   }) : assert(to > from, 'the window spans time'),
        assert(scaleMax > 0, 'the scale needs a positive top');
 
@@ -353,6 +356,12 @@ final class TimeSeriesPainter extends CustomPainter {
 
   /// Behind a gap's label, so the hatching does not cross it.
   final Color background;
+
+  /// The zone's offset from UTC at a time; ticks fall on round times in
+  /// that zone. The labels always read the device's zone, so the chart
+  /// keeps the default, and a test passes a zone that the machine's `TZ`
+  /// cannot change.
+  final Duration Function(DateTime time) zoneOffsetOf;
 
   static const strokeWidth = 1.5;
 
@@ -566,7 +575,7 @@ final class TimeSeriesPainter extends CustomPainter {
     var tick = firstTimeSeriesTick(
       from: from,
       step: stepMicros,
-      offset: edge.timeZoneOffset.inMicroseconds,
+      offset: zoneOffsetOf(edge).inMicroseconds,
     );
 
     final tickPaint = Paint()..color = _ink;
@@ -635,7 +644,8 @@ final class TimeSeriesPainter extends CustomPainter {
       oldDelegate.textStyle != textStyle ||
       oldDelegate.textScaler != textScaler ||
       oldDelegate.textDirection != textDirection ||
-      oldDelegate.background != background;
+      oldDelegate.background != background ||
+      oldDelegate.zoneOffsetOf != zoneOffsetOf;
 
   @override
   bool shouldRebuildSemantics(TimeSeriesPainter oldDelegate) =>

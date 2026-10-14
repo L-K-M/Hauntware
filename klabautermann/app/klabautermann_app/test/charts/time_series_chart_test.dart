@@ -455,6 +455,54 @@ void main() {
     expect(first(utc(5, 0), Duration.zero), utc(5, 0));
   });
 
+  testWidgets('places time ticks in the zone it is given, not UTC', (
+    tester,
+  ) async {
+    final ring = TimeSeriesRing(capacity: 2, lanes: 1);
+    addTearDown(ring.dispose);
+    // Noon in Nepal, where no UTC grid of half an hour or more has a tick.
+    final to = DateTime.utc(2026, 10, 14, 6, 15).microsecondsSinceEpoch;
+    const size = Size(400, 200);
+    List<double> ticksIn(Duration zone) {
+      final canvas = TestRecordingCanvas();
+      TimeSeriesPainter(
+        data: ring,
+        version: ring.version,
+        from: to - 4 * Duration.microsecondsPerHour,
+        to: to,
+        scaleMax: 100,
+        unit: ChartUnit.percent,
+        strings: testChartStrings,
+        colors: const [Colors.blue],
+        gaps: const [],
+        summaries: const [],
+        textStyle: const TextStyle(fontSize: 11, color: Colors.black),
+        textScaler: TextScaler.noScaling,
+        textDirection: TextDirection.ltr,
+        background: Colors.white,
+        zoneOffsetOf: (_) => zone,
+      ).paint(canvas, size);
+      // The tick marks are the only 1 px wide rectangles.
+      return [
+        for (final call in canvas.invocations)
+          if (call.invocation.memberName == #drawRect)
+            if (call.invocation.positionalArguments.first case Rect(
+              width: 1,
+              :final center,
+            ))
+              center.dx,
+      ];
+    }
+
+    // Runs under any TZ, CI's UTC included: the zone comes from the test.
+    final edge = size.width - TimeSeriesPainter.strokeWidth / 2;
+    expect(
+      ticksIn(const Duration(hours: 5, minutes: 45)).last,
+      closeTo(edge, 0.01),
+    );
+    expect(ticksIn(Duration.zero).last, lessThan(edge - 1));
+  });
+
   testWidgets('scales to the data in view in IEC units', (tester) async {
     final ring = TimeSeriesRing(capacity: 10, lanes: 2);
     addTearDown(ring.dispose);
