@@ -24,8 +24,9 @@ import 'ssh_config_settings.dart';
 /// - A host is left out and counted when [SshConfigSettings] cannot
 ///   resolve it or [jumpRoutes] cannot follow its route: one ssh would
 ///   take through a `ProxyCommand`, a `Match` or `Include` the engine
-///   cannot evaluate, a `HostName` or `IdentityFile` token, or a line ssh
-///   rejects, all of which apply to the hops it names too.
+///   cannot evaluate, a final pass that a system config may ask for, a
+///   `HostName` or `IdentityFile` token, or a line ssh rejects, all of
+///   which apply to the hops it names too.
 ///
 /// The text is parsed in the calling isolate: the engine's, so a large
 /// config never stalls the UI (CN-19). Both lists are unmodifiable, in

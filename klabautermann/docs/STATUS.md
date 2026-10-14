@@ -132,8 +132,10 @@ slice:
   (03 §10.1), filling the route, sign-in, search text and `host:port`
   conflict fields. A host it cannot dial as ssh would is skipped and
   counted: a `ProxyCommand`, a `Match` or `Include` that could change
-  it (`Include` is not followed), a token ssh fills in, a line ssh
-  rejects, or a route ssh would refuse. Nothing dials them yet.
+  it (`Include` is not followed), a second reading of the file for the
+  host ssh dials that would change it (Fedora's and RHEL's
+  `/etc/ssh/ssh_config` ask ssh for one), a token ssh fills in, a line
+  ssh rejects, or a route ssh would refuse. Nothing dials them yet.
 - Packaging: `scripts/build.sh`, `scripts/package-linux.sh` (.deb and
   AppImage through the shared `scripts/package-linux-common.sh`) and
   `scripts/build-flatpak.sh` with `flatpak/ch.lkmc.klabautermann.yml`.
