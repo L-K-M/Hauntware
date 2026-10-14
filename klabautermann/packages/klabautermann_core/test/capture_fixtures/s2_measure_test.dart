@@ -89,11 +89,16 @@ void main() {
 
   test('a relative sampler shell path is taken from the cwd', () async {
     // What `--sh` passes on for a path with a slash in it. It starts with
-    // `test/`, which exists here but not beside the temporary `sh` link;
-    // past that, `..` stops at the root.
-    final up = '../' * Directory.current.path.split('/').length;
+    // the package's test directory, which exists from the cwd (the
+    // workspace root or the package) but not beside the temporary `sh`
+    // link; past that, `..` stops at the root.
+    final anchor = Directory('test').existsSync()
+        ? 'test'
+        : 'packages/klabautermann_core/test';
+    final depth =
+        anchor.split('/').length + Directory.current.path.split('/').length;
     final sampler = await LocalSampler.start(
-      SamplerLaunch.stdinShell('test/$up${dash!.substring(1)}'),
+      SamplerLaunch.stdinShell('$anchor/${'../' * depth}${dash!.substring(1)}'),
       kind: SamplerKind.fast,
       environment: env,
     );

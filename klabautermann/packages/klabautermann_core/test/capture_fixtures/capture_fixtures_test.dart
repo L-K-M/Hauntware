@@ -6,6 +6,16 @@ import 'dart:io';
 
 import 'package:test/test.dart';
 
+/// The tool's entry point from the workspace root (as CI runs the suite)
+/// or from the package directory.
+String _toolPath() {
+  const packageRelative = 'tool/capture_fixtures.dart';
+  return [
+    'packages/klabautermann_core/$packageRelative',
+    packageRelative,
+  ].firstWhere((path) => File(path).existsSync());
+}
+
 void main() {
   for (final args in [
     ['--ticks', '0'],
@@ -15,7 +25,7 @@ void main() {
   ]) {
     test('measure ${args.join(' ')} prints the usage', () async {
       final r = await Process.run(Platform.resolvedExecutable, [
-        'tool/capture_fixtures.dart',
+        _toolPath(),
         'measure',
         ...args,
       ]);
