@@ -3575,6 +3575,12 @@ palette) and presets in the preview. v1: paste from Séance and Poltergeist
   threshold-band changes (values refreshing every 1 to 5 s are not live
   regions). v1: text scaling to 200 %, full keyboard reachability, log
   readability. v1.x: more languages, right-to-left layout.
+- Tables (A11Y-03, M2): until F5e lifts it into `ghost_ui`, the app's
+  `SortableTable` gives each row one node whose label is its cells as
+  "column: value" and whose custom semantics actions are the row's
+  verbs. Flutter's table roles are not used: their debug checks require
+  table, row and cell nodes to nest directly, and a virtualized list puts
+  its scroll node between the table and its rows.
 
 ---
 

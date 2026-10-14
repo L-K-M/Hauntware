@@ -537,6 +537,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'More'**
   String get serverTabMore;
+
+  /// A table cell as a screen reader hears it within its row: the column's header label, then the cell's value (A11Y-03).
+  ///
+  /// In en, this message translates to:
+  /// **'{column}: {value}'**
+  String tableCellSemantics(String column, String value);
+
+  /// Screen-reader value of the table column header the rows are sorted by, smallest first.
+  ///
+  /// In en, this message translates to:
+  /// **'Sorted ascending'**
+  String get tableSortedAscending;
+
+  /// Screen-reader value of the table column header the rows are sorted by, largest first.
+  ///
+  /// In en, this message translates to:
+  /// **'Sorted descending'**
+  String get tableSortedDescending;
+
+  /// Screen-reader hint of a table column header that sorts the rows when activated.
+  ///
+  /// In en, this message translates to:
+  /// **'Sort by this column'**
+  String get tableSortHint;
+
+  /// Tooltip and screen-reader label of the button at the end of a table row that opens the row's actions.
+  ///
+  /// In en, this message translates to:
+  /// **'Row actions'**
+  String get tableRowActions;
 }
 
 class _AppLocalizationsDelegate
