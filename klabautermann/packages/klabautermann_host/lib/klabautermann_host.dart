@@ -3,9 +3,10 @@
 /// Pure Dart, host-neutral: the HWS/1 sampler program text and its
 /// collector fragments, the request encoder, the incremental frame
 /// parser, the capability-probe model and parsers, the per-collector
-/// payload parsers, the cron evaluator, the validated command builders,
-/// the threshold rules and the counter-to-rate maths. SSH, quoting and
-/// process plumbing are injected by `klabautermann_core`.
+/// payload parsers, the cron evaluator, the jobs list, the validated
+/// command builders, the threshold rules and the counter-to-rate maths.
+/// SSH, quoting and process plumbing are injected by
+/// `klabautermann_core`.
 library;
 
 export 'src/commands/commands.dart';
@@ -15,6 +16,8 @@ export 'src/hws/collector.dart';
 export 'src/hws/frames.dart';
 export 'src/hws/program.dart';
 export 'src/hws/request.dart';
+export 'src/jobs/jobs.dart';
+export 'src/jobs/schedule.dart';
 export 'src/parse/cron.dart';
 export 'src/parse/fs.dart';
 export 'src/parse/identity.dart';

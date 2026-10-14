@@ -12,6 +12,14 @@ slice:
 
 - `klabautermann_host`: HWS/1 program, frame protocol, capability probe,
   parsers and snapshot/rate models with per-platform fixture goldens.
+- Jobs model (JOB-01, JOB-02 data): `klabautermann_host`'s `mergeJobs`
+  turns a `cron` and a `timers` tick into one list of cron lines,
+  periodic scripts and timers, each with an English-free
+  `ScheduleDescription` and, for cron, next runs with DST annotations
+  in the server zone or the line's `CRON_TZ`. Timer triggers and
+  `RandomizedDelaySec` have fields but no source yet, `CRON_TZ` zones
+  other than the server's and UTC need a resolver, and nothing in the
+  engine or app consumes the list yet.
 - `klabautermann_docker`: pure-Dart HTTP/1.1 client, NDJSON/JSON-seq
   scanning, stdcopy, versioned API models and negotiation, compose labels
   and grouping.
