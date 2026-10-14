@@ -102,10 +102,11 @@ final class DeviceSettingsReadOnlyException implements Exception {
 ///
 /// Every write replaces the whole document atomically (a sibling temp file,
 /// flushed, renamed over the target, then the directory synced) and writes
-/// queue, so the file holds the last change this process made; between two
-/// app instances the last writer wins (see [open]). A change is applied in
-/// memory before it is written and stays applied when the write fails: the
-/// call throws, and the next successful write carries it.
+/// queue, so the file holds the last change this process made. The store
+/// assumes it is the only writer, which the desktops' instance lock
+/// provides (see [open]); a phone runs one process per app. A change is
+/// applied in memory before it is written and stays applied when the write
+/// fails: the call throws, and the next successful write carries it.
 ///
 /// Keys this build does not know are kept and written back, so a newer
 /// build's settings survive a write by this one within the same schema
@@ -134,11 +135,13 @@ final class DeviceSettingsStore {
   /// consumer first asks: once persisted it exists before any reader does,
   /// so the catalog library's enrollment and every later reader only ever
   /// read it, and no two readers in this process can race to mint
-  /// different ids. An id is only handed out once it is on disk. Nothing
-  /// guards against a second process: two instances that open a missing
-  /// file at once (the Linux runner allows several) each mint and hand out
-  /// an id, and the last rename wins on disk. An inter-process lock or a
-  /// single desktop instance must land before enrollment reads the id.
+  /// different ids. An id is only handed out once it is on disk. The store
+  /// itself does not guard against a second process: two that opened a
+  /// missing file at once would each mint and hand out an id, and the last
+  /// rename would win on disk. The composition root opens it only after
+  /// taking the `InstanceLock`, so a second desktop instance never gets
+  /// here; when the lock cannot be taken at all, the app runs unguarded
+  /// and says so.
   ///
   /// [writer] and [now] are seams for tests.
   static Future<DeviceSettingsStore> open(

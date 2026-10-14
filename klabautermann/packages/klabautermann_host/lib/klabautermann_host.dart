@@ -4,11 +4,15 @@
 /// collector fragments, the request encoder, the incremental frame
 /// parser, the capability-probe model and parsers, the per-collector
 /// payload parsers, the cron evaluator, the jobs list, the validated
-/// command builders, the threshold rules and the counter-to-rate maths.
-/// SSH, quoting and process plumbing are injected by
+/// command builders, the threshold rules, the access-check,
+/// external-monitor and panel capability rules and the counter-to-rate
+/// maths. SSH, quoting and process plumbing are injected by
 /// `klabautermann_core`.
 library;
 
+export 'src/access/access_check.dart';
+export 'src/access/external_monitors.dart';
+export 'src/access/panels.dart';
 export 'src/commands/commands.dart';
 export 'src/cron/evaluate.dart';
 export 'src/cron/expression.dart';

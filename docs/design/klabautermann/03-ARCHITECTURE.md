@@ -1544,6 +1544,7 @@ platform identities in 04, section 12.3):
 | `ssh_config_imports.json` [E] | D13's device-local store for FL-02 imports from `~/.ssh/config` (alias, host, port, user), replaced whole by each import; never pushed (D14). `IdentityFile` and `ProxyJump` join when links land (M2). Built in M1: the engine isolate loads it at start and saves each import atomically before it answers (10.1). A damaged file is renamed to `ssh_config_imports.json.corrupt-<UTC time>`; a file it cannot read or rename, or one from a newer schema, is left as it is and no import is saved that run | `klabautermann_core` [E] | MVP |
 | `settings.json` | Device settings, `klabautermann.sync.deviceId` (minted once, never regenerated), monitor set, per-server device preferences | app | MVP |
 | `window_state.json` | The desktop main window's last normal frame and its maximized and full-screen flags (10.2), in the shape Séance's file established (`x`, `y`, `width`, `height`, `isMaximized`, `isFullScreen`; physical pixels on Windows); never synced. Added in M1, a deviation from the plan, which listed no window file: kept out of `settings.json`, as Séance and Planchette keep theirs, so debounced drag saves never rewrite the file that holds the device id | app | MVP |
+| `instance.lock` [E] | Empty. One desktop instance per support directory (built in M2): the composition root takes an exclusive, non-blocking advisory lock on it after the settings window's branch and before `settings.json` and `window_state.json` open and the engine isolate starts, so one process mints the device id and writes these files, and holds it for the life of the process; the file is never deleted. A second instance opens no other file and only says it is already running, until the user quits it. A lock that fails for another reason (no write access, no lock support) lets the app run unguarded and says so at startup. Phones run one process per app and take none | app, through `klabautermann_core`'s `InstanceLock` | MVP |
 | `capabilities/<serverId>.json` | Cached probe results, 24 h TTL | `klabautermann_core` | MVP |
 | `audit/<serverId>.jsonl` | Audit log, 90-day retention [E] | `klabautermann_core` | MVP |
 | `history/<serverId>/<tier>.ring` | Fixed-size binary rollups (`RandomAccessFile`, no rewrite per sample) | `klabautermann_core` | v1 |
@@ -1839,7 +1840,7 @@ the probe returns:
 | Init and systemd | `/proc/1/comm`, `/run/systemd/system`, `systemctl --version` first line |
 | Virtualization | `systemd-detect-virt`, `systemd-detect-virt -c` (SYS-04); the `fuse.lxcfs` mounts in `/proc/mounts`, which tell which system-wide `/proc` files show the container's own values (D50) |
 | Identity | `id -u`, `id -un`, `id -nG` (journal and docker groups) |
-| Elevation | `sudo -V` first line (sudo or sudo-rs), `sudo -n true` result, `command -v doas run0`, `doas -n true` result when doas exists, `command -V printf` (builtin or not, 8.3) |
+| Elevation | `sudo -V` first line (sudo or sudo-rs), `sudo -n true` result, `command -v doas run0`, `doas -n true` result when doas exists, `run0 --no-ask-password true` result when run0 exists (8.3 rung 6), `command -V printf` (builtin or not, 8.3); the Identity row's `id -u` decides the root-login rung |
 | Tools | `command -v` for about 30 tools: `journalctl`, `crontab`, `ss`, `ip`, `lsblk`, `findmnt`, `smartctl`, `sensors`, `docker`, `podman`, `socat`, `timeout`, `setsid`, `ncdu`, `gdu`, `sadf`, `logger`, `systemd-run`, `apt-get`, `dnf`, `dnf5`, `apk`, `pacman`, `zypper`, `nvidia-smi`, ... |
 | Kernel features | `/proc/pressure/cpu` readable; `/sys/fs/cgroup/cgroup.controllers` (cgroup v2) |
 | Locale | `locale -a` contains `C.UTF-8` |
@@ -2731,6 +2732,11 @@ A panel that needs more than it has shows a lock with the least-privileged
 fix and "enable admin mode"; it never elevates silently (ServerBox rule
 [R]).
 
+The access check's sudo NOPASSWD row (CN-24) offers no fix command until
+SAF-17 generates narrow, validated rules (v1.x): a blanket rule equals root
+(8.4), and password sudo already reaches admin mode through the prelude
+(8.3 rung 3), so the row points to admin mode instead.
+
 ### 8.2 Admin mode (SAF-02)
 
 - Per server, explicit, off by default. Turning it on runs detection, asks
@@ -3586,6 +3592,12 @@ palette) and presets in the preview. v1: paste from Séance and Poltergeist
   threshold-band changes (values refreshing every 1 to 5 s are not live
   regions). v1: text scaling to 200 %, full keyboard reachability, log
   readability. v1.x: more languages, right-to-left layout.
+- Tables (A11Y-03, M2): until F5e lifts it into `ghost_ui`, the app's
+  `SortableTable` gives each row one node whose label is its cells as
+  "column: value" and whose custom semantics actions are the row's
+  verbs. Flutter's table roles are not used: their debug checks require
+  table, row and cell nodes to nest directly, and a virtualized list puts
+  its scroll node between the table and its rows.
 
 ---
 
