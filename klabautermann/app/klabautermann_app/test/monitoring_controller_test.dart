@@ -9,7 +9,8 @@ Sample _sample(String serverId, SampleStream stream, int seq) => Sample(
   stream: stream,
   seq: seq,
   at: DateTime.utc(2026, 10, 14, 12, 0, seq),
-  result: OverviewResult(),
+  // Valid for every stream, which `Sample` asserts.
+  result: const CollectorUnavailable(CollectorUnavailableReason.timeout),
 );
 
 void main() {

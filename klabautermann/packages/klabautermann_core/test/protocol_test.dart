@@ -431,6 +431,49 @@ void main() {
       expect(unavailable.detail, 'systemctl: not found');
     });
 
+    test('a sample holds its stream\'s variant or CollectorUnavailable', () {
+      final variants = <SampleStream, SampleResult>{
+        SampleStream.overview: OverviewResult(),
+        SampleStream.core: CoreResult(),
+        SampleStream.fs: FsResult(FsSnapshot(const [])),
+        SampleStream.identity: const IdentityResult(),
+        SampleStream.procs: ProcsResult(const []),
+        SampleStream.units: UnitsResult(UnitsSnapshot()),
+        SampleStream.failedUnits: FailedUnitsResult(const []),
+        SampleStream.timers: TimersResult(TimersSnapshot()),
+        SampleStream.cron: CronResult(CronSnapshot()),
+      };
+      expect(variants.keys, SampleStream.values);
+      const unavailable = CollectorUnavailable(
+        CollectorUnavailableReason.timeout,
+      );
+
+      Sample sample(SampleStream stream, SampleResult result) => Sample(
+        serverId: 'srv-1',
+        stream: stream,
+        seq: 1,
+        at: DateTime.utc(2026, 10, 14, 12),
+        result: result,
+      );
+
+      for (final stream in SampleStream.values) {
+        expect(sample(stream, unavailable).result, same(unavailable));
+        for (final MapEntry(key: variantStream, value: result)
+            in variants.entries) {
+          if (variantStream == stream) {
+            expect(sample(stream, result).result, same(result));
+            continue;
+          }
+
+          expect(
+            () => sample(stream, result),
+            throwsA(isA<AssertionError>()),
+            reason: '${result.runtimeType} is not a $stream result',
+          );
+        }
+      }
+    });
+
     test('sampling states, gaps and host profiles survive', () async {
       for (final phase in SamplingPhase.values) {
         final state =

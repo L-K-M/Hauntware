@@ -363,7 +363,22 @@ final class Sample extends EngineEvent {
     required this.seq,
     required this.at,
     required this.result,
-  });
+  }) : assert(
+         // Comparisons rather than a switch: the assert of a const
+         // constructor takes only constant expressions.
+         result is CollectorUnavailable ||
+             (stream == SampleStream.overview && result is OverviewResult) ||
+             (stream == SampleStream.core && result is CoreResult) ||
+             (stream == SampleStream.fs && result is FsResult) ||
+             (stream == SampleStream.identity && result is IdentityResult) ||
+             (stream == SampleStream.procs && result is ProcsResult) ||
+             (stream == SampleStream.units && result is UnitsResult) ||
+             (stream == SampleStream.failedUnits &&
+                 result is FailedUnitsResult) ||
+             (stream == SampleStream.timers && result is TimersResult) ||
+             (stream == SampleStream.cron && result is CronResult),
+         'result must be the variant for stream, or CollectorUnavailable',
+       );
 
   final String serverId;
   final SampleStream stream;
