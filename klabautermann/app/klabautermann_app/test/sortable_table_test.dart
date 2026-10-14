@@ -192,14 +192,17 @@ void main() {
     });
 
     test('keeps tied rows in the caller order in both directions', () {
-      const tied = [
-        _Proc(9, 'a', 1, ''),
-        _Proc(5, 'b', 1, ''),
-        _Proc(7, 'c', 2, ''),
-        _Proc(6, 'd', 1, ''),
+      // Over 32 rows: `List.sort` insertion-sorts shorter lists, which is
+      // stable by itself and would hide a missing tie-break.
+      final tied = [
+        for (var pid = 0; pid < 100; pid++)
+          _Proc(pid, '', (pid % 3).toDouble(), ''),
       ];
-      expect(sorted(up('cpu'), tied), [9, 5, 6, 7]);
-      expect(sorted(down('cpu'), tied), [7, 9, 5, 6]);
+      List<int> cpu(int value) => [
+        for (var pid = value; pid < 100; pid += 3) pid,
+      ];
+      expect(sorted(up('cpu'), tied), [...cpu(0), ...cpu(1), ...cpu(2)]);
+      expect(sorted(down('cpu'), tied), [...cpu(2), ...cpu(1), ...cpu(0)]);
     });
 
     test('puts unknown values last in both directions', () {
