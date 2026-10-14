@@ -61,13 +61,18 @@ final class TimeSeriesRing extends ChangeNotifier {
   int _version = 0;
   int _latest = 0;
 
+  /// The time of the newest sample the ring has dropped, in microseconds
+  /// since the epoch, or null while it has dropped none.
+  int? _evicted;
+
   /// Bumped by every sample and gap change.
   int get version => _version;
 
   int get length => math.min(_added, capacity);
 
-  /// The gaps, oldest first; the last one may still be open. Gaps that
-  /// ended before the oldest sample are dropped.
+  /// The gaps, oldest first; the last one may still be open. A gap is
+  /// dropped once a sample at or after its end has left the ring, so the
+  /// gaps that lead up to the oldest sample stay.
   late final List<ChartGap> gaps = UnmodifiableListView(_gaps);
 
   /// Sample [index]'s time in microseconds since the epoch, oldest first.
@@ -102,6 +107,7 @@ final class TimeSeriesRing extends ChangeNotifier {
     assert(values.length == lanes, 'one value per lane');
     final micros = _ordered(at);
     final slot = _added % capacity;
+    if (_added >= capacity) _evicted = _times[slot];
     _times[slot] = micros;
     for (var lane = 0; lane < lanes; lane++) {
       final value = values[lane];
@@ -147,14 +153,15 @@ final class TimeSeriesRing extends ChangeNotifier {
   DateTime _time(int micros) => DateTime.fromMicrosecondsSinceEpoch(micros);
 
   void _changed() {
-    // A gap that ended before the oldest sample is out of the data. One
-    // that the oldest sample closed stays: it names the time before that
-    // sample, as when sampling stopped before the first one arrived. The
-    // cap bounds gaps opened while no sample arrives.
-    if (length > 0) {
-      final oldest = microsAt(0);
+    // A gap is out of the data once a sample at or after its end has left
+    // the ring. Until then it names time before the oldest sample, as when
+    // sampling stopped, perhaps for several reasons in turn, before the
+    // first sample arrived. The cap bounds gaps opened while no sample
+    // arrives.
+    final evicted = _evicted;
+    if (evicted != null) {
       _gaps.removeWhere(
-        (gap) => gap.end != null && gap.end!.microsecondsSinceEpoch < oldest,
+        (gap) => gap.end != null && gap.end!.microsecondsSinceEpoch <= evicted,
       );
     }
     if (_gaps.length > capacity) _gaps.removeRange(0, _gaps.length - capacity);

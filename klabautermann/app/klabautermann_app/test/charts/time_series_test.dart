@@ -113,6 +113,18 @@ void main() {
       ));
     });
 
+    test('keeps every gap in a chain that the first sample closes', () {
+      final ring = _ring();
+      ring.openGap(_at(0), ChartGapReason.appClosed);
+      ring.openGap(_at(60), ChartGapReason.disconnected);
+      ring.add(_at(90), [1]);
+
+      expect(ring.gaps, [
+        (start: _at(0), end: _at(60), reason: ChartGapReason.appClosed),
+        (start: _at(60), end: _at(90), reason: ChartGapReason.disconnected),
+      ]);
+    });
+
     test('keeps at most capacity gaps while no sample arrives', () {
       final ring = _ring(capacity: 2);
       for (var second = 0; second < 6; second++) {
