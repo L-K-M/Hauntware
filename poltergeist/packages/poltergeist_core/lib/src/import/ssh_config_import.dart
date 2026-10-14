@@ -25,8 +25,6 @@ import 'package:seance_core/seance_core.dart';
 import '_bookmark_import_dedupe.dart';
 
 const int _defaultSshPort = 22;
-const int _minimumSshPort = 1;
-const int _maximumSshPort = 65535;
 
 /// OpenSSH's own `Include` nesting cap; beyond it ssh refuses the whole
 /// config, while import records an unresolved-include note and keeps the
@@ -65,9 +63,10 @@ enum SshConfigImportLimitation {
   /// apply its directives to this host. Only top-level includes resolve.
   hostInclude,
 
-  /// The block's `Port` is outside 1–65535; the bookmark model refuses
-  /// such ports (04 §2.1 — they would mint malformed `hostkey:` ids) and
-  /// the row cannot be imported at all.
+  /// The pinned importer refused the block's `Port`: not a decimal
+  /// 1–65535 or a service name it knows, which ssh would reject too. The
+  /// bookmark model refuses such ports (04 §2.1 — they would mint
+  /// malformed `hostkey:` ids) and the row cannot be imported at all.
   invalidPort,
 
   /// Connection defaults — `Port`, `User`, `HostName`, `IdentityFile` —
@@ -144,6 +143,10 @@ class SshConfigImportRow {
 
   final List<SshConfigImportLimitation> limitations;
 
+  /// The block's `Port` argument as written when the pinned importer
+  /// refused it ([SshConfigImportLimitation.invalidPort]); null otherwise.
+  final String? refusedPort;
+
   bool get importByDefault =>
       !matchesExistingBookmark &&
       !matchesEarlierImportRow &&
@@ -161,6 +164,9 @@ class SshConfigImportRow {
   /// The dedupe key's port half — 22 unless the block names another.
   int get port => host.port ?? _defaultSshPort;
 
+  /// The port to show: the refused argument, or [port].
+  String get portLabel => refusedPort ?? '$port';
+
   const SshConfigImportRow({
     required this.id,
     required this.host,
@@ -170,6 +176,7 @@ class SshConfigImportRow {
     this.matchesEarlierImportRow = false,
     this.earlierImportRowAlias,
     this.limitations = const [],
+    this.refusedPort,
   });
 
   /// Builds the bookmark this row imports: a `remotePath` bookmark over
@@ -286,10 +293,20 @@ class SshConfigImportService {
         if (parsed.host.proxyJump != null)
           SshConfigImportLimitation.proxyJump,
       };
-      final parsedPort = parsed.host.port;
-      if (parsedPort != null &&
-          (parsedPort < _minimumSshPort || parsedPort > _maximumSshPort)) {
+      final refusedPort = parsed.refusedPort;
+      if (refusedPort != null) {
+        // The row can never import, so it takes no part in dedupe.
         limitations.add(SshConfigImportLimitation.invalidPort);
+        rows.add(
+          SshConfigImportRow(
+            id: mintId(),
+            host: parsed.host,
+            sourcePath: parsed.sourcePath,
+            limitations: List.unmodifiable(limitations),
+            refusedPort: refusedPort,
+          ),
+        );
+        continue;
       }
 
       // Host+port+username — the host lowercased because DNS/ssh
@@ -324,12 +341,16 @@ class SshConfigImportService {
   }
 }
 
-/// One host block parsed out of one file.
+/// One host parsed out of one file.
 class _ParsedHost {
   final ImportedHost host;
   final String sourcePath;
 
-  const _ParsedHost(this.host, this.sourcePath);
+  /// The `Port` argument the pinned importer refused; null for a host it
+  /// imports.
+  final String? refusedPort;
+
+  const _ParsedHost(this.host, this.sourcePath, {this.refusedPort});
 }
 
 /// Walks the resolved config accumulating hosts, limitations, and
@@ -351,7 +372,8 @@ class _ParsedHost {
 class _Resolver {
   final SshConfigImportService service;
 
-  /// Hosts in first-obtained order across the whole resolved config.
+  /// Hosts in first-obtained order across the whole resolved config, each
+  /// chunk's refused hosts after its importable ones.
   final List<_ParsedHost> hosts = [];
 
   /// Limitations applying to every row: Match blocks, top-level
@@ -388,10 +410,18 @@ class _Resolver {
     final chunks = _splitAtTopLevelIncludes(text, deferredIncludes);
 
     for (final chunk in chunks) {
-      hosts.addAll(
-        SshConfigImporter.parse(chunk.text)
-            .map((host) => _ParsedHost(host, path)),
-      );
+      final parsed = SshConfigImporter.parse(chunk.text);
+      hosts.addAll(parsed.hosts.map((host) => _ParsedHost(host, path)));
+      // Refused hosts follow the chunk's importable ones: they never
+      // import, so their position decides no first-obtained dedupe.
+      for (final skipped in parsed.skipped) {
+        switch (skipped.reason) {
+          case SkippedHostReason.invalidPort:
+            hosts.add(
+              _ParsedHost(skipped.host, path, refusedPort: skipped.value),
+            );
+        }
+      }
       _scanUnsupported(chunk, promoteTopLevelDefaults);
       for (final args in chunk.includeArgsAfter) {
         await _resolveInclude(

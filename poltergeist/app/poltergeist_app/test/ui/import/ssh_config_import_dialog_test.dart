@@ -208,8 +208,9 @@ void main() {
     // chip outranks the earlier-row chip when both would apply.
     expect(find.text('Duplicate of bookmark “Prod web”'), findsNWidgets(2));
     expect(find.text('Duplicate of “web” in this import'), findsNothing);
-    // …and the invalid port chip.
+    // …and the invalid port chip, beside the port as written.
     expect(find.text('Cannot import: port outside 1–65535'), findsOneWidget);
+    expect(find.text('bad-port:70000'), findsOneWidget);
 
     // Both endpoint rows duplicate the existing bookmark, so every row
     // starts skipped; the invalid-port row can never import at all.

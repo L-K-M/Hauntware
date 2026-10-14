@@ -94,14 +94,12 @@ void main() {
       expect(result.skippedCount, 2);
     });
 
-    test('a negative Port is skipped; an unparsable one reads as 22', () {
+    test('a Port ssh rejects is skipped; a service name resolves', () {
       // ssh rejects the whole config over `Port -1` or `Port 22a`, but it
-      // resolves a service name such as `ssh` to its port, 22. A negative
-      // port is out of range like any other. Séance's SshConfigImporter
-      // reads an unparsable Port, service names included, as absent, so
-      // its host imports with the default port and is not counted: `word`
-      // matches ssh only because that default is 22. This pins the current
-      // behavior, so a change in seance_core surfaces here.
+      // resolves a service name such as `ssh` to its port, 22. Séance's
+      // SshConfigImporter skips and reports a block whose Port ssh would
+      // reject, and resolves `ssh` itself. This pins that behavior, so a
+      // change in seance_core surfaces here.
       final result = fleetEntriesFromSshConfig(
         'Host negative\n  Port -1\n'
         'Host typo\n  Port 22a\n'
@@ -109,10 +107,9 @@ void main() {
       );
 
       expect(result.entries.map((e) => (e.label, e.port)), [
-        ('typo', kSshDefaultPort),
         ('word', kSshDefaultPort),
       ]);
-      expect(result.skippedCount, 1);
+      expect(result.skippedCount, 2);
     });
 
     test('an empty HostName or User counts as absent', () {

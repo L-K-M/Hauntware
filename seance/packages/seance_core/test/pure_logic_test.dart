@@ -43,7 +43,7 @@ Host bastion db
   HostName 10.0.0.5
   ProxyJump prod
 ''';
-      final hosts = SshConfigImporter.parse(text);
+      final hosts = SshConfigImporter.parse(text).hosts;
       expect(hosts.map((h) => h.alias), ['prod', 'bastion']);
 
       final prod = hosts.first;
@@ -59,7 +59,7 @@ Host bastion db
 
     test('supports Key=value form and quoted values', () {
       const text = 'Host x\n  HostName=x.example.com\n  User="root"\n';
-      final h = SshConfigImporter.parse(text).single;
+      final h = SshConfigImporter.parse(text).hosts.single;
       expect(h.hostName, 'x.example.com');
       expect(h.user, 'root');
     });
@@ -71,7 +71,7 @@ Host bastion db
           '  User =deploy\n'
           '  Port= 2222\n'
           '  IdentityFile  =  ~/.ssh/id\n';
-      final h = SshConfigImporter.parse(text).single;
+      final h = SshConfigImporter.parse(text).hosts.single;
       expect(h.alias, 'x');
       expect(h.hostName, 'x.example.com');
       expect(h.user, 'deploy');
@@ -89,7 +89,7 @@ Host bastion db
           // A `#` starts a comment only where an argument would start.
           '  HostName x.example.com # comment\n'
           '  ProxyJump jump#2\n';
-      final h = SshConfigImporter.parse(text).single;
+      final h = SshConfigImporter.parse(text).hosts.single;
       expect(h.identityFile, '~/My Keys/#1');
       expect(h.user, 'ops');
       expect(h.hostName, 'x.example.com');
@@ -99,31 +99,109 @@ Host bastion db
       final escaped = SshConfigImporter.parse(r'''
 Host y
   IdentityFile ~/My\ Keys/\"id\"\x
-''').single;
+''').hosts.single;
       expect(escaped.identityFile, r'~/My Keys/"id"\x');
 
       // ssh rejects an unterminated quote; the importer reads it to the end
       // of the line rather than dropping the value.
-      final open = SshConfigImporter.parse('Host z\n  User "ops\n').single;
+      final open = SshConfigImporter.parse(
+        'Host z\n  User "ops\n',
+      ).hosts.single;
       expect(open.user, 'ops');
 
       // A directive with no value is absent, so the alias is the address.
-      final blank = SshConfigImporter.parse('Host b\n  HostName=\n').single;
+      final blank = SshConfigImporter.parse(
+        'Host b\n  HostName=\n',
+      ).hosts.single;
       expect(blank.hostName, isNull);
       expect(blank.effectiveHost, 'b');
+    });
+
+    test('reads Port as ssh does: a decimal 1 to 65535 or a service', () {
+      final result = SshConfigImporter.parse(
+        'Host top\n  Port 65535\n'
+        // ssh's strtonum() reads base 10 and allows a sign.
+        'Host padded\n  Port 0022\n'
+        'Host signed\n  Port +2222\n'
+        'Host named\n  Port ssh\n'
+        'Host web\n  Port https\n',
+      );
+      expect(result.hosts.map((h) => (h.alias, h.port)), [
+        ('top', 65535),
+        ('padded', 22),
+        ('signed', 2222),
+        ('named', 22),
+        ('web', 443),
+      ]);
+      expect(result.skipped, isEmpty);
+    });
+
+    test('skips and reports a host whose Port ssh rejects', () {
+      // ssh rejects the whole config over each of these ("Bad port").
+      const values = {
+        '-1': '-1',
+        '0': '0',
+        '65536': '65536',
+        '22a': '22a',
+        '0x16': '0x16',
+        'SSH': 'SSH',
+        '99999999999999999999': '99999999999999999999',
+        '""': '',
+      };
+      for (final MapEntry(key: written, value: value) in values.entries) {
+        final result = SshConfigImporter.parse(
+          'Host bad\n'
+          '  HostName bad.example.com\n'
+          '  Port $written\n'
+          'Host good\n',
+        );
+        expect(result.hosts.map((h) => h.alias), ['good'], reason: written);
+
+        final skipped = result.skipped.single;
+        expect(skipped.reason, SkippedHostReason.invalidPort, reason: written);
+        expect(skipped.value, value, reason: written);
+        expect(skipped.line, 3, reason: written);
+        expect(skipped.host.alias, 'bad', reason: written);
+        expect(skipped.host.hostName, 'bad.example.com', reason: written);
+        expect(skipped.host.port, isNull, reason: written);
+      }
+    });
+
+    test('a rejected Port skips its block even beside a valid one', () {
+      final result = SshConfigImporter.parse(
+        'Host a\n  Port 22a\n  Port 2222\n'
+        'Host b\n  Port 2222\n  Port=\n',
+      );
+      expect(result.hosts, isEmpty);
+      expect(result.skipped.map((s) => (s.host.alias, s.value, s.line)), [
+        ('a', '22a', 2),
+        ('b', '', 6),
+      ]);
+    });
+
+    test('checks Port only in the blocks it imports', () {
+      // ssh would reject these too, but no imported host reads them.
+      final result = SshConfigImporter.parse(
+        'Port 0\n'
+        'Host *\n  Port 22a\n'
+        'Match all\n  Port x\n'
+        'Host ok\n',
+      );
+      expect(result.hosts.map((h) => h.alias), ['ok']);
+      expect(result.skipped, isEmpty);
     });
 
     test('converts to a ServerConfig with reference-not-store key auth', () {
       final h = SshConfigImporter.parse(
         'Host x\n HostName h\n IdentityFile ~/.ssh/id\n',
-      ).single;
+      ).hosts.single;
       final cfg = h.toServerConfig(id: 'id1', now: 5);
       expect(cfg.authMethod, AuthMethod.privateKey);
       expect(cfg.identityFilePath, '~/.ssh/id');
       // OpenSSH tries the agent for a keyless host, so imports do the same.
       final keylessCfg = SshConfigImporter.parse(
         'Host y\n HostName h\n',
-      ).single.toServerConfig(id: 'id2', now: 5);
+      ).hosts.single.toServerConfig(id: 'id2', now: 5);
       expect(keylessCfg.authMethod, AuthMethod.agent);
     });
   });

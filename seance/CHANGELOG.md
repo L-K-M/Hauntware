@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Import SSH config skips a host whose `Port` ssh would reject, such as
+  `22a`, `0x16`, `0` or `65536`, and the message after the import counts
+  it. Such a host used to be imported with port 22 or an impossible
+  port. `Port ssh`, `http` and `https` read as 22, 80 and 443.
 - Import SSH config reads lines as ssh does. `HostName = example.com`
   imports `example.com`, not `= example.com`. Single and double quotes
   and backslash escapes are removed, and a `#` inside quotes or inside a

@@ -40,19 +40,83 @@ class ImportedHost {
   }
 }
 
+/// Why [SshConfigImporter] left a host out.
+enum SkippedHostReason {
+  /// The block's `Port` is not a port ssh accepts (see [SshConfigImporter]).
+  invalidPort,
+}
+
+/// A host [SshConfigImporter] left out because its block is invalid.
+class SkippedHost {
+  /// The block's other settings, to show what was left out. Its
+  /// [ImportedHost.port] is null; never import it.
+  final ImportedHost host;
+
+  final SkippedHostReason reason;
+
+  /// The refused argument as written, such as `22a`; empty when the
+  /// directive had none.
+  final String value;
+
+  /// The 1-based line number of the refused directive.
+  final int line;
+
+  const SkippedHost({
+    required this.host,
+    required this.reason,
+    required this.value,
+    required this.line,
+  });
+}
+
+/// What [SshConfigImporter.parse] read from a config.
+class SshConfigImport {
+  /// Hosts to import, in file order.
+  final List<ImportedHost> hosts;
+
+  /// Hosts left out because their block is invalid, in file order.
+  final List<SkippedHost> skipped;
+
+  const SshConfigImport({required this.hosts, required this.skipped});
+}
+
 /// A read-only importer for `~/.ssh/config`. Parses the common directives
 /// (`Host`, `HostName`, `Port`, `User`, `IdentityFile`, `ProxyJump`) and skips
 /// everything else. Wildcard-only host patterns (e.g. `Host *`) are dropped,
 /// since they describe defaults rather than a connectable server. Lines are
 /// split as ssh splits them ([SshConfigLine]): `Key value`, `Key=value` and
 /// `Key = value` are equivalent, and quoted arguments are unquoted.
+///
+/// `Port` is read as ssh's `a2port()` reads it: a decimal 1 to 65535, or a
+/// service name. ssh resolves names with `getservbyname(3)`, which Dart
+/// cannot call portably, so only `ssh`, `http` and `https` are known here.
+/// ssh rejects the whole config over any other `Port`; the importer leaves
+/// out only the hosts of that block and reports them in
+/// [SshConfigImport.skipped]. A `Port` outside the imported blocks (before
+/// the first `Host`, in a wildcard-only block or in a `Match` block) is not
+/// read, so it is not checked either.
 class SshConfigImporter {
-  /// Parse the text of an ssh config file into importable hosts.
-  static List<ImportedHost> parse(String text) {
+  static const int _minimumPort = 1;
+  static const int _maximumPort = 65535;
+
+  /// The service names a `Port` may give instead of a number, with their
+  /// TCP ports from the IANA registry.
+  static const Map<String, int> _servicePorts = {
+    'ssh': 22,
+    'http': 80,
+    'https': 443,
+  };
+
+  /// A base-10 integer with an optional sign, as `strtonum()` reads it.
+  static final RegExp _decimal = RegExp(r'^[+-]?[0-9]+$');
+
+  /// Parse the text of an ssh config file into importable hosts, and the
+  /// hosts left out because their block is invalid.
+  static SshConfigImport parse(String text) {
     final blocks = <_Block>[];
     _Block? current;
 
-    for (final raw in text.split('\n')) {
+    for (final (index, raw) in text.split('\n').indexed) {
       final line = SshConfigLine.tryParse(raw);
       if (line == null) continue;
 
@@ -63,6 +127,16 @@ class SshConfigImporter {
       } else if (line.keyword == 'match') {
         // Match blocks are conditional; ignore their directives for import.
         current = null;
+      } else if (current != null && line.keyword == 'port') {
+        // ssh checks every Port line, so a bad one is not hidden by a
+        // valid one elsewhere in the block.
+        final value = line.arguments.firstOrNull ?? '';
+        final port = _parsePort(value);
+        if (port == null) {
+          current.badPort ??= (line: index + 1, value: value);
+        } else {
+          current.port = port;
+        }
       } else if (current != null) {
         // ssh reads a directive's first argument and rejects the line when
         // it is missing, empty or followed by more; the importer reads the
@@ -75,6 +149,7 @@ class SshConfigImporter {
     }
 
     final hosts = <ImportedHost>[];
+    final skipped = <SkippedHost>[];
     for (final block in blocks) {
       final alias = block.patterns.firstWhere(
         (p) => !_isWildcard(p),
@@ -82,16 +157,45 @@ class SshConfigImporter {
       );
       if (alias.isEmpty) continue; // wildcard-only block: defaults, not a host
       final d = block.directives;
-      hosts.add(ImportedHost(
+      final badPort = block.badPort;
+      final host = ImportedHost(
         alias: alias,
         hostName: d['hostname'],
-        port: d['port'] != null ? int.tryParse(d['port']!) : null,
+        port: badPort == null ? block.port : null,
         user: d['user'],
         identityFile: _expandTilde(d['identityfile']),
         proxyJump: d['proxyjump'],
-      ));
+      );
+      if (badPort == null) {
+        hosts.add(host);
+      } else {
+        skipped.add(
+          SkippedHost(
+            host: host,
+            reason: SkippedHostReason.invalidPort,
+            value: badPort.value,
+            line: badPort.line,
+          ),
+        );
+      }
     }
-    return hosts;
+    return SshConfigImport(
+      hosts: List.unmodifiable(hosts),
+      skipped: List.unmodifiable(skipped),
+    );
+  }
+
+  /// The port ssh's `a2port()` reads from [value], or null where ssh
+  /// reports "Bad port".
+  static int? _parsePort(String value) {
+    if (!_decimal.hasMatch(value)) return _servicePorts[value];
+
+    // null when the digits overflow an int, which is out of range too.
+    final port = int.tryParse(value);
+    if (port == null || port < _minimumPort || port > _maximumPort) {
+      return null;
+    }
+    return port;
   }
 
   static bool _isWildcard(String pattern) =>
@@ -204,5 +308,12 @@ class SshConfigLine {
 class _Block {
   final List<String> patterns;
   final Map<String, String> directives = {};
+
+  /// The last valid `Port`, like every other directive here.
+  int? port;
+
+  /// The first `Port` ssh would reject, which makes the block invalid.
+  ({int line, String value})? badPort;
+
   _Block({required this.patterns});
 }

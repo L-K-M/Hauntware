@@ -706,30 +706,83 @@ Host web
     }
   });
 
-  test('ports outside 1–65535 make the row unimportable', () async {
+  test('a Port the pin refuses makes the row unimportable', () async {
     final preview = await _load('''
 Host zero
   Port 0
 
 Host huge
+  HostName huge.example.com
   Port 70000
+
+Host typo
+  Port 22a
 
 Host fine
   Port 65535
+
+Host named
+  Port ssh
 ''');
+    final rows = {for (final row in preview.rows) row.host.alias: row};
 
-    expect(preview.rows[0].importable, isFalse);
-    expect(preview.rows[0].importByDefault, isFalse);
-    expect(
-      preview.rows[0].limitations,
-      contains(SshConfigImportLimitation.invalidPort),
+    // The pin reports refused hosts apart from the ones it imports; they
+    // follow the chunk's importable rows.
+    expect(preview.rows.map((r) => r.host.alias).toList(), [
+      'fine',
+      'named',
+      'zero',
+      'huge',
+      'typo',
+    ]);
+
+    for (final alias in ['zero', 'huge', 'typo']) {
+      final row = rows[alias]!;
+      expect(row.importable, isFalse, reason: alias);
+      expect(row.importByDefault, isFalse, reason: alias);
+      expect(
+        row.limitations,
+        contains(SshConfigImportLimitation.invalidPort),
+        reason: alias,
+      );
+      expect(
+        () => row.toBookmark(now: DateTime.utc(2026, 9, 8)),
+        throwsStateError,
+        reason: alias,
+      );
+    }
+    // The preview shows the refused argument, not the default port.
+    expect(rows['huge']!.host.effectiveHost, 'huge.example.com');
+    expect(rows['huge']!.portLabel, '70000');
+    expect(rows['typo']!.portLabel, '22a');
+
+    expect(rows['fine']!.importable, isTrue);
+    expect(rows['fine']!.port, 65535);
+    expect(rows['named']!.port, 22);
+    expect(rows['named']!.portLabel, '22');
+  });
+
+  test('a refused row takes no part in dedupe', () async {
+    final preview = await _load(
+      '''
+Host broken
+  HostName web.example.com
+  User alice
+  Port 22a
+
+Host web
+  HostName web.example.com
+  User alice
+''',
+      existing: [_existingBookmark('Typo', host: 'web.example.com')],
     );
-    expect(() => preview.rows[0].toBookmark(now: DateTime.utc(2026, 9, 8)),
-        throwsStateError);
+    final rows = {for (final row in preview.rows) row.host.alias: row};
 
-    expect(preview.rows[1].importable, isFalse);
-    expect(preview.rows[2].importable, isTrue);
-    expect(preview.rows[2].port, 65535);
+    // Only the importable row matches the bookmark for
+    // alice@web.example.com:22; the refused one names no port to compare.
+    expect(rows['web']!.matchesExistingBookmark, isTrue);
+    expect(rows['broken']!.matchesExistingBookmark, isFalse);
+    expect(rows['broken']!.matchesEarlierImportRow, isFalse);
   });
 
   test('a missing root config fails the load', () async {
@@ -989,7 +1042,7 @@ Host alpha beta
           '  ProxyCommand nc %h %p\n';
       // The pinned importer is the oracle: the preview row must carry
       // the same alias the pin minted, not a second host parser.
-      final pinnedAlias = SshConfigImporter.parse(text).single.alias;
+      final pinnedAlias = SshConfigImporter.parse(text).hosts.single.alias;
       final preview = await _load(text);
 
       expect(preview.rows, hasLength(1), reason: separator.key);
@@ -1008,7 +1061,7 @@ Host alpha beta
     // can drift from the pin's tokenization again.
     final text = 'Host alpha\rbeta\n'
         '  Include extra.conf\n';
-    final pinnedAlias = SshConfigImporter.parse(text).single.alias;
+    final pinnedAlias = SshConfigImporter.parse(text).hosts.single.alias;
     final preview = await _load(text);
 
     expect(preview.rows.single.host.alias, pinnedAlias);
@@ -1022,7 +1075,7 @@ Host alpha beta
     // pin never minted.
     final text = 'Host "alpha" "beta"\n'
         '  ProxyCommand nc %h %p\n';
-    final pinnedAlias = SshConfigImporter.parse(text).single.alias;
+    final pinnedAlias = SshConfigImporter.parse(text).hosts.single.alias;
     final preview = await _load(text);
 
     expect(preview.rows.single.host.alias, pinnedAlias);

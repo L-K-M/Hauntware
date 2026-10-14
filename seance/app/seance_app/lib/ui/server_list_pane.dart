@@ -852,9 +852,15 @@ class _ServerListPaneState extends State<ServerListPane> {
       ),
     );
     if (text != null && text.trim().isNotEmpty) {
-      final n = await state.importSshConfig(text);
+      final (:imported, :skipped) = await state.importSshConfig(text);
       if (context.mounted) {
-        showTopToastIn(context, message: 'Imported $n host(s)');
+        showTopToastIn(
+          context,
+          message: skipped == 0
+              ? 'Imported $imported host(s)'
+              : 'Imported $imported host(s). Skipped $skipped with an '
+                    'invalid Port.',
+        );
       }
     }
   }

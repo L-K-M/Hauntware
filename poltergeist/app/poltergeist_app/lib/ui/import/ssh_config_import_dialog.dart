@@ -51,7 +51,7 @@ BookmarkImportDialogRow _dialogRow(SshConfigImportRow row) {
   return BookmarkImportDialogRow(
     id: row.id,
     label: row.host.alias,
-    endpoint: '${row.host.effectiveHost}:${row.port}',
+    endpoint: '${row.host.effectiveHost}:${row.portLabel}',
     username: row.username,
     authentication: hasKeyPath
         ? (l10n) => l10n.sshImportAuthKey(keyPath)
