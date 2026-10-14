@@ -13,6 +13,7 @@
     "systemdVersion": 239,
     "virtualization": "kvm",
     "container": "none",
+    "lxcfsMounts": null,
     "uid": 1001,
     "user": "ops",
     "groups": [

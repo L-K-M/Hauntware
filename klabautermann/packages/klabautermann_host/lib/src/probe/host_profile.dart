@@ -48,6 +48,26 @@ final class EngineSocket {
   };
 }
 
+/// The system-wide `/proc` files of D50: inside a container each shows
+/// the host's figures unless it is a `fuse.lxcfs` mount. Namespaced files
+/// such as `/proc/net/dev` and `/proc/<pid>` are the container's own and
+/// are deliberately not listed.
+enum SystemWideProcFile {
+  meminfo('/proc/meminfo'),
+  stat('/proc/stat'),
+  loadavg('/proc/loadavg'),
+  uptime('/proc/uptime'),
+  diskstats('/proc/diskstats'),
+  pressureCpu('/proc/pressure/cpu'),
+  pressureIo('/proc/pressure/io'),
+  pressureMemory('/proc/pressure/memory');
+
+  const SystemWideProcFile(this.path);
+
+  /// The absolute path, as `/proc/mounts` names a mount point.
+  final String path;
+}
+
 /// The probe's findings (03 §6.1), keyed by area; unknown stays null.
 @immutable
 final class HostProfile {
@@ -65,6 +85,7 @@ final class HostProfile {
     this.systemdVersion,
     this.virtualization,
     this.container,
+    List<String>? lxcfsMounts,
     this.uid,
     this.user,
     List<String>? groups,
@@ -92,7 +113,10 @@ final class HostProfile {
     this.killUserProcesses,
     this.xdgRuntimeDir,
     Map<String, SectionStatus>? areaStatuses,
-  }) : groups = List.unmodifiable(groups ?? []),
+  }) : lxcfsMounts = lxcfsMounts == null
+           ? null
+           : List.unmodifiable(lxcfsMounts),
+       groups = List.unmodifiable(groups ?? []),
        tools = Map.unmodifiable(tools ?? {}),
        engineSockets = List.unmodifiable(engineSockets ?? []),
        areaStatuses = Map.unmodifiable(areaStatuses ?? {});
@@ -118,6 +142,10 @@ final class HostProfile {
   // virt: `systemd-detect-virt` and `-c`; 'none' or a name; null when the
   // tool is absent (unknown stays unknown).
   final String? virtualization, container;
+
+  /// The `/proc` files that are `fuse.lxcfs` mounts, in `/proc/mounts`
+  /// order (D50): empty when there are none, null when unknown.
+  final List<String>? lxcfsMounts;
 
   // identity: `id -u`, `id -un`, `id -nG`.
   final int? uid;
@@ -182,6 +210,24 @@ final class HostProfile {
   bool? toolPresent(String tool) =>
       tools.containsKey(tool) ? tools[tool] != null : null;
 
+  /// Whether [file] shows the container host's figures rather than this
+  /// system's own (D50, SYS-04), so its values must show as unknown with
+  /// that reason. False when lxcfs serves the file or
+  /// `systemd-detect-virt -c` found no container; true inside a named
+  /// container; null when neither is known, as on a host without
+  /// `systemd-detect-virt` and without lxcfs mounts. An lxcfs mount over
+  /// any `/proc` file also tells that this is a container.
+  bool? showsHostFigures(SystemWideProcFile file) {
+    final mounts = lxcfsMounts;
+    if (mounts != null && mounts.contains(file.path)) return false;
+
+    final c = container;
+    if (c != null) return c != 'none';
+
+    if (mounts == null || mounts.isEmpty) return null;
+    return true;
+  }
+
   Map<String, Object?> toJson() => {
     'kernelSys': kernelSys,
     'kernelRelease': kernelRelease,
@@ -196,6 +242,7 @@ final class HostProfile {
     'systemdVersion': systemdVersion,
     'virtualization': virtualization,
     'container': container,
+    'lxcfsMounts': lxcfsMounts,
     'uid': uid,
     'user': user,
     'groups': groups,
