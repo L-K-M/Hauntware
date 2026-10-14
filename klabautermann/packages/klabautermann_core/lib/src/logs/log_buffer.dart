@@ -194,8 +194,9 @@ final class LogBuffer {
   /// Appends one batch of journal entries as [add] appends lines: each
   /// entry's MESSAGE becomes a line's text, cut at the line cap, and its
   /// other fields the line's [LogLine.journal]. Those count against
-  /// [maxBytes] too, within the line cap: fields that would pass it are
-  /// left out and counted, so an entry fits however many fields it has.
+  /// [maxBytes] too and get up to [maxLineBytes] beside the text: fields
+  /// that would pass it are left out and counted, so an entry fits however
+  /// many fields it has.
   void addJournal(Iterable<JournalEntry> entries, {int dropped = 0}) {
     RangeError.checkNotNegative(dropped, 'dropped');
 
@@ -238,8 +239,9 @@ final class LogBuffer {
     final text = _fit(message ?? '', maxLineBytes);
     final textBytes = _byteLength(text);
 
-    // The source and the fields share what the text leaves of the line
-    // cap, so an entry never needs more than the byte cap.
+    // The source and the fields get up to one line cap beside the text,
+    // within what the text leaves of the byte cap, so an entry never needs
+    // more than the byte cap.
     var room = math.min(maxLineBytes, maxBytes - textBytes);
     final kept = _fit(entry.unit ?? entry.identifier ?? '', room);
     final source = kept.isEmpty ? null : kept;

@@ -895,11 +895,11 @@ close the section; they are not decisions.
   behind Planchette's find bar, with tests for case folding and match
   windows (`planchette/packages/planchette_core/test/editor_syntax_test.dart`
   [V]). The package is pure Dart; it adds `unorm_dart`, `uuid` and
-  `fixnum` to the app's lockfile, which the Séance and Planchette apps
-  already resolve [V]. `planchette_editor` stays out of the MVP app
-  (10.8). *Rejected:* a search of the app's own (a second copy of the same
-  rules); `planchette_editor`'s find (an editor for one text buffer,
-  10.8).
+  `fixnum` to the app's lockfile, at the versions the Séance and
+  Planchette apps resolve [V]. `planchette_editor` stays out of the log
+  viewer (10.8). *Rejected:* a search of the app's own (a second copy of
+  the same rules); `planchette_editor`'s find (an editor for one text
+  buffer, 10.8).
 
 ### Proposals awaiting the owner
 
@@ -3632,10 +3632,11 @@ keeps a journal entry's MESSAGE as the line's text under the same cut,
 and its unit (else its syslog identifier), priority and PID typed beside
 it. Every other field is kept in the order received, encoded once as
 UTF-8 JSON in a byte list, so an entry costs a few objects however many
-fields it has, and those bytes count against the 32 MiB cap. They share
-what the text leaves of the 16 KiB line cap; fields past it are left out
-and counted. A buffer full of typical service entries (15 fields, 671
-bytes each) holds about 42 MiB in the heap test. A row reads `unit[PID]:
+fields it has, and those bytes count against the 32 MiB cap. With the
+unit they get up to one 16 KiB line cap beside the text, within what the
+text leaves of the byte cap; fields past it are left out and counted. A
+buffer full of typical service entries (15 fields, 671 bytes each) holds
+about 42 MiB in the heap test. A row reads `unit[PID]:
 message`, its level from `PRIORITY`. A MESSAGE's newline shows as a
 return mark (⏎) and a line separator: without wrap the row ends at its
 first line, where the text engine draws no ellipsis, and with wrap each
@@ -3646,8 +3647,11 @@ unless run with `--all`, reads as not sent. Search (D56) reads a row's
 visible text, unit and PID included, and ignores case unless told not
 to. It keeps a match count for each matching line and searches only new
 lines as they arrive; stepping wraps around, pauses following and scrolls
-the match into sight, and the current match is underlined as well as
-coloured. Matches in a line are found again when it is drawn.
+the match's row into sight. Without wrap, a match past a row's ellipsis
+stays hidden until sideways scrolling lands, and one after a journal
+row's first line until wrap is on. Only the current match is underlined,
+whatever the line's SGR underline, so it differs by more than colour.
+Matches in a line are found again when it is drawn.
 
 ### 10.9 Theme
 

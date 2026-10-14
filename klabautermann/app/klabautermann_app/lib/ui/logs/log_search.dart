@@ -27,6 +27,11 @@ typedef LogMatch = ({int seq, int index});
 /// [next] and [previous] wrap around at the newest and oldest match. From
 /// no current match, [next] goes to the oldest and [previous] to the
 /// newest. A new query or case setting starts with no current match.
+///
+/// A new query or case setting searches every held line at once, which
+/// took 73 to 125 ms for 50,000 journal rows of about 115 characters in a
+/// JIT test run, so a search field should debounce its input or search in
+/// slices across frames.
 class LogSearch extends ChangeNotifier {
   LogSearch(this._logs) {
     _logs.addListener(_onLines);

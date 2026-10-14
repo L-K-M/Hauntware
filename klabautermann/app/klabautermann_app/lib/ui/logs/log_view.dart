@@ -66,9 +66,10 @@ final _rowBreaks = RegExp('[\u2028\u2029]');
 ///
 /// A journal line's row (LOG-01) starts with its unit and PID, and a tap,
 /// or Enter on the focused row, pauses following and shows its other
-/// fields beneath it, one row each without wrap. With a [search], its matches are highlighted,
-/// and each step to a match pauses following and scrolls the match into
-/// sight (LOG-05).
+/// fields beneath it, one row each without wrap. With a [search], its
+/// matches are highlighted, and each step to a match pauses following and
+/// scrolls the match's row into sight (LOG-05). Without wrap a match
+/// after the row's first line or past its ellipsis stays out of sight.
 class LogView extends StatefulWidget {
   const LogView({
     super.key,
