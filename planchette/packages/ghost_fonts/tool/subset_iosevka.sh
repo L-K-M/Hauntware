@@ -8,7 +8,7 @@
 # about 480 KB per style. Characters left out fall back to the next
 # family in the app's stack.
 #
-# Needs curl, python3 and pyftsubset from fonttools 4.67.0
+# Needs curl, python3, sha256sum or shasum, and pyftsubset from fonttools 4.67.0
 # (for example: uv tool install fonttools==4.67.0).
 #
 # Usage: tool/subset_iosevka.sh [path/to/PkgTTF-Unhinted-IosevkaTerm-34.9.0.zip]
@@ -49,6 +49,7 @@ readonly unicodes=(
 readonly features=calt,ccmp,locl,mark,mkmk,kern,liga,rlig,clig
 
 out="$(cd "$(dirname "$0")/.." && pwd)/fonts/IosevkaTerm"
+mkdir -p "$out"
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 
@@ -57,7 +58,12 @@ if [[ -z "$archive" ]]; then
   archive="$work/$archive_name"
   curl --fail --location --silent --show-error --output "$archive" "$url"
 fi
-echo "$archive_sha256  $archive" | sha256sum --check --quiet
+# sha256sum is GNU coreutils; macOS has shasum instead.
+if command -v sha256sum >/dev/null; then
+  echo "$archive_sha256  $archive" | sha256sum --check --quiet
+else
+  echo "$archive_sha256  $archive" | shasum -a 256 --check --status
+fi
 
 ranges="$(IFS=,; echo "${unicodes[*]}")"
 for style in "${styles[@]}"; do

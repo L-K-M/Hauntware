@@ -169,7 +169,7 @@ class SeanceTerminalThemes {
 }
 
 /// The terminal's face while [AppSettings.terminalFontFamily] is blank:
-/// narrow, so a window holds more columns, and drawn with ligatures.
+/// narrow, so a window holds more columns.
 const BundledMonoFont kDefaultTerminalFont = BundledMonoFont.iosevkaTerm;
 
 /// The resolved terminal look for one build: the text style and the palette.

@@ -15,7 +15,15 @@ import 'src/bundled_mono_font.dart';
 /// paints real glyphs awaits this first (inside `tester.runAsync` in a
 /// widget test). Reads the manifest rather than a file list, so a family
 /// missing from the pubspec fails the tests that need it.
-Future<void> loadBundledMonoFonts() => _loaded ??= _load();
+Future<void> loadBundledMonoFonts() async {
+  try {
+    await (_loaded ??= _load());
+  } catch (_) {
+    // Not remembered: a later call, say after the binding is up, retries.
+    _loaded = null;
+    rethrow;
+  }
+}
 
 Future<void>? _loaded;
 
