@@ -1,0 +1,432 @@
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:klabautermann_core/klabautermann_core.dart';
+import 'package:test/test.dart';
+
+const _versionKey = 'klabautermann.settings.version';
+const _deviceIdKey = 'klabautermann.sync.deviceId';
+const _appearanceKey = 'klabautermann.appearance';
+
+final _uuidV4 = RegExp(
+  r'^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
+);
+
+/// A fixed clock, so the copy of a damaged file has a known name.
+final _time = DateTime.utc(2026, 10, 13, 23, 5, 29, 123, 456);
+const _stamp = '20261013T230529123456Z';
+
+const _darkAppearance = <String, Object?>{
+  'palette': {'name': 'Klabautermann'},
+  'mode': 'dark',
+};
+
+void main() {
+  late Directory directory;
+  late File file;
+
+  setUp(() {
+    directory = Directory.systemTemp.createTempSync('klab-settings-');
+    file = File('${directory.path}/$deviceSettingsFileName');
+  });
+
+  tearDown(() => directory.deleteSync(recursive: true));
+
+  Map<String, Object?> document() =>
+      jsonDecode(file.readAsStringSync()) as Map<String, Object?>;
+
+  List<String> entries() =>
+      directory
+          .listSync()
+          .map((entity) => entity.uri.pathSegments.lastWhere((s) => s != ''))
+          .toList()
+        ..sort();
+
+  void writeDocument(Map<String, Object?> json) =>
+      file.writeAsStringSync(jsonEncode(json));
+
+  group('DeviceSettingsStore', () {
+    test('a first launch mints a UUID v4 device id and saves it', () async {
+      final store = await DeviceSettingsStore.open(file);
+
+      expect(store.issue, isNull);
+      expect(store.deviceId, matches(_uuidV4));
+      expect(store.appearance, isNull);
+      expect(document(), {
+        _versionKey: deviceSettingsSchemaVersion,
+        _deviceIdKey: store.deviceId,
+      });
+      expect(entries(), [deviceSettingsFileName], reason: 'no temp file left');
+    });
+
+    test('the device id survives reloads and is never rewritten', () async {
+      final first = await DeviceSettingsStore.open(file);
+      final bytes = file.readAsBytesSync();
+
+      var writes = 0;
+      Future<void> countingWriter(File target, List<int> contents) {
+        writes++;
+        return writeFileAtomically(target, contents);
+      }
+
+      for (var launch = 0; launch < 3; launch++) {
+        final reopened = await DeviceSettingsStore.open(
+          file,
+          writer: countingWriter,
+        );
+        expect(reopened.deviceId, first.deviceId);
+        expect(reopened.issue, isNull);
+      }
+      expect(writes, 0, reason: 'opening a valid file writes nothing');
+      expect(file.readAsBytesSync(), bytes);
+    });
+
+    test(
+      'round-trips the appearance and keeps keys it does not know',
+      () async {
+        writeDocument({
+          _versionKey: 1,
+          _deviceIdKey: 'device-a',
+          'klabautermann.monitor.set': ['srv-1'],
+          'klabautermann.later': {'nested': true},
+        });
+
+        final store = await DeviceSettingsStore.open(file);
+        await store.setAppearance(_darkAppearance);
+        final reopened = await DeviceSettingsStore.open(file);
+
+        expect(reopened.issue, isNull);
+        expect(reopened.deviceId, 'device-a');
+        expect(reopened.appearance, _darkAppearance);
+        expect(document(), {
+          _versionKey: 1,
+          _deviceIdKey: 'device-a',
+          'klabautermann.monitor.set': ['srv-1'],
+          'klabautermann.later': {'nested': true},
+          _appearanceKey: _darkAppearance,
+        });
+      },
+    );
+
+    test('an appearance that is not an object reads as none', () async {
+      writeDocument({
+        _versionKey: 1,
+        _deviceIdKey: 'device-a',
+        _appearanceKey: 'dark',
+      });
+
+      final store = await DeviceSettingsStore.open(file);
+
+      expect(store.issue, isNull);
+      expect(store.appearance, isNull);
+      expect(store.deviceId, 'device-a');
+    });
+
+    test('overlapping writes land in call order', () async {
+      final store = await DeviceSettingsStore.open(file);
+
+      await Future.wait([
+        store.setAppearance({'mode': 'light'}),
+        store.setAppearance({'mode': 'dark'}),
+      ]);
+
+      final reopened = await DeviceSettingsStore.open(file);
+      expect(reopened.appearance, {'mode': 'dark'});
+    });
+
+    test('saves the appearance as it was passed', () async {
+      final store = await DeviceSettingsStore.open(file);
+      final palette = <String, Object?>{'name': 'Klabautermann'};
+      final appearance = <String, Object?>{'palette': palette, 'mode': 'dark'};
+
+      final saved = store.setAppearance(appearance);
+      appearance['mode'] = 'light';
+      palette['name'] = 'changed';
+      await saved;
+
+      expect(store.appearance, _darkAppearance);
+      expect(document()[_appearanceKey], _darkAppearance);
+    });
+
+    test('a valid file without a device id mints one and saves it', () async {
+      writeDocument({_versionKey: 1, _appearanceKey: _darkAppearance});
+
+      final store = await DeviceSettingsStore.open(file);
+
+      expect(store.issue, isNull);
+      expect(store.deviceId, matches(_uuidV4));
+      expect(document(), {
+        _versionKey: 1,
+        _appearanceKey: _darkAppearance,
+        _deviceIdKey: store.deviceId,
+      });
+      expect(entries(), [deviceSettingsFileName]);
+    });
+
+    test('a failed write keeps the change in memory and the file as it '
+        'was', () async {
+      var failing = false;
+      Future<void> writer(File target, List<int> contents) {
+        if (failing) throw const FileSystemException('disk full');
+        return writeFileAtomically(target, contents);
+      }
+
+      final store = await DeviceSettingsStore.open(file, writer: writer);
+      final before = file.readAsBytesSync();
+
+      failing = true;
+      await expectLater(
+        store.setAppearance(_darkAppearance),
+        throwsA(isA<FileSystemException>()),
+      );
+      expect(store.appearance, _darkAppearance);
+      expect(file.readAsBytesSync(), before);
+
+      // The queue is not wedged by the failure.
+      failing = false;
+      await store.setAppearance({'mode': 'light'});
+      expect(document()[_appearanceKey], {'mode': 'light'});
+    });
+
+    test('a failed first write hands out no device id', () async {
+      Future<void> failingWriter(File target, List<int> contents) =>
+          throw const FileSystemException('read-only file system');
+
+      final store = await DeviceSettingsStore.open(file, writer: failingWriter);
+
+      expect(store.issue?.kind, DeviceSettingsIssueKind.notSaved);
+      expect(store.issue?.error, isA<FileSystemException>());
+      expect(store.deviceId, isNull);
+      expect(file.existsSync(), isFalse);
+
+      // The next launch that can write mints and keeps one.
+      final next = await DeviceSettingsStore.open(file);
+      expect(next.issue, isNull);
+      expect(next.deviceId, matches(_uuidV4));
+    });
+
+    group('a damaged file', () {
+      test('is copied aside byte for byte, and its device id kept', () async {
+        const damaged =
+            '{"klabautermann.settings.version":1,'
+            '"klabautermann.sync.deviceId":"device-a",'
+            '"klabautermann.appearance":{"mode":"da';
+        file.writeAsStringSync(damaged);
+
+        final store = await DeviceSettingsStore.open(file, now: () => _time);
+
+        final issue = store.issue!;
+        expect(issue.kind, DeviceSettingsIssueKind.recovered);
+        expect(issue.error, isA<FormatException>());
+        expect(
+          issue.preservedAs,
+          '${file.path}.corrupt-$_stamp',
+          reason: "Poltergeist's UTC-stamped copy name",
+        );
+        expect(File(issue.preservedAs!).readAsStringSync(), damaged);
+        expect(store.deviceId, 'device-a');
+        expect(store.appearance, isNull);
+        // The defaults and the kept id are written back at once (Séance's
+        // rule), so the next launch does not mint a new id.
+        expect(document(), {_versionKey: 1, _deviceIdKey: 'device-a'});
+        expect(entries(), [
+          deviceSettingsFileName,
+          '$deviceSettingsFileName.corrupt-$_stamp',
+        ]);
+      });
+
+      final invalid = <String, List<int>>{
+        'a list': utf8.encode('[]'),
+        'no version': utf8.encode('{"$_deviceIdKey":"device-a"}'),
+        'a text version': utf8.encode('{"$_versionKey":"1"}'),
+        'version zero': utf8.encode('{"$_versionKey":0}'),
+        'a numeric device id': utf8.encode(
+          '{"$_versionKey":1,"$_deviceIdKey":7}',
+        ),
+        'an empty device id': utf8.encode(
+          '{"$_versionKey":1,"$_deviceIdKey":""}',
+        ),
+        'bytes that are not UTF-8': [0xff, 0xfe, 0x7b],
+        'an empty file': [],
+      };
+      for (final MapEntry(key: name, value: bytes) in invalid.entries) {
+        test('is recovered when it holds $name', () async {
+          file.writeAsBytesSync(bytes);
+
+          final store = await DeviceSettingsStore.open(file, now: () => _time);
+
+          expect(store.issue?.kind, DeviceSettingsIssueKind.recovered);
+          expect(File(store.issue!.preservedAs!).readAsBytesSync(), bytes);
+          expect(document()[_versionKey], deviceSettingsSchemaVersion);
+          // 'no version' still shows a usable id; the others get a new one.
+          if (name == 'no version') {
+            expect(store.deviceId, 'device-a');
+          } else {
+            expect(store.deviceId, matches(_uuidV4));
+          }
+          expect(document()[_deviceIdKey], store.deviceId);
+        });
+      }
+
+      test('never overwrites the copy of an earlier damage', () async {
+        file.writeAsStringSync('first damage');
+        final first = await DeviceSettingsStore.open(file, now: () => _time);
+        file.writeAsStringSync('second damage');
+        final second = await DeviceSettingsStore.open(file, now: () => _time);
+
+        final firstCopy = first.issue!.preservedAs!;
+        final secondCopy = second.issue!.preservedAs!;
+        expect(secondCopy, isNot(firstCopy));
+        expect(second.issue!.kind, DeviceSettingsIssueKind.recovered);
+        expect(File(firstCopy).readAsStringSync(), 'first damage');
+        expect(File(secondCopy).readAsStringSync(), 'second damage');
+      });
+
+      test('is left untouched when its copy fails, and nothing is '
+          'saved', () async {
+        const damaged = '{"klabautermann.sync.deviceId":"device-a",';
+        file.writeAsStringSync(damaged);
+        Future<void> writer(File target, List<int> contents) {
+          if (target.path.contains('.corrupt-')) {
+            throw const FileSystemException('permission denied');
+          }
+          return writeFileAtomically(target, contents);
+        }
+
+        final store = await DeviceSettingsStore.open(file, writer: writer);
+
+        expect(store.issue?.kind, DeviceSettingsIssueKind.unpreserved);
+        expect(store.issue?.kind.readOnly, isTrue);
+        expect(store.deviceId, 'device-a');
+        await expectLater(
+          store.setAppearance(_darkAppearance),
+          throwsA(isA<DeviceSettingsReadOnlyException>()),
+        );
+        expect(store.appearance, _darkAppearance, reason: 'kept in memory');
+        expect(file.readAsStringSync(), damaged);
+        expect(entries(), [deviceSettingsFileName]);
+      });
+
+      test('stays in place when the write-back fails, for the next launch '
+          'to recover', () async {
+        const damaged = '{"klabautermann.sync.deviceId":"device-a"';
+        file.writeAsStringSync(damaged);
+        Future<void> writer(File target, List<int> contents) {
+          if (target.path == file.path) {
+            throw const FileSystemException('disk full');
+          }
+          return writeFileAtomically(target, contents);
+        }
+
+        final store = await DeviceSettingsStore.open(
+          file,
+          writer: writer,
+          now: () => _time,
+        );
+
+        // The copy was made, but the file was not reset, so the user is
+        // not told it was.
+        final issue = store.issue!;
+        expect(issue.kind, DeviceSettingsIssueKind.recoveredNotSaved);
+        expect(issue.kind.readOnly, isFalse);
+        expect(issue.preservedAs, '${file.path}.corrupt-$_stamp');
+        expect(File(issue.preservedAs!).readAsStringSync(), damaged);
+        expect(
+          issue.error,
+          isA<FileSystemException>(),
+          reason: "the write's failure, not the parse error",
+        );
+        expect(store.deviceId, 'device-a', reason: 'still on disk');
+        expect(file.readAsStringSync(), damaged);
+
+        final next = await DeviceSettingsStore.open(file);
+        expect(next.issue?.kind, DeviceSettingsIssueKind.recovered);
+        expect(next.deviceId, 'device-a');
+        expect(document(), {_versionKey: 1, _deviceIdKey: 'device-a'});
+      });
+
+      test('hands out no new device id when the write-back fails', () async {
+        file.writeAsStringSync('no id here');
+        Future<void> writer(File target, List<int> contents) {
+          if (target.path == file.path) {
+            throw const FileSystemException('disk full');
+          }
+          return writeFileAtomically(target, contents);
+        }
+
+        final store = await DeviceSettingsStore.open(file, writer: writer);
+
+        expect(store.issue?.kind, DeviceSettingsIssueKind.recoveredNotSaved);
+        expect(store.deviceId, isNull, reason: 'the minted id never saved');
+        expect(file.readAsStringSync(), 'no id here');
+      });
+    });
+
+    test('an unreadable file is left alone and nothing is saved', () async {
+      // A directory where the file should be: present, but not readable as
+      // a file, whoever runs the test.
+      Directory(file.path).createSync();
+
+      final store = await DeviceSettingsStore.open(file);
+
+      expect(store.issue?.kind, DeviceSettingsIssueKind.unreadable);
+      expect(store.issue?.error, isA<FileSystemException>());
+      expect(store.deviceId, isNull, reason: 'no id is invented');
+      await expectLater(
+        store.setAppearance(_darkAppearance),
+        throwsA(isA<DeviceSettingsReadOnlyException>()),
+      );
+      expect(Directory(file.path).existsSync(), isTrue);
+      expect(entries(), [deviceSettingsFileName]);
+    });
+
+    test('a newer schema is read but never rewritten', () async {
+      writeDocument({
+        _versionKey: deviceSettingsSchemaVersion + 1,
+        _deviceIdKey: 'device-b',
+        _appearanceKey: _darkAppearance,
+        'klabautermann.newer': 1,
+      });
+      final bytes = file.readAsBytesSync();
+
+      final store = await DeviceSettingsStore.open(file);
+
+      expect(store.issue?.kind, DeviceSettingsIssueKind.newerVersion);
+      expect(store.deviceId, 'device-b');
+      expect(store.appearance, _darkAppearance);
+      await expectLater(
+        store.setAppearance({'mode': 'light'}),
+        throwsA(isA<DeviceSettingsReadOnlyException>()),
+      );
+      expect(file.readAsBytesSync(), bytes);
+    });
+  });
+
+  group('writeFileAtomically', () {
+    test('replaces the file, creating its folder, and leaves no temp '
+        'file', () async {
+      final nested = File('${directory.path}/support/settings.json');
+
+      await writeFileAtomically(nested, utf8.encode('first'));
+      await writeFileAtomically(nested, utf8.encode('second'));
+
+      expect(nested.readAsStringSync(), 'second');
+      expect(nested.parent.listSync().map((e) => e.path), [nested.path]);
+    });
+
+    test('a failed replace leaves the target as it was and removes the '
+        'temp file', () async {
+      // rename(2) cannot replace a non-empty directory.
+      final target = Directory(file.path)..createSync();
+      File('${target.path}/keep').writeAsStringSync('kept');
+
+      await expectLater(
+        writeFileAtomically(file, utf8.encode('{}')),
+        throwsA(isA<FileSystemException>()),
+      );
+
+      expect(File('${target.path}/keep').readAsStringSync(), 'kept');
+      expect(entries(), [deviceSettingsFileName]);
+    });
+  });
+}

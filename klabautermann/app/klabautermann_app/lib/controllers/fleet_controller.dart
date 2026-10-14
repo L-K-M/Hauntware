@@ -53,6 +53,7 @@ final class SshConfigImportSucceeded extends SshConfigImportOutcome {
   const SshConfigImportSucceeded({
     required this.importedCount,
     required this.skippedCount,
+    required this.saved,
   });
 
   /// See [SshConfigImported.importedCount].
@@ -60,6 +61,10 @@ final class SshConfigImportSucceeded extends SshConfigImportOutcome {
 
   /// See [SshConfigImported.skippedCount].
   final int skippedCount;
+
+  /// See [SshConfigImported.saved]: false means this import is not kept
+  /// after a restart.
+  final bool saved;
 }
 
 /// The app could not read the config, so nothing reached the engine.
@@ -81,7 +86,7 @@ final class SshConfigImportRejected extends SshConfigImportOutcome {
 /// snapshots, per-server link phases from [LinkState] events, the
 /// workspace's selection, and the desktop ssh_config import (FL-02).
 /// Pull-only by construction (D14): the one request it sends,
-/// [ImportSshConfig], changes the engine's device-local import list and
+/// [ImportSshConfig], changes the engine's device-local import store and
 /// never a catalog record.
 final class FleetController extends ChangeNotifier {
   /// [servers] seeds the list until the engine's first [CatalogReplaced].
@@ -205,11 +210,16 @@ final class FleetController extends ChangeNotifier {
         notifyListeners();
       case CatalogReplaced(:final entries):
         _replaceFleet(entries);
-      case SshConfigImported(:final importedCount, :final skippedCount):
+      case SshConfigImported(
+        :final importedCount,
+        :final skippedCount,
+        :final saved,
+      ):
         _completeImport(
           SshConfigImportSucceeded(
             importedCount: importedCount,
             skippedCount: skippedCount,
+            saved: saved,
           ),
         );
       case RequestRejected(:final requestName, :final reason)
@@ -231,6 +241,10 @@ final class FleetController extends ChangeNotifier {
         !_servers.any((server) => server.id == _selectedServerId)) {
       _selectedServerId = null;
     }
+    // A phase kept for a dropped server would resurface if its id came
+    // back in a later fleet, and the map would grow with every churn.
+    final ids = {for (final server in _servers) server.id};
+    _linkPhases.removeWhere((serverId, _) => !ids.contains(serverId));
     notifyListeners();
   }
 

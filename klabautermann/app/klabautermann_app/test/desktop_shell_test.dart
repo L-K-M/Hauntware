@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:klabautermann_app/ui/desktop_shell.dart';
+import 'package:klabautermann_app/ui/fleet_rail.dart';
+import 'package:klabautermann_app/ui/inspector_pane.dart';
+import 'package:klabautermann_app/ui/server_workspace.dart';
 import 'package:klabautermann_core/klabautermann_core.dart'
     show LinkPhase, LinkState;
 
@@ -101,4 +104,29 @@ void main() {
     expect(find.byTooltip('Show section'), findsOneWidget);
     expect(find.text('Inspector'), findsOneWidget);
   });
+
+  testWidgets('a tablet\'s insets and keyboard reach no pane a second time', (
+    tester,
+  ) async {
+    // A landscape tablet with a cutout, the keyboard up. The shell insets
+    // the panes for the cutout and the home indicator and the Scaffold
+    // shrinks them for the keyboard, so their own scroll views and safe
+    // areas must see none of it, or each pads for it again.
+    const insets = FakeViewPadding(left: 30, top: 24, bottom: 20);
+    tester.view.padding = insets;
+    tester.view.viewPadding = insets;
+    tester.view.viewInsets = const FakeViewPadding(bottom: 300);
+    await pumpApp(tester, servers: twoServers);
+
+    expect(find.byType(DesktopShell), findsOneWidget);
+    for (final pane in [FleetRail, ServerWorkspace, InspectorPane]) {
+      final context = tester.element(find.byType(pane));
+      expect(MediaQuery.paddingOf(context), EdgeInsets.zero, reason: '$pane');
+      expect(
+        MediaQuery.viewInsetsOf(context),
+        EdgeInsets.zero,
+        reason: '$pane',
+      );
+    }
+  }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
 }

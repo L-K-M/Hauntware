@@ -24,6 +24,24 @@ dependencies:
   # value the light and dark themes are built from (03 D9, §10.9).
   ghost_theme:
     path: ../../../planchette/packages/ghost_theme
+  # getApplicationSupportDirectory() for settings.json (03 §4.10); pinned
+  # to Poltergeist's version.
+  path_provider: 2.1.6
+  # The desktop settings window's link engine, the main window's state
+  # lifecycle and the macOS toolbar band channel (03 §10.2, D32). Brings
+  # the window_manager and screen_retriever plugins with it.
+  ghost_desktop:
+    path: ../../../planchette/packages/ghost_desktop
+  # The macOS integrated titlebar: a transparent titlebar over full-size
+  # content with an empty unified toolbar (lib/services/macos_titlebar.dart).
+  # Pinned to the version Séance and Poltergeist run, whose titlebar this
+  # one follows.
+  macos_window_utils: 1.9.1
+  # File > Quit on Linux and Windows asks the main window to close, the
+  # path its close button takes (lib/ui/menus/app_commands.dart). Already
+  # resolved through ghost_desktop; pinned to that version, as Poltergeist
+  # pins it.
+  window_manager: 0.5.2
 
 dev_dependencies:
   flutter_test:

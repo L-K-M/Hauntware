@@ -536,19 +536,43 @@ follows the existing split: critical for mass or unbounded destruction,
 warning for scoped data loss and lockout-class commands (`iptables -F`
 `:96-100`, the power rule `:91-95`).
 
+After F2-4 (review of #156), rows 15 to 19 and 22 to 25 were revised and
+row 26 added. The rows use four shorthands: `O` is
+`(?:\s+-\S+(?:\s+[^\s-]\S*)?){0,8}`, up to eight options with or
+without a value; unbounded, it backtracked over every later option, so
+a 40 KB script of repeated `docker -a` took over 20 s to scan. `D` is
+`\bdockerO`, `docker` and its global options (`--context prod`,
+`-H ssh://h`); `K` is
+`(?<![\w-])kill(?![\w-])` plus a negative lookahead that skips a first
+argument of `-l`, `-L`, `--list`, `--table` or signal 0 (`-0`, `-s 0`,
+`-n 0`, `--signal 0`), forms that send no signal; only the first argument
+counts, so a `# -l` comment cannot hide `kill -9 1`; `N` is
+`(?<!\s(?:-[snq]|--signal|--queue|--timeout))`, which rejects a word
+that is a signal, queue or timeout operand rather than a PID. The code
+writes rows 25 and 26 in an equivalent linear form. The operand
+lookbehind follows the PID. Only the first `K` on a line is tried (for
+row 26, the first `K` that a blank follows, plus any `K` that blanks and
+a newline follow, which keeps the old `\s+` matches across a newline),
+since a later `K` reaches nothing the first one does not. Row 26 reads
+its arguments as `\S[^\n]*` rather than `\S+[^\n]*`, the same strings
+without retrying every split of a long argument. On 64 KB lines, trying
+every kill took about 36 s on repeated `kill x`, and `\S+` about 34 s
+on one long argument.
+
 | # | Pattern | Severity | Explanation |
 |---|---|---|---|
-| 15 | `\bdocker\s+system\s+prune\b(?=[^\n]*(--volumes\b\|--all\b\|\s-\w*a))` (also `-af`, `-fa`) | critical | `docker system prune` sweeping images and volumes destroys all unused data |
-| 16 | `\bdocker\s+volume\s+prune\b` | critical | Removes every unused volume, taking attached data with it |
-| 17 | `\bdocker\s+volume\s+rm\b` | warning | Deletes a named volume and its data |
-| 18 | `\b(?:docker\s+compose\|docker-compose)\b[^\n]*\sdown\b(?=[^\n]*(--volumes\b\|\s-\w*v))` (also `compose -f f.yaml down -v`) | critical | `compose down -v` drops the stack's volumes |
-| 19 | `\bsystemctl\s+(?:stop\|disable\|mask)\b[^\n]*\bssh` | warning | Stopping or masking sshd cuts future SSH access to the host |
+| 15 | `D\s+system\s+prune\b(?=[^\n]*(--volumes\b\|--all\b\|\s-\w*a))` (also `-af`, `-fa`, `docker --context prod system prune -af --volumes`) | critical | `docker system prune --all` deletes every unused image; `--volumes` also deletes unused volumes and their data. Corrected in F2-4: since Docker 23 (API 1.42) volume pruning takes only anonymous volumes, so "all unused data" overstated it |
+| 16 | `D\s+volume\s+prune\b` (also `docker -H ssh://h volume prune -f`) | critical | Removes unused volumes and their data (named ones too with `--all` or before Docker 23). Corrected in F2-4: Docker 23 prunes only anonymous volumes by default (23.0.0 release notes; `docker volume prune` reference) |
+| 17 | `D\s+volume\s+(?:rm\|remove)\b` | warning | Deletes a named volume and its data. `docker volume remove` is the alias of `rm`; only global options, not arbitrary words, may precede `volume`, so `docker run alpine volume rm x` is not matched |
+| 18 | `(?:D\s+compose\|\bdocker-compose)\b[^\n]*\sdown\b(?=[^\n]*(--volumes\b\|\s-\w*v))` (also `compose -f f.yaml down -v`, `docker --context prod compose down -v`) | critical | `compose down -v` drops the stack's volumes |
+| 19 | `\bsystemctlO\s+(?:stop\|disable\|mask)\s[^\n]*\bsshd?(?![\w-])\|\bservice\s+sshd?\s+stop\b` | warning | Stopping or masking sshd cuts future SSH access to the host. Options may precede the verb (`systemctl --now disable ssh`, `-q stop sshd`, `-H prod stop sshd`); `service ssh stop` is the SysV form; the unit is `ssh` or `sshd` with an optional suffix (`ssh.socket`, `sshd@1.service`), so `sshfs`, `ssh-agent` and `sshd-keygen` are not matched |
 | 20 | `\bcrontab\b[^\n]*\s-\w*r` | warning | `crontab -r` deletes the user's whole cron table |
 | 21 | `\bufw\b(?:\s+--?\w[\w-]*)*\s+(?:reset\|disable)\b` (also `ufw --force reset`) | warning | Removes or switches off the firewall |
-| 22 | `\bnft\s+flush\s+ruleset\b` | warning | Drops the entire nftables ruleset |
-| 23 | `\buserdel\b(?![^\n]*(\s-\w*r\|--remove\b))` | warning | Removes a user account |
-| 24 | `\buserdel\b(?=[^\n]*(\s-\w*r\|--remove\b))` (`-r`, `-rf`, `-fr`) | critical | `userdel -r` also deletes the home directory |
-| 25 | `\bkill\b[^\n]*\s1\b` | warning | Signals PID 1; `-9 1` is the plan's case, `TERM 1` shuts systemd down |
+| 22 | `\bnft\s+flush\s+(?:ruleset\|table\|chain)\b` | warning | Drops nftables rules (a whole ruleset, table or chain); this can leave the host unfiltered or lock you out. A flushed table or chain keeps its base chains' policies, so a drop policy then blocks everything, the `iptables -F` case (`iptables -F INPUT` is the chain form); a flushed ruleset has no tables left and filters nothing |
+| 23 | `\buserdel\b(?![^\n]*(\s-\w*r\|--remove\b))`, or `\bdeluser` with exactly one operand, no leading `--group` and neither `--remove-home` nor `--remove-all-files` | warning | Removes a user account. `deluser NAME GROUP` only takes NAME out of GROUP and `deluser --group NAME` removes a group, so a second operand or a leading `--group` rules it out; a `#` comment counts as neither, and neither does text after a shell operator or a newline, which quotes and `$(...)` keep in the segment (`ssh host 'deluser bob; rm -f x'`). An option that takes a value (`--conf FILE`) is read as an operand, a rare form left unflagged |
+| 24 | `\buserdel\b(?=[^\n]*(\s-\w*r\|--remove\b))\|\bdeluser\b(?=[^\n]*\s--remove-(?:home\|all-files)\b)` (`-r`, `-rf`, `-fr`) | critical | `userdel -r` and `deluser --remove-home` also delete the home directory; `deluser --remove-all-files` deletes every file the user owns. The deluser flags destroy the same unbounded user data as `userdel -r`, so they share its severity |
+| 25 | `K[^\n]*N\s1\b` | warning | Signals PID 1, the init process or a container's main process; this can reboot the host or stop the container. Corrected in F2-4: the plan's `\bkill\b[^\n]*\s1\b` also fired on `tmux kill-session -t 1` and on a 1 that is the operand of `-s`, `-n` or `-l`; systemd re-executes on `TERM` and reboots on `INT` (systemd(1)), and PID 1 receives only signals it handles, so `-9 1` is dropped inside its namespace (pid_namespaces(7)); `kill -9 1` stays the plan's case. Revised after F2-4: `--signal 1 42`, `--list 1` and `kill -0 1` (signal 0 only probes) are not PID 1, while `kill -s KILL 1` still is |
+| 26 | `K\s+\S+[^\n]*N\s-1\b` | warning | Signals every process you are allowed to signal; as root that ends every service and session on the host. PID -1 is every process the caller may signal except init (kill(2)); only a `-1` after the first argument is a PID, since a leading `-1` is SIGHUP; `\b` rejects a process group such as `-12345` but accepts a closing quote or parenthesis (`sh -c 'kill -9 -1'`). Warning like rule 25 and the power rule: processes stop, stored data stays |
 
 Overlap with the 14 existing rules, checked rule by rule: `docker`,
 `crontab`, `ufw`, `nft`, `userdel`, `kill` have no coverage today (plan's
@@ -566,7 +590,43 @@ existing critical rule independently.
 Benign nonmatches the tests pin: `docker compose up`, `docker volume ls`,
 `docker run -v /a:/b`, `docker system df`, `systemctl status sshd`,
 `crontab -l`/`crontab -e`, `ufw status`, `nft list ruleset`, `usermod`,
-`useradd`, `kill 1000`, `docker compose down` (no `-v`).
+`useradd`, `kill 1000`, `docker compose down` (no `-v`). The revised rows
+add `systemctl stop sshfs`, `systemctl --user stop ssh-agent`,
+`service ssh restart`, `kill --signal 1 42`, `kill --list 1`,
+`kill -0 1`, `kill -1 1234`, `deluser deploy docker` and
+`docker run alpine volume rm pgdata`.
+
+**Command segments.** Every rule, the original 14 and the ones above, is
+matched against one command at a time rather than the whole line, so a
+flag or path from the next command cannot complete a pattern. Before
+matching, `scan` removes backslash-newline continuations and splits the
+text at unquoted `;`, `&&`, `||`, `&`, `|`, `|&` and newlines. Single
+quotes, `$'...'`, double quotes, backslash escapes, `${...}`, `$(...)`,
+`<(...)`, `>(...)` and backticks keep a command together, and as in bash,
+quotes nest inside `${...}` even within double quotes
+(`rm -rf "${D:-"a;b"}" /etc` is one command); `>&`, `<&`, `&>` and `>|`
+are redirections; a `#` that starts a word runs to the end of the line
+without opening quotes. Each line of a here-document body (after `<<WORD`
+or `<<-WORD`, up to the WORD line) is one command with continuations
+joined, since the body may be fed to a shell, but its quotes are not
+tracked, so an apostrophe in prose (`Don't panic` in a motd) cannot join
+the commands after the body or move their findings onto its line. Two
+rules need a wider view: `curl|sh` is matched
+per pipeline (commands joined by `|` or `|&` stay together) and the fork
+bomb, which is built from separators, on the whole text. A finding
+carries the line on which its command starts, one finding per rule and
+line, so the Command inbox scans a script whole instead of line by line
+and a continued command is checked as one.
+
+The splitter is a scanner, not a shell parser, and errs toward keeping
+text together: extra text can only add a false positive, while a wrong
+split can hide part of a match. Known gaps: a `case` pattern's `)` inside
+`$(...)` ends the substitution early; a here-document is recognised only
+outside quotes and substitutions, and `<<` in an arithmetic `((...))` is
+taken for one; aliases, functions and `eval` are not expanded. Tests pin
+that `systemctl stop nginx; ssh deploy@host`, `rm -rf ./build; ls /` and
+`git clean -n && rm -f out.o` raise nothing, that `userdel \` + newline +
+`-r deploy` is critical, and that `rm -rf \` + newline + `/etc` is caught.
 
 ### 3.7 Barrel exports (F2e)
 
@@ -716,9 +776,13 @@ identically today (`app_services.dart:1178-1183`,
 `server_editor_backend.dart:193-201`). Prompting, dismissal propagation
 and `CredentialOrigin` tagging stay in Poltergeist's
 `_PromptBroker`/`PromptCoordinator`; the coordinator's vault-first
-branch calls the shared resolver over `CredentialPromptData`'s fields
-(authMethod, secretRef, identityFilePath), preserving
-auto-answer-on-agent and cancel-to-`RemoteFileException` behaviour.
+branch calls the shared resolver over `CredentialPromptData`'s
+authMethod and secretRef only, preserving auto-answer-on-agent and
+cancel-to-`RemoteFileException` behaviour. It omits identityFilePath:
+that branch has never read key files (the dialog does), and with the
+path set the resolver reads the key file instead of answering with the
+stored key. Passing it is a behaviour change, so it moves to the later
+`fail` PR (§10).
 
 ## 5. Migration plan (staged PRs)
 

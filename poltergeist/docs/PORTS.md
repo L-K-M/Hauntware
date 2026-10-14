@@ -142,7 +142,19 @@ transfer-rate, limit and ETA formatters and the custom-rate parse
 grammar followed on 2026-10-13 in `ghost_rate_format.dart`, which also
 carries the new IEC binary size/rate formatters for Klabautermann;
 `activity_format.dart` keeps the app's names as delegates and owns the
-10 GB/s parse ceiling.
+10 GB/s parse ceiling. Séance's server-list sectioning followed on
+2026-10-13 in its own package, `ghost_servers` (over `seance_protocol`
+and `ghost_ui`); the SERVERS section's catalog grouping calls its
+`groupServers` instead of grouping inline, with the `srv:` collapse keys
+unchanged. The status-dot vocabulary followed the same day in that
+package's `server_status.dart`: `serverIndicatorOf` keeps its name and
+ARB words as a delegate to its list rule (through
+`ui/ghost_servers_adapter.dart`), the sidebar rail resolves the rail
+rule through that adapter directly (so `railIndicatorOf`, left without
+a caller, was removed), the rail's paint map and the
+sidebar's hidden-live header dot draw through `ghostStatusDot` and
+`ghostHiddenLiveIndicator`, and the pane-tab `ServerStateGlyph` paint
+stays here.
 
 ## Cross-app deep links (2026-10-02)
 
@@ -885,7 +897,15 @@ counterpart is ported here.
 - Shared: 2026-10-08. `existingServerGroups` moved into `seance_protocol`
   beside `ServerConfig` and reaches the server editor through the core
   barrel; this file is removed.
-- Port-back candidates: none — Séance owns the source.
+- Shared: 2026-10-13. Séance's whole file moved verbatim (import
+  re-pointed to `seance_protocol`) to Planchette's `ghost_servers`, its
+  test with it; `serverListRows` gained a `labels` parameter whose
+  default is Séance's titles. The catalog's inline grouping in
+  `ui/sidebar/sidebar_servers_section.dart` now calls `groupServers`
+  with the controller's pinned set; its collapse keys still go through
+  `SidebarCollapseKeys.serverGroup`.
+- Port-back candidates: none — the source now lives in the shared
+  `ghost_servers` package, which both apps consume.
 
 ## app/poltergeist_app/lib/ui/server_filter.dart
 

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:klabautermann_app/controllers/fleet_controller.dart';
@@ -110,6 +111,24 @@ void main() {
         expect(fleet.selectedServer, isNull);
       },
     );
+
+    test('forgets the link phase of a server the new fleet drops', () async {
+      final fleet = controller();
+      engine
+        ..emit(CatalogReplaced([_entry('web-1'), _entry('db-1')]))
+        ..emit(const LinkState('ssh-config:web-1', LinkPhase.connected))
+        ..emit(const LinkState('ssh-config:db-1', LinkPhase.failed));
+      await settle();
+
+      engine.emit(CatalogReplaced([_entry('db-1')]));
+      await settle();
+      expect(fleet.linkPhaseFor('ssh-config:db-1'), LinkPhase.failed);
+
+      // A re-added server starts disconnected, not in its old phase.
+      engine.emit(CatalogReplaced([_entry('web-1'), _entry('db-1')]));
+      await settle();
+      expect(fleet.linkPhaseFor('ssh-config:web-1'), LinkPhase.disconnected);
+    });
   });
 
   group('importSshConfig (FL-02)', () {
@@ -134,16 +153,43 @@ void main() {
 
       engine
         ..emit(CatalogReplaced([_entry('web-1', host: 'web-1.example')]))
-        ..emit(const SshConfigImported(importedCount: 1, skippedCount: 3));
+        ..emit(
+          const SshConfigImported(
+            importedCount: 1,
+            skippedCount: 3,
+            saved: true,
+          ),
+        );
 
       final result = await outcome as SshConfigImportSucceeded;
       expect(result.importedCount, 1);
       expect(result.skippedCount, 3);
+      expect(result.saved, isTrue);
       // The fleet already shows the import when the answer completes.
       expect(fleet.servers.single.address, 'web-1.example');
       expect(fleet.isImportingSshConfig, isFalse);
       // The only traffic: the import itself, never a catalog write (D14).
       expect(engine.sent, hasLength(1));
+    });
+
+    test('an import the engine could not save says so', () async {
+      final fleet = controller(sshConfig: FakeSshConfigSource.text(_config));
+      final outcome = fleet.importSshConfig();
+      await settle();
+
+      engine
+        ..emit(CatalogReplaced([_entry('web-1')]))
+        ..emit(
+          const SshConfigImported(
+            importedCount: 1,
+            skippedCount: 0,
+            saved: false,
+          ),
+        );
+
+      final result = await outcome as SshConfigImportSucceeded;
+      expect(result.saved, isFalse);
+      expect(fleet.servers.single.id, 'ssh-config:web-1');
     });
 
     test('a second call while one runs joins it', () async {
@@ -156,7 +202,9 @@ void main() {
 
       source.gate!.complete();
       await settle();
-      engine.emit(const SshConfigImported(importedCount: 0, skippedCount: 0));
+      engine.emit(
+        const SshConfigImported(importedCount: 0, skippedCount: 0, saved: true),
+      );
       await first;
 
       expect(source.reads, 1);
@@ -204,8 +252,13 @@ void main() {
     });
   });
 
-  test('imports through the real engine isolate (CN-19)', () async {
-    final client = await IsolateEngineClient.spawn();
+  test('imports through the real engine isolate (CN-19), and a restart '
+      'restores them (03 §4.10)', () async {
+    final support = Directory.systemTemp.createTempSync('klab-fleet-');
+    addTearDown(() => support.deleteSync(recursive: true));
+    final client = await IsolateEngineClient.spawn(
+      supportDirectory: support.path,
+    );
     addTearDown(client.shutdown);
     final fleet = FleetController(
       client,
@@ -223,9 +276,31 @@ void main() {
 
     expect(outcome.importedCount, 2);
     expect(outcome.skippedCount, 1);
-    expect(fleet.servers.map((s) => (s.displayName, s.address)), [
+    expect(outcome.saved, isTrue);
+    const imported = [
       ('web-1', 'deploy@web-1.example'),
       ('db-1', '10.0.0.4:2222'),
-    ]);
+    ];
+    expect(fleet.servers.map((s) => (s.displayName, s.address)), imported);
+
+    // The next launch: a new engine over the same support directory, and
+    // a controller built a moment after spawn, as the composition root
+    // may. The startup fleet still reaches it.
+    await client.shutdown();
+    final restarted = await IsolateEngineClient.spawn(
+      supportDirectory: support.path,
+    );
+    addTearDown(restarted.shutdown);
+    expect(restarted.ready.importStoreIssue, isNull);
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+    final next = FleetController(restarted);
+    addTearDown(next.dispose);
+    final restored = Completer<void>();
+    next.addListener(() {
+      if (!restored.isCompleted) restored.complete();
+    });
+
+    await restored.future.timeout(const Duration(seconds: 5));
+    expect(next.servers.map((s) => (s.displayName, s.address)), imported);
   });
 }

@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:ghost_servers/ghost_servers.dart'
+    show GhostIndicatorRule, GhostServerGlyph, GhostServerIndicator;
 import 'package:poltergeist_core/poltergeist_core.dart';
 
 import '../l10n/app_localizations.dart';
 import '../theme/app_theme.dart';
+import 'ghost_servers_adapter.dart';
 
 /// What the one composed server indicator paints (02 §4: exactly one
 /// indicator per server — SEA-021).
@@ -48,118 +51,41 @@ typedef ServerIndicatorAppearance = ({
 /// truth outranks probes"). Where the two truths do not contradict, 02 §4's
 /// tri-state probe dot stays the favorite row's indicator, which is what
 /// 07 §3.3 requires the interim list to render.
+///
+/// The shared list rule (`ghost_servers`, `GhostIndicatorRule.list`) since
+/// 2026-10-13; this keeps the app's glyph vocabulary and ARB words.
 ServerIndicatorAppearance serverIndicatorOf(
   AppLocalizations l10n, {
   ServerStatus? status,
   ProbeStatus? probe,
-}) {
-  final connection = status == null
-      ? null
-      : _connectionAppearance(l10n, status);
-  if (connection != null && _outranksProbe(connection.glyph, probe)) {
-    return connection;
-  }
+}) => serverIndicatorAppearance(
+  resolveServerIndicator(
+    l10n,
+    GhostIndicatorRule.list,
+    status: status,
+    probe: probe,
+  ),
+);
 
-  final reachability = probe == null ? null : _probeAppearance(l10n, probe);
-  if (reachability != null) return reachability;
-
-  return connection ?? (glyph: ServerIndicatorGlyph.none, label: '');
-}
-
-/// The D32 rail's resolution (10 §5). The rail tells "connected" (a
-/// disc) apart from "reachable" (a ring), so any connection truth
-/// beyond idle outranks the probe here: a live or in-flight transport
-/// must never read as merely reachable, which [serverIndicatorOf]'s
-/// tri-state list rule would show for a connected or connecting server
-/// whose probe answered. With no connection (or an idle one) the probe
-/// speaks, exactly as there.
-ServerIndicatorAppearance railIndicatorOf(
-  AppLocalizations l10n, {
-  ServerStatus? status,
-  ProbeStatus? probe,
-}) {
-  final connection = status == null
-      ? null
-      : _connectionAppearance(l10n, status);
-  if (connection != null && connection.glyph != ServerIndicatorGlyph.idle) {
-    return connection;
-  }
-  return serverIndicatorOf(l10n, status: status, probe: probe);
-}
-
-/// The glyphs that contradict a probe result and therefore replace it:
-/// adverse truth (a block, a failure the state explains) always, and
-/// authenticated transports over any non-online result — the reverse of
-/// the audit finding's contradiction, since connected transports prove
-/// reachability (an "unknown" claim beside them is just as wrong).
-/// Pending and idle never replace a probe: an in-flight attempt does not
-/// contradict the last reachability result (if the host is truly down the
-/// attempt fails into a failure glyph), and a server with no transport
-/// keeps the probe's answer.
-bool _outranksProbe(ServerIndicatorGlyph glyph, ProbeStatus? probe) =>
-    switch (glyph) {
-      ServerIndicatorGlyph.blocked || ServerIndicatorGlyph.failed => true,
-      ServerIndicatorGlyph.connected => probe != ProbeStatus.online,
-      _ => false,
-    };
-
-/// A `detail` on the status means the state explains a failure (03 §3.2);
-/// cancellation and idle teardown carry none, so `disconnected` splits into
-/// [ServerIndicatorGlyph.failed] and [ServerIndicatorGlyph.idle].
-ServerIndicatorAppearance _connectionAppearance(
-  AppLocalizations l10n,
-  ServerStatus status,
-) {
-  final failed = status.detail != null;
-  return switch (status.state) {
-    ServerConnectionState.connecting => (
-      glyph: ServerIndicatorGlyph.pending,
-      label: l10n.connectionStateConnecting,
-    ),
-    ServerConnectionState.reconnecting => (
-      glyph: ServerIndicatorGlyph.pending,
-      label: l10n.connectionStateReconnecting,
-    ),
-    ServerConnectionState.connected => (
-      glyph: ServerIndicatorGlyph.connected,
-      label: l10n.connectionStateConnected,
-    ),
-    ServerConnectionState.disconnected =>
-      failed
-          ? (
-              glyph: ServerIndicatorGlyph.failed,
-              label: l10n.connectionFailedTitle,
-            )
-          : (
-              glyph: ServerIndicatorGlyph.idle,
-              label: l10n.connectionStateNotConnected,
-            ),
-    ServerConnectionState.blocked => (
-      glyph: ServerIndicatorGlyph.blocked,
-      label: l10n.connectionBlockedTitle,
-    ),
-  };
-}
-
-ServerIndicatorAppearance _probeAppearance(
-  AppLocalizations l10n,
-  ProbeStatus probe,
-) {
-  return switch (probe) {
-    ProbeStatus.online => (
-      glyph: ServerIndicatorGlyph.probe,
-      label: l10n.probeStatusOnline,
-    ),
-    ProbeStatus.offline => (
-      glyph: ServerIndicatorGlyph.probe,
-      label: l10n.probeStatusOffline,
-    ),
-    ProbeStatus.unknown => (
-      glyph: ServerIndicatorGlyph.probe,
-      label: l10n.probeStatusUnknown,
-    ),
-  };
-}
+/// A shared indicator in this app's glyph vocabulary: every probe answer
+/// is the one [ServerIndicatorGlyph.probe] marker (the caller paints the
+/// reachability dot), and a state without words reads as the empty label.
+ServerIndicatorAppearance serverIndicatorAppearance(
+  GhostServerIndicator indicator,
+) => (
+  glyph: switch (indicator.glyph) {
+    GhostServerGlyph.none => ServerIndicatorGlyph.none,
+    GhostServerGlyph.connecting => ServerIndicatorGlyph.pending,
+    GhostServerGlyph.connected => ServerIndicatorGlyph.connected,
+    GhostServerGlyph.idle => ServerIndicatorGlyph.idle,
+    GhostServerGlyph.failed => ServerIndicatorGlyph.failed,
+    GhostServerGlyph.blocked => ServerIndicatorGlyph.blocked,
+    GhostServerGlyph.reachable ||
+    GhostServerGlyph.unreachable ||
+    GhostServerGlyph.reachabilityUnknown => ServerIndicatorGlyph.probe,
+  },
+  label: indicator.label ?? '',
+);
 
 /// The composed indicator's paint, without a label: for rows that render the
 /// state as text beside it.

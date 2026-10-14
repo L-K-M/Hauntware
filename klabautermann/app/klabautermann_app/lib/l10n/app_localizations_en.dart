@@ -117,10 +117,29 @@ class AppLocalizationsEn extends AppLocalizations {
       'The import from ~/.ssh/config failed. Try again, and restart the app if it keeps failing.';
 
   @override
+  String get sshConfigImportNotSaved =>
+      'This import could not be saved, so it will not be kept after a restart.';
+
+  @override
   String get syncFleet => 'Synchronize';
 
   @override
   String get openSettings => 'Settings';
+
+  @override
+  String get settingsCommand => 'Settings…';
+
+  @override
+  String get appQuitLabel => 'Quit';
+
+  @override
+  String get menuFile => 'File';
+
+  @override
+  String get menuView => 'View';
+
+  @override
+  String get menuWindow => 'Window';
 
   @override
   String get statusConnected => 'Connected';
@@ -174,6 +193,52 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get themeDark => 'Dark';
+
+  @override
+  String get themeNotSaved =>
+      'The theme changed, but it could not be saved, so it will not be kept after a restart.';
+
+  @override
+  String get themeNotChanged => 'The theme could not be changed.';
+
+  @override
+  String settingsFileRecovered(String fileName) {
+    return 'Your settings file could not be read and was reset. The old file is kept as $fileName.';
+  }
+
+  @override
+  String settingsFileRecoveredNotSaved(String fileName) {
+    return 'Your settings file could not be read or reset. The old file is kept as $fileName. Changes you make now may be lost when Klabautermann restarts.';
+  }
+
+  @override
+  String get settingsFileLeftAsIs =>
+      'Your settings file could not be read, so it was left as it is. Changes you make now are not saved.';
+
+  @override
+  String get settingsFileNewer =>
+      'Your settings were saved by a newer version of Klabautermann. Changes you make now are not saved.';
+
+  @override
+  String get settingsFileNotSaved =>
+      'Your settings could not be saved. Changes you make now may be lost when Klabautermann restarts.';
+
+  @override
+  String importsFileRecovered(String fileName) {
+    return 'Your imported servers could not be read and were cleared. The old file is kept as $fileName. Import ~/.ssh/config again to bring them back.';
+  }
+
+  @override
+  String get importsFileLeftAsIs =>
+      'Your imported servers could not be read, so their file was left as it is. Servers you import now will not be kept after a restart.';
+
+  @override
+  String get importsFileNewer =>
+      'Your imported servers were saved by a newer version of Klabautermann. Servers you import now will not be kept after a restart.';
+
+  @override
+  String get settingsWindowUnreachable =>
+      'Settings cannot reach Klabautermann. Close this window and open Settings again.';
 
   @override
   String get workspaceEmptyTitle => 'Select a server';

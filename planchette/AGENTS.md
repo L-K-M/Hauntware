@@ -30,6 +30,10 @@ packages/
                           form, the shipped presets, the theme builders and
                           chrome extension, and the per-app style and codec
                           seams; outside the workspace
+  ghost_servers/          server surfaces shared by Séance and Poltergeist
+                          (today the server list's sectioning and the
+                          status-dot vocabulary), over seance_protocol
+                          and ghost_ui; outside the workspace
 app/
   planchette_app/         Flutter client — NOT a workspace member (it needs
                           the Flutter SDK; members must not).
@@ -59,6 +63,7 @@ dart test    packages/planchette_core
 (cd packages/ghost_ui && flutter pub get && flutter analyze && flutter test)
 (cd packages/ghost_marks && flutter pub get && flutter analyze && flutter test)
 (cd packages/ghost_theme && flutter pub get && flutter analyze && flutter test)
+(cd packages/ghost_servers && flutter pub get && flutter analyze && flutter test)
 (cd app/planchette_app && flutter pub get && flutter analyze && flutter test)
 
 # Desktop app for this host, staged into dist/

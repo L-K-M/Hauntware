@@ -1,10 +1,23 @@
 /// Klabautermann's pure-Dart engine layer: the D18 engine isolate, its
-/// plain-data protocol and the client the app composes over
-/// (docs/design/klabautermann/03, sections 3.2 and 10.1).
+/// plain-data protocol and the client the app composes over, and the
+/// device settings store (docs/design/klabautermann/03, sections 3.2, 4.10
+/// and 10.1).
 library;
 
 export 'src/engine/engine_client.dart';
 export 'src/engine/protocol.dart';
+// The app's settings.json (03 §4.10), and the atomic writer the app's
+// other device-local files (window_state.json) share with it.
+export 'src/settings/device_settings_store.dart'
+    show
+        DeviceSettingsIssue,
+        DeviceSettingsIssueKind,
+        DeviceSettingsReadOnlyException,
+        DeviceSettingsStore,
+        DeviceSettingsWriter,
+        deviceSettingsFileName,
+        deviceSettingsSchemaVersion,
+        writeFileAtomically;
 
 // 03 §3.2: the app reaches seance_core, klabautermann_host and
 // klabautermann_docker types only through this barrel, each behind an

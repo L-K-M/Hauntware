@@ -25,7 +25,7 @@ void main() {
     expect(propertiesFile.existsSync(), isTrue);
     expect(keyStore.existsSync(), isTrue);
 
-    final propertiesText = propertiesFile.readAsStringSync();
+    final propertiesText = _read(_ciPropertiesPath);
     expect(propertiesText.split('\n').first, _publicKeyWarning);
 
     final properties = _parseProperties(propertiesText);
@@ -97,4 +97,6 @@ Map<String, String> _parseProperties(String contents) {
   return properties;
 }
 
-String _read(String path) => File(path).readAsStringSync();
+/// Line endings normalized, so a CRLF checkout reads the same.
+String _read(String path) =>
+    File(path).readAsStringSync().replaceAll('\r\n', '\n');

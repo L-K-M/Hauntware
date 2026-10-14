@@ -2,7 +2,9 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:klabautermann_app/l10n/app_localizations.dart';
 import 'package:klabautermann_app/services/ssh_config_source.dart';
+import 'package:klabautermann_app/ui/startup_issue_notice.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 
 import 'support/fake_ssh_config.dart';
@@ -60,7 +62,9 @@ void main() {
 
     harness.engine
       ..emit(_imported)
-      ..emit(const SshConfigImported(importedCount: 2, skippedCount: 0));
+      ..emit(
+        const SshConfigImported(importedCount: 2, skippedCount: 0, saved: true),
+      );
     await tester.pumpAndSettle();
 
     expect(find.text('web-1'), findsOneWidget);
@@ -122,7 +126,7 @@ void main() {
     source.gate!.complete();
     await tester.pumpAndSettle();
     harness.engine.emit(
-      const SshConfigImported(importedCount: 0, skippedCount: 0),
+      const SshConfigImported(importedCount: 0, skippedCount: 0, saved: true),
     );
     await tester.pumpAndSettle();
     expect(
@@ -144,7 +148,7 @@ void main() {
 
     await _chooseImportFromRail(tester);
     harness.engine.emit(
-      const SshConfigImported(importedCount: 1, skippedCount: 2),
+      const SshConfigImported(importedCount: 1, skippedCount: 2, saved: true),
     );
     await tester.pumpAndSettle();
     expect(
@@ -159,9 +163,10 @@ void main() {
     // The first toast times out (4 s) before the second import.
     await tester.pump(const Duration(seconds: 5));
     await tester.pumpAndSettle();
+    expect(find.textContaining('Imported 1 server'), findsNothing);
     await _chooseImportFromRail(tester);
     harness.engine.emit(
-      const SshConfigImported(importedCount: 0, skippedCount: 0),
+      const SshConfigImported(importedCount: 0, skippedCount: 0, saved: true),
     );
     await tester.pumpAndSettle();
     expect(
@@ -181,7 +186,7 @@ void main() {
 
     await _chooseImportFromRail(tester);
     harness.engine.emit(
-      const SshConfigImported(importedCount: 0, skippedCount: 2),
+      const SshConfigImported(importedCount: 0, skippedCount: 2, saved: true),
     );
     await tester.pumpAndSettle();
 
@@ -194,6 +199,132 @@ void main() {
       findsOneWidget,
     );
     expect(find.textContaining('names no hosts'), findsNothing);
+  });
+
+  testWidgets('an import the engine could not save says it will not be '
+      'kept', (tester) async {
+    final harness = await pumpApp(
+      tester,
+      size: _desktop,
+      sshConfig: FakeSshConfigSource.text(_config),
+    );
+
+    await _chooseImportFromRail(tester);
+    harness.engine
+      ..emit(_imported)
+      ..emit(
+        const SshConfigImported(
+          importedCount: 2,
+          skippedCount: 0,
+          saved: false,
+        ),
+      );
+    await tester.pumpAndSettle();
+
+    // The counts stay true, and a second toast says they will not last.
+    expect(find.text('web-1'), findsOneWidget);
+    expect(find.text('Imported 2 servers from ~/.ssh/config.'), findsOneWidget);
+    expect(
+      find.text(
+        'This import could not be saved, so it will not be kept after a '
+        'restart.',
+      ),
+      findsOneWidget,
+    );
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('a saved import says nothing about saving', (tester) async {
+    final harness = await pumpApp(
+      tester,
+      size: _desktop,
+      sshConfig: FakeSshConfigSource.text(_config),
+    );
+
+    await _chooseImportFromRail(tester);
+    harness.engine
+      ..emit(_imported)
+      ..emit(
+        const SshConfigImported(importedCount: 2, skippedCount: 0, saved: true),
+      );
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('could not be saved'), findsNothing);
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pumpAndSettle();
+  });
+
+  group('the import store at startup (03 §4.10)', () {
+    const keptAs = 'ssh_config_imports.json.corrupt-20261014T093005250Z';
+
+    testWidgets('a damaged store is reported once, naming the kept '
+        'copy', (tester) async {
+      await pumpApp(
+        tester,
+        size: _desktop,
+        sshConfig: FakeSshConfigSource.text(_config),
+        importStoreIssue: const ImportStoreIssue(
+          ImportStoreIssueKind.recovered,
+          preservedAs: '/support/$keptAs',
+        ),
+      );
+
+      expect(
+        find.text(
+          'Your imported servers could not be read and were cleared. The '
+          'old file is kept as $keptAs. Import ~/.ssh/config again to '
+          'bring them back.',
+        ),
+        findsOneWidget,
+      );
+      await tester.pump(const Duration(seconds: 11));
+      await tester.pumpAndSettle();
+      expect(find.textContaining(keptAs), findsNothing);
+    });
+
+    testWidgets('a settings issue and a store issue both show', (tester) async {
+      await pumpApp(
+        tester,
+        size: _desktop,
+        settingsIssue: const DeviceSettingsIssue(
+          DeviceSettingsIssueKind.notSaved,
+        ),
+        importStoreIssue: const ImportStoreIssue(
+          ImportStoreIssueKind.newerVersion,
+        ),
+      );
+
+      expect(find.textContaining('Your settings could not be saved'), findsOne);
+      expect(
+        find.textContaining('saved by a newer version of Klabautermann'),
+        findsOne,
+      );
+      await tester.pump(const Duration(seconds: 11));
+      await tester.pumpAndSettle();
+    });
+
+    test('every store issue has its own sentence', () {
+      final l10n = lookupAppLocalizations(const Locale('en'));
+      final messages = {
+        for (final kind in ImportStoreIssueKind.values)
+          kind: importStoreIssueMessage(
+            l10n,
+            ImportStoreIssue(kind, preservedAs: '/support/$keptAs'),
+          ),
+      };
+
+      expect(messages[ImportStoreIssueKind.recovered], contains(keptAs));
+      // Only a file this run may replace invites a new import to restore.
+      expect(messages[ImportStoreIssueKind.recovered], contains('again'));
+      for (final kind in [
+        ImportStoreIssueKind.leftAsIs,
+        ImportStoreIssueKind.newerVersion,
+      ]) {
+        expect(messages[kind], contains('will not be kept after a restart'));
+      }
+      expect(messages.values.toSet(), hasLength(messages.length));
+    });
   });
 
   const failureMessages = {

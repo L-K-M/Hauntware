@@ -30,7 +30,8 @@ const int _maximumPort = 65535;
 /// is outside 1 to 65535, or when an earlier block already took its alias
 /// (the alias is the entry's id; ssh would merge the two blocks, this keeps
 /// the first). The text is parsed in the calling isolate: the engine's, so
-/// a large config never stalls the UI (CN-19).
+/// a large config never stalls the UI (CN-19). The engine keeps the returned
+/// entries as its import state, so the list is unmodifiable.
 ({List<FleetEntry> entries, int skippedCount}) fleetEntriesFromSshConfig(
   String text,
 ) {
@@ -40,7 +41,7 @@ const int _maximumPort = 65535;
 
   for (final host in SshConfigImporter.parse(text)) {
     final port = host.port ?? kSshDefaultPort;
-    if (port < _minimumPort || port > _maximumPort) {
+    if (!isTcpPort(port)) {
       skipped++;
       continue;
     }
@@ -50,19 +51,37 @@ const int _maximumPort = 65535;
     }
 
     entries.add(
-      FleetEntry(
-        serverId: '$_importIdPrefix${host.alias}',
-        label: host.alias,
+      importedFleetEntry(
+        alias: host.alias,
         // `HostName=` with no value is as good as absent.
         host: _nonEmpty(host.hostName) ?? host.alias,
         port: port,
         user: _nonEmpty(host.user),
-        origin: FleetEntryOrigin.sshConfig,
       ),
     );
   }
-  return (entries: entries, skippedCount: skipped);
+  return (entries: List.unmodifiable(entries), skippedCount: skipped);
 }
+
+/// The fleet entry for one imported host: the one place that derives an
+/// import's id from its alias, shared by the parser above and the import
+/// store, which keeps only alias, host, port and user (03 §4.10).
+FleetEntry importedFleetEntry({
+  required String alias,
+  required String host,
+  required int port,
+  String? user,
+}) => FleetEntry(
+  serverId: '$_importIdPrefix$alias',
+  label: alias,
+  host: host,
+  port: port,
+  user: user,
+  origin: FleetEntryOrigin.sshConfig,
+);
+
+/// Whether [port] is in the TCP port range, so it can name an endpoint.
+bool isTcpPort(int port) => port >= _minimumPort && port <= _maximumPort;
 
 String? _nonEmpty(String? value) =>
     value == null || value.isEmpty ? null : value;

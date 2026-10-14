@@ -1909,14 +1909,17 @@ revocation and concurrent login/deletion lifecycle work remain separate.
   updates, deactivates on the last, and honors the enable/disable setting
   (including re-anchoring live sessions on re-enable); the settings field
   round-trips in `app_settings_test.dart`.
-- `app/seance_app/test/server_grouping_test.dart` — sectioning: PINNED
+- `server_grouping_test.dart`, in Planchette's `ghost_servers` package
+  since 2026-10-13 with the library it tests — sectioning: PINNED
   then SERVERS (ungrouped first, groups nested and sorted), case-folded
   keys with the first spelling kept, no empty section headers (unless a
   filter hid a live server there), folding a group, the shortlist or
   SERVERS itself, and a stale collapsed key doing nothing.
 - `app/seance_app/test/server_status_dot_test.dart` — the shared dot
   mapping (live session over probe; solid for sessions, ring for probe
-  observations) and the tab aggregation behind it.
+  observations) and the tab aggregation behind it. Since 2026-10-13 the
+  rules and paint map live in Planchette's `ghost_servers`
+  (`server_status_test.dart` there); this suite pins Séance's delegates.
 - `app/seance_app/test/host_key_blocked_test.dart`: a session is
   blocked only when its own prompt refused a changed key (declined, or
   the unwired prompt's default); a declined first use, an accepted key
