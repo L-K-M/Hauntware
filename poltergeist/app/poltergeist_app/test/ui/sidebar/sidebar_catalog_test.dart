@@ -18,6 +18,7 @@ import 'package:poltergeist_core/poltergeist_core.dart';
 
 import '../../services/pane_controller_test.dart' as controller_test;
 import '../../support/fake_bookmark_store.dart';
+import '../../support/fake_server_catalog.dart';
 import '../../support/fake_stored_id_set.dart';
 import '../../support/test_panes.dart';
 
@@ -58,7 +59,7 @@ final class _CatalogSource extends ChangeNotifier {
 
 void main() {
   late FakeBookmarkStore store;
-  late SeanceServerCatalog catalog;
+  late FakeServerCatalog catalog;
   late _CatalogSource source;
   late List<(ServerConfig, SidebarOpenAction)> opens;
   late int addCalls;
@@ -143,7 +144,7 @@ void main() {
 
   setUp(() {
     store = FakeBookmarkStore();
-    catalog = SeanceServerCatalog();
+    catalog = FakeServerCatalog();
     source = _CatalogSource();
     opens = [];
     addCalls = 0;

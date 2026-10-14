@@ -1,15 +1,18 @@
 /// The shared sync catalog (decision D6; docs/design/catalog-library.md):
-/// the persistent record store, the server-config store and its sync
-/// tuples, enrollment, the host-key and pin-verdict seams, record crypto,
-/// the materialized server catalog, and the file primitives behind the
-/// stores' default writer. A secondary library of `seance_core`: import it
-/// beside `package:seance_core/seance_core.dart`.
+/// the record coordinator with its handler seam and write path, the
+/// persistent record store, the server-config store and its sync tuples,
+/// enrollment, the host-key and pin-verdict seams, record crypto, the
+/// read-only server catalog, and the file primitives behind the stores'
+/// default writer. A secondary library of `seance_core`: import it beside
+/// `package:seance_core/seance_core.dart`.
 ///
-/// Poltergeist's coordinator drives these types today; its
-/// `poltergeist_core` barrel re-exports them, so Poltergeist code keeps
-/// importing them from there.
+/// Poltergeist drives the coordinator with its `bookmark:` handler; its
+/// `poltergeist_core` barrel re-exports these types, so Poltergeist code
+/// keeps importing them from there.
 library;
 
+export 'src/catalog/catalog_snapshot.dart' show CatalogSnapshot;
+export 'src/catalog/catalog_writer.dart' show CatalogWriter;
 export 'src/catalog/enrollment.dart'
     show
         EnrollmentResult,
@@ -44,16 +47,28 @@ export 'src/catalog/pin_verdicts.dart'
         InMemorySyncTripwireStore,
         PinVerdictStore,
         SyncTripwireStore;
-export 'src/catalog/record_crypto.dart' show RecordCrypto, isDecryptableSyncId;
-export 'src/catalog/seance_server_catalog.dart' show SeanceServerCatalog;
+export 'src/catalog/push_policy.dart' show PushPolicy;
+export 'src/catalog/record_coordinator.dart'
+    show
+        ApplyReport,
+        CatalogMode,
+        HostKeyConflict,
+        RecordCoordinator,
+        SyncRoundResult,
+        isDecryptableSyncId;
+export 'src/catalog/record_crypto.dart' show RecordCrypto;
+export 'src/catalog/record_handler.dart'
+    show
+        ApplyContext,
+        ApplyOutcome,
+        ApplyPhase,
+        RecordHandler,
+        outranksMaterialized;
 export 'src/catalog/server_config_store.dart'
     show
         FileServerConfigStore,
         ServerSyncTuple,
         SyncTrackingServerStore,
-        // Poltergeist's coordinator stamps its server tombstone records
-        // with the store's rule, so the two never disagree.
-        deletionStamp,
         serverStoreQuarantinePath;
 export 'src/catalog/sync_tuple.dart' show SyncTuple;
 // The file primitives behind the stores' default writer, which

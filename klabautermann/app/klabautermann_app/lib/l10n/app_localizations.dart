@@ -202,10 +202,10 @@ abstract class AppLocalizations {
   /// **'{count, plural, =0{Your ~/.ssh/config names no hosts to import.} =1{Imported 1 server from ~/.ssh/config.} other{Imported {count} servers from ~/.ssh/config.}}'**
   String sshConfigImported(int count);
 
-  /// Shown instead of sshConfigImported when the import left host blocks out; importedCount (0 or more) is the number of servers it added, skippedCount (1 or more) the number of host blocks it left out. One message, so the translation decides how its sentences join.
+  /// Shown instead of sshConfigImported when the import left hosts out; importedCount (0 or more) is the number of servers it added, skippedCount (1 or more) the number of hosts it left out. One message, so the translation decides how its sentences join.
   ///
   /// In en, this message translates to:
-  /// **'{importedCount, plural, =0{No hosts were imported from ~/.ssh/config.} =1{Imported 1 server from ~/.ssh/config.} other{Imported {importedCount} servers from ~/.ssh/config.}} {skippedCount, plural, =1{1 host was skipped because its port is invalid or its name repeats an earlier host.} other{{skippedCount} hosts were skipped because their port is invalid or their name repeats an earlier host.}}'**
+  /// **'{importedCount, plural, =0{No hosts were imported from ~/.ssh/config.} =1{Imported 1 server from ~/.ssh/config.} other{Imported {importedCount} servers from ~/.ssh/config.}} {skippedCount, plural, =1{1 host was skipped because its port is unsupported or its name repeats an earlier host.} other{{skippedCount} hosts were skipped because their port is unsupported or their name repeats an earlier host.}}'**
   String sshConfigImportedWithSkips(int importedCount, int skippedCount);
 
   /// No description provided for @sshConfigMissing.
@@ -442,6 +442,30 @@ abstract class AppLocalizations {
   /// **'Your imported servers were saved by a newer version of Klabautermann. Servers you import now will not be kept after a restart.'**
   String get importsFileNewer;
 
+  /// Startup notice: the lock that keeps a second copy of the desktop app from starting could not be taken, so a second copy would not be stopped.
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann could not check whether it is already running. If you open it twice, the two copies can overwrite each other\'s settings and imported servers.'**
+  String get instanceLockUnavailable;
+
+  /// Heading of the only screen a second copy of the desktop app shows before it quits.
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann is already running'**
+  String get alreadyRunningTitle;
+
+  /// Body of the screen a second copy of the desktop app shows: where to go instead, and why only one copy runs.
+  ///
+  /// In en, this message translates to:
+  /// **'Switch to the Klabautermann window that is already open. Only one copy runs at a time, so two copies never overwrite each other\'s settings and imported servers.'**
+  String get alreadyRunningBody;
+
+  /// Button on the already-running screen that quits the second copy.
+  ///
+  /// In en, this message translates to:
+  /// **'Quit'**
+  String get alreadyRunningQuit;
+
   /// Shown in the desktop settings window when the app does not answer it.
   ///
   /// In en, this message translates to:
@@ -537,6 +561,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'More'**
   String get serverTabMore;
+
+  /// A table cell as a screen reader hears it within its row: the column's header label, then the cell's value (A11Y-03).
+  ///
+  /// In en, this message translates to:
+  /// **'{column}: {value}'**
+  String tableCellSemantics(String column, String value);
+
+  /// Screen-reader value of the table column header the rows are sorted by, smallest first.
+  ///
+  /// In en, this message translates to:
+  /// **'Sorted ascending'**
+  String get tableSortedAscending;
+
+  /// Screen-reader value of the table column header the rows are sorted by, largest first.
+  ///
+  /// In en, this message translates to:
+  /// **'Sorted descending'**
+  String get tableSortedDescending;
+
+  /// Screen-reader hint of a table column header that sorts the rows when activated.
+  ///
+  /// In en, this message translates to:
+  /// **'Sort by this column'**
+  String get tableSortHint;
+
+  /// Tooltip and screen-reader label of the button at the end of a table row that opens the row's actions.
+  ///
+  /// In en, this message translates to:
+  /// **'Row actions'**
+  String get tableRowActions;
 }
 
 class _AppLocalizationsDelegate
