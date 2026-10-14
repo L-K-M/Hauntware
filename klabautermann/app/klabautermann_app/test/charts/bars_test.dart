@@ -208,9 +208,11 @@ void main() {
         'Memory: Used 6 GiB, Buffers unknown, Cache 3 GiB of 16 GiB',
       );
 
-      // A negative value is no reading either.
-      await tester.pumpWidget(_memory(buffers: -1));
-      expect(_runsIn(tester, StackedBar).last, _hatched(0.5625));
+      // A negative or infinite value is no reading either.
+      for (final buffers in [-1.0, double.infinity]) {
+        await tester.pumpWidget(_memory(buffers: buffers));
+        expect(_runsIn(tester, StackedBar).last, _hatched(0.5625));
+      }
 
       await tester.pumpWidget(_memory(total: null));
       expect(_runsIn(tester, StackedBar), [_hatched(0)]);
@@ -239,6 +241,13 @@ void main() {
         'Memory: Used 15 GiB, Buffers 512 MiB, Cache 3 GiB of 16 GiB, stale',
       );
       semantics.dispose();
+    });
+
+    testWidgets('claims no severity against a zero total', (tester) async {
+      await tester.pumpWidget(_memory(total: 0, thresholds: _thresholds));
+
+      expect(_runsIn(tester, StackedBar), isEmpty);
+      expect(find.byType(Icon), findsNothing);
     });
 
     testWidgets('parts its runs by the track and hatches unknown', (
@@ -299,7 +308,8 @@ void main() {
       ]);
       expect(
         tester.getSemantics(find.byType(PressureBar)),
-        matchesSemantics(label: 'CPU 50%, Memory 75%, Disk 25%'),
+        // The tooltip stays out of the tree, so the summary is read once.
+        matchesSemantics(label: 'CPU 50%, Memory 75%, Disk 25%', tooltip: ''),
       );
       semantics.dispose();
     });
@@ -399,5 +409,31 @@ void main() {
         expect(size, normal);
       }
     });
+  });
+
+  test('a value at a threshold has its severity', () {
+    expect(_thresholds.severityOf(79.9), ChartSeverity.normal);
+    expect(_thresholds.severityOf(80), ChartSeverity.warning);
+    expect(_thresholds.severityOf(89.9), ChartSeverity.warning);
+    expect(_thresholds.severityOf(90), ChartSeverity.critical);
+  });
+
+  test('the painter repaints when what it draws changes', () {
+    BarPainter painter({
+      int cellCount = 1,
+      double end = 0.5,
+      Color? trackColor,
+    }) => BarPainter(
+      cellCount: cellCount,
+      runs: [_fill(0, end, _palette.series[0])],
+      trackColor: trackColor ?? _palette.track,
+    );
+    final old = painter();
+
+    // Equal runs in a new list, as every rebuild makes them.
+    expect(painter().shouldRepaint(old), isFalse);
+    expect(painter(end: 0.6).shouldRepaint(old), isTrue);
+    expect(painter(cellCount: 2).shouldRepaint(old), isTrue);
+    expect(painter(trackColor: _palette.muted).shouldRepaint(old), isTrue);
   });
 }
