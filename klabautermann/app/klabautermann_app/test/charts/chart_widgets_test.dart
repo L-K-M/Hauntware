@@ -105,6 +105,35 @@ void main() {
     );
   });
 
+  test('a full ring slides its oldest sample out without a gap', () {
+    final ring = _ring(List.filled(11, 50), capacity: 10);
+    double lineLeft(double slide) {
+      final canvas = TestRecordingCanvas();
+      SparklinePainter(
+        series: ring,
+        version: ring.version,
+        slide: AlwaysStoppedAnimation(slide),
+        scaleMax: 100,
+        lineColor: const Color(0xFF000000),
+        warningBand: null,
+        criticalBand: null,
+      ).paint(canvas, const Size(100, 40));
+      final draw = canvas.invocations.singleWhere(
+        (call) => call.invocation.memberName == #drawPath,
+      );
+      return (draw.invocation.positionalArguments.first as Path)
+          .getBounds()
+          .left;
+    }
+
+    // The plot's left edge, inset by half the stroke.
+    const plotLeft = SparklinePainter.strokeWidth / 2;
+    for (final slide in [0.0, 0.5, 0.99]) {
+      expect(lineLeft(slide), lessThanOrEqualTo(plotLeft), reason: '$slide');
+    }
+    expect(lineLeft(1), plotLeft);
+  });
+
   // The reduced-motion signals A11Y-11 honours: Android's, through
   // MediaQuery, and iOS's, only through the accessibility features.
   for (final (signal, features) in [

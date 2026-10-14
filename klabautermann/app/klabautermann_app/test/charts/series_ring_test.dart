@@ -20,6 +20,17 @@ void main() {
     expect(() => ring.samples[4], throwsRangeError);
   });
 
+  test('a full ring keeps the sample its last add pushed out', () {
+    final ring = _ring(3, [1, 2, 3]);
+    expect(ring.samplesWithEvicted, [1, 2, 3]);
+
+    ring.add(4);
+
+    expect(ring.samples, [2, 3, 4]);
+    expect(ring.samplesWithEvicted, [1, 2, 3, 4]);
+    expect(() => ring.samplesWithEvicted[4], throwsRangeError);
+  });
+
   test('every sample bumps the version and notifies', () {
     final ring = _ring(2, [1]);
     var notified = 0;

@@ -14,60 +14,68 @@ import 'package:flutter/foundation.dart';
 final class SeriesRing extends ChangeNotifier {
   SeriesRing(this.capacity)
     : assert(capacity > 1, 'a series needs two slots to draw a line'),
-      _slots = Float64List(capacity);
+      _slots = Float64List(capacity + 1);
 
   final int capacity;
 
-  /// NaN marks an unknown sample, so the ring stays one unboxed buffer.
+  /// NaN marks an unknown sample, so the ring stays one unboxed buffer. Its
+  /// one slot past [capacity] holds the sample the last [add] pushed out.
   final Float64List _slots;
-  int _length = 0;
   int _added = 0;
 
   /// The samples, oldest first: a live, read-only view.
-  late final List<double?> samples = _RingView(this);
+  late final List<double?> samples = _RingView(this, capacity);
+
+  /// [samples] behind the one the last [add] pushed out of a full ring, so
+  /// a chart can slide it out of view: a live, read-only view whose first
+  /// entry has running index [added] minus its length.
+  late final List<double?> samplesWithEvicted = _RingView(this, capacity + 1);
 
   /// Bumped by every sample.
   int get version => _added;
 
-  int get length => _length;
+  int get length => math.min(_added, capacity);
 
   /// How many samples were ever added: the running index the next one
   /// takes. Charts align their downsampling columns to running indices.
   int get added => _added;
 
   /// The running index of [samples]' first entry.
-  int get firstIndex => _added - _length;
+  int get firstIndex => _added - length;
 
   void add(double? value) {
-    _slots[_added % capacity] = value != null && value.isFinite
+    _slots[_added % _slots.length] = value != null && value.isFinite
         ? value
         : double.nan;
     _added++;
-    _length = math.min(_length + 1, capacity);
     notifyListeners();
   }
 
-  double? _at(int index) {
-    RangeError.checkValidIndex(index, samples, 'index', _length);
-    final value = _slots[(firstIndex + index) % capacity];
+  double? _at(int runningIndex) {
+    final value = _slots[runningIndex % _slots.length];
     return value.isNaN ? null : value;
   }
 }
 
-/// [SeriesRing.samples].
+/// [SeriesRing.samples] and [SeriesRing.samplesWithEvicted]: the newest
+/// [_window] samples.
 final class _RingView extends ListBase<double?> {
-  _RingView(this._ring);
+  _RingView(this._ring, this._window);
 
   final SeriesRing _ring;
+  final int _window;
 
   @override
-  int get length => _ring._length;
+  int get length => math.min(_ring._added, _window);
 
   @override
   set length(int _) => throw UnsupportedError(_readOnly);
 
   @override
-  double? operator [](int index) => _ring._at(index);
+  double? operator [](int index) {
+    RangeError.checkValidIndex(index, this, 'index', length);
+    return _ring._at(_ring._added - length + index);
+  }
 
   @override
   void operator []=(int index, double? value) =>

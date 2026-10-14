@@ -204,10 +204,10 @@ final class SparklinePainter extends CustomPainter {
 
   static const _ruleWidth = 1.0;
 
-  /// The columns of the last paint, kept while the series' version and the
+  /// The columns of the last paint, kept while the samples drawn and the
   /// bucket size stay, so the slide's frames do not downsample again.
   List<MinMaxColumn?> _columns = const [];
-  ({int version, int bucketSize})? _columnsKey;
+  ({int version, int bucketSize, int firstIndex})? _columnsKey;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -241,15 +241,25 @@ final class SparklinePainter extends CustomPainter {
   void _paintLine(Canvas canvas, Rect plot, double Function(double) yOf) {
     if (series.length == 0) return;
 
+    // While a full ring's new sample slides in, the one it pushed out
+    // slides off the left edge instead of vanishing first.
+    final samples = slide.value < 1
+        ? series.samplesWithEvicted
+        : series.samples;
+    final firstIndex = series.added - samples.length;
     final step = plot.width / (series.capacity - 1);
     final bucketSize = math.max(1, (series.capacity / plot.width).ceil());
-    final key = (version: series.version, bucketSize: bucketSize);
+    final key = (
+      version: series.version,
+      bucketSize: bucketSize,
+      firstIndex: firstIndex,
+    );
     if (_columnsKey != key) {
       _columnsKey = key;
       _columns = downsampleMinMax(
-        series.samples,
+        samples,
         bucketSize: bucketSize,
-        firstIndex: series.firstIndex,
+        firstIndex: firstIndex,
       );
     }
 
@@ -271,7 +281,7 @@ final class SparklinePainter extends CustomPainter {
         continue;
       }
       // The column's middle slot, among those still in the ring.
-      final from = math.max(column.start, series.firstIndex);
+      final from = math.max(column.start, firstIndex);
       final to = math.min(column.start + bucketSize - 1, newest);
       final x = plot.right - (newest - (from + to) / 2) * step + shift;
       for (final value in [
