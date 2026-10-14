@@ -104,79 +104,94 @@ class TimeSeriesChart extends StatelessWidget {
       color: palette.scaleText,
     );
 
+    final plot = RepaintBoundary(
+      child: CustomPaint(
+        size: Size.infinite,
+        painter: TimeSeriesPainter(
+          data: data,
+          version: data.version,
+          from: from,
+          to: to,
+          scaleMax: scaleMax,
+          unit: unit,
+          strings: strings,
+          colors: palette.series,
+          gaps: gaps,
+          summaries: [
+            for (final (lane, samples) in inView.indexed)
+              chartSeriesSummary(
+                label: labels[lane],
+                samples: edgeInGap ? [...samples, null] : samples,
+                unit: unit,
+                span: scaleMax,
+                strings: strings,
+              ),
+          ],
+          textStyle: style,
+          textScaler: MediaQuery.textScalerOf(context),
+          textDirection: Directionality.of(context),
+          background: theme.colorScheme.surface,
+        ),
+      ),
+    );
+    final legend = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ExcludeSemantics(
+          child: Wrap(
+            spacing: 12,
+            runSpacing: 2,
+            children: [
+              for (final (lane, label) in labels.indexed)
+                _legendEntry(
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: palette.series[lane],
+                      borderRadius: BorderRadius.circular(1.5),
+                    ),
+                    child: const SizedBox(width: 12, height: 3),
+                  ),
+                  label,
+                  theme.textTheme.labelSmall!,
+                ),
+              for (final reason in {for (final gap in gaps) gap.reason})
+                _legendEntry(
+                  CustomPaint(
+                    size: const Size(12, 10),
+                    painter: _HatchSwatch(palette.scaleText),
+                  ),
+                  _gapLabel(reason, strings),
+                  style,
+                ),
+            ],
+          ),
+        ),
+        Text(source, style: style),
+      ],
+    );
+
     return Semantics(
       container: true,
       // The fallback size, for a parent that leaves the chart unbounded.
       child: LimitedBox(
         maxWidth: 320,
         maxHeight: 200,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: RepaintBoundary(
-                child: CustomPaint(
-                  size: Size.infinite,
-                  painter: TimeSeriesPainter(
-                    data: data,
-                    version: data.version,
-                    from: from,
-                    to: to,
-                    scaleMax: scaleMax,
-                    unit: unit,
-                    strings: strings,
-                    colors: palette.series,
-                    gaps: gaps,
-                    summaries: [
-                      for (final (lane, samples) in inView.indexed)
-                        chartSeriesSummary(
-                          label: labels[lane],
-                          samples: edgeInGap ? [...samples, null] : samples,
-                          unit: unit,
-                          span: scaleMax,
-                          strings: strings,
-                        ),
-                    ],
-                    textStyle: style,
-                    textScaler: MediaQuery.textScalerOf(context),
-                    textDirection: Directionality.of(context),
-                    background: theme.colorScheme.surface,
-                  ),
+        child: LayoutBuilder(
+          builder: (context, constraints) => Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: plot),
+              const SizedBox(height: 4),
+              // Large text may not squeeze the plot out: the legend and the
+              // source take at most half the height and scroll within it.
+              ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight: constraints.maxHeight / 2,
                 ),
+                child: SingleChildScrollView(child: legend),
               ),
-            ),
-            const SizedBox(height: 4),
-            ExcludeSemantics(
-              child: Wrap(
-                spacing: 12,
-                runSpacing: 2,
-                children: [
-                  for (final (lane, label) in labels.indexed)
-                    _legendEntry(
-                      DecoratedBox(
-                        decoration: BoxDecoration(
-                          color: palette.series[lane],
-                          borderRadius: BorderRadius.circular(1.5),
-                        ),
-                        child: const SizedBox(width: 12, height: 3),
-                      ),
-                      label,
-                      theme.textTheme.labelSmall!,
-                    ),
-                  for (final reason in {for (final gap in gaps) gap.reason})
-                    _legendEntry(
-                      CustomPaint(
-                        size: const Size(12, 10),
-                        painter: _HatchSwatch(palette.scaleText),
-                      ),
-                      _gapLabel(reason, strings),
-                      style,
-                    ),
-                ],
-              ),
-            ),
-            Text(source, style: style),
-          ],
+            ],
+          ),
         ),
       ),
     );

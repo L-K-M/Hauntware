@@ -319,6 +319,40 @@ void main() {
     semantics.dispose();
   });
 
+  testWidgets('keeps a plot when doubled text grows the legend', (
+    tester,
+  ) async {
+    tester.platformDispatcher.textScaleFactorTestValue = 2;
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    final ring = TimeSeriesRing(capacity: 10, lanes: 4);
+    addTearDown(ring.dispose);
+    for (final (minute, reason) in ChartGapReason.values.indexed) {
+      ring.add(_at(minute * 120), [1, 2, 3, 4]);
+      ring.openGap(_at(minute * 120 + 60), reason);
+    }
+    await tester.pumpWidget(
+      chartFrame(
+        SizedBox(
+          width: 400,
+          height: 120,
+          child: TimeSeriesChart(
+            data: ring,
+            labels: const ['User', 'System', 'I/O wait', 'Steal'],
+            unit: ChartUnit.percent,
+            strings: testChartStrings,
+            source: 'Sampled by this device while connected',
+            end: _end,
+          ),
+        ),
+      ),
+    );
+
+    // The legend and source scroll within half the height rather than
+    // overflowing the chart and squeezing the plot to nothing.
+    expect(tester.takeException(), isNull);
+    expect(tester.getSize(_plot).height, greaterThanOrEqualTo(56));
+  });
+
   testWidgets('scales to the data in view in IEC units', (tester) async {
     final ring = TimeSeriesRing(capacity: 10, lanes: 2);
     addTearDown(ring.dispose);
