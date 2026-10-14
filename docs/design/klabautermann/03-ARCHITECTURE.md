@@ -3513,13 +3513,14 @@ the engine in `engine_isolate.dart` beside it):
   server across its streams (D44), `at` is the engine's own clock in UTC,
   since a host's clock may be off, and `result` is a sealed value per
   stream holding derived values (D43): for `overview` and `core`, CPU
-  percentages, memory in bytes with `MemAvailable` semantics, load per
-  core and byte rates per interface (`core` adds per-core CPU, disk rates,
-  the pressure averages without the kernel's cumulative stall counter, and
-  uptime), each rate map null until a previous reading exists, so unknown
-  never sums to zero; for `procs`, per-process CPU
-  shares with the start time PRC-02 checks; and the parsed tables for
-  `fs`, `identity`, `units`, `failedUnits`, `timers` and `cron`. A
+  percentages, memory in bytes with `MemAvailable` semantics and whether
+  a ZFS ARC counts as used (7.1), load per core and byte rates per
+  interface (`core` adds per-core CPU, disk rates, the pressure averages
+  without the kernel's cumulative stall counter, and uptime), each rate
+  map null until a previous reading exists, so unknown never sums to
+  zero; for `procs`, per-process CPU shares with the start time PRC-02
+  checks; and the parsed tables for `fs`, `identity`, `units`,
+  `failedUnits`, `timers` and `cron`. A
   stream whose collector reports a section status other than `ok` (6.2)
   gets `CollectorUnavailable` with that status as an enum and the
   collector's error output, control characters stripped. Requests and

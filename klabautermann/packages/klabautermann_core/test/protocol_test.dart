@@ -238,6 +238,7 @@ void main() {
         sharedBytes: 128,
         swapTotalBytes: 2048,
         swapUsedBytes: 512,
+        zfsArcCountedAsUsed: true,
       );
       const cpu = CpuPercentages([10, 0, 5, 80, 5], 15);
       const load = LoadAvg(load1: 1.5, load5: 1, load15: 0.5);
@@ -261,6 +262,7 @@ void main() {
       expect(overview.memory!.usedBytes, 4096);
       expect(overview.memory!.sharedBytes, 128);
       expect(overview.memory!.swapUsedBytes, 512);
+      expect(overview.memory!.zfsArcCountedAsUsed, isTrue);
       expect(overview.load!.load5, 1);
       expect(overview.loadPerCore, 0.375);
       expect(overview.network!['eth0']!.rxBytesPerSecond, 10);

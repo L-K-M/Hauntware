@@ -1420,11 +1420,17 @@ final class MemoryUsage {
     this.sharedBytes,
     this.swapTotalBytes,
     this.swapUsedBytes,
+    this.zfsArcCountedAsUsed,
   });
 
   final int? totalBytes, usedBytes, availableBytes;
   final int? buffersBytes, cachedBytes, sharedBytes;
   final int? swapTotalBytes, swapUsedBytes;
+
+  /// Whether `/proc/spl/kstat/zfs/arcstats` exists: the ZFS ARC is then
+  /// part of [usedBytes], and MEM-01's bar says "ZFS ARC counted as used"
+  /// (7.1). Null while the engine does not know.
+  final bool? zfsArcCountedAsUsed;
 }
 
 /// One `/proc/pressure` file as 7.1 shows it: the shares of time some or
