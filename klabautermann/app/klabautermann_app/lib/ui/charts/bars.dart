@@ -407,7 +407,8 @@ Widget _bar(
 
 /// A stretch of one bar cell, from [start] to [end] as shares of the
 /// cell's width: filled with [color], or [hatched] with it where the host
-/// did not report a value.
+/// did not report a value. A cell's runs come in order, and one that
+/// starts past the cell's left edge starts where the run before it ends.
 typedef BarRun = ({
   int cell,
   double start,
@@ -437,6 +438,8 @@ final class BarPainter extends CustomPainter {
 
   /// The track shows through this gap between neighbouring runs, so the
   /// segments part by more than colour, also when stale turns them grey.
+  /// The run after the gap gives up the width; a run that ends inside its
+  /// cell is not shortened, so a small value still shows.
   static const runGap = 1.0;
 
   static const _hatchSpacing = 4.0;
@@ -464,9 +467,8 @@ final class BarPainter extends CustomPainter {
         if (run.cell != cell) continue;
         final start = run.start.clamp(0.0, 1.0);
         final end = run.end.clamp(0.0, 1.0);
-        final left =
-            rect.left + start * rect.width + (start > 0 ? runGap / 2 : 0);
-        final right = rect.left + end * rect.width - (end < 1 ? runGap / 2 : 0);
+        final left = rect.left + start * rect.width + (start > 0 ? runGap : 0);
+        final right = rect.left + end * rect.width;
         if (right <= left) continue;
         final runRect = Rect.fromLTRB(left, rect.top, right, rect.bottom);
         if (run.hatched) {

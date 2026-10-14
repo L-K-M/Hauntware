@@ -212,18 +212,18 @@ void main() {
           ),
         ),
       );
-      const half = BarPainter.runGap / 2;
+      const gap = BarPainter.runGap;
 
       expect(
         _paintIn(StackedBar),
         paints
           ..rect(rect: const Rect.fromLTWH(0, 0, 200, 8), color: _palette.track)
           ..rect(
-            rect: const Rect.fromLTRB(0, 0, 100 - half, 8),
+            rect: const Rect.fromLTRB(0, 0, 100, 8),
             color: _palette.series[0],
           )
           ..rect(
-            rect: const Rect.fromLTRB(100 + half, 0, 150 - half, 8),
+            rect: const Rect.fromLTRB(100 + gap, 0, 150, 8),
             color: _palette.series[1],
           )
           ..path(
@@ -251,6 +251,29 @@ void main() {
         matchesSemantics(label: 'CPU 50%, Memory 75%, Disk 25%'),
       );
       semantics.dispose();
+    });
+
+    testWidgets('fills a cell to its share, a small one too', (tester) async {
+      await tester.pumpWidget(_pressure(_cells(3, 0, 50)));
+      // Cells are (46 - 2 * 2) / 3 = 14 px wide, and nothing follows a
+      // fill, so no gap shortens it.
+      const cell = 14.0;
+
+      expect(
+        _paintIn(PressureBar),
+        paints
+          ..rect(color: _palette.track)
+          ..rect(
+            rect: const Rect.fromLTRB(0, 0, 3 / 100 * cell, 6),
+            color: _palette.series[0],
+          )
+          ..rect(color: _palette.track)
+          ..rect(color: _palette.track)
+          ..rect(
+            rect: const Rect.fromLTRB(2 * (cell + 2), 0, 39, 6),
+            color: _palette.series[2],
+          ),
+      );
     });
 
     testWidgets('shows the highest severity by colour, icon and words', (
