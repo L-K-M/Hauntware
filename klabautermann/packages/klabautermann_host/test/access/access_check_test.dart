@@ -128,6 +128,33 @@ void main() {
       }
     });
 
+    test('a denied identity area leaves the journal row unknown', () {
+      final p = host(
+        uid: null,
+        user: null,
+        groups: const [],
+        denied: {'identity'},
+      );
+      expect(_of(p, I.journal), (
+        _unknown,
+        R.probeAreaUnavailable,
+        null,
+        false,
+      ));
+    });
+
+    test('a denied sockets area leaves the engine rows unknown', () {
+      final p = host(denied: {'sockets'});
+      for (final item in [I.dockerSocket, I.runtime]) {
+        expect(_of(p, item), (
+          _unknown,
+          R.probeAreaUnavailable,
+          null,
+          false,
+        ), reason: item.name);
+      }
+    });
+
     test('an unanswered sudo -n stays unknown', () {
       expect(_of(host(sudoNonInteractive: null), I.sudoNoPassword), (
         _unknown,

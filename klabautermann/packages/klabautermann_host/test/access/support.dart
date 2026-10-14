@@ -38,8 +38,8 @@ List<ProbeSection> probeSections(String text) {
   return out;
 }
 
-/// A login on a systemd host whose probe areas all answered; each
-/// argument overrides one fact.
+/// A login on a systemd host whose probe areas all answered, except
+/// those in [denied]; each other argument overrides one fact.
 HostProfile host({
   int? uid = 1000,
   String? user = 'ops',
@@ -60,6 +60,7 @@ HostProfile host({
   List<EngineSocket> sockets = const [],
   bool? systemdDir = true,
   int? systemdVersion = 252,
+  Set<String> denied = const {},
 }) => HostProfile(
   uid: uid,
   user: user,
@@ -75,7 +76,7 @@ HostProfile host({
   systemdVersion: systemdVersion,
   areaStatuses: {
     for (final area in 'distro init identity elev tools sockets'.split(' '))
-      area: SectionStatus.ok,
+      area: denied.contains(area) ? SectionStatus.denied : SectionStatus.ok,
   },
 );
 
