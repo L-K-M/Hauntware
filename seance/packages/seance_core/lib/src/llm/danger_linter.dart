@@ -34,11 +34,16 @@ class DangerFinding {
 /// (`userdel \` + newline + `-r deploy` is one command). [_ShellText]
 /// describes the split and its limits.
 class DangerLinter {
-  /// `docker` and any global options before its subcommand, such as
+  /// Up to eight options before a subcommand or verb, such as
   /// `--context prod` or `-H ssh://h`. An option's value is a word that
   /// does not start with `-`; backtracking lets a flag without one stand
-  /// alone.
-  static const _docker = r'\bdocker(?:\s+-\S+(?:\s+[^\s-]\S*)?)*';
+  /// alone. Unbounded, each `docker` or `systemctl` backtracked over every
+  /// later option, so a 40 KB script of repeated `docker -a` took over
+  /// 20 s.
+  static const _options = r'(?:\s+-\S+(?:\s+[^\s-]\S*)?){0,8}';
+
+  /// `docker` and any global options before its subcommand.
+  static const _docker = '\\bdocker$_options';
 
   /// `kill`, unless its first argument means no signal is sent: -l, -L,
   /// --list and --table print signal names, and signal 0 (-0, -s 0, -n 0,
@@ -184,7 +189,8 @@ class DangerLinter {
       // and sshd-keygen are not matched; status and restart leave access
       // intact.
       RegExp(
-        r'\bsystemctl(?:\s+-\S+(?:\s+[^\s-]\S*)?)*\s+(?:stop|disable|mask)\s'
+        '\\bsystemctl$_options'
+        r'\s+(?:stop|disable|mask)\s'
         r'[^\n]*\bsshd?(?![\w-])'
         r'|\bservice\s+sshd?\s+stop\b',
       ),

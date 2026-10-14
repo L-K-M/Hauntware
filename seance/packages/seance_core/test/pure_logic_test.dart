@@ -501,6 +501,24 @@ Host bastion db
           expect(findings.single.severity, severity, reason: command);
         }
       });
+
+      test('scans a script of repeated options at the inbox size limit', () {
+        // An unbounded option prefix backtracked over every later option
+        // from each docker or systemctl, taking over 20 s on 40 KB.
+        for (final word in ['docker -a', 'systemctl -a']) {
+          final script = List.filled(
+            kInboxMaxScriptBytes ~/ (word.length + 1),
+            word,
+          ).join(' ');
+          final watch = Stopwatch()..start();
+          DangerLinter.scan(script);
+          expect(
+            watch.elapsed,
+            lessThan(const Duration(seconds: 2)),
+            reason: word,
+          );
+        }
+      });
     });
 
     // Rules look at one command at a time: unquoted separators end a

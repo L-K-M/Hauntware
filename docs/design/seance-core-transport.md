@@ -531,9 +531,12 @@ warning for scoped data loss and lockout-class commands (`iptables -F`
 `:96-100`, the power rule `:91-95`).
 
 After F2-4 (review of #156), rows 15 to 19 and 22 to 25 were revised and
-row 26 added. The rows use three shorthands: `D` is
-`\bdocker(?:\s+-\S+(?:\s+[^\s-]\S*)?)*`, `docker` and its global
-options (`--context prod`, `-H ssh://h`); `K` is
+row 26 added. The rows use four shorthands: `O` is
+`(?:\s+-\S+(?:\s+[^\s-]\S*)?){0,8}`, up to eight options with or
+without a value; unbounded, it backtracked over every later option, so
+a 40 KB script of repeated `docker -a` took over 20 s to scan. `D` is
+`\bdockerO`, `docker` and its global options (`--context prod`,
+`-H ssh://h`); `K` is
 `(?<![\w-])kill(?![\w-])` plus a negative lookahead that skips a first
 argument of `-l`, `-L`, `--list`, `--table` or signal 0 (`-0`, `-s 0`,
 `-n 0`, `--signal 0`), forms that send no signal; only the first argument
@@ -547,7 +550,7 @@ that is a signal, queue or timeout operand rather than a PID.
 | 16 | `D\s+volume\s+prune\b` (also `docker -H ssh://h volume prune -f`) | critical | Removes unused volumes and their data (named ones too with `--all` or before Docker 23). Corrected in F2-4: Docker 23 prunes only anonymous volumes by default (23.0.0 release notes; `docker volume prune` reference) |
 | 17 | `D\s+volume\s+(?:rm\|remove)\b` | warning | Deletes a named volume and its data. `docker volume remove` is the alias of `rm`; only global options, not arbitrary words, may precede `volume`, so `docker run alpine volume rm x` is not matched |
 | 18 | `(?:D\s+compose\|\bdocker-compose)\b[^\n]*\sdown\b(?=[^\n]*(--volumes\b\|\s-\w*v))` (also `compose -f f.yaml down -v`, `docker --context prod compose down -v`) | critical | `compose down -v` drops the stack's volumes |
-| 19 | `\bsystemctl(?:\s+-\S+(?:\s+[^\s-]\S*)?)*\s+(?:stop\|disable\|mask)\s[^\n]*\bsshd?(?![\w-])\|\bservice\s+sshd?\s+stop\b` | warning | Stopping or masking sshd cuts future SSH access to the host. Options may precede the verb (`systemctl --now disable ssh`, `-q stop sshd`, `-H prod stop sshd`); `service ssh stop` is the SysV form; the unit is `ssh` or `sshd` with an optional suffix (`ssh.socket`, `sshd@1.service`), so `sshfs`, `ssh-agent` and `sshd-keygen` are not matched |
+| 19 | `\bsystemctlO\s+(?:stop\|disable\|mask)\s[^\n]*\bsshd?(?![\w-])\|\bservice\s+sshd?\s+stop\b` | warning | Stopping or masking sshd cuts future SSH access to the host. Options may precede the verb (`systemctl --now disable ssh`, `-q stop sshd`, `-H prod stop sshd`); `service ssh stop` is the SysV form; the unit is `ssh` or `sshd` with an optional suffix (`ssh.socket`, `sshd@1.service`), so `sshfs`, `ssh-agent` and `sshd-keygen` are not matched |
 | 20 | `\bcrontab\b[^\n]*\s-\w*r` | warning | `crontab -r` deletes the user's whole cron table |
 | 21 | `\bufw\b(?:\s+--?\w[\w-]*)*\s+(?:reset\|disable)\b` (also `ufw --force reset`) | warning | Removes or switches off the firewall |
 | 22 | `\bnft\s+flush\s+(?:ruleset\|table\|chain)\b` | warning | Drops nftables rules (a whole ruleset, table or chain); this can leave the host unfiltered or lock you out. A flushed table or chain keeps its base chains' policies, so a drop policy then blocks everything, the `iptables -F` case (`iptables -F INPUT` is the chain form); a flushed ruleset has no tables left and filters nothing |
