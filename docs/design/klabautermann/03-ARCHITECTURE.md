@@ -3589,10 +3589,11 @@ the row counts sit in a Fenwick tree and a sliver of the viewer's own
 finds offsets and indexes in O(log n), where `SliverVariedExtentList` sums
 every extent before an index. Only the lines a layout shows, and as many
 rows above its offset so a page up lands on measured lines, are measured,
-once per width, font and locale: one row without a layout when an upper
-bound of its width fits (a monospace advance per Latin-1 code unit, two
-per other unit or tab; a line or paragraph separator never fits),
-otherwise laid out. Other lines keep an earlier count or, once the viewer
+once per width, font and locale: one row without a layout when the line
+is all Latin-1 and fits at a monospace advance per code unit (two per
+tab), otherwise laid out, since a fallback font can draw any other glyph
+wider than a fixed count of advances and a line or paragraph separator
+breaks the row. Other lines keep an earlier count or, once the viewer
 has a width, an estimate from their length, and a measurement above the
 view moves the offset by the difference while the offset keeps its share
 of the line it is in, so the lines in sight hold still and a resize lays

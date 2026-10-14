@@ -191,19 +191,20 @@ class _LogViewState extends State<LogView> {
       rowWidth - 2 * _rowPadding - (_hasGutter ? text.gutter : 0);
 
   /// The rows entry [index] wraps to in a row [crossAxisExtent] wide: one
-  /// when an upper bound of its width fits, otherwise laid out. A
-  /// dropped-lines record keeps to one row; a cut line is laid out for its
-  /// note.
+  /// when it is all Latin-1 and an upper bound of its width fits
+  /// ([logTextCells]), otherwise laid out. A dropped-lines record keeps to
+  /// one row; a cut line is laid out for its note.
   int _measureRows(int index, double crossAxisExtent) {
     final entry = widget.controller[index];
     if (entry is! LogLine) return 1;
 
     final text = _text!;
     final width = _textWidth(crossAxisExtent, text);
-    if (!entry.truncated &&
-        logTextCells(parseSgr(entry.text).text) * text.advance <= width) {
-      return 1;
-    }
+    final cells = entry.truncated
+        ? null
+        : logTextCells(parseSgr(entry.text).text);
+    if (cells != null && cells * text.advance <= width) return 1;
+
     final painter = TextPainter(
       text: _lineSpan(entry, text),
       textDirection: TextDirection.ltr,
