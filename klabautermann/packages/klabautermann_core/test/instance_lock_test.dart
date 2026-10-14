@@ -144,13 +144,21 @@ void main() {
   });
 
   test('a support directory that cannot hold the file is unavailable, '
-      'not held', () async {
+      'not held, also to an acquire that overlaps the failing one', () async {
     final notADirectory = File('${directory.path}/file')..writeAsStringSync('');
-    final attempt = await InstanceLock.acquire(Directory(notADirectory.path));
-    expect(attempt, isA<InstanceLockUnavailable>());
+    final attempts = await Future.wait([
+      InstanceLock.acquire(Directory(notADirectory.path)),
+      InstanceLock.acquire(Directory(notADirectory.path)),
+    ]);
+    expect(attempts, everyElement(isA<InstanceLockUnavailable>()));
     expect(
-      (attempt as InstanceLockUnavailable).error,
+      (attempts.first as InstanceLockUnavailable).error,
       isA<FileSystemException>(),
+    );
+    expect(
+      await InstanceLock.acquire(Directory(notADirectory.path)),
+      isA<InstanceLockUnavailable>(),
+      reason: 'a failed attempt leaves no claim behind',
     );
   });
 

@@ -53,22 +53,49 @@ final class InstanceLock {
   final String _path;
   final RandomAccessFile _handle;
 
-  /// The lock file paths this isolate holds or is acquiring, as
-  /// [_lockFilePath] spells them. A path is claimed before the first
-  /// await, so two overlapping [acquire] calls cannot both open the file.
-  /// A held lock stays here until [release], which also keeps its handle
-  /// reachable: a handle closed by anything but [release] would drop the
-  /// lock while the app runs.
-  static final Map<String, InstanceLock?> _claimed = {};
+  /// The locks this isolate holds, by [_lockFilePath]. A lock stays here
+  /// until [release], which also keeps its handle reachable: a handle
+  /// closed by anything but [release] would drop the lock while the app
+  /// runs.
+  static final Map<String, InstanceLock> _held = {};
+
+  /// The attempts in flight, by the same path. An attempt is registered
+  /// before its first await, so two overlapping [acquire] calls cannot both
+  /// open the file; the later one reports what the first found.
+  static final Map<String, Future<InstanceLockAttempt>> _pending = {};
 
   /// Takes the lock in [supportDirectory], creating the directory and the
   /// file when they are missing. Never throws and never waits for another
   /// holder.
   static Future<InstanceLockAttempt> acquire(Directory supportDirectory) async {
     final path = _lockFilePath(supportDirectory);
-    if (_claimed.containsKey(path)) return const InstanceLockHeld();
-    _claimed[path] = null;
+    if (_held.containsKey(path)) return const InstanceLockHeld();
+    if (_pending[path] case final pending?) {
+      // Held by this isolate if that attempt took the lock; whatever kept
+      // it from the lock otherwise keeps this one from it too.
+      return switch (await pending) {
+        InstanceLockAcquired() => const InstanceLockHeld(),
+        final attempt => attempt,
+      };
+    }
 
+    final attempt = _lock(supportDirectory, path);
+    _pending[path] = attempt;
+    try {
+      final result = await attempt;
+      if (result case InstanceLockAcquired(:final lock)) _held[path] = lock;
+      return result;
+    } finally {
+      final finished = _pending.remove(path);
+      assert(identical(finished, attempt), 'one attempt per path at a time');
+    }
+  }
+
+  /// Opens and locks the file at [path]; the claims are [acquire]'s.
+  static Future<InstanceLockAttempt> _lock(
+    Directory supportDirectory,
+    String path,
+  ) async {
     final RandomAccessFile handle;
     try {
       await supportDirectory.create(recursive: true);
@@ -76,14 +103,12 @@ final class InstanceLock {
       // descriptor open for writing.
       handle = await File(path).open(mode: FileMode.append);
     } on FileSystemException catch (error) {
-      _claimed.remove(path);
       return InstanceLockUnavailable(error);
     }
 
     try {
       await handle.lock(FileLock.exclusive);
     } on FileSystemException catch (error) {
-      _claimed.remove(path);
       try {
         await handle.close();
       } on FileSystemException {
@@ -94,9 +119,7 @@ final class InstanceLock {
           : InstanceLockUnavailable(error);
     }
 
-    final lock = InstanceLock._(path, handle);
-    _claimed[path] = lock;
-    return InstanceLockAcquired(lock);
+    return InstanceLockAcquired(InstanceLock._(path, handle));
   }
 
   /// The lock file's path in [supportDirectory], one spelling per file:
@@ -117,8 +140,8 @@ final class InstanceLock {
   /// never calls it: the lock lasts as long as the process. Calling it
   /// again does nothing.
   Future<void> release() async {
-    if (!identical(_claimed[_path], this)) return;
-    _claimed.remove(_path);
+    if (!identical(_held[_path], this)) return;
+    _held.remove(_path);
     try {
       await _handle.unlock();
     } finally {
