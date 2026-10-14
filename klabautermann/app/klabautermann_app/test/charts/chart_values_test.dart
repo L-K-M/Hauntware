@@ -119,6 +119,8 @@ void main() {
       // A one-sample spike and noise under 5 % of the scale are steady, as
       // are too few samples and a scale of nothing.
       expect(summary([20, 22, 21, 95, 20, 23, 21, 22]), endsWith('steady'));
+      // Level outer quarters, though the last sample is below the first.
+      expect(summary([20, 20, 20, 20, 20, 20, 30, 10]), endsWith('steady'));
       expect(summary([10, 50]), endsWith('steady'));
       expect(summary([10, 20, 30, 40], span: 0), endsWith('steady'));
     });

@@ -16,7 +16,11 @@ SeriesRing _ring(List<double?> samples, {int? capacity}) {
   return ring;
 }
 
-Widget _sparkline(SeriesRing ring, {ChartThresholds? thresholds}) => chartFrame(
+Widget _sparkline(
+  SeriesRing ring, {
+  ChartThresholds? thresholds,
+  bool showScale = false,
+}) => chartFrame(
   SizedBox(
     width: 100,
     height: 40,
@@ -27,9 +31,13 @@ Widget _sparkline(SeriesRing ring, {ChartThresholds? thresholds}) => chartFrame(
       strings: testChartStrings,
       max: 100,
       thresholds: thresholds,
+      showScale: showScale,
     ),
   ),
 );
+
+SparklinePainter _painterOf(WidgetTester tester) =>
+    tester.widget<CustomPaint>(_painter).painter! as SparklinePainter;
 
 /// 03 §10.7: the sparkline's painter, its version-counter repaint,
 /// semantics (A11Y-02, A11Y-15) and reduced motion (A11Y-11).
@@ -83,19 +91,17 @@ void main() {
   ) async {
     final ring = _ring([10, 20, 30], capacity: 10);
     await tester.pumpWidget(_sparkline(ring));
-    SparklinePainter painter() =>
-        tester.widget<CustomPaint>(_painter).painter! as SparklinePainter;
-    final before = painter();
+    final before = _painterOf(tester);
 
     ring.add(40);
     await tester.pumpAndSettle();
-    final after = painter();
+    final after = _painterOf(tester);
     expect(after.version, ring.version);
     expect(after.shouldRepaint(before), isTrue);
 
     // A rebuild with nothing new keeps the picture.
     await tester.pumpWidget(_sparkline(ring));
-    expect(painter().shouldRepaint(after), isFalse);
+    expect(_painterOf(tester).shouldRepaint(after), isFalse);
     expect(
       find.descendant(
         of: find.byType(Sparkline),
@@ -103,6 +109,20 @@ void main() {
       ),
       findsOneWidget,
     );
+  });
+
+  testWidgets('follows the ring a rebuild hands it', (tester) async {
+    final first = _ring([10, 20], capacity: 10);
+    final second = _ring([30, 40, 50], capacity: 10);
+    await tester.pumpWidget(_sparkline(first));
+    await tester.pumpWidget(_sparkline(second));
+
+    second.add(60);
+    await tester.pumpAndSettle();
+    expect(_painterOf(tester).version, second.version);
+
+    first.add(30);
+    expect(tester.binding.hasScheduledFrame, isFalse);
   });
 
   test('a full ring slides its oldest sample out without a gap', () {
@@ -168,7 +188,8 @@ void main() {
   ) async {
     final semantics = tester.ensureSemantics();
     final ring = _ring([10, 50, 80, 95], capacity: 10);
-    await tester.pumpWidget(_sparkline(ring));
+    // The scale label stays out of the summary.
+    await tester.pumpWidget(_sparkline(ring, showScale: true));
 
     expect(
       tester.getSemantics(find.byType(Sparkline)),
