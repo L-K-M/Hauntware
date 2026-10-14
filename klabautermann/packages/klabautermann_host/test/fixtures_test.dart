@@ -116,7 +116,15 @@ void main() {
           File('$root/$platform/probe.sections').readAsStringSync(),
         );
         final result = parseProbe(sections, _ctx).toJsonResult();
-        expect(result, equals(_golden('$root/$platform/probe.golden.json')));
+        final golden = _golden('$root/$platform/probe.golden.json');
+        expect(result, equals(golden));
+
+        // The device cache's JSON reads back into the same profile.
+        final json = (golden! as Map<String, Object?>)['result'];
+        expect(
+          HostProfile.fromJson(json! as Map<String, Object?>).toJson(),
+          json,
+        );
       });
     });
   }
