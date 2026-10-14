@@ -383,6 +383,15 @@ void main() {
         ).hosts.single.user,
         'everyone',
       );
+      // So does a `Host *` key at the top: ssh offers the host's own key
+      // next, which the engine, holding one key, does not (03 §10.1).
+      expect(
+        importedHostsFromSshConfig(
+          'Host *\n  IdentityFile ~/.ssh/id_ed25519\n'
+          'Host gh\n  HostName github.com\n  IdentityFile ~/.ssh/gh\n',
+        ).hosts.single.identityFile,
+        '~/.ssh/id_ed25519',
+      );
     });
 
     test('a Match block applies when its criteria hold', () {

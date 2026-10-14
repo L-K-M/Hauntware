@@ -3515,7 +3515,12 @@ the engine in `engine_isolate.dart` beside it):
     address), `Port`, `User`, the first `IdentityFile` that is not
     `none` (ssh tries the files in order; the engine signs in with that
     one alone) and the route, whichever of `ProxyJump` and
-    `ProxyCommand` comes first.
+    `ProxyCommand` comes first. So an `IdentityFile` that a `Host *`
+    block or a line at the top of the file gives is the only key for
+    every host it reaches, though ssh would offer the host's own key
+    next: a server that accepts only that one rejects the engine's
+    sign-in (credentials rejected) where ssh gets in. Storing the
+    ordered list waits for a connector that can offer several keys.
   - A host is left out and counted when ssh would take a route the
     engine cannot know or follow: its route is a `ProxyCommand` other
     than `none`, which the engine cannot run; a `Match` block that may

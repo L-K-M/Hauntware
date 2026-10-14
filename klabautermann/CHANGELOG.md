@@ -16,18 +16,21 @@
 - The `~/.ssh/config` import reads each host as ssh does, for the
   connections to come: settings from `Host *`, wildcard and repeated
   blocks and lines before the first `Host` apply, the first value wins,
-  `Match` blocks count where Klabautermann can evaluate them, and
-  `%h` in `HostName` is the host's name. It keeps each host's
-  `IdentityFile` and `ProxyJump`, and the settings of jump hosts the
-  file names only in a `ProxyJump`. A host Klabautermann cannot connect
-  to as ssh would is skipped and counted in the import message: one
-  that uses a `ProxyCommand`, one an `Include` or a `Match` block it
-  cannot evaluate could change, one whose port, user, key or jump host
-  would change when ssh reads the file a second time for the name it
-  dials (as Fedora's and RHEL's `/etc/ssh/ssh_config` make it do), one
-  whose `HostName` or `IdentityFile` needs something it cannot fill in,
-  or one whose `ProxyJump` ssh would refuse or it cannot follow (a route
-  of more than 16 hops included).
+  `Match` blocks count where Klabautermann can evaluate them, and `%h`
+  in `HostName` is the host's name. It keeps each host's `IdentityFile`
+  and `ProxyJump`, and the settings of jump hosts the file names only in
+  a `ProxyJump`. Of several `IdentityFile` lines it keeps only the first
+  ssh would offer, so a key that `Host *` sets at the top of the file
+  comes before a host's own, and a server that accepts only the host's
+  own key will refuse Klabautermann. A host Klabautermann cannot connect
+  to as ssh would is skipped and counted in the import message: one that
+  uses a `ProxyCommand`, one an `Include` or a `Match` block it cannot
+  evaluate could change, one whose port, user, key or jump host would
+  change when ssh reads the file a second time for the name it dials (as
+  Fedora's and RHEL's `/etc/ssh/ssh_config` make it do), one whose
+  `HostName` or `IdentityFile` needs something it cannot fill in, or one
+  whose `ProxyJump` ssh would refuse or it cannot follow (a route of
+  more than 16 hops included).
 - Desktop settings window: on macOS, Linux and Windows, Settings opens in
   a window of its own, and a theme change there applies to the app.
   Phones keep the settings page.
