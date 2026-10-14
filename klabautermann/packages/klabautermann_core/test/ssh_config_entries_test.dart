@@ -449,6 +449,24 @@ void main() {
           'web': ['me@gw:22', 'me@db.internal:22', 'me@web:22'],
         },
       );
+      // That hop is a record of its own, resolved and stored: only
+      // another hop record's route names it.
+      const nested =
+          'Host *.internal\n  ProxyJump gw.corp\n'
+          'Host *.corp\n  Port 2222\n  User admin\n'
+          'Host web\n  ProxyJump db.internal\n';
+      expect(_dials(nested), {
+        'web': ['admin@gw.corp:2222', 'me@db.internal:22', 'me@web:22'],
+      });
+      expect(
+        importedHostsFromSshConfig(
+          nested,
+        ).hops.map((h) => (h.alias, h.port, h.user, h.proxyJump)),
+        [
+          ('db.internal', 22, null, 'gw.corp'),
+          ('gw.corp', 2222, 'admin', null),
+        ],
+      );
     });
 
     test('reads a ProxyJump from the whole rest of its line, and leaves out '

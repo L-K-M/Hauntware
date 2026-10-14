@@ -3,7 +3,7 @@ import 'dart:io';
 
 import 'package:klabautermann_core/klabautermann_core.dart';
 import 'package:klabautermann_core/src/fleet/imported_fleet.dart'
-    show ImportedHostDetail;
+    show ImportedFleet, ImportedHostDetail;
 import 'package:klabautermann_core/src/fleet/ssh_config_entries.dart';
 import 'package:klabautermann_core/src/fleet/ssh_config_import_store.dart';
 import 'package:seance_core/seance_core.dart' show ImportedHost;
@@ -149,6 +149,40 @@ void main() {
       expect(reopened.hosts.map((h) => h.alias), sshConfigFixtureEntries);
       // bastion's ProxyJump names jump.example, which no Host line does.
       expect(reopened.hops.map((h) => h.alias), ['jump.example']);
+    });
+
+    test('keeps a hop record that only another hop record names', () async {
+      final imported = importedHostsFromSshConfig(
+        'Host *.internal\n  ProxyJump gw.corp\n'
+        'Host *.corp\n  Port 2222\n  User admin\n'
+        'Host web\n  ProxyJump db.internal\n',
+      );
+      final store = await SshConfigImportStore.open(file);
+      await store.replace(imported.hosts, hops: imported.hops);
+
+      final reopened = await SshConfigImportStore.open(file);
+      expect(_fields(reopened.hops), [
+        ('db.internal', 'db.internal', 22, null, null, 'gw.corp'),
+        ('gw.corp', 'gw.corp', 2222, 'admin', null, null),
+      ]);
+      // The reopened records still route web through both hops.
+      final fleet = ImportedFleet(
+        reopened.hosts,
+        hops: reopened.hops,
+        localUser: 'me',
+      );
+      final first = fleet.serverConfig(
+        fleet.serverConfig('ssh-config:web')!.jumpHostId!,
+      )!;
+      final gateway = fleet.serverConfig(first.jumpHostId!)!;
+      expect(
+        (first.username, first.host, first.port),
+        ('me', 'db.internal', 22),
+      );
+      expect(
+        (gateway.username, gateway.host, gateway.port),
+        ('admin', 'gw.corp', 2222),
+      );
     });
 
     test('each replace drops the previous set, an empty one too', () async {
