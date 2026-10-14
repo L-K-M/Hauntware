@@ -195,7 +195,12 @@ jobs:
           sudo visudo -cf "$rules"
           sudo install -o root -g root -m 0440 "$rules" \
             /etc/sudoers.d/seance-elev
-          sudo visudo -c
+          # A whole-configuration `visudo -c` fails on the runner image's
+          # own /etc/sudoers.d/runner ("bad permissions, should be mode
+          # 0440"), which sudo itself accepts. Check the installed copy
+          # and that sudo still runs instead.
+          sudo visudo -cf /etc/sudoers.d/seance-elev
+          sudo -n true
 
           report="$RUNNER_TEMP/elevation-sudo.json"
           SEANCE_SUDO_TEST_PASSWORD="$password" dart test \
