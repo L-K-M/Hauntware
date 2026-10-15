@@ -19,8 +19,9 @@ final class OnCalendarElapse {
   final String? text;
 
   /// The instant in UTC: the `(in UTC)` line decoded, or the timestamp
-  /// itself when it ends in `UTC` or `GMT` and that line is missing,
-  /// which systemd-analyze omits in a zone whose offset is zero all year.
+  /// itself when it ends in `UTC`, `GMT` or `-00` and that line is
+  /// missing, which systemd-analyze omits in a zone with a zero offset
+  /// and no DST.
   final DateTime? atUtc;
 
   /// The `From now` detail (`9h left`).
@@ -145,11 +146,17 @@ ParseResult<OnCalendarResult> parseOnCalendar(String raw) {
 }
 
 /// An elapse without an `(in UTC)` line as an instant. systemd-analyze
-/// leaves that line out when `in_utc_timezone()` holds, an offset of
-/// zero all year, where stamps end in `UTC` or, as in Etc/GMT and
-/// Atlantic/Reykjavik, `GMT`.
-DateTime? _zeroOffsetStamp(String s) =>
-    _utcStamp(s.endsWith(' GMT') ? '${s.substring(0, s.length - 4)} UTC' : s);
+/// leaves that line out when `in_utc_timezone()` holds, a zero offset
+/// and no DST, where stamps end in `UTC`, `GMT` (Etc/GMT,
+/// Atlantic/Reykjavik) or `-00` (Factory).
+DateTime? _zeroOffsetStamp(String s) {
+  for (final zone in const [' GMT', ' -00']) {
+    if (s.endsWith(zone)) {
+      return _utcStamp('${s.substring(0, s.length - zone.length)} UTC');
+    }
+  }
+  return _utcStamp(s);
+}
 
 /// `Wed 2026-10-15 14:45:00 UTC` to a UTC instant; other zone
 /// abbreviations are ambiguous and stay null (the row text survives in

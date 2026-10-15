@@ -97,6 +97,20 @@ Normalized form: *-*-* 00:00:00
     );
   });
 
+  test('in the Factory zone the -00 elapse is the instant too', () {
+    // systemd 255 under TZ=Factory: offset zero without DST, so no
+    // `(in UTC)` line, and strftime's %Z prints `-00`.
+    const raw = '''
+Normalized form: *-*-* 00:00:00
+    Next elapse: Fri 2026-10-16 00:00:00 -00
+       From now: 11h left
+''';
+    expect(
+      parseOnCalendar(raw).value.elapses.single.atUtc,
+      DateTime.parse('2026-10-16T00:00:00Z'),
+    );
+  });
+
   test('a non-UTC zone keeps the text but leaves atUtc unknown', () {
     const raw = '''
 Original form: daily
