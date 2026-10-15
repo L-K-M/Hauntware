@@ -52,9 +52,7 @@ void main() {
         _optionalJson(read, file.readAsStringSync()),
       );
     }
-    if (File('${dir.path}/timer_detail.txt').existsSync()) {
-      _write('${dir.path}/timer_jobs.golden.json', _timerJobsJson(dir.path));
-    }
+    _write('${dir.path}/timer_jobs.golden.json', _timerJobsJson(dir.path));
     stdout.writeln('$platform: goldens rewritten');
   }
 }
@@ -82,28 +80,31 @@ Map<String, Object?> _timerJobsJson(String dir) {
     nowUtc: DateTime.utc(2026, 10, 14, 12),
     zone: null,
   );
-  final detail = parseTimerDetail(
-    File('$dir/timer_detail.txt').readAsStringSync(),
-    _ctx,
-  ).value;
-  final read = parseOnCalendar(
-    File('$dir/oncalendar.txt').readAsStringSync(),
-  ).value;
-  final first = jobs.indexWhere((j) => j is TimerJobEntry);
-  jobs[first] = (jobs[first] as TimerJobEntry).withDetail(
-    detail,
-    // oncalendar.txt is the read issued for the timer's one calendar
-    // expression. Reads are keyed by the expression sent, as the
-    // output names it only when it differs from the normalized form.
-    calendars: {detail.calendar.single: read},
-  );
+  final detailFile = File('$dir/timer_detail.txt');
+  final detail = detailFile.existsSync()
+      ? parseTimerDetail(detailFile.readAsStringSync(), _ctx).value
+      : null;
+  if (detail != null) {
+    final read = parseOnCalendar(
+      File('$dir/oncalendar.txt').readAsStringSync(),
+    ).value;
+    final first = jobs.indexWhere((j) => j is TimerJobEntry);
+    jobs[first] = (jobs[first] as TimerJobEntry).withDetail(
+      detail,
+      // oncalendar.txt is the read issued for the timer's one calendar
+      // expression. Reads are keyed by the expression sent, as the
+      // output names it only when it differs from the normalized form.
+      calendars: {detail.calendar.single: read},
+    );
+  }
   return {
     'jobs': jobs.map((j) => j.toJson()).toList(),
-    'timerCalendarReads': timerCalendarCommands(
-      detail,
-      runCount: 2,
-      systemdMajor: profile.systemdVersion,
-    ),
+    if (detail != null)
+      'timerCalendarReads': timerCalendarCommands(
+        detail,
+        runCount: 2,
+        systemdMajor: profile.systemdVersion,
+      ),
   };
 }
 

@@ -128,14 +128,12 @@ void main() {
           );
         });
       }
-      if (File('$root/$platform/timer_detail.txt').existsSync()) {
-        test('timer jobs', () {
-          expect(
-            _timerJobsJson('$root/$platform'),
-            equals(_golden('$root/$platform/timer_jobs.golden.json')),
-          );
-        });
-      }
+      test('timer jobs', () {
+        expect(
+          _timerJobsJson('$root/$platform'),
+          equals(_golden('$root/$platform/timer_jobs.golden.json')),
+        );
+      });
 
       test('probe', () {
         final sections = _probeSections(
@@ -176,11 +174,12 @@ Map<String, Object?> _optionalJson(String read, String payload) =>
     };
 
 /// The timer rows of the jobs list (03 §7.7) from a fixture's `timers`
-/// payload. The first timer takes the fixture's `timer_detail` payload
-/// (D57) with the `oncalendar` read of the expression that read echoes,
-/// and the golden records the reads the probe's systemd version gets.
-/// Timer rows need no zone; the cron rows' golden is in
-/// klabautermann_core. `tool/regen_goldens.dart` mirrors it.
+/// payload. Where the fixture carries a `timer_detail` payload, the
+/// first timer takes it (D57) with the `oncalendar` read of the
+/// expression that read echoes, and the golden records the reads the
+/// probe's systemd version gets. Timer rows need no zone; the cron
+/// rows' golden is in klabautermann_core. `tool/regen_goldens.dart`
+/// mirrors it.
 Map<String, Object?> _timerJobsJson(String dir) {
   final profile = parseProbe(
     _probeSections(File('$dir/probe.sections').readAsStringSync()),
@@ -191,28 +190,31 @@ Map<String, Object?> _timerJobsJson(String dir) {
     nowUtc: DateTime.utc(2026, 10, 14, 12),
     zone: null,
   );
-  final detail = parseTimerDetail(
-    File('$dir/timer_detail.txt').readAsStringSync(),
-    _ctx,
-  ).value;
-  final read = parseOnCalendar(
-    File('$dir/oncalendar.txt').readAsStringSync(),
-  ).value;
-  final first = jobs.indexWhere((j) => j is TimerJobEntry);
-  jobs[first] = (jobs[first] as TimerJobEntry).withDetail(
-    detail,
-    // oncalendar.txt is the read issued for the timer's one calendar
-    // expression. Reads are keyed by the expression sent, as the
-    // output names it only when it differs from the normalized form.
-    calendars: {detail.calendar.single: read},
-  );
+  final detailFile = File('$dir/timer_detail.txt');
+  final detail = detailFile.existsSync()
+      ? parseTimerDetail(detailFile.readAsStringSync(), _ctx).value
+      : null;
+  if (detail != null) {
+    final read = parseOnCalendar(
+      File('$dir/oncalendar.txt').readAsStringSync(),
+    ).value;
+    final first = jobs.indexWhere((j) => j is TimerJobEntry);
+    jobs[first] = (jobs[first] as TimerJobEntry).withDetail(
+      detail,
+      // oncalendar.txt is the read issued for the timer's one calendar
+      // expression. Reads are keyed by the expression sent, as the
+      // output names it only when it differs from the normalized form.
+      calendars: {detail.calendar.single: read},
+    );
+  }
   return {
     'jobs': jobs.map((j) => j.toJson()).toList(),
-    'timerCalendarReads': timerCalendarCommands(
-      detail,
-      runCount: 2,
-      systemdMajor: profile.systemdVersion,
-    ),
+    if (detail != null)
+      'timerCalendarReads': timerCalendarCommands(
+        detail,
+        runCount: 2,
+        systemdMajor: profile.systemdVersion,
+      ),
   };
 }
 

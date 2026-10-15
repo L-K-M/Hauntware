@@ -1,0 +1,36 @@
+{
+  "jobs": [
+    {
+      "kind": "timer",
+      "id": "timer|apt-daily.timer",
+      "timer": {
+        "unit": "apt-daily.timer",
+        "activates": "apt-daily.service",
+        "nextUs": 1750003600000000,
+        "leftUs": 3600000000,
+        "lastUs": 1749996400000000,
+        "passedUs": 3600000000,
+        "nextText": null,
+        "lastText": null
+      },
+      "triggers": null,
+      "randomizedDelayUs": null
+    },
+    {
+      "kind": "timer",
+      "id": "timer|logrotate.timer",
+      "timer": {
+        "unit": "logrotate.timer",
+        "activates": "logrotate.service",
+        "nextUs": 1750032000000000,
+        "leftUs": 32000000000,
+        "lastUs": 1749945600000000,
+        "passedUs": 54400000000,
+        "nextText": null,
+        "lastText": null
+      },
+      "triggers": null,
+      "randomizedDelayUs": null
+    }
+  ]
+}
