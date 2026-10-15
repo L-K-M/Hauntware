@@ -119,6 +119,11 @@ final _mountSource = RegExp(
   multiLine: true,
 );
 
+final _unitType = RegExp(
+  r'\.(service|socket|device|mount|automount|swap|target|path|timer|slice|'
+  r'scope)$',
+);
+
 final _patterns = <(String, RegExp, String Function(Match))>[
   (
     'URL credentials',
@@ -130,7 +135,9 @@ final _patterns = <(String, RegExp, String Function(Match))>[
   (
     'email address',
     RegExp(r'[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}'),
-    (_) => _emailPlaceholder,
+    // A systemd template instance (`getty@tty1.service`) has the same
+    // shape; its unit type is the last label.
+    (m) => _unitType.hasMatch(m[0]!) ? m[0]! : _emailPlaceholder,
   ),
   (
     'UUID',

@@ -124,6 +124,13 @@ void main() {
       );
     });
 
+    test('systemd template instances are no email addresses', () {
+      const units =
+          'getty@tty1.service user@1000.service modprobe@drm.service '
+          'zfs-scrub@tank.timer';
+      expect(_redact(units, collector: 'units'), units);
+    });
+
     test('MACs in interface names, disk ids and hostnamectl fields', () {
       expect(
         _redact(
