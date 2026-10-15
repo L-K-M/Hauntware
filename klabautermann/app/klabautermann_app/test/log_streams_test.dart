@@ -99,6 +99,18 @@ void main() {
     expect(third.events, [const LogStreamRunning()]);
   });
 
+  test('another request\'s rejection is not an open\'s', () async {
+    final recorder = _Recorder();
+    streams.open(_spec, recorder);
+
+    engine.emit(const RequestRejected('Connect', 'not yet'));
+    await pumpEventQueue();
+    expect(recorder.events, isEmpty);
+    engine.emit(_rejected);
+    await pumpEventQueue();
+    expect(recorder.events, ['rejected']);
+  });
+
   test('an engine that stops refuses the streams still open', () async {
     final running = _Recorder();
     final waiting = _Recorder();
@@ -144,5 +156,21 @@ void main() {
     await pumpEventQueue();
     expect(limited.value, isFalse);
     expect(streams.journalLimitedFor('srv-2').value, isNull);
+
+    // SYN-08: a server that left the fleet takes its access with it.
+    engine.emit(
+      CatalogReplaced([
+        const FleetEntry(
+          serverId: 'srv-2',
+          label: 'db-1',
+          host: 'db-1.example',
+          port: kSshDefaultPort,
+          origin: FleetEntryOrigin.sshConfig,
+        ),
+      ]),
+    );
+    engine.emit(HostProfileChanged('srv-1', profile(['users'])));
+    await pumpEventQueue();
+    expect(streams.journalLimitedFor('srv-1').value, isNull);
   });
 }
