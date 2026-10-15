@@ -23,12 +23,24 @@ const _kDefaultFontFamilyFallback = [
   'sans-serif',
 ];
 
+/// [seance fork] Whether the painter shapes neighbouring characters
+/// together, so a font's ligatures (`->`, `!=`) can form.
+enum TerminalLigatures {
+  /// Every cell is shaped alone, as upstream draws it.
+  off,
+
+  /// Runs of joinable cells are shaped together; see
+  /// `TerminalPainter.paintLine`.
+  on,
+}
+
 class TerminalStyle {
   const TerminalStyle({
     this.fontSize = _kDefaultFontSize,
     this.height = _kDefaultHeight,
     this.fontFamily = _kDefaultFontFamily,
     this.fontFamilyFallback = _kDefaultFontFamilyFallback,
+    this.ligatures = TerminalLigatures.off,
   });
 
   factory TerminalStyle.fromTextStyle(TextStyle textStyle) {
@@ -50,6 +62,10 @@ class TerminalStyle {
   final String fontFamily;
 
   final List<String> fontFamilyFallback;
+
+  /// [seance fork] Off by default, which keeps upstream's cell-by-cell
+  /// drawing for every caller that does not ask.
+  final TerminalLigatures ligatures;
 
   TextStyle toTextStyle({
     Color? color,
@@ -76,12 +92,14 @@ class TerminalStyle {
     double? height,
     String? fontFamily,
     List<String>? fontFamilyFallback,
+    TerminalLigatures? ligatures,
   }) {
     return TerminalStyle(
       fontSize: fontSize ?? this.fontSize,
       height: height ?? this.height,
       fontFamily: fontFamily ?? this.fontFamily,
       fontFamilyFallback: fontFamilyFallback ?? this.fontFamilyFallback,
+      ligatures: ligatures ?? this.ligatures,
     );
   }
 }

@@ -1,0 +1,821 @@
+{
+  "schemaVersion": 1,
+  "tool": "klabautermann_core/tool/capture_fixtures.dart measure",
+  "capturedAt": "2026-10-14T11:20:42.742140Z",
+  "collectorSetVersion": "2",
+  "host": {
+    "os": "Ubuntu 24.04.5 LTS",
+    "kernel": "Linux 6.18.44-fc-v114 x86_64",
+    "cpuModel": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "cpus": 4,
+    "systemdRunning": false,
+    "clockTicksPerSecond": 100,
+    "sh": "/usr/bin/dash"
+  },
+  "shells": {
+    "/usr/bin/dash": "not bash",
+    "/usr/bin/bash": "5.2.21(1)-release"
+  },
+  "preReady": [
+    {
+      "loginShell": "/usr/bin/dash",
+      "scenario": "empty HOME",
+      "sshVariables": true,
+      "bytesBeforeReady": 0,
+      "outcome": "ready",
+      "overviewTickOk": true
+    },
+    {
+      "loginShell": "/usr/bin/dash",
+      "scenario": "this host's /etc/skel files",
+      "sshVariables": true,
+      "bytesBeforeReady": 0,
+      "outcome": "ready",
+      "overviewTickOk": true
+    },
+    {
+      "loginShell": "/usr/bin/dash",
+      "scenario": ".bashrc prints a banner",
+      "sshVariables": true,
+      "bytesBeforeReady": 0,
+      "outcome": "ready",
+      "overviewTickOk": true
+    },
+    {
+      "loginShell": "/usr/bin/dash",
+      "scenario": ".bashrc prints a banner, no SSH variables",
+      "sshVariables": false,
+      "bytesBeforeReady": 0,
+      "outcome": "ready",
+      "overviewTickOk": true
+    },
+    {
+      "loginShell": "/usr/bin/dash",
+      "scenario": ".profile, .bash_profile and .bash_login print banners",
+      "sshVariables": true,
+      "bytesBeforeReady": 0,
+      "outcome": "ready",
+      "overviewTickOk": true
+    },
+    {
+      "loginShell": "/usr/bin/dash",
+      "scenario": ".bashrc prints 60 KiB",
+      "sshVariables": true,
+      "bytesBeforeReady": 0,
+      "outcome": "ready",
+      "overviewTickOk": true
+    },
+    {
+      "loginShell": "/usr/bin/dash",
+      "scenario": ".bashrc prints 70 KiB",
+      "sshVariables": true,
+      "bytesBeforeReady": 0,
+      "outcome": "ready",
+      "overviewTickOk": true
+    },
+    {
+      "loginShell": "/usr/bin/bash",
+      "scenario": "empty HOME",
+      "sshVariables": true,
+      "bytesBeforeReady": 0,
+      "outcome": "ready",
+      "overviewTickOk": true
+    },
+    {
+      "loginShell": "/usr/bin/bash",
+      "scenario": "this host's /etc/skel files",
+      "sshVariables": true,
+      "bytesBeforeReady": 0,
+      "outcome": "ready",
+      "overviewTickOk": true
+    },
+    {
+      "loginShell": "/usr/bin/bash",
+      "scenario": ".bashrc prints a banner",
+      "sshVariables": true,
+      "bytesBeforeReady": 18,
+      "outcome": "ready",
+      "overviewTickOk": true
+    },
+    {
+      "loginShell": "/usr/bin/bash",
+      "scenario": ".bashrc prints a banner, no SSH variables",
+      "sshVariables": false,
+      "bytesBeforeReady": 0,
+      "outcome": "ready",
+      "overviewTickOk": true
+    },
+    {
+      "loginShell": "/usr/bin/bash",
+      "scenario": ".profile, .bash_profile and .bash_login print banners",
+      "sshVariables": true,
+      "bytesBeforeReady": 0,
+      "outcome": "ready",
+      "overviewTickOk": true
+    },
+    {
+      "loginShell": "/usr/bin/bash",
+      "scenario": ".bashrc prints 60 KiB",
+      "sshVariables": true,
+      "bytesBeforeReady": 61440,
+      "outcome": "ready",
+      "overviewTickOk": true
+    },
+    {
+      "loginShell": "/usr/bin/bash",
+      "scenario": ".bashrc prints 70 KiB",
+      "sshVariables": true,
+      "bytesBeforeReady": 71680,
+      "outcome": "noReady",
+      "overviewTickOk": null
+    }
+  ],
+  "fastTick": [
+    {
+      "shell": "/usr/bin/dash",
+      "collector": "overview",
+      "ticks": 500,
+      "replyBytes": {
+        "min": 1223.0,
+        "median": 1227.0,
+        "mean": 1226.608,
+        "max": 1227.0
+      },
+      "payloadBytes": 1084,
+      "payloadBlocks": {
+        "stat": 67,
+        "meminfo": 266,
+        "loadavg": 41,
+        "netdev": 710
+      },
+      "cpuMsPerTick": 0.78,
+      "childCpuMs": 0.0,
+      "wallMsPerTick": {
+        "min": 0.79,
+        "median": 1.031,
+        "mean": 1.139,
+        "max": 4.183
+      }
+    },
+    {
+      "shell": "/usr/bin/dash",
+      "collector": "core",
+      "ticks": 500,
+      "replyBytes": {
+        "min": 2769.0,
+        "median": 2773.0,
+        "mean": 2772.608,
+        "max": 2773.0
+      },
+      "payloadBytes": 2634,
+      "payloadBlocks": {
+        "stat": 296,
+        "meminfo": 266,
+        "loadavg": 41,
+        "netdev": 711,
+        "diskstats": 924,
+        "pressure_cpu": 122,
+        "pressure_io": 128,
+        "pressure_memory": 116,
+        "uptime": 30
+      },
+      "cpuMsPerTick": 1.48,
+      "childCpuMs": 0.0,
+      "wallMsPerTick": {
+        "min": 1.566,
+        "median": 1.872,
+        "mean": 2.065,
+        "max": 9.371
+      }
+    },
+    {
+      "shell": "/usr/bin/bash",
+      "collector": "overview",
+      "ticks": 500,
+      "replyBytes": {
+        "min": 1223.0,
+        "median": 1227.0,
+        "mean": 1226.608,
+        "max": 1227.0
+      },
+      "payloadBytes": 1084,
+      "payloadBlocks": {
+        "stat": 67,
+        "meminfo": 266,
+        "loadavg": 41,
+        "netdev": 710
+      },
+      "cpuMsPerTick": 0.94,
+      "childCpuMs": 0.0,
+      "wallMsPerTick": {
+        "min": 0.877,
+        "median": 1.158,
+        "mean": 1.268,
+        "max": 5.756
+      }
+    },
+    {
+      "shell": "/usr/bin/bash",
+      "collector": "core",
+      "ticks": 500,
+      "replyBytes": {
+        "min": 2769.0,
+        "median": 2773.0,
+        "mean": 2772.608,
+        "max": 2773.0
+      },
+      "payloadBytes": 2634,
+      "payloadBlocks": {
+        "stat": 296,
+        "meminfo": 266,
+        "loadavg": 41,
+        "netdev": 711,
+        "diskstats": 924,
+        "pressure_cpu": 122,
+        "pressure_io": 128,
+        "pressure_memory": 116,
+        "uptime": 30
+      },
+      "cpuMsPerTick": 1.86,
+      "childCpuMs": 0.0,
+      "wallMsPerTick": {
+        "min": 1.795,
+        "median": 2.228,
+        "mean": 2.577,
+        "max": 33.818
+      }
+    }
+  ],
+  "procs": [
+    {
+      "shell": "/usr/bin/dash",
+      "extraProcesses": 0,
+      "processes": 78,
+      "payloadBytes": 23863,
+      "bytesPerProcess": 305.93589743589746,
+      "capFraction": 0.022757530212402344,
+      "outcome": "ok",
+      "wallMs": {
+        "min": 38.305,
+        "median": 48.293,
+        "mean": 56.347,
+        "max": 82.442
+      },
+      "cpuMs": {
+        "min": 30.0,
+        "median": 30.0,
+        "mean": 43.333,
+        "max": 70.0
+      }
+    },
+    {
+      "shell": "/usr/bin/bash",
+      "extraProcesses": 0,
+      "processes": 79,
+      "payloadBytes": 23993,
+      "bytesPerProcess": 303.7088607594937,
+      "capFraction": 0.022881507873535156,
+      "outcome": "ok",
+      "wallMs": {
+        "min": 84.634,
+        "median": 121.316,
+        "mean": 111.525,
+        "max": 128.626
+      },
+      "cpuMs": {
+        "min": 70.0,
+        "median": 90.0,
+        "mean": 93.333,
+        "max": 120.0
+      }
+    },
+    {
+      "shell": "/usr/bin/dash",
+      "extraProcesses": 1000,
+      "processes": 1079,
+      "payloadBytes": 475491,
+      "bytesPerProcess": 440.67747914735867,
+      "capFraction": 0.4534635543823242,
+      "outcome": "ok",
+      "wallMs": {
+        "min": 2211.007,
+        "median": 2273.906,
+        "mean": 2461.292,
+        "max": 2898.963
+      },
+      "cpuMs": {
+        "min": 2120.0,
+        "median": 2150.0,
+        "mean": 2343.333,
+        "max": 2760.0
+      }
+    },
+    {
+      "shell": "/usr/bin/bash",
+      "extraProcesses": 1000,
+      "processes": 1079,
+      "payloadBytes": 477019,
+      "bytesPerProcess": 442.09360518999074,
+      "capFraction": 0.45492076873779297,
+      "outcome": "ok",
+      "wallMs": {
+        "min": 17256.785,
+        "median": 17256.785,
+        "mean": 17256.785,
+        "max": 17256.785
+      },
+      "cpuMs": {
+        "min": 16350.0,
+        "median": 16350.0,
+        "mean": 16350.0,
+        "max": 16350.0
+      }
+    },
+    {
+      "shell": "/usr/bin/dash",
+      "extraProcesses": 2000,
+      "processes": 2083,
+      "payloadBytes": 934440,
+      "bytesPerProcess": 448.6029764762362,
+      "capFraction": 0.8911514282226562,
+      "outcome": "ok",
+      "wallMs": {
+        "min": 10305.753,
+        "median": 10305.753,
+        "mean": 10305.753,
+        "max": 10305.753
+      },
+      "cpuMs": {
+        "min": 10100.0,
+        "median": 10100.0,
+        "mean": 10100.0,
+        "max": 10100.0
+      }
+    },
+    {
+      "shell": "/usr/bin/bash",
+      "extraProcesses": 2000,
+      "processes": 2091,
+      "payloadBytes": 933187,
+      "bytesPerProcess": 446.2874222859876,
+      "capFraction": 0.8899564743041992,
+      "outcome": "ok",
+      "wallMs": {
+        "min": 67549.696,
+        "median": 67549.696,
+        "mean": 67549.696,
+        "max": 67549.696
+      },
+      "cpuMs": {
+        "min": 64970.0,
+        "median": 64970.0,
+        "mean": 64970.0,
+        "max": 64970.0
+      }
+    },
+    {
+      "shell": "/usr/bin/dash",
+      "extraProcesses": 3000,
+      "processes": 3085,
+      "payloadBytes": 1384187,
+      "bytesPerProcess": 448.68298217179904,
+      "capFraction": 1.320063591003418,
+      "outcome": "lost: section byte count missing or over the cap",
+      "wallMs": {
+        "min": 23276.868,
+        "median": 23276.868,
+        "mean": 23276.868,
+        "max": 23276.868
+      },
+      "cpuMs": {
+        "min": 21650.0,
+        "median": 21650.0,
+        "mean": 21650.0,
+        "max": 21650.0
+      }
+    },
+    {
+      "shell": "/usr/bin/bash",
+      "extraProcesses": 3000,
+      "processes": 3085,
+      "payloadBytes": 1383347,
+      "bytesPerProcess": 448.41069692058346,
+      "capFraction": 1.3192625045776367,
+      "outcome": "lost: section byte count missing or over the cap",
+      "wallMs": {
+        "min": 153000.086,
+        "median": 153000.086,
+        "mean": 153000.086,
+        "max": 153000.086
+      },
+      "cpuMs": {
+        "min": 144550.0,
+        "median": 144550.0,
+        "mean": 144550.0,
+        "max": 144550.0
+      }
+    }
+  ],
+  "slowTick": [
+    {
+      "shell": "/usr/bin/dash",
+      "collectors": [
+        "probe"
+      ],
+      "wallMs": {
+        "min": 70.829,
+        "median": 73.167,
+        "mean": 75.601,
+        "max": 82.807
+      },
+      "cpuMs": {
+        "min": 70.0,
+        "median": 70.0,
+        "mean": 73.333,
+        "max": 80.0
+      },
+      "replyBytes": 2269,
+      "statuses": {
+        "probe_kernel": "ok",
+        "probe_distro": "ok",
+        "probe_init": "ok",
+        "probe_virt": "ok",
+        "probe_identity": "ok",
+        "probe_elev": "ok",
+        "probe_tools": "ok",
+        "probe_kfeat": "ok",
+        "probe_locale": "ok",
+        "probe_sockets": "ok",
+        "probe_session": "ok",
+        "probe_clock": "ok",
+        "probe_linger": "ok"
+      }
+    },
+    {
+      "shell": "/usr/bin/dash",
+      "collectors": [
+        "fs"
+      ],
+      "wallMs": {
+        "min": 6.66,
+        "median": 7.396,
+        "mean": 7.43,
+        "max": 8.235
+      },
+      "cpuMs": {
+        "min": 0.0,
+        "median": 10.0,
+        "mean": 10.0,
+        "max": 20.0
+      },
+      "replyBytes": 1478,
+      "statuses": {
+        "fs": "ok"
+      }
+    },
+    {
+      "shell": "/usr/bin/dash",
+      "collectors": [
+        "identity"
+      ],
+      "wallMs": {
+        "min": 8.547,
+        "median": 8.947,
+        "mean": 8.963,
+        "max": 9.396
+      },
+      "cpuMs": {
+        "min": 0.0,
+        "median": 10.0,
+        "mean": 6.667,
+        "max": 10.0
+      },
+      "replyBytes": 733,
+      "statuses": {
+        "identity": "ok"
+      }
+    },
+    {
+      "shell": "/usr/bin/dash",
+      "collectors": [
+        "procs"
+      ],
+      "wallMs": {
+        "min": 43.85,
+        "median": 44.093,
+        "mean": 45.894,
+        "max": 49.738
+      },
+      "cpuMs": {
+        "min": 30.0,
+        "median": 30.0,
+        "mean": 33.333,
+        "max": 40.0
+      },
+      "replyBytes": 28435,
+      "statuses": {
+        "procs": "ok"
+      }
+    },
+    {
+      "shell": "/usr/bin/dash",
+      "collectors": [
+        "units"
+      ],
+      "wallMs": {
+        "min": 13.667,
+        "median": 13.832,
+        "mean": 14.068,
+        "max": 14.706
+      },
+      "cpuMs": {
+        "min": 10.0,
+        "median": 20.0,
+        "mean": 20.0,
+        "max": 30.0
+      },
+      "replyBytes": 410,
+      "statuses": {
+        "units": "error"
+      }
+    },
+    {
+      "shell": "/usr/bin/dash",
+      "collectors": [
+        "timers"
+      ],
+      "wallMs": {
+        "min": 7.945,
+        "median": 9.037,
+        "mean": 8.807,
+        "max": 9.44
+      },
+      "cpuMs": {
+        "min": 0.0,
+        "median": 0.0,
+        "mean": 3.333,
+        "max": 10.0
+      },
+      "replyBytes": 276,
+      "statuses": {
+        "timers": "error"
+      }
+    },
+    {
+      "shell": "/usr/bin/dash",
+      "collectors": [
+        "cron"
+      ],
+      "wallMs": {
+        "min": 0.785,
+        "median": 0.838,
+        "mean": 0.822,
+        "max": 0.843
+      },
+      "cpuMs": {
+        "min": 0.0,
+        "median": 0.0,
+        "mean": 0.0,
+        "max": 0.0
+      },
+      "replyBytes": 1250,
+      "statuses": {
+        "cron": "ok"
+      }
+    },
+    {
+      "shell": "/usr/bin/dash",
+      "collectors": [
+        "fs",
+        "identity",
+        "procs",
+        "units",
+        "timers",
+        "cron"
+      ],
+      "wallMs": {
+        "min": 77.169,
+        "median": 78.064,
+        "mean": 81.649,
+        "max": 89.714
+      },
+      "cpuMs": {
+        "min": 70.0,
+        "median": 80.0,
+        "mean": 76.667,
+        "max": 80.0
+      },
+      "replyBytes": 32127,
+      "statuses": {
+        "fs": "ok",
+        "identity": "ok",
+        "procs": "ok",
+        "units": "error",
+        "timers": "error",
+        "cron": "ok"
+      }
+    },
+    {
+      "shell": "/usr/bin/bash",
+      "collectors": [
+        "probe"
+      ],
+      "wallMs": {
+        "min": 85.792,
+        "median": 89.245,
+        "mean": 88.22,
+        "max": 89.624
+      },
+      "cpuMs": {
+        "min": 80.0,
+        "median": 90.0,
+        "mean": 90.0,
+        "max": 100.0
+      },
+      "replyBytes": 2269,
+      "statuses": {
+        "probe_kernel": "ok",
+        "probe_distro": "ok",
+        "probe_init": "ok",
+        "probe_virt": "ok",
+        "probe_identity": "ok",
+        "probe_elev": "ok",
+        "probe_tools": "ok",
+        "probe_kfeat": "ok",
+        "probe_locale": "ok",
+        "probe_sockets": "ok",
+        "probe_session": "ok",
+        "probe_clock": "ok",
+        "probe_linger": "ok"
+      }
+    },
+    {
+      "shell": "/usr/bin/bash",
+      "collectors": [
+        "fs"
+      ],
+      "wallMs": {
+        "min": 8.934,
+        "median": 8.996,
+        "mean": 9.391,
+        "max": 10.244
+      },
+      "cpuMs": {
+        "min": 0.0,
+        "median": 10.0,
+        "mean": 6.667,
+        "max": 10.0
+      },
+      "replyBytes": 1478,
+      "statuses": {
+        "fs": "ok"
+      }
+    },
+    {
+      "shell": "/usr/bin/bash",
+      "collectors": [
+        "identity"
+      ],
+      "wallMs": {
+        "min": 10.462,
+        "median": 11.798,
+        "mean": 13.354,
+        "max": 17.803
+      },
+      "cpuMs": {
+        "min": 0.0,
+        "median": 10.0,
+        "mean": 6.667,
+        "max": 10.0
+      },
+      "replyBytes": 733,
+      "statuses": {
+        "identity": "ok"
+      }
+    },
+    {
+      "shell": "/usr/bin/bash",
+      "collectors": [
+        "procs"
+      ],
+      "wallMs": {
+        "min": 79.759,
+        "median": 89.406,
+        "mean": 86.628,
+        "max": 90.719
+      },
+      "cpuMs": {
+        "min": 70.0,
+        "median": 80.0,
+        "mean": 80.0,
+        "max": 90.0
+      },
+      "replyBytes": 28424,
+      "statuses": {
+        "procs": "ok"
+      }
+    },
+    {
+      "shell": "/usr/bin/bash",
+      "collectors": [
+        "units"
+      ],
+      "wallMs": {
+        "min": 17.441,
+        "median": 18.784,
+        "mean": 18.882,
+        "max": 20.422
+      },
+      "cpuMs": {
+        "min": 10.0,
+        "median": 10.0,
+        "mean": 16.667,
+        "max": 30.0
+      },
+      "replyBytes": 410,
+      "statuses": {
+        "units": "error"
+      }
+    },
+    {
+      "shell": "/usr/bin/bash",
+      "collectors": [
+        "timers"
+      ],
+      "wallMs": {
+        "min": 10.871,
+        "median": 11.273,
+        "mean": 11.553,
+        "max": 12.516
+      },
+      "cpuMs": {
+        "min": 10.0,
+        "median": 10.0,
+        "mean": 16.667,
+        "max": 30.0
+      },
+      "replyBytes": 276,
+      "statuses": {
+        "timers": "error"
+      }
+    },
+    {
+      "shell": "/usr/bin/bash",
+      "collectors": [
+        "cron"
+      ],
+      "wallMs": {
+        "min": 0.813,
+        "median": 1.06,
+        "mean": 0.978,
+        "max": 1.062
+      },
+      "cpuMs": {
+        "min": 0.0,
+        "median": 0.0,
+        "mean": 0.0,
+        "max": 0.0
+      },
+      "replyBytes": 1250,
+      "statuses": {
+        "cron": "ok"
+      }
+    },
+    {
+      "shell": "/usr/bin/bash",
+      "collectors": [
+        "fs",
+        "identity",
+        "procs",
+        "units",
+        "timers",
+        "cron"
+      ],
+      "wallMs": {
+        "min": 128.934,
+        "median": 134.295,
+        "mean": 135.682,
+        "max": 143.816
+      },
+      "cpuMs": {
+        "min": 120.0,
+        "median": 130.0,
+        "mean": 130.0,
+        "max": 140.0
+      },
+      "replyBytes": 32137,
+      "statuses": {
+        "fs": "ok",
+        "identity": "ok",
+        "procs": "ok",
+        "units": "error",
+        "timers": "error",
+        "cron": "ok"
+      }
+    }
+  ],
+  "loadavg": {
+    "start": "0.86 0.77 0.87 1/112 19616",
+    "end": "1.13 1.16 1.03 1/115 27842"
+  }
+}

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ghost_fonts/testing.dart';
 import 'package:poltergeist_app/l10n/app_localizations.dart';
 import 'package:poltergeist_app/services/folder_size.dart';
 import 'package:poltergeist_app/services/pane_controller.dart';
@@ -39,6 +40,11 @@ Future<ByteData> _fontBytes(String path) async =>
 /// default family name for body text plus the mono fallback chain the
 /// row metrics style reaches for.
 Future<void> _loadRealFonts() async {
+  // The widget-test resolver does not walk fontFamilyFallback to a
+  // dynamically loaded family, so the theme's primary mono family has to
+  // be registered itself — otherwise code text rasterizes as tofu. Shipped
+  // with the app, so always there.
+  await loadBundledMonoFonts();
   final dir = Platform.environment['POLTERGEIST_CAPTURE_FONT_DIR'] ??
       '${Platform.environment['HOME']}/.local/share/fonts';
   final sans = File('$dir/DejaVuSans.ttf');
@@ -53,12 +59,6 @@ Future<void> _loadRealFonts() async {
     final monoLoader = FontLoader('DejaVu Sans Mono')
       ..addFont(_fontBytes(mono.path));
     await monoLoader.load();
-    // The widget-test resolver does not walk fontFamilyFallback to a
-    // dynamically loaded family, so register the face under the theme's
-    // primary mono name too — otherwise editor text rasterizes as tofu.
-    final primaryMono = FontLoader('JetBrains Mono')
-      ..addFont(_fontBytes(mono.path));
-    await primaryMono.load();
   }
   // Kind glyphs are MaterialIcons codepoints: without the icon font they
   // rasterize as tofu boxes. It ships inside the Flutter SDK.

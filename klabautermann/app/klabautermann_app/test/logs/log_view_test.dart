@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'dart:io' show Platform;
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart' show defaultTargetPlatform;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -21,9 +23,17 @@ const _viewSize = Size(400, 200);
 double _lineHeight(WidgetTester tester) =>
     tester.getSize(find.byType(RichText).first).height;
 
-ThemeData _theme(Brightness brightness) => brightness == Brightness.dark
-    ? GhostTheme.dark(klabautermannThemeStyle, platform: TargetPlatform.linux)
-    : GhostTheme.light(klabautermannThemeStyle, platform: TargetPlatform.linux);
+/// The theme's [platform] also picks the scroll physics: macOS bounces
+/// past the ends, Linux and Windows clamp.
+ThemeData _theme(
+  Brightness brightness, {
+  TargetPlatform platform = TargetPlatform.linux,
+}) => brightness == Brightness.dark
+    ? GhostTheme.dark(klabautermannThemeStyle, platform: platform)
+    : GhostTheme.light(klabautermannThemeStyle, platform: platform);
+
+/// The desktop platforms, for tests whose theme follows the variant's.
+final _desktops = TargetPlatformVariant.desktop();
 
 List<String> _lines(int from, int count) => [
   for (var i = from; i < from + count; i++) 'line $i',
@@ -34,9 +44,10 @@ Widget _app(
   LogWrap wrap = LogWrap.off,
   LogLevel? Function(LogLine line)? levelOf,
   Brightness brightness = Brightness.light,
+  TargetPlatform platform = TargetPlatform.linux,
 }) => MaterialApp(
   debugShowCheckedModeBanner: false,
-  theme: _theme(brightness),
+  theme: _theme(brightness, platform: platform),
   localizationsDelegates: AppLocalizations.localizationsDelegates,
   supportedLocales: AppLocalizations.supportedLocales,
   home: Material(
@@ -51,6 +62,7 @@ Future<LogViewController> _pump(
   LogLevel? Function(LogLine line)? levelOf,
   Size size = _viewSize,
   Brightness brightness = Brightness.light,
+  TargetPlatform platform = TargetPlatform.linux,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -59,7 +71,13 @@ Future<LogViewController> _pump(
   addTearDown(logs.dispose);
 
   await tester.pumpWidget(
-    _app(logs, wrap: wrap, levelOf: levelOf, brightness: brightness),
+    _app(
+      logs,
+      wrap: wrap,
+      levelOf: levelOf,
+      brightness: brightness,
+      platform: platform,
+    ),
   );
   return logs;
 }
@@ -500,6 +518,339 @@ void main() {
       expect(logs.following.value, isFalse);
       expect(_topLine(tester), lessThanOrEqualTo(top));
     });
+
+    for (final wrap in LogWrap.values) {
+      testWidgets('an animated scroll while paused lands where it was aimed '
+          'as old lines leave, wrap ${wrap.name}', (tester) async {
+        final logs = await _pump(
+          tester,
+          wrap: wrap,
+          controller: LogViewController(buffer: LogBuffer(maxLines: 100)),
+        );
+        // Line 5 wraps to several rows when wrap is on.
+        logs.add([
+          ..._lines(0, 5),
+          'line 5 ${List.filled(40, 'word').join(' ')}',
+          ..._lines(6, 94),
+        ]);
+        await tester.pump();
+        await _pauseAtLineTop(tester, logs);
+        final top = _topLine(tester);
+        final position = _position(tester);
+
+        // Three lines up over 100 ms, as a click on the desktop scrollbar's
+        // track animates, with lines 0 to 19 leaving 40 ms in.
+        unawaited(
+          position.animateTo(
+            position.pixels - 3 * _rowHeight(tester),
+            duration: const Duration(milliseconds: 100),
+            curve: Curves.linear,
+          ),
+        );
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 40));
+        logs.add(_lines(100, 20));
+        await tester.pump(const Duration(milliseconds: 16));
+        expect(logs.firstSeq, 20);
+        expect(
+          _topLine(tester),
+          inInclusiveRange(top - 3, top),
+          reason: 'during the animation',
+        );
+
+        await tester.pumpAndSettle();
+        expect(logs.following.value, isFalse);
+        expect(_topLine(tester), top - 3, reason: 'where the animation ends');
+        expect(_topHold(tester).hidden, closeTo(0, 1e-3));
+
+        // An animation to the newest line still ends on it, following.
+        unawaited(
+          position.animateTo(
+            position.maxScrollExtent,
+            duration: const Duration(milliseconds: 100),
+            curve: Curves.linear,
+          ),
+        );
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 40));
+        logs.add(_lines(120, 20));
+        await tester.pumpAndSettle();
+        expect(logs.firstSeq, 40);
+        expect(logs.following.value, isTrue);
+        expect(_atEnd(tester), isTrue);
+        expect(_shows(tester, 139), isTrue);
+      });
+    }
+
+    for (final wrap in LogWrap.values) {
+      testWidgets(
+        'a track click near the top while paused stays on the lines as old '
+        'ones leave, wrap ${wrap.name}',
+        (tester) async {
+          final logs = await _pump(
+            tester,
+            wrap: wrap,
+            controller: LogViewController(buffer: LogBuffer(maxLines: 100)),
+            platform: defaultTargetPlatform,
+          );
+          logs.add([
+            ..._lines(0, 5),
+            'line 5 ${List.filled(40, 'word').join(' ')}',
+            ..._lines(6, 94),
+          ]);
+          await tester.pump();
+          await _pauseAtLineTop(tester, logs);
+          final position = _position(tester);
+          // Less than a page from the oldest line, so the click aims at it.
+          position.jumpTo(
+            position.pixels - (_topLine(tester) - 8) * _rowHeight(tester),
+          );
+          await tester.pump();
+          expect(_topLine(tester), 8);
+
+          // A click on the scrollbar's track above its thumb, once the
+          // pointer has shown the scrollbar, animates a page up for 100 ms.
+          const track = Offset(396, 1);
+          final mouse = await tester.createGesture(
+            kind: PointerDeviceKind.mouse,
+          );
+          addTearDown(mouse.removePointer);
+          await mouse.addPointer(location: track);
+          await tester.pump();
+          await mouse.moveTo(track);
+          await tester.pumpAndSettle();
+          final before = position.pixels;
+          await mouse.down(track);
+          await tester.pump();
+          await mouse.up();
+          await tester.pump();
+
+          // Lines 0 to 19 leave 40 ms in. The rest of the path must not run
+          // past the oldest line left, which bouncing physics would show as
+          // blank space above it.
+          for (var ms = 0; ms < 500; ms += 10) {
+            if (ms == 40) logs.add(_lines(100, 20));
+            await tester.pump(const Duration(milliseconds: 10));
+            expect(
+              position.pixels,
+              greaterThanOrEqualTo(position.minScrollExtent),
+              reason: 'the frame ${ms + 10} ms after the click',
+            );
+          }
+          expect(position.pixels, lessThan(before), reason: 'it animated');
+
+          await tester.pumpAndSettle();
+          expect(logs.firstSeq, 20);
+          expect(logs.following.value, isFalse);
+          expect(_topLine(tester), 20);
+          expect(_topHold(tester).hidden, closeTo(0, 1e-3));
+        },
+        variant: _desktops,
+      );
+    }
+
+    // Curves that come within a few pixels of the end 110 ms into 300 ms
+    // and then turn back from it or run past it.
+    for (final (name, curve) in [
+      ('bounceOut', Curves.bounceOut),
+      ('easeOutBack', Curves.easeOutBack),
+    ]) {
+      for (final wrap in LogWrap.values) {
+        testWidgets(
+          'an animation to the newest line while paused moves no further '
+          'than its curve as old lines leave, $name, wrap ${wrap.name}',
+          (tester) async {
+            // Animates a paused view to the end, with lines 0 to 19 leaving
+            // 110 ms in when [evict]. Returns the highest the view went
+            // above the line it started on, in rows, the furthest it went
+            // past the end, in pixels, and whether it landed following on
+            // the newest line.
+            Future<({double above, double past, bool landed})> run({
+              required bool evict,
+            }) async {
+              await tester.pumpWidget(const SizedBox());
+              final logs = await _pump(
+                tester,
+                wrap: wrap,
+                controller: LogViewController(buffer: LogBuffer(maxLines: 100)),
+                platform: defaultTargetPlatform,
+              );
+              logs.add(_lines(0, 100));
+              await tester.pump();
+              await _pauseAtLineTop(tester, logs);
+              final position = _position(tester);
+              final row = _rowHeight(tester);
+              // Every line takes one row, so line n starts at
+              // (n - firstSeq) rows.
+              final start = _topLine(tester);
+              expect(position.pixels, closeTo(start * row, 0.01));
+
+              unawaited(
+                position.animateTo(
+                  position.maxScrollExtent,
+                  duration: const Duration(milliseconds: 300),
+                  curve: curve,
+                ),
+              );
+              await tester.pump();
+              var above = 0.0;
+              var past = 0.0;
+              for (var ms = 0; ms < 600; ms += 10) {
+                if (evict && ms == 110) logs.add(_lines(100, 20));
+                await tester.pump(const Duration(milliseconds: 10));
+                final startAt = (start - logs.firstSeq) * row;
+                above = math.max(above, (startAt - position.pixels) / row);
+                past = math.max(
+                  past,
+                  position.pixels - position.maxScrollExtent,
+                );
+              }
+              expect(logs.firstSeq, evict ? 20 : 0);
+
+              await tester.pumpAndSettle();
+              final newest = logs.firstSeq + logs.length - 1;
+              return (
+                above: above,
+                past: past,
+                landed:
+                    logs.following.value &&
+                    _atEnd(tester) &&
+                    _shows(tester, newest),
+              );
+            }
+
+            final control = await run(evict: false);
+            expect(control.above, 0);
+            expect(control.landed, isTrue);
+
+            final evicted = await run(evict: true);
+            expect(
+              evicted.above,
+              lessThan(0.01),
+              reason: 'rows above the line it started on',
+            );
+            expect(
+              evicted.past,
+              lessThanOrEqualTo(control.past + 0.01),
+              reason: 'pixels past the end',
+            );
+            expect(
+              evicted.landed,
+              isTrue,
+              reason: 'following, on the newest line',
+            );
+          },
+          variant: _desktops,
+        );
+      }
+    }
+
+    for (final wrap in LogWrap.values) {
+      testWidgets(
+        'an animation to a line while paused lands on it as the lines in '
+        'view leave, wrap ${wrap.name}',
+        (tester) async {
+          // Animates a paused view down from line 8 to line [aim] for
+          // 100 ms, as a click on the scrollbar's track does, with lines 0
+          // to 19, the view's own among them, leaving 40 ms in. Returns
+          // where it lands.
+          Future<_TopHold> run({required int aim}) async {
+            await tester.pumpWidget(const SizedBox());
+            final logs = await _pump(
+              tester,
+              wrap: wrap,
+              controller: LogViewController(buffer: LogBuffer(maxLines: 100)),
+              platform: defaultTargetPlatform,
+            );
+            logs.add(_lines(0, 100));
+            await tester.pump();
+            await _pauseAtLineTop(tester, logs);
+            final position = _position(tester);
+            final row = _rowHeight(tester);
+            position.jumpTo(position.pixels - (_topLine(tester) - 8) * row);
+            await tester.pump();
+            expect(_topLine(tester), 8);
+
+            unawaited(
+              position.animateTo(
+                position.pixels + (aim - 8) * row,
+                duration: const Duration(milliseconds: 100),
+                curve: Curves.easeInOut,
+              ),
+            );
+            await tester.pump();
+            await tester.pump(const Duration(milliseconds: 40));
+            logs.add(_lines(100, 20));
+            // Frame by frame, so the path passes the oldest line left: it
+            // waits there, neither above it nor stopped by the physics.
+            for (var ms = 50; ms < 200; ms += 10) {
+              await tester.pump(const Duration(milliseconds: 10));
+              expect(position.pixels, greaterThanOrEqualTo(0));
+            }
+            await tester.pumpAndSettle();
+            expect(logs.firstSeq, 20);
+            expect(logs.following.value, isFalse);
+            return _topHold(tester);
+          }
+
+          final kept = await run(aim: 30);
+          expect(kept.line, 30, reason: 'the line it was aimed at');
+          expect(kept.hidden, closeTo(0, 1e-3));
+
+          // Line 18 leaves too, so it lands on the oldest line left.
+          final left = await run(aim: 18);
+          expect(left.line, 20, reason: 'the oldest line left');
+          expect(left.hidden, closeTo(0, 1e-3));
+        },
+        variant: _desktops,
+      );
+    }
+
+    for (final wrap in LogWrap.values) {
+      testWidgets(
+        'an animation to the top that runs past it while paused lands on '
+        'the oldest line as lines leave, wrap ${wrap.name}',
+        (tester) async {
+          final logs = await _pump(
+            tester,
+            wrap: wrap,
+            controller: LogViewController(buffer: LogBuffer(maxLines: 100)),
+            platform: defaultTargetPlatform,
+          );
+          logs.add(_lines(0, 100));
+          await tester.pump();
+          await _pauseAtLineTop(tester, logs);
+          final position = _position(tester);
+          position.jumpTo(
+            position.pixels - (_topLine(tester) - 25) * _rowHeight(tester),
+          );
+          await tester.pump();
+          expect(_topLine(tester), 25);
+
+          // easeOutBack runs past the top before it settles there, which
+          // bouncing physics show as blank space above the oldest line.
+          unawaited(
+            position.animateTo(
+              0,
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeOutBack,
+            ),
+          );
+          await tester.pump();
+          await tester.pump(const Duration(milliseconds: 200));
+          expect(position.pixels, lessThan(0), reason: 'above the top');
+
+          // Lines 0 to 19 leave while the view is above the oldest line.
+          logs.add(_lines(100, 20));
+          await tester.pumpAndSettle();
+          expect(logs.firstSeq, 20);
+          expect(logs.following.value, isFalse);
+          expect(_topLine(tester), 20);
+          expect(_topHold(tester).hidden, closeTo(0, 1e-3));
+        },
+        variant: TargetPlatformVariant.only(TargetPlatform.macOS),
+      );
+    }
 
     testWidgets('clearing a paused view follows again', (tester) async {
       final logs = await _pump(tester);

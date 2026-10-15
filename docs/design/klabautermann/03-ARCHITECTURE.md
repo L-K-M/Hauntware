@@ -1899,8 +1899,10 @@ shown as unknown, never as zero.
   (`SC/src/terminal/shell_command.dart:63`, safe for sh, bash, zsh and fish
   [V]). Nothing else is ever written to the sampler's stdin. At most one
   request is outstanding per sampler; a tick that would overlap is skipped
-  and counted. `<seq>` numbers one sampler session's requests and restarts
-  with it; the engine's `Sample.seq` is a separate counter (D44).
+  and counted, and an on-demand read that would overlap is skipped
+  without being counted, since the user started it. `<seq>` numbers one
+  sampler session's requests and restarts with it; the engine's
+  `Sample.seq` is a separate counter (D44).
 - **Why command lines.** dash, the `/bin/sh` of Debian and Ubuntu, reads
   ahead from a pipe: a `read` loop inside a program sent on the same stdin
   loses request lines that arrive in the same write, while command lines are
@@ -1943,6 +1945,13 @@ shown as unknown, never as zero.
   the client send `TERM` (OpenSSH 7.9 and later signal the process group
   [R: r5 §1.2]), close the channel and restart the sampler with backoff.
   A missed tick is visible on the client as a gap, not as a stale value.
+  The READY deadline is 15 s from the opened channel, which covers the
+  login shell's startup files, and a slow request's margin is 5 s [E].
+  The backoff takes the link's figures (5.1). Its failure count resets
+  on a reply, a lost one included, and not on READY, so a sampler that
+  reaches READY and then fails every request still backs off. A closed
+  link stops the sampler instead of restarting it; the next link starts
+  a new one.
 
 ### 6.3 Program sketch
 
