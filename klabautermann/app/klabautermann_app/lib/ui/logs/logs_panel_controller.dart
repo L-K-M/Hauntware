@@ -21,7 +21,8 @@ const int kLogsPanelWindow = 500;
 /// starts over. A window ([live] off) reads the newest
 /// [kLogsPanelWindow] records, which arrive newest first, and shows them
 /// oldest first once it ends; a full window stays as it is while hidden.
-/// Turning [live] off closes the follow and keeps its entries.
+/// Turning [live] off closes the follow and keeps its entries, or reads
+/// a window when it showed none.
 class LogsPanelController extends ChangeNotifier implements LogStreamListener {
   LogsPanelController({
     required this._streams,
@@ -93,7 +94,8 @@ class LogsPanelController extends ChangeNotifier implements LogStreamListener {
     if (live == _live) return;
     _live = live;
     _closeStream();
-    _kept = !live;
+    // Only what a follow showed is kept; with nothing shown, read a window.
+    _kept = !live && logs.length > 0;
     _open();
     notifyListeners();
   }

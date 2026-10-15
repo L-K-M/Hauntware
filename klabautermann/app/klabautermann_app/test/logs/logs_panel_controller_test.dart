@@ -91,7 +91,9 @@ void main() {
         ..setVisible(true)
         ..setLive(false);
       expect(lines(), isEmpty);
-      expect(engine.sentOfType<OpenLogStream>(), hasLength(1));
+      // The follow showed nothing to keep, so a window is read.
+      expect(opens(), hasLength(2));
+      expect(opens().last.spec.follow, isFalse);
 
       panel.apply(const LogQuery(unit: 'nginx.service'));
       final window = opens().last.spec;
@@ -121,6 +123,17 @@ void main() {
       expect(opens().last.spec.afterCursor, 's=9');
     },
   );
+
+  test('Live off after a refusal reads a window, which may answer', () async {
+    panel.setVisible(true);
+    await emit(const RequestRejected('OpenLogStream', 'not implemented yet'));
+
+    panel.setLive(false);
+    expect(opens(), hasLength(2));
+    expect(opens().last.spec.follow, isFalse);
+    await emit(const RequestRejected('OpenLogStream', 'not implemented yet'));
+    expect(panel.rejected, isTrue);
+  });
 
   test(
     'a rejection stays until retried; a file without a valid path waits',
