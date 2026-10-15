@@ -249,6 +249,9 @@ final class MonitoringController extends ChangeNotifier {
     }
 
     _openViews.remove(serverId);
+    // A stopped engine (or a disposed controller) holds no link, and a
+    // grace timer would only keep this controller alive to send nothing.
+    if (_engineStopped) return;
     if (_linkGrace == Duration.zero) {
       _send(Disconnect(serverId));
       return;

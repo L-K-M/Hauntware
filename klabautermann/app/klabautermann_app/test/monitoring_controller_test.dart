@@ -438,6 +438,22 @@ void main() {
         expect(stopping.sent, [isA<Connect>()]);
       },
     );
+
+    testWidgets('a view that leaves after the engine stopped, or after '
+        'dispose, waits out no grace', (tester) async {
+      final stopping = FakeEngineClient();
+      final stopped = MonitoringController(stopping)..openServer('srv-1');
+      addTearDown(stopped.dispose);
+      await stopping.close();
+      stopped.leaveServer('srv-1');
+
+      MonitoringController(engine)
+        ..openServer('srv-1')
+        ..dispose()
+        ..leaveServer('srv-1');
+      // The test binding fails a timer still pending here: it would hold
+      // the dead controller for the grace, to send nothing.
+    });
   });
 
   test('the app activity reaches the engine only when it changes', () {
