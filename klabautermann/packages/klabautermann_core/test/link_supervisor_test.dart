@@ -606,6 +606,37 @@ void main() {
       expect(statuses(), [const LinkConnecting(), const LinkConnecting()]);
     });
 
+    test('a dial on its way keeps nothing learned either: the server that '
+        'comes back before it returns starts over', () async {
+      supervisor.connect('s1', purpose: _interactive);
+      calls.last.fail(LinkFailureKind.unreachable);
+      await clock.elapse(Duration.zero);
+      supervisor.connect('s1', purpose: _interactive);
+      // One failure in, and asked keyboard-interactive questions.
+      final pending = calls.last
+        ..onPhase!(
+          const LinkNeedsUser(
+            promptId: 'p1',
+            kind: PromptKind.keyboardInteractive,
+          ),
+        );
+      supervisor
+        ..forget(['s1'])
+        ..connect('s1', purpose: _background);
+      pending.fail(null);
+      await clock.elapse(Duration.zero);
+      expect(calls, hasLength(3), reason: 'dialed unattended again');
+      expect(calls.last.purpose, _background);
+
+      events.clear();
+      calls.last.fail(LinkFailureKind.unreachable);
+      await clock.elapse(Duration.zero);
+      expect(statuses(), [
+        _failed(LinkFailureKind.unreachable),
+        LinkBackoff(clock.now.add(const Duration(seconds: 1))),
+      ]);
+    });
+
     test('several go together: a slot one frees does not dial another\'s '
         'queued attempt', () async {
       final servers = [
