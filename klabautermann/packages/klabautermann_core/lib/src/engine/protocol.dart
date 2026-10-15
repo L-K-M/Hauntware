@@ -1924,8 +1924,9 @@ final class ProcessRow {
   /// compares before signalling it.
   final int? startTicks;
 
-  /// The command line, one item per argument; null when it could not be
-  /// read (7.2's "command line unavailable"). Pass an unmodifiable list.
+  /// The command line, one item per argument (per whitespace token on a
+  /// host where only `ps` lists it, 7.2); null when it could not be read
+  /// (7.2's "command line unavailable"). Pass an unmodifiable list.
   final List<String>? arguments;
 }
 

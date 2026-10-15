@@ -353,11 +353,18 @@ ProcsResult procsResult(
         cpuPercent: cpu[p.pid],
         startTicks: p.startTicks,
         // A `ps` fallback row joined its arguments with spaces, so their
-        // boundaries are lost (7.2); it reads as unavailable.
-        arguments: p.argv,
+        // boundaries are lost; it lists the whitespace tokens, so 8.9's
+        // per-argument masking works on those (7.2).
+        arguments: p.argv ?? _tokens(p.argsJoined),
       ),
   ]);
 }
+
+/// The tokens of a `ps` command line, which the host parser joins with
+/// single spaces; none for an empty one.
+List<String>? _tokens(String? joined) => joined == null
+    ? null
+    : List.unmodifiable(joined.isEmpty ? const <String>[] : joined.split(' '));
 
 /// SYS-01's identity, resolved from hostnamectl, then os-release and
 /// `uname` (03 §6.5).

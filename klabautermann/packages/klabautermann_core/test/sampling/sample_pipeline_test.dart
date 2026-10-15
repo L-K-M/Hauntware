@@ -8,7 +8,7 @@ import 'package:klabautermann_core/src/sampling/sample_pipeline.dart';
 import 'package:klabautermann_core/src/sampling/sample_results.dart';
 import 'package:klabautermann_core/src/sampling/sampler_session.dart';
 import 'package:klabautermann_host/klabautermann_host.dart'
-    show HwsSection, SectionStatus;
+    show HwsSection, ProcEntry, ProcsSnapshot, SectionStatus;
 import 'package:test/test.dart';
 
 import '../support/sample_frames.dart';
@@ -444,6 +444,25 @@ void main() {
       _section('fs', SectionStatus.error, '${'\u{1F600}' * 2048}z'),
     )!.detail!;
     expect(emoji, '${'\u{1F600}' * 2047}z');
+  });
+
+  test('a ps fallback row lists its whitespace tokens (7.2)', () {
+    final rows = procsResult(
+      ProcsSnapshot(
+        processes: [
+          ProcEntry(pid: 1, argv: const ['sh', '-c', 'a b']),
+          ProcEntry(pid: 2, argsJoined: 'nginx -g daemon off;'),
+          ProcEntry(pid: 3, argsJoined: ''),
+          ProcEntry(pid: 4),
+        ],
+      ),
+    ).processes;
+    expect(rows.map((r) => r.arguments), [
+      ['sh', '-c', 'a b'],
+      ['nginx', '-g', 'daemon', 'off;'],
+      isEmpty,
+      isNull,
+    ]);
   });
 
   group('host profile', () {
