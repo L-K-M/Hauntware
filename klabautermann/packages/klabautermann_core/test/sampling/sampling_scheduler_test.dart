@@ -366,6 +366,74 @@ void main() {
     },
   );
 
+  test('readings due while a sampler restarts are lost, as gaps, a '
+      'covered stream\'s by its coverer\'s ticks, and are read once it is '
+      'ready', () async {
+    subscribe({SampleStream.overview, SampleStream.core});
+    await clock.elapse(const Duration(seconds: 3));
+    final fast = sessions.singleWhere((s) => s.kind == _fast);
+    link.hangStarts = true;
+    await link.running.singleWhere((p) => p.kind == _fast).close();
+    await _until(() => fast.restarts == 1 && fast.state is SamplerStarting);
+    await clock.elapse(const Duration(seconds: 19));
+    link
+      ..hangStarts = false
+      ..failHungStarts();
+    await _until(() => fast.state is SamplerReady);
+    await settle();
+
+    expect(samples(SampleStream.core), ['core@0', 'core@2', 'core@22']);
+    expect(samples(SampleStream.overview), ['overview@0', 'overview@22']);
+    expect(
+      events.whereType<Gap>().map(
+        (g) => (g.cause, g.streams.single, g.from.second, g.until.second),
+      ),
+      unorderedEquals([
+        (GapCause.readingLost, SampleStream.core, 2, 22),
+        (GapCause.readingLost, SampleStream.overview, 0, 22),
+      ]),
+    );
+  });
+
+  test('readings due while the probe holds the slow sampler are lost, as '
+      'gaps', () async {
+    link.stalled.add(_slow);
+    subscribe({SampleStream.procs});
+    await settle();
+    final slow = sessions.singleWhere((s) => s.kind == _slow);
+    // Ends the slow process, and with it the probe it holds.
+    Future<void> endProbe(int restarts) async {
+      link.stalled.clear();
+      await link.running.singleWhere((p) => p.kind == _slow).close();
+      await _until(
+        () => slow.restarts == restarts && slow.state is SamplerReady,
+      );
+      await settle();
+    }
+
+    // procs had no reading yet, so the first probe loses none.
+    await endProbe(1);
+    await clock.elapse(const Duration(seconds: 14));
+    link.stalled.add(_slow);
+    await clock.elapse(const Duration(seconds: 7));
+    await endProbe(2);
+
+    expect(link.linesOf(_slow), [
+      'hw_o probe',
+      ...List.filled(5, 'hw_t procs'),
+      'hw_o probe',
+      'hw_t procs',
+    ]);
+    expect(samples(), [
+      for (final t in [0, 3, 6, 9, 12, 21]) 'procs@$t',
+    ]);
+    final gap = events.whereType<Gap>().single;
+    expect(
+      (gap.cause, gap.streams.single, gap.from.second, gap.until.second),
+      (GapCause.readingLost, SampleStream.procs, 12, 21),
+    );
+  });
+
   test('the background stops the samplers at once, and the foreground '
       'resumes them on the same link without a probe', () async {
     subscribe({SampleStream.core});

@@ -2315,8 +2315,11 @@ stream the profile reads on demand once per `Subscribe` naming it
 (10.1); such a read that brings no reply is tried again after 15 s [E].
 Due times follow a monotonic clock, so a changed wall clock cannot stall
 sampling. A sampler ticks only while it is ready, so its restarts (6.2)
-cost no skipped ticks, and a tick that would overlap its outstanding
-request is skipped and counted, never queued. A first or owed reading
+cost no skipped ticks: a cadence reading due while its sampler
+restarts, or while the probe holds it, is lost (a gap, 10.1), and the
+sampler reads its streams as soon as it can tick again. A tick
+that would overlap its outstanding request is skipped and counted,
+never queued. A first or owed reading
 due meanwhile waits for that request to settle instead, since a skipped
 tick would lose it, and the streams of a skipped tick join the next tick
 the sampler sends, so a period that keeps landing on skipped ticks

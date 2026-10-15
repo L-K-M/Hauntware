@@ -86,10 +86,11 @@ Duration Function() _monotonicClock() {
 /// [subscribed] and [update] after a subscription or a link changed,
 /// [profileChanged], [activity], and [retain] for the fleet. A tick that
 /// would overlap its sampler's outstanding request is skipped and
-/// counted by the session ([SamplerSession.skippedTicks]), never queued,
-/// and a missed fast deadline makes the restarted fast sampler's start a
-/// dead-peer hint to the link supervisor until the link next shows a
-/// sign of life.
+/// counted by the session ([SamplerSession.skippedTicks]), never queued;
+/// one due while its sampler restarts or waits for the probe is a
+/// reading lost, a gap. A missed fast deadline makes the restarted fast
+/// sampler's start a dead-peer hint to the link supervisor until the
+/// link next shows a sign of life.
 final class SamplingScheduler {
   /// [linkFor] gives a server's ready link, null while it has none.
   /// [deadPeerHint] and [clearDeadPeerHint] reach the link supervisor.
@@ -361,20 +362,33 @@ final class SamplingScheduler {
         _schedule(server, run, run.fast);
       }),
     );
+    _schedule(server, run, run.slow);
   }
 
   // -- ticks ----------------------------------------------------------
 
   /// Arms [sampler]'s timer for its earliest due stream that drives
-  /// ticks, if it may tick; a free slow sampler owing the probe sends it
-  /// first. The session's state is read here rather than from its
+  /// ticks; a free slow sampler owing the probe sends it first. A
+  /// sampler that cannot tick arms it for the streams it would lose. The
+  /// session's state is read here rather than from its
   /// [SamplerSession.states], which reports a change a turn later.
   void _schedule(_Server server, _Run run, _Sampler sampler) {
     sampler.timer?.cancel();
     sampler.timer = null;
-    if (sampler.session.state is! SamplerReady) return;
-    if (sampler.kind == SamplerKind.fast && run.holdFast) return;
-    if (sampler.kind == SamplerKind.slow && run.probing) return;
+    // A stopped session's link closed; the conditions say why.
+    if (sampler.session.state is SamplerStopped) return;
+    if (!_canTick(run, sampler)) {
+      final next = _next(run, sampler, (stream) => _losable(run, stream));
+      if (next != null) _arm(sampler, next, () => _lose(server, run, sampler));
+      return;
+    }
+    if (sampler.lost.isNotEmpty) {
+      final now = _elapsed();
+      for (final stream in sampler.lost) {
+        if (run.due.containsKey(stream)) run.due[stream] = now;
+      }
+      sampler.lost.clear();
+    }
 
     final probeAt = sampler.kind == SamplerKind.slow && !sampler.busy
         ? run.probeAt
@@ -384,20 +398,40 @@ final class SamplingScheduler {
       return;
     }
 
-    Duration? next;
-    for (final MapEntry(key: stream, value: due) in run.due.entries) {
-      if (_kindOf(stream) != sampler.kind ||
-          _rides(run, stream) ||
-          _held(run, sampler, stream)) {
-        continue;
-      }
-      if (next == null || due < next) next = due;
-    }
+    final next = _next(run, sampler, (s) => !_held(run, sampler, s));
     if (probeAt != null && (next == null || probeAt <= next)) {
       _arm(sampler, probeAt, () => _schedule(server, run, sampler));
     } else if (next != null) {
       _arm(sampler, next, () => _tick(server, run, sampler));
     }
+  }
+
+  /// Whether [sampler] may send a tick: it is ready, and neither waiting
+  /// for the probe (the fast one) nor sending it (the slow one).
+  static bool _canTick(_Run run, _Sampler sampler) =>
+      sampler.session.state is SamplerReady &&
+      switch (sampler.kind) {
+        SamplerKind.fast => !run.holdFast,
+        SamplerKind.slow => !run.probing,
+      };
+
+  /// The earliest due time of [sampler]'s streams that drive ticks and
+  /// pass [test].
+  static Duration? _next(
+    _Run run,
+    _Sampler sampler,
+    bool Function(SampleStream stream) test,
+  ) {
+    Duration? next;
+    for (final MapEntry(key: stream, value: due) in run.due.entries) {
+      if (_kindOf(stream) != sampler.kind ||
+          _rides(run, stream) ||
+          !test(stream)) {
+        continue;
+      }
+      if (next == null || due < next) next = due;
+    }
+    return next;
   }
 
   void _arm(_Sampler sampler, Duration at, void Function() callback) {
@@ -422,12 +456,64 @@ final class SamplingScheduler {
       (run.unread.contains(stream) ||
           samplingPeriod(stream, _subscriptions.profile) == null);
 
+  /// Whether [stream] is a reading lost when it comes due while its
+  /// sampler cannot tick: a cadence reading, not a first one or one owed
+  /// once, which wait for the sampler instead.
+  bool _losable(_Run run, SampleStream stream) =>
+      !run.unread.contains(stream) &&
+      samplingPeriod(stream, _subscriptions.profile) != null;
+
+  /// Reports the streams a tick would read now as readings lost to a
+  /// sampler that restarts or waits for the probe (03 §6.2: a missed
+  /// tick shows as a gap), and moves them to their next period as a sent
+  /// tick would. The sampler reads them as soon as it can tick again.
+  void _lose(_Server server, _Run run, _Sampler sampler) {
+    sampler.timer = null;
+    if (!identical(server.run, run)) return;
+    if (_canTick(run, sampler)) {
+      _schedule(server, run, sampler);
+      return;
+    }
+
+    final now = _elapsed();
+    final profile = _subscriptions.profile;
+    final lost = {
+      for (final MapEntry(key: stream, value: due) in run.due.entries)
+        if (_kindOf(stream) == sampler.kind &&
+            due <= now &&
+            _losable(run, stream))
+          stream,
+    };
+    lost.removeWhere(
+      (stream) => _rides(run, stream) && !lost.contains(_coverer(stream)),
+    );
+    for (final stream in lost) {
+      run.due[stream] = _aligned(
+        run.epoch,
+        samplingPeriod(stream, profile)!,
+        now,
+      );
+    }
+    sampler.lost.addAll(lost);
+    _emitAll(
+      server.pipeline.addTick(
+        lost,
+        const SamplerSkipped(SamplerSkipReason.notReady),
+        _now(),
+      ),
+    );
+    _schedule(server, run, sampler);
+  }
+
   void _tick(_Server server, _Run run, _Sampler sampler) {
     sampler.timer = null;
     if (!identical(server.run, run)) return;
-    // A sampler that failed since the timer was armed ticks again once
-    // it is ready, which its state change reports.
-    if (sampler.session.state is! SamplerReady) return;
+    // A sampler that failed since the timer was armed loses its streams
+    // until it can tick again.
+    if (!_canTick(run, sampler)) {
+      _schedule(server, run, sampler);
+      return;
+    }
 
     final now = _elapsed();
     final read = {
@@ -621,4 +707,8 @@ final class _Sampler {
 
   /// A tick it sent is outstanding.
   bool busy = false;
+
+  /// Streams whose readings came due while it could not tick; they are
+  /// due at once when it can again.
+  final Set<SampleStream> lost = {};
 }
