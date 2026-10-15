@@ -2,7 +2,8 @@ import 'dart:async';
 import 'dart:ui' show FlutterView;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/semantics.dart' show SemanticsService;
+import 'package:flutter/semantics.dart'
+    show AccessibilityFocusBlockType, SemanticsService;
 import 'package:ghost_servers/ghost_servers.dart';
 import 'package:ghost_theme/ghost_theme.dart' show GhostChrome;
 import 'package:klabautermann_core/klabautermann_core.dart';
@@ -560,6 +561,10 @@ class FleetServerRow extends StatelessWidget {
 /// "Connected" to "Connected with limits" are news. Samples and probe
 /// answers are never announced; a server that joins or leaves the fleet
 /// is not a link change.
+///
+/// Where the platform takes no announcements, as on Android, which
+/// deprecated them and where Flutter reports them unsupported, the latest
+/// changes go to a live region instead, as Flutter's date picker does.
 class _LinkAnnouncer extends StatefulWidget {
   const _LinkAnnouncer({required this.fleet, required this.child});
 
@@ -580,6 +585,10 @@ class _LinkAnnouncerState extends State<_LinkAnnouncer> {
   late AppLocalizations _l10n;
   late FlutterView _view;
   late TextDirection _direction;
+  late bool _announces;
+
+  /// The last link changes, for the live region; null before any.
+  String? _liveText;
 
   @override
   void initState() {
@@ -594,6 +603,7 @@ class _LinkAnnouncerState extends State<_LinkAnnouncer> {
     _l10n = AppLocalizations.of(context);
     _view = View.of(context);
     _direction = Directionality.of(context);
+    _announces = MediaQuery.maybeSupportsAnnounceOf(context) ?? false;
     // Heard afresh, so a new language rewords the states without
     // announcing them.
     _heard = _current();
@@ -631,22 +641,41 @@ class _LinkAnnouncerState extends State<_LinkAnnouncer> {
 
   void _onFleetChanged() {
     final current = _current();
-    for (final server in widget.fleet.servers) {
-      final before = _heard[server.id];
-      if (before == null || before == current[server.id]) continue;
-
-      final word = linkStatusWord(_l10n, widget.fleet.linkStatusFor(server.id));
-      unawaited(
-        SemanticsService.sendAnnouncement(
-          _view,
-          _l10n.fleetRowLinkAnnouncement(server.displayName, word),
-          _direction,
-        ),
-      );
-    }
+    final changes = [
+      for (final server in widget.fleet.servers)
+        if (_heard[server.id] case final before?
+            when before != current[server.id])
+          _l10n.fleetRowLinkAnnouncement(
+            server.displayName,
+            linkStatusWord(_l10n, widget.fleet.linkStatusFor(server.id)),
+          ),
+    ];
     _heard = current;
+    if (changes.isEmpty) return;
+
+    if (!_announces) {
+      setState(() => _liveText = changes.join(_l10n.fleetRowListSeparator));
+      return;
+    }
+    for (final change in changes) {
+      unawaited(SemanticsService.sendAnnouncement(_view, change, _direction));
+    }
   }
 
   @override
-  Widget build(BuildContext context) => widget.child;
+  Widget build(BuildContext context) {
+    final live = !_announces;
+    // The node takes no accessibility focus of its own: its label is read
+    // out when it changes, and the rows stay nodes of their own.
+    return Semantics(
+      container: live,
+      explicitChildNodes: live,
+      liveRegion: live ? true : null,
+      accessibilityFocusBlockType: live
+          ? AccessibilityFocusBlockType.blockNode
+          : null,
+      label: live ? _liveText : null,
+      child: widget.child,
+    );
+  }
 }

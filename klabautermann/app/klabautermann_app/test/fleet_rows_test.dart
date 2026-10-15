@@ -400,6 +400,28 @@ void main() {
       await tester.pump(const Duration(seconds: 2));
       await tester.pumpAndSettle();
     });
+
+    testWidgets('without announcements, link changes go to a live region '
+        '(A11Y-15)', (tester) async {
+      tester.platformDispatcher.accessibilityFeaturesTestValue =
+          const FakeAccessibilityFeatures();
+      addTearDown(
+        tester.platformDispatcher.clearAccessibilityFeaturesTestValue,
+      );
+      final rows = await _pump(tester);
+
+      await rows.emit(tester, const [LinkState('srv-1', LinkConnecting())]);
+      expect(tester.takeAnnouncements(), isEmpty);
+      expect(
+        tester.getSemantics(find.bySemanticsLabel('web-1: Connecting')),
+        isSemantics(label: 'web-1: Connecting', isLiveRegion: true),
+      );
+      expect(
+        find.bySemanticsLabel(RegExp('^web-1, ')),
+        findsOneWidget,
+        reason: 'the rows stay nodes of their own',
+      );
+    });
   });
 
   testWidgets('the locator warning shows on the row with the other '
