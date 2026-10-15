@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ghost_ui/ghost_ui.dart' show contrastRatio;
 import 'package:klabautermann_app/controllers/coverage_controller.dart';
+import 'package:klabautermann_app/l10n/app_localizations.dart';
 import 'package:klabautermann_app/ui/coverage.dart';
 import 'package:klabautermann_app/ui/fleet_rail.dart' show FleetEmptyState;
 import 'package:klabautermann_app/ui/server_workspace.dart';
@@ -52,6 +53,22 @@ void main() {
       expect(coverage.serverCount, 2);
       expect(coverage.watchedCount, 1);
       expect(FleetCoverage.of(twoServers).watchedCount, 0);
+    });
+
+    test('the watched body claims no unwatched servers, since the monitor '
+        'set may hold the whole fleet', () {
+      final l10n = lookupAppLocalizations(const Locale('en'));
+
+      expect(
+        l10n.coverageWatchedBody(1),
+        '1 server is read continuously while Klabautermann is open. Any '
+        'others are read only while you have them open.',
+      );
+      expect(
+        l10n.coverageWatchedBody(2),
+        '2 servers are read continuously while Klabautermann is open. Any '
+        'others are read only while you have them open.',
+      );
     });
   });
 

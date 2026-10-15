@@ -353,9 +353,9 @@ class AppLocalizationsEn extends AppLocalizations {
       watched,
       locale: localeName,
       other:
-          '$watched servers are read continuously while Klabautermann is open. The others are read only while you have them open.',
+          '$watched servers are read continuously while Klabautermann is open. Any others are read only while you have them open.',
       one:
-          '1 server is read continuously while Klabautermann is open. The others are read only while you have them open.',
+          '1 server is read continuously while Klabautermann is open. Any others are read only while you have them open.',
       zero:
           'No server is watched on this device, so each is read only while you have it open.',
     );

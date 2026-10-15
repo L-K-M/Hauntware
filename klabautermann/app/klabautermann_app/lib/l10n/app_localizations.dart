@@ -631,7 +631,7 @@ abstract class AppLocalizations {
   /// Body of the coverage sheet's watched-servers item; watched is the size of this device's monitor set within the fleet.
   ///
   /// In en, this message translates to:
-  /// **'{watched, plural, =0{No server is watched on this device, so each is read only while you have it open.} =1{1 server is read continuously while Klabautermann is open. The others are read only while you have them open.} other{{watched} servers are read continuously while Klabautermann is open. The others are read only while you have them open.}}'**
+  /// **'{watched, plural, =0{No server is watched on this device, so each is read only while you have it open.} =1{1 server is read continuously while Klabautermann is open. Any others are read only while you have them open.} other{{watched} servers are read continuously while Klabautermann is open. Any others are read only while you have them open.}}'**
   String coverageWatchedBody(int watched);
 
   /// Heading of the coverage sheet's list of what this device does not cover.
