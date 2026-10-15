@@ -16,8 +16,10 @@ enum ProcsArgvSource { cmdline, ps, psW, none }
 
 /// How the `procs` fragment chose its rows (D48): every process; above
 /// `kProcsRowCap` processes, the union of the top halves by CPU share since
-/// start and by resident memory; or, on a host without `sort` or `head`,
-/// the first rows in pid order.
+/// start and by resident memory; or, on a host without `sort` or `head` or
+/// when that selection comes back empty, the first rows in glob order:
+/// the byte order of the pid text, not numeric order (pid 1000 precedes
+/// pid 2).
 enum ProcsSelection {
   all('all'),
   cpuAndMemory('cpu_rss'),
