@@ -363,6 +363,27 @@ void main() {
       ]);
     });
 
+    test('a pinned hop key leaves the attempt connecting', () async {
+      hops['ssh-config-hop:gw'] = _server(id: 'ssh-config-hop:gw');
+      await pins.put(_key('198.51.100.1'));
+      await pins.put(_key('192.0.2.10'));
+      final seen = <Object>[];
+      onDial = (dial) async {
+        await dial.resolveJumpHost!('ssh-config-hop:gw');
+        await dial.tofu.check(_key('198.51.100.1'));
+        seen.add('server key');
+        await dial.tofu.check(_key('192.0.2.10'));
+        return _FakeLink();
+      };
+
+      await connect(
+        server: _server(jumpHostId: 'ssh-config-hop:gw'),
+        onPhase: seen.add,
+      );
+
+      expect(seen, ['server key', const LinkAuthenticating()]);
+    });
+
     test('a keyboard-interactive answer is reported and remembered', () async {
       await pins.put(_key('192.0.2.10'));
       final phases = <LinkStatus>[];
