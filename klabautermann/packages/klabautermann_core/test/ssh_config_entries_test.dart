@@ -518,6 +518,41 @@ void main() {
       });
       expect(importedHostsFromSshConfig(later).skippedCount, 1);
 
+      // The final pass's Port and IdentityFile count there too: behind gw,
+      // ssh's final pass dials bastion.example.com on 2200, or with k9.
+      for (final setting in [
+        'Port 2200\n  ProxyJump bastion.example.com:2200',
+        'IdentityFile ~/.ssh/k9\n  ProxyJump bastion.example.com',
+      ]) {
+        final config =
+            'Host *.example.com\n  $setting\n'
+            'Host bastion\n  HostName bastion.example.com\n'
+            'Host gw\n  HostName 10.0.0.9\n'
+            'Host web\n  HostName 10.0.0.5\n  ProxyJump gw,bastion\n';
+        expect(_dials(config), {
+          'bastion': ['me@bastion.example.com:22'],
+          'gw': ['me@10.0.0.9:22'],
+        }, reason: config);
+        expect(
+          importedHostsFromSshConfig(config).skippedCount,
+          1,
+          reason: config,
+        );
+      }
+
+      // The hop's own port comes first, so both passes dial bastion on
+      // 2222.
+      expect(
+        _dials(
+          'Host *.example.com\n'
+          '  Port 2200\n  ProxyJump bastion.example.com:2200\n'
+          'Host bastion\n  HostName bastion.example.com\n'
+          'Host gw\n  HostName 10.0.0.9\n'
+          'Host web\n  HostName 10.0.0.5\n  ProxyJump gw,bastion:2222\n',
+        )['web'],
+        ['me@10.0.0.9:22', 'me@bastion.example.com:2222', 'me@10.0.0.5:22'],
+      );
+
       // As a first hop on another port, the loop test no longer matches.
       const firstHop =
           'Match originalhost bastion.example.com\n  ProxyJump none\n'
@@ -530,6 +565,21 @@ void main() {
         'web2': ['me@bastion.example.com:22', 'me@10.0.0.6:22'],
       });
       expect(importedHostsFromSshConfig(firstHop).skippedCount, 1);
+
+      // Nor as another user: as u2, bastion's final pass jumps through
+      // u1@bastion.example.com, which ssh takes, so web has two routes.
+      // As u1 that jump is the loop.
+      const firstHopUser =
+          'Match originalhost bastion.example.com\n  ProxyJump none\n'
+          'Host *.example.com\n  User u1\n  ProxyJump u1@bastion.example.com\n'
+          'Host bastion\n  HostName bastion.example.com\n'
+          'Host web\n  HostName 10.0.0.5\n  ProxyJump u2@bastion\n'
+          'Host db\n  HostName 10.0.0.6\n  ProxyJump u1@bastion\n';
+      expect(_dials(firstHopUser), {
+        'bastion': ['me@bastion.example.com:22'],
+        'db': ['u1@bastion.example.com:22', 'me@10.0.0.6:22'],
+      });
+      expect(importedHostsFromSshConfig(firstHopUser).skippedCount, 1);
 
       // A final pass that routes bastion back through itself loops on
       // any port.
