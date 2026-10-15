@@ -104,10 +104,10 @@ Map<String, Object?> _jobsJson(String dir) {
     final first = jobs.indexWhere((j) => j is TimerJobEntry);
     jobs[first] = (jobs[first] as TimerJobEntry).withDetail(
       detail,
-      calendars: {
-        for (final e in detail.calendar)
-          if (e == read.originalForm) e: read,
-      },
+      // oncalendar.txt is the read issued for the timer's one calendar
+      // expression. Reads are keyed by the expression sent, as the
+      // output names it only when it differs from the normalized form.
+      calendars: {detail.calendar.single: read},
     );
   }
   return {

@@ -42,7 +42,9 @@ final class OnCalendarResult {
     List<OnCalendarElapse>? elapses,
   }) : elapses = List.unmodifiable(elapses ?? []);
 
-  /// The expression echo (`Original form:`).
+  /// The expression echo (`Original form:`), null when the input was
+  /// already the normalized form: systemd-analyze then omits the line,
+  /// so callers key a read by the expression they sent.
   final String? originalForm;
 
   /// The canonical systemd spelling (`Normalized form:`), what the
