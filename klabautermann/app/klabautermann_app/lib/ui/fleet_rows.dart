@@ -552,12 +552,14 @@ class FleetServerRow extends StatelessWidget {
   }
 }
 
-/// Tells the screen reader when a server's link changes state (A11Y-15):
-/// once per change of the session state `ghost_servers` draws, worded with
-/// the link's word, so a connect that moves from connecting to
-/// authenticating is one announcement, not two. Samples and probe answers
-/// are never announced; a server that joins or leaves the fleet is not a
-/// link change.
+/// Tells the screen reader when a server's link changes state (A11Y-15),
+/// worded with the link's word: once per change of that word, except that
+/// connecting, authenticating and waiting to reconnect are one attempt in
+/// flight, as `ghost_servers` draws them, so a connect or a retry loop is
+/// not read out step by step. "Needs your input" to "Blocked" and
+/// "Connected" to "Connected with limits" are news. Samples and probe
+/// answers are never announced; a server that joins or leaves the fleet
+/// is not a link change.
 class _LinkAnnouncer extends StatefulWidget {
   const _LinkAnnouncer({required this.fleet, required this.child});
 
@@ -568,9 +570,13 @@ class _LinkAnnouncer extends StatefulWidget {
   State<_LinkAnnouncer> createState() => _LinkAnnouncerState();
 }
 
+/// What [_LinkAnnouncer] tells a link change by: the session state the
+/// shared dot draws and, past an attempt in flight, the link's word.
+typedef _HeardLink = (GhostSessionState session, String? word);
+
 class _LinkAnnouncerState extends State<_LinkAnnouncer> {
-  /// Each listed server's session state as last seen.
-  late Map<String, GhostSessionState> _sessions;
+  /// Each listed server's link as last heard.
+  late Map<String, _HeardLink> _heard;
   late AppLocalizations _l10n;
   late FlutterView _view;
   late TextDirection _direction;
@@ -578,7 +584,6 @@ class _LinkAnnouncerState extends State<_LinkAnnouncer> {
   @override
   void initState() {
     super.initState();
-    _sessions = _current();
     widget.fleet.addListener(_onFleetChanged);
   }
 
@@ -589,6 +594,9 @@ class _LinkAnnouncerState extends State<_LinkAnnouncer> {
     _l10n = AppLocalizations.of(context);
     _view = View.of(context);
     _direction = Directionality.of(context);
+    // Heard afresh, so a new language rewords the states without
+    // announcing them.
+    _heard = _current();
   }
 
   @override
@@ -606,15 +614,25 @@ class _LinkAnnouncerState extends State<_LinkAnnouncer> {
     super.dispose();
   }
 
-  Map<String, GhostSessionState> _current() => {
+  Map<String, _HeardLink> _current() => {
     for (final server in widget.fleet.servers)
-      server.id: ghostSessionOf(widget.fleet.linkStatusFor(server.id)),
+      server.id: _hear(widget.fleet.linkStatusFor(server.id)),
   };
+
+  _HeardLink _hear(LinkStatus link) {
+    final session = ghostSessionOf(link);
+    return (
+      session,
+      session == GhostSessionState.connecting
+          ? null
+          : linkStatusWord(_l10n, link),
+    );
+  }
 
   void _onFleetChanged() {
     final current = _current();
     for (final server in widget.fleet.servers) {
-      final before = _sessions[server.id];
+      final before = _heard[server.id];
       if (before == null || before == current[server.id]) continue;
 
       final word = linkStatusWord(_l10n, widget.fleet.linkStatusFor(server.id));
@@ -626,7 +644,7 @@ class _LinkAnnouncerState extends State<_LinkAnnouncer> {
         ),
       );
     }
-    _sessions = current;
+    _heard = current;
   }
 
   @override

@@ -458,6 +458,31 @@ void main() {
       rows.sample('srv-1', SampleStream.core, _core(cpu: 4)),
     ]);
     expect(heard(), isEmpty);
+
+    // States the shared dot draws alike still read differently.
+    await rows.emit(tester, const [
+      LinkState('srv-1', LinkDegraded(LinkDegradedReason.sessionLimitLearned)),
+    ]);
+    expect(heard(), ['web-1: Connected with limits']);
+    await rows.emit(tester, const [
+      LinkState(
+        'srv-1',
+        LinkNeedsUser(promptId: 'p-1', kind: PromptKind.credential),
+      ),
+    ]);
+    expect(heard(), ['web-1: Needs your input']);
+    await rows.emit(tester, const [
+      LinkState('srv-1', LinkBlocked(LinkBlockedReason.hostKeyChanged)),
+    ]);
+    expect(heard(), ['web-1: Blocked']);
+
+    // A retry loop's waits and dials are one attempt in flight.
+    await rows.emit(tester, [
+      LinkState('srv-1', LinkBackoff(_t0.add(const Duration(seconds: 9)))),
+    ]);
+    expect(heard(), ['web-1: Waiting to reconnect']);
+    await rows.emit(tester, const [LinkState('srv-1', LinkConnecting())]);
+    expect(heard(), isEmpty);
   });
 
   group('fixed height (03 §10.3, FL-07)', () {
