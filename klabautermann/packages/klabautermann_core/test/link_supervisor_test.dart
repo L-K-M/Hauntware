@@ -35,11 +35,13 @@ final class _Clock {
     while (true) {
       await pumpEventQueue();
       _timers.removeWhere((t) => !t.isActive);
-      final due = _timers.where((t) => !t.due.isAfter(end)).toList()
-        ..sort((a, b) => a.due.compareTo(b.due));
+      final due = _timers.where((t) => !t.due.isAfter(end));
       if (due.isEmpty) break;
-      now = due.first.due;
-      due.first.fire();
+      // The earliest, first started among equals, as real timers fire:
+      // List.sort is not guaranteed to be stable.
+      final next = due.reduce((a, b) => b.due.isBefore(a.due) ? b : a);
+      now = next.due;
+      next.fire();
     }
     now = end;
     await pumpEventQueue();
@@ -202,6 +204,18 @@ void main() {
     await clock.elapse(Duration.zero);
     return link;
   }
+
+  test('the test clock fires timers due at once in start order', () async {
+    // The dial order tests rely on this, as with real timers. More than
+    // the 32 timers List.sort happens to keep in order today.
+    final fired = <int>[];
+    for (var i = 0; i < 40; i++) {
+      clock.start(const Duration(seconds: 1), () => fired.add(i));
+    }
+
+    await clock.elapse(const Duration(seconds: 1));
+    expect(fired, [for (var i = 0; i < 40; i++) i]);
+  });
 
   test('an unknown server is refused', () {
     expect(supervisor.connect('unknown', purpose: _interactive), isFalse);
