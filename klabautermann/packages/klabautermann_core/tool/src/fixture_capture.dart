@@ -127,9 +127,13 @@ String? platformIdFor(HostProfile profile) {
 /// Ubuntu, Fedora, RHEL and Arch: accounts in this range are people's.
 const _personalUids = (min: 1000, max: 60000);
 
+/// The kernel's overflow uid, `nobody`'s.
+const _nobodyUid = 65534;
+
 /// The literals a local capture redacts: [hostNames] with each FQDN's
-/// first label, and the name and home directory of the capturing user
-/// (home [home]) and of every personal account in [passwd]. Names a
+/// first label, the name and home directory of the capturing user (home
+/// [home], unless `/` or `/root`) unless their uid is a system one, and
+/// those of every personal account in [passwd]. Names a
 /// fixture keeps are left out: `localhost` and the os-release ID and
 /// ID_LIKE words, which cloud images use as host and default user names
 /// and which the `identity` and probe payloads must keep.
@@ -153,9 +157,15 @@ RedactionLiterals captureLiterals(
   final hosts = <String>{
     for (final h in hostNames) ...[h, h.split('.').first],
   }.where(keep);
+  // Directory-service (sssd, FreeIPA) and systemd-homed accounts lie
+  // above UID_MAX, so the capturing user need only be no system account;
+  // an unknown uid fails safe.
+  final uid = profile.uid;
+  final capturer =
+      uid == null || (uid >= _personalUids.min && uid != _nobodyUid);
   // User name to home directory; the capturing user comes first.
   final accounts = <String, String>{
-    if (profile.user case final user? when personal(profile.uid)) user: home,
+    if (profile.user case final user? when capturer) user: home,
   };
   // name:password:uid:gid:gecos:home:shell (passwd(5)).
   for (final fields in LineSplitter.split(passwd).map((l) => l.split(':'))) {
@@ -166,7 +176,10 @@ RedactionLiterals captureLiterals(
   return RedactionLiterals(
     hostNames: hosts.toList(),
     userNames: accounts.keys.toList(),
-    homeDirs: accounts.values.toSet().toList(),
+    homeDirs: accounts.values
+        .where((h) => h != '/' && h != '/root')
+        .toSet()
+        .toList(),
     extra: extra,
   );
 }

@@ -23,6 +23,7 @@ Capture _capture({
   String distro = 'ID=ubuntu\nVERSION_ID="24.04"',
   String cron = 'cron at 10.0.0.7',
   String? identity,
+  String uid = '1000',
 }) => Capture(
   const SamplerLaunch.stdinShell('dash'),
   {
@@ -36,7 +37,7 @@ Capture _capture({
   [
     _section('probe_kernel', 'Linux 6.1.0 x86_64'),
     _section('probe_distro', distro),
-    _section('probe_identity', 'uid=1000\nuser=anke\ngroups=anke sudo'),
+    _section('probe_identity', 'uid=$uid\nuser=anke\ngroups=anke sudo'),
     _section('probe_session', 'hw_timeout=absent\nssh_connection='),
   ],
 );
@@ -158,6 +159,35 @@ void main() {
     expect(literals.userNames, ['anke', 'bob']);
     expect(literals.homeDirs, ['/home/anke', '/srv/bob']);
     expect(literals.extra, ['nas07']);
+  });
+
+  test('the capturing user at any uid but a system one', () {
+    // sssd's idmap range, systemd-homed, a system account, nobody.
+    for (final (uid, users) in [
+      ('1876001104', ['anke']),
+      ('60100', ['anke']),
+      ('999', <String>[]),
+      ('65534', <String>[]),
+    ]) {
+      final literals = captureLiterals(
+        _capture(uid: uid).profile,
+        hostNames: const [],
+        home: '/home/anke',
+        passwd: '',
+      );
+      expect(literals.userNames, users, reason: uid);
+      expect(literals.homeDirs, [if (users.isNotEmpty) '/home/anke']);
+    }
+    // A HOME of /root names no account.
+    expect(
+      captureLiterals(
+        _capture().profile,
+        hostNames: const [],
+        home: '/root',
+        passwd: '',
+      ).homeDirs,
+      isEmpty,
+    );
   });
 
   test('host names from hostnamectl in the identity section', () {

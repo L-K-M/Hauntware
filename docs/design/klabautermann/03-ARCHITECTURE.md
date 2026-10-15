@@ -2343,7 +2343,9 @@ fragments (D48).
 - Capture redaction: the host's names (kernel, `/etc/hostname`,
   hostnamectl) and each FQDN's first label, the names and home
   directories of personal accounts (uid 1000 to 60000, login.defs'
-  defaults) and `--redact` values become fixed placeholders, names as
+  defaults; the capturing user at any uid from 1000 but 65534, as
+  directory-service and systemd-homed accounts lie above that range)
+  and `--redact` values become fixed placeholders, names as
   whole words in any case, a `-` in them also as device-mapper's `--`
   and systemd's `\x2d`; `localhost` and the os-release `ID` and
   `ID_LIKE` words stay, as fixtures need them. IPv4 and IPv6 addresses
