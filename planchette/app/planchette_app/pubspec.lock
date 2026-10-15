@@ -207,6 +207,13 @@ packages:
       relative: true
     source: path
     version: "1.9.0"
+  ghost_fonts:
+    dependency: transitive
+    description:
+      path: "../../packages/ghost_fonts"
+      relative: true
+    source: path
+    version: "1.9.0"
   ghost_ui:
     dependency: "direct main"
     description:

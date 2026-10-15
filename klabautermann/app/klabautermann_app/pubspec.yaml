@@ -32,6 +32,9 @@ dependencies:
   # the window_manager and screen_retriever plugins with it.
   ghost_desktop:
     path: ../../../planchette/packages/ghost_desktop
+  # The bundled monospace fonts behind the siblings' code stack.
+  ghost_fonts:
+    path: ../../../planchette/packages/ghost_fonts
   # The macOS integrated titlebar: a transparent titlebar over full-size
   # content with an empty unified toolbar (lib/services/macos_titlebar.dart).
   # Pinned to the version Séance and Poltergeist run, whose titlebar this

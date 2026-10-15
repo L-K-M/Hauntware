@@ -1,0 +1,304 @@
+{
+  "nowUtc": "2026-10-14T12:00:00.000Z",
+  "zoneOffsetMinutes": 120,
+  "zoneName": "Europe/Berlin",
+  "jobs": [
+    {
+      "kind": "cron",
+      "id": "cron|/etc/crontab|0",
+      "source": "/etc/crontab",
+      "user": "root",
+      "command": "cd / && run-parts --report /etc/cron.hourly",
+      "raw": "17 *\t* * *\troot\tcd / && run-parts --report /etc/cron.hourly",
+      "schedule": {
+        "type": "cron",
+        "text": "17 * * * *",
+        "macro": null,
+        "fields": {
+          "minute": "17",
+          "hour": "*",
+          "dayOfMonth": "*",
+          "month": "*",
+          "dayOfWeek": "*"
+        },
+        "dayMatch": "both",
+        "timeZone": null
+      },
+      "nextRuns": [
+        {
+          "atUtc": "2026-10-14T12:17:00.000Z",
+          "wall": "2026-10-14T14:17:00.000Z",
+          "offsetMinutes": 120,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-14T13:17:00.000Z",
+          "wall": "2026-10-14T15:17:00.000Z",
+          "offsetMinutes": 120,
+          "dst": "none"
+        }
+      ],
+      "runsUnknown": null
+    },
+    {
+      "kind": "cron",
+      "id": "cron|/etc/crontab|1",
+      "source": "/etc/crontab",
+      "user": "root",
+      "command": "test -x /usr/sbin/anacron || run-parts --report /etc/cron.daily",
+      "raw": "25 6\t* * *\troot\ttest -x /usr/sbin/anacron || run-parts --report /etc/cron.daily",
+      "schedule": {
+        "type": "cron",
+        "text": "25 6 * * *",
+        "macro": null,
+        "fields": {
+          "minute": "25",
+          "hour": "6",
+          "dayOfMonth": "*",
+          "month": "*",
+          "dayOfWeek": "*"
+        },
+        "dayMatch": "both",
+        "timeZone": null
+      },
+      "nextRuns": [
+        {
+          "atUtc": "2026-10-15T04:25:00.000Z",
+          "wall": "2026-10-15T06:25:00.000Z",
+          "offsetMinutes": 120,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-16T04:25:00.000Z",
+          "wall": "2026-10-16T06:25:00.000Z",
+          "offsetMinutes": 120,
+          "dst": "none"
+        }
+      ],
+      "runsUnknown": null
+    },
+    {
+      "kind": "cron",
+      "id": "cron|/etc/crontab|2",
+      "source": "/etc/crontab",
+      "user": "root",
+      "command": "test -x /usr/sbin/anacron || run-parts --report /etc/cron.weekly",
+      "raw": "47 6\t* * 7\troot\ttest -x /usr/sbin/anacron || run-parts --report /etc/cron.weekly",
+      "schedule": {
+        "type": "cron",
+        "text": "47 6 * * 7",
+        "macro": null,
+        "fields": {
+          "minute": "47",
+          "hour": "6",
+          "dayOfMonth": "*",
+          "month": "*",
+          "dayOfWeek": "7"
+        },
+        "dayMatch": "both",
+        "timeZone": null
+      },
+      "nextRuns": [
+        {
+          "atUtc": "2026-10-18T04:47:00.000Z",
+          "wall": "2026-10-18T06:47:00.000Z",
+          "offsetMinutes": 120,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-25T04:47:00.000Z",
+          "wall": "2026-10-25T06:47:00.000Z",
+          "offsetMinutes": 120,
+          "dst": "none"
+        }
+      ],
+      "runsUnknown": null
+    },
+    {
+      "kind": "cron",
+      "id": "cron|/etc/crontab|3",
+      "source": "/etc/crontab",
+      "user": "root",
+      "command": "test -x /usr/sbin/anacron || run-parts --report /etc/cron.monthly",
+      "raw": "52 6\t1 * *\troot\ttest -x /usr/sbin/anacron || run-parts --report /etc/cron.monthly",
+      "schedule": {
+        "type": "cron",
+        "text": "52 6 1 * *",
+        "macro": null,
+        "fields": {
+          "minute": "52",
+          "hour": "6",
+          "dayOfMonth": "1",
+          "month": "*",
+          "dayOfWeek": "*"
+        },
+        "dayMatch": "both",
+        "timeZone": null
+      },
+      "nextRuns": [
+        {
+          "atUtc": "2026-11-01T04:52:00.000Z",
+          "wall": "2026-11-01T06:52:00.000Z",
+          "offsetMinutes": 120,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-12-01T04:52:00.000Z",
+          "wall": "2026-12-01T06:52:00.000Z",
+          "offsetMinutes": 120,
+          "dst": "none"
+        }
+      ],
+      "runsUnknown": null
+    },
+    {
+      "kind": "cron",
+      "id": "cron|/etc/cron.d/anacron|0",
+      "source": "/etc/cron.d/anacron",
+      "user": "root",
+      "command": "test -x /etc/init.d/anacron && systemctl start anacron",
+      "raw": "30 7\t* * *\troot\ttest -x /etc/init.d/anacron && systemctl start anacron",
+      "schedule": {
+        "type": "cron",
+        "text": "30 7 * * *",
+        "macro": null,
+        "fields": {
+          "minute": "30",
+          "hour": "7",
+          "dayOfMonth": "*",
+          "month": "*",
+          "dayOfWeek": "*"
+        },
+        "dayMatch": "both",
+        "timeZone": null
+      },
+      "nextRuns": [
+        {
+          "atUtc": "2026-10-15T05:30:00.000Z",
+          "wall": "2026-10-15T07:30:00.000Z",
+          "offsetMinutes": 120,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-16T05:30:00.000Z",
+          "wall": "2026-10-16T07:30:00.000Z",
+          "offsetMinutes": 120,
+          "dst": "none"
+        }
+      ],
+      "runsUnknown": null
+    },
+    {
+      "kind": "periodic",
+      "id": "periodic|hourly|0anacron",
+      "period": "hourly",
+      "name": "0anacron",
+      "directory": "/etc/cron.hourly",
+      "driverIds": [
+        "cron|/etc/crontab|0"
+      ],
+      "schedules": [
+        {
+          "type": "cron",
+          "text": "17 * * * *",
+          "macro": null,
+          "fields": {
+            "minute": "17",
+            "hour": "*",
+            "dayOfMonth": "*",
+            "month": "*",
+            "dayOfWeek": "*"
+          },
+          "dayMatch": "both",
+          "timeZone": null
+        }
+      ],
+      "nextRuns": [
+        {
+          "atUtc": "2026-10-14T12:17:00.000Z",
+          "wall": "2026-10-14T14:17:00.000Z",
+          "offsetMinutes": 120,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-14T13:17:00.000Z",
+          "wall": "2026-10-14T15:17:00.000Z",
+          "offsetMinutes": 120,
+          "dst": "none"
+        }
+      ],
+      "runsUnknown": null
+    },
+    {
+      "kind": "periodic",
+      "id": "periodic|daily|apt-compat",
+      "period": "daily",
+      "name": "apt-compat",
+      "directory": "/etc/cron.daily",
+      "driverIds": [
+        "cron|/etc/crontab|1"
+      ],
+      "schedules": [],
+      "nextRuns": [],
+      "runsUnknown": "anacron"
+    },
+    {
+      "kind": "periodic",
+      "id": "periodic|weekly|man-db",
+      "period": "weekly",
+      "name": "man-db",
+      "directory": "/etc/cron.weekly",
+      "driverIds": [
+        "cron|/etc/crontab|2"
+      ],
+      "schedules": [],
+      "nextRuns": [],
+      "runsUnknown": "anacron"
+    },
+    {
+      "kind": "periodic",
+      "id": "periodic|monthly|mdadm",
+      "period": "monthly",
+      "name": "mdadm",
+      "directory": "/etc/cron.monthly",
+      "driverIds": [
+        "cron|/etc/crontab|3"
+      ],
+      "schedules": [],
+      "nextRuns": [],
+      "runsUnknown": "anacron"
+    },
+    {
+      "kind": "timer",
+      "id": "timer|logrotate.timer",
+      "timer": {
+        "unit": "logrotate.timer",
+        "activates": "logrotate.service",
+        "nextUs": 1750001800000000,
+        "leftUs": 1200000000,
+        "lastUs": 1749990000000000,
+        "passedUs": 13000000000,
+        "nextText": null,
+        "lastText": null
+      },
+      "triggers": null,
+      "randomizedDelayUs": null
+    },
+    {
+      "kind": "timer",
+      "id": "timer|motd-news.timer",
+      "timer": {
+        "unit": "motd-news.timer",
+        "activates": "motd-news.service",
+        "nextUs": 1751000000000000,
+        "leftUs": 1000000000000,
+        "lastUs": null,
+        "passedUs": null,
+        "nextText": null,
+        "lastText": null
+      },
+      "triggers": null,
+      "randomizedDelayUs": null
+    }
+  ]
+}

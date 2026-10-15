@@ -12,7 +12,7 @@
 library;
 
 export 'src/catalog/catalog_snapshot.dart' show CatalogSnapshot;
-export 'src/catalog/catalog_writer.dart' show CatalogWriter;
+export 'src/catalog/catalog_writer.dart' show CatalogWriter, WriteOutcome;
 export 'src/catalog/enrollment.dart'
     show
         EnrollmentResult,
