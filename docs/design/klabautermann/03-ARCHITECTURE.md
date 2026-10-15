@@ -1636,11 +1636,11 @@ abstract interface class RemoteProcess {
   for the user. The engine's link supervisor redials only after a failure
   to reach the server (unreachable or timed out) or a lost link,
   reporting `closed` (with the failure kind of a failed attempt) and then
-  `backoff(until)`; the count resets once a link is up. Every other failure, one the engine
-  cannot classify included, waits for the user's next connect: a prompt,
-  a rejected or missing credential and a client limitation come back on
-  every retry, and repeated sign-in failures get the device banned by
-  fail2ban (c2 R11). A server whose last connect needed
+  `backoff(until)`; the count resets once a link is up. Every other
+  failure, one the engine cannot classify included, waits for the user's
+  next connect: a prompt, a rejected or missing credential and a client
+  limitation come back on every retry, and repeated sign-in failures get
+  the device banned by fail2ban (c2 R11). A server whose last connect needed
   keyboard-interactive answers, on itself or a jump host, is never dialed
   unattended (4.5). A changed host key blocks the server until the
   re-pin flow of 4.6 exists; until then nothing unblocks it but an
