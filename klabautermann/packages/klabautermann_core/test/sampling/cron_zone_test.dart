@@ -228,11 +228,13 @@ void main() {
 
   test('a clock reading outside DateTime\'s range counts as none', () {
     // The server sends `epoch=`; past about 8.64e12 s no DateTime holds
-    // it, and near the int64 limit the milliseconds overflow.
+    // it, and near the int64 limits the milliseconds overflow; the
+    // minimum is its own absolute value.
     for (final epoch in [
       99999999999999,
       -99999999999999,
       9223372036854775807,
+      -9223372036854775808,
     ]) {
       final profile = _profile('+0100', 'Europe/Berlin', epoch);
       expect(

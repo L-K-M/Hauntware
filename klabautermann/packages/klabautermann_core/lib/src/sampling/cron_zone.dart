@@ -50,9 +50,13 @@ ServerCronZone serverCronZone(HostProfile? profile, DateTime atUtc) {
     );
   }
   // The server sends the clock reading; bounding it first keeps the
-  // milliseconds from overflowing and DateTime from throwing (6.5).
+  // milliseconds from overflowing and DateTime from throwing (6.5). No
+  // abs(): the int64 minimum is its own absolute value.
   final epoch = profile!.epochSeconds;
-  final probedAt = epoch == null || epoch.abs() > _maxDateTimeSeconds
+  final probedAt =
+      epoch == null ||
+          epoch > _maxDateTimeSeconds ||
+          epoch < -_maxDateTimeSeconds
       ? atUtc
       : DateTime.fromMillisecondsSinceEpoch(epoch * 1000, isUtc: true);
   if (_offsetAt(location, probedAt) != probed.offset) {
