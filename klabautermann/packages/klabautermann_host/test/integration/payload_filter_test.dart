@@ -736,6 +736,41 @@ void main() {
         expect(snap.totalProcesses, 2);
         expect(snap.processes.map((p) => p.pid), [10, 12]);
       });
+
+      test('procs never expands a pattern in a comm', () async {
+        // "a) /*/*\nb" leaves "/*/*" after the last ") " of the first
+        // stat line. Expanded, its paths would pass the field-count guard
+        // and reach the share's arithmetic, which ends the sampler; bash
+        // there also runs the subscript of a relative match such as
+        // "tmp/q/x[$(cmd)]". A directory of the tree stands in for "/*"
+        // so the expansion does not depend on the host.
+        Directory globbed({required bool lxcfs}) {
+          final root = _procRoot();
+          for (var i = 0; i < 30; i++) {
+            _mark(root, 'g/d$i');
+          }
+          final comm = 'a) ${root.path}/g/*\nb';
+          if (lxcfs) {
+            _write(
+              root,
+              'proc/mounts',
+              'lxcfs ${root.path}/proc/uptime fuse.lxcfs rw 0 0\n',
+            );
+          }
+          _proc(root, 1, comm: lxcfs ? comm : null, rssKb: 1);
+          _proc(root, 10, rssKb: 10);
+          _proc(root, 11, comm: comm, rssKb: 11);
+          return root;
+        }
+
+        final plain = (await _procs(shell, globbed(lxcfs: false))).parsed;
+        expect(plain.value.totalProcesses, 2);
+        expect(plain.value.processes.map((p) => p.pid), [1, 10]);
+        // Inside lxcfs, PID 1's stat also sets the clock.
+        final lx = (await _procs(shell, globbed(lxcfs: true))).parsed;
+        expect(lx.value.totalProcesses, 1);
+        expect(lx.value.processes.map((p) => p.pid), [10]);
+      });
     });
   }
 

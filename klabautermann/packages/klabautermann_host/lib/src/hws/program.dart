@@ -760,7 +760,10 @@ psec() {
 /// and `VmRSS:` lines of `status`: pid, state, ppid, utime, stime,
 /// starttime, uid, RSS in kB (`-` for an unknown uid or RSS) and comm.
 /// Both loops join rows in chunks of 64, so a tick's time grows about
-/// linearly with the process count instead of with its square.
+/// linearly with the process count instead of with its square. Any
+/// process can put a newline in its comm, which leaves comm text after
+/// the last `) ` of the first stat line, so the fields there are split
+/// with globbing off and fewer than 20 skip the process.
 ///
 /// Above [kProcsRowCap] processes `sort` keeps the union of the top halves
 /// by CPU share since start and by RSS (`selection=cpu_rss`); without
@@ -799,7 +802,7 @@ c_procs() {
   fi
   _z=0
   if [ "$HW_LXUP" = 1 ] && IFS= read -r _l 2>/dev/null </proc/1/stat; then
-    set -- ${_l##*) }; _z=$((${20:-0} / 100))
+    set -f; set -- ${_l##*) }; set +f; _z=$((${20:-0} / 100))
   fi
   _up=; read -r _up _x 2>/dev/null </proc/uptime
   _up=${_up%%.*}; _now=$((${_up:-0} + _z))
@@ -812,7 +815,7 @@ c_procs() {
     esac
     _p=${_f#/proc/}; _p=${_p%/stat}
     _c=${_l#*\(}; _c=${_c%\)*}
-    set -- ${_l##*) }
+    set -f; set -- ${_l##*) }; set +f
     [ $# -ge 20 ] || continue
     _u=-; _m=-
     while read -r _a _b _x; do
