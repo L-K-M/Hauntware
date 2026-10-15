@@ -186,6 +186,10 @@ Future<Map<String, Object?>> runEngineBudget(
   final port = ReceivePort('klabautermann engine budget');
   final report = Completer<Map<String, Object?>>();
   var messages = 0, samples = 0, logRecords = 0, logDropped = 0;
+  // Which hosts got through, and whether their counters gave rates.
+  final samplesByServer = <String, int>{};
+  final profiled = <String>{};
+  var samplesWithCpu = 0, samplesWithDiskRates = 0;
   // One reading at a time.
   final heapBytes = <int>[];
   var heapReads = Future<void>.value();
@@ -205,9 +209,17 @@ Future<Map<String, Object?>> runEngineBudget(
         messages++;
         logRecords += records.length;
         logDropped += dropped;
-      case Sample():
+      case Sample(:final serverId, :final result):
         messages++;
         samples++;
+        samplesByServer.update(serverId, (n) => n + 1, ifAbsent: () => 1);
+        if (result case OverviewResult(cpu: _?) || CoreResult(cpu: _?)) {
+          samplesWithCpu++;
+        }
+        if (result case CoreResult(disks: _?)) samplesWithDiskRates++;
+      case HostProfileChanged(:final serverId):
+        messages++;
+        profiled.add(serverId);
       case EngineEvent():
         messages++;
     }
@@ -271,6 +283,10 @@ Future<Map<String, Object?>> runEngineBudget(
       'ui': {
         'messages': messages,
         'samples': samples,
+        'samplesByServer': samplesByServer,
+        'samplesWithCpu': samplesWithCpu,
+        'samplesWithDiskRates': samplesWithDiskRates,
+        'serversProfiled': profiled.length,
         'logRecords': logRecords,
         'logDropped': logDropped,
       },

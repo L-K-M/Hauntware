@@ -39,9 +39,20 @@ void main() {
     final ui = json['ui']! as Map<String, Object?>;
     expect(ui['samples']! as int, greaterThan(10 * 2));
     expect(ui['messages']! as int, greaterThan(20 + (ui['samples']! as int)));
+    expect(ui['serversProfiled'], 10);
+    expect(ui['samplesByServer']! as Map, hasLength(10));
+    // The replayed counters advance, so the pipeline derives rates.
+    expect(ui['samplesWithCpu']! as int, greaterThan(0));
+    expect(ui['samplesWithDiskRates']! as int, greaterThan(0));
 
     final ticks = json['ticks']! as Map<String, Object?>;
     expect(ticks['count']! as int, greaterThan(0));
+    // Every host's first read falls in the 300 ms warm-up, which the
+    // window leaves out.
+    expect(
+      ((ticks['count']! as int) * (ticks['eventsPerTick']! as num)).round(),
+      lessThan(ui['samples']! as int),
+    );
     expect(
       (ticks['replyBytes']! as Map).keys,
       unorderedEquals(['overview', 'core']),
