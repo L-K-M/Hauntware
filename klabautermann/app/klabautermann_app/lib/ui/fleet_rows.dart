@@ -1,0 +1,570 @@
+import 'dart:async';
+import 'dart:ui' show FlutterView;
+
+import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart' show SemanticsService;
+import 'package:ghost_servers/ghost_servers.dart';
+import 'package:ghost_theme/ghost_theme.dart' show GhostChrome;
+import 'package:klabautermann_core/klabautermann_core.dart';
+
+import '../controllers/fleet_controller.dart';
+import '../controllers/monitoring_controller.dart';
+import '../l10n/app_localizations.dart';
+import '../theme/app_theme.dart';
+import 'chart_strings.dart';
+import 'charts/charts.dart';
+import 'fleet_rail.dart' show FleetEmptyState, linkStatusWord;
+import 'fleet_row_state.dart';
+import 'sidebar_kit.dart';
+
+/// `ghost_servers`' words for a row whose link is [link] (03 §10.10's
+/// adapter convention). Every session state takes the word for the status
+/// at hand, as the bag allows, so a backoff that the shared glyph draws
+/// as connecting still reads "Waiting to reconnect"; the probe answers
+/// take FL-04's words. A block carries no detail: its reasons are worded
+/// where the user resolves them. The section header's words for hidden
+/// live servers stay unset, since the rail folds no live server away
+/// behind a summary (groups and sections are K42).
+GhostServerStatusStrings fleetStatusStrings(
+  AppLocalizations l10n,
+  LinkStatus link,
+) {
+  final word = linkStatusWord(l10n, link);
+  return GhostServerStatusStrings(
+    connected: word,
+    connecting: word,
+    failed: word,
+    blocked: word,
+    notConnected: l10n.statusDisconnected,
+    probeOnline: l10n.fleetRowProbeOnline,
+    probeOffline: l10n.fleetRowProbeOffline,
+    probeUnknown: l10n.fleetRowProbeUnknown,
+    blockedDetail: null,
+  );
+}
+
+/// The icon beside a row's state word (A11Y-01): its shape tells the
+/// states apart where the dot's colour would. Only "nothing known" has
+/// none, as it has no dot and no word.
+IconData? fleetStatusIcon(GhostServerGlyph glyph) => switch (glyph) {
+  GhostServerGlyph.connected => Icons.link,
+  GhostServerGlyph.connecting => Icons.sync,
+  GhostServerGlyph.failed => Icons.error_outline,
+  GhostServerGlyph.blocked => Icons.block,
+  GhostServerGlyph.idle => Icons.link_off,
+  GhostServerGlyph.reachable => Icons.cloud_done_outlined,
+  GhostServerGlyph.unreachable => Icons.cloud_off_outlined,
+  GhostServerGlyph.reachabilityUnknown => Icons.help_outline,
+  GhostServerGlyph.none => null,
+};
+
+/// [age] in whole seconds under a minute, whole minutes under an hour and
+/// whole hours beyond (03 §9.5 item 4's "updated 4 s ago").
+String fleetRowAge(AppLocalizations l10n, Duration age) {
+  if (age < const Duration(minutes: 1)) {
+    return l10n.fleetRowAgeSeconds(age.inSeconds);
+  }
+  if (age < const Duration(hours: 1)) {
+    return l10n.fleetRowAgeMinutes(age.inMinutes);
+  }
+  return l10n.fleetRowAgeHours(age.inHours);
+}
+
+/// The fleet's rows under the shared filter field (FL-05, 03 §10.3), for
+/// the desktop rail and the phone's home list alike, with the screen
+/// reader told of link changes (A11Y-15).
+///
+/// The field shows while the fleet has servers. Esc clears a query, then
+/// leaves the field; Enter opens the first match through [onOpen]. A live
+/// query shows its matches even while [collapsed] folds the rows away
+/// behind the section header, so the count under the field never
+/// describes rows nobody can see.
+class FleetServerList extends StatefulWidget {
+  const FleetServerList({
+    super.key,
+    required this.fleet,
+    required this.monitoring,
+    required this.onOpen,
+    this.collapsed = false,
+    this.showSelection = false,
+  });
+
+  final FleetController fleet;
+
+  /// Feeds the rows' readings and their freshness clock (03 §10.1).
+  final MonitoringController monitoring;
+
+  final void Function(FleetServer server) onOpen;
+  final bool collapsed;
+
+  /// Draws the selected server's pill: the desktop workspace shows it,
+  /// while a phone's pushed screen covers the list.
+  final bool showSelection;
+
+  @override
+  State<FleetServerList> createState() => _FleetServerListState();
+}
+
+class _FleetServerListState extends State<FleetServerList> {
+  String _query = '';
+  final _filterFocus = FocusNode(debugLabel: 'Fleet filter');
+
+  @override
+  void dispose() {
+    _filterFocus.dispose();
+    super.dispose();
+  }
+
+  void _setQuery(String query) => setState(() => _query = query);
+
+  void _dismissFilter() {
+    if (_query.isNotEmpty) {
+      _setQuery('');
+      return;
+    }
+    _filterFocus.unfocus();
+  }
+
+  /// Matches are recomputed here rather than captured from the last build:
+  /// typing and submitting within one frame would act on a stale list.
+  void _openFirstMatch() {
+    if (_query.isEmpty) return;
+    final first = widget.fleet.servers
+        .where((server) => fleetServerMatches(server, _query))
+        .firstOrNull;
+    if (first == null) return;
+    _filterFocus.unfocus();
+    widget.onOpen(first);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return _LinkAnnouncer(
+      fleet: widget.fleet,
+      child: ListenableBuilder(
+        listenable: widget.fleet,
+        builder: (context, _) {
+          final servers = widget.fleet.servers;
+          if (servers.isEmpty) return const FleetEmptyState();
+
+          final matches = [
+            for (final server in servers)
+              if (fleetServerMatches(server, _query)) server,
+          ];
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SidebarFilterField(
+                query: _query,
+                focusNode: _filterFocus,
+                onChanged: _setQuery,
+                onDismiss: _dismissFilter,
+                onSubmitted: _openFirstMatch,
+                countText: matches.isEmpty
+                    ? l10n.fleetFilterCount(0, servers.length)
+                    : l10n.fleetFilterCountOpensFirst(
+                        matches.length,
+                        servers.length,
+                      ),
+              ),
+              Expanded(
+                child: matches.isEmpty
+                    ? _NoMatches(onClear: () => _setQuery(''))
+                    : ListView(
+                        children: [
+                          if (!widget.collapsed || _query.isNotEmpty)
+                            for (final server in matches)
+                              FleetServerRow(
+                                key: ValueKey(server.id),
+                                server: server,
+                                fleet: widget.fleet,
+                                monitoring: widget.monitoring,
+                                selected:
+                                    widget.showSelection &&
+                                    widget.fleet.selectedServerId == server.id,
+                                onActivate: () => widget.onOpen(server),
+                              ),
+                        ],
+                      ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _NoMatches extends StatelessWidget {
+  const _NoMatches({required this.onClear});
+
+  final VoidCallback onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    // A list, so large text in a short rail scrolls instead of clipping.
+    return ListView(
+      padding: const EdgeInsets.all(24),
+      children: [
+        Text(
+          l10n.fleetFilterNoMatches,
+          style: Theme.of(context).textTheme.bodyMedium,
+          textAlign: TextAlign.center,
+        ),
+        Center(
+          child: TextButton(
+            onPressed: onClear,
+            child: Text(l10n.sidebarFilterClear),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// The key of the age a [FleetServerRow] shows under its pressure bar.
+const Key kFleetRowAgeKey = ValueKey('fleetRowAge');
+
+/// One server row of 03 §10.3 over the sidebar kit's [SidebarRow]: the
+/// mark with `ghost_servers`' dot, the state word on the second line and
+/// its icon at the row's end (A11Y-01), and, beside the row, the locator
+/// warning (03 §4.6) and a monitored server's pressure bar (FL-07) over
+/// the reading's age.
+///
+/// A server is monitored while the app holds an `overview` or `core`
+/// reading for it ([fleetRowReading]). Rows subscribe nothing themselves:
+/// FL-21 samples the fleet only for the monitor set, which does not exist
+/// yet, so readings come from the surfaces that show a server's panels.
+///
+/// The row is one screen-reader node whose label says everything it
+/// shows; its values refresh with every sample, so it is no live region
+/// (A11Y-15). Its height is the kit's fixed extent whatever it shows, so
+/// a host turning unreachable never reflows the list.
+class FleetServerRow extends StatelessWidget {
+  const FleetServerRow({
+    super.key,
+    required this.server,
+    required this.fleet,
+    required this.monitoring,
+    required this.onActivate,
+    this.selected = false,
+  });
+
+  final FleetServer server;
+  final FleetController fleet;
+  final MonitoringController monitoring;
+  final VoidCallback onActivate;
+  final bool selected;
+
+  /// The widest the warning, pressure bar and age beside the row grow:
+  /// the warning (16 px), the bar with its severity icon (64), the gaps,
+  /// and room for an age wider than the bar at large text sizes, so the
+  /// kit's row keeps room for its mark, icon and a title on a 260 px rail.
+  static const double _extrasMaxWidth = 120;
+
+  @override
+  Widget build(BuildContext context) {
+    final id = server.id;
+    final overview = monitoring.sampleFor(id, SampleStream.overview);
+    final core = monitoring.sampleFor(id, SampleStream.core);
+    final fs = monitoring.sampleFor(id, SampleStream.fs);
+    return ListenableBuilder(
+      listenable: Listenable.merge([overview, core, fs]),
+      builder: (context, _) {
+        final samples = (
+          overview: overview.value,
+          core: core.value,
+          fs: fs.value,
+        );
+        // Only a row with a reading has an age to keep counting, so only
+        // such a row keeps the clock ticking.
+        if (samples.overview == null && samples.core == null) {
+          return _build(context, samples, null);
+        }
+        return ValueListenableBuilder(
+          valueListenable: monitoring.clock,
+          builder: (context, now, _) => _build(context, samples, now),
+        );
+      },
+    );
+  }
+
+  Widget _build(
+    BuildContext context,
+    ({Sample? overview, Sample? core, Sample? fs}) samples,
+    DateTime? now,
+  ) {
+    final l10n = AppLocalizations.of(context);
+    // The status colours live on ghost_theme's chrome beside the tokens
+    // they are held to the same contrast floor with.
+    final chrome = GhostChrome.of(context, klabautermannThemeStyle);
+    final link = fleet.linkStatusFor(server.id);
+    final session = ghostSessionOf(link);
+    // The rail rule: live truth beyond idle outranks the probe, so a
+    // connected server never reads as merely reachable.
+    final indicator = ghostServerIndicator(
+      fleetStatusStrings(l10n, link),
+      GhostIndicatorRule.rail,
+      session: session,
+      probe: ghostProbeOf(fleet.reachabilityFor(server.id)),
+    );
+    final reading = now == null
+        ? null
+        : fleetRowReading(
+            overview: samples.overview,
+            core: samples.core,
+            fs: samples.fs,
+            session: session,
+            now: now,
+          );
+
+    final chartStrings = klabautermannChartStrings(l10n);
+    final cells = reading == null
+        ? null
+        : [
+            PressureCell(
+              label: l10n.fleetRowCpu,
+              percent: reading.cpuPercent,
+              thresholds: kFleetRowThresholds,
+            ),
+            PressureCell(
+              label: l10n.fleetRowMemory,
+              percent: reading.memoryPercent,
+              thresholds: kFleetRowThresholds,
+            ),
+            PressureCell(
+              label: l10n.fleetRowDisk,
+              percent: reading.diskPercent,
+              thresholds: kFleetRowThresholds,
+            ),
+          ];
+    final freshness = reading == null
+        ? null
+        : l10n.fleetRowUpdated(fleetRowAge(l10n, reading.age));
+    final pressure = cells == null
+        ? null
+        : pressureSummary(cells, chartStrings, stale: reading!.stale);
+    final conflict = _conflictWarning(l10n);
+    // Nothing known paints no dot and shows no word, as in Séance; a
+    // screen reader still hears the link's word.
+    final label = indicator.label;
+
+    final subtitle = [?label, ?server.address].join(l10n.fleetRowPartSeparator);
+    final tooltip = [
+      ?server.address,
+      ?label,
+      ?indicator.detail,
+      ?freshness,
+      ?conflict,
+    ].join('\n');
+    final row = SidebarRow(
+      mark: const Icon(Icons.dns_outlined),
+      title: server.displayName,
+      subtitle: subtitle.isEmpty ? null : subtitle,
+      status: ghostStatusDot(
+        indicator,
+        GhostStatusColors(
+          online: chrome.statusConnected,
+          connecting: chrome.statusConnecting,
+          offline: chrome.statusFailed,
+        ),
+      ),
+      // A framed mark means connected, a silhouette the eye tells apart
+      // without the dot's colour (Séance's rail does the same).
+      markRing: indicator.glyph == GhostServerGlyph.connected
+          ? chrome.statusConnected
+          : null,
+      trailingIcon: fleetStatusIcon(indicator.glyph),
+      selected: selected,
+      onActivate: (_) => onActivate(),
+      tooltip: tooltip.isEmpty ? null : tooltip,
+      semanticLabel: [
+        server.displayName,
+        ?server.address,
+        l10n.statusSemantics(label ?? linkStatusWord(l10n, link)),
+        ?freshness,
+        ?pressure,
+        ?conflict,
+      ].join(l10n.fleetRowListSeparator),
+    );
+
+    // The age, short, under the pressure bar, level with the second line;
+    // the tooltip and the label say it in full. A link that is down shows
+    // its word instead, and the grey bar the rest. Not the kit's trailing
+    // text: beside the bar it would crowd the state word out of a 260 px
+    // rail, and it never gives way, so 200 % text would overflow the row.
+    final age = reading == null || reading.linkDown
+        ? null
+        : fleetRowAge(l10n, reading.age);
+    final extras = [
+      if (conflict != null)
+        Tooltip(
+          message: conflict,
+          excludeFromSemantics: true,
+          // Hover only, as on the row: a touch long-press opens its menu.
+          triggerMode: TooltipTriggerMode.manual,
+          child: Icon(
+            Icons.warning_amber_rounded,
+            size: 16,
+            color: ChartPalette.of(context).warning,
+          ),
+        ),
+      if (cells != null)
+        Flexible(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            spacing: 4,
+            children: [
+              PressureBar(
+                cells: cells,
+                strings: chartStrings,
+                stale: reading!.stale,
+              ),
+              if (age != null)
+                Text(
+                  age,
+                  key: kFleetRowAgeKey,
+                  maxLines: 1,
+                  softWrap: false,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: SidebarThemeTokens.of(context).secondaryText,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
+                ),
+            ],
+          ),
+        ),
+    ];
+    if (extras.isEmpty) return row;
+
+    // Beside the row rather than in it: the kit's row takes no trailing
+    // widget, and ghost_ui is a shared package outside this change. The
+    // row's label already says what these show, so they stay out of the
+    // semantics tree, and a tap on them opens the server like the row.
+    // Capped, so that at 200 % text the age gives way before the row.
+    return Row(
+      children: [
+        Expanded(child: row),
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: _extrasMaxWidth),
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: onActivate,
+            child: ExcludeSemantics(
+              child: Padding(
+                padding: const EdgeInsetsDirectional.only(end: 8),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  spacing: 6,
+                  children: extras,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// The locator warning K14's import flags (03 §4.6), naming the other
+  /// servers by their labels; null when nothing collides.
+  String? _conflictWarning(AppLocalizations l10n) {
+    final ids = server.locatorConflict;
+    if (ids == null || ids.isEmpty) return null;
+
+    final names = [
+      for (final id in ids)
+        fleet.servers
+                .where((other) => other.id == id)
+                .firstOrNull
+                ?.displayName ??
+            id,
+    ];
+    return l10n.fleetRowLocatorConflict(names.join(l10n.fleetRowListSeparator));
+  }
+}
+
+/// Tells the screen reader when a server's link changes state (A11Y-15):
+/// once per change of the session state `ghost_servers` draws, worded with
+/// the link's word, so a connect that moves from connecting to
+/// authenticating is one announcement, not two. Samples and probe answers
+/// are never announced; a server that joins or leaves the fleet is not a
+/// link change.
+class _LinkAnnouncer extends StatefulWidget {
+  const _LinkAnnouncer({required this.fleet, required this.child});
+
+  final FleetController fleet;
+  final Widget child;
+
+  @override
+  State<_LinkAnnouncer> createState() => _LinkAnnouncerState();
+}
+
+class _LinkAnnouncerState extends State<_LinkAnnouncer> {
+  /// Each listed server's session state as last seen.
+  late Map<String, GhostSessionState> _sessions;
+  late AppLocalizations _l10n;
+  late FlutterView _view;
+  late TextDirection _direction;
+
+  @override
+  void initState() {
+    super.initState();
+    _sessions = _current();
+    widget.fleet.addListener(_onFleetChanged);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Read here, since the fleet's notifications arrive outside a build.
+    _l10n = AppLocalizations.of(context);
+    _view = View.of(context);
+    _direction = Directionality.of(context);
+  }
+
+  @override
+  void didUpdateWidget(_LinkAnnouncer oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    assert(
+      widget.fleet == oldWidget.fleet,
+      'new controllers come with a new tree (KlabautermannApp, D44)',
+    );
+  }
+
+  @override
+  void dispose() {
+    widget.fleet.removeListener(_onFleetChanged);
+    super.dispose();
+  }
+
+  Map<String, GhostSessionState> _current() => {
+    for (final server in widget.fleet.servers)
+      server.id: ghostSessionOf(widget.fleet.linkStatusFor(server.id)),
+  };
+
+  void _onFleetChanged() {
+    final current = _current();
+    for (final server in widget.fleet.servers) {
+      final before = _sessions[server.id];
+      if (before == null || before == current[server.id]) continue;
+
+      final word = linkStatusWord(_l10n, widget.fleet.linkStatusFor(server.id));
+      unawaited(
+        SemanticsService.sendAnnouncement(
+          _view,
+          _l10n.fleetRowLinkAnnouncement(server.displayName, word),
+          _direction,
+        ),
+      );
+    }
+    _sessions = current;
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
+}

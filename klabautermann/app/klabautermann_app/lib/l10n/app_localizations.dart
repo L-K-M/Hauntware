@@ -346,6 +346,108 @@ abstract class AppLocalizations {
   /// **'Server status: {status}'**
   String statusSemantics(String status);
 
+  /// Fleet row state (FL-04): the reachability probe reached the server's SSH port, and nothing is connected to it.
+  ///
+  /// In en, this message translates to:
+  /// **'Online'**
+  String get fleetRowProbeOnline;
+
+  /// Fleet row state (FL-04): the reachability probe was refused, or the host had no route or no address.
+  ///
+  /// In en, this message translates to:
+  /// **'Offline'**
+  String get fleetRowProbeOffline;
+
+  /// Fleet row state (FL-04): the reachability probe could not tell, for example after a timeout. Not the same as offline: a host behind a firewall or a jump host may be up.
+  ///
+  /// In en, this message translates to:
+  /// **'Reachability unknown'**
+  String get fleetRowProbeUnknown;
+
+  /// A reading's age under a minute: beside a fleet row's state icon, and as fleetRowUpdated's age.
+  ///
+  /// In en, this message translates to:
+  /// **'{seconds} s'**
+  String fleetRowAgeSeconds(int seconds);
+
+  /// A reading's age under an hour, in whole minutes: beside a fleet row's state icon, and as fleetRowUpdated's age.
+  ///
+  /// In en, this message translates to:
+  /// **'{minutes} min'**
+  String fleetRowAgeMinutes(int minutes);
+
+  /// A reading's age of an hour or more, in whole hours: beside a fleet row's state icon, and as fleetRowUpdated's age.
+  ///
+  /// In en, this message translates to:
+  /// **'{hours} h'**
+  String fleetRowAgeHours(int hours);
+
+  /// Fleet row freshness (03 §9.5 item 4, OV-04): how long ago the row's CPU and memory reading arrived, in the row's tooltip and screen-reader label.
+  ///
+  /// In en, this message translates to:
+  /// **'Updated {age} ago'**
+  String fleetRowUpdated(String age);
+
+  /// The CPU cell of a fleet row's pressure bar (FL-07), as its summary names it.
+  ///
+  /// In en, this message translates to:
+  /// **'CPU'**
+  String get fleetRowCpu;
+
+  /// The memory cell of a fleet row's pressure bar (FL-07), as its summary names it.
+  ///
+  /// In en, this message translates to:
+  /// **'Memory'**
+  String get fleetRowMemory;
+
+  /// The disk cell of a fleet row's pressure bar (FL-07): how full the server's root file system is.
+  ///
+  /// In en, this message translates to:
+  /// **'Disk'**
+  String get fleetRowDisk;
+
+  /// Fleet row warning (03 §4.6): saved host keys are keyed by address and port, so this server's would collide with those of the named servers, which reach the same address through other jump hosts.
+  ///
+  /// In en, this message translates to:
+  /// **'Host key conflict with {servers}: they reach the same address through a different jump route.'**
+  String fleetRowLocatorConflict(String servers);
+
+  /// Between the parts of a fleet row's second line: its state and its address.
+  ///
+  /// In en, this message translates to:
+  /// **' · '**
+  String get fleetRowPartSeparator;
+
+  /// Between the parts of a fleet row's screen-reader label, and between server names in fleetRowLocatorConflict.
+  ///
+  /// In en, this message translates to:
+  /// **', '**
+  String get fleetRowListSeparator;
+
+  /// Screen-reader announcement when a server's connection state changes (A11Y-15); status is a word such as Connected or Connection lost.
+  ///
+  /// In en, this message translates to:
+  /// **'{server}: {status}'**
+  String fleetRowLinkAnnouncement(String server, String status);
+
+  /// Under the fleet filter field while a query matches no server: how many servers match out of all.
+  ///
+  /// In en, this message translates to:
+  /// **'{matches} of {total}'**
+  String fleetFilterCount(int matches, int total);
+
+  /// Under the fleet filter field while a query matches servers: how many match out of all, and that the Enter key opens the first match.
+  ///
+  /// In en, this message translates to:
+  /// **'{matches} of {total} · Enter opens the first'**
+  String fleetFilterCountOpensFirst(int matches, int total);
+
+  /// Shown in place of the fleet list when the filter matches no server.
+  ///
+  /// In en, this message translates to:
+  /// **'No servers match'**
+  String get fleetFilterNoMatches;
+
   /// No description provided for @settingsTitle.
   ///
   /// In en, this message translates to:

@@ -177,6 +177,73 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get fleetRowProbeOnline => 'Online';
+
+  @override
+  String get fleetRowProbeOffline => 'Offline';
+
+  @override
+  String get fleetRowProbeUnknown => 'Reachability unknown';
+
+  @override
+  String fleetRowAgeSeconds(int seconds) {
+    return '$seconds s';
+  }
+
+  @override
+  String fleetRowAgeMinutes(int minutes) {
+    return '$minutes min';
+  }
+
+  @override
+  String fleetRowAgeHours(int hours) {
+    return '$hours h';
+  }
+
+  @override
+  String fleetRowUpdated(String age) {
+    return 'Updated $age ago';
+  }
+
+  @override
+  String get fleetRowCpu => 'CPU';
+
+  @override
+  String get fleetRowMemory => 'Memory';
+
+  @override
+  String get fleetRowDisk => 'Disk';
+
+  @override
+  String fleetRowLocatorConflict(String servers) {
+    return 'Host key conflict with $servers: they reach the same address through a different jump route.';
+  }
+
+  @override
+  String get fleetRowPartSeparator => ' · ';
+
+  @override
+  String get fleetRowListSeparator => ', ';
+
+  @override
+  String fleetRowLinkAnnouncement(String server, String status) {
+    return '$server: $status';
+  }
+
+  @override
+  String fleetFilterCount(int matches, int total) {
+    return '$matches of $total';
+  }
+
+  @override
+  String fleetFilterCountOpensFirst(int matches, int total) {
+    return '$matches of $total · Enter opens the first';
+  }
+
+  @override
+  String get fleetFilterNoMatches => 'No servers match';
+
+  @override
   String get settingsTitle => 'Settings';
 
   @override

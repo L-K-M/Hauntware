@@ -4072,6 +4072,33 @@ and in the pressure bar. The optional `HealthMark` overlay (`ok`,
 the MVP (D55). v1 adds density modes, the summary strip, attention-first
 sort and the faults-only filter.
 
+As built in M2 (`app/klabautermann_app/lib/ui/fleet_rows.dart`,
+`fleet_row_state.dart`), the desktop rail and the phone list share one
+row over the kit's `SidebarRow`, resolved through `ghost_servers`'
+indicator under its rail rule. The app's adapter maps a degraded link to
+connected, a backoff to connecting, waiting on the user or a block to
+blocked, and a close to failed unless the engine closed it on purpose
+with no failure; session states take the link's own word, probe answers
+read "Online", "Offline" and "Reachability unknown". A state with a dot
+also shows its word on the second line and an icon at the row's end, a
+connected mark is framed, and nothing known shows no dot and no word. The
+row is one screen-reader node naming everything it shows, and a change of
+the shared session state is announced once; samples and probe answers are
+not. Until the monitor set (FL-21) exists, a server counts as monitored
+while the app holds an `overview` or `core` reading for it in this engine
+run, and rows subscribe nothing themselves; with links off, rows show
+reachability only. The bar reads CPU busy, used out of total memory, and
+the root file system's `df` capacity, warns at 80 % and turns critical at
+90 % until OV-11's thresholds, and is stale once the link is down or the
+reading is older than twice its stream's slowest 6.4 cadence (60 s for
+`overview`, 20 s for `core`); an `fs` reading past 240 s leaves the disk
+unknown. The reading's age sits under the bar, and in full
+("Updated 4 s ago") in the tooltip and the label. The bar, its age and
+the locator warning (4.6) sit beside the kit's row, which takes no
+trailing widget. The filter (FL-05) is the kit's `SidebarFilterField`
+over `FleetEntry.searchText`, name and address standing in without it:
+every term must occur, Enter opens the first match and Esc clears.
+
 ### 10.4 Server view and panels
 
 Each panel declares the capabilities it needs; missing ones hide the panel
