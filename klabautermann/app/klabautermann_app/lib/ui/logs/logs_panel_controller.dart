@@ -68,14 +68,21 @@ class LogsPanelController extends ChangeNotifier implements LogStreamListener {
   /// The engine refused the last open outright.
   bool get rejected => _rejected;
 
-  /// The engine's last status for the stream, which may have ended; null
-  /// while none is open or before the engine said anything.
+  /// The engine's last status for the stream, which may have ended, as
+  /// a kept window's end; otherwise null while none is open or before
+  /// the engine said anything.
   LogStreamStatus? get status => _status;
 
   void setVisible(bool visible) {
     if (visible == _visible) return;
     _visible = visible;
-    visible ? _open() : _closeStream();
+    if (visible) {
+      _open();
+    } else if (!_kept) {
+      // What is kept has no stream open, and keeps its end status, so an
+      // empty window still says why it is empty.
+      _closeStream();
+    }
     notifyListeners();
   }
 

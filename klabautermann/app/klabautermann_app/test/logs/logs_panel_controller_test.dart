@@ -124,6 +124,22 @@ void main() {
     },
   );
 
+  test('an empty window keeps its end through a hide and a show', () async {
+    panel
+      ..setVisible(true)
+      ..setLive(false);
+    const end = LogStreamEnded(LogStreamEndReason.oldestReached);
+    await emit(LogStreamState(lastId(), end));
+    expect(panel.status, end);
+
+    final sent = opens().length;
+    panel
+      ..setVisible(false)
+      ..setVisible(true);
+    expect(opens(), hasLength(sent), reason: 'an ended window is kept');
+    expect(panel.status, end, reason: 'the empty view says why');
+  });
+
   test('Live off after a refusal reads a window, which may answer', () async {
     panel.setVisible(true);
     await emit(const RequestRejected('OpenLogStream', 'not implemented yet'));
