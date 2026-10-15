@@ -23,6 +23,10 @@ final _twoEngines = debianHost(
   },
 );
 
+const _twoEnginesText =
+    'Runtime: Docker, rootful; Podman, rootless (Podman can also answer on '
+    'Docker\'s socket path)';
+
 Finder _inHeader(Finder finder) =>
     find.descendant(of: find.byType(ServerHeader), matching: finder);
 
@@ -46,9 +50,15 @@ void main() {
     final l10n = lookupAppLocalizations(const Locale('en'));
     String runtime(HostProfile? profile) => detectedRuntimeText(l10n, profile);
     expect(runtime(null), 'Runtime: not checked yet');
-    expect(runtime(debianHost()), 'Runtime: Docker, rootful');
+    // A socket at Docker's path carries the Access tab's caveat that
+    // podman-docker may serve it (CN-09).
+    expect(
+      runtime(debianHost()),
+      'Runtime: Docker, rootful (Podman can also answer on Docker\'s socket '
+      'path)',
+    );
     expect(runtime(alpineContainer()), 'Runtime: Podman, rootless');
-    expect(runtime(_twoEngines), 'Runtime: Docker, rootful; Podman, rootless');
+    expect(runtime(_twoEngines), _twoEnginesText);
     expect(
       runtime(
         debianHost(
@@ -93,7 +103,10 @@ void main() {
       findsOneWidget,
       reason: 'the row says it in its own label',
     );
-    expect(_inHeader(find.text('Runtime: Docker, rootful')), findsOneWidget);
+    expect(
+      _inHeader(find.textContaining('Runtime: Docker, rootful (')),
+      findsOneWidget,
+    );
 
     // The rail rule: with no link, the probe's answer speaks, as on the
     // server's row.
@@ -169,10 +182,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(tester.takeException(), isNull);
-      expect(
-        _inHeader(find.text('Runtime: Docker, rootful; Podman, rootless')),
-        findsOneWidget,
-      );
+      expect(_inHeader(find.text(_twoEnginesText)), findsOneWidget);
       // The phone's app bar carries the name; the header does not repeat
       // it.
       expect(

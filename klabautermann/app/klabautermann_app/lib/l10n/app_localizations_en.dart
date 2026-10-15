@@ -1539,6 +1539,11 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String overviewHeaderRuntimeDockerPath(String engines) {
+    return 'Runtime: $engines (Podman can also answer on Docker\'s socket path)';
+  }
+
+  @override
   String get overviewHeaderRuntimeSeparator => '; ';
 
   @override

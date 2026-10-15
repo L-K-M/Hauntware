@@ -208,16 +208,19 @@ class _LinkDot extends StatelessWidget {
 /// The detected runtime (CN-09) in one line, from the access check over
 /// the probe's [profile], as the Access tab derives it (03 §10.4): the
 /// engines found, none, unknown, or not checked before the probe answers.
+/// A Docker engine, known only by its socket's path, carries the Access
+/// tab's caveat that a `podman-docker` install may answer there.
 String detectedRuntimeText(AppLocalizations l10n, HostProfile? profile) {
   if (profile == null) return l10n.overviewHeaderRuntimeNotChecked;
 
   final access = evaluateAccess(profile);
   if (access.engines.isNotEmpty) {
-    return l10n.overviewHeaderRuntime(
-      access.engines
-          .map((engine) => engineNameText(l10n, engine))
-          .join(l10n.overviewHeaderRuntimeSeparator),
-    );
+    final engines = access.engines
+        .map((engine) => engineNameText(l10n, engine))
+        .join(l10n.overviewHeaderRuntimeSeparator);
+    return access.engines.any((e) => e.runtime == EngineRuntime.docker)
+        ? l10n.overviewHeaderRuntimeDockerPath(engines)
+        : l10n.overviewHeaderRuntime(engines);
   }
   return switch (access.row(AccessItem.runtime).status) {
     AccessStatus.missing => l10n.overviewHeaderRuntimeNone,

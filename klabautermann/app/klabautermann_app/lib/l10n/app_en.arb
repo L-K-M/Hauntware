@@ -1762,6 +1762,16 @@
       }
     }
   },
+  "overviewHeaderRuntimeDockerPath": "Runtime: {engines} (Podman can also answer on Docker's socket path)",
+  "@overviewHeaderRuntimeDockerPath": {
+    "description": "overviewHeaderRuntime when an engine was found at Docker's socket path: the engine is named from the path alone, and a podman-docker install may serve that path, as the Access tab notes (accessRuntimeAlias).",
+    "placeholders": {
+      "engines": {
+        "type": "String",
+        "example": "Docker, rootful"
+      }
+    }
+  },
   "overviewHeaderRuntimeSeparator": "; ",
   "@overviewHeaderRuntimeSeparator": {
     "description": "Between two engines in overviewHeaderRuntime; each engine's own words already hold a comma."

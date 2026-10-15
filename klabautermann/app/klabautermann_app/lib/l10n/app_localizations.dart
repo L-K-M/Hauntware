@@ -2206,6 +2206,12 @@ abstract class AppLocalizations {
   /// **'Runtime: {engines}'**
   String overviewHeaderRuntime(String engines);
 
+  /// overviewHeaderRuntime when an engine was found at Docker's socket path: the engine is named from the path alone, and a podman-docker install may serve that path, as the Access tab notes (accessRuntimeAlias).
+  ///
+  /// In en, this message translates to:
+  /// **'Runtime: {engines} (Podman can also answer on Docker\'s socket path)'**
+  String overviewHeaderRuntimeDockerPath(String engines);
+
   /// Between two engines in overviewHeaderRuntime; each engine's own words already hold a comma.
   ///
   /// In en, this message translates to:
