@@ -216,8 +216,8 @@ void main() {
     // MEM-01 and MEM-02 in binary units, never decimal file sizes.
     for (final text in [
       'Used 6 GiB',
-      'Buffers 512 MiB',
-      'Cache 4 GiB',
+      '512 MiB',
+      '4 GiB',
       '10 GiB',
       '1.5 GiB',
       'Used 256 MiB',
@@ -237,6 +237,34 @@ void main() {
     expect(find.text('Updated 0 s ago'), findsOneWidget);
   });
 
+  testWidgets('MEM-01\'s bar never draws more than the memory taken', (
+    tester,
+  ) async {
+    // Used is the total less MemAvailable, and the cache counts Cached,
+    // which holds shared memory, also in used: 6 GiB in /dev/shm here.
+    const memory = MemoryUsage(
+      totalBytes: 16 * _gib,
+      usedBytes: 10 * _gib,
+      availableBytes: 6 * _gib,
+      buffersBytes: 256 * _mib,
+      cachedBytes: 8 * _gib,
+      sharedBytes: 6 * _gib,
+    );
+    final panel = await _pump(tester);
+    await panel.sample(tester, _core(memory: memory));
+
+    final bar = _bars(tester).singleWhere((bar) => bar.label == 'Memory');
+    final drawn = bar.segments.fold(
+      0.0,
+      (sum, segment) => sum + (segment.value ?? 0),
+    );
+    expect(
+      drawn,
+      lessThanOrEqualTo(memory.totalBytes! - memory.availableBytes!),
+      reason: 'the bar\'s empty part is at least what is available',
+    );
+  });
+
   testWidgets('an unknown value reads unknown, never zero (03 §10.4)', (
     tester,
   ) async {
@@ -246,7 +274,7 @@ void main() {
       CoreResult(memory: const MemoryUsage(totalBytes: 16 * _gib)),
     );
 
-    expect(find.text('Unknown'), findsNWidgets(10));
+    expect(find.text('Unknown'), findsNWidgets(12));
     expect(find.text('0%'), findsNothing);
     expect(find.text('0.00'), findsNothing);
     expect(find.textContaining('0 B'), findsNothing);

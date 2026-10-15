@@ -310,20 +310,22 @@ final class _Cards {
     String? bytes(int? value) => value == null
         ? null
         : formatChartValue(value.toDouble(), ChartUnit.bytes, strings);
-    BarSegment part(String label, int? value) =>
-        BarSegment(label: label, value: value?.toDouble());
     return PanelSection(
       title: l10n.overviewMemoryTitle,
       children: [
+        // Only used is drawn: it is the total less MemAvailable, which
+        // counts no shared memory and keeps some cache back, so buffers
+        // and cache overlap it and would stack past what is taken.
         ..._charts(
           context,
           series: MetricSeries.memoryUsed,
           label: l10n.overviewMemoryTitle,
           unit: ChartUnit.bytes,
           segments: [
-            part(l10n.overviewMemoryUsed, memory?.usedBytes),
-            part(l10n.overviewMemoryBuffers, memory?.buffersBytes),
-            part(l10n.overviewMemoryCache, memory?.cachedBytes),
+            BarSegment(
+              label: l10n.overviewMemoryUsed,
+              value: memory?.usedBytes?.toDouble(),
+            ),
           ],
           total: memory?.totalBytes?.toDouble(),
           thresholds: kFleetRowThresholds,
@@ -332,6 +334,8 @@ final class _Cards {
           stale: stale,
           facts: [
             (l10n.overviewMemoryAvailable, bytes(memory?.availableBytes)),
+            (l10n.overviewMemoryBuffers, bytes(memory?.buffersBytes)),
+            (l10n.overviewMemoryCache, bytes(memory?.cachedBytes)),
             (l10n.overviewMemoryShared, bytes(memory?.sharedBytes)),
           ],
         ),
