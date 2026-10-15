@@ -455,7 +455,8 @@ String? _kernel(AppLocalizations l10n, IdentityResult identity) =>
 
 /// A mount's full mount point, device and type with the figures a narrow
 /// table leaves out, in a sheet (03 §10.5: details push further). It shows
-/// the reading the row had; after a timeout its usage reads as unknown.
+/// the reading the row had; after a timeout its usage reads as unknown,
+/// with the timeout as the reason.
 void _showMountDetails(
   BuildContext context,
   AppLocalizations l10n,
@@ -484,7 +485,11 @@ void _showMountDetails(
               _Fact(label: l10n.systemDevice, value: mount.device),
               _Fact(label: l10n.systemColumnType, value: mount.type),
               if (timedOut)
-                _Fact(label: l10n.systemColumnUsage, value: null)
+                _Fact(
+                  label: l10n.systemColumnUsage,
+                  value: null,
+                  note: l10n.systemUnavailableTimeout,
+                )
               else ...[
                 _Fact(label: l10n.systemColumnUsed, value: _used(l10n, mount)),
                 _Fact(

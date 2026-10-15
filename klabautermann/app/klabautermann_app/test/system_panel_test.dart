@@ -607,6 +607,17 @@ void main() {
       isSemantics(label: 'Mount: /\nType: ext4\nUsage: Unknown'),
     );
     expect(find.text('21 GiB of 50 GiB'), findsNothing);
+
+    // The sheet gives the reason too, not a bare unknown.
+    await tester.tap(_row('/'));
+    await tester.pumpAndSettle();
+    expect(
+      find.descendant(
+        of: find.byType(BottomSheet),
+        matching: find.text('This reading did not finish in time.'),
+      ),
+      findsOneWidget,
+    );
     handle.dispose();
   });
 
