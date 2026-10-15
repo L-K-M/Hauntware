@@ -33,6 +33,10 @@ String _blocks(int n, {int btime = 1700000000, bool core = true}) {
     '== meminfo ==',
     'MemTotal: 1000',
     'MemAvailable: 400',
+    'Cached: 100',
+    'SReclaimable: 20',
+    'SwapTotal: 300',
+    'SwapFree: 200',
     '== loadavg ==',
     '2.00 1.00 0.50 1/100 42',
     '== netdev ==',
@@ -56,6 +60,16 @@ SamplerReplied _fastReply(
 }) => reply(n + 1, uptime ?? 1000.0 + 2 * n, [
   if (overview) ok('overview', _blocks(n, core: false)),
   if (core) ok('core', _blocks(n, btime: btime)),
+]);
+
+/// A `procs` reply listing pid 1 with [utime] user jiffies, read at
+/// [uptime].
+SamplerReplied _procsReply(int utime, double uptime) => reply(1, uptime, [
+  ok(
+    'procs',
+    '== stat ==\n1 1 (init) S 0 1 1 0 -1 0 0 0 0 0 $utime 0 0 0 20 0 1 '
+        '0 500 0 0',
+  ),
 ]);
 
 ServerSamplePipeline _sampling({
@@ -95,12 +109,13 @@ List<String> _describe(List<EngineEvent> events) => [
     },
 ];
 
-/// A probe reply: the clock (Europe/Berlin at +0200) and the
+/// A probe reply: the clock (Europe/Berlin at [offset]) and the
 /// virtualization answers.
 SamplerReplied _probe({
   String container = 'none',
   String lxcfs = '',
   int epoch = 1750000000,
+  String offset = '+0200',
   String session = '10.0.0.1 50000 10.0.0.2 22',
 }) => reply(1, 1, [
   ok('probe_kernel', 'Linux 6.1.0 x86_64'),
@@ -113,7 +128,7 @@ SamplerReplied _probe({
   ok('probe_session', 'ssh_connection=$session'),
   ok(
     'probe_clock',
-    'epoch=$epoch\noffset=+0200\nTimezone=Europe/Berlin\n'
+    'epoch=$epoch\noffset=$offset\nTimezone=Europe/Berlin\n'
         'etc_timezone=Europe/Berlin',
   ),
 ]);
@@ -153,6 +168,11 @@ void main() {
       expect(core.disks!['sda']!.writeBytesPerSecond, 4096);
       expect(core.loadPerCore, 2);
       expect(core.uptime, const Duration(seconds: 1002));
+      final memory = core.memory!;
+      expect(
+        [memory.usedBytes, memory.cachedBytes, memory.swapUsedBytes],
+        [600 * 1024, 120 * 1024, 100 * 1024],
+      );
 
       final rebooted = _result<CoreResult>(
         p.addTick(_fast, _fastReply(2, btime: 1700009999), _at(4)),
@@ -210,6 +230,22 @@ void main() {
         [lower.cpu, lower.network, lower.disks, lower.perCpu],
         [null, null, null, null],
       );
+      // So does memory without a meminfo block.
+      final bare = reply(1, 1012, [ok('overview', '== loadavg ==\n1 1 1')]);
+      expect(
+        _result<OverviewResult>(p.addTick(_fast, bare, _at(4))).memory,
+        isNull,
+      );
+    });
+
+    test('disk rates span the time since the last core reading', () {
+      final p = _sampling()
+        ..addTick(_fast, _fastReply(0), _at(0))
+        ..addTick(_fast, _fastReply(1, core: false), _at(2));
+      final core = _result<CoreResult>(p.addTick(_fast, _fastReply(2), _at(4)));
+      // Two steps of 16 written sectors over four seconds of uptime.
+      expect(core.disks!['sda']!.writeBytesPerSecond, 4096);
+      expect(core.network!['eth0']!.rxBytesPerSecond, 1000);
     });
 
     test('a core section serves the overview stream too', () {
@@ -292,6 +328,20 @@ void main() {
       );
     });
 
+    test('a sampler that is not ready loses the reading', () {
+      final p = _sampling()
+        ..addTick(_fast, _fastReply(0), _at(0))
+        ..addTick(
+          _fast,
+          const SamplerSkipped(SamplerSkipReason.notReady),
+          _at(2),
+        );
+      expect(
+        _describe(p.addTick(_fast, _fastReply(1), _at(4))).first,
+        'gap core,overview 0-4 readingLost',
+      );
+    });
+
     test('a reply without a stream\'s section loses its reading', () {
       final p = _sampling()..addTick(_fast, _fastReply(0), _at(0));
       expect(_describe(p.addTick(_fast, _fastReply(1, core: false), _at(2))), [
@@ -317,15 +367,22 @@ void main() {
     });
 
     test('the background pauses sampling and starts a new series', () {
-      final p = _sampling()..addTick(_fast, _fastReply(0), _at(0));
-      expect(_set(p, 3, activity: AppActivity.background), [
+      final streams = {..._fast, SampleStream.procs};
+      final p = _sampling(streams: streams)
+        ..addTick(_fast, _fastReply(0), _at(0))
+        ..addTick({SampleStream.procs}, _procsReply(100, 1000), _at(1));
+      expect(_set(p, 3, streams: streams, activity: AppActivity.background), [
         'state pausedInBackground 3',
       ]);
-      expect(_set(p, 30), ['state sampling 30']);
+      expect(_set(p, 30, streams: streams), ['state sampling 30']);
 
       final events = p.addTick(_fast, _fastReply(1), _at(32));
       expect(_describe(events).first, 'gap core,overview 0-32 background');
       expect(_result<CoreResult>(events).cpu, isNull);
+      final procs = _result<ProcsResult>(
+        p.addTick({SampleStream.procs}, _procsReply(300, 1030), _at(33)),
+      );
+      expect(procs.processes.single.cpuPercent, isNull);
     });
 
     test('a lost link outranks a lost reading and keeps its start', () {
@@ -356,20 +413,12 @@ void main() {
 
     test('a stream subscribed again has no gap and starts a new series', () {
       final streams = {..._fast, SampleStream.procs};
-      // pid 1 with [utime] user jiffies, read at [uptime].
-      SamplerReplied procs(int utime, double uptime) => reply(1, uptime, [
-        ok(
-          'procs',
-          '== stat ==\n1 1 (init) S 0 1 1 0 -1 0 0 0 0 0 $utime 0 0 0 20 0 1 '
-              '0 500 0 0',
-        ),
-      ]);
       final p = _sampling(streams: streams)
         ..addTick(_fast, _fastReply(0), _at(0))
-        ..addTick({SampleStream.procs}, procs(100, 1000), _at(1))
+        ..addTick({SampleStream.procs}, _procsReply(100, 1000), _at(1))
         ..addTick(_fast, const SamplerGap(2, SamplerGapReason.lost), _at(2));
       double? share(int utime, double uptime, int at) => _result<ProcsResult>(
-        p.addTick({SampleStream.procs}, procs(utime, uptime), _at(at)),
+        p.addTick({SampleStream.procs}, _procsReply(utime, uptime), _at(at)),
       ).processes.single.cpuPercent;
       _set(p, 3, streams: {SampleStream.overview});
       _set(p, 3, streams: streams);
@@ -448,11 +497,12 @@ void main() {
     expect(emoji, '${'\u{1F600}' * 2047}z');
   });
 
-  test('a ps fallback row lists its whitespace tokens (7.2)', () {
+  test('process rows: RSS in bytes; a ps fallback row lists its '
+      'whitespace tokens (7.2)', () {
     final rows = procsResult(
       ProcsSnapshot(
         processes: [
-          ProcEntry(pid: 1, argv: const ['sh', '-c', 'a b']),
+          ProcEntry(pid: 1, rssKb: 2, argv: const ['sh', '-c', 'a b']),
           ProcEntry(pid: 2, argsJoined: 'nginx -g daemon off;'),
           ProcEntry(pid: 3, argsJoined: ''),
           ProcEntry(pid: 4),
@@ -465,14 +515,17 @@ void main() {
       isEmpty,
       isNull,
     ]);
+    expect(rows.first.residentBytes, 2048);
   });
 
   group('host profile', () {
     test('a changed profile is reported, a new clock or session is not', () {
       final p = _sampling();
       expect(_describe(p.addProbe(_probe())), ['profile']);
+      // Daylight saving time ended: the zone keeps its name.
       final again = _probe(
         epoch: 1750000100,
+        offset: '+0100',
         session: '10.0.0.9 1 10.0.0.2 22',
       );
       expect(p.addProbe(again), isEmpty);
