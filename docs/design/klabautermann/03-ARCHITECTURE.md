@@ -4191,7 +4191,7 @@ the colour, shows which segment or cell crossed: the palette test keeps
 pairs apart only within the series and within the severities, and the
 light amber and orange measure a CIE76 distance of 2.0 under
 deuteranopia. Stale values turn every fill the family's graphite and drop
-the severity, since an old reading's may no longer hold. Every fill holds
+the severity, since an old reading may no longer hold. Every fill holds
 3:1 on the track (`surfaceContainerHighest`).
 
 ### 10.8 Log viewer
@@ -4276,8 +4276,10 @@ fields it has, and those bytes count against the 32 MiB cap. With the
 unit they get up to one 16 KiB line cap beside the text, within what the
 text leaves of the byte cap; fields past it are left out and counted. A
 buffer full of typical service entries (15 fields, 671 bytes each) holds
-about 42 MiB in the heap test. A row reads `unit[PID]:
-message`, its level from `PRIORITY`. A MESSAGE's newline shows as a
+about 42 MiB of the 64 MiB budget (11.4) in the heap test: retained heap,
+the bytes the 32 MiB cap counts plus each entry's objects. A row reads
+`unit[PID]: message`, its level from `PRIORITY`. A MESSAGE's newline
+shows as a
 return mark (⏎) and a line separator: without wrap the row ends at its
 first line, where the text engine draws no ellipsis, and with wrap each
 line takes its own rows. A tap or Enter pauses following and shows the
