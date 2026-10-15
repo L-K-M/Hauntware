@@ -110,7 +110,10 @@
     },
     "uptimeSeconds": 86400.25,
     "idleSeconds": 172000.5,
-    "zfsArc": null
+    "zfsArc": {
+      "sizeBytes": 6871947674,
+      "minBytes": 2147483648
+    }
   },
   "warnings": []
 }
