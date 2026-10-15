@@ -462,6 +462,9 @@ class FleetServerRow extends StatelessWidget {
             constraints: const BoxConstraints(maxWidth: _extrasMaxWidth),
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
+              // The row's node has the tap already; the detector's own
+              // would merge into the list item as a second, unnamed stop.
+              excludeFromSemantics: true,
               onTap: onActivate,
               child: ExcludeSemantics(
                 child: Padding(

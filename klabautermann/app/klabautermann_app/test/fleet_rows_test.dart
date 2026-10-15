@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart' show SemanticsAction;
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:klabautermann_app/controllers/fleet_controller.dart';
@@ -308,6 +309,32 @@ void main() {
       ]);
       expect(find.byType(PressureBar), findsOneWidget);
       expect(FocusManager.instance.primaryFocus, same(focused));
+    });
+
+    testWidgets('a monitored row is one named stop, its bar folded into '
+        'it', (tester) async {
+      final rows = await _pump(tester);
+      await rows.emit(tester, [
+        const LinkState('srv-1', LinkReady()),
+        rows.sample('srv-1', SampleStream.core, _core(cpu: 12)),
+      ]);
+
+      final tappable = [
+        for (final node
+            in find.semantics.byAction(SemanticsAction.tap).evaluate())
+          node.label,
+      ];
+      expect(tappable, [
+        isNotEmpty,
+        startsWith('web-1, '),
+        startsWith('db-1, '),
+      ], reason: 'the filter field, then one node per row');
+      final bar = tester.widget<PressureBar>(find.byType(PressureBar));
+      expect(
+        find.bySemanticsLabel(pressureSummary(bar.cells, testChartStrings)),
+        findsNothing,
+        reason: 'the summary is said only inside the row\'s label',
+      );
     });
   });
 
