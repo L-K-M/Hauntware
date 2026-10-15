@@ -121,7 +121,8 @@ void main() {
       ).value;
       final s = CalendarSchedule.fromResult(result)!;
       expect(s.normalized, '*-*-* 00:00:00');
-      expect(s.elapses!.single.atUtc, isNull);
+      // A UTC server zone prints no `(in UTC)` line; the stamp is UTC.
+      expect(s.elapses!.single.atUtc, DateTime.utc(2026, 10, 15));
       expect(s.elapses!.single.text, 'Thu 2026-10-15 00:00:00 UTC');
       expect(s.toJson()['type'], 'calendar');
     });

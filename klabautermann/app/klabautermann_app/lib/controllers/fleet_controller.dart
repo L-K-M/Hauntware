@@ -12,6 +12,8 @@ final class FleetServer {
     required this.id,
     required this.displayName,
     this.address,
+    this.searchText,
+    this.locatorConflict,
   });
 
   /// The row for [entry]; its address leaves out the default port.
@@ -20,6 +22,8 @@ final class FleetServer {
       id: entry.serverId,
       displayName: entry.label,
       address: _address(entry),
+      searchText: entry.searchText,
+      locatorConflict: entry.locatorConflict,
     );
   }
 
@@ -31,6 +35,13 @@ final class FleetServer {
   /// Host or `user@host` for the row's subtitle (03 §10.3), with `:port`
   /// when the port is not 22.
   final String? address;
+
+  /// What the rail's filter matches (FL-05); see [FleetEntry.searchText].
+  final String? searchText;
+
+  /// The ids of the servers whose host-key pins would collide with this
+  /// one's (03 §4.6); see [FleetEntry.locatorConflict].
+  final List<String>? locatorConflict;
 
   static String _address(FleetEntry entry) {
     final login = entry.user == null ? '' : '${entry.user}@';

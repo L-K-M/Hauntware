@@ -261,6 +261,9 @@ void main() {
                   network: const {
                     'eth0': NetRate(rxBytesPerSecond: 10, txBytesPerSecond: 2),
                   },
+                  withheld: const {
+                    MetricField.load: MetricWithheldReason.containerHostFigures,
+                  },
                 ),
               )
               as OverviewResult;
@@ -274,6 +277,10 @@ void main() {
       expect(overview.loadPerCore, 0.375);
       expect(overview.network!['eth0']!.rxBytesPerSecond, 10);
       expect(() => overview.network!.clear(), throwsUnsupportedError);
+      expect(overview.withheld, {
+        MetricField.load: MetricWithheldReason.containerHostFigures,
+      });
+      expect(() => overview.withheld.clear(), throwsUnsupportedError);
 
       final core =
           await result(

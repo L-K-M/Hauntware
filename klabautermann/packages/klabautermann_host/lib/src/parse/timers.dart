@@ -1,7 +1,8 @@
 /// Parser for the `timers` slow-collector payload (03 §6.4, §7.7):
 /// `systemctl list-timers --all --output=json` on systemd 246+
 /// (`== timers_json ==`), else the columnar `list-timers --all` table
-/// (`== timers_text ==`) sliced at its header's column offsets.
+/// (`== timers_text ==`) sliced at its header's column offsets. Also the
+/// on-demand `timer_detail` payload of one timer (D57).
 library;
 
 import 'dart:convert';
@@ -9,6 +10,7 @@ import 'dart:convert';
 import 'package:meta/meta.dart';
 
 import '../hws/program.dart' show kTimeoutAbsentMarker;
+import '../jobs/schedule.dart' show MonotonicBase, MonotonicSchedule;
 import 'models.dart' show splitBlocks;
 import 'parse_result.dart';
 
@@ -128,6 +130,143 @@ ParseResult<TimersSnapshot> parseTimers(String raw, ParseContext ctx) {
     warnings,
   );
 }
+
+/// One timer's triggers and randomized delay from the on-demand
+/// `timer_detail` read (03 §7.7, D57).
+@immutable
+final class TimerDetail {
+  TimerDetail({
+    List<String>? calendar,
+    List<MonotonicSchedule>? monotonic,
+    this.randomizedDelay,
+    this.timeoutAbsent = false,
+  }) : calendar = List.unmodifiable(calendar ?? []),
+       monotonic = List.unmodifiable(monotonic ?? []);
+
+  /// The `OnCalendar=` expressions in systemd's normalized form, in
+  /// `systemctl show` order.
+  final List<String> calendar;
+
+  /// The monotonic triggers (`OnBootSec=` and the like).
+  final List<MonotonicSchedule> monotonic;
+
+  /// `RandomizedDelaySec=`, zero when unset; null when `systemctl show`
+  /// printed no value it could read (systemd before 229 has none).
+  final Duration? randomizedDelay;
+
+  /// True when the payload reports the read ran without `timeout`.
+  final bool timeoutAbsent;
+
+  Map<String, Object?> toJson() => {
+    'calendar': calendar,
+    'monotonic': monotonic.map((m) => m.toJson()).toList(),
+    'randomizedDelayUs': randomizedDelay?.inMicroseconds,
+    'timeoutAbsent': timeoutAbsent,
+  };
+}
+
+/// Parses a `timer_detail` section payload; never throws (03 §6.5). It
+/// holds `systemctl show` lines in any order, one per calendar and per
+/// monotonic trigger, and the randomized delay:
+///
+/// ```text
+/// TimersCalendar={ OnCalendar=*-*-* 06,18:00:00 ; next_elapse=Thu ... UTC }
+/// TimersMonotonic={ OnBootUSec=15min ; next_elapse=15min }
+/// RandomizedDelayUSec=12h
+/// ```
+///
+/// Spans are systemd's `format_timespan` text (`1h 30min`, `1.500000s`,
+/// `0`). A payload without a calendar or monotonic trigger warns:
+/// [TimerJobEntry.withDetail] leaves such a timer's triggers unknown.
+ParseResult<TimerDetail> parseTimerDetail(String raw, ParseContext ctx) {
+  final warnings = <String>[];
+  final calendar = <String>[];
+  final monotonic = <MonotonicSchedule>[];
+  Duration? delay;
+  var timeoutAbsent = false;
+  for (final line in raw.split('\n')) {
+    if (line == kTimeoutAbsentMarker) {
+      timeoutAbsent = true;
+      continue;
+    }
+    final eq = line.indexOf('=');
+    if (eq < 0) {
+      if (line.trim().isNotEmpty) warnings.add('timer_detail: "$line"');
+      continue;
+    }
+    final value = line.substring(eq + 1).trim();
+    switch (line.substring(0, eq)) {
+      case _ when value.isEmpty:
+        break;
+      case 'TimersCalendar':
+        final (base, expression) = _trigger(value);
+        if (base == 'OnCalendar' && expression.isNotEmpty) {
+          calendar.add(expression);
+        } else {
+          warnings.add('timer_detail: calendar trigger "$value"');
+        }
+      case 'TimersMonotonic':
+        final (base, span) = _trigger(value);
+        final b = _monotonicBases[base];
+        final us = _timespanUs(span);
+        if (b == null || us == null) {
+          warnings.add('timer_detail: monotonic trigger "$value"');
+        } else {
+          monotonic.add(
+            MonotonicSchedule(
+              base: b,
+              span: Duration(microseconds: us),
+            ),
+          );
+        }
+      case 'RandomizedDelayUSec':
+        final us = _timespanUs(value);
+        if (us == null) {
+          warnings.add('timer_detail: randomized delay "$value"');
+        } else {
+          delay = Duration(microseconds: us);
+        }
+      default:
+        warnings.add('timer_detail: "$line"');
+    }
+  }
+  // A loaded timer has one of these unless it uses only OnClockChange=
+  // or OnTimezoneChange= (timer_verify refuses it otherwise), and for a
+  // unit no longer loaded systemctl prints the defaults, so a read
+  // without either says nothing about the timer's triggers or delay.
+  if (calendar.isEmpty && monotonic.isEmpty) {
+    warnings.add('timer_detail: no calendar or monotonic trigger');
+  }
+  return ParseResult(
+    TimerDetail(
+      calendar: calendar,
+      monotonic: monotonic,
+      randomizedDelay: delay,
+      timeoutAbsent: timeoutAbsent,
+    ),
+    warnings,
+  );
+}
+
+/// `{ <base>=<value> ; next_elapse=<next> }` as its base and value; an
+/// empty base when the shape does not match. A calendar expression holds
+/// neither ` ; ` nor braces, so the last ` ; next_elapse=` ends it.
+(String, String) _trigger(String braced) {
+  if (!braced.startsWith('{') || !braced.endsWith('}')) return ('', '');
+  final inner = braced.substring(1, braced.length - 1);
+  final end = inner.lastIndexOf(' ; next_elapse=');
+  final pair = (end < 0 ? inner : inner.substring(0, end)).trim();
+  final eq = pair.indexOf('=');
+  if (eq < 0) return ('', '');
+  return (pair.substring(0, eq), pair.substring(eq + 1).trim());
+}
+
+/// `systemctl show` names a monotonic base by its bus property
+/// (`OnBootUSec`), the unit setting's name with `USec` for `Sec`.
+final _monotonicBases = {
+  for (final b in MonotonicBase.values)
+    '${b.setting.substring(0, b.setting.length - 3)}USec': b,
+};
 
 /// `list-timers --output=json` rows: objects with `next`, `left`,
 /// `last`, `passed` (finite microseconds or null), `unit` and
@@ -283,26 +422,55 @@ int? _timerTimestampUs(String cell) {
   return DateTime.tryParse(stamp)?.microsecondsSinceEpoch;
 }
 
-/// Parses a `list-timers` span cell (`20h left`, `1 day ago`, `n/a`)
-/// into microseconds; unknown unit words yield null.
+/// Parses a systemd span (`20h left`, `1 day ago`, `1min 30.500000s`,
+/// `0`, `n/a`) into microseconds; unknown unit words, a fraction of a
+/// unit above a second and spans past [_maxSpanUs] yield null.
 int? _timespanUs(String cell) {
   var t = cell.trim();
   if (t.isEmpty || t == 'n/a' || t == '-') return null;
+  if (t == '0') return 0;
   for (final tail in const [' left', ' ago']) {
     if (t.endsWith(tail)) t = t.substring(0, t.length - tail.length);
   }
+  // The relative format spells units as words (`1 day 3h`).
+  t = t.replaceAllMapped(_spacedUnit, (m) => '${m[1]}${m[2]}');
   var total = 0;
   var matched = false;
   for (final part in t.split(RegExp(r'\s+'))) {
-    final m = RegExp(r'^(\d+)(\w+)$').firstMatch(part);
+    final m = _spanPart.firstMatch(part);
     if (m == null) return null;
-    final us = _spanUnits[m[2]!];
-    if (us == null) return null;
-    total += int.parse(m[1]!) * us;
+    final unit = _spanUnits[m[3]!];
+    final n = int.tryParse(m[1]!);
+    if (unit == null || n == null || n > (_maxSpanUs - total) ~/ unit) {
+      return null;
+    }
+    total += n * unit;
+    // A fraction of a unit: `.5s` is 500,000 µs, digits past µs dropped.
+    // format_timespan prints one only below a minute, on `s` or `ms`; a
+    // larger unit times six digits could overflow.
+    if (m[2] case final f?) {
+      if (unit > _usPerSecond) return null;
+      total += int.parse(f) * unit ~/ _pow10[f.length];
+      if (total > _maxSpanUs) return null;
+    }
     matched = true;
   }
   return matched ? total : null;
 }
+
+/// One span word: digits, an optional fraction of up to six digits, and
+/// a unit (`30.500000s`, `2h`, `1day`).
+final _spanPart = RegExp(r'^(\d{1,18})(?:\.(\d{1,6}))?([^\d\s.]+)$');
+
+/// A number and the unit word after it (`1 day`, `2 weeks`).
+final _spacedUnit = RegExp(r'(\d) ([a-z]+)\b');
+
+const _pow10 = [1, 10, 100, 1000, 10000, 100000, 1000000];
+
+const _usPerSecond = 1000000;
+
+/// The longest span read: 2^62 µs, about 146,000 years.
+const _maxSpanUs = 1 << 62;
 
 /// systemd `format_timespan` units, in microseconds.
 const _spanUnits = {
@@ -325,6 +493,7 @@ const _spanUnits = {
   'weeks': 604800000000,
   'month': 2629800000000,
   'months': 2629800000000,
+  'y': 31557600000000,
   'year': 31557600000000,
   'years': 31557600000000,
 };

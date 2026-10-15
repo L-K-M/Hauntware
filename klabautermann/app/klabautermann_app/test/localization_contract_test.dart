@@ -164,6 +164,27 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'the window spans time'",
     "'the scale needs a positive top'",
   },
+  'lib/ui/fleet_row_state.dart': {
+    // The root mount point whose use the pressure bar shows.
+    "'/'",
+    // The filter's term separator, and the name-and-address haystack that
+    // stands in for the engine's search text.
+    r"r'\s+'",
+    r"'${server.displayName} ${server.address ?? ''}'",
+    "''",
+  },
+  'lib/ui/fleet_rows.dart': {
+    // The filter's empty query.
+    "''",
+    // A FocusNode debug label.
+    "'Fleet filter'",
+    // The key tests find a row's age by.
+    "'fleetRowAge'",
+    // The line break between the row tooltip's facts, each ARB text.
+    r"'\n'",
+    // An assert message; programmer diagnostic, never rendered.
+    "'new controllers come with a new tree (KlabautermannApp, D44)'",
+  },
   'lib/ui/logs/log_query.dart': {
     // The path rule's separators and dot parts (03 §8.8), and the empty
     // defaults of the text filters.
@@ -249,6 +270,10 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'${widget.tableId}.rowActions.$key'",
     r"'${widget.tableId}.row.$key'",
   },
+  // What systemd-detect-virt prints for no virtualization, compared with
+  // the probe's answer; the System tab shows ARB text for it
+  // (systemVirtualizationNone).
+  'lib/ui/system_view.dart': {"'none'"},
 };
 
 const _config = L10nContractConfig(

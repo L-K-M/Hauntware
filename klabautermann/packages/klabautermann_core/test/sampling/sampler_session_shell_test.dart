@@ -108,6 +108,37 @@ void main() {
         expect(fast.restarts + slow.restarts, 0);
       });
 
+      test('timer_detail hands its unit to systemctl show (D57)', () async {
+        link = await LocalProcessLink.create(path);
+        // A systemctl first on PATH that answers only the expected argv.
+        final stub = File('${link.workingDirectory.path}/systemctl')
+          ..writeAsStringSync(
+            '#!/bin/sh\n'
+            '[ "\$*" = "show -p TimersCalendar -p TimersMonotonic '
+            '-p RandomizedDelayUSec -- apt-daily.timer" ] || '
+            '{ echo "argv: \$*"; exit 1; }\n'
+            "echo 'TimersCalendar={ OnCalendar=*-*-* 06,18:00:00 ; "
+            "next_elapse=n/a }'\n"
+            'echo RandomizedDelayUSec=12h\n',
+          );
+        expect(Process.runSync('chmod', ['755', stub.path]).exitCode, 0);
+        final slow = _session(link, SamplerKind.slow)..start();
+        await _ready(slow);
+
+        final outcome = await slow.onDemand(Collector.timerDetail, const [
+          'apt-daily.timer',
+        ]);
+        final section = (outcome as SamplerReplied).reply.section(
+          'timer_detail',
+        )!;
+        final payload = utf8.decode(section.payload);
+        expect(section.status, SectionStatus.ok, reason: payload);
+        final detail = parseTimerDetail(payload, ParseContext.standard).value;
+        expect(detail.calendar, ['*-*-* 06,18:00:00']);
+        expect(detail.randomizedDelay, const Duration(hours: 12));
+        await slow.close();
+      });
+
       test('a SIGSTOP stall misses the deadline and restarts', () async {
         link = await LocalProcessLink.create(path);
         final session = _session(

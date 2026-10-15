@@ -1,0 +1,11 @@
+{
+  "result": {
+    "calendar": [
+      "*-*-* 00:00:00"
+    ],
+    "monotonic": [],
+    "randomizedDelayUs": 0,
+    "timeoutAbsent": false
+  },
+  "warnings": []
+}

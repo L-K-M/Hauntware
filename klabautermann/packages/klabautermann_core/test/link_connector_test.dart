@@ -2,6 +2,9 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:klabautermann_core/klabautermann_core.dart';
+import 'package:klabautermann_core/src/fleet/imported_fleet.dart';
+import 'package:klabautermann_core/src/fleet/ssh_config_entries.dart';
+import 'package:klabautermann_core/src/fleet/ssh_config_import_store.dart';
 import 'package:klabautermann_core/src/links/credential_source.dart';
 import 'package:klabautermann_core/src/links/link_connector.dart';
 import 'package:klabautermann_core/src/links/prompt_broker.dart';
@@ -17,6 +20,7 @@ import 'package:seance_core/seance_core.dart'
         ServerConfig,
         SshConnectException,
         SshConnectionLog,
+        SshCredentials,
         SshJumpHostResolver,
         SshLink,
         TofuVerifier;
@@ -29,6 +33,8 @@ final class _FakeLink implements SshLink {
 
 /// What the connector handed to one dial.
 typedef _Dial = ({
+  ServerConfig config,
+  SshCredentials credentials,
   TofuVerifier tofu,
   HostKeyPrompter onHostKey,
   KeyboardInteractiveResponder? onKeyboardInteractive,
@@ -103,10 +109,9 @@ void main() {
 
   tearDown(() => temp.delete(recursive: true));
 
-  Future<LinkConnectResult> connect({
-    ServerConfig? server,
-    ConnectPurpose purpose = ConnectPurpose.background,
+  LinkConnector connector({
     bool realDial = false,
+    ServerConfig? Function(String id)? hopConfig,
   }) => LinkConnector(
     credentials: EngineCredentialSource(
       identityAuditLogIn(temp.path),
@@ -115,7 +120,7 @@ void main() {
     ),
     hostKeys: pins,
     prompts: broker,
-    hopConfig: (id) => hops[id],
+    hopConfig: hopConfig ?? (id) => hops[id],
     dial: realDial
         ? SshLink.connect
         : ({
@@ -127,6 +132,8 @@ void main() {
             resolveJumpHost,
           }) {
             final dial = (
+              config: config,
+              credentials: credentials,
               tofu: tofu,
               onHostKey: onHostKey,
               onKeyboardInteractive: onKeyboardInteractive,
@@ -135,7 +142,22 @@ void main() {
             dials.add(dial);
             return onDial(dial);
           },
-  ).connect(server ?? _server(), purpose: purpose);
+  );
+
+  Future<LinkConnectResult> connect({
+    ServerConfig? server,
+    ConnectPurpose purpose = ConnectPurpose.background,
+    bool realDial = false,
+    void Function(LinkStatus phase)? onPhase,
+    void Function()? onDialing,
+    Future<void>? abandoned,
+  }) => connector(realDial: realDial).connect(
+    server ?? _server(),
+    purpose: purpose,
+    onPhase: onPhase,
+    onDialing: onDialing,
+    abandoned: abandoned,
+  );
 
   /// Dials that present [key] as `SshLink.connect` does (seance_core's
   /// `_verifyHostKey`): a pinned key passes, any other asks, an approved
@@ -312,6 +334,162 @@ void main() {
     });
   });
 
+  group('phases', () {
+    test('authenticating follows the server\'s own key, not a hop\'s, and '
+        'an answered hop prompt goes back to connecting', () async {
+      hops['ssh-config-hop:gw'] = _server(id: 'ssh-config-hop:gw');
+      await pins.put(_key('192.0.2.10'));
+      final phases = <LinkStatus>[];
+      onDial = (dial) async {
+        await dial.resolveJumpHost!('ssh-config-hop:gw');
+        final hop = await dial.tofu.check(_key('198.51.100.1'));
+        if (await dial.onHostKey(hop)) await dial.tofu.pin(hop.presented);
+        await dial.tofu.check(_key('192.0.2.10'));
+        return _FakeLink();
+      };
+
+      final result = connect(
+        server: _server(jumpHostId: 'ssh-config-hop:gw'),
+        purpose: ConnectPurpose.interactive,
+        onPhase: phases.add,
+      );
+      final prompt = await answerNext(const PromptTrustAnswer(true));
+      await result;
+
+      expect(phases, [
+        LinkNeedsUser(promptId: prompt.promptId, kind: PromptKind.hostKey),
+        const LinkConnecting(),
+        const LinkAuthenticating(),
+      ]);
+    });
+
+    test('a pinned hop key leaves the attempt connecting', () async {
+      hops['ssh-config-hop:gw'] = _server(id: 'ssh-config-hop:gw');
+      await pins.put(_key('198.51.100.1'));
+      await pins.put(_key('192.0.2.10'));
+      final seen = <Object>[];
+      onDial = (dial) async {
+        await dial.resolveJumpHost!('ssh-config-hop:gw');
+        await dial.tofu.check(_key('198.51.100.1'));
+        seen.add('server key');
+        await dial.tofu.check(_key('192.0.2.10'));
+        return _FakeLink();
+      };
+
+      await connect(
+        server: _server(jumpHostId: 'ssh-config-hop:gw'),
+        onPhase: seen.add,
+      );
+
+      expect(seen, ['server key', const LinkAuthenticating()]);
+    });
+
+    test('a keyboard-interactive answer is reported and remembered', () async {
+      await pins.put(_key('192.0.2.10'));
+      final phases = <LinkStatus>[];
+      onDial = (dial) async {
+        await dial.tofu.check(_key('192.0.2.10'));
+        await dial.onKeyboardInteractive!(_challenge(['Code:']));
+        return _FakeLink();
+      };
+
+      final result = connect(
+        purpose: ConnectPurpose.interactive,
+        onPhase: phases.add,
+      );
+      final prompt = await answerNext(const PromptResponsesAnswer(['1']));
+
+      expect((await result as LinkConnected).keyboardInteractive, isTrue);
+      expect(phases, [
+        const LinkAuthenticating(),
+        LinkNeedsUser(
+          promptId: prompt.promptId,
+          kind: PromptKind.keyboardInteractive,
+        ),
+        const LinkAuthenticating(),
+      ]);
+    });
+
+    test('onDialing hears once the route is resolved', () async {
+      hops['ssh-config-hop:gw'] = _server(id: 'ssh-config-hop:gw');
+      final seen = <String>[];
+      onDial = (dial) async {
+        seen.add('dial');
+        if (dial.config.jumpHostId case final hop?) {
+          await dial.resolveJumpHost!(hop);
+          seen.add('route');
+        }
+        return _FakeLink();
+      };
+
+      await connect(onDialing: () => seen.add('dialing'));
+      await connect(
+        server: _server(jumpHostId: 'ssh-config-hop:gw'),
+        onDialing: () => seen.add('dialing'),
+      );
+
+      expect(seen, ['dialing', 'dial', 'dial', 'dialing', 'route']);
+    });
+  });
+
+  group('abandoned', () {
+    test('withdraws the open prompt, so the attempt fails', () async {
+      final abandon = Completer<void>();
+      presenting(_key('192.0.2.10'));
+
+      final result = connect(
+        purpose: ConnectPurpose.interactive,
+        abandoned: abandon.future,
+      );
+      await pumpEventQueue();
+      abandon.complete();
+
+      expect(_failure(await result), LinkFailureKind.hostKeyDeclined);
+      expect(
+        (events.last as PromptWithdrawn).reason,
+        PromptWithdrawnReason.attemptEnded,
+      );
+    });
+
+    test('while its key file is read, it never dials', () async {
+      await Directory('${temp.path}/.ssh').create();
+      await File('${temp.path}/.ssh/id').writeAsString('key');
+
+      final result = await connect(
+        server: _server(
+          authMethod: AuthMethod.privateKey,
+          identityFilePath: '~/.ssh/id',
+        ),
+        abandoned: Future.value(),
+      );
+
+      expect(result, isA<LinkConnectFailed>());
+      expect(dials, isEmpty);
+    });
+
+    test('before its route resolves, it opens no socket', () async {
+      final abandon = Completer<void>();
+      hops['ssh-config-hop:gw'] = _server(id: 'ssh-config-hop:gw');
+      ResolvedSshHost? hop;
+      onDial = (dial) async {
+        abandon.complete();
+        await pumpEventQueue();
+        hop = await dial.resolveJumpHost!('ssh-config-hop:gw');
+        throw _connectError(StateError('Missing jump host'));
+      };
+
+      var dialing = false;
+      await connect(
+        server: _server(jumpHostId: 'ssh-config-hop:gw'),
+        onDialing: () => dialing = true,
+        abandoned: abandon.future,
+      );
+
+      expect(hop, isNull);
+      expect(dialing, isFalse);
+    });
+  });
+
   group('credentials', () {
     test('a key that cannot be read fails before dialing', () async {
       final result = await connect(
@@ -370,6 +548,59 @@ void main() {
         IdentityFileFailure.notFound,
       );
     });
+  });
+
+  test('an ssh_config import reaches the dial through the store and '
+      'ImportedFleet, each hop with its own key', () async {
+    await Directory('${temp.path}/.ssh').create();
+    await File('${temp.path}/.ssh/web').writeAsString('web key');
+    await File('${temp.path}/.ssh/gw').writeAsString('gw key');
+    final file = File('${temp.path}/$sshConfigImportsFileName');
+    final imported = importedHostsFromSshConfig("""
+Host web
+  HostName 10.0.0.5
+  User deploy
+  IdentityFile ~/.ssh/web
+  ProxyJump gw
+Host gw
+  HostName gw.example.com
+  Port 2222
+  User jump
+  IdentityFile ~/.ssh/gw
+""");
+    final saved = await (await SshConfigImportStore.open(
+      file,
+    )).replace(imported.hosts, hops: imported.hops);
+    expect(saved, isTrue);
+
+    // What a restarted engine reads back.
+    final store = await SshConfigImportStore.open(file);
+    final fleet = ImportedFleet(
+      store.hosts,
+      hops: store.hops,
+      localUser: 'me',
+      detail: store.detail,
+    );
+    ResolvedSshHost? gw;
+    onDial = (dial) async {
+      gw = await dial.resolveJumpHost!(dial.config.jumpHostId!);
+      return _FakeLink();
+    };
+    final result = await connector(hopConfig: fleet.serverConfig).connect(
+      fleet.serverConfig('ssh-config:web')!,
+      purpose: ConnectPurpose.background,
+    );
+
+    expect(result, isA<LinkConnected>());
+    final web = dials.single.config;
+    expect((web.host, web.port, web.username), ('10.0.0.5', 22, 'deploy'));
+    expect(dials.single.credentials.privateKeyPem, 'web key');
+    final hop = gw!.config;
+    expect(
+      (hop.id, hop.host, hop.port, hop.username),
+      ('ssh-config-hop:gw', 'gw.example.com', 2222, 'jump'),
+    );
+    expect(gw!.credentials.privateKeyPem, 'gw key');
   });
 
   group('failure kinds', () {

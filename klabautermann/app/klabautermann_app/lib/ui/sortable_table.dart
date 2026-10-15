@@ -182,7 +182,9 @@ List<R> sortTableRows<R>(
 /// Sort state is the caller's ([sort], [onSort]): a tab view disposes the
 /// panes it hides, and the panel's controller keeps the order across
 /// that. The table needs a bounded height; when the columns do not fit
-/// the width it scrolls sideways rather than overflow.
+/// the width it scrolls sideways rather than overflow. Sized to show
+/// every row inside a scrolling page, it scrolls that page to the active
+/// row and pages by what the page shows.
 ///
 /// Flutter's table semantics roles are not used: their debug checks
 /// require table, row and cell nodes to nest directly, which the
@@ -352,6 +354,12 @@ class _SortableTableState<R> extends State<SortableTable<R>> {
   int? _activeIndex;
 
   bool _hasFocus = false;
+
+  /// Whether the body last lost focus to another route or window, or to
+  /// the root scope while the app was inactive: its scope then still names
+  /// it the focused child, and focus comes back when that closes rather
+  /// than by the user's navigation.
+  bool _focusParked = false;
   bool _showRing = false;
   double _rowExtent = 0;
   List<SidebarMenuEntry> _menuEntries = const [];
@@ -401,15 +409,22 @@ class _SortableTableState<R> extends State<SortableTable<R>> {
   }
 
   void _onFocusChange(bool focused) {
+    // A node taking focus within the scope becomes its focused child.
+    if (!focused) _focusParked = _focus.enclosingScope?.focusedChild == _focus;
     setState(() {
       _hasFocus = focused;
       if (focused && _activeIndex == null && _sorted.isNotEmpty) {
         _setActive(0);
       }
     });
+    if (!focused) return;
+
     // Tab may return to a row a wheel or a re-sort moved out of view,
-    // where it would be neither built nor ringed.
-    if (focused) _reveal();
+    // where it would be neither built nor ringed. A page around the table
+    // follows the user's navigation only: focus that a closed route or a
+    // resumed window hands back leaves the page where it was read.
+    _revealInBody();
+    if (!_focusParked) _revealInPage();
   }
 
   void _move(_Step step) {
@@ -420,8 +435,7 @@ class _SortableTableState<R> extends State<SortableTable<R>> {
     }
 
     final current = _activeIndex;
-    final viewport = _scroll.position.viewportDimension;
-    final page = math.max(1, (viewport / _rowExtent).floor() - 1);
+    final page = math.max(1, (_shownHeight() / _rowExtent).floor() - 1);
     // With no active row yet, any key makes the first row active.
     final target = current == null
         ? 0
@@ -437,9 +451,25 @@ class _SortableTableState<R> extends State<SortableTable<R>> {
     _reveal();
   }
 
-  /// Scrolls the least distance that shows the active row whole; the
-  /// fixed extent makes its offset exact without building it.
+  /// How much of the body a screen shows: its own viewport, or less where
+  /// a page scrolling around the table is shorter, as for a table sized
+  /// to show every row.
+  double _shownHeight() {
+    final own = _scroll.position.viewportDimension;
+    final page = Scrollable.maybeOf(context, axis: Axis.vertical);
+    return page == null ? own : math.min(own, page.position.viewportDimension);
+  }
+
+  /// Shows the active row whole, in the body and then in any page around
+  /// the table.
   void _reveal() {
+    _revealInBody();
+    _revealInPage();
+  }
+
+  /// Scrolls the body the least distance that shows the active row whole;
+  /// the fixed extent makes its offset exact without building it.
+  void _revealInBody() {
     final index = _activeIndex;
     if (index == null || !_scroll.hasClients) return;
 
@@ -453,6 +483,25 @@ class _SortableTableState<R> extends State<SortableTable<R>> {
       shown
           .clamp(position.minScrollExtent, position.maxScrollExtent)
           .toDouble(),
+    );
+  }
+
+  /// Asks a page scrolling around the table to show the active row, as for
+  /// a table sized to show every row: across the row's full width, so a
+  /// sideways scroll stays where it is.
+  void _revealInPage() {
+    final index = _activeIndex;
+    final body = _bodyKey.currentContext?.findRenderObject();
+    if (index == null || !_scroll.hasClients) return;
+    if (body is! RenderBox || !body.hasSize) return;
+
+    body.showOnScreen(
+      rect: Rect.fromLTWH(
+        0,
+        index * _rowExtent - _scroll.offset,
+        body.size.width,
+        _rowExtent,
+      ),
     );
   }
 
