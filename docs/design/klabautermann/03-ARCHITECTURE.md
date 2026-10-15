@@ -3598,9 +3598,13 @@ the engine in `engine_isolate.dart` beside it):
   `identity` and `failedUnits`; Processes `procs`; Services `units`; Jobs
   `timers` and `cron`; System `identity`, `fs` and `core`; Logs, Docker
   and Access none. Hidden pages stay built, so visibility comes from the
-  tab controller's index. The app sends `SetAppActivity` only on a change
-  (foreground while resumed or inactive, background while hidden, paused
-  or detached), and the engine starts with the app in the foreground.
+  tab controller's index. The app sends `SetAppActivity` only on a change,
+  and the engine starts with the app in the foreground. Phones report the
+  background while hidden, paused or detached. A desktop app stays in the
+  foreground while it runs, minimized (hidden) too: 02 pauses in the
+  background on phones only (FL-04, FL-21, D34), and the background
+  pause, which stops every subscription, link and probe, would stop the
+  alerts 9.5 item 7 promises while the app is open.
   Samples feed a ring of 300 readings per server, stream and series (CPU
   busy, used memory, used swap and one-minute load, from `overview` and
   `core`). A clock ticking each second while shown turns the `Sample.at`

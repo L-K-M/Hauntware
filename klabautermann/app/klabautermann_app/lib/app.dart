@@ -93,8 +93,8 @@ class KlabautermannApp extends StatelessWidget {
     // every surface then opens and subscribes on the new engine.
     return KeyedSubtree(
       key: ValueKey((fleet, monitoring)),
-      // The engine pauses sampling while the user cannot see the app (03
-      // §6.4); the reporter tells it when that changes.
+      // On phones the engine pauses sampling while the user cannot see the
+      // app (03 §6.4); the reporter tells it when that changes.
       child: AppActivityReporter(
         monitoring: monitoring,
         child: _buildApp(context),

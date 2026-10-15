@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart' show setEquals;
+import 'package:flutter/foundation.dart' show defaultTargetPlatform, setEquals;
 import 'package:flutter/scheduler.dart' show SchedulerBinding;
 import 'package:flutter/widgets.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
@@ -185,9 +185,13 @@ class _SampledSurfaceState extends State<SampledSurface> {
 }
 
 /// Reports to [MonitoringController.setAppActivity] whether the user can
-/// see the app (03 §10.1, §6.4): in the foreground while resumed or
-/// inactive (shown without focus), in the background while hidden, paused
-/// or detached.
+/// see the app (03 §10.1, §6.4). Only phones go to the background: while
+/// hidden, paused or detached, and back to the foreground once resumed or
+/// inactive (shown without focus). A desktop app stays in the foreground
+/// while it runs, minimized (hidden) too: 02 pauses in the background on
+/// phones only (FL-04, FL-21, D34), and the background pause stops every
+/// subscription, link and probe, which would stop the alerts 9.5 item 7
+/// promises while the app is open.
 class AppActivityReporter extends StatefulWidget {
   const AppActivityReporter({
     super.key,
@@ -216,14 +220,21 @@ class _AppActivityReporterState extends State<AppActivityReporter> {
     }
   }
 
-  void _report(AppLifecycleState state) =>
-      widget.monitoring.setAppActivity(switch (state) {
-        AppLifecycleState.resumed ||
-        AppLifecycleState.inactive => AppActivity.foreground,
-        AppLifecycleState.hidden ||
-        AppLifecycleState.paused ||
-        AppLifecycleState.detached => AppActivity.background,
-      });
+  void _report(AppLifecycleState state) {
+    final phone = switch (defaultTargetPlatform) {
+      TargetPlatform.android || TargetPlatform.iOS => true,
+      TargetPlatform.fuchsia ||
+      TargetPlatform.linux ||
+      TargetPlatform.macOS ||
+      TargetPlatform.windows => false,
+    };
+    widget.monitoring.setAppActivity(switch (state) {
+      AppLifecycleState.hidden ||
+      AppLifecycleState.paused ||
+      AppLifecycleState.detached when phone => AppActivity.background,
+      _ => AppActivity.foreground,
+    });
+  }
 
   @override
   void dispose() {

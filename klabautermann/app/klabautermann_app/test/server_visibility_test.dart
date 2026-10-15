@@ -206,32 +206,57 @@ void main() {
     expect(_linkRequests(engine), ['connect srv-1', 'disconnect srv-1']);
   });
 
-  testWidgets('the engine hears when the app leaves sight and returns', (
-    tester,
-  ) async {
-    final harness = await pumpApp(tester, size: _desktop);
-    List<AppActivity> told() => [
+  group('app activity (03 §10.1)', () {
+    List<AppActivity> told(AppHarness harness) => [
       for (final request in harness.engine.sentOfType<SetAppActivity>())
         (request as SetAppActivity).activity,
     ];
-    addTearDown(
-      () => tester.binding.handleAppLifecycleStateChanged(
+
+    /// Moves the app through [states]; it is resumed after the test.
+    void lifecycle(WidgetTester tester, List<AppLifecycleState> states) {
+      addTearDown(
+        () => tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.resumed,
+        ),
+      );
+      for (final state in states) {
+        tester.binding.handleAppLifecycleStateChanged(state);
+      }
+    }
+
+    testWidgets('a phone tells the engine when the app leaves sight and '
+        'returns', (tester) async {
+      final harness = await pumpApp(tester, size: _phone);
+
+      // Shown without focus is still in sight.
+      lifecycle(tester, [AppLifecycleState.inactive]);
+      expect(told(harness), isEmpty);
+      lifecycle(tester, [AppLifecycleState.hidden]);
+      expect(told(harness), [AppActivity.background]);
+      lifecycle(tester, [AppLifecycleState.paused]);
+      expect(told(harness), [AppActivity.background]);
+
+      lifecycle(tester, [
+        AppLifecycleState.hidden,
+        AppLifecycleState.inactive,
         AppLifecycleState.resumed,
-      ),
-    );
+      ]);
+      expect(told(harness), [AppActivity.background, AppActivity.foreground]);
+    });
 
-    // Shown without focus is still in sight.
-    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
-    expect(told(), isEmpty);
-    tester.binding
-      ..handleAppLifecycleStateChanged(AppLifecycleState.hidden)
-      ..handleAppLifecycleStateChanged(AppLifecycleState.paused);
-    expect(told(), [AppActivity.background]);
+    testWidgets('a phone app already out of sight says so as it '
+        'mounts', (tester) async {
+      lifecycle(tester, [AppLifecycleState.inactive, AppLifecycleState.hidden]);
+      final harness = await pumpApp(tester, size: _phone);
+      expect(told(harness), [AppActivity.background]);
+    });
 
-    tester.binding
-      ..handleAppLifecycleStateChanged(AppLifecycleState.hidden)
-      ..handleAppLifecycleStateChanged(AppLifecycleState.inactive)
-      ..handleAppLifecycleStateChanged(AppLifecycleState.resumed);
-    expect(told(), [AppActivity.background, AppActivity.foreground]);
+    testWidgets('a minimized desktop app stays in the foreground', (
+      tester,
+    ) async {
+      final harness = await pumpApp(tester, size: _desktop);
+      lifecycle(tester, [AppLifecycleState.inactive, AppLifecycleState.hidden]);
+      expect(told(harness), isEmpty);
+    }, variant: TargetPlatformVariant.desktop());
   });
 }
