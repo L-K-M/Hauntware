@@ -303,13 +303,19 @@ final class _Cards {
     );
   }
 
+  /// [value] in the chart formatters' IEC units, null when unknown.
+  static String? _bytes(AppLocalizations l10n, int? value) => value == null
+      ? null
+      : formatChartValue(
+          value.toDouble(),
+          ChartUnit.bytes,
+          klabautermannChartStrings(l10n),
+        );
+
   Widget memory(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final strings = klabautermannChartStrings(l10n);
     final memory = core.memory;
-    String? bytes(int? value) => value == null
-        ? null
-        : formatChartValue(value.toDouble(), ChartUnit.bytes, strings);
+    String? bytes(int? value) => _bytes(l10n, value);
     return PanelSection(
       title: l10n.overviewMemoryTitle,
       children: [
@@ -333,6 +339,7 @@ final class _Cards {
         _Facts(
           stale: stale,
           facts: [
+            (l10n.overviewMemoryTotal, bytes(memory?.totalBytes)),
             (l10n.overviewMemoryAvailable, bytes(memory?.availableBytes)),
             (l10n.overviewMemoryBuffers, bytes(memory?.buffersBytes)),
             (l10n.overviewMemoryCache, bytes(memory?.cachedBytes)),
@@ -355,7 +362,7 @@ final class _Cards {
       children: [
         if (total == 0)
           Text(l10n.overviewSwapNone, style: _valueStyle(context, stale))
-        else
+        else ...[
           ..._charts(
             context,
             series: MetricSeries.swapUsed,
@@ -369,6 +376,11 @@ final class _Cards {
             ],
             total: total?.toDouble(),
           ),
+          _Facts(
+            stale: stale,
+            facts: [(l10n.overviewMemoryTotal, _bytes(l10n, total))],
+          ),
+        ],
         ?_withheld(l10n, const [MetricField.memory]),
       ],
     );

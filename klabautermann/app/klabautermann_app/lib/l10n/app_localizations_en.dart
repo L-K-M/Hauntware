@@ -1629,6 +1629,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get overviewMemoryCache => 'Cache';
 
   @override
+  String get overviewMemoryTotal => 'Total';
+
+  @override
   String get overviewMemoryAvailable => 'Available';
 
   @override

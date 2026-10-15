@@ -4469,13 +4469,14 @@ reading, in two columns from the System tab's 600 px panel width:
   many cores on phones. Load: the 1, 5 and 15 minute averages and the
   load per core, to two decimals, without a sparkline, since the charts
   have no unitless scale yet. Memory: used on a bar out of the total,
-  available, buffers, cache and shared beside it, and MEM-01's "ZFS
-  ARC counted as used" note. MEM-01 asks for a stacked bar, but used
-  is the total less `MemAvailable` (7.1), which never counts shared
-  memory and keeps part of the cache back, while the cache counts
-  `Cached` with its shared memory: stacked, the parts overlap and would
-  fill the bar while memory is still available, so only used is drawn.
-  Swap: used out of the total, or "No swap is set up."
+  the total, available, buffers, cache and shared beside it, and
+  MEM-01's "ZFS ARC counted as used" note. MEM-01 asks for a stacked
+  bar, but used is the total less `MemAvailable` (7.1), which never
+  counts shared memory and keeps part of the cache back, while the
+  cache counts `Cached` with its shared memory: stacked, the parts
+  overlap and would fill the bar while memory is still available, so
+  only used is drawn. Swap: used on a bar out of the total, the total
+  beside it, or "No swap is set up."
 - The CPU and memory gauges and the CPU sparkline warn at the fleet
   rows' 80 % and 90 % until OV-11, so a server's row and Overview
   agree; swap, load and the per-core figures carry no thresholds.

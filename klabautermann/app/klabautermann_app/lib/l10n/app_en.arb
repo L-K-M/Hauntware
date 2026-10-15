@@ -1872,6 +1872,10 @@
   "@overviewMemoryCache": {
     "description": "MEM-01: memory holding the page cache and reclaimable kernel caches."
   },
+  "overviewMemoryTotal": "Total",
+  "@overviewMemoryTotal": {
+    "description": "MEM-01 and MEM-02: the server's installed memory, or the swap space it has set up."
+  },
   "overviewMemoryAvailable": "Available",
   "@overviewMemoryAvailable": {
     "description": "MEM-01: memory available to new programs without swapping."

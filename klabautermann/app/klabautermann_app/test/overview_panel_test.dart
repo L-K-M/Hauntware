@@ -222,9 +222,14 @@ void main() {
       '1.5 GiB',
       'Used 256 MiB',
       'ZFS ARC counted as used',
+      // The installed memory and the swap space, in sight and not only in
+      // the bars' summaries.
+      '16 GiB',
+      '2 GiB',
     ]) {
       expect(find.text(text), findsOneWidget, reason: text);
     }
+    expect(find.text('Total'), findsNWidgets(2));
     expect(find.textContaining('GB'), findsNothing);
     expect(find.textContaining('MB'), findsNothing);
 
@@ -274,7 +279,7 @@ void main() {
       CoreResult(memory: const MemoryUsage(totalBytes: 16 * _gib)),
     );
 
-    expect(find.text('Unknown'), findsNWidgets(12));
+    expect(find.text('Unknown'), findsNWidgets(13));
     expect(find.text('0%'), findsNothing);
     expect(find.text('0.00'), findsNothing);
     expect(find.textContaining('0 B'), findsNothing);

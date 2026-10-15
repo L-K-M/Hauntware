@@ -2350,6 +2350,12 @@ abstract class AppLocalizations {
   /// **'Cache'**
   String get overviewMemoryCache;
 
+  /// MEM-01 and MEM-02: the server's installed memory, or the swap space it has set up.
+  ///
+  /// In en, this message translates to:
+  /// **'Total'**
+  String get overviewMemoryTotal;
+
   /// MEM-01: memory available to new programs without swapping.
   ///
   /// In en, this message translates to:
