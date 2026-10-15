@@ -4098,7 +4098,11 @@ and DSK-01's and DSK-02's mounts in the sortable table, in IEC units:
   mount point short (A11Y-09).
 - When `df` times out, the reply cannot tell which mount hung, so the
   mounts of the last complete reading stay listed with that reading's
-  time, each with its usage unknown instead of old figures. A host
+  time, each with its usage unknown instead of old figures. The
+  monitoring controller keeps each server's latest reading per stream
+  (`lastReadingFor`) beside its latest sample, so a reading taken
+  while only Overview sampled `fs`, or before a switch to another
+  server, still counts; it leaves with the server (SYN-08). A host
   without `timeout` is told that a stale mount can stall disk readings.
 - The usage bars carry no thresholds until OV-11 (v1) sets them.
 

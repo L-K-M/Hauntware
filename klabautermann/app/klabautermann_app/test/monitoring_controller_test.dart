@@ -362,6 +362,24 @@ void main() {
     expect(monitoring.profileFor('srv-1').value, isNull);
   });
 
+  test('each stream\'s latest reading outlives a collector that fails '
+      'after it, and leaves with the server (SYN-08)', () async {
+    const fs = SampleStream.fs;
+    final listed = _sample('srv-1', fs, 1, result: FsResult(FsSnapshot([])));
+    engine
+      ..emit(listed)
+      ..emit(_sample('srv-1', fs, 2));
+    await settle();
+    final box = monitoring.lastReadingFor('srv-1', fs);
+    expect(box.value, same(listed));
+    expect(monitoring.sampleFor('srv-1', fs).value?.seq, 2);
+
+    engine.emit(CatalogReplaced([_entry('srv-2')]));
+    await settle();
+    expect(_disposed(box as ChangeNotifier), isTrue);
+    expect(monitoring.lastReadingFor('srv-1', fs).value, isNull);
+  });
+
   group('links (03 §5.12)', () {
     testWidgets('the first view connects; the last leave disconnects after '
         'the grace', (tester) async {

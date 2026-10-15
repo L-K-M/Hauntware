@@ -54,17 +54,17 @@ class _SystemPanelState extends State<SystemPanel> {
   late ValueListenable<Sample?> _fs;
   late ValueListenable<HostProfile?> _profile;
 
-  /// The latest `fs` reading that listed mounts. While a later one times
+  /// The latest `fs` sample that listed mounts. While a later one times
   /// out, as on a stale network mount, its mounts stay listed with their
-  /// usage marked as timed out rather than vanishing.
-  Sample? _listed;
+  /// usage unknown rather than vanishing.
+  late ValueListenable<Sample?> _listed;
 
   /// The table's order and the pseudo filter, which outlive tab switches:
   /// the workspace keeps a panel built once opened.
   TableSort? _sort;
   bool _showPseudo = false;
 
-  List<Listenable> get _slow => [_identity, _fs, _profile];
+  List<Listenable> get _slow => [_identity, _fs, _listed, _profile];
 
   @override
   void initState() {
@@ -81,7 +81,6 @@ class _SystemPanelState extends State<SystemPanel> {
     }
 
     _detach();
-    _listed = null;
     _attach();
   }
 
@@ -97,11 +96,11 @@ class _SystemPanelState extends State<SystemPanel> {
     _identity = monitoring.sampleFor(serverId, SampleStream.identity);
     _core = monitoring.sampleFor(serverId, SampleStream.core);
     _fs = monitoring.sampleFor(serverId, SampleStream.fs);
+    _listed = monitoring.lastReadingFor(serverId, SampleStream.fs);
     _profile = monitoring.profileFor(serverId);
     for (final listenable in _slow) {
       listenable.addListener(_onSlowChange);
     }
-    _keepListed();
   }
 
   void _detach() {
@@ -110,13 +109,7 @@ class _SystemPanelState extends State<SystemPanel> {
     }
   }
 
-  void _onSlowChange() => setState(_keepListed);
-
-  void _keepListed() {
-    if (_fs.value case final sample? when sample.result is FsResult) {
-      _listed = sample;
-    }
-  }
+  void _onSlowChange() => setState(() {});
 
   @override
   Widget build(BuildContext context) {
@@ -257,7 +250,10 @@ class _SystemPanelState extends State<SystemPanel> {
       null => [_waiting(l10n)],
       CollectorUnavailable(reason: CollectorUnavailableReason.timeout) => [
         _Notice(icon: Icons.timer_off_outlined, text: l10n.systemDisksTimedOut),
-        if (_listed case Sample(:final at, result: FsResult(:final fs))) ...[
+        if (_listed.value case Sample(
+          :final at,
+          result: FsResult(:final fs),
+        )) ...[
           Text(l10n.systemDisksLastListed(at.toLocal())),
           ..._mounts(context, l10n, fs, wide: wide, timedOut: true),
         ],

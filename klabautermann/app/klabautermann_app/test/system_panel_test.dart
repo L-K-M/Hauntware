@@ -551,6 +551,26 @@ void main() {
     expect(find.text('Alpine Linux v3.20'), findsOneWidget);
   });
 
+  testWidgets('a tab opened on a df timeout lists the mounts read before '
+      'it', (tester) async {
+    final panel = await _pump(tester);
+    panel.serverId!.value = 'srv-2';
+    await tester.pumpAndSettle();
+    // Read while the tab showed another server, as while only Overview
+    // samples the stream.
+    await panel.sample(tester, SampleStream.fs, FsResult(_fs));
+    await panel.sample(
+      tester,
+      SampleStream.fs,
+      const CollectorUnavailable(CollectorUnavailableReason.timeout),
+    );
+
+    panel.serverId!.value = _serverId;
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Disk usage did not finish'), findsOneWidget);
+    expect(_mountOrder(tester), ['/', '/mnt/backup', '/data']);
+  });
+
   testWidgets('a collector without a value says why, with the host\'s '
       'output', (tester) async {
     final panel = await _pump(tester);

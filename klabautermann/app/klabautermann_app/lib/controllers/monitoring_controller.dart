@@ -128,6 +128,15 @@ final class MonitoringController extends ChangeNotifier {
   ValueListenable<Sample?> sampleFor(String serverId, SampleStream stream) =>
       _server(serverId).box(stream);
 
+  /// The latest sample of [serverId]'s [stream] that carried a reading
+  /// rather than [CollectorUnavailable], or null before one: what a view
+  /// keeps listing, marked as old, while the collector fails, as the
+  /// System tab's mounts while `df` times out on a stale mount.
+  ValueListenable<Sample?> lastReadingFor(
+    String serverId,
+    SampleStream stream,
+  ) => _server(serverId).lastReading(stream);
+
   /// What the probe last found on [serverId] ([HostProfileChanged]), or
   /// null before its first answer this engine run: SYS-01's
   /// virtualization and the container facts behind D50's unknowns.
@@ -305,9 +314,9 @@ final class MonitoringController extends ChangeNotifier {
     }
   }
 
-  /// SYN-08: a server that leaves the fleet takes its readings, rings,
-  /// profile and seq floor with it, and comes back, if it does, without
-  /// them.
+  /// SYN-08: a server that leaves the fleet takes its readings, last
+  /// readings, rings, profile and seq floor with it, and comes back, if it
+  /// does, without them.
   void _purge(Set<String> fleetIds) {
     _fleetIds = fleetIds;
     _readings.removeWhere((serverId, readings) {
@@ -379,14 +388,15 @@ final class _FreshnessClock extends ChangeNotifier
   }
 }
 
-/// One server's readings: its seq floor, latest sample per stream, rings
-/// and probe profile.
+/// One server's readings: its seq floor, latest sample and latest reading
+/// per stream, rings and probe profile.
 final class _ServerReadings {
   /// The highest [Sample.seq] kept: the engine counts one sequence per
   /// server across its streams (D44).
   int? _lastSeq;
 
   final Map<SampleStream, ValueNotifier<Sample?>> _boxes = {};
+  final Map<SampleStream, ValueNotifier<Sample?>> _lastReadings = {};
   final Map<SampleStream, Map<MetricSeries, SeriesRing>> _rings = {};
   final ValueNotifier<HostProfile?> profile = ValueNotifier(null);
 
@@ -403,6 +413,9 @@ final class _ServerReadings {
 
   ValueNotifier<Sample?> box(SampleStream stream) =>
       _boxes.putIfAbsent(stream, () => ValueNotifier<Sample?>(null));
+
+  ValueNotifier<Sample?> lastReading(SampleStream stream) =>
+      _lastReadings.putIfAbsent(stream, () => ValueNotifier<Sample?>(null));
 
   /// Every series of [stream] at once, so they stay aligned sample for
   /// sample.
@@ -433,11 +446,14 @@ final class _ServerReadings {
         ring.add(series.readFrom(sample.result));
       }
     }
+    if (sample.result is! CollectorUnavailable) {
+      lastReading(sample.stream).value = sample;
+    }
     box(sample.stream).value = sample;
   }
 
   void dispose() {
-    for (final box in _boxes.values) {
+    for (final box in [..._boxes.values, ..._lastReadings.values]) {
       box.dispose();
     }
     for (final ring in _rings.values.expand((rings) => rings.values)) {
