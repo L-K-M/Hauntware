@@ -90,6 +90,20 @@ void main() {
       );
     });
 
+    test('the kernel log takes identifier and unit filters', () {
+      // journald names kernel-transport records (SYSLOG_IDENTIFIER=kernel,
+      // or the `systemd[1]:` prefix of a line written to /dev/kmsg) and
+      // gives the lines it wrote there itself its own unit.
+      expect(
+        HostCommands.journalctl(
+          kernel: true,
+          unit: 'systemd-journald.service',
+          identifier: 'systemd',
+        ).sublist(4),
+        ['-k', '-b', '-u', 'systemd-journald.service', '-t', 'systemd'],
+      );
+    });
+
     test('times are epoch seconds, with microseconds when present', () {
       final since = DateTime.fromMicrosecondsSinceEpoch(
         1792065600000042,
@@ -106,7 +120,7 @@ void main() {
       );
     });
 
-    test('combinations journalctl refuses or cannot answer are refused', () {
+    test('combinations journalctl refuses and a bounded follow fail', () {
       final t = DateTime.utc(2026, 10, 15);
       for (final build in <void Function()>[
         () => HostCommands.journalctl(since: t, cursor: 's=1'),
@@ -115,8 +129,6 @@ void main() {
           since: t.add(const Duration(seconds: 1)),
           until: t,
         ),
-        () => HostCommands.journalctl(kernel: true, unit: 'a.service'),
-        () => HostCommands.journalctl(kernel: true, identifier: 'kernel'),
         () => HostCommands.journalctl(since: DateTime.utc(1969, 12, 31)),
       ]) {
         expect(build, throwsA(isA<HostCommandError>()));

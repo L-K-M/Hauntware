@@ -101,13 +101,16 @@ abstract final class HostCommands {
   }
 
   /// `journalctl -o json` with the log view's filters (03 §7.6, §10.1):
-  /// the kernel log (`-k -b`) or unit and identifier, the current boot,
+  /// the kernel log (`-k -b`), unit, identifier, the current boot,
   /// priority floor, time range, resume cursor, window size ([lines]),
-  /// [order] and a grep pattern. Every supplied filter is validated, and
-  /// combinations journalctl refuses or cannot answer are refused here:
-  /// `--since` with a cursor (journalctl takes one starting point), a
-  /// follow with `--until`, a range that ends before it starts, and unit
-  /// or identifier filters on the kernel log, which has neither.
+  /// [order] and a grep pattern. Every supplied filter is validated.
+  /// Refused here are what journalctl refuses, `--since` with a cursor
+  /// (it takes one starting point) and a range that ends before it
+  /// starts, and, as this builder's choice, a follow with `--until`,
+  /// since a follow reads on to the present. The kernel log takes unit
+  /// and identifier filters: journald names its records (`kernel`, or
+  /// the `name[pid]:` prefix of a line written to `/dev/kmsg`) and gives
+  /// the lines it wrote there itself its own unit.
   static List<String> journalctl({
     bool kernel = false,
     String? unit,
@@ -130,9 +133,6 @@ abstract final class HostCommands {
     if (grep != null) _check(ArgValidators.journalGrep, grep);
     if (lines != null && lines < 0) {
       throw const HostCommandError('negative line count');
-    }
-    if (kernel && (unit != null || identifier != null)) {
-      throw const HostCommandError('the kernel log has no unit or identifier');
     }
     if (since != null && cursor != null) {
       throw const HostCommandError('--since and a cursor exclude each other');
