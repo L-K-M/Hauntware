@@ -251,6 +251,18 @@ void main() {
       expect(r.counts, {'secret': 3, 'URL credentials': 1});
     });
 
+    test('URL credentials without a user name', () {
+      expect(
+        _redact(
+          'redis-cli -u redis://:Hunter2@localhost:6379/0 ping\n'
+          'x rediss://:Hunter2@10.0.0.5:6379',
+          collector: 'cron',
+        ),
+        'redis-cli -u redis://[redacted]@localhost:6379/0 ping\n'
+        'x rediss://[redacted]@192.0.2.1:6379',
+      );
+    });
+
     test('crontab credential shapes SecretRedactor misses', () {
       const lines = [
         ('PGPASSWORD=Hunter2 pg_dump', 'PGPASSWORD=[redacted] pg_dump'),

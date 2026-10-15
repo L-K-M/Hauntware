@@ -197,7 +197,7 @@ final _patterns = <(String, RegExp, String Function(Match))>[
   (
     'URL credentials',
     RegExp(
-      r'(?<![A-Za-z0-9+.-])([A-Za-z][A-Za-z0-9+.-]*://)[^\s/@:]+:[^\s/@]*@',
+      r'(?<![A-Za-z0-9+.-])([A-Za-z][A-Za-z0-9+.-]*://)[^\s/@:]*:[^\s/@]*@',
     ),
     (m) => '${m[1]}$kRedacted@',
   ),
