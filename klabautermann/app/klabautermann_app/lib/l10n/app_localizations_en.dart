@@ -489,7 +489,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String systemDisksLastListed(DateTime time) {
-    final intl.DateFormat timeDateFormat = intl.DateFormat.jm(localeName);
+    final intl.DateFormat timeDateFormat = intl.DateFormat.yMMMd(
+      localeName,
+    ).add_jm();
     final String timeString = timeDateFormat.format(time);
 
     return 'These mounts are from the reading at $timeString; their usage is unknown now.';

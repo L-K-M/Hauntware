@@ -784,7 +784,7 @@ abstract class AppLocalizations {
   /// **'Disk usage did not finish in time. A network mount (NFS or SMB) that stopped answering is the usual cause.'**
   String get systemDisksTimedOut;
 
-  /// Under systemDisksTimedOut, when an earlier reading listed the mounts: the list below is that reading's, and none of its figures is current. time is when that reading was taken.
+  /// Under systemDisksTimedOut, when an earlier reading listed the mounts: the list below is that reading's, and none of its figures is current. time is when that reading was taken, as a date and time in the UI locale and this device's time zone, since a stale mount can keep failing for days.
   ///
   /// In en, this message translates to:
   /// **'These mounts are from the reading at {time}; their usage is unknown now.'**

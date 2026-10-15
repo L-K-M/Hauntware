@@ -402,11 +402,11 @@
   },
   "systemDisksLastListed": "These mounts are from the reading at {time}; their usage is unknown now.",
   "@systemDisksLastListed": {
-    "description": "Under systemDisksTimedOut, when an earlier reading listed the mounts: the list below is that reading's, and none of its figures is current. time is when that reading was taken.",
+    "description": "Under systemDisksTimedOut, when an earlier reading listed the mounts: the list below is that reading's, and none of its figures is current. time is when that reading was taken, as a date and time in the UI locale and this device's time zone, since a stale mount can keep failing for days.",
     "placeholders": {
       "time": {
         "type": "DateTime",
-        "format": "jm"
+        "format": "yMMMd+jm"
       }
     }
   },

@@ -494,7 +494,7 @@ void main() {
     expect(
       find.text(
         'These mounts are from the reading at '
-        '${DateFormat.jm('en').format(listedAt)}; their usage is unknown now.',
+        '${DateFormat.yMMMd('en').add_jm().format(listedAt)}; their usage is unknown now.',
       ),
       findsOneWidget,
     );
