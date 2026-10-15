@@ -3592,7 +3592,9 @@ the engine in `engine_isolate.dart` beside it):
   at the first record older than it and ends as oldest record reached,
   and a follow reads on from the cursor alone. A follow delivers up to
   `window` earlier records oldest first, then each new one as the host
-  writes it, and `afterCursor` resumes it after a record the app holds.
+  writes it, and `afterCursor` resumes it after a record the app holds
+  instead: it delivers every record after that one, so a reconnect
+  leaves no gap, and `window` does not apply.
   `LogBatch(streamId, records, dropped)` carries sealed records, which
   the engine resolves so the app parses nothing (6.5): a journal entry's
   cursor, time, priority as a syslog severity, unit, identifier, PID,

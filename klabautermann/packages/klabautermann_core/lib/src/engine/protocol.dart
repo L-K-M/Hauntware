@@ -829,8 +829,10 @@ final class ImportStoreIssue {
 /// the last one's cursor reads on to older records (LOG-01's "load
 /// older"; SVC-04's unit logs are one window). A follow delivers up to
 /// [window] earlier records oldest first, then each new record as the
-/// host writes it, until [CloseStream]; with [afterCursor] it resumes
-/// after a record the app already holds (LOG-02).
+/// host writes it, until [CloseStream]. With [afterCursor] it resumes
+/// after a record the app already holds instead (LOG-02): it delivers
+/// every record after that one, so a reconnect leaves no gap, and
+/// [window] does not apply.
 @immutable
 final class LogStreamSpec {
   LogStreamSpec({
@@ -853,8 +855,8 @@ final class LogStreamSpec {
   final LogSource source;
 
   /// How many records: a window's size (LOG-01's pages hold 500, SVC-04's
-  /// unit logs 50), or how many earlier records a follow delivers before
-  /// the new ones.
+  /// unit logs 50), or how many earlier records a follow without
+  /// [afterCursor] delivers before the new ones.
   final int window;
 
   /// Whether the stream follows new records instead of ending after its
