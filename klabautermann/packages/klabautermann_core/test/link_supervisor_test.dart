@@ -162,6 +162,7 @@ void main() {
   late List<EngineEvent> events;
   late List<_Call> calls;
   late LinkSupervisor supervisor;
+  final gone = <String>{};
 
   LinkSupervisor make({
     BackgroundLinkPolicy policy = BackgroundLinkPolicy.keepOpen,
@@ -172,7 +173,8 @@ void main() {
       calls.add(call);
       return call._result.future;
     },
-    configFor: (id) => id.startsWith('s') ? _config(id) : null,
+    configFor: (id) =>
+        id.startsWith('s') && !gone.contains(id) ? _config(id) : null,
     emit: events.add,
     policy: policy,
     startTimer: clock.start,
@@ -184,6 +186,7 @@ void main() {
     clock = _Clock();
     events = [];
     calls = [];
+    gone.clear();
     supervisor = make();
   });
 
@@ -242,6 +245,32 @@ void main() {
     expect(calls.map((c) => c.serverId).skip(4), ['s6']);
     expect(calls.last.purpose, _interactive);
     expect(statuses('s5'), [const LinkConnecting()]);
+  });
+
+  test('the user\'s request moves a queued unattended attempt ahead, and '
+      'one in its slot dials at once', () async {
+    supervisor = make(random: 0.5);
+    for (final id in ['s1', 's2', 's3', 's4', 's5', 's6']) {
+      supervisor.connect(id, purpose: _background);
+    }
+    supervisor.connect('s1', purpose: _interactive);
+    supervisor.connect('s6', purpose: _interactive);
+    await clock.elapse(Duration.zero);
+    expect(calls.map((c) => (c.serverId, c.purpose)), [('s1', _interactive)]);
+
+    calls.single.fail(LinkFailureKind.unreachable);
+    await clock.elapse(Duration.zero);
+    expect((calls.last.serverId, calls.last.purpose), ('s6', _interactive));
+  });
+
+  test('a server that leaves the fleet before its dial is closed', () async {
+    supervisor = make(random: 0.5);
+    supervisor.connect('s1', purpose: _background);
+    gone.add('s1');
+    await clock.elapse(kConnectJitter);
+
+    expect(calls, isEmpty);
+    expect(statuses(), [const LinkConnecting(), _ownerClosed]);
   });
 
   test('a given-up dial keeps its slot until it returns once it is on its '
@@ -373,6 +402,15 @@ void main() {
       ]);
     });
 
+    test('runs on through a phase without a prompt', () async {
+      supervisor.connect('s1', purpose: _interactive);
+      await clock.elapse(const Duration(seconds: 30));
+      calls.single.onPhase!(const LinkAuthenticating());
+      await clock.elapse(const Duration(seconds: 30));
+
+      expect(calls.single.wasAbandoned, isTrue);
+    });
+
     test('leaves out the time a prompt waits on the user', () async {
       supervisor.connect('s1', purpose: _interactive);
       final call = calls.single;
@@ -475,6 +513,7 @@ void main() {
       await linked(keyboardInteractive: true);
       supervisor.disconnect('s1');
       supervisor.connect('s1', purpose: _background);
+      await clock.elapse(kConnectJitter);
       expect(calls, hasLength(1));
 
       final link = await linked(keyboardInteractive: true);
