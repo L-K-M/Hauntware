@@ -4454,8 +4454,9 @@ exists, and opens the coverage sheet; it avoids "read only", which the
 header's read-only indicator means. The runtime is the access
 check's engines over the probe's profile, as the Access tab lists
 them, with its caveat that Podman can also answer on Docker's socket
-path whenever a Docker engine is named. On phones the header heads the body under the app bar, whose
-fixed-height bottom would clip it at large text.
+path whenever a Docker engine is named. On phones the header heads the
+body under the app bar, whose fixed-height bottom would clip it at
+large text.
 
 As built in M2 for OV-01, OV-03 and OV-04
 (`app/klabautermann_app/lib/ui/overview_panel.dart`), the Overview tab
