@@ -193,7 +193,9 @@ final class LinkSupervisor {
     _grace = null;
     for (final server in _servers.values) {
       if (!server.wanted || !_tearDown(server)) continue;
-      server.hold = _Hold.untilForeground;
+      server.hold = server.keyboardInteractive
+          ? _Hold.forUser
+          : _Hold.untilForeground;
       _set(server, const LinkClosed(LinkClosedReason.closedByOwner));
     }
   }
@@ -291,6 +293,11 @@ final class LinkSupervisor {
     // is open and starts again once the attempt goes on.
     if (phase is LinkNeedsUser) {
       attempt.timer?.cancel();
+      // Questions asked once are asked again, so the server waits for
+      // the user from now on, even if this attempt fails.
+      if (phase.kind == PromptKind.keyboardInteractive) {
+        server.keyboardInteractive = true;
+      }
     } else if (server.status is LinkNeedsUser) {
       _armDeadline(attempt);
     }
@@ -370,12 +377,7 @@ final class LinkSupervisor {
         unawaited(server.states?.cancel());
         server.states = null;
         _set(server, LinkClosed(_closedReason(reason)));
-        if (!server.wanted) return;
-        if (server.keyboardInteractive) {
-          server.hold = _Hold.forUser;
-          return;
-        }
-        _backoff(server);
+        if (server.wanted) _backoff(server);
       default:
         // Connecting, authenticating and prompts happen before
         // SshLink.connect returns; backoff is the supervisor's own.
@@ -383,7 +385,14 @@ final class LinkSupervisor {
     }
   }
 
+  /// Waits [samplerRestartDelay] and redials unattended; a server whose
+  /// last connect needed keyboard-interactive answers waits for the user.
   void _backoff(_Server server) {
+    if (server.keyboardInteractive) {
+      server.hold = _Hold.forUser;
+      return;
+    }
+
     final delay = samplerRestartDelay(server.failures++, _random);
     _set(server, LinkBackoff(_now().add(delay)));
     server.retry = _startTimer(delay, () {
@@ -467,8 +476,8 @@ final class LinkSupervisor {
 enum _Hold {
   none,
 
-  /// A failure only the user can resolve, or a lost link of a
-  /// keyboard-interactive server: only an interactive request dials.
+  /// A failure only the user can resolve, or a keyboard-interactive
+  /// server with nothing running: only an interactive request dials.
   forUser,
 
   /// A changed host key or endpoint (D46): nothing dials.
@@ -500,7 +509,7 @@ final class _Server {
   int failures = 0;
   _Hold hold = _Hold.none;
 
-  /// The last connect answered keyboard-interactive questions.
+  /// The last connect asked keyboard-interactive questions.
   bool keyboardInteractive = false;
 
   /// An interactive request arrived while an unattended attempt dialed.

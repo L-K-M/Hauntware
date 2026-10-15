@@ -408,17 +408,55 @@ void main() {
     expect(calls.map((c) => c.purpose), [_background, _interactive]);
   });
 
-  test('a keyboard-interactive server is never dialed unattended', () async {
-    final link = await linked(keyboardInteractive: true);
-    link.become(const SshLinkClosed(SshLinkClosedReason.linkLost));
-    await clock.elapse(const Duration(minutes: 5));
-    supervisor.connect('s1', purpose: _background);
+  group('a keyboard-interactive server is never dialed unattended', () {
+    test('after a disconnect, a lost link or a failed connect', () async {
+      await linked(keyboardInteractive: true);
+      supervisor.disconnect('s1');
+      supervisor.connect('s1', purpose: _background);
+      expect(calls, hasLength(1));
 
-    expect(calls, hasLength(1));
-    expect(statuses().last, const LinkClosed(LinkClosedReason.linkLost));
+      final link = await linked(keyboardInteractive: true);
+      link.become(const SshLinkClosed(SshLinkClosedReason.linkLost));
+      await clock.elapse(const Duration(minutes: 5));
+      supervisor.connect('s1', purpose: _background);
+      expect(calls, hasLength(2));
+      expect(statuses().last, const LinkClosed(LinkClosedReason.linkLost));
 
-    supervisor.connect('s1', purpose: _interactive);
-    expect(calls, hasLength(2));
+      supervisor.connect('s1', purpose: _interactive);
+      calls.last.fail(LinkFailureKind.unreachable);
+      await clock.elapse(const Duration(minutes: 5));
+      expect(calls, hasLength(3));
+      expect(statuses().last, _failed(LinkFailureKind.unreachable));
+    });
+
+    test('after the background grace period', () async {
+      supervisor = make(policy: BackgroundLinkPolicy.closeAfterGrace);
+      await linked(keyboardInteractive: true);
+      supervisor.setActivity(AppActivity.background);
+      await clock.elapse(kBackgroundGracePeriod);
+      supervisor.setActivity(AppActivity.foreground);
+      await clock.elapse(const Duration(minutes: 5));
+
+      expect(calls, hasLength(1));
+      expect(statuses().last, _ownerClosed);
+      supervisor.connect('s1', purpose: _interactive);
+      expect(calls, hasLength(2));
+    });
+
+    test('once a connect asked its questions, even if it failed', () async {
+      supervisor.connect('s1', purpose: _interactive);
+      calls.last.onPhase!(
+        const LinkNeedsUser(
+          promptId: 'p1',
+          kind: PromptKind.keyboardInteractive,
+        ),
+      );
+      calls.last.onPhase!(const LinkAuthenticating());
+      calls.last.fail(LinkFailureKind.timedOut);
+      await clock.elapse(const Duration(minutes: 5));
+
+      expect(calls, hasLength(1));
+    });
   });
 
   group('in the background', () {
