@@ -32,43 +32,59 @@ typedef ArgValidator = String? Function(String value);
 enum Collector {
   /// The capability probe (03 §6.1). Emits one section per probe area on
   /// the slow sampler; the client requests it once after connect.
-  probe(SamplerKind.slow, []),
+  probe(SamplerKind.slow, [], guardedCommands: 16),
 
-  /// Fleet-row metrics: total cpu line, filtered meminfo, loadavg, netdev
-  /// (03 §6.4, fast sampler).
-  overview(SamplerKind.fast, []),
+  /// Fleet-row metrics: total cpu line, the meminfo subset, loadavg and
+  /// the interface counters D48 keeps (03 §6.4, fast sampler).
+  overview(SamplerKind.fast, [], guardedCommands: 0),
 
-  /// Focused-server metrics: overview plus per-core cpu lines, btime,
-  /// diskstats, pressure, uptime (03 §6.4, fast sampler).
-  core(SamplerKind.fast, []),
+  /// Focused-server metrics: overview plus per-core busy and idle jiffies,
+  /// btime, the diskstats counters D48 keeps, PSI averages, uptime and
+  /// the ZFS ARC (03 §6.4, fast sampler).
+  core(SamplerKind.fast, [], guardedCommands: 0),
 
   /// Mount usage and inodes from `df -PT -B1` and `df -Pi` (03 §6.4, §7.3,
   /// slow sampler under `timeout`).
-  fs(SamplerKind.slow, []),
+  fs(SamplerKind.slow, [], guardedCommands: 2),
 
   /// Host identity: `/etc/os-release`, `uname`, `hostnamectl --json=short`
   /// (03 §6.4, slow sampler).
-  identity(SamplerKind.slow, []),
+  identity(SamplerKind.slow, [], guardedCommands: 2),
 
   /// Process list: `/proc/<pid>/stat` and `status` with builtins, every
   /// `cmdline` through one `head|tr` pipeline, `ps` fallback (03 §7.2,
   /// slow sampler while the view is visible).
-  procs(SamplerKind.slow, []),
+  procs(SamplerKind.slow, [], guardedCommands: 3),
 
   /// systemd units and failed units (03 §6.4, §7.5).
-  units(SamplerKind.slow, []),
+  units(SamplerKind.slow, [], guardedCommands: 4),
 
   /// systemd timers (03 §6.4, §7.7).
-  timers(SamplerKind.slow, []),
+  timers(SamplerKind.slow, [], guardedCommands: 2),
 
   /// Cron jobs: own `crontab -l`, `/etc/crontab`, `/etc/cron.d/*` and the
   /// `cron.{hourly,daily,weekly,monthly}` directory names (03 §6.4, §7.7).
-  cron(SamplerKind.slow, []);
+  cron(SamplerKind.slow, [], guardedCommands: 1);
 
-  const Collector(this.sampler, this.argValidators);
+  const Collector(
+    this.sampler,
+    this.argValidators, {
+    required this.guardedCommands,
+  });
 
   /// Which sampler's program contains this collector's fragment.
   final SamplerKind sampler;
+
+  /// An upper bound on the guarded commands (`hw_run`, `hw_qrun`) one run
+  /// of this collector's fragment starts, each bounded by `timeout 10`
+  /// when the host has `timeout` (03 §6.2). A slow request's deadline is
+  /// derived from the sum over its collectors (D47). The count is the
+  /// calls written in the fragment, none of them inside a loop; where
+  /// calls sit on exclusive branches (`procs`' `head` or `ps`, the JSON or
+  /// text calls of `units` and `timers`) only one branch runs, so the
+  /// bound is high by those. A test ties each count to the fragment text.
+  /// The fast collectors run builtins only and declare 0.
+  final int guardedCommands;
 
   /// Positional validators for `hw_o` arguments; the request is refused
   /// when the argument count differs from this list's length or any

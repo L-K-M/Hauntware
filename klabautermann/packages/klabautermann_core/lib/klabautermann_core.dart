@@ -5,6 +5,9 @@
 library;
 
 export 'src/engine/engine_client.dart';
+// What a substitute engine for IsolateEngineClient.spawn's entryPoint is
+// handed; the app's restart test runs one.
+export 'src/engine/engine_isolate.dart' show EngineStart;
 export 'src/engine/protocol.dart';
 // The log viewer's line store and SGR reader (03 §10.8).
 export 'src/logs/log_buffer.dart';
@@ -37,7 +40,7 @@ export 'src/settings/instance_lock.dart'
 // explicit `show` list that changes as a milestone wires types in or
 // retires them.
 // The host types are the plain data that sampling results and
-// HostProfileChanged carry (D52).
+// HostProfileChanged carry (D52), and the log viewer's journal rows.
 export 'package:klabautermann_host/klabautermann_host.dart'
     show
         CpuPercentages,
@@ -45,6 +48,7 @@ export 'package:klabautermann_host/klabautermann_host.dart'
         DiskRate,
         FsSnapshot,
         HostProfile,
+        JournalEntry,
         LoadAvg,
         NetRate,
         SystemdUnit,

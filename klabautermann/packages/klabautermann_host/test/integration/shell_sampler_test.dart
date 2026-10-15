@@ -177,7 +177,9 @@ void _expectMetricBlocks(HwsSection s, {required bool core}) {
   );
   if (core) {
     expect(stat.any((l) => l.startsWith('btime ')), isTrue);
-    expect(b['diskstats'], isNotEmpty);
+    // The rows are filtered to whole disks with I/O (D48), which a
+    // container may not have.
+    expect(b.containsKey('diskstats'), isTrue);
     expect(b['uptime'], isNotEmpty);
   }
 }

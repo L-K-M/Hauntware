@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:seance_core/seance_core.dart';
 
 import '../services/settings_backend.dart';
+import '../theme.dart' show SeanceTheme;
 import 'settings_layout.dart';
 
 /// Settings > Inbox: the producers (bots, scripts) connected to the command
@@ -389,7 +390,7 @@ class _PairingDialogState extends State<_PairingDialog> {
     final instructions = inboxAgentInstructions(
       InboxPairing.decode(widget.pairing).url,
     );
-    const mono = TextStyle(fontFamily: 'monospace', fontSize: 12);
+    final mono = SeanceTheme.mono.copyWith(fontSize: 12);
     return AlertDialog(
       title: Text('Connected "${widget.appName}"'),
       content: SizedBox(

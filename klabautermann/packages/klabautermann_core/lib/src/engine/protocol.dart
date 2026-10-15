@@ -1697,11 +1697,12 @@ final class OverviewResult extends SampleResult {
 }
 
 /// The focused server's reading ([SampleStream.core], OV-01): the
-/// overview's values plus per-core CPU, disk rates, pressure and uptime.
+/// overview's values plus per-core busy shares, disk rates, pressure and
+/// uptime.
 final class CoreResult extends SampleResult {
   CoreResult({
     this.cpu,
-    Map<String, CpuPercentages>? perCpu,
+    Map<String, double>? perCpu,
     this.memory,
     this.load,
     this.loadPerCore,
@@ -1719,9 +1720,11 @@ final class CoreResult extends SampleResult {
   /// As [OverviewResult.cpu].
   final CpuPercentages? cpu;
 
-  /// Occupancy per core (`cpu0`, `cpu1` and so on) since the previous
-  /// reading; null without one, as [OverviewResult.network].
-  final Map<String, CpuPercentages>? perCpu;
+  /// Busy percent per core (`cpu0`, `cpu1` and so on) since the previous
+  /// reading, as CPU-02 shows it; null without one, as
+  /// [OverviewResult.network]. The host sends each core's busy and idle
+  /// jiffies only, without the per-field breakdown of [cpu] (D48).
+  final Map<String, double>? perCpu;
 
   final MemoryUsage? memory;
   final LoadAvg? load;
@@ -1768,15 +1771,16 @@ final class MemoryUsage {
   final int? buffersBytes, cachedBytes, sharedBytes;
   final int? swapTotalBytes, swapUsedBytes;
 
-  /// Whether `/proc/spl/kstat/zfs/arcstats` exists: the ZFS ARC is then
-  /// part of [usedBytes], and MEM-01's bar says "ZFS ARC counted as used"
-  /// (7.1). Null while the engine does not know.
+  /// Whether the ZFS ARC is part of [usedBytes], and MEM-01's bar says
+  /// "ZFS ARC counted as used" (7.1): true where
+  /// `/proc/spl/kstat/zfs/arcstats` exists outside a container (D48).
+  /// Null while the engine does not know.
   final bool? zfsArcCountedAsUsed;
 }
 
 /// One `/proc/pressure` file as 7.1 shows it: the shares of time some or
-/// all tasks stalled. The kernel's cumulative stall counter (`total`)
-/// stays in the engine (D43). A line the file lacks stays null.
+/// all tasks stalled. The host leaves out the kernel's cumulative stall
+/// counter (`total`, D48). A line the file lacks stays null.
 @immutable
 final class StallShares {
   const StallShares({this.some, this.full});

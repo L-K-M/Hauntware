@@ -76,6 +76,15 @@ abstract final class SeanceTheme {
   /// style's [GhostThemeStyle.monoFontFamilies]: the family's shared stack,
   /// led by bundled JetBrains Mono.
   static const List<String> monoFallback = ghostMonoFontFamilies;
+
+  /// [monoFallback] as a style, for code, paths and keys in the UI:
+  /// `SeanceTheme.mono.copyWith(fontSize: 12)`. Never a bare
+  /// `fontFamily: 'monospace'`: only Linux and Android know that family,
+  /// and macOS, iOS and Windows draw the proportional system font instead.
+  static const TextStyle mono = TextStyle(
+    fontFamily: ghostMonoFontFamily,
+    fontFamilyFallback: monoFallback,
+  );
 }
 
 /// Colors for the online/offline/connecting/unknown indicator dots, from

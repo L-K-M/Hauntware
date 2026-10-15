@@ -4,6 +4,7 @@ import 'package:seance_core/seance_core.dart';
 import '../app_state.dart';
 import '../family_hues.dart';
 import '../main.dart';
+import '../theme.dart' show SeanceTheme;
 import 'top_toast.dart';
 
 /// The Snippets tab: reusable command templates, synced across devices. Tapping
@@ -119,7 +120,7 @@ class _SnippetsPaneState extends State<SnippetsPane> {
                                 : _preview(s.body),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontFamily: 'monospace'),
+                            style: SeanceTheme.mono,
                           ),
                           onTap: () => _insert(context, state, s),
                           trailing: PopupMenuButton<String>(
@@ -251,7 +252,7 @@ class _Suggestions extends StatelessWidget {
                 cmd,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
+                style: SeanceTheme.mono.copyWith(fontSize: 13),
               ),
               trailing: Row(
                 mainAxisSize: MainAxisSize.min,
@@ -408,7 +409,7 @@ class _SnippetEditorState extends State<_SnippetEditor> {
               controller: _body,
               minLines: 3,
               maxLines: 10,
-              style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
+              style: SeanceTheme.mono.copyWith(fontSize: 13),
               decoration: const InputDecoration(
                 labelText: 'Command',
                 hintText: r'e.g. tail -f {{logfile}} | grep {{pattern}}',

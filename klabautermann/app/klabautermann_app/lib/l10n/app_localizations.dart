@@ -807,6 +807,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'[line cut: {total} characters in all]'**
   String logLineCut(int total);
+
+  /// Stands in for a journal message or field value the server did not send because it is larger than 4,096 bytes.
+  ///
+  /// In en, this message translates to:
+  /// **'[not sent: over 4,096 bytes]'**
+  String get logJournalNotSent;
+
+  /// Last row of a journal entry's expanded fields when the log view kept only some of them; count is how many it left out.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 more field not kept} other{{count} more fields not kept}}'**
+  String logJournalFieldsLeftOut(int count);
+
+  /// Screen-reader hint for activating a journal row: shows all of the entry's journal fields beneath it.
+  ///
+  /// In en, this message translates to:
+  /// **'Show fields'**
+  String get logJournalShowFields;
+
+  /// Screen-reader hint for activating a journal row that shows its fields: hides them again.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide fields'**
+  String get logJournalHideFields;
 }
 
 class _AppLocalizationsDelegate

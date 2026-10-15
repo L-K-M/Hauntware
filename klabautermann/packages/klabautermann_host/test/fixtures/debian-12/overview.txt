@@ -1,19 +1,16 @@
 == stat ==
 cpu  4705 356 1831 74933 1020 0 45 0 0 0
 == meminfo ==
-MemTotal:       16384000 kB
-MemFree:         8192000 kB
-MemAvailable:   12288000 kB
-Buffers:          524288 kB
-Cached:          3145728 kB
-SReclaimable:     262144 kB
-Shmem:            131072 kB
-SwapTotal:       2097152 kB
-SwapFree:        2097152 kB
+MemTotal: 16384000
+MemFree: 8192000
+MemAvailable: 12288000
+Buffers: 524288
+Cached: 3145728
+SReclaimable: 262144
+Shmem: 131072
+SwapTotal: 2097152
+SwapFree: 2097152
 == loadavg ==
 0.42 0.38 0.30 2/512 12345
 == netdev ==
-Inter-|   Receive                                                |  Transmit
- face |bytes    packets errs drop fifo frame compressed multicast|bytes    packets errs drop fifo colls carrier compressed
-    lo: 1234567   12345    0    0    0     0          0         0  1234567   12345    0    0    0     0       0        0
-  eth0: 987654321  654321    0    3    0     0          0         0 123456789  234567    0    0    0     0       0        0
+eth0 987654321 123456789
