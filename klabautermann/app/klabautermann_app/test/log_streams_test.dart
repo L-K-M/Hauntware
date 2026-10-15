@@ -99,6 +99,23 @@ void main() {
     expect(third.events, [const LogStreamRunning()]);
   });
 
+  test('an engine that stops refuses the streams still open', () async {
+    final running = _Recorder();
+    final waiting = _Recorder();
+    final closed = _Recorder();
+    streams.open(_spec, running);
+    engine.emit(LogStreamState(idOf(0), const LogStreamRunning()));
+    await pumpEventQueue();
+    streams.open(_spec, waiting);
+    streams.open(_spec, closed).close();
+
+    await engine.close();
+    await pumpEventQueue();
+    expect(running.events, [const LogStreamRunning(), 'rejected']);
+    expect(waiting.events, ['rejected']);
+    expect(closed.events, isEmpty);
+  });
+
   test('a stopped engine refuses opens after they return', () async {
     await engine.close();
     final recorder = _Recorder();

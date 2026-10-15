@@ -42,7 +42,7 @@ final class LogStreamHandle {
 /// stream also answers every open before it.
 final class LogStreams {
   LogStreams(this._engine) {
-    _events = _engine.events.listen(_onEvent, onDone: () => _stopped = true);
+    _events = _engine.events.listen(_onEvent, onDone: _onEngineDone);
   }
 
   final EngineClient _engine;
@@ -126,6 +126,18 @@ final class LogStreams {
         });
       case EngineEvent():
         break;
+    }
+  }
+
+  /// A stopped engine answers nothing more, so every stream still open
+  /// is refused, as `FleetController` ends a pending import.
+  void _onEngineDone() {
+    _stopped = true;
+    _unanswered.clear();
+    final listeners = [..._listeners.values];
+    _listeners.clear();
+    for (final listener in listeners) {
+      listener.onLogRejected();
     }
   }
 
