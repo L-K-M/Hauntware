@@ -1,0 +1,527 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:ghost_theme/ghost_theme.dart';
+import 'package:intl/intl.dart' show DateFormat;
+import 'package:klabautermann_app/controllers/monitoring_controller.dart';
+import 'package:klabautermann_app/l10n/app_localizations.dart';
+import 'package:klabautermann_app/theme/app_theme.dart';
+import 'package:klabautermann_app/ui/server_surfaces.dart';
+import 'package:klabautermann_app/ui/system_panel.dart';
+import 'package:klabautermann_core/klabautermann_core.dart';
+
+import 'support/charts.dart'
+    show goldenFontFamily, goldensCompareHere, loadGoldenFonts;
+import 'support/fake_engine.dart';
+import 'support/harness.dart';
+
+const _serverId = 'srv-1';
+const _kib = 1024;
+const _mib = 1024 * _kib;
+const _gib = 1024 * _mib;
+
+const _wide = Size(718, 1000);
+const _phone = Size(390, 1400);
+
+/// When the readings are taken; local, so the words do not depend on the
+/// test machine's zone.
+final _now = DateTime(2026, 10, 15, 14, 30);
+final _booted = DateTime(2026, 10, 3, 11, 23);
+
+const _identity = IdentityResult(
+  hostname: 'web-1',
+  osPrettyName: 'Debian GNU/Linux 12 (bookworm)',
+  kernelName: 'Linux',
+  kernelRelease: '6.1.0-26-amd64',
+  arch: 'x86_64',
+);
+
+CoreResult _core({Map<String, NetRate>? network = _network}) => CoreResult(
+  uptime: const Duration(days: 12, hours: 3, minutes: 7),
+  bootedAt: _booted,
+  network: network,
+);
+
+const _network = {
+  'eth0': NetRate(
+    rxBytesPerSecond: 1.25 * _mib,
+    txBytesPerSecond: 200.0 * _kib,
+  ),
+  'eth1': NetRate(
+    rxBytesPerSecond: 0.25 * _mib,
+    txBytesPerSecond: 100.0 * _kib,
+  ),
+};
+
+/// A mount from `df`: sizes in GiB, then the use and inode shares.
+FsMount _mount(
+  String device,
+  String type,
+  String mountPoint,
+  (num, num, num) gib, [
+  int? use,
+  int? inodes,
+]) => FsMount(
+  device: device,
+  type: type,
+  mountPoint: mountPoint,
+  sizeBytes: (gib.$1 * _gib).round(),
+  usedBytes: (gib.$2 * _gib).round(),
+  availBytes: (gib.$3 * _gib).round(),
+  capacityPercent: use,
+  inodeUsePercent: inodes,
+);
+
+final _fs = FsSnapshot([
+  _mount('/dev/sda1', 'ext4', '/', (50, 21, 26), 45, 12),
+  _mount('tmpfs', 'tmpfs', '/run', (0.75, 0.002, 0.748), 1, 1),
+  _mount('nas:/export/backup', 'nfs4', '/mnt/backup', (2048, 1700, 348), 84),
+  _mount('/dev/sdb1', 'xfs', '/data', (500, 120, 380), 24, 3),
+]);
+
+final _vm = HostProfile(
+  virtualization: 'kvm',
+  container: 'none',
+  lxcfsMounts: const [],
+);
+
+/// An LXC container without lxcfs: every system-wide `/proc` file is the
+/// host's (D50).
+final _container = HostProfile(
+  virtualization: 'lxc',
+  container: 'lxc',
+  lxcfsMounts: const [],
+);
+
+final class _Panel {
+  _Panel(this.engine);
+
+  final FakeEngineClient engine;
+  int _seq = 0;
+
+  Future<void> sample(
+    WidgetTester tester,
+    SampleStream stream,
+    SampleResult result, {
+    DateTime? at,
+  }) async {
+    engine.emit(
+      Sample(
+        serverId: _serverId,
+        stream: stream,
+        seq: ++_seq,
+        at: at ?? _now,
+        result: result,
+      ),
+    );
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> profile(WidgetTester tester, HostProfile profile) async {
+    engine.emit(HostProfileChanged(_serverId, profile));
+    await tester.pumpAndSettle();
+  }
+
+  /// A healthy server: every stream read once.
+  Future<void> all(WidgetTester tester, HostProfile profile) async {
+    await this.profile(tester, profile);
+    await sample(tester, SampleStream.identity, _identity);
+    await sample(tester, SampleStream.core, _core());
+    await sample(tester, SampleStream.fs, FsResult(_fs));
+  }
+}
+
+ThemeData _theme(Brightness brightness, TargetPlatform platform) {
+  final theme = brightness == Brightness.light
+      ? GhostTheme.light(klabautermannThemeStyle, platform: platform)
+      : GhostTheme.dark(klabautermannThemeStyle, platform: platform);
+  return theme.copyWith(
+    textTheme: theme.textTheme.apply(fontFamily: goldenFontFamily),
+  );
+}
+
+Future<_Panel> _pump(
+  WidgetTester tester, {
+  Size size = _wide,
+  double textScale = 1,
+  Brightness brightness = Brightness.light,
+  TargetPlatform platform = TargetPlatform.linux,
+}) async {
+  tester.view.physicalSize = size;
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.reset);
+
+  final engine = FakeEngineClient();
+  final monitoring = MonitoringController(engine);
+  addTearDown(() async {
+    monitoring.dispose();
+    await engine.close();
+  });
+
+  final theme = _theme(brightness, platform);
+  await tester.pumpWidget(
+    MaterialApp(
+      debugShowCheckedModeBanner: false,
+      theme: theme,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: MediaQuery.withClampedTextScaling(
+        minScaleFactor: textScale,
+        maxScaleFactor: textScale,
+        child: Scaffold(
+          body: RepaintBoundary(
+            child: ColoredBox(
+              color: theme.colorScheme.surface,
+              child: SystemPanel(monitoring: monitoring, serverId: _serverId),
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
+  return _Panel(engine);
+}
+
+Finder _inSection(SystemSection section, Finder finder) =>
+    find.descendant(of: find.byKey(ValueKey(section)), matching: finder);
+
+Finder _row(String mountPoint) => find.byKey(ValueKey('disks.row.$mountPoint'));
+
+/// The mount points the table shows, top to bottom.
+List<String> _mountOrder(WidgetTester tester) {
+  const prefix = 'disks.row.';
+  return [
+    for (final element in find.byType(Semantics).evaluate())
+      if (element.widget.key case ValueKey<String>(
+        :final value,
+      ) when value.startsWith(prefix))
+        value.substring(prefix.length),
+  ];
+}
+
+/// 03 §10.2's System tab: SYS-01, SYS-04, BOOT-01, DSK-01, DSK-02 and
+/// NET-01 from the identity, core and fs streams and the probe's profile.
+void main() {
+  setUpAll(() async {
+    if (goldensCompareHere) await loadGoldenFonts();
+  });
+
+  testWidgets('the desktop System tab samples its streams and shows them', (
+    tester,
+  ) async {
+    final harness = await pumpApp(
+      tester,
+      servers: twoServers,
+      size: const Size(1280, 1000),
+    );
+    await tester.tap(find.text('web-1'));
+    await tester.pumpAndSettle();
+    final tab = find.descendant(
+      of: find.byType(TabBar),
+      matching: find.text('System'),
+    );
+    await tester.ensureVisible(tab);
+    await tester.tap(tab);
+    await tester.pumpAndSettle();
+
+    final system = harness.engine
+        .sentOfType<Subscribe>()
+        .cast<Subscribe>()
+        .last;
+    expect(system.streams, ServerPanel.system.streams);
+    expect(find.text('Waiting for the first reading.'), findsNWidgets(4));
+
+    await _Panel(harness.engine).all(tester, _vm);
+    expect(find.text('Waiting for the first reading.'), findsNothing);
+    expect(find.text('Debian GNU/Linux 12 (bookworm)'), findsOneWidget);
+    expect(find.text('Virtual machine (kvm)'), findsOneWidget);
+    expect(find.text('21 GiB of 50 GiB'), findsOneWidget);
+  });
+
+  testWidgets('SYS-01 and BOOT-01 word identity, uptime and boot time', (
+    tester,
+  ) async {
+    final handle = tester.ensureSemantics();
+    final panel = await _pump(tester);
+    await panel.all(tester, _vm);
+
+    for (final text in [
+      'web-1',
+      'Debian GNU/Linux 12 (bookworm)',
+      'Linux 6.1.0-26-amd64',
+      'x86_64',
+      'Virtual machine (kvm)',
+      '12 days, 3 hours',
+      DateFormat.yMMMd('en').add_jm().format(_booted),
+    ]) {
+      expect(find.text(text), findsOneWidget, reason: text);
+    }
+    // A label and its value are one node (A11Y-03's "column: value" in
+    // fact form).
+    expect(
+      find.bySemanticsLabel(RegExp(r'^Up for\n12 days, 3 hours$')),
+      findsOneWidget,
+    );
+    expect(find.textContaining('This server is a container'), findsNothing);
+    handle.dispose();
+  });
+
+  testWidgets('NET-01 sums every interface in IEC units, and an unknown '
+      'rate is never zero', (tester) async {
+    final panel = await _pump(tester);
+    await panel.sample(tester, SampleStream.core, _core());
+    expect(
+      _inSection(SystemSection.network, find.text('1.5 MiB/s')),
+      findsOneWidget,
+    );
+    expect(
+      _inSection(SystemSection.network, find.text('300 KiB/s')),
+      findsOneWidget,
+    );
+
+    // The first reading after a reset has no rates to give.
+    await panel.sample(tester, SampleStream.core, _core(network: null));
+    expect(
+      _inSection(SystemSection.network, find.text('Unknown')),
+      findsNWidgets(2),
+    );
+    expect(find.textContaining('0 B/s'), findsNothing);
+  });
+
+  testWidgets('SYS-04: inside a container without lxcfs the host\'s uptime '
+      'and boot time read as unknown with the reason', (tester) async {
+    final handle = tester.ensureSemantics();
+    final panel = await _pump(tester);
+    await panel.all(tester, _container);
+
+    expect(find.text('Container (lxc)'), findsOneWidget);
+    expect(
+      find.text(
+        'This server is a container. Figures that would come from its host '
+        'read as unknown.',
+      ),
+      findsOneWidget,
+    );
+    const reason =
+        'Inside this container this figure would be the host\'s, so it is '
+        'not shown.';
+    expect(
+      _inSection(SystemSection.uptime, find.text(reason)),
+      findsNWidgets(2),
+    );
+    expect(find.text('12 days, 3 hours'), findsNothing);
+    expect(
+      find.bySemanticsLabel(RegExp('^Up for\nUnknown\n$reason\$')),
+      findsOneWidget,
+    );
+    // The container's own namespaces stay as measured (D50).
+    expect(find.text('1.5 MiB/s'), findsOneWidget);
+    expect(find.text('21 GiB of 50 GiB'), findsOneWidget);
+    handle.dispose();
+  });
+
+  testWidgets('SYS-04: lxcfs serves the container\'s own uptime but not its '
+      'boot time', (tester) async {
+    final handle = tester.ensureSemantics();
+    final panel = await _pump(tester);
+    await panel.all(
+      tester,
+      HostProfile(
+        virtualization: 'lxc',
+        container: 'lxc',
+        lxcfsMounts: const ['/proc/uptime', '/proc/meminfo', '/proc/stat'],
+      ),
+    );
+
+    expect(find.text('12 days, 3 hours'), findsOneWidget);
+    expect(
+      find.bySemanticsLabel(RegExp(r'^Booted\nUnknown\nInside this container')),
+      findsOneWidget,
+    );
+    handle.dispose();
+  });
+
+  testWidgets('DSK-01 and DSK-02 list usage and inodes per mount, pseudo '
+      'filesystems on request, and a missing timeout guard', (tester) async {
+    final handle = tester.ensureSemantics();
+    final panel = await _pump(tester);
+    await panel.sample(tester, SampleStream.fs, FsResult(_fs));
+
+    expect(_mountOrder(tester), ['/', '/mnt/backup', '/data']);
+    expect(
+      tester.getSemantics(_row('/mnt/backup')),
+      isSemantics(
+        label:
+            'Mount: /mnt/backup\nType: nfs4\nUsed: 1.7 TiB of 2 TiB\n'
+            'Use: 84%\nInodes: Unknown',
+      ),
+    );
+
+    await tester.tap(find.text('Show pseudo filesystems (1)'));
+    await tester.pumpAndSettle();
+    expect(_mountOrder(tester), ['/', '/run', '/mnt/backup', '/data']);
+
+    // Use sorts its largest first.
+    await tester.tap(find.byKey(const ValueKey('disks.column.use')));
+    await tester.pumpAndSettle();
+    expect(_mountOrder(tester), ['/mnt/backup', '/', '/data', '/run']);
+
+    const noTimeout =
+        'This server has no timeout command, so a network mount that stops '
+        'answering can stall disk readings.';
+    expect(find.text(noTimeout), findsNothing);
+    final unguarded = FsSnapshot(_fs.mounts, timeoutAbsent: true);
+    await panel.sample(tester, SampleStream.fs, FsResult(unguarded));
+    expect(find.text(noTimeout), findsOneWidget);
+    handle.dispose();
+  });
+
+  testWidgets('a narrow table opens a mount\'s bytes and device in a sheet', (
+    tester,
+  ) async {
+    final handle = tester.ensureSemantics();
+    final panel = await _pump(
+      tester,
+      size: _phone,
+      platform: TargetPlatform.android,
+    );
+    await panel.sample(tester, SampleStream.fs, FsResult(_fs));
+    expect(
+      tester.getSemantics(_row('/mnt/backup')),
+      isSemantics(
+        label: 'Mount: /mnt/backup\nUse: 84%\nInodes: Unknown',
+        isButton: true,
+      ),
+    );
+
+    await tester.tap(_row('/mnt/backup'));
+    await tester.pumpAndSettle();
+    final sheet = find.byType(BottomSheet);
+    for (final text in ['nas:/export/backup', 'nfs4', '1.7 TiB of 2 TiB']) {
+      expect(
+        find.descendant(of: sheet, matching: find.text(text)),
+        findsOneWidget,
+      );
+    }
+    handle.dispose();
+  });
+
+  testWidgets('a df that timed out keeps the last listed mounts, each marked '
+      'timed out', (tester) async {
+    final handle = tester.ensureSemantics();
+    final panel = await _pump(tester);
+    await panel.sample(
+      tester,
+      SampleStream.fs,
+      const CollectorUnavailable(CollectorUnavailableReason.timeout),
+    );
+    const timedOut =
+        'Disk usage did not finish in time. A network mount (NFS or SMB) '
+        'that stopped answering is the usual cause.';
+    expect(find.text(timedOut), findsOneWidget);
+    expect(_mountOrder(tester), isEmpty, reason: 'no earlier reading');
+
+    final listedAt = DateTime(2026, 10, 15, 14, 29);
+    await panel.sample(tester, SampleStream.fs, FsResult(_fs), at: listedAt);
+    await panel.sample(
+      tester,
+      SampleStream.fs,
+      const CollectorUnavailable(CollectorUnavailableReason.timeout),
+    );
+    expect(find.text(timedOut), findsOneWidget);
+    expect(
+      find.text(
+        'These mounts are from the reading at '
+        '${DateFormat.jm('en').format(listedAt)}; their usage is unknown now.',
+      ),
+      findsOneWidget,
+    );
+    expect(_mountOrder(tester), ['/', '/mnt/backup', '/data']);
+    expect(
+      tester.getSemantics(_row('/mnt/backup')),
+      isSemantics(label: 'Mount: /mnt/backup\nType: nfs4\nUsage: Timed out'),
+    );
+    expect(find.text('21 GiB of 50 GiB'), findsNothing);
+    handle.dispose();
+  });
+
+  testWidgets('a collector without a value says why, with the host\'s '
+      'output', (tester) async {
+    final panel = await _pump(tester);
+    await panel.sample(
+      tester,
+      SampleStream.identity,
+      const CollectorUnavailable(
+        CollectorUnavailableReason.denied,
+        detail: 'hostnamectl: Permission denied',
+      ),
+    );
+    expect(
+      _inSection(
+        SystemSection.identity,
+        find.text('The server refused this reading.'),
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('hostnamectl: Permission denied'), findsOneWidget);
+  });
+
+  for (final (name, size, platform) in [
+    ('desktop', _wide, TargetPlatform.linux),
+    ('phone', _phone, TargetPlatform.android),
+  ]) {
+    testWidgets('lays out without overflow at 200 % text on the $name', (
+      tester,
+    ) async {
+      final panel = await _pump(
+        tester,
+        size: size,
+        platform: platform,
+        textScale: 2,
+      );
+      await panel.all(tester, _container);
+      await panel.sample(
+        tester,
+        SampleStream.fs,
+        const CollectorUnavailable(CollectorUnavailableReason.timeout),
+      );
+      expect(tester.takeException(), isNull);
+      await panel.sample(tester, SampleStream.fs, FsResult(_fs));
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  group('golden', () {
+    // 03 §11.1: the desktop scene is a virtual machine in full health; the
+    // phone scene an LXC container without lxcfs, whose host figures read
+    // as unknown, and the narrow mounts table.
+    for (final brightness in Brightness.values) {
+      testWidgets('desktop, ${brightness.name}', (tester) async {
+        final panel = await _pump(tester, brightness: brightness);
+        await panel.all(tester, _vm);
+        await expectLater(
+          find.byType(SystemPanel),
+          matchesGoldenFile(
+            'goldens/system_panel_desktop_${brightness.name}.png',
+          ),
+        );
+      }, skip: !goldensCompareHere);
+
+      testWidgets('phone, ${brightness.name}', (tester) async {
+        final panel = await _pump(
+          tester,
+          size: _phone,
+          brightness: brightness,
+          platform: TargetPlatform.android,
+        );
+        await panel.all(tester, _container);
+        await expectLater(
+          find.byType(SystemPanel),
+          matchesGoldenFile(
+            'goldens/system_panel_phone_${brightness.name}.png',
+          ),
+        );
+      }, skip: !goldensCompareHere);
+    }
+  });
+}

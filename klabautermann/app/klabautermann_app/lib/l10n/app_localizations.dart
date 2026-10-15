@@ -598,6 +598,270 @@ abstract class AppLocalizations {
   /// **'More'**
   String get serverTabMore;
 
+  /// Heading of the System tab's section about what the server is: host name, operating system, kernel, architecture and virtualization (SYS-01).
+  ///
+  /// In en, this message translates to:
+  /// **'Identity'**
+  String get systemIdentityTitle;
+
+  /// Heading of the System tab's section with how long the server has been up and when it booted (BOOT-01).
+  ///
+  /// In en, this message translates to:
+  /// **'Uptime'**
+  String get systemUptimeTitle;
+
+  /// Heading of the System tab's section with the server's total network throughput (NET-01).
+  ///
+  /// In en, this message translates to:
+  /// **'Network'**
+  String get systemNetworkTitle;
+
+  /// Heading of the System tab's section with the space and inodes each mounted filesystem uses (DSK-01, DSK-02).
+  ///
+  /// In en, this message translates to:
+  /// **'Disks'**
+  String get systemDisksTitle;
+
+  /// Label of the server's static host name in the System tab.
+  ///
+  /// In en, this message translates to:
+  /// **'Host name'**
+  String get systemHostname;
+
+  /// Label of the server's operating system and version, as the server names it, in the System tab.
+  ///
+  /// In en, this message translates to:
+  /// **'Operating system'**
+  String get systemOperatingSystem;
+
+  /// Label of the server's kernel name and release in the System tab.
+  ///
+  /// In en, this message translates to:
+  /// **'Kernel'**
+  String get systemKernel;
+
+  /// The server's kernel as the System tab shows it: its name and its release, both as the server reports them.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} {release}'**
+  String systemKernelValue(String name, String release);
+
+  /// Label of the server's machine architecture, such as x86_64 or aarch64, in the System tab.
+  ///
+  /// In en, this message translates to:
+  /// **'Architecture'**
+  String get systemArchitecture;
+
+  /// Label of whether the server runs on bare metal, in a virtual machine or in a container, in the System tab.
+  ///
+  /// In en, this message translates to:
+  /// **'Virtualization'**
+  String get systemVirtualization;
+
+  /// The System tab's virtualization value when the server detected neither a virtual machine nor a container.
+  ///
+  /// In en, this message translates to:
+  /// **'None detected'**
+  String get systemVirtualizationNone;
+
+  /// The System tab's virtualization value for a server in a virtual machine; name is the technology as the server reports it.
+  ///
+  /// In en, this message translates to:
+  /// **'Virtual machine ({name})'**
+  String systemVirtualizationMachine(String name);
+
+  /// The System tab's virtualization value for a server that is a container; name is the technology as the server reports it.
+  ///
+  /// In en, this message translates to:
+  /// **'Container ({name})'**
+  String systemVirtualizationContainer(String name);
+
+  /// The System tab's virtualization value for a server that is a container of a technology the server did not name.
+  ///
+  /// In en, this message translates to:
+  /// **'Container'**
+  String get systemVirtualizationContainerUnnamed;
+
+  /// Note in the System tab's identity section for a container: values the container would read from its host's system files are not shown as its own (SYS-04).
+  ///
+  /// In en, this message translates to:
+  /// **'This server is a container. Figures that would come from its host read as unknown.'**
+  String get systemContainerNotice;
+
+  /// A System tab value the server did not report, or that is not shown for a reason given beside it; never shown as zero.
+  ///
+  /// In en, this message translates to:
+  /// **'Unknown'**
+  String get systemUnknown;
+
+  /// Reason beside an unknown System tab value: in a container, the system file it comes from shows the host's figures instead of the container's (SYS-04).
+  ///
+  /// In en, this message translates to:
+  /// **'Inside this container this figure would be the host\'s, so it is not shown.'**
+  String get systemUnknownContainer;
+
+  /// Label of how long the server has been running since it booted, in the System tab.
+  ///
+  /// In en, this message translates to:
+  /// **'Up for'**
+  String get systemUptime;
+
+  /// How long a server has been up, from one day on: whole days and the hours past them.
+  ///
+  /// In en, this message translates to:
+  /// **'{days, plural, =1{1 day} other{{days} days}}, {hours, plural, =1{1 hour} other{{hours} hours}}'**
+  String systemUptimeDays(int days, int hours);
+
+  /// How long a server has been up, from one hour to a day: whole hours and the minutes past them.
+  ///
+  /// In en, this message translates to:
+  /// **'{hours, plural, =1{1 hour} other{{hours} hours}}, {minutes, plural, =1{1 minute} other{{minutes} minutes}}'**
+  String systemUptimeHours(int hours, int minutes);
+
+  /// How long a server has been up, under an hour: whole minutes.
+  ///
+  /// In en, this message translates to:
+  /// **'{minutes, plural, =0{Less than a minute} =1{1 minute} other{{minutes} minutes}}'**
+  String systemUptimeMinutes(int minutes);
+
+  /// Label of when the server last booted, in the System tab.
+  ///
+  /// In en, this message translates to:
+  /// **'Booted'**
+  String get systemBooted;
+
+  /// When the server last booted: a date and time in the UI locale and this device's time zone.
+  ///
+  /// In en, this message translates to:
+  /// **'{time}'**
+  String systemBootedValue(DateTime time);
+
+  /// Label of the server's total receive rate over all its network interfaces, in the System tab.
+  ///
+  /// In en, this message translates to:
+  /// **'Receive'**
+  String get systemReceive;
+
+  /// Label of the server's total transmit rate over all its network interfaces, in the System tab.
+  ///
+  /// In en, this message translates to:
+  /// **'Transmit'**
+  String get systemTransmit;
+
+  /// A System tab section before the server sent its first reading for it.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for the first reading.'**
+  String get systemWaiting;
+
+  /// A System tab section whose reading failed because a command it runs is not installed on the server.
+  ///
+  /// In en, this message translates to:
+  /// **'The server lacks the tool this reading needs.'**
+  String get systemUnavailableMissing;
+
+  /// A System tab section whose reading failed because the server denied permission.
+  ///
+  /// In en, this message translates to:
+  /// **'The server refused this reading.'**
+  String get systemUnavailableDenied;
+
+  /// A System tab section whose reading the server stopped because it took too long.
+  ///
+  /// In en, this message translates to:
+  /// **'This reading did not finish in time.'**
+  String get systemUnavailableTimeout;
+
+  /// A System tab section whose reading failed for another reason; the server's error output may follow.
+  ///
+  /// In en, this message translates to:
+  /// **'This reading failed.'**
+  String get systemUnavailableError;
+
+  /// The Disks section when the server stopped the disk usage command because it hung, which a stale network mount causes (DSK-01).
+  ///
+  /// In en, this message translates to:
+  /// **'Disk usage did not finish in time. A network mount (NFS or SMB) that stopped answering is the usual cause.'**
+  String get systemDisksTimedOut;
+
+  /// Under systemDisksTimedOut, when an earlier reading listed the mounts: the list below is that reading's, and none of its figures is current. time is when that reading was taken.
+  ///
+  /// In en, this message translates to:
+  /// **'These mounts are from the reading at {time}; their usage is unknown now.'**
+  String systemDisksLastListed(DateTime time);
+
+  /// The Disks section on a server without the timeout command, which normally stops a disk usage command that hangs (DSK-01).
+  ///
+  /// In en, this message translates to:
+  /// **'This server has no timeout command, so a network mount that stops answering can stall disk readings.'**
+  String get systemDisksNoTimeout;
+
+  /// Filter chip in the Disks section that also lists in-memory and image filesystems such as tmpfs, overlay and squashfs, hidden by default; count is how many there are.
+  ///
+  /// In en, this message translates to:
+  /// **'Show pseudo filesystems ({count})'**
+  String systemDisksShowPseudo(int count);
+
+  /// In place of the Disks table when the server's reading listed no filesystem, or only pseudo filesystems while they are hidden.
+  ///
+  /// In en, this message translates to:
+  /// **'No mounts to show.'**
+  String get systemDisksEmpty;
+
+  /// Label of the device or source a filesystem is mounted from, such as /dev/sda1 or nas:/export, in a mount's details.
+  ///
+  /// In en, this message translates to:
+  /// **'Device'**
+  String get systemDevice;
+
+  /// Disks table column: where the filesystem is mounted.
+  ///
+  /// In en, this message translates to:
+  /// **'Mount'**
+  String get systemColumnMount;
+
+  /// Disks table column: the filesystem type, such as ext4 or nfs4.
+  ///
+  /// In en, this message translates to:
+  /// **'Type'**
+  String get systemColumnType;
+
+  /// Disks table column: the space used out of the filesystem's size.
+  ///
+  /// In en, this message translates to:
+  /// **'Used'**
+  String get systemColumnUsed;
+
+  /// Disks table column: the share of the filesystem's space in use, as df reports it.
+  ///
+  /// In en, this message translates to:
+  /// **'Use'**
+  String get systemColumnUse;
+
+  /// Disks table column: the share of the filesystem's inodes (file entries) in use; a full inode table stops new files like a full disk.
+  ///
+  /// In en, this message translates to:
+  /// **'Inodes'**
+  String get systemColumnInodes;
+
+  /// Disks table column shown after the disk usage command timed out: what is known of each mount's usage now.
+  ///
+  /// In en, this message translates to:
+  /// **'Usage'**
+  String get systemColumnUsage;
+
+  /// A Disks table cell: the space used and the filesystem's size, both already formatted with binary units such as GiB.
+  ///
+  /// In en, this message translates to:
+  /// **'{used} of {size}'**
+  String systemUsedOf(String used, String size);
+
+  /// A Disks table cell for a mount whose usage is unknown because the disk usage command timed out.
+  ///
+  /// In en, this message translates to:
+  /// **'Timed out'**
+  String get systemTimedOut;
+
   /// A chart's screen-reader summary of one series: what it measures, its current, lowest and highest values (already formatted with their units) and its trend, one of chartTrendRising, chartTrendFalling or chartTrendSteady.
   ///
   /// In en, this message translates to:

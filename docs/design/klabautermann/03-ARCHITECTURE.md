@@ -4081,6 +4081,26 @@ rights, streamlocal, compose plugin and systemd version, each with a
 copyable fix command that is never run implicitly. Unknown values show
 "unknown", never zero.
 
+As built in M2 (`app/klabautermann_app/lib/ui/system_panel.dart`), the
+System tab shows SYS-01's identity, BOOT-01's uptime and boot time,
+NET-01's total receive and transmit rates over every reported interface,
+and DSK-01's and DSK-02's mounts in the sortable table, in IEC units:
+
+- A figure whose `/proc` file `HostProfile.showsHostFigures` reports as
+  the container host's (uptime from `uptime`, boot time from `stat`)
+  reads "unknown" with that reason whatever the reading holds (SYS-04,
+  D50); while the probe cannot tell, figures stay as measured. Network
+  rates and mounts come from the container's own namespaces and stay.
+- Pseudo filesystems (`FsMount.isPseudo`) sit behind a filter, off by
+  default. In a panel narrower than 600 px the table keeps the mount,
+  use and inode columns, and a row opens the device, type and bytes in
+  a sheet.
+- When `df` times out, the reply cannot tell which mount hung, so the
+  mounts of the last complete reading stay listed with that reading's
+  time, each marked timed out instead of showing old figures. A host
+  without `timeout` is told that a stale mount can stall disk readings.
+- The usage bars carry no thresholds until OV-11 (v1) sets them.
+
 ### 10.5 Phone (under 600 dp) and tablet
 
 The fleet list is home; a server opens a pushed screen with a bottom bar
