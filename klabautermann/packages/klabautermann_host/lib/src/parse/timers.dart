@@ -415,8 +415,8 @@ int? _timerTimestampUs(String cell) {
 }
 
 /// Parses a systemd span (`20h left`, `1 day ago`, `1min 30.500000s`,
-/// `0`, `n/a`) into microseconds; unknown unit words and spans past
-/// [_maxSpanUs] yield null.
+/// `0`, `n/a`) into microseconds; unknown unit words, a fraction of a
+/// unit above a second and spans past [_maxSpanUs] yield null.
 int? _timespanUs(String cell) {
   var t = cell.trim();
   if (t.isEmpty || t == 'n/a' || t == '-') return null;
@@ -438,8 +438,12 @@ int? _timespanUs(String cell) {
     }
     total += n * unit;
     // A fraction of a unit: `.5s` is 500,000 µs, digits past µs dropped.
+    // format_timespan prints one only below a minute, on `s` or `ms`; a
+    // larger unit times six digits could overflow.
     if (m[2] case final f?) {
+      if (unit > _usPerSecond) return null;
       total += int.parse(f) * unit ~/ _pow10[f.length];
+      if (total > _maxSpanUs) return null;
     }
     matched = true;
   }
@@ -454,6 +458,8 @@ final _spanPart = RegExp(r'^(\d{1,18})(?:\.(\d{1,6}))?([^\d\s.]+)$');
 final _spacedUnit = RegExp(r'(\d) ([a-z]+)\b');
 
 const _pow10 = [1, 10, 100, 1000, 10000, 100000, 1000000];
+
+const _usPerSecond = 1000000;
 
 /// The longest span read: 2^62 µs, about 146,000 years.
 const _maxSpanUs = 1 << 62;

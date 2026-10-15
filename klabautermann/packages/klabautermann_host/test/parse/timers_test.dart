@@ -223,6 +223,16 @@ void main() {
         '-1s',
         '99999999999999999999y',
         '9223372036854775807us 9223372036854775807us',
+        // Past the 2^62 µs bound: one word, a sum, and a fraction.
+        '999999999999999999y',
+        '146138y 146138y',
+        '4611686018427s 0.999999s',
+        // format_timespan prints a fraction only below a minute, and one
+        // of a larger unit could overflow int64.
+        '0.999999y',
+        '1.5y',
+        '1.500000y',
+        '1.5min',
       ]) {
         final r = parseTimerDetail('RandomizedDelayUSec=$bad', _ctx);
         expect(r.value.randomizedDelay, isNull, reason: bad);
