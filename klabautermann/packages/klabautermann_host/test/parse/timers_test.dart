@@ -74,6 +74,22 @@ void main() {
     expect(r.warnings, hasLength(3));
   });
 
+  test('JSON instants at the DateTime bounds are kept', () {
+    const maxUs = 8640000000000000000;
+    final raw = [
+      '== timers_json ==',
+      '[{"next":$maxUs,"last":-$maxUs,"unit":"edge.timer"}]',
+    ].join('\n');
+
+    final r = parseTimers(raw, _ctx);
+    final t = r.value.timers.single;
+    expect(t.nextUs, maxUs);
+    expect(t.lastUs, -maxUs);
+    expect(t.nextUtc, isNotNull);
+    expect(t.lastUtc, isNotNull);
+    expect(r.warnings, isEmpty);
+  });
+
   test('text rows are sliced at the header columns', () {
     final raw = [
       '== timers_text ==',

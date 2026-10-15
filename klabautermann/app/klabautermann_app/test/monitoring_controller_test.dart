@@ -64,6 +64,20 @@ void main() {
       expect(monitoring.isSubscribed('srv-1', 'overview'), isFalse);
       expect(monitoring.isSubscribed('srv-1', 'row'), isTrue);
     });
+
+    // An on-demand stream is read once per Subscribe that names it, so a
+    // surface refreshes it by resending: the repeat must reach the engine.
+    test('subscribing an id again forwards the replacing Subscribe', () {
+      monitoring
+        ..subscribe('srv-1', 'row', {SampleStream.overview})
+        ..subscribe('srv-1', 'row', {SampleStream.core, SampleStream.fs});
+
+      final [first, second] = engine.sentOfType<Subscribe>().cast<Subscribe>();
+      expect(first.streams, {SampleStream.overview});
+      expect(second.subscriptionId, 'row');
+      expect(second.streams, {SampleStream.core, SampleStream.fs});
+      expect(monitoring.isSubscribed('srv-1', 'row'), isTrue);
+    });
   });
 
   group('samples (03 §10.1)', () {
