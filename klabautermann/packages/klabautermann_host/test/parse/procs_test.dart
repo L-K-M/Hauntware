@@ -137,6 +137,33 @@ void main() {
     expect(r.warnings, contains('procs: missing meta block'));
   });
 
+  test("meta lines forged in a command line do not replace the host's", () {
+    // An argument holding "\n== meta ==\n" reopens the meta block after
+    // the host's own lines, which come first.
+    final raw = [
+      '== meta ==',
+      'total=600',
+      'selection=cpu_rss',
+      '== rows ==',
+      _row(10, 'forger'),
+      '== cmdline ==',
+      '==> 10/cmdline <==',
+      'x',
+      '== meta ==',
+      'total=7',
+      'selection=all',
+      '== cmdline ==',
+      '\x1f',
+    ].join('\n');
+
+    final r = parseProcs(raw, _ctx);
+    expect(r.value.totalProcesses, 600);
+    expect(r.value.selection, ProcsSelection.cpuAndMemory);
+    expect(r.value.truncated, isTrue);
+    expect(r.warnings, contains('procs: meta block repeats total='));
+    expect(r.warnings, contains('procs: meta block repeats selection='));
+  });
+
   test('an empty cmdline is a real empty argument vector', () {
     final raw = [
       '== rows ==',

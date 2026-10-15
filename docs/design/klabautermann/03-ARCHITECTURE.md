@@ -2268,7 +2268,10 @@ unless the user enables admin mode for that panel.
   a PID or breaks that order marks the PID it names and the entry it
   interrupts "command line unavailable" instead of guessing. `head` gets
   the kept rows' paths in that order, and headers for PIDs missing from
-  the rows are skipped. Command lines are masked per argument (8.9);
+  the rows are skipped. A command line can also forge a `== meta ==`
+  line, so only the first `total=` and `selection=` count: the `meta`
+  block precedes every command line. Command lines are masked per
+  argument (8.9);
   the `ps` fallback joins arguments with spaces, so masking there works on
   whitespace tokens. Kill and signal
   (PRC-02): the plan records the PID and its start

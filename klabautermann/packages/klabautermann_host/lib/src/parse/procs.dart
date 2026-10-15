@@ -315,6 +315,9 @@ _Row? _parseRow(String line, List<String> warnings) {
 }
 
 /// The `meta` block: the `total=` count and the `selection=` wire name.
+/// Only the first line of each counts: the fragment writes this block
+/// first, and a command line holding a `== meta ==` line reopens it
+/// (splitBlocks) to append forged lines.
 ({int? total, ProcsSelection? selection}) _parseMeta(
   List<String>? lines,
   List<String> warnings,
@@ -325,10 +328,19 @@ _Row? _parseRow(String line, List<String> warnings) {
   }
   int? total;
   ProcsSelection? selection;
+  final seen = <String>{};
   for (final line in lines) {
-    if (line.startsWith('total=')) {
+    final key = line.startsWith('total=')
+        ? 'total='
+        : line.startsWith('selection=')
+        ? 'selection='
+        : null;
+    if (key == null) continue;
+    if (!seen.add(key)) {
+      warnings.add('procs: meta block repeats $key');
+    } else if (key == 'total=') {
       total = int.tryParse(line.substring(6));
-    } else if (line.startsWith('selection=')) {
+    } else {
       final name = line.substring(10);
       selection = ProcsSelection.values
           .where((s) => s.wireName == name)
