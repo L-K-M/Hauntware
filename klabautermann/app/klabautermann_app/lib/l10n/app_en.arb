@@ -268,9 +268,9 @@
   "@coverageLiveBody": {
     "description": "Body of the coverage sheet's live-readings item."
   },
-  "coverageWatchedTitle": "Watched servers",
+  "coverageWatchedTitle": "Continuous watching",
   "@coverageWatchedTitle": {
-    "description": "Coverage sheet item about the servers this device watches continuously (its monitor set, FL-21)."
+    "description": "Coverage sheet item about the servers this device watches continuously (its monitor set, FL-21): listed as covered once one is watched, and as not covered while none is."
   },
   "coverageWatchedBody": "{watched, plural, =0{No server is watched on this device, so each is read only while you have it open.} =1{1 server is read continuously while Klabautermann is open. The others are read only while you have them open.} other{{watched} servers are read continuously while Klabautermann is open. The others are read only while you have them open.}}",
   "@coverageWatchedBody": {

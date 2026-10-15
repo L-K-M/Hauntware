@@ -239,19 +239,25 @@ void main() {
       expect(find.text('Coverage on this device'), findsOneWidget);
       expect(find.text('T0'), findsOneWidget);
       expect(find.text('SSH while Klabautermann is open'), findsOneWidget);
+      double top(String text) => tester.getTopLeft(find.text(text)).dy;
       for (final item in [
         'Covered',
         'Live readings while open',
-        'Watched servers',
+        'Not covered',
+        'Continuous watching',
         'No server is watched on this device, so each is read only while '
             'you have it open.',
-        'Not covered',
         'While Klabautermann is closed',
         'A server going down',
         'History before you connected',
       ]) {
         expect(find.text(item), findsOneWidget, reason: item);
       }
+      expect(
+        top('Continuous watching'),
+        greaterThan(top('Not covered')),
+        reason: 'no server is watched, so watching is not covered',
+      );
       expect(
         find.text('While in the background'),
         findsNothing,

@@ -622,10 +622,10 @@ abstract class AppLocalizations {
   /// **'Metrics, processes, services, logs and jobs of the servers you have open.'**
   String get coverageLiveBody;
 
-  /// Coverage sheet item about the servers this device watches continuously (its monitor set, FL-21).
+  /// Coverage sheet item about the servers this device watches continuously (its monitor set, FL-21): listed as covered once one is watched, and as not covered while none is.
   ///
   /// In en, this message translates to:
-  /// **'Watched servers'**
+  /// **'Continuous watching'**
   String get coverageWatchedTitle;
 
   /// Body of the coverage sheet's watched-servers item; watched is the size of this device's monitor set within the fleet.

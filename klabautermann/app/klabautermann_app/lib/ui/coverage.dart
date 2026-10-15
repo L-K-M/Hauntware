@@ -325,6 +325,13 @@ class CoverageSheet extends StatelessWidget {
       listenable: fleet,
       builder: (context, _) {
         final coverage = FleetCoverage.of(fleet.servers);
+        // Continuous watching is covered only once a server is watched.
+        final watching = coverage.watchedCount > 0;
+        final watched = _SheetItem(
+          leading: watching ? covered : notCovered,
+          title: l10n.coverageWatchedTitle,
+          body: l10n.coverageWatchedBody(coverage.watchedCount),
+        );
         return Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -371,14 +378,11 @@ class CoverageSheet extends StatelessWidget {
                         title: l10n.coverageLiveTitle,
                         body: l10n.coverageLiveBody,
                       ),
-                      _SheetItem(
-                        leading: covered,
-                        title: l10n.coverageWatchedTitle,
-                        body: l10n.coverageWatchedBody(coverage.watchedCount),
-                      ),
+                      if (watching) watched,
                     ]),
                     const SizedBox(height: 4),
                     ...section(l10n.coverageNotCoveredHeading, [
+                      if (!watching) watched,
                       _SheetItem(
                         leading: notCovered,
                         title: l10n.coverageClosedTitle,

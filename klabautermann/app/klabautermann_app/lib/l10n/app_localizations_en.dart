@@ -345,7 +345,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'Metrics, processes, services, logs and jobs of the servers you have open.';
 
   @override
-  String get coverageWatchedTitle => 'Watched servers';
+  String get coverageWatchedTitle => 'Continuous watching';
 
   @override
   String coverageWatchedBody(int watched) {
