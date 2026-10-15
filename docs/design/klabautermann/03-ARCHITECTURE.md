@@ -4483,11 +4483,11 @@ reading, in two columns from the System tab's 600 px panel width:
   rows' 80 % and 90 % until OV-11, so a server's row and Overview
   agree; swap, load and the per-core figures carry no thresholds.
 - Every figure goes through the chart formatters' IEC units, and a
-  test keeps `ghostFormatFileSize` out of `lib/`. A figure the
-  container withholds (D50) reads unknown with SYS-04's reason, once
-  per card. With only the load per core withheld, the container's own
-  load averages show and the note says the core count would be the
-  host's.
+  test keeps the decimal `ghostFormatFileSize` and `ghostFormatByteRate`
+  out of `lib/`. A figure the container withholds (D50) reads unknown
+  with SYS-04's reason, once per card. With only the load per core
+  withheld, the container's own load averages show and the note says
+  the core count would be the host's.
 - No radial `Gauge` exists yet; the stacked bar is the gauge.
 
 ### 10.5 Phone (under 600 dp) and tablet
