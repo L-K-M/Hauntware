@@ -415,6 +415,11 @@ void main() {
         'ssh://[2001:db8::1]',
         'ssh://h..example',
         'ssh://@h',
+        // ssh puts the last hop's host in the command without brackets,
+        // and the nested ssh reads it as an ssh URI: gw on port 2222.
+        '[ssh://gw:2222]',
+        'u@[ssh://gw]',
+        'a,[ssh://gw]',
       ]) {
         expect(hops(value), isNull, reason: value);
       }

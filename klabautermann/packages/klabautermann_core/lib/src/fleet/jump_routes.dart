@@ -116,6 +116,9 @@ final class JumpHop {
 /// - has `none`, in any case, as the first of several hops: a nested ssh
 ///   then gets `-J none`, which means no jump, and dials the next hop
 ///   directly, without that hop's own route;
+/// - has a hop whose host in brackets starts with `ssh://`: ssh puts the
+///   host in the command without them, and the nested ssh reads it as
+///   an ssh URI;
 /// - contains `%`, which ssh expands as a token (ssh_config(5), TOKENS);
 /// - has a hop whose user holds U+FFFD, in place of bytes that are not
 ///   UTF-8, which ssh would sign in with;
@@ -520,6 +523,8 @@ List<_Hop>? _parseProxyJump(String value) {
     if (hop == null ||
         !_isShellWord(hop.host) ||
         hop.host.startsWith('-') ||
+        // The nested ssh reads it, brackets dropped, as an ssh URI.
+        hop.host.startsWith('ssh://') ||
         !_isShellWord(hop.user ?? '') ||
         (hop.user?.startsWith('-') ?? false) ||
         (hop.user?.contains(_replacement) ?? false)) {
