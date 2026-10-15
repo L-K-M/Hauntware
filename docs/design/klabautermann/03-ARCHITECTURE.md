@@ -3791,6 +3791,41 @@ hold each span's foreground and background to a minimum contrast
 (`contrastRatio`, A11Y-04), RGB included. Full at the caps with either
 kind of text, the buffer holds about 35 MiB of the 64 MiB budget (11.4).
 
+The viewer (`app/klabautermann_app/lib/ui/logs/`) forces a strut, so every
+row is a whole number of lines. Without wrap a row is one line, and a long
+line ends in an ellipsis until sideways scrolling lands; that also keeps a
+cut line's note out of sight, though screen readers read it. With wrap,
+the row counts sit in a Fenwick tree and a sliver of the viewer's own
+finds offsets and indexes in O(log n), where `SliverVariedExtentList` sums
+every extent before an index. Only the lines a layout shows, and as many
+rows above its offset so a page up lands on measured lines, are measured,
+once per width, font and locale: one row without a layout when the line
+is all Latin-1 and fits at a monospace advance per code unit (two per
+tab), allowing for the rounding of the engine's single-precision sum,
+otherwise laid out, since a fallback font can draw any other glyph
+wider than a fixed count of advances and a line or paragraph separator
+breaks the row. Other lines keep an earlier count or, once the viewer
+has a width, an estimate from their length, and a measurement above the
+view moves the offset by the difference while the offset, moving by
+whole rows, keeps its share of the line it is in to within a row, so a
+line that starts at the offset still does; the lines in sight hold still
+and a resize lays out only the lines near them. Tabs
+are not expanded to stops yet. Any scroll that leaves the
+newest line pauses following, and reaching it again, End or Follow resumes
+it; the scroll position holds the end during layout, and while paused it
+drops the extent of evicted lines from its offset and converts the
+offset when the line height or wrap changes, keeping the line at the top
+and, to within a row, its share above the edge. Content that no longer
+fills the view below the offset ends the view at the newest line
+instead, still paused. Every span keeps 4.5:1
+on its background, moved toward black or white as little as needed. SGR
+colours 1 to 6 and 9 to 14 take the family's glyph hues, 8 its graphite;
+0, 7 and 15 stay black, light grey and white. The caller supplies a line's
+level; journal priorities 0 to 3 are errors, 4 warnings, 5 and 6 plain, 7
+debug, each with a spoken gutter icon. Levels are never guessed from text
+(CTX-05, v1). Its goldens draw with flutter_test's font rather than the
+bundled font of 11.1 until they share K05a's approach.
+
 ### 10.9 Theme
 
 MVP: `ghost_theme` (F4b, D9) builds the light and dark themes, installs
