@@ -11,6 +11,7 @@ import 'package:klabautermann_host/klabautermann_host.dart'
         HostProfile,
         LoadAvg,
         NetRate,
+        ProcsSelection,
         SystemdUnit,
         TimersSnapshot,
         UnitsSnapshot;
@@ -48,6 +49,10 @@ import 'package:meta/meta.dart';
 /// and reads a [LogStreamSpec] (a sealed [LogSource] with its filters, a
 /// window, follow and a resume cursor), [LogBatch] carries sealed
 /// [LogRecord]s the engine resolved, and [LogStreamState] joins.
+///
+/// [ProcsResult] then gained the host's process count and how it chose
+/// its rows, and [ProcessRow] lost the thread count the host no longer
+/// sends (03 D48), within v3 the same way.
 const int kEngineProtocolVersion = 3;
 
 /// Every message the UI isolate sends the engine (03 §10.1, D18). Plain data
@@ -1816,10 +1821,18 @@ final class IdentityResult extends SampleResult {
 
 /// The process list ([SampleStream.procs], 7.2).
 final class ProcsResult extends SampleResult {
-  ProcsResult(List<ProcessRow> processes)
+  ProcsResult(List<ProcessRow> processes, {this.totalProcesses, this.selection})
     : processes = List.unmodifiable(processes);
 
   final List<ProcessRow> processes;
+
+  /// How many processes the host counted; above 500 it sends only some of
+  /// them (D48), so PRC-01 says "showing N of M". Null when the host did
+  /// not report it.
+  final int? totalProcesses;
+
+  /// How the host chose [processes] (D48); null when it did not report it.
+  final ProcsSelection? selection;
 }
 
 /// One process as [ProcsResult] lists it (PRC-01).
@@ -1832,7 +1845,6 @@ final class ProcessRow {
     this.state,
     this.userName,
     this.uid,
-    this.threads,
     this.residentBytes,
     this.cpuPercent,
     this.startTicks,
@@ -1850,7 +1862,6 @@ final class ProcessRow {
 
   final String? userName;
   final int? uid;
-  final int? threads;
   final int? residentBytes;
 
   /// Its share of one CPU since the previous reading, in percent: above

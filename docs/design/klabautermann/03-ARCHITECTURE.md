@@ -3710,7 +3710,8 @@ the engine in `engine_isolate.dart` beside it):
   host sends no per-core breakdown, D48), each rate
   map null until a previous reading exists, so unknown never sums to
   zero; for `procs`, per-process CPU shares with the start time PRC-02
-  checks; for `identity`, the strings SYS-01 shows, resolved in the
+  checks, plus the host's process count and how it chose the rows it
+  sent (D48); for `identity`, the strings SYS-01 shows, resolved in the
   engine so the host's JSON never crosses (6.5); and the parsed tables
   for `fs`, `units`, `failedUnits`, `timers` and `cron`. A
   stream whose collector reports a section status other than `ok` (6.2)
