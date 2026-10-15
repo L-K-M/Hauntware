@@ -246,6 +246,16 @@ void main() {
         isNull,
       );
     });
+
+    test('inContainer follows lxcfs mounts, then detect-virt', () {
+      expect(
+        HostProfile(container: 'none', lxcfsMounts: lxcfs).inContainer,
+        isTrue,
+      );
+      expect(HostProfile(container: 'lxc').inContainer, isTrue);
+      expect(HostProfile(container: 'none').inContainer, isFalse);
+      expect(HostProfile(lxcfsMounts: const []).inContainer, isNull);
+    });
   });
 
   group('fromJson', () {

@@ -1664,7 +1664,9 @@ final class OverviewResult extends SampleResult {
     this.load,
     this.loadPerCore,
     Map<String, NetRate>? network,
-  }) : network = _unmodifiable(network);
+    Map<MetricField, MetricWithheldReason> withheld = const {},
+  }) : network = _unmodifiable(network),
+       withheld = Map.unmodifiable(withheld);
 
   /// CPU occupancy since the previous reading; null without one to compare
   /// with (the first reading, or after a reboot or a counter reset).
@@ -1683,6 +1685,12 @@ final class OverviewResult extends SampleResult {
   /// one, and empty only when the host reported no interface, so unknown
   /// never sums to zero (03 §1.2 principle 6).
   final Map<String, NetRate>? network;
+
+  /// The values the engine left null for a reason the app words (D50):
+  /// each field whose `/proc` file shows a container host's figures,
+  /// whether or not this reading carried it. Empty outside containers
+  /// and while the probe cannot tell whether the server is one.
+  final Map<MetricField, MetricWithheldReason> withheld;
 }
 
 /// The focused server's reading ([SampleStream.core], OV-01): the
@@ -1702,9 +1710,11 @@ final class CoreResult extends SampleResult {
     this.memoryPressure,
     this.uptime,
     this.bootedAt,
+    Map<MetricField, MetricWithheldReason> withheld = const {},
   }) : perCpu = _unmodifiable(perCpu),
        network = _unmodifiable(network),
-       disks = _unmodifiable(disks);
+       disks = _unmodifiable(disks),
+       withheld = Map.unmodifiable(withheld);
 
   /// As [OverviewResult.cpu].
   final CpuPercentages? cpu;
@@ -1737,6 +1747,56 @@ final class CoreResult extends SampleResult {
 
   /// When the host booted (`btime`), in UTC.
   final DateTime? bootedAt;
+
+  /// As [OverviewResult.withheld].
+  final Map<MetricField, MetricWithheldReason> withheld;
+}
+
+/// A value of [OverviewResult] or [CoreResult] that
+/// [OverviewResult.withheld] can name, after the `/proc` file it comes
+/// from (D50).
+enum MetricField {
+  /// `cpu`, from `/proc/stat`.
+  cpu,
+
+  /// [CoreResult.perCpu], from `/proc/stat`.
+  perCpu,
+
+  /// `memory`, from `/proc/meminfo`.
+  memory,
+
+  /// `load`, from `/proc/loadavg`.
+  load,
+
+  /// `loadPerCore`, from `/proc/loadavg` and the CPU count of
+  /// `/proc/stat`.
+  loadPerCore,
+
+  /// [CoreResult.disks], from `/proc/diskstats`.
+  disks,
+
+  /// [CoreResult.cpuPressure], from `/proc/pressure/cpu`.
+  cpuPressure,
+
+  /// [CoreResult.ioPressure], from `/proc/pressure/io`.
+  ioPressure,
+
+  /// [CoreResult.memoryPressure], from `/proc/pressure/memory`.
+  memoryPressure,
+
+  /// [CoreResult.uptime], from `/proc/uptime`.
+  uptime,
+
+  /// [CoreResult.bootedAt], from the `btime` line of `/proc/stat`.
+  bootedAt,
+}
+
+/// Why the engine left a [MetricField] null (D50).
+enum MetricWithheldReason {
+  /// Inside a container, the field's `/proc` file shows the container
+  /// host's figures, not this system's (SYS-04): no lxcfs mount serves
+  /// the container's own there, or lxcfs passes the host's through.
+  containerHostFigures,
 }
 
 /// Memory as MEM-01's breakdown shows it, in bytes, which the engine

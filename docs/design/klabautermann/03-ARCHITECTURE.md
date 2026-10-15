@@ -725,6 +725,15 @@ Proposals awaiting the owner close the section; they are not decisions.
   hosts (their `diskstats` there also needs a kernel older than 5.0);
   an unknown answer for those files (unknown already means that the
   container question is open, which it is not here).
+  K23 builds it: such a value is null in its `OverviewResult` or
+  `CoreResult`, and the result's `withheld` map names the field with
+  the typed reason `containerHostFigures`, also on a reading that did
+  not carry it, so the app never shows "no previous reading" instead.
+  `/proc/net/dev` is namespaced and never withheld, and MEM-01's ARC
+  note does not apply in a container (D48). Where the container
+  question is open (no `systemd-detect-virt` and no lxcfs mount, or no
+  probe answer yet), values show as measured: withholding them would
+  blank every such host, Alpine and BusyBox ones included.
 - **D52. Runtime code lives outside `src/engine/`.** In
   `klabautermann_core`, links, sampling, logs and capabilities live in
   `lib/src/links/`, `lib/src/sampling/`, `lib/src/logs/` and
