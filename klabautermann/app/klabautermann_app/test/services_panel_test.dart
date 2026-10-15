@@ -278,23 +278,28 @@ void main() {
     tester,
   ) async {
     final panel = await _pump(tester);
+    // A bullet-led row read by position (CN-10), the sub state leading
+    // the description as the host's text parser leaves it; `systemctl
+    // --failed` leads its rows with the bullet.
+    final misread = _unit(
+      '●',
+      'loaded',
+      'failed',
+      'failed A web server',
+      'nginx.service',
+    );
     await panel.sample(
       tester,
-      _result(
-        format: UnitListFormat.text,
-        units: [
-          _unit('cron.service', 'active', 'running'),
-          _unit('odd.service', 'sleeping', 'Dead', null, null),
-          // A bullet-led row read by position (CN-10), the sub state
-          // leading the description as the host's text parser leaves it.
-          _unit(
-            '●',
-            'loaded',
-            'failed',
-            'failed A web server',
-            'nginx.service',
-          ),
-        ],
+      UnitsResult(
+        UnitsSnapshot(
+          units: [
+            _unit('cron.service', 'active', 'running'),
+            _unit('odd.service', 'sleeping', 'Dead', null, null),
+            misread,
+          ],
+          failed: [misread],
+          format: UnitListFormat.text,
+        ),
       ),
     );
 
@@ -309,10 +314,13 @@ void main() {
     expect(find.text('loaded'), findsNothing);
     expect(find.text('failed A web server'), findsNothing);
 
-    // Nor does the row's page show the shifted description.
+    // A misread name is no unit's, so neither its row nor the failed
+    // units summary opens a page that would read its journal.
+    expect(find.text('●: unknown'), findsOneWidget);
+    expect(find.widgetWithText(TextButton, '●: unknown'), findsNothing);
     await _open(tester, '●');
-    expect(find.text('Recent log lines'), findsOneWidget);
-    expect(find.text('failed A web server'), findsNothing);
+    expect(find.text('Recent log lines'), findsNothing);
+    expect(panel.opens, isEmpty);
   });
 
   testWidgets('words an unavailable unit list', (tester) async {

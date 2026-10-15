@@ -2399,8 +2399,9 @@ no longer holds that value.
   systemd's tables, or a sub state spelled as systemd spells them.
   Anything else reads "unknown", and so do every state and the
   description of a row whose name ends in no unit type, as a text row
-  the host read by position after a status bullet would (CN-10). A
-  notice names the text fallback.
+  the host read by position after a status bullet would (CN-10). Such
+  a row opens no page, since its name is not a unit's. A notice names
+  the text fallback.
 - SVC-02's summary (`failed_units_summary.dart`, which the health card
   is to share over `failedUnits`) counts `UnitsSnapshot.failed` and
   names up to five, each with its sub state: systemd's `Result` property

@@ -22,7 +22,8 @@ class FailedUnitsSummary extends StatelessWidget {
 
   final List<SystemdUnit> failed;
 
-  /// Opens a unit; null lists the units as plain text.
+  /// Opens a unit; null lists the units as plain text, as a row whose
+  /// name ends in no unit type always is (CN-10).
   final ValueChanged<SystemdUnit>? onUnitSelected;
 
   /// How many units it names before "and N more".
@@ -83,11 +84,12 @@ class _FailedUnit extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final states = unitStatesOf(unit);
     final label = l10n.servicesFailedUnit(
       unit.unit,
-      unitStatesOf(unit).sub ?? l10n.chartUnknownValue,
+      states.sub ?? l10n.chartUnknownValue,
     );
-    final onSelected = this.onSelected;
+    final onSelected = states.type == null ? null : this.onSelected;
     return Padding(
       padding: const EdgeInsetsDirectional.only(start: 20),
       child: onSelected == null

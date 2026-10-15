@@ -117,8 +117,10 @@ class _ServicesPanelState extends State<ServicesPanel> {
 
   void _onUnits() => setState(() {});
 
+  /// Opens [unit]'s page, unless its name ends in no unit type: a text
+  /// row the host misread names no unit whose journal it could read.
   void _openUnit(SystemdUnit unit) {
-    if (_open?.name == unit.unit) return;
+    if (_open?.name == unit.unit || unitStatesOf(unit).type == null) return;
     setState(() => _open = (name: unit.unit, key: GlobalKey()));
   }
 
