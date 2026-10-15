@@ -1902,6 +1902,12 @@ final class ProcsResult extends SampleResult {
   /// How many processes the host counted; above 500 it sends only some of
   /// them (D48), so PRC-01 says "showing N of M". Null when the host did
   /// not report it.
+  ///
+  /// [processes] can hold more: with [ProcsSelection.all], a `ps` fallback
+  /// adds the processes it lists that the count missed, such as `ps`
+  /// itself and those started after the count. The host left processes
+  /// out when [selection] is not [ProcsSelection.all] or this count
+  /// exceeds the rows, never merely because the two differ.
   final int? totalProcesses;
 
   /// How the host chose [processes] (D48); null when it did not report it.

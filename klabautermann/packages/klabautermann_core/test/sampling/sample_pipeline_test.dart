@@ -551,6 +551,32 @@ void main() {
     expect(full.selection, ProcsSelection.all);
   });
 
+  test('a full list from a ps fallback can hold more rows than the host '
+      'counted (D48)', () {
+    // `ps` runs after the count, so it also lists itself; only the
+    // selection says whether the host left processes out.
+    final p = _sampling(streams: {SampleStream.procs});
+    final procs = _result<ProcsResult>(
+      p.addTick(
+        {SampleStream.procs},
+        reply(1, 1000, [
+          ok(
+            'procs',
+            '== meta ==\ntotal=1\nselection=all\n'
+                '== rows ==\n1 S 0 100 0 500 0 2048 init\n'
+                '== cmdline ==\n== ps ==\nPID PPID USER STAT RSS COMMAND\n'
+                '1 0 root S 2048 /sbin/init\n'
+                '9 1 root R 900 ps -eo pid,ppid,user,stat,rss,args',
+          ),
+        ]),
+        _at(0),
+      ),
+    );
+    expect(procs.processes.map((r) => r.pid), [1, 9]);
+    expect(procs.totalProcesses, 1);
+    expect(procs.selection, ProcsSelection.all);
+  });
+
   test('process rows: RSS in bytes; a ps fallback row lists its '
       'whitespace tokens (7.2)', () {
     final rows = procsResult(
