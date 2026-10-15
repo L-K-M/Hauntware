@@ -520,7 +520,7 @@ void main() {
     test('closes its link and reports nothing', () async {
       final link = await linked();
       gone.add('s1');
-      supervisor.forget('s1');
+      supervisor.forget(['s1']);
       link.become(const SshLinkClosed(SshLinkClosedReason.closedByOwner));
       await clock.elapse(const Duration(minutes: 5));
 
@@ -538,9 +538,7 @@ void main() {
       calls.last.fail(LinkFailureKind.unreachable);
       await clock.elapse(Duration.zero);
       gone.addAll(['s1', 's2']);
-      supervisor
-        ..forget('s1')
-        ..forget('s2');
+      supervisor.forget(['s1', 's2']);
       final late = call.succeed();
       await clock.elapse(const Duration(minutes: 5));
 
@@ -562,13 +560,13 @@ void main() {
         LinkConnectBlocked(LinkBlockedReason.hostKeyChanged, Exception('key')),
       );
       await clock.elapse(Duration.zero);
-      supervisor.forget('s1');
+      supervisor.forget(['s1']);
       supervisor.connect('s1', purpose: _interactive);
       expect(calls, hasLength(2), reason: 'no longer blocked');
 
       calls.last.succeed(keyboardInteractive: true);
       await clock.elapse(Duration.zero);
-      supervisor.forget('s1');
+      supervisor.forget(['s1']);
       supervisor.connect('s1', purpose: _background);
       await clock.elapse(kConnectJitter);
       expect(calls, hasLength(3), reason: 'dialed unattended again');
@@ -578,7 +576,7 @@ void main() {
       await clock.elapse(const Duration(seconds: 1));
       calls.last.fail(LinkFailureKind.unreachable);
       await clock.elapse(Duration.zero);
-      supervisor.forget('s1');
+      supervisor.forget(['s1']);
       events.clear();
       supervisor.connect('s1', purpose: _interactive);
       calls.last.fail(LinkFailureKind.unreachable);
@@ -595,7 +593,7 @@ void main() {
         'attempt until it returns', () async {
       supervisor.connect('s1', purpose: _interactive);
       final first = calls.single..onDialing!();
-      supervisor.forget('s1');
+      supervisor.forget(['s1']);
       supervisor.connect('s1', purpose: _interactive);
       await clock.elapse(Duration.zero);
       expect(calls, hasLength(1));
@@ -608,8 +606,26 @@ void main() {
       expect(statuses(), [const LinkConnecting(), const LinkConnecting()]);
     });
 
+    test('several go together: a slot one frees does not dial another\'s '
+        'queued attempt', () async {
+      final servers = [
+        for (var i = 1; i <= kMaxConnectsInFlight + 1; i++) 's$i',
+      ];
+      for (final serverId in servers) {
+        supervisor.connect(serverId, purpose: _interactive);
+      }
+      expect(calls, hasLength(kMaxConnectsInFlight));
+      final queued = servers.last;
+      gone.addAll(['s1', queued]);
+      supervisor.forget(['s1', queued]);
+      await clock.elapse(const Duration(minutes: 5));
+
+      expect(calls, hasLength(kMaxConnectsInFlight));
+      expect(statuses(queued), [const LinkConnecting()]);
+    });
+
     test('a server it does not hold is ignored', () {
-      supervisor.forget('s1');
+      supervisor.forget(['s1']);
       expect(events, isEmpty);
     });
   });

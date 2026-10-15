@@ -134,9 +134,7 @@ void engineMain(
     final before = fleetIds;
     fleetIds = {for (final entry in fleet.entries) entry.serverId};
     sampling.fleet = fleetIds;
-    for (final serverId in before.difference(fleetIds)) {
-      links?.forget(serverId);
-    }
+    links?.forget(before.difference(fleetIds));
   }
 
   Future<void> handle(Object? message) async {

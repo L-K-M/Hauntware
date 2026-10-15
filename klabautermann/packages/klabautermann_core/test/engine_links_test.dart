@@ -5,6 +5,8 @@ import 'dart:isolate';
 import 'package:klabautermann_core/klabautermann_core.dart';
 import 'package:klabautermann_core/src/engine/engine_isolate.dart';
 import 'package:klabautermann_core/src/links/link_connector.dart';
+import 'package:klabautermann_core/src/links/link_supervisor.dart'
+    show kMaxConnectsInFlight;
 import 'package:seance_core/seance_core.dart'
     show
         HostKey,
@@ -298,6 +300,52 @@ void main() {
       expect(await engine.next(), _authenticating);
       expect(await engine.next(), _ready);
       expect(dials, hasLength(2));
+    });
+
+    test('several leaving together report nothing, one whose attempt '
+        'waits for a slot included', () async {
+      // Each dial hangs before it resolves its jump route, so its attempt
+      // holds a slot that giving it up frees.
+      final engine = await _Engine.start(
+        support.path,
+        linksEnabled: true,
+        dial:
+            ({
+              required config,
+              required credentials,
+              required tofu,
+              required onHostKey,
+              onKeyboardInteractive,
+              resolveJumpHost,
+            }) => Completer<SshLink>().future,
+      );
+      final hosts = [
+        for (var i = 1; i <= kMaxConnectsInFlight + 1; i++) 'ssh-config:s$i',
+      ];
+      await engine.import(
+        [
+          _bastionConfig,
+          for (final id in hosts)
+            'Host ${id.split(':').last}\n  HostName 192.0.2.10\n  User me\n'
+                '  ProxyJump bastion\n',
+        ].join(),
+      );
+      for (final id in hosts) {
+        engine.send(Connect(id));
+        expect(
+          await engine.next(),
+          _state(const LinkConnecting(), serverId: id),
+        );
+      }
+
+      engine
+        ..send(const ImportSshConfig(_otherConfig))
+        // Answered after the import: nothing came for the servers that
+        // left.
+        ..send(const Connect('ssh-config:gone'));
+      expect(await engine.next(), isA<CatalogReplaced>());
+      expect(await engine.next(), isA<SshConfigImported>());
+      expect(await engine.rejected(), 'Connect');
     });
 
     test('withdraws the prompt its attempt waits on', () async {

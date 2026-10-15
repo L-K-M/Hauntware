@@ -169,28 +169,33 @@ final class LinkSupervisor {
     _pump();
   }
 
-  /// Forgets [serverId], which left the fleet (03 §5.1): gives up its
-  /// attempt and backoff and closes its link as [disconnect] does, but
-  /// reports nothing, since the app drops a server's status with its
-  /// entry, and keeps nothing learned about it (a block, a
+  /// Forgets [serverIds], which left the fleet (03 §5.1): gives up their
+  /// attempts and backoffs and closes their links as [disconnect] does,
+  /// but reports nothing, since the app drops a server's status with its
+  /// entry, and keeps nothing learned about them (a block, a
   /// keyboard-interactive last connect, the failure count), so a server
   /// that comes back starts over. A given-up dial still on its way keeps
   /// the server's record until it returns, so the server's next attempt
   /// waits for it.
-  void forget(String serverId) {
-    final server = _servers[serverId];
-    if (server == null) return;
+  ///
+  /// All of them go before a slot they free starts a queued attempt, so
+  /// no queued attempt of one of them dials and reports a close.
+  void forget(Iterable<String> serverIds) {
+    for (final serverId in serverIds) {
+      final server = _servers[serverId];
+      if (server == null) continue;
 
-    _tearDown(server);
-    if (server.dialPending) {
-      server
-        ..status = const LinkIdle()
-        ..wanted = false
-        ..failures = 0
-        ..hold = _Hold.none
-        ..keyboardInteractive = false;
-    } else {
-      _servers.remove(serverId);
+      _tearDown(server);
+      if (server.dialPending) {
+        server
+          ..status = const LinkIdle()
+          ..wanted = false
+          ..failures = 0
+          ..hold = _Hold.none
+          ..keyboardInteractive = false;
+      } else {
+        _servers.remove(serverId);
+      }
     }
     _pump();
   }
