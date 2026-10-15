@@ -154,8 +154,8 @@ void main() {
     expect(
       find.text(
         'Imported 1 server from ~/.ssh/config. 2 hosts were skipped '
-        'because their port is unsupported or their name repeats an earlier '
-        'host.',
+        'because of settings Klabautermann cannot follow as ssh would, '
+        'such as a ProxyCommand, Include or Match block.',
       ),
       findsOneWidget,
     );
@@ -193,8 +193,8 @@ void main() {
     expect(
       find.text(
         'No hosts were imported from ~/.ssh/config. 2 hosts were skipped '
-        'because their port is unsupported or their name repeats an earlier '
-        'host.',
+        'because of settings Klabautermann cannot follow as ssh would, '
+        'such as a ProxyCommand, Include or Match block.',
       ),
       findsOneWidget,
     );
