@@ -416,7 +416,7 @@
   },
   "systemDisksShowPseudo": "Show pseudo filesystems ({count})",
   "@systemDisksShowPseudo": {
-    "description": "Filter chip in the Disks section that also lists in-memory and image filesystems such as tmpfs, overlay and squashfs, hidden by default; count is how many there are.",
+    "description": "Checkbox in the Disks section that also lists in-memory and image filesystems such as tmpfs, overlay and squashfs, hidden by default; count is how many there are.",
     "placeholders": {
       "count": {
         "type": "int",

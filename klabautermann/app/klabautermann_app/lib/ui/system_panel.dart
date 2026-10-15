@@ -663,8 +663,8 @@ class _Notice extends StatelessWidget {
 /// The wide table's use cell: df's share as a bar and in figures. The bar
 /// spans the used plus the available space, the base df computes its
 /// share on (reserved blocks count in neither), so bar and figure agree
-/// up to df's rounding; without both it spans the size. The table reads the figure to screen
-/// readers, so the bar's own summary stays out.
+/// up to df's rounding; without both it spans the size. The table reads
+/// the figure to screen readers, so the bar's own summary stays out.
 class _UseCell extends StatelessWidget {
   const _UseCell({required this.mount, required this.percent});
 

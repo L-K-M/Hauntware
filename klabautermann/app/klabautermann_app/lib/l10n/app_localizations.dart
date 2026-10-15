@@ -796,7 +796,7 @@ abstract class AppLocalizations {
   /// **'This server has no timeout command, so a network mount that stops answering can stall disk readings.'**
   String get systemDisksNoTimeout;
 
-  /// Filter chip in the Disks section that also lists in-memory and image filesystems such as tmpfs, overlay and squashfs, hidden by default; count is how many there are.
+  /// Checkbox in the Disks section that also lists in-memory and image filesystems such as tmpfs, overlay and squashfs, hidden by default; count is how many there are.
   ///
   /// In en, this message translates to:
   /// **'Show pseudo filesystems ({count})'**
