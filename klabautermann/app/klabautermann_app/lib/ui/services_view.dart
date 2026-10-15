@@ -1,6 +1,7 @@
 import 'package:klabautermann_core/klabautermann_core.dart';
 
 import '../controllers/log_reads.dart';
+import '../controllers/log_streams.dart';
 import '../l10n/app_localizations.dart';
 
 /// How many recent journal records a unit's page reads (SVC-04, 03 §7.5:
@@ -137,7 +138,9 @@ String? unitLogsNotice(AppLocalizations l10n, LogRead read) {
   final empty = read.records.isEmpty;
   return switch (read.state) {
     LogReadRequested() => l10n.servicesLogsRequested,
-    LogReadRefused() => l10n.servicesLogsRefused,
+    LogReadRefused(rejection: LogRejection.refused) => l10n.servicesLogsRefused,
+    LogReadRefused(rejection: LogRejection.engineStopped) =>
+      l10n.servicesLogsEngineStopped,
     LogReadReported(:final status) => switch (status) {
       LogStreamWaiting(:final reason) => switch (reason) {
         LogStreamWaitReason.link => l10n.servicesLogsWaitingLink,

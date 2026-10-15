@@ -1972,6 +1972,12 @@ abstract class AppLocalizations {
   /// **'Reading unit logs is not available in this version yet.'**
   String get servicesLogsRefused;
 
+  /// The app's engine, which starts once per launch, stopped before answering the unit-log read; no log lines are shown until the app restarts.
+  ///
+  /// In en, this message translates to:
+  /// **'The app\'s engine stopped. Restart the app to read unit logs.'**
+  String get servicesLogsEngineStopped;
+
   /// The app refused to read logs for a unit name that fails its validation.
   ///
   /// In en, this message translates to:

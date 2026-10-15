@@ -181,8 +181,9 @@ class LogsPanelController extends ChangeNotifier implements LogStreamListener {
     notifyListeners();
   }
 
+  // The status words both reasons alike: the engine did not open the log.
   @override
-  void onLogRejected() {
+  void onLogRejected(LogRejection rejection) {
     _stream = null;
     _opening = false;
     _rejected = true;

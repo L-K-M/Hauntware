@@ -2521,7 +2521,8 @@ no longer holds that value.
   one owner of log streams, which the Logs panel shares and which gives
   each rejection of `OpenLogStream` to the oldest open without an answer
   (10.1). Until the service is wired, the page says unit logs are not
-  available in this version.
+  available in this version; a read the engine can no longer answer,
+  because it stopped, says so and asks for a restart of the app.
 
 ### 7.6 Logs (LOG)
 

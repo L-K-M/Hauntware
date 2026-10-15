@@ -4,6 +4,15 @@ import 'dart:collection';
 import 'package:flutter/foundation.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 
+/// Why [LogStreamListener.onLogRejected] refused a stream.
+enum LogRejection {
+  /// The engine refused the open outright with a [RequestRejected].
+  refused,
+
+  /// The engine has stopped and will answer nothing.
+  engineStopped,
+}
+
 /// What a [LogStreams] stream tells its owner, in engine order. Nothing
 /// arrives after [LogStreamHandle.close], after a [LogStreamEnded] status,
 /// or after [onLogRejected].
@@ -12,9 +21,8 @@ abstract interface class LogStreamListener {
 
   void onLogStatus(LogStreamStatus status);
 
-  /// The engine refused the open outright ([RequestRejected]), or has
-  /// stopped and will answer nothing.
-  void onLogRejected();
+  /// No answer for the stream follows, for [rejection]'s reason.
+  void onLogRejected(LogRejection rejection);
 }
 
 /// One stream [LogStreams.open] opened.
@@ -81,7 +89,9 @@ final class LogStreams {
     if (_send(OpenLogStream(streamId: id, spec: spec))) {
       _unanswered.add(id);
     } else {
-      scheduleMicrotask(() => _listeners.remove(id)?.onLogRejected());
+      scheduleMicrotask(
+        () => _listeners.remove(id)?.onLogRejected(LogRejection.engineStopped),
+      );
     }
     return LogStreamHandle._(this, id);
   }
@@ -116,7 +126,9 @@ final class LogStreams {
         listener?.onLogStatus(status);
       case RequestRejected(:final requestName)
           when requestName == '$OpenLogStream' && _unanswered.isNotEmpty:
-        _listeners.remove(_unanswered.removeFirst())?.onLogRejected();
+        _listeners
+            .remove(_unanswered.removeFirst())
+            ?.onLogRejected(LogRejection.refused);
       case HostProfileChanged(:final serverId, :final profile):
         if (_fleetIds case final ids? when !ids.contains(serverId)) return;
         _limited(serverId).value = evaluateAccess(profile).journalLimited;
@@ -134,14 +146,14 @@ final class LogStreams {
   }
 
   /// A stopped engine answers nothing more, so every stream still open
-  /// is refused, as `FleetController` ends a pending import.
+  /// is refused, as `FleetController` ends a pending import. Each goes
+  /// as it is refused, so one a refused surface closes meanwhile hears
+  /// nothing more.
   void _onEngineDone() {
     _stopped = true;
     _unanswered.clear();
-    final listeners = [..._listeners.values];
-    _listeners.clear();
-    for (final listener in listeners) {
-      listener.onLogRejected();
+    for (final id in [..._listeners.keys]) {
+      _listeners.remove(id)?.onLogRejected(LogRejection.engineStopped);
     }
   }
 

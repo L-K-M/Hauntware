@@ -192,6 +192,30 @@ void main() {
       expect(unitLogsNotice(l10n, read), l10n.servicesLogsRefused);
     });
 
+    // Refused too, but not for this version's lack of a log service.
+    test('words a read the engine stopped under', () async {
+      await engine.close();
+      await pumpEventQueue();
+
+      expect(unitLogsNotice(l10n, read), l10n.servicesLogsEngineStopped);
+    });
+
+    test('words a read opened after the engine stopped', () async {
+      await engine.close();
+      final late = LogRead(
+        streams,
+        LogStreamSpec(
+          serverId: 'srv-1',
+          source: const JournalLogSource(unit: 'ssh.service'),
+          window: kUnitLogWindow,
+          follow: false,
+        ),
+      );
+      await pumpEventQueue();
+
+      expect(unitLogsNotice(l10n, late), l10n.servicesLogsEngineStopped);
+    });
+
     test('says nothing over lines', () async {
       await accept(
         LogBatch(
