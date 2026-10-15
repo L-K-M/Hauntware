@@ -2,10 +2,10 @@
   "result": {
     "jobs": [
       {
-        "source": "/etc/crontab",
+        "source": "crontab",
         "schedule": "*/15 * * * *",
-        "command": "/etc/periodic/15min",
-        "user": "run-parts",
+        "command": "run-parts /etc/periodic/15min",
+        "user": null,
         "cronTz": null,
         "expression": {
           "minutes": [
@@ -103,10 +103,10 @@
         "raw": "*/15\t*\t*\t*\t*\trun-parts /etc/periodic/15min"
       },
       {
-        "source": "/etc/crontab",
+        "source": "crontab",
         "schedule": "0 * * * *",
-        "command": "/etc/periodic/hourly",
-        "user": "run-parts",
+        "command": "run-parts /etc/periodic/hourly",
+        "user": null,
         "cronTz": null,
         "expression": {
           "minutes": [
@@ -201,10 +201,10 @@
         "raw": "0\t*\t*\t*\t*\trun-parts /etc/periodic/hourly"
       },
       {
-        "source": "/etc/crontab",
+        "source": "crontab",
         "schedule": "0 2 * * *",
-        "command": "/etc/periodic/daily",
-        "user": "run-parts",
+        "command": "run-parts /etc/periodic/daily",
+        "user": null,
         "cronTz": null,
         "expression": {
           "minutes": [
@@ -276,10 +276,10 @@
         "raw": "0\t2\t*\t*\t*\trun-parts /etc/periodic/daily"
       },
       {
-        "source": "/etc/crontab",
+        "source": "crontab",
         "schedule": "0 3 * * 6",
-        "command": "/etc/periodic/weekly",
-        "user": "run-parts",
+        "command": "run-parts /etc/periodic/weekly",
+        "user": null,
         "cronTz": null,
         "expression": {
           "minutes": [
@@ -345,10 +345,10 @@
         "raw": "0\t3\t*\t*\t6\trun-parts /etc/periodic/weekly"
       },
       {
-        "source": "/etc/crontab",
+        "source": "crontab",
         "schedule": "0 5 1 * *",
-        "command": "/etc/periodic/monthly",
-        "user": "run-parts",
+        "command": "run-parts /etc/periodic/monthly",
+        "user": null,
         "cronTz": null,
         "expression": {
           "minutes": [
@@ -390,25 +390,8 @@
         "raw": "0\t5\t1\t*\t*\trun-parts /etc/periodic/monthly"
       }
     ],
-    "dirEntries": [
-      {
-        "period": "hourly",
-        "name": "0anacron"
-      },
-      {
-        "period": "daily",
-        "name": "0anacron"
-      },
-      {
-        "period": "weekly",
-        "name": "0anacron"
-      },
-      {
-        "period": "monthly",
-        "name": "0anacron"
-      }
-    ],
-    "ownCrontabPresent": false,
+    "dirEntries": [],
+    "ownCrontabPresent": true,
     "timeoutAbsent": false
   },
   "warnings": []

@@ -5,10 +5,10 @@
   "jobs": [
     {
       "kind": "cron",
-      "id": "cron|/etc/crontab|0",
-      "source": "/etc/crontab",
-      "user": "run-parts",
-      "command": "/etc/periodic/15min",
+      "id": "cron|crontab|0",
+      "source": "crontab",
+      "user": null,
+      "command": "run-parts /etc/periodic/15min",
       "raw": "*/15\t*\t*\t*\t*\trun-parts /etc/periodic/15min",
       "schedule": {
         "type": "cron",
@@ -60,10 +60,10 @@
     },
     {
       "kind": "cron",
-      "id": "cron|/etc/crontab|1",
-      "source": "/etc/crontab",
-      "user": "run-parts",
-      "command": "/etc/periodic/hourly",
+      "id": "cron|crontab|1",
+      "source": "crontab",
+      "user": null,
+      "command": "run-parts /etc/periodic/hourly",
       "raw": "0\t*\t*\t*\t*\trun-parts /etc/periodic/hourly",
       "schedule": {
         "type": "cron",
@@ -115,10 +115,10 @@
     },
     {
       "kind": "cron",
-      "id": "cron|/etc/crontab|2",
-      "source": "/etc/crontab",
-      "user": "run-parts",
-      "command": "/etc/periodic/daily",
+      "id": "cron|crontab|2",
+      "source": "crontab",
+      "user": null,
+      "command": "run-parts /etc/periodic/daily",
       "raw": "0\t2\t*\t*\t*\trun-parts /etc/periodic/daily",
       "schedule": {
         "type": "cron",
@@ -170,10 +170,10 @@
     },
     {
       "kind": "cron",
-      "id": "cron|/etc/crontab|3",
-      "source": "/etc/crontab",
-      "user": "run-parts",
-      "command": "/etc/periodic/weekly",
+      "id": "cron|crontab|3",
+      "source": "crontab",
+      "user": null,
+      "command": "run-parts /etc/periodic/weekly",
       "raw": "0\t3\t*\t*\t6\trun-parts /etc/periodic/weekly",
       "schedule": {
         "type": "cron",
@@ -225,10 +225,10 @@
     },
     {
       "kind": "cron",
-      "id": "cron|/etc/crontab|4",
-      "source": "/etc/crontab",
-      "user": "run-parts",
-      "command": "/etc/periodic/monthly",
+      "id": "cron|crontab|4",
+      "source": "crontab",
+      "user": null,
+      "command": "run-parts /etc/periodic/monthly",
       "raw": "0\t5\t1\t*\t*\trun-parts /etc/periodic/monthly",
       "schedule": {
         "type": "cron",
@@ -277,50 +277,6 @@
         }
       ],
       "runsUnknown": null
-    },
-    {
-      "kind": "periodic",
-      "id": "periodic|hourly|0anacron",
-      "period": "hourly",
-      "name": "0anacron",
-      "directory": "/etc/cron.hourly",
-      "driverIds": [],
-      "schedules": [],
-      "nextRuns": [],
-      "runsUnknown": "noDriver"
-    },
-    {
-      "kind": "periodic",
-      "id": "periodic|daily|0anacron",
-      "period": "daily",
-      "name": "0anacron",
-      "directory": "/etc/cron.daily",
-      "driverIds": [],
-      "schedules": [],
-      "nextRuns": [],
-      "runsUnknown": "anacron"
-    },
-    {
-      "kind": "periodic",
-      "id": "periodic|weekly|0anacron",
-      "period": "weekly",
-      "name": "0anacron",
-      "directory": "/etc/cron.weekly",
-      "driverIds": [],
-      "schedules": [],
-      "nextRuns": [],
-      "runsUnknown": "anacron"
-    },
-    {
-      "kind": "periodic",
-      "id": "periodic|monthly|0anacron",
-      "period": "monthly",
-      "name": "0anacron",
-      "directory": "/etc/cron.monthly",
-      "driverIds": [],
-      "schedules": [],
-      "nextRuns": [],
-      "runsUnknown": "anacron"
     }
   ]
 }

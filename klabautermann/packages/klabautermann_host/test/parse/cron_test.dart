@@ -36,6 +36,31 @@ void main() {
     expect(r.value.jobs.last.expression!.hours, {0});
   });
 
+  test('a BusyBox crontab -l has no user column', () {
+    // BusyBox crond reads /etc/crontabs/<user> and has no /etc/crontab;
+    // Alpine's default crontab separates fields with tabs.
+    final raw = [
+      '== crontab_meta ==',
+      'rc=0',
+      '== crontab ==',
+      '# min\thour\tday\tmonth\tweekday\tcommand',
+      '*/15\t*\t*\t*\t*\trun-parts /etc/periodic/15min',
+      '0\t3\t*\t*\t6\trun-parts /etc/periodic/weekly',
+      '== etc_crontab ==',
+      '== cron_d ==',
+      '== cron_dirs ==',
+    ].join('\n');
+
+    final r = parseCron(raw, _ctx);
+    expect(r.warnings, isEmpty);
+    expect(r.value.jobs.map((j) => (j.source, j.user, j.command)), [
+      ('crontab', null, 'run-parts /etc/periodic/15min'),
+      ('crontab', null, 'run-parts /etc/periodic/weekly'),
+    ]);
+    expect(r.value.jobs.first.expression!.minutes, {0, 15, 30, 45});
+    expect(r.value.jobs.last.expression!.weekDays, {6});
+  });
+
   test('/etc/crontab carries the user column', () {
     final raw = [
       '== crontab_meta ==',
