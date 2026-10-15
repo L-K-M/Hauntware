@@ -389,9 +389,10 @@ final class PressureLine {
   };
 }
 
-/// One /proc/pressure file: the core collector sends cpu's `some` only,
-/// io's and memory's `some` and `full` (03 §7.1 "PSI (absence is
-/// normal)").
+/// One /proc/pressure file: its `some` and `full` lines (03 §7.1 "PSI
+/// (absence is normal)"). Kernels before 5.13 have no `full` line for
+/// cpu, and later ones report zero for it at the system level; an lxcfs
+/// `pressure/cpu` carries the container's own `full` (D48, D50).
 @immutable
 final class Pressure {
   const Pressure({this.some, this.full});

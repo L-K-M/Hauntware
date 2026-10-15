@@ -614,24 +614,26 @@ Proposals awaiting the owner close the section; they are not decisions.
   head accounted it. A `netdev` or `diskstats` row whose counters are all
   zero (an unused NIC, idle `nbd` devices) is left out; its first non-zero
   reading starts its series. PSI keeps `avg10`, `avg60` and `avg300`
-  (7.1), without the cumulative `total` and without the cpu file's `full`
-  line, which the kernel sets to zero at the system level [V: Linux
-  `Documentation/accounting/psi.rst`]. Where
-  `/proc/spl/kstat/zfs/arcstats` exists, `core` adds the ARC's `c_min` and
-  `size` [V: OpenZFS `module/zfs/arc.c`], for MEM-01's "ZFS ARC counted as
-  used" and MEM-05's reclaimable part above `c_min` (v1.x); a host without
-  the file sends no block, which reads as not present, never as zero.
-  Inside a container the file is the host's ARC [U], which an lxcfs
-  `meminfo` does not contain, so the engine applies MEM-01's note outside
-  containers only. On synthetic `/proc` trees [U] a `core` reply is
-  1,111 B at 4 CPUs, 1,841 B at 32 and 2,675 B at 64, 26 B for each
-  further CPU, and an `overview` reply 507 B, so 2.5 KB holds to about 56
-  CPUs and 11.4 allows 30 B for each CPU beyond 32; real hosts remain for
-  S2. *Rejected:* filtering only in the engine (the bytes still cross the
-  link on every tick, against 11.4's 1 KB/s for 10 hosts); name lists of
-  virtual interfaces and partitions (never complete); leaving out every
-  interface with a master (that drops bond slaves and bridge ports, the
-  only devices under a bond or a bridge).
+  (7.1), without the cumulative `total`. The cpu file's `full` line stays:
+  the kernel reports zero for it at the system level [V: Linux
+  `Documentation/accounting/psi.rst`], but an lxcfs `pressure/cpu` (D50)
+  is the container's cgroup `cpu.pressure`, copied verbatim, where `full`
+  is defined [V: lxcfs `src/proc_fuse.c` (`proc_pressure_read`) at
+  v7.0.0]. Where `/proc/spl/kstat/zfs/arcstats` exists, `core` adds the
+  ARC's `c_min` and `size` [V: OpenZFS `module/zfs/arc.c`], for MEM-01's
+  "ZFS ARC counted as used" and MEM-05's reclaimable part above `c_min`
+  (v1.x); a host without the file sends no block, which reads as not
+  present, never as zero. Inside a container the file is the host's ARC
+  [U], which an lxcfs `meminfo` does not contain, so the engine applies
+  MEM-01's note outside containers only. On synthetic `/proc` trees [U] a
+  `core` reply is 1,111 B at 4 CPUs, 1,841 B at 32 and 2,675 B at 64, 26 B
+  for each further CPU, and an `overview` reply 507 B, so 2.5 KB holds to
+  about 56 CPUs and 11.4 allows 30 B for each CPU beyond 32; real hosts
+  remain for S2. *Rejected:* filtering only in the engine (the bytes still
+  cross the link on every tick, against 11.4's 1 KB/s for 10 hosts); name
+  lists of virtual interfaces and partitions (never complete); leaving out
+  every interface with a master (that drops bond slaves and bridge ports,
+  the only devices under a bond or a bridge).
 - **D49. Collector locale.** Collectors that render text for people
   (A11Y-08) run their command under `LC_ALL=C.UTF-8`, or under the
   sampler's `LC_ALL=C` when the host lacks `C.UTF-8`. The program decides

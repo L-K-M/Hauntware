@@ -78,7 +78,11 @@
         "avg60": 0.98,
         "avg300": 0.8
       },
-      "full": null
+      "full": {
+        "avg10": 0.0,
+        "avg60": 0.0,
+        "avg300": 0.0
+      }
     },
     "ioPressure": {
       "some": {

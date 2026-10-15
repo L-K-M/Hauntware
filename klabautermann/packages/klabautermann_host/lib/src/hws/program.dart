@@ -364,10 +364,8 @@ c_overview() {
 /// idle plus iowait, busy the other fields but guest, which user and
 /// nice already include), or their first eight counters from a shell
 /// with 32-bit arithmetic, `btime`, the diskstats rows, PSI averages
-/// without the cumulative `total` and without cpu's `full` line, which
-/// the kernel sets to zero at the system level
-/// (Documentation/accounting/psi.rst), /proc/uptime and, where ZFS is
-/// loaded, the ARC's `c_min` and `size`.
+/// without the cumulative `total`, /proc/uptime and, where ZFS is loaded,
+/// the ARC's `c_min` and `size`.
 const _kCoreFragment = r"""
 c_core() {
   st=ok
@@ -397,9 +395,8 @@ c_core() {
     [ -r "/proc/pressure/$p" ] || continue
     o="$o$NL== pressure_$p =="
     while read -r _k _a _b _c _x; do
-      case $p:$_k in
-        cpu:full) ;;
-        *:some | *:full)
+      case $_k in
+        some | full)
           o="$o$NL$_k $_a $_b $_c" ;;
       esac
     done <"/proc/pressure/$p"

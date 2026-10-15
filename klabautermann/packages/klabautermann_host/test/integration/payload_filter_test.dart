@@ -336,7 +336,8 @@ void main() {
           expect(core.diskstats.first.sectorsWritten, 87654321 * 61);
 
           expect(core.cpuPressure!.some!.avg10, 12.34);
-          expect(core.cpuPressure!.full, isNull);
+          // Under lxcfs, cpu's full line is the container's real figure.
+          expect(core.cpuPressure!.full!.avg10, 1.23);
           expect(core.ioPressure!.full!.avg300, 0.76);
           expect(utf8.decode(r.section.payload), isNot(contains('total=')));
           expect(core.zfsArc!.sizeBytes, 34012345678);
