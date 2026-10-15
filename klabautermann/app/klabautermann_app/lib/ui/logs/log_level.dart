@@ -1,3 +1,6 @@
+import 'package:klabautermann_core/klabautermann_core.dart'
+    show JournalFields, LogLine;
+
 /// How the log viewer marks a line's severity (03 §10.8 level colouring):
 /// colour on the line's text plus an icon with a spoken name in its gutter,
 /// so colour is never the only cue (A11Y-01). A line with no level, or
@@ -17,6 +20,14 @@ enum LogLevel {
     4 => warning,
     5 || 6 => info,
     7 => debug,
+    _ => null,
+  };
+
+  /// The level of a journal line from its `PRIORITY`, or null for a plain
+  /// line or a priority out of range: a `LogView.levelOf` for journal
+  /// rows.
+  static LogLevel? ofJournalLine(LogLine line) => switch (line.journal) {
+    JournalFields(:final priority?) => fromSyslogPriority(priority),
     _ => null,
   };
 }

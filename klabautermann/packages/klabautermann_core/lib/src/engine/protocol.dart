@@ -330,10 +330,17 @@ final class SshConfigImported extends EngineEvent {
   /// Hosts the import added to the fleet; zero when the config names none.
   final int importedCount;
 
-  /// Hosts the import left out: a `Port` the importer refuses (one ssh
-  /// rejects, or a service name other than `ssh`, `http` or `https`), or an
-  /// alias an earlier block already took. Wildcard-only blocks such as
-  /// `Host *` are defaults rather than hosts and do not count.
+  /// Hosts the import left out because the engine cannot dial them as ssh
+  /// would (03 §10.1): a route through a `ProxyCommand`; a `Match` or
+  /// `Include` that could set a value the engine cannot know, or a
+  /// second pass over the config (`CanonicalizeHostname`, or a `Match
+  /// final` or `Include` while a value is still unset); a `HostName`
+  /// token other than `%h` or `%%`, or an `IdentityFile` holding a `%`
+  /// token or `${VAR}`; a `ProxyJump` the engine cannot follow as ssh
+  /// would; a line ssh rejects, such as a `Port` the import refuses (one
+  /// ssh rejects, or a service name other than `ssh`, `http` or `https`);
+  /// or a jump hop left out for any of these. Wildcard-only blocks such
+  /// as `Host *` name no host and do not count.
   final int skippedCount;
 
   /// Whether `ssh_config_imports.json` now holds this import. False when
@@ -699,8 +706,8 @@ final class FleetEntry {
   /// The SSH port, [kSshDefaultPort] unless the source names another.
   final int port;
 
-  /// The login name; null leaves it to SSH, which uses the local account
-  /// name when the config names no `User`.
+  /// The login name the source names; null when it names none, and the
+  /// engine then signs in as the local account (`USER` or `USERNAME`).
   final String? user;
 
   /// The group the rail files the entry under, or null for none. An
@@ -711,7 +718,9 @@ final class FleetEntry {
 
   /// The jump hosts the engine connects through, first hop first, each as
   /// its source names it (an ssh_config alias, or `[user@]host[:port]`);
-  /// null for a direct connection. Pass an unmodifiable list.
+  /// null for a direct connection, and for an import whose route is
+  /// unknown: one from an older import store (03 §4.10), which the engine
+  /// marks by sending no [authKind]. Pass an unmodifiable list.
   final List<String>? jumpRoute;
 
   /// How the engine signs in to the server, or null when the source does
@@ -723,9 +732,11 @@ final class FleetEntry {
   /// import (03 §3.2); null when the engine built none.
   final String? searchText;
 
-  /// The server ids of the other entries that share this entry's host-key
-  /// pin locator (`host:port`) behind a different jump route, whose pins
-  /// would collide (03 §4.6); null when none do. Pass an unmodifiable list.
+  /// The server ids of the other entries that pin a host key at one of
+  /// this entry's pin locators (`host:port`: the server's or a jump hop's)
+  /// behind a different jump route, whose pins would collide (03 §4.6);
+  /// null when none do, and for an import whose route is unknown (see
+  /// [jumpRoute]). Pass an unmodifiable list.
   final List<String>? locatorConflict;
 
   // By value: every CatalogReplaced copies its entries across the isolate

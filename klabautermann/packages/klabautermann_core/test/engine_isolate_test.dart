@@ -172,6 +172,10 @@ void main() {
       // and the block that names one keeps its own HostName.
       expect(byLabel['legacy']!.host, 'legacy.example.com');
       expect(byLabel['v6']!.host, '2001:db8::1');
+      // The fields links need: the route, the sign-in and the filter text.
+      expect(byLabel['bastion']!.jumpRoute, ['jump.example']);
+      expect(byLabel['web-1']!.authKind, FleetAuthKind.identityFile);
+      expect(byLabel['web-1']!.searchText, contains('web-1.example.com:2222'));
       expect(await events.moveNext(), isTrue);
       final answer = events.current as SshConfigImported;
       expect(answer.importedCount, sshConfigFixtureEntries.length);
@@ -257,6 +261,33 @@ void main() {
       expect(emptied.entries, isEmpty);
     });
 
+    test('hop records reach the fleet and survive a restart', () async {
+      // a reaches gw.corp through the `*.corp` hop record, on 2222, where
+      // b is behind another hop, so each entry names the other.
+      const config =
+          'Host *.corp\n  Port 2222\n'
+          'Host a\n  HostName 10.0.0.5\n  ProxyJump gw.corp\n'
+          'Host b\n  HostName gw.corp\n  Port 2222\n  ProxyJump other\n';
+      Map<String, List<String>?> conflicts(CatalogReplaced fleet) => {
+        for (final entry in fleet.entries) entry.label: entry.locatorConflict,
+      };
+      const expected = {
+        'a': ['ssh-config:b'],
+        'b': ['ssh-config:a'],
+      };
+
+      final first = await spawnEngine();
+      final (events: firstEvents, fleet: _) = await started(first);
+      first.send(const ImportSshConfig(config));
+      expect(conflicts((await next(firstEvents)) as CatalogReplaced), expected);
+      expect(((await next(firstEvents)) as SshConfigImported).saved, isTrue);
+      await firstEvents.cancel();
+      await first.shutdown();
+
+      final (events: _, :fleet) = await started(await spawnEngine());
+      expect(conflicts(fleet), expected);
+    });
+
     test('a damaged store is reported at start and kept aside', () async {
       const damaged = '{"version": 1, "entries": [{"alias": "web-1"';
       importsFile.writeAsStringSync(damaged);
@@ -282,6 +313,39 @@ void main() {
       final (events: _, fleet: restored) = await started(restarted);
       expect(restored.entries.map((e) => e.label), ['web-1']);
       expect(File(issue.preservedAs!).readAsStringSync(), damaged);
+    });
+
+    test('a schema 1 store lists its hosts with neither route nor sign-in '
+        'until the next import', () async {
+      // What M1 saved for `Host db / HostName 10.0.0.5 / ProxyJump bastion
+      // / IdentityFile ~/.ssh/k`: neither of the last two was kept.
+      importsFile.writeAsStringSync(
+        jsonEncode({
+          'version': 1,
+          'entries': [
+            {'alias': 'db', 'host': '10.0.0.5', 'port': 22},
+          ],
+        }),
+      );
+
+      final client = await spawnEngine();
+
+      expect(client.ready.importStoreIssue, isNull);
+      final (:events, :fleet) = await started(client);
+      final stored = fleet.entries.single;
+      expect((stored.label, stored.host), ('db', '10.0.0.5'));
+      expect(stored.jumpRoute, isNull);
+      expect(stored.authKind, isNull, reason: 'unknown, not the agent');
+
+      client.send(
+        const ImportSshConfig(
+          'Host db\n  HostName 10.0.0.5\n  ProxyJump bastion\n'
+          '  IdentityFile ~/.ssh/k\n',
+        ),
+      );
+      final imported = ((await next(events)) as CatalogReplaced).entries.single;
+      expect(imported.jumpRoute, ['bastion']);
+      expect(imported.authKind, FleetAuthKind.identityFile);
     });
 
     test('an import that cannot be saved shows for this run and says '

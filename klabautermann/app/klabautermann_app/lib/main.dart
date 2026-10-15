@@ -125,6 +125,9 @@ Future<void> main(List<String> args) async {
     engine,
     sshConfig: sshConfigSourceFor(defaultTargetPlatform, Platform.environment),
   );
+  // Spawned once per launch: a restarted engine would be a new client
+  // with new controllers over it, whose seq floors start empty (D44), and
+  // KlabautermannApp remounts its tree when handed them.
   final monitoring = MonitoringController(engine);
   final appearance = appearanceFromSettings(settings);
 

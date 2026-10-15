@@ -47,7 +47,7 @@
       }
     }
   },
-  "sshConfigImportedWithSkips": "{importedCount, plural, =0{No hosts were imported from ~/.ssh/config.} =1{Imported 1 server from ~/.ssh/config.} other{Imported {importedCount} servers from ~/.ssh/config.}} {skippedCount, plural, =1{1 host was skipped because its port is unsupported or its name repeats an earlier host.} other{{skippedCount} hosts were skipped because their port is unsupported or their name repeats an earlier host.}}",
+  "sshConfigImportedWithSkips": "{importedCount, plural, =0{No hosts were imported from ~/.ssh/config.} =1{Imported 1 server from ~/.ssh/config.} other{Imported {importedCount} servers from ~/.ssh/config.}} {skippedCount, plural, =1{1 host was skipped because of settings Klabautermann cannot follow as ssh would, such as a ProxyCommand, Include or Match block.} other{{skippedCount} hosts were skipped because of settings Klabautermann cannot follow as ssh would, such as a ProxyCommand, Include or Match block.}}",
   "@sshConfigImportedWithSkips": {
     "description": "Shown instead of sshConfigImported when the import left hosts out; importedCount (0 or more) is the number of servers it added, skippedCount (1 or more) the number of hosts it left out. One message, so the translation decides how its sentences join.",
     "placeholders": {
@@ -498,5 +498,27 @@
         "format": "decimalPattern"
       }
     }
+  },
+  "logJournalNotSent": "[not sent: over 4,096 bytes]",
+  "@logJournalNotSent": {
+    "description": "Stands in for a journal message or field value the server did not send because it is larger than 4,096 bytes."
+  },
+  "logJournalFieldsLeftOut": "{count, plural, =1{1 more field not kept} other{{count} more fields not kept}}",
+  "@logJournalFieldsLeftOut": {
+    "description": "Last row of a journal entry's expanded fields when the log view kept only some of them; count is how many it left out.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "logJournalShowFields": "Show fields",
+  "@logJournalShowFields": {
+    "description": "Screen-reader hint for activating a journal row: shows all of the entry's journal fields beneath it."
+  },
+  "logJournalHideFields": "Hide fields",
+  "@logJournalHideFields": {
+    "description": "Screen-reader hint for activating a journal row that shows its fields: hides them again."
   }
 }
