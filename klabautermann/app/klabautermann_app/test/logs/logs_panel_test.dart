@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:klabautermann_app/controllers/monitoring_controller.dart';
 import 'package:klabautermann_app/l10n/app_localizations.dart';
+import 'package:klabautermann_app/ui/logs/log_query.dart';
 import 'package:klabautermann_app/ui/logs/log_view.dart';
 import 'package:klabautermann_app/ui/logs/logs_panel.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
@@ -194,6 +195,31 @@ void main() {
     await tester.tap(find.text('File'));
     await tester.pumpAndSettle();
     expect(find.textContaining(_notice), findsNothing);
+  });
+
+  testWidgets('tells the source and case matching by more than colour', (
+    tester,
+  ) async {
+    await _pump(tester);
+    expect(
+      find.descendant(
+        of: find.byType(SegmentedButton<LogSourceKind>),
+        matching: find.byIcon(Icons.check),
+      ),
+      findsOneWidget,
+    );
+
+    final toggle = find.widgetWithIcon(IconButton, Icons.text_fields);
+    Material surface() => tester.widget<Material>(
+      find.descendant(of: toggle, matching: find.byType(Material)).first,
+    );
+    BorderSide edge() => (surface().shape! as OutlinedBorder).side;
+    expect(surface().color, Colors.transparent);
+    expect(edge().style, BorderStyle.solid);
+    await tester.tap(toggle);
+    await tester.pumpAndSettle();
+    expect(surface().color!.a, 1);
+    expect(edge(), BorderSide.none);
   });
 
   testWidgets('applies the journal filters', (tester) async {

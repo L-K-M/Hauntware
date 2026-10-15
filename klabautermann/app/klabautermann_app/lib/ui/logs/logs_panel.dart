@@ -242,7 +242,6 @@ class _LogsPanelState extends State<LogsPanel> {
             container: true,
             label: l10n.logsPanelSource,
             child: SegmentedButton<LogSourceKind>(
-              showSelectedIcon: false,
               segments: [
                 for (final source in LogSourceKind.values)
                   ButtonSegment(
@@ -636,7 +635,9 @@ class _SearchFieldState extends State<_SearchField> {
                 ),
               ),
             ),
-            IconButton(
+            // Outlined when off and filled when on, so the state shows by
+            // more than colour (03 §10.10).
+            IconButton.outlined(
               isSelected: search.caseSensitive,
               icon: const Icon(Icons.text_fields),
               tooltip: l10n.logsPanelSearchCase,
