@@ -655,9 +655,9 @@
   "@logsPanelEmpty": {
     "description": "Shown in place of the log when reading finished without any entry."
   },
-  "logsPanelSearchHint": "Search loaded entries",
-  "@logsPanelSearchHint": {
-    "description": "Hint in the empty log search field; the search covers the entries the panel holds, not the whole log on the server."
+  "logsPanelSearchLabel": "Search loaded entries",
+  "@logsPanelSearchLabel": {
+    "description": "Label of the log search field, also its name for screen readers once it holds text; the search covers the entries the panel holds, not the whole log on the server."
   },
   "logsPanelSearchCase": "Match case",
   "@logsPanelSearchCase": {

@@ -970,11 +970,11 @@ abstract class AppLocalizations {
   /// **'No entries match these filters.'**
   String get logsPanelEmpty;
 
-  /// Hint in the empty log search field; the search covers the entries the panel holds, not the whole log on the server.
+  /// Label of the log search field, also its name for screen readers once it holds text; the search covers the entries the panel holds, not the whole log on the server.
   ///
   /// In en, this message translates to:
   /// **'Search loaded entries'**
-  String get logsPanelSearchHint;
+  String get logsPanelSearchLabel;
 
   /// Tooltip of the toggle that makes the log search tell upper from lower case.
   ///

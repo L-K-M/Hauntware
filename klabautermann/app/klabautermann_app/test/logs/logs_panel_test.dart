@@ -222,6 +222,19 @@ void main() {
     expect(edge(), BorderSide.none);
   });
 
+  testWidgets('names the search field once it holds text', (tester) async {
+    final semantics = tester.ensureSemantics();
+    await _pump(tester);
+    await tester.enterText(find.byType(TextField).last, 'abc');
+    await tester.pumpAndSettle(const Duration(milliseconds: 300));
+
+    final field = tester.getSemantics(
+      find.bySemanticsLabel(RegExp('Search loaded entries')),
+    );
+    expect(field.value, 'abc');
+    semantics.dispose();
+  });
+
   testWidgets('applies the journal filters', (tester) async {
     final panel = await _pump(tester);
     await tester.enterText(

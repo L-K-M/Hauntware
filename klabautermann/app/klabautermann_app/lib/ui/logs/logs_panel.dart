@@ -622,7 +622,9 @@ class _SearchFieldState extends State<_SearchField> {
                   isDense: true,
                   border: const OutlineInputBorder(),
                   prefixIcon: const Icon(Icons.search),
-                  hintText: l10n.logsPanelSearchHint,
+                  // A label, not a hint, so the field keeps its name for
+                  // screen readers once it holds text.
+                  labelText: l10n.logsPanelSearchLabel,
                   suffixText: search.query.isEmpty
                       ? null
                       : switch (search.currentNumber) {

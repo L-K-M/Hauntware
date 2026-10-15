@@ -664,7 +664,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get logsPanelEmpty => 'No entries match these filters.';
 
   @override
-  String get logsPanelSearchHint => 'Search loaded entries';
+  String get logsPanelSearchLabel => 'Search loaded entries';
 
   @override
   String get logsPanelSearchCase => 'Match case';
