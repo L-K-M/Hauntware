@@ -1480,6 +1480,7 @@ class _DocumentShellState extends State<_DocumentShell>
                                     fontFamily: settings.value.fontFamily,
                                     fontSize: _fontSize.toDouble(),
                                   ),
+                                  ligatures: settings.value.ligatures,
                                   controller: tab.editor,
                                   isActive: tab == active,
                                   banner: _diskNotice(tab),

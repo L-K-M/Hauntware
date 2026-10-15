@@ -9,12 +9,14 @@
 // ghost_desktop's link engine owns the handshake, the snapshots and the quit
 // question; what is here is Poltergeist's own.
 import 'package:flutter/services.dart';
+import 'package:planchette_editor/planchette_editor.dart' show EditorLigatures;
 import 'package:poltergeist_core/poltergeist_core.dart';
 
 import '../../theme/app_appearance.dart';
 import '../../theme/theme_palette.dart';
 import '../bookmark_backup_service.dart'
     show BackupSwitchOutcome, RetainedBackupAccount;
+import '../editor_font.dart';
 
 /// On the app's engine only: `open` in, `closed` out.
 const MethodChannel settingsWindowControlChannel = MethodChannel(
@@ -48,6 +50,7 @@ enum SettingsLinkMethod {
   setCheckForUpdates,
   setAppearance,
   setEditorTextSize,
+  setEditorFont,
   setDirectoryGrouping,
   setDoubleClickAction,
   registerEditor,
@@ -83,9 +86,11 @@ enum SettingsLinkKey {
   deleteSeparateOffered,
   directoryGrouping,
   doubleClickAction,
+  editorFont,
   editors,
   editorTextSize,
   encryptionPassphrase,
+  fontFamily,
   gate,
   general,
   hashLength,
@@ -94,6 +99,7 @@ enum SettingsLinkKey {
   keepLocal,
   lastSyncAt,
   lastSyncError,
+  ligatures,
   local,
   locator,
   memory,
@@ -203,6 +209,16 @@ AppAppearance decodeAppearance(Map<String, Object?> json) => AppAppearance(
   mode: ThemeModePreference.values.byName(
     json[SettingsLinkKey.mode.name]! as String,
   ),
+);
+
+Map<String, Object?> encodeEditorFont(EditorFont font) => {
+  SettingsLinkKey.fontFamily.name: font.family,
+  SettingsLinkKey.ligatures.name: font.ligatures.name,
+};
+
+EditorFont decodeEditorFont(Map<String, Object?> json) => EditorFont(
+  family: json[SettingsLinkKey.fontFamily.name]! as String,
+  ligatures: EditorLigatures.named(json[SettingsLinkKey.ligatures.name]),
 );
 
 Map<String, Object?> encodeSyncAccount(SyncAccount account) => {

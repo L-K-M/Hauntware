@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:ghost_fonts/ghost_fonts.dart';
 import 'package:planchette_editor/planchette_editor.dart';
 
 import 'app_settings.dart';
@@ -84,6 +85,21 @@ class _SettingsDialogState extends State<SettingsDialog> {
                 min: AppSettings.minimumFontSize,
                 max: AppSettings.maximumFontSize,
                 onChanged: (size) => _apply(_value.copyWith(fontSize: size)),
+              ),
+              _fontMenu(theme),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Ligatures'),
+                subtitle: const Text(
+                  'Join character pairs such as -> and != into one symbol, '
+                  'in fonts that draw them.',
+                ),
+                value: _value.ligatures == EditorLigatures.on,
+                onChanged: (on) => _apply(
+                  _value.copyWith(
+                    ligatures: on ? EditorLigatures.on : EditorLigatures.off,
+                  ),
+                ),
               ),
               const SizedBox(height: 16),
               _section(theme, 'Indentation for new documents'),
@@ -209,6 +225,63 @@ class _SettingsDialogState extends State<SettingsDialog> {
       ),
     ),
   );
+
+  /// The included fonts, each drawn in its own face, with the editor's
+  /// default marked. A family a hand-edited settings file names leads the
+  /// list, so opening it changes nothing.
+  Widget _fontMenu(ThemeData theme) {
+    // The menu's value for the editor's default: storing no family keeps
+    // the document on the default should it ever change.
+    const standard = '';
+    final stored = _value.fontFamily;
+    final bundled = stored == null
+        ? editorDefaultFont
+        : BundledMonoFont.named(stored);
+    final selected = switch (bundled) {
+      null => stored!,
+      editorDefaultFont => standard,
+      final font => font.displayName,
+    };
+    return Row(
+      children: [
+        SizedBox(
+          width: 64,
+          child: Text('Font', style: theme.textTheme.bodyMedium),
+        ),
+        Expanded(
+          child: DropdownButton<String>(
+            key: const ValueKey('settings.font'),
+            isExpanded: true,
+            value: selected,
+            items: [
+              if (bundled == null)
+                DropdownMenuItem(value: stored, child: Text(stored!)),
+              for (final font in BundledMonoFont.values)
+                DropdownMenuItem(
+                  value: font == editorDefaultFont
+                      ? standard
+                      : font.displayName,
+                  child: Text(
+                    font == editorDefaultFont
+                        ? '${font.displayName} (default)'
+                        : font.displayName,
+                    style: TextStyle(fontFamily: font.family),
+                  ),
+                ),
+            ],
+            onChanged: (family) {
+              if (family == null) return;
+              _apply(
+                _value.copyWith(
+                  fontFamily: () => family == standard ? null : family,
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
 
   /// Whole steps only: sizes and widths are integers, and a step per value
   /// lets the keyboard arrows move one at a time.

@@ -1,7 +1,7 @@
 import 'dart:ui';
 
 import 'package:planchette_editor/planchette_editor.dart'
-    show EditorTextSize;
+    show EditorLigatures, EditorTextSize;
 import 'package:poltergeist_core/poltergeist_core.dart'
     show
         TransferConcurrency,
@@ -10,6 +10,7 @@ import 'package:poltergeist_core/poltergeist_core.dart'
         maxGlobalInFlightTransfers;
 
 import '../theme/app_appearance.dart';
+import 'editor_font.dart';
 import '../theme/theme_palette.dart';
 import 'double_click_action.dart';
 import 'pane_tabs_controller.dart' show NewTabTarget;
@@ -43,6 +44,8 @@ const _updateChecksEnabledKey = 'updates.checkEnabled';
 const _themePaletteKey = 'theme.palette';
 const _themeModeKey = 'theme.mode';
 const _editorTextSizeKey = 'editor.textSize';
+const _editorFontFamilyKey = 'editor.fontFamily';
+const _editorLigaturesKey = 'editor.ligatures';
 const _skipRuleSetsKey = 'sync.skipRuleSets';
 
 /// How a server's own Automatic is spelled in the stored overrides; a
@@ -490,6 +493,29 @@ class AppPreferences {
 
   Future<void> saveEditorTextSize(int size) =>
       _store.set(_editorTextSizeKey, EditorTextSize.clamp(size));
+
+  /// The built-in editor's font on this device; a missing or corrupt value
+  /// is the default family with ligatures on.
+  Future<EditorFont> loadEditorFont() async {
+    String? family;
+    String? ligatures;
+    try {
+      family = await _store.get<String>(_editorFontFamilyKey);
+      ligatures = await _store.get<String>(_editorLigaturesKey);
+    } catch (_) {
+      return EditorFont.standard;
+    }
+    return EditorFont(
+      family: family ?? EditorFont.standard.family,
+      ligatures: EditorLigatures.named(ligatures),
+    );
+  }
+
+  /// Both keys in one write, so a family never lands without its ligatures.
+  Future<void> saveEditorFont(EditorFont font) => _store.setAll({
+    _editorFontFamilyKey: font.family,
+    _editorLigaturesKey: font.ligatures.name,
+  });
 
   /// This device's skip rule sets (05 §3), in the order they were made:
   /// local templates, never synced. A damaged stored value keeps every

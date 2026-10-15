@@ -16,6 +16,7 @@ import '../../ui/settings/preview_settings.dart';
 import '../bookmark_backup_service.dart'
     show BackupSwitchOutcome, RetainedBackupAccount;
 import '../double_click_action.dart';
+import '../editor_font.dart';
 import '../external_file_opener.dart';
 import '../settings_models.dart';
 import '../sync_account_gate.dart';
@@ -77,6 +78,8 @@ class RemoteSettings extends GhostSettingsWindowClient<SettingsWindowTab> {
     _link,
   );
   bool _hasEditorTextSize = false;
+  late final RemoteEditorFont _editorFont = RemoteEditorFont._(_link);
+  bool _hasEditorFont = false;
   late final RemoteDirectoryGrouping _directoryGrouping =
       RemoteDirectoryGrouping._(_link);
   bool _hasDirectoryGrouping = false;
@@ -128,6 +131,9 @@ class RemoteSettings extends GhostSettingsWindowClient<SettingsWindowTab> {
   /// no editor text size.
   EditorTextSizeModel? get editorTextSize =>
       _hasEditorTextSize ? _editorTextSize : null;
+
+  /// The editor part's font rows, or null when the app has no editor font.
+  EditorFontModel? get editorFont => _hasEditorFont ? _editorFont : null;
 
   /// The General tab's file-list row, or null when the app has none.
   DirectoryGroupingModel? get directoryGrouping =>
@@ -193,6 +199,11 @@ class RemoteSettings extends GhostSettingsWindowClient<SettingsWindowTab> {
     _hasEditorTextSize = editorTextSize != null;
     if (editorTextSize != null) _editorTextSize._apply(editorTextSize);
 
+    final editorFont = (snapshot[SettingsLinkKey.editorFont.name] as Map?)
+        ?.cast<String, Object?>();
+    _hasEditorFont = editorFont != null;
+    if (editorFont != null) _editorFont._apply(decodeEditorFont(editorFont));
+
     final grouping = snapshot[SettingsLinkKey.directoryGrouping.name] as String?;
     _hasDirectoryGrouping = grouping != null;
     if (grouping != null) {
@@ -221,6 +232,7 @@ class RemoteSettings extends GhostSettingsWindowClient<SettingsWindowTab> {
     _directoryGrouping.dispose();
     _doubleClickAction.dispose();
     _editorTextSize.dispose();
+    _editorFont.dispose();
     super.dispose();
   }
 }
@@ -277,6 +289,28 @@ final class RemoteEditorTextSize extends ChangeNotifier
   @override
   Future<void> setTextSize(int size) =>
       _link.call(SettingsLinkMethod.setEditorTextSize, size);
+}
+
+/// [EditorFontModel] over the link: the app's font as the latest snapshot
+/// carries it, and writes that run in the app's isolate.
+final class RemoteEditorFont extends ChangeNotifier implements EditorFontModel {
+  RemoteEditorFont._(this._link);
+
+  final _Link _link;
+  EditorFont _value = EditorFont.standard;
+
+  void _apply(EditorFont font) {
+    if (font == _value) return;
+    _value = font;
+    notifyListeners();
+  }
+
+  @override
+  EditorFont get value => _value;
+
+  @override
+  Future<void> setFont(EditorFont font) =>
+      _link.call(SettingsLinkMethod.setEditorFont, encodeEditorFont(font));
 }
 
 /// [DirectoryGroupingModel] over the link: the app's value as the latest

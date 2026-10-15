@@ -3,10 +3,12 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:planchette_editor/planchette_editor.dart' show EditorLigatures;
 import 'package:poltergeist_app/services/appearance_controller.dart';
 import 'package:poltergeist_app/services/directory_grouping_controller.dart';
 import 'package:poltergeist_app/services/double_click_action.dart';
 import 'package:poltergeist_app/services/double_click_action_controller.dart';
+import 'package:poltergeist_app/services/editor_font_controller.dart';
 import 'package:poltergeist_app/services/editor_text_size_controller.dart';
 import 'package:poltergeist_app/services/settings_window/remote_settings.dart';
 import 'package:poltergeist_app/services/settings_window/settings_window_host.dart';
@@ -17,6 +19,7 @@ import 'package:poltergeist_app/theme/theme_presets.dart';
 import 'package:poltergeist_app/ui/settings/appearance_settings.dart';
 import 'package:poltergeist_app/ui/settings/directory_grouping_settings.dart';
 import 'package:poltergeist_app/ui/settings/double_click_action_settings.dart';
+import 'package:poltergeist_app/ui/settings/editor_font_settings.dart';
 import 'package:poltergeist_app/ui/settings/editor_text_size_settings.dart';
 import 'package:poltergeist_app/ui/settings/general_settings.dart';
 import 'package:poltergeist_app/ui/settings/preview_settings.dart';
@@ -36,6 +39,7 @@ void main() {
   late SettingsWindowHost host;
   late AppearanceController appearance;
   late EditorTextSizeController editorTextSize;
+  late EditorFontController editorFont;
   late DirectoryGroupingController directoryGrouping;
   late DoubleClickActionController doubleClickAction;
   late bool checkForUpdates;
@@ -63,6 +67,8 @@ void main() {
     checkForUpdates = true;
     editorTextSize = EditorTextSizeController(initial: 18);
     addTearDown(editorTextSize.dispose);
+    editorFont = EditorFontController();
+    addTearDown(editorFont.dispose);
     directoryGrouping = DirectoryGroupingController();
     addTearDown(directoryGrouping.dispose);
     doubleClickAction = DoubleClickActionController();
@@ -76,6 +82,7 @@ void main() {
           ),
           appearance: appearance,
           editorTextSize: editorTextSize,
+          editorFont: editorFont,
           directoryGrouping: directoryGrouping,
           doubleClickAction: doubleClickAction,
           changes: [updates],
@@ -250,6 +257,35 @@ void main() {
           .first,
     );
     expect(find.text('18 pt'), findsOneWidget);
+  });
+
+  testWidgets('the editor font follows the text size, and writes the app\'s '
+      'font', (tester) async {
+    await pumpWindow(tester, SettingsWindowTab.appearance);
+    final ligatures = find.byKey(const ValueKey('editor.ligatures'));
+    await tester.scrollUntilVisible(
+      ligatures,
+      200,
+      scrollable: find
+          .descendant(
+            of: find.byKey(const PageStorageKey(SettingsWindowTab.appearance)),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+    expect(
+      tester.getRect(find.byType(EditorFontSection)).top,
+      greaterThan(tester.getRect(find.byType(EditorTextSizeSection)).top),
+    );
+
+    await tester.ensureVisible(ligatures);
+    await tester.pumpAndSettle();
+    await tester.tap(ligatures);
+    await tester.pump();
+    await tester.runAsync(pumpEventQueue);
+    await tester.pumpAndSettle();
+
+    expect(editorFont.value.ligatures, EditorLigatures.off);
   });
 
   testWidgets('the General tab ends with the folders switch, which '

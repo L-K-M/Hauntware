@@ -10,10 +10,15 @@ import 'package:flutter/material.dart';
 import '../../l10n/app_localizations.dart';
 import '../../services/application_error_reporter.dart';
 import '../../services/settings_models.dart'
-    show AppearanceSettingsModel, DirectoryGroupingModel, EditorTextSizeModel;
+    show
+        AppearanceSettingsModel,
+        DirectoryGroupingModel,
+        EditorFontModel,
+        EditorTextSizeModel;
 import '../top_toast.dart';
 import 'appearance_settings.dart';
 import 'directory_grouping_settings.dart';
+import 'editor_font_settings.dart';
 import 'editor_text_size_settings.dart';
 
 /// The live value and write sink the General section needs — assembled
@@ -48,6 +53,7 @@ Future<void> showGeneralSettingsDialog(
   DirectoryGroupingModel? directoryGrouping,
   AppearanceSettingsModel? appearance,
   EditorTextSizeModel? editorTextSize,
+  EditorFontModel? editorFont,
 }) => showDialog<void>(
   context: context,
   builder: (dialogContext) {
@@ -78,6 +84,7 @@ Future<void> showGeneralSettingsDialog(
                 const Divider(height: 32),
               if (editorTextSize != null)
                 EditorTextSizeSection(model: editorTextSize),
+              if (editorFont != null) EditorFontSection(model: editorFont),
             ],
           ),
         ),

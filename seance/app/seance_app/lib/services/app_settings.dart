@@ -3,7 +3,8 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
-import 'package:planchette_editor/planchette_editor.dart' show EditorTextSize;
+import 'package:planchette_editor/planchette_editor.dart'
+    show EditorLigatures, EditorTextSize;
 import 'package:seance_core/seance_core.dart';
 
 import '../theme/app_appearance.dart';
@@ -259,6 +260,14 @@ class AppSettings {
   /// editor shares. Device-local like the terminal's, for the same reason.
   int editorFontSize;
 
+  /// The built-in editor's family, stored like [terminalFontFamily]. Empty
+  /// means the editor's default, bundled JetBrains Mono.
+  String editorFontFamily;
+
+  /// Whether the built-in editor's font draws ligatures. Device-local like
+  /// the rest of the editor's appearance.
+  EditorLigatures editorLigatures;
+
   /// The app's theme. Device-local like the terminal's appearance and for
   /// the same reason: a theme is chosen for the screen and the room in
   /// front of you, so it never syncs — and a theme is the one setting
@@ -314,6 +323,8 @@ class AppSettings {
     this.terminalPalette = TerminalPalette.followApp,
     this.terminalLigatures = TerminalLigatures.on,
     this.editorFontSize = EditorTextSize.standard,
+    this.editorFontFamily = '',
+    this.editorLigatures = EditorLigatures.on,
     ThemePalette? themePalette,
     this.themeMode = ThemeModePreference.system,
     this.deviceId = '',
@@ -379,6 +390,8 @@ class AppSettings {
     'terminalPalette': terminalPalette.name,
     'terminalLigatures': terminalLigatures.name,
     'editorFontSize': editorFontSize,
+    'editorFontFamily': editorFontFamily,
+    'editorLigatures': editorLigatures.name,
     'themePalette': themePalette.toJson(),
     'themeMode': themeMode.name,
     'deviceId': deviceId,
@@ -452,6 +465,11 @@ class AppSettings {
       final num size => EditorTextSize.clamp(size.round()),
       _ => EditorTextSize.standard,
     },
+    editorFontFamily: switch (json['editorFontFamily']) {
+      final String family => family,
+      _ => '',
+    },
+    editorLigatures: EditorLigatures.named(json['editorLigatures']),
     // Lenient all the way down: a hand-edited theme costs at most its own
     // bad values, never the rest of the settings file.
     themePalette: seanceThemeCodec.decodeStored(json['themePalette']),

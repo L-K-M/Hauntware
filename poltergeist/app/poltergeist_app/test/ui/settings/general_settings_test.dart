@@ -3,15 +3,18 @@
 // immediate persist, revert the field and toast on a failed write.
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:planchette_editor/planchette_editor.dart' show EditorLigatures;
 import 'package:poltergeist_app/l10n/app_localizations.dart';
 import 'package:poltergeist_app/services/appearance_controller.dart';
 import 'package:poltergeist_app/services/directory_grouping_controller.dart';
+import 'package:poltergeist_app/services/editor_font_controller.dart';
 import 'package:poltergeist_app/services/editor_text_size_controller.dart';
 import 'package:poltergeist_app/services/registered_command.dart';
 import 'package:poltergeist_app/services/settings_window/settings_window_link.dart';
 import 'package:poltergeist_app/ui/settings/app_settings_command.dart';
 import 'package:poltergeist_app/ui/settings/appearance_settings.dart';
 import 'package:poltergeist_app/ui/settings/directory_grouping_settings.dart';
+import 'package:poltergeist_app/ui/settings/editor_font_settings.dart';
 import 'package:poltergeist_app/ui/settings/editor_text_size_settings.dart';
 import 'package:poltergeist_app/ui/settings/general_settings.dart';
 import 'package:poltergeist_core/poltergeist_core.dart' show DirectoryGrouping;
@@ -267,6 +270,35 @@ void main() {
       await tester.pump();
       expect(textSize.value, 20);
       expect(find.text('20 pt'), findsOneWidget);
+    });
+
+    testWidgets('the editor font follows the text size in the dialog', (
+      tester,
+    ) async {
+      final textSize = EditorTextSizeController();
+      addTearDown(textSize.dispose);
+      final font = EditorFontController();
+      addTearDown(font.dispose);
+      await run(
+        tester,
+        buildAppSettingsCommand(
+          editorTextSize: textSize,
+          editorFont: font,
+          enabled: () => true,
+        ),
+      );
+
+      final section = find.byType(EditorFontSection);
+      await tester.ensureVisible(section);
+      await tester.pumpAndSettle();
+      expect(
+        tester.getRect(section).top,
+        greaterThan(tester.getRect(find.byType(EditorTextSizeSection)).top),
+      );
+
+      await tester.tap(find.byKey(const ValueKey('editor.ligatures')));
+      await tester.pump();
+      expect(font.value.ligatures, EditorLigatures.off);
     });
 
     testWidgets('with only a theme to set, it is Appearance alone', (

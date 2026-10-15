@@ -2399,6 +2399,28 @@
   "@editorTextSizeHint": {
     "description": "Note under the built-in editor's text size slider: the editor's View menu zoom commands set the same size."
   },
+  "editorFontLabel": "Font",
+  "@editorFontLabel": {
+    "description": "Label beside the built-in editor's font menu in Settings → Appearance."
+  },
+  "editorFontDefault": "{font} (default)",
+  "@editorFontDefault": {
+    "description": "The font menu entry for the editor's default font, which ships with the app.",
+    "placeholders": {
+      "font": {
+        "type": "String",
+        "example": "JetBrains Mono"
+      }
+    }
+  },
+  "editorLigaturesLabel": "Ligatures",
+  "@editorLigaturesLabel": {
+    "description": "Switch in Settings → Appearance: whether the built-in editor's font joins character pairs into ligatures."
+  },
+  "editorLigaturesSubtitle": "Join character pairs such as -> and != into one symbol, in fonts that draw them.",
+  "@editorLigaturesSubtitle": {
+    "description": "Explains the built-in editor's Ligatures switch; -> and != are typed characters, not to be translated."
+  },
   "editorZoomInLabel": "Zoom In",
   "@editorZoomInLabel": {
     "description": "Editor window View menu: make the editor's text larger (Cmd/Ctrl and +)."

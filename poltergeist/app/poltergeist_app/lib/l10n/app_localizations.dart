@@ -2833,6 +2833,30 @@ abstract class AppLocalizations {
   /// **'Zoom In, Zoom Out and Actual Size in an editor change it too.'**
   String get editorTextSizeHint;
 
+  /// Label beside the built-in editor's font menu in Settings → Appearance.
+  ///
+  /// In en, this message translates to:
+  /// **'Font'**
+  String get editorFontLabel;
+
+  /// The font menu entry for the editor's default font, which ships with the app.
+  ///
+  /// In en, this message translates to:
+  /// **'{font} (default)'**
+  String editorFontDefault(String font);
+
+  /// Switch in Settings → Appearance: whether the built-in editor's font joins character pairs into ligatures.
+  ///
+  /// In en, this message translates to:
+  /// **'Ligatures'**
+  String get editorLigaturesLabel;
+
+  /// Explains the built-in editor's Ligatures switch; -> and != are typed characters, not to be translated.
+  ///
+  /// In en, this message translates to:
+  /// **'Join character pairs such as -> and != into one symbol, in fonts that draw them.'**
+  String get editorLigaturesSubtitle;
+
   /// Editor window View menu: make the editor's text larger (Cmd/Ctrl and +).
   ///
   /// In en, this message translates to:

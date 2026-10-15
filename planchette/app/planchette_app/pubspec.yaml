@@ -14,6 +14,8 @@ dependencies:
     sdk: flutter
   ghost_desktop:
     path: ../../packages/ghost_desktop
+  ghost_fonts:
+    path: ../../packages/ghost_fonts
   ghost_ui:
     path: ../../packages/ghost_ui
   path: 1.9.1
