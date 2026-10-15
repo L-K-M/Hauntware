@@ -3615,9 +3615,15 @@ the engine in `engine_isolate.dart` beside it):
   reading once no subscription named it at the end of a turn; a tab
   switch that hands `core` from one panel to another in one turn leaves
   no hole. A `CatalogReplaced` without
-  a server drops these and its seq floor (SYN-08). The engine's
-  rejections of `Connect`, `Disconnect` and `SetAppActivity` until links
-  land show nothing.
+  a server drops these and its seq floor (SYN-08). SYN-08's endpoint
+  change is deferred: an entry that keeps its id under a new endpoint (a
+  re-import that points an alias at another host) keeps them, since the
+  client hands the startup fleet to the fleet controller alone, so the
+  monitoring controller has no endpoint to compare on the first import
+  after launch; that purge needs the engine to report the change
+  (`EndpointChanged`) or the startup entries. The engine's rejections of
+  `Connect`, `Disconnect` and `SetAppActivity` until links land show
+  nothing.
 - **`Reachability(serverId, status)`** reports one server's latest probe
   answer, `online`, `offline` or `unknown` as `seance_core`'s
   `ProbeStatus` gives it, apart from `LinkState`: a probe is a TCP
