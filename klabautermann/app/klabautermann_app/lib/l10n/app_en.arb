@@ -1809,6 +1809,10 @@
   "@overviewUnknownContainer": {
     "description": "Reason in an Overview card whose figures are unknown: in a container, the system file they come from shows the host's figures instead of the container's (SYS-04)."
   },
+  "overviewUnknownContainerLoadPerCore": "Inside this container the core count would be the host's, so the load per core is not shown.",
+  "@overviewUnknownContainerLoadPerCore": {
+    "description": "Reason in the Overview's Load card when only the load per core is unknown: in a container, the CPU count would be the host's while the load averages are the container's own (SYS-04)."
+  },
   "overviewCpuTitle": "CPU",
   "@overviewCpuTitle": {
     "description": "Heading of the Overview's CPU card (OV-01), also the name its chart summaries give."

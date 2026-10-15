@@ -1577,6 +1577,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'Inside this container these figures would be the host\'s, so they are not shown.';
 
   @override
+  String get overviewUnknownContainerLoadPerCore =>
+      'Inside this container the core count would be the host\'s, so the load per core is not shown.';
+
+  @override
   String get overviewCpuTitle => 'CPU';
 
   @override

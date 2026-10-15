@@ -2260,6 +2260,12 @@ abstract class AppLocalizations {
   /// **'Inside this container these figures would be the host\'s, so they are not shown.'**
   String get overviewUnknownContainer;
 
+  /// Reason in the Overview's Load card when only the load per core is unknown: in a container, the CPU count would be the host's while the load averages are the container's own (SYS-04).
+  ///
+  /// In en, this message translates to:
+  /// **'Inside this container the core count would be the host\'s, so the load per core is not shown.'**
+  String get overviewUnknownContainerLoadPerCore;
+
   /// Heading of the Overview's CPU card (OV-01), also the name its chart summaries give.
   ///
   /// In en, this message translates to:

@@ -326,6 +326,9 @@ void main() {
     const note =
         'Inside this container these figures would be the host\'s, so they '
         'are not shown.';
+    const perCoreNote =
+        'Inside this container the core count would be the host\'s, so the '
+        'load per core is not shown.';
     final panel = await _pump(tester);
     await panel.sample(
       tester,
@@ -343,6 +346,21 @@ void main() {
     expect(find.text(note), findsNWidgets(3));
     expect(find.text('Busy 17%'), findsOneWidget);
 
+    // In each card: the shared note, then the load-per-core one.
+    void expectNotes(Map<String, (int, int)> notesByCard) {
+      for (final MapEntry(key: title, value: (notes, perCore))
+          in notesByCard.entries) {
+        Finder inCard(String text) => find.descendant(
+          of: find.byWidgetPredicate(
+            (widget) => widget is PanelSection && widget.title == title,
+          ),
+          matching: find.text(text),
+        );
+        expect(inCard(note), findsNWidgets(notes), reason: title);
+        expect(inCard(perCoreNote), findsNWidgets(perCore), reason: title);
+      }
+    }
+
     // CPU and the load averages: one note in each of their cards.
     await panel.sample(
       tester,
@@ -356,23 +374,35 @@ void main() {
         },
       ),
     );
-    for (final (title, notes) in [
-      ('CPU', 1),
-      ('Load', 1),
-      ('Memory', 0),
-      ('Swap', 0),
-    ]) {
-      expect(
-        find.descendant(
-          of: find.byWidgetPredicate(
-            (widget) => widget is PanelSection && widget.title == title,
-          ),
-          matching: find.text(note),
-        ),
-        findsNWidgets(notes),
-        reason: title,
-      );
-    }
+    expectNotes({
+      'CPU': (1, 0),
+      'Load': (1, 0),
+      'Memory': (0, 0),
+      'Swap': (0, 0),
+    });
+
+    // A container whose /proc/stat is the host's withholds the total and
+    // the per-core figures together: the CPU card says so once. Its own
+    // load averages show, divided by no core count.
+    await panel.sample(
+      tester,
+      CoreResult(
+        memory: _memory,
+        load: const LoadAvg(load1: 0.5, load5: 0.4, load15: 0.3),
+        withheld: const {
+          MetricField.cpu: reason,
+          MetricField.perCpu: reason,
+          MetricField.loadPerCore: reason,
+        },
+      ),
+    );
+    expect(find.text('0.50'), findsOneWidget);
+    expectNotes({
+      'CPU': (1, 0),
+      'Load': (0, 1),
+      'Memory': (0, 0),
+      'Swap': (0, 0),
+    });
   });
 
   testWidgets('OV-04: values grey once older than the core stream\'s limit, '

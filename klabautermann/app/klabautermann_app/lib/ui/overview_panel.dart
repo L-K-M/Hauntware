@@ -194,13 +194,16 @@ final class _Cards {
   final CoreResult core;
   final bool stale;
 
-  /// SYS-04's reason when the engine withheld any of [fields] as the
-  /// container host's (D50); their values are then null.
-  Widget? _withheld(AppLocalizations l10n, List<MetricField> fields) =>
-      fields.any(core.withheld.containsKey)
+  /// SYS-04's reason, or [text], when the engine withheld any of [fields]
+  /// as the container host's (D50); their values are then null.
+  Widget? _withheld(
+    AppLocalizations l10n,
+    List<MetricField> fields, {
+    String? text,
+  }) => fields.any(core.withheld.containsKey)
       ? PanelNotice(
           icon: Icons.info_outline,
-          text: l10n.overviewUnknownContainer,
+          text: text ?? l10n.overviewUnknownContainer,
         )
       : null;
 
@@ -271,7 +274,6 @@ final class _Cards {
             (l10n.overviewCpuIdle, percent(cpu?.idle)),
           ],
         ),
-        ?_withheld(l10n, const [MetricField.cpu]),
         Semantics(
           header: true,
           child: Text(
@@ -283,7 +285,9 @@ final class _Cards {
           _Facts(stale: stale, facts: const [])
         else
           _CoreBars(cores: orderedCores(perCpu), stale: stale),
-        ?_withheld(l10n, const [MetricField.perCpu]),
+        // One note for the card: a container withholds both from the same
+        // /proc/stat, so two would repeat each other.
+        ?_withheld(l10n, const [MetricField.cpu, MetricField.perCpu]),
       ],
     );
   }
@@ -305,7 +309,12 @@ final class _Cards {
             (l10n.overviewLoadPerCore, figure(core.loadPerCore)),
           ],
         ),
-        ?_withheld(l10n, const [MetricField.load, MetricField.loadPerCore]),
+        // The averages come from /proc/loadavg; with only the per-core
+        // figure withheld, they show and its core count is the host's.
+        ?(_withheld(l10n, const [MetricField.load]) ??
+            _withheld(l10n, const [
+              MetricField.loadPerCore,
+            ], text: l10n.overviewUnknownContainerLoadPerCore)),
       ],
     );
   }
