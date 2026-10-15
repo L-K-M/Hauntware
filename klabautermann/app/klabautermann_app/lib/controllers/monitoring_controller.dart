@@ -81,7 +81,8 @@ Duration? sampleAge(DateTime? at, DateTime now) {
 /// handshake consumes [EngineReady], and the engine's exit closes its
 /// events), so a restarted engine comes with a new client and a controller
 /// built anew over it: the seq floor starts empty, as the new engine counts
-/// from the start (D44), and surfaces resubscribe as they mount.
+/// from the start (D44), and surfaces resubscribe as `KlabautermannApp`
+/// remounts them for the new controller.
 final class MonitoringController extends ChangeNotifier {
   /// [linkGrace] replaces [kLinkLeaveGrace]; zero sends [Disconnect] at
   /// once. [now] is what [clock] reads.

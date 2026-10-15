@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:klabautermann_app/app.dart';
 import 'package:klabautermann_app/controllers/monitoring_controller.dart';
 import 'package:klabautermann_app/ui/inspector_pane.dart';
 import 'package:klabautermann_app/ui/server_surfaces.dart';
@@ -129,6 +130,37 @@ void main() {
     await tester.pumpAndSettle();
     expect(_linkRequests(engine).last, 'disconnect srv-2');
     expect(_unsubscribes(engine).last.serverId, 'srv-2');
+  });
+
+  testWidgets('a restarted engine\'s controllers get every surface anew '
+      '(D44)', (tester) async {
+    final harness = await _openWeb1(tester, _desktop);
+    final restarted = FakeEngineClient();
+    final monitoring = MonitoringController(
+      restarted,
+      linkGrace: Duration.zero,
+    );
+    addTearDown(() async {
+      monitoring.dispose();
+      await restarted.close();
+    });
+
+    await tester.pumpWidget(
+      KlabautermannApp(
+        fleet: harness.fleet,
+        monitoring: monitoring,
+        appearance: harness.appearance,
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(_linkRequests(restarted), ['connect srv-1']);
+    expect(_subscribes(restarted).single.streams, ServerPanel.overview.streams);
+    // The first run's surfaces let go as they unmount.
+    expect(_linkRequests(harness.engine), [
+      'connect srv-1',
+      'disconnect srv-1',
+    ]);
+    expect(_unsubscribes(harness.engine), hasLength(1));
   });
 
   testWidgets('the phone screen holds its server open and samples the '

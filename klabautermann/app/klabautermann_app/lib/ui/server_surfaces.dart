@@ -75,7 +75,10 @@ class _OpenServerState extends State<OpenServer> {
   @override
   void didUpdateWidget(OpenServer oldWidget) {
     super.didUpdateWidget(oldWidget);
-    assert(widget.monitoring == oldWidget.monitoring);
+    assert(
+      widget.monitoring == oldWidget.monitoring,
+      'new controllers come with a new tree (KlabautermannApp, D44)',
+    );
     if (widget.serverId == oldWidget.serverId) return;
 
     widget.monitoring
@@ -142,7 +145,10 @@ class _SampledSurfaceState extends State<SampledSurface> {
   @override
   void didUpdateWidget(SampledSurface oldWidget) {
     super.didUpdateWidget(oldWidget);
-    assert(widget.monitoring == oldWidget.monitoring);
+    assert(
+      widget.monitoring == oldWidget.monitoring,
+      'new controllers come with a new tree (KlabautermannApp, D44)',
+    );
     if (!setEquals(oldWidget.streams, widget.streams)) _release();
     _sync();
   }

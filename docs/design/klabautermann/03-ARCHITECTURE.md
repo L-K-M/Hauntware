@@ -525,8 +525,10 @@ Proposals awaiting the owner close the section; they are not decisions.
   it lives in the monitoring controller, built over one `EngineClient`,
   and a client is one run, since its handshake consumes `EngineReady` and
   the engine's exit closes its events. A restarted engine is a new client
-  with new controllers, whose floors start empty and whose surfaces
-  resubscribe as they mount; a server that leaves the fleet loses its
+  with new controllers, whose floors start empty. Routes and surfaces keep
+  the controllers they were built with, so the app's view keys its tree
+  by its controllers: new ones remount every surface, which opens and
+  subscribes on the new engine. A server that leaves the fleet loses its
   floor too. *Rejected:* the request number with a UI reset on restart
   (the UI does not see sampler restarts); a reset on an `EngineReady` in
   the event stream (the handshake consumes it, so the reset would never

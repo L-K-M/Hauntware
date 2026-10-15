@@ -88,11 +88,17 @@ class KlabautermannApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // The engine pauses sampling while the user cannot see the app (03
-    // §6.4); the reporter tells it when that changes.
-    return AppActivityReporter(
-      monitoring: monitoring,
-      child: _buildApp(context),
+    // Controllers last one engine run (D44), and routes and surfaces keep
+    // the ones they were built with, so new ones remount the whole tree:
+    // every surface then opens and subscribes on the new engine.
+    return KeyedSubtree(
+      key: ValueKey((fleet, monitoring)),
+      // The engine pauses sampling while the user cannot see the app (03
+      // §6.4); the reporter tells it when that changes.
+      child: AppActivityReporter(
+        monitoring: monitoring,
+        child: _buildApp(context),
+      ),
     );
   }
 
