@@ -2318,7 +2318,9 @@ sampling. A sampler ticks only while it is ready, so its restarts (6.2)
 cost no skipped ticks, and a tick that would overlap its outstanding
 request is skipped and counted, never queued. A first or owed reading
 due meanwhile waits for that request to settle instead, since a skipped
-tick would lose it. The slow sampler's first
+tick would lose it, and the streams of a skipped tick join the next tick
+the sampler sends, so a period that keeps landing on skipped ticks
+cannot starve its stream. The slow sampler's first
 request on a link is the probe (6.1), sent again on a later run on the
 same link only if it went unanswered. Until it settles the slow sampler
 sends nothing else and, for a server whose profile the engine does not

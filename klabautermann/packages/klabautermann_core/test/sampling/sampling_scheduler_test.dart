@@ -312,6 +312,33 @@ void main() {
     expect(sessions.singleWhere((s) => s.kind == _slow).skippedTicks, 0);
   });
 
+  test(
+    'a stream whose tick a busy sampler skipped joins the next tick it '
+    'sends, so a period that keeps landing on skips cannot starve it',
+    () async {
+      subscribe({SampleStream.procs, SampleStream.fs});
+      await settle();
+      link.stalled.add(_slow);
+      final process = link.running.singleWhere((p) => p.kind == _slow);
+      // Each request is answered 4 s after it went out, so the ticks at
+      // even multiples of 3 s, fs's at 30 s among them, find it busy.
+      for (var t = 3; t < 36; t += 6) {
+        await clock.elapse(Duration(seconds: t + 4) - clock.elapsed);
+        process.answer(process.held.removeLast());
+      }
+      await settle();
+
+      expect(link.linesOf(_slow), [
+        'hw_o probe',
+        'hw_t procs fs',
+        for (var t = 3; t < 30; t += 6) 'hw_t procs',
+        'hw_t procs fs',
+      ]);
+      expect(samples(SampleStream.fs), ['fs@0', 'fs@37']);
+      expect(sessions.singleWhere((s) => s.kind == _slow).skippedTicks, 6);
+    },
+  );
+
   test('the background stops the samplers at once, and the foreground '
       'resumes them on the same link without a probe', () async {
     subscribe({SampleStream.core});

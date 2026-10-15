@@ -177,6 +177,7 @@ final class SamplingScheduler {
       if (run == null) continue;
 
       final now = _elapsed();
+      run.missed.clear();
       for (final stream in run.streams) {
         final period = samplingPeriod(stream, profile);
         if (period != null) {
@@ -281,6 +282,7 @@ final class SamplingScheduler {
     run.streams = streams;
     run.due.removeWhere((stream, _) => !streams.contains(stream));
     run.unread.retainAll(streams);
+    run.missed.retainAll(streams);
     for (final stream in streams) {
       if (run.due.containsKey(stream)) continue;
       final read = switch (stream) {
@@ -413,6 +415,9 @@ final class SamplingScheduler {
             !_held(run, sampler, stream))
           stream,
     };
+    if (read.isNotEmpty && !sampler.busy) {
+      read.addAll(run.missed.where((s) => _kindOf(s) == sampler.kind));
+    }
     read.removeWhere(
       (stream) => _rides(run, stream) && !read.contains(_coverer(stream)),
     );
@@ -432,6 +437,11 @@ final class SamplingScheduler {
     // The session skips and counts a tick while another is outstanding;
     // only a tick it sends makes the sampler busy.
     final sent = !sampler.busy;
+    if (sent) {
+      run.missed.removeAll(read);
+    } else {
+      run.missed.addAll(read);
+    }
     sampler.busy = true;
     final outcome = sampler.session.tick(_collectors(read));
     _schedule(server, run, sampler);
@@ -555,6 +565,11 @@ final class _Run {
   /// Streams due at once since they joined the run, until a tick sends
   /// them.
   final Set<SampleStream> unread = {};
+
+  /// Streams of ticks the session skipped as busy. They join the next
+  /// tick their sampler sends, which costs no request of its own, so a
+  /// period that keeps landing on skipped ticks cannot starve them.
+  final Set<SampleStream> missed = {};
 
   /// The fast sampler waits for the probe (see `_probe`).
   bool holdFast;
