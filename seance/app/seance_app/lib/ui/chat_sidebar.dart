@@ -6,6 +6,7 @@ import '../app_state.dart';
 import '../family_hues.dart';
 import '../services/chat_session.dart';
 import '../main.dart';
+import '../theme.dart' show SeanceTheme;
 
 /// The always-available assistant. It sees the active session's recent output
 /// (redacted) by default, can search the web, and can place a command in the
@@ -325,7 +326,7 @@ class _StagedCommand extends StatelessWidget {
               Expanded(
                 child: Text(
                   'placed in prompt: $command',
-                  style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+                  style: SeanceTheme.mono.copyWith(fontSize: 12),
                 ),
               ),
             ],

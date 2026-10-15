@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:planchette_editor/planchette_editor.dart' show EditorLigatures;
 import 'package:seance_core/seance_core.dart';
 
 import '../theme/app_appearance.dart';
@@ -81,6 +82,14 @@ abstract class SettingsBackend implements Listenable {
   /// Persists the built-in editor's text size and resizes every open
   /// editor. A no-op when nothing changed.
   Future<void> setEditorFontSize(int size);
+
+  /// Persists the built-in editor's family ('' for its default) and
+  /// ligatures, and redraws every open editor. A no-op when nothing
+  /// changed.
+  Future<void> setEditorFont({
+    required String fontFamily,
+    required EditorLigatures ligatures,
+  });
 
   /// Persists the theme and re-themes the app — and an open settings
   /// window, through its next snapshot. A no-op when nothing changed.

@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 
 import '../services/xterm_engine.dart';
+import '../theme.dart' show SeanceTheme;
 
 /// A compact, horizontally-scrollable row of keys the soft keyboard lacks —
 /// Esc, Tab, Ctrl, arrows, Home/End/PgUp/PgDn and a few shell punctuation
@@ -98,10 +99,7 @@ class TerminalKeyboardBar extends StatelessWidget {
       _KeyButton(
         onTap: () => engine.sendKey(bytes),
         semanticLabel: semanticLabel,
-        child: Text(
-          text,
-          style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
-        ),
+        child: Text(text, style: SeanceTheme.mono.copyWith(fontSize: 13)),
       );
 
   Widget _icon(IconData icon, TerminalCursorKey key, String semanticLabel) =>
@@ -116,19 +114,13 @@ class TerminalKeyboardBar extends StatelessWidget {
       _KeyButton(
         onTap: () => engine.sendCursorKey(key),
         semanticLabel: semanticLabel,
-        child: Text(
-          text,
-          style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
-        ),
+        child: Text(text, style: SeanceTheme.mono.copyWith(fontSize: 13)),
       );
 
   Widget _char(String ch, String semanticLabel) => _KeyButton(
     onTap: () => engine.sendKey(utf8.encode(ch)),
     semanticLabel: semanticLabel,
-    child: Text(
-      ch,
-      style: const TextStyle(fontFamily: 'monospace', fontSize: 15),
-    ),
+    child: Text(ch, style: SeanceTheme.mono.copyWith(fontSize: 15)),
   );
 
   /// The sticky Ctrl modifier, highlighted while armed.
@@ -143,8 +135,7 @@ class TerminalKeyboardBar extends StatelessWidget {
         background: armed ? scheme.primary : null,
         child: Text(
           'ctrl',
-          style: TextStyle(
-            fontFamily: 'monospace',
+          style: SeanceTheme.mono.copyWith(
             fontSize: 13,
             fontWeight: armed ? FontWeight.bold : FontWeight.normal,
             color: armed ? scheme.onPrimary : null,

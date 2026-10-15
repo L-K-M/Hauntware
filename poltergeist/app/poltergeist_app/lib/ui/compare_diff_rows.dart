@@ -4,22 +4,31 @@ import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show precisionErrorTolerance;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:ghost_fonts/ghost_fonts.dart' show resolveMonoFamily;
 import 'package:poltergeist_core/poltergeist_core.dart';
 
 import '../l10n/app_localizations.dart';
+import '../services/editor_font.dart';
 import '../theme/app_theme.dart' show poltergeistMonoTextStyle;
 import '../theme/compare_diff_colors.dart';
 import 'compare_diff_layout.dart';
 
-/// The diff rows' text at [fontSize]: the compare view's editor face,
-/// unhighlighted. Spacing is pinned so an ambient text theme cannot widen
-/// the columns the wrap counts.
-TextStyle _rowStyleAt(double fontSize) => poltergeistMonoTextStyle.copyWith(
-  fontSize: fontSize,
-  height: 1.35,
-  letterSpacing: 0,
-  wordSpacing: 0,
-);
+/// The diff rows' text at [fontSize] in [font]: the compare view's editor
+/// face, unhighlighted. Spacing is pinned so an ambient text theme cannot
+/// widen the columns the wrap counts.
+TextStyle _rowStyleAt(double fontSize, EditorFont font) =>
+    font.ligatures.applyTo(
+      poltergeistMonoTextStyle.copyWith(
+        fontFamily: switch (font.chosenFamily) {
+          final family? => resolveMonoFamily(family),
+          null => null,
+        },
+        fontSize: fontSize,
+        height: 1.35,
+        letterSpacing: 0,
+        wordSpacing: 0,
+      ),
+    );
 
 /// A digit run long enough to average the face's advance.
 final _measureSample = '0' * 10;
@@ -79,6 +88,7 @@ final class CompareDiffRows extends StatefulWidget {
     required this.activeRegion,
     required this.controller,
     required this.fontSize,
+    this.font = EditorFont.standard,
   });
 
   final TextComparisonComputed result;
@@ -93,6 +103,9 @@ final class CompareDiffRows extends StatefulWidget {
 
   /// The rows' text size in logical pixels: the editor's text size.
   final double fontSize;
+
+  /// The rows' font: the editor's.
+  final EditorFont font;
 
   @override
   State<CompareDiffRows> createState() => _CompareDiffRowsState();
@@ -181,7 +194,10 @@ class _CompareDiffRowsState extends State<CompareDiffRows> {
   @override
   void didUpdateWidget(CompareDiffRows oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.fontSize != widget.fontSize) _styleRows();
+    if (oldWidget.fontSize != widget.fontSize ||
+        oldWidget.font != widget.font) {
+      _styleRows();
+    }
     if (identical(oldWidget.controller, widget.controller)) return;
 
     if (identical(oldWidget.controller._rows, this)) {
@@ -201,7 +217,7 @@ class _CompareDiffRowsState extends State<CompareDiffRows> {
   ScrollController get _scroll => widget.controller.scroll;
 
   void _styleRows() {
-    _rowStyle = _rowStyleAt(widget.fontSize);
+    _rowStyle = _rowStyleAt(widget.fontSize, widget.font);
     _rowStrut = StrutStyle.fromTextStyle(_rowStyle, forceStrutHeight: true);
   }
 

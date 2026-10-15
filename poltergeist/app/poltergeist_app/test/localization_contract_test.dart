@@ -196,6 +196,8 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   },
   'lib/services/app_preferences.dart': {
     "'editor.textSize'",
+    "'editor.fontFamily'",
+    "'editor.ligatures'",
     "'layout.paneRatio'",
     "'window.left'",
     "'window.top'",
@@ -421,6 +423,15 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   },
   // The editor text size slider's key — plumbing for tests, never rendered.
   'lib/ui/settings/editor_text_size_settings.dart': {"'editor.textSize'"},
+  // The editor font rows' keys, and the menu's value for the default font:
+  // an empty family, never rendered.
+  'lib/ui/settings/editor_font_settings.dart': {
+    "''",
+    "'editor.font'",
+    "'editor.ligatures'",
+  },
+  // The default font's family: empty, meaning the editor's own.
+  'lib/services/editor_font.dart': {"''"},
   // The folders switch's key.
   'lib/ui/settings/directory_grouping_settings.dart': {"'view.foldersOnTop'"},
   // The double-click action dropdown's key.
@@ -624,8 +635,8 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   },
   // Monospace rendering of machine data (fingerprints, endpoints,
   // transcripts) plus list joins — no authored copy.
-  'lib/ui/connection_status_panel.dart': {"'\\n'", "'monospace'"},
-  'lib/ui/prompts/credential_dialog.dart': {"''", "'monospace'"},
+  'lib/ui/connection_status_panel.dart': {"'\\n'"},
+  'lib/ui/prompts/credential_dialog.dart': {"''"},
   // Monospace rendering of machine data (endpoints, identity paths) plus
   // null-fallbacks for optional labels — no authored copy.
   'lib/ui/import/ssh_config_import_dialog.dart': {
@@ -652,7 +663,7 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'$stackTrace'",
     r"'the file picker returned no content for $sourceName'",
   },
-  'lib/ui/prompts/host_key_dialog.dart': {"'monospace'", "'\$type\\n\$value'"},
+  'lib/ui/prompts/host_key_dialog.dart': {"'\$type\\n\$value'"},
   'lib/ui/adaptive_shell.dart': {
     "'primary-pane'",
     "'secondary-pane'",
@@ -2462,19 +2473,12 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     // The identity-read audit label: machine data, never rendered copy.
     r"'${config.username}@${config.host}'",
   },
-  'lib/ui/connection_log_view.dart': {
-    "'monospace'",
-    "'Consolas'",
-    "'Menlo'",
-    "'Courier New'",
-  },
   'lib/ui/server_editor.dart': {
-    // Controller seeds and fallbacks (empty strings and the loaded port),
-    // the mono font on the PEM and login-script fields, and error
-    // interpolations handed to ARB strings — machinery, not copy.
+    // Controller seeds and fallbacks (empty strings and the loaded port)
+    // and error interpolations handed to ARB strings — machinery, not
+    // copy.
     "''",
     r"'${e?.port ?? 22}'",
-    "'monospace'",
     r"'$error'",
     r"'$e'",
     // D37's override menu: its key, and the fixed counts, which are bare

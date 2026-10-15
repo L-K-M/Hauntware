@@ -147,6 +147,9 @@ void main() {
       await mount(tester);
       await openSettings(tester);
 
+      // The Saving switches sit below the Text rows: scroll them in.
+      await tester.ensureVisible(find.text('Trim trailing whitespace on save'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Trim trailing whitespace on save'));
       await tester.pumpAndSettle();
       expect(
@@ -168,6 +171,8 @@ void main() {
       await mount(tester);
       await openSettings(tester);
 
+      await tester.ensureVisible(find.text('Ensure final newline on save'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Trim trailing whitespace on save'));
       await tester.tap(find.text('Ensure final newline on save'));
       await tester.pumpAndSettle();

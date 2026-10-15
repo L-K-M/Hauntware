@@ -1,6 +1,39 @@
 import 'package:flutter/widgets.dart';
 import 'package:ghost_fonts/ghost_fonts.dart';
 
+/// Whether the editor's font joins character pairs such as `->` and `!=`
+/// into one symbol. Only fonts that draw ligatures change, and the bundled
+/// ones keep every character on its own cell either way, so carets and
+/// selections stay where they were. Each app stores the choice itself.
+enum EditorLigatures {
+  off,
+  on;
+
+  /// The choice a settings file stored as [name] ('off'). Anything else,
+  /// missing or from a newer version, is [on], the default.
+  static EditorLigatures named(Object? name) =>
+      values.firstWhere((value) => value.name == name, orElse: () => on);
+
+  /// [style] drawn with this choice. Off turns off contextual alternates
+  /// and standard ligatures, the two features ligature fonts draw them
+  /// with; on keeps [style], since text shaping applies both by default.
+  TextStyle applyTo(TextStyle style) => switch (this) {
+    off => style.copyWith(
+      fontFeatures: [...?style.fontFeatures, ..._ligaturesOff],
+    ),
+    on => style,
+  };
+}
+
+const _ligaturesOff = [
+  FontFeature.disable('calt'),
+  FontFeature.disable('liga'),
+];
+
+/// The bundled face the editor draws in when its host names no other, and
+/// the one a font menu marks as the default.
+const BundledMonoFont editorDefaultFont = BundledMonoFont.jetBrainsMono;
+
 /// The editor's monospace family: bundled JetBrains Mono everywhere, so the
 /// document looks the same on every platform and draws ligatures. The
 /// fallbacks start with it too, so a host family that is not installed
@@ -15,7 +48,7 @@ import 'package:ghost_fonts/ghost_fonts.dart';
 /// system UI font, which is proportional on macOS and Windows. Name real
 /// families there.
 TextStyle editorMonospaceFor(TargetPlatform platform) {
-  final bundled = BundledMonoFont.jetBrainsMono.family;
+  final bundled = editorDefaultFont.family;
   return TextStyle(
     fontFamily: bundled,
     fontFamilyFallback: [

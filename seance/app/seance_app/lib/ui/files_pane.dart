@@ -20,6 +20,7 @@ import '../services/file_export_service.dart';
 import '../services/managed_remote_file.dart';
 import '../services/remote_files_controller.dart';
 import '../services/xterm_engine.dart';
+import '../theme.dart' show SeanceTheme;
 import 'built_in_text_editor.dart';
 import 'file_kinds.dart';
 
@@ -1871,10 +1872,7 @@ class _BrowserHeader extends StatelessWidget {
                           controller.currentPath ?? 'Opening SFTP…',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontFamily: 'monospace',
-                            fontSize: 12,
-                          ),
+                          style: SeanceTheme.mono.copyWith(fontSize: 12),
                         ),
                       ),
                     ),
@@ -2623,6 +2621,8 @@ class EditorTabView extends StatelessWidget {
       remoteFiles: files,
       dirtyNotifier: tab.dirty,
       fontSize: state.services.settings.editorFontSize,
+      fontFamily: state.services.settings.editorFontFamily,
+      ligatures: state.services.settings.editorLigatures,
       onZoom: (zoom) => unawaited(_zoom(context, zoom)),
       onSaved: () => _reconcileAfterSave(owner),
       onUpload: files == null

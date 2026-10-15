@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- **Choose the editor's font.** Settings → Appearance lists the four
+  included fonts under the editor's text size, each in its own face,
+  with a Ligatures switch. Editor windows and the compare view draw in
+  the choice.
+- **Fingerprints, keys and logs are fixed-width everywhere.** Host key
+  fingerprints, private keys, login scripts, the credential prompt's
+  address and the connection panel's log draw in JetBrains Mono on
+  macOS, iOS and Windows, where they used to fall back to the
+  proportional system font. The connection log uses JetBrains Mono too,
+  instead of Menlo or Consolas, and the grep cheat sheet in the editor's
+  find bar uses the document's font.
 - **Every name on an ssh_config `Host` line gets a row.** `Host web db`
   offers `web` and `db` with the block's settings and notes, where only
   `web` appeared before. Wildcard and `!` patterns still get no row.

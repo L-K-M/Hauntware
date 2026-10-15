@@ -14,7 +14,9 @@ import 'package:poltergeist_core/poltergeist_core.dart';
 import '../l10n/app_localizations.dart';
 import '../services/compare_diff_controller.dart';
 import '../services/registered_command.dart' show ViewShortcuts;
-import '../services/settings_models.dart' show EditorTextSizeModel;
+import '../services/editor_font.dart';
+import '../services/settings_models.dart'
+    show EditorFontModel, EditorTextSizeModel;
 import '../services/sync_compare_controller.dart';
 import '../theme/app_theme.dart' show poltergeistMonoTextStyle;
 import 'compact/compact_posture.dart' show compactPostureApplies;
@@ -94,6 +96,7 @@ final class CompareView extends StatefulWidget {
     this.title,
     this.clock,
     this.textSize,
+    this.font,
     @visibleForTesting this.startDiff,
   });
 
@@ -110,6 +113,10 @@ final class CompareView extends StatefulWidget {
   /// editors draw in and follow as it changes; null draws at
   /// [pe.EditorTextSize.standard].
   final EditorTextSizeModel? textSize;
+
+  /// The built-in editor's font, which the rows and the Separate editors
+  /// draw in and follow; null draws in the default font, ligatures on.
+  final EditorFontModel? font;
 
   /// Test seam for the diff worker; null runs [startTextComparison].
   final TextComparisonStarter? startDiff;
@@ -155,7 +162,8 @@ class _CompareViewState extends State<CompareView> {
   @override
   void didUpdateWidget(CompareView oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (!identical(oldWidget.textSize, widget.textSize)) {
+    if (!identical(oldWidget.textSize, widget.textSize) ||
+        !identical(oldWidget.font, widget.font)) {
       _listenable = _merged();
     }
     if (identical(oldWidget.controller, widget.controller)) return;
@@ -190,13 +198,19 @@ class _CompareViewState extends State<CompareView> {
     widget.controller.addListener(_syncDiff);
   }
 
-  /// What the view rebuilds for: the side loads, the diff and the text
-  /// size.
-  Listenable _merged() =>
-      Listenable.merge([widget.controller, _diff, ?widget.textSize]);
+  /// What the view rebuilds for: the side loads, the diff, the text size
+  /// and the font.
+  Listenable _merged() => Listenable.merge([
+    widget.controller,
+    _diff,
+    ?widget.textSize,
+    ?widget.font,
+  ]);
 
   double get _fontSize =>
       (widget.textSize?.value ?? pe.EditorTextSize.standard).toDouble();
+
+  EditorFont get _font => widget.font?.value ?? EditorFont.standard;
 
   /// Hands the diff both documents once both sides have loaded.
   void _syncDiff() {
@@ -407,6 +421,7 @@ class _CompareViewState extends State<CompareView> {
       now: now,
       body: body,
       fontSize: _fontSize,
+      font: _font,
       onFindInSeparate: _openSeparate,
     );
   }
@@ -479,6 +494,7 @@ class _CompareViewState extends State<CompareView> {
             activeRegion: _activeRegion,
             controller: _rowsController,
             fontSize: _fontSize,
+            font: _font,
           )
         : _computingCard(context, l10n);
     return Column(
@@ -863,6 +879,7 @@ class _CompareSide extends StatefulWidget {
     required this.now,
     required this.body,
     required this.fontSize,
+    required this.font,
     required this.onFindInSeparate,
   });
 
@@ -874,6 +891,9 @@ class _CompareSide extends StatefulWidget {
 
   /// The editor's text size in logical pixels.
   final double fontSize;
+
+  /// The editor's font.
+  final EditorFont font;
 
   /// Switches to the Separate layout, from a header-only Find.
   final VoidCallback onFindInSeparate;
@@ -1151,9 +1171,11 @@ class _CompareSideState extends State<_CompareSide> {
       editingLocked: true,
       showStatus: false,
       textStyle: poltergeistMonoTextStyle.copyWith(
+        fontFamily: widget.font.chosenFamily,
         fontSize: widget.fontSize,
         height: 1.35,
       ),
+      ligatures: widget.font.ligatures,
     );
   }
 

@@ -3,7 +3,11 @@ import 'package:flutter/widgets.dart';
 
 import '../../services/registered_command.dart';
 import '../../services/settings_models.dart'
-    show AppearanceSettingsModel, DirectoryGroupingModel, EditorTextSizeModel;
+    show
+        AppearanceSettingsModel,
+        DirectoryGroupingModel,
+        EditorFontModel,
+        EditorTextSizeModel;
 import '../../services/settings_window/settings_window_link.dart';
 import 'general_settings.dart';
 
@@ -21,13 +25,14 @@ const kAppSettingsCommandId = 'app.settings';
 /// On desktop it opens the Settings window on General ([openWindow]); the
 /// Settings dialog remains for a runner without one, and is what phones and
 /// tablets get: General's rows ([settings] and [directoryGrouping]) and
-/// Appearance ([appearance] with the editor's [editorTextSize]), whichever
-/// the app has.
+/// Appearance ([appearance] with the editor's [editorTextSize] and
+/// [editorFont]), whichever the app has.
 RegisteredCommand buildAppSettingsCommand({
   GeneralSettings Function()? settings,
   DirectoryGroupingModel? directoryGrouping,
   AppearanceSettingsModel? appearance,
   EditorTextSizeModel? editorTextSize,
+  EditorFontModel? editorFont,
   required bool Function() enabled,
   OpenSettingsWindow? openWindow,
 }) {
@@ -35,7 +40,8 @@ RegisteredCommand buildAppSettingsCommand({
     settings != null ||
         directoryGrouping != null ||
         appearance != null ||
-        editorTextSize != null,
+        editorTextSize != null ||
+        editorFont != null,
     'Settings needs a section to show.',
   );
   return RegisteredCommand(
@@ -60,6 +66,7 @@ RegisteredCommand buildAppSettingsCommand({
         directoryGrouping: directoryGrouping,
         appearance: appearance,
         editorTextSize: editorTextSize,
+        editorFont: editorFont,
       );
     },
     // 10 §8: the macOS app menu on Mac (AppKit convention), File's

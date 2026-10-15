@@ -46,6 +46,7 @@ class PlanchetteEditor extends StatefulWidget {
     this.currentLineColor,
     this.placeholder,
     this.tabKeyBehavior = EditorTabKeyBehavior.indent,
+    this.ligatures = EditorLigatures.on,
   });
 
   final EditorController controller;
@@ -85,6 +86,10 @@ class PlanchetteEditor extends StatefulWidget {
   /// Enter and Backspace always follow the document's indentation; this only
   /// decides whether Tab indents or leaves the editor.
   final EditorTabKeyBehavior tabKeyBehavior;
+
+  /// Whether the font's ligatures draw, in the document and the find
+  /// fields alike.
+  final EditorLigatures ligatures;
 
   @override
   State<PlanchetteEditor> createState() => _PlanchetteEditorState();
@@ -145,7 +150,7 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
     final base = editorMonospaceFor(
       defaultTargetPlatform,
     ).merge(const TextStyle(fontSize: 14, height: 1.35));
-    final style = base.merge(widget.textStyle);
+    final style = widget.ligatures.applyTo(base.merge(widget.textStyle));
     final family = style.fontFamily!;
 
     // Hosts written for the old default pass the generic name, which only
@@ -863,8 +868,10 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
             row,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
+            // Patterns, in the document's face like the find fields.
             style: theme.textTheme.labelSmall?.copyWith(
-              fontFamily: 'monospace',
+              fontFamily: _style.fontFamily,
+              fontFamilyFallback: _style.fontFamilyFallback,
             ),
           ),
       ],

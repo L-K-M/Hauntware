@@ -1834,6 +1834,21 @@ class AppLocalizationsEn extends AppLocalizations {
       'Zoom In, Zoom Out and Actual Size in an editor change it too.';
 
   @override
+  String get editorFontLabel => 'Font';
+
+  @override
+  String editorFontDefault(String font) {
+    return '$font (default)';
+  }
+
+  @override
+  String get editorLigaturesLabel => 'Ligatures';
+
+  @override
+  String get editorLigaturesSubtitle =>
+      'Join character pairs such as -> and != into one symbol, in fonts that draw them.';
+
+  @override
   String get editorZoomInLabel => 'Zoom In';
 
   @override
