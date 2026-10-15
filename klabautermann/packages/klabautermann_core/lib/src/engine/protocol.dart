@@ -197,7 +197,10 @@ final class SetCadenceProfile extends EngineRequest {
 
 /// Opens a log stream on [spec]'s server (03 §10.1, §7.6): its records
 /// arrive as [LogBatch]es and its progress as [LogStreamState]s, all
-/// under [streamId], until it ends or [CloseStream] closes it.
+/// under [streamId], until it ends or [CloseStream] closes it. The engine
+/// answers an open it accepts with a [LogStreamState] before it handles
+/// the next request, so the app can give a [RequestRejected] to the
+/// oldest open with no answer yet.
 final class OpenLogStream extends EngineRequest {
   const OpenLogStream({required this.streamId, required this.spec});
 
@@ -473,8 +476,9 @@ final class Gap extends EngineEvent {
   /// The streams without readings. Pass an unmodifiable set.
   final Set<SampleStream> streams;
 
-  /// The last reading before the gap, or when sampling stopped, and when
-  /// readings resumed; both by the engine's clock in UTC.
+  /// The streams' last reading before the gap and the reading that
+  /// resumed them, which follows this event; both by the engine's clock
+  /// in UTC. A stream without an earlier reading has no gap.
   final DateTime from, until;
 
   final GapCause cause;
@@ -521,8 +525,9 @@ final class LogBatch extends EngineEvent {
 }
 
 /// What the [OpenLogStream] stream [streamId] is doing, for LOG-02's
-/// connection chip (03 §10.1). The engine sends it whenever [status]
-/// changes; a [LogStreamEnded] status is the stream's last event.
+/// connection chip (03 §10.1). The engine sends it as it accepts the open,
+/// before the next request, and whenever [status] changes; a
+/// [LogStreamEnded] status is the stream's last event.
 final class LogStreamState extends EngineEvent {
   const LogStreamState(this.streamId, this.status);
 
@@ -930,8 +935,8 @@ final class JournalLogSource extends LogSource {
 }
 
 /// The kernel's messages for the current boot (LOG-03): `journalctl -k`,
-/// read as [JournalRecord]s, with `dmesg --json` only as a fallback, read
-/// as [KernelRecord]s. Past boots arrive with LOG-09 (v1).
+/// read as [JournalRecord]s, with `dmesg --json --decode` only as a
+/// fallback, read as [KernelRecord]s. Past boots arrive with LOG-09 (v1).
 final class KernelLogSource extends LogSource {
   const KernelLogSource();
 }
@@ -1014,7 +1019,8 @@ final class JournalRecord extends LogRecord {
   final Map<String, String?> fields;
 }
 
-/// One kernel ring-buffer record from `dmesg --json`, LOG-03's fallback.
+/// One kernel ring-buffer record from `dmesg --json --decode`, LOG-03's
+/// fallback.
 final class KernelRecord extends LogRecord {
   const KernelRecord({required this.message, this.sinceBoot, this.priority});
 
@@ -1024,8 +1030,7 @@ final class KernelRecord extends LogRecord {
   /// `time`: how long after boot the kernel logged it.
   final Duration? sinceBoot;
 
-  /// The level in `pri`, which also holds the facility; null when dmesg
-  /// sent no `pri`.
+  /// The level that `pri` names; null when dmesg sent no level name.
   final LogPriority? priority;
 }
 
@@ -1663,8 +1668,8 @@ sealed class SampleResult {
 
 /// The stream's collector produced no value this time (03 §6.2). The app
 /// words [reason] through its catalog (D35); [detail] is the collector's
-/// error output as the host sent it, control characters stripped, or null
-/// when there was none.
+/// error output as the host sent it, control characters stripped and
+/// at most its last 4,096 characters kept, or null when there was none.
 final class CollectorUnavailable extends SampleResult {
   const CollectorUnavailable(this.reason, {this.detail});
 
@@ -1680,7 +1685,9 @@ final class OverviewResult extends SampleResult {
     this.load,
     this.loadPerCore,
     Map<String, NetRate>? network,
-  }) : network = _unmodifiable(network);
+    Map<MetricField, MetricWithheldReason> withheld = const {},
+  }) : network = _unmodifiable(network),
+       withheld = Map.unmodifiable(withheld);
 
   /// CPU occupancy since the previous reading; null without one to compare
   /// with (the first reading, or after a reboot or a counter reset).
@@ -1699,6 +1706,13 @@ final class OverviewResult extends SampleResult {
   /// one, and empty only when the host reported no interface, so unknown
   /// never sums to zero (03 §1.2 principle 6).
   final Map<String, NetRate>? network;
+
+  /// The values the engine left null for a reason the app words (D50):
+  /// each field of this result whose `/proc` file shows a container
+  /// host's figures, whether or not this reading carried it. Empty
+  /// outside containers and while the probe cannot tell whether the
+  /// server is one.
+  final Map<MetricField, MetricWithheldReason> withheld;
 }
 
 /// The focused server's reading ([SampleStream.core], OV-01): the
@@ -1718,9 +1732,11 @@ final class CoreResult extends SampleResult {
     this.memoryPressure,
     this.uptime,
     this.bootedAt,
+    Map<MetricField, MetricWithheldReason> withheld = const {},
   }) : perCpu = _unmodifiable(perCpu),
        network = _unmodifiable(network),
-       disks = _unmodifiable(disks);
+       disks = _unmodifiable(disks),
+       withheld = Map.unmodifiable(withheld);
 
   /// As [OverviewResult.cpu].
   final CpuPercentages? cpu;
@@ -1753,6 +1769,56 @@ final class CoreResult extends SampleResult {
 
   /// When the host booted (`btime`), in UTC.
   final DateTime? bootedAt;
+
+  /// As [OverviewResult.withheld].
+  final Map<MetricField, MetricWithheldReason> withheld;
+}
+
+/// A value of [OverviewResult] or [CoreResult] that
+/// [OverviewResult.withheld] or [CoreResult.withheld] can name, after
+/// the `/proc` file it comes from (D50).
+enum MetricField {
+  /// `cpu`, from `/proc/stat`.
+  cpu,
+
+  /// [CoreResult.perCpu], from `/proc/stat`.
+  perCpu,
+
+  /// `memory`, from `/proc/meminfo`.
+  memory,
+
+  /// `load`, from `/proc/loadavg`.
+  load,
+
+  /// `loadPerCore`, from `/proc/loadavg` and the CPU count of
+  /// `/proc/stat`.
+  loadPerCore,
+
+  /// [CoreResult.disks], from `/proc/diskstats`.
+  disks,
+
+  /// [CoreResult.cpuPressure], from `/proc/pressure/cpu`.
+  cpuPressure,
+
+  /// [CoreResult.ioPressure], from `/proc/pressure/io`.
+  ioPressure,
+
+  /// [CoreResult.memoryPressure], from `/proc/pressure/memory`.
+  memoryPressure,
+
+  /// [CoreResult.uptime], from `/proc/uptime`.
+  uptime,
+
+  /// [CoreResult.bootedAt], from the `btime` line of `/proc/stat`.
+  bootedAt,
+}
+
+/// Why the engine left a [MetricField] null (D50).
+enum MetricWithheldReason {
+  /// Inside a container, the field's `/proc` file shows the container
+  /// host's figures, not this system's (SYS-04): no lxcfs mount serves
+  /// the container's own there, or lxcfs passes the host's through.
+  containerHostFigures,
 }
 
 /// Memory as MEM-01's breakdown shows it, in bytes, which the engine
@@ -1778,7 +1844,8 @@ final class MemoryUsage {
 
   /// Whether the ZFS ARC is part of [usedBytes], and MEM-01's bar says
   /// "ZFS ARC counted as used" (7.1): true where
-  /// `/proc/spl/kstat/zfs/arcstats` exists outside a container (D48).
+  /// `/proc/spl/kstat/zfs/arcstats` exists and the `meminfo` shown is the
+  /// kernel's own, outside a container or without an lxcfs mount (D48).
   /// Null while the engine does not know.
   final bool? zfsArcCountedAsUsed;
 }
@@ -1840,6 +1907,12 @@ final class ProcsResult extends SampleResult {
   /// How many processes the host counted; above 500 it sends only some of
   /// them (D48), so PRC-01 says "showing N of M". Null when the host did
   /// not report it.
+  ///
+  /// [processes] can hold more: with [ProcsSelection.all], a `ps` fallback
+  /// adds the processes it lists that the count missed, such as `ps`
+  /// itself and those started after the count. The host left processes
+  /// out when [selection] is not [ProcsSelection.all] or this count
+  /// exceeds the rows, never merely because the two differ.
   final int? totalProcesses;
 
   /// How the host chose [processes] (D48); null when it did not report it.
@@ -1884,8 +1957,9 @@ final class ProcessRow {
   /// compares before signalling it.
   final int? startTicks;
 
-  /// The command line, one item per argument; null when it could not be
-  /// read (7.2's "command line unavailable"). Pass an unmodifiable list.
+  /// The command line, one item per argument (per whitespace token on a
+  /// host where only `ps` lists it, 7.2); null when it could not be read
+  /// (7.2's "command line unavailable"). Pass an unmodifiable list.
   final List<String>? arguments;
 }
 

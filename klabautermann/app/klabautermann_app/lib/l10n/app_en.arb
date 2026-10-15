@@ -109,6 +109,144 @@
       }
     }
   },
+  "fleetRowProbeOnline": "Online",
+  "@fleetRowProbeOnline": {
+    "description": "Fleet row state (FL-04): the reachability probe reached the server's SSH port, and nothing is connected to it."
+  },
+  "fleetRowProbeOffline": "Offline",
+  "@fleetRowProbeOffline": {
+    "description": "Fleet row state (FL-04): the reachability probe was refused, or the host had no route or no address."
+  },
+  "fleetRowProbeUnknown": "Reachability unknown",
+  "@fleetRowProbeUnknown": {
+    "description": "Fleet row state (FL-04): the reachability probe could not tell, for example after a timeout. Not the same as offline: a host behind a firewall or a jump host may be up."
+  },
+  "fleetRowAgeSeconds": "{seconds} s",
+  "@fleetRowAgeSeconds": {
+    "description": "A reading's age under a minute: under a fleet row's pressure bar, and as the age in fleetRowUpdated and fleetRowStaleAge.",
+    "placeholders": {
+      "seconds": {
+        "type": "int",
+        "example": "4"
+      }
+    }
+  },
+  "fleetRowAgeMinutes": "{minutes} min",
+  "@fleetRowAgeMinutes": {
+    "description": "A reading's age under an hour, in whole minutes: under a fleet row's pressure bar, and as the age in fleetRowUpdated and fleetRowStaleAge.",
+    "placeholders": {
+      "minutes": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  },
+  "fleetRowAgeHours": "{hours} h",
+  "@fleetRowAgeHours": {
+    "description": "A reading's age of an hour or more, in whole hours: under a fleet row's pressure bar, and as the age in fleetRowUpdated and fleetRowStaleAge.",
+    "placeholders": {
+      "hours": {
+        "type": "int",
+        "example": "2"
+      }
+    }
+  },
+  "fleetRowUpdated": "Updated {age} ago",
+  "@fleetRowUpdated": {
+    "description": "Fleet row freshness (03 §9.5 item 4, OV-04): how long ago the row's CPU and memory reading arrived, in the row's tooltip and screen-reader label.",
+    "placeholders": {
+      "age": {
+        "type": "String",
+        "example": "4 s"
+      }
+    }
+  },
+  "fleetRowStaleAge": "Stale · {age}",
+  "@fleetRowStaleAge": {
+    "description": "Under a fleet row's grey pressure bar, beside a history icon (03 §9.5 item 4, A11Y-01): the values are stale, and age says how old they are. Used when the row's state word (for example Connected or Online) does not already say the connection is down.",
+    "placeholders": {
+      "age": {
+        "type": "String",
+        "example": "25 s"
+      }
+    }
+  },
+  "fleetRowCpu": "CPU",
+  "@fleetRowCpu": {
+    "description": "The CPU cell of a fleet row's pressure bar (FL-07), as its summary names it."
+  },
+  "fleetRowMemory": "Memory",
+  "@fleetRowMemory": {
+    "description": "The memory cell of a fleet row's pressure bar (FL-07), as its summary names it."
+  },
+  "fleetRowDisk": "Disk",
+  "@fleetRowDisk": {
+    "description": "The disk cell of a fleet row's pressure bar (FL-07): how full the server's root file system is."
+  },
+  "fleetRowLocatorConflict": "Host key conflict with {servers}: they reach the same address through a different jump route.",
+  "@fleetRowLocatorConflict": {
+    "description": "Fleet row warning (03 §4.6): saved host keys are keyed by address and port, so this server's would collide with those of the named servers, which reach the same address through other jump hosts.",
+    "placeholders": {
+      "servers": {
+        "type": "String",
+        "example": "db-1, db-2"
+      }
+    }
+  },
+  "fleetRowPartSeparator": " · ",
+  "@fleetRowPartSeparator": {
+    "description": "Between the parts of a fleet row's second line: its state and its address."
+  },
+  "fleetRowListSeparator": ", ",
+  "@fleetRowListSeparator": {
+    "description": "Between the parts of a fleet row's screen-reader label, and between server names in fleetRowLocatorConflict."
+  },
+  "fleetRowLinkAnnouncement": "{server}: {status}",
+  "@fleetRowLinkAnnouncement": {
+    "description": "Screen-reader announcement when a server's connection state changes (A11Y-15); status is a word such as Connected or Connection lost.",
+    "placeholders": {
+      "server": {
+        "type": "String",
+        "example": "web-1"
+      },
+      "status": {
+        "type": "String",
+        "example": "Connection lost"
+      }
+    }
+  },
+  "fleetFilterCount": "{matches} of {total}",
+  "@fleetFilterCount": {
+    "description": "Under the fleet filter field while a query matches no server: how many servers match out of all.",
+    "placeholders": {
+      "matches": {
+        "type": "int",
+        "example": "0"
+      },
+      "total": {
+        "type": "int",
+        "example": "12"
+      }
+    }
+  },
+  "fleetFilterCountOpensFirst": "{matches} of {total} · Enter opens the first",
+  "@fleetFilterCountOpensFirst": {
+    "description": "Under the fleet filter field while a query matches servers: how many match out of all, and that the Enter key opens the first match.",
+    "placeholders": {
+      "matches": {
+        "type": "int",
+        "example": "3"
+      },
+      "total": {
+        "type": "int",
+        "example": "12"
+      }
+    }
+  },
+  "fleetFilterNoMatches": "No servers match",
+  "@fleetFilterNoMatches": {
+    "description": "Shown in place of the fleet list when the filter matches no server."
+  },
   "settingsTitle": "Settings",
   "settingsTabGeneral": "General",
   "settingsTabAppearance": "Appearance",
@@ -204,6 +342,197 @@
   "inspectorTitle": "Inspector",
   "inspectorEmptyBody": "Details, alerts, operations and coverage appear here once you select a server.",
   "placeholderMilestone": "Available in a later milestone.",
+  "coverageFirstRunTitle": "How Klabautermann watches your servers",
+  "@coverageFirstRunTitle": {
+    "description": "Heading of the first-run coverage card (03 §9.5 item 1), shown above the fleet on phones and above the workspace on desktops until the user dismisses it."
+  },
+  "coverageFirstRunBody": "Klabautermann connects over SSH only while it is open. It installs nothing on your servers unless you ask it to. Charts cover only the time this device was connected.",
+  "@coverageFirstRunBody": {
+    "description": "Body of the first-run coverage card: what the app does and does not cover. It names no alerts, since this version has none."
+  },
+  "coverageFirstRunDismiss": "Got it",
+  "@coverageFirstRunDismiss": {
+    "description": "Button that dismisses the first-run coverage card for good on this device."
+  },
+  "coverageFirstRunDetails": "Coverage details",
+  "@coverageFirstRunDetails": {
+    "description": "Button on the first-run coverage card that opens the coverage sheet."
+  },
+  "coverageFirstRunNotSaved": "Klabautermann could not save that you dismissed the coverage note, so it shows again after a restart.",
+  "@coverageFirstRunNotSaved": {
+    "description": "Top toast when dismissing the first-run coverage card could not be written to the device's settings file; the card stays hidden for this session."
+  },
+  "coverageChip": "{total, plural, =1{Watching {watched} of 1 server on this device, only while open} other{Watching {watched} of {total} servers on this device, only while open}}",
+  "@coverageChip": {
+    "description": "The fleet header's coverage chip (03 §9.5 item 2): how many fleet servers this device watches continuously (its monitor set) out of all of them; watching happens only while the app is open. Opens the coverage sheet.",
+    "placeholders": {
+      "watched": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "coverageChipHint": "Show coverage details",
+  "@coverageChipHint": {
+    "description": "Screen-reader hint for activating the fleet header's coverage chip."
+  },
+  "coverageSheetTitle": "Coverage on this device",
+  "@coverageSheetTitle": {
+    "description": "Heading of the coverage sheet the fleet header's chip opens."
+  },
+  "coverageTierBadge": "T0",
+  "@coverageTierBadge": {
+    "description": "Badge naming the execution tier the fleet runs at: T0, SSH only while the app is open (03 §9). Kept as written."
+  },
+  "coverageTierTitle": "SSH while Klabautermann is open",
+  "@coverageTierTitle": {
+    "description": "What the T0 badge means, beside it in the coverage sheet."
+  },
+  "coverageTierBody": "Klabautermann reads your servers over SSH only while it is open. It installs nothing on them unless you ask it to.",
+  "@coverageTierBody": {
+    "description": "Explanation under the tier title in the coverage sheet."
+  },
+  "coverageCoveredHeading": "Covered",
+  "@coverageCoveredHeading": {
+    "description": "Heading of the coverage sheet's list of what this device covers."
+  },
+  "coverageLiveTitle": "Live readings while open",
+  "@coverageLiveTitle": {
+    "description": "Coverage sheet item: the servers the user has open are read live."
+  },
+  "coverageLiveBody": "Metrics, processes, services, logs and jobs of the servers you have open.",
+  "@coverageLiveBody": {
+    "description": "Body of the coverage sheet's live-readings item."
+  },
+  "coverageWatchedTitle": "Continuous watching",
+  "@coverageWatchedTitle": {
+    "description": "Coverage sheet item about the servers this device watches continuously (its monitor set, FL-21): listed as covered once one is watched, and as not covered while none is."
+  },
+  "coverageWatchedBody": "{watched, plural, =0{No server is watched on this device, so each is read only while you have it open.} =1{1 server is read continuously while Klabautermann is open. Any others are read only while you have them open.} other{{watched} servers are read continuously while Klabautermann is open. Any others are read only while you have them open.}}",
+  "@coverageWatchedBody": {
+    "description": "Body of the coverage sheet's watched-servers item; watched is the size of this device's monitor set within the fleet.",
+    "placeholders": {
+      "watched": {
+        "type": "int"
+      }
+    }
+  },
+  "coverageNotCoveredHeading": "Not covered",
+  "@coverageNotCoveredHeading": {
+    "description": "Heading of the coverage sheet's list of what this device does not cover."
+  },
+  "coverageClosedTitle": "While Klabautermann is closed",
+  "@coverageClosedTitle": {
+    "description": "Coverage sheet item: nothing is covered while the app is closed."
+  },
+  "coverageClosedBody": "Nothing checks your servers, so nothing can warn you about them.",
+  "@coverageClosedBody": {
+    "description": "Body of the coverage sheet's while-closed item."
+  },
+  "coverageHostDownTitle": "A server going down",
+  "@coverageHostDownTitle": {
+    "description": "Coverage sheet item: a server that goes down while the app is closed goes unnoticed."
+  },
+  "coverageHostDownBody": "If a server stops while Klabautermann is closed, you find out the next time you open it.",
+  "@coverageHostDownBody": {
+    "description": "Body of the coverage sheet's server-down item."
+  },
+  "coverageHistoryTitle": "History before you connected",
+  "@coverageHistoryTitle": {
+    "description": "Coverage sheet item: charts hold no history from before this device connected."
+  },
+  "coverageHistoryBody": "Charts cover only the time this device was connected. Gaps are marked, never filled in.",
+  "@coverageHistoryBody": {
+    "description": "Body of the coverage sheet's history item."
+  },
+  "coverageBackgroundTitle": "While in the background",
+  "@coverageBackgroundTitle": {
+    "description": "Coverage sheet item shown on iOS and Android only: reading stops in the background (PLT-04)."
+  },
+  "coverageBackgroundBody": "Reading stops while Klabautermann is in the background and resumes when you return.",
+  "@coverageBackgroundBody": {
+    "description": "Body of the coverage sheet's background item, on iOS and Android only."
+  },
+  "coverageFreshnessSeconds": "{seconds} s",
+  "@coverageFreshnessSeconds": {
+    "description": "An age under a minute in a freshness line (03 §9.5 item 4), as in \"Updated 4 s ago\".",
+    "placeholders": {
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "coverageFreshnessMinutes": "{minutes} min",
+  "@coverageFreshnessMinutes": {
+    "description": "An age under an hour, in whole minutes, in a freshness line.",
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "coverageFreshnessHours": "{hours} h",
+  "@coverageFreshnessHours": {
+    "description": "An age under a day, in whole hours, in a freshness line.",
+    "placeholders": {
+      "hours": {
+        "type": "int"
+      }
+    }
+  },
+  "coverageFreshnessDays": "{days} d",
+  "@coverageFreshnessDays": {
+    "description": "An age of a day or more, in whole days, in a freshness line.",
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "coverageFreshnessUpdated": "Updated {age} ago",
+  "@coverageFreshnessUpdated": {
+    "description": "Freshness line of a server's or panel's values while they are current; age is one of the coverageFreshness age strings.",
+    "placeholders": {
+      "age": {
+        "type": "String",
+        "example": "4 s"
+      }
+    }
+  },
+  "coverageFreshnessStale": "Stale: updated {age} ago",
+  "@coverageFreshnessStale": {
+    "description": "Freshness line of values older than their stream's limit, which are drawn grey beside it.",
+    "placeholders": {
+      "age": {
+        "type": "String",
+        "example": "3 min"
+      }
+    }
+  },
+  "coverageFreshnessDisconnected": "Disconnected {age} ago",
+  "@coverageFreshnessDisconnected": {
+    "description": "Freshness line while the server's connection is down after readings arrived; age is how long it has been down.",
+    "placeholders": {
+      "age": {
+        "type": "String",
+        "example": "3 min"
+      }
+    }
+  },
+  "coverageFreshnessPaused": "Paused: app in background",
+  "@coverageFreshnessPaused": {
+    "description": "Freshness line while a phone app is in the background and reading is paused."
+  },
+  "coverageFreshnessNotWatched": "Not watched on this device",
+  "@coverageFreshnessNotWatched": {
+    "description": "Freshness line of a server outside this device's monitor set that nothing reads."
+  },
+  "coverageFreshnessNoData": "No data yet",
+  "@coverageFreshnessNoData": {
+    "description": "Freshness line before the first reading has arrived."
+  },
   "serverTitle": "{name}",
   "@serverTitle": {
     "placeholders": {
@@ -222,6 +551,254 @@
   "workspaceTabSystem": "System",
   "workspaceTabAccess": "Access",
   "serverTabMore": "More",
+  "systemIdentityTitle": "Identity",
+  "@systemIdentityTitle": {
+    "description": "Heading of the System tab's section about what the server is: host name, operating system, kernel, architecture and virtualization (SYS-01)."
+  },
+  "systemUptimeTitle": "Uptime",
+  "@systemUptimeTitle": {
+    "description": "Heading of the System tab's section with how long the server has been up and when it booted (BOOT-01)."
+  },
+  "systemNetworkTitle": "Network",
+  "@systemNetworkTitle": {
+    "description": "Heading of the System tab's section with the server's total network throughput (NET-01)."
+  },
+  "systemDisksTitle": "Disks",
+  "@systemDisksTitle": {
+    "description": "Heading of the System tab's section with the space and inodes each mounted filesystem uses (DSK-01, DSK-02)."
+  },
+  "systemHostname": "Host name",
+  "@systemHostname": {
+    "description": "Label of the server's static host name in the System tab."
+  },
+  "systemOperatingSystem": "Operating system",
+  "@systemOperatingSystem": {
+    "description": "Label of the server's operating system and version, as the server names it, in the System tab."
+  },
+  "systemKernel": "Kernel",
+  "@systemKernel": {
+    "description": "Label of the server's kernel name and release in the System tab."
+  },
+  "systemKernelValue": "{name} {release}",
+  "@systemKernelValue": {
+    "description": "The server's kernel as the System tab shows it: its name and its release, both as the server reports them.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Linux"
+      },
+      "release": {
+        "type": "String",
+        "example": "6.8.0-45-generic"
+      }
+    }
+  },
+  "systemArchitecture": "Architecture",
+  "@systemArchitecture": {
+    "description": "Label of the server's machine architecture, such as x86_64 or aarch64, in the System tab."
+  },
+  "systemVirtualization": "Virtualization",
+  "@systemVirtualization": {
+    "description": "Label of whether the server runs on bare metal, in a virtual machine or in a container, in the System tab."
+  },
+  "systemVirtualizationNone": "None detected",
+  "@systemVirtualizationNone": {
+    "description": "The System tab's virtualization value when the server detected neither a virtual machine nor a container."
+  },
+  "systemVirtualizationMachine": "Virtual machine ({name})",
+  "@systemVirtualizationMachine": {
+    "description": "The System tab's virtualization value for a server in a virtual machine; name is the technology as the server reports it.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "kvm"
+      }
+    }
+  },
+  "systemVirtualizationContainer": "Container ({name})",
+  "@systemVirtualizationContainer": {
+    "description": "The System tab's virtualization value for a server that is a container; name is the technology as the server reports it.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "lxc"
+      }
+    }
+  },
+  "systemVirtualizationContainerUnnamed": "Container",
+  "@systemVirtualizationContainerUnnamed": {
+    "description": "The System tab's virtualization value for a server that is a container of a technology the server did not name."
+  },
+  "systemContainerNotice": "This server is a container. Figures that would come from its host read as unknown.",
+  "@systemContainerNotice": {
+    "description": "Note in the System tab's identity section for a container: values the container would read from its host's system files are not shown as its own (SYS-04)."
+  },
+  "systemUnknown": "Unknown",
+  "@systemUnknown": {
+    "description": "A System tab value the server did not report, or that is not shown for a reason given beside it; never shown as zero."
+  },
+  "systemUnknownContainer": "Inside this container this figure would be the host's, so it is not shown.",
+  "@systemUnknownContainer": {
+    "description": "Reason beside an unknown System tab value: in a container, the system file it comes from shows the host's figures instead of the container's (SYS-04)."
+  },
+  "systemUptime": "Up for",
+  "@systemUptime": {
+    "description": "Label of how long the server has been running since it booted, in the System tab."
+  },
+  "systemUptimeDays": "{days, plural, =1{1 day} other{{days} days}}, {hours, plural, =1{1 hour} other{{hours} hours}}",
+  "@systemUptimeDays": {
+    "description": "How long a server has been up, from one day on: whole days and the hours past them.",
+    "placeholders": {
+      "days": {
+        "type": "int",
+        "format": "decimalPattern"
+      },
+      "hours": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "systemUptimeHours": "{hours, plural, =1{1 hour} other{{hours} hours}}, {minutes, plural, =1{1 minute} other{{minutes} minutes}}",
+  "@systemUptimeHours": {
+    "description": "How long a server has been up, from one hour to a day: whole hours and the minutes past them.",
+    "placeholders": {
+      "hours": {
+        "type": "int",
+        "format": "decimalPattern"
+      },
+      "minutes": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "systemUptimeMinutes": "{minutes, plural, =0{Less than a minute} =1{1 minute} other{{minutes} minutes}}",
+  "@systemUptimeMinutes": {
+    "description": "How long a server has been up, under an hour: whole minutes.",
+    "placeholders": {
+      "minutes": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "systemBooted": "Booted",
+  "@systemBooted": {
+    "description": "Label of when the server last booted, in the System tab."
+  },
+  "systemBootedValue": "{time}",
+  "@systemBootedValue": {
+    "description": "When the server last booted: a date and time in the UI locale and this device's time zone.",
+    "placeholders": {
+      "time": {
+        "type": "DateTime",
+        "format": "yMMMd+jm"
+      }
+    }
+  },
+  "systemReceive": "Receive",
+  "@systemReceive": {
+    "description": "Label of the server's total receive rate over all its network interfaces, in the System tab."
+  },
+  "systemTransmit": "Transmit",
+  "@systemTransmit": {
+    "description": "Label of the server's total transmit rate over all its network interfaces, in the System tab."
+  },
+  "systemWaiting": "Waiting for the first reading.",
+  "@systemWaiting": {
+    "description": "A System tab section before the server sent its first reading for it."
+  },
+  "systemUnavailableMissing": "The server lacks the tool this reading needs.",
+  "@systemUnavailableMissing": {
+    "description": "A System tab section whose reading failed because a command it runs is not installed on the server."
+  },
+  "systemUnavailableDenied": "The server refused this reading.",
+  "@systemUnavailableDenied": {
+    "description": "A System tab section whose reading failed because the server denied permission."
+  },
+  "systemUnavailableTimeout": "This reading did not finish in time.",
+  "@systemUnavailableTimeout": {
+    "description": "A System tab section whose reading the server stopped because it took too long."
+  },
+  "systemUnavailableError": "This reading failed.",
+  "@systemUnavailableError": {
+    "description": "A System tab section whose reading failed for another reason; the server's error output may follow."
+  },
+  "systemDisksTimedOut": "Disk usage did not finish in time. A network mount (NFS or SMB) that stopped answering is the usual cause.",
+  "@systemDisksTimedOut": {
+    "description": "The Disks section when the server stopped the disk usage command because it hung, which a stale network mount causes (DSK-01)."
+  },
+  "systemDisksLastListed": "These mounts are from the reading at {time}; their usage is unknown now.",
+  "@systemDisksLastListed": {
+    "description": "Under systemDisksTimedOut, when an earlier reading listed the mounts: the list below is that reading's, and none of its figures is current. time is when that reading was taken, as a date and time in the UI locale and this device's time zone, since a stale mount can keep failing for days.",
+    "placeholders": {
+      "time": {
+        "type": "DateTime",
+        "format": "yMMMd+jm"
+      }
+    }
+  },
+  "systemDisksNoTimeout": "This server has no timeout command, so a network mount that stops answering can stall disk readings.",
+  "@systemDisksNoTimeout": {
+    "description": "The Disks section on a server without the timeout command, which normally stops a disk usage command that hangs (DSK-01)."
+  },
+  "systemDisksShowPseudo": "Show pseudo filesystems ({count})",
+  "@systemDisksShowPseudo": {
+    "description": "Checkbox in the Disks section that also lists in-memory and image filesystems such as tmpfs, overlay and squashfs, hidden by default; count is how many there are.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "systemDisksEmpty": "No mounts to show.",
+  "@systemDisksEmpty": {
+    "description": "In place of the Disks table when the server's reading listed no filesystem, or only pseudo filesystems while they are hidden."
+  },
+  "systemDevice": "Device",
+  "@systemDevice": {
+    "description": "Label of the device or source a filesystem is mounted from, such as /dev/sda1 or nas:/export, in a mount's details."
+  },
+  "systemColumnMount": "Mount",
+  "@systemColumnMount": {
+    "description": "Disks table column: where the filesystem is mounted."
+  },
+  "systemColumnType": "Type",
+  "@systemColumnType": {
+    "description": "Disks table column: the filesystem type, such as ext4 or nfs4."
+  },
+  "systemColumnUsed": "Used",
+  "@systemColumnUsed": {
+    "description": "Disks table column: the space used out of the filesystem's size."
+  },
+  "systemColumnUse": "Use",
+  "@systemColumnUse": {
+    "description": "Disks table column: the share of the filesystem's space in use, as df reports it."
+  },
+  "systemColumnInodes": "Inodes",
+  "@systemColumnInodes": {
+    "description": "Disks table column: the share of the filesystem's inodes (file entries) in use; a full inode table stops new files like a full disk."
+  },
+  "systemColumnUsage": "Usage",
+  "@systemColumnUsage": {
+    "description": "Disks table column, and label in a mount's details, shown after the disk usage command timed out: what is known of the mount's usage now."
+  },
+  "systemUsedOf": "{used} of {size}",
+  "@systemUsedOf": {
+    "description": "A Disks table cell: the space used and the filesystem's size, both already formatted with binary units such as GiB.",
+    "placeholders": {
+      "used": {
+        "type": "String",
+        "example": "21 GiB"
+      },
+      "size": {
+        "type": "String",
+        "example": "50 GiB"
+      }
+    }
+  },
   "chartSeriesSummary": "{label}: now {current}, lowest {lowest}, highest {highest}, {trend}",
   "@chartSeriesSummary": {
     "description": "A chart's screen-reader summary of one series: what it measures, its current, lowest and highest values (already formatted with their units) and its trend, one of chartTrendRising, chartTrendFalling or chartTrendSteady.",
@@ -809,6 +1386,16 @@
   "@logJournalNotSent": {
     "description": "Stands in for a journal message or field value the server did not send because it is larger than 4,096 bytes."
   },
+  "logJournalFieldNotSent": "{name} [not sent: over 4,096 bytes]",
+  "@logJournalFieldNotSent": {
+    "description": "Row of a journal entry's expanded fields for a field whose value the server did not send because it is larger than 4,096 bytes; name is the journal field's name as the server sent it, such as CODE_LINE.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "CODE_LINE"
+      }
+    }
+  },
   "logJournalFieldsLeftOut": "{count, plural, =1{1 more field not kept} other{{count} more fields not kept}}",
   "@logJournalFieldsLeftOut": {
     "description": "Last row of a journal entry's expanded fields when the log view kept only some of them; count is how many it left out.",
@@ -826,5 +1413,331 @@
   "logJournalHideFields": "Hide fields",
   "@logJournalHideFields": {
     "description": "Screen-reader hint for activating a journal row that shows its fields: hides them again."
+  },
+  "servicesWaiting": "Waiting for the first list of units…",
+  "@servicesWaiting": {
+    "description": "Services panel: shown until the server's first list of systemd units arrives."
+  },
+  "servicesUnavailableMissing": "This server has no systemctl, so there are no units to list.",
+  "@servicesUnavailableMissing": {
+    "description": "Services panel: the server lacks the systemctl tool, as on a system without systemd."
+  },
+  "servicesUnavailableDenied": "The server refused to list its units.",
+  "@servicesUnavailableDenied": {
+    "description": "Services panel: listing systemd units failed with a permission error."
+  },
+  "servicesUnavailableTimeout": "Listing units took too long and was stopped.",
+  "@servicesUnavailableTimeout": {
+    "description": "Services panel: the unit listing ran past its time limit on the server."
+  },
+  "servicesUnavailableError": "Listing units failed.",
+  "@servicesUnavailableError": {
+    "description": "Services panel: listing systemd units failed for another reason; the server's error output may follow."
+  },
+  "servicesTextFallback": "This server's systemd is older than version 246, so units are read from text. States that could not be read show as unknown.",
+  "@servicesTextFallback": {
+    "description": "Services panel notice for old systemd, whose unit list has no JSON output (CN-10)."
+  },
+  "servicesFilterType": "Type",
+  "@servicesFilterType": {
+    "description": "Label of the Services panel's filter by unit type, such as service or socket."
+  },
+  "servicesFilterTypeAll": "All types",
+  "@servicesFilterTypeAll": {
+    "description": "The unit type filter's choice that shows units of every type."
+  },
+  "servicesFilterState": "State",
+  "@servicesFilterState": {
+    "description": "Label of the Services panel's filter by a unit's active state, such as active or failed."
+  },
+  "servicesFilterStateAll": "All states",
+  "@servicesFilterStateAll": {
+    "description": "The unit state filter's choice that shows units in every state."
+  },
+  "servicesEmpty": "No units match these filters.",
+  "@servicesEmpty": {
+    "description": "Services panel: the unit list is empty under the chosen type and state filters."
+  },
+  "servicesColumnUnit": "Unit",
+  "@servicesColumnUnit": {
+    "description": "Column header of the unit list: the systemd unit's name."
+  },
+  "servicesColumnLoad": "Load",
+  "@servicesColumnLoad": {
+    "description": "Column header and label: whether systemd loaded the unit's configuration (its load state)."
+  },
+  "servicesColumnActive": "Active",
+  "@servicesColumnActive": {
+    "description": "Column header and label: the unit's high-level state, such as active, inactive or failed (its active state)."
+  },
+  "servicesColumnSub": "Sub",
+  "@servicesColumnSub": {
+    "description": "Column header and label: the unit's detailed state, such as running or exited (its sub state)."
+  },
+  "servicesColumnDescription": "Description",
+  "@servicesColumnDescription": {
+    "description": "Column header of the unit list: the unit's description from its configuration."
+  },
+  "servicesFailedCount": "{count, plural, =0{No failed units} =1{1 failed unit} other{{count} failed units}}",
+  "@servicesFailedCount": {
+    "description": "Heading of the failed units summary (SVC-02); count is how many systemd units failed.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "servicesFailedUnit": "{unit}: {state}",
+  "@servicesFailedUnit": {
+    "description": "One failed unit in the failed units summary: its name, then its detailed (sub) state as the server reports it, or the word for unknown.",
+    "placeholders": {
+      "unit": {
+        "type": "String",
+        "example": "nginx.service"
+      },
+      "state": {
+        "type": "String",
+        "example": "failed"
+      }
+    }
+  },
+  "servicesFailedMore": "{count, plural, =1{and 1 more} other{and {count} more}}",
+  "@servicesFailedMore": {
+    "description": "Last line of the failed units summary when it lists only some of them; count is how many it leaves out.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "servicesUnitClose": "Close unit details",
+  "@servicesUnitClose": {
+    "description": "Tooltip of the button that closes a unit's details and returns to the unit list."
+  },
+  "servicesLogsTitle": "Recent log lines",
+  "@servicesLogsTitle": {
+    "description": "Heading of a unit's recent journal lines on its details (SVC-04)."
+  },
+  "servicesLogsRequested": "Asking the server for recent log lines…",
+  "@servicesLogsRequested": {
+    "description": "A unit's log lines were requested and the app has no answer yet."
+  },
+  "servicesLogsWaitingLink": "Waiting for the connection to the server…",
+  "@servicesLogsWaitingLink": {
+    "description": "A unit's log read waits until the connection to the server is ready."
+  },
+  "servicesLogsWaitingChannel": "Waiting for a free session on the server…",
+  "@servicesLogsWaitingChannel": {
+    "description": "A unit's log read waits until the connection has a free session for it."
+  },
+  "servicesLogsWaitingBackground": "Paused while the app is in the background.",
+  "@servicesLogsWaitingBackground": {
+    "description": "A unit's log read waits until the app returns to the foreground."
+  },
+  "servicesLogsReading": "Reading recent log lines…",
+  "@servicesLogsReading": {
+    "description": "A unit's log read is running on the server."
+  },
+  "servicesLogsEmpty": "The journal holds no lines for this unit.",
+  "@servicesLogsEmpty": {
+    "description": "A unit's log read finished without any journal line."
+  },
+  "servicesLogsRefused": "Reading unit logs is not available in this version yet.",
+  "@servicesLogsRefused": {
+    "description": "The app's engine cannot read logs yet and refused the request; no log lines are shown."
+  },
+  "servicesLogsInvalid": "This unit's name cannot be used to read its logs.",
+  "@servicesLogsInvalid": {
+    "description": "The app refused to read logs for a unit name that fails its validation."
+  },
+  "servicesLogsMissing": "This server has no journalctl, so unit logs cannot be read.",
+  "@servicesLogsMissing": {
+    "description": "A unit's log read failed because the server lacks journalctl."
+  },
+  "servicesLogsDenied": "The server refused to read this unit's journal.",
+  "@servicesLogsDenied": {
+    "description": "A unit's log read failed with a permission error."
+  },
+  "servicesLogsFailed": "Reading this unit's journal failed.",
+  "@servicesLogsFailed": {
+    "description": "A unit's log read failed for another reason; the server's error output may follow."
+  },
+  "logsPanelSource": "Source",
+  "@logsPanelSource": {
+    "description": "Label of the Logs panel's source picker, which chooses between the journal, the kernel log and a file; also the title of the phone's source sheet."
+  },
+  "logsPanelSourceName": "{source, select, journal{Journal} kernel{Kernel} other{File}}",
+  "@logsPanelSourceName": {
+    "description": "Name of a Logs panel source: the systemd journal, the kernel's messages, or one file on the server.",
+    "placeholders": {
+      "source": {
+        "type": "String"
+      }
+    }
+  },
+  "logsPanelUnit": "Unit",
+  "@logsPanelUnit": {
+    "description": "Label of the Logs panel's filter field for a systemd unit name."
+  },
+  "logsPanelIdentifier": "Identifier",
+  "@logsPanelIdentifier": {
+    "description": "Label of the Logs panel's filter field for a syslog identifier (the program's syslog tag)."
+  },
+  "logsPanelPriority": "Priority",
+  "@logsPanelPriority": {
+    "description": "Label of the Logs panel's priority filter, which shows entries at a syslog priority or more urgent."
+  },
+  "logsPanelPriorityAny": "Any priority",
+  "@logsPanelPriorityAny": {
+    "description": "Priority filter choice that shows entries of every priority."
+  },
+  "logsPanelPriorityLevel": "{level, select, emergency{Emergency} alert{Alert and above} critical{Critical and above} error{Error and above} warning{Warning and above} notice{Notice and above} info{Info and above} other{Debug and above}}",
+  "@logsPanelPriorityLevel": {
+    "description": "Priority filter choice: entries at this syslog priority or more urgent ones.",
+    "placeholders": {
+      "level": {
+        "type": "String"
+      }
+    }
+  },
+  "logsPanelCurrentBoot": "Current boot only",
+  "@logsPanelCurrentBoot": {
+    "description": "Toggle of the Logs panel's journal filters that shows only entries since the server last started."
+  },
+  "logsPanelTimeRange": "Time range",
+  "@logsPanelTimeRange": {
+    "description": "Label of the Logs panel's time range filter."
+  },
+  "logsPanelTimeRangeOption": "{range, select, last15Minutes{Last 15 minutes} lastHour{Last hour} last24Hours{Last 24 hours} last7Days{Last 7 days} other{Any time}}",
+  "@logsPanelTimeRangeOption": {
+    "description": "Time range filter choice: how far back entries are shown, counted from when the log opens.",
+    "placeholders": {
+      "range": {
+        "type": "String"
+      }
+    }
+  },
+  "logsPanelPath": "File path",
+  "@logsPanelPath": {
+    "description": "Label of the Logs panel's field for the file on the server to tail."
+  },
+  "logsPanelPathHint": "Absolute path, such as /var/log/syslog",
+  "@logsPanelPathHint": {
+    "description": "Hint in the empty file path field."
+  },
+  "logsPanelPathProblem": "{problem, select, notAbsolute{Enter an absolute path that starts with /.} notNormalized{Remove the . and .. parts from the path.} other{The path contains a NUL character.}}",
+  "@logsPanelPathProblem": {
+    "description": "Error under the file path field when the server would refuse the path.",
+    "placeholders": {
+      "problem": {
+        "type": "String"
+      }
+    }
+  },
+  "logsPanelCommonPaths": "Common paths",
+  "@logsPanelCommonPaths": {
+    "description": "Tooltip of the button beside the file path field that lists common log files, such as the syslog and web server logs."
+  },
+  "logsPanelApply": "Apply",
+  "@logsPanelApply": {
+    "description": "Button that reads the log again with the filters or path entered."
+  },
+  "logsPanelFilters": "{count, plural, =0{Filters} other{Filters ({count})}}",
+  "@logsPanelFilters": {
+    "description": "Phone button that opens the Logs panel's filters in a sheet; count is how many filters are set.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "logsPanelLiveState": "{state, select, live{Live} connecting{Connecting} disconnected{Disconnected} paused{Paused} stopped{Stopped} other{Unavailable}}",
+  "@logsPanelLiveState": {
+    "description": "Chip that turns following new log entries on and off, naming what the log stream is doing: following, waiting for the server or a free session, waiting for the connection, paused by the user or the app's background, ended, or not available.",
+    "placeholders": {
+      "state": {
+        "type": "String"
+      }
+    }
+  },
+  "logsPanelLiveTooltip": "Follow new entries as the server writes them",
+  "@logsPanelLiveTooltip": {
+    "description": "Tooltip of the Logs panel's Live chip."
+  },
+  "logsPanelJournalLimited": "Only your own journal entries are shown: your account on this server is not in the systemd-journal, adm or wheel group. The server's Access section shows how to add it.",
+  "@logsPanelJournalLimited": {
+    "description": "Notice above the journal when the server shows the signed-in account only its own entries. The group names are names on the server and stay as they are."
+  },
+  "logsPanelKernelLimited": "Kernel messages may be missing: your account on this server is not in the systemd-journal, adm or wheel group, so the journal shows it none. The server's Access section shows how to add it.",
+  "@logsPanelKernelLimited": {
+    "description": "Notice above the kernel log when the server's journal shows the signed-in account only its own entries, which never include kernel messages. The group names are names on the server and stay as they are."
+  },
+  "logsPanelStatus": "{status, select, opening{Opening the log…} waitingLink{Waiting for the connection to the server.} waitingChannel{Waiting for a free session on the server.} waitingBackground{Paused while the app is in the background.} loading{Loading entries…} invalid{The engine refused this filter or path.} missing{The server has no such file or log tool.} denied{The server denied access to this log.} failed{Reading the log failed.} rejected{The engine did not open this log.} other{Choose or type the absolute path of a file to tail.}}",
+  "@logsPanelStatus": {
+    "description": "Status line above the log saying what reading it is doing or why it stopped.",
+    "placeholders": {
+      "status": {
+        "type": "String"
+      }
+    }
+  },
+  "logsPanelRetry": "Retry",
+  "@logsPanelRetry": {
+    "description": "Button that opens the log again after it stopped or was refused."
+  },
+  "logsPanelEmpty": "This log has no entries.",
+  "@logsPanelEmpty": {
+    "description": "Shown in place of the log when reading a kernel log, a file or an unfiltered journal finished without any entry, unless the kernel log or journal is limited to the account's own entries."
+  },
+  "logsPanelEmptyFiltered": "No entries match these filters.",
+  "@logsPanelEmptyFiltered": {
+    "description": "Shown in place of the log when reading the journal with filters set finished without any entry."
+  },
+  "logsPanelEmptyLimited": "No entries are visible to your account.",
+  "@logsPanelEmptyLimited": {
+    "description": "Shown in place of the log when reading an unfiltered journal or the kernel log finished without any entry while the server shows the signed-in account only its own journal entries."
+  },
+  "logsPanelSearchLabel": "Search loaded entries",
+  "@logsPanelSearchLabel": {
+    "description": "Label of the log search field, also its name for screen readers once it holds text; the search covers the entries the panel holds, not the whole log on the server."
+  },
+  "logsPanelSearchCase": "Match case",
+  "@logsPanelSearchCase": {
+    "description": "Tooltip of the toggle that makes the log search tell upper from lower case."
+  },
+  "logsPanelSearchMatches": "{total, plural, =0{No matches} =1{1 match} other{{total} matches}}",
+  "@logsPanelSearchMatches": {
+    "description": "How many matches the log search found, before one is selected.",
+    "placeholders": {
+      "total": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "logsPanelSearchPosition": "{current} of {total}",
+  "@logsPanelSearchPosition": {
+    "description": "Which match of the log search is selected, out of how many.",
+    "placeholders": {
+      "current": {
+        "type": "int",
+        "format": "decimalPattern"
+      },
+      "total": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "logsPanelSearchPrevious": "Previous match",
+  "@logsPanelSearchPrevious": {
+    "description": "Tooltip of the button that moves to the previous log search match."
+  },
+  "logsPanelSearchNext": "Next match",
+  "@logsPanelSearchNext": {
+    "description": "Tooltip of the button that moves to the next log search match."
   }
 }

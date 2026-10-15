@@ -1,10 +1,11 @@
 /// Command builders for the interactive views (03 §8.8). Every builder
 /// validates its arguments with [ArgValidators] and returns an argv list;
-/// quoting is deliberately left to the caller, which joins the words with
-/// the injected `quoteShellWord` (03 §8.8 "nothing is quoted here").
+/// [HostCommands.commandLine] turns one into the remote command line with
+/// the caller's injected `quoteShellWord`, the only quoting there is.
 library;
 
 import '../hws/collector.dart' show ArgValidators;
+import '../hws/request.dart' show ShellQuote;
 
 /// A command refused before building: an argument failed its validator
 /// (03 §8.8).
@@ -36,8 +37,62 @@ enum SystemctlVerb {
   disable,
 }
 
+/// The order `journalctl` reads in (03 §7.6, §10.1). journalctl refuses
+/// `--reverse` together with `--follow`, so the two are one choice.
+enum JournalOrder {
+  /// Oldest first, journalctl's default.
+  oldestFirst,
+
+  /// Newest first (`-r`): a window, and its older pages after a cursor.
+  newestFirst,
+
+  /// Follow (`-f`): the earlier records oldest first, then each new one.
+  follow,
+}
+
+/// The locale [HostCommands.commandLine] exports (03 §8.8, A11Y-08).
+enum CommandLocale {
+  /// `C`: for output only the engine reads, and on hosts without
+  /// `C.UTF-8`.
+  c('C'),
+
+  /// `C.UTF-8`: for text people read, on a host whose probe found the
+  /// locale (03 §6.1, D49); plain `C` escapes or replaces non-ASCII text
+  /// in some tools.
+  cUtf8('C.UTF-8');
+
+  const CommandLocale(this.value);
+
+  /// The `LC_ALL` value.
+  final String value;
+}
+
 /// Validated command builders (03 §8.8).
 abstract final class HostCommands {
+  /// The command line that runs [argv] on the host (03 §8.8): `sh -c`
+  /// exports the sampler's environment (6.2) with [locale] and then
+  /// `exec`s [argv], which follows the script as its positional
+  /// parameters. The script is a constant, so each word is quoted once,
+  /// by [quote], for the login shell alone, and `sh` receives the words
+  /// as given whenever [quote] suits that shell (`quoteShellWord`: sh,
+  /// bash, zsh and fish). The clock and calendar reads that need the
+  /// server zone unset `TZ` in their own subshell ([onCalendar]).
+  static String commandLine(
+    List<String> argv, {
+    required ShellQuote quote,
+    CommandLocale locale = CommandLocale.c,
+  }) {
+    if (argv.isEmpty) throw const HostCommandError('empty command');
+    return [
+      'sh',
+      '-c',
+      'export LC_ALL=${locale.value} TZ=UTC SYSTEMD_PAGER= NO_COLOR=1; '
+          'exec "\$@"',
+      'sh',
+      ...argv,
+    ].map(quote).join(' ');
+  }
+
   /// `systemctl --no-ask-password <verb> -- <unit>` (03 §7.5).
   /// `--no-ask-password` fails fast where a polkit prompt would block.
   static List<String> systemctl(SystemctlVerb verb, String unit) {
@@ -45,37 +100,91 @@ abstract final class HostCommands {
     return ['systemctl', '--no-ask-password', verb.name, '--', unit];
   }
 
-  /// `journalctl -o json` with the log view's filters (03 §7.6): unit,
-  /// priority floor, since expression, resume cursor, line cap and a
-  /// grep pattern. Every supplied filter is validated.
+  /// `journalctl -o json` with the log view's filters (03 §7.6, §10.1):
+  /// the kernel log (`-k -b`), unit, identifier, the current boot,
+  /// priority floor, time range, resume cursor, window size ([lines]),
+  /// [order] and a grep pattern. Every supplied filter is validated.
+  /// Refused here are what journalctl refuses, `--since` with a cursor
+  /// (it takes one starting point) and a range that ends before it
+  /// starts, and, as this builder's choice, a follow with `--until`,
+  /// since a follow reads on to the present. The kernel log takes unit
+  /// and identifier filters: journald names its records (`kernel`, or
+  /// the `name[pid]:` prefix of a line written to `/dev/kmsg`) and gives
+  /// the lines it wrote there itself its own unit.
   static List<String> journalctl({
+    bool kernel = false,
     String? unit,
+    String? identifier,
+    bool currentBoot = false,
     String? priority,
-    String? since,
+    DateTime? since,
+    DateTime? until,
     String? cursor,
     int? lines,
+    JournalOrder order = JournalOrder.oldestFirst,
     String? grep,
   }) {
     if (unit != null) _check(ArgValidators.unitName, unit);
+    if (identifier != null) {
+      _check(ArgValidators.syslogIdentifier, identifier);
+    }
     if (priority != null) _check(ArgValidators.journalPriority, priority);
-    if (since != null) _check(ArgValidators.journalSince, since);
     if (cursor != null) _check(ArgValidators.journalCursor, cursor);
     if (grep != null) _check(ArgValidators.journalGrep, grep);
     if (lines != null && lines < 0) {
       throw const HostCommandError('negative line count');
+    }
+    if (since != null && cursor != null) {
+      throw const HostCommandError('--since and a cursor exclude each other');
+    }
+    if (until != null && order == JournalOrder.follow) {
+      throw const HostCommandError('a follow reads up to the present');
+    }
+    if (since != null && until != null && since.isAfter(until)) {
+      throw const HostCommandError('--since is after --until');
     }
     return [
       'journalctl',
       '-o',
       'json',
       '--no-pager',
+      if (kernel) '-k',
+      if (kernel || currentBoot) '-b',
       if (unit != null) ...['-u', unit],
+      if (identifier != null) ...['-t', identifier],
       if (priority != null) ...['-p', priority],
-      if (since != null) ...['--since', since],
+      if (since != null) '--since=${_journalTime(since)}',
+      if (until != null) '--until=${_journalTime(until)}',
       if (cursor != null) '--after-cursor=$cursor',
       if (lines != null) ...['-n', '$lines'],
+      ...switch (order) {
+        JournalOrder.oldestFirst => const <String>[],
+        JournalOrder.newestFirst => const ['-r'],
+        JournalOrder.follow => const ['-f'],
+      },
       if (grep != null) ...['-g', grep],
     ];
+  }
+
+  /// `dmesg --json --decode`, the kernel log's fallback (LOG-03, 03
+  /// §7.6), read by `parseDmesgJson`. `--decode` names each record's
+  /// facility and level: the one number util-linux prints without it
+  /// changed layout in 2.40. It prints the whole ring buffer: dmesg takes
+  /// no record count, so the reader keeps the newest itself.
+  static List<String> dmesgJson() => const ['dmesg', '--json', '--decode'];
+
+  /// `tail -n <lines> [-F] -- <path>` for one file (LOG-22, 03 §7.6): its
+  /// last [lines] lines, then with [follow] each appended line, following
+  /// the name across rotation (`-F` retries a missing or replaced file).
+  /// The path must be absolute and normalized (03 §8.8).
+  static List<String> tail(
+    String path, {
+    required int lines,
+    bool follow = false,
+  }) {
+    _check(ArgValidators.absolutePath, path);
+    if (lines < 0) throw const HostCommandError('negative line count');
+    return ['tail', '-n', '$lines', if (follow) '-F', '--', path];
   }
 
   /// `crontab -l -u <user>` for the jobs view's user switch (03 §7.7).
@@ -98,9 +207,10 @@ abstract final class HostCommands {
   /// `ss -tulpn` for the listening-ports list (03 §7.4).
   static List<String> ss() => const ['ss', '-tulpn'];
 
-  /// `(unset TZ; systemd-analyze calendar --iterations=N '<expr>')` for
-  /// the OnCalendar preview (03 §7.7): the subshell clears a session TZ
-  /// so the expression resolves in the server zone. Below systemd 242
+  /// `(unset TZ; systemd-analyze calendar --iterations=N -- '<expr>')`
+  /// for the OnCalendar preview (03 §7.7): the subshell clears a session
+  /// TZ so the expression resolves in the server zone, and `--` keeps an
+  /// expression that starts with `-` an operand. Below systemd 242
   /// `--iterations` does not exist and is left off ([systemdMajor] null
   /// keeps it: unknown versions get the modern flag).
   static List<String> onCalendar(
@@ -118,10 +228,22 @@ abstract final class HostCommands {
     return [
       'sh',
       '-c',
-      '(unset TZ; systemd-analyze calendar$it "\$1")',
+      '(unset TZ; systemd-analyze calendar$it -- "\$1")',
       'hws-cal',
       expression,
     ];
+  }
+
+  /// An instant as journalctl's `@<seconds since the epoch>` timestamp
+  /// (systemd.time(7)), with the microseconds when there are any, so the
+  /// session's zone plays no part.
+  static String _journalTime(DateTime t) {
+    final us = t.microsecondsSinceEpoch;
+    if (us < 0) throw HostCommandError('time before the epoch', argument: '$t');
+    final fraction = us % 1000000;
+    final seconds = '@${us ~/ 1000000}';
+    if (fraction == 0) return seconds;
+    return '$seconds.${'$fraction'.padLeft(6, '0')}';
   }
 
   static void _check(String? Function(String) validator, String value) {

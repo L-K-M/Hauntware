@@ -4,6 +4,8 @@ import 'package:flutter/foundation.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 
 import '../ui/charts/series_ring.dart';
+import 'log_reads.dart';
+import 'log_streams.dart';
 
 /// How long a server's link outlives the last view that opened it, as long
 /// as the grace 03 §5.1 and D34 give a backgrounded phone's link: stepping
@@ -67,13 +69,31 @@ Duration? sampleAge(DateTime? at, DateTime now) {
   return age.isNegative ? Duration.zero : age;
 }
 
+/// What the engine last said sampling a server is doing ([state]), and
+/// the phase before it ([previous]; null for the first this engine run).
+/// The protocol has the engine send a [SamplingState] at each phase
+/// change, so the pair tells a link lost while sampling, whose loss
+/// `state.since` dates, from one already down when a view or the return
+/// from the background subscribed the server again, whose phase began
+/// only then (03 §9.5 item 4).
+@immutable
+final class SamplingStatus {
+  const SamplingStatus(this.state, {this.previous});
+
+  final SamplingState state;
+  final SamplingPhase? previous;
+}
+
 /// The monitoring concern (03 §10.1): what the engine should keep linked
 /// and sample for what the user can see, and what comes back.
 ///
 /// Views open and leave servers: the first open sends [Connect], the last
 /// leave [Disconnect] after the grace. Visible surfaces hold subscriptions,
 /// each under its own id (D45). The app's activity goes out when it
-/// changes. Samples land in a listenable per server and stream and a ring
+/// changes. A server that leaves the fleet takes its link and subscriptions
+/// with it in the engine (03 §5.1), so it is sent nothing while it is gone,
+/// and if it comes back, the views still holding it connect and subscribe
+/// again. Samples land in a listenable per server and stream and a ring
 /// per [MetricSeries], so a tick repaints only the surfaces painting it
 /// (§10.1 forbids a whole-app rebuild every 1 to 5 s).
 ///
@@ -92,7 +112,15 @@ final class MonitoringController extends ChangeNotifier {
     DateTime Function() now = DateTime.now,
   }) : _clock = _FreshnessClock(now) {
     _events = _engine.events.listen(_onEngineEvent, onDone: _onEngineDone);
+    logs = LogStreams(_engine);
   }
+
+  /// The log streams panels open, and each server's journal access for
+  /// LOG-04's notice (03 §10.1, §10.8): a concern of its own that lasts
+  /// this engine run, listening to the engine beside this controller. It
+  /// sends every [OpenLogStream] the app sends, [openLogRead]'s included,
+  /// since a rejection names no stream.
+  late final LogStreams logs;
 
   final EngineClient _engine;
   final Duration _linkGrace;
@@ -105,7 +133,7 @@ final class MonitoringController extends ChangeNotifier {
   /// The engine's startup fleet goes to the fleet controller, its client's
   /// first listener (`main.dart`), so this is null until the next import;
   /// no sample can precede the views that subscribe it, which show fleet
-  /// servers only.
+  /// servers only, so until then every server counts as listed.
   Set<String>? _fleetIds;
 
   /// The streams the engine was asked to sample, by `(serverId,
@@ -127,6 +155,15 @@ final class MonitoringController extends ChangeNotifier {
   /// one box instead of the whole controller.
   ValueListenable<Sample?> sampleFor(String serverId, SampleStream stream) =>
       _server(serverId).box(stream);
+
+  /// The latest sample of [serverId]'s [stream] that carried a reading
+  /// rather than [CollectorUnavailable], or null before one: what a view
+  /// keeps listing, marked as old, while the collector fails, as the
+  /// System tab's mounts while `df` times out on a stale mount.
+  ValueListenable<Sample?> lastReadingFor(
+    String serverId,
+    SampleStream stream,
+  ) => _server(serverId).lastReading(stream);
 
   /// What the probe last found on [serverId] ([HostProfileChanged]), or
   /// null before its first answer this engine run: SYS-01's
@@ -154,6 +191,14 @@ final class MonitoringController extends ChangeNotifier {
   /// a slow stream's newer reading says nothing about a stalled fast one.
   ValueListenable<DateTime> get clock => _clock;
 
+  /// What the engine last said sampling [serverId] is doing, or null
+  /// before it said anything this engine run. With [sampleFor] and [clock]
+  /// it gives a stream's freshness line (`ui/freshness.dart`, 03 §9.5 item
+  /// 4): paused in the background, or disconnected since the link was lost
+  /// while sampling.
+  ValueListenable<SamplingStatus?> samplingFor(String serverId) =>
+      _server(serverId).sampling;
+
   bool isSubscribed(String serverId, String subscriptionId) =>
       _subscribed.containsKey((serverId, subscriptionId));
 
@@ -178,6 +223,7 @@ final class MonitoringController extends ChangeNotifier {
       streams,
     );
     _followRingStreams(serverId, named);
+    if (!_listed(serverId)) return;
     _send(
       Subscribe(
         serverId: serverId,
@@ -191,8 +237,13 @@ final class MonitoringController extends ChangeNotifier {
     final named = _ringStreamsNamed(serverId);
     if (_subscribed.remove((serverId, subscriptionId)) == null) return;
     _followRingStreams(serverId, named);
+    if (!_listed(serverId)) return;
     _send(Unsubscribe(serverId: serverId, subscriptionId: subscriptionId));
   }
+
+  /// Whether the fleet lists [serverId]. The engine holds no link or
+  /// subscription for a server it does not list (03 §5.1).
+  bool _listed(String serverId) => _fleetIds?.contains(serverId) ?? true;
 
   /// The ring streams some subscription of [serverId] names.
   Set<SampleStream> _ringStreamsNamed(String serverId) => {
@@ -223,13 +274,20 @@ final class MonitoringController extends ChangeNotifier {
     });
   }
 
+  /// Opens a bounded read of [spec], a window ([LogStreamSpec.follow]
+  /// false) such as SVC-04's unit logs (03 §7.5), through [logs]. The
+  /// returned [LogRead] reports its records and state; the caller closes
+  /// it once it no longer shows it.
+  LogRead openLogRead(LogStreamSpec spec) => LogRead(logs, spec);
+
   /// A view of [serverId] opened (the desktop workspace, the phone's pushed
   /// screen). The first sends [Connect]; within the grace after the last
   /// leave the link is still held and nothing is sent.
   ///
-  /// Until links land the engine answers [Connect] and [Disconnect] with
-  /// [RequestRejected], which this controller ignores like every event it
-  /// does not consume: the views stay as they are and show no error.
+  /// An engine with links off, as the app spawns it until they are ready,
+  /// answers [Connect] with [RequestRejected], which this controller
+  /// ignores like every event it does not consume: the views stay as they
+  /// are and show no error.
   void openServer(String serverId) {
     final views = _openViews[serverId] ?? 0;
     _openViews[serverId] = views + 1;
@@ -240,7 +298,7 @@ final class MonitoringController extends ChangeNotifier {
       leaving.cancel();
       return;
     }
-    _send(Connect(serverId));
+    if (_listed(serverId)) _send(Connect(serverId));
   }
 
   /// A view [openServer] counted closed. The last sends [Disconnect] once
@@ -255,9 +313,10 @@ final class MonitoringController extends ChangeNotifier {
     }
 
     _openViews.remove(serverId);
-    // A stopped engine (or a disposed controller) holds no link, and a
-    // grace timer would only keep this controller alive to send nothing.
-    if (_engineStopped) return;
+    // A stopped engine (or a disposed controller) holds no link, nor does
+    // the engine hold one for a server the fleet no longer lists, so no
+    // grace timer waits to disconnect it.
+    if (_engineStopped || !_listed(serverId)) return;
     if (_linkGrace == Duration.zero) {
       _send(Disconnect(serverId));
       return;
@@ -299,21 +358,54 @@ final class MonitoringController extends ChangeNotifier {
         if (_fleetIds case final ids? when !ids.contains(serverId)) return;
         _server(serverId).profile.value = profile;
       case CatalogReplaced(:final entries):
-        _purge({for (final entry in entries) entry.serverId});
+        _replaceFleet({for (final entry in entries) entry.serverId});
+      case SamplingState(:final serverId):
+        // As for a sample: a server that left the fleet stays purged.
+        if (_fleetIds case final ids? when !ids.contains(serverId)) return;
+        final box = _server(serverId).sampling;
+        box.value = SamplingStatus(event, previous: box.value?.state.phase);
       case EngineEvent():
         break;
     }
   }
 
-  /// SYN-08: a server that leaves the fleet takes its readings, rings and
-  /// seq floor with it, and comes back, if it does, without them.
-  void _purge(Set<String> fleetIds) {
+  /// SYN-08: a server that leaves the fleet takes its readings, last
+  /// readings, rings, profile and seq floor with it, and comes back, if it
+  /// does, without them. The engine forgets its link and subscriptions too
+  /// (03 §5.1), so its pending [Disconnect] goes, and a server that comes
+  /// back gets [Connect] and [Subscribe] again for the views and surfaces
+  /// still holding it. Their counts and subscriptions stay meanwhile: the
+  /// views leave and unsubscribe when they unmount.
+  void _replaceFleet(Set<String> fleetIds) {
+    final before = _fleetIds;
     _fleetIds = fleetIds;
     _readings.removeWhere((serverId, readings) {
       if (fleetIds.contains(serverId)) return false;
       readings.dispose();
       return true;
     });
+    _leaving.removeWhere((serverId, timer) {
+      if (fleetIds.contains(serverId)) return false;
+      timer.cancel();
+      return true;
+    });
+
+    // Until the first fleet this controller saw, every server was listed.
+    if (before == null) return;
+    for (final serverId in fleetIds.difference(before)) {
+      if (_openViews.containsKey(serverId)) _send(Connect(serverId));
+      for (final MapEntry(key: (id, subscriptionId), value: streams)
+          in _subscribed.entries) {
+        if (id != serverId) continue;
+        _send(
+          Subscribe(
+            serverId: serverId,
+            subscriptionId: subscriptionId,
+            streams: streams,
+          ),
+        );
+      }
+    }
   }
 
   void _onEngineDone() {
@@ -330,6 +422,7 @@ final class MonitoringController extends ChangeNotifier {
   @override
   void dispose() {
     unawaited(_events.cancel());
+    logs.dispose();
     _onEngineDone();
     for (final readings in _readings.values) {
       readings.dispose();
@@ -378,14 +471,15 @@ final class _FreshnessClock extends ChangeNotifier
   }
 }
 
-/// One server's readings: its seq floor, latest sample per stream and
-/// rings.
+/// One server's readings: its seq floor, latest sample and latest reading
+/// per stream, rings and probe profile.
 final class _ServerReadings {
   /// The highest [Sample.seq] kept: the engine counts one sequence per
   /// server across its streams (D44).
   int? _lastSeq;
 
   final Map<SampleStream, ValueNotifier<Sample?>> _boxes = {};
+  final Map<SampleStream, ValueNotifier<Sample?>> _lastReadings = {};
   final Map<SampleStream, Map<MetricSeries, SeriesRing>> _rings = {};
   final ValueNotifier<HostProfile?> profile = ValueNotifier(null);
 
@@ -393,6 +487,10 @@ final class _ServerReadings {
   /// whose next reading follows a hole.
   final Set<SampleStream> _unnamed = {};
   final Set<SampleStream> _afterHole = {};
+
+  /// The engine's latest [SamplingState] for the server, with the phase
+  /// before it.
+  final ValueNotifier<SamplingStatus?> sampling = ValueNotifier(null);
 
   void unnamed(SampleStream stream) => _unnamed.add(stream);
 
@@ -402,6 +500,9 @@ final class _ServerReadings {
 
   ValueNotifier<Sample?> box(SampleStream stream) =>
       _boxes.putIfAbsent(stream, () => ValueNotifier<Sample?>(null));
+
+  ValueNotifier<Sample?> lastReading(SampleStream stream) =>
+      _lastReadings.putIfAbsent(stream, () => ValueNotifier<Sample?>(null));
 
   /// Every series of [stream] at once, so they stay aligned sample for
   /// sample.
@@ -432,11 +533,15 @@ final class _ServerReadings {
         ring.add(series.readFrom(sample.result));
       }
     }
+    if (sample.result is! CollectorUnavailable) {
+      lastReading(sample.stream).value = sample;
+    }
     box(sample.stream).value = sample;
   }
 
   void dispose() {
-    for (final box in _boxes.values) {
+    sampling.dispose();
+    for (final box in [..._boxes.values, ..._lastReadings.values]) {
       box.dispose();
     }
     for (final ring in _rings.values.expand((rings) => rings.values)) {

@@ -77,9 +77,10 @@ typedef LinkConnect =
 /// - No attempt starts while the app is in the background; under
 ///   [BackgroundLinkPolicy.closeAfterGrace] links close after
 ///   [kBackgroundGracePeriod] and redial on return.
+/// - A server that leaves the fleet is forgotten ([forget]).
 ///
-/// Not wired into the engine yet, which still rejects `Connect`,
-/// `Disconnect` and `SetAppActivity`.
+/// The engine isolate owns it and hands it `Connect`, `Disconnect` and
+/// `SetAppActivity`.
 final class LinkSupervisor {
   /// [configFor] looks up a fleet server's config by id, null for an
   /// unknown or undialable one. [startTimer], [now] and [random] are test
@@ -103,6 +104,11 @@ final class LinkSupervisor {
   final Random _random;
 
   final Map<String, _Server> _servers = {};
+
+  /// The ids of servers with a dial, current or given up, that has not
+  /// returned yet. Kept apart from the records, which [forget] drops, so
+  /// a server that comes back while its old dial runs waits for it too.
+  final Set<String> _dialsPending = {};
 
   /// Attempts waiting for a slot, interactive ones first.
   final List<_Attempt> _queue = [];
@@ -165,6 +171,24 @@ final class LinkSupervisor {
     if (!_tearDown(server)) return;
 
     _set(server, const LinkClosed(LinkClosedReason.closedByOwner));
+    _pump();
+  }
+
+  /// Forgets [serverIds], which left the fleet (03 §5.1): gives up their
+  /// attempts and backoffs and closes their links as [disconnect] does,
+  /// but reports nothing, since the app drops a server's status with its
+  /// entry, and keeps nothing learned about them (a block, a
+  /// keyboard-interactive last connect, the failure count), so a server
+  /// that comes back starts over. A given-up dial still on its way holds
+  /// the next attempt of a server that comes back until it returns.
+  ///
+  /// All of them go before a slot they free starts a queued attempt, so
+  /// no queued attempt of one of them dials and reports a close.
+  void forget(Iterable<String> serverIds) {
+    for (final serverId in serverIds) {
+      final server = _servers.remove(serverId);
+      if (server != null) _tearDown(server);
+    }
     _pump();
   }
 
@@ -236,7 +260,7 @@ final class LinkSupervisor {
     // Waiting for a given-up dial, such as a key read stalled on a mount,
     // counts against the deadline, so the wait shows as a timeout and
     // backs off rather than staying connecting.
-    if (server.dialPending) _armDeadline(attempt);
+    if (_dialsPending.contains(server.id)) _armDeadline(attempt);
     _pump();
   }
 
@@ -244,7 +268,9 @@ final class LinkSupervisor {
   /// foreground, skipping servers whose given-up dial has not returned.
   void _pump() {
     while (!_background && _inFlight < kMaxConnectsInFlight) {
-      final index = _queue.indexWhere((a) => !a.server.dialPending);
+      final index = _queue.indexWhere(
+        (a) => !_dialsPending.contains(a.server.id),
+      );
       if (index < 0) return;
 
       final attempt = _queue.removeAt(index);
@@ -276,7 +302,8 @@ final class LinkSupervisor {
     final server = attempt.server;
     final config = _configFor(server.id);
     if (config == null) {
-      // The server left the fleet while it waited.
+      // The server lost its config while the attempt waited: its entry
+      // can no longer be dialed, or it left the fleet without [forget].
       _drop(attempt);
       server.wanted = false;
       _set(server, const LinkClosed(LinkClosedReason.closedByOwner));
@@ -285,7 +312,7 @@ final class LinkSupervisor {
     }
 
     attempt.dialing = true;
-    server.dialPending = true;
+    _dialsPending.add(server.id);
     _armDeadline(attempt);
     unawaited(_run(attempt, config));
   }
@@ -305,10 +332,11 @@ final class LinkSupervisor {
     }
     _freeSlot(attempt);
     final server = attempt.server;
-    server.dialPending = false;
+    _dialsPending.remove(server.id);
     // An attempt queued behind this dial now waits only for a slot, which
-    // the deadline leaves out.
-    final next = server.attempt;
+    // the deadline leaves out. It may be a forgotten server's comeback,
+    // with a record of its own.
+    final next = _servers[server.id]?.attempt;
     if (next != null && !next.holdsSlot) next.timer?.cancel();
     _settle(attempt, result);
     _pump();
@@ -543,8 +571,6 @@ final class _Server {
   /// The current attempt, queued, in its slot or dialing.
   _Attempt? attempt;
 
-  /// A dial, current or given up, has not returned yet.
-  bool dialPending = false;
   Timer? retry;
 
   /// Failed attempts since the last link, for [samplerRestartDelay].

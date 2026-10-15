@@ -177,6 +177,78 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get fleetRowProbeOnline => 'Online';
+
+  @override
+  String get fleetRowProbeOffline => 'Offline';
+
+  @override
+  String get fleetRowProbeUnknown => 'Reachability unknown';
+
+  @override
+  String fleetRowAgeSeconds(int seconds) {
+    return '$seconds s';
+  }
+
+  @override
+  String fleetRowAgeMinutes(int minutes) {
+    return '$minutes min';
+  }
+
+  @override
+  String fleetRowAgeHours(int hours) {
+    return '$hours h';
+  }
+
+  @override
+  String fleetRowUpdated(String age) {
+    return 'Updated $age ago';
+  }
+
+  @override
+  String fleetRowStaleAge(String age) {
+    return 'Stale · $age';
+  }
+
+  @override
+  String get fleetRowCpu => 'CPU';
+
+  @override
+  String get fleetRowMemory => 'Memory';
+
+  @override
+  String get fleetRowDisk => 'Disk';
+
+  @override
+  String fleetRowLocatorConflict(String servers) {
+    return 'Host key conflict with $servers: they reach the same address through a different jump route.';
+  }
+
+  @override
+  String get fleetRowPartSeparator => ' · ';
+
+  @override
+  String get fleetRowListSeparator => ', ';
+
+  @override
+  String fleetRowLinkAnnouncement(String server, String status) {
+    return '$server: $status';
+  }
+
+  @override
+  String fleetFilterCount(int matches, int total) {
+    return '$matches of $total';
+  }
+
+  @override
+  String fleetFilterCountOpensFirst(int matches, int total) {
+    return '$matches of $total · Enter opens the first';
+  }
+
+  @override
+  String get fleetFilterNoMatches => 'No servers match';
+
+  @override
   String get settingsTitle => 'Settings';
 
   @override
@@ -290,6 +362,154 @@ class AppLocalizationsEn extends AppLocalizations {
   String get placeholderMilestone => 'Available in a later milestone.';
 
   @override
+  String get coverageFirstRunTitle => 'How Klabautermann watches your servers';
+
+  @override
+  String get coverageFirstRunBody =>
+      'Klabautermann connects over SSH only while it is open. It installs nothing on your servers unless you ask it to. Charts cover only the time this device was connected.';
+
+  @override
+  String get coverageFirstRunDismiss => 'Got it';
+
+  @override
+  String get coverageFirstRunDetails => 'Coverage details';
+
+  @override
+  String get coverageFirstRunNotSaved =>
+      'Klabautermann could not save that you dismissed the coverage note, so it shows again after a restart.';
+
+  @override
+  String coverageChip(int watched, int total) {
+    String _temp0 = intl.Intl.pluralLogic(
+      total,
+      locale: localeName,
+      other:
+          'Watching $watched of $total servers on this device, only while open',
+      one: 'Watching $watched of 1 server on this device, only while open',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get coverageChipHint => 'Show coverage details';
+
+  @override
+  String get coverageSheetTitle => 'Coverage on this device';
+
+  @override
+  String get coverageTierBadge => 'T0';
+
+  @override
+  String get coverageTierTitle => 'SSH while Klabautermann is open';
+
+  @override
+  String get coverageTierBody =>
+      'Klabautermann reads your servers over SSH only while it is open. It installs nothing on them unless you ask it to.';
+
+  @override
+  String get coverageCoveredHeading => 'Covered';
+
+  @override
+  String get coverageLiveTitle => 'Live readings while open';
+
+  @override
+  String get coverageLiveBody =>
+      'Metrics, processes, services, logs and jobs of the servers you have open.';
+
+  @override
+  String get coverageWatchedTitle => 'Continuous watching';
+
+  @override
+  String coverageWatchedBody(int watched) {
+    String _temp0 = intl.Intl.pluralLogic(
+      watched,
+      locale: localeName,
+      other:
+          '$watched servers are read continuously while Klabautermann is open. Any others are read only while you have them open.',
+      one:
+          '1 server is read continuously while Klabautermann is open. Any others are read only while you have them open.',
+      zero:
+          'No server is watched on this device, so each is read only while you have it open.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get coverageNotCoveredHeading => 'Not covered';
+
+  @override
+  String get coverageClosedTitle => 'While Klabautermann is closed';
+
+  @override
+  String get coverageClosedBody =>
+      'Nothing checks your servers, so nothing can warn you about them.';
+
+  @override
+  String get coverageHostDownTitle => 'A server going down';
+
+  @override
+  String get coverageHostDownBody =>
+      'If a server stops while Klabautermann is closed, you find out the next time you open it.';
+
+  @override
+  String get coverageHistoryTitle => 'History before you connected';
+
+  @override
+  String get coverageHistoryBody =>
+      'Charts cover only the time this device was connected. Gaps are marked, never filled in.';
+
+  @override
+  String get coverageBackgroundTitle => 'While in the background';
+
+  @override
+  String get coverageBackgroundBody =>
+      'Reading stops while Klabautermann is in the background and resumes when you return.';
+
+  @override
+  String coverageFreshnessSeconds(int seconds) {
+    return '$seconds s';
+  }
+
+  @override
+  String coverageFreshnessMinutes(int minutes) {
+    return '$minutes min';
+  }
+
+  @override
+  String coverageFreshnessHours(int hours) {
+    return '$hours h';
+  }
+
+  @override
+  String coverageFreshnessDays(int days) {
+    return '$days d';
+  }
+
+  @override
+  String coverageFreshnessUpdated(String age) {
+    return 'Updated $age ago';
+  }
+
+  @override
+  String coverageFreshnessStale(String age) {
+    return 'Stale: updated $age ago';
+  }
+
+  @override
+  String coverageFreshnessDisconnected(String age) {
+    return 'Disconnected $age ago';
+  }
+
+  @override
+  String get coverageFreshnessPaused => 'Paused: app in background';
+
+  @override
+  String get coverageFreshnessNotWatched => 'Not watched on this device';
+
+  @override
+  String get coverageFreshnessNoData => 'No data yet';
+
+  @override
   String serverTitle(String name) {
     return '$name';
   }
@@ -320,6 +540,224 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get serverTabMore => 'More';
+
+  @override
+  String get systemIdentityTitle => 'Identity';
+
+  @override
+  String get systemUptimeTitle => 'Uptime';
+
+  @override
+  String get systemNetworkTitle => 'Network';
+
+  @override
+  String get systemDisksTitle => 'Disks';
+
+  @override
+  String get systemHostname => 'Host name';
+
+  @override
+  String get systemOperatingSystem => 'Operating system';
+
+  @override
+  String get systemKernel => 'Kernel';
+
+  @override
+  String systemKernelValue(String name, String release) {
+    return '$name $release';
+  }
+
+  @override
+  String get systemArchitecture => 'Architecture';
+
+  @override
+  String get systemVirtualization => 'Virtualization';
+
+  @override
+  String get systemVirtualizationNone => 'None detected';
+
+  @override
+  String systemVirtualizationMachine(String name) {
+    return 'Virtual machine ($name)';
+  }
+
+  @override
+  String systemVirtualizationContainer(String name) {
+    return 'Container ($name)';
+  }
+
+  @override
+  String get systemVirtualizationContainerUnnamed => 'Container';
+
+  @override
+  String get systemContainerNotice =>
+      'This server is a container. Figures that would come from its host read as unknown.';
+
+  @override
+  String get systemUnknown => 'Unknown';
+
+  @override
+  String get systemUnknownContainer =>
+      'Inside this container this figure would be the host\'s, so it is not shown.';
+
+  @override
+  String get systemUptime => 'Up for';
+
+  @override
+  String systemUptimeDays(int days, int hours) {
+    final intl.NumberFormat daysNumberFormat = intl.NumberFormat.decimalPattern(
+      localeName,
+    );
+    final String daysString = daysNumberFormat.format(days);
+    final intl.NumberFormat hoursNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String hoursString = hoursNumberFormat.format(hours);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      days,
+      locale: localeName,
+      other: '$daysString days',
+      one: '1 day',
+    );
+    String _temp1 = intl.Intl.pluralLogic(
+      hours,
+      locale: localeName,
+      other: '$hoursString hours',
+      one: '1 hour',
+    );
+    return '$_temp0, $_temp1';
+  }
+
+  @override
+  String systemUptimeHours(int hours, int minutes) {
+    final intl.NumberFormat hoursNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String hoursString = hoursNumberFormat.format(hours);
+    final intl.NumberFormat minutesNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String minutesString = minutesNumberFormat.format(minutes);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      hours,
+      locale: localeName,
+      other: '$hoursString hours',
+      one: '1 hour',
+    );
+    String _temp1 = intl.Intl.pluralLogic(
+      minutes,
+      locale: localeName,
+      other: '$minutesString minutes',
+      one: '1 minute',
+    );
+    return '$_temp0, $_temp1';
+  }
+
+  @override
+  String systemUptimeMinutes(int minutes) {
+    final intl.NumberFormat minutesNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String minutesString = minutesNumberFormat.format(minutes);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      minutes,
+      locale: localeName,
+      other: '$minutesString minutes',
+      one: '1 minute',
+      zero: 'Less than a minute',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get systemBooted => 'Booted';
+
+  @override
+  String systemBootedValue(DateTime time) {
+    final intl.DateFormat timeDateFormat = intl.DateFormat.yMMMd(
+      localeName,
+    ).add_jm();
+    final String timeString = timeDateFormat.format(time);
+
+    return '$timeString';
+  }
+
+  @override
+  String get systemReceive => 'Receive';
+
+  @override
+  String get systemTransmit => 'Transmit';
+
+  @override
+  String get systemWaiting => 'Waiting for the first reading.';
+
+  @override
+  String get systemUnavailableMissing =>
+      'The server lacks the tool this reading needs.';
+
+  @override
+  String get systemUnavailableDenied => 'The server refused this reading.';
+
+  @override
+  String get systemUnavailableTimeout => 'This reading did not finish in time.';
+
+  @override
+  String get systemUnavailableError => 'This reading failed.';
+
+  @override
+  String get systemDisksTimedOut =>
+      'Disk usage did not finish in time. A network mount (NFS or SMB) that stopped answering is the usual cause.';
+
+  @override
+  String systemDisksLastListed(DateTime time) {
+    final intl.DateFormat timeDateFormat = intl.DateFormat.yMMMd(
+      localeName,
+    ).add_jm();
+    final String timeString = timeDateFormat.format(time);
+
+    return 'These mounts are from the reading at $timeString; their usage is unknown now.';
+  }
+
+  @override
+  String get systemDisksNoTimeout =>
+      'This server has no timeout command, so a network mount that stops answering can stall disk readings.';
+
+  @override
+  String systemDisksShowPseudo(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    return 'Show pseudo filesystems ($countString)';
+  }
+
+  @override
+  String get systemDisksEmpty => 'No mounts to show.';
+
+  @override
+  String get systemDevice => 'Device';
+
+  @override
+  String get systemColumnMount => 'Mount';
+
+  @override
+  String get systemColumnType => 'Type';
+
+  @override
+  String get systemColumnUsed => 'Used';
+
+  @override
+  String get systemColumnUse => 'Use';
+
+  @override
+  String get systemColumnInodes => 'Inodes';
+
+  @override
+  String get systemColumnUsage => 'Usage';
+
+  @override
+  String systemUsedOf(String used, String size) {
+    return '$used of $size';
+  }
 
   @override
   String chartSeriesSummary(
@@ -735,6 +1173,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get logJournalNotSent => '[not sent: over 4,096 bytes]';
 
   @override
+  String logJournalFieldNotSent(String name) {
+    return '$name [not sent: over 4,096 bytes]';
+  }
+
+  @override
   String logJournalFieldsLeftOut(int count) {
     final intl.NumberFormat countNumberFormat =
         intl.NumberFormat.decimalPattern(localeName);
@@ -754,4 +1197,328 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get logJournalHideFields => 'Hide fields';
+
+  @override
+  String get servicesWaiting => 'Waiting for the first list of units…';
+
+  @override
+  String get servicesUnavailableMissing =>
+      'This server has no systemctl, so there are no units to list.';
+
+  @override
+  String get servicesUnavailableDenied =>
+      'The server refused to list its units.';
+
+  @override
+  String get servicesUnavailableTimeout =>
+      'Listing units took too long and was stopped.';
+
+  @override
+  String get servicesUnavailableError => 'Listing units failed.';
+
+  @override
+  String get servicesTextFallback =>
+      'This server\'s systemd is older than version 246, so units are read from text. States that could not be read show as unknown.';
+
+  @override
+  String get servicesFilterType => 'Type';
+
+  @override
+  String get servicesFilterTypeAll => 'All types';
+
+  @override
+  String get servicesFilterState => 'State';
+
+  @override
+  String get servicesFilterStateAll => 'All states';
+
+  @override
+  String get servicesEmpty => 'No units match these filters.';
+
+  @override
+  String get servicesColumnUnit => 'Unit';
+
+  @override
+  String get servicesColumnLoad => 'Load';
+
+  @override
+  String get servicesColumnActive => 'Active';
+
+  @override
+  String get servicesColumnSub => 'Sub';
+
+  @override
+  String get servicesColumnDescription => 'Description';
+
+  @override
+  String servicesFailedCount(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$countString failed units',
+      one: '1 failed unit',
+      zero: 'No failed units',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String servicesFailedUnit(String unit, String state) {
+    return '$unit: $state';
+  }
+
+  @override
+  String servicesFailedMore(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'and $countString more',
+      one: 'and 1 more',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get servicesUnitClose => 'Close unit details';
+
+  @override
+  String get servicesLogsTitle => 'Recent log lines';
+
+  @override
+  String get servicesLogsRequested => 'Asking the server for recent log lines…';
+
+  @override
+  String get servicesLogsWaitingLink =>
+      'Waiting for the connection to the server…';
+
+  @override
+  String get servicesLogsWaitingChannel =>
+      'Waiting for a free session on the server…';
+
+  @override
+  String get servicesLogsWaitingBackground =>
+      'Paused while the app is in the background.';
+
+  @override
+  String get servicesLogsReading => 'Reading recent log lines…';
+
+  @override
+  String get servicesLogsEmpty => 'The journal holds no lines for this unit.';
+
+  @override
+  String get servicesLogsRefused =>
+      'Reading unit logs is not available in this version yet.';
+
+  @override
+  String get servicesLogsInvalid =>
+      'This unit\'s name cannot be used to read its logs.';
+
+  @override
+  String get servicesLogsMissing =>
+      'This server has no journalctl, so unit logs cannot be read.';
+
+  @override
+  String get servicesLogsDenied =>
+      'The server refused to read this unit\'s journal.';
+
+  @override
+  String get servicesLogsFailed => 'Reading this unit\'s journal failed.';
+
+  @override
+  String get logsPanelSource => 'Source';
+
+  @override
+  String logsPanelSourceName(String source) {
+    String _temp0 = intl.Intl.selectLogic(source, {
+      'journal': 'Journal',
+      'kernel': 'Kernel',
+      'other': 'File',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get logsPanelUnit => 'Unit';
+
+  @override
+  String get logsPanelIdentifier => 'Identifier';
+
+  @override
+  String get logsPanelPriority => 'Priority';
+
+  @override
+  String get logsPanelPriorityAny => 'Any priority';
+
+  @override
+  String logsPanelPriorityLevel(String level) {
+    String _temp0 = intl.Intl.selectLogic(level, {
+      'emergency': 'Emergency',
+      'alert': 'Alert and above',
+      'critical': 'Critical and above',
+      'error': 'Error and above',
+      'warning': 'Warning and above',
+      'notice': 'Notice and above',
+      'info': 'Info and above',
+      'other': 'Debug and above',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get logsPanelCurrentBoot => 'Current boot only';
+
+  @override
+  String get logsPanelTimeRange => 'Time range';
+
+  @override
+  String logsPanelTimeRangeOption(String range) {
+    String _temp0 = intl.Intl.selectLogic(range, {
+      'last15Minutes': 'Last 15 minutes',
+      'lastHour': 'Last hour',
+      'last24Hours': 'Last 24 hours',
+      'last7Days': 'Last 7 days',
+      'other': 'Any time',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get logsPanelPath => 'File path';
+
+  @override
+  String get logsPanelPathHint => 'Absolute path, such as /var/log/syslog';
+
+  @override
+  String logsPanelPathProblem(String problem) {
+    String _temp0 = intl.Intl.selectLogic(problem, {
+      'notAbsolute': 'Enter an absolute path that starts with /.',
+      'notNormalized': 'Remove the . and .. parts from the path.',
+      'other': 'The path contains a NUL character.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get logsPanelCommonPaths => 'Common paths';
+
+  @override
+  String get logsPanelApply => 'Apply';
+
+  @override
+  String logsPanelFilters(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Filters ($countString)',
+      zero: 'Filters',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String logsPanelLiveState(String state) {
+    String _temp0 = intl.Intl.selectLogic(state, {
+      'live': 'Live',
+      'connecting': 'Connecting',
+      'disconnected': 'Disconnected',
+      'paused': 'Paused',
+      'stopped': 'Stopped',
+      'other': 'Unavailable',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get logsPanelLiveTooltip =>
+      'Follow new entries as the server writes them';
+
+  @override
+  String get logsPanelJournalLimited =>
+      'Only your own journal entries are shown: your account on this server is not in the systemd-journal, adm or wheel group. The server\'s Access section shows how to add it.';
+
+  @override
+  String get logsPanelKernelLimited =>
+      'Kernel messages may be missing: your account on this server is not in the systemd-journal, adm or wheel group, so the journal shows it none. The server\'s Access section shows how to add it.';
+
+  @override
+  String logsPanelStatus(String status) {
+    String _temp0 = intl.Intl.selectLogic(status, {
+      'opening': 'Opening the log…',
+      'waitingLink': 'Waiting for the connection to the server.',
+      'waitingChannel': 'Waiting for a free session on the server.',
+      'waitingBackground': 'Paused while the app is in the background.',
+      'loading': 'Loading entries…',
+      'invalid': 'The engine refused this filter or path.',
+      'missing': 'The server has no such file or log tool.',
+      'denied': 'The server denied access to this log.',
+      'failed': 'Reading the log failed.',
+      'rejected': 'The engine did not open this log.',
+      'other': 'Choose or type the absolute path of a file to tail.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get logsPanelRetry => 'Retry';
+
+  @override
+  String get logsPanelEmpty => 'This log has no entries.';
+
+  @override
+  String get logsPanelEmptyFiltered => 'No entries match these filters.';
+
+  @override
+  String get logsPanelEmptyLimited => 'No entries are visible to your account.';
+
+  @override
+  String get logsPanelSearchLabel => 'Search loaded entries';
+
+  @override
+  String get logsPanelSearchCase => 'Match case';
+
+  @override
+  String logsPanelSearchMatches(int total) {
+    final intl.NumberFormat totalNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String totalString = totalNumberFormat.format(total);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      total,
+      locale: localeName,
+      other: '$totalString matches',
+      one: '1 match',
+      zero: 'No matches',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String logsPanelSearchPosition(int current, int total) {
+    final intl.NumberFormat currentNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String currentString = currentNumberFormat.format(current);
+    final intl.NumberFormat totalNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String totalString = totalNumberFormat.format(total);
+
+    return '$currentString of $totalString';
+  }
+
+  @override
+  String get logsPanelSearchPrevious => 'Previous match';
+
+  @override
+  String get logsPanelSearchNext => 'Next match';
 }

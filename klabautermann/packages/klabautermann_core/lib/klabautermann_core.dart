@@ -40,21 +40,30 @@ export 'src/settings/instance_lock.dart'
 // explicit `show` list that changes as a milestone wires types in or
 // retires them.
 // The host types are the plain data that sampling results and
-// HostProfileChanged carry (D52), and the log viewer's journal rows.
+// HostProfileChanged carry (D52), the file names
+// HostProfile.showsHostFigures takes (D50), and the log viewer's journal
+// rows.
 export 'package:klabautermann_host/klabautermann_host.dart'
     show
         CpuPercentages,
         CronSnapshot,
         DiskRate,
+        FsMount,
         FsSnapshot,
         HostProfile,
         JournalEntry,
         LoadAvg,
         NetRate,
         ProcsSelection,
+        SystemWideProcFile,
         SystemdUnit,
         TimersSnapshot,
+        UnitListFormat,
         UnitsSnapshot;
+// The Logs panel's LOG-04 notice: the access check's journal row (K04)
+// over the probe's HostProfile.
+export 'package:klabautermann_host/klabautermann_host.dart'
+    show AccessReport, evaluateAccess;
 // The app resolves `~/.ssh/config` for the FL-02 import with Séance's home
 // rule, which also undoes a macOS sandbox's container `HOME`.
 export 'package:seance_core/seance_core.dart' show expandHomePath;
@@ -75,6 +84,5 @@ export 'package:klabautermann_host/klabautermann_host.dart'
         EngineRuntime,
         FixElevation,
         HostPanel,
-        evaluateAccess,
         evaluatePanel;
 export 'package:seance_core/seance_core.dart' show quoteShellWord;

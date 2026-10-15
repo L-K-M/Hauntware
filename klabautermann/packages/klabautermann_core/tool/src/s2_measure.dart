@@ -374,8 +374,9 @@ final class Sleepers {
   }
 }
 
-/// Each slow collector on its own, then all but the probe in one tick,
-/// three rounds on one sampler: wall time, CPU and the statuses.
+/// Each slow collector a tick can request on its own, then all of them
+/// but the probe in one tick, three rounds on one sampler: wall time, CPU
+/// and the statuses. A collector with arguments is `hw_o` only.
 Future<List<Map<String, Object?>>> measureSlowTick(
   String shell,
   int clockTicks,
@@ -383,7 +384,7 @@ Future<List<Map<String, Object?>>> measureSlowTick(
 ) => _withSampler(shell, SamplerKind.slow, env, (s) async {
   final slow = [
     for (final c in Collector.values)
-      if (c.sampler == SamplerKind.slow) c,
+      if (c.sampler == SamplerKind.slow && c.argValidators.isEmpty) c,
   ];
   final requests = [
     for (final c in slow) [c],

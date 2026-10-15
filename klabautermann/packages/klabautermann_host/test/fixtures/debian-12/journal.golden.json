@@ -1,0 +1,37 @@
+{
+  "result": [
+    {
+      "cursor": "s=7b1d3c2a9f0e4d5c8b6a1f2e3d4c5b6a;i=1a2b;b=0f1e2d3c4b5a69788796a5b4c3d2e1f0;m=2dc6c0;t=63a1b2c3d4e5f;x=9c8b7a6f5e4d3c2b",
+      "realtimeUs": 1750000000000000,
+      "priority": 6,
+      "unit": null,
+      "identifier": "kernel",
+      "message": "EXT4-fs (vda1): mounted filesystem with ordered data mode. Quota mode: none."
+    },
+    {
+      "cursor": "s=7b1d3c2a9f0e4d5c8b6a1f2e3d4c5b6a;i=1a2c;b=0f1e2d3c4b5a69788796a5b4c3d2e1f0;m=3b9aca00;t=63a1b2c3d5000;x=1c2b3a4f5e6d7c8b",
+      "realtimeUs": 1750000060000000,
+      "priority": 6,
+      "unit": "ssh.service",
+      "identifier": "sshd",
+      "message": "Accepted publickey for admin from 192.0.2.10 port 50022 ssh2: ED25519 SHA256:abcdefghijklmnopqrstuvwxyz0123456789ABCDEFG"
+    },
+    {
+      "cursor": "s=7b1d3c2a9f0e4d5c8b6a1f2e3d4c5b6a;i=1a2d;b=0f1e2d3c4b5a69788796a5b4c3d2e1f0;m=3b9b0e50;t=63a1b2c3d5101;x=2d3c4b5a6f7e8d9c",
+      "realtimeUs": 1750000060100000,
+      "priority": 3,
+      "unit": "backup.service",
+      "identifier": "backup.sh",
+      "message": "copy /srv/��: failed"
+    },
+    {
+      "cursor": "s=7b1d3c2a9f0e4d5c8b6a1f2e3d4c5b6a;i=1a2e;b=0f1e2d3c4b5a69788796a5b4c3d2e1f0;m=3b9b52a0;t=63a1b2c3d5202;x=3e4d5c6b7a8f9e0d",
+      "realtimeUs": 1750000060200000,
+      "priority": 4,
+      "unit": "app.service",
+      "identifier": "app",
+      "message": null
+    }
+  ],
+  "warnings": []
+}

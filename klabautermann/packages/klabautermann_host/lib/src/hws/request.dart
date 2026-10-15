@@ -30,19 +30,26 @@ final class HwsRequestError implements Exception {
 
   @override
   String toString() {
-    final c = collector == null ? '' : ' for ${collector!.name}';
+    final c = collector == null ? '' : ' for ${collector!.wireName}';
     final a = argument == null ? '' : ' (argument: $argument)';
     return 'HwsRequestError$c: $reason$a';
   }
 }
 
 /// `hw_t <seq> <collector>...` plus the newline that submits it (03 §6.2).
+/// A collector that takes arguments is refused: a tick passes none, so it
+/// is requested through [encodeOnDemandRequest] only.
 String encodeTickRequest(int seq, List<Collector> collectors) {
   _checkSeq(seq);
   if (collectors.isEmpty) {
     throw const HwsRequestError('a tick requests at least one collector');
   }
-  return 'hw_t $seq ${collectors.map((c) => c.name).join(' ')}\n';
+  for (final c in collectors) {
+    if (c.argValidators.isNotEmpty) {
+      throw HwsRequestError('takes arguments, so only hw_o', collector: c);
+    }
+  }
+  return 'hw_t $seq ${collectors.map((c) => c.wireName).join(' ')}\n';
 }
 
 /// `hw_o <seq> <collector> <arg>...` plus the newline (03 §6.2).
@@ -65,7 +72,7 @@ String encodeOnDemandRequest(
       collector: collector,
     );
   }
-  final b = StringBuffer('hw_o $seq ${collector.name}');
+  final b = StringBuffer('hw_o $seq ${collector.wireName}');
   for (var i = 0; i < args.length; i++) {
     final reason = validators[i](args[i]);
     if (reason != null) {

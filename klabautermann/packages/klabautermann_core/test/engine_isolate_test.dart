@@ -86,8 +86,7 @@ void main() {
         ..send(const EnrollSync())
         ..send(const RunSyncRound())
         ..send(const PlanAction(ActionIntent(serverId: 'srv-1', action: 'x')))
-        // Accepted once links land; until then nothing would act on it.
-        ..send(const SetAppActivity(AppActivity.background));
+        ..send(const SetMonitorSet(['srv-1']));
 
       final names = [
         for (var i = 0; i < 4; i++)
@@ -97,8 +96,32 @@ void main() {
         'EnrollSync',
         'RunSyncRound',
         'PlanAction',
-        'SetAppActivity',
+        'SetMonitorSet',
       ]);
+    });
+
+    test('links stay off unless spawn turns them on', () async {
+      Future<String> connectAnswer({bool? linksEnabled}) async {
+        final client = linksEnabled == null
+            ? await spawnEngine()
+            : await IsolateEngineClient.spawn(
+                supportDirectory: support.path,
+                linksEnabled: linksEnabled,
+              );
+        addTearDown(client.shutdown);
+        final (:events, fleet: _) = await started(client);
+        client.send(const Connect('srv-1'));
+        final answer = (await next(events)) as RequestRejected;
+        await events.cancel();
+        return answer.reason;
+      }
+
+      expect(await connectAnswer(), contains('links are off'));
+      // On, the engine looks the server up, and the empty fleet has none.
+      expect(
+        await connectAnswer(linksEnabled: true),
+        contains('no fleet server srv-1'),
+      );
     });
 
     test('sampling subscriptions are accepted without a reply', () async {

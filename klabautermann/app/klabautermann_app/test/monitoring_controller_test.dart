@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart' show ChangeNotifier, FlutterError;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:klabautermann_app/controllers/log_reads.dart';
+import 'package:klabautermann_app/controllers/log_streams.dart';
 import 'package:klabautermann_app/controllers/monitoring_controller.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 
@@ -38,6 +40,38 @@ FleetEntry _entry(String serverId) => FleetEntry(
   port: kSshDefaultPort,
   origin: FleetEntryOrigin.sshConfig,
 );
+
+/// A Logs panel stream's side of [LogStreamListener], in arrival order.
+final class _PanelStream implements LogStreamListener {
+  final events = <Object>[];
+
+  @override
+  void onLogBatch(LogBatch batch) => events.add(batch.records.length);
+
+  @override
+  void onLogStatus(LogStreamStatus status) => events.add(status);
+
+  @override
+  void onLogRejected() => events.add('rejected');
+}
+
+/// SVC-04's unit logs: a bounded window of one unit.
+LogStreamSpec _unitLogs(String unit) => LogStreamSpec(
+  serverId: 'srv-1',
+  source: JournalLogSource(unit: unit),
+  window: 50,
+  follow: false,
+);
+
+/// The Logs panel's live journal.
+final _panelLog = LogStreamSpec(
+  serverId: 'srv-1',
+  source: const JournalLogSource(),
+  window: 500,
+  follow: true,
+);
+
+const _openRejected = RequestRejected('OpenLogStream', 'not implemented yet');
 
 /// Whether [notifier] was disposed: only then does adding a listener fail.
 bool _disposed(ChangeNotifier notifier) {
@@ -305,6 +339,30 @@ void main() {
       // The test binding also fails a periodic timer left running here.
       timed.dispose();
     });
+
+    test('the latest sampling state lands in its server\'s box with the '
+        'phase it left, and leaves with the server (SYN-08)', () async {
+      final since = DateTime.utc(2026, 10, 14, 12);
+      SamplingState state(String serverId, SamplingPhase phase) =>
+          SamplingState(serverId: serverId, phase: phase, since: since);
+      final paused = state('srv-1', SamplingPhase.pausedInBackground);
+      engine
+        ..emit(state('srv-1', SamplingPhase.sampling))
+        ..emit(paused);
+      await settle();
+      final box = monitoring.samplingFor('srv-1');
+      expect(box.value!.state, same(paused));
+      expect(box.value!.previous, SamplingPhase.sampling);
+      expect(monitoring.samplingFor('srv-2').value, isNull);
+
+      engine
+        ..emit(CatalogReplaced([_entry('srv-2')]))
+        // Still in flight when the server left: it must not come back.
+        ..emit(state('srv-1', SamplingPhase.sampling));
+      await settle();
+      expect(_disposed(box as ChangeNotifier), isTrue);
+      expect(monitoring.samplingFor('srv-1').value, isNull);
+    });
   });
 
   test('a server that leaves the fleet loses its readings and seq floor '
@@ -339,6 +397,45 @@ void main() {
       ..emit(_sample('srv-1', overview, 1));
     await settle();
     expect(monitoring.sampleFor('srv-1', overview).value?.seq, 1);
+  });
+
+  test('the latest host profile lands in its server\'s box and leaves '
+      'with the server (SYN-08)', () async {
+    final kvm = HostProfile(virtualization: 'kvm', container: 'none');
+    final lxc = HostProfile(virtualization: 'lxc', container: 'lxc');
+    engine
+      ..emit(HostProfileChanged('srv-1', kvm))
+      ..emit(HostProfileChanged('srv-1', lxc));
+    await settle();
+    final box = monitoring.profileFor('srv-1');
+    expect(box.value, same(lxc));
+    expect(monitoring.profileFor('srv-2').value, isNull);
+
+    engine
+      ..emit(CatalogReplaced([_entry('srv-2')]))
+      // Still in flight when the server left: it must not come back.
+      ..emit(HostProfileChanged('srv-1', kvm));
+    await settle();
+    expect(_disposed(box as ChangeNotifier), isTrue);
+    expect(monitoring.profileFor('srv-1').value, isNull);
+  });
+
+  test('each stream\'s latest reading outlives a collector that fails '
+      'after it, and leaves with the server (SYN-08)', () async {
+    const fs = SampleStream.fs;
+    final listed = _sample('srv-1', fs, 1, result: FsResult(FsSnapshot([])));
+    engine
+      ..emit(listed)
+      ..emit(_sample('srv-1', fs, 2));
+    await settle();
+    final box = monitoring.lastReadingFor('srv-1', fs);
+    expect(box.value, same(listed));
+    expect(monitoring.sampleFor('srv-1', fs).value?.seq, 2);
+
+    engine.emit(CatalogReplaced([_entry('srv-2')]));
+    await settle();
+    expect(_disposed(box as ChangeNotifier), isTrue);
+    expect(monitoring.lastReadingFor('srv-1', fs).value, isNull);
   });
 
   group('links (03 §5.12)', () {
@@ -453,6 +550,188 @@ void main() {
         ..leaveServer('srv-1');
       // The test binding fails a timer still pending here: it would hold
       // the dead controller for the grace, to send nothing.
+    });
+  });
+
+  group('a server that leaves the fleet (03 §5.1)', () {
+    testWidgets('drops its pending Disconnect, so a view back after a '
+        're-import within the grace connects again', (tester) async {
+      final links = MonitoringController(engine);
+      addTearDown(links.dispose);
+      links
+        ..openServer('srv-1')
+        ..leaveServer('srv-1');
+
+      engine.emit(CatalogReplaced([_entry('srv-2')]));
+      await tester.pump(kLinkLeaveGrace);
+      expect(engine.sentOfType<Disconnect>(), isEmpty);
+
+      engine.emit(CatalogReplaced([_entry('srv-1'), _entry('srv-2')]));
+      await tester.pump();
+      links.openServer('srv-1');
+      expect(engine.sentOfType<Connect>(), hasLength(2));
+    });
+
+    test('is sent nothing while gone; views still mounted connect and '
+        'subscribe again when it comes back', () async {
+      monitoring
+        ..openServer('srv-1')
+        ..subscribe('srv-1', 'overview', {SampleStream.core});
+      engine.emit(CatalogReplaced([_entry('srv-2')]));
+      await settle();
+      final before = engine.sent.length;
+
+      monitoring
+        ..openServer('srv-1')
+        ..leaveServer('srv-1')
+        ..subscribe('srv-1', 'panel', {SampleStream.procs})
+        ..unsubscribe('srv-1', 'overview');
+      expect(engine.sent, hasLength(before));
+
+      engine.emit(CatalogReplaced([_entry('srv-1'), _entry('srv-2')]));
+      await settle();
+      final replayed = engine.sent.skip(before).toList();
+      expect(replayed, hasLength(2));
+      expect((replayed.first as Connect).serverId, 'srv-1');
+      final subscribe = replayed.last as Subscribe;
+      expect(
+        (subscribe.serverId, subscribe.subscriptionId),
+        ('srv-1', 'panel'),
+      );
+      expect(subscribe.streams, {SampleStream.procs});
+
+      // A fleet that keeps it changes nothing.
+      engine.emit(CatalogReplaced([_entry('srv-1')]));
+      await settle();
+      expect(engine.sent, hasLength(before + 2));
+    });
+
+    testWidgets('a view that leaves while it is gone waits out no grace', (
+      tester,
+    ) async {
+      final links = MonitoringController(engine);
+      addTearDown(links.dispose);
+      links.openServer('srv-1');
+      engine.emit(CatalogReplaced(const []));
+      await tester.pump();
+      links.leaveServer('srv-1');
+
+      engine.emit(CatalogReplaced([_entry('srv-1')]));
+      await tester.pump();
+      expect(engine.sentOfType<Connect>(), hasLength(1), reason: 'no view');
+      links.openServer('srv-1');
+      expect(engine.sentOfType<Connect>(), hasLength(2));
+      expect(engine.sentOfType<Disconnect>(), isEmpty);
+      // The test binding fails a grace timer still pending here.
+    });
+
+    test('a view that opens while it is gone connects only once it comes '
+        'back', () async {
+      monitoring.openServer('srv-1');
+      engine.emit(CatalogReplaced(const []));
+      await settle();
+      monitoring
+        ..leaveServer('srv-1')
+        ..openServer('srv-1');
+      expect(engine.sentOfType<Connect>(), hasLength(1));
+
+      engine.emit(CatalogReplaced([_entry('srv-1')]));
+      await settle();
+      expect(engine.sentOfType<Connect>(), hasLength(2));
+    });
+
+    test('the first fleet replays nothing: the views and surfaces open '
+        'before it were sent already', () async {
+      monitoring
+        ..openServer('srv-1')
+        ..subscribe('srv-1', 'overview', {SampleStream.core});
+      final sent = engine.sent.length;
+
+      engine.emit(CatalogReplaced([_entry('srv-1')]));
+      await settle();
+      expect(engine.sent, hasLength(sent));
+    });
+  });
+
+  // A RequestRejected names no stream, so every OpenLogStream the app
+  // sends, a unit-log read's or a Logs panel stream's, waits in one line
+  // for its answer (03 §10.1).
+  group('log streams (03 §10.1)', () {
+    List<String> openIds() => [
+      for (final open in engine.sentOfType<OpenLogStream>())
+        (open as OpenLogStream).streamId,
+    ];
+
+    test('reads and panel streams take ids from one counter and get '
+        'their own events', () async {
+      final read = monitoring.openLogRead(_unitLogs('nginx.service'));
+      final panel = _PanelStream();
+      monitoring.logs.open(_panelLog, panel);
+      monitoring.openLogRead(_unitLogs('ssh.service'));
+      monitoring.logs.open(_panelLog, _PanelStream());
+
+      final ids = openIds();
+      expect(ids.toSet(), hasLength(4));
+
+      engine
+        ..emit(LogStreamState(ids[1], const LogStreamRunning()))
+        ..emit(
+          LogBatch(
+            streamId: ids[0],
+            records: const [JournalRecord(message: 'started')],
+          ),
+        );
+      await settle();
+      expect(read.records, hasLength(1));
+      expect(read.state, isA<LogReadRequested>());
+      expect(panel.events, [const LogStreamRunning()]);
+    });
+
+    test('one rejection refuses only the oldest open, a read before a '
+        'panel stream', () async {
+      final read = monitoring.openLogRead(_unitLogs('nginx.service'));
+      final panel = _PanelStream();
+      monitoring.logs.open(_panelLog, panel);
+
+      engine.emit(_openRejected);
+      await settle();
+      expect(read.state, isA<LogReadRefused>());
+      expect(panel.events, isEmpty);
+
+      engine.emit(_openRejected);
+      await settle();
+      expect(panel.events, ['rejected']);
+    });
+
+    test('one rejection refuses only the oldest open, a panel stream '
+        'before a read', () async {
+      final panel = _PanelStream();
+      monitoring.logs.open(_panelLog, panel);
+      final read = monitoring.openLogRead(_unitLogs('nginx.service'));
+
+      engine.emit(_openRejected);
+      await settle();
+      expect(panel.events, ['rejected']);
+      expect(read.state, isA<LogReadRequested>());
+
+      engine.emit(_openRejected);
+      await settle();
+      expect(read.state, isA<LogReadRefused>());
+    });
+
+    test('a later open\'s answer also answers a read sent before it', () async {
+      final read = monitoring.openLogRead(_unitLogs('nginx.service'));
+      final panel = _PanelStream();
+      monitoring.logs.open(_panelLog, panel);
+
+      // Answered in order, the read was accepted before the panel stream's
+      // answer, so the later rejection is nobody's.
+      engine
+        ..emit(LogStreamState(openIds()[1], const LogStreamRunning()))
+        ..emit(_openRejected);
+      await settle();
+      expect(read.state, isA<LogReadRequested>());
+      expect(panel.events, [const LogStreamRunning()]);
     });
   });
 

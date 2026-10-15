@@ -142,9 +142,133 @@ void main() {
     expect(r.value.timers.single.nextText, 'Mon 2023-11-13 21:45:58 CET');
   });
 
+  test('spans with unit words read as microseconds', () {
+    final raw = [
+      '== timers_text ==',
+      _header(),
+      _row('n/a', '1 day 3h left', 'n/a', '2 weeks ago', 'x.timer', 'x'),
+    ].join('\n');
+    final t = parseTimers(raw, _ctx).value.timers.single;
+    expect(t.leftUs, const Duration(hours: 27).inMicroseconds);
+    expect(t.passedUs, const Duration(days: 14).inMicroseconds);
+  });
+
   test('an empty payload yields no timers and a warning', () {
     final r = parseTimers('', _ctx);
     expect(r.value.format, TimerListFormat.none);
     expect(r.warnings, isNotEmpty);
+  });
+
+  group('timer_detail (D57)', () {
+    test('calendar and monotonic triggers and the randomized delay', () {
+      final r = parseTimerDetail(
+        'hw_timeout=absent\n'
+        'TimersMonotonic={ OnBootUSec=15min ; next_elapse=15min }\n'
+        'TimersMonotonic={ OnUnitInactiveUSec=1h 30.500000s ; '
+        'next_elapse=0 }\n'
+        'TimersCalendar={ OnCalendar=*-*-* 06,18:00:00 ; '
+        'next_elapse=Thu 2026-10-15 18:00:00 UTC }\n'
+        'TimersCalendar={ OnCalendar=Mon..Fri *-*-* 09:00:00 Europe/Berlin '
+        '; next_elapse=n/a }\n'
+        'RandomizedDelayUSec=12h\n',
+        _ctx,
+      );
+      expect(r.warnings, isEmpty);
+      expect(r.value.toJson(), {
+        'calendar': [
+          '*-*-* 06,18:00:00',
+          'Mon..Fri *-*-* 09:00:00 Europe/Berlin',
+        ],
+        'monotonic': [
+          {'type': 'monotonic', 'base': 'boot', 'spanUs': 900000000},
+          {'type': 'monotonic', 'base': 'unitInactive', 'spanUs': 3630500000},
+        ],
+        'randomizedDelayUs': 43200000000,
+        'timeoutAbsent': true,
+      });
+    });
+
+    test('every monotonic base maps from its bus property name', () {
+      for (final b in MonotonicBase.values) {
+        final property = b.setting.replaceFirst(RegExp(r'Sec$'), 'USec');
+        final r = parseTimerDetail(
+          'TimersMonotonic={ $property=1d ; next_elapse=1d }',
+          _ctx,
+        );
+        expect(r.value.monotonic.single.base, b, reason: property);
+      }
+    });
+
+    test('zero and absent delays differ; empty values are skipped', () {
+      const trigger = 'TimersMonotonic={ OnBootUSec=1h ; next_elapse=1h }\n';
+      final zero = parseTimerDetail('${trigger}RandomizedDelayUSec=0\n', _ctx);
+      expect(zero.value.randomizedDelay, Duration.zero);
+      expect(zero.warnings, isEmpty);
+      final old = parseTimerDetail(
+        '${trigger}TimersCalendar=\nTimersMonotonic=\n',
+        _ctx,
+      );
+      expect(old.value.randomizedDelay, isNull);
+      expect(old.value.calendar, isEmpty);
+      expect(old.warnings, isEmpty);
+    });
+
+    test('a read without calendar or monotonic triggers warns', () {
+      final r = parseTimerDetail('RandomizedDelayUSec=0\n', _ctx);
+      expect(r.value.calendar, isEmpty);
+      expect(r.value.monotonic, isEmpty);
+      expect(r.warnings.single, contains('no calendar or monotonic trigger'));
+    });
+
+    test('spans systemd prints parse, others warn instead of throwing', () {
+      Duration? delay(String span) => parseTimerDetail(
+        'RandomizedDelayUSec=$span',
+        _ctx,
+      ).value.randomizedDelay;
+      expect(delay('1y 2month'), const Duration(microseconds: 36817200000000));
+      expect(delay('2w 3d 4h 5min 6s 7ms 8us'), isNotNull);
+      expect(delay('1.5ms'), const Duration(microseconds: 1500));
+      for (final bad in [
+        'infinity',
+        '5 parsecs',
+        '1.2.3s',
+        '-1s',
+        '99999999999999999999y',
+        '9223372036854775807us 9223372036854775807us',
+        // Past the 2^62 µs bound: one word, a sum, and a fraction.
+        '999999999999999999y',
+        '146138y 146138y',
+        '4611686018427s 0.999999s',
+        // format_timespan prints a fraction only below a minute, and one
+        // of a larger unit could overflow int64.
+        '0.999999y',
+        '1.5y',
+        '1.500000y',
+        '1.5min',
+      ]) {
+        final r = parseTimerDetail(
+          'TimersCalendar={ OnCalendar=daily ; next_elapse=n/a }\n'
+          'RandomizedDelayUSec=$bad',
+          _ctx,
+        );
+        expect(r.value.randomizedDelay, isNull, reason: bad);
+        expect(r.warnings, hasLength(1), reason: bad);
+      }
+    });
+
+    test('error text and broken triggers warn', () {
+      final r = parseTimerDetail(
+        'Failed to get properties: Access denied\n'
+        'TimersCalendar=OnCalendar=daily\n'
+        'TimersCalendar={ OnBootUSec=1h ; next_elapse=1h }\n'
+        'TimersMonotonic={ OnWhenever=1h ; next_elapse=1h }\n'
+        'Unexpected=1\n',
+        _ctx,
+      );
+      expect(r.value.calendar, isEmpty);
+      expect(r.value.monotonic, isEmpty);
+      // Five broken lines, then no trigger at all.
+      expect(r.warnings, hasLength(6));
+    });
   });
 }

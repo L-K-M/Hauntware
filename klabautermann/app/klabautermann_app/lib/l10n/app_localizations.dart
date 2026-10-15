@@ -346,6 +346,114 @@ abstract class AppLocalizations {
   /// **'Server status: {status}'**
   String statusSemantics(String status);
 
+  /// Fleet row state (FL-04): the reachability probe reached the server's SSH port, and nothing is connected to it.
+  ///
+  /// In en, this message translates to:
+  /// **'Online'**
+  String get fleetRowProbeOnline;
+
+  /// Fleet row state (FL-04): the reachability probe was refused, or the host had no route or no address.
+  ///
+  /// In en, this message translates to:
+  /// **'Offline'**
+  String get fleetRowProbeOffline;
+
+  /// Fleet row state (FL-04): the reachability probe could not tell, for example after a timeout. Not the same as offline: a host behind a firewall or a jump host may be up.
+  ///
+  /// In en, this message translates to:
+  /// **'Reachability unknown'**
+  String get fleetRowProbeUnknown;
+
+  /// A reading's age under a minute: under a fleet row's pressure bar, and as the age in fleetRowUpdated and fleetRowStaleAge.
+  ///
+  /// In en, this message translates to:
+  /// **'{seconds} s'**
+  String fleetRowAgeSeconds(int seconds);
+
+  /// A reading's age under an hour, in whole minutes: under a fleet row's pressure bar, and as the age in fleetRowUpdated and fleetRowStaleAge.
+  ///
+  /// In en, this message translates to:
+  /// **'{minutes} min'**
+  String fleetRowAgeMinutes(int minutes);
+
+  /// A reading's age of an hour or more, in whole hours: under a fleet row's pressure bar, and as the age in fleetRowUpdated and fleetRowStaleAge.
+  ///
+  /// In en, this message translates to:
+  /// **'{hours} h'**
+  String fleetRowAgeHours(int hours);
+
+  /// Fleet row freshness (03 §9.5 item 4, OV-04): how long ago the row's CPU and memory reading arrived, in the row's tooltip and screen-reader label.
+  ///
+  /// In en, this message translates to:
+  /// **'Updated {age} ago'**
+  String fleetRowUpdated(String age);
+
+  /// Under a fleet row's grey pressure bar, beside a history icon (03 §9.5 item 4, A11Y-01): the values are stale, and age says how old they are. Used when the row's state word (for example Connected or Online) does not already say the connection is down.
+  ///
+  /// In en, this message translates to:
+  /// **'Stale · {age}'**
+  String fleetRowStaleAge(String age);
+
+  /// The CPU cell of a fleet row's pressure bar (FL-07), as its summary names it.
+  ///
+  /// In en, this message translates to:
+  /// **'CPU'**
+  String get fleetRowCpu;
+
+  /// The memory cell of a fleet row's pressure bar (FL-07), as its summary names it.
+  ///
+  /// In en, this message translates to:
+  /// **'Memory'**
+  String get fleetRowMemory;
+
+  /// The disk cell of a fleet row's pressure bar (FL-07): how full the server's root file system is.
+  ///
+  /// In en, this message translates to:
+  /// **'Disk'**
+  String get fleetRowDisk;
+
+  /// Fleet row warning (03 §4.6): saved host keys are keyed by address and port, so this server's would collide with those of the named servers, which reach the same address through other jump hosts.
+  ///
+  /// In en, this message translates to:
+  /// **'Host key conflict with {servers}: they reach the same address through a different jump route.'**
+  String fleetRowLocatorConflict(String servers);
+
+  /// Between the parts of a fleet row's second line: its state and its address.
+  ///
+  /// In en, this message translates to:
+  /// **' · '**
+  String get fleetRowPartSeparator;
+
+  /// Between the parts of a fleet row's screen-reader label, and between server names in fleetRowLocatorConflict.
+  ///
+  /// In en, this message translates to:
+  /// **', '**
+  String get fleetRowListSeparator;
+
+  /// Screen-reader announcement when a server's connection state changes (A11Y-15); status is a word such as Connected or Connection lost.
+  ///
+  /// In en, this message translates to:
+  /// **'{server}: {status}'**
+  String fleetRowLinkAnnouncement(String server, String status);
+
+  /// Under the fleet filter field while a query matches no server: how many servers match out of all.
+  ///
+  /// In en, this message translates to:
+  /// **'{matches} of {total}'**
+  String fleetFilterCount(int matches, int total);
+
+  /// Under the fleet filter field while a query matches servers: how many match out of all, and that the Enter key opens the first match.
+  ///
+  /// In en, this message translates to:
+  /// **'{matches} of {total} · Enter opens the first'**
+  String fleetFilterCountOpensFirst(int matches, int total);
+
+  /// Shown in place of the fleet list when the filter matches no server.
+  ///
+  /// In en, this message translates to:
+  /// **'No servers match'**
+  String get fleetFilterNoMatches;
+
   /// No description provided for @settingsTitle.
   ///
   /// In en, this message translates to:
@@ -538,6 +646,216 @@ abstract class AppLocalizations {
   /// **'Available in a later milestone.'**
   String get placeholderMilestone;
 
+  /// Heading of the first-run coverage card (03 §9.5 item 1), shown above the fleet on phones and above the workspace on desktops until the user dismisses it.
+  ///
+  /// In en, this message translates to:
+  /// **'How Klabautermann watches your servers'**
+  String get coverageFirstRunTitle;
+
+  /// Body of the first-run coverage card: what the app does and does not cover. It names no alerts, since this version has none.
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann connects over SSH only while it is open. It installs nothing on your servers unless you ask it to. Charts cover only the time this device was connected.'**
+  String get coverageFirstRunBody;
+
+  /// Button that dismisses the first-run coverage card for good on this device.
+  ///
+  /// In en, this message translates to:
+  /// **'Got it'**
+  String get coverageFirstRunDismiss;
+
+  /// Button on the first-run coverage card that opens the coverage sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'Coverage details'**
+  String get coverageFirstRunDetails;
+
+  /// Top toast when dismissing the first-run coverage card could not be written to the device's settings file; the card stays hidden for this session.
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann could not save that you dismissed the coverage note, so it shows again after a restart.'**
+  String get coverageFirstRunNotSaved;
+
+  /// The fleet header's coverage chip (03 §9.5 item 2): how many fleet servers this device watches continuously (its monitor set) out of all of them; watching happens only while the app is open. Opens the coverage sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'{total, plural, =1{Watching {watched} of 1 server on this device, only while open} other{Watching {watched} of {total} servers on this device, only while open}}'**
+  String coverageChip(int watched, int total);
+
+  /// Screen-reader hint for activating the fleet header's coverage chip.
+  ///
+  /// In en, this message translates to:
+  /// **'Show coverage details'**
+  String get coverageChipHint;
+
+  /// Heading of the coverage sheet the fleet header's chip opens.
+  ///
+  /// In en, this message translates to:
+  /// **'Coverage on this device'**
+  String get coverageSheetTitle;
+
+  /// Badge naming the execution tier the fleet runs at: T0, SSH only while the app is open (03 §9). Kept as written.
+  ///
+  /// In en, this message translates to:
+  /// **'T0'**
+  String get coverageTierBadge;
+
+  /// What the T0 badge means, beside it in the coverage sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'SSH while Klabautermann is open'**
+  String get coverageTierTitle;
+
+  /// Explanation under the tier title in the coverage sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann reads your servers over SSH only while it is open. It installs nothing on them unless you ask it to.'**
+  String get coverageTierBody;
+
+  /// Heading of the coverage sheet's list of what this device covers.
+  ///
+  /// In en, this message translates to:
+  /// **'Covered'**
+  String get coverageCoveredHeading;
+
+  /// Coverage sheet item: the servers the user has open are read live.
+  ///
+  /// In en, this message translates to:
+  /// **'Live readings while open'**
+  String get coverageLiveTitle;
+
+  /// Body of the coverage sheet's live-readings item.
+  ///
+  /// In en, this message translates to:
+  /// **'Metrics, processes, services, logs and jobs of the servers you have open.'**
+  String get coverageLiveBody;
+
+  /// Coverage sheet item about the servers this device watches continuously (its monitor set, FL-21): listed as covered once one is watched, and as not covered while none is.
+  ///
+  /// In en, this message translates to:
+  /// **'Continuous watching'**
+  String get coverageWatchedTitle;
+
+  /// Body of the coverage sheet's watched-servers item; watched is the size of this device's monitor set within the fleet.
+  ///
+  /// In en, this message translates to:
+  /// **'{watched, plural, =0{No server is watched on this device, so each is read only while you have it open.} =1{1 server is read continuously while Klabautermann is open. Any others are read only while you have them open.} other{{watched} servers are read continuously while Klabautermann is open. Any others are read only while you have them open.}}'**
+  String coverageWatchedBody(int watched);
+
+  /// Heading of the coverage sheet's list of what this device does not cover.
+  ///
+  /// In en, this message translates to:
+  /// **'Not covered'**
+  String get coverageNotCoveredHeading;
+
+  /// Coverage sheet item: nothing is covered while the app is closed.
+  ///
+  /// In en, this message translates to:
+  /// **'While Klabautermann is closed'**
+  String get coverageClosedTitle;
+
+  /// Body of the coverage sheet's while-closed item.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing checks your servers, so nothing can warn you about them.'**
+  String get coverageClosedBody;
+
+  /// Coverage sheet item: a server that goes down while the app is closed goes unnoticed.
+  ///
+  /// In en, this message translates to:
+  /// **'A server going down'**
+  String get coverageHostDownTitle;
+
+  /// Body of the coverage sheet's server-down item.
+  ///
+  /// In en, this message translates to:
+  /// **'If a server stops while Klabautermann is closed, you find out the next time you open it.'**
+  String get coverageHostDownBody;
+
+  /// Coverage sheet item: charts hold no history from before this device connected.
+  ///
+  /// In en, this message translates to:
+  /// **'History before you connected'**
+  String get coverageHistoryTitle;
+
+  /// Body of the coverage sheet's history item.
+  ///
+  /// In en, this message translates to:
+  /// **'Charts cover only the time this device was connected. Gaps are marked, never filled in.'**
+  String get coverageHistoryBody;
+
+  /// Coverage sheet item shown on iOS and Android only: reading stops in the background (PLT-04).
+  ///
+  /// In en, this message translates to:
+  /// **'While in the background'**
+  String get coverageBackgroundTitle;
+
+  /// Body of the coverage sheet's background item, on iOS and Android only.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading stops while Klabautermann is in the background and resumes when you return.'**
+  String get coverageBackgroundBody;
+
+  /// An age under a minute in a freshness line (03 §9.5 item 4), as in "Updated 4 s ago".
+  ///
+  /// In en, this message translates to:
+  /// **'{seconds} s'**
+  String coverageFreshnessSeconds(int seconds);
+
+  /// An age under an hour, in whole minutes, in a freshness line.
+  ///
+  /// In en, this message translates to:
+  /// **'{minutes} min'**
+  String coverageFreshnessMinutes(int minutes);
+
+  /// An age under a day, in whole hours, in a freshness line.
+  ///
+  /// In en, this message translates to:
+  /// **'{hours} h'**
+  String coverageFreshnessHours(int hours);
+
+  /// An age of a day or more, in whole days, in a freshness line.
+  ///
+  /// In en, this message translates to:
+  /// **'{days} d'**
+  String coverageFreshnessDays(int days);
+
+  /// Freshness line of a server's or panel's values while they are current; age is one of the coverageFreshness age strings.
+  ///
+  /// In en, this message translates to:
+  /// **'Updated {age} ago'**
+  String coverageFreshnessUpdated(String age);
+
+  /// Freshness line of values older than their stream's limit, which are drawn grey beside it.
+  ///
+  /// In en, this message translates to:
+  /// **'Stale: updated {age} ago'**
+  String coverageFreshnessStale(String age);
+
+  /// Freshness line while the server's connection is down after readings arrived; age is how long it has been down.
+  ///
+  /// In en, this message translates to:
+  /// **'Disconnected {age} ago'**
+  String coverageFreshnessDisconnected(String age);
+
+  /// Freshness line while a phone app is in the background and reading is paused.
+  ///
+  /// In en, this message translates to:
+  /// **'Paused: app in background'**
+  String get coverageFreshnessPaused;
+
+  /// Freshness line of a server outside this device's monitor set that nothing reads.
+  ///
+  /// In en, this message translates to:
+  /// **'Not watched on this device'**
+  String get coverageFreshnessNotWatched;
+
+  /// Freshness line before the first reading has arrived.
+  ///
+  /// In en, this message translates to:
+  /// **'No data yet'**
+  String get coverageFreshnessNoData;
+
   /// No description provided for @serverTitle.
   ///
   /// In en, this message translates to:
@@ -597,6 +915,264 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'More'**
   String get serverTabMore;
+
+  /// Heading of the System tab's section about what the server is: host name, operating system, kernel, architecture and virtualization (SYS-01).
+  ///
+  /// In en, this message translates to:
+  /// **'Identity'**
+  String get systemIdentityTitle;
+
+  /// Heading of the System tab's section with how long the server has been up and when it booted (BOOT-01).
+  ///
+  /// In en, this message translates to:
+  /// **'Uptime'**
+  String get systemUptimeTitle;
+
+  /// Heading of the System tab's section with the server's total network throughput (NET-01).
+  ///
+  /// In en, this message translates to:
+  /// **'Network'**
+  String get systemNetworkTitle;
+
+  /// Heading of the System tab's section with the space and inodes each mounted filesystem uses (DSK-01, DSK-02).
+  ///
+  /// In en, this message translates to:
+  /// **'Disks'**
+  String get systemDisksTitle;
+
+  /// Label of the server's static host name in the System tab.
+  ///
+  /// In en, this message translates to:
+  /// **'Host name'**
+  String get systemHostname;
+
+  /// Label of the server's operating system and version, as the server names it, in the System tab.
+  ///
+  /// In en, this message translates to:
+  /// **'Operating system'**
+  String get systemOperatingSystem;
+
+  /// Label of the server's kernel name and release in the System tab.
+  ///
+  /// In en, this message translates to:
+  /// **'Kernel'**
+  String get systemKernel;
+
+  /// The server's kernel as the System tab shows it: its name and its release, both as the server reports them.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} {release}'**
+  String systemKernelValue(String name, String release);
+
+  /// Label of the server's machine architecture, such as x86_64 or aarch64, in the System tab.
+  ///
+  /// In en, this message translates to:
+  /// **'Architecture'**
+  String get systemArchitecture;
+
+  /// Label of whether the server runs on bare metal, in a virtual machine or in a container, in the System tab.
+  ///
+  /// In en, this message translates to:
+  /// **'Virtualization'**
+  String get systemVirtualization;
+
+  /// The System tab's virtualization value when the server detected neither a virtual machine nor a container.
+  ///
+  /// In en, this message translates to:
+  /// **'None detected'**
+  String get systemVirtualizationNone;
+
+  /// The System tab's virtualization value for a server in a virtual machine; name is the technology as the server reports it.
+  ///
+  /// In en, this message translates to:
+  /// **'Virtual machine ({name})'**
+  String systemVirtualizationMachine(String name);
+
+  /// The System tab's virtualization value for a server that is a container; name is the technology as the server reports it.
+  ///
+  /// In en, this message translates to:
+  /// **'Container ({name})'**
+  String systemVirtualizationContainer(String name);
+
+  /// The System tab's virtualization value for a server that is a container of a technology the server did not name.
+  ///
+  /// In en, this message translates to:
+  /// **'Container'**
+  String get systemVirtualizationContainerUnnamed;
+
+  /// Note in the System tab's identity section for a container: values the container would read from its host's system files are not shown as its own (SYS-04).
+  ///
+  /// In en, this message translates to:
+  /// **'This server is a container. Figures that would come from its host read as unknown.'**
+  String get systemContainerNotice;
+
+  /// A System tab value the server did not report, or that is not shown for a reason given beside it; never shown as zero.
+  ///
+  /// In en, this message translates to:
+  /// **'Unknown'**
+  String get systemUnknown;
+
+  /// Reason beside an unknown System tab value: in a container, the system file it comes from shows the host's figures instead of the container's (SYS-04).
+  ///
+  /// In en, this message translates to:
+  /// **'Inside this container this figure would be the host\'s, so it is not shown.'**
+  String get systemUnknownContainer;
+
+  /// Label of how long the server has been running since it booted, in the System tab.
+  ///
+  /// In en, this message translates to:
+  /// **'Up for'**
+  String get systemUptime;
+
+  /// How long a server has been up, from one day on: whole days and the hours past them.
+  ///
+  /// In en, this message translates to:
+  /// **'{days, plural, =1{1 day} other{{days} days}}, {hours, plural, =1{1 hour} other{{hours} hours}}'**
+  String systemUptimeDays(int days, int hours);
+
+  /// How long a server has been up, from one hour to a day: whole hours and the minutes past them.
+  ///
+  /// In en, this message translates to:
+  /// **'{hours, plural, =1{1 hour} other{{hours} hours}}, {minutes, plural, =1{1 minute} other{{minutes} minutes}}'**
+  String systemUptimeHours(int hours, int minutes);
+
+  /// How long a server has been up, under an hour: whole minutes.
+  ///
+  /// In en, this message translates to:
+  /// **'{minutes, plural, =0{Less than a minute} =1{1 minute} other{{minutes} minutes}}'**
+  String systemUptimeMinutes(int minutes);
+
+  /// Label of when the server last booted, in the System tab.
+  ///
+  /// In en, this message translates to:
+  /// **'Booted'**
+  String get systemBooted;
+
+  /// When the server last booted: a date and time in the UI locale and this device's time zone.
+  ///
+  /// In en, this message translates to:
+  /// **'{time}'**
+  String systemBootedValue(DateTime time);
+
+  /// Label of the server's total receive rate over all its network interfaces, in the System tab.
+  ///
+  /// In en, this message translates to:
+  /// **'Receive'**
+  String get systemReceive;
+
+  /// Label of the server's total transmit rate over all its network interfaces, in the System tab.
+  ///
+  /// In en, this message translates to:
+  /// **'Transmit'**
+  String get systemTransmit;
+
+  /// A System tab section before the server sent its first reading for it.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for the first reading.'**
+  String get systemWaiting;
+
+  /// A System tab section whose reading failed because a command it runs is not installed on the server.
+  ///
+  /// In en, this message translates to:
+  /// **'The server lacks the tool this reading needs.'**
+  String get systemUnavailableMissing;
+
+  /// A System tab section whose reading failed because the server denied permission.
+  ///
+  /// In en, this message translates to:
+  /// **'The server refused this reading.'**
+  String get systemUnavailableDenied;
+
+  /// A System tab section whose reading the server stopped because it took too long.
+  ///
+  /// In en, this message translates to:
+  /// **'This reading did not finish in time.'**
+  String get systemUnavailableTimeout;
+
+  /// A System tab section whose reading failed for another reason; the server's error output may follow.
+  ///
+  /// In en, this message translates to:
+  /// **'This reading failed.'**
+  String get systemUnavailableError;
+
+  /// The Disks section when the server stopped the disk usage command because it hung, which a stale network mount causes (DSK-01).
+  ///
+  /// In en, this message translates to:
+  /// **'Disk usage did not finish in time. A network mount (NFS or SMB) that stopped answering is the usual cause.'**
+  String get systemDisksTimedOut;
+
+  /// Under systemDisksTimedOut, when an earlier reading listed the mounts: the list below is that reading's, and none of its figures is current. time is when that reading was taken, as a date and time in the UI locale and this device's time zone, since a stale mount can keep failing for days.
+  ///
+  /// In en, this message translates to:
+  /// **'These mounts are from the reading at {time}; their usage is unknown now.'**
+  String systemDisksLastListed(DateTime time);
+
+  /// The Disks section on a server without the timeout command, which normally stops a disk usage command that hangs (DSK-01).
+  ///
+  /// In en, this message translates to:
+  /// **'This server has no timeout command, so a network mount that stops answering can stall disk readings.'**
+  String get systemDisksNoTimeout;
+
+  /// Checkbox in the Disks section that also lists in-memory and image filesystems such as tmpfs, overlay and squashfs, hidden by default; count is how many there are.
+  ///
+  /// In en, this message translates to:
+  /// **'Show pseudo filesystems ({count})'**
+  String systemDisksShowPseudo(int count);
+
+  /// In place of the Disks table when the server's reading listed no filesystem, or only pseudo filesystems while they are hidden.
+  ///
+  /// In en, this message translates to:
+  /// **'No mounts to show.'**
+  String get systemDisksEmpty;
+
+  /// Label of the device or source a filesystem is mounted from, such as /dev/sda1 or nas:/export, in a mount's details.
+  ///
+  /// In en, this message translates to:
+  /// **'Device'**
+  String get systemDevice;
+
+  /// Disks table column: where the filesystem is mounted.
+  ///
+  /// In en, this message translates to:
+  /// **'Mount'**
+  String get systemColumnMount;
+
+  /// Disks table column: the filesystem type, such as ext4 or nfs4.
+  ///
+  /// In en, this message translates to:
+  /// **'Type'**
+  String get systemColumnType;
+
+  /// Disks table column: the space used out of the filesystem's size.
+  ///
+  /// In en, this message translates to:
+  /// **'Used'**
+  String get systemColumnUsed;
+
+  /// Disks table column: the share of the filesystem's space in use, as df reports it.
+  ///
+  /// In en, this message translates to:
+  /// **'Use'**
+  String get systemColumnUse;
+
+  /// Disks table column: the share of the filesystem's inodes (file entries) in use; a full inode table stops new files like a full disk.
+  ///
+  /// In en, this message translates to:
+  /// **'Inodes'**
+  String get systemColumnInodes;
+
+  /// Disks table column, and label in a mount's details, shown after the disk usage command timed out: what is known of the mount's usage now.
+  ///
+  /// In en, this message translates to:
+  /// **'Usage'**
+  String get systemColumnUsage;
+
+  /// A Disks table cell: the space used and the filesystem's size, both already formatted with binary units such as GiB.
+  ///
+  /// In en, this message translates to:
+  /// **'{used} of {size}'**
+  String systemUsedOf(String used, String size);
 
   /// A chart's screen-reader summary of one series: what it measures, its current, lowest and highest values (already formatted with their units) and its trend, one of chartTrendRising, chartTrendFalling or chartTrendSteady.
   ///
@@ -1204,6 +1780,12 @@ abstract class AppLocalizations {
   /// **'[not sent: over 4,096 bytes]'**
   String get logJournalNotSent;
 
+  /// Row of a journal entry's expanded fields for a field whose value the server did not send because it is larger than 4,096 bytes; name is the journal field's name as the server sent it, such as CODE_LINE.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} [not sent: over 4,096 bytes]'**
+  String logJournalFieldNotSent(String name);
+
   /// Last row of a journal entry's expanded fields when the log view kept only some of them; count is how many it left out.
   ///
   /// In en, this message translates to:
@@ -1221,6 +1803,384 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Hide fields'**
   String get logJournalHideFields;
+
+  /// Services panel: shown until the server's first list of systemd units arrives.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for the first list of units…'**
+  String get servicesWaiting;
+
+  /// Services panel: the server lacks the systemctl tool, as on a system without systemd.
+  ///
+  /// In en, this message translates to:
+  /// **'This server has no systemctl, so there are no units to list.'**
+  String get servicesUnavailableMissing;
+
+  /// Services panel: listing systemd units failed with a permission error.
+  ///
+  /// In en, this message translates to:
+  /// **'The server refused to list its units.'**
+  String get servicesUnavailableDenied;
+
+  /// Services panel: the unit listing ran past its time limit on the server.
+  ///
+  /// In en, this message translates to:
+  /// **'Listing units took too long and was stopped.'**
+  String get servicesUnavailableTimeout;
+
+  /// Services panel: listing systemd units failed for another reason; the server's error output may follow.
+  ///
+  /// In en, this message translates to:
+  /// **'Listing units failed.'**
+  String get servicesUnavailableError;
+
+  /// Services panel notice for old systemd, whose unit list has no JSON output (CN-10).
+  ///
+  /// In en, this message translates to:
+  /// **'This server\'s systemd is older than version 246, so units are read from text. States that could not be read show as unknown.'**
+  String get servicesTextFallback;
+
+  /// Label of the Services panel's filter by unit type, such as service or socket.
+  ///
+  /// In en, this message translates to:
+  /// **'Type'**
+  String get servicesFilterType;
+
+  /// The unit type filter's choice that shows units of every type.
+  ///
+  /// In en, this message translates to:
+  /// **'All types'**
+  String get servicesFilterTypeAll;
+
+  /// Label of the Services panel's filter by a unit's active state, such as active or failed.
+  ///
+  /// In en, this message translates to:
+  /// **'State'**
+  String get servicesFilterState;
+
+  /// The unit state filter's choice that shows units in every state.
+  ///
+  /// In en, this message translates to:
+  /// **'All states'**
+  String get servicesFilterStateAll;
+
+  /// Services panel: the unit list is empty under the chosen type and state filters.
+  ///
+  /// In en, this message translates to:
+  /// **'No units match these filters.'**
+  String get servicesEmpty;
+
+  /// Column header of the unit list: the systemd unit's name.
+  ///
+  /// In en, this message translates to:
+  /// **'Unit'**
+  String get servicesColumnUnit;
+
+  /// Column header and label: whether systemd loaded the unit's configuration (its load state).
+  ///
+  /// In en, this message translates to:
+  /// **'Load'**
+  String get servicesColumnLoad;
+
+  /// Column header and label: the unit's high-level state, such as active, inactive or failed (its active state).
+  ///
+  /// In en, this message translates to:
+  /// **'Active'**
+  String get servicesColumnActive;
+
+  /// Column header and label: the unit's detailed state, such as running or exited (its sub state).
+  ///
+  /// In en, this message translates to:
+  /// **'Sub'**
+  String get servicesColumnSub;
+
+  /// Column header of the unit list: the unit's description from its configuration.
+  ///
+  /// In en, this message translates to:
+  /// **'Description'**
+  String get servicesColumnDescription;
+
+  /// Heading of the failed units summary (SVC-02); count is how many systemd units failed.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{No failed units} =1{1 failed unit} other{{count} failed units}}'**
+  String servicesFailedCount(int count);
+
+  /// One failed unit in the failed units summary: its name, then its detailed (sub) state as the server reports it, or the word for unknown.
+  ///
+  /// In en, this message translates to:
+  /// **'{unit}: {state}'**
+  String servicesFailedUnit(String unit, String state);
+
+  /// Last line of the failed units summary when it lists only some of them; count is how many it leaves out.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{and 1 more} other{and {count} more}}'**
+  String servicesFailedMore(int count);
+
+  /// Tooltip of the button that closes a unit's details and returns to the unit list.
+  ///
+  /// In en, this message translates to:
+  /// **'Close unit details'**
+  String get servicesUnitClose;
+
+  /// Heading of a unit's recent journal lines on its details (SVC-04).
+  ///
+  /// In en, this message translates to:
+  /// **'Recent log lines'**
+  String get servicesLogsTitle;
+
+  /// A unit's log lines were requested and the app has no answer yet.
+  ///
+  /// In en, this message translates to:
+  /// **'Asking the server for recent log lines…'**
+  String get servicesLogsRequested;
+
+  /// A unit's log read waits until the connection to the server is ready.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for the connection to the server…'**
+  String get servicesLogsWaitingLink;
+
+  /// A unit's log read waits until the connection has a free session for it.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for a free session on the server…'**
+  String get servicesLogsWaitingChannel;
+
+  /// A unit's log read waits until the app returns to the foreground.
+  ///
+  /// In en, this message translates to:
+  /// **'Paused while the app is in the background.'**
+  String get servicesLogsWaitingBackground;
+
+  /// A unit's log read is running on the server.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading recent log lines…'**
+  String get servicesLogsReading;
+
+  /// A unit's log read finished without any journal line.
+  ///
+  /// In en, this message translates to:
+  /// **'The journal holds no lines for this unit.'**
+  String get servicesLogsEmpty;
+
+  /// The app's engine cannot read logs yet and refused the request; no log lines are shown.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading unit logs is not available in this version yet.'**
+  String get servicesLogsRefused;
+
+  /// The app refused to read logs for a unit name that fails its validation.
+  ///
+  /// In en, this message translates to:
+  /// **'This unit\'s name cannot be used to read its logs.'**
+  String get servicesLogsInvalid;
+
+  /// A unit's log read failed because the server lacks journalctl.
+  ///
+  /// In en, this message translates to:
+  /// **'This server has no journalctl, so unit logs cannot be read.'**
+  String get servicesLogsMissing;
+
+  /// A unit's log read failed with a permission error.
+  ///
+  /// In en, this message translates to:
+  /// **'The server refused to read this unit\'s journal.'**
+  String get servicesLogsDenied;
+
+  /// A unit's log read failed for another reason; the server's error output may follow.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading this unit\'s journal failed.'**
+  String get servicesLogsFailed;
+
+  /// Label of the Logs panel's source picker, which chooses between the journal, the kernel log and a file; also the title of the phone's source sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'Source'**
+  String get logsPanelSource;
+
+  /// Name of a Logs panel source: the systemd journal, the kernel's messages, or one file on the server.
+  ///
+  /// In en, this message translates to:
+  /// **'{source, select, journal{Journal} kernel{Kernel} other{File}}'**
+  String logsPanelSourceName(String source);
+
+  /// Label of the Logs panel's filter field for a systemd unit name.
+  ///
+  /// In en, this message translates to:
+  /// **'Unit'**
+  String get logsPanelUnit;
+
+  /// Label of the Logs panel's filter field for a syslog identifier (the program's syslog tag).
+  ///
+  /// In en, this message translates to:
+  /// **'Identifier'**
+  String get logsPanelIdentifier;
+
+  /// Label of the Logs panel's priority filter, which shows entries at a syslog priority or more urgent.
+  ///
+  /// In en, this message translates to:
+  /// **'Priority'**
+  String get logsPanelPriority;
+
+  /// Priority filter choice that shows entries of every priority.
+  ///
+  /// In en, this message translates to:
+  /// **'Any priority'**
+  String get logsPanelPriorityAny;
+
+  /// Priority filter choice: entries at this syslog priority or more urgent ones.
+  ///
+  /// In en, this message translates to:
+  /// **'{level, select, emergency{Emergency} alert{Alert and above} critical{Critical and above} error{Error and above} warning{Warning and above} notice{Notice and above} info{Info and above} other{Debug and above}}'**
+  String logsPanelPriorityLevel(String level);
+
+  /// Toggle of the Logs panel's journal filters that shows only entries since the server last started.
+  ///
+  /// In en, this message translates to:
+  /// **'Current boot only'**
+  String get logsPanelCurrentBoot;
+
+  /// Label of the Logs panel's time range filter.
+  ///
+  /// In en, this message translates to:
+  /// **'Time range'**
+  String get logsPanelTimeRange;
+
+  /// Time range filter choice: how far back entries are shown, counted from when the log opens.
+  ///
+  /// In en, this message translates to:
+  /// **'{range, select, last15Minutes{Last 15 minutes} lastHour{Last hour} last24Hours{Last 24 hours} last7Days{Last 7 days} other{Any time}}'**
+  String logsPanelTimeRangeOption(String range);
+
+  /// Label of the Logs panel's field for the file on the server to tail.
+  ///
+  /// In en, this message translates to:
+  /// **'File path'**
+  String get logsPanelPath;
+
+  /// Hint in the empty file path field.
+  ///
+  /// In en, this message translates to:
+  /// **'Absolute path, such as /var/log/syslog'**
+  String get logsPanelPathHint;
+
+  /// Error under the file path field when the server would refuse the path.
+  ///
+  /// In en, this message translates to:
+  /// **'{problem, select, notAbsolute{Enter an absolute path that starts with /.} notNormalized{Remove the . and .. parts from the path.} other{The path contains a NUL character.}}'**
+  String logsPanelPathProblem(String problem);
+
+  /// Tooltip of the button beside the file path field that lists common log files, such as the syslog and web server logs.
+  ///
+  /// In en, this message translates to:
+  /// **'Common paths'**
+  String get logsPanelCommonPaths;
+
+  /// Button that reads the log again with the filters or path entered.
+  ///
+  /// In en, this message translates to:
+  /// **'Apply'**
+  String get logsPanelApply;
+
+  /// Phone button that opens the Logs panel's filters in a sheet; count is how many filters are set.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{Filters} other{Filters ({count})}}'**
+  String logsPanelFilters(int count);
+
+  /// Chip that turns following new log entries on and off, naming what the log stream is doing: following, waiting for the server or a free session, waiting for the connection, paused by the user or the app's background, ended, or not available.
+  ///
+  /// In en, this message translates to:
+  /// **'{state, select, live{Live} connecting{Connecting} disconnected{Disconnected} paused{Paused} stopped{Stopped} other{Unavailable}}'**
+  String logsPanelLiveState(String state);
+
+  /// Tooltip of the Logs panel's Live chip.
+  ///
+  /// In en, this message translates to:
+  /// **'Follow new entries as the server writes them'**
+  String get logsPanelLiveTooltip;
+
+  /// Notice above the journal when the server shows the signed-in account only its own entries. The group names are names on the server and stay as they are.
+  ///
+  /// In en, this message translates to:
+  /// **'Only your own journal entries are shown: your account on this server is not in the systemd-journal, adm or wheel group. The server\'s Access section shows how to add it.'**
+  String get logsPanelJournalLimited;
+
+  /// Notice above the kernel log when the server's journal shows the signed-in account only its own entries, which never include kernel messages. The group names are names on the server and stay as they are.
+  ///
+  /// In en, this message translates to:
+  /// **'Kernel messages may be missing: your account on this server is not in the systemd-journal, adm or wheel group, so the journal shows it none. The server\'s Access section shows how to add it.'**
+  String get logsPanelKernelLimited;
+
+  /// Status line above the log saying what reading it is doing or why it stopped.
+  ///
+  /// In en, this message translates to:
+  /// **'{status, select, opening{Opening the log…} waitingLink{Waiting for the connection to the server.} waitingChannel{Waiting for a free session on the server.} waitingBackground{Paused while the app is in the background.} loading{Loading entries…} invalid{The engine refused this filter or path.} missing{The server has no such file or log tool.} denied{The server denied access to this log.} failed{Reading the log failed.} rejected{The engine did not open this log.} other{Choose or type the absolute path of a file to tail.}}'**
+  String logsPanelStatus(String status);
+
+  /// Button that opens the log again after it stopped or was refused.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get logsPanelRetry;
+
+  /// Shown in place of the log when reading a kernel log, a file or an unfiltered journal finished without any entry, unless the kernel log or journal is limited to the account's own entries.
+  ///
+  /// In en, this message translates to:
+  /// **'This log has no entries.'**
+  String get logsPanelEmpty;
+
+  /// Shown in place of the log when reading the journal with filters set finished without any entry.
+  ///
+  /// In en, this message translates to:
+  /// **'No entries match these filters.'**
+  String get logsPanelEmptyFiltered;
+
+  /// Shown in place of the log when reading an unfiltered journal or the kernel log finished without any entry while the server shows the signed-in account only its own journal entries.
+  ///
+  /// In en, this message translates to:
+  /// **'No entries are visible to your account.'**
+  String get logsPanelEmptyLimited;
+
+  /// Label of the log search field, also its name for screen readers once it holds text; the search covers the entries the panel holds, not the whole log on the server.
+  ///
+  /// In en, this message translates to:
+  /// **'Search loaded entries'**
+  String get logsPanelSearchLabel;
+
+  /// Tooltip of the toggle that makes the log search tell upper from lower case.
+  ///
+  /// In en, this message translates to:
+  /// **'Match case'**
+  String get logsPanelSearchCase;
+
+  /// How many matches the log search found, before one is selected.
+  ///
+  /// In en, this message translates to:
+  /// **'{total, plural, =0{No matches} =1{1 match} other{{total} matches}}'**
+  String logsPanelSearchMatches(int total);
+
+  /// Which match of the log search is selected, out of how many.
+  ///
+  /// In en, this message translates to:
+  /// **'{current} of {total}'**
+  String logsPanelSearchPosition(int current, int total);
+
+  /// Tooltip of the button that moves to the previous log search match.
+  ///
+  /// In en, this message translates to:
+  /// **'Previous match'**
+  String get logsPanelSearchPrevious;
+
+  /// Tooltip of the button that moves to the next log search match.
+  ///
+  /// In en, this message translates to:
+  /// **'Next match'**
+  String get logsPanelSearchNext;
 }
 
 class _AppLocalizationsDelegate

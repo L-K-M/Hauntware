@@ -1,7 +1,8 @@
 /// Parser for `systemd-analyze calendar` output (03 §7.7): the
 /// `Original form`, `Normalized form` and one elapse per `Next elapse`
-/// or `Iteration #N` row, each optionally followed by `(in UTC)` and
-/// `From now` detail lines.
+/// or later-run row (`Iter. #N:` in systemd 242 to 252, `Iteration #N`
+/// from 253), each optionally followed by `(in UTC)` and `From now`
+/// detail lines.
 library;
 
 import 'package:meta/meta.dart';
@@ -17,8 +18,10 @@ final class OnCalendarElapse {
   /// UTC` or a zone abbreviation we cannot resolve).
   final String? text;
 
-  /// The `(in UTC)` line decoded, when systemd-analyze printed it (it is
-  /// omitted when the server zone is already UTC).
+  /// The instant in UTC: the `(in UTC)` line decoded, or the timestamp
+  /// itself when it ends in `UTC`, `GMT` or `-00` and that line is
+  /// missing, which systemd-analyze omits in a zone with a zero offset
+  /// and no DST.
   final DateTime? atUtc;
 
   /// The `From now` detail (`9h left`).
@@ -40,14 +43,16 @@ final class OnCalendarResult {
     List<OnCalendarElapse>? elapses,
   }) : elapses = List.unmodifiable(elapses ?? []);
 
-  /// The expression echo (`Original form:`).
+  /// The expression echo (`Original form:`), null when the input was
+  /// already the normalized form: systemd-analyze then omits the line,
+  /// so callers key a read by the expression they sent.
   final String? originalForm;
 
   /// The canonical systemd spelling (`Normalized form:`), what the
   /// jobs view offers to write back.
   final String? normalizedForm;
 
-  /// `Next elapse` plus every `Iteration #N`, in order.
+  /// `Next elapse` plus every later-run row, in order.
   final List<OnCalendarElapse> elapses;
 
   Map<String, Object?> toJson() => {
@@ -74,7 +79,7 @@ ParseResult<OnCalendarResult> parseOnCalendar(String raw) {
     elapses.add(
       OnCalendarElapse(
         text: text.isEmpty ? null : text.join('\n'),
-        atUtc: utc,
+        atUtc: utc ?? (text.length == 1 ? _zeroOffsetStamp(text.single) : null),
         fromNow: fromNow,
       ),
     );
@@ -84,7 +89,7 @@ ParseResult<OnCalendarResult> parseOnCalendar(String raw) {
     open = false;
   }
 
-  final iter = RegExp(r'^Iteration #\d+:');
+  final iter = RegExp(r'^Iter(?:\.|ation) #\d+:');
   for (final line in raw.split('\n')) {
     final t = line.trim();
     if (t.isEmpty) continue;
@@ -138,6 +143,19 @@ ParseResult<OnCalendarResult> parseOnCalendar(String raw) {
     ),
     warnings,
   );
+}
+
+/// An elapse without an `(in UTC)` line as an instant. systemd-analyze
+/// leaves that line out when `in_utc_timezone()` holds, a zero offset
+/// and no DST, where stamps end in `UTC`, `GMT` (Etc/GMT,
+/// Atlantic/Reykjavik) or `-00` (Factory).
+DateTime? _zeroOffsetStamp(String s) {
+  for (final zone in const [' GMT', ' -00']) {
+    if (s.endsWith(zone)) {
+      return _utcStamp('${s.substring(0, s.length - zone.length)} UTC');
+    }
+  }
+  return _utcStamp(s);
 }
 
 /// `Wed 2026-10-15 14:45:00 UTC` to a UTC instant; other zone
