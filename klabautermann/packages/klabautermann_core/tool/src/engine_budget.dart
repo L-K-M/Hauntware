@@ -213,8 +213,9 @@ Future<Map<String, Object?>> runEngineBudget(
     }
   });
 
+  Isolate? engine;
   try {
-    await Isolate.spawn(
+    engine = await Isolate.spawn(
       _replayEngine,
       (
         ui: port.sendPort,
@@ -226,7 +227,7 @@ Future<Map<String, Object?>> runEngineBudget(
       onError: port.sendPort,
       debugName: 'klabautermann engine budget',
     );
-    final engine = await report.future.timeout(
+    final measured = await report.future.timeout(
       plan.warmup + plan.measure + const Duration(minutes: 1),
     );
     await heapReads;
@@ -264,7 +265,7 @@ Future<Map<String, Object?>> runEngineBudget(
         'measureSeconds': plan.measure.inMicroseconds / 1e6,
         'heap': plan.heap.name,
       },
-      ...engine,
+      ...measured,
       'heapAfterFullCollectionBytes': heap == null ? null : heapBytes,
       // What crossed the isolate hop in the whole run, warm-up included.
       'ui': {
@@ -275,6 +276,9 @@ Future<Map<String, Object?>> runEngineBudget(
       },
     };
   } finally {
+    // A replay that timed out would otherwise keep ticking; one that
+    // reported has already exited.
+    engine?.kill(priority: Isolate.immediate);
     port.close();
     await heap?.close();
   }
