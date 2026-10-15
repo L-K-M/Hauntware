@@ -1,0 +1,3 @@
+hw_timeout=absent
+TimersCalendar={ OnCalendar=*-*-* 00:00:00 ; next_elapse=Sun 2025-06-15 22:00:00 UTC }
+RandomizedDelayUSec=1h

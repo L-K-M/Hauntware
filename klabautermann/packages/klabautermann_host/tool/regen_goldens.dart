@@ -44,10 +44,30 @@ void main() {
       '${dir.path}/probe.golden.json',
       parseProbe(sections, _ctx).toJsonResult(),
     );
+    for (final read in _optionalReads) {
+      final file = File('${dir.path}/$read.txt');
+      if (!file.existsSync()) continue;
+      _write(
+        '${dir.path}/$read.golden.json',
+        _optionalJson(read, file.readAsStringSync()),
+      );
+    }
     _write('${dir.path}/jobs.golden.json', _jobsJson(dir.path));
     stdout.writeln('$platform: goldens rewritten');
   }
 }
+
+/// Mirrors `_optionalReads` in `test/fixtures_test.dart`.
+const _optionalReads = ['timer_detail', 'oncalendar', 'journal', 'dmesg'];
+
+Map<String, Object?> _optionalJson(String read, String payload) =>
+    switch (read) {
+      'timer_detail' => parseTimerDetail(payload, _ctx).toJsonResult(),
+      'oncalendar' => parseOnCalendar(payload).toJsonResult(),
+      'journal' => parseJournalLines(payload).toJsonResult(),
+      'dmesg' => parseDmesgJson(payload).toJsonResult(),
+      _ => throw StateError(read),
+    };
 
 /// Mirrors `_jobsJson` in `test/fixtures_test.dart`.
 Map<String, Object?> _jobsJson(String dir) {
@@ -73,11 +93,34 @@ Map<String, Object?> _jobsJson(String dir) {
     ),
     runCount: 2,
   );
+  final detailFile = File('$dir/timer_detail.txt');
+  final detail = detailFile.existsSync()
+      ? parseTimerDetail(detailFile.readAsStringSync(), _ctx).value
+      : null;
+  if (detail != null) {
+    final read = parseOnCalendar(
+      File('$dir/oncalendar.txt').readAsStringSync(),
+    ).value;
+    final first = jobs.indexWhere((j) => j is TimerJobEntry);
+    jobs[first] = (jobs[first] as TimerJobEntry).withDetail(
+      detail,
+      // oncalendar.txt is the read issued for the timer's one calendar
+      // expression. Reads are keyed by the expression sent, as the
+      // output names it only when it differs from the normalized form.
+      calendars: {detail.calendar.single: read},
+    );
+  }
   return {
     'nowUtc': now.toIso8601String(),
     'zoneOffsetMinutes': minutes,
     'zoneName': profile.timezone,
     'jobs': jobs.map((j) => j.toJson()).toList(),
+    if (detail != null)
+      'timerCalendarReads': timerCalendarCommands(
+        detail,
+        runCount: 2,
+        systemdMajor: profile.systemdVersion,
+      ),
   };
 }
 
@@ -105,6 +148,11 @@ Object? _toJson(Object? v) {
   if (v is UnitsSnapshot) return v.toJson();
   if (v is TimersSnapshot) return v.toJson();
   if (v is CronSnapshot) return v.toJson();
+  if (v is TimerDetail) return v.toJson();
+  if (v is OnCalendarResult) return v.toJson();
+  if (v is JournalEntry) return v.toJson();
+  if (v is DmesgRecord) return v.toJson();
+  if (v is List) return v.map(_toJson).toList();
   throw ArgumentError(v);
 }
 
