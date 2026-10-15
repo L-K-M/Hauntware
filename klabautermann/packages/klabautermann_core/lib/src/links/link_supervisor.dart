@@ -203,8 +203,9 @@ final class LinkSupervisor {
   }
 
   /// Makes [attempt] interactive: a queued one moves ahead, one waiting
-  /// out its jitter dials now, and one already dialing unattended is
-  /// followed by an interactive one if it fails for want of the user.
+  /// out its jitter dials now (in the background, it queues), and one
+  /// already dialing unattended is followed by an interactive one if it
+  /// fails for want of the user.
   void _promote(_Attempt attempt) {
     if (attempt.dialing) {
       attempt.userAsked = true;
@@ -212,13 +213,15 @@ final class LinkSupervisor {
     }
 
     attempt.purpose = ConnectPurpose.interactive;
-    if (attempt.holdsSlot) {
+    if (!attempt.holdsSlot) {
+      _queue.remove(attempt);
+      _enqueue(attempt);
+    } else if (_background) {
+      _requeue(attempt);
+    } else {
       attempt.timer?.cancel();
       _dial(attempt);
-      return;
     }
-    _queue.remove(attempt);
-    _enqueue(attempt);
   }
 
   void _enqueue(_Attempt attempt) {
@@ -252,9 +255,21 @@ final class LinkSupervisor {
         _dial(attempt);
       } else {
         final jitter = kConnectJitter * _random.nextDouble();
-        attempt.timer = _startTimer(jitter, () => _dial(attempt));
+        attempt.timer = _startTimer(
+          jitter,
+          () => _background ? _requeue(attempt) : _dial(attempt),
+        );
       }
     }
+  }
+
+  /// Returns [attempt] from its slot to the queue, ahead of unattended
+  /// attempts, when the app went to the background before it dialed.
+  void _requeue(_Attempt attempt) {
+    attempt.timer?.cancel();
+    _freeSlot(attempt);
+    final at = _queue.indexWhere((a) => a.purpose == ConnectPurpose.background);
+    _queue.insert(at < 0 ? _queue.length : at, attempt);
   }
 
   void _dial(_Attempt attempt) {

@@ -537,6 +537,23 @@ void main() {
       expect(calls.map((c) => c.serverId), ['s1', 's2']);
     });
 
+    test('an attempt in its slot does not dial either', () async {
+      supervisor = make(random: 0.5);
+      supervisor.connect('s1', purpose: _background);
+      supervisor.connect('s2', purpose: _background);
+      supervisor.setActivity(AppActivity.background);
+      supervisor.connect('s2', purpose: _interactive);
+      await clock.elapse(const Duration(minutes: 5));
+      expect(calls, isEmpty);
+
+      supervisor.setActivity(AppActivity.foreground);
+      await clock.elapse(const Duration(seconds: 1));
+      expect(calls.map((c) => (c.serverId, c.purpose)), [
+        ('s2', _interactive),
+        ('s1', _background),
+      ]);
+    });
+
     test(
       'a phone closes its links after 30 s and redials them on return',
       () async {
