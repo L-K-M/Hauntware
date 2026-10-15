@@ -19,6 +19,7 @@ import '../l10n/app_localizations.dart';
 import '../services/transfer_limits_controller.dart'
     show transferConcurrencyChoices;
 import '../services/uuid.dart';
+import '../theme/app_theme.dart' show poltergeistMonoTextStyle;
 import 'connection_test_report.dart';
 import 'server_appearance.dart';
 import 'server_color_picker.dart';
@@ -717,7 +718,7 @@ class _ServerEditorState extends State<_ServerEditor> {
             TextFormField(
               controller: _keyPem,
               maxLines: 5,
-              style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+              style: poltergeistMonoTextStyle.copyWith(fontSize: 12),
               decoration: InputDecoration(
                 labelText: l10n.serverEditorPrivateKeyPem,
                 border: const OutlineInputBorder(),
@@ -778,7 +779,7 @@ class _ServerEditorState extends State<_ServerEditor> {
         controller: _loginScript,
         maxLines: 3,
         minLines: 1,
-        style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+        style: poltergeistMonoTextStyle.copyWith(fontSize: 12),
         decoration: InputDecoration(
           labelText: l10n.serverEditorLoginScript,
           hintText: l10n.serverEditorLoginScriptHint,

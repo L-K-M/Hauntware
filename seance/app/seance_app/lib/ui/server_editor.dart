@@ -649,7 +649,7 @@ class _ServerEditorState extends State<_ServerEditor> {
             TextFormField(
               controller: _keyPem,
               maxLines: 5,
-              style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+              style: SeanceTheme.mono.copyWith(fontSize: 12),
               decoration: const InputDecoration(
                   labelText: 'Private key (PEM/OpenSSH)',
                   border: OutlineInputBorder()),
@@ -679,7 +679,7 @@ class _ServerEditorState extends State<_ServerEditor> {
         controller: _loginScript,
         maxLines: 3,
         minLines: 1,
-        style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+        style: SeanceTheme.mono.copyWith(fontSize: 12),
         decoration: const InputDecoration(
           labelText: 'Login script (optional)',
           hintText: 'e.g. cd ~/work && tmux attach -t work || tmux new -s work',

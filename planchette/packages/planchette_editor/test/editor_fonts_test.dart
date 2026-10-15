@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -119,5 +121,24 @@ void main() {
         reason: '$platform',
       );
     }
+  });
+
+  test('no editor text names the bare monospace family', () {
+    // A real family only on Linux and Android; elsewhere the name draws the
+    // proportional system font. Code text takes the editor's style.
+    final bare = RegExp(r'''fontFamily:\s*['"]monospace['"]''');
+    final offenders = <String>[];
+    for (final entity in Directory('lib').listSync(recursive: true)) {
+      if (entity is! File || !entity.path.endsWith('.dart')) continue;
+
+      for (final (index, line) in entity.readAsLinesSync().indexed) {
+        if (line.trimLeft().startsWith('//')) continue;
+        if (!bare.hasMatch(line)) continue;
+
+        offenders.add('${entity.path}:${index + 1}');
+      }
+    }
+
+    expect(offenders, isEmpty);
   });
 }
