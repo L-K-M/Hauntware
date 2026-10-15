@@ -526,14 +526,17 @@ Proposals awaiting the owner close the section; they are not decisions.
   and a client is one run, since its handshake consumes `EngineReady` and
   the engine's exit closes its events. A restarted engine is a new client
   with new controllers, whose floors start empty. Routes and surfaces keep
-  the controllers they were built with, so the app's view keys its tree
-  by its controllers: new ones remount every surface, which opens and
-  subscribes on the new engine. A server that leaves the fleet loses its
-  floor too. *Rejected:* the request number with a UI reset on restart
-  (the UI does not see sampler restarts); a reset on an `EngineReady` in
-  the event stream (the handshake consumes it, so the reset would never
-  run, and a client outliving its engine would also have to replay
-  subscriptions, links and the app's activity into the next one).
+  the controllers they were built with, so the app's view remounts its
+  tree for new controllers, which reopens and resubscribes every surface
+  on the new engine. It shows nothing for one frame in between, since the
+  old tree must be gone before the new one mounts: macOS has one native
+  menu bar, and the old one clears it as it goes. A server that leaves
+  the fleet loses its floor too. *Rejected:* the request number with a
+  UI reset on restart (the UI does not see sampler restarts); a reset on
+  an `EngineReady` in the event stream (the handshake consumes it, so the
+  reset would never run, and a client outliving its engine would also
+  have to replay subscriptions, links and the app's activity into the
+  next one).
 - **D45. Subscriptions are keyed by `(serverId, subscriptionId)`.** Each
   surface that shows a server's data (a fleet row, the overview, a visible
   panel) holds its own subscription with its own collector set. The engine
