@@ -2145,7 +2145,11 @@ compared, since its request may start before the latest fast one), and
 so do sampling that stopped for the
 background or a lost link and a stream no longer subscribed, so no rate
 averages over a pause. A lost reading keeps the series, and the next
-rate spans it. Disk throughput uses 512-byte sectors (CN-04). A reply
+rate spans it. Per-process CPU shares are timed by the uptime too,
+which the host reads before a request's first collector, so `procs`
+leads its request; a `procs` reading behind another collector, and
+the one after it, have no shares. Disk throughput uses 512-byte
+sectors (CN-04). A reply
 with a `core` section and no `overview` one also serves the `overview`
 stream, since `core` reads every counter `overview` does. A
 filtered core sample is about 1.5 to 2.5 KB and an overview sample about

@@ -62,15 +62,17 @@ SamplerReplied _fastReply(
   if (core) ok('core', _blocks(n, btime: btime)),
 ]);
 
+/// A `procs` section listing pid 1 with [utime] user jiffies.
+TestSection _procsSection(int utime) => ok(
+  'procs',
+  '== stat ==\n1 1 (init) S 0 1 1 0 -1 0 0 0 0 0 $utime 0 0 0 20 0 1 '
+      '0 500 0 0',
+);
+
 /// A `procs` reply listing pid 1 with [utime] user jiffies, read at
 /// [uptime].
-SamplerReplied _procsReply(int utime, double uptime) => reply(1, uptime, [
-  ok(
-    'procs',
-    '== stat ==\n1 1 (init) S 0 1 1 0 -1 0 0 0 0 0 $utime 0 0 0 20 0 1 '
-        '0 500 0 0',
-  ),
-]);
+SamplerReplied _procsReply(int utime, double uptime) =>
+    reply(1, uptime, [_procsSection(utime)]);
 
 ServerSamplePipeline _sampling({
   SampleSequence? sequence,
@@ -495,6 +497,25 @@ void main() {
       _section('fs', SectionStatus.error, '${'\u{1F600}' * 2048}z'),
     )!.detail!;
     expect(emoji, '${'\u{1F600}' * 2047}z');
+  });
+
+  test('a reply\'s uptime times procs only when procs leads it', () {
+    // The host reads the `B` uptime before the first collector, so a slow
+    // `fs` ahead of `procs` would count toward the interval.
+    final streams = {SampleStream.fs, SampleStream.procs};
+    final p = _sampling(streams: streams);
+    double? share(List<TestSection> sections, double uptime, int at) =>
+        _result<ProcsResult>(
+          p.addTick(streams, reply(1, uptime, sections), _at(at)),
+        ).processes.single.cpuPercent;
+    final fs = ok('fs', '');
+
+    expect(share([fs, _procsSection(100)], 1000, 0), isNull);
+    expect(share([fs, _procsSection(400)], 1012, 12), isNull);
+    // Nor does the next reading know when the one before was taken.
+    expect(share([_procsSection(700), fs], 1015, 15), isNull);
+    // 300 jiffies at 100 per second over three seconds: one full CPU.
+    expect(share([_procsSection(1000), fs], 1018, 18), 100);
   });
 
   test('process rows: RSS in bytes; a ps fallback row lists its '

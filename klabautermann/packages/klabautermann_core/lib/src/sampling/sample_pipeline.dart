@@ -186,7 +186,9 @@ final class ServerSamplePipeline {
   /// a missing `overview` one, since `core` reads every counter
   /// `overview` does. A reading lost to a deadline, a framing error or a
   /// sampler that is restarting opens a gap instead, as does a reply
-  /// without a stream's section.
+  /// without a stream's section. Per-process CPU shares need `procs` to
+  /// be the first collector of its request (03 §6.4); a `procs` section
+  /// behind another has no shares, nor does the next one.
   /// Outcomes outside [SamplingPhase.sampling] are ignored, as are
   /// samplers that closed (the conditions say why) and ticks skipped
   /// while another request is outstanding. The pipeline opens no gap for
@@ -278,7 +280,10 @@ final class ServerSamplePipeline {
             ),
             SampleStream.procs => _procs(
               parseProcs(text(s), ctx).value,
-              reply.uptimeSeconds,
+              // The host reads the `B` uptime before the reply's first
+              // collector, so it times `procs` only when `procs` ran
+              // first; behind another, its share interval is unknown.
+              identical(s, reply.sections.first) ? reply.uptimeSeconds : null,
             ),
             SampleStream.units => UnitsResult(parseUnits(text(s), ctx).value),
             SampleStream.failedUnits => FailedUnitsResult(
