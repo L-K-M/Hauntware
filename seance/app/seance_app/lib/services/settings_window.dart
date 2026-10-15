@@ -166,6 +166,9 @@ class SettingsWindowHost {
           fontSize: (json['fontSize'] as num).toDouble(),
           fontFamily: json['fontFamily'] as String,
           palette: TerminalPalette.values.byName(json['palette'] as String),
+          ligatures: TerminalLigatures.values.byName(
+            json['ligatures'] as String,
+          ),
         );
       case SettingsLinkMethod.setEditorFontSize:
         await _backend.setEditorFontSize(argument! as int);
@@ -348,10 +351,12 @@ class RemoteSettingsBackend extends GhostSettingsWindowClient<SettingsTab>
     required double fontSize,
     required String fontFamily,
     required TerminalPalette palette,
+    required TerminalLigatures ligatures,
   }) => _call(SettingsLinkMethod.setTerminalAppearance, {
     'fontSize': fontSize,
     'fontFamily': fontFamily,
     'palette': palette.name,
+    'ligatures': ligatures.name,
   });
 
   @override

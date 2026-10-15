@@ -157,12 +157,13 @@ final class BookmarkHandler implements RecordHandler {
 }
 
 /// Local bookmark writes, sealed through the coordinator's
-/// [CatalogWriter.sealLocal] funnel like every other local edit.
+/// [CatalogWriter.sealLocal] funnel like every other local edit, and
+/// refused like every other under `PushPolicy.none`.
 extension BookmarkRecordWrites on RecordCoordinator {
   /// A local save: seal the row under the `bookmark:` id with the row's own
   /// stamp and this install's authorship, and mark it dirty for the next
   /// push (04 §3.2 — `deviceId: deviceId`, always).
-  Future<void> onBookmarkSaved(Bookmark bookmark) => writer.sealLocal(
+  Future<WriteOutcome> onBookmarkSaved(Bookmark bookmark) => writer.sealLocal(
     DecryptedRecord(
       id: '$_bookmarkPrefix${bookmark.id}',
       kind: RecordKind.bookmark,
@@ -176,7 +177,7 @@ extension BookmarkRecordWrites on RecordCoordinator {
   /// at the deletion — fixing the resurrection gap Séance's ephemeral
   /// store has. Tombstones are retained indefinitely: no GC window is safe
   /// while a long-offline device could still push the old row.
-  Future<void> onBookmarkDeleted(String bookmarkId) => writer.sealLocal(
+  Future<WriteOutcome> onBookmarkDeleted(String bookmarkId) => writer.sealLocal(
     DecryptedRecord(
       id: '$_bookmarkPrefix$bookmarkId',
       kind: RecordKind.bookmark,

@@ -54,10 +54,8 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Dark'));
     await tester.pumpAndSettle();
-    harness.monitoring.subscribe('srv-1', const {
-      Collector.overview,
-    }, const Duration(seconds: 2));
-    harness.monitoring.unsubscribe('srv-1');
+    harness.monitoring.subscribe('srv-1', 'row', const {SampleStream.overview});
+    harness.monitoring.unsubscribe('srv-1', 'row');
     await tester.pumpAndSettle();
 
     // Prove the drive reached the engine, then judge every request.

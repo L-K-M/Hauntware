@@ -16,8 +16,37 @@ slice:
   READY up to 64 KiB and reads an empty `B` uptime as unknown;
   `HwsTickAssembler` turns frames into replies (READY version check, a
   reply lost to a framing error, out-of-order markers ending the
-  session), and `kSamplerStartCommand` is the start line. No engine code
-  uses them yet; the real-shell test runs on them.
+  session), and `kSamplerStartCommand` is the start line. The sampler
+  session below and the real-shell test use them.
+- Sampler session (M2): `klabautermann_core`'s `SamplerSession` runs one
+  sampler over an `SshLink`: the start command, the program with a fresh
+  nonce, a READY deadline, one request at a time (an overlapping tick
+  is skipped and counted), slow deadlines from the guarded commands
+  (D47), and on a missed deadline or a broken stream
+  `RemoteProcess.close()` and a restart after a backoff of 1 s doubling
+  to a 30 s cap, less up to 30 % of downward jitter (so the first
+  restart comes after 0.7 s to 1 s). Tested against a scripted process
+  and local dash and bash (a SIGSTOP stall included); nothing starts it
+  yet, and no SSH fixture test covers it.
+- Spike S2 part 1: `klabautermann_core/tool/capture_fixtures.dart
+  measure` runs the real program locally under dash and bash (as
+  `sh -s`, and as `<login shell> -c '<start command>'` the way sshd
+  runs a command) and records [the evidence](evidence/s2/README.md):
+  output before READY, fast-tick bytes and CPU, `procs` beyond 1,000
+  processes and slow-tick times. The unguarded `procs` loops reach the
+  10 s guarded budget near 2,000 processes under dash, where passing
+  the D47 deadline depends on its margin, not yet fixed, and pass it by
+  1,079 under bash; K15 has to resolve that. Fixture capture with its
+  redaction review, SSH mode, the other shells (CI images, else the
+  manual list) and systemd collectors (runner VM) remain.
+- Jobs model (JOB-01, JOB-02 data): `klabautermann_host`'s `mergeJobs`
+  turns a `cron` and a `timers` tick into one list of cron lines,
+  periodic scripts and timers, each with an English-free
+  `ScheduleDescription` and, for cron, next runs with DST annotations
+  in the server zone or the line's `CRON_TZ`. Timer triggers and
+  `RandomizedDelaySec` have fields but no source yet, `CRON_TZ` zones
+  other than the server's and UTC need a resolver, and nothing in the
+  engine or app consumes the list yet.
 - Access rules (M2, `klabautermann_host` `access/`): the CN-24 rows from
   a `HostProfile` (passwordless sudo, journal group with the LOG-04
   notice, Docker socket rights with the SAF-08 flag, systemd version,
@@ -33,15 +62,17 @@ slice:
   and grouping.
 - `klabautermann_core`: the D18 engine isolate skeleton: the plain-data
   request/event protocol of 03 §10.1 as sealed classes, `engineMain`
-  answering `Hello`/`Subscribe`/`Unsubscribe` and rejecting the rows whose
-  milestones have not landed, and `IsolateEngineClient` for the UI side.
-  Protocol v2 types `CatalogReplaced` as a list of plain `FleetEntry`
-  values and adds `ImportSshConfig`/`SshConfigImported`: the engine
-  parses ssh_config text with `seance_core`'s `SshConfigImporter` off the
-  UI isolate (CN-19). Spawning takes the app's support directory, where
-  the engine keeps the imports (below); `EngineReady` reports a problem
-  with that file and `SshConfigImported` says whether the import was
-  saved, both added within v2.
+  answering `Hello`/`Subscribe`/`Unsubscribe` and rejecting the rows
+  whose milestones have not landed, and `IsolateEngineClient` for the UI
+  side. Protocol v2 types `CatalogReplaced` as a list of plain
+  `FleetEntry` values and adds `ImportSshConfig`/`SshConfigImported`:
+  the engine reads ssh_config text off the UI isolate (CN-19), splitting
+  its lines as `readconf.c` does and taking a host for each name a
+  `Host` line gives, as `SshConfigImporter.hostAliases` does. Spawning
+  takes the app's support directory, where the engine keeps the imports
+  (below); `EngineReady` reports a problem with that file and
+  `SshConfigImported` says whether the import was saved, both added
+  within v2.
 - Protocol v3 (M2 links, 03 §10.1): `LinkState` carries a sealed
   `LinkStatus` (D46's eight states plus `blocked`, typed reasons and an
   optional failure kind), `Prompt` a sealed request per kind, and
@@ -50,8 +81,8 @@ slice:
   `locatorConflict`. The fleet controller keeps link statuses and probe
   answers only for listed servers, and the rail words every status.
   Nothing produces them yet: the engine still rejects `Connect` and
-  `SetAppActivity`, sends no prompts or probe answers, and fills none of
-  the new fleet fields.
+  `SetAppActivity`, sends no prompts or probe answers, and fills the new
+  fleet fields only for imports (below).
 - `klabautermann_app`: `flutter create`d for the five platforms with the
   04 §12.3 identities, generated launcher icons, the desktop three-pane
   shell (fleet rail, workspace, inspector) at 960 px and up, the phone
@@ -81,6 +112,12 @@ slice:
   the Flutter SDK's Roboto and compare on Linux only. `Gauge` follows in
   its own PR. Nothing shows a chart yet: the overview and fleet rows that
   feed the rings come later in M2.
+- Bars (03 §10.7, M2): `StackedBar` for the memory breakdown and disks
+  (MEM-01, DSK-01) and the fleet rows' three-cell `PressureBar` (FL-07),
+  with hatching for unknown values, grey when stale, and threshold
+  colours paired with a stripe, an icon and words (A11Y-01), plus
+  screen-reader summaries and light and dark goldens. Nothing shows
+  them yet.
 - Sortable table (M2): the app's `SortableTable`, which the M2 lists
   build on. The caller owns the sort (a header click flips it; ties keep
   the caller's order and unknown values sort last). A screen reader hears
@@ -141,9 +178,25 @@ slice:
   schema, is left as it is and no import is saved that run. Each case is
   told once in a top toast at startup. As with `settings.json`, no real
   build has run it yet: the tests restart the engine isolate against a
-  temporary folder. `Include` is not followed (`SshConfigImporter` drops
-  it), and `ProxyJump` and `IdentityFile` are not carried or stored yet:
-  the rail needs neither until links land (M2).
+  temporary folder. Since M2 the import reads each host as ssh does:
+  every block that applies gives the values still unset, `Match` blocks
+  count where their criteria can be evaluated, and the store keeps the
+  effective `HostName`, `Port`, `User`, first `IdentityFile` and
+  `ProxyJump`, plus hop records for route names no `Host` line gives
+  (schema 3; a schema 1 or 2 file's hosts are listed without route,
+  sign-in or connect config until the next import). The engine maps
+  imports to the `ServerConfig`s and jump-hop configs links will dial
+  (03 §10.1), filling the route, sign-in, search text and `host:port`
+  conflict fields. A host it cannot dial as ssh would is skipped and
+  counted: a `ProxyCommand`, a `Match` or `Include` that could change
+  it (`Include` is not followed), a second reading of the file for the
+  host ssh dials that would change it (Fedora's and RHEL's
+  `/etc/ssh/ssh_config` ask ssh for one), a token ssh fills in, a value
+  holding bytes that are not UTF-8, a line ssh rejects, or a route ssh
+  would refuse. Where that second reading would route a host through
+  itself or into a jumphost loop, ssh cannot be taking it, so the host
+  keeps the first reading's values (as a bastion under `Host * !bastion`
+  does). Nothing dials them yet.
 - Packaging: `scripts/build.sh`, `scripts/package-linux.sh` (.deb and
   AppImage through the shared `scripts/package-linux-common.sh`) and
   `scripts/build-flatpak.sh` with `flatpak/ch.lkmc.klabautermann.yml`.
@@ -244,6 +297,16 @@ slice:
   escape and control but tab. A heap test keeps a full buffer of either
   kind under the 64 MiB budget (03 §11.4). Nothing uses them yet: the
   viewer and the engine's followers come in later M2 PRs.
+- Log viewer (03 §10.8, LOG-02): `lib/ui/logs/`'s `LogView` over a
+  `LogViewController` draws fixed one-line rows or wrapped rows, measuring
+  only the lines a layout shows and finding offsets in O(log n); follows
+  the newest line, pauses on any scroll away from it and resumes at the
+  end, on End or Follow; colours levels with a spoken gutter icon; holds
+  every span to 4.5:1; and scrolls by keyboard with a focus ring. Light
+  and dark goldens draw with the test font and compare on Linux only. Not
+  yet: sideways scrolling without wrap (a long line ends in an ellipsis,
+  which hides a cut line's note) and tab stops. No panel shows it yet: the
+  Logs and Services panels and the followers come later in M2.
 
 Pull-only from the start (D14): no surface sends a request that could
 push or write catalog records, and a widget test guards it.
@@ -362,3 +425,27 @@ wiring on Linux.
 Follow-up: this is the suite's fourth copy of the controller. The D32
 review in [SHARED.md](SHARED.md) defers a shared macOS plugin to a
 separate suite PR, which must land before any product makes a fifth.
+
+## Open review findings
+
+GLM's review of PR #190 (2026-10-15) flagged these in code already on
+main. Both were checked against the code and are not fixed yet:
+
+- Alpine cron fixture: `klabautermann_host`'s
+  `test/fixtures/alpine-322/cron.txt` puts BusyBox crontab lines under
+  `etc_crontab`. BusyBox lines have no user column, but the
+  system-crontab parser reads the sixth field as the user, so
+  `cron.golden.json` and `jobs.golden.json` record `user: "run-parts"`
+  and `command: "/etc/periodic/15min"` for all five lines. BusyBox crond
+  reads `/etc/crontabs/<user>` without a user column and has no
+  `/etc/crontab`. Either move the lines to the fixture's `crontab`
+  section or teach the parser a no-user-column flavour. The fixture is
+  hand-written; the S2 capture replaces it.
+- Cron runs after a DST change: `ServerZone` keeps the probe's fixed
+  offset unless the consumer passes `offsetAt`, and nothing does yet
+  (`HostProfile` in `host_profile.dart`, the jobs goldens). A run past a
+  transition keeps the old offset. Examples: the debian-12 golden's
+  Europe/Berlin runs from 2026-10-25 say +120 where CET is +60, and the
+  rhel-8 golden's America/New_York runs from 2026-11-01 say -240 where
+  EST is -300. The first consumer of the jobs list must supply the zone
+  lookup. Until then, the goldens should say they are fixed-offset.

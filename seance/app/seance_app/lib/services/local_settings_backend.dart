@@ -111,15 +111,18 @@ class LocalSettingsBackend implements SettingsBackend {
     required double fontSize,
     required String fontFamily,
     required TerminalPalette palette,
+    required TerminalLigatures ligatures,
   }) async {
     if (_s.terminalFontSize == fontSize &&
         _s.terminalPalette == palette &&
-        _s.terminalFontFamily == fontFamily) {
+        _s.terminalFontFamily == fontFamily &&
+        _s.terminalLigatures == ligatures) {
       return;
     }
     _s.terminalFontSize = fontSize;
     _s.terminalPalette = palette;
     _s.terminalFontFamily = fontFamily;
+    _s.terminalLigatures = ligatures;
     // Terminals read the settings during build, so they need a nudge.
     _state.terminalAppearanceChanged();
     await _state.services.saveSettings();

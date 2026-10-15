@@ -47,7 +47,7 @@
       }
     }
   },
-  "sshConfigImportedWithSkips": "{importedCount, plural, =0{No hosts were imported from ~/.ssh/config.} =1{Imported 1 server from ~/.ssh/config.} other{Imported {importedCount} servers from ~/.ssh/config.}} {skippedCount, plural, =1{1 host was skipped because its port is unsupported or its name repeats an earlier host.} other{{skippedCount} hosts were skipped because their port is unsupported or their name repeats an earlier host.}}",
+  "sshConfigImportedWithSkips": "{importedCount, plural, =0{No hosts were imported from ~/.ssh/config.} =1{Imported 1 server from ~/.ssh/config.} other{Imported {importedCount} servers from ~/.ssh/config.}} {skippedCount, plural, =1{1 host was skipped because of settings Klabautermann cannot follow as ssh would, such as a ProxyCommand, Include or Match block.} other{{skippedCount} hosts were skipped because of settings Klabautermann cannot follow as ssh would, such as a ProxyCommand, Include or Match block.}}",
   "@sshConfigImportedWithSkips": {
     "description": "Shown instead of sshConfigImported when the import left hosts out; importedCount (0 or more) is the number of servers it added, skippedCount (1 or more) the number of hosts it left out. One message, so the translation decides how its sentences join.",
     "placeholders": {
@@ -272,6 +272,70 @@
   "@chartUnknownValue": {
     "description": "Shown and read in place of a value the server did not report; never shown as zero."
   },
+  "chartGapAppClosed": "app closed",
+  "@chartGapAppClosed": {
+    "description": "The label on a chart's hatched band for a period without data because Klabautermann was not running (03 §9.5)."
+  },
+  "chartGapBackground": "in background",
+  "@chartGapBackground": {
+    "description": "The label on a chart's hatched band for a period without data because the app was in the background, where it stops sampling."
+  },
+  "chartGapDisconnected": "disconnected",
+  "@chartGapDisconnected": {
+    "description": "The label on a chart's hatched band for a period without data because the connection to the server was down."
+  },
+  "chartGapSummary": "No data from {start} to {end}: {reason}",
+  "@chartGapSummary": {
+    "description": "A screen reader's description of a chart's band without data: when it began and ended, and why, one of chartGapAppClosed, chartGapBackground or chartGapDisconnected.",
+    "placeholders": {
+      "start": {
+        "type": "DateTime",
+        "format": "jms"
+      },
+      "end": {
+        "type": "DateTime",
+        "format": "jms"
+      },
+      "reason": {
+        "type": "String",
+        "example": "in background"
+      }
+    }
+  },
+  "chartGapOngoing": "No data since {start}: {reason}",
+  "@chartGapOngoing": {
+    "description": "A screen reader's description of a chart's band without data that has not ended: when it began and why, one of chartGapAppClosed, chartGapBackground or chartGapDisconnected.",
+    "placeholders": {
+      "start": {
+        "type": "DateTime",
+        "format": "jms"
+      },
+      "reason": {
+        "type": "String",
+        "example": "disconnected"
+      }
+    }
+  },
+  "chartTime": "{time}",
+  "@chartTime": {
+    "description": "A time label on a chart's time axis, to the minute, in the UI locale.",
+    "placeholders": {
+      "time": {
+        "type": "DateTime",
+        "format": "jm"
+      }
+    }
+  },
+  "chartTimeWithSeconds": "{time}",
+  "@chartTimeWithSeconds": {
+    "description": "A time label on a chart's time axis, to the second, in the UI locale, for axes whose ticks are less than a minute apart.",
+    "placeholders": {
+      "time": {
+        "type": "DateTime",
+        "format": "jms"
+      }
+    }
+  },
   "chartTrendRising": "rising",
   "@chartTrendRising": {
     "description": "A series' trend in its screen-reader summary: it has gone up over the chart's window."
@@ -294,6 +358,74 @@
         "optionalParameters": {
           "decimalDigits": 0
         }
+      }
+    }
+  },
+  "chartBarSummary": "{label}: {parts} of {total}",
+  "@chartBarSummary": {
+    "description": "A bar chart's screen-reader summary, such as a memory breakdown: what it measures, its parts (each a chartBarPart, joined by chartListSeparator) and the total they are part of, already formatted with its unit.",
+    "placeholders": {
+      "label": {
+        "type": "String",
+        "example": "Memory"
+      },
+      "parts": {
+        "type": "String",
+        "example": "Used 6 GiB, Cache 3 GiB"
+      },
+      "total": {
+        "type": "String",
+        "example": "16 GiB"
+      }
+    }
+  },
+  "chartBarPart": "{label} {value}",
+  "@chartBarPart": {
+    "description": "One part of a bar chart in its legend and screen-reader summary: what the part measures and its value, already formatted with its unit, or chartUnknownValue.",
+    "placeholders": {
+      "label": {
+        "type": "String",
+        "example": "Cache"
+      },
+      "value": {
+        "type": "String",
+        "example": "3 GiB"
+      }
+    }
+  },
+  "chartListSeparator": ", ",
+  "@chartListSeparator": {
+    "description": "Joins the parts of a bar chart's screen-reader summary, such as \"CPU 42%, Memory 71%\"."
+  },
+  "chartWithSeverity": "{part} ({severity})",
+  "@chartWithSeverity": {
+    "description": "A bar chart part whose value has crossed a threshold, so its colour changed: the part (a chartBarPart) and chartSeverityWarning or chartSeverityCritical.",
+    "placeholders": {
+      "part": {
+        "type": "String",
+        "example": "Memory 92%"
+      },
+      "severity": {
+        "type": "String",
+        "example": "critical"
+      }
+    }
+  },
+  "chartSeverityWarning": "warning",
+  "@chartSeverityWarning": {
+    "description": "A value past its warning threshold, shown in the warning colour with a warning icon."
+  },
+  "chartSeverityCritical": "critical",
+  "@chartSeverityCritical": {
+    "description": "A value past its critical threshold, shown in the critical colour with an error icon."
+  },
+  "chartStale": "{summary}, stale",
+  "@chartStale": {
+    "description": "A bar chart's screen-reader summary while its values are stale: no new sample has arrived in time, so the bar is grey and shows the last values the server reported.",
+    "placeholders": {
+      "summary": {
+        "type": "String",
+        "example": "CPU 42%, Memory 71%, Disk 40%"
       }
     }
   },
@@ -326,5 +458,67 @@
   "tableRowActions": "Row actions",
   "@tableRowActions": {
     "description": "Tooltip and screen-reader label of the button at the end of a table row that opens the row's actions."
+  },
+  "logViewLabel": "Log",
+  "@logViewLabel": {
+    "description": "Screen-reader name of a log view, the scrolling list of a server's log lines."
+  },
+  "logFollow": "Follow",
+  "@logFollow": {
+    "description": "Button shown while a log view is paused: scrolls to the newest line and keeps it in sight as lines arrive (LOG-02)."
+  },
+  "logLevelError": "Error",
+  "@logLevelError": {
+    "description": "Spoken name of the icon beside a log line logged as an error or worse."
+  },
+  "logLevelWarning": "Warning",
+  "@logLevelWarning": {
+    "description": "Spoken name of the icon beside a log line logged as a warning."
+  },
+  "logLevelDebug": "Debug",
+  "@logLevelDebug": {
+    "description": "Spoken name of the icon beside a log line logged as debug output."
+  },
+  "logDroppedLines": "{count, plural, =1{1 line dropped here} other{{count} lines dropped here}}",
+  "@logDroppedLines": {
+    "description": "A row in a log view where lines arrived faster than the view could keep and were left out; count is how many.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "logLineCut": "[line cut: {total} characters in all]",
+  "@logLineCut": {
+    "description": "Note after a log line too long to keep whole; total is the full line's length.",
+    "placeholders": {
+      "total": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "logJournalNotSent": "[not sent: over 4,096 bytes]",
+  "@logJournalNotSent": {
+    "description": "Stands in for a journal message or field value the server did not send because it is larger than 4,096 bytes."
+  },
+  "logJournalFieldsLeftOut": "{count, plural, =1{1 more field not kept} other{{count} more fields not kept}}",
+  "@logJournalFieldsLeftOut": {
+    "description": "Last row of a journal entry's expanded fields when the log view kept only some of them; count is how many it left out.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "logJournalShowFields": "Show fields",
+  "@logJournalShowFields": {
+    "description": "Screen-reader hint for activating a journal row: shows all of the entry's journal fields beneath it."
+  },
+  "logJournalHideFields": "Hide fields",
+  "@logJournalHideFields": {
+    "description": "Screen-reader hint for activating a journal row that shows its fields: hides them again."
   }
 }

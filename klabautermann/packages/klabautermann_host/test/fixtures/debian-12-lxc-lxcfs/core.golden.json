@@ -1,0 +1,119 @@
+{
+  "result": {
+    "cpu": {
+      "name": "cpu",
+      "jiffies": [
+        183456,
+        1204,
+        61230,
+        9876543,
+        4321,
+        0,
+        2345,
+        0,
+        0,
+        0
+      ]
+    },
+    "perCpu": {
+      "cpu0": {
+        "name": "cpu0",
+        "busy": 124070,
+        "idle": 4940460
+      },
+      "cpu1": {
+        "name": "cpu1",
+        "busy": 124165,
+        "idle": 4940404
+      }
+    },
+    "btime": 1749000000,
+    "meminfo": {
+      "fields": {
+        "MemTotal": 2097152,
+        "MemFree": 1310720,
+        "MemAvailable": 1730560,
+        "Buffers": 0,
+        "Cached": 393216,
+        "SReclaimable": 24576,
+        "Shmem": 16384,
+        "SwapTotal": 524288,
+        "SwapFree": 524288
+      }
+    },
+    "loadavg": {
+      "load1": 1.42,
+      "load5": 1.37,
+      "load15": 1.3,
+      "running": 3,
+      "total": 1876,
+      "lastPid": 912345
+    },
+    "netdev": [
+      {
+        "name": "eth0",
+        "rxBytes": 734002111,
+        "txBytes": 41234567
+      }
+    ],
+    "diskstats": [
+      {
+        "name": "nvme0n1",
+        "readsCompleted": 22345678,
+        "sectorsRead": 1187654320,
+        "writesCompleted": 33456789,
+        "sectorsWritten": 2234567890
+      },
+      {
+        "name": "nvme1n1",
+        "readsCompleted": 22301234,
+        "sectorsRead": 1186543210,
+        "writesCompleted": 33401234,
+        "sectorsWritten": 2233456789
+      }
+    ],
+    "cpuPressure": {
+      "some": {
+        "avg10": 1.25,
+        "avg60": 0.98,
+        "avg300": 0.8
+      },
+      "full": {
+        "avg10": 0.0,
+        "avg60": 0.0,
+        "avg300": 0.0
+      }
+    },
+    "ioPressure": {
+      "some": {
+        "avg10": 0.3,
+        "avg60": 0.25,
+        "avg300": 0.2
+      },
+      "full": {
+        "avg10": 0.1,
+        "avg60": 0.08,
+        "avg300": 0.06
+      }
+    },
+    "memoryPressure": {
+      "some": {
+        "avg10": 0.0,
+        "avg60": 0.0,
+        "avg300": 0.0
+      },
+      "full": {
+        "avg10": 0.0,
+        "avg60": 0.0,
+        "avg300": 0.0
+      }
+    },
+    "uptimeSeconds": 86400.25,
+    "idleSeconds": 172000.5,
+    "zfsArc": {
+      "sizeBytes": 6871947674,
+      "minBytes": 2147483648
+    }
+  },
+  "warnings": []
+}

@@ -2,8 +2,11 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:klabautermann_core/klabautermann_core.dart';
+import 'package:klabautermann_core/src/fleet/imported_fleet.dart'
+    show ImportedFleet, ImportedHostDetail;
 import 'package:klabautermann_core/src/fleet/ssh_config_entries.dart';
 import 'package:klabautermann_core/src/fleet/ssh_config_import_store.dart';
+import 'package:seance_core/seance_core.dart' show ImportedHost;
 import 'package:test/test.dart';
 
 import 'fixtures/ssh_config_fixture.dart';
@@ -12,17 +15,40 @@ import 'fixtures/ssh_config_fixture.dart';
 final _time = DateTime.utc(2026, 10, 14, 9, 30, 5, 250);
 const _stamp = '20261014T093005250Z';
 
-final _web = importedFleetEntry(
+const _web = ImportedHost(
   alias: 'web-1',
-  host: 'web-1.example.com',
+  hostName: 'web-1.example.com',
   port: 2222,
   user: 'deploy',
+  identityFile: '~/.ssh/id_ed25519',
+  proxyJump: 'ops@bastion:2200',
 );
-final _bastion = importedFleetEntry(
+const _bastion = ImportedHost(
   alias: 'bastion',
-  host: 'bastion',
+  hostName: 'bastion',
   port: kSshDefaultPort,
 );
+
+/// A hop record: the settings ssh would use for `gw.corp`, which a route
+/// gives but no Host line does.
+const _gateway = ImportedHost(
+  alias: 'gw.corp',
+  hostName: 'gw.corp',
+  port: 2222,
+  user: 'admin',
+);
+const _behindGateway = ImportedHost(
+  alias: 'db',
+  hostName: '10.0.0.5',
+  port: kSshDefaultPort,
+  proxyJump: 'gw.corp',
+);
+
+/// What a stored host holds, comparable by value.
+List<Object?> _fields(Iterable<ImportedHost> hosts) => [
+  for (final h in hosts)
+    (h.alias, h.effectiveHost, h.port, h.user, h.identityFile, h.proxyJump),
+];
 
 void main() {
   late Directory directory;
@@ -47,7 +73,8 @@ void main() {
       final store = await SshConfigImportStore.open(file);
 
       expect(store.issue, isNull);
-      expect(store.entries, isEmpty);
+      expect(store.hosts, isEmpty);
+      expect(store.detail, ImportedHostDetail.full);
       expect(names(), isEmpty);
     });
 
@@ -64,8 +91,10 @@ void main() {
             'host': 'web-1.example.com',
             'port': 2222,
             'user': 'deploy',
+            'identityFile': '~/.ssh/id_ed25519',
+            'proxyJump': 'ops@bastion:2200',
           },
-          // No `User` in the config, no key in the file.
+          // Nothing the config does not name gets a key in the file.
           {'alias': 'bastion', 'host': 'bastion', 'port': 22},
         ],
       });
@@ -73,33 +102,103 @@ void main() {
 
       final reopened = await SshConfigImportStore.open(file);
       expect(reopened.issue, isNull);
-      // By value, ids and origin included: they derive from the alias.
-      expect(reopened.entries, [_web, _bastion]);
-      expect(reopened.entries.first.serverId, 'ssh-config:web-1');
-      expect(() => reopened.entries.add(_web), throwsUnsupportedError);
+      expect(reopened.detail, ImportedHostDetail.full);
+      expect(_fields(reopened.hosts), _fields([_web, _bastion]));
+      expect(() => reopened.hosts.add(_web), throwsUnsupportedError);
+    });
+
+    test('saves hop records apart from the hosts and restores them', () async {
+      final store = await SshConfigImportStore.open(file);
+
+      expect(await store.replace([_behindGateway], hops: [_gateway]), isTrue);
+
+      expect(jsonDecode(file.readAsStringSync()), {
+        'version': sshConfigImportsSchemaVersion,
+        'entries': [
+          {
+            'alias': 'db',
+            'host': '10.0.0.5',
+            'port': 22,
+            'proxyJump': 'gw.corp',
+          },
+        ],
+        'hops': [
+          {
+            'alias': 'gw.corp',
+            'host': 'gw.corp',
+            'port': 2222,
+            'user': 'admin',
+          },
+        ],
+      });
+      final reopened = await SshConfigImportStore.open(file);
+      expect(reopened.issue, isNull);
+      expect(_fields(reopened.hosts), _fields([_behindGateway]));
+      expect(_fields(reopened.hops), _fields([_gateway]));
+      expect(() => reopened.hops.add(_web), throwsUnsupportedError);
     });
 
     test('what the importer produces survives a save and a reload', () async {
-      final imported = fleetEntriesFromSshConfig(sshConfigFixture).entries;
+      final imported = importedHostsFromSshConfig(sshConfigFixture);
       final store = await SshConfigImportStore.open(file);
-      await store.replace(imported);
+      await store.replace(imported.hosts, hops: imported.hops);
 
       final reopened = await SshConfigImportStore.open(file);
-      expect(reopened.entries, imported);
-      expect(reopened.entries.map((e) => e.label), sshConfigFixtureEntries);
+      expect(_fields(reopened.hosts), _fields(imported.hosts));
+      expect(_fields(reopened.hops), _fields(imported.hops));
+      expect(reopened.hosts.map((h) => h.alias), sshConfigFixtureEntries);
+      // bastion's ProxyJump names jump.example, which no Host line does.
+      expect(reopened.hops.map((h) => h.alias), ['jump.example']);
+    });
+
+    test('keeps a hop record that only another hop record names', () async {
+      final imported = importedHostsFromSshConfig(
+        'Host *.internal\n  ProxyJump gw.corp\n'
+        'Host *.corp\n  Port 2222\n  User admin\n'
+        'Host web\n  ProxyJump db.internal\n',
+      );
+      final store = await SshConfigImportStore.open(file);
+      await store.replace(imported.hosts, hops: imported.hops);
+
+      final reopened = await SshConfigImportStore.open(file);
+      expect(_fields(reopened.hops), [
+        ('db.internal', 'db.internal', 22, null, null, 'gw.corp'),
+        ('gw.corp', 'gw.corp', 2222, 'admin', null, null),
+      ]);
+      // The reopened records still route web through both hops.
+      final fleet = ImportedFleet(
+        reopened.hosts,
+        hops: reopened.hops,
+        localUser: 'me',
+      );
+      final first = fleet.serverConfig(
+        fleet.serverConfig('ssh-config:web')!.jumpHostId!,
+      )!;
+      final gateway = fleet.serverConfig(first.jumpHostId!)!;
+      expect(
+        (first.username, first.host, first.port),
+        ('me', 'db.internal', 22),
+      );
+      expect(
+        (gateway.username, gateway.host, gateway.port),
+        ('admin', 'gw.corp', 2222),
+      );
     });
 
     test('each replace drops the previous set, an empty one too', () async {
       final store = await SshConfigImportStore.open(file);
       await store.replace([_web, _bastion]);
       await store.replace([_bastion]);
-      expect((await SshConfigImportStore.open(file)).entries, [_bastion]);
+      expect(
+        _fields((await SshConfigImportStore.open(file)).hosts),
+        _fields([_bastion]),
+      );
 
       await store.replace(const []);
-      expect(store.entries, isEmpty);
-      expect((await SshConfigImportStore.open(file)).entries, isEmpty);
+      expect(store.hosts, isEmpty);
+      expect((await SshConfigImportStore.open(file)).hosts, isEmpty);
       expect(jsonDecode(file.readAsStringSync()), {
-        'version': 1,
+        'version': sshConfigImportsSchemaVersion,
         'entries': <Object?>[],
       });
     });
@@ -137,9 +236,12 @@ void main() {
       );
       expect(await store.replace([_bastion]), isFalse);
 
-      expect(store.entries, [_bastion], reason: 'shown for this run');
+      expect(_fields(store.hosts), _fields([_bastion]), reason: 'this run');
       expect(file.readAsBytesSync(), bytes);
-      expect((await SshConfigImportStore.open(file)).entries, [_web]);
+      expect(
+        _fields((await SshConfigImportStore.open(file)).hosts),
+        _fields([_web]),
+      );
     });
 
     group('a damaged file', () {
@@ -176,6 +278,69 @@ void main() {
         'an empty user': _document([
           {'alias': 'a', 'host': 'h', 'port': 22, 'user': ''},
         ]),
+        'an empty identity file': _document([
+          {'alias': 'a', 'host': 'h', 'port': 22, 'identityFile': ''},
+        ]),
+        'an identity file of none': _document([
+          {'alias': 'a', 'host': 'h', 'port': 22, 'identityFile': 'None'},
+        ]),
+        'an identity file ssh would expand': _document([
+          {'alias': 'a', 'host': 'h', 'port': 22, 'identityFile': '~/k/%h'},
+        ]),
+        'a ProxyJump that is no string': _document([
+          {'alias': 'a', 'host': 'h', 'port': 22, 'proxyJump': 7},
+        ]),
+        'a ProxyJump ssh rejects': _document([
+          {'alias': 'a', 'host': 'h', 'port': 22, 'proxyJump': 'j:0'},
+        ]),
+        'a route of more than 16 hops': _document([
+          {
+            'alias': 'a',
+            'host': 'h',
+            'port': 22,
+            'proxyJump': [for (var hop = 0; hop < 17; hop++) 'j$hop'].join(','),
+          },
+        ]),
+        'a ProxyJump loop': _document([
+          {'alias': 'a', 'host': 'h', 'port': 22, 'proxyJump': 'b'},
+          {'alias': 'b', 'host': 'i', 'port': 22, 'proxyJump': 'a'},
+        ]),
+        'hop records that are no list': _document(
+          [
+            {'alias': 'a', 'host': 'h', 'port': 22},
+          ],
+          extra: {'hops': 'gw'},
+        ),
+        'a hop record with no host': _document(
+          [
+            {'alias': 'a', 'host': 'h', 'port': 22, 'proxyJump': 'gw'},
+          ],
+          extra: {
+            'hops': [
+              {'alias': 'gw', 'port': 22},
+            ],
+          },
+        ),
+        'a hop record that takes a host\'s alias': _document(
+          [
+            {'alias': 'a', 'host': 'h', 'port': 22},
+          ],
+          extra: {
+            'hops': [
+              {'alias': 'a', 'host': 'i', 'port': 22},
+            ],
+          },
+        ),
+        'a hop record whose route loops': _document(
+          [
+            {'alias': 'a', 'host': 'h', 'port': 22, 'proxyJump': 'gw'},
+          ],
+          extra: {
+            'hops': [
+              {'alias': 'gw', 'host': 'g', 'port': 22, 'proxyJump': 'gw'},
+            ],
+          },
+        ),
       };
 
       for (final MapEntry(key: name, value: bytes) in damaged.entries) {
@@ -190,7 +355,7 @@ void main() {
           expect(issue.detail, isNotEmpty);
           expect(File(issue.preservedAs!).readAsBytesSync(), bytes);
           expect(file.existsSync(), isFalse);
-          expect(store.entries, isEmpty, reason: 'all or nothing');
+          expect(store.hosts, isEmpty, reason: 'all or nothing');
         });
       }
 
@@ -202,7 +367,7 @@ void main() {
 
         final reopened = await SshConfigImportStore.open(file);
         expect(reopened.issue, isNull);
-        expect(reopened.entries, [_web]);
+        expect(_fields(reopened.hosts), _fields([_web]));
         expect(names(), [
           sshConfigImportsFileName,
           '$sshConfigImportsFileName.corrupt-$_stamp',
@@ -243,7 +408,7 @@ void main() {
         expect(store.issue?.kind, ImportStoreIssueKind.leftAsIs);
         expect(store.issue?.preservedAs, isNull);
         expect(await store.replace([_web]), isFalse);
-        expect(store.entries, [_web], reason: 'shown for this run');
+        expect(_fields(store.hosts), _fields([_web]), reason: 'this run');
         expect(writes, 0);
         expect(longName.readAsStringSync(), 'not json');
       });
@@ -288,7 +453,7 @@ void main() {
       final store = await SshConfigImportStore.open(file);
 
       expect(store.issue?.kind, ImportStoreIssueKind.newerVersion);
-      expect(store.entries, isEmpty);
+      expect(store.hosts, isEmpty);
       expect(await store.replace([_web]), isFalse);
       expect(file.readAsBytesSync(), bytes);
       expect(names(), [sshConfigImportsFileName]);
@@ -307,14 +472,67 @@ void main() {
       final store = await SshConfigImportStore.open(file);
 
       expect(store.issue, isNull);
-      expect(store.entries, [
-        importedFleetEntry(alias: 'a', host: 'h', port: 22),
-      ]);
+      expect(_fields(store.hosts), [('a', 'h', 22, null, null, null)]);
+    });
+
+    test('reads a version 1 file as addresses only, until the next import '
+        'rewrites it', () async {
+      // Version 1 kept neither IdentityFile nor ProxyJump, so whether a
+      // host signs in with a key or sits behind a jump host is unknown.
+      file.writeAsBytesSync(
+        _document([
+          {'alias': 'a', 'host': 'h', 'port': 2200, 'user': 'u'},
+        ], version: 1),
+      );
+
+      final store = await SshConfigImportStore.open(file);
+
+      expect(store.issue, isNull);
+      expect(_fields(store.hosts), [('a', 'h', 2200, 'u', null, null)]);
+      expect(store.detail, ImportedHostDetail.addressOnly);
+      expect(await store.replace([_web]), isTrue);
+      expect(store.detail, ImportedHostDetail.full);
+      expect(
+        (jsonDecode(file.readAsStringSync()) as Map)['version'],
+        sshConfigImportsSchemaVersion,
+      );
+    });
+
+    test('reads a version 2 file for its addresses alone, whatever its '
+        'routes say', () async {
+      // Version 2 read each host's values from its first block, so its
+      // routes may not be the ones ssh takes; they are not read, nor
+      // checked.
+      file.writeAsBytesSync(
+        _document(
+          [
+            {
+              'alias': 'a',
+              'host': 'h',
+              'port': 22,
+              'identityFile': '~/.ssh/%h',
+              'proxyJump': 'a',
+            },
+          ],
+          version: 2,
+          extra: {'hops': 'not read'},
+        ),
+      );
+
+      final store = await SshConfigImportStore.open(file);
+
+      expect(store.issue, isNull);
+      expect(store.detail, ImportedHostDetail.addressOnly);
+      expect(_fields(store.hosts), [('a', 'h', 22, null, null, null)]);
+      expect(store.hops, isEmpty);
     });
   });
 }
 
+/// A store file of [version], this build's schema unless given.
 List<int> _document(
   List<Map<String, Object?>> entries, {
+  int version = sshConfigImportsSchemaVersion,
   Map<String, Object?> extra = const {},
-}) => utf8.encode(jsonEncode({'version': 1, 'entries': entries, ...extra}));
+}) =>
+    utf8.encode(jsonEncode({'version': version, 'entries': entries, ...extra}));

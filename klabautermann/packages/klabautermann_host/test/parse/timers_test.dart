@@ -56,6 +56,40 @@ void main() {
     expect(r.value.timers.last.nextUs, isNull);
   });
 
+  test('JSON instants beyond the DateTime range read as unknown', () {
+    final raw = [
+      '== timers_json ==',
+      '[{"next":9000000000000000000,"last":-9000000000000000000,'
+          '"unit":"a.timer"},'
+          '{"next":-9223372036854775808,"unit":"b.timer"}]',
+    ].join('\n');
+
+    final r = parseTimers(raw, _ctx);
+    for (final t in r.value.timers) {
+      expect(t.nextUs, isNull, reason: t.unit);
+      expect(t.lastUs, isNull, reason: t.unit);
+      expect(t.nextUtc, isNull, reason: t.unit);
+      expect(t.lastUtc, isNull, reason: t.unit);
+    }
+    expect(r.warnings, hasLength(3));
+  });
+
+  test('JSON instants at the DateTime bounds are kept', () {
+    const maxUs = 8640000000000000000;
+    final raw = [
+      '== timers_json ==',
+      '[{"next":$maxUs,"last":-$maxUs,"unit":"edge.timer"}]',
+    ].join('\n');
+
+    final r = parseTimers(raw, _ctx);
+    final t = r.value.timers.single;
+    expect(t.nextUs, maxUs);
+    expect(t.lastUs, -maxUs);
+    expect(t.nextUtc, isNotNull);
+    expect(t.lastUtc, isNotNull);
+    expect(r.warnings, isEmpty);
+  });
+
   test('text rows are sliced at the header columns', () {
     final raw = [
       '== timers_text ==',

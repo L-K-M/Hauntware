@@ -35,6 +35,29 @@ void main() {
     test('the fragments cover every collector', () {
       expect(collectorFragments.keys, containsAll(Collector.values));
     });
+
+    test('each declares the guarded calls its fragment makes (D47)', () {
+      final call = RegExp(r'\bhw_q?run [a-z]');
+      final loopStart = RegExp(r'(^|;)\s*do$|^\s*(for|while) .*; do$');
+      for (final c in Collector.values) {
+        var calls = 0;
+        var depth = 0;
+        for (final line in collectorFragments[c]!.split('\n')) {
+          final code = line.trimLeft();
+          if (code.startsWith('#')) continue;
+          if (code == 'done' || code.startsWith('done ')) depth--;
+          final n = call.allMatches(code).length;
+          // A guarded call in a loop would run once per pass.
+          final inLoop =
+              depth > 0 || RegExp(r'\bdo\b.*\bdone\b').hasMatch(code);
+          expect(inLoop && n > 0, isFalse, reason: '${c.name}: $code');
+          calls += n;
+          if (loopStart.hasMatch(code)) depth++;
+        }
+        expect(depth, 0, reason: '${c.name} loops balance');
+        expect(c.guardedCommands, calls, reason: c.name);
+      }
+    });
   });
 
   group('buildSamplerProgram', () {
@@ -94,6 +117,15 @@ void main() {
       expect(program, isNot(contains('c_core()')));
     });
 
+    test('only the fast program carries the filtering readers (D48)', () {
+      final fast = buildSamplerProgram(kind: SamplerKind.fast, nonce: nonce);
+      final slow = buildSamplerProgram(kind: SamplerKind.slow, nonce: nonce);
+      for (final helper in ['hw_meminfo', 'hw_netdev', 'hw_diskstats']) {
+        expect(fast, contains('$helper() {'), reason: helper);
+        expect(slow, isNot(contains(helper)), reason: helper);
+      }
+    });
+
     test('the READY marker is the program last line', () {
       for (final kind in SamplerKind.values) {
         final program = buildSamplerProgram(kind: kind, nonce: nonce);
@@ -140,6 +172,42 @@ void main() {
     ).allMatches(program).toList();
     expect(loops, hasLength(1), reason: 'one tool loop in _probe_tools');
     expect(loops.single.group(1)!.split(' '), kProbeTools);
+  });
+
+  group('HW_UTF8 (D49)', () {
+    const nonce = '0123456789abcdef0123456789abcdef';
+
+    test('the slow program decides it once, before any collector', () {
+      final program = buildSamplerProgram(kind: SamplerKind.slow, nonce: nonce);
+      expect('locale -a'.allMatches(program), hasLength(1));
+      final decided = program.indexOf('HW_UTF8=1');
+      expect(decided, greaterThan(program.indexOf('hw_qrun()')));
+      expect(decided, lessThan(program.indexOf('c_fs()')));
+      expect(decided, lessThan(program.indexOf('c_probe()')));
+    });
+
+    test('the probe reports the decision instead of checking again', () {
+      final program = buildSamplerProgram(kind: SamplerKind.slow, nonce: nonce);
+      final start = program.indexOf('_probe_locale() {');
+      final body = program.substring(start, program.indexOf('\n}\n', start));
+      expect(body, contains(r'"$HW_UTF8"'));
+      expect(body, isNot(contains('locale -a')));
+    });
+
+    test('the fast program forks no locale check', () {
+      final program = buildSamplerProgram(kind: SamplerKind.fast, nonce: nonce);
+      expect(program, isNot(contains('HW_UTF8')));
+      expect(program, isNot(contains('locale')));
+    });
+  });
+
+  test('the probe reads the lxcfs mounts (D50)', () {
+    final program = buildSamplerProgram(
+      kind: SamplerKind.slow,
+      nonce: '0123456789abcdef0123456789abcdef',
+    );
+    expect(program, contains('\n  _probe_lxcfs\n'));
+    expect(program, contains('fuse.lxcfs:/proc/*)'));
   });
 
   group('kSamplerStartCommand', () {

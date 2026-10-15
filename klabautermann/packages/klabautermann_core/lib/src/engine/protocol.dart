@@ -1,6 +1,19 @@
 import 'dart:typed_data';
 
-import 'package:klabautermann_host/klabautermann_host.dart';
+// Only plain-data host types cross (D52): none here holds a function, as
+// `Collector` (its argument validators) and `ServerZone` (`offsetAt`) do.
+import 'package:klabautermann_host/klabautermann_host.dart'
+    show
+        CpuPercentages,
+        CronSnapshot,
+        DiskRate,
+        FsSnapshot,
+        HostProfile,
+        LoadAvg,
+        NetRate,
+        SystemdUnit,
+        TimersSnapshot,
+        UnitsSnapshot;
 import 'package:meta/meta.dart';
 
 /// The isolate protocol version; [Hello] and [EngineReady] compare it so an
@@ -23,6 +36,18 @@ import 'package:meta/meta.dart';
 /// retracts a prompt, [SetAppActivity] reports the app's activity,
 /// [Reachability] reports probe results, and [FleetEntry] gains the
 /// nullable `jumpRoute`, `authKind`, `searchText` and `locatorConflict`.
+///
+/// Sampling joined v3 without a bump, as the import store's fields joined
+/// v2, before any v3 build shipped: [Subscribe] and [Unsubscribe] name one
+/// surface's subscription and its [SampleStream]s (D45),
+/// [SetCadenceProfile] picks the cadence column, [Sample] carries an
+/// engine-owned `seq` (D44) and a sealed [SampleResult] of derived values
+/// (D43), and [SamplingState], [Gap] and [HostProfileChanged] join.
+///
+/// Log streams joined v3 the same way: [OpenLogStream] names its stream
+/// and reads a [LogStreamSpec] (a sealed [LogSource] with its filters, a
+/// window, follow and a resume cursor), [LogBatch] carries sealed
+/// [LogRecord]s the engine resolved, and [LogStreamState] joins.
 const int kEngineProtocolVersion = 3;
 
 /// Every message the UI isolate sends the engine (03 §10.1, D18). Plain data
@@ -118,40 +143,76 @@ final class SetAppActivity extends EngineRequest {
   final AppActivity activity;
 }
 
-/// Starts the server-side sampler tick for [serverId] (03 §10.1).
+/// One surface's interest in [serverId]'s readings (03 §10.1, §6.4, D45).
+/// Each surface that shows the server (a fleet row, the overview, a
+/// visible panel) holds its own [subscriptionId]. The engine samples the
+/// union of the streams the server's subscriptions name, so closing one
+/// surface never stops another's. Sending the same ids again replaces
+/// that subscription's [streams]; an empty set drops it. Cadence is not a
+/// field: [SetCadenceProfile] and [SetAppActivity] hold for every
+/// subscription at once. A stream the profile reads on demand (see
+/// [CadenceProfile.cellularSaver]) is read once per [Subscribe] that
+/// names it, a repeat included, so a surface refreshes it by resending.
+/// While the server is [SamplingPhase.waitingForLink] or
+/// [SamplingPhase.pausedInBackground], that reading waits until the link
+/// is ready and the app is in the foreground, and resends in the meantime
+/// add no further reading.
 final class Subscribe extends EngineRequest {
   const Subscribe({
     required this.serverId,
-    required this.collectors,
-    required this.cadence,
+    required this.subscriptionId,
+    required this.streams,
   });
 
   final String serverId;
 
-  /// The HWS/1 collector set (03 §6.4); the engine keeps the fast/slow
-  /// sampler split these names imply.
-  final Set<Collector> collectors;
+  /// The surface's own id, unique among the server's subscriptions.
+  final String subscriptionId;
 
-  /// How often the server runs the tick.
-  final Duration cadence;
+  /// What the surface shows. Pass an unmodifiable set.
+  final Set<SampleStream> streams;
 }
 
-/// Stops the tick the 03 §10.1 table abbreviates as `Unsubscribe`; the row's
-/// own `Connect(serverId)`/`Disconnect(serverId)` naming is followed here.
+/// Drops the subscription [Subscribe] made with the same ids (03 §10.1).
+/// The engine stops a stream once no subscription for the server names it.
 final class Unsubscribe extends EngineRequest {
-  const Unsubscribe(this.serverId);
+  const Unsubscribe({required this.serverId, required this.subscriptionId});
 
   final String serverId;
+  final String subscriptionId;
 }
 
-/// Opens a server log stream; batches arrive as [LogBatch] (03 §10.1, §10.8).
+/// Picks the 03 §6.4 cadence column for every subscription at once (D45),
+/// such as the phones' column or the cellular saver.
+final class SetCadenceProfile extends EngineRequest {
+  const SetCadenceProfile(this.profile);
+
+  final CadenceProfile profile;
+}
+
+/// Opens a log stream on [spec]'s server (03 §10.1, §7.6): its records
+/// arrive as [LogBatch]es and its progress as [LogStreamState]s, all
+/// under [streamId], until it ends or [CloseStream] closes it.
 final class OpenLogStream extends EngineRequest {
-  const OpenLogStream(this.spec);
+  const OpenLogStream({required this.streamId, required this.spec});
+
+  /// The app's own id for the stream, which it picks so it can close the
+  /// stream before the engine has answered. Unlike a [Subscribe] id, it
+  /// is never reused for the engine's lifetime (a counter will do):
+  /// stream events carry no generation, so a closed stream's last batch
+  /// or end can arrive after the next open, and an open the engine
+  /// rejects outright gets a [RequestRejected], which names no stream.
+  /// The engine rejects an open whose id an earlier open used.
+  final String streamId;
 
   final LogStreamSpec spec;
 }
 
-/// Closes an open [LogBatch] stream (03 §10.1).
+/// Closes the stream [OpenLogStream] opened as [streamId] (03 §10.1). The
+/// engine stops the read, and its last event for the stream is a
+/// [LogStreamState] with [LogStreamEndReason.closed]; batches it sent
+/// before it handled this request arrive ahead of that. Closing a stream
+/// that is not open, because it ended or never opened, does nothing.
 final class CloseStream extends EngineRequest {
   const CloseStream(this.streamId);
 
@@ -269,10 +330,17 @@ final class SshConfigImported extends EngineEvent {
   /// Hosts the import added to the fleet; zero when the config names none.
   final int importedCount;
 
-  /// Hosts the import left out: a `Port` the importer refuses (one ssh
-  /// rejects, or a service name other than `ssh`, `http` or `https`), or an
-  /// alias an earlier block already took. Wildcard-only blocks such as
-  /// `Host *` are defaults rather than hosts and do not count.
+  /// Hosts the import left out because the engine cannot dial them as ssh
+  /// would (03 §10.1): a route through a `ProxyCommand`; a `Match` or
+  /// `Include` that could set a value the engine cannot know, or a
+  /// second pass over the config (`CanonicalizeHostname`, or a `Match
+  /// final` or `Include` while a value is still unset); a `HostName`
+  /// token other than `%h` or `%%`, or an `IdentityFile` holding a `%`
+  /// token or `${VAR}`; a `ProxyJump` the engine cannot follow as ssh
+  /// would; a line ssh rejects, such as a `Port` the import refuses (one
+  /// ssh rejects, or a service name other than `ssh`, `http` or `https`);
+  /// or a jump hop left out for any of these. Wildcard-only blocks such
+  /// as `Host *` name no host and do not count.
   final int skippedCount;
 
   /// Whether `ssh_config_imports.json` now holds this import. False when
@@ -318,35 +386,143 @@ final class Reachability extends EngineEvent {
   final ReachabilityStatus status;
 }
 
-/// One coalesced sampler tick (03 §10.1); [seq] is the HWS/1 tick number so
-/// the UI can drop reordered batches.
+/// One reading of one subscribed [stream] of [serverId] (03 §10.1, §6.4).
 final class Sample extends EngineEvent {
   const Sample({
     required this.serverId,
+    required this.stream,
     required this.seq,
-    required this.snapshot,
+    required this.at,
+    required this.result,
+  }) : assert(
+         // Comparisons rather than a switch: the assert of a const
+         // constructor takes only constant expressions.
+         result is CollectorUnavailable ||
+             (stream == SampleStream.overview && result is OverviewResult) ||
+             (stream == SampleStream.core && result is CoreResult) ||
+             (stream == SampleStream.fs && result is FsResult) ||
+             (stream == SampleStream.identity && result is IdentityResult) ||
+             (stream == SampleStream.procs && result is ProcsResult) ||
+             (stream == SampleStream.units && result is UnitsResult) ||
+             (stream == SampleStream.failedUnits &&
+                 result is FailedUnitsResult) ||
+             (stream == SampleStream.timers && result is TimersResult) ||
+             (stream == SampleStream.cron && result is CronResult),
+         'result must be the variant for stream, or CollectorUnavailable',
+       );
+
+  final String serverId;
+  final SampleStream stream;
+
+  /// The engine's counter for [serverId] (D44): it rises with every
+  /// sample of the server, whatever its stream, for the engine's
+  /// lifetime, across sampler restarts and reconnects. The app drops a
+  /// sample whose seq is not above the last one it kept for the server.
+  /// The HWS/1 request number stays inside the engine.
+  final int seq;
+
+  /// When the engine took the reading, by its own clock (this device's)
+  /// in UTC; freshness and charts use it, since a host's clock may be off.
+  final DateTime at;
+
+  /// The reading with its rates and percentages already derived (D43):
+  /// the variant for [stream], or [CollectorUnavailable].
+  final SampleResult result;
+}
+
+/// What sampling [serverId] is doing since [since] (03 §9.5 item 4). The
+/// engine sends it whenever [phase] changes; rows and cards word their
+/// freshness from it and from the last [Sample.at].
+final class SamplingState extends EngineEvent {
+  const SamplingState({
+    required this.serverId,
+    required this.phase,
+    required this.since,
   });
 
   final String serverId;
-  final int seq;
+  final SamplingPhase phase;
 
-  /// The tick's metrics: [OverviewSnapshot] for fleet rows, `CoreSnapshot`
-  /// for the focused server (03 §6.4).
-  final OverviewSnapshot snapshot;
+  /// When [phase] began, by the engine's clock in UTC.
+  final DateTime since;
 }
 
-/// One batch of an [OpenLogStream] stream, capped by 03 §10.1's rate;
-/// [dropped] counts lines the buffer discarded since the last batch.
-final class LogBatch extends EngineEvent {
-  const LogBatch({
-    required this.streamId,
-    required this.lines,
-    this.dropped = 0,
+/// [serverId]'s [streams] have no readings from [from] to [until], for
+/// [cause] (03 §9.5 item 5, §6.2). The engine sends it when readings
+/// resume, so both ends are known. While a gap is open, a background or
+/// disconnected one shows in [SamplingState]; a [GapCause.readingLost]
+/// one shows only as an ageing [Sample.at], since the phase stays
+/// [SamplingPhase.sampling]. Charts draw it as a labelled band and never
+/// interpolate across it.
+final class Gap extends EngineEvent {
+  const Gap({
+    required this.serverId,
+    required this.streams,
+    required this.from,
+    required this.until,
+    required this.cause,
   });
 
+  final String serverId;
+
+  /// The streams without readings. Pass an unmodifiable set.
+  final Set<SampleStream> streams;
+
+  /// The last reading before the gap, or when sampling stopped, and when
+  /// readings resumed; both by the engine's clock in UTC.
+  final DateTime from, until;
+
+  final GapCause cause;
+}
+
+/// What the capability probe found on [serverId] (03 §6.1). The engine
+/// sends it when it first knows the server's profile in a run, and again
+/// whenever a later probe finds a different one, compared without the
+/// fields every probe or session changes: the clock (`epochSeconds`,
+/// `zoneOffset`) and the session (`sshConnection`, `sessionParentPid`,
+/// `sessionParentComm`), which may therefore be older than the last
+/// probe. The probe is not a [SampleStream]: the engine runs it itself
+/// after connecting.
+final class HostProfileChanged extends EngineEvent {
+  const HostProfileChanged(this.serverId, this.profile);
+
+  final String serverId;
+
+  /// The probe's findings; what it could not tell stays null.
+  final HostProfile profile;
+}
+
+/// The next records of the [OpenLogStream] stream [streamId], in the
+/// stream's order ([LogStreamSpec]). The engine sends at most 20 batches
+/// a second per stream (03 §10.1), so a busy follow arrives in batches
+/// rather than record by record.
+final class LogBatch extends EngineEvent {
+  LogBatch({
+    required this.streamId,
+    required Iterable<LogRecord> records,
+    this.dropped = 0,
+  }) : records = List.unmodifiable(records),
+       assert(dropped >= 0, 'dropped counts records');
+
   final String streamId;
-  final List<String> lines;
+
+  /// The records, of the variants the stream's [LogSource] names.
+  final List<LogRecord> records;
+
+  /// How many records the engine discarded since the stream's previous
+  /// batch, before [records]; the view shows them as one "dropped N
+  /// lines" entry (LOG-02, 03 §10.8).
   final int dropped;
+}
+
+/// What the [OpenLogStream] stream [streamId] is doing, for LOG-02's
+/// connection chip (03 §10.1). The engine sends it whenever [status]
+/// changes; a [LogStreamEnded] status is the stream's last event.
+final class LogStreamState extends EngineEvent {
+  const LogStreamState(this.streamId, this.status);
+
+  final String streamId;
+  final LogStreamStatus status;
 }
 
 /// The answer to one [DockerQuery] (03 §10.1): the endpoint's decoded JSON
@@ -529,8 +705,8 @@ final class FleetEntry {
   /// The SSH port, [kSshDefaultPort] unless the source names another.
   final int port;
 
-  /// The login name; null leaves it to SSH, which uses the local account
-  /// name when the config names no `User`.
+  /// The login name the source names; null when it names none, and the
+  /// engine then signs in as the local account (`USER` or `USERNAME`).
   final String? user;
 
   /// The group the rail files the entry under, or null for none. An
@@ -541,7 +717,9 @@ final class FleetEntry {
 
   /// The jump hosts the engine connects through, first hop first, each as
   /// its source names it (an ssh_config alias, or `[user@]host[:port]`);
-  /// null for a direct connection. Pass an unmodifiable list.
+  /// null for a direct connection, and for an import whose route is
+  /// unknown: one from an older import store (03 §4.10), which the engine
+  /// marks by sending no [authKind]. Pass an unmodifiable list.
   final List<String>? jumpRoute;
 
   /// How the engine signs in to the server, or null when the source does
@@ -553,9 +731,11 @@ final class FleetEntry {
   /// import (03 §3.2); null when the engine built none.
   final String? searchText;
 
-  /// The server ids of the other entries that share this entry's host-key
-  /// pin locator (`host:port`) behind a different jump route, whose pins
-  /// would collide (03 §4.6); null when none do. Pass an unmodifiable list.
+  /// The server ids of the other entries that pin a host key at one of
+  /// this entry's pin locators (`host:port`: the server's or a jump hop's)
+  /// behind a different jump route, whose pins would collide (03 §4.6);
+  /// null when none do, and for an import whose route is unknown (see
+  /// [jumpRoute]). Pass an unmodifiable list.
   final List<String>? locatorConflict;
 
   // By value: every CatalogReplaced copies its entries across the isolate
@@ -652,36 +832,296 @@ final class ImportStoreIssue {
   final String? detail;
 }
 
-/// Which log source an [OpenLogStream] follows (03 §7.6).
-enum LogStreamSource {
-  /// `journalctl` over the unit or priority in [LogStreamSpec.target].
-  journal,
-
-  /// A file path in [LogStreamSpec.target].
-  file,
-
-  /// A container's logs; [LogStreamSpec.target] is the container id.
-  docker,
-}
-
-/// What an [OpenLogStream] request follows (03 §10.1).
+/// What an [OpenLogStream] reads, on which server, and how much (03 §7.6,
+/// §10.1).
+///
+/// A window ([follow] false) reads the newest [window] records, older than
+/// [afterCursor] when it is set, and ends. They arrive newest first, so
+/// the last one's cursor reads on to older records (LOG-01's "load
+/// older"; SVC-04's unit logs are one window). A follow delivers up to
+/// [window] earlier records oldest first, then each new record as the
+/// host writes it, until [CloseStream]. With [afterCursor] it resumes
+/// after a record the app already holds instead (LOG-02): it delivers
+/// every record after that one, so a reconnect leaves no gap, and
+/// [window] does not apply.
 @immutable
 final class LogStreamSpec {
-  const LogStreamSpec({
+  LogStreamSpec({
     required this.serverId,
     required this.source,
-    this.target,
-    this.follow = true,
-  });
+    required this.window,
+    required this.follow,
+    this.afterCursor,
+  }) : assert(window >= 0, 'window counts records'),
+       assert(
+         afterCursor == null || source is! FileLogSource,
+         'a file tail has no cursor',
+       ),
+       assert(
+         !follow || source is! JournalLogSource || source.until == null,
+         'a follow reads up to the present',
+       );
 
   final String serverId;
-  final LogStreamSource source;
+  final LogSource source;
 
-  /// Unit name, file path, or container id, per [source].
-  final String? target;
+  /// How many records: a window's size (LOG-01's pages hold 500, SVC-04's
+  /// unit logs 50), or how many earlier records a follow without
+  /// [afterCursor] delivers before the new ones.
+  final int window;
 
-  /// `tail -f`-style streaming when true; a bounded read when false.
+  /// Whether the stream follows new records instead of ending after its
+  /// window.
   final bool follow;
+
+  /// A [JournalRecord.cursor] the read continues after, in the stream's
+  /// order: a window reads older records, a follow the ones written after
+  /// it. File tails and `dmesg` have no cursor. Null starts at the newest
+  /// record. journalctl refuses `--since` together with a cursor, so with
+  /// one the engine applies [JournalLogSource.since] itself: a window ends
+  /// with [LogStreamEndReason.oldestReached] at the first record older
+  /// than it, and a follow reads on from the cursor alone.
+  final String? afterCursor;
+}
+
+/// Where an [OpenLogStream] reads (03 §7.6). Container logs (CTX-01) are
+/// not a source yet: they come from the Docker Engine API with M3.
+@immutable
+sealed class LogSource {
+  const LogSource();
+}
+
+/// The systemd journal through `journalctl -o json`, read as
+/// [JournalRecord]s, with LOG-01's filters; SVC-04's unit logs filter by
+/// [unit]. A null filter matches every record. There is no text filter:
+/// LOG-05 searches the records the view holds, and `journalctl -g`
+/// arrives with LOG-06 (v1).
+final class JournalLogSource extends LogSource {
+  const JournalLogSource({
+    this.unit,
+    this.identifier,
+    this.priority,
+    this.currentBootOnly = false,
+    this.since,
+    this.until,
+  });
+
+  /// A systemd unit name (`-u`).
+  final String? unit;
+
+  /// A syslog identifier (`-t`).
+  final String? identifier;
+
+  /// The least urgent priority shown (`-p`): records at it or more urgent.
+  final LogPriority? priority;
+
+  /// Only the current boot's records (`-b`); past boots arrive with
+  /// LOG-09's boot picker (v1).
+  final bool currentBootOnly;
+
+  /// The time range (`--since`, `--until`). A follow takes no [until],
+  /// since it reads up to the present.
+  final DateTime? since, until;
+}
+
+/// The kernel's messages for the current boot (LOG-03): `journalctl -k`,
+/// read as [JournalRecord]s, with `dmesg --json` only as a fallback, read
+/// as [KernelRecord]s. Past boots arrive with LOG-09 (v1).
+final class KernelLogSource extends LogSource {
+  const KernelLogSource();
+}
+
+/// One file's lines as [FileRecord]s (LOG-22): `tail -n` for a window,
+/// and `tail -F`, which follows the file by name across rotation, for a
+/// follow. No archives.
+final class FileLogSource extends LogSource {
+  const FileLogSource(this.path);
+
+  /// The absolute path, typed or picked from the common paths; the engine
+  /// validates it (03 §8.8) before it quotes it into the command.
+  final String path;
+}
+
+/// A syslog severity as journald and the kernel record it, most urgent
+/// first, so a value's [Enum.index] is its number (0 to 7, RFC 5424).
+enum LogPriority {
+  emergency,
+  alert,
+  critical,
+  error,
+  warning,
+  notice,
+  info,
+  debug,
+}
+
+/// One record of a [LogBatch]; the stream's [LogSource] decides the
+/// variant. Each is plain data the engine resolved from what the host sent
+/// (D52, 03 §6.5), so the app parses nothing.
+@immutable
+sealed class LogRecord {
+  const LogRecord();
+}
+
+/// One journal entry from `journalctl -o json` (LOG-01 to LOG-03, SVC-04).
+/// The engine reads its columns once; a value the host sent that does not
+/// fit its column, such as a time beyond [DateTime]'s range or a priority
+/// outside 0 to 7, is null, as a missing one is.
+final class JournalRecord extends LogRecord {
+  const JournalRecord({
+    this.cursor,
+    this.at,
+    this.priority,
+    this.unit,
+    this.identifier,
+    this.pid,
+    this.message,
+    this.fields = const {},
+  });
+
+  /// `__CURSOR`, which [LogStreamSpec.afterCursor] continues after.
+  final String? cursor;
+
+  /// `__REALTIME_TIMESTAMP`: when journald received the entry, by the
+  /// host's clock.
+  final DateTime? at;
+
+  /// `PRIORITY`.
+  final LogPriority? priority;
+
+  /// `_SYSTEMD_UNIT`, or `_SYSTEMD_USER_UNIT` or `UNIT` without one.
+  final String? unit;
+
+  /// `SYSLOG_IDENTIFIER`.
+  final String? identifier;
+
+  /// `_PID`, when it is a positive number.
+  final int? pid;
+
+  /// `MESSAGE`; null when the entry has none or journalctl sent it as
+  /// null, which `-o json` does for a field over 4,096 bytes unless it
+  /// runs with `--all`.
+  final String? message;
+
+  /// Every field as `klabautermann_host`'s journal parser decoded it, the
+  /// ones above included, for the row's expandable fields (03 §10.8); null
+  /// where journalctl sent null. Pass an unmodifiable map.
+  final Map<String, String?> fields;
+}
+
+/// One kernel ring-buffer record from `dmesg --json`, LOG-03's fallback.
+final class KernelRecord extends LogRecord {
+  const KernelRecord({required this.message, this.sinceBoot, this.priority});
+
+  /// `msg`.
+  final String message;
+
+  /// `time`: how long after boot the kernel logged it.
+  final Duration? sinceBoot;
+
+  /// The level in `pri`, which also holds the facility; null when dmesg
+  /// sent no `pri`.
+  final LogPriority? priority;
+}
+
+/// One line of a tailed file (LOG-22), without its line break.
+final class FileRecord extends LogRecord {
+  const FileRecord(this.text);
+
+  final String text;
+}
+
+/// A log stream's state behind [LogStreamState]. Compares by value, as
+/// [LinkStatus] does, because a status that crosses the boundary may
+/// arrive as a copy.
+@immutable
+sealed class LogStreamStatus {
+  const LogStreamStatus();
+
+  /// The values that tell two statuses of one variant apart.
+  List<Object?> get _values => const [];
+
+  @override
+  bool operator ==(Object other) =>
+      other is LogStreamStatus &&
+      other.runtimeType == runtimeType &&
+      _sameItems(other._values, _values);
+
+  @override
+  int get hashCode => Object.hash(runtimeType, Object.hashAll(_values));
+}
+
+/// The read waits for [reason] to clear, then runs on its own: a window
+/// starts, and a follow starts or resumes after its last record.
+final class LogStreamWaiting extends LogStreamStatus {
+  const LogStreamWaiting(this.reason);
+
+  final LogStreamWaitReason reason;
+
+  @override
+  List<Object?> get _values => [reason];
+}
+
+/// The read runs on the host: a window until it ends, a follow live.
+final class LogStreamRunning extends LogStreamStatus {
+  const LogStreamRunning();
+}
+
+/// The stream ended for [reason], and nothing more arrives for it.
+/// [detail] is the host's error output when the host ended it, control
+/// characters stripped, or null.
+final class LogStreamEnded extends LogStreamStatus {
+  const LogStreamEnded(this.reason, {this.detail});
+
+  final LogStreamEndReason reason;
+  final String? detail;
+
+  @override
+  List<Object?> get _values => [reason, detail];
+}
+
+/// What a [LogStreamWaiting] stream waits for.
+enum LogStreamWaitReason {
+  /// The server's link; [LinkState] says why it is not ready.
+  link,
+
+  /// A free session channel: reads of its kind already hold their share
+  /// of the budget (03 §5.2), or the server allows fewer sessions than
+  /// the budget ([LinkDegraded]).
+  channel,
+
+  /// The app's return to the foreground ([SetAppActivity]): 03 §6.4
+  /// pauses everything while it is in the background.
+  background,
+}
+
+/// Why a [LogStreamEnded] stream ended.
+enum LogStreamEndReason {
+  /// A window delivered [LogStreamSpec.window] records, or fewer when the
+  /// engine's output cap for the read stopped it first. Older records may
+  /// remain; a journal window after the last record's cursor reads on.
+  windowFilled,
+
+  /// A window reached the oldest record its source holds within its
+  /// filters: nothing older remains.
+  oldestReached,
+
+  /// [CloseStream] closed it.
+  closed,
+
+  /// The engine refused the spec without running anything, such as a
+  /// unit name or path its validation rejects (03 §8.8).
+  invalid,
+
+  /// The tool or file the source reads is absent on the host.
+  missing,
+
+  /// The host refused the read, such as a file only `adm` or root may
+  /// read; admin mode (03 §8.2), which reads such files, arrives with M4.
+  denied,
+
+  /// The read failed otherwise.
+  failed,
 }
 
 /// Which read-only endpoint a [DockerQuery] runs (03 §7.12 to §7.15).
@@ -1109,3 +1549,360 @@ enum ReachabilityStatus {
 
 /// The sync round's phase behind [SyncStatus] (03 §10.1).
 enum SyncPhase { idle, running, succeeded, failed }
+
+/// What a [Subscribe] names and each [Sample] carries: the 03 §6.4
+/// collectors as surfaces see them. [units] and [failedUnits] both come
+/// from the host's `units` collector: [failedUnits] is the health card's
+/// list every 60 s, apart from the Services panel's full list every 15 s,
+/// so the engine tells the two surfaces apart by stream (D45). The probe
+/// is not a stream (see [HostProfileChanged]).
+enum SampleStream {
+  /// Fleet-row metrics: CPU, memory, load and network ([OverviewResult]).
+  overview,
+
+  /// The focused server's metrics: the overview's plus per-core CPU,
+  /// disks, pressure and uptime ([CoreResult]).
+  core,
+
+  /// Mount usage and inodes ([FsResult]).
+  fs,
+
+  /// OS, kernel and host name, read once per session ([IdentityResult]).
+  identity,
+
+  /// The process list ([ProcsResult]).
+  procs,
+
+  /// Every systemd unit, for the Services panel ([UnitsResult]).
+  units,
+
+  /// The failed systemd units, for the health card ([FailedUnitsResult]).
+  failedUnits,
+
+  /// systemd timers ([TimersResult]).
+  timers,
+
+  /// Cron jobs ([CronResult]).
+  cron,
+}
+
+/// The 03 §6.4 cadence columns [SetCadenceProfile] picks among.
+enum CadenceProfile {
+  /// The Desktop column; the engine starts with it.
+  desktop,
+
+  /// The Phone column.
+  phone,
+
+  /// The Cellular saver column, which reads `timers` and `cron` on
+  /// demand: once per [Subscribe] that names them, as soon as the link is
+  /// ready and the app is in the foreground (see [Subscribe]).
+  cellularSaver,
+}
+
+/// What sampling a server is doing, behind [SamplingState].
+enum SamplingPhase {
+  /// No subscription names the server, so nothing runs, such as for a
+  /// monitored server whose surfaces are all hidden. This is not 03
+  /// §9.5's "not watched on this device": the app words that from the
+  /// monitor set it owns (FL-21, [SetMonitorSet]).
+  unsubscribed,
+
+  /// Subscribed, but the server's link is not ready; [LinkState] says why.
+  waitingForLink,
+
+  /// The samplers run the subscribed streams.
+  sampling,
+
+  /// Paused while the app is in the background ([SetAppActivity]); the
+  /// subscriptions stay and resume on return.
+  pausedInBackground,
+}
+
+/// Why a [Gap] has no readings; 03 §9.5 labels the band from it.
+enum GapCause {
+  /// The app was in the background ("in background").
+  background,
+
+  /// The server's link was down ("disconnected").
+  disconnected,
+
+  /// Sampling ran but a reading was lost: a request missed its deadline,
+  /// a framing error lost its reply, or the sampler restarted (03 §6.2).
+  readingLost,
+}
+
+/// Why a [CollectorUnavailable] has no value: the HWS/1 section statuses
+/// other than `ok` (03 §6.2).
+enum CollectorUnavailableReason {
+  /// A tool the collector needs is absent on the host.
+  missing,
+
+  /// The host refused the collector, such as with a permission error.
+  denied,
+
+  /// The `timeout` guard stopped the collector.
+  timeout,
+
+  /// The collector failed otherwise.
+  error,
+}
+
+/// The reading behind a [Sample]: one variant per [SampleStream], or
+/// [CollectorUnavailable]. Rates arrive as rates (D43), so the app keeps
+/// no previous reading to compute them from.
+@immutable
+sealed class SampleResult {
+  const SampleResult();
+}
+
+/// The stream's collector produced no value this time (03 §6.2). The app
+/// words [reason] through its catalog (D35); [detail] is the collector's
+/// error output as the host sent it, control characters stripped, or null
+/// when there was none.
+final class CollectorUnavailable extends SampleResult {
+  const CollectorUnavailable(this.reason, {this.detail});
+
+  final CollectorUnavailableReason reason;
+  final String? detail;
+}
+
+/// A fleet row's reading ([SampleStream.overview], FL-07).
+final class OverviewResult extends SampleResult {
+  OverviewResult({
+    this.cpu,
+    this.memory,
+    this.load,
+    this.loadPerCore,
+    Map<String, NetRate>? network,
+  }) : network = _unmodifiable(network);
+
+  /// CPU occupancy since the previous reading; null without one to compare
+  /// with (the first reading, or after a reboot or a counter reset).
+  final CpuPercentages? cpu;
+
+  final MemoryUsage? memory;
+
+  /// The load averages as the host reports them.
+  final LoadAvg? load;
+
+  /// The one-minute load divided by the number of CPUs (7.1's load with
+  /// core context); null while the engine does not know that number.
+  final double? loadPerCore;
+
+  /// Byte rates per interface since the previous reading; null without
+  /// one, and empty only when the host reported no interface, so unknown
+  /// never sums to zero (03 §1.2 principle 6).
+  final Map<String, NetRate>? network;
+}
+
+/// The focused server's reading ([SampleStream.core], OV-01): the
+/// overview's values plus per-core busy shares, disk rates, pressure and
+/// uptime.
+final class CoreResult extends SampleResult {
+  CoreResult({
+    this.cpu,
+    Map<String, double>? perCpu,
+    this.memory,
+    this.load,
+    this.loadPerCore,
+    Map<String, NetRate>? network,
+    Map<String, DiskRate>? disks,
+    this.cpuPressure,
+    this.ioPressure,
+    this.memoryPressure,
+    this.uptime,
+    this.bootedAt,
+  }) : perCpu = _unmodifiable(perCpu),
+       network = _unmodifiable(network),
+       disks = _unmodifiable(disks);
+
+  /// As [OverviewResult.cpu].
+  final CpuPercentages? cpu;
+
+  /// Busy percent per core (`cpu0`, `cpu1` and so on) since the previous
+  /// reading, as CPU-02 shows it; null without one, as
+  /// [OverviewResult.network]. The host sends each core's busy and idle
+  /// jiffies only, without the per-field breakdown of [cpu] (D48).
+  final Map<String, double>? perCpu;
+
+  final MemoryUsage? memory;
+  final LoadAvg? load;
+
+  /// As [OverviewResult.loadPerCore].
+  final double? loadPerCore;
+
+  /// As [OverviewResult.network].
+  final Map<String, NetRate>? network;
+
+  /// Byte rates per block device since the previous reading; null without
+  /// one, as [OverviewResult.network].
+  final Map<String, DiskRate>? disks;
+
+  /// Pressure stall information; null where the kernel has none, which is
+  /// normal (7.1).
+  final StallShares? cpuPressure, ioPressure, memoryPressure;
+
+  /// How long the host has been up.
+  final Duration? uptime;
+
+  /// When the host booted (`btime`), in UTC.
+  final DateTime? bootedAt;
+}
+
+/// Memory as MEM-01's breakdown shows it, in bytes, which the engine
+/// derives from `/proc/meminfo` with `MemAvailable` semantics (7.1). What
+/// the host did not report stays null.
+@immutable
+final class MemoryUsage {
+  const MemoryUsage({
+    this.totalBytes,
+    this.usedBytes,
+    this.availableBytes,
+    this.buffersBytes,
+    this.cachedBytes,
+    this.sharedBytes,
+    this.swapTotalBytes,
+    this.swapUsedBytes,
+    this.zfsArcCountedAsUsed,
+  });
+
+  final int? totalBytes, usedBytes, availableBytes;
+  final int? buffersBytes, cachedBytes, sharedBytes;
+  final int? swapTotalBytes, swapUsedBytes;
+
+  /// Whether the ZFS ARC is part of [usedBytes], and MEM-01's bar says
+  /// "ZFS ARC counted as used" (7.1): true where
+  /// `/proc/spl/kstat/zfs/arcstats` exists outside a container (D48).
+  /// Null while the engine does not know.
+  final bool? zfsArcCountedAsUsed;
+}
+
+/// One `/proc/pressure` file as 7.1 shows it: the shares of time some or
+/// all tasks stalled. The host leaves out the kernel's cumulative stall
+/// counter (`total`, D48). A line the file lacks stays null.
+@immutable
+final class StallShares {
+  const StallShares({this.some, this.full});
+
+  final StallAverages? some, full;
+}
+
+/// Stall shares in percent over the last 10, 60 and 300 seconds.
+@immutable
+final class StallAverages {
+  const StallAverages(this.avg10, this.avg60, this.avg300);
+
+  final double avg10, avg60, avg300;
+}
+
+Map<String, V>? _unmodifiable<V>(Map<String, V>? map) =>
+    map == null ? null : Map.unmodifiable(map);
+
+/// Mount usage and inodes ([SampleStream.fs], 7.3).
+final class FsResult extends SampleResult {
+  const FsResult(this.fs);
+
+  final FsSnapshot fs;
+}
+
+/// SYS-01's identity ([SampleStream.identity]); virtualization comes with
+/// [HostProfileChanged]. The engine resolves each value from hostnamectl,
+/// then os-release and `uname`, so the host's JSON never crosses (03
+/// §6.5); what the host did not report stays null.
+final class IdentityResult extends SampleResult {
+  const IdentityResult({
+    this.hostname,
+    this.osPrettyName,
+    this.kernelName,
+    this.kernelRelease,
+    this.arch,
+  });
+
+  /// The static host name, which only hostnamectl reports.
+  final String? hostname;
+
+  final String? osPrettyName, kernelName, kernelRelease, arch;
+}
+
+/// The process list ([SampleStream.procs], 7.2).
+final class ProcsResult extends SampleResult {
+  ProcsResult(List<ProcessRow> processes)
+    : processes = List.unmodifiable(processes);
+
+  final List<ProcessRow> processes;
+}
+
+/// One process as [ProcsResult] lists it (PRC-01).
+@immutable
+final class ProcessRow {
+  const ProcessRow({
+    required this.pid,
+    this.parentPid,
+    this.name,
+    this.state,
+    this.userName,
+    this.uid,
+    this.threads,
+    this.residentBytes,
+    this.cpuPercent,
+    this.startTicks,
+    this.arguments,
+  });
+
+  final int pid;
+  final int? parentPid;
+
+  /// The kernel's name for it (`comm`), as the host sent it.
+  final String? name;
+
+  /// The state letter of `/proc/<pid>/stat`, such as `R` or `S`.
+  final String? state;
+
+  final String? userName;
+  final int? uid;
+  final int? threads;
+  final int? residentBytes;
+
+  /// Its share of one CPU since the previous reading, in percent: above
+  /// 100 when it runs on several CPUs, and null on its first reading.
+  final double? cpuPercent;
+
+  /// When it started, in clock ticks after boot (field 22 of
+  /// `/proc/<pid>/stat`): with [pid], what PRC-02's PID-reuse guard
+  /// compares before signalling it.
+  final int? startTicks;
+
+  /// The command line, one item per argument; null when it could not be
+  /// read (7.2's "command line unavailable"). Pass an unmodifiable list.
+  final List<String>? arguments;
+}
+
+/// Every systemd unit and the failed ones ([SampleStream.units], 7.5).
+final class UnitsResult extends SampleResult {
+  const UnitsResult(this.units);
+
+  final UnitsSnapshot units;
+}
+
+/// The failed systemd units ([SampleStream.failedUnits], OV-02).
+final class FailedUnitsResult extends SampleResult {
+  FailedUnitsResult(List<SystemdUnit> failed)
+    : failed = List.unmodifiable(failed);
+
+  final List<SystemdUnit> failed;
+}
+
+/// systemd timers ([SampleStream.timers], 7.7).
+final class TimersResult extends SampleResult {
+  const TimersResult(this.timers);
+
+  final TimersSnapshot timers;
+}
+
+/// Cron jobs ([SampleStream.cron], 7.7).
+final class CronResult extends SampleResult {
+  const CronResult(this.cron);
+
+  final CronSnapshot cron;
+}

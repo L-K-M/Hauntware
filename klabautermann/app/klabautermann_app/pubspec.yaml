@@ -24,6 +24,10 @@ dependencies:
   # value the light and dark themes are built from (03 D9, §10.9).
   ghost_theme:
     path: ../../../planchette/packages/ghost_theme
+  # The log viewer's text search (LOG-05, 03 D56): Planchette's find-bar
+  # search with its case folding.
+  planchette_core:
+    path: ../../../planchette/packages/planchette_core
   # getApplicationSupportDirectory() for settings.json (03 §4.10); pinned
   # to Poltergeist's version.
   path_provider: 2.1.6
@@ -32,6 +36,9 @@ dependencies:
   # the window_manager and screen_retriever plugins with it.
   ghost_desktop:
     path: ../../../planchette/packages/ghost_desktop
+  # The bundled monospace fonts behind the siblings' code stack.
+  ghost_fonts:
+    path: ../../../planchette/packages/ghost_fonts
   # The macOS integrated titlebar: a transparent titlebar over full-size
   # content with an empty unified toolbar (lib/services/macos_titlebar.dart).
   # Pinned to the version Séance and Poltergeist run, whose titlebar this

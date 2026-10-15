@@ -205,7 +205,7 @@ abstract class AppLocalizations {
   /// Shown instead of sshConfigImported when the import left hosts out; importedCount (0 or more) is the number of servers it added, skippedCount (1 or more) the number of hosts it left out. One message, so the translation decides how its sentences join.
   ///
   /// In en, this message translates to:
-  /// **'{importedCount, plural, =0{No hosts were imported from ~/.ssh/config.} =1{Imported 1 server from ~/.ssh/config.} other{Imported {importedCount} servers from ~/.ssh/config.}} {skippedCount, plural, =1{1 host was skipped because its port is unsupported or its name repeats an earlier host.} other{{skippedCount} hosts were skipped because their port is unsupported or their name repeats an earlier host.}}'**
+  /// **'{importedCount, plural, =0{No hosts were imported from ~/.ssh/config.} =1{Imported 1 server from ~/.ssh/config.} other{Imported {importedCount} servers from ~/.ssh/config.}} {skippedCount, plural, =1{1 host was skipped because of settings Klabautermann cannot follow as ssh would, such as a ProxyCommand, Include or Match block.} other{{skippedCount} hosts were skipped because of settings Klabautermann cannot follow as ssh would, such as a ProxyCommand, Include or Match block.}}'**
   String sshConfigImportedWithSkips(int importedCount, int skippedCount);
 
   /// No description provided for @sshConfigMissing.
@@ -628,6 +628,48 @@ abstract class AppLocalizations {
   /// **'unknown'**
   String get chartUnknownValue;
 
+  /// The label on a chart's hatched band for a period without data because Klabautermann was not running (03 §9.5).
+  ///
+  /// In en, this message translates to:
+  /// **'app closed'**
+  String get chartGapAppClosed;
+
+  /// The label on a chart's hatched band for a period without data because the app was in the background, where it stops sampling.
+  ///
+  /// In en, this message translates to:
+  /// **'in background'**
+  String get chartGapBackground;
+
+  /// The label on a chart's hatched band for a period without data because the connection to the server was down.
+  ///
+  /// In en, this message translates to:
+  /// **'disconnected'**
+  String get chartGapDisconnected;
+
+  /// A screen reader's description of a chart's band without data: when it began and ended, and why, one of chartGapAppClosed, chartGapBackground or chartGapDisconnected.
+  ///
+  /// In en, this message translates to:
+  /// **'No data from {start} to {end}: {reason}'**
+  String chartGapSummary(DateTime start, DateTime end, String reason);
+
+  /// A screen reader's description of a chart's band without data that has not ended: when it began and why, one of chartGapAppClosed, chartGapBackground or chartGapDisconnected.
+  ///
+  /// In en, this message translates to:
+  /// **'No data since {start}: {reason}'**
+  String chartGapOngoing(DateTime start, String reason);
+
+  /// A time label on a chart's time axis, to the minute, in the UI locale.
+  ///
+  /// In en, this message translates to:
+  /// **'{time}'**
+  String chartTime(DateTime time);
+
+  /// A time label on a chart's time axis, to the second, in the UI locale, for axes whose ticks are less than a minute apart.
+  ///
+  /// In en, this message translates to:
+  /// **'{time}'**
+  String chartTimeWithSeconds(DateTime time);
+
   /// A series' trend in its screen-reader summary: it has gone up over the chart's window.
   ///
   /// In en, this message translates to:
@@ -651,6 +693,48 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{share}'**
   String chartPercent(double share);
+
+  /// A bar chart's screen-reader summary, such as a memory breakdown: what it measures, its parts (each a chartBarPart, joined by chartListSeparator) and the total they are part of, already formatted with its unit.
+  ///
+  /// In en, this message translates to:
+  /// **'{label}: {parts} of {total}'**
+  String chartBarSummary(String label, String parts, String total);
+
+  /// One part of a bar chart in its legend and screen-reader summary: what the part measures and its value, already formatted with its unit, or chartUnknownValue.
+  ///
+  /// In en, this message translates to:
+  /// **'{label} {value}'**
+  String chartBarPart(String label, String value);
+
+  /// Joins the parts of a bar chart's screen-reader summary, such as "CPU 42%, Memory 71%".
+  ///
+  /// In en, this message translates to:
+  /// **', '**
+  String get chartListSeparator;
+
+  /// A bar chart part whose value has crossed a threshold, so its colour changed: the part (a chartBarPart) and chartSeverityWarning or chartSeverityCritical.
+  ///
+  /// In en, this message translates to:
+  /// **'{part} ({severity})'**
+  String chartWithSeverity(String part, String severity);
+
+  /// A value past its warning threshold, shown in the warning colour with a warning icon.
+  ///
+  /// In en, this message translates to:
+  /// **'warning'**
+  String get chartSeverityWarning;
+
+  /// A value past its critical threshold, shown in the critical colour with an error icon.
+  ///
+  /// In en, this message translates to:
+  /// **'critical'**
+  String get chartSeverityCritical;
+
+  /// A bar chart's screen-reader summary while its values are stale: no new sample has arrived in time, so the bar is grey and shows the last values the server reported.
+  ///
+  /// In en, this message translates to:
+  /// **'{summary}, stale'**
+  String chartStale(String summary);
 
   /// A table cell as a screen reader hears it within its row: the column's header label, then the cell's value (A11Y-03).
   ///
@@ -681,6 +765,72 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Row actions'**
   String get tableRowActions;
+
+  /// Screen-reader name of a log view, the scrolling list of a server's log lines.
+  ///
+  /// In en, this message translates to:
+  /// **'Log'**
+  String get logViewLabel;
+
+  /// Button shown while a log view is paused: scrolls to the newest line and keeps it in sight as lines arrive (LOG-02).
+  ///
+  /// In en, this message translates to:
+  /// **'Follow'**
+  String get logFollow;
+
+  /// Spoken name of the icon beside a log line logged as an error or worse.
+  ///
+  /// In en, this message translates to:
+  /// **'Error'**
+  String get logLevelError;
+
+  /// Spoken name of the icon beside a log line logged as a warning.
+  ///
+  /// In en, this message translates to:
+  /// **'Warning'**
+  String get logLevelWarning;
+
+  /// Spoken name of the icon beside a log line logged as debug output.
+  ///
+  /// In en, this message translates to:
+  /// **'Debug'**
+  String get logLevelDebug;
+
+  /// A row in a log view where lines arrived faster than the view could keep and were left out; count is how many.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 line dropped here} other{{count} lines dropped here}}'**
+  String logDroppedLines(int count);
+
+  /// Note after a log line too long to keep whole; total is the full line's length.
+  ///
+  /// In en, this message translates to:
+  /// **'[line cut: {total} characters in all]'**
+  String logLineCut(int total);
+
+  /// Stands in for a journal message or field value the server did not send because it is larger than 4,096 bytes.
+  ///
+  /// In en, this message translates to:
+  /// **'[not sent: over 4,096 bytes]'**
+  String get logJournalNotSent;
+
+  /// Last row of a journal entry's expanded fields when the log view kept only some of them; count is how many it left out.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 more field not kept} other{{count} more fields not kept}}'**
+  String logJournalFieldsLeftOut(int count);
+
+  /// Screen-reader hint for activating a journal row: shows all of the entry's journal fields beneath it.
+  ///
+  /// In en, this message translates to:
+  /// **'Show fields'**
+  String get logJournalShowFields;
+
+  /// Screen-reader hint for activating a journal row that shows its fields: hides them again.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide fields'**
+  String get logJournalHideFields;
 }
 
 class _AppLocalizationsDelegate

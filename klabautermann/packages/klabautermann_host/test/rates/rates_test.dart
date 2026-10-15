@@ -8,30 +8,24 @@ const _u32 = CounterWidth.bits32;
 
 CpuTimes _cpu(String name, List<int> j) => CpuTimes(name, j);
 
-NetDevEntry _net(String name, int rxBytes, int txBytes) => NetDevEntry(
-  name,
-  [rxBytes, 0, 0, 0, 0, 0, 0, 0],
-  [txBytes, 0, 0, 0, 0, 0, 0, 0],
-);
+NetDevEntry _net(String name, int rxBytes, int txBytes) =>
+    NetDevEntry(name, rxBytes: rxBytes, txBytes: txBytes);
 
 DiskStatEntry _disk(String name, int sectorsRead, int sectorsWritten) =>
-    DiskStatEntry(8, 0, name, [
-      0,
-      0,
-      sectorsRead,
-      0,
-      0,
-      0,
-      sectorsWritten,
-      0,
-      0,
-      0,
-      0,
-    ]);
+    DiskStatEntry(
+      name,
+      readsCompleted: 0,
+      sectorsRead: sectorsRead,
+      writesCompleted: 0,
+      sectorsWritten: sectorsWritten,
+    );
+
+CoreCpuTimes _core1(String name, int busy, int idle) =>
+    CoreCpuTimes(name, busy: busy, idle: idle);
 
 CoreSnapshot _core({
   CpuTimes? cpu,
-  Map<String, CpuTimes>? perCpu,
+  Map<String, CoreCpuTimes>? perCpu,
   int? btime,
   List<NetDevEntry>? netdev,
   List<DiskStatEntry>? diskstats,
@@ -123,18 +117,29 @@ void main() {
     });
   });
 
-  group('perCpuDeltaPercent', () {
+  group('perCpuBusyPercent', () {
+    test('busy is the busy delta over the busy plus idle delta', () {
+      final r = perCpuBusyPercent(
+        {'cpu0': _core1('cpu0', 100, 900)},
+        {'cpu0': _core1('cpu0', 130, 970)},
+      );
+      expect(r['cpu0'], 30);
+    });
+
     test('cores missing from either side are skipped', () {
-      final r = perCpuDeltaPercent(
-        {
-          'cpu0': _cpu('cpu0', [1, 2, 3, 4]),
-        },
-        {
-          'cpu0': _cpu('cpu0', [2, 3, 4, 5]),
-          'cpu1': _cpu('cpu1', [1, 2, 3, 4]),
-        },
+      final r = perCpuBusyPercent(
+        {'cpu0': _core1('cpu0', 1, 4)},
+        {'cpu0': _core1('cpu0', 2, 5), 'cpu1': _core1('cpu1', 1, 4)},
       );
       expect(r.keys, ['cpu0']);
+    });
+
+    test('a decrease or a zero delta yields no entry', () {
+      final r = perCpuBusyPercent(
+        {'cpu0': _core1('cpu0', 10, 10), 'cpu1': _core1('cpu1', 10, 10)},
+        {'cpu0': _core1('cpu0', 5, 20), 'cpu1': _core1('cpu1', 10, 10)},
+      );
+      expect(r, isEmpty);
     });
   });
 

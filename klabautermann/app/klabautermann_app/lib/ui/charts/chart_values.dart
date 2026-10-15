@@ -23,10 +23,24 @@ final class ChartStrings {
     required this.seriesEmpty,
     required this.seriesUnknown,
     required this.unknownValue,
+    required this.gapAppClosed,
+    required this.gapBackground,
+    required this.gapDisconnected,
+    required this.gapSummary,
+    required this.gapOngoing,
+    required this.time,
+    required this.timeWithSeconds,
     required this.trendRising,
     required this.trendFalling,
     required this.trendSteady,
     required this.percent,
+    required this.barSummary,
+    required this.barPart,
+    required this.listSeparator,
+    required this.withSeverity,
+    required this.severityWarning,
+    required this.severityCritical,
+    required this.stale,
   });
 
   /// A series' screen-reader summary (A11Y-02): its label, the formatted
@@ -49,12 +63,52 @@ final class ChartStrings {
   /// A value the host did not report; never shown as zero (03 §10.4).
   final String unknownValue;
 
+  /// The labels of a time-series chart's bands without data (03 §9.5
+  /// item 5): the app was not running, was in the background, or had no
+  /// link to the server.
+  final String gapAppClosed;
+  final String gapBackground;
+  final String gapDisconnected;
+
+  /// A band without data as a screen reader hears it: when it began and
+  /// ended, and its label.
+  final String Function(DateTime start, DateTime end, String reason) gapSummary;
+
+  /// A band without data that has not ended yet.
+  final String Function(DateTime start, String reason) gapOngoing;
+
+  /// A time axis label to the minute, and to the second for ticks less
+  /// than a minute apart.
+  final String Function(DateTime time) time;
+  final String Function(DateTime time) timeWithSeconds;
+
   final String trendRising;
   final String trendFalling;
   final String trendSteady;
 
   /// A share from 0 to 100 in the UI locale's number format.
   final String Function(double value) percent;
+
+  /// A stacked bar's screen-reader summary: its label, its [barPart]s
+  /// joined by [listSeparator], and the formatted total.
+  final String Function(String label, String parts, String total) barSummary;
+
+  /// One part of a bar, as its legend and summary name it: the part's
+  /// label and its formatted value.
+  final String Function(String label, String value) barPart;
+
+  /// Between the parts of a bar's summary.
+  final String listSeparator;
+
+  /// A [barPart] past a threshold, with [severityWarning] or
+  /// [severityCritical] (A11Y-01: the colour never speaks alone).
+  final String Function(String part, String severity) withSeverity;
+
+  final String severityWarning;
+  final String severityCritical;
+
+  /// A bar's summary while its values are stale (OV-04).
+  final String Function(String summary) stale;
 }
 
 /// [value] as axis or value text in [unit].

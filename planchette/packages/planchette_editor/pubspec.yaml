@@ -11,6 +11,9 @@ dependencies:
   clock: ^1.1.2
   flutter:
     sdk: flutter
+  # The bundled monospace fonts the document draws in.
+  ghost_fonts:
+    path: ../ghost_fonts
   ghost_ui:
     path: ../ghost_ui
   planchette_core:

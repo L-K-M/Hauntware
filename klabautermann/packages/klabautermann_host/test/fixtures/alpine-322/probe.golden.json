@@ -13,6 +13,7 @@
     "systemdVersion": null,
     "virtualization": null,
     "container": null,
+    "lxcfsMounts": null,
     "uid": 1000,
     "user": "alpine",
     "groups": [
