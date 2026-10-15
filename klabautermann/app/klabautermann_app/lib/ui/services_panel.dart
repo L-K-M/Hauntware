@@ -71,6 +71,16 @@ class _ServicesPanelState extends State<ServicesPanel> {
   ({String name, GlobalKey key})? _open;
   final _listKey = GlobalKey();
 
+  /// The list's and the page's focus, and the page's close button. A
+  /// narrow panel hides the list behind the page, where a focused table
+  /// would still take keys: focus moves to the close button then, and
+  /// [_returnFocus], what held it in the list, gets it back when the page
+  /// closes (03 §10.10).
+  final _listFocus = FocusNode(canRequestFocus: false, skipTraversal: true);
+  final _pageFocus = FocusNode(canRequestFocus: false, skipTraversal: true);
+  final _closeFocus = FocusNode();
+  FocusNode? _returnFocus;
+
   @override
   void initState() {
     super.initState();
@@ -88,11 +98,15 @@ class _ServicesPanelState extends State<ServicesPanel> {
     _units.removeListener(_onUnits);
     _attach();
     _open = null;
+    _returnFocus = null;
   }
 
   @override
   void dispose() {
     _units.removeListener(_onUnits);
+    _listFocus.dispose();
+    _pageFocus.dispose();
+    _closeFocus.dispose();
     super.dispose();
   }
 
@@ -108,7 +122,28 @@ class _ServicesPanelState extends State<ServicesPanel> {
     setState(() => _open = (name: unit.unit, key: GlobalKey()));
   }
 
-  void _close() => setState(() => _open = null);
+  void _close() {
+    final restore = _pageFocus.hasFocus ? _returnFocus : null;
+    _returnFocus = null;
+    setState(() => _open = null);
+    if (restore == null) return;
+
+    // The list shows again, and may take focus, once rebuilt; a table
+    // the list no longer holds has nothing to take.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (restore.parent != null && restore.canRequestFocus) {
+        restore.requestFocus();
+      }
+    });
+  }
+
+  /// Moves focus from the hidden list into the page shown in its place.
+  void _focusPage() {
+    if (!mounted || _open == null || !_listFocus.hasFocus) return;
+
+    _returnFocus = FocusManager.instance.primaryFocus;
+    _closeFocus.requestFocus();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -124,21 +159,30 @@ class _ServicesPanelState extends State<ServicesPanel> {
         final open = _open;
         final page = open == null
             ? null
-            : _UnitPage(
-                key: open.key,
-                monitoring: widget.monitoring,
-                serverId: widget.serverId,
-                name: open.name,
-                unit: _find(units, open.name),
-                visible: widget.visible,
-                wide: wide,
-                onClose: _close,
+            : Focus(
+                focusNode: _pageFocus,
+                includeSemantics: false,
+                child: _UnitPage(
+                  key: open.key,
+                  monitoring: widget.monitoring,
+                  serverId: widget.serverId,
+                  name: open.name,
+                  unit: _find(units, open.name),
+                  visible: widget.visible,
+                  wide: wide,
+                  closeFocus: _closeFocus,
+                  onClose: _close,
+                ),
               );
         // The list keeps its place in the tree, so opening a unit keeps the
         // table's focus, active row and scroll position.
         final list = KeyedSubtree(
           key: _listKey,
-          child: _list(l10n, units, result, wide: wide),
+          child: Focus(
+            focusNode: _listFocus,
+            includeSemantics: false,
+            child: _list(l10n, units, result, wide: wide),
+          ),
         );
         if (page == null) return Padding(padding: padding, child: list);
         if (wide) {
@@ -158,6 +202,8 @@ class _ServicesPanelState extends State<ServicesPanel> {
         // A narrow panel shows the page in the list's place, as a phone
         // pushes details (03 §10.5), and Back returns to the list. A
         // hidden tab stays mounted, so Back is left to the route then.
+        // Focus the hidden list holds moves to the page once it shows.
+        WidgetsBinding.instance.addPostFrameCallback((_) => _focusPage());
         return PopScope(
           canPop: !widget.visible,
           onPopInvokedWithResult: (didPop, _) {
@@ -359,6 +405,7 @@ class _UnitPage extends StatefulWidget {
     required this.unit,
     required this.visible,
     required this.wide,
+    required this.closeFocus,
     required this.onClose,
   });
 
@@ -371,6 +418,7 @@ class _UnitPage extends StatefulWidget {
 
   final bool visible;
   final bool wide;
+  final FocusNode closeFocus;
   final VoidCallback onClose;
 
   @override
@@ -465,6 +513,7 @@ class _UnitPageState extends State<_UnitPage> {
             children: [
               IconButton(
                 tooltip: l10n.servicesUnitClose,
+                focusNode: widget.closeFocus,
                 icon: Icon(widget.wide ? Icons.close : Icons.arrow_back),
                 onPressed: widget.onClose,
               ),

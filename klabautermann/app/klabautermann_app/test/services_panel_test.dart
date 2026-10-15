@@ -103,6 +103,11 @@ final class _Panel {
   List<OpenLogStream> get opens =>
       engine.sentOfType<OpenLogStream>().cast<OpenLogStream>();
 
+  /// The units whose journal the opens read, in order.
+  List<String?> get opened => [
+    for (final open in opens) (open.spec.source as JournalLogSource).unit,
+  ];
+
   List<String> get closes => [
     for (final close in engine.sentOfType<CloseStream>())
       (close as CloseStream).streamId,
@@ -519,6 +524,59 @@ void main() {
     expect(_row('cron.service'), findsOneWidget);
     expect(panel.opens, hasLength(1));
     expect(_line('Address in use'), findsOneWidget);
+  });
+
+  testWidgets('a narrow page takes focus off the hidden table and returns it', (
+    tester,
+  ) async {
+    // A narrow desktop panel: a click focuses the table behind the page.
+    final panel = await _pump(tester, size: const Size(560, 800));
+    await panel.sample(tester);
+    await _open(tester, 'cron.service');
+    expect(_row('backup.service'), findsNothing);
+
+    // The keys reach the page's close button, not the hidden table.
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.sendKeyEvent(LogicalKeyboardKey.space);
+    await tester.pumpAndSettle();
+    expect(panel.opened, ['cron.service']);
+    expect(_row('backup.service'), findsOneWidget);
+
+    // Closing gives the table its focus back.
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    expect(panel.opened, ['cron.service', 'backup.service']);
+  });
+
+  testWidgets('a desktop panel narrow at 200% text keeps keys on the page', (
+    tester,
+  ) async {
+    final panel = await _pump(
+      tester,
+      size: const Size(1000, 800),
+      textScale: 2,
+    );
+    await panel.sample(tester);
+    // Tab to the table's body, then open its second unit.
+    var stops = 0;
+    while (stops++ < 12 &&
+        FocusManager.instance.primaryFocus?.debugLabel != 'SortableTable') {
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pumpAndSettle();
+    }
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    expect(_row('cron.service'), findsNothing);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    expect(_row('cron.service'), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    expect(panel.opened, ['backup.service', 'nginx.service']);
   });
 
   testWidgets('Back on another tab leaves the hidden page open', (

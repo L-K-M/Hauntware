@@ -2406,19 +2406,20 @@ no longer holds that value.
   names up to five, each with its sub state: systemd's `Result` property
   needs `systemctl show` (SVC-08, v1).
 - A unit's page opens under the table, or in its place below a 600 px
-  panel width that grows with the text scale (Back returns). It reads
-  SVC-04's lines as one 50-record journal window through the monitoring
-  controller and says what the read does until lines arrive: waiting
-  for an answer, the link, a channel or the foreground, reading, no
-  lines, or the end's reason with the host's error text. A read still
-  running when its tab hides stops and starts over once shown. Since
-  `RequestRejected` names no stream, the controller gives a rejection of
-  `OpenLogStream` to its oldest open without an answer: exact while the
-  engine refuses every open, and once the log service is wired it
-  refuses one outright only for a reused id, which the app's counter
-  never sends. A read closed before its answer keeps its place until
-  that answer arrives. Until the service is wired, the page says unit
-  logs are not available in this version.
+  panel width that grows with the text scale (Back returns), where it
+  takes the focus the hidden list held to its close button and gives it
+  back on closing (10.10). It reads SVC-04's lines as one 50-record
+  journal window through the monitoring controller and says what the
+  read does until lines arrive: waiting for an answer, the link, a
+  channel or the foreground, reading, no lines, or the end's reason with
+  the host's error text. A read still running when its tab hides stops
+  and starts over once shown. Since `RequestRejected` names no stream,
+  the controller gives a rejection of `OpenLogStream` to its oldest open
+  without an answer: exact while the engine refuses every open, and once
+  the log service is wired it refuses one outright only for a reused id,
+  which the app's counter never sends. A read closed before its answer
+  keeps its place until that answer arrives. Until the service is wired,
+  the page says unit logs are not available in this version.
 
 ### 7.6 Logs (LOG)
 
