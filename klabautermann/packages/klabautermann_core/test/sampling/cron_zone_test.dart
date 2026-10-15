@@ -283,6 +283,19 @@ void main() {
     expect(cronTzZone('Mars/Olympus_Mons', DateTime.utc(2026)), isNull);
   });
 
+  test('a reading evaluates the runs of a bounded number of lines', () {
+    final lines = List.filled(kCronLinesEvaluated + 1, '59 23 * * * a');
+    final result = cronResult(
+      _crontab(lines.join('\n')),
+      _berlin,
+      DateTime.utc(2026, 10, 14, 12),
+    );
+    final rows = result.jobs.cast<CronJobEntry>();
+    expect(rows, hasLength(kCronLinesEvaluated + 1));
+    expect(rows[kCronLinesEvaluated - 1].nextRuns, hasLength(5));
+    expect(rows.last.runsUnknown, JobRunsUnknown.notEvaluated);
+  });
+
   test('no probe answer yet means no server zone', () {
     expect(serverCronZone(null, DateTime.utc(2026)), (
       zone: null,

@@ -6,6 +6,7 @@ library;
 import 'package:meta/meta.dart';
 
 import '../cron/evaluate.dart';
+import '../cron/expression.dart';
 import '../parse/cron.dart';
 import '../parse/timers.dart';
 import 'schedule.dart';
@@ -28,6 +29,10 @@ enum JobRunsUnknown {
 
   /// No minute within the evaluation horizon matches (`0 0 30 2 *`).
   noRunInHorizon,
+
+  /// The line lies past [mergeJobs]'s evaluation limit, which bounds the
+  /// work a huge crontab costs.
+  notEvaluated,
 
   /// anacron runs the directory, and the MVP does not model its timing
   /// (JOB-04 is v1). The payload shows anacron installed, and the
@@ -207,8 +212,10 @@ typedef CronZoneResolver = ServerZone? Function(String timeZone);
 /// `CRON_TZ` applies: [zoneFor] resolves it first, then a name equal to
 /// the server zone's or a UTC alias. A null [zone] means the server zone
 /// is unknown, and lines without a `CRON_TZ` list no runs. Each lists up
-/// to [runCount] runs strictly after [nowUtc]. Pure; throws only for a
-/// nonpositive [runCount], a caller error.
+/// to [runCount] runs strictly after [nowUtc]; with an [evaluateLimit],
+/// only that many lines in payload order get their runs evaluated, and
+/// later ones give [JobRunsUnknown.notEvaluated]. Pure; throws only for
+/// a nonpositive [runCount], a caller error.
 List<JobEntry> mergeJobs({
   CronSnapshot? cron,
   TimersSnapshot? timers,
@@ -216,9 +223,23 @@ List<JobEntry> mergeJobs({
   required ServerZone? zone,
   CronZoneResolver? zoneFor,
   int runCount = 5,
+  int? evaluateLimit,
 }) {
   if (runCount <= 0) {
     throw ArgumentError.value(runCount, 'runCount', 'must be positive');
+  }
+
+  var evaluated = 0;
+  List<CronRun>? evaluate(CronExpression expression, ServerZone runZone) {
+    if (evaluateLimit != null && evaluated >= evaluateLimit) return null;
+
+    evaluated++;
+    return nextCronRuns(
+      expression,
+      afterUtc: nowUtc,
+      zone: runZone,
+      count: runCount,
+    );
   }
 
   final cronEntries = <CronJobEntry>[];
@@ -230,10 +251,9 @@ List<JobEntry> mergeJobs({
       _cronEntry(
         'cron|${job.source}|$ordinal',
         job,
-        nowUtc: nowUtc,
         zone: zone,
         zoneFor: zoneFor,
-        runCount: runCount,
+        evaluate: evaluate,
       ),
     );
   }
@@ -258,13 +278,14 @@ List<JobEntry> mergeJobs({
   ];
 }
 
+/// The row of [job]; [evaluate] lists its runs in a zone, or returns
+/// null past the evaluation limit.
 CronJobEntry _cronEntry(
   String id,
   CronJob job, {
-  required DateTime nowUtc,
   required ServerZone? zone,
   required CronZoneResolver? zoneFor,
-  required int runCount,
+  required List<CronRun>? Function(CronExpression, ServerZone) evaluate,
 }) {
   final expression = job.expression;
   if (expression == null) {
@@ -303,12 +324,15 @@ CronJobEntry _cronEntry(
     );
   }
 
-  final runs = nextCronRuns(
-    expression,
-    afterUtc: nowUtc,
-    zone: runZone,
-    count: runCount,
-  );
+  final runs = evaluate(expression, runZone);
+  if (runs == null) {
+    return CronJobEntry._(
+      id: id,
+      job: job,
+      schedule: schedule,
+      runsUnknown: JobRunsUnknown.notEvaluated,
+    );
+  }
   return CronJobEntry._(
     id: id,
     job: job,

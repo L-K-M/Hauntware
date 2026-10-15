@@ -823,6 +823,9 @@ Proposals awaiting the owner close the section; they are not decisions.
   offset, and `CronResult` says why: no name, a name the database lacks,
   or an offset mismatch (a stale name or diverging zone data). Without a
   probed offset the server zone is unknown, and its rows say so. A
+  reading evaluates the runs of its first 200 lines and marks the rest
+  not evaluated, because a line can cost about 2 ms in the shared
+  engine isolate and a 1 MiB section holds tens of thousands. A
   `CRON_TZ` resolves through the same database. `ServerZone.offsetAt`
   carries the rules inside the engine, and the rows cross with plain
   `CronRun`s (D52). The database can disagree with the server's own zone

@@ -371,8 +371,15 @@ List<String>? _tokens(String? joined) => joined == null
     ? null
     : List.unmodifiable(joined.isEmpty ? const <String>[] : joined.split(' '));
 
+/// The most cron lines whose next runs one `cron` reading evaluates.
+/// A line can cost about 2 ms in the engine isolate, which every server
+/// shares, and a 1 MiB section holds some 75,000 lines; later lines give
+/// `JobRunsUnknown.notEvaluated`.
+const kCronLinesEvaluated = 200;
+
 /// [cron] with its jobs rows (7.7): each line's next runs after [at] in
-/// the server zone of [profile] or the line's `CRON_TZ` (D57).
+/// the server zone of [profile] or the line's `CRON_TZ` (D57), for the
+/// first [kCronLinesEvaluated] lines.
 CronResult cronResult(CronSnapshot cron, HostProfile? profile, DateTime at) {
   final server = serverCronZone(profile, at);
   return CronResult(
@@ -382,6 +389,7 @@ CronResult cronResult(CronSnapshot cron, HostProfile? profile, DateTime at) {
       nowUtc: at,
       zone: server.zone,
       zoneFor: (name) => cronTzZone(name, at),
+      evaluateLimit: kCronLinesEvaluated,
     ),
     zoneName: server.zoneName,
     zoneFallback: server.fallback,

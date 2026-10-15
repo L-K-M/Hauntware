@@ -144,6 +144,26 @@ void main() {
       }
     });
 
+    test('lines past the evaluation limit list no runs and say why', () {
+      final jobs = mergeJobs(
+        cron: _cron(
+          crontab: '0 3 * * * a\n@reboot b\n0 4 * * * c\n0 5 * * * d',
+        ),
+        nowUtc: _now,
+        zone: _fixed(0, 'Etc/UTC'),
+        evaluateLimit: 2,
+      ).cast<CronJobEntry>();
+      // @reboot has nothing to evaluate, so it does not count.
+      expect(jobs.map((j) => j.runsUnknown), [
+        null,
+        JobRunsUnknown.reboot,
+        null,
+        JobRunsUnknown.notEvaluated,
+      ]);
+      expect(jobs[3].schedule!.text, '0 5 * * *');
+      expect(jobs[3].nextRuns, isEmpty);
+    });
+
     test('a spring-forward gap and a fall-back overlap are annotated', () {
       final gap = _only(
         _merge(
