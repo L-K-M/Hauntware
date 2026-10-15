@@ -62,6 +62,7 @@ class _ServerDetailPageState extends State<ServerDetailPage>
   void _openAccess() => Navigator.of(context).push(
     MaterialPageRoute<void>(
       builder: (context) => AccessPage(
+        fleet: widget.fleet,
         monitoring: widget.monitoring,
         serverId: widget.server.id,
         serverName: widget.server.displayName,

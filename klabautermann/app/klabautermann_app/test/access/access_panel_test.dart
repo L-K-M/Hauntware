@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ghost_fonts/testing.dart' show loadBundledMonoFonts;
 import 'package:ghost_ui/ghost_ui.dart' show contrastRatio;
+import 'package:klabautermann_app/controllers/fleet_controller.dart';
 import 'package:klabautermann_app/controllers/monitoring_controller.dart';
 import 'package:klabautermann_app/l10n/app_localizations.dart';
 import 'package:klabautermann_app/ui/access/access_panel.dart';
@@ -21,6 +22,22 @@ const _phone = Size(390, 800);
 const _notChecked =
     'Not checked yet. Klabautermann checks access after it connects to this '
     'server.';
+
+/// [twoServers] as the engine's catalog lists them.
+const _web1Entry = FleetEntry(
+  serverId: 'srv-1',
+  label: 'web-1',
+  host: 'web-1.example',
+  port: 22,
+  origin: FleetEntryOrigin.sshConfig,
+);
+const _db1Entry = FleetEntry(
+  serverId: 'srv-2',
+  label: 'db-1',
+  host: '10.0.0.4',
+  port: 22,
+  origin: FleetEntryOrigin.sshConfig,
+);
 
 /// Pumps the app at [size], opens web-1 (srv-1) and, when [profile] is
 /// given, delivers it as the probe's answer.
@@ -335,23 +352,41 @@ void main() {
     expect(find.byType(AccessPanel), findsOneWidget);
   });
 
+  testWidgets('a pushed Access screen follows its server out of the fleet '
+      'and back', (tester) async {
+    const rootLogin = 'You log in as root, so no elevation or group is needed.';
+    final harness = await _openWeb1(
+      tester,
+      _phone,
+      profile: alpineContainer(tools: {'tail': null}),
+    );
+    await tester.tap(find.text('Logs'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Open Access'));
+    await tester.pumpAndSettle();
+    expect(find.text(rootLogin), findsWidgets);
+
+    // SYN-08: the profile leaves with its server.
+    harness.engine.emit(CatalogReplaced(const [_db1Entry]));
+    await tester.pumpAndSettle();
+    expect(find.text(rootLogin), findsNothing);
+    expect(find.text(_notChecked), findsOneWidget);
+
+    harness.engine
+      ..emit(CatalogReplaced(const [_web1Entry, _db1Entry]))
+      ..emit(HostProfileChanged('srv-1', debianHost()));
+    await tester.pumpAndSettle();
+    expect(find.text(rootLogin), findsNothing);
+    expect(find.text('sudo usermod -aG systemd-journal alice'), findsOneWidget);
+  });
+
   testWidgets('drops a server\'s profile when it leaves the fleet '
       '(SYN-08)', (tester) async {
     final harness = await _openWeb1(tester, _desktop, profile: debianHost());
     final profile = harness.monitoring.profileFor('srv-1');
     expect(profile.value, isNotNull);
 
-    harness.engine.emit(
-      CatalogReplaced(const [
-        FleetEntry(
-          serverId: 'srv-2',
-          label: 'db-1',
-          host: '10.0.0.4',
-          port: 22,
-          origin: FleetEntryOrigin.sshConfig,
-        ),
-      ]),
-    );
+    harness.engine.emit(CatalogReplaced(const [_db1Entry]));
     await tester.pumpAndSettle();
     harness.engine.emit(HostProfileChanged('srv-1', debianHost()));
     await tester.pumpAndSettle();
@@ -365,9 +400,11 @@ void main() {
       tester.platformDispatcher.textScaleFactorTestValue = 2;
       addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
       final engine = FakeEngineClient();
+      final fleet = FleetController(engine, servers: twoServers);
       final monitoring = MonitoringController(engine);
       addTearDown(() async {
         monitoring.dispose();
+        fleet.dispose();
         await engine.close();
       });
       tester.view.physicalSize = size;
@@ -378,6 +415,7 @@ void main() {
         _frame(
           Brightness.light,
           AccessPage(
+            fleet: fleet,
             monitoring: monitoring,
             serverId: 'srv-1',
             serverName: 'web-1',

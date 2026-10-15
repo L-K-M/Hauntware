@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:klabautermann_core/klabautermann_core.dart';
 
+import '../../controllers/fleet_controller.dart';
 import '../../controllers/monitoring_controller.dart';
 import '../../l10n/app_localizations.dart';
 import '../../theme/app_theme.dart' show klabautermannThemeStyle;
@@ -74,11 +75,13 @@ class AccessPanel extends StatelessWidget {
 class AccessPage extends StatelessWidget {
   const AccessPage({
     super.key,
+    required this.fleet,
     required this.monitoring,
     required this.serverId,
     required this.serverName,
   });
 
+  final FleetController fleet;
   final MonitoringController monitoring;
   final String serverId;
   final String serverName;
@@ -88,8 +91,15 @@ class AccessPage extends StatelessWidget {
     appBar: AppBar(
       title: Text(AppLocalizations.of(context).accessPageTitle(serverName)),
     ),
+    // A server leaving the fleet takes its profile listenable with it
+    // (SYN-08), and one that returns gets a new one: the panel reads it
+    // again on each fleet change, as the server screen under it does.
     body: SafeArea(
-      child: AccessPanel(monitoring: monitoring, serverId: serverId),
+      child: ListenableBuilder(
+        listenable: fleet,
+        builder: (context, _) =>
+            AccessPanel(monitoring: monitoring, serverId: serverId),
+      ),
     ),
   );
 }
