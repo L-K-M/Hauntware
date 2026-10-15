@@ -3582,7 +3582,12 @@ the engine in `engine_isolate.dart` beside it):
     command with a token ssh cannot expand, and a directive the engine
     does not map are not checked. It does not read the system-wide
     `/etc/ssh/ssh_config`, which ssh reads after the user's file and
-    which can set what that file leaves unset.
+    which can set what that file leaves unset. A host whose name ssh
+    refuses as a host name is left out and counted too
+    (`valid_hostname()`: a leading `-`, whitespace or a control
+    character as the C locale reads them, which a `Host` pattern can
+    hold since only spaces and tabs split it, or one of
+    `` '`"$\;&<>|(){} ``).
   - `ProxyJump` follows ssh (`parse_jump()` and `ssh.c`): `a,b` dials
     `a`, then `b` through `a`; `none` is direct. ssh reaches each hop
     with a nested ssh that reads the config for the hop's name, so a hop

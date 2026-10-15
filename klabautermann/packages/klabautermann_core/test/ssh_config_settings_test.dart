@@ -90,6 +90,32 @@ void main() {
       expect(_applies('Host caf\u{FFFD}', 'web'), isFalse);
     });
 
+    test('a name ssh refuses as a host name is unresolved', () {
+      // ssh.c's valid_hostname(), with isspace() and iscntrl() in the C
+      // locale.
+      for (final name in [
+        '-web',
+        for (final c in '\'`"\$\\;&<>|(){}'.split('')) 'a${c}b',
+        for (final c in [' ', '\t', '\n', '\v', '\f', '\r', '\x01', '\x7f'])
+          'a${c}b',
+      ]) {
+        expect(
+          _resolve('Host *\n  HostName 10.0.0.5\n', name),
+          UnresolvedReason.rejectedName,
+          reason: name,
+        );
+      }
+      for (final name in ['a-b', 'a!b', 'caf\u00e9', 'a~b', 'a#b', 'a[b]']) {
+        expect(_resolve('Host *\n  HostName 10.0.0.5\n', name), (
+          '10.0.0.5',
+          22,
+          null,
+          null,
+          null,
+        ), reason: name);
+      }
+    });
+
     test('a HostName, User or IdentityFile holding U+FFFD leaves the name '
         'out', () {
       // ssh dials and signs in with the bytes themselves, which the

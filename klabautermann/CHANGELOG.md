@@ -23,8 +23,10 @@
   ssh would offer, so a key that `Host *` sets at the top of the file
   comes before a host's own, and a server that accepts only the host's
   own key will refuse Klabautermann. A host Klabautermann cannot connect
-  to as ssh would is skipped and counted in the import message: one that
-  uses a `ProxyCommand`, one an `Include` or a `Match` block it cannot
+  to as ssh would is skipped and counted in the import message: one
+  whose name ssh refuses as a host name (a leading `-`, whitespace, a
+  control character or a character the shell reads), one that uses a
+  `ProxyCommand`, one an `Include` or a `Match` block it cannot
   evaluate could change, one whose port, user, key or jump host would
   change when ssh reads the file a second time for the name it dials (as
   Fedora's and RHEL's `/etc/ssh/ssh_config` make it do), unless that

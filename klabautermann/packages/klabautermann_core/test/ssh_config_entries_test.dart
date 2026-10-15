@@ -128,6 +128,29 @@ void main() {
       expect(result.skippedCount, 3);
     });
 
+    test('leaves out a host whose name ssh refuses as a host name', () {
+      // ssh.c's valid_hostname() refuses a name that starts with `-`, or
+      // holds whitespace, a control character or one of '`"$\;&<>|(){}.
+      // Lines split only at spaces and tabs, so a \v or \f stays part of
+      // a Host pattern.
+      final result = importedHostsFromSshConfig(
+        'Host -web\n  HostName 10.0.0.5\n'
+        'Host a;b\n  HostName 10.0.0.6\n'
+        'Host web\v\n  HostName 10.0.0.8\n'
+        'Host c\fd e\$f g\x01h i\x7fj k\\"l m(n o|p\n  HostName 10.0.0.9\n'
+        'Host a!b caf\u00e9 a~b a#b a[b]\n  HostName 10.0.0.7\n',
+      );
+
+      expect(result.hosts.map((h) => h.alias), [
+        'a!b',
+        'caf\u00e9',
+        'a~b',
+        'a#b',
+        'a[b]',
+      ]);
+      expect(result.skippedCount, 10);
+    });
+
     test('a ProxyJump or CanonicalizeHostname line ssh rejects anywhere '
         'leaves out every host', () {
       // parse_jump() checks every ProxyJump line, in a block that applies

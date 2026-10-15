@@ -56,6 +56,10 @@ const String _replacement = '\u{FFFD}';
 /// file, so the app puts it back for the engine to see.
 const String _byteOrderMark = '\u{FEFF}';
 
+/// The characters, besides whitespace and control characters, that ssh's
+/// `valid_hostname()` refuses in the host name you give it.
+const String _refusedInHostName = '\'`"\$\\;&<>|(){}';
+
 /// `readconf.c`'s `WHITESPACE`, which `strdelim()` skips around a keyword.
 const String _whitespace = ' \t\r\n';
 
@@ -99,6 +103,12 @@ enum UnresolvedReason {
   /// ssh takes one, one of those lines or the `Host` line with a quote
   /// left open, or a `Host` line with an empty pattern.
   rejectedLine,
+
+  /// ssh refuses the name as a host name (`ssh.c`, `valid_hostname()`):
+  /// it starts with `-`, or holds whitespace or a control character, as
+  /// the C locale reads them, or one of [_refusedInHostName]. Lines split
+  /// only at spaces and tabs, so a `Host` pattern may hold `\v` or `\f`.
+  rejectedName,
 
   /// The `HostName` holds a token other than `%h` or `%%`, or ends in
   /// `%`; ssh exits on it.
@@ -185,7 +195,8 @@ final class UnresolvedSshSettings extends SshConfigResolution {
 /// `Match` apply to every name. A `Host` block applies when one of its
 /// patterns matches the name and no negated one does (`*` and `?` are
 /// wildcards, matched case-sensitively on UTF-8 bytes, as `match_pattern()`
-/// does). The app decodes the file with U+FFFD for bytes that are not
+/// does). A name ssh refuses as a host name (`valid_hostname()`) is
+/// unresolved. The app decodes the file with U+FFFD for bytes that are not
 /// UTF-8, so a name holding one is unresolved, as is one whose `HostName`,
 /// `User` or first `IdentityFile` holds one, and a wildcard pattern
 /// holding one may match any name. Whichever of `ProxyJump` and
@@ -365,6 +376,9 @@ final class SshConfigSettings {
   SshConfigResolution resolve(String name) {
     if (_rejected) {
       return const UnresolvedSshSettings(UnresolvedReason.rejectedLine);
+    }
+    if (!_isValidHostName(name)) {
+      return const UnresolvedSshSettings(UnresolvedReason.rejectedName);
     }
     if (name.contains(_replacement)) {
       return const UnresolvedSshSettings(UnresolvedReason.undecodedName);
@@ -1073,6 +1087,18 @@ final class _ConfigLine {
       unit == _doubleQuote || unit == _singleQuote || unit == _backslash;
 }
 
+/// ssh's `valid_hostname()`: [name] does not start with `-` and holds no
+/// C `isspace()` or `iscntrl()` character, nor one of
+/// [_refusedInHostName].
+bool _isValidHostName(String name) =>
+    !name.startsWith('-') &&
+    !name.codeUnits.any(
+      (c) =>
+          c <= _space ||
+          c == _delete ||
+          _refusedInHostName.codeUnits.contains(c),
+    );
+
 /// ssh's expansion of a `HostName` [value] for [name] (`ssh.c` calls
 /// `percent_expand()` with `h` alone): `%h` is the name and `%%` is `%`.
 /// Null for any other token or a trailing `%`, on which ssh exits.
@@ -1144,6 +1170,7 @@ const int _question = 0x3f;
 const int _bang = 0x21;
 const int _comma = 0x2c;
 const int _space = 0x20;
+const int _delete = 0x7f;
 const int _tab = 0x09;
 const int _carriageReturn = 0x0d;
 const int _lineFeed = 0x0a;
