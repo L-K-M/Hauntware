@@ -17,13 +17,14 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 import '../../l10n/app_localizations.dart';
 import '../../theme/app_theme.dart';
 import 'log_level.dart';
+import 'log_search.dart';
 import 'log_text.dart';
 import 'log_view_controller.dart';
 
 /// Whether a [LogView] wraps long lines.
 enum LogWrap {
-  /// One row a line, every row the same extent; a long line is cut at the
-  /// view's edge with an ellipsis.
+  /// One row a line, plus one a field a journal row shows; a long line
+  /// is cut at the view's edge with an ellipsis.
   off,
 
   /// Long lines wrap; a line is measured once per width when a layout
@@ -48,11 +49,19 @@ const double _endTolerance = 1;
 /// to n of these of the total.
 const double _singlePrecisionRoundoff = 1 / (1 << 24);
 
+/// How many glyph advances a journal row's fields are indented by.
+const int _fieldIndent = 2;
+
+/// The rows kept above a search match the view scrolls to.
+const int _revealContext = 2;
+
+/// Line and paragraph separators, which would break a field's row.
+final _rowBreaks = RegExp('[\u2028\u2029]');
+
 /// The log viewer of 03 §10.8 over a [LogViewController]: a lazily built
-/// list with a fixed line extent when [wrap] is off and measured row
-/// counts when it is on, follow with pause on scroll (LOG-02), level
-/// colours with a gutter icon, and keyboard operation with a visible
-/// focus ring (03 §10.6, MVP).
+/// list of rows a whole number of lines each, measured when [wrap] is on,
+/// follow with pause on scroll (LOG-02), level colours with a gutter icon,
+/// and keyboard operation with a visible focus ring (03 §10.6, MVP).
 ///
 /// Following keeps the newest line in sight. Scrolling away from it pauses
 /// following, and the view then stays on the lines it shows while new
@@ -64,12 +73,22 @@ const double _singlePrecisionRoundoff = 1 / (1 << 24);
 /// instead, still paused. Scrolling back to the newest line, End, or the
 /// Follow button resumes following. Keys: Up and Down move a line, Page
 /// Up and Page Down a page, Home goes to the oldest line, End follows.
+///
+/// A journal line's row (LOG-01) starts with its unit and PID, and a tap,
+/// or Enter on the focused row, pauses following and shows its other
+/// fields beneath it, one row each without wrap. Fields that open or close
+/// above the top edge move no line in sight, and a row in sight keeps its
+/// place while its fields open. With a [search], its matches are
+/// highlighted, and each step to a match pauses following and scrolls the
+/// match's row into sight (LOG-05). Without wrap a match after the row's
+/// first line or past its ellipsis stays out of sight.
 class LogView extends StatefulWidget {
   const LogView({
     super.key,
     required this.controller,
     this.wrap = LogWrap.off,
     this.levelOf,
+    this.search,
   });
 
   final LogViewController controller;
@@ -78,6 +97,9 @@ class LogView extends StatefulWidget {
   /// The level of a line, for its colour and gutter icon. Without it no
   /// line has a level and the view has no gutter.
   final LogLevel? Function(LogLine line)? levelOf;
+
+  /// The search whose matches the view highlights, over [controller].
+  final LogSearch? search;
 
   @override
   State<LogView> createState() => _LogViewState();
@@ -93,14 +115,29 @@ class _LogViewState extends State<LogView> {
   late AppLocalizations _l10n;
   _TextLayout? _text;
 
-  /// The wrapped row count of each held entry, kept in step with the
-  /// controller whether or not [LogView.wrap] is on.
-  late _RowCounts _rows;
+  /// The row count of each held entry without wrap, one a line plus its
+  /// fields' rows, and with it, wrapped rows, both kept in step with the
+  /// controller and the fields shown, so a wrap toggle keeps the counts
+  /// measured before it.
+  late _RowCounts _lineRows;
+  late _RowCounts _wrappedRows;
+
+  /// The counts [LogView.wrap] lays out with, and the other mode's.
+  _RowCounts get _rows => widget.wrap == LogWrap.on ? _wrappedRows : _lineRows;
+  _RowCounts get _otherRows =>
+      widget.wrap == LogWrap.on ? _lineRows : _wrappedRows;
+
+  /// The fields of each journal row that shows them, by seq.
+  final _expanded = <int, List<(String, String?)>>{};
+
+  /// The search's [LogSearch.steps] last brought into sight.
+  int _steps = 0;
 
   @override
   void initState() {
     super.initState();
     _listen(widget.controller);
+    _listenSearch(widget.search);
   }
 
   @override
@@ -112,7 +149,7 @@ class _LogViewState extends State<LogView> {
     if (previous == null) {
       _resetRows();
     } else if (!identical(previous, _text)) {
-      _rows.invalidate();
+      _invalidateRows();
       // The offset counts lines or rows of the old height.
       final scale = _text!.lineHeight / previous.lineHeight;
       if (scale != 1) _holdLines((pixels) => pixels * scale);
@@ -122,25 +159,33 @@ class _LogViewState extends State<LogView> {
   @override
   void didUpdateWidget(LogView oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.search != widget.search) {
+      oldWidget.search?.removeListener(_onSearch);
+      _listenSearch(widget.search);
+    }
     if (oldWidget.controller != widget.controller) {
       _unlisten(oldWidget.controller);
       _listen(widget.controller);
+      _expanded.clear();
       _resetRows();
       return;
     }
 
     if (oldWidget.wrap != widget.wrap) {
-      _holdLines((pixels) => _offsetIn(widget.wrap, pixels));
+      // The offset counts the old mode's rows, now the other counts.
+      final previous = _otherRows;
+      _holdLines((pixels) => _offsetIn(previous, pixels));
     }
     if ((oldWidget.levelOf == null) != (widget.levelOf == null)) {
       // The gutter came or went, and with it some of every row's width.
-      _rows.invalidate();
+      _invalidateRows();
     }
   }
 
   @override
   void dispose() {
     _unlisten(widget.controller);
+    widget.search?.removeListener(_onSearch);
     _vertical.dispose();
     _focusNode.dispose();
     super.dispose();
@@ -156,13 +201,29 @@ class _LogViewState extends State<LogView> {
     controller.following.removeListener(_onFollowing);
   }
 
+  void _listenSearch(LogSearch? search) {
+    search?.addListener(_onSearch);
+    _steps = search?.steps ?? 0;
+  }
+
   void _resetRows() {
-    _rows = _RowCounts(_measureRows);
-    _rows.sync(widget.controller, _estimateRows);
+    _RowCounts counts(LogWrap wrap) => _RowCounts(
+      (index, crossAxisExtent) => _measureRows(wrap, index, crossAxisExtent),
+      (index, crossAxisExtent) => _estimateRows(wrap, index, crossAxisExtent),
+    )..sync(widget.controller);
+    _lineRows = counts(LogWrap.off);
+    _wrappedRows = counts(LogWrap.on);
+  }
+
+  void _invalidateRows() {
+    _lineRows.invalidate();
+    _wrappedRows.invalidate();
   }
 
   void _onLines() {
-    final removed = _rows.sync(widget.controller, _estimateRows);
+    final removed = _rows.sync(widget.controller);
+    _otherRows.sync(widget.controller);
+    _expanded.removeWhere((seq, _) => seq < widget.controller.firstSeq);
     // While paused, keep the lines in sight where they are: the entries
     // that left the buffer took their extent from above them. When the
     // lines in sight left too, the offset stops at the oldest line left,
@@ -171,17 +232,69 @@ class _LogViewState extends State<LogView> {
     if (removed.entries > 0 && !widget.controller.following.value) {
       final position = _vertical.hasClients ? _vertical.position : null;
       if (position is _TailScrollPosition && position.hasPixels) {
-        final rows = widget.wrap == LogWrap.on ? removed.rows : removed.entries;
-        final extent = rows * _text!.lineHeight;
+        final extent = removed.rows * _text!.lineHeight;
         position.shiftBy(-math.min(extent, position.pixels), path: -extent);
       }
     }
     setState(() {});
   }
 
+  void _onSearch() {
+    final search = widget.search!;
+    final match = search.current;
+    if (search.steps != _steps && match != null) {
+      _steps = search.steps;
+      widget.controller.pause();
+      _reveal(match.seq - widget.controller.firstSeq);
+    }
+    setState(() {});
+  }
+
+  /// Scrolls entry [index] into sight, with a few rows above it, unless
+  /// all of it is in sight already.
+  void _reveal(int index) {
+    if (!_vertical.hasClients) return;
+    final position = _vertical.position;
+    if (!position.hasContentDimensions) return;
+
+    final line = _text!.lineHeight;
+    final top = _rows.rowsBefore(index) * line;
+    final bottom = top + _rows.rowsOf(index) * line;
+    final viewEnd = position.pixels + position.viewportDimension;
+    if (top >= position.pixels && bottom <= viewEnd) return;
+
+    _jump(position, top - _revealContext * line - position.pixels);
+  }
+
+  /// Shows or hides [line]'s fields. Showing them pauses following, so
+  /// the row holds still while they open beneath it, and in a paused view
+  /// fields above the top edge move no line in sight ([_fieldsMoved]). A
+  /// tap that lands after [line] left the buffer, before its row is
+  /// rebuilt, does nothing.
+  void _toggleFields(LogLine line) {
+    if (line.seq < widget.controller.firstSeq) return;
+
+    setState(() {
+      if (_expanded.remove(line.seq) == null) {
+        _expanded[line.seq] = line.journal!.fields;
+        widget.controller.pause();
+      }
+    });
+    final index = line.seq - widget.controller.firstSeq;
+    final start = _rows.rowsBefore(index);
+    final rows = _rows.rowsOf(index);
+    final change = _rows.remeasure(index);
+    // The other mode's count follows, for a wrap toggle to map through.
+    _otherRows.remeasure(index);
+    final height = _text!.lineHeight;
+    _holdLines(
+      (pixels) => _fieldsMoved(pixels / height, start, rows, change) * height,
+    );
+  }
+
   /// Moves a paused view's offset to [convert] of it when what the offset
-  /// counts changes, so the same lines stay in sight; a following view
-  /// moves to the newest line anyway.
+  /// counts changes, or rows above it come or go, so the same lines stay
+  /// in sight; a following view moves to the newest line anyway.
   void _holdLines(double Function(double pixels) convert) {
     if (widget.controller.following.value || !_vertical.hasClients) return;
 
@@ -190,22 +303,37 @@ class _LogViewState extends State<LogView> {
     position.shiftBy(convert(position.pixels) - position.pixels);
   }
 
-  /// The offset [pixels], counted in the other mode, as an offset counted
-  /// in [wrap] mode on the same entry and as far into it: without wrap an
-  /// offset counts lines, with wrap the rows of [_rows].
-  double _offsetIn(LogWrap wrap, double pixels) {
-    if (_rows.length == 0) return pixels;
+  /// The offset [pixels] into the rows of [previous] as an offset into
+  /// [_rows] on the same entry and as far into its rows, for when what the
+  /// rows count changes: lines and fields without wrap, wrapped rows with
+  /// it.
+  double _offsetIn(_RowCounts previous, double pixels) {
+    if (previous.length == 0 || _rows.length == 0) return pixels;
 
     final line = _text!.lineHeight;
     final at = math.max(0.0, pixels / line);
-    if (wrap == LogWrap.on) {
-      final index = math.min(at.floor(), _rows.length - 1);
-      final into = (at - index).clamp(0.0, 1.0) * _rows.rowsOf(index);
-      return (_rows.rowsBefore(index) + into) * line;
-    }
-    final index = _rows.indexAtRow((at + _rowTolerance).floor());
-    final into = (at - _rows.rowsBefore(index)) / _rows.rowsOf(index);
-    return (index + into.clamp(0.0, 1.0)) * line;
+    final index = previous.indexAtRow((at + _rowTolerance).floor());
+    final into = (at - previous.rowsBefore(index)) / previous.rowsOf(index);
+    return (_rows.rowsBefore(index) +
+            into.clamp(0.0, 1.0) * _rows.rowsOf(index)) *
+        line;
+  }
+
+  /// Where an offset [at] rows down goes when the entry from row [start]
+  /// changes by [change] rows from [rows] as its fields open or close
+  /// beneath its line. Past the entry it moves by as much, so the lines in
+  /// sight hold still. In the rows the entry keeps it stays, so a row in
+  /// sight keeps its place: keeping its share, as [_offsetIn] does, would
+  /// push the line of a row partly above the edge out of sight. In fields
+  /// that closed it moves to the entry's last row, keeping its place in
+  /// its row.
+  static double _fieldsMoved(double at, int start, int rows, int change) {
+    final end = start + rows;
+    if (at + _rowTolerance >= end) return at + change;
+
+    final kept = end + change;
+    if (at + _rowTolerance < kept) return at;
+    return kept - 1 + math.max(0.0, at - (at + _rowTolerance).floor());
   }
 
   void _onFollowing() {
@@ -232,38 +360,79 @@ class _LogViewState extends State<LogView> {
     return false;
   }
 
-  String? _cutNote(LogLine line) {
+  /// A cut line's note, or the note for a journal MESSAGE not sent.
+  String? _note(LogLine line) {
+    if (line.journal?.messageNotSent ?? false) return _l10n.logJournalNotSent;
+
     final length = line.originalLength;
     return length == null ? null : _l10n.logLineCut(length);
   }
+
+  /// The rows of a journal row's fields: `NAME=value` each, on one row
+  /// without wrap, and a note for the fields the buffer left out.
+  List<String> _fieldLines(LogLine line, List<(String, String?)> fields) => [
+    for (final (name, value) in fields)
+      value == null
+          ? '$name ${_l10n.logJournalNotSent}'
+          : parseSgr(
+              '$name=$value'.replaceAll('\n', ' '),
+            ).text.replaceAll(_rowBreaks, ' '),
+    if (line.journal!.fieldsLeftOut > 0)
+      _l10n.logJournalFieldsLeftOut(line.journal!.fieldsLeftOut),
+  ];
 
   bool get _hasGutter => widget.levelOf != null;
 
   double _textWidth(double rowWidth, _TextLayout text) =>
       rowWidth - 2 * _rowPadding - (_hasGutter ? text.gutter : 0);
 
-  /// The rows entry [index] wraps to in a row [crossAxisExtent] wide: one
-  /// when it is all Latin-1 and an upper bound of its width, the engine's
-  /// rounding included, fits ([logTextCells]), otherwise laid out. A
-  /// dropped-lines record keeps to one row; a cut line is laid out for its
-  /// note.
-  int _measureRows(int index, double crossAxisExtent) {
+  /// The rows entry [index] takes in [wrap] mode in a row [crossAxisExtent]
+  /// wide: one a line and one a field shown without wrap. With wrap, each
+  /// wraps to one row when it is all Latin-1 and an upper bound of its
+  /// width, the engine's rounding included, fits ([logTextCells]), and is
+  /// laid out otherwise; a line with a note is laid out for it. A
+  /// dropped-lines record keeps to one row.
+  int _measureRows(LogWrap wrap, int index, double crossAxisExtent) {
     final entry = widget.controller[index];
     if (entry is! LogLine) return 1;
 
+    final fields = switch (_expanded[entry.seq]) {
+      final kept? => _fieldLines(entry, kept),
+      null => const <String>[],
+    };
+    if (wrap == LogWrap.off) return 1 + fields.length;
+
     final text = _text!;
     final width = _textWidth(crossAxisExtent, text);
-    final cells = entry.truncated
-        ? null
-        : logTextCells(parseSgr(entry.text).text);
-    // One roundoff more than the cells, for the width's own rounding.
-    final bound = cells == null
-        ? null
-        : cells * text.advance * (1 + (cells + 1) * _singlePrecisionRoundoff);
-    if (bound != null && bound <= width) return 1;
+    bool fits(String plain, double width) {
+      final cells = logTextCells(plain);
+      if (cells == null) return false;
+      // One roundoff more than the cells, for the width's own rounding.
+      final bound =
+          cells * text.advance * (1 + (cells + 1) * _singlePrecisionRoundoff);
+      return bound <= width;
+    }
 
+    var rows = _note(entry) == null && fits(logRowText(entry), width)
+        ? 1
+        : _layoutRows(_lineSpan(entry, text), width, text);
+    final fieldWidth = width - text.fieldIndent;
+    for (final field in fields) {
+      rows += fits(field, fieldWidth)
+          ? 1
+          : _layoutRows(
+              TextSpan(text: field, style: text.base),
+              fieldWidth,
+              text,
+            );
+    }
+    return rows;
+  }
+
+  /// The rows [span] wraps to at [width].
+  int _layoutRows(TextSpan span, double width, _TextLayout text) {
     final painter = TextPainter(
-      text: _lineSpan(entry, text),
+      text: span,
       textDirection: TextDirection.ltr,
       strutStyle: text.strut,
       textScaler: text.scaler,
@@ -273,27 +442,39 @@ class _LogViewState extends State<LogView> {
     return rows;
   }
 
-  /// A guess at the rows of [entry] until a layout measures it: its code
-  /// units, escapes included, at the width last measured, and never more
-  /// rows than code units.
-  int _estimateRows(LogEntry entry) {
-    final crossAxisExtent = _rows.crossAxisExtent;
-    if (entry is! LogLine || crossAxisExtent == null) return 1;
+  /// A guess at the rows of entry [index] in [wrap] mode until a layout
+  /// measures it, plus one a field it shows: one without wrap; with it,
+  /// its code units, escapes included, at the [crossAxisExtent] last
+  /// measured at, and never more rows than code units.
+  int _estimateRows(LogWrap wrap, int index, double? crossAxisExtent) {
+    final entry = widget.controller[index];
+    if (entry is! LogLine) return 1;
+
+    final fields = switch (_expanded[entry.seq]) {
+      final kept? => _fieldLines(entry, kept).length,
+      null => 0,
+    };
+    if (wrap == LogWrap.off || crossAxisExtent == null) return 1 + fields;
 
     final text = _text!;
     final width = _textWidth(crossAxisExtent, text);
-    final units = entry.text.length;
-    if (width <= 0 || units == 0) return 1;
-    return (units * text.advance / width).ceil().clamp(1, units);
+    final units = entry.text.length + (entry.journal?.source?.length ?? 0);
+    if (width <= 0 || units == 0) return 1 + fields;
+    return (units * text.advance / width).ceil().clamp(1, units) + fields;
   }
 
-  TextSpan _lineSpan(LogLine line, _TextLayout text) => logLineSpan(
-    line,
-    palette: text.palette,
-    base: text.base,
-    level: widget.levelOf?.call(line),
-    cutNote: _cutNote(line),
-  );
+  TextSpan _lineSpan(LogLine line, _TextLayout text) {
+    final search = widget.search;
+    return logLineSpan(
+      line,
+      palette: text.palette,
+      base: text.base,
+      level: widget.levelOf?.call(line),
+      note: _note(line),
+      matches: search?.matchesIn(line) ?? const [],
+      currentMatch: search?.currentIndexIn(line),
+    );
+  }
 
   void _scroll(_LogScroll scroll) {
     if (scroll == _LogScroll.end) {
@@ -336,25 +517,27 @@ class _LogViewState extends State<LogView> {
     final rows = SliverChildBuilderDelegate(
       (context, index) => _row(index, text),
       childCount: widget.controller.length,
+      // Rows are keyed by seq, so a row keeps its element, and with it
+      // focus, while entries leave the buffer and every index shifts.
+      findChildIndexCallback: (key) {
+        final index = (key as ValueKey<int>).value - widget.controller.firstSeq;
+        return index >= 0 && index < widget.controller.length ? index : null;
+      },
     );
     final list = NotificationListener<ScrollUpdateNotification>(
       onNotification: _onScrollUpdate,
       child: CustomScrollView(
         controller: _vertical,
         semanticChildCount: widget.controller.length,
+        // One sliver in both modes: a row whose fields open or close keeps
+        // its element, and with it keyboard and accessibility focus.
         slivers: [
-          switch (widget.wrap) {
-            LogWrap.off => SliverFixedExtentList(
-              itemExtent: text.lineHeight,
-              delegate: rows,
-            ),
-            LogWrap.on => _WrappedRows(
-              rows: _rows,
-              revision: _rows.revision,
-              lineHeight: text.lineHeight,
-              delegate: rows,
-            ),
-          },
+          _LogRows(
+            rows: _rows,
+            revision: _rows.revision,
+            lineHeight: text.lineHeight,
+            delegate: rows,
+          ),
         ],
       ),
     );
@@ -377,7 +560,10 @@ class _LogViewState extends State<LogView> {
             color: text.palette.background,
             child: Stack(
               children: [
-                Positioned.fill(child: list),
+                // Journal rows' ink and focus draw over the background.
+                Positioned.fill(
+                  child: Material(type: MaterialType.transparency, child: list),
+                ),
                 if (!following)
                   PositionedDirectional(
                     end: 16,
@@ -406,23 +592,43 @@ class _LogViewState extends State<LogView> {
     );
   }
 
+  // RichText, not Text: Text would merge the ambient DefaultTextStyle in,
+  // which the measured extents do not see.
+  Widget _richText(TextSpan span, _TextLayout text) => RichText(
+    text: span,
+    textDirection: TextDirection.ltr,
+    strutStyle: text.strut,
+    textScaler: text.scaler,
+    softWrap: widget.wrap == LogWrap.on,
+    maxLines: widget.wrap == LogWrap.off ? 1 : null,
+    overflow: widget.wrap == LogWrap.off
+        ? TextOverflow.ellipsis
+        : TextOverflow.clip,
+  );
+
   Widget _row(int index, _TextLayout text) {
     final entry = widget.controller[index];
     final level = entry is LogLine ? widget.levelOf?.call(entry) : null;
+    final fields = _expanded[entry.seq];
     final Widget body = switch (entry) {
-      // RichText, not Text: Text would merge the ambient DefaultTextStyle
-      // in, which the measured extents do not see.
-      LogLine() => RichText(
-        text: _lineSpan(entry, text),
-        textDirection: TextDirection.ltr,
-        strutStyle: text.strut,
-        textScaler: text.scaler,
-        softWrap: widget.wrap == LogWrap.on,
-        maxLines: widget.wrap == LogWrap.off ? 1 : null,
-        overflow: widget.wrap == LogWrap.off
-            ? TextOverflow.ellipsis
-            : TextOverflow.clip,
+      LogLine() when fields != null => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _richText(_lineSpan(entry, text), text),
+          for (final field in _fieldLines(entry, fields))
+            Padding(
+              padding: EdgeInsetsDirectional.only(start: text.fieldIndent),
+              child: _richText(
+                TextSpan(
+                  text: field,
+                  style: text.base.merge(text.palette.sourceStyle),
+                ),
+                text,
+              ),
+            ),
+        ],
       ),
+      LogLine() => _richText(_lineSpan(entry, text), text),
       LogDroppedLines(:final count) => Row(
         children: [
           Icon(
@@ -445,21 +651,34 @@ class _LogViewState extends State<LogView> {
       ),
     };
 
+    final Widget row = Padding(
+      padding: const EdgeInsets.symmetric(horizontal: _rowPadding),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (_hasGutter)
+            SizedBox(
+              width: text.gutter,
+              height: text.lineHeight,
+              child: _levelIcon(level, text),
+            ),
+          Expanded(child: body),
+        ],
+      ),
+    );
+    final key = ValueKey(entry.seq);
+    if (entry is! LogLine || entry.journal == null) {
+      return MergeSemantics(key: key, child: row);
+    }
+
     return MergeSemantics(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: _rowPadding),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (_hasGutter)
-              SizedBox(
-                width: text.gutter,
-                height: text.lineHeight,
-                child: _levelIcon(level, text),
-              ),
-            Expanded(child: body),
-          ],
-        ),
+      key: key,
+      child: Semantics(
+        expanded: fields != null,
+        onTapHint: fields == null
+            ? _l10n.logJournalShowFields
+            : _l10n.logJournalHideFields,
+        child: InkWell(onTap: () => _toggleFields(entry), child: row),
       ),
     );
   }
@@ -561,14 +780,17 @@ final class _TextLayout {
 
   /// The level icon's column.
   double get gutter => iconSize + 6;
+
+  /// How far a journal row's fields are indented.
+  double get fieldIndent => _fieldIndent * advance;
 }
 
 /// The slots a [_RowCounts] starts with.
 const int _minRowSlots = 1024;
 
-/// The row count of every entry a [LogView] holds, for wrap mode, with the
-/// rows before any entry found in O(log n) through a Fenwick tree, so a
-/// frame costs the same however many lines are held (03 §11.4).
+/// The row count of every entry a [LogView] holds, with the rows before
+/// any entry found in O(log n) through a Fenwick tree, so a frame costs
+/// the same however many lines are held (03 §11.4).
 ///
 /// Only the entries a layout shows, and as many rows above its offset, are
 /// measured, once per width, font and locale ([measure]); the others keep
@@ -579,11 +801,15 @@ const int _minRowSlots = 1024;
 /// share of the entry it is in to within a row ([_keepShare]), so the
 /// lines in sight hold still.
 final class _RowCounts {
-  _RowCounts(this._measure);
+  _RowCounts(this._measure, this._estimate);
 
   /// The exact rows of the entry at an index in a row of a cross-axis
   /// extent.
   final int Function(int index, double crossAxisExtent) _measure;
+
+  /// A guess at the rows of the entry at an index until a layout measures
+  /// it, from the cross-axis extent last measured at, if any.
+  final int Function(int index, double? crossAxisExtent) _estimate;
 
   // Entry i lives in slot _front + i; the slots before _front belong to
   // evicted entries, whose rows _frontRows cancels. _tree is the Fenwick
@@ -599,6 +825,8 @@ final class _RowCounts {
 
   /// Counts measured in an older generation are estimates; 0 is never.
   int _generation = 1;
+
+  /// The cross-axis extent last measured at, or null before a layout.
   double? _crossAxisExtent;
 
   /// Changes whenever the rows would lay out differently, so the sliver
@@ -610,9 +838,6 @@ final class _RowCounts {
 
   /// The rows of every held entry.
   int get total => _total;
-
-  /// The cross-axis extent last measured at, or null before a layout.
-  double? get crossAxisExtent => _crossAxisExtent;
 
   int rowsOf(int index) => _counts[_front + index];
 
@@ -637,12 +862,9 @@ final class _RowCounts {
   }
 
   /// Brings the counts in step with [controller], guessing new entries'
-  /// rows with [estimate], and returns the entries that left from the
-  /// front and their rows.
-  ({int entries, int rows}) sync(
-    LogViewController controller,
-    int Function(LogEntry entry) estimate,
-  ) {
+  /// rows, and returns the entries that left from the front and their
+  /// rows.
+  ({int entries, int rows}) sync(LogViewController controller) {
     var entries = 0;
     var rows = 0;
     while (_length > 0 && _firstSeq < controller.firstSeq) {
@@ -658,10 +880,23 @@ final class _RowCounts {
 
     final end = controller.firstSeq + controller.length;
     for (var seq = _firstSeq + _length; seq < end; seq++) {
-      _append(estimate(controller[seq - controller.firstSeq]));
+      _append(_estimate(seq - controller.firstSeq, _crossAxisExtent));
     }
     _revision++;
     return (entries: entries, rows: rows);
+  }
+
+  /// Measures the entry at [index] again at once, for a change only it
+  /// sees, such as its fields showing, and returns how its count changed.
+  /// Before a layout gives the counts a width, it estimates the entry.
+  int remeasure(int index) {
+    final slot = _front + index;
+    _measuredIn[slot] = 0;
+    final change = _crossAxisExtent == null
+        ? _recount(slot, _estimate(index, null))
+        : _measureAt(index);
+    _revision++;
+    return change;
   }
 
   /// Makes every count an estimate, for a new font, scale, locale or
@@ -751,9 +986,14 @@ final class _RowCounts {
     if (_measuredIn[slot] == _generation) return 0;
 
     _measuredIn[slot] = _generation;
-    final change = _measure(index, _crossAxisExtent!) - _counts[slot];
+    return _recount(slot, _measure(index, _crossAxisExtent!));
+  }
+
+  /// Sets the count in [slot] to [rows] and returns how it changed.
+  int _recount(int slot, int rows) {
+    final change = rows - _counts[slot];
     if (change != 0) {
-      _counts[slot] += change;
+      _counts[slot] = rows;
       _total += change;
       _add(slot, change);
     }
@@ -804,12 +1044,12 @@ final class _RowCounts {
 /// How close to a row boundary a scroll offset counts as on it, in rows.
 const double _rowTolerance = 1e-6;
 
-/// The rows of a wrapping [LogView]: a sliver like `SliverVariedExtentList`
-/// whose offsets and indexes come from [_RowCounts] in O(log n), where
-/// that list sums every extent before an index, and which measures the
-/// entries a layout shows before laying them out.
-final class _WrappedRows extends SliverMultiBoxAdaptorWidget {
-  const _WrappedRows({
+/// The rows of a [LogView]: a sliver like `SliverVariedExtentList` whose
+/// offsets and indexes come from [_RowCounts] in O(log n), where that
+/// list sums every extent before an index, and which measures the entries
+/// a layout shows before laying them out.
+final class _LogRows extends SliverMultiBoxAdaptorWidget {
+  const _LogRows({
     required super.delegate,
     required this.rows,
     required this.revision,
@@ -823,19 +1063,15 @@ final class _WrappedRows extends SliverMultiBoxAdaptorWidget {
   final double lineHeight;
 
   @override
-  _RenderWrappedRows createRenderObject(BuildContext context) =>
-      _RenderWrappedRows(
-        childManager: context as SliverMultiBoxAdaptorElement,
-        rows: rows,
-        revision: revision,
-        lineHeight: lineHeight,
-      );
+  _RenderLogRows createRenderObject(BuildContext context) => _RenderLogRows(
+    childManager: context as SliverMultiBoxAdaptorElement,
+    rows: rows,
+    revision: revision,
+    lineHeight: lineHeight,
+  );
 
   @override
-  void updateRenderObject(
-    BuildContext context,
-    _RenderWrappedRows renderObject,
-  ) {
+  void updateRenderObject(BuildContext context, _RenderLogRows renderObject) {
     renderObject
       ..rows = rows
       ..revision = revision
@@ -843,8 +1079,8 @@ final class _WrappedRows extends SliverMultiBoxAdaptorWidget {
   }
 }
 
-final class _RenderWrappedRows extends RenderSliverFixedExtentBoxAdaptor {
-  _RenderWrappedRows({
+final class _RenderLogRows extends RenderSliverFixedExtentBoxAdaptor {
+  _RenderLogRows({
     required super.childManager,
     required this._rows,
     required this._revision,

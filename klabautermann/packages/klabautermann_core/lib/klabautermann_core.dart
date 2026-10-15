@@ -37,7 +37,7 @@ export 'src/settings/instance_lock.dart'
 // explicit `show` list that changes as a milestone wires types in or
 // retires them.
 // The host types are the plain data that sampling results and
-// HostProfileChanged carry (D52).
+// HostProfileChanged carry (D52), and the log viewer's journal rows.
 export 'package:klabautermann_host/klabautermann_host.dart'
     show
         CpuPercentages,
@@ -45,6 +45,7 @@ export 'package:klabautermann_host/klabautermann_host.dart'
         DiskRate,
         FsSnapshot,
         HostProfile,
+        JournalEntry,
         LoadAvg,
         NetRate,
         ProcsSelection,

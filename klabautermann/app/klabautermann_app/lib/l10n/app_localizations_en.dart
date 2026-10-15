@@ -95,9 +95,9 @@ class AppLocalizationsEn extends AppLocalizations {
       skippedCount,
       locale: localeName,
       other:
-          '$skippedCount hosts were skipped because their port is unsupported or their name repeats an earlier host.',
+          '$skippedCount hosts were skipped because of settings Klabautermann cannot follow as ssh would, such as a ProxyCommand, Include or Match block.',
       one:
-          '1 host was skipped because its port is unsupported or its name repeats an earlier host.',
+          '1 host was skipped because of settings Klabautermann cannot follow as ssh would, such as a ProxyCommand, Include or Match block.',
     );
     return '$_temp0 $_temp1';
   }
@@ -493,4 +493,28 @@ class AppLocalizationsEn extends AppLocalizations {
 
     return '[line cut: $totalString characters in all]';
   }
+
+  @override
+  String get logJournalNotSent => '[not sent: over 4,096 bytes]';
+
+  @override
+  String logJournalFieldsLeftOut(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$countString more fields not kept',
+      one: '1 more field not kept',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get logJournalShowFields => 'Show fields';
+
+  @override
+  String get logJournalHideFields => 'Hide fields';
 }

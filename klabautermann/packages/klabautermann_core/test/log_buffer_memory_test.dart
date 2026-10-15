@@ -113,6 +113,46 @@ void main() {
       });
     }
 
+    test('a buffer full of journal entries stays under 64 MiB', () async {
+      // A typical service entry, every value its own: the fields cost a
+      // few objects an entry, whatever their number.
+      JournalEntry entry(int i, String fill) => JournalEntry({
+        '__CURSOR': 's=${'a' * 32};i=${i.toRadixString(16)};b=${'b' * 32}',
+        '__REALTIME_TIMESTAMP': '${1760000000000000 + i}',
+        '__MONOTONIC_TIMESTAMP': '${9000000 + i}',
+        '_BOOT_ID': 'c' * 32,
+        'PRIORITY': '6',
+        '_UID': '33',
+        '_GID': '33',
+        '_COMM': 'nginx',
+        '_EXE': '/usr/sbin/nginx',
+        '_CMDLINE': 'nginx: worker process',
+        '_PID': '$i',
+        '_SYSTEMD_UNIT': 'app-$i.service',
+        'SYSLOG_IDENTIFIER': 'nginx',
+        '_TRANSPORT': 'stdout',
+        'MESSAGE': '${_prefix(i)}$fill',
+      });
+      // 671 bytes for the entries that stay, so both caps bind as for
+      // lines above.
+      final last = entry(logBufferMaxLines, '');
+      final unpadded = (LogBuffer()..addJournal([last])).bytes;
+      final fill = 'x' * (671 - unpadded);
+
+      final before = await probe.liveHeapBytes();
+      final buffer = LogBuffer();
+      for (var i = 0; i < logBufferMaxLines + 100; i++) {
+        buffer.addJournal([entry(i, fill)]);
+      }
+      final retained = await probe.liveHeapBytes() - before;
+
+      expect((buffer[0] as LogLine).journal!.fieldsLeftOut, 0);
+      expect(buffer.length, greaterThan(logBufferMaxLines * 0.99));
+      expect(buffer.bytes, greaterThan(logBufferMaxBytes * 0.99));
+      expect(retained, greaterThanOrEqualTo(buffer.bytes));
+      expect(retained, lessThan(_budgetBytes));
+    });
+
     for (final (kind, fill) in [
       // 20,000 code units a line, each cut to 8,192: 2,048 fill 32 MiB.
       ('two-byte', 'Ж' * 19993),

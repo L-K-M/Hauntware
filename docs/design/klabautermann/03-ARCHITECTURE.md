@@ -243,8 +243,9 @@ password · D42 alert delivery through the sync server · D43 rates in the
 engine · D44 sample sequence · D45 subscriptions · D46 link vocabulary ·
 D47 sampler deadlines · D48 host-side filtering · D49 collector locale ·
 D50 LXC values · D51 Access tab · D52 runtime placement · D53 integration
-placement · D54 runtime override in M3 · D55 no health overlay in the MVP.
-Proposals awaiting the owner close the section; they are not decisions.
+placement · D54 runtime override in M3 · D55 no health overlay in the MVP
+· D56 log search through `planchette_core`. Proposals awaiting the owner
+close the section; they are not decisions.
 
 ### Shape and scope
 
@@ -1056,6 +1057,19 @@ Proposals awaiting the owner close the section; they are not decisions.
   it would be a shared-package change off the MVP path. Its first planned
   use stays 9.3's health overlay for Séance and Poltergeist (v1.x).
   Supersedes 10.3's overlay for the MVP.
+- **D56. The app searches logs with `planchette_core`.** The log viewer's
+  text search (LOG-05, 7.6) runs `planchette_core`'s `findSearchMatches`
+  over each loaded row's visible text, so `klabautermann_app` gains a
+  path dependency on `planchette_core` (3.2), as the Séance app has
+  (`seance/app/seance_app/pubspec.yaml:13-14` [V]). It is the search
+  behind Planchette's find bar, with tests for case folding and match
+  windows (`planchette/packages/planchette_core/test/editor_syntax_test.dart`
+  [V]). The package is pure Dart; it adds `unorm_dart`, `uuid` and
+  `fixnum` to the app's lockfile, at the versions the Séance and
+  Planchette apps resolve [V]. `planchette_editor` stays out of the log
+  viewer (10.8). *Rejected:* a search of the app's own (a second copy of
+  the same rules); `planchette_editor`'s find (an editor for one text
+  buffer, 10.8).
 
 ### Proposals awaiting the owner
 
@@ -1183,6 +1197,7 @@ graph TD
   APP --> GM
   APP --> GD
   APP --> PE
+  APP --> PCO
   APP --> ST
   CORE --> SC
   CORE --> HOST
@@ -1214,9 +1229,9 @@ graph TD
 barrel (`klabautermann/packages/klabautermann_core/lib/klabautermann_core.dart`)
 re-exports exactly one `seance_core` name, the home rule the app uses to
 find `~/.ssh/config` for the FL-02 import (it also undoes a macOS
-sandbox's container `HOME`). The engine imports the ssh_config parser
-under its own `show` list
-(`klabautermann/packages/klabautermann_core/lib/src/fleet/ssh_config_entries.dart`) and maps
+sandbox's container `HOME`). The engine imports Séance's ssh_config
+tokenizer and host type under its own `show` lists
+(`klabautermann/packages/klabautermann_core/lib/src/fleet/`) and maps
 its hosts to `FleetEntry` values (10.1), so no `seance_core` type crosses
 the isolate boundary (D18). The device settings store (4.10) mints the
 device id with `uuidV4` and syncs the directory after each atomic write
@@ -1228,8 +1243,12 @@ neither name reaches the app:
 ```dart
 // klabautermann_core.dart: the app's only route to seance_core
 export 'package:seance_core/seance_core.dart' show expandHomePath;
-// src/fleet/ssh_config_entries.dart: engine-side only
-import 'package:seance_core/seance_core.dart' show SshConfigImporter;
+// src/fleet/: engine-side only; the ssh_config reader, and the connect
+// configs the imports map to
+import 'package:seance_core/seance_core.dart'
+    show ImportedHost, SshConfigImporter;
+import 'package:seance_core/seance_core.dart'
+    show AuthMethod, ServerConfig, serverSearchHaystack;
 // src/settings/device_settings_store.dart: the app isolate's settings.json
 // and the atomic writer the engine's import store shares
 import 'package:seance_core/catalog.dart' show syncLocalDirectory;
@@ -1237,10 +1256,11 @@ import 'package:seance_core/seance_core.dart' show uuidV4;
 ```
 
 The barrel's `klabautermann_host` export shows only the plain-data types
-that sampling results and `HostProfileChanged` carry (10.1); each list
-changes only as a milestone wires a type in or retires one. No
-`ghost_*` package depends on `seance_core`; `klabautermann_core` is a
-product package, and the curated lines above are its only
+that sampling results and `HostProfileChanged` carry (10.1), and
+`JournalEntry` (the log viewer's journal rows, 10.8); each list changes
+only as a milestone wires a type in or retires one. No `ghost_*` package
+depends on `seance_core`; `klabautermann_core` is a product package, and
+the curated lines above are its only
 `seance_core` edge. Poltergeist's and
 Séance's edges to the new shared packages appear as each extraction
 switches them (3.5). The Rust workspace
@@ -1561,7 +1581,12 @@ re-push (c1 §2.4).
   identity file through an injected reader, agent through `SshAgentClient`,
   editor drafts including Séance's draft identity bookmark contract, 3.6).
   On mobile, agent auth and `identityFilePath` generally do not work, so the
-  prompt offers to import a key into the vault.
+  prompt offers to import a key into the vault. Inside the Flatpak,
+  which shows only the paths it grants, a missing key file counts as
+  hidden by the sandbox, since a path it does not grant reads as
+  missing; the remedy is a wider grant (04 §12.1), not a new path. A
+  refused file stays access denied: the sandbox hides paths rather than
+  refusing them.
 - **Background rule (FL-21).** Background sampling uses only servers whose
   credentials resolve without a prompt and whose endpoint is confirmed;
   keyboard-interactive servers connect on explicit open only and get exactly
@@ -1605,9 +1630,16 @@ re-push (c1 §2.4).
   unchecked.
 - Known limitation: pins are keyed by `host:port`, so identical private
   addresses behind different jump routes collide (c2 R8). The app warns
-  when two servers in the list share a locator with different routes. The
-  fix changes the suite's pin locator convention and is a dedicated
-  suite-wide task after v1, together with F7 (owner decision 2026-10-10).
+  when two servers in the list share a locator with different routes. For
+  imports the engine lists the others in each entry's `locatorConflict`
+  (10.1), comparing routes by each hop's `host:port`, so one jump host
+  reached as another user is the same route. Every jump hop's key is
+  pinned under its own `host:port` as well, so a hop counts like a
+  server: two entries conflict when the server or a hop of one shares a
+  locator with the server or a hop of the other behind a different
+  route. The fix changes the suite's
+  pin locator convention and is a dedicated suite-wide task after v1,
+  together with F7 (owner decision 2026-10-10).
 
 ### 4.7 Endpoint confirmation (SAF-09)
 
@@ -1712,10 +1744,11 @@ platform identities in 04, section 12.3):
 | `vault.json`, `vault.json.rekey` | Credentials and re-key journal | `SC/src/store/` | MVP |
 | `host_keys.json`, verdict and tripwire files | Pins and quarantine state | catalog library | MVP |
 | `endpoint_pins.json` | Confirmed endpoints | catalog library | MVP |
-| `ssh_config_imports.json` [E] | D13's device-local store for FL-02 imports from `~/.ssh/config` (alias, host, port, user), replaced whole by each import; never pushed (D14). `IdentityFile` and `ProxyJump` join when links land (M2). Built in M1: the engine isolate loads it at start and saves each import atomically before it answers (10.1). A damaged file is renamed to `ssh_config_imports.json.corrupt-<UTC time>`; a file it cannot read or rename, or one from a newer schema, is left as it is and no import is saved that run | `klabautermann_core` [E] | MVP |
+| `ssh_config_imports.json` [E] | D13's device-local store for FL-02 imports from `~/.ssh/config`, replaced whole by each import; never pushed (D14). Schema 3 (M2) holds each host's alias, host, port, user, `IdentityFile` and `ProxyJump` with the values ssh would use (10.1): the effective host (`%h` expanded, lowercased unless an address) and port, the first `IdentityFile` that is not `none`, and the `ProxyJump` as written; under `hops` it holds the same for each other name a stored route gives. An older file holds addresses only: schema 1 (M1) kept no `IdentityFile` or `ProxyJump` and kept `HostName` as written, `%h` included, and schema 2 read each host's values from its first block alone. Its hosts are listed as stored, with no `jumpRoute`, `authKind` or `locatorConflict`, and get no connect config until the next import rewrites the file. Built in M1: the engine isolate loads it at start and saves each import atomically before it answers (10.1). A damaged file is renamed to `ssh_config_imports.json.corrupt-<UTC time>`; a file it cannot read or rename, or one from a newer schema, is left as it is and no import is saved that run | `klabautermann_core` [E] | MVP |
 | `settings.json` | Device settings, `klabautermann.sync.deviceId` (minted once, never regenerated), monitor set, per-server device preferences | app | MVP |
 | `window_state.json` | The desktop main window's last normal frame and its maximized and full-screen flags (10.2), in the shape Séance's file established (`x`, `y`, `width`, `height`, `isMaximized`, `isFullScreen`; physical pixels on Windows); never synced. Added in M1, a deviation from the plan, which listed no window file: kept out of `settings.json`, as Séance and Planchette keep theirs, so debounced drag saves never rewrite the file that holds the device id | app | MVP |
 | `instance.lock` [E] | Empty. One desktop instance per support directory (built in M2): the composition root takes an exclusive, non-blocking advisory lock on it after the settings window's branch and before `settings.json` and `window_state.json` open and the engine isolate starts, so one process mints the device id and writes these files, and holds it for the life of the process; the file is never deleted. A second instance opens no other file and only says it is already running, until the user quits it. A lock that fails for another reason (no write access, no lock support) lets the app run unguarded and says so at startup. Phones run one process per app and take none | app, through `klabautermann_core`'s `InstanceLock` | MVP |
+| `identity_reads.jsonl` [E] | Audit trail of identity-file reads (M2): one JSON line per attempt to read a server's or jump hop's `IdentityFile`, read or not (UTC time, server id and label, the expanded path, the error), through `seance_core`'s `IdentityAuditLog`, under the name Séance and Poltergeist use. Owner-only on Linux and macOS, also through rotation, which keeps the newest 500 lines once the file passes 1,000; never synced. Recording is best effort and never fails a connect. Added in M2, a deviation from the plan, which listed no such file | `klabautermann_core` | MVP |
 | `capabilities/<serverId>.json` | Cached probe results, 24 h TTL | `klabautermann_core` | MVP |
 | `audit/<serverId>.jsonl` | Audit log, 90-day retention [E] | `klabautermann_core` | MVP |
 | `history/<serverId>/<tier>.ring` | Fixed-size binary rollups (`RandomAccessFile`, no rewrite per sample) | `klabautermann_core` | v1 |
@@ -3667,20 +3700,188 @@ the engine in `engine_isolate.dart` beside it):
   and never sent to the sync server. Imports carry no group.
 - **`ImportSshConfig(text)`** carries the config's text: the UI reads
   `~/.ssh/config` and decides whether the platform has one, and the
-  engine opens no file for it. The engine parses the text off the UI
-  isolate (CN-19) with `seance_core`'s `SshConfigImporter`
+  engine opens no file for it. The engine reads the text off the UI
+  isolate (CN-19), splitting its lines as `readconf.c` does (below) and
+  taking a host for each name a `Host` line gives, as `seance_core`'s
+  `SshConfigImporter.hostAliases` does
   (`klabautermann/packages/klabautermann_core/lib/src/fleet/ssh_config_entries.dart`), replaces
   every entry an earlier import produced, and sends `CatalogReplaced`
   before `SshConfigImported`, so the fleet already shows the imports when
-  the counts arrive. `skippedCount` counts hosts left out for a `Port`
-  the importer refuses (one ssh rejects, or a service name other than
-  `ssh`, `http` or `https`; the importer reports them) or an alias an
-  earlier block already took; wildcard-only blocks such as `Host *` are
-  defaults and are not counted.
+  the counts arrive. `skippedCount` counts the hosts left out because
+  the engine cannot dial them as ssh would (below); wildcard-only blocks
+  such as `Host *` name no host and are not counted.
   An import is not a catalog write (D14). The engine saves the new set to
   D13's device-local store (4.10) before it answers; `saved` is false when
   the write failed or the store was left as it is at start, and the fleet
   then shows the import only until the engine stops.
+- **Imports as connect targets (M2).** The engine maps each import to a
+  `ServerConfig` with Séance's `ImportedHost.toServerConfig` (an
+  `IdentityFile` is a key read from its path, otherwise the agent signs)
+  and fills the import's `jumpRoute`, `authKind`, `searchText` and
+  `locatorConflict`. A host or hop without `User` signs in as `USER`, or
+  `USERNAME` on Windows; with neither set it gets no config, and nor
+  does a host from a store of an older schema (4.10). The engine never
+  dials a route ssh would not take, so the import reads each host as
+  ssh does (`readconf.c`; `ssh_config_settings.dart` beside the import):
+  - Lines split as `readconf.c` splits them: only space, tab, CR, LF and
+    form feed are stripped from a line's end, and only space and tab
+    separate arguments, so U+00A0, U+FEFF, `\v` and other whitespace are
+    part of a value. A `ProxyJump` value ends sooner: `parse_jump()`
+    cuts it at the first C whitespace character after its first, `\v`
+    and `\f` among them, so the import drops those from its end and
+    refuses a hop that still holds one, while U+00A0 and U+FEFF stay
+    part of the hop. ssh reads a byte-order mark at the top of the file
+    as part of the first keyword and rejects the whole config, so such a
+    file imports no host and counts every one; the app keeps the mark,
+    which Dart's UTF-8 decoder drops.
+  - Every block that applies to the name sets each value it names unless
+    an earlier line set it, so the first value wins within a block and
+    across blocks, and a later block for an alias adds only what earlier
+    ones left unset. Lines before the first `Host` or `Match` apply to
+    every name. A `Host` block applies when one of its patterns matches
+    the name (`*` and `?` as `match_pattern()` reads them, on UTF-8
+    bytes, so `?` is one byte) and no negated one does. A `Match` block
+    applies when all its criteria hold: `all`, `host` (the `HostName`
+    read so far) and `originalhost` are evaluated as ssh does, and
+    `canonical` and `final` hold only on the final pass.
+  - A `Match final` makes ssh read its config again, the final pass
+    (`ssh.c`): `HostName` is fixed by then, `Host` and `Match host`
+    match the host ssh dials (lowercased, or an address as
+    `getnameinfo()` writes it unless only its case differs), and blocks
+    that apply set what is still unset. `/etc/ssh/ssh_config` can ask
+    for that pass too (Fedora and RHEL ship `Match final all` in
+    `ssh_config.d`), so the import reads the user's file a second time
+    for every host and hop: with a `Match final` in it, what that pass
+    sets applies; without one, a host whose `Port`, `User`, first
+    `IdentityFile` or route that pass would set is left out, because the
+    outcome depends on a system file the engine cannot see. One
+    exception: where that pass would give the host a route ssh refuses
+    (a jumphost loop, below, or a route that leads back through the host
+    itself, as `Host * !bastion` with `ProxyJump bastion` does for a
+    bastion whose `HostName` is `bastion.example.com`), ssh cannot be
+    taking that pass for it, so the host keeps its first pass's
+    settings. Only loops that are certain count: a jump with its own
+    user, to a host without `User`, or to an address whose final form
+    the import cannot know, does not. A route that reaches such a host
+    as a hop keeps its first pass only where the final pass would loop
+    there too: as a later hop, which ssh hands the hops before it with
+    `-J`, both passes must give the same `HostName`, `Port`, `User` and
+    `IdentityFile`, the hop's own port and user first; as a first hop,
+    the final pass's route must still loop on the hop's own port and as
+    its own user, else that pass's. Otherwise the host behind it is left
+    out and counted. The import makes this check for every hop, even
+    where ssh's final pass already fails before reaching it (for a host
+    that keeps its first pass, or behind a first hop that holds only by
+    looping). It is conservative there: it may leave out a host that
+    plain ssh reaches, but never keeps a route ssh does not take. With
+    `Host *.example.com` / `User ops` / `ProxyJump bastion.example.com`,
+    `Host bastion` / `HostName bastion.example.com`, `Host bastion2` /
+    `HostName b2.example.com` and `Host web` / `HostName 10.0.0.5` /
+    `ProxyJump bastion,bastion2`, plain ssh reaches web through bastion
+    and bastion2 and the final pass fails at bastion with a jumphost
+    loop, yet web is left out, because bastion2's final pass as a later
+    hop gives `User ops`. A host whose two passes give two routes ssh
+    would take is left out and counted. For a
+    `HostName` whose final form the import cannot know (an address with
+    a scope, or one the system resolver may read where Dart does not), a
+    block whose pattern may match it counts as a `Match` that may apply.
+  - The engine keeps `HostName` as ssh dials it (`%h` is the name and
+    `%%` is `%`, ssh_config(5), TOKENS; lowercased unless it is an
+    address), `Port`, `User`, the first `IdentityFile` that is not
+    `none` (ssh tries the files in order; the engine signs in with that
+    one alone; `IdentityFile2`, an obsolete name ssh still reads, adds a
+    file too) and the route, whichever of `ProxyJump` and
+    `ProxyCommand` comes first. So an `IdentityFile` that a `Host *`
+    block or a line at the top of the file gives is the only key for
+    every host it reaches, though ssh would offer the host's own key
+    next: a server that accepts only that one rejects the engine's
+    sign-in (credentials rejected) where ssh gets in. Storing the
+    ordered list waits for a connector that can offer several keys.
+  - A host is left out and counted when ssh would take a route the
+    engine cannot know or follow: its route is a `ProxyCommand` other
+    than `none`, which the engine cannot run; a `Match` block that may
+    apply could set a value first, because it has an `exec`, `user`,
+    `localuser`, `localnetwork` or `tagged` criterion and none that
+    fails, or ssh rejects it; an `Include`, which the engine does not
+    follow, applies to it, since the included file could set any value;
+    the config has an `Include` anywhere, since an included file could
+    ask for the final pass and set any value then, and the host's
+    `Port`, `User`, `IdentityFile` or route is still unset after the
+    first pass; the final pass above would set one of those;
+    `CanonicalizeHostname` is other than `no`; its `HostName` holds
+    another token, on which ssh exits, or its first `IdentityFile` holds
+    a `%` token or a `${VAR}`, which ssh fills in from the connection
+    and the environment; its name holds U+FFFD, which the app decodes in
+    place of bytes that are not UTF-8 (ssh compares the bytes, and
+    distinct names decode alike), or so does its `HostName`, `User` or
+    first `IdentityFile`, or a hop's user (ssh dials and signs in with
+    the bytes), or a wildcard pattern holding U+FFFD
+    may apply and could set a value first; or a block that applies holds
+    a line ssh rejects (a `Port` other than a decimal 1 to 65535 or
+    `ssh`, `http` or `https`, a value missing or doubled, a quote left
+    open, or a `Host` line with an empty pattern). ssh rejects the whole
+    config over such a line wherever it stands; the import checks only
+    the blocks that apply to a host, except for `ProxyJump` and
+    `CanonicalizeHostname`, which ssh checks in every block: a
+    `ProxyJump` whose syntax `parse_jump()` rejects (an empty hop, a
+    port it cannot read, an ssh URI with a path, and so on; a service
+    name other than `ssh`, `http` or `https` counts as one it cannot
+    read), or a `CanonicalizeHostname` other than `yes`, `no`, `true`,
+    `false` or `always`, anywhere in the file leaves out every host.
+    Other lines count only where they apply to a host, so a malformed
+    `Match` whose block sets nothing the import reads, a `Match exec`
+    command with a token ssh cannot expand, and a directive the engine
+    does not map are not checked. It does not read the system-wide
+    `/etc/ssh/ssh_config`, which ssh reads after the user's file and
+    which can set what that file leaves unset. A host whose name ssh
+    refuses as a host name is left out and counted too
+    (`valid_hostname()`: a leading `-`, whitespace or a control
+    character as the C locale reads them, which a `Host` pattern can
+    hold since only spaces and tabs split it, or one of
+    `` '`"$\;&<>|(){} ``), and so is a host whose name holds `@` or
+    starts with `ssh://` (lowercase only, as `parse_uri()` compares):
+    `ssh.c` splits such a name at its last `@` into a user and a host,
+    or reads it as an ssh URI, before it reads the config, so no block
+    applies to such a name.
+  - `ProxyJump` follows ssh (`parse_jump()` and `ssh.c`): `a,b` dials
+    `a`, then `b` through `a`; `none` is direct. ssh reaches each hop
+    with a nested ssh that reads the config for the hop's name, so a hop
+    takes the settings its name resolves to, its own user and port
+    first: an alias's (exactly, as `Host` patterns match), or for any
+    other name a hop record resolved the same way and stored with the
+    hosts. Only the first hop's own `ProxyJump` applies, since ssh hands
+    every later hop the earlier ones with `-J`. A host is also left out
+    when its `ProxyJump` is one ssh rejects, gives a port other than a
+    decimal 1 to 65535, holds a `%` token, has a hop that the shell
+    running the route would read otherwise (whitespace, a quote, a glob
+    character or another shell character in its user or host, or in a
+    hop before the last as written, such as the brackets of
+    `[2001:db8::1]`, which the shell globs into the names of matching
+    files, a leading `~`, which it expands to a home directory, or a
+    leading `-`), has a hop whose host in brackets starts with `ssh://`
+    (ssh drops the brackets, and the nested ssh reads it as an ssh URI),
+    has a `#` comment holding a comma (ssh cuts the hops it hands on
+    with `-J` from the value as written, at its last comma, so the
+    comment reaches the shell), has `none` as the first of several hops
+    (a nested ssh then gets `-J none`, which means no jump, and dials
+    the next hop without its own route), loops through first hops, makes
+    a route of more than 16 hops (the first hop's own included; Séance's
+    connector refuses a longer one), has a hop that as written is the
+    host or hop it leads to as ssh dials it (an address as
+    `getnameinfo()` writes it, unless only its case differs; any address
+    where the import cannot tell that form), on that one's port and as
+    its user (ssh's "jumphost loop"), or names a host or hop left out
+    (whose settings the engine would lack). That last rule also covers a
+    later hop left out only for its own route (a `ProxyCommand`, a
+    `ProxyJump` the engine cannot follow, or a `Match` that could set
+    the route), which ssh ignores: the import is conservative there and
+    leaves out every host behind such a hop, although ssh would reach
+    them.
+  - Each hop is a `ServerConfig` with the id `ssh-config-hop:` plus the
+    route's names up to that hop, joined by commas, so the same config
+    yields the same ids and routes that begin alike share hops; each
+    hop's `jumpHostId` names the hop before it, and the engine hands its
+    lookup to `CredentialResolver.jumpHostResolver`.
 - **Version 3 (M2 links).** `LinkState(serverId, status)` carries a
   sealed `LinkStatus`: D46's eight states plus `blocked`, each with its
   own typed values: `degraded(reason)`, `backoff(until)`,
@@ -3702,11 +3903,18 @@ the engine in `engine_isolate.dart` beside it):
   user with a retry flag. `host` and `port` name the machine that asks,
   a jump host while the engine connects through it. `PromptWithdrawn`
   (expired, or the attempt ended) closes a prompt the engine no longer
-  waits on. `FleetEntry` gains the nullable `jumpRoute` (hop names in
+  waits on. A prompt expires 2 minutes after it is sent [E], OpenSSH's
+  default `LoginGraceTime` (sshd_config(5)), after which such a server
+  has dropped the unauthenticated connection anyway. Its `promptId` is a
+  UUID, so an answer meant for an earlier engine's prompt matches
+  nothing. A keyboard-interactive round without questions never becomes
+  a prompt: the engine answers it, as OpenSSH's client does.
+  `FleetEntry` gains the nullable `jumpRoute` (hop names in
   dial order), `authKind` (agent, identity file, stored key, password),
   `searchText` (built in the engine with `serverSearchHaystack`, which
   the app may not import, 3.2) and `locatorConflict` (the ids of entries
-  that share the `host:port` pin locator behind another route, 4.6). The
+  that pin a key at one of this entry's `host:port` pin locators, the
+  server's or a jump hop's, behind another route, 4.6). The
   app keeps statuses and probe answers only for servers its fleet lists.
   A closed link reads as failed (10.3's `failed` dot, and
   `ghost_servers`' `GhostSessionState.failed`) unless the engine closed
@@ -3970,17 +4178,22 @@ hold each span's foreground and background to a minimum contrast
 (`contrastRatio`, A11Y-04), RGB included. Full at the caps with either
 kind of text, the buffer holds about 35 MiB of the 64 MiB budget (11.4).
 
-The viewer (`app/klabautermann_app/lib/ui/logs/`) forces a strut, so every
-row is a whole number of lines. Without wrap a row is one line, and a long
-line ends in an ellipsis until sideways scrolling lands; that also keeps a
-cut line's note out of sight, though screen readers read it. With wrap,
-the row counts sit in a Fenwick tree and a sliver of the viewer's own
-finds offsets and indexes in O(log n), where `SliverVariedExtentList` sums
-every extent before an index. Only the lines a layout shows, and as many
-rows above its offset so a page up lands on measured lines, are measured,
-once per width, font and locale: one row without a layout when the line
-is all Latin-1 and fits at a monospace advance per code unit (two per
-tab), allowing for the rounding of the engine's single-precision sum,
+The viewer (`app/klabautermann_app/lib/ui/logs/`) forces a strut, so
+every row is a whole number of lines. Without wrap a line takes one row,
+and a journal row one more for each field it shows; a long line ends in
+an ellipsis until sideways scrolling lands, which also keeps a cut
+line's note out of sight, though screen readers read it. The row counts
+sit in a Fenwick tree and a sliver of the viewer's own finds offsets and
+indexes in O(log n), where `SliverVariedExtentList` sums every extent
+before an index. It lays out both modes, so a journal row keeps its
+element, and with it keyboard and accessibility focus, when its fields
+open (M2; K06b used a fixed-extent list without wrap). Each mode keeps
+its own counts in step, so turning wrap off and on keeps the wrapped
+ones. With wrap, only the lines a layout shows, and as many rows above
+its offset so a page up lands on measured lines, are measured, once per
+width, font and locale: one row without a layout when the line is all
+Latin-1 and fits at a monospace advance per code unit (two per tab),
+allowing for the rounding of the engine's single-precision sum,
 otherwise laid out, since a fallback font can draw any other glyph
 wider than a fixed count of advances and a line or paragraph separator
 breaks the row. Other lines keep an earlier count or, once the viewer
@@ -4004,6 +4217,34 @@ level; journal priorities 0 to 3 are errors, 4 warnings, 5 and 6 plain, 7
 debug, each with a spoken gutter icon. Levels are never guessed from text
 (CTX-05, v1). Its goldens draw with flutter_test's font rather than the
 bundled font of 11.1 until they share K05a's approach.
+
+Journal rows and search (LOG-01, LOG-05, as built in M2): `LogBuffer`
+keeps a journal entry's MESSAGE as the line's text under the same cut,
+and its unit (else its syslog identifier), priority and PID typed beside
+it. Every other field is kept in the order received, encoded once as
+UTF-8 JSON in a byte list, so an entry costs a few objects however many
+fields it has, and those bytes count against the 32 MiB cap. With the
+unit they get up to one 16 KiB line cap beside the text, within what the
+text leaves of the byte cap; fields past it are left out and counted. A
+buffer full of typical service entries (15 fields, 671 bytes each) holds
+about 42 MiB in the heap test. A row reads `unit[PID]:
+message`, its level from `PRIORITY`. A MESSAGE's newline shows as a
+return mark (⏎) and a line separator: without wrap the row ends at its
+first line, where the text engine draws no ellipsis, and with wrap each
+line takes its own rows. A tap or Enter pauses following and shows the
+fields beneath the row, `NAME=value` on one row each without wrap, and a
+JSON null, which `journalctl -o json` sends for a field over 4,096 bytes
+unless run with `--all`, reads as not sent. In a paused view, fields that
+open or close above the top edge move no line in sight, and a row in
+sight keeps its place while its fields open. Search (D56) reads a row's
+visible text, unit and PID included, and ignores case unless told not
+to. It keeps a match count for each matching line and searches only new
+lines as they arrive; stepping wraps around, pauses following and scrolls
+the match's row into sight. Without wrap, a match past a row's ellipsis
+stays hidden until sideways scrolling lands, and one after a journal
+row's first line until wrap is on. Only the current match is underlined,
+whatever the line's SGR underline, so it differs by more than colour.
+Matches in a line are found again when it is drawn.
 
 ### 10.9 Theme
 

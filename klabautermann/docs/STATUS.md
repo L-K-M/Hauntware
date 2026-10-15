@@ -62,15 +62,17 @@ slice:
   and grouping.
 - `klabautermann_core`: the D18 engine isolate skeleton: the plain-data
   request/event protocol of 03 §10.1 as sealed classes, `engineMain`
-  answering `Hello`/`Subscribe`/`Unsubscribe` and rejecting the rows whose
-  milestones have not landed, and `IsolateEngineClient` for the UI side.
-  Protocol v2 types `CatalogReplaced` as a list of plain `FleetEntry`
-  values and adds `ImportSshConfig`/`SshConfigImported`: the engine
-  parses ssh_config text with `seance_core`'s `SshConfigImporter` off the
-  UI isolate (CN-19). Spawning takes the app's support directory, where
-  the engine keeps the imports (below); `EngineReady` reports a problem
-  with that file and `SshConfigImported` says whether the import was
-  saved, both added within v2.
+  answering `Hello`/`Subscribe`/`Unsubscribe` and rejecting the rows
+  whose milestones have not landed, and `IsolateEngineClient` for the UI
+  side. Protocol v2 types `CatalogReplaced` as a list of plain
+  `FleetEntry` values and adds `ImportSshConfig`/`SshConfigImported`:
+  the engine reads ssh_config text off the UI isolate (CN-19), splitting
+  its lines as `readconf.c` does and taking a host for each name a
+  `Host` line gives, as `SshConfigImporter.hostAliases` does. Spawning
+  takes the app's support directory, where the engine keeps the imports
+  (below); `EngineReady` reports a problem with that file and
+  `SshConfigImported` says whether the import was saved, both added
+  within v2.
 - Protocol v3 (M2 links, 03 §10.1): `LinkState` carries a sealed
   `LinkStatus` (D46's eight states plus `blocked`, typed reasons and an
   optional failure kind), `Prompt` a sealed request per kind, and
@@ -79,8 +81,8 @@ slice:
   `locatorConflict`. The fleet controller keeps link statuses and probe
   answers only for listed servers, and the rail words every status.
   Nothing produces them yet: the engine still rejects `Connect` and
-  `SetAppActivity`, sends no prompts or probe answers, and fills none of
-  the new fleet fields.
+  `SetAppActivity`, sends no prompts or probe answers, and fills the new
+  fleet fields only for imports (below).
 - `klabautermann_app`: `flutter create`d for the five platforms with the
   04 §12.3 identities, generated launcher icons, the desktop three-pane
   shell (fleet rail, workspace, inspector) at 960 px and up, the phone
@@ -166,9 +168,25 @@ slice:
   schema, is left as it is and no import is saved that run. Each case is
   told once in a top toast at startup. As with `settings.json`, no real
   build has run it yet: the tests restart the engine isolate against a
-  temporary folder. `Include` is not followed (`SshConfigImporter` drops
-  it), and `ProxyJump` and `IdentityFile` are not carried or stored yet:
-  the rail needs neither until links land (M2).
+  temporary folder. Since M2 the import reads each host as ssh does:
+  every block that applies gives the values still unset, `Match` blocks
+  count where their criteria can be evaluated, and the store keeps the
+  effective `HostName`, `Port`, `User`, first `IdentityFile` and
+  `ProxyJump`, plus hop records for route names no `Host` line gives
+  (schema 3; a schema 1 or 2 file's hosts are listed without route,
+  sign-in or connect config until the next import). The engine maps
+  imports to the `ServerConfig`s and jump-hop configs links will dial
+  (03 §10.1), filling the route, sign-in, search text and `host:port`
+  conflict fields. A host it cannot dial as ssh would is skipped and
+  counted: a `ProxyCommand`, a `Match` or `Include` that could change
+  it (`Include` is not followed), a second reading of the file for the
+  host ssh dials that would change it (Fedora's and RHEL's
+  `/etc/ssh/ssh_config` ask ssh for one), a token ssh fills in, a value
+  holding bytes that are not UTF-8, a line ssh rejects, or a route ssh
+  would refuse. Where that second reading would route a host through
+  itself or into a jumphost loop, ssh cannot be taking it, so the host
+  keeps the first reading's values (as a bastion under `Host * !bastion`
+  does). Nothing dials them yet.
 - Packaging: `scripts/build.sh`, `scripts/package-linux.sh` (.deb and
   AppImage through the shared `scripts/package-linux-common.sh`) and
   `scripts/build-flatpak.sh` with `flatpak/ch.lkmc.klabautermann.yml`.
@@ -397,3 +415,27 @@ wiring on Linux.
 Follow-up: this is the suite's fourth copy of the controller. The D32
 review in [SHARED.md](SHARED.md) defers a shared macOS plugin to a
 separate suite PR, which must land before any product makes a fifth.
+
+## Open review findings
+
+GLM's review of PR #190 (2026-10-15) flagged these in code already on
+main. Both were checked against the code and are not fixed yet:
+
+- Alpine cron fixture: `klabautermann_host`'s
+  `test/fixtures/alpine-322/cron.txt` puts BusyBox crontab lines under
+  `etc_crontab`. BusyBox lines have no user column, but the
+  system-crontab parser reads the sixth field as the user, so
+  `cron.golden.json` and `jobs.golden.json` record `user: "run-parts"`
+  and `command: "/etc/periodic/15min"` for all five lines. BusyBox crond
+  reads `/etc/crontabs/<user>` without a user column and has no
+  `/etc/crontab`. Either move the lines to the fixture's `crontab`
+  section or teach the parser a no-user-column flavour. The fixture is
+  hand-written; the S2 capture replaces it.
+- Cron runs after a DST change: `ServerZone` keeps the probe's fixed
+  offset unless the consumer passes `offsetAt`, and nothing does yet
+  (`HostProfile` in `host_profile.dart`, the jobs goldens). A run past a
+  transition keeps the old offset. Examples: the debian-12 golden's
+  Europe/Berlin runs from 2026-10-25 say +120 where CET is +60, and the
+  rhel-8 golden's America/New_York runs from 2026-11-01 say -240 where
+  EST is -300. The first consumer of the jobs list must supply the zone
+  lookup. Until then, the goldens should say they are fixed-offset.
