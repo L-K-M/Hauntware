@@ -48,10 +48,10 @@ Duration? samplingPeriod(SampleStream stream, CadenceProfile profile) {
   return period == null ? null : Duration(seconds: period);
 }
 
-/// How long a read owed once (`identity`, an on-demand stream) waits
-/// before it is tried again when its request brought no reply [E]: the
-/// shortest slow period, so a lost reading costs no more than a missed
-/// `units` tick.
+/// How long a read owed once (`identity`, an on-demand stream, the
+/// probe) waits before it is tried again when its request brought no
+/// reply [E]: the `units` period, the shortest slow period every profile
+/// shares, so a lost reading costs no more than a missed `units` tick.
 const _owedReadRetry = Duration(seconds: 15);
 
 /// The stream whose collector also serves [stream]'s, or null: a `core`

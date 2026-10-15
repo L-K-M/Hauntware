@@ -1,6 +1,9 @@
 // The sampling scheduler's policy (03 §6.2, §6.4, D45) on a fake clock:
 // real sampler sessions over a link whose processes answer at once, so
-// the request lines the samplers write show the cadence.
+// the request lines the samplers write show the cadence. The sessions'
+// own request deadlines and restart delays are real timers, since
+// SamplerSession has no timer seam, so the tests of misses and restarts
+// wait for them in real time, with short figures and a 5 s cap.
 import 'dart:async';
 
 import 'package:klabautermann_core/klabautermann_core.dart';
