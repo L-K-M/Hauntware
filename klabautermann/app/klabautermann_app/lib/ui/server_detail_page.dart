@@ -4,6 +4,8 @@ import 'package:ghost_ui/ghost_ui.dart' show SelectedTabView;
 import '../controllers/fleet_controller.dart';
 import '../controllers/monitoring_controller.dart';
 import '../l10n/app_localizations.dart';
+import 'access/access_panel.dart' show AccessPage;
+import 'access/panel_gate.dart';
 import 'fleet_rail.dart' show linkStatusWord;
 import 'inspector_pane.dart' show PlaceholderPaneBody;
 import 'logs/logs_panel.dart';
@@ -56,6 +58,19 @@ class _ServerDetailPageState extends State<ServerDetailPage>
     super.dispose();
   }
 
+  /// Pushes the Access tab, where a hidden panel's link leads (03 §10.4);
+  /// More lists it with the other panels later (03 §10.5).
+  void _openAccess() => Navigator.of(context).push(
+    MaterialPageRoute<void>(
+      builder: (context) => AccessPage(
+        fleet: widget.fleet,
+        monitoring: widget.monitoring,
+        serverId: widget.server.id,
+        serverName: widget.server.displayName,
+      ),
+    ),
+  );
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -90,20 +105,26 @@ class _ServerDetailPageState extends State<ServerDetailPage>
           controller: _destinations,
           children: [
             for (final (index, panel) in ServerDetailPage._panels.indexed)
-              SampledSurface(
+              GatedPanel(
                 monitoring: widget.monitoring,
                 serverId: widget.server.id,
-                surface: panel.name,
-                streams: panel.streams,
-                visible: _destinations.index == index,
-                child: switch (panel) {
-                  ServerPanel.logs => LogsPanel(
-                    monitoring: widget.monitoring,
-                    serverId: widget.server.id,
-                    visible: _destinations.index == index,
-                  ),
-                  _ => const PlaceholderPaneBody(),
-                },
+                panel: panel,
+                onOpenAccess: _openAccess,
+                child: SampledSurface(
+                  monitoring: widget.monitoring,
+                  serverId: widget.server.id,
+                  surface: panel.name,
+                  streams: panel.streams,
+                  visible: _destinations.index == index,
+                  child: switch (panel) {
+                    ServerPanel.logs => LogsPanel(
+                      monitoring: widget.monitoring,
+                      serverId: widget.server.id,
+                      visible: _destinations.index == index,
+                    ),
+                    _ => const PlaceholderPaneBody(),
+                  },
+                ),
               ),
             // More: the other panels, pushed further (03 §10.5).
             const PlaceholderPaneBody(),

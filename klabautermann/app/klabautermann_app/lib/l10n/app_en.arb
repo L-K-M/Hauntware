@@ -1006,6 +1006,316 @@
       }
     }
   },
+  "accessNeverRuns": "Klabautermann never runs these fix commands. Copy one and run it yourself on the server.",
+  "@accessNeverRuns": {
+    "description": "Access tab: the note above the access rows saying the app only shows and copies fix commands and never runs them (CN-24)."
+  },
+  "accessRootEquivalenceTitle": "Root-equivalent access",
+  "@accessRootEquivalenceTitle": {
+    "description": "Access tab: title of the notice explaining which rights equal root on the server (SAF-08)."
+  },
+  "accessRootEquivalenceBody": "Using a rootful Docker or Podman socket, or a broad passwordless sudo rule, gives the same power as root on this server. A rootless engine gives only the power of the user that runs it.",
+  "@accessRootEquivalenceBody": {
+    "description": "Access tab: body of the root-equivalence notice (SAF-08)."
+  },
+  "accessNotChecked": "Not checked yet. Klabautermann checks access after it connects to this server.",
+  "@accessNotChecked": {
+    "description": "Access tab and Docker tab: shown in place of an access answer before the server's capability probe has reported."
+  },
+  "accessRowNotChecked": "Not checked yet.",
+  "@accessRowNotChecked": {
+    "description": "Access tab: the reason under each row before the server's capability probe has reported; accessNotChecked explains it once above the rows."
+  },
+  "accessStatusOk": "OK",
+  "@accessStatusOk": {
+    "description": "Access tab: the state word of a row whose right the account has."
+  },
+  "accessStatusMissing": "Missing",
+  "@accessStatusMissing": {
+    "description": "Access tab: the state word of a row whose right the account lacks, as far as the probe could tell."
+  },
+  "accessStatusUnknown": "Unknown",
+  "@accessStatusUnknown": {
+    "description": "Access tab: the state word of a row the probe could not answer yet."
+  },
+  "accessItemSudo": "Passwordless sudo",
+  "@accessItemSudo": {
+    "description": "Access tab row title: whether sudo (or doas) runs without a password for the login account."
+  },
+  "accessItemJournal": "Journal group",
+  "@accessItemJournal": {
+    "description": "Access tab row title: whether the account may read the whole system journal (membership in systemd-journal or a similar group)."
+  },
+  "accessItemDockerSocket": "Docker socket",
+  "@accessItemDockerSocket": {
+    "description": "Access tab row title: whether the account can use a Docker or Podman engine socket."
+  },
+  "accessItemStreamlocal": "Streamlocal forwarding",
+  "@accessItemStreamlocal": {
+    "description": "Access tab row title: whether the SSH server allows forwarding to a Unix socket, which Docker support uses. 'Streamlocal' is OpenSSH's term; keep it."
+  },
+  "accessItemCompose": "Compose plugin",
+  "@accessItemCompose": {
+    "description": "Access tab row title: whether the docker compose plugin is installed."
+  },
+  "accessItemSystemd": "systemd version",
+  "@accessItemSystemd": {
+    "description": "Access tab row title: whether the server runs systemd, and which version. 'systemd' is a product name, always lower case."
+  },
+  "accessItemRuntime": "Container runtime",
+  "@accessItemRuntime": {
+    "description": "Access tab row title: which container engines (Docker or Podman, rootful or rootless) the server has."
+  },
+  "accessReasonProbeUnavailable": "The server's probe could not answer this.",
+  "@accessReasonProbeUnavailable": {
+    "description": "Access tab row reason: the part of the capability probe that answers this row failed."
+  },
+  "accessReasonRootLogin": "You log in as root, so no elevation or group is needed.",
+  "@accessReasonRootLogin": {
+    "description": "Access tab row reason: the login account is root."
+  },
+  "accessReasonSudoNoPassword": "sudo runs without asking for a password.",
+  "@accessReasonSudoNoPassword": {
+    "description": "Access tab row reason: sudo -n succeeded."
+  },
+  "accessReasonDoasNoPassword": "doas runs without asking for a password. sudo is not installed.",
+  "@accessReasonDoasNoPassword": {
+    "description": "Access tab row reason: there is no sudo, and doas -n succeeded."
+  },
+  "accessReasonSudoNotPasswordless": "sudo asks for a password, or your account may not use it. No fix is offered: a broad passwordless rule equals root.",
+  "@accessReasonSudoNotPasswordless": {
+    "description": "Access tab row reason: sudo -n failed; the app deliberately offers no command that would make sudo passwordless."
+  },
+  "accessReasonDoasNotPasswordless": "doas asks for a password, which Klabautermann cannot enter. sudo is not installed.",
+  "@accessReasonDoasNotPasswordless": {
+    "description": "Access tab row reason: there is no sudo, and doas wants a password."
+  },
+  "accessReasonNoElevationTool": "Neither sudo nor doas is installed.",
+  "@accessReasonNoElevationTool": {
+    "description": "Access tab row reason: the server has no elevation tool."
+  },
+  "accessReasonJournalGroup": "You are in a group that can read the whole system journal.",
+  "@accessReasonJournalGroup": {
+    "description": "Access tab row reason: the account is in systemd-journal, adm or wheel."
+  },
+  "accessReasonNotInJournalGroup": "The journal shows only your own entries. Members of systemd-journal can read all of them.",
+  "@accessReasonNotInJournalGroup": {
+    "description": "Access tab row reason: journalctl silently limits the account to its own entries."
+  },
+  "accessReasonNoJournal": "This server has no journalctl.",
+  "@accessReasonNoJournal": {
+    "description": "Access tab row reason, and why a panel that needs journalctl is hidden: the probe found no journalctl command."
+  },
+  "accessReasonRootfulSocket": "You can use a rootful engine socket.",
+  "@accessReasonRootfulSocket": {
+    "description": "Access tab row reason: the account can write to a Docker or Podman socket of an engine that runs as root."
+  },
+  "accessReasonRootlessSocket": "You can use rootless engine sockets only.",
+  "@accessReasonRootlessSocket": {
+    "description": "Access tab row reason: the only engine sockets the account can write to belong to engines running as a normal user."
+  },
+  "accessReasonSocketNotWritable": "Engine sockets exist, but your account cannot use any of them.",
+  "@accessReasonSocketNotWritable": {
+    "description": "Access tab row reason: engine sockets exist, none writable for the account."
+  },
+  "accessReasonNoEngineSocket": "No Docker or Podman socket was found.",
+  "@accessReasonNoEngineSocket": {
+    "description": "Access tab row reason: none of the known engine socket paths exists."
+  },
+  "accessReasonPendingDocker": "Checked once Docker support arrives.",
+  "@accessReasonPendingDocker": {
+    "description": "Access tab row reason for streamlocal forwarding and the compose plugin, which the app checks only from the release with Docker support."
+  },
+  "accessReasonSystemdJson": "Version {version}: unit and timer lists are read in full.",
+  "@accessReasonSystemdJson": {
+    "description": "Access tab row reason: systemd 246 or later.",
+    "placeholders": {
+      "version": {
+        "type": "int",
+        "example": "255"
+      }
+    }
+  },
+  "accessReasonSystemdTextFallback": "Version {version}: older than 246, so unit and timer lists are read from text output.",
+  "@accessReasonSystemdTextFallback": {
+    "description": "Access tab row reason: systemd 239 to 245, which lacks JSON output.",
+    "placeholders": {
+      "version": {
+        "type": "int",
+        "example": "239"
+      }
+    }
+  },
+  "accessReasonSystemdOlderThanTested": "Version {version} is older than any tested version (239).",
+  "@accessReasonSystemdOlderThanTested": {
+    "description": "Access tab row reason: systemd older than the oldest supported release.",
+    "placeholders": {
+      "version": {
+        "type": "int",
+        "example": "219"
+      }
+    }
+  },
+  "accessReasonSystemdVersionUnparsed": "systemd runs, but its version could not be read.",
+  "@accessReasonSystemdVersionUnparsed": {
+    "description": "Access tab row reason: systemd is PID 1, but its version line did not parse."
+  },
+  "accessReasonNotSystemd": "This server does not run systemd.",
+  "@accessReasonNotSystemd": {
+    "description": "Access tab row reason, and why a panel that needs systemd is hidden: PID 1 is not systemd."
+  },
+  "accessReasonEnginesDetected": "Found on this server:",
+  "@accessReasonEnginesDetected": {
+    "description": "Access tab and Docker tab: introduces the list of engine sockets found."
+  },
+  "accessReasonEngineCliWithoutSocket": "A docker or podman command exists, but no engine socket was found.",
+  "@accessReasonEngineCliWithoutSocket": {
+    "description": "Access tab and Docker tab: an engine command line tool exists, but no socket."
+  },
+  "accessReasonNoEngine": "No Docker or Podman engine was found.",
+  "@accessReasonNoEngine": {
+    "description": "Access tab and Docker tab: no engine socket and no engine command."
+  },
+  "accessRootEquivalentBadge": "Root-equivalent",
+  "@accessRootEquivalentBadge": {
+    "description": "Access tab: badge beside a row whose right equals root on the server (SAF-08)."
+  },
+  "accessDockerGroupWarning": "Members of the docker group are root-equivalent. A rootless engine, which equals your user, is the safer choice.",
+  "@accessDockerGroupWarning": {
+    "description": "Access tab: warning shown beside the command that adds the account to the docker group (SAF-08)."
+  },
+  "accessFixRootShell": "Run this as root: the server has neither sudo nor doas.",
+  "@accessFixRootShell": {
+    "description": "Access tab: note under a fix command on a server without any elevation tool."
+  },
+  "accessFixElevationUnknown": "Run this as root. The probe could not tell whether the server has sudo or doas.",
+  "@accessFixElevationUnknown": {
+    "description": "Access tab: note under a fix command shown without a sudo or doas prefix because the server's probe did not report which elevation tool, if any, is installed."
+  },
+  "accessFixNextLogin": "Group changes take effect at your next login.",
+  "@accessFixNextLogin": {
+    "description": "Access tab: note under a fix command that adds the account to a group."
+  },
+  "accessFixCopy": "Copy command",
+  "@accessFixCopy": {
+    "description": "Access tab: button that copies a fix command to the clipboard. The app never runs it."
+  },
+  "accessFixCopyLabel": "Copy command for {item}",
+  "@accessFixCopyLabel": {
+    "description": "Access tab: screen-reader name of the Copy command button; item is the title of the row whose fix it copies. Starts with the button's visible text (accessFixCopy) so voice control finds it by that text.",
+    "placeholders": {
+      "item": {
+        "type": "String",
+        "example": "Journal group"
+      }
+    }
+  },
+  "accessFixCopied": "Copied. Run it yourself on the server.",
+  "@accessFixCopied": {
+    "description": "Access tab: confirmation after copying a fix command, reminding that the app has not run it."
+  },
+  "accessFixCopyFailed": "Not copied. The clipboard still holds its earlier text; try again before you paste.",
+  "@accessFixCopyFailed": {
+    "description": "Access tab: shown instead of the confirmation when the system refused to put a fix command on the clipboard (on Windows, while another app holds it), so pasting now would paste older text."
+  },
+  "accessEngineDockerRootful": "Docker, rootful",
+  "@accessEngineDockerRootful": {
+    "description": "Access tab and Docker tab: an engine socket of Docker running as root."
+  },
+  "accessEngineDockerRootless": "Docker, rootless",
+  "@accessEngineDockerRootless": {
+    "description": "Access tab and Docker tab: an engine socket of Docker running as a normal user."
+  },
+  "accessEnginePodmanRootful": "Podman, rootful",
+  "@accessEnginePodmanRootful": {
+    "description": "Access tab and Docker tab: an engine socket of Podman running as root."
+  },
+  "accessEnginePodmanRootless": "Podman, rootless",
+  "@accessEnginePodmanRootless": {
+    "description": "Access tab and Docker tab: an engine socket of Podman running as a normal user."
+  },
+  "accessEngineAt": "{engine} at {path}",
+  "@accessEngineAt": {
+    "description": "Access tab and Docker tab: one engine socket the probe found; engine is one of the accessEngine names, path is the socket's path on the server.",
+    "placeholders": {
+      "engine": {
+        "type": "String",
+        "example": "Docker, rootful"
+      },
+      "path": {
+        "type": "String",
+        "example": "/var/run/docker.sock"
+      }
+    }
+  },
+  "accessEngineUsableRootful": "Your account can use it, which is root-equivalent.",
+  "@accessEngineUsableRootful": {
+    "description": "Access tab and Docker tab: the account can write to this rootful engine socket (SAF-08)."
+  },
+  "accessEngineUsableRootless": "Your account can use it, which equals the user that runs it.",
+  "@accessEngineUsableRootless": {
+    "description": "Access tab and Docker tab: the account can write to this rootless engine socket (SAF-08)."
+  },
+  "accessEngineNotUsable": "Your account cannot use it.",
+  "@accessEngineNotUsable": {
+    "description": "Access tab and Docker tab: the account cannot write to this engine socket."
+  },
+  "accessRuntimeAlias": "Podman can also answer on Docker's socket path. Docker support will tell them apart.",
+  "@accessRuntimeAlias": {
+    "description": "Access tab and Docker tab: note under a socket at Docker's path, which a podman-docker install may serve."
+  },
+  "accessDockerPendingTitle": "Arrives with Docker support",
+  "@accessDockerPendingTitle": {
+    "description": "Docker tab: title shown instead of the Docker panels until the release with Docker support."
+  },
+  "accessDockerPendingBody": "Containers, images and stacks arrive with Docker support. Until then, this tab shows the runtime Klabautermann detected, read-only.",
+  "@accessDockerPendingBody": {
+    "description": "Docker tab: body under accessDockerPendingTitle."
+  },
+  "accessDetectedRuntime": "Detected runtime",
+  "@accessDetectedRuntime": {
+    "description": "Docker tab: heading over the container engines the probe found."
+  },
+  "accessPanelHiddenTitle": "{panel} is not available on this server",
+  "@accessPanelHiddenTitle": {
+    "description": "Shown instead of a server panel that cannot work with this server or account; panel is the panel's tab name.",
+    "placeholders": {
+      "panel": {
+        "type": "String",
+        "example": "Services"
+      }
+    }
+  },
+  "accessNeedJournalAccess": "Your account cannot read the whole journal.",
+  "@accessNeedJournalAccess": {
+    "description": "Why a panel is hidden: it needs read access to the whole system journal."
+  },
+  "accessNeedDmesg": "dmesg is not available.",
+  "@accessNeedDmesg": {
+    "description": "Why a panel is hidden: it needs the dmesg command."
+  },
+  "accessNeedTail": "This server has no tail command.",
+  "@accessNeedTail": {
+    "description": "Why a panel is hidden: it needs the tail command."
+  },
+  "accessNeedCrontab": "This server has no crontab command.",
+  "@accessNeedCrontab": {
+    "description": "Why a panel is hidden: it needs the crontab command."
+  },
+  "accessOpen": "Open Access",
+  "@accessOpen": {
+    "description": "Button under a hidden panel's reasons and on the Docker tab: shows the Access tab, which lists the account's rights on the server and how to fix them."
+  },
+  "accessPageTitle": "Access on {name}",
+  "@accessPageTitle": {
+    "description": "Title of the Access screen pushed on phones; name is the server's display name.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "web-1"
+      }
+    }
+  },
   "tableCellSemantics": "{column}: {value}",
   "@tableCellSemantics": {
     "description": "A table cell as a screen reader hears it within its row: the column's header label, then the cell's value (A11Y-03).",

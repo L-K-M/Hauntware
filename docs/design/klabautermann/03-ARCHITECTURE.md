@@ -4388,7 +4388,30 @@ with the reason and a link to the access check (CN-24), the MVP's Access
 tab (10.2, D51), which lists sudo NOPASSWD, journal group, Docker socket
 rights, streamlocal, compose plugin and systemd version, each with a
 copyable fix command that is never run implicitly. Unknown values show
-"unknown", never zero.
+"unknown", never zero. As built in M2
+(`app/klabautermann_app/lib/ui/access/`), the app evaluates K04's access
+check and panel declarations over the probe's latest `HostProfile`
+(`MonitoringController.profileFor`); the engine runs no command for the
+tab:
+- A tab hides only when every host panel behind it lacks a capability
+  the probe answered; Logs stands for the journal, the kernel log and
+  the file tail and stays while any one works. Before the probe
+  answers, or when it did not report a capability, the tab shows and
+  its values read "unknown". A hidden tab is not built, so it samples
+  nothing; it names what is missing and links to the Access tab, which
+  the desktop strip selects, moving keyboard focus into it, and a phone
+  pushes. The phone's More destination does not list Access yet, so
+  there the link is the way in.
+- Each row shows its state as an icon and a word, its reason, SAF-08's
+  badge on a root-equivalent right, and its fix as one line: the
+  elevation prefix, then each word, quoted (8.8) only where a shell
+  would split or expand it. Copying writes the clipboard and sends the
+  engine nothing, and the tab says the app never runs a fix. SAF-08's
+  notice heads the tab whatever the rows say; docker-group advice adds
+  its own warning naming the rootless alternative, and 8.4's admin-mode
+  alternative joins it once admin mode exists.
+- The Docker tab reads "arrives with Docker support" over the detected
+  runtime (D54), read-only, on every host until M3.
 
 As built in M2 (`app/klabautermann_app/lib/ui/system_panel.dart`), the
 System tab shows SYS-01's identity, BOOT-01's uptime and boot time,

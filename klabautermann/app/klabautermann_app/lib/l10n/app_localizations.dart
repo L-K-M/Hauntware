@@ -1312,6 +1312,402 @@ abstract class AppLocalizations {
   /// **'{summary}, stale'**
   String chartStale(String summary);
 
+  /// Access tab: the note above the access rows saying the app only shows and copies fix commands and never runs them (CN-24).
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann never runs these fix commands. Copy one and run it yourself on the server.'**
+  String get accessNeverRuns;
+
+  /// Access tab: title of the notice explaining which rights equal root on the server (SAF-08).
+  ///
+  /// In en, this message translates to:
+  /// **'Root-equivalent access'**
+  String get accessRootEquivalenceTitle;
+
+  /// Access tab: body of the root-equivalence notice (SAF-08).
+  ///
+  /// In en, this message translates to:
+  /// **'Using a rootful Docker or Podman socket, or a broad passwordless sudo rule, gives the same power as root on this server. A rootless engine gives only the power of the user that runs it.'**
+  String get accessRootEquivalenceBody;
+
+  /// Access tab and Docker tab: shown in place of an access answer before the server's capability probe has reported.
+  ///
+  /// In en, this message translates to:
+  /// **'Not checked yet. Klabautermann checks access after it connects to this server.'**
+  String get accessNotChecked;
+
+  /// Access tab: the reason under each row before the server's capability probe has reported; accessNotChecked explains it once above the rows.
+  ///
+  /// In en, this message translates to:
+  /// **'Not checked yet.'**
+  String get accessRowNotChecked;
+
+  /// Access tab: the state word of a row whose right the account has.
+  ///
+  /// In en, this message translates to:
+  /// **'OK'**
+  String get accessStatusOk;
+
+  /// Access tab: the state word of a row whose right the account lacks, as far as the probe could tell.
+  ///
+  /// In en, this message translates to:
+  /// **'Missing'**
+  String get accessStatusMissing;
+
+  /// Access tab: the state word of a row the probe could not answer yet.
+  ///
+  /// In en, this message translates to:
+  /// **'Unknown'**
+  String get accessStatusUnknown;
+
+  /// Access tab row title: whether sudo (or doas) runs without a password for the login account.
+  ///
+  /// In en, this message translates to:
+  /// **'Passwordless sudo'**
+  String get accessItemSudo;
+
+  /// Access tab row title: whether the account may read the whole system journal (membership in systemd-journal or a similar group).
+  ///
+  /// In en, this message translates to:
+  /// **'Journal group'**
+  String get accessItemJournal;
+
+  /// Access tab row title: whether the account can use a Docker or Podman engine socket.
+  ///
+  /// In en, this message translates to:
+  /// **'Docker socket'**
+  String get accessItemDockerSocket;
+
+  /// Access tab row title: whether the SSH server allows forwarding to a Unix socket, which Docker support uses. 'Streamlocal' is OpenSSH's term; keep it.
+  ///
+  /// In en, this message translates to:
+  /// **'Streamlocal forwarding'**
+  String get accessItemStreamlocal;
+
+  /// Access tab row title: whether the docker compose plugin is installed.
+  ///
+  /// In en, this message translates to:
+  /// **'Compose plugin'**
+  String get accessItemCompose;
+
+  /// Access tab row title: whether the server runs systemd, and which version. 'systemd' is a product name, always lower case.
+  ///
+  /// In en, this message translates to:
+  /// **'systemd version'**
+  String get accessItemSystemd;
+
+  /// Access tab row title: which container engines (Docker or Podman, rootful or rootless) the server has.
+  ///
+  /// In en, this message translates to:
+  /// **'Container runtime'**
+  String get accessItemRuntime;
+
+  /// Access tab row reason: the part of the capability probe that answers this row failed.
+  ///
+  /// In en, this message translates to:
+  /// **'The server\'s probe could not answer this.'**
+  String get accessReasonProbeUnavailable;
+
+  /// Access tab row reason: the login account is root.
+  ///
+  /// In en, this message translates to:
+  /// **'You log in as root, so no elevation or group is needed.'**
+  String get accessReasonRootLogin;
+
+  /// Access tab row reason: sudo -n succeeded.
+  ///
+  /// In en, this message translates to:
+  /// **'sudo runs without asking for a password.'**
+  String get accessReasonSudoNoPassword;
+
+  /// Access tab row reason: there is no sudo, and doas -n succeeded.
+  ///
+  /// In en, this message translates to:
+  /// **'doas runs without asking for a password. sudo is not installed.'**
+  String get accessReasonDoasNoPassword;
+
+  /// Access tab row reason: sudo -n failed; the app deliberately offers no command that would make sudo passwordless.
+  ///
+  /// In en, this message translates to:
+  /// **'sudo asks for a password, or your account may not use it. No fix is offered: a broad passwordless rule equals root.'**
+  String get accessReasonSudoNotPasswordless;
+
+  /// Access tab row reason: there is no sudo, and doas wants a password.
+  ///
+  /// In en, this message translates to:
+  /// **'doas asks for a password, which Klabautermann cannot enter. sudo is not installed.'**
+  String get accessReasonDoasNotPasswordless;
+
+  /// Access tab row reason: the server has no elevation tool.
+  ///
+  /// In en, this message translates to:
+  /// **'Neither sudo nor doas is installed.'**
+  String get accessReasonNoElevationTool;
+
+  /// Access tab row reason: the account is in systemd-journal, adm or wheel.
+  ///
+  /// In en, this message translates to:
+  /// **'You are in a group that can read the whole system journal.'**
+  String get accessReasonJournalGroup;
+
+  /// Access tab row reason: journalctl silently limits the account to its own entries.
+  ///
+  /// In en, this message translates to:
+  /// **'The journal shows only your own entries. Members of systemd-journal can read all of them.'**
+  String get accessReasonNotInJournalGroup;
+
+  /// Access tab row reason, and why a panel that needs journalctl is hidden: the probe found no journalctl command.
+  ///
+  /// In en, this message translates to:
+  /// **'This server has no journalctl.'**
+  String get accessReasonNoJournal;
+
+  /// Access tab row reason: the account can write to a Docker or Podman socket of an engine that runs as root.
+  ///
+  /// In en, this message translates to:
+  /// **'You can use a rootful engine socket.'**
+  String get accessReasonRootfulSocket;
+
+  /// Access tab row reason: the only engine sockets the account can write to belong to engines running as a normal user.
+  ///
+  /// In en, this message translates to:
+  /// **'You can use rootless engine sockets only.'**
+  String get accessReasonRootlessSocket;
+
+  /// Access tab row reason: engine sockets exist, none writable for the account.
+  ///
+  /// In en, this message translates to:
+  /// **'Engine sockets exist, but your account cannot use any of them.'**
+  String get accessReasonSocketNotWritable;
+
+  /// Access tab row reason: none of the known engine socket paths exists.
+  ///
+  /// In en, this message translates to:
+  /// **'No Docker or Podman socket was found.'**
+  String get accessReasonNoEngineSocket;
+
+  /// Access tab row reason for streamlocal forwarding and the compose plugin, which the app checks only from the release with Docker support.
+  ///
+  /// In en, this message translates to:
+  /// **'Checked once Docker support arrives.'**
+  String get accessReasonPendingDocker;
+
+  /// Access tab row reason: systemd 246 or later.
+  ///
+  /// In en, this message translates to:
+  /// **'Version {version}: unit and timer lists are read in full.'**
+  String accessReasonSystemdJson(int version);
+
+  /// Access tab row reason: systemd 239 to 245, which lacks JSON output.
+  ///
+  /// In en, this message translates to:
+  /// **'Version {version}: older than 246, so unit and timer lists are read from text output.'**
+  String accessReasonSystemdTextFallback(int version);
+
+  /// Access tab row reason: systemd older than the oldest supported release.
+  ///
+  /// In en, this message translates to:
+  /// **'Version {version} is older than any tested version (239).'**
+  String accessReasonSystemdOlderThanTested(int version);
+
+  /// Access tab row reason: systemd is PID 1, but its version line did not parse.
+  ///
+  /// In en, this message translates to:
+  /// **'systemd runs, but its version could not be read.'**
+  String get accessReasonSystemdVersionUnparsed;
+
+  /// Access tab row reason, and why a panel that needs systemd is hidden: PID 1 is not systemd.
+  ///
+  /// In en, this message translates to:
+  /// **'This server does not run systemd.'**
+  String get accessReasonNotSystemd;
+
+  /// Access tab and Docker tab: introduces the list of engine sockets found.
+  ///
+  /// In en, this message translates to:
+  /// **'Found on this server:'**
+  String get accessReasonEnginesDetected;
+
+  /// Access tab and Docker tab: an engine command line tool exists, but no socket.
+  ///
+  /// In en, this message translates to:
+  /// **'A docker or podman command exists, but no engine socket was found.'**
+  String get accessReasonEngineCliWithoutSocket;
+
+  /// Access tab and Docker tab: no engine socket and no engine command.
+  ///
+  /// In en, this message translates to:
+  /// **'No Docker or Podman engine was found.'**
+  String get accessReasonNoEngine;
+
+  /// Access tab: badge beside a row whose right equals root on the server (SAF-08).
+  ///
+  /// In en, this message translates to:
+  /// **'Root-equivalent'**
+  String get accessRootEquivalentBadge;
+
+  /// Access tab: warning shown beside the command that adds the account to the docker group (SAF-08).
+  ///
+  /// In en, this message translates to:
+  /// **'Members of the docker group are root-equivalent. A rootless engine, which equals your user, is the safer choice.'**
+  String get accessDockerGroupWarning;
+
+  /// Access tab: note under a fix command on a server without any elevation tool.
+  ///
+  /// In en, this message translates to:
+  /// **'Run this as root: the server has neither sudo nor doas.'**
+  String get accessFixRootShell;
+
+  /// Access tab: note under a fix command shown without a sudo or doas prefix because the server's probe did not report which elevation tool, if any, is installed.
+  ///
+  /// In en, this message translates to:
+  /// **'Run this as root. The probe could not tell whether the server has sudo or doas.'**
+  String get accessFixElevationUnknown;
+
+  /// Access tab: note under a fix command that adds the account to a group.
+  ///
+  /// In en, this message translates to:
+  /// **'Group changes take effect at your next login.'**
+  String get accessFixNextLogin;
+
+  /// Access tab: button that copies a fix command to the clipboard. The app never runs it.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy command'**
+  String get accessFixCopy;
+
+  /// Access tab: screen-reader name of the Copy command button; item is the title of the row whose fix it copies. Starts with the button's visible text (accessFixCopy) so voice control finds it by that text.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy command for {item}'**
+  String accessFixCopyLabel(String item);
+
+  /// Access tab: confirmation after copying a fix command, reminding that the app has not run it.
+  ///
+  /// In en, this message translates to:
+  /// **'Copied. Run it yourself on the server.'**
+  String get accessFixCopied;
+
+  /// Access tab: shown instead of the confirmation when the system refused to put a fix command on the clipboard (on Windows, while another app holds it), so pasting now would paste older text.
+  ///
+  /// In en, this message translates to:
+  /// **'Not copied. The clipboard still holds its earlier text; try again before you paste.'**
+  String get accessFixCopyFailed;
+
+  /// Access tab and Docker tab: an engine socket of Docker running as root.
+  ///
+  /// In en, this message translates to:
+  /// **'Docker, rootful'**
+  String get accessEngineDockerRootful;
+
+  /// Access tab and Docker tab: an engine socket of Docker running as a normal user.
+  ///
+  /// In en, this message translates to:
+  /// **'Docker, rootless'**
+  String get accessEngineDockerRootless;
+
+  /// Access tab and Docker tab: an engine socket of Podman running as root.
+  ///
+  /// In en, this message translates to:
+  /// **'Podman, rootful'**
+  String get accessEnginePodmanRootful;
+
+  /// Access tab and Docker tab: an engine socket of Podman running as a normal user.
+  ///
+  /// In en, this message translates to:
+  /// **'Podman, rootless'**
+  String get accessEnginePodmanRootless;
+
+  /// Access tab and Docker tab: one engine socket the probe found; engine is one of the accessEngine names, path is the socket's path on the server.
+  ///
+  /// In en, this message translates to:
+  /// **'{engine} at {path}'**
+  String accessEngineAt(String engine, String path);
+
+  /// Access tab and Docker tab: the account can write to this rootful engine socket (SAF-08).
+  ///
+  /// In en, this message translates to:
+  /// **'Your account can use it, which is root-equivalent.'**
+  String get accessEngineUsableRootful;
+
+  /// Access tab and Docker tab: the account can write to this rootless engine socket (SAF-08).
+  ///
+  /// In en, this message translates to:
+  /// **'Your account can use it, which equals the user that runs it.'**
+  String get accessEngineUsableRootless;
+
+  /// Access tab and Docker tab: the account cannot write to this engine socket.
+  ///
+  /// In en, this message translates to:
+  /// **'Your account cannot use it.'**
+  String get accessEngineNotUsable;
+
+  /// Access tab and Docker tab: note under a socket at Docker's path, which a podman-docker install may serve.
+  ///
+  /// In en, this message translates to:
+  /// **'Podman can also answer on Docker\'s socket path. Docker support will tell them apart.'**
+  String get accessRuntimeAlias;
+
+  /// Docker tab: title shown instead of the Docker panels until the release with Docker support.
+  ///
+  /// In en, this message translates to:
+  /// **'Arrives with Docker support'**
+  String get accessDockerPendingTitle;
+
+  /// Docker tab: body under accessDockerPendingTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Containers, images and stacks arrive with Docker support. Until then, this tab shows the runtime Klabautermann detected, read-only.'**
+  String get accessDockerPendingBody;
+
+  /// Docker tab: heading over the container engines the probe found.
+  ///
+  /// In en, this message translates to:
+  /// **'Detected runtime'**
+  String get accessDetectedRuntime;
+
+  /// Shown instead of a server panel that cannot work with this server or account; panel is the panel's tab name.
+  ///
+  /// In en, this message translates to:
+  /// **'{panel} is not available on this server'**
+  String accessPanelHiddenTitle(String panel);
+
+  /// Why a panel is hidden: it needs read access to the whole system journal.
+  ///
+  /// In en, this message translates to:
+  /// **'Your account cannot read the whole journal.'**
+  String get accessNeedJournalAccess;
+
+  /// Why a panel is hidden: it needs the dmesg command.
+  ///
+  /// In en, this message translates to:
+  /// **'dmesg is not available.'**
+  String get accessNeedDmesg;
+
+  /// Why a panel is hidden: it needs the tail command.
+  ///
+  /// In en, this message translates to:
+  /// **'This server has no tail command.'**
+  String get accessNeedTail;
+
+  /// Why a panel is hidden: it needs the crontab command.
+  ///
+  /// In en, this message translates to:
+  /// **'This server has no crontab command.'**
+  String get accessNeedCrontab;
+
+  /// Button under a hidden panel's reasons and on the Docker tab: shows the Access tab, which lists the account's rights on the server and how to fix them.
+  ///
+  /// In en, this message translates to:
+  /// **'Open Access'**
+  String get accessOpen;
+
+  /// Title of the Access screen pushed on phones; name is the server's display name.
+  ///
+  /// In en, this message translates to:
+  /// **'Access on {name}'**
+  String accessPageTitle(String name);
+
   /// A table cell as a screen reader hears it within its row: the column's header label, then the cell's value (A11Y-03).
   ///
   /// In en, this message translates to:

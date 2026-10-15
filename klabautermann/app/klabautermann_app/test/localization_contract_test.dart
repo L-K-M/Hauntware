@@ -147,6 +147,9 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   // The brand preset's stored name, English across the family like the
   // siblings' preset names; no surface shows it yet.
   'lib/theme/app_theme.dart': {"'Klabautermann'"},
+  // The Access tab's copied fix command: the pattern of a shell word that
+  // needs no quoting, and the space between the command's words.
+  'lib/ui/access/access_panel.dart': {r"r'^[A-Za-z0-9_./:@+,-]+$'", "' '"},
   // Chart assert messages, RangeError argument names and the read-only
   // ring view's UnsupportedError: programmer diagnostics, never rendered.
   'lib/ui/charts/bars.dart': {
