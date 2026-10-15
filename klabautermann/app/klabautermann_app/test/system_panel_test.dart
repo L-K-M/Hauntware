@@ -1,3 +1,5 @@
+import 'dart:async' show unawaited;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show LogicalKeyboardKey;
 import 'package:flutter_test/flutter_test.dart';
@@ -448,6 +450,69 @@ void main() {
       handle.dispose();
     });
   }
+
+  testWidgets('focus handed back to the table leaves the page where it '
+      'was read', (tester) async {
+    final panel = await _pump(tester, size: const Size(718, 600));
+    await panel.sample(
+      tester,
+      SampleStream.fs,
+      FsResult(
+        FsSnapshot([
+          for (var index = 0; index < 40; index++)
+            _mount('/dev/vd$index', 'ext4', '/m$index', (10, 1, 9), 10, 1),
+        ]),
+      ),
+    );
+    await tester.ensureVisible(_row('/m20'));
+    await tester.tap(_row('/m20'));
+    await tester.pumpAndSettle();
+    tester.state<NavigatorState>(find.byType(Navigator)).pop();
+    await tester.pumpAndSettle();
+    expect(FocusManager.instance.primaryFocus?.debugLabel, 'SortableTable');
+
+    // The reader wheels up to Identity; the table keeps focus.
+    final page = tester
+        .state<ScrollableState>(
+          find
+              .descendant(
+                of: find.byType(SystemPanel),
+                matching: find.byType(Scrollable),
+              )
+              .first,
+        )
+        .position;
+    page.jumpTo(0);
+    await tester.pumpAndSettle();
+
+    // Flutter parks focus over an inactive window on desktop only.
+    addTearDown(
+      () => tester.binding.handleAppLifecycleStateChanged(
+        AppLifecycleState.resumed,
+      ),
+    );
+    for (final state in [
+      AppLifecycleState.inactive,
+      AppLifecycleState.resumed,
+    ]) {
+      tester.binding.handleAppLifecycleStateChanged(state);
+      await tester.pumpAndSettle();
+    }
+    expect(FocusManager.instance.primaryFocus?.debugLabel, 'SortableTable');
+    expect(page.pixels, 0, reason: 'another window and back');
+
+    unawaited(
+      showDialog<void>(
+        context: tester.element(find.byType(SystemPanel)),
+        builder: (context) => const Dialog(child: SizedBox.square()),
+      ),
+    );
+    await tester.pumpAndSettle();
+    tester.state<NavigatorState>(find.byType(Navigator)).pop();
+    await tester.pumpAndSettle();
+    expect(FocusManager.instance.primaryFocus?.debugLabel, 'SortableTable');
+    expect(page.pixels, 0, reason: 'a dialog opened and closed');
+  }, variant: TargetPlatformVariant.only(TargetPlatform.linux));
 
   testWidgets('a narrow table opens a mount\'s bytes and device in a sheet', (
     tester,
