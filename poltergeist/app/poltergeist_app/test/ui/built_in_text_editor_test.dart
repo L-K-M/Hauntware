@@ -14,7 +14,10 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ghost_fonts/ghost_fonts.dart' show BundledMonoFont;
 import 'package:poltergeist_app/l10n/app_localizations.dart';
+import 'package:poltergeist_app/services/editor_font.dart';
+import 'package:poltergeist_app/services/editor_font_controller.dart';
 import 'package:poltergeist_app/services/editor_text_size_controller.dart';
 import 'package:poltergeist_app/ui/built_in_text_editor.dart';
 import 'package:poltergeist_app/ui/editor_syntax.dart';
@@ -355,6 +358,41 @@ void main() {
     expect(fontSize(), 14);
     // The document kept its text: the chords never reached the field.
     expect(find.widgetWithText(TextField, 'one\n'), findsOneWidget);
+  });
+
+  testWidgets('the editor draws in the shared font and ligature choice', (
+    tester,
+  ) async {
+    final font = EditorFontController();
+    addTearDown(font.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: BuiltInTextEditorScreen(
+          file: file,
+          initialText: 'a -> b\n',
+          showToast: (_, _) {},
+          monoFontFallback: const ['Mono Stack'],
+          basenameOf: remoteBasename,
+          font: font,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    TextStyle style() =>
+        tester.widget<TextField>(find.byType(TextField)).style!;
+    expect(style().fontFamily, 'Mono Stack');
+    expect(style().fontFeatures ?? const [], isEmpty);
+
+    await font.setFont(
+      const EditorFont(family: 'Maple Mono', ligatures: EditorLigatures.off),
+    );
+    await tester.pump();
+
+    // A bundled font's name draws the bundled copy.
+    expect(style().fontFamily, BundledMonoFont.mapleMono.family);
+    expect(style().fontFeatures, contains(const FontFeature.disable('liga')));
   });
 
   testWidgets('without a size model the editor draws at the standard size', (

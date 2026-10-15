@@ -19,6 +19,7 @@ void main() {
       // The editor's own fallback, so an untouched install changes nothing.
       expect(settings.indentation, const Indentation.spaces());
       expect(settings.fontFamily, isNull);
+      expect(settings.ligatures, EditorLigatures.on);
     });
 
     test('round-trips through JSON', () {
@@ -27,6 +28,7 @@ void main() {
         fontSize: 18,
         indentation: Indentation.tabs(width: 8),
         fontFamily: 'Fira Code',
+        ligatures: EditorLigatures.off,
       );
       expect(AppSettings.fromJson(settings.toJson()), settings);
     });
@@ -98,6 +100,26 @@ void main() {
       );
     });
 
+    test('an unreadable ligature choice keeps them on', () {
+      for (final stored in ['nonsense', 0, false, null]) {
+        expect(
+          AppSettings.fromJson({'ligatures': stored}).ligatures,
+          EditorLigatures.on,
+          reason: '$stored',
+        );
+      }
+    });
+
+    test('copyWith sets and clears the font family', () {
+      const fira = AppSettings(fontFamily: 'Fira Code');
+      expect(fira.copyWith(fontSize: 20).fontFamily, 'Fira Code');
+      expect(fira.copyWith(fontFamily: () => null).fontFamily, isNull);
+      expect(
+        const AppSettings().copyWith(fontFamily: () => 'Maple Mono').fontFamily,
+        'Maple Mono',
+      );
+    });
+
     test('an unknown key is ignored rather than fatal', () {
       final settings = AppSettings.fromJson(const {
         'fontSize': 15,
@@ -109,6 +131,10 @@ void main() {
     test('equality is by value so an unchanged save can be skipped', () {
       expect(const AppSettings(), const AppSettings());
       expect(const AppSettings(), isNot(const AppSettings(fontSize: 13)));
+      expect(
+        const AppSettings(),
+        isNot(const AppSettings(ligatures: EditorLigatures.off)),
+      );
     });
 
     test('the JSON is readable', () {

@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ghost_fonts/ghost_fonts.dart';
 import 'package:planchette_app/planchette_app.dart';
 import 'package:planchette_app/services/app_settings.dart';
 import 'package:planchette_app/services/document_workspace.dart';
@@ -196,6 +197,66 @@ void main() {
     await tester.pumpAndSettle();
     await settings.flush();
     expect((await settingsStore.load())?.fontSize, chosen);
+  }, variant: const TargetPlatformVariant({TargetPlatform.linux}));
+
+  testWidgets('the font menu draws the document in the chosen font', (
+    tester,
+  ) async {
+    workspace.newDocument();
+    await mount(tester);
+    await openSettings(tester);
+    expect(find.text('JetBrains Mono (default)'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('settings.font')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Maple Mono').last);
+    await tester.pumpAndSettle();
+    expect(settings.value.fontFamily, 'Maple Mono');
+    expect(documentStyle(tester).fontFamily, BundledMonoFont.mapleMono.family);
+
+    // Back to the default stores no family, so it follows the default.
+    await tester.tap(find.byKey(const ValueKey('settings.font')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('JetBrains Mono (default)').last);
+    await tester.pumpAndSettle();
+    expect(settings.value.fontFamily, isNull);
+    expect(documentStyle(tester).fontFamily, editorDefaultFont.family);
+  }, variant: const TargetPlatformVariant({TargetPlatform.linux}));
+
+  testWidgets('a hand-edited family stays selected in the font menu', (
+    tester,
+  ) async {
+    await settings.update(settings.value.copyWith(fontFamily: () => 'Menlo'));
+    workspace.newDocument();
+    await mount(tester);
+    await openSettings(tester);
+    final menu = tester.widget<DropdownButton<String>>(
+      find.byKey(const ValueKey('settings.font')),
+    );
+    expect(menu.value, 'Menlo');
+    expect(settings.value.fontFamily, 'Menlo');
+  }, variant: const TargetPlatformVariant({TargetPlatform.linux}));
+
+  testWidgets('the ligatures switch turns them off and Cancel restores', (
+    tester,
+  ) async {
+    workspace.newDocument();
+    await mount(tester);
+    expect(documentStyle(tester).fontFeatures ?? const [], isEmpty);
+
+    await openSettings(tester);
+    await tester.tap(find.widgetWithText(SwitchListTile, 'Ligatures'));
+    await tester.pumpAndSettle();
+    expect(settings.value.ligatures, EditorLigatures.off);
+    expect(
+      documentStyle(tester).fontFeatures,
+      contains(const FontFeature.disable('calt')),
+    );
+
+    await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
+    await tester.pumpAndSettle();
+    expect(settings.value.ligatures, EditorLigatures.on);
+    expect(documentStyle(tester).fontFeatures ?? const [], isEmpty);
   }, variant: const TargetPlatformVariant({TargetPlatform.linux}));
 
   testWidgets('View › Zoom changes the stored text size', (tester) async {

@@ -4,9 +4,11 @@ import 'dart:ui';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
-import 'package:planchette_editor/planchette_editor.dart' show EditorTextSize;
+import 'package:planchette_editor/planchette_editor.dart'
+    show EditorLigatures, EditorTextSize;
 import 'package:poltergeist_app/services/app_preferences.dart';
 import 'package:poltergeist_app/services/double_click_action.dart';
+import 'package:poltergeist_app/services/editor_font.dart';
 import 'package:poltergeist_app/services/settings_store.dart';
 import 'package:poltergeist_app/services/sidebar_controller.dart';
 import 'package:poltergeist_app/services/skip_rule_sets.dart';
@@ -284,6 +286,43 @@ void main() {
         store: SettingsStore(path: settingsFile.path, onError: (_, _) {}),
       );
       expect(await preferences.loadEditorTextSize(), EditorTextSize.standard);
+    });
+  });
+
+  group('the built-in editor font', () {
+    AppPreferences fresh() =>
+        AppPreferences(store: SettingsStore(path: settingsFile.path));
+
+    test('defaults to the editor default and round-trips', () async {
+      expect(await fresh().loadEditorFont(), EditorFont.standard);
+      const chosen = EditorFont(
+        family: 'Maple Mono',
+        ligatures: EditorLigatures.off,
+      );
+      await fresh().saveEditorFont(chosen);
+      expect(await fresh().loadEditorFont(), chosen);
+      final stored =
+          jsonDecode(await settingsFile.readAsString()) as Map<String, Object?>;
+      expect(stored['editor.fontFamily'], 'Maple Mono');
+      expect(stored['editor.ligatures'], 'off');
+    });
+
+    test('a hand-edited ligature value keeps them on', () async {
+      await settingsFile.writeAsString(
+        '{"editor.fontFamily":"Fira Code","editor.ligatures":"nonsense"}',
+      );
+      expect(
+        await fresh().loadEditorFont(),
+        const EditorFont(family: 'Fira Code'),
+      );
+    });
+
+    test('an unreadable store reads as the default font', () async {
+      await settingsFile.writeAsBytes([0xff]);
+      final preferences = AppPreferences(
+        store: SettingsStore(path: settingsFile.path, onError: (_, _) {}),
+      );
+      expect(await preferences.loadEditorFont(), EditorFont.standard);
     });
   });
 

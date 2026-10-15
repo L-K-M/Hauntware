@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:planchette_editor/planchette_editor.dart' show EditorLigatures;
 import 'package:seance_core/seance_core.dart';
 
 import '../app_state.dart';
@@ -130,6 +131,12 @@ class LocalSettingsBackend implements SettingsBackend {
 
   @override
   Future<void> setEditorFontSize(int size) => _state.setEditorFontSize(size);
+
+  @override
+  Future<void> setEditorFont({
+    required String fontFamily,
+    required EditorLigatures ligatures,
+  }) => _state.setEditorFont(fontFamily: fontFamily, ligatures: ligatures);
 
   /// Applied before the write, like the terminal's appearance: the screen
   /// writes through on every change, and the app repainting only after the

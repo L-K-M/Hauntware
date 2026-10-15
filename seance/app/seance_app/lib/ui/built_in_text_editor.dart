@@ -38,6 +38,13 @@ class BuiltInTextEditorScreen extends StatefulWidget {
   /// The text size every editor tab draws in (Settings → General).
   final int fontSize;
 
+  /// The family every editor tab draws in, as Settings → General stores
+  /// it ('Fira Code'); empty for the editor's default.
+  final String fontFamily;
+
+  /// Whether that font's ligatures draw (Settings → General).
+  final EditorLigatures ligatures;
+
   /// View › Zoom on the app-wide [fontSize], from the zoom chords. Null
   /// leaves the chords unbound.
   final void Function(EditorZoom zoom)? onZoom;
@@ -54,6 +61,8 @@ class BuiltInTextEditorScreen extends StatefulWidget {
     this.dirtyNotifier,
     this.isActive = true,
     this.fontSize = EditorTextSize.standard,
+    this.fontFamily = '',
+    this.ligatures = EditorLigatures.on,
     this.onZoom,
   });
 
@@ -341,12 +350,17 @@ class BuiltInTextEditorScreenState extends State<BuiltInTextEditorScreen>
               syntaxTheme: seanceEditorSyntaxTheme(
                 Theme.of(context).brightness,
               ),
+              // A blank family keeps the editor's own; a missing one lands
+              // on Séance's stack.
               textStyle: TextStyle(
-                fontFamily: SeanceTheme.monoFallback.first,
+                fontFamily: widget.fontFamily.trim().isEmpty
+                    ? SeanceTheme.monoFallback.first
+                    : widget.fontFamily,
                 fontFamilyFallback: SeanceTheme.monoFallback,
                 fontSize: widget.fontSize.toDouble(),
                 height: 1.35,
               ),
+              ligatures: widget.ligatures,
               banner: widget.remoteFiles == null ? null : _remoteBanner(),
               statusBuilder: (context, controller) => widget.remoteFiles == null
                   ? _statusBar(context)

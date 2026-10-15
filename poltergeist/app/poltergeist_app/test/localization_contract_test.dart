@@ -196,6 +196,8 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   },
   'lib/services/app_preferences.dart': {
     "'editor.textSize'",
+    "'editor.fontFamily'",
+    "'editor.ligatures'",
     "'layout.paneRatio'",
     "'window.left'",
     "'window.top'",
@@ -421,6 +423,15 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   },
   // The editor text size slider's key — plumbing for tests, never rendered.
   'lib/ui/settings/editor_text_size_settings.dart': {"'editor.textSize'"},
+  // The editor font rows' keys, and the menu's value for the default font:
+  // an empty family, never rendered.
+  'lib/ui/settings/editor_font_settings.dart': {
+    "''",
+    "'editor.font'",
+    "'editor.ligatures'",
+  },
+  // The default font's family: empty, meaning the editor's own.
+  'lib/services/editor_font.dart': {"''"},
   // The folders switch's key.
   'lib/ui/settings/directory_grouping_settings.dart': {"'view.foldersOnTop'"},
   // The double-click action dropdown's key.

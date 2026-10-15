@@ -21,6 +21,7 @@ import 'services/archive_queue_tasks.dart';
 import 'services/appearance_controller.dart';
 import 'services/directory_grouping_controller.dart';
 import 'services/double_click_action_controller.dart';
+import 'services/editor_font_controller.dart';
 import 'services/editor_text_size_controller.dart';
 import 'services/skip_rule_sets_controller.dart';
 import 'services/application_error_reporter.dart';
@@ -553,6 +554,11 @@ Future<void> main(List<String> args) async {
     initial: await preferences.loadEditorTextSize(),
     save: preferences.saveEditorTextSize,
   );
+  // And its font, shared the same way.
+  final editorFont = EditorFontController(
+    initial: await preferences.loadEditorFont(),
+    save: preferences.saveEditorFont,
+  );
   // Whether lists keep folders on top: the global default of the view
   // options (02 §2.4), shared by every window's panes.
   final viewPreferences = ViewPreferencesStore(store: settingsStore);
@@ -707,6 +713,7 @@ Future<void> main(List<String> args) async {
       updateCheck: updateCheck,
       appearance: appearance,
       editorTextSize: editorTextSize,
+      editorFont: editorFont,
       directoryGrouping: directoryGrouping,
       skipRuleSets: skipRuleSets,
       deepLinks: deepLinks,

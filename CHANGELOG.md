@@ -17,6 +17,9 @@
 
 ### Added
 
+- Planchette, Séance and Poltergeist let you choose the built-in
+  editor's font and turn its ligatures off. Each app keeps the choice on
+  the device, like the editor's text size.
 - Every app ships four open-source monospace fonts: Iosevka Term,
   JetBrains Mono, Fira Code and Maple Mono, all with ligatures such as
   `->` and `!=`. Code and editors in Planchette, Séance and Poltergeist

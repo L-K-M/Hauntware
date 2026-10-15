@@ -10,6 +10,7 @@ import 'package:poltergeist_core/poltergeist_core.dart';
 import 'package:planchette_editor/planchette_editor.dart' as pe;
 
 import '../l10n/app_localizations.dart';
+import '../services/editor_font.dart';
 import '../services/registered_command.dart';
 import '../services/settings_models.dart';
 import 'menus/app_menu_host.dart';
@@ -38,6 +39,7 @@ class BuiltInTextEditorScreen extends StatefulWidget {
     required this.monoFontFallback,
     required this.basenameOf,
     this.textSize,
+    this.font,
   });
 
   /// The local file or managed checkout being edited.
@@ -96,6 +98,10 @@ class BuiltInTextEditorScreen extends StatefulWidget {
   /// zoom commands.
   final EditorTextSizeModel? textSize;
 
+  /// The app-wide font every editor draws in. Null draws in the editor's
+  /// default family with ligatures on.
+  final EditorFontModel? font;
+
   @override
   State<BuiltInTextEditorScreen> createState() =>
       _BuiltInTextEditorScreenState();
@@ -137,6 +143,7 @@ class _BuiltInTextEditorScreenState extends State<BuiltInTextEditorScreen> {
     _editor.setEditingLocked(widget.quitPending, notify: false);
     _editor.addListener(_changed);
     widget.textSize?.addListener(_changed);
+    widget.font?.addListener(_changed);
     widget.onCloseGuardChanged?.call(_confirmClose);
     _editor.initialize();
   }
@@ -155,12 +162,17 @@ class _BuiltInTextEditorScreenState extends State<BuiltInTextEditorScreen> {
       oldWidget.textSize?.removeListener(_changed);
       widget.textSize?.addListener(_changed);
     }
+    if (!identical(widget.font, oldWidget.font)) {
+      oldWidget.font?.removeListener(_changed);
+      widget.font?.addListener(_changed);
+    }
   }
 
   @override
   void dispose() {
     widget.onCloseGuardChanged?.call(null);
     widget.textSize?.removeListener(_changed);
+    widget.font?.removeListener(_changed);
     _editor.removeListener(_changed);
     _editor.dispose();
     super.dispose();
@@ -169,6 +181,7 @@ class _BuiltInTextEditorScreenState extends State<BuiltInTextEditorScreen> {
   void _openSearch() => _editor.openSearch();
 
   int get _textSize => widget.textSize?.value ?? pe.EditorTextSize.standard;
+  EditorFont get _font => widget.font?.value ?? EditorFont.standard;
 
   /// Zoom applies to every editor and outlasts the window, as in
   /// Planchette: it is the app-wide setting, not this document's.
@@ -372,12 +385,14 @@ class _BuiltInTextEditorScreenState extends State<BuiltInTextEditorScreen> {
             controller: _editor,
             strings: PoltergeistEditorStrings(l10n),
             editingLocked: widget.quitPending,
+            // A family that is not installed lands on the injected stack.
             textStyle: TextStyle(
-              fontFamily: widget.monoFontFallback.first,
+              fontFamily: _font.chosenFamily ?? widget.monoFontFallback.first,
               fontFamilyFallback: widget.monoFontFallback,
               fontSize: _textSize.toDouble(),
               height: 1.35,
             ),
+            ligatures: _font.ligatures,
           ),
         ),
       ),

@@ -6,6 +6,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- Settings › Text › Font picks the document's font from the four that
+  ship with Planchette, each shown in its own face, and Ligatures turns
+  joined symbols such as `->` and `!=` off. A font named in a
+  hand-edited settings file stays selected.
+
 ### Fixed
 - Selected text stands out in the dark look. Its indigo highlight was
   barely lighter than the page; it is now lighter and bluer, and comments

@@ -4,7 +4,12 @@ import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:ghost_fonts/ghost_fonts.dart' show BundledMonoFont;
 import 'package:planchette_editor/planchette_editor.dart'
-    show EditorTextSize, normalizeEditorExtensions, validateEditorDisplayName;
+    show
+        EditorLigatures,
+        EditorTextSize,
+        editorDefaultFont,
+        normalizeEditorExtensions,
+        validateEditorDisplayName;
 import 'package:seance_core/seance_core.dart';
 
 import '../family_hues.dart';
@@ -122,6 +127,8 @@ class _SettingsScreenState extends State<SettingsScreen>
   late TerminalPalette _terminalPalette;
   late TerminalLigatures _terminalLigatures;
   final _terminalFont = TextEditingController();
+  late EditorLigatures _editorLigatures;
+  final _editorFont = TextEditingController();
   SyncEnrollmentMode _syncMode = SyncEnrollmentMode.login;
   bool _saving = false;
   String? _syncStatus;
@@ -178,6 +185,8 @@ class _SettingsScreenState extends State<SettingsScreen>
     _terminalPalette = s.terminalPalette;
     _terminalLigatures = s.terminalLigatures;
     _terminalFont.text = s.terminalFontFamily;
+    _editorLigatures = s.editorLigatures;
+    _editorFont.text = s.editorFontFamily;
     _syncUrl.text = s.syncBaseUrl ?? '';
     _syncUser.text = s.syncUsername ?? '';
     _listenForTabRequests();
@@ -213,6 +222,7 @@ class _SettingsScreenState extends State<SettingsScreen>
       _syncEncryptionPassphrase,
       _syncEncryptionPassphraseConfirm,
       _terminalFont,
+      _editorFont,
     ]) {
       c.dispose();
     }
@@ -617,12 +627,13 @@ class _SettingsScreenState extends State<SettingsScreen>
       const Divider(height: 40),
       SettingsSectionHeader(
         'Built-in editor',
-        helpTitle: 'Editor text size',
+        helpTitle: 'Editor text',
         help:
-            'The text size of every built-in editor tab on this device. In an '
-            'editor tab you can zoom without opening Settings: ⌘ with +, − or '
-            '0 on macOS and iPadOS, Ctrl with the same keys elsewhere. The '
-            'sizes match Planchette and Poltergeist.',
+            'The text size, font and ligatures of every built-in editor tab on '
+            'this device. In an editor tab you can zoom without opening '
+            'Settings: ⌘ with +, − or 0 on macOS and iPadOS, Ctrl with the '
+            'same keys elsewhere. The sizes and included fonts match '
+            'Planchette and Poltergeist.',
       ),
       Row(
         children: [
@@ -648,6 +659,45 @@ class _SettingsScreenState extends State<SettingsScreen>
             ),
           ),
         ],
+      ),
+      TextField(
+        key: const ValueKey('editor.font'),
+        controller: _editorFont,
+        decoration: InputDecoration(
+          labelText: 'Font family (optional)',
+          hintText:
+              'e.g. Fira Code — blank uses ${editorDefaultFont.displayName}',
+          suffixIcon: IconButton(
+            tooltip: 'Choose a font',
+            icon: const Icon(Icons.font_download_outlined),
+            onPressed: _pickEditorFont,
+          ),
+        ),
+        onSubmitted: (_) => _persistEditorFont(),
+        onTapOutside: (_) {
+          // As for the terminal's field: the override has to dismiss the
+          // soft keyboard itself.
+          FocusManager.instance.primaryFocus?.unfocus();
+          _persistEditorFont();
+        },
+      ),
+      SwitchListTile(
+        key: const ValueKey('editor.ligatures'),
+        contentPadding: EdgeInsets.zero,
+        title: const Text('Ligatures'),
+        subtitle: const Text(
+          'Join character pairs such as -> and != into one symbol, in fonts '
+          'that draw them.',
+        ),
+        value: _editorLigatures == EditorLigatures.on,
+        onChanged: (on) {
+          setState(
+            () => _editorLigatures = on
+                ? EditorLigatures.on
+                : EditorLigatures.off,
+          );
+          _persistEditorFont();
+        },
       ),
       const Divider(height: 40),
       SettingsSectionHeader(
@@ -1291,6 +1341,30 @@ class _SettingsScreenState extends State<SettingsScreen>
     'Editor text size',
     () => _backend.setEditorFontSize(_editorFontSize),
   );
+
+  Future<void> _persistEditorFont() => _persist(
+    'Editor font',
+    () => _backend.setEditorFont(
+      fontFamily: _editorFont.text.trim(),
+      ligatures: _editorLigatures,
+    ),
+  );
+
+  /// The terminal font's picker for the editor: a dismissal leaves the
+  /// field alone, the default choice clears it.
+  Future<void> _pickEditorFont() async {
+    final chosen = await showFontPicker(
+      context,
+      fonts: _systemFonts,
+      current: _editorFont.text.trim(),
+      title: 'Editor font',
+      builtInLabel: 'Use ${editorDefaultFont.displayName}',
+      bundled: BundledMonoFont.values,
+    );
+    if (chosen == null || !mounted) return;
+    _editorFont.text = chosen;
+    await _persistEditorFont();
+  }
 
   /// Opens the installed-font picker and applies what it returns.
   ///

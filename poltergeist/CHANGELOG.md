@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **Choose the editor's font.** Settings → Appearance lists the four
+  included fonts under the editor's text size, each in its own face,
+  with a Ligatures switch. Editor windows and the compare view draw in
+  the choice.
 - **Every name on an ssh_config `Host` line gets a row.** `Host web db`
   offers `web` and `db` with the block's settings and notes, where only
   `web` appeared before. Wildcard and `!` patterns still get no row.

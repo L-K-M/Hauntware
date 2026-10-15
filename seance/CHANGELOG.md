@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Settings › General › Built-in editor has a font field with the same
+  picker as the terminal's, and a Ligatures switch. Editor tabs draw in
+  JetBrains Mono with ligatures unless you choose otherwise.
 - The terminal draws ligatures: `->`, `=>`, `!=` and the like appear
   as single symbols in fonts that have them, such as the included
   Iosevka Term, JetBrains Mono, Fira Code and Maple Mono. Settings ›
