@@ -18,6 +18,15 @@ linux_x64 in a 4-CPU container (Intel Xeon at 2.10 GHz, kernel 6.18)
 that other jobs shared; each file records the load average before and
 after.
 
+The runs predate the harness's review fixes, two of which touch its
+output. The follow's stand-in now also holds a batch back while it
+would be the 21st within a second (03 §10.1); the 50 ms beat alone let
+a late batch and the next go a few milliseconds apart. Over 10 s of
+10 ms steps with 2 ms of jitter it sends 198 or 199 batches where the
+beat alone sent 200, so the batch figures below would move by under
+1 %. And the `ui` counts now include samples by server, the servers
+profiled and the samples with rates, which these files lack.
+
 **These numbers are provisional.** A shared container is neither 03
 §11.4's reference VM nor a phone. Device numbers and the UI frame p99
 belong to spike S5 part 2 (K29b) and the manual gate of 06, and nothing
