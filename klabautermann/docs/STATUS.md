@@ -42,10 +42,11 @@ slice:
   (runner VM) remain.
 - Payload filter (M2, 03 D48, K15, #199): collector-set version 4 filters
   `overview` and `core` on the host with builtins only. Both send the
-  total `cpu` line, the meminfo subset, the load average and the rx and tx
-  bytes of device-backed NICs whose master, if any, has no device, other
-  than Xen netback ports, else of interfaces that are neither a bridge nor
-  enslaved, else of all but `lo`.
+  total `cpu` line, the meminfo subset, the load average and the rx and
+  tx bytes, picking interfaces in this order: device-backed NICs that
+  are not Xen netback ports and whose master, if any, has no device;
+  then interfaces that are neither a bridge nor enslaved; then all but
+  `lo`.
   `core` adds per-core busy and idle sums (eight raw counters from shells
   with 32-bit arithmetic such as mksh), `btime`, four I/O counters per
   whole disk (no partitions, stacked devices, loop, ram, zram or zd
