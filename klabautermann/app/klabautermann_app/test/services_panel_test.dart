@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show LogicalKeyboardKey;
+import 'package:flutter/services.dart' show LogicalKeyboardKey, SystemChannels;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ghost_theme/ghost_theme.dart';
 import 'package:klabautermann_app/controllers/monitoring_controller.dart';
@@ -496,6 +496,38 @@ void main() {
     await tester.pumpAndSettle();
     expect(_row('cron.service'), findsOneWidget);
     expect(panel.closes, hasLength(2));
+  });
+
+  testWidgets('Back on another tab leaves the hidden page open', (
+    tester,
+  ) async {
+    var exits = 0;
+    final messenger = tester.binding.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+      if (call.method == 'SystemNavigator.pop') exits++;
+      return null;
+    });
+    addTearDown(
+      () => messenger.setMockMethodCallHandler(SystemChannels.platform, null),
+    );
+    final panel = await _pump(
+      tester,
+      size: _phone,
+      platform: TargetPlatform.android,
+    );
+    await panel.sample(tester);
+    await _open(tester, 'nginx.service');
+
+    panel.visible.value = false;
+    await tester.pumpAndSettle();
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(exits, 1);
+
+    panel.visible.value = true;
+    await tester.pumpAndSettle();
+    expect(find.text('Recent log lines'), findsOneWidget);
+    expect(_row('cron.service'), findsNothing);
   });
 
   testWidgets('touch platforms give the filters 48 dp tap targets', (

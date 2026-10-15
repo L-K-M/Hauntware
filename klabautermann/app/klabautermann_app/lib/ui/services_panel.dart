@@ -150,11 +150,12 @@ class _ServicesPanelState extends State<ServicesPanel> {
         }
 
         // A narrow panel shows the page in the list's place, as a phone
-        // pushes details (03 §10.5), and Back returns to the list.
+        // pushes details (03 §10.5), and Back returns to the list. A
+        // hidden tab stays mounted, so Back is left to the route then.
         return PopScope(
-          canPop: false,
+          canPop: !widget.visible,
           onPopInvokedWithResult: (didPop, _) {
-            if (!didPop) _close();
+            if (!didPop && widget.visible) _close();
           },
           child: Padding(
             padding: padding,
