@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 
@@ -16,9 +18,14 @@ const double _wideWidth = 600;
 const double _gap = 16;
 const double _sparklineHeight = 40;
 
-/// A per-core bar's width, and its core name's, before text scaling.
-const double _coreBarWidth = 150;
-const double _coreNameWidth = 44;
+/// A per-core bar's width with its figure, beside the core's name, before
+/// text scaling, and the gap between a core's name, bar and figure.
+const double _coreBarWidth = 106;
+const double _coreGap = 8;
+
+/// The widest a core's name gets before text scaling; only a name no
+/// kernel prints, such as a broken host's, is cut there.
+const double _coreNameMaxWidth = 72;
 
 /// The trailing number of a `/proc/stat` core name such as `cpu12`.
 final RegExp _coreNumber = RegExp(r'\d+$');
@@ -401,20 +408,46 @@ class _CoreBars extends StatelessWidget {
     final strings = klabautermannChartStrings(l10n);
     final scaler = MediaQuery.textScalerOf(context);
     final style = _valueStyle(context, stale);
+    // Every name gets the longest one's width on one line, so `cpu100`
+    // does not wrap into what reads as a lower core and the bars line up.
+    // Measured in the style `Text` resolves, bold text included.
+    var nameStyle = DefaultTextStyle.of(context).style.merge(style);
+    if (MediaQuery.boldTextOf(context)) {
+      nameStyle = nameStyle.merge(const TextStyle(fontWeight: FontWeight.bold));
+    }
+    final nameWidth = cores.fold(0.0, (widest, core) {
+      final painter = TextPainter(
+        text: TextSpan(text: core.$1, style: nameStyle),
+        textDirection: Directionality.of(context),
+        textScaler: scaler,
+        maxLines: 1,
+      )..layout();
+      final width = painter.width;
+      painter.dispose();
+      return math.max(
+        widest,
+        math.min(width.ceilToDouble(), scaler.scale(_coreNameMaxWidth)),
+      );
+    });
     return Wrap(
       spacing: _gap,
       runSpacing: 8,
       children: [
         for (final (name, value) in cores)
           SizedBox(
-            width: scaler.scale(_coreBarWidth),
+            width: nameWidth + _coreGap + scaler.scale(_coreBarWidth),
             child: MergeSemantics(
               child: Row(
-                spacing: 8,
+                spacing: _coreGap,
                 children: [
                   SizedBox(
-                    width: scaler.scale(_coreNameWidth),
-                    child: Text(name, style: style),
+                    width: nameWidth,
+                    child: Text(
+                      name,
+                      style: style,
+                      softWrap: false,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
                   Expanded(
                     child: ExcludeSemantics(

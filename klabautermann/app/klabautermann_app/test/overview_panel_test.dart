@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:klabautermann_app/controllers/monitoring_controller.dart';
 import 'package:klabautermann_app/l10n/app_localizations.dart';
@@ -291,6 +292,33 @@ void main() {
     );
     expect(find.text('No swap is set up.'), findsOneWidget);
   });
+
+  for (final textScale in [1.0, 2.0]) {
+    testWidgets('a core name past two digits keeps to one line at '
+        '${(textScale * 100).round()} % text', (tester) async {
+      final panel = await _pump(tester, size: _phone, textScale: textScale);
+      await panel.sample(
+        tester,
+        _core(
+          perCpu: {
+            for (var core = 0; core <= 101; core++) 'cpu$core': 7,
+            // No kernel prints it: cut rather than overflow the card.
+            'cpu99999999999999999999': 7,
+          },
+        ),
+      );
+
+      for (final name in ['cpu9', 'cpu99', 'cpu100', 'cpu101']) {
+        final paragraph = tester.renderObject<RenderParagraph>(find.text(name));
+        expect(
+          paragraph.getMaxIntrinsicWidth(double.infinity),
+          lessThanOrEqualTo(paragraph.size.width),
+          reason: '$name wraps',
+        );
+      }
+      expect(tester.takeException(), isNull);
+    });
+  }
 
   testWidgets('SYS-04: figures a container withholds say why', (tester) async {
     const reason = MetricWithheldReason.containerHostFigures;
