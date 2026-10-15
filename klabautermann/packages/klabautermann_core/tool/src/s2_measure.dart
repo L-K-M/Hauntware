@@ -7,6 +7,7 @@ library;
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:klabautermann_host/klabautermann_host.dart';
 
@@ -221,7 +222,11 @@ Map<String, int> blockSizes(List<int> payload) {
 /// than the machine runs, up to three requests per shell and count (one
 /// when it takes over 10 s). The payload size is the `S` marker's
 /// declared byte count, which the reply carries even when the frame
-/// parser rejects it for exceeding [kMaxSectionBytes].
+/// parser rejects it for exceeding [kMaxSectionBytes]. `bytesPerRow`
+/// divides it by the rows the host sends: every process, or
+/// [kProcsRowCap] above that many (D48). Before collector-set version 5
+/// the host sent every process, and the S2 evidence records that
+/// quotient as `bytesPerProcess`.
 Future<List<Map<String, Object?>>> measureProcs(
   List<String> shells,
   List<int> extraProcesses,
@@ -261,7 +266,7 @@ Future<List<Map<String, Object?>>> measureProcs(
               'extraProcesses': extra,
               'processes': processes,
               'payloadBytes': bytes,
-              'bytesPerProcess': bytes / processes,
+              'bytesPerRow': bytes / min(processes, kProcsRowCap),
               'capFraction': bytes / kMaxSectionBytes,
               'outcome': reply.tick == null
                   ? 'lost: ${reply.lostDetail}'
