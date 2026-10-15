@@ -2397,9 +2397,10 @@ no longer holds that value.
 - A state shows as systemd's own word, never translated (10.10), only
   when systemd uses it in that column: a load or active state from
   systemd's tables, or a sub state spelled as systemd spells them.
-  Anything else reads "unknown", and so does every state of a row whose
-  name ends in no unit type, as a text row the host read by position
-  after a status bullet would (CN-10). A notice names the text fallback.
+  Anything else reads "unknown", and so do every state and the
+  description of a row whose name ends in no unit type, as a text row
+  the host read by position after a status bullet would (CN-10). A
+  notice names the text fallback.
 - SVC-02's summary (`failed_units_summary.dart`, which the health card
   is to share over `failedUnits`) counts `UnitsSnapshot.failed` and
   names up to five, each with its sub state: systemd's `Result` property

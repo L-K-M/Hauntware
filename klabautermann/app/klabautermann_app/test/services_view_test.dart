@@ -54,6 +54,22 @@ void main() {
     }
   });
 
+  test('reads the description of a misread text row as unknown', () {
+    SystemdUnit described(String name) => SystemdUnit(
+      unit: name,
+      load: 'loaded',
+      active: 'failed',
+      sub: 'failed',
+      description: 'failed A web server',
+    );
+
+    expect(unitDescriptionOf(described('●')), isNull);
+    expect(
+      unitDescriptionOf(described('nginx.service')),
+      'failed A web server',
+    );
+  });
+
   test('filters by type and state, unknown being a value of its own', () {
     final units = [
       _unit('ssh.service', 'loaded', 'active', 'running'),

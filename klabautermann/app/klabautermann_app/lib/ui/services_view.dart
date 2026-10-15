@@ -83,6 +83,12 @@ UnitStates unitStatesOf(SystemdUnit unit) {
   );
 }
 
+/// [unit]'s description, unknown (null) with the states of a row whose
+/// name ends in no unit type: a text row the host misread by position
+/// holds its sub state and more there, never the description (CN-10).
+String? unitDescriptionOf(SystemdUnit unit) =>
+    unitStatesOf(unit).type == null ? null : unit.description;
+
 /// What a filter over one unit column keeps: every unit when [any], else
 /// the units whose value is [value], null meaning unknown.
 typedef UnitFilter<T extends Enum> = ({bool any, T? value});

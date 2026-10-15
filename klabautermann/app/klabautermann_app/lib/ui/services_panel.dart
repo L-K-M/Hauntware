@@ -230,8 +230,8 @@ List<SortableTableColumn<SystemdUnit>> _columns(
       SortableTableColumn(
         id: _Column.description.name,
         label: l10n.servicesColumnDescription,
-        text: (unit) => shown(unit.description),
-        sortKey: (unit) => unit.description,
+        text: (unit) => shown(unitDescriptionOf(unit)),
+        sortKey: unitDescriptionOf,
         extent: const FlexColumnExtent(3),
       ),
   ];

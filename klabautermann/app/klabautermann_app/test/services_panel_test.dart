@@ -220,8 +220,15 @@ void main() {
         units: [
           _unit('cron.service', 'active', 'running'),
           _unit('odd.service', 'sleeping', 'Dead', null, null),
-          // A bullet-led row read by position (CN-10).
-          _unit('●', 'loaded', 'failed', null, 'nginx.service'),
+          // A bullet-led row read by position (CN-10), the sub state
+          // leading the description as the host's text parser leaves it.
+          _unit(
+            '●',
+            'loaded',
+            'failed',
+            'failed A web server',
+            'nginx.service',
+          ),
         ],
       ),
     );
@@ -235,6 +242,7 @@ void main() {
     await _choose(tester, _Menu.type, 'unknown');
     expect(_unknownIn('●'), findsNWidgets(4));
     expect(find.text('loaded'), findsNothing);
+    expect(find.text('failed A web server'), findsNothing);
   });
 
   testWidgets('words an unavailable unit list', (tester) async {
