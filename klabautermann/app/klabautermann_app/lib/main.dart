@@ -9,6 +9,7 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 import 'package:path_provider/path_provider.dart';
 
 import 'app.dart';
+import 'controllers/coverage_controller.dart';
 import 'controllers/fleet_controller.dart';
 import 'controllers/monitoring_controller.dart';
 import 'services/instance_guard.dart';
@@ -134,6 +135,12 @@ Future<void> main(List<String> args) async {
   // KlabautermannApp remounts its tree when handed them.
   final monitoring = MonitoringController(engine);
   final appearance = appearanceFromSettings(settings);
+  // 03 §9.5 item 1: the first-run card shows until dismissed on this
+  // device, which settings.json keeps.
+  final coverage = CoverageController(
+    firstRunCardDismissed: settings.firstRunCardDismissed,
+    saveDismissal: settings.dismissFirstRunCard,
+  );
 
   // Desktop only: the runners there host the settings window; phones keep
   // the settings route.
@@ -147,6 +154,7 @@ Future<void> main(List<String> args) async {
       fleet: fleet,
       monitoring: monitoring,
       appearance: appearance,
+      coverage: coverage,
       settingsIssue: settings.issue,
       importStoreIssue: importStoreIssue,
       instanceLockIssue: instanceLockIssue,

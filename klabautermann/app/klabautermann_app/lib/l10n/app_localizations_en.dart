@@ -362,6 +362,154 @@ class AppLocalizationsEn extends AppLocalizations {
   String get placeholderMilestone => 'Available in a later milestone.';
 
   @override
+  String get coverageFirstRunTitle => 'How Klabautermann watches your servers';
+
+  @override
+  String get coverageFirstRunBody =>
+      'Klabautermann connects over SSH only while it is open. It installs nothing on your servers unless you ask it to. Charts cover only the time this device was connected.';
+
+  @override
+  String get coverageFirstRunDismiss => 'Got it';
+
+  @override
+  String get coverageFirstRunDetails => 'Coverage details';
+
+  @override
+  String get coverageFirstRunNotSaved =>
+      'Klabautermann could not save that you dismissed the coverage note, so it shows again after a restart.';
+
+  @override
+  String coverageChip(int watched, int total) {
+    String _temp0 = intl.Intl.pluralLogic(
+      total,
+      locale: localeName,
+      other:
+          'Watching $watched of $total servers on this device, only while open',
+      one: 'Watching $watched of 1 server on this device, only while open',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get coverageChipHint => 'Show coverage details';
+
+  @override
+  String get coverageSheetTitle => 'Coverage on this device';
+
+  @override
+  String get coverageTierBadge => 'T0';
+
+  @override
+  String get coverageTierTitle => 'SSH while Klabautermann is open';
+
+  @override
+  String get coverageTierBody =>
+      'Klabautermann reads your servers over SSH only while it is open. It installs nothing on them unless you ask it to.';
+
+  @override
+  String get coverageCoveredHeading => 'Covered';
+
+  @override
+  String get coverageLiveTitle => 'Live readings while open';
+
+  @override
+  String get coverageLiveBody =>
+      'Metrics, processes, services, logs and jobs of the servers you have open.';
+
+  @override
+  String get coverageWatchedTitle => 'Continuous watching';
+
+  @override
+  String coverageWatchedBody(int watched) {
+    String _temp0 = intl.Intl.pluralLogic(
+      watched,
+      locale: localeName,
+      other:
+          '$watched servers are read continuously while Klabautermann is open. Any others are read only while you have them open.',
+      one:
+          '1 server is read continuously while Klabautermann is open. Any others are read only while you have them open.',
+      zero:
+          'No server is watched on this device, so each is read only while you have it open.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get coverageNotCoveredHeading => 'Not covered';
+
+  @override
+  String get coverageClosedTitle => 'While Klabautermann is closed';
+
+  @override
+  String get coverageClosedBody =>
+      'Nothing checks your servers, so nothing can warn you about them.';
+
+  @override
+  String get coverageHostDownTitle => 'A server going down';
+
+  @override
+  String get coverageHostDownBody =>
+      'If a server stops while Klabautermann is closed, you find out the next time you open it.';
+
+  @override
+  String get coverageHistoryTitle => 'History before you connected';
+
+  @override
+  String get coverageHistoryBody =>
+      'Charts cover only the time this device was connected. Gaps are marked, never filled in.';
+
+  @override
+  String get coverageBackgroundTitle => 'While in the background';
+
+  @override
+  String get coverageBackgroundBody =>
+      'Reading stops while Klabautermann is in the background and resumes when you return.';
+
+  @override
+  String coverageFreshnessSeconds(int seconds) {
+    return '$seconds s';
+  }
+
+  @override
+  String coverageFreshnessMinutes(int minutes) {
+    return '$minutes min';
+  }
+
+  @override
+  String coverageFreshnessHours(int hours) {
+    return '$hours h';
+  }
+
+  @override
+  String coverageFreshnessDays(int days) {
+    return '$days d';
+  }
+
+  @override
+  String coverageFreshnessUpdated(String age) {
+    return 'Updated $age ago';
+  }
+
+  @override
+  String coverageFreshnessStale(String age) {
+    return 'Stale: updated $age ago';
+  }
+
+  @override
+  String coverageFreshnessDisconnected(String age) {
+    return 'Disconnected $age ago';
+  }
+
+  @override
+  String get coverageFreshnessPaused => 'Paused: app in background';
+
+  @override
+  String get coverageFreshnessNotWatched => 'Not watched on this device';
+
+  @override
+  String get coverageFreshnessNoData => 'No data yet';
+
+  @override
   String serverTitle(String name) {
     return '$name';
   }
@@ -812,6 +960,140 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get logJournalHideFields => 'Hide fields';
+
+  @override
+  String get servicesWaiting => 'Waiting for the first list of units…';
+
+  @override
+  String get servicesUnavailableMissing =>
+      'This server has no systemctl, so there are no units to list.';
+
+  @override
+  String get servicesUnavailableDenied =>
+      'The server refused to list its units.';
+
+  @override
+  String get servicesUnavailableTimeout =>
+      'Listing units took too long and was stopped.';
+
+  @override
+  String get servicesUnavailableError => 'Listing units failed.';
+
+  @override
+  String get servicesTextFallback =>
+      'This server\'s systemd is older than version 246, so units are read from text. States that could not be read show as unknown.';
+
+  @override
+  String get servicesFilterType => 'Type';
+
+  @override
+  String get servicesFilterTypeAll => 'All types';
+
+  @override
+  String get servicesFilterState => 'State';
+
+  @override
+  String get servicesFilterStateAll => 'All states';
+
+  @override
+  String get servicesEmpty => 'No units match these filters.';
+
+  @override
+  String get servicesColumnUnit => 'Unit';
+
+  @override
+  String get servicesColumnLoad => 'Load';
+
+  @override
+  String get servicesColumnActive => 'Active';
+
+  @override
+  String get servicesColumnSub => 'Sub';
+
+  @override
+  String get servicesColumnDescription => 'Description';
+
+  @override
+  String servicesFailedCount(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$countString failed units',
+      one: '1 failed unit',
+      zero: 'No failed units',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String servicesFailedUnit(String unit, String state) {
+    return '$unit: $state';
+  }
+
+  @override
+  String servicesFailedMore(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'and $countString more',
+      one: 'and 1 more',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get servicesUnitClose => 'Close unit details';
+
+  @override
+  String get servicesLogsTitle => 'Recent log lines';
+
+  @override
+  String get servicesLogsRequested => 'Asking the server for recent log lines…';
+
+  @override
+  String get servicesLogsWaitingLink =>
+      'Waiting for the connection to the server…';
+
+  @override
+  String get servicesLogsWaitingChannel =>
+      'Waiting for a free session on the server…';
+
+  @override
+  String get servicesLogsWaitingBackground =>
+      'Paused while the app is in the background.';
+
+  @override
+  String get servicesLogsReading => 'Reading recent log lines…';
+
+  @override
+  String get servicesLogsEmpty => 'The journal holds no lines for this unit.';
+
+  @override
+  String get servicesLogsRefused =>
+      'Reading unit logs is not available in this version yet.';
+
+  @override
+  String get servicesLogsInvalid =>
+      'This unit\'s name cannot be used to read its logs.';
+
+  @override
+  String get servicesLogsMissing =>
+      'This server has no journalctl, so unit logs cannot be read.';
+
+  @override
+  String get servicesLogsDenied =>
+      'The server refused to read this unit\'s journal.';
+
+  @override
+  String get servicesLogsFailed => 'Reading this unit\'s journal failed.';
 
   @override
   String get logsPanelSource => 'Source';

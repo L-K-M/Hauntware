@@ -8,6 +8,7 @@ import 'fleet_rail.dart' show linkStatusWord;
 import 'inspector_pane.dart' show PlaceholderPaneBody;
 import 'logs/logs_panel.dart';
 import 'server_surfaces.dart';
+import 'services_panel.dart';
 import 'system_panel.dart';
 
 /// The server workspace of 03 §10.2: a header over the panel tab strip.
@@ -42,7 +43,7 @@ class ServerWorkspace extends StatelessWidget {
   Widget _build(BuildContext context, AppLocalizations l10n) {
     final server = fleet.selectedServer;
     if (server == null) {
-      return Center(
+      final invitation = Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Column(
@@ -59,6 +60,16 @@ class ServerWorkspace extends StatelessWidget {
                 textAlign: TextAlign.center,
               ),
             ],
+          ),
+        ),
+      );
+      // Centred while it fits, and scrolls when large text outgrows a
+      // short window (A11Y-09), as under the first-run card (03 §9.5).
+      return LayoutBuilder(
+        builder: (context, box) => SingleChildScrollView(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: box.maxHeight),
+            child: invitation,
           ),
         ),
       );
@@ -126,6 +137,11 @@ class _Panels extends StatelessWidget {
                 streams: panel.streams,
                 visible: tabs.index == index,
                 child: switch (panel) {
+                  ServerPanel.services => ServicesPanel(
+                    monitoring: monitoring,
+                    serverId: serverId,
+                    visible: tabs.index == index,
+                  ),
                   ServerPanel.logs => LogsPanel(
                     monitoring: monitoring,
                     serverId: serverId,

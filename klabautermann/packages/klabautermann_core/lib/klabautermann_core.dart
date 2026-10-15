@@ -58,6 +58,7 @@ export 'package:klabautermann_host/klabautermann_host.dart'
         SystemWideProcFile,
         SystemdUnit,
         TimersSnapshot,
+        UnitListFormat,
         UnitsSnapshot;
 // The Logs panel's LOG-04 notice: the access check's journal row (K04)
 // over the probe's HostProfile.

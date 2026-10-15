@@ -7,6 +7,7 @@ import 'package:klabautermann_core/klabautermann_core.dart'
     show DeviceSettingsIssue, ImportStoreIssue, InstanceLockUnavailable;
 
 import 'controllers/appearance_controller.dart';
+import 'controllers/coverage_controller.dart';
 import 'controllers/fleet_controller.dart';
 import 'controllers/monitoring_controller.dart';
 import 'l10n/app_localizations.dart';
@@ -33,6 +34,7 @@ class KlabautermannApp extends StatelessWidget {
     required this.fleet,
     required this.monitoring,
     required this.appearance,
+    required this.coverage,
     this.settingsIssue,
     this.importStoreIssue,
     this.instanceLockIssue,
@@ -43,6 +45,10 @@ class KlabautermannApp extends StatelessWidget {
   final FleetController fleet;
   final MonitoringController monitoring;
   final AppearanceController appearance;
+
+  /// Whether the first-run coverage card still shows (03 §9.5 item 1).
+  /// Like [appearance], it outlives an engine run.
+  final CoverageController coverage;
 
   /// What went wrong opening `settings.json`, told once at startup.
   final DeviceSettingsIssue? settingsIssue;
@@ -145,6 +151,7 @@ class KlabautermannApp extends StatelessWidget {
                   child: AdaptiveShell(
                     fleet: fleet,
                     monitoring: monitoring,
+                    coverage: coverage,
                     onOpenSettings: openSettings,
                   ),
                 );

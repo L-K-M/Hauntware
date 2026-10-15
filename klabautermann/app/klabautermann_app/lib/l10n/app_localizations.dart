@@ -646,6 +646,216 @@ abstract class AppLocalizations {
   /// **'Available in a later milestone.'**
   String get placeholderMilestone;
 
+  /// Heading of the first-run coverage card (03 §9.5 item 1), shown above the fleet on phones and above the workspace on desktops until the user dismisses it.
+  ///
+  /// In en, this message translates to:
+  /// **'How Klabautermann watches your servers'**
+  String get coverageFirstRunTitle;
+
+  /// Body of the first-run coverage card: what the app does and does not cover. It names no alerts, since this version has none.
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann connects over SSH only while it is open. It installs nothing on your servers unless you ask it to. Charts cover only the time this device was connected.'**
+  String get coverageFirstRunBody;
+
+  /// Button that dismisses the first-run coverage card for good on this device.
+  ///
+  /// In en, this message translates to:
+  /// **'Got it'**
+  String get coverageFirstRunDismiss;
+
+  /// Button on the first-run coverage card that opens the coverage sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'Coverage details'**
+  String get coverageFirstRunDetails;
+
+  /// Top toast when dismissing the first-run coverage card could not be written to the device's settings file; the card stays hidden for this session.
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann could not save that you dismissed the coverage note, so it shows again after a restart.'**
+  String get coverageFirstRunNotSaved;
+
+  /// The fleet header's coverage chip (03 §9.5 item 2): how many fleet servers this device watches continuously (its monitor set) out of all of them; watching happens only while the app is open. Opens the coverage sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'{total, plural, =1{Watching {watched} of 1 server on this device, only while open} other{Watching {watched} of {total} servers on this device, only while open}}'**
+  String coverageChip(int watched, int total);
+
+  /// Screen-reader hint for activating the fleet header's coverage chip.
+  ///
+  /// In en, this message translates to:
+  /// **'Show coverage details'**
+  String get coverageChipHint;
+
+  /// Heading of the coverage sheet the fleet header's chip opens.
+  ///
+  /// In en, this message translates to:
+  /// **'Coverage on this device'**
+  String get coverageSheetTitle;
+
+  /// Badge naming the execution tier the fleet runs at: T0, SSH only while the app is open (03 §9). Kept as written.
+  ///
+  /// In en, this message translates to:
+  /// **'T0'**
+  String get coverageTierBadge;
+
+  /// What the T0 badge means, beside it in the coverage sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'SSH while Klabautermann is open'**
+  String get coverageTierTitle;
+
+  /// Explanation under the tier title in the coverage sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann reads your servers over SSH only while it is open. It installs nothing on them unless you ask it to.'**
+  String get coverageTierBody;
+
+  /// Heading of the coverage sheet's list of what this device covers.
+  ///
+  /// In en, this message translates to:
+  /// **'Covered'**
+  String get coverageCoveredHeading;
+
+  /// Coverage sheet item: the servers the user has open are read live.
+  ///
+  /// In en, this message translates to:
+  /// **'Live readings while open'**
+  String get coverageLiveTitle;
+
+  /// Body of the coverage sheet's live-readings item.
+  ///
+  /// In en, this message translates to:
+  /// **'Metrics, processes, services, logs and jobs of the servers you have open.'**
+  String get coverageLiveBody;
+
+  /// Coverage sheet item about the servers this device watches continuously (its monitor set, FL-21): listed as covered once one is watched, and as not covered while none is.
+  ///
+  /// In en, this message translates to:
+  /// **'Continuous watching'**
+  String get coverageWatchedTitle;
+
+  /// Body of the coverage sheet's watched-servers item; watched is the size of this device's monitor set within the fleet.
+  ///
+  /// In en, this message translates to:
+  /// **'{watched, plural, =0{No server is watched on this device, so each is read only while you have it open.} =1{1 server is read continuously while Klabautermann is open. Any others are read only while you have them open.} other{{watched} servers are read continuously while Klabautermann is open. Any others are read only while you have them open.}}'**
+  String coverageWatchedBody(int watched);
+
+  /// Heading of the coverage sheet's list of what this device does not cover.
+  ///
+  /// In en, this message translates to:
+  /// **'Not covered'**
+  String get coverageNotCoveredHeading;
+
+  /// Coverage sheet item: nothing is covered while the app is closed.
+  ///
+  /// In en, this message translates to:
+  /// **'While Klabautermann is closed'**
+  String get coverageClosedTitle;
+
+  /// Body of the coverage sheet's while-closed item.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing checks your servers, so nothing can warn you about them.'**
+  String get coverageClosedBody;
+
+  /// Coverage sheet item: a server that goes down while the app is closed goes unnoticed.
+  ///
+  /// In en, this message translates to:
+  /// **'A server going down'**
+  String get coverageHostDownTitle;
+
+  /// Body of the coverage sheet's server-down item.
+  ///
+  /// In en, this message translates to:
+  /// **'If a server stops while Klabautermann is closed, you find out the next time you open it.'**
+  String get coverageHostDownBody;
+
+  /// Coverage sheet item: charts hold no history from before this device connected.
+  ///
+  /// In en, this message translates to:
+  /// **'History before you connected'**
+  String get coverageHistoryTitle;
+
+  /// Body of the coverage sheet's history item.
+  ///
+  /// In en, this message translates to:
+  /// **'Charts cover only the time this device was connected. Gaps are marked, never filled in.'**
+  String get coverageHistoryBody;
+
+  /// Coverage sheet item shown on iOS and Android only: reading stops in the background (PLT-04).
+  ///
+  /// In en, this message translates to:
+  /// **'While in the background'**
+  String get coverageBackgroundTitle;
+
+  /// Body of the coverage sheet's background item, on iOS and Android only.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading stops while Klabautermann is in the background and resumes when you return.'**
+  String get coverageBackgroundBody;
+
+  /// An age under a minute in a freshness line (03 §9.5 item 4), as in "Updated 4 s ago".
+  ///
+  /// In en, this message translates to:
+  /// **'{seconds} s'**
+  String coverageFreshnessSeconds(int seconds);
+
+  /// An age under an hour, in whole minutes, in a freshness line.
+  ///
+  /// In en, this message translates to:
+  /// **'{minutes} min'**
+  String coverageFreshnessMinutes(int minutes);
+
+  /// An age under a day, in whole hours, in a freshness line.
+  ///
+  /// In en, this message translates to:
+  /// **'{hours} h'**
+  String coverageFreshnessHours(int hours);
+
+  /// An age of a day or more, in whole days, in a freshness line.
+  ///
+  /// In en, this message translates to:
+  /// **'{days} d'**
+  String coverageFreshnessDays(int days);
+
+  /// Freshness line of a server's or panel's values while they are current; age is one of the coverageFreshness age strings.
+  ///
+  /// In en, this message translates to:
+  /// **'Updated {age} ago'**
+  String coverageFreshnessUpdated(String age);
+
+  /// Freshness line of values older than their stream's limit, which are drawn grey beside it.
+  ///
+  /// In en, this message translates to:
+  /// **'Stale: updated {age} ago'**
+  String coverageFreshnessStale(String age);
+
+  /// Freshness line while the server's connection is down after readings arrived; age is how long it has been down.
+  ///
+  /// In en, this message translates to:
+  /// **'Disconnected {age} ago'**
+  String coverageFreshnessDisconnected(String age);
+
+  /// Freshness line while a phone app is in the background and reading is paused.
+  ///
+  /// In en, this message translates to:
+  /// **'Paused: app in background'**
+  String get coverageFreshnessPaused;
+
+  /// Freshness line of a server outside this device's monitor set that nothing reads.
+  ///
+  /// In en, this message translates to:
+  /// **'Not watched on this device'**
+  String get coverageFreshnessNotWatched;
+
+  /// Freshness line before the first reading has arrived.
+  ///
+  /// In en, this message translates to:
+  /// **'No data yet'**
+  String get coverageFreshnessNoData;
+
   /// No description provided for @serverTitle.
   ///
   /// In en, this message translates to:
@@ -1203,6 +1413,198 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Hide fields'**
   String get logJournalHideFields;
+
+  /// Services panel: shown until the server's first list of systemd units arrives.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for the first list of units…'**
+  String get servicesWaiting;
+
+  /// Services panel: the server lacks the systemctl tool, as on a system without systemd.
+  ///
+  /// In en, this message translates to:
+  /// **'This server has no systemctl, so there are no units to list.'**
+  String get servicesUnavailableMissing;
+
+  /// Services panel: listing systemd units failed with a permission error.
+  ///
+  /// In en, this message translates to:
+  /// **'The server refused to list its units.'**
+  String get servicesUnavailableDenied;
+
+  /// Services panel: the unit listing ran past its time limit on the server.
+  ///
+  /// In en, this message translates to:
+  /// **'Listing units took too long and was stopped.'**
+  String get servicesUnavailableTimeout;
+
+  /// Services panel: listing systemd units failed for another reason; the server's error output may follow.
+  ///
+  /// In en, this message translates to:
+  /// **'Listing units failed.'**
+  String get servicesUnavailableError;
+
+  /// Services panel notice for old systemd, whose unit list has no JSON output (CN-10).
+  ///
+  /// In en, this message translates to:
+  /// **'This server\'s systemd is older than version 246, so units are read from text. States that could not be read show as unknown.'**
+  String get servicesTextFallback;
+
+  /// Label of the Services panel's filter by unit type, such as service or socket.
+  ///
+  /// In en, this message translates to:
+  /// **'Type'**
+  String get servicesFilterType;
+
+  /// The unit type filter's choice that shows units of every type.
+  ///
+  /// In en, this message translates to:
+  /// **'All types'**
+  String get servicesFilterTypeAll;
+
+  /// Label of the Services panel's filter by a unit's active state, such as active or failed.
+  ///
+  /// In en, this message translates to:
+  /// **'State'**
+  String get servicesFilterState;
+
+  /// The unit state filter's choice that shows units in every state.
+  ///
+  /// In en, this message translates to:
+  /// **'All states'**
+  String get servicesFilterStateAll;
+
+  /// Services panel: the unit list is empty under the chosen type and state filters.
+  ///
+  /// In en, this message translates to:
+  /// **'No units match these filters.'**
+  String get servicesEmpty;
+
+  /// Column header of the unit list: the systemd unit's name.
+  ///
+  /// In en, this message translates to:
+  /// **'Unit'**
+  String get servicesColumnUnit;
+
+  /// Column header and label: whether systemd loaded the unit's configuration (its load state).
+  ///
+  /// In en, this message translates to:
+  /// **'Load'**
+  String get servicesColumnLoad;
+
+  /// Column header and label: the unit's high-level state, such as active, inactive or failed (its active state).
+  ///
+  /// In en, this message translates to:
+  /// **'Active'**
+  String get servicesColumnActive;
+
+  /// Column header and label: the unit's detailed state, such as running or exited (its sub state).
+  ///
+  /// In en, this message translates to:
+  /// **'Sub'**
+  String get servicesColumnSub;
+
+  /// Column header of the unit list: the unit's description from its configuration.
+  ///
+  /// In en, this message translates to:
+  /// **'Description'**
+  String get servicesColumnDescription;
+
+  /// Heading of the failed units summary (SVC-02); count is how many systemd units failed.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{No failed units} =1{1 failed unit} other{{count} failed units}}'**
+  String servicesFailedCount(int count);
+
+  /// One failed unit in the failed units summary: its name, then its detailed (sub) state as the server reports it, or the word for unknown.
+  ///
+  /// In en, this message translates to:
+  /// **'{unit}: {state}'**
+  String servicesFailedUnit(String unit, String state);
+
+  /// Last line of the failed units summary when it lists only some of them; count is how many it leaves out.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{and 1 more} other{and {count} more}}'**
+  String servicesFailedMore(int count);
+
+  /// Tooltip of the button that closes a unit's details and returns to the unit list.
+  ///
+  /// In en, this message translates to:
+  /// **'Close unit details'**
+  String get servicesUnitClose;
+
+  /// Heading of a unit's recent journal lines on its details (SVC-04).
+  ///
+  /// In en, this message translates to:
+  /// **'Recent log lines'**
+  String get servicesLogsTitle;
+
+  /// A unit's log lines were requested and the app has no answer yet.
+  ///
+  /// In en, this message translates to:
+  /// **'Asking the server for recent log lines…'**
+  String get servicesLogsRequested;
+
+  /// A unit's log read waits until the connection to the server is ready.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for the connection to the server…'**
+  String get servicesLogsWaitingLink;
+
+  /// A unit's log read waits until the connection has a free session for it.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for a free session on the server…'**
+  String get servicesLogsWaitingChannel;
+
+  /// A unit's log read waits until the app returns to the foreground.
+  ///
+  /// In en, this message translates to:
+  /// **'Paused while the app is in the background.'**
+  String get servicesLogsWaitingBackground;
+
+  /// A unit's log read is running on the server.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading recent log lines…'**
+  String get servicesLogsReading;
+
+  /// A unit's log read finished without any journal line.
+  ///
+  /// In en, this message translates to:
+  /// **'The journal holds no lines for this unit.'**
+  String get servicesLogsEmpty;
+
+  /// The app's engine cannot read logs yet and refused the request; no log lines are shown.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading unit logs is not available in this version yet.'**
+  String get servicesLogsRefused;
+
+  /// The app refused to read logs for a unit name that fails its validation.
+  ///
+  /// In en, this message translates to:
+  /// **'This unit\'s name cannot be used to read its logs.'**
+  String get servicesLogsInvalid;
+
+  /// A unit's log read failed because the server lacks journalctl.
+  ///
+  /// In en, this message translates to:
+  /// **'This server has no journalctl, so unit logs cannot be read.'**
+  String get servicesLogsMissing;
+
+  /// A unit's log read failed with a permission error.
+  ///
+  /// In en, this message translates to:
+  /// **'The server refused to read this unit\'s journal.'**
+  String get servicesLogsDenied;
+
+  /// A unit's log read failed for another reason; the server's error output may follow.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading this unit\'s journal failed.'**
+  String get servicesLogsFailed;
 
   /// Label of the Logs panel's source picker, which chooses between the journal, the kernel log and a file; also the title of the phone's source sheet.
   ///

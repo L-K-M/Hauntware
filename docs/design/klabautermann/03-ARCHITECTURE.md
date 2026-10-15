@@ -1796,7 +1796,7 @@ platform identities in 04, section 12.3):
 | `host_keys.json`, verdict and tripwire files | Pins and quarantine state | catalog library | MVP |
 | `endpoint_pins.json` | Confirmed endpoints | catalog library | MVP |
 | `ssh_config_imports.json` [E] | D13's device-local store for FL-02 imports from `~/.ssh/config`, replaced whole by each import; never pushed (D14). Schema 3 (M2) holds each host's alias, host, port, user, `IdentityFile` and `ProxyJump` with the values ssh would use (10.1): the effective host (`%h` expanded, lowercased unless an address) and port, the first `IdentityFile` that is not `none`, and the `ProxyJump` as written; under `hops` it holds the same for each other name a stored route gives. An older file holds addresses only: schema 1 (M1) kept no `IdentityFile` or `ProxyJump` and kept `HostName` as written, `%h` included, and schema 2 read each host's values from its first block alone. Its hosts are listed as stored, with no `jumpRoute`, `authKind` or `locatorConflict`, and get no connect config until the next import rewrites the file. Built in M1: the engine isolate loads it at start and saves each import atomically before it answers (10.1). A damaged file is renamed to `ssh_config_imports.json.corrupt-<UTC time>`; a file it cannot read or rename, or one from a newer schema, is left as it is and no import is saved that run | `klabautermann_core` [E] | MVP |
-| `settings.json` | Device settings, `klabautermann.sync.deviceId` (minted once, never regenerated), monitor set, per-server device preferences | app | MVP |
+| `settings.json` | Device settings, `klabautermann.sync.deviceId` (minted once, never regenerated), whether the first-run coverage card was dismissed (`klabautermann.coverage.firstRunCardDismissed`, M2, 9.5; anything but `true` shows the card again), monitor set, per-server device preferences | app | MVP |
 | `window_state.json` | The desktop main window's last normal frame and its maximized and full-screen flags (10.2), in the shape Séance's file established (`x`, `y`, `width`, `height`, `isMaximized`, `isFullScreen`; physical pixels on Windows); never synced. Added in M1, a deviation from the plan, which listed no window file: kept out of `settings.json`, as Séance and Planchette keep theirs, so debounced drag saves never rewrite the file that holds the device id | app | MVP |
 | `instance.lock` [E] | Empty. One desktop instance per support directory (built in M2): the composition root takes an exclusive, non-blocking advisory lock on it after the settings window's branch and before `settings.json` and `window_state.json` open and the engine isolate starts, so one process mints the device id and writes these files, and holds it for the life of the process; the file is never deleted. A second instance opens no other file and only says it is already running, until the user quits it. A lock that fails for another reason (no write access, no lock support) lets the app run unguarded and says so at startup. Phones run one process per app and take none | app, through `klabautermann_core`'s `InstanceLock` | MVP |
 | `identity_reads.jsonl` [E] | Audit trail of identity-file reads (M2): one JSON line per attempt to read a server's or jump hop's `IdentityFile`, read or not (UTC time, server id and label, the expanded path, the error), through `seance_core`'s `IdentityAuditLog`, under the name Séance and Poltergeist use. Owner-only on Linux and macOS, also through rotation, which keeps the newest 500 lines once the file passes 1,000; never synced. Recording is best effort and never fails a connect. Added in M2, a deviation from the plan, which listed no such file | `klabautermann_core` | MVP |
@@ -2490,6 +2490,43 @@ unless the user enables admin mode for that panel.
 - **v1.x.** Override editor (SAF-12 path, `systemd-analyze verify`,
   `daemon-reload`), "make resilient" (`Restart=on-failure` drop-in),
   dependencies, OpenRC and procd adapters.
+
+As built in M2 (`app/klabautermann_app/lib/ui/services_panel.dart`), the
+Services tab lists the `units` stream's units in the sortable table with
+their load, active and sub states, filtered by unit type (services by
+default) and by active state; a filter keeps its choice when a refresh
+no longer holds that value.
+
+- A state shows as systemd's own word, never translated (10.10), only
+  when systemd uses it in that column: a load or active state from
+  systemd's tables, or a sub state spelled as systemd spells them.
+  Anything else reads "unknown", and so do every state and the
+  description of a row whose name ends in no unit type, as a text row
+  the host read by position after a status bullet would (CN-10). Such
+  a row opens no page, since its name is not a unit's. A notice names
+  the text fallback.
+- SVC-02's summary (`failed_units_summary.dart`, which the health card
+  is to share over `failedUnits`) counts `UnitsSnapshot.failed` and
+  names up to five, each with its sub state: systemd's `Result` property
+  needs `systemctl show` (SVC-08, v1).
+- A unit's page opens under the table, or in its place below a 600 px
+  panel width that grows with the text scale (Back returns), where it
+  takes the focus the hidden list held to its close button and gives it
+  back on closing (10.10). It reads SVC-04's lines as one 50-record
+  journal window through the monitoring controller and says what the
+  read does until lines arrive: waiting for an answer, the link, a
+  channel or the foreground, reading, no lines, or the end's reason with
+  the host's error text. A read still running when its tab hides stops
+  and starts over once shown. Since `RequestRejected` names no stream,
+  the controller gives a rejection of `OpenLogStream` to its oldest open
+  without an answer: exact while the engine refuses every open, and once
+  the log service is wired it refuses one outright only for a reused id,
+  which the app's counter never sends. A read closed before its answer
+  keeps its place until that answer arrives. This needs the controller
+  to send every `OpenLogStream` the app sends, since a second sender
+  with its own queue would also take each rejection as its own. Until
+  the service is wired, the page says unit logs are not available in
+  this version.
 
 ### 7.6 Logs (LOG)
 
@@ -3760,6 +3797,37 @@ by hue alone, short of 10.10's "never colour alone" for two to four
 series: the colour-blind check (10.7) and the per-series summaries are
 no second visual cue, and a dash pattern would read as missed samples,
 so that cue is still open.
+
+As built in M2 for items 1, 2 and 4 (`app/klabautermann_app/lib/ui/`
+`coverage.dart` and `freshness.dart`), the card and the chip leave out
+alerts, which arrive with ALR-01 (v1): the card's last sentence is
+"Charts cover only the time this device was connected", and the chip
+reads "Watching 4 of 12 servers on this device, only while open". The
+card heads the desktop workspace and the phone's fleet list, taking at
+most half of that column, its words scrolling above buttons that stay in
+view, until "Got it", which `settings.json` keeps (4.10); a dismissal
+that cannot be saved hides it for the session and says it returns. The
+chip heads the rail, above its section header, and the phone's list,
+under the card; it shows nothing for an empty fleet and counts the
+fleet's servers in FL-21's monitor set, none until the app stores one.
+It opens the coverage sheet, a bottom sheet under 600 dp and a dialog
+above: the T0 badge with its meaning, what is covered (the open servers'
+live readings) and what is not (continuous watching while no server is
+watched, anything while the app is closed, a server going down, history
+from before this device connected, and on iOS and Android the
+background pause), with no control. One formatter words freshness for
+the rows and cards, which adopt it as they land: the background pause
+first; "not watched on this device" for a server outside the monitor set
+that nothing samples, where a reading before any `SamplingState` counts
+as sampled (the engine sends none yet); "disconnected 3 min ago" from
+the start of a `waitingForLink` phase entered from `sampling`, once
+readings have arrived; otherwise the latest reading's age in its largest
+whole unit (s, min, h, d), "stale" once it reaches the caller's limit
+for that stream; "no data yet" before the first reading. A link already
+down when a view or the return from the background subscribes again
+reads the reading's age, since its phase began only then. The monitoring
+controller keeps each server's latest `SamplingState` and the phase
+before it.
 
 ---
 

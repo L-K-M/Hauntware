@@ -9,6 +9,7 @@ import 'package:ghost_desktop/ghost_desktop.dart' show GhostSettingsLinkMethod;
 import 'package:ghost_theme/ghost_theme.dart';
 import 'package:klabautermann_app/app.dart';
 import 'package:klabautermann_app/controllers/appearance_controller.dart';
+import 'package:klabautermann_app/controllers/coverage_controller.dart';
 import 'package:klabautermann_app/controllers/fleet_controller.dart';
 import 'package:klabautermann_app/controllers/monitoring_controller.dart';
 import 'package:klabautermann_app/services/settings_window/remote_settings.dart';
@@ -279,9 +280,11 @@ void main() {
       final engine = FakeEngineClient();
       final fleet = FleetController(engine);
       final monitoring = MonitoringController(engine);
+      final coverage = CoverageController(firstRunCardDismissed: true);
       addTearDown(() async {
         fleet.dispose();
         monitoring.dispose();
+        coverage.dispose();
         await engine.close();
       });
       final remote = await connectWindow(tester, SettingsTab.appearance);
@@ -294,6 +297,7 @@ void main() {
                 fleet: fleet,
                 monitoring: monitoring,
                 appearance: main,
+                coverage: coverage,
               ),
             ),
             Expanded(child: SettingsWindowApp(remote: remote)),
