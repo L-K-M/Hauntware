@@ -5,9 +5,12 @@ library;
 
 import 'package:meta/meta.dart';
 
+import '../commands/commands.dart';
 import '../cron/evaluate.dart';
 import '../cron/expression.dart';
+import '../hws/collector.dart' show ArgValidators;
 import '../parse/cron.dart';
+import '../parse/oncalendar.dart';
 import '../parse/timers.dart';
 import 'schedule.dart';
 
@@ -171,12 +174,41 @@ final class TimerJobEntry extends JobEntry {
   final SystemdTimer timer;
 
   /// The timer's `OnCalendar=` and monotonic triggers; null until the
-  /// timer properties are collected, so an empty list means none.
+  /// timer properties are collected, and when a read listed none.
   final List<ScheduleDescription>? triggers;
 
   /// `RandomizedDelaySec=`; null until the timer properties are
-  /// collected.
+  /// collected, and when `systemctl show` gave no readable value.
   final Duration? randomizedDelay;
+
+  /// This row with [detail]'s triggers and randomized delay (03 §7.7,
+  /// D57). Each calendar trigger takes the elapses and normalized form of
+  /// its entry in [calendars], the [parseOnCalendar] results of
+  /// [timerCalendarCommands]' reads keyed by expression; without one, or
+  /// when systemd rejected the expression, its elapses stay unknown.
+  ///
+  /// A [detail] without a calendar or monotonic trigger leaves triggers
+  /// and delay unknown: `systemctl show` prints that for a unit no longer
+  /// loaded, with a default delay of 0, and for a timer with only
+  /// `OnClockChange=` or `OnTimezoneChange=`, which it does not list.
+  TimerJobEntry withDetail(
+    TimerDetail detail, {
+    Map<String, OnCalendarResult> calendars = const {},
+  }) {
+    if (detail.calendar.isEmpty && detail.monotonic.isEmpty) {
+      return TimerJobEntry(timer: timer);
+    }
+
+    return TimerJobEntry(
+      timer: timer,
+      triggers: [
+        for (final expression in detail.calendar)
+          _calendarTrigger(expression, calendars[expression]),
+        ...detail.monotonic,
+      ],
+      randomizedDelay: detail.randomizedDelay,
+    );
+  }
 
   @override
   String get id => 'timer|${timer.unit}';
@@ -196,6 +228,31 @@ final class TimerJobEntry extends JobEntry {
     'randomizedDelayUs': randomizedDelay?.inMicroseconds,
   };
 }
+
+CalendarSchedule _calendarTrigger(String expression, OnCalendarResult? result) {
+  final evaluated = result == null ? null : CalendarSchedule.fromResult(result);
+  return evaluated ?? CalendarSchedule(normalized: expression);
+}
+
+/// The `systemd-analyze calendar` reads that give [detail]'s calendar
+/// triggers their next runs (03 §7.7, D57): a [HostCommands.onCalendar]
+/// argv per expression, for [runCount] runs. Below systemd 242
+/// ([systemdMajor]) the command has no `--iterations` and the read
+/// yields one run. An expression the host sent that the builder would
+/// refuse gets no read, and its elapses stay unknown.
+Map<String, List<String>> timerCalendarCommands(
+  TimerDetail detail, {
+  required int runCount,
+  int? systemdMajor,
+}) => {
+  for (final expression in detail.calendar)
+    if (ArgValidators.calendarExpression(expression) == null)
+      expression: HostCommands.onCalendar(
+        expression,
+        iterations: runCount,
+        systemdMajor: systemdMajor,
+      ),
+};
 
 /// Resolves a `CRON_TZ` name to a zone, or null when unknown.
 typedef CronZoneResolver = ServerZone? Function(String timeZone);
@@ -345,7 +402,7 @@ CronJobEntry _cronEntry(
   // cronie converts its minutes into any CRON_TZ zone, even one named
   // like its own, and matches the line there. An empty value stays in
   // the line's environment, so cronie skips that line during catch-up
-  // like any other CRON_TZ line (D57).
+  // like any other CRON_TZ line (D58).
   final clock = job.cronTz == null ? CronClock.server : CronClock.line;
   final runs = evaluate(expression, runZone, clock);
   if (runs == null) {

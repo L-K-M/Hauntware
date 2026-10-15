@@ -40,18 +40,22 @@ export 'src/settings/instance_lock.dart'
 // explicit `show` list that changes as a milestone wires types in or
 // retires them.
 // The host types are the plain data that sampling results and
-// HostProfileChanged carry (D52), and the log viewer's journal rows.
+// HostProfileChanged carry (D52), the file names
+// HostProfile.showsHostFigures takes (D50), and the log viewer's journal
+// rows.
 export 'package:klabautermann_host/klabautermann_host.dart'
     show
         CpuPercentages,
         CronSnapshot,
         DiskRate,
+        FsMount,
         FsSnapshot,
         HostProfile,
         JournalEntry,
         LoadAvg,
         NetRate,
         ProcsSelection,
+        SystemWideProcFile,
         SystemdUnit,
         TimersSnapshot,
         UnitsSnapshot;

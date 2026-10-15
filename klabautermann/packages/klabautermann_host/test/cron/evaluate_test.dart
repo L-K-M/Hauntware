@@ -262,7 +262,7 @@ void main() {
   });
 
   test('a line clock follows its zone under the server\'s repeats', () {
-    // A CRON_TZ line (D57) under modelled Berlin, which repeats
+    // A CRON_TZ line (D58) under modelled Berlin, which repeats
     // 01:00Z to 02:00Z on 2026-10-25. Modelled New York (-5, -4 from
     // 2026-03-08T07:00Z to 2026-11-01T06:00Z) falls back apart from
     // it; modelled London (+0, +1 over Berlin's window) with it.

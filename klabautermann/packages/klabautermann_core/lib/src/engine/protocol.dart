@@ -56,7 +56,7 @@ import 'package:meta/meta.dart';
 /// sends (03 D48), within v3 the same way.
 ///
 /// [CronResult] then gained the jobs rows with next runs in the server's
-/// zone and that zone's basis (03 §7.7, D57), within v3 the same way.
+/// zone and that zone's basis (03 §7.7, D58), within v3 the same way.
 const int kEngineProtocolVersion = 3;
 
 /// Every message the UI isolate sends the engine (03 §10.1, D18). Plain data
@@ -935,8 +935,8 @@ final class JournalLogSource extends LogSource {
 }
 
 /// The kernel's messages for the current boot (LOG-03): `journalctl -k`,
-/// read as [JournalRecord]s, with `dmesg --json` only as a fallback, read
-/// as [KernelRecord]s. Past boots arrive with LOG-09 (v1).
+/// read as [JournalRecord]s, with `dmesg --json --decode` only as a
+/// fallback, read as [KernelRecord]s. Past boots arrive with LOG-09 (v1).
 final class KernelLogSource extends LogSource {
   const KernelLogSource();
 }
@@ -1019,7 +1019,8 @@ final class JournalRecord extends LogRecord {
   final Map<String, String?> fields;
 }
 
-/// One kernel ring-buffer record from `dmesg --json`, LOG-03's fallback.
+/// One kernel ring-buffer record from `dmesg --json --decode`, LOG-03's
+/// fallback.
 final class KernelRecord extends LogRecord {
   const KernelRecord({required this.message, this.sinceBoot, this.priority});
 
@@ -1029,8 +1030,7 @@ final class KernelRecord extends LogRecord {
   /// `time`: how long after boot the kernel logged it.
   final Duration? sinceBoot;
 
-  /// The level in `pri`, which also holds the facility; null when dmesg
-  /// sent no `pri`.
+  /// The level that `pri` names; null when dmesg sent no level name.
   final LogPriority? priority;
 }
 
@@ -1987,7 +1987,7 @@ final class TimersResult extends SampleResult {
 
 /// Cron jobs ([SampleStream.cron], 7.7): the parsed table, and its jobs
 /// rows with next runs the engine evaluated at the sample's time in the
-/// server's zone (D57), since the zone rules stay in the engine (D52).
+/// server's zone (D58), since the zone rules stay in the engine (D52).
 final class CronResult extends SampleResult {
   CronResult(
     this.cron, {
@@ -2019,7 +2019,7 @@ final class CronResult extends SampleResult {
 
 /// Why [CronResult]'s server-zone runs follow the probe's fixed offset
 /// instead of a zone's rules, so no DST change after now shows in them
-/// (7.7, D57).
+/// (7.7, D58).
 enum CronZoneFallback {
   /// The probe found no IANA zone name.
   noZoneName,

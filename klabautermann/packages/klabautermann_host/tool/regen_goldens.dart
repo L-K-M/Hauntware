@@ -44,8 +44,67 @@ void main() {
       '${dir.path}/probe.golden.json',
       parseProbe(sections, _ctx).toJsonResult(),
     );
+    for (final read in _optionalReads) {
+      final file = File('${dir.path}/$read.txt');
+      if (!file.existsSync()) continue;
+      _write(
+        '${dir.path}/$read.golden.json',
+        _optionalJson(read, file.readAsStringSync()),
+      );
+    }
+    if (File('${dir.path}/timer_detail.txt').existsSync()) {
+      _write('${dir.path}/timer_jobs.golden.json', _timerJobsJson(dir.path));
+    }
     stdout.writeln('$platform: goldens rewritten');
   }
+}
+
+/// Mirrors `_optionalReads` in `test/fixtures_test.dart`.
+const _optionalReads = ['timer_detail', 'oncalendar', 'journal', 'dmesg'];
+
+Map<String, Object?> _optionalJson(String read, String payload) =>
+    switch (read) {
+      'timer_detail' => parseTimerDetail(payload, _ctx).toJsonResult(),
+      'oncalendar' => parseOnCalendar(payload).toJsonResult(),
+      'journal' => parseJournalLines(payload).toJsonResult(),
+      'dmesg' => parseDmesgJson(payload).toJsonResult(),
+      _ => throw StateError(read),
+    };
+
+/// Mirrors `_timerJobsJson` in `test/fixtures_test.dart`.
+Map<String, Object?> _timerJobsJson(String dir) {
+  final profile = parseProbe(
+    _probeSections(File('$dir/probe.sections').readAsStringSync()),
+    _ctx,
+  ).value;
+  final jobs = mergeJobs(
+    timers: parseTimers(File('$dir/timers.txt').readAsStringSync(), _ctx).value,
+    nowUtc: DateTime.utc(2026, 10, 14, 12),
+    zone: null,
+  );
+  final detail = parseTimerDetail(
+    File('$dir/timer_detail.txt').readAsStringSync(),
+    _ctx,
+  ).value;
+  final read = parseOnCalendar(
+    File('$dir/oncalendar.txt').readAsStringSync(),
+  ).value;
+  final first = jobs.indexWhere((j) => j is TimerJobEntry);
+  jobs[first] = (jobs[first] as TimerJobEntry).withDetail(
+    detail,
+    // oncalendar.txt is the read issued for the timer's one calendar
+    // expression. Reads are keyed by the expression sent, as the
+    // output names it only when it differs from the normalized form.
+    calendars: {detail.calendar.single: read},
+  );
+  return {
+    'jobs': jobs.map((j) => j.toJson()).toList(),
+    'timerCalendarReads': timerCalendarCommands(
+      detail,
+      runCount: 2,
+      systemdMajor: profile.systemdVersion,
+    ),
+  };
 }
 
 void _write(String path, Object? json) {
@@ -72,6 +131,11 @@ Object? _toJson(Object? v) {
   if (v is UnitsSnapshot) return v.toJson();
   if (v is TimersSnapshot) return v.toJson();
   if (v is CronSnapshot) return v.toJson();
+  if (v is TimerDetail) return v.toJson();
+  if (v is OnCalendarResult) return v.toJson();
+  if (v is JournalEntry) return v.toJson();
+  if (v is DmesgRecord) return v.toJson();
+  if (v is List) return v.map(_toJson).toList();
   throw ArgumentError(v);
 }
 

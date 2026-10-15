@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Settings › General › Built-in editor has a font field with the same
+  picker as the terminal's, and a Ligatures switch. Editor tabs draw in
+  JetBrains Mono with ligatures unless you choose otherwise.
+- Fixed-width text, such as host key fingerprints, private keys, paths,
+  commands and the keyboard bar's keys, draws in JetBrains Mono on
+  macOS, iOS and Windows. It used to fall back to the proportional
+  system font there. The connection log uses JetBrains Mono too, instead
+  of Menlo or Consolas, and the grep cheat sheet in the editor's find
+  bar uses the document's font.
 - The terminal draws ligatures: `->`, `=>`, `!=` and the like appear
   as single symbols in fonts that have them, such as the included
   Iosevka Term, JetBrains Mono, Fira Code and Maple Mono. Settings ›

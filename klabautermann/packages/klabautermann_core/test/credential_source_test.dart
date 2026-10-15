@@ -145,6 +145,21 @@ void main() {
     timeout: const Timeout(Duration(seconds: 5)),
   );
 
+  test(
+    'a character device is unreadable, since a tty would wait for input',
+    () async {
+      // /dev/null answers a read at once, so the test cannot hang; a tty
+      // at the same place would block until someone typed.
+      await Link('$home/.ssh/id_test').create('/dev/null');
+
+      expect(
+        (await unavailable(source())).failure,
+        IdentityFileFailure.unreadable,
+      );
+    },
+    testOn: '!windows',
+  );
+
   test('a symlink to a key is read through the link', () async {
     await File('$home/.ssh/id_real').writeAsString(_pem);
     await Link('$home/.ssh/id_test').create('$home/.ssh/id_real');

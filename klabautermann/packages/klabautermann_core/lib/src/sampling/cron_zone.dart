@@ -1,4 +1,4 @@
-/// The zones the engine evaluates cron next runs in (03 §7.7, D57):
+/// The zones the engine evaluates cron next runs in (03 §7.7, D58):
 /// the server's zone with the rules `package:timezone`'s database holds
 /// for the probe's IANA name, checked against the offset the server
 /// reported, else at that fixed offset with the reason; and the zones a

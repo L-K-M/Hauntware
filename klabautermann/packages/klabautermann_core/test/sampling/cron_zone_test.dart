@@ -1,4 +1,4 @@
-// Cron next runs in the server's zone (03 §7.7, D57): the engine's
+// Cron next runs in the server's zone (03 §7.7, D58): the engine's
 // jobs rows follow `package:timezone`'s rules for the probe's zone name
 // across DST changes in both directions, keep a zone without DST
 // steady, and fall back to the probe's fixed offset with a reason;

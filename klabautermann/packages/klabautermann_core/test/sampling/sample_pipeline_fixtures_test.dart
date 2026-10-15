@@ -3,7 +3,7 @@
 // amounts, and one reading of each slow collector, framed as the sampler
 // prints them. The second reading's rates follow from those amounts, and
 // the cron reading's jobs rows match `test/fixtures/cron_jobs/` (7.7,
-// D57); `KLAB_REGEN_GOLDENS=1` rewrites those goldens.
+// D58); `KLAB_REGEN_GOLDENS=1` rewrites those goldens.
 import 'dart:convert';
 import 'dart:io';
 

@@ -6,12 +6,17 @@ import 'package:poltergeist_core/poltergeist_core.dart';
 import 'package:poltergeist_core/src/engine/connect_log_coalescer.dart'
     show connectionLogFlushInterval;
 import 'package:poltergeist_core/src/engine/local_directory_watcher.dart'
-    show LocalDirectoryWatcher, LocalWatchBackend;
+    show LocalWatchBackend;
 import 'package:test/test.dart';
 
 import '../connection/pool_fakes.dart';
 
 const _connectionLogPollTimeout = Duration(seconds: 1);
+
+/// Bounds the local-watch suite's signal polls: generous for a loaded
+/// runner's late debounce timer, short enough that a signal which never
+/// comes fails promptly.
+const _watchSignalPollTimeout = Duration(seconds: 5);
 
 /// Mode-bit refusals (and symlink fixtures) need a POSIX host this process
 /// cannot override as root — the fs suite's guard, applied to the local
@@ -2344,15 +2349,72 @@ void main() {
       return (h, backend, opened.channelId, opened.homePath);
     }
 
-    /// Waits past the debounce window so a debounced change has crossed —
-    /// derived from the production constant, not a restated millisecond
-    /// value that can drift (the connectionLogFlushInterval precedent).
-    Future<void> settleDebounce() => Future<void>.delayed(
-          LocalDirectoryWatcher.debounceInterval * 2,
-        );
-
     List<DirectoryWatchEvent> watchEvents(HostHarness h) =>
         h.events.whereType<DirectoryWatchEvent>().toList();
+
+    /// Polls until a watch event (on [channelId], when given) has crossed
+    /// or [_watchSignalPollTimeout] passes, then returns the crossed watch
+    /// events (again on [channelId], when given) for the caller to assert.
+    ///
+    /// A fixed sleep cannot stand in for this. A debounced signal crosses
+    /// on a real timer; when a stalled runner wakes with both that timer
+    /// and the sleep's expired, the VM runs them in one batch and the
+    /// sleep's continuation asserts before the signal's port message is
+    /// delivered (the macOS flake on PR #206).
+    Future<List<DirectoryWatchEvent>> awaitWatchEvents(
+      HostHarness h, {
+      int? channelId,
+    }) async {
+      List<DirectoryWatchEvent> crossed() => [
+        for (final event in watchEvents(h))
+          if (channelId == null || event.channelId == channelId) event,
+      ];
+      final poll = Stopwatch()..start();
+      while (crossed().isEmpty && poll.elapsed < _watchSignalPollTimeout) {
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+      return crossed();
+    }
+
+    /// Proves a negative without a fixed sleep: returns the watch events
+    /// that crossed before a sentinel signal, the sentinel's own excluded.
+    ///
+    /// Opens a second channel on [h], watches it through [backend], fires
+    /// one change into it and waits for its signal. Every debounced signal
+    /// waits the same interval on this isolate's timers, which fire in
+    /// deadline order, and crosses one FIFO port; an immediate lost signal
+    /// crosses sooner still. So any signal an earlier emission scheduled,
+    /// such as the stale one under test, has crossed by the time the
+    /// sentinel's has, however late a loaded runner fires the timers.
+    Future<List<DirectoryWatchEvent>> crossedBeforeSentinel(
+      HostHarness h,
+      FakeWatchBackend backend,
+    ) async {
+      final root = _localFixture('pg-watch-sentinel');
+      final sentinel = await h.openLocal(root.path);
+      final watched = await h.call(
+        (id) => WatchLocalDirectoryRequest(
+          requestId: id,
+          channelId: sentinel.channelId,
+          path: sentinel.homePath,
+        ),
+      );
+      expect(watched, isA<EngineAck>());
+
+      backend.emit(
+        sentinel.homePath,
+        FileSystemCreateEvent('${sentinel.homePath}/sentinel.txt', false),
+      );
+      expect(
+        await awaitWatchEvents(h, channelId: sentinel.channelId),
+        isNotEmpty,
+        reason: 'The sentinel never crossed; the negative is unproven.',
+      );
+      return [
+        for (final event in watchEvents(h))
+          if (event.channelId != sentinel.channelId) event,
+      ];
+    }
 
     test('watch canonicalizes the target and forwards debounced changes',
         () async {
@@ -2364,8 +2426,7 @@ void main() {
       expect(backend.controllers.keys, [homePath]);
       backend.emit(homePath, FileSystemCreateEvent('$homePath/new.txt', false));
 
-      await settleDebounce();
-      final events = watchEvents(h);
+      final events = await awaitWatchEvents(h);
       expect(events, hasLength(1));
       expect(events.single.channelId, channelId);
       expect(events.single.path, homePath);
@@ -2417,16 +2478,14 @@ void main() {
 
       // The replaced watch's events are epoch-dead.
       backend.emit(homePath, FileSystemCreateEvent('$homePath/old.txt', false));
-      await settleDebounce();
-      expect(watchEvents(h), isEmpty);
+      expect(await crossedBeforeSentinel(h, backend), isEmpty);
 
       // The new binding signals.
       backend.emit(
         subCanonical,
         FileSystemCreateEvent('$subCanonical/new.txt', false),
       );
-      await settleDebounce();
-      final events = watchEvents(h);
+      final events = await awaitWatchEvents(h, channelId: opened.channelId);
       expect(events, hasLength(1));
       expect(events.single.path, subCanonical);
       expect(events.single.signal, DirectoryWatchSignal.changed);
@@ -2565,8 +2624,7 @@ void main() {
 
       // Released: events no longer cross.
       backend.emit(homePath, FileSystemCreateEvent('$homePath/x.txt', false));
-      await settleDebounce();
-      expect(watchEvents(h), isEmpty);
+      expect(await crossedBeforeSentinel(h, backend), isEmpty);
     });
 
     test('closing the channel releases the watch', () async {
@@ -2583,8 +2641,7 @@ void main() {
       expect(backend.cancelled, [homePath]);
 
       backend.emit(homePath, FileSystemCreateEvent('$homePath/x.txt', false));
-      await settleDebounce();
-      expect(watchEvents(h), isEmpty);
+      expect(await crossedBeforeSentinel(h, backend), isEmpty);
     });
 
     test('shutdown releases local watches', () async {

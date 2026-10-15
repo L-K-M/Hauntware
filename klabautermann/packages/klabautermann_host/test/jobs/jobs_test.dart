@@ -204,7 +204,7 @@ void main() {
         ),
       );
       expect(job.schedule!.timeZone, 'Europe/Berlin');
-      // A CRON_TZ line misses its zone's gap (D57): 02:30 CEST next runs
+      // A CRON_TZ line misses its zone's gap (D58): 02:30 CEST next runs
       // on 2026-03-30, where the fixed +1 would give 01:30Z.
       expect(job.nextRuns.first.atUtc, DateTime.utc(2026, 3, 30, 0, 30));
       expect(job.nextRuns.first.offset, const Duration(hours: 2));
@@ -274,7 +274,7 @@ void main() {
 
     test('an empty CRON_TZ line misses the server zone\'s gap', () {
       // cronie keeps the empty value: the line reads the server's clock
-      // but, as a CRON_TZ line, is never caught up (D57). A plain line
+      // but, as a CRON_TZ line, is never caught up (D58). A plain line
       // would run at the jump, 2026-03-29T01:00Z.
       final job = _only(
         _merge(
@@ -472,6 +472,102 @@ void main() {
         'calendar',
         'monotonic',
       ]);
+    });
+
+    group('detail (D57)', () {
+      final detail = TimerDetail(
+        calendar: ['*-*-* 06,18:00:00', 'Mon *-*-* 00:00:00'],
+        monotonic: [
+          const MonotonicSchedule(
+            base: MonotonicBase.boot,
+            span: Duration(minutes: 15),
+          ),
+        ],
+        randomizedDelay: const Duration(hours: 12),
+      );
+
+      test('one systemd-analyze read per calendar expression', () {
+        final reads = timerCalendarCommands(detail, runCount: 5);
+        expect(reads.keys, detail.calendar);
+        expect(
+          reads['Mon *-*-* 00:00:00'],
+          HostCommands.onCalendar('Mon *-*-* 00:00:00', iterations: 5),
+        );
+      });
+
+      test('below systemd 242 a read asks for one run', () {
+        final reads = timerCalendarCommands(
+          detail,
+          runCount: 5,
+          systemdMajor: 239,
+        );
+        expect(
+          reads.values.map((argv) => argv[2]),
+          everyElement('(unset TZ; systemd-analyze calendar -- "\$1")'),
+        );
+      });
+
+      test('an expression the builder refuses gets no read', () {
+        final hostile = TimerDetail(calendar: ['daily\nreboot', 'x' * 600]);
+        expect(timerCalendarCommands(hostile, runCount: 2), isEmpty);
+      });
+
+      test('triggers take their calendar results, then the monotonic', () {
+        final result = parseOnCalendar('''
+  Original form: *-*-* 06,18:00:00
+Normalized form: *-*-* 06,18:00:00
+    Next elapse: Thu 2026-10-15 18:00:00 UTC
+''').value;
+        final entry = TimerJobEntry(
+          timer: const SystemdTimer(unit: 'apt-daily.timer'),
+        ).withDetail(detail, calendars: {'*-*-* 06,18:00:00': result});
+        expect(entry.randomizedDelay, const Duration(hours: 12));
+        expect(entry.triggers!.map((t) => t.toJson()), [
+          {
+            'type': 'calendar',
+            'normalized': '*-*-* 06,18:00:00',
+            'elapses': [
+              {
+                'text': 'Thu 2026-10-15 18:00:00 UTC',
+                'atUtc': '2026-10-15T18:00:00.000Z',
+                'fromNow': null,
+              },
+            ],
+          },
+          // Not read yet: the expression, with elapses unknown.
+          {
+            'type': 'calendar',
+            'normalized': 'Mon *-*-* 00:00:00',
+            'elapses': null,
+          },
+          {'type': 'monotonic', 'base': 'boot', 'spanUs': 900000000},
+        ]);
+      });
+
+      test('a read without triggers leaves triggers and delay unknown', () {
+        // What `systemctl show` prints for a unit that is no longer
+        // loaded; a loaded timer without these triggers has only
+        // OnClockChange= or OnTimezoneChange=.
+        final empty = parseTimerDetail(
+          'RandomizedDelayUSec=0\n',
+          ParseContext.standard,
+        ).value;
+        final entry = TimerJobEntry(
+          timer: const SystemdTimer(unit: 'gone.timer'),
+        ).withDetail(empty);
+        expect(entry.triggers, isNull);
+        expect(entry.randomizedDelay, isNull);
+      });
+
+      test('a rejected expression keeps its text without elapses', () {
+        final rejected = parseOnCalendar('Failed to parse: x\n').value;
+        final entry = TimerJobEntry(
+          timer: const SystemdTimer(unit: 'x.timer'),
+        ).withDetail(TimerDetail(calendar: ['x']), calendars: {'x': rejected});
+        final trigger = entry.triggers!.single as CalendarSchedule;
+        expect(trigger.normalized, 'x');
+        expect(trigger.elapses, isNull);
+      });
     });
   });
 }

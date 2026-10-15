@@ -67,15 +67,21 @@ void main() {
 
     // Nothing observed yet: the row still carries the word (03 §10.3).
     expect(
-      find.bySemanticsLabel('Server status: Disconnected'),
+      find.bySemanticsLabel(RegExp('Server status: Disconnected')),
       findsNWidgets(2),
     );
 
     harness.engine.emit(const LinkState('srv-1', LinkReady()));
     await tester.pumpAndSettle();
 
-    expect(find.bySemanticsLabel('Server status: Connected'), findsOneWidget);
-    expect(find.bySemanticsLabel('Server status: Disconnected'), findsOne);
+    expect(
+      find.bySemanticsLabel('web-1, web-1.example, Server status: Connected'),
+      findsOneWidget,
+    );
+    expect(
+      find.bySemanticsLabel('db-1, 10.0.0.4, Server status: Disconnected'),
+      findsOne,
+    );
   });
 
   test('every link status has its word (D46)', () {

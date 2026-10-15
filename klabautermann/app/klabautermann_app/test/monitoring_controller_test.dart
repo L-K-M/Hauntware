@@ -341,6 +341,45 @@ void main() {
     expect(monitoring.sampleFor('srv-1', overview).value?.seq, 1);
   });
 
+  test('the latest host profile lands in its server\'s box and leaves '
+      'with the server (SYN-08)', () async {
+    final kvm = HostProfile(virtualization: 'kvm', container: 'none');
+    final lxc = HostProfile(virtualization: 'lxc', container: 'lxc');
+    engine
+      ..emit(HostProfileChanged('srv-1', kvm))
+      ..emit(HostProfileChanged('srv-1', lxc));
+    await settle();
+    final box = monitoring.profileFor('srv-1');
+    expect(box.value, same(lxc));
+    expect(monitoring.profileFor('srv-2').value, isNull);
+
+    engine
+      ..emit(CatalogReplaced([_entry('srv-2')]))
+      // Still in flight when the server left: it must not come back.
+      ..emit(HostProfileChanged('srv-1', kvm));
+    await settle();
+    expect(_disposed(box as ChangeNotifier), isTrue);
+    expect(monitoring.profileFor('srv-1').value, isNull);
+  });
+
+  test('each stream\'s latest reading outlives a collector that fails '
+      'after it, and leaves with the server (SYN-08)', () async {
+    const fs = SampleStream.fs;
+    final listed = _sample('srv-1', fs, 1, result: FsResult(FsSnapshot([])));
+    engine
+      ..emit(listed)
+      ..emit(_sample('srv-1', fs, 2));
+    await settle();
+    final box = monitoring.lastReadingFor('srv-1', fs);
+    expect(box.value, same(listed));
+    expect(monitoring.sampleFor('srv-1', fs).value?.seq, 2);
+
+    engine.emit(CatalogReplaced([_entry('srv-2')]));
+    await settle();
+    expect(_disposed(box as ChangeNotifier), isTrue);
+    expect(monitoring.lastReadingFor('srv-1', fs).value, isNull);
+  });
+
   group('links (03 §5.12)', () {
     testWidgets('the first view connects; the last leave disconnects after '
         'the grace', (tester) async {
@@ -453,6 +492,106 @@ void main() {
         ..leaveServer('srv-1');
       // The test binding fails a timer still pending here: it would hold
       // the dead controller for the grace, to send nothing.
+    });
+  });
+
+  group('a server that leaves the fleet (03 §5.1)', () {
+    testWidgets('drops its pending Disconnect, so a view back after a '
+        're-import within the grace connects again', (tester) async {
+      final links = MonitoringController(engine);
+      addTearDown(links.dispose);
+      links
+        ..openServer('srv-1')
+        ..leaveServer('srv-1');
+
+      engine.emit(CatalogReplaced([_entry('srv-2')]));
+      await tester.pump(kLinkLeaveGrace);
+      expect(engine.sentOfType<Disconnect>(), isEmpty);
+
+      engine.emit(CatalogReplaced([_entry('srv-1'), _entry('srv-2')]));
+      await tester.pump();
+      links.openServer('srv-1');
+      expect(engine.sentOfType<Connect>(), hasLength(2));
+    });
+
+    test('is sent nothing while gone; views still mounted connect and '
+        'subscribe again when it comes back', () async {
+      monitoring
+        ..openServer('srv-1')
+        ..subscribe('srv-1', 'overview', {SampleStream.core});
+      engine.emit(CatalogReplaced([_entry('srv-2')]));
+      await settle();
+      final before = engine.sent.length;
+
+      monitoring
+        ..openServer('srv-1')
+        ..leaveServer('srv-1')
+        ..subscribe('srv-1', 'panel', {SampleStream.procs})
+        ..unsubscribe('srv-1', 'overview');
+      expect(engine.sent, hasLength(before));
+
+      engine.emit(CatalogReplaced([_entry('srv-1'), _entry('srv-2')]));
+      await settle();
+      final replayed = engine.sent.skip(before).toList();
+      expect(replayed, hasLength(2));
+      expect((replayed.first as Connect).serverId, 'srv-1');
+      final subscribe = replayed.last as Subscribe;
+      expect(
+        (subscribe.serverId, subscribe.subscriptionId),
+        ('srv-1', 'panel'),
+      );
+      expect(subscribe.streams, {SampleStream.procs});
+
+      // A fleet that keeps it changes nothing.
+      engine.emit(CatalogReplaced([_entry('srv-1')]));
+      await settle();
+      expect(engine.sent, hasLength(before + 2));
+    });
+
+    testWidgets('a view that leaves while it is gone waits out no grace', (
+      tester,
+    ) async {
+      final links = MonitoringController(engine);
+      addTearDown(links.dispose);
+      links.openServer('srv-1');
+      engine.emit(CatalogReplaced(const []));
+      await tester.pump();
+      links.leaveServer('srv-1');
+
+      engine.emit(CatalogReplaced([_entry('srv-1')]));
+      await tester.pump();
+      expect(engine.sentOfType<Connect>(), hasLength(1), reason: 'no view');
+      links.openServer('srv-1');
+      expect(engine.sentOfType<Connect>(), hasLength(2));
+      expect(engine.sentOfType<Disconnect>(), isEmpty);
+      // The test binding fails a grace timer still pending here.
+    });
+
+    test('a view that opens while it is gone connects only once it comes '
+        'back', () async {
+      monitoring.openServer('srv-1');
+      engine.emit(CatalogReplaced(const []));
+      await settle();
+      monitoring
+        ..leaveServer('srv-1')
+        ..openServer('srv-1');
+      expect(engine.sentOfType<Connect>(), hasLength(1));
+
+      engine.emit(CatalogReplaced([_entry('srv-1')]));
+      await settle();
+      expect(engine.sentOfType<Connect>(), hasLength(2));
+    });
+
+    test('the first fleet replays nothing: the views and surfaces open '
+        'before it were sent already', () async {
+      monitoring
+        ..openServer('srv-1')
+        ..subscribe('srv-1', 'overview', {SampleStream.core});
+      final sent = engine.sent.length;
+
+      engine.emit(CatalogReplaced([_entry('srv-1')]));
+      await settle();
+      expect(engine.sent, hasLength(sent));
     });
   });
 

@@ -22,3 +22,8 @@ without the `kB` unit and padding.
 For version 5 the same script turned the `stat` and `status` blocks of
 `procs.txt` into the `meta` block and one trimmed row per process,
 keeping the `cmdline` block as it was.
+
+`timer_detail.txt` (the on-demand read of `logrotate.timer`, 03 D57) and
+`oncalendar.txt` are hand-written from systemctl(1), systemd-analyze(1)
+and systemd.time(7). systemd 239 has no `--iterations`, so the calendar
+read prints one elapse.

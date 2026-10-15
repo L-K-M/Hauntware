@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ghost_desktop/ghost_desktop.dart' show GhostSettingsLinkMethod;
+import 'package:planchette_editor/planchette_editor.dart' show EditorLigatures;
 import 'package:seance_app/app_state.dart';
 import 'package:seance_app/services/app_services.dart';
 import 'package:seance_app/services/app_lock.dart';
@@ -210,6 +211,25 @@ void main() {
     expect(notified, greaterThan(0));
     final reread = await services.settingsStore.load();
     expect(reread.editorFontSize, 28);
+  });
+
+  test('an editor font set in the window redraws the app\'s editors', () async {
+    final window = await openWindow();
+    addTearDown(window.dispose);
+    var notified = 0;
+    state.addListener(() => notified++);
+
+    await window.setEditorFont(
+      fontFamily: 'Fira Code',
+      ligatures: EditorLigatures.off,
+    );
+
+    expect(services.settings.editorFontFamily, 'Fira Code');
+    expect(services.settings.editorLigatures, EditorLigatures.off);
+    expect(notified, greaterThan(0));
+    final reread = await services.settingsStore.load();
+    expect(reread.editorFontFamily, 'Fira Code');
+    expect(reread.editorLigatures, EditorLigatures.off);
   });
 
   test('a theme set in the window re-themes the app and the window', () async {

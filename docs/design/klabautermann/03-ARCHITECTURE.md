@@ -244,7 +244,8 @@ engine · D44 sample sequence · D45 subscriptions · D46 link vocabulary ·
 D47 sampler deadlines · D48 host-side filtering · D49 collector locale ·
 D50 LXC values · D51 Access tab · D52 runtime placement · D53 integration
 placement · D54 runtime override in M3 · D55 no health overlay in the MVP
-· D56 log search through `planchette_core` · D57 cron zone rules.
+· D56 log search through `planchette_core` · D57 timer triggers · D58
+cron zone rules.
 Proposals awaiting the owner close the section; they are not decisions.
 
 ### Shape and scope
@@ -813,7 +814,30 @@ Proposals awaiting the owner close the section; they are not decisions.
   class it names (`tool/protocol_guard/lib/protocol_guard.dart:167-183`
   [V]), so a `ServerZone` field would pass it. *Rejected:* callback-owner
   entries in `tool/guards.yaml` (a root-file change for each class).
-- **D57. Cron next runs follow `package:timezone`'s zone rules.**
+- **D57. A timer's triggers come from `systemctl show` through `hw_o`.**
+  JOB-02's schedule and `RandomizedDelaySec` of one systemd timer are an
+  on-demand read on the slow sampler, `hw_o <seq> timer_detail <timer>`,
+  which runs `systemctl show -p TimersCalendar -p TimersMonotonic -p
+  RandomizedDelayUSec -- <timer>`, guarded by `timeout` where the host
+  has it (collector-set version 6). `TimersCalendar` holds each `OnCalendar=` in systemd's
+  normalized form, `TimersMonotonic` the monotonic triggers, without
+  which a timer that has only those would list none, and
+  `RandomizedDelayUSec` the delay as a `format_timespan` span. A tick
+  passes no arguments, so it never names `timer_detail`. The next runs
+  of each expression come from `HostCommands.onCalendar`, a command of
+  its own outside the sampler, as 7.7 describes, with one run below
+  systemd 242; `timerCalendarCommands` builds those reads and
+  `TimerJobEntry.withDetail` merges their results; a later PR wires
+  both into the engine. A read with neither trigger leaves the timer's
+  triggers and delay unknown: `systemctl show` prints that for a unit
+  no longer loaded, with a default delay, and for a timer with only
+  `OnClockChange=` or `OnTimezoneChange=`. *Rejected:* evaluating the expressions inside
+  the sampler (one guarded call per trigger would tie the request's
+  guarded-command count, and with it D47's deadline, to the timer, and
+  the run count would be a program constant); reading the unit files
+  (`systemctl cat` leaves drop-ins, specifiers and normalization to the
+  client); `TimersCalendar` without `TimersMonotonic`.
+- **D58. Cron next runs follow `package:timezone`'s zone rules.**
   `klabautermann_core` depends on `package:timezone` and embeds its
   `latest_all` database (about 0.4 MB, loaded on first use). The engine
   evaluates each `cron` reading's jobs rows at the sample's time. The
@@ -851,9 +875,10 @@ Proposals awaiting the owner close the section; they are not decisions.
   3.0pl1-211 `cron.c`] and BusyBox crond runs every job by the clock,
   which the runs do not model yet. The database's transition tables
   end at the 32-bit time limit, early in 2038; a run after a zone's
-  last listed transition keeps the offset in force after it. The jobs
-  goldens live in `klabautermann_core/test/fixtures/cron_jobs/`, because
-  `klabautermann_host` stays on meta and collection (3.1). Why: Dart
+  last listed transition keeps the offset in force after it. The cron
+  rows' jobs goldens live in `klabautermann_core/test/fixtures/cron_jobs/`,
+  because `klabautermann_host` stays on meta and collection (3.1); timer
+  rows need no zone and keep host goldens. Why: Dart
   ships no zone database, and a fixed offset puts every run after a DST
   change an hour off. *Rejected:* reading the server's own zone file
   through the probe (exact, but a program change and a TZif parser; a v1
@@ -1220,7 +1245,7 @@ klabautermann/
   packages/
     klabautermann_host/          pure Dart; dependencies meta, collection
     klabautermann_docker/        pure Dart; dependencies meta, collection; no dart:io in lib/
-    klabautermann_core/          pure Dart; dependencies seance_core, klabautermann_host, klabautermann_docker, timezone (D57)
+    klabautermann_core/          pure Dart; dependencies seance_core, klabautermann_host, klabautermann_docker, timezone (D58)
       lib/src/{links,sampling,logs,capabilities}/   runtime services beside lib/src/engine/ (D52)
       test/integration/          engine tests against the fixture, tagged, skipped without it (D53)
       tool/capture_fixtures.dart                    fixture capture (6.5, D53)
@@ -1661,7 +1686,8 @@ re-push (c1 §2.4).
   hidden by the sandbox, since a path it does not grant reads as
   missing; the remedy is a wider grant (04 §12.1), not a new path. A
   refused file stays access denied: the sandbox hides paths rather than
-  refusing them.
+  refusing them. Only a regular file, after symlinks, is read as a key:
+  a FIFO waits for a writer and a device such as a tty for input.
 - **Background rule (FL-21).** Background sampling uses only servers whose
   credentials resolve without a prompt and whose endpoint is confirmed;
   keyboard-interactive servers connect on explicit open only and get exactly
@@ -1894,13 +1920,58 @@ abstract interface class RemoteProcess {
 - **Reconnect (CN-05).** Backoff with 1 s base, 30 s cap and downward jitter
   (Poltergeist's constants [R]); journal cursors and Docker `since=` resume.
   Background reconnects never prompt; a server that needs a prompt waits
-  for the user.
+  for the user. The engine's link supervisor redials only after a failure
+  to reach the server (unreachable or timed out) or a lost link,
+  reporting `closed` (with the failure kind of a failed attempt) and then
+  `backoff(until)`; the count resets once a link is up. Every other
+  failure, one the engine cannot classify included, waits for the user's
+  next connect: a prompt, a rejected or missing credential and a client
+  limitation come back on every retry, and repeated sign-in failures get
+  the device banned by fail2ban (c2 R11). A server whose last connect needed
+  keyboard-interactive answers, on itself or a jump host, is never dialed
+  unattended (4.5). A changed host key blocks the server until the
+  re-pin flow of 4.6 exists; until then nothing unblocks it but an
+  engine restart.
+- **Attempts.** `SshLink.connect` shows no state before it returns, so
+  the supervisor reports `connecting` while an attempt queues and dials,
+  `authenticating` once the server's own host key has passed (each jump
+  hop's is checked first), `needsUser` while a prompt is out, and after
+  an answer `authenticating`, or `connecting` while a jump host asked.
+  An attempt is given up as timed out after 60 s [E] of work; the clock
+  stops while a prompt waits on the user and starts over once it is
+  answered. `SshLink.connect` bounds a socket connect but gives the
+  handshake and authentication 5 minutes, and a key file on a stalled
+  mount blocks its stat and read without bound. A given-up attempt
+  (deadline, `Disconnect`, the background grace) withdraws its prompts
+  and, if its route is not resolved yet, never dials. The server's next
+  attempt waits for it to return, and that wait counts against the next
+  attempt's own deadline; a link the given-up attempt still brings is
+  closed, so a server has one dial at a time.
 - **States** cross the isolate boundary as plain data: `idle`,
   `connecting`, `authenticating`, `ready(capabilities)`, `degraded(reason)`,
   `backoff(until)`, `needsUser(prompt)`, `closed(reason)`, plus the
   engine's own `blocked(reason)`; every reason is an enum (D46).
 - **Mobile.** On background, sampling stops at once and the link closes
   after a 30 s grace period unless a detached operation is being followed.
+  No attempt starts while the app is in the background, on any platform:
+  queued attempts and redials wait for its return. A desktop keeps its
+  links open (sampling pauses, 6.4), and a phone's closed links redial
+  unattended on return.
+- **Fleet removal.** A server that leaves the fleet is forgotten. The
+  supervisor gives up its attempt and backoff and closes its link
+  without a `LinkState`, since the app drops a status with its entry
+  (10.1), and keeps nothing it learned: a server that comes back is
+  dialed as a new one, its block, keyboard-interactive mark and failure
+  count gone, while its host-key pins, kept by `host:port` (4.6), still
+  hold, so a changed key blocks it again on its first dial. A given-up
+  dial still on its way delays its next attempt as above. The engine
+  drops the server's subscriptions and ignores a `Subscribe` for a
+  server outside the fleet, which only a request that crossed the
+  removal sends. The app sends nothing for the server while it is gone
+  and drops its pending `Disconnect`; when it comes back, the views and
+  surfaces still holding it send `Connect` and `Subscribe` again. An
+  entry that keeps its id under a new endpoint keeps its link until it
+  closes, as it keeps its readings (10.1, SYN-08's endpoint change).
 - `SshSession.runCommand` is re-implemented on the same exec core, so
   Séance's RemoteGit and command flows gain classification and exit signals
   with no other behaviour change; Séance adopting dead-peer detection for
@@ -2098,9 +2169,14 @@ c2 found these defects in 3.0.2. The last column gives their state on the
 
 One long-lived connection per host per device keeps login records and
 `MaxStartups` pressure low (r5 §3.2). Fleet connects are capped at 4
-concurrent with jitter; reachability probes reuse `ProbeService`
-(`SC/src/probe/probe_service.dart:64`, 45 s jittered sweeps, at most 6
-concurrent [V]) and run only for confirmed endpoints.
+concurrent with jitter: every connection attempt takes one of 4 slots
+(D19), the user's ahead of the queue and dialing as soon as it has one,
+an unattended one after a random wait of up to 1 s [E] in its slot. A
+given-up attempt frees its slot at once only while its route is
+unresolved; a dial past that point cannot be stopped, so it keeps the
+slot until `SshLink.connect` returns. Reachability probes reuse
+`ProbeService` (`SC/src/probe/probe_service.dart:64`, 45 s jittered
+sweeps, at most 6 concurrent [V]) and run only for confirmed endpoints.
 
 ---
 
@@ -2265,6 +2341,7 @@ and is the single source for every runner, including the T1 scripts (9.3).
 | `procs` | slow | `/proc/<pid>/stat` and `status` with builtins, at most 500 trimmed rows (D48); the kept rows' `/proc/<pid>/cmdline` through one `head` piped into `tr '\000' '\037'` (7.2); `ps -eo ...` or BusyBox `ps w` fallback | 3 s while visible | 5 s while visible | 10 s |
 | `units` | slow | `systemctl list-units --all --output=json` (systemd 246+), else `--plain --no-legend`; `systemctl --failed` | 15 s while visible; 60 s for the health card | same | same |
 | `timers`, `cron` | slow | `systemctl list-timers --all --output=json`; `crontab -l`; `/etc/crontab`; `/etc/cron.d/*`; `cron.{hourly,...}` | 60 s while visible | same | on demand |
+| `timer_detail` | slow | `systemctl show -p TimersCalendar -p TimersMonotonic -p RandomizedDelayUSec -- <timer>` (D57) | on demand | same | same |
 | `identity` | slow | `/etc/os-release`, `uname`, `hostnamectl --json=short` (systemd 249+) | once per session | same | same |
 | `temps`, `gpu`, `smart` (v1) | slow | hwmon and thermal sysfs, `nvidia-smi --query-gpu=...`, `smartctl -n standby -j` | 10 s, 30 s, 10 min | same | on demand |
 | `packages` (v1) | slow | `apt-get -s upgrade`, `dnf check-update`, ... (7.8) | on demand, 60 min | on demand | on demand |
@@ -2467,14 +2544,18 @@ unless the user enables admin mode for that panel.
 ### 7.6 Logs (LOG)
 
 - **MVP.** Journal viewer (LOG-01): `journalctl -o json --no-pager` with
-  unit, identifier, priority, boot and time filters, newest first, windows
-  of 500 entries, older pages addressed by `__CURSOR` [U: exact paging flags,
-  spike S2]. Byte-array values (non-UTF-8) and `null` over-threshold fields
-  are handled. Follow (LOG-02): `journalctl -f -o json --after-cursor=<c>` on
+  unit, identifier, priority, boot and time filters (times as
+  `@<epoch seconds>`, so the session's zone plays no part), newest
+  first, windows of 500 entries, older pages addressed by `__CURSOR`
+  [U: exact paging flags, spike S2]. Byte-array values (non-UTF-8) and
+  `null` over-threshold fields are handled. Follow (LOG-02): `journalctl -f -o json --after-cursor=<c>` on
   its own `RemoteProcess`; stop with `TERM`, then close; resume from the last
   cursor after a reconnect; a per-view ring by lines and bytes with a
   line-length cap; a Live, Connecting, Paused or Disconnected chip. Kernel
-  log (LOG-03): `journalctl -k -b`, `dmesg --json` only as a fallback.
+  log (LOG-03): `journalctl -k -b`, `dmesg --json --decode` only as a
+  fallback; `--decode` names facility and level, because the single
+  `pri` number util-linux prints without it is `facility | level` in
+  2.38 and 2.39 and `(facility << 3) | level` from 2.40.
   Access notice (LOG-04): without `systemd-journal`, `adm` or `wheel`,
   `journalctl` silently returns only the user's own entries; the probe's
   `id -nG` drives a notice with the least-privileged fix. Text search
@@ -2497,11 +2578,13 @@ unless the user enables admin mode for that panel.
   (JOB-02): a Dart cron parser in `klabautermann_host` (5 fields, ranges, steps,
   names, macros, `CRON_TZ`) evaluated in the engine in the server's time
   zone: the zone database's rules for the probe's zone name, else the
-  probe's offset with the reason (D57), with DST transitions, runs within
+  probe's offset with the reason (D58), with DST transitions, runs within
   an hour of one and `RandomizedDelaySec` annotated;
-  `OnCalendar` expressions use `(unset TZ; systemd-analyze calendar
-  --iterations=N '<expr>')` on the host instead of a reimplementation
-  (`--iterations` from systemd 242 [R: systemd NEWS]; below that, one next
+  `OnCalendar` expressions, which a timer's `timer_detail` read gives
+  with its `RandomizedDelaySec` (D57), use `(unset TZ; systemd-analyze
+  calendar --iterations=N -- '<expr>')` on the host instead of a
+  reimplementation (`--` keeps an expression the host sent an operand;
+  `--iterations` from systemd 242 [R: systemd NEWS]; below that, one next
   run without `--iterations`, so RHEL 8 shows one run),
   because PID 1 evaluates zone-less expressions in the system zone [R:
   systemd.time(7)] (6.2); phrases come from ARB templates, worded from
@@ -3214,7 +3297,13 @@ names (enum), absolute normalized paths without NUL, collector names (enum),
 cron expressions (parsed before writing). Every remote command is wrapped as
 `sh -c <quoted>` with `LC_ALL=C TZ=UTC` inside, so the login shell's syntax
 never matters; only the clock and calendar reads of 6.2 unset `TZ` in a
-subshell. Property tests run quoted output through a real `sh` on Linux
+subshell. `HostCommands.commandLine` does it with a constant script,
+`export LC_ALL=C TZ=UTC SYSTEMD_PAGER= NO_COLOR=1; exec "$@"` (6.2's
+sampler variables), followed by the command's words as positional
+parameters, so each word is quoted once, for the login shell. A command
+that renders text for people exports `LC_ALL=C.UTF-8` instead when the
+probe found that locale (A11Y-08; the sampler decides on the host,
+D49). Property tests run quoted output through a real `sh` on Linux
 CI.
 
 ### 8.9 Secret masking and redaction (SAF-07, SYN-03)
@@ -4011,6 +4100,21 @@ the engine in `engine_isolate.dart` beside it):
   `ghost_servers`' `GhostSessionState.failed`) unless the engine closed
   it on purpose with no failure kind: the kinds name only what the
   engine classified, and a lost link is a failure its reason explains.
+- **Links in the engine (M2).** The engine hands `Connect`,
+  `Disconnect` and `SetAppActivity` to its link supervisor (5.1, 5.12)
+  and `AnswerPrompt` to its prompt broker. `Connect` is the user's
+  connect, since the app sends it when a view opens, so it may prompt.
+  `RequestRejected` answers a `Connect` for a server the engine cannot
+  dial (outside the fleet, a jump hop's id included, or without a
+  config) and an `AnswerPrompt` for a prompt that is not open or with
+  an answer that does not fit it.
+  `IsolateEngineClient.spawn(linksEnabled:)` (`EngineStart.linksEnabled`,
+  off unless given) turns links on. Off, the engine has no supervisor,
+  so `Connect` gets `RequestRejected` and nothing dials, while
+  `Disconnect` and `SetAppActivity` change nothing. The composition root
+  keeps them off until pins outlive the engine (the catalog library's
+  `host_keys.json`, 4.10; until then the engine pins in memory) and the
+  app can show prompts; tests turn them on.
 - **Version 3 (M2 sampling).** Sampling joined version 3 without a bump,
   as the import store's fields joined version 2, before any version 3
   build shipped. `Subscribe` names the surface's `SampleStream`s: the 6.4
@@ -4047,7 +4151,7 @@ the engine in `engine_isolate.dart` beside it):
   jobs rows of its lines and `cron.<period>` scripts, with next runs from
   the sample's time in the server zone, and that zone's name, why the
   runs use the probe's fixed offset, or that no server zone is known
-  (7.7, D57). A stream whose collector
+  (7.7, D58). A stream whose collector
   reports a section status other than `ok` (6.2) gets
   `CollectorUnavailable` with that status as an enum and the end of the
   collector's error output (at most 4,096 characters), control
@@ -4124,8 +4228,8 @@ the engine in `engine_isolate.dart` beside it):
   gap copy names them ("paused: app in background", "in background").
   *Rejected:* unsubscribing everything on background (every subscription
   resent on return, and a background pause indistinguishable from
-  surfaces that closed); a field on `Subscribe` (D45). Until the link
-  supervisor lands, the engine answers it with `RequestRejected`.
+  surfaces that closed); a field on `Subscribe` (D45). The engine hands
+  it to the link supervisor (5.1).
 - **Visibility and lifecycle (M2, app side).** The monitoring controller
   sends `Connect` when the first view of a server opens (the desktop
   workspace's selection, the phone's pushed screen) and `Disconnect` 30 s
@@ -4159,9 +4263,10 @@ the engine in `engine_isolate.dart` beside it):
   client hands the startup fleet to the fleet controller alone, so the
   monitoring controller has no endpoint to compare on the first import
   after launch; that purge needs the engine to report the change
-  (`EndpointChanged`) or the startup entries. The engine's rejections of
-  `Connect`, `Disconnect` and `SetAppActivity` until links land show
-  nothing.
+  (`EndpointChanged`) or the startup entries. With links off, the
+  engine's rejection of `Connect` shows nothing. A server that leaves
+  the fleet is sent nothing until it comes back, when the views and
+  surfaces still holding it connect and subscribe again (5.1).
 - **`Reachability(serverId, status)`** reports one server's latest probe
   answer, `online`, `offline` or `unknown` as `seance_core`'s
   `ProbeStatus` gives it, apart from `LinkState`: a probe is a TCP
@@ -4214,6 +4319,47 @@ and in the pressure bar. The optional `HealthMark` overlay (`ok`,
 the MVP (D55). v1 adds density modes, the summary strip, attention-first
 sort and the faults-only filter.
 
+As built in M2 (`app/klabautermann_app/lib/ui/fleet_rows.dart`,
+`fleet_row_state.dart`), the desktop rail and the phone list share one
+row over the kit's `SidebarRow`, resolved through `ghost_servers`'
+indicator under its rail rule. The app's adapter maps a degraded link to
+connected, a backoff to connecting, waiting on the user or a block to
+blocked, and a close to failed unless the engine closed it on purpose
+with no failure; session states take the link's own word, probe answers
+read "Online", "Offline" and "Reachability unknown". A state with a dot
+also shows its word on the second line and an icon at the row's end, a
+connected mark is framed, and nothing known shows no dot and no word. The
+row is one screen-reader node naming everything it shows. A change of the
+link's word is announced once, connecting, authenticating and waiting to
+reconnect counting as one attempt; samples and probe answers are not.
+Where the platform takes no announcements (Android), the latest change is
+the label of a live region around the list, as in Flutter's date picker.
+Until the monitor set (FL-21) exists, a server counts as monitored
+while the app holds an `overview` or `core` reading for it in this engine
+run, and rows subscribe nothing themselves; with links off, rows show
+reachability only. The bar reads CPU busy, used out of total memory, and
+the root file system's `df` capacity, warns at 80 % and turns critical at
+90 % until OV-11's thresholds, and is stale once the link is down or the
+reading is older than twice its stream's slowest 6.4 cadence (60 s for
+`overview`, 20 s for `core`); an `fs` reading past 240 s leaves the disk
+unknown. The reading's age sits under the bar whatever the link says,
+and in full ("Updated 4 s ago") in the tooltip and the label; stale
+values add a history icon, and "Stale" before the age unless the state
+word already says the link is down. The bar, its age and the locator
+warning (4.6) sit beside the kit's row, which takes no trailing widget,
+so the selection pill, hover fill and focus ring stop short of them
+until `SidebarRow` gains a trailing slot (a `ghost_ui` follow-up), and
+the app mirrors the kit's private row metrics to measure the room left.
+The bar and age show only where the row still fits the name and state
+word in full and the age fits beside it, each measured as drawn at the
+current text scale; elsewhere they give way, staying in the tooltip and
+the label. The warning always shows, and a touch on it shows its
+words. A collapsed or filtered section that hides a live server does
+not yet say so in its header (`ghostHiddenLiveIndicator`).
+The filter (FL-05) is the kit's `SidebarFilterField`
+over `FleetEntry.searchText`, name and address standing in without it:
+every term must occur, Enter opens the first match and Esc clears.
+
 ### 10.4 Server view and panels
 
 Each panel declares the capabilities it needs; missing ones hide the panel
@@ -4222,6 +4368,32 @@ tab (10.2, D51), which lists sudo NOPASSWD, journal group, Docker socket
 rights, streamlocal, compose plugin and systemd version, each with a
 copyable fix command that is never run implicitly. Unknown values show
 "unknown", never zero.
+
+As built in M2 (`app/klabautermann_app/lib/ui/system_panel.dart`), the
+System tab shows SYS-01's identity, BOOT-01's uptime and boot time,
+NET-01's total receive and transmit rates over every reported interface,
+and DSK-01's and DSK-02's mounts in the sortable table, in IEC units:
+
+- A figure whose `/proc` file `HostProfile.showsHostFigures` reports as
+  the container host's (uptime from `uptime`, boot time from `stat`)
+  reads "unknown" with that reason whatever the reading holds (SYS-04,
+  D50); while the probe cannot tell, figures stay as measured. Network
+  rates and mounts come from the container's own namespaces and stay.
+- Pseudo filesystems (`FsMount.isPseudo`) sit behind a filter, off by
+  default. In a panel narrower than 600 px, a width that grows with the
+  text scale, the table keeps the mount, use and inode columns, so
+  larger text does not scroll the wide table sideways. Any row opens
+  its full mount point, device, type and figures in a sheet, since the
+  mount column can cut a long mount point short (A11Y-09).
+- When `df` times out, the reply cannot tell which mount hung, so the
+  mounts of the last complete reading stay listed with that reading's
+  time, each with its usage unknown instead of old figures. The
+  monitoring controller keeps each server's latest reading per stream
+  (`lastReadingFor`) beside its latest sample, so a reading taken
+  while only Overview sampled `fs`, or before a switch to another
+  server, still counts; it leaves with the server (SYN-08). A host
+  without `timeout` is told that a stale mount can stall disk readings.
+- The usage bars carry no thresholds until OV-11 (v1) sets them.
 
 ### 10.5 Phone (under 600 dp) and tablet
 
@@ -4282,7 +4454,7 @@ the colour, shows which segment or cell crossed: the palette test keeps
 pairs apart only within the series and within the severities, and the
 light amber and orange measure a CIE76 distance of 2.0 under
 deuteranopia. Stale values turn every fill the family's graphite and drop
-the severity, since an old reading's may no longer hold. Every fill holds
+the severity, since an old reading may no longer hold. Every fill holds
 3:1 on the track (`surfaceContainerHighest`).
 
 ### 10.8 Log viewer
@@ -4367,8 +4539,10 @@ fields it has, and those bytes count against the 32 MiB cap. With the
 unit they get up to one 16 KiB line cap beside the text, within what the
 text leaves of the byte cap; fields past it are left out and counted. A
 buffer full of typical service entries (15 fields, 671 bytes each) holds
-about 42 MiB in the heap test. A row reads `unit[PID]:
-message`, its level from `PRIORITY`. A MESSAGE's newline shows as a
+about 42 MiB of the 64 MiB budget (11.4) in the heap test: retained heap,
+the bytes the 32 MiB cap counts plus each entry's objects. A row reads
+`unit[PID]: message`, its level from `PRIORITY`. A MESSAGE's newline
+shows as a
 return mark (⏎) and a line separator: without wrap the row ends at its
 first line, where the text engine draws no ellipsis, and with wrap each
 line takes its own rows. A tap or Enter pauses following and shows the

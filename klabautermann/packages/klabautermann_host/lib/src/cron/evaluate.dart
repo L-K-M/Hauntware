@@ -3,7 +3,7 @@
 /// IANA rule carrier, because Dart ships no zoneinfo; DST transitions
 /// are detected as offset jumps and annotated so the UI can mark runs
 /// that fire inside a spring-forward gap, in the first pass of a
-/// fall-back overlap, or otherwise within an hour of a transition (D57).
+/// fall-back overlap, or otherwise within an hour of a transition (D58).
 /// A line follows the server's clock or, under `CRON_TZ`, its own
 /// zone's ([CronClock]).
 library;
@@ -27,7 +27,7 @@ final class ServerZone {
   final String? ianaName;
 
   /// Returns the zone's offset at an instant. klabautermann_core
-  /// supplies it from `package:timezone`'s rules for [ianaName] (D57);
+  /// supplies it from `package:timezone`'s rules for [ianaName] (D58);
   /// absent means fixed-offset evaluation.
   final Duration Function(DateTime utcInstant)? offsetAt;
 
@@ -37,7 +37,7 @@ final class ServerZone {
 }
 
 /// Which clock a cron line's schedule follows across DST transitions
-/// (03 §7.7, D57), after cronie's `find_jobs` [R: cron.c].
+/// (03 §7.7, D58), after cronie's `find_jobs` [R: cron.c].
 enum CronClock {
   /// The cron daemon's own clock in the server's zone, for a line
   /// without `CRON_TZ`. A fixed-time job runs the minutes a forward jump
@@ -76,7 +76,7 @@ enum CronDst {
   /// line's zone or, for a [CronClock.line] job, the server's. The
   /// client's zone database may place the transition elsewhere than the
   /// server's, which cron reads, so the run may fire an hour off, or
-  /// not at all near the server zone's fall-back (D57).
+  /// not at all near the server zone's fall-back (D58).
   nearTransition,
 }
 

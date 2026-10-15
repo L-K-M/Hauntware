@@ -6,7 +6,7 @@ import 'dart:developer' as developer;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:planchette_editor/planchette_editor.dart'
-    show EditorTextSize, EditorZoom;
+    show EditorLigatures, EditorTextSize, EditorZoom;
 import 'package:seance_core/seance_core.dart';
 import 'package:xterm/xterm.dart' show TerminalController;
 
@@ -2363,6 +2363,24 @@ class AppState extends ChangeNotifier {
     settings.editorFontSize = next;
     notifyListeners();
     await _saveZoom();
+  }
+
+  /// Sets the built-in editor's family ('' for its default) and ligatures.
+  /// The editors redraw before the write, as for the text size; a no-op
+  /// change neither notifies nor writes.
+  Future<void> setEditorFont({
+    required String fontFamily,
+    required EditorLigatures ligatures,
+  }) async {
+    final settings = services.settings;
+    if (settings.editorFontFamily == fontFamily &&
+        settings.editorLigatures == ligatures) {
+      return;
+    }
+    settings.editorFontFamily = fontFamily;
+    settings.editorLigatures = ligatures;
+    notifyListeners();
+    await services.saveSettings();
   }
 
   /// Counts [_saveZoom] calls.

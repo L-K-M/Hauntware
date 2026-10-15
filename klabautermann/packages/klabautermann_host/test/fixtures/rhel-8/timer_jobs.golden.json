@@ -1,0 +1,73 @@
+{
+  "jobs": [
+    {
+      "kind": "timer",
+      "id": "timer|logrotate.timer",
+      "timer": {
+        "unit": "logrotate.timer",
+        "activates": "logrotate.service",
+        "nextUs": 1699911958000000,
+        "leftUs": 8100000000,
+        "lastUs": 1699903800000000,
+        "passedUs": 600000000,
+        "nextText": "Mon 2023-11-13 21:45:58 UTC",
+        "lastText": "Mon 2023-11-13 19:30:00 UTC"
+      },
+      "triggers": [
+        {
+          "type": "calendar",
+          "normalized": "*-*-* 00:00:00",
+          "elapses": [
+            {
+              "text": "Tue 2023-11-14 00:00:00 EST",
+              "atUtc": "2023-11-14T05:00:00.000Z",
+              "fromNow": "3h 14min left"
+            }
+          ]
+        }
+      ],
+      "randomizedDelayUs": 0
+    },
+    {
+      "kind": "timer",
+      "id": "timer|mdadm-last-resort.timer",
+      "timer": {
+        "unit": "mdadm-last-resort.timer",
+        "activates": "mdadm-last-resort.service",
+        "nextUs": 1699912800000000,
+        "leftUs": 9000000000,
+        "lastUs": null,
+        "passedUs": null,
+        "nextText": "Mon 2023-11-13 22:00:00 UTC",
+        "lastText": "n/a"
+      },
+      "triggers": null,
+      "randomizedDelayUs": null
+    },
+    {
+      "kind": "timer",
+      "id": "timer|fstrim.timer",
+      "timer": {
+        "unit": "fstrim.timer",
+        "activates": "fstrim.service",
+        "nextUs": null,
+        "leftUs": null,
+        "lastUs": null,
+        "passedUs": null,
+        "nextText": "n/a",
+        "lastText": "n/a"
+      },
+      "triggers": null,
+      "randomizedDelayUs": null
+    }
+  ],
+  "timerCalendarReads": {
+    "*-*-* 00:00:00": [
+      "sh",
+      "-c",
+      "(unset TZ; systemd-analyze calendar -- \"$1\")",
+      "hws-cal",
+      "*-*-* 00:00:00"
+    ]
+  }
+}

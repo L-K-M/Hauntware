@@ -2,8 +2,9 @@
 // fixture directory holds hand-written collector payloads plus a
 // `<collector>.golden.json` per payload; `tool/regen_goldens.dart`
 // rewrites the goldens. Fixture provenance is in each SOURCE.md. The
-// jobs list built from these fixtures has its golden in
-// klabautermann_core, whose zone database the next runs need (D57).
+// cron rows of the jobs list built from these fixtures have their
+// golden in klabautermann_core, whose zone database the next runs need
+// (D58); the timer rows have `timer_jobs.golden.json` here.
 import 'dart:convert';
 import 'dart:io';
 
@@ -116,6 +117,26 @@ void main() {
         });
       }
 
+      // K18's reads, where a platform carries them (SOURCE.md).
+      for (final read in _optionalReads) {
+        final file = File('$root/$platform/$read.txt');
+        if (!file.existsSync()) continue;
+        test(read, () {
+          expect(
+            _optionalJson(read, file.readAsStringSync()),
+            equals(_golden('$root/$platform/$read.golden.json')),
+          );
+        });
+      }
+      if (File('$root/$platform/timer_detail.txt').existsSync()) {
+        test('timer jobs', () {
+          expect(
+            _timerJobsJson('$root/$platform'),
+            equals(_golden('$root/$platform/timer_jobs.golden.json')),
+          );
+        });
+      }
+
       test('probe', () {
         final sections = _probeSections(
           File('$root/$platform/probe.sections').readAsStringSync(),
@@ -141,6 +162,60 @@ HostProfile _profile(String root, String platform) => parseProbe(
   _ctx,
 ).value;
 
+/// Payloads that are not tick collectors: the on-demand `timer_detail`,
+/// `systemd-analyze calendar`, `journalctl -o json` and `dmesg --json`.
+const _optionalReads = ['timer_detail', 'oncalendar', 'journal', 'dmesg'];
+
+Map<String, Object?> _optionalJson(String read, String payload) =>
+    switch (read) {
+      'timer_detail' => parseTimerDetail(payload, _ctx).toJsonResult(),
+      'oncalendar' => parseOnCalendar(payload).toJsonResult(),
+      'journal' => parseJournalLines(payload).toJsonResult(),
+      'dmesg' => parseDmesgJson(payload).toJsonResult(),
+      _ => throw StateError(read),
+    };
+
+/// The timer rows of the jobs list (03 §7.7) from a fixture's `timers`
+/// payload. The first timer takes the fixture's `timer_detail` payload
+/// (D57) with the `oncalendar` read of the expression that read echoes,
+/// and the golden records the reads the probe's systemd version gets.
+/// Timer rows need no zone; the cron rows' golden is in
+/// klabautermann_core. `tool/regen_goldens.dart` mirrors it.
+Map<String, Object?> _timerJobsJson(String dir) {
+  final profile = parseProbe(
+    _probeSections(File('$dir/probe.sections').readAsStringSync()),
+    _ctx,
+  ).value;
+  final jobs = mergeJobs(
+    timers: parseTimers(File('$dir/timers.txt').readAsStringSync(), _ctx).value,
+    nowUtc: DateTime.utc(2026, 10, 14, 12),
+    zone: null,
+  );
+  final detail = parseTimerDetail(
+    File('$dir/timer_detail.txt').readAsStringSync(),
+    _ctx,
+  ).value;
+  final read = parseOnCalendar(
+    File('$dir/oncalendar.txt').readAsStringSync(),
+  ).value;
+  final first = jobs.indexWhere((j) => j is TimerJobEntry);
+  jobs[first] = (jobs[first] as TimerJobEntry).withDetail(
+    detail,
+    // oncalendar.txt is the read issued for the timer's one calendar
+    // expression. Reads are keyed by the expression sent, as the
+    // output names it only when it differs from the normalized form.
+    calendars: {detail.calendar.single: read},
+  );
+  return {
+    'jobs': jobs.map((j) => j.toJson()).toList(),
+    'timerCalendarReads': timerCalendarCommands(
+      detail,
+      runCount: 2,
+      systemdMajor: profile.systemdVersion,
+    ),
+  };
+}
+
 /// The shared `{"result": ..., "warnings": [...]}` golden shape.
 extension on ParseResult<Object?> {
   Map<String, Object?> toJsonResult() => {
@@ -160,6 +235,11 @@ Object? _toJson(Object? v) {
   if (v is UnitsSnapshot) return v.toJson();
   if (v is TimersSnapshot) return v.toJson();
   if (v is CronSnapshot) return v.toJson();
+  if (v is TimerDetail) return v.toJson();
+  if (v is OnCalendarResult) return v.toJson();
+  if (v is JournalEntry) return v.toJson();
+  if (v is DmesgRecord) return v.toJson();
+  if (v is List) return v.map(_toJson).toList();
   throw ArgumentError(v);
 }
 

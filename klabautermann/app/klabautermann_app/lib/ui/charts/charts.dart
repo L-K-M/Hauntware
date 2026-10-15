@@ -4,7 +4,8 @@
 /// them.
 library;
 
-export 'bars.dart' show BarSegment, PressureBar, PressureCell, StackedBar;
+export 'bars.dart'
+    show BarSegment, PressureBar, PressureCell, StackedBar, pressureSummary;
 export 'chart_style.dart';
 export 'chart_values.dart' hide uncheckedChartScaleMax;
 export 'series_ring.dart';

@@ -81,6 +81,23 @@ void main() {
       expect(subscriptions.streamsFor('srv-1'), {SampleStream.overview});
     });
 
+    test('a server the fleet no longer lists loses its subscriptions, and '
+        'takes none until it is back (03 §5.1)', () {
+      subscriptions
+        ..subscribe(_subscribe('row', {SampleStream.overview}))
+        ..subscribe(_subscribe('row', {SampleStream.fs}, serverId: 'srv-2'))
+        ..fleet = {'srv-2'}
+        // Sent before the app heard that srv-1 left.
+        ..subscribe(_subscribe('panel', {SampleStream.procs}));
+      expect(subscriptions.servers, {'srv-2'});
+
+      subscriptions
+        ..fleet = {'srv-1', 'srv-2'}
+        ..subscribe(_subscribe('panel', {SampleStream.procs}));
+      expect(subscriptions.streamsFor('srv-1'), {SampleStream.procs});
+      expect(subscriptions.streamsFor('srv-2'), {SampleStream.fs});
+    });
+
     test('the cadence profile starts at the Desktop column', () {
       expect(subscriptions.profile, CadenceProfile.desktop);
     });

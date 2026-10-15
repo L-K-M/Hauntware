@@ -38,6 +38,7 @@ import 'services/settings_models.dart'
         AppearanceSettingsModel,
         DirectoryGroupingModel,
         DoubleClickActionModel,
+        EditorFontModel,
         EditorTextSizeModel;
 import 'services/settings_window/settings_window_host.dart';
 import 'services/sidebar_controller.dart'
@@ -130,6 +131,7 @@ class PoltergeistApp extends StatefulWidget {
     this.checkoutPrompts,
     this.appearance,
     this.editorTextSize,
+    this.editorFont,
     this.directoryGrouping,
     this.skipRuleSets,
     this.deepLinks,
@@ -367,6 +369,10 @@ class PoltergeistApp extends StatefulWidget {
   /// Appearance and View › Zoom. Null keeps editors at the standard size.
   final EditorTextSizeModel? editorTextSize;
 
+  /// The built-in editor's font on this device, behind Settings →
+  /// Appearance. Null keeps editors in the default font, ligatures on.
+  final EditorFontModel? editorFont;
+
   /// Whether file lists keep folders on top, behind Settings → General.
   /// Null keeps folders on top and leaves the row out.
   final DirectoryGroupingModel? directoryGrouping;
@@ -576,6 +582,7 @@ class _PoltergeistAppState extends State<PoltergeistApp> {
       checkoutPrompts: widget.checkoutPrompts,
       appearance: widget.appearance,
       editorTextSize: widget.editorTextSize,
+      editorFont: widget.editorFont,
       directoryGrouping: widget.directoryGrouping,
       skipRuleSets: widget.skipRuleSets,
       deepLinks: widget.deepLinks,

@@ -36,9 +36,42 @@ slice:
   processes and slow-tick times. The unguarded `procs` loops reach the
   10 s guarded budget near 2,000 processes under dash, where passing
   the D47 deadline depends on its margin, not yet fixed, and pass it by
-  1,079 under bash; K15 has to resolve that. Fixture capture with its
-  redaction review, SSH mode, the other shells (CI images, else the
-  manual list) and systemd collectors (runner VM) remain.
+  1,079 under bash; a `procs` bound, which K15 left out, has to resolve
+  that. Fixture capture with its redaction review, SSH mode, the other
+  shells (CI images, else the manual list) and systemd collectors
+  (runner VM) remain.
+- Payload filter (M2, 03 D48, K15, #199): collector-set version 4 filters
+  `overview` and `core` on the host with builtins only. Both send the
+  total `cpu` line, the meminfo subset, the load average and the rx and
+  tx bytes, picking interfaces in this order: device-backed NICs that
+  are not Xen netback ports and whose master, if any, has no device;
+  then interfaces that are neither a bridge nor enslaved; then all but
+  `lo`.
+  `core` adds per-core busy and idle sums (eight raw counters from shells
+  with 32-bit arithmetic such as mksh), `btime`, four I/O counters per
+  whole disk (no partitions, stacked devices, loop, ram, zram or zd
+  devices, nor NVMe path rows whose head counts the same I/O), PSI
+  averages without `total`, the uptime and, where arcstats exists, the ZFS
+  ARC's `c_min` and `size`. `Collector.guardedCommands` feeds the D47 slow
+  deadline, and the engine protocol's `CoreResult.perCpu` holds busy
+  percent per core. On synthetic trees [U] a `core` reply is 1,880 B at 32
+  CPUs plus 26 B per further CPU; 03 §11.4 allows 30 B for each CPU beyond
+  32 and exempts shells with 32-bit arithmetic, whose replies pass 2.5 KB
+  from 22 CPUs. The `procs` bound (S2 above) and real-host captures
+  remain.
+- Probe and host profile (M2, 03 D49 and D50, K09, #192): the probe's new
+  `lxcfs` area lists the `/proc` files that are `fuse.lxcfs` mounts, and
+  `HostProfile.showsHostFigures` applies D50: inside a container a
+  system-wide `/proc` file shows the host's figures, so its values are
+  unknown, unless lxcfs serves the container's own, which it does not
+  reliably do for `stat`, `loadavg`, `diskstats` and `pressure/io`. The
+  slow program decides `HW_UTF8` once at start from `locale -a` (D49), and
+  the probe's `locale` area reports it; no collector uses it yet.
+  `HostProfile` gains `fromJson` for the device cache, `serverZone` (the
+  probe's offset plus an IANA name, without rules) and `counterWidth` from
+  `uname -m`; a `systemd-detect-virt` error no longer reads as a container
+  name. Hand-made Debian 12 LXC fixtures with and without lxcfs, marked
+  [U], cover it. Nothing reads these yet.
 - Jobs model (JOB-01, JOB-02 data): `klabautermann_host`'s `mergeJobs`
   turns a `cron` and a `timers` tick into one list of cron lines,
   periodic scripts and timers, each with an English-free
@@ -83,6 +116,41 @@ slice:
   Nothing produces them yet: the engine still rejects `Connect` and
   `SetAppActivity`, sends no prompts or probe answers, and fills the new
   fleet fields only for imports (below).
+- Protocol v3 sampling (M2, 03 §10.1, K16a, #193): `Subscribe` and
+  `Unsubscribe` name one surface's subscription and its `SampleStream`s
+  (D45; the health card's failed units are a `failedUnits` stream of their
+  own), `SetCadenceProfile` picks the 03 §6.4 column, and `Sample` carries
+  its stream, an engine-owned per-server `seq` (D44), the engine's time
+  and a sealed result of derived values (D43) or `CollectorUnavailable`;
+  `SamplingState`, `Gap` and `HostProfileChanged` join. Sampling joined v3
+  without a bump. The engine keys subscriptions by server and subscription
+  id and keeps the cadence profile, but runs no sampler and sends none of
+  these events yet.
+- Protocol v3 logs (M2, K16b, #198; 03 §10.1, LOG-01 to LOG-03, LOG-22,
+  SVC-04): `OpenLogStream` carries an app-chosen `streamId` and a
+  `LogStreamSpec` with a sealed source (the journal with unit, identifier,
+  priority, current-boot and time filters; the kernel log; one file), a
+  `window`, `follow` and `afterCursor`. `LogBatch` carries sealed
+  `JournalRecord`, `KernelRecord` and `FileRecord` values with a dropped
+  count, and `LogStreamState` a sealed waiting, running or ended status.
+  The engine resolves journal entries into plain records and reads a time
+  beyond `DateTime`'s range, a priority outside 0 to 7 or a non-positive
+  PID as unknown; `JournalEntry.timestampUtc` no longer throws on such a
+  time. Logs joined v3 without a bump. Until the log service lands, the
+  engine rejects `OpenLogStream` and ignores `CloseStream`.
+- Link connector (M2, `klabautermann_core` `links/`, K17, #197): the
+  engine's credential source (no vault yet; key files read at connect time
+  after `~` expansion, at most 1 MiB, each attempt recorded best effort in
+  `identity_reads.jsonl`, waiting at most 2 s and dropping failed writes,
+  read failures classified as not found, access denied, unreadable or
+  hidden by the Flatpak sandbox), a prompt broker keyed by
+  UUID `promptId` with a 2-minute expiry and withdrawal when the attempt
+  ends, and `LinkConnector` over `SshLink.connect` with `TofuVerifier`
+  over an injected pin store (in memory for now). Only interactive
+  connects prompt: background connects decline a first-seen host key and
+  offer no keyboard-interactive, and a changed key blocks the link. There
+  is no passphrase prompt and no prompt dialog in the app yet, and nothing
+  wires the connector or the broker into the engine yet.
 - `klabautermann_app`: `flutter create`d for the five platforms with the
   04 §12.3 identities, generated launcher icons, the desktop three-pane
   shell (fleet rail, workspace, inspector) at 960 px and up, the phone
@@ -91,6 +159,40 @@ slice:
   built through `ghost_theme` from the Klabautermann brand preset (D9;
   the appearance persists in `settings.json`, below), and the English
   ARB catalogue (D35, A11Y-05).
+- Visibility and lifecycle (M2, K21, #200): the workspace and the phone's
+  server screen hold their server open, so the first open view sends
+  `Connect` and the last one `Disconnect` 30 s later; tabs use
+  `SelectedTabView`, and only the selected panel subscribes its 03 §6.4
+  streams, each surface under its own id (D45). On phones an
+  `AppLifecycleListener` sends `SetAppActivity` on foreground and
+  background changes; a desktop app stays in the foreground.
+  `MonitoringController` keeps the latest sample per server and stream and
+  a 300-reading `SeriesRing` per server, stream and series (CPU busy, used
+  memory, used swap, one-minute load), with a gap wherever no subscription
+  named the stream, and a one-second clock that ages each stream's latest
+  `Sample.at` for freshness; a server that leaves the fleet takes its
+  readings and seq floor with it (SYN-08). The seq floor lasts one engine
+  run: a restarted engine would be a new client with new controllers, and
+  the app remounts its tree when handed them (D44), but nothing restarts
+  the engine yet: `main.dart` spawns it once per launch. The engine still
+  rejects `Connect`, `Disconnect` and `SetAppActivity`, and the app shows
+  nothing for it. No surface shows rings or freshness yet, and the
+  time-series chart below draws a `TimeSeriesRing`, not these rings.
+- Localization contract (D35, A11Y-05):
+  `app/klabautermann_app/test/localization_contract_test.dart` runs the
+  suite's shared scanner (`tool/l10n_contract`, 03 §3.5 F1b) over `lib/`
+  with a per-file allowlist of reviewed technical literals (such as
+  channel and file names, command ids and diagnostics), as Poltergeist's
+  contract does. It replaces the interim `localization_test.dart` and
+  keeps the two checks the scanner does not make: every ARB key is
+  referenced from `lib/`, and no `Text`, `text`, `title`, `subtitle`,
+  `label`, `tooltip`, `hintText` or `semanticLabel` slot takes a literal
+  (other parameters, such as `message`, are not checked). One entry is
+  UI copy, not technical: the log viewer's row for a journal field not
+  sent (`lib/ui/logs/log_view.dart`) joins the field name and
+  `logJournalNotSent` in code, so a translation cannot place the name.
+  Follow-up: an ARB message with a `{name}` placeholder replaces it and
+  its allowlist entry.
 - Chart foundations (03 §10.7, M2): `lib/ui/charts/` holds `Sparkline`
   over a fixed-capacity `SeriesRing` that repaints on its version
   counter, with min-max downsampling to the pixel width, gaps for unknown
@@ -100,14 +202,27 @@ slice:
   severity and series colours to 3:1 and keeps them apart under simulated
   colour-vision deficiencies (A11Y-04); light and dark goldens draw with
   the Flutter SDK's Roboto and compare on Linux only. `Gauge` follows in
-  its own PR. Nothing shows a chart yet: the overview and fleet rows that
-  feed the rings come later in M2.
+  its own PR. Nothing shows a chart yet: since K21 `MonitoringController`
+  fills the rings, and the overview and fleet rows that show them come
+  later in M2.
 - Bars (03 §10.7, M2): `StackedBar` for the memory breakdown and disks
   (MEM-01, DSK-01) and the fleet rows' three-cell `PressureBar` (FL-07),
   with hatching for unknown values, grey when stale, and threshold
   colours paired with a stripe, an icon and words (A11Y-01), plus
   screen-reader summaries and light and dark goldens. Nothing shows
   them yet.
+- Time-series chart (03 §10.7, §9.5 item 5, OV-03, M2, K12, #194):
+  `TimeSeriesChart` draws one to four lanes of a `TimeSeriesRing` on a
+  shared time axis with round local-time ticks and one IEC or percent
+  scale. The caller opens a gap with its reason; no line crosses a gap or
+  an unknown sample, each gap is a hatched band (2 px strokes held to 3:1
+  as drawn) labelled "app closed", "in background" or "disconnected" where
+  it fits, and the legend names each series, each gap reason and the
+  caller's source. Screen readers get each series' summary, which reads
+  "now unknown" while the right edge is in a gap, and each gap's span.
+  Lanes differ by hue alone, which is still open against 03 §10.10. Not
+  yet: `CoreHeatmap`, 03 §10.7's crosshair and threshold bands on this
+  chart. Nothing shows the chart yet.
 - Sortable table (M2): the app's `SortableTable`, which the M2 lists
   build on. The caller owns the sort (a header click flips it; ties keep
   the caller's order and unknown values sort last). A screen reader hears
@@ -201,6 +316,21 @@ slice:
   bundle's signature, packages the .deb, AppImage and Flatpak, and runs
   the macOS fixtures. No release job ships these builds before M4
   (decision 16).
+- Integration CI legs (M2, K47, #195): `detect_klabautermann_integration`
+  in the root `ci.yml` runs on every main push and dispatch, and on PRs
+  that touch `klabautermann/**`, `seance_core`, `seance_protocol`, the
+  Poltergeist fixture files the sshd fixture builds on or `ci.yml`.
+  `klabautermann_integration` runs `test/integration/run.sh` once the
+  fixture's `docker-compose.yml` is committed, and
+  `test/integration/capture.sh` once that is committed.
+  `klabautermann_frame_timing` runs `scripts/bench-frame-timing.sh` under
+  Xvfb on main pushes and dispatch. Each leg is skipped with a notice
+  until its entry point lands, and the detector fails if a committed one
+  disappears. `klabautermann_dart` and `scripts/test.sh` also analyze and
+  test `klabautermann/test/integration`, which so far holds the jobs'
+  contract test. A workspace `dart_test.yaml` declares the `shell` tag and
+  the 60 s cap for runs from `klabautermann/`. No entry point is on main
+  yet, so none of the three legs has run.
 - Desktop settings window (03 §10.2, D32): on macOS, Linux and Windows,
   Settings opens in a native window of its own through `ghost_desktop`'s
   `GhostSettingsWindowHost`; phones, and a desktop runner that cannot
@@ -285,8 +415,8 @@ slice:
   `LogBatch`'s drops as one "dropped N lines" entry. `parseSgr` turns a
   line's SGR colours and attributes into spans and drops every other
   escape and control but tab. A heap test keeps a full buffer of either
-  kind under the 64 MiB budget (03 §11.4). Nothing uses them yet: the
-  viewer and the engine's followers come in later M2 PRs.
+  kind under the 64 MiB budget (03 §11.4). The log viewer below uses
+  them; the engine's followers come later in M2.
 - Log viewer (03 §10.8, LOG-02): `lib/ui/logs/`'s `LogView` over a
   `LogViewController` draws fixed one-line rows or wrapped rows, measuring
   only the lines a layout shows and finding offsets in O(log n); follows
@@ -297,6 +427,25 @@ slice:
   yet: sideways scrolling without wrap (a long line ends in an ellipsis,
   which hides a cut line's note) and tab stops. No panel shows it yet: the
   Logs and Services panels and the followers come later in M2.
+- Journal rows and search (03 §10.8, LOG-01, LOG-05, K13, #196):
+  `LogBuffer.addJournal` keeps a journal entry's MESSAGE as the line's
+  text and its other fields as UTF-8 JSON bytes counted against the 32 MiB
+  cap; the source and fields get up to one 16 KiB line cap beside the
+  text, and fields past it are left out and counted. A buffer full of
+  typical entries holds about 42 MiB of retained heap in the heap test,
+  within the 64 MiB budget. `addJournal` takes the host's `JournalEntry`,
+  not the protocol's `JournalRecord`. `LogView` draws journal rows as
+  `unit[PID]: message` with the level from `PRIORITY`, marks a message's
+  newlines, and shows an entry's fields beneath its row on a tap or Enter.
+  `LogSearch` searches the loaded rows with `planchette_core`'s
+  `findSearchMatches` (03 D56), ignoring case unless set, and steps
+  between matches with wrap-around; the view highlights matches and
+  scrolls the current one's row into sight. Not yet: the search field,
+  which must debounce or search in slices; showing a match past a row's
+  ellipsis or after a journal row's first line without wrap; a time column
+  (needs the server zone); and repeated journal fields, which
+  `parseJournalLines` misreads. No panel shows it yet: the Logs and
+  Services panels and the engine's log streams come later in M2.
 
 Pull-only from the start (D14): no surface sends a request that could
 push or write catalog records, and a widget test guards it.

@@ -1,0 +1,14 @@
+{
+  "result": {
+    "originalForm": null,
+    "normalizedForm": "*-*-* 00:00:00",
+    "elapses": [
+      {
+        "text": "Tue 2023-11-14 00:00:00 EST",
+        "atUtc": "2023-11-14T05:00:00.000Z",
+        "fromNow": "3h 14min left"
+      }
+    ]
+  },
+  "warnings": []
+}

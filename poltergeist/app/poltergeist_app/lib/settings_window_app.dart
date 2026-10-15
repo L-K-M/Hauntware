@@ -18,6 +18,7 @@ import 'ui/settings/appearance_settings.dart';
 import 'ui/settings/backup_settings.dart';
 import 'ui/settings/directory_grouping_settings.dart';
 import 'ui/settings/double_click_action_settings.dart';
+import 'ui/settings/editor_font_settings.dart';
 import 'ui/settings/editor_settings.dart';
 import 'ui/settings/editor_text_size_settings.dart';
 import 'ui/settings/general_settings.dart';
@@ -149,7 +150,8 @@ class _SettingsWindowScreenState extends State<SettingsWindowScreen>
         widget.remote.directoryGrouping != null)
       SettingsWindowTab.general,
     if (widget.remote.appearance != null ||
-        widget.remote.editorTextSize != null)
+        widget.remote.editorTextSize != null ||
+        widget.remote.editorFont != null)
       SettingsWindowTab.appearance,
     if (widget.remote.doubleClickAction != null ||
         widget.remote.editors != null ||
@@ -234,12 +236,14 @@ class _SettingsWindowScreenState extends State<SettingsWindowScreen>
       case SettingsWindowTab.appearance:
         final appearance = remote.appearance;
         final editorTextSize = remote.editorTextSize;
+        final editorFont = remote.editorFont;
         children = [
           if (appearance != null) AppearanceSection(model: appearance),
           if (appearance != null && editorTextSize != null)
             const SizedBox(height: 32),
           if (editorTextSize != null)
             EditorTextSizeSection(model: editorTextSize),
+          if (editorFont != null) EditorFontSection(model: editorFont),
         ];
       case SettingsWindowTab.editing:
         final doubleClickAction = remote.doubleClickAction;
