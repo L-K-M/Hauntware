@@ -4024,6 +4024,14 @@ the engine in `engine_isolate.dart` beside it):
   read denied, or failed) and the host's error output. Until the log
   service is wired, the engine rejects `OpenLogStream` and ignores
   `CloseStream`, since no stream is open.
+  On the app side (M2), `MonitoringController.logs` owns the run's
+  streams: it mints `log-N` ids, routes each stream's events to the
+  surface that opened it, and stops routing once that surface closes
+  the stream. It gives a rejection of `OpenLogStream` to the oldest open
+  with no event yet, and takes any stream's first event as answering
+  every open sent before it. That is only sound if the log service
+  answers each open it accepts with a `LogStreamState` before it
+  handles the next request, which it must therefore do.
 - **`SetAppActivity(activity)`** is a request of its own and applies to
   every subscription, link and probe at once: 6.4 pauses everything while
   the app is in the background, and D34 adds the phones' grace period

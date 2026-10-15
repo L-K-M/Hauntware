@@ -55,6 +55,10 @@ export 'package:klabautermann_host/klabautermann_host.dart'
         SystemdUnit,
         TimersSnapshot,
         UnitsSnapshot;
+// The Logs panel's LOG-04 notice: the access check's journal row (K04)
+// over the probe's HostProfile.
+export 'package:klabautermann_host/klabautermann_host.dart'
+    show AccessReport, evaluateAccess;
 // The app resolves `~/.ssh/config` for the FL-02 import with Séance's home
 // rule, which also undoes a macOS sandbox's container `HOME`.
 export 'package:seance_core/seance_core.dart' show expandHomePath;

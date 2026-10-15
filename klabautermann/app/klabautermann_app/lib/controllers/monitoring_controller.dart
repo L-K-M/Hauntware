@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 
 import '../ui/charts/series_ring.dart';
+import 'log_streams.dart';
 
 /// How long a server's link outlives the last view that opened it, as long
 /// as the grace 03 §5.1 and D34 give a backgrounded phone's link: stepping
@@ -92,7 +93,13 @@ final class MonitoringController extends ChangeNotifier {
     DateTime Function() now = DateTime.now,
   }) : _clock = _FreshnessClock(now) {
     _events = _engine.events.listen(_onEngineEvent, onDone: _onEngineDone);
+    logs = LogStreams(_engine);
   }
+
+  /// The log streams panels open, and each server's journal access for
+  /// LOG-04's notice (03 §10.1, §10.8): a concern of its own that lasts
+  /// this engine run, listening to the engine beside this controller.
+  late final LogStreams logs;
 
   final EngineClient _engine;
   final Duration _linkGrace;
@@ -320,6 +327,7 @@ final class MonitoringController extends ChangeNotifier {
   @override
   void dispose() {
     unawaited(_events.cancel());
+    logs.dispose();
     _onEngineDone();
     for (final readings in _readings.values) {
       readings.dispose();

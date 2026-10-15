@@ -76,6 +76,12 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     // The rejected request's class name, which RequestRejected carries.
     r"'$ImportSshConfig'",
   },
+  'lib/controllers/log_streams.dart': {
+    // A log stream id the engine keys a stream's events by (03 §10.1), and
+    // the rejected request's class name, which RequestRejected carries.
+    r"'log-${_count++}'",
+    r"'$OpenLogStream'",
+  },
   'lib/controllers/monitoring_controller.dart': {
     // Assert messages; programmer diagnostics, never rendered.
     r"'$stream carries no metrics'",
