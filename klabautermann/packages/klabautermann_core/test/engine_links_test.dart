@@ -478,7 +478,14 @@ void main() {
       await engine.until<Sample>();
 
       engine.send(const ImportSshConfig(_otherConfig));
-      await engine.until<SshConfigImported>();
+      // Samples sent before the engine handled the import may still
+      // arrive; nothing else comes before its answer.
+      while (true) {
+        final event = await engine.next();
+        if (event is CatalogReplaced) break;
+        expect(event, isA<Sample>());
+      }
+      expect(await engine.next(), isA<SshConfigImported>());
       expect(link.running, isEmpty);
       engine.send(const Connect('ssh-config:gone'));
       expect(await engine.rejected(), 'Connect');
