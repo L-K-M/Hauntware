@@ -43,8 +43,9 @@ slice:
 - Payload filter (M2, 03 D48, K15, #199): collector-set version 4 filters
   `overview` and `core` on the host with builtins only. Both send the
   total `cpu` line, the meminfo subset, the load average and the rx and tx
-  bytes of device-backed NICs other than Xen netback ports, else of
-  interfaces that are neither a bridge nor enslaved, else of all but `lo`.
+  bytes of device-backed NICs whose master, if any, has no device, other
+  than Xen netback ports, else of interfaces that are neither a bridge nor
+  enslaved, else of all but `lo`.
   `core` adds per-core busy and idle sums (eight raw counters from shells
   with 32-bit arithmetic such as mksh), `btime`, four I/O counters per
   whole disk (no partitions, stacked devices, loop, ram, zram or zd
@@ -138,9 +139,10 @@ slice:
   engine rejects `OpenLogStream` and ignores `CloseStream`.
 - Link connector (M2, `klabautermann_core` `links/`, K17, #197): the
   engine's credential source (no vault yet; key files read at connect time
-  after `~` expansion, at most 1 MiB, every read recorded in
-  `identity_reads.jsonl`, failures classified as not found, access denied,
-  unreadable or hidden by the Flatpak sandbox), a prompt broker keyed by
+  after `~` expansion, at most 1 MiB, each attempt recorded best effort in
+  `identity_reads.jsonl`, waiting at most 2 s and dropping failed writes,
+  read failures classified as not found, access denied, unreadable or
+  hidden by the Flatpak sandbox), a prompt broker keyed by
   UUID `promptId` with a 2-minute expiry and withdrawal when the attempt
   ends, and `LinkConnector` over `SshLink.connect` with `TofuVerifier`
   over an injected pin store (in memory for now). Only interactive
@@ -169,11 +171,12 @@ slice:
   named the stream, and a one-second clock that ages each stream's latest
   `Sample.at` for freshness; a server that leaves the fleet takes its
   readings and seq floor with it (SYN-08). The seq floor lasts one engine
-  run: a restarted engine is a new client with new controllers, and the
-  app remounts its tree for them (D44). The engine still rejects
-  `Connect`, `Disconnect` and `SetAppActivity`, and the app shows nothing
-  for it. No surface shows rings or freshness yet, and the time-series
-  chart below draws a `TimeSeriesRing`, not these rings.
+  run: a restarted engine would be a new client with new controllers, and
+  the app remounts its tree when handed them (D44), but nothing restarts
+  the engine yet: `main.dart` spawns it once per launch. The engine still
+  rejects `Connect`, `Disconnect` and `SetAppActivity`, and the app shows
+  nothing for it. No surface shows rings or freshness yet, and the
+  time-series chart below draws a `TimeSeriesRing`, not these rings.
 - Chart foundations (03 §10.7, M2): `lib/ui/charts/` holds `Sparkline`
   over a fixed-capacity `SeriesRing` that repaints on its version
   counter, with min-max downsampling to the pixel width, gaps for unknown
@@ -183,8 +186,9 @@ slice:
   severity and series colours to 3:1 and keeps them apart under simulated
   colour-vision deficiencies (A11Y-04); light and dark goldens draw with
   the Flutter SDK's Roboto and compare on Linux only. `Gauge` follows in
-  its own PR. Nothing shows a chart yet: the overview and fleet rows that
-  feed the rings come later in M2.
+  its own PR. Nothing shows a chart yet: since K21 `MonitoringController`
+  fills the rings, and the overview and fleet rows that show them come
+  later in M2.
 - Bars (03 §10.7, M2): `StackedBar` for the memory breakdown and disks
   (MEM-01, DSK-01) and the fleet rows' three-cell `PressureBar` (FL-07),
   with hatching for unknown values, grey when stale, and threshold
