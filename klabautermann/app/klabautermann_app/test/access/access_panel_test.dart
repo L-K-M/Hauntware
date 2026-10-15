@@ -173,6 +173,26 @@ void main() {
     expect(harness.engine.sent, sentBefore);
   });
 
+  testWidgets('confirms a copy on its own server only', (tester) async {
+    _recordClipboard(tester);
+    const confirmation = 'Copied. Run it yourself on the server.';
+    final harness = await _openWeb1(tester, _desktop, profile: debianHost());
+    harness.engine.emit(HostProfileChanged('srv-2', debianHost()));
+    await _openTab(tester, 'Access');
+    final copy = find.widgetWithText(OutlinedButton, 'Copy command').first;
+    await tester.ensureVisible(copy);
+    await tester.tap(copy);
+    await tester.pumpAndSettle();
+    expect(find.text(confirmation), findsOneWidget);
+
+    // db-1's fix reads the same, but nothing was copied there.
+    await tester.tap(find.text('db-1'));
+    await tester.pumpAndSettle();
+    expect(find.byType(AccessPanel), findsOneWidget);
+    expect(find.text('sudo usermod -aG systemd-journal alice'), findsOneWidget);
+    expect(find.text(confirmation), findsNothing);
+  });
+
   testWidgets('says the server lacks sudo and doas only when the probe '
       'found neither', (tester) async {
     const absent = 'Run this as root: the server has neither sudo nor doas.';

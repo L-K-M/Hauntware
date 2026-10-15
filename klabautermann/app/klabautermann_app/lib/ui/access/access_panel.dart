@@ -64,7 +64,10 @@ class AccessPanel extends StatelessWidget {
       skipTraversal: true,
       child: ValueListenableBuilder<HostProfile?>(
         valueListenable: monitoring.profileFor(serverId),
-        builder: (context, profile, _) => _AccessBody(profile: profile),
+        // Keyed: the workspace reuses this panel for the next server, whose
+        // rows start with nothing copied and the column at its top.
+        builder: (context, profile, _) =>
+            _AccessBody(key: ValueKey(serverId), profile: profile),
       ),
     ),
   );
@@ -131,7 +134,7 @@ class DetectedRuntime extends StatelessWidget {
 }
 
 class _AccessBody extends StatelessWidget {
-  const _AccessBody({required this.profile});
+  const _AccessBody({super.key, required this.profile});
 
   final HostProfile? profile;
 
