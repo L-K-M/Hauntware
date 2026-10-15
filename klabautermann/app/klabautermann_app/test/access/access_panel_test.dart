@@ -129,6 +129,13 @@ void main() {
     await _openTab(tester, 'Access');
     final sentBefore = [...harness.engine.sent];
 
+    // Each button names the right whose fix it copies (03 §10.10).
+    for (final item in ['Journal group', 'Docker socket']) {
+      expect(
+        find.bySemanticsLabel('Copy the $item fix command'),
+        findsOneWidget,
+      );
+    }
     final copy = find.widgetWithText(OutlinedButton, 'Copy command').first;
     await tester.ensureVisible(copy);
     await tester.tap(copy);

@@ -623,6 +623,16 @@
   "@accessFixCopy": {
     "description": "Access tab: button that copies a fix command to the clipboard. The app never runs it."
   },
+  "accessFixCopyLabel": "Copy the {item} fix command",
+  "@accessFixCopyLabel": {
+    "description": "Access tab: screen-reader name of the Copy command button; item is the title of the row whose fix it copies.",
+    "placeholders": {
+      "item": {
+        "type": "String",
+        "example": "Journal group"
+      }
+    }
+  },
   "accessFixCopied": "Copied. Run it yourself on the server.",
   "@accessFixCopied": {
     "description": "Access tab: confirmation after copying a fix command, reminding that the app has not run it."

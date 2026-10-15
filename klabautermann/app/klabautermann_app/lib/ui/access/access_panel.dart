@@ -412,7 +412,13 @@ class _AccessRowTileState extends State<_AccessRowTile> {
           OutlinedButton.icon(
             onPressed: () => _copy(command),
             icon: Icon(copied ? Icons.check : Icons.copy_outlined, size: 18),
-            label: Text(l10n.accessFixCopy),
+            // Read with its row's name: a host shows several such buttons.
+            label: Text(
+              l10n.accessFixCopy,
+              semanticsLabel: l10n.accessFixCopyLabel(
+                _itemTitle(l10n, widget.item),
+              ),
+            ),
           ),
           // Announced as it appears; the app has run nothing.
           if (copied)

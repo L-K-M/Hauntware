@@ -600,6 +600,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get accessFixCopy => 'Copy command';
 
   @override
+  String accessFixCopyLabel(String item) {
+    return 'Copy the $item fix command';
+  }
+
+  @override
   String get accessFixCopied => 'Copied. Run it yourself on the server.';
 
   @override
