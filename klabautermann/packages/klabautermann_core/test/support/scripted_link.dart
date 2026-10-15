@@ -7,10 +7,33 @@ import 'package:klabautermann_host/klabautermann_host.dart'
     show kCollectorSetVersion;
 import 'package:seance_core/seance_core.dart';
 
-/// The parts of [SshLink] the sampler does not use throw.
+/// The parts of [SshLink] the samplers and the link supervisor do not
+/// use throw.
 abstract base class TestLinkBase implements SshLink {
+  final _changes = StreamController<SshLinkState>.broadcast();
+  SshLinkState _state = const SshLinkReady(SshLinkSeen());
+  int closes = 0;
+
   @override
-  SshLinkState state = const SshLinkReady(SshLinkSeen());
+  SshLinkState get state => _state;
+
+  /// Moves the link to [next] and reports it on [states].
+  set state(SshLinkState next) => _changes.add(_state = next);
+
+  /// The current state for each listener, then every change.
+  @override
+  Stream<SshLinkState> get states => Stream.multi((controller) {
+    controller.add(_state);
+    final subscription = _changes.stream.listen(controller.add);
+    controller.onCancel = subscription.cancel;
+  });
+
+  @override
+  Future<void> close() async {
+    closes++;
+    if (_state is SshLinkClosed) return;
+    state = const SshLinkClosed(SshLinkClosedReason.closedByOwner);
+  }
 
   @override
   Never noSuchMethod(Invocation invocation) =>

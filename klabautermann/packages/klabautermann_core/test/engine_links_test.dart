@@ -36,6 +36,9 @@ Matcher _state(LinkStatus status, {String serverId = _web}) => isA<LinkState>()
     .having((event) => event.status, 'status', status);
 
 final _connecting = _state(const LinkConnecting());
+final _waitingForLink = isA<SamplingState>()
+    .having((event) => event.serverId, 'serverId', _web)
+    .having((event) => event.phase, 'phase', SamplingPhase.waitingForLink);
 final _authenticating = _state(const LinkAuthenticating());
 final _ready = _state(const LinkReady());
 
@@ -207,6 +210,26 @@ void main() {
     expect(dials, isEmpty);
   });
 
+  test('the sampling scheduler runs only with links on: off, a Subscribe '
+      'gets no answer; on, its server waits for a link', () async {
+    for (final linksEnabled in [false, true]) {
+      final engine = await startEngine(linksEnabled: linksEnabled);
+      await engine.import(_webConfig);
+      engine
+        ..send(
+          const Subscribe(
+            serverId: _web,
+            subscriptionId: 'rail',
+            streams: {SampleStream.overview},
+          ),
+        )
+        // Rejected after the engine handled the Subscribe.
+        ..send(const Connect('ssh-config:gone'));
+      if (linksEnabled) expect(await engine.next(), _waitingForLink);
+      expect(await engine.rejected(), 'Connect');
+    }
+  });
+
   test('Connect dials the fleet server as the user\'s connect, and its '
       'prompt is answered through AnswerPrompt', () async {
     final engine = await startEngine();
@@ -371,6 +394,7 @@ void main() {
           )
           // Rejected after the engine handled the Subscribe.
           ..send(const Connect('ssh-config:gone'));
+        if (linksEnabled) expect(await engine.next(), _waitingForLink);
         expect(await engine.rejected(), 'Connect');
         expect(subscriptions.servers, {_web});
 

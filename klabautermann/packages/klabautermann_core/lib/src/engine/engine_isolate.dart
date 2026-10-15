@@ -12,6 +12,7 @@ import '../links/credential_source.dart';
 import '../links/link_connector.dart';
 import '../links/link_supervisor.dart';
 import '../links/prompt_broker.dart';
+import '../sampling/sampling_scheduler.dart';
 import '../sampling/subscriptions.dart';
 import 'protocol.dart';
 
@@ -35,10 +36,11 @@ final class EngineStart {
   final String supportDirectory;
 
   /// Whether the engine opens SSH links (03 §5.1, §10.1). Without them it
-  /// has no link supervisor: [Connect] gets [RequestRejected] and nothing
-  /// dials, [Disconnect] and [SetAppActivity] change nothing, and no
-  /// [Prompt] is ever open. The app's composition root leaves them off;
-  /// tests turn them on.
+  /// has no link supervisor and no sampling scheduler: [Connect] gets
+  /// [RequestRejected] and nothing dials or samples, [Disconnect] and
+  /// [SetAppActivity] change nothing, subscriptions are only recorded,
+  /// and no [Prompt] is ever open. The app's composition root leaves
+  /// them off; tests turn them on.
   final bool linksEnabled;
 }
 
@@ -50,8 +52,10 @@ final class EngineStart {
 /// whether links are on. The engine first returns its command port, then
 /// answers requests on the client's port: [Hello] gets [EngineReady] and
 /// the fleet it started with in a [CatalogReplaced], [Subscribe],
-/// [Unsubscribe] and [SetCadenceProfile] update the sampling subscriptions
-/// (silently: no sampler runs them yet), [ImportSshConfig] gets
+/// [Unsubscribe] and [SetCadenceProfile] update the sampling subscriptions,
+/// which the sampling scheduler runs over each server's ready link as
+/// [Sample], [Gap], [SamplingState] and [HostProfileChanged] events
+/// (03 §6.4; links off, nothing samples), [ImportSshConfig] gets
 /// [CatalogReplaced] and [SshConfigImported], [Connect], [Disconnect] and
 /// [SetAppActivity] go to the link supervisor and [AnswerPrompt] to the
 /// prompt broker (03 §5.1), [CloseStream] does nothing (no log stream is
@@ -60,8 +64,7 @@ final class EngineStart {
 ///
 /// [dial] replaces `SshLink.connect`, so tests can run the engine's links
 /// without a network. [subscriptions], when given, holds the sampling
-/// subscriptions, so tests can read what no event shows until samplers
-/// run them.
+/// subscriptions, so tests can read them.
 void engineMain(
   EngineStart start, {
   @visibleForTesting LinkDialer dial = SshLink.connect,
@@ -75,9 +78,13 @@ void engineMain(
       uiPort.send(RequestRejected(request.runtimeType.toString(), reason));
 
   // Which streams each server's surfaces subscribed, and the cadence
-  // profile (D45). Nothing samples them yet; the scheduler of 03 §6.4
-  // reads them once the samplers are wired.
+  // profile (D45), which the scheduler below samples.
   final sampling = subscriptions ?? SamplingSubscriptions();
+
+  // Samples each subscribed server over its ready link (03 §6.4). None
+  // while links are off, since no link would ever be ready. It follows
+  // every LinkState the supervisor reports.
+  SamplingScheduler? scheduler;
 
   // FL-02's imported hosts, in D13's device-local store (03 §4.10),
   // opened before the first request is handled. Each import replaces the
@@ -118,15 +125,28 @@ void engineMain(
           // Fleet entries only: the fleet's hop configs serve their routes.
           configFor: (id) =>
               fleetIds.contains(id) ? fleet.serverConfig(id) : null,
-          emit: uiPort.send,
+          emit: (event) {
+            uiPort.send(event);
+            if (event is LinkState) scheduler?.update(event.serverId);
+          },
           policy: Platform.isAndroid || Platform.isIOS
               ? BackgroundLinkPolicy.closeAfterGrace
               : BackgroundLinkPolicy.keepOpen,
         )
       : null;
+  if (links != null) {
+    scheduler = SamplingScheduler(
+      subscriptions: sampling,
+      linkFor: links.link,
+      emit: uiPort.send,
+      deadPeerHint: links.deadPeerHint,
+      clearDeadPeerHint: links.clearDeadPeerHint,
+    );
+  }
 
   // Rebuilds the fleet from the store. A server that left it is forgotten
-  // (03 §5.1): its link and attempts end and its subscriptions go.
+  // (03 §5.1): its samplers, link and attempts end and its subscriptions
+  // go.
   void refreshFleet() {
     fleet = ImportedFleet(
       imports.hosts,
@@ -137,6 +157,7 @@ void engineMain(
     final before = fleetIds;
     fleetIds = {for (final entry in fleet.entries) entry.serverId};
     sampling.fleet = fleetIds;
+    scheduler?.retain(fleetIds);
     links?.forget(before.difference(fleetIds));
   }
 
@@ -175,6 +196,7 @@ void engineMain(
         links?.disconnect(serverId);
       case SetAppActivity(:final activity):
         links?.setActivity(activity);
+        scheduler?.activity = activity;
       case AnswerPrompt(:final promptId, :final answer):
         switch (prompts.answer(promptId, answer)) {
           case PromptAnswerResult.answered:
@@ -186,10 +208,13 @@ void engineMain(
         }
       case Subscribe():
         sampling.subscribe(message);
-      case Unsubscribe():
+        scheduler?.subscribed(message);
+      case Unsubscribe(:final serverId):
         sampling.unsubscribe(message);
+        scheduler?.update(serverId);
       case SetCadenceProfile(:final profile):
         sampling.profile = profile;
+        scheduler?.profileChanged();
       case CloseStream():
         // Closing a stream that is not open does nothing (03 §10.1), and
         // none is: until the log service lands, OpenLogStream gets
