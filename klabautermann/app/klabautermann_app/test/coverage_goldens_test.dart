@@ -11,9 +11,10 @@ import 'support/harness.dart';
 
 const _sceneKey = ValueKey('coverage-scene');
 
-/// 03 §11.1's golden row for the coverage surfaces, light and dark, with
-/// the bundled font: the first-run card over the fleet header's chip, and
-/// the coverage sheet's body. Baselines come from the Linux runner.
+/// Goldens for the coverage surfaces, light and dark, with the bundled
+/// font, following 03 §11.1's golden layer: the first-run card over the
+/// fleet header's chip, and the coverage sheet's body. Baselines come from
+/// the Linux runner.
 void main() {
   setUpAll(() async {
     if (goldensCompareHere) await loadGoldenFonts();
