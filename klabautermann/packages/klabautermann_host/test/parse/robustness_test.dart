@@ -185,6 +185,22 @@ void main() {
       expect(r.value.hostname, 'h');
       expect(r.value.hostnamectl['FutureField'], 42);
     });
+
+    test('identity reads hostnamectl fields of another type as absent', () {
+      final raw = [
+        '== uname ==',
+        'Linux 6.1.0 x86_64',
+        '== hostnamectl ==',
+        '{"Hostname":1,"KernelName":["x"],"KernelRelease":{},'
+            '"OperatingSystemPrettyName":true,"Architecture":2.5}',
+      ].join('\n');
+      final r = parseIdentity(raw, _ctx);
+      expect(r.value.hostname, isNull);
+      expect(r.value.effectiveKernelName, 'Linux');
+      expect(r.value.effectiveKernelRelease, '6.1.0');
+      expect(r.value.effectiveOsPrettyName, isNull);
+      expect(r.value.effectiveArch, 'x86_64');
+    });
   });
 
   group('hostile bytes', () {

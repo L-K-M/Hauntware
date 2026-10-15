@@ -1,9 +1,11 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:isolate';
 import 'dart:typed_data';
 
 import 'package:klabautermann_core/klabautermann_core.dart';
-import 'package:klabautermann_host/klabautermann_host.dart' show MemInfo;
+import 'package:klabautermann_host/klabautermann_host.dart'
+    show CronJob, FsMount, SystemdTimer;
 import 'package:test/test.dart';
 
 /// Echoes every message back; protocol values cross a real isolate boundary
@@ -64,10 +66,11 @@ void main() {
         const SetAppActivity(AppActivity.background),
         const Subscribe(
           serverId: 'srv-1',
-          collectors: {Collector.overview, Collector.core},
-          cadence: Duration(seconds: 2),
+          subscriptionId: 'row',
+          streams: {SampleStream.overview, SampleStream.fs},
         ),
-        const Unsubscribe('srv-1'),
+        const Unsubscribe(serverId: 'srv-1', subscriptionId: 'row'),
+        const SetCadenceProfile(CadenceProfile.phone),
         const ImportSshConfig('Host web-1\n  HostName web-1.example\n'),
         const OpenLogStream(
           LogStreamSpec(
@@ -123,9 +126,24 @@ void main() {
         const Reachability('srv-1', ReachabilityStatus.online),
         Sample(
           serverId: 'srv-1',
+          stream: SampleStream.overview,
           seq: 7,
-          snapshot: OverviewSnapshot(meminfo: MemInfo({'MemTotal': 1024})),
+          at: DateTime.utc(2026, 10, 14, 12),
+          result: OverviewResult(),
         ),
+        SamplingState(
+          serverId: 'srv-1',
+          phase: SamplingPhase.sampling,
+          since: DateTime.utc(2026, 10, 14, 12),
+        ),
+        Gap(
+          serverId: 'srv-1',
+          streams: const {SampleStream.core},
+          from: DateTime.utc(2026, 10, 14, 12),
+          until: DateTime.utc(2026, 10, 14, 12, 1),
+          cause: GapCause.readingLost,
+        ),
+        HostProfileChanged('srv-1', HostProfile()),
         const LogBatch(streamId: 'stream-1', lines: ['a'], dropped: 2),
         const DockerResult(serverId: 'srv-1', payload: {'Id': 'x'}),
         const DockerEvent('srv-1', {'status': 'start'}),
@@ -158,30 +176,357 @@ void main() {
       }
     });
 
-    test('compound fields survive: collectors, cadence, snapshot', () async {
-      const request = Subscribe(
-        serverId: 'srv-9',
-        collectors: {Collector.fs, Collector.identity},
-        cadence: Duration(milliseconds: 1500),
-      );
-      final received = await roundTrip(request) as Subscribe;
-      expect(received.serverId, 'srv-9');
-      expect(received.collectors, {Collector.fs, Collector.identity});
-      expect(received.cadence, const Duration(milliseconds: 1500));
-
-      final event =
+    test('sampling requests survive with their ids, streams and '
+        'profile (D45)', () async {
+      final subscribe =
           await roundTrip(
-                Sample(
+                const Subscribe(
                   serverId: 'srv-9',
-                  seq: 42,
-                  snapshot: OverviewSnapshot(
-                    meminfo: MemInfo({'MemTotal': 1024, 'MemAvailable': 512}),
+                  subscriptionId: 'overview',
+                  streams: {SampleStream.core, SampleStream.failedUnits},
+                ),
+              )
+              as Subscribe;
+      expect(subscribe.serverId, 'srv-9');
+      expect(subscribe.subscriptionId, 'overview');
+      expect(subscribe.streams, {SampleStream.core, SampleStream.failedUnits});
+
+      final unsubscribe =
+          await roundTrip(
+                const Unsubscribe(serverId: 'srv-9', subscriptionId: 'row'),
+              )
+              as Unsubscribe;
+      expect(unsubscribe.serverId, 'srv-9');
+      expect(unsubscribe.subscriptionId, 'row');
+
+      for (final profile in CadenceProfile.values) {
+        final received =
+            await roundTrip(SetCadenceProfile(profile)) as SetCadenceProfile;
+        expect(received.profile, profile);
+      }
+    });
+
+    test('every sample result survives with its values (D43)', () async {
+      Future<SampleResult> result(
+        SampleStream stream,
+        SampleResult value,
+      ) async {
+        final sample =
+            await roundTrip(
+                  Sample(
+                    serverId: 'srv-1',
+                    stream: stream,
+                    seq: 41,
+                    at: DateTime.utc(2026, 10, 14, 12, 0, 5),
+                    result: value,
+                  ),
+                )
+                as Sample;
+        expect(sample.serverId, 'srv-1');
+        expect(sample.stream, stream);
+        expect(sample.seq, 41);
+        expect(sample.at, DateTime.utc(2026, 10, 14, 12, 0, 5));
+        return sample.result;
+      }
+
+      const memory = MemoryUsage(
+        totalBytes: 8192,
+        usedBytes: 4096,
+        availableBytes: 4096,
+        buffersBytes: 256,
+        cachedBytes: 1024,
+        sharedBytes: 128,
+        swapTotalBytes: 2048,
+        swapUsedBytes: 512,
+        zfsArcCountedAsUsed: true,
+      );
+      const cpu = CpuPercentages([10, 0, 5, 80, 5], 15);
+      const load = LoadAvg(load1: 1.5, load5: 1, load15: 0.5);
+
+      final overview =
+          await result(
+                SampleStream.overview,
+                OverviewResult(
+                  cpu: cpu,
+                  memory: memory,
+                  load: load,
+                  loadPerCore: 0.375,
+                  network: const {
+                    'eth0': NetRate(rxBytesPerSecond: 10, txBytesPerSecond: 2),
+                  },
+                ),
+              )
+              as OverviewResult;
+      expect(overview.cpu!.busy, 15);
+      expect(overview.cpu!.system, 5);
+      expect(overview.memory!.usedBytes, 4096);
+      expect(overview.memory!.sharedBytes, 128);
+      expect(overview.memory!.swapUsedBytes, 512);
+      expect(overview.memory!.zfsArcCountedAsUsed, isTrue);
+      expect(overview.load!.load5, 1);
+      expect(overview.loadPerCore, 0.375);
+      expect(overview.network!['eth0']!.rxBytesPerSecond, 10);
+      expect(() => overview.network!.clear(), throwsUnsupportedError);
+
+      final core =
+          await result(
+                SampleStream.core,
+                CoreResult(
+                  cpu: cpu,
+                  perCpu: const {'cpu0': cpu},
+                  disks: const {
+                    'sda': DiskRate(
+                      readBytesPerSecond: 512,
+                      writeBytesPerSecond: 1024,
+                    ),
+                  },
+                  ioPressure: const StallShares(some: StallAverages(1, 2, 3)),
+                  uptime: const Duration(days: 3),
+                  bootedAt: DateTime.utc(2026, 10, 11, 12),
+                ),
+              )
+              as CoreResult;
+      expect(core.perCpu!['cpu0']!.busy, 15);
+      expect(core.disks!['sda']!.writeBytesPerSecond, 1024);
+      expect(core.ioPressure!.some!.avg60, 2);
+      expect(core.cpuPressure, isNull);
+      expect(core.uptime, const Duration(days: 3));
+      expect(core.bootedAt, DateTime.utc(2026, 10, 11, 12));
+      // No previous reading is unknown, not zero (03 §1.2 principle 6).
+      expect(core.network, isNull);
+      final measuredNone =
+          await result(SampleStream.overview, OverviewResult(network: {}))
+              as OverviewResult;
+      expect(measuredNone.network, isEmpty);
+
+      final fs =
+          await result(
+                SampleStream.fs,
+                FsResult(
+                  FsSnapshot([
+                    const FsMount(
+                      device: '/dev/sda1',
+                      type: 'ext4',
+                      mountPoint: '/',
+                      capacityPercent: 42,
+                    ),
+                  ]),
+                ),
+              )
+              as FsResult;
+      expect(fs.fs.mounts.single.capacityPercent, 42);
+
+      final identity =
+          await result(
+                SampleStream.identity,
+                const IdentityResult(
+                  hostname: 'web-1',
+                  osPrettyName: 'Debian GNU/Linux 12 (bookworm)',
+                  kernelName: 'Linux',
+                  kernelRelease: '6.1.0-26-amd64',
+                  arch: 'x86-64',
+                ),
+              )
+              as IdentityResult;
+      expect(identity.hostname, 'web-1');
+      expect(identity.osPrettyName, 'Debian GNU/Linux 12 (bookworm)');
+      expect(identity.kernelName, 'Linux');
+      expect(identity.kernelRelease, '6.1.0-26-amd64');
+      expect(identity.arch, 'x86-64');
+
+      final procs =
+          await result(
+                SampleStream.procs,
+                ProcsResult([
+                  const ProcessRow(
+                    pid: 812,
+                    parentPid: 1,
+                    name: 'sshd',
+                    state: 'S',
+                    userName: 'root',
+                    uid: 0,
+                    threads: 1,
+                    residentBytes: 8192,
+                    cpuPercent: 0.5,
+                    startTicks: 1234,
+                    arguments: ['sshd:', 'deploy'],
+                  ),
+                ]),
+              )
+              as ProcsResult;
+      final sshd = procs.processes.single;
+      expect(sshd.pid, 812);
+      expect(sshd.parentPid, 1);
+      expect(sshd.name, 'sshd');
+      expect(sshd.userName, 'root');
+      expect(sshd.residentBytes, 8192);
+      expect(sshd.cpuPercent, 0.5);
+      expect(sshd.startTicks, 1234);
+      expect(sshd.arguments, ['sshd:', 'deploy']);
+
+      const failedUnit = SystemdUnit(unit: 'nginx.service', active: 'failed');
+      final units =
+          await result(
+                SampleStream.units,
+                UnitsResult(
+                  UnitsSnapshot(
+                    units: const [failedUnit],
+                    failed: const [failedUnit],
                   ),
                 ),
               )
-              as Sample;
-      expect(event.seq, 42);
-      expect(event.snapshot.meminfo.totalKb, 1024);
+              as UnitsResult;
+      expect(units.units.units.single.unit, 'nginx.service');
+      final failed =
+          await result(
+                SampleStream.failedUnits,
+                FailedUnitsResult(const [failedUnit]),
+              )
+              as FailedUnitsResult;
+      expect(failed.failed.single.active, 'failed');
+
+      final timers =
+          await result(
+                SampleStream.timers,
+                TimersResult(
+                  TimersSnapshot(
+                    timers: const [
+                      SystemdTimer(unit: 'apt-daily.timer', nextUs: 1),
+                    ],
+                  ),
+                ),
+              )
+              as TimersResult;
+      expect(timers.timers.timers.single.unit, 'apt-daily.timer');
+
+      final cron =
+          await result(
+                SampleStream.cron,
+                CronResult(
+                  CronSnapshot(
+                    jobs: const [
+                      CronJob(
+                        source: '/etc/crontab',
+                        schedule: '@daily',
+                        command: 'backup',
+                        raw: '@daily root backup',
+                      ),
+                    ],
+                  ),
+                ),
+              )
+              as CronResult;
+      expect(cron.cron.jobs.single.command, 'backup');
+
+      final unavailable =
+          await result(
+                SampleStream.units,
+                const CollectorUnavailable(
+                  CollectorUnavailableReason.missing,
+                  detail: 'systemctl: not found',
+                ),
+              )
+              as CollectorUnavailable;
+      expect(unavailable.reason, CollectorUnavailableReason.missing);
+      expect(unavailable.detail, 'systemctl: not found');
+    });
+
+    test('a sample holds its stream\'s variant or CollectorUnavailable', () {
+      final variants = <SampleStream, SampleResult>{
+        SampleStream.overview: OverviewResult(),
+        SampleStream.core: CoreResult(),
+        SampleStream.fs: FsResult(FsSnapshot(const [])),
+        SampleStream.identity: const IdentityResult(),
+        SampleStream.procs: ProcsResult(const []),
+        SampleStream.units: UnitsResult(UnitsSnapshot()),
+        SampleStream.failedUnits: FailedUnitsResult(const []),
+        SampleStream.timers: TimersResult(TimersSnapshot()),
+        SampleStream.cron: CronResult(CronSnapshot()),
+      };
+      expect(variants.keys, SampleStream.values);
+      const unavailable = CollectorUnavailable(
+        CollectorUnavailableReason.timeout,
+      );
+
+      Sample sample(SampleStream stream, SampleResult result) => Sample(
+        serverId: 'srv-1',
+        stream: stream,
+        seq: 1,
+        at: DateTime.utc(2026, 10, 14, 12),
+        result: result,
+      );
+
+      for (final stream in SampleStream.values) {
+        expect(sample(stream, unavailable).result, same(unavailable));
+        for (final MapEntry(key: variantStream, value: result)
+            in variants.entries) {
+          if (variantStream == stream) {
+            expect(sample(stream, result).result, same(result));
+            continue;
+          }
+
+          expect(
+            () => sample(stream, result),
+            throwsA(isA<AssertionError>()),
+            reason: '${result.runtimeType} is not a $stream result',
+          );
+        }
+      }
+    });
+
+    test('sampling states, gaps and host profiles survive', () async {
+      for (final phase in SamplingPhase.values) {
+        final state =
+            await roundTrip(
+                  SamplingState(
+                    serverId: 'srv-1',
+                    phase: phase,
+                    since: DateTime.utc(2026, 10, 14, 12, 1),
+                  ),
+                )
+                as SamplingState;
+        expect(state.serverId, 'srv-1');
+        expect(state.phase, phase);
+        expect(state.since, DateTime.utc(2026, 10, 14, 12, 1));
+      }
+
+      for (final cause in GapCause.values) {
+        final gap =
+            await roundTrip(
+                  Gap(
+                    serverId: 'srv-1',
+                    streams: const {SampleStream.overview, SampleStream.fs},
+                    from: DateTime.utc(2026, 10, 14, 12, 1),
+                    until: DateTime.utc(2026, 10, 14, 12, 14),
+                    cause: cause,
+                  ),
+                )
+                as Gap;
+        expect(gap.serverId, 'srv-1');
+        expect(gap.streams, {SampleStream.overview, SampleStream.fs});
+        expect(gap.from, DateTime.utc(2026, 10, 14, 12, 1));
+        expect(gap.until, DateTime.utc(2026, 10, 14, 12, 14));
+        expect(gap.cause, cause);
+      }
+
+      final changed =
+          await roundTrip(
+                HostProfileChanged(
+                  'srv-1',
+                  HostProfile(
+                    systemdVersion: 252,
+                    groups: const ['adm', 'systemd-journal'],
+                    tools: const {'timeout': '/usr/bin/timeout', 'zstd': null},
+                  ),
+                ),
+              )
+              as HostProfileChanged;
+      expect(changed.serverId, 'srv-1');
+      expect(changed.profile.systemdVersion, 252);
+      expect(changed.profile.groups, ['adm', 'systemd-journal']);
+      expect(changed.profile.timeoutPresent, isTrue);
+      expect(changed.profile.toolPresent('zstd'), isFalse);
+      expect(changed.profile.kernelRelease, isNull);
     });
 
     test('fleet entries survive with every field and stay read-only', () async {
@@ -518,5 +863,28 @@ void main() {
               as TerminalBytes;
       expect(bytes.bytes, orderedEquals(const [9, 8]));
     });
+  });
+
+  test('crosses no klabautermann_host type that holds a function '
+      '(D52)', () async {
+    // The protocol guard checks a field's own type, not the fields of a
+    // host class it names, so the host types that cross are listed.
+    final uri = await Isolate.resolvePackageUri(
+      Uri.parse('package:klabautermann_core/src/engine/protocol.dart'),
+    );
+    final source = File.fromUri(uri!).readAsStringSync();
+    final shown = RegExp(
+      r"import 'package:klabautermann_host/klabautermann_host\.dart'"
+      r'\s+show([^;]+);',
+    ).firstMatch(source)?[1];
+
+    expect(shown, isNotNull, reason: 'host types cross only by name');
+    final names = shown!.split(',').map((name) => name.trim()).toSet();
+    expect(names, contains('HostProfile'));
+    // Collector holds argument validators, ServerZone its `offsetAt`.
+    expect(names.intersection({'Collector', 'ServerZone'}), isEmpty);
+    // Pressure holds the cumulative stall counter, which stays in the
+    // engine (D43); StallShares carries the averages.
+    expect(names, isNot(contains('Pressure')));
   });
 }

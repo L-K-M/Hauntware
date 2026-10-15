@@ -3,10 +3,10 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 
-/// The monitoring concern (03 §10.1): sampler subscriptions and the
-/// per-server `ValueListenable` that keeps sample updates local to the
-/// surfaces painting them (a whole-app `notifyListeners` would rebuild the
-/// shell on every 1 to 5 s tick, which §10.1 forbids).
+/// The monitoring concern (03 §10.1): this app's sampling subscriptions
+/// and a `ValueListenable` per server and stream that keeps sample updates
+/// local to the surfaces painting them (a whole-app `notifyListeners`
+/// would rebuild the shell on every 1 to 5 s tick, which §10.1 forbids).
 final class MonitoringController extends ChangeNotifier {
   MonitoringController(this._engine) {
     _events = _engine.events.listen(_onEngineEvent);
@@ -15,36 +15,49 @@ final class MonitoringController extends ChangeNotifier {
   final EngineClient _engine;
   late final StreamSubscription<EngineEvent> _events;
 
-  final Map<String, ValueNotifier<OverviewSnapshot?>> _samples = {};
+  final Map<(String, SampleStream), ValueNotifier<Sample?>> _samples = {};
+
+  /// The highest [Sample.seq] kept per server: the engine counts one
+  /// sequence per server across its streams (D44).
   final Map<String, int> _lastSeq = {};
 
-  /// The live snapshot holder for [serverId], created on first use. A
+  /// The `(serverId, subscriptionId)` pairs this controller asked the
+  /// engine to sample (D45).
+  final Set<(String, String)> _subscribed = {};
+
+  /// The latest sample of [serverId]'s [stream], created on first use. A
   /// surface listens to this one box instead of the whole controller.
-  ValueListenable<OverviewSnapshot?> snapshotFor(String serverId) {
-    return _samples.putIfAbsent(
-      serverId,
-      () => ValueNotifier<OverviewSnapshot?>(null),
-    );
-  }
+  ValueListenable<Sample?> sampleFor(String serverId, SampleStream stream) =>
+      _box(serverId, stream);
 
-  /// Which servers this controller asked the engine to sample (the
-  /// monitor-set bookkeeping lives in the engine; this mirrors what the
-  /// UI sent for its own view).
-  final Set<String> _subscribed = {};
+  bool isSubscribed(String serverId, String subscriptionId) =>
+      _subscribed.contains((serverId, subscriptionId));
 
-  bool isSubscribed(String serverId) => _subscribed.contains(serverId);
-
-  /// Starts the engine's sampler tick for [serverId] (03 §10.1).
-  void subscribe(String serverId, Set<Collector> collectors, Duration cadence) {
-    _subscribed.add(serverId);
+  /// Asks the engine to sample [streams] of [serverId] for the surface
+  /// [subscriptionId] (03 §10.1, D45). Each surface holds its own id, so
+  /// unsubscribing one leaves the streams of the others running;
+  /// subscribing an id again replaces its streams.
+  void subscribe(
+    String serverId,
+    String subscriptionId,
+    Set<SampleStream> streams,
+  ) {
+    assert(streams.isNotEmpty, 'unsubscribe instead of naming no stream');
+    _subscribed.add((serverId, subscriptionId));
     _engine.send(
-      Subscribe(serverId: serverId, collectors: collectors, cadence: cadence),
+      Subscribe(
+        serverId: serverId,
+        subscriptionId: subscriptionId,
+        streams: Set.unmodifiable(streams),
+      ),
     );
   }
 
-  void unsubscribe(String serverId) {
-    if (!_subscribed.remove(serverId)) return;
-    _engine.send(Unsubscribe(serverId));
+  void unsubscribe(String serverId, String subscriptionId) {
+    if (!_subscribed.remove((serverId, subscriptionId))) return;
+    _engine.send(
+      Unsubscribe(serverId: serverId, subscriptionId: subscriptionId),
+    );
   }
 
   void _onEngineEvent(EngineEvent event) {
@@ -52,14 +65,11 @@ final class MonitoringController extends ChangeNotifier {
     final last = _lastSeq[event.serverId];
     if (last != null && event.seq <= last) return;
     _lastSeq[event.serverId] = event.seq;
-    _samples
-            .putIfAbsent(
-              event.serverId,
-              () => ValueNotifier<OverviewSnapshot?>(null),
-            )
-            .value =
-        event.snapshot;
+    _box(event.serverId, event.stream).value = event;
   }
+
+  ValueNotifier<Sample?> _box(String serverId, SampleStream stream) => _samples
+      .putIfAbsent((serverId, stream), () => ValueNotifier<Sample?>(null));
 
   @override
   void dispose() {
