@@ -162,12 +162,13 @@ void main() {
 
     // Password prompts take a secret, or null to dismiss.
     final attempt = broker.attempt('ssh-config:web');
-    for (final request in const [
-      CredentialPromptRequest(user: 'me'),
-      ElevationPromptRequest(user: 'me'),
-    ]) {
-      unawaited(attempt.ask(host: 'h', port: 22, request: request));
-    }
+    final secrets = [
+      for (final request in const [
+        CredentialPromptRequest(user: 'me'),
+        ElevationPromptRequest(user: 'me'),
+      ])
+        attempt.ask(host: 'h', port: 22, request: request),
+    ];
     expect(
       broker.answer('prompt-2', const PromptResponsesAnswer([])),
       PromptAnswerResult.doesNotFit,
@@ -180,6 +181,27 @@ void main() {
       broker.answer('prompt-3', const PromptSecretAnswer(null)),
       PromptAnswerResult.answered,
     );
+    expect(((await secrets[0])! as PromptSecretAnswer).secret, 'pw');
+    // A dismissal is an answer, unlike a withdrawal's null.
+    expect(((await secrets[1])! as PromptSecretAnswer).secret, isNull);
+  });
+
+  test('a host-key prompt takes only a trust answer', () async {
+    final answer = broker
+        .attempt('ssh-config:web')
+        .ask(host: 'h', port: 22, request: _hostKey);
+
+    for (final wrong in const <PromptAnswer>[
+      PromptResponsesAnswer(['yes']),
+      PromptSecretAnswer('yes'),
+    ]) {
+      expect(broker.answer('prompt-1', wrong), PromptAnswerResult.doesNotFit);
+    }
+    expect(
+      broker.answer('prompt-1', const PromptTrustAnswer(false)),
+      PromptAnswerResult.answered,
+    );
+    expect(((await answer)! as PromptTrustAnswer).accepted, isFalse);
   });
 
   test('ids are UUIDs by default', () {
