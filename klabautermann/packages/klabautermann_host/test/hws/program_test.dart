@@ -35,6 +35,29 @@ void main() {
     test('the fragments cover every collector', () {
       expect(collectorFragments.keys, containsAll(Collector.values));
     });
+
+    test('each declares the guarded calls its fragment makes (D47)', () {
+      final call = RegExp(r'\bhw_q?run [a-z]');
+      final loopStart = RegExp(r'(^|;)\s*do$|^\s*(for|while) .*; do$');
+      for (final c in Collector.values) {
+        var calls = 0;
+        var depth = 0;
+        for (final line in collectorFragments[c]!.split('\n')) {
+          final code = line.trimLeft();
+          if (code.startsWith('#')) continue;
+          if (code == 'done' || code.startsWith('done ')) depth--;
+          final n = call.allMatches(code).length;
+          // A guarded call in a loop would run once per pass.
+          final inLoop =
+              depth > 0 || RegExp(r'\bdo\b.*\bdone\b').hasMatch(code);
+          expect(inLoop && n > 0, isFalse, reason: '${c.name}: $code');
+          calls += n;
+          if (loopStart.hasMatch(code)) depth++;
+        }
+        expect(depth, 0, reason: '${c.name} loops balance');
+        expect(c.guardedCommands, calls, reason: c.name);
+      }
+    });
   });
 
   group('buildSamplerProgram', () {
@@ -92,6 +115,15 @@ void main() {
       }
       expect(program, isNot(contains('c_overview()')));
       expect(program, isNot(contains('c_core()')));
+    });
+
+    test('only the fast program carries the filtering readers (D48)', () {
+      final fast = buildSamplerProgram(kind: SamplerKind.fast, nonce: nonce);
+      final slow = buildSamplerProgram(kind: SamplerKind.slow, nonce: nonce);
+      for (final helper in ['hw_meminfo', 'hw_netdev', 'hw_diskstats']) {
+        expect(fast, contains('$helper() {'), reason: helper);
+        expect(slow, isNot(contains(helper)), reason: helper);
+      }
     });
 
     test('the READY marker is the program last line', () {

@@ -117,7 +117,7 @@ void main() {
         '== loadavg ==',
         '0.1 0.2 0.3 4/5 6 extra tokens here',
         '== netdev ==',
-        'lo: 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18',
+        'eth0 1 2 3',
         '== unknown ==',
         'ignored',
       ].join('\n');
@@ -128,18 +128,30 @@ void main() {
       expect(r.warnings, isNotEmpty);
     });
 
-    test('core tolerates diskstats rows with extra discard fields', () {
+    test('core skips malformed per-core, diskstats and arcstats rows', () {
       final raw = [
         '== stat ==',
         'cpu  1 2 3 4 5 6 7 8 9 10',
+        'cpu0 5 6',
+        'cpu1 1 2 3 4 5 6 7 8 9 10',
+        'cpu2 1 2 3 4 5 6 7 8',
         '== diskstats ==',
-        '8 0 sda 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18',
-        '8 1 sda1 1 2 3',
+        'sda 1 2 3 4',
+        'sdb 1 2 3',
+        'sdc 1 2 3 x',
+        '== arcstats ==',
+        'size 4096',
+        'c_min -1',
       ].join('\n');
       final r = parseCore(raw, _ctx);
-      expect(r.value.diskstats, hasLength(1));
-      expect(r.value.diskstats.single.fields, hasLength(18));
-      expect(r.warnings, isNotEmpty);
+      expect(r.value.perCpu.keys, ['cpu0', 'cpu2']);
+      // A 32-bit shell's eight counters (D48).
+      expect(r.value.perCpu['cpu2']!.busy, 1 + 2 + 3 + 6 + 7 + 8);
+      expect(r.value.perCpu['cpu2']!.idle, 4 + 5);
+      expect(r.value.diskstats.map((d) => d.name), ['sda']);
+      expect(r.value.zfsArc!.sizeBytes, 4096);
+      expect(r.value.zfsArc!.minBytes, isNull);
+      expect(r.warnings.where((w) => w.contains('malformed')), hasLength(4));
     });
 
     test('fs tolerates df rows with padded columns', () {

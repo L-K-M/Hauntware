@@ -1,12 +1,11 @@
-/// An OpenSSH client config exercising what Séance's `SshConfigImporter`
-/// reads, drops and ignores (FL-02). The comments say what each block
-/// should produce; [sshConfigFixtureEntries] and
-/// [sshConfigFixtureSkipped] are the expected totals.
+/// An OpenSSH client config exercising what the FL-02 import reads, drops
+/// and ignores. The comments say what each block should produce;
+/// [sshConfigFixtureEntries] and [sshConfigFixtureSkipped] are the
+/// expected totals.
 const String sshConfigFixture = r'''
-# Defaults before the first Host block: ssh applies them everywhere, the
-# importer drops them, and the top-level Include is not followed.
-User everyone
-Include ~/.ssh/config.d/*
+# Lines before the first Host block apply to every host; this one sets
+# nothing the engine maps.
+ServerAliveInterval 15
 
 Host web-1
   HostName web-1.example.com
@@ -23,29 +22,31 @@ Host bastion
   User=admin
   ProxyJump jump.example
 
-# Wildcard-only blocks are defaults, not hosts (negations count).
+# Wildcard-only blocks name no host, and these set nothing for the hosts
+# here: the first nothing the engine maps, the second matches none.
 Host *
   ServerAliveInterval 30
 
 Host *.corp !secret.corp
   User corp
 
-# A conditional block: its directives are ignored.
+# `host` compares the HostName read so far, so this applies to no host
+# here, and `exec` is not run once a criterion fails.
 Match host web-1 exec "true"
   User matched
 
-# An Include inside a host block is not followed either.
 Host legacy
-  Include legacy.conf
   HostName legacy.example.com
 
 # A port no endpoint can use: skipped and counted.
 Host broken-port
   Port 70000
 
-# A second block for a taken alias: skipped and counted, not merged.
+# A second block for web-1 adds only what the first left unset: its
+# ProxyJump, not its User.
 Host web-1
   User someone-else
+  ProxyJump none
 
 Host v6
   HostName 2001:db8::1
@@ -60,5 +61,5 @@ const List<String> sshConfigFixtureEntries = [
   'v6',
 ];
 
-/// Blocks [sshConfigFixture] skips: `broken-port` and the second `web-1`.
-const int sshConfigFixtureSkipped = 2;
+/// Hosts [sshConfigFixture] skips: `broken-port`.
+const int sshConfigFixtureSkipped = 1;

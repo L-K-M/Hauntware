@@ -347,11 +347,12 @@ void main() {
     final fleet = FleetController(
       client,
       sshConfig: FakeSshConfigSource.text(
-        '# The engine isolate parses this, not the UI isolate.\n'
-        'Host *\n  User everyone\n'
+        '# The engine isolate parses this, not the UI isolate. As in\n'
+        '# ssh, the first value wins: Host * gives only db-1 a User.\n'
         'Host web-1\n  HostName web-1.example\n  User deploy\n'
         'Host db-1\n  HostName 10.0.0.4\n  Port 2222\n'
-        'Host bad\n  Port 99999\n',
+        'Host bad\n  Port 99999\n'
+        'Host *\n  User everyone\n',
       ),
     );
     addTearDown(fleet.dispose);
@@ -363,7 +364,7 @@ void main() {
     expect(outcome.saved, isTrue);
     const imported = [
       ('web-1', 'deploy@web-1.example'),
-      ('db-1', '10.0.0.4:2222'),
+      ('db-1', 'everyone@10.0.0.4:2222'),
     ];
     expect(fleet.servers.map((s) => (s.displayName, s.address)), imported);
 
