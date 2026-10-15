@@ -3896,7 +3896,7 @@ the engine in `engine_isolate.dart` beside it):
     the final pass's route must still loop on the hop's own port and as
     its own user, else that pass's. Otherwise the host behind it is left
     out and counted. The import skips this check where ssh's final pass
-    already fails before the hop: on the route of a host that keeps its
+    already fails before the hop: for the hops of a host that keeps its
     first pass, and behind a first hop that holds only by looping,
     directly or through its own first hops. ssh reaches such a hop only
     where no final pass is asked for, and every name then takes its
@@ -3904,7 +3904,10 @@ the engine in `engine_isolate.dart` beside it):
     for every name or for none, as `Match final all` does; one that asks
     for it for some names only, such as a `CanonicalizeHostname` in a
     `Host` block, falls outside what the import models, like any other
-    value that file sets. With
+    value that file sets. A first hop's own route is still checked as
+    where ssh dials that hop as itself, so a host behind a first hop
+    whose own route fails the check is left out and counted, although
+    ssh may reach it: that is conservative, not what ssh does. With
     `Host *.example.com` / `User ops` / `ProxyJump bastion.example.com`,
     `Host bastion` / `HostName bastion.example.com`, `Host bastion2` /
     `HostName b2.example.com` and `Host web` / `HostName 10.0.0.5` /

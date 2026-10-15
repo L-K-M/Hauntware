@@ -652,6 +652,17 @@ void main() {
           'Host x\n  HostName x.internal\n  ProxyJump gw,bastion2\n'
           'Host web\n  HostName 10.0.0.5\n  ProxyJump x,10.0.0.5:2222\n';
       expect(_dials(leftOutFirstHop).keys, ['bastion', 'bastion2', 'gw']);
+
+      // The same where the first hop is a hop record, which the import
+      // would store: gw.internal's own route counts as where ssh dials
+      // it as itself, and there the final pass reaches bastion2 as ops.
+      // Plain ssh reaches web, so leaving it out is conservative.
+      const leftOutRecord =
+          '${loops}Host 10.0.0.*\n  Port 2222\n'
+          'Host *.internal\n  ProxyJump h0.lan,bastion2\n'
+          'Host web\n  HostName 10.0.0.5\n'
+          '  ProxyJump gw.internal,10.0.0.5:2222\n';
+      expect(_dials(leftOutRecord).keys, ['bastion', 'bastion2']);
     });
 
     test('a wildcard block before the host\'s own block comes first', () {
