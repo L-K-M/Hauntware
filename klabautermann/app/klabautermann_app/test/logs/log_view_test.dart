@@ -781,6 +781,12 @@ void main() {
             await tester.pump();
             await tester.pump(const Duration(milliseconds: 40));
             logs.add(_lines(100, 20));
+            // Frame by frame, so the path passes the oldest line left: it
+            // waits there, neither above it nor stopped by the physics.
+            for (var ms = 50; ms < 200; ms += 10) {
+              await tester.pump(const Duration(milliseconds: 10));
+              expect(position.pixels, greaterThanOrEqualTo(0));
+            }
             await tester.pumpAndSettle();
             expect(logs.firstSeq, 20);
             expect(logs.following.value, isFalse);

@@ -311,7 +311,9 @@ class _LogViewState extends State<LogView> {
       _LogScroll.lineDown => line,
       _LogScroll.pageUp => -page,
       _LogScroll.pageDown => page,
-      _LogScroll.top || _LogScroll.end => double.negativeInfinity,
+      _LogScroll.top => double.negativeInfinity,
+      // Unreachable: End follows above. Kept for exhaustiveness.
+      _LogScroll.end => double.infinity,
     });
   }
 
@@ -1148,8 +1150,10 @@ final class _ShiftableScrollAnimation extends DrivenScrollActivity {
     }
     // When the lines in sight left, the moved path runs above the oldest
     // line left, and when the line aimed at left too, so does its end.
-    // Bouncing physics would show the blank space there, so the path goes
-    // no further above the oldest line than its curve does.
+    // Bouncing physics would show the blank space there, and clamping
+    // physics would report overscroll, which ends the animation on the
+    // oldest line, so the path goes no further above the oldest line than
+    // its curve does.
     final minExtent = (delegate as ScrollPosition).minScrollExtent;
     return super.applyMoveTo(
       math.max(value + shift, math.min(value, minExtent)),
