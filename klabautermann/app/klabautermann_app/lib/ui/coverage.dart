@@ -100,14 +100,15 @@ class FirstRunCoverageCard extends StatelessWidget {
   final FleetController fleet;
 
   /// Hides the card; a dismissal that cannot be saved says so, since the
-  /// card returns at the next start.
+  /// card returns at the next start, and prints why.
   Future<void> _dismiss(BuildContext context) async {
     // Captured first: the card is gone once the dismissal applies.
     final overlay = Overlay.of(context, rootOverlay: true);
     final notSaved = AppLocalizations.of(context).coverageFirstRunNotSaved;
     try {
       await coverage.dismissFirstRunCard();
-    } on Exception {
+    } on Exception catch (error) {
+      debugPrint('$error');
       if (overlay.mounted) showTopToast(overlay, message: notSaved);
     }
   }

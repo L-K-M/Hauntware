@@ -36,6 +36,20 @@ CoverageController _firstLaunch(List<String> saves, {Object? failWith}) =>
       },
     );
 
+/// What [body] hands to debugPrint. The binding checks that debugPrint is
+/// restored before tear-downs run, so this restores it itself.
+Future<List<String>> _printedDuring(Future<void> Function() body) async {
+  final printed = <String>[];
+  final previous = debugPrint;
+  debugPrint = (message, {wrapWidth}) => printed.add('$message');
+  try {
+    await body();
+  } finally {
+    debugPrint = previous;
+  }
+  return printed;
+}
+
 /// The toast's timer has to run out before the test ends.
 Future<void> _letToastsGo(WidgetTester tester) async {
   await tester.pump(const Duration(seconds: 10));
@@ -129,25 +143,25 @@ void main() {
       );
     });
 
-    testWidgets('a dismissal that cannot be saved says it will return', (
-      tester,
-    ) async {
+    testWidgets('a dismissal that cannot be saved says it will return, and '
+        'logs why', (tester) async {
+      const error = DeviceSettingsReadOnlyException(
+        DeviceSettingsIssueKind.newerVersion,
+      );
       final saves = <String>[];
       await pumpApp(
         tester,
         size: _desktop,
-        coverage: _firstLaunch(
-          saves,
-          failWith: const DeviceSettingsReadOnlyException(
-            DeviceSettingsIssueKind.newerVersion,
-          ),
-        ),
+        coverage: _firstLaunch(saves, failWith: error),
       );
 
-      await tester.tap(find.text('Got it'));
-      await tester.pumpAndSettle();
+      final printed = await _printedDuring(() async {
+        await tester.tap(find.text('Got it'));
+        await tester.pumpAndSettle();
+      });
 
       expect(_card, findsNothing);
+      expect(printed, contains('$error'));
       expect(
         find.text(
           'Klabautermann could not save that you dismissed the coverage '
