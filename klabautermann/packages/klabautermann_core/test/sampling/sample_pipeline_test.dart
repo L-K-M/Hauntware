@@ -438,6 +438,12 @@ void main() {
     )!.detail!;
     expect(detail, hasLength(kCollectorDetailMaxChars));
     expect(detail, endsWith('tail'));
+
+    // The cut never splits a surrogate pair.
+    final emoji = collectorUnavailable(
+      _section('fs', SectionStatus.error, '${'\u{1F600}' * 2048}z'),
+    )!.detail!;
+    expect(emoji, '${'\u{1F600}' * 2047}z');
   });
 
   group('host profile', () {

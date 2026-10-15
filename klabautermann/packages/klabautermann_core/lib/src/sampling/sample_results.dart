@@ -51,9 +51,10 @@ CollectorUnavailable? collectorUnavailable(HwsSection section) {
         .where((line) => line != kTimeoutAbsentMarker)
         .join('\n'),
   ).trim();
-  final detail = text.length > kCollectorDetailMaxChars
-      ? text.substring(text.length - kCollectorDetailMaxChars)
-      : text;
+  var cut = max(0, text.length - kCollectorDetailMaxChars);
+  // Step past a low surrogate, so the cut never leaves half a pair.
+  if (cut > 0 && (text.codeUnitAt(cut) & 0xFC00) == 0xDC00) cut++;
+  final detail = text.substring(cut);
   return CollectorUnavailable(reason, detail: detail.isEmpty ? null : detail);
 }
 
