@@ -36,10 +36,11 @@ final class LogStreamHandle {
 /// access from the probe for LOG-04's notice.
 ///
 /// A [RequestRejected] names no stream, so a rejection of [OpenLogStream]
-/// goes to the oldest open with no event yet. That holds because the
-/// engine handles requests in order and answers each open it accepts with
-/// a [LogStreamState] before the next request, so the first event of any
-/// stream also answers every open before it.
+/// goes to the oldest open with no event yet. That is sound only because
+/// the engine handles requests in order and its log service must answer
+/// each open it accepts with a [LogStreamState] before the next request
+/// ([OpenLogStream]), so the first event of any stream also answers every
+/// open before it.
 final class LogStreams {
   LogStreams(this._engine) {
     _events = _engine.events.listen(_onEvent, onDone: _onEngineDone);
