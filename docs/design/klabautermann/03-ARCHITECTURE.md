@@ -590,7 +590,8 @@ Proposals awaiting the owner close the section; they are not decisions.
   core's idle sum would wrap after about 248 days at USER_HZ 100: the fast
   program tests the width once at start, and such a shell sends each
   `cpuN` line's first eight counters instead, about 67 B per core instead
-  of 26 B [U], outside 11.4's per-CPU allowance. `meminfo` keeps MEM-01's
+  of 26 B [U], so its `core` reply passes 2.5 KB from 22 CPUs, which 11.4
+  exempts. `meminfo` keeps MEM-01's
   nine keys without padding or unit. `netdev` keeps the bytes received and
   sent (NET-01) of each interface with a `device` link in sysfs whose
   master, if it has one, has none: loopback, bridges, bonds, VLANs, veths
@@ -654,7 +655,8 @@ Proposals awaiting the owner close the section; they are not decisions.
   `core` reply is 1,151 B at 4 CPUs, 1,880 B at 32 and 2,714 B at 64, 26 B
   for each further CPU, and an `overview` reply 507 B, so 2.5 KB holds to
   about 55 CPUs and 11.4 allows 30 B for each CPU beyond 32; under mksh a
-  `core` reply is 3,192 B at 32 CPUs. Real hosts remain for S2.
+  `core` reply is 1,315 B at 4 CPUs, 2,453 B at 21, 2,520 B at 22 and
+  3,192 B at 32. Real hosts remain for S2.
   *Rejected:* filtering only in the engine (the bytes still cross the link
   on every tick, against 11.4's 1 KB/s for 10 hosts); name lists of
   virtual interfaces and partitions (never complete); leaving out every
@@ -3999,7 +4001,10 @@ palette) and presets in the preview. v1: paste from Séance and Poltergeist
 ### 11.4 Performance budgets (gated from M2)
 
 - Fast tick at most 2.5 KB, plus 30 B for each CPU beyond 32 (D48), and
-  5 ms of server CPU on the reference VM [E].
+  5 ms of server CPU on the reference VM [E]. A shell with 32-bit
+  arithmetic, such as mksh, is exempt from the size limit: its `core`
+  reply carries eight counters per core and passes 2.5 KB from 22 CPUs
+  (D48).
 - 10 monitored hosts at default phone cadence: under 1 KB/s in total.
 - UI frame p99 under 16 ms with 10 hosts and one 1,000 lines/s follow on a
   low-end Android phone (spike S5 baseline; a device measurement, manual
