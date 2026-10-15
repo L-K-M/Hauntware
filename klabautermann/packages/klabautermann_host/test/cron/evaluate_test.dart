@@ -310,6 +310,19 @@ void main() {
       (DateTime.utc(2026, 10, 26, 1, 30), CronDst.none),
       (DateTime.utc(2026, 10, 27, 1, 30), CronDst.none),
     ]);
+    // A zone falling back an hour after Berlin (0, -1 from 02:00Z)
+    // repeats 01:30 first inside the server's window: only the second
+    // pass runs.
+    final late = _dstZone(
+      -1,
+      DateTime.utc(2026, 3, 29, 2),
+      DateTime.utc(2026, 10, 25, 2),
+    );
+    expect(line('30 1 * * *', DateTime.utc(2026, 10, 24, 12), late), [
+      (DateTime.utc(2026, 10, 25, 2, 30), CronDst.nearTransition),
+      (DateTime.utc(2026, 10, 26, 2, 30), CronDst.none),
+      (DateTime.utc(2026, 10, 27, 2, 30), CronDst.none),
+    ]);
     // A wildcard job runs in the server's window, a fixed-time one not;
     // without a known server zone nothing marks or drops them.
     final window = DateTime.utc(2026, 10, 25, 0, 45);

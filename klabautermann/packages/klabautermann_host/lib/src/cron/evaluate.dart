@@ -49,7 +49,7 @@ enum CronClock {
   /// the minutes the zone's forward jump skips and matches the minutes
   /// its backward jump repeats twice. While the server's zone repeats an
   /// hour, cron runs no fixed-time job at all, which leaves one run when
-  /// both zones fall back at the same instant.
+  /// both zones fall back by the same amount at the same instant.
   line,
 }
 
@@ -66,9 +66,10 @@ enum CronDst {
 
   /// The wall minute occurs twice around a backward transition; a
   /// fixed-time job fires at the first occurrence only. A
-  /// [CronClock.line] job does so only when the second occurrence falls
-  /// in the server zone's repeated hour; otherwise it fires twice, each
-  /// run marked [nearTransition].
+  /// [CronClock.line] job fires at each occurrence outside the server
+  /// zone's repeated hour, and carries this mark only on a first
+  /// occurrence whose second falls in that hour; its other runs within
+  /// an hour of a transition are [nearTransition].
   overlap,
 
   /// An ordinary wall minute within an hour of a transition, of the

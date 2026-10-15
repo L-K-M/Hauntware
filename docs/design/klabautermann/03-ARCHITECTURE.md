@@ -843,11 +843,11 @@ Proposals awaiting the owner close the section; they are not decisions.
   stays set [R: cronie `env.c` `load_env`], so its line matches on the
   server's clock and is not caught up either. While the server's zone
   repeats an hour cron runs only wildcard jobs, so a fixed-time
-  `CRON_TZ` job runs once when both zones fall back at the same instant
-  and misses any other match inside that hour. Such a run within an hour
-  of either zone's transition is marked; without a known server
-  zone, or at the probe's fixed offset, the runs ignore the server's
-  repeated hour. Debian's cron ignores `CRON_TZ` [R: Debian cron
+  `CRON_TZ` job runs once when both zones fall back by the same amount
+  at the same instant and misses any other match inside that hour. Such
+  a run within an hour of either zone's transition is marked; without a
+  known server zone, or at the probe's fixed offset, the runs ignore the
+  server's repeated hour. Debian's cron ignores `CRON_TZ` [R: Debian cron
   3.0pl1-211 `cron.c`] and BusyBox crond runs every job by the clock,
   which the runs do not model yet. The database's transition tables
   end at the 32-bit time limit, early in 2038; a run after a zone's
