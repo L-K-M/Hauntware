@@ -24,6 +24,15 @@ ServerZone _berlinZone() => ServerZone(
   offsetAt: _berlin,
 );
 
+/// A zone at [std] hours outside `[spring, fall)` and an hour ahead
+/// inside it, as a rule carrier.
+ServerZone _dstZone(int std, DateTime spring, DateTime fall) => ServerZone(
+  offset: Duration(hours: std),
+  offsetAt: (utc) => Duration(
+    hours: std + (!utc.isBefore(spring) && utc.isBefore(fall) ? 1 : 0),
+  ),
+);
+
 /// The `(instant, annotation)` of the next five runs of [text] after
 /// [after] in [zone], modelled Berlin by default.
 List<(DateTime, CronDst)> _runs(
@@ -134,6 +143,40 @@ void main() {
     expect(runs.single.atUtc, DateTime.utc(2026, 3, 29, 1));
     // The annotated wall minute is the one the clock skipped.
     expect(runs.single.wall, DateTime.utc(2026, 3, 29, 2));
+  });
+
+  test('a gap run fires when the wall day beside the gap does not match', () {
+    // cron runs each skipped minute with that minute's own date. Modelled
+    // Azores (-1, +0 from 2027-03-28T01:00Z) skips Sunday 00:00 to 00:59
+    // after a Saturday; modelled Nuuk (-2, -1 at the same instant) skips
+    // Saturday 23:00 to 23:59 before a Sunday.
+    final spring = DateTime.utc(2027, 3, 28, 1);
+    final fall = DateTime.utc(2027, 10, 31, 1);
+    final after = DateTime.utc(2027, 3, 20);
+    expect(_runs('30 0 * * 0', after, _dstZone(-1, spring, fall)).take(3), [
+      (DateTime.utc(2027, 3, 21, 1, 30), CronDst.none),
+      (spring, CronDst.gap),
+      (DateTime.utc(2027, 4, 4, 0, 30), CronDst.none),
+    ]);
+    expect(_runs('30 23 * * 6', after, _dstZone(-2, spring, fall)).take(3), [
+      (DateTime.utc(2027, 3, 21, 1, 30), CronDst.none),
+      (spring, CronDst.gap),
+      (DateTime.utc(2027, 4, 4, 0, 30), CronDst.none),
+    ]);
+  });
+
+  test('a gap right before the first instant scanned still runs', () {
+    // The scan starts at 01:00Z, the jump itself, whose minute before
+    // is wall 01:59 CET: 02:30 was skipped and runs at the jump.
+    expect(_runs('30 2 * * *', DateTime.utc(2026, 3, 29, 0, 59, 30)).first, (
+      DateTime.utc(2026, 3, 29, 1),
+      CronDst.gap,
+    ));
+    // From the jump on, that run is no longer strictly after.
+    expect(_runs('30 2 * * *', DateTime.utc(2026, 3, 29, 1)).first, (
+      DateTime.utc(2026, 3, 30, 0, 30),
+      CronDst.none,
+    ));
   });
 
   test('a fall-back overlap run keeps the first occurrence', () {

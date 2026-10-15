@@ -283,6 +283,30 @@ void main() {
     expect(cronTzZone('Mars/Olympus_Mons', DateTime.utc(2026)), isNull);
   });
 
+  test('a gap beside a day the job skips runs at the jump', () {
+    // Each zone's spring jump skips minutes of a day the job matches,
+    // next to a wall day it does not; cron runs them at the jump.
+    for (final (zone, line, after, jump) in [
+      ('Atlantic/Azores', '30 0 * * 0', (2027, 3, 22), (2027, 3, 28, 1)),
+      ('America/Nuuk', '30 23 * * 6', (2027, 3, 22), (2027, 3, 28, 1)),
+      ('America/Santiago', '30 0 * * 0', (2026, 9, 1), (2026, 9, 6, 4)),
+      ('America/Havana', '30 0 * * 0', (2027, 3, 8), (2027, 3, 14, 5)),
+    ]) {
+      final at = DateTime.utc(after.$1, after.$2, after.$3);
+      final result = cronResult(
+        _crontab('CRON_TZ=$zone\n$line a'),
+        _berlin,
+        at,
+      );
+      final (run, _, dst) = _runs(result).first;
+      expect(
+        (run, dst),
+        (DateTime.utc(jump.$1, jump.$2, jump.$3, jump.$4), CronDst.gap),
+        reason: zone,
+      );
+    }
+  });
+
   test('a reading evaluates the runs of a bounded number of lines', () {
     final lines = List.filled(kCronLinesEvaluated + 1, '59 23 * * * a');
     final result = cronResult(

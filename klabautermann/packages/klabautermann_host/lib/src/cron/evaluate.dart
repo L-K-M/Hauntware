@@ -111,11 +111,28 @@ List<CronRun> nextCronRuns(
   final limit = afterUtc.add(Duration(days: horizonDays));
   final wildcard = expression.hasWildcardTime;
   var t = _afterMinute(afterUtc);
-  int? prevWallMs;
+  // The wall clock one minute before [t]: a forward jump into [t] runs
+  // its skipped minutes at [t] even when [t] is the first instant.
+  var prevWallMs = _wallMsAt(zone, t.subtract(_minute));
   while (runs.length < count && t.isBefore(limit)) {
     final offset = zone.offsetFor(t);
     final wallMs = t.millisecondsSinceEpoch + offset.inMilliseconds;
     final wall = DateTime.fromMillisecondsSinceEpoch(wallMs, isUtc: true);
+    if (!wildcard) {
+      final advance = wallMs - prevWallMs;
+      if (advance > 60000 && advance <= _maxGapMs) {
+        // Forward jump: skipped wall minutes that match fire at the
+        // transition instant (cronie notices within 3 hours). Each
+        // minute matches with its own date, before the day check, since
+        // [wall]'s day may differ from theirs.
+        for (var w = prevWallMs + 60000; w < wallMs; w += 60000) {
+          final skipped = DateTime.fromMillisecondsSinceEpoch(w, isUtc: true);
+          if (expression.matches(skipped)) {
+            _emit(runs, w, t, offset, CronDst.gap, count);
+          }
+        }
+      }
+    }
     if (!_dayCanMatch(expression, wall)) {
       // Find the next wall day that can match by date arithmetic alone,
       // then jump to just under its midnight; the evaluator walks forward
@@ -137,21 +154,10 @@ List<CronRun> nextCronRuns(
           const Duration(hours: 3).inMilliseconds;
       if (jumpMs < 60000) jumpMs = 60000;
       t = t.add(Duration(milliseconds: jumpMs));
-      prevWallMs = null;
+      prevWallMs = jumpMs == 60000
+          ? wallMs
+          : _wallMsAt(zone, t.subtract(_minute));
       continue;
-    }
-    if (prevWallMs != null && !wildcard) {
-      final advance = wallMs - prevWallMs;
-      if (advance > 60000 && advance <= _maxGapMs) {
-        // Forward jump: skipped wall minutes that match fire at the
-        // transition instant (cronie notices within 3 hours).
-        for (var w = prevWallMs + 60000; w < wallMs; w += 60000) {
-          final skipped = DateTime.fromMillisecondsSinceEpoch(w, isUtc: true);
-          if (expression.matches(skipped)) {
-            _emit(runs, w, t, offset, CronDst.gap, count);
-          }
-        }
-      }
     }
     // A fixed-time job's minute in the repeated pass has already run.
     if (expression.matches(wall) &&
@@ -168,6 +174,12 @@ List<CronRun> nextCronRuns(
   }
   return runs;
 }
+
+const _minute = Duration(minutes: 1);
+
+/// The zone's wall clock at instant [t], in milliseconds.
+int _wallMsAt(ServerZone zone, DateTime t) =>
+    t.millisecondsSinceEpoch + zone.offsetFor(t).inMilliseconds;
 
 /// The first instant-minute strictly after [afterUtc].
 DateTime _afterMinute(DateTime afterUtc) {
