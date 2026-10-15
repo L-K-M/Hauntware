@@ -287,6 +287,16 @@ slice:
   escape and control but tab. A heap test keeps a full buffer of either
   kind under the 64 MiB budget (03 §11.4). Nothing uses them yet: the
   viewer and the engine's followers come in later M2 PRs.
+- Log viewer (03 §10.8, LOG-02): `lib/ui/logs/`'s `LogView` over a
+  `LogViewController` draws fixed one-line rows or wrapped rows, measuring
+  only the lines a layout shows and finding offsets in O(log n); follows
+  the newest line, pauses on any scroll away from it and resumes at the
+  end, on End or Follow; colours levels with a spoken gutter icon; holds
+  every span to 4.5:1; and scrolls by keyboard with a focus ring. Light
+  and dark goldens draw with the test font and compare on Linux only. Not
+  yet: sideways scrolling without wrap (a long line ends in an ellipsis,
+  which hides a cut line's note) and tab stops. No panel shows it yet: the
+  Logs and Services panels and the followers come later in M2.
 
 Pull-only from the start (D14): no surface sends a request that could
 push or write catalog records, and a widget test guards it.
@@ -405,3 +415,27 @@ wiring on Linux.
 Follow-up: this is the suite's fourth copy of the controller. The D32
 review in [SHARED.md](SHARED.md) defers a shared macOS plugin to a
 separate suite PR, which must land before any product makes a fifth.
+
+## Open review findings
+
+GLM's review of PR #190 (2026-10-15) flagged these in code already on
+main. Both were checked against the code and are not fixed yet:
+
+- Alpine cron fixture: `klabautermann_host`'s
+  `test/fixtures/alpine-322/cron.txt` puts BusyBox crontab lines under
+  `etc_crontab`. BusyBox lines have no user column, but the
+  system-crontab parser reads the sixth field as the user, so
+  `cron.golden.json` and `jobs.golden.json` record `user: "run-parts"`
+  and `command: "/etc/periodic/15min"` for all five lines. BusyBox crond
+  reads `/etc/crontabs/<user>` without a user column and has no
+  `/etc/crontab`. Either move the lines to the fixture's `crontab`
+  section or teach the parser a no-user-column flavour. The fixture is
+  hand-written; the S2 capture replaces it.
+- Cron runs after a DST change: `ServerZone` keeps the probe's fixed
+  offset unless the consumer passes `offsetAt`, and nothing does yet
+  (`HostProfile` in `host_profile.dart`, the jobs goldens). A run past a
+  transition keeps the old offset. Examples: the debian-12 golden's
+  Europe/Berlin runs from 2026-10-25 say +120 where CET is +60, and the
+  rhel-8 golden's America/New_York runs from 2026-11-01 say -240 where
+  EST is -300. The first consumer of the jobs list must supply the zone
+  lookup. Until then, the goldens should say they are fixed-offset.

@@ -1,0 +1,16 @@
+== crontab_meta ==
+rc=0
+== crontab ==
+# m h dom mon dow command
+*/5 * * * * /home/anke/bin/healthcheck
+== etc_crontab ==
+SHELL=/bin/sh
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+17 *	* * *	root	cd / && run-parts --report /etc/cron.hourly
+25 6	* * *	root	test -x /usr/sbin/anacron || run-parts --report /etc/cron.daily
+47 6	* * 7	root	test -x /usr/sbin/anacron || run-parts --report /etc/cron.weekly
+52 6	1 * *	root	test -x /usr/sbin/anacron || run-parts --report /etc/cron.monthly
+== cron_d ==
+== cron_dirs ==
+daily apt-compat
+daily dpkg

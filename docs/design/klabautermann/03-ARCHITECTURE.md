@@ -243,8 +243,9 @@ password · D42 alert delivery through the sync server · D43 rates in the
 engine · D44 sample sequence · D45 subscriptions · D46 link vocabulary ·
 D47 sampler deadlines · D48 host-side filtering · D49 collector locale ·
 D50 LXC values · D51 Access tab · D52 runtime placement · D53 integration
-placement · D54 runtime override in M3 · D55 no health overlay in the MVP.
-Proposals awaiting the owner close the section; they are not decisions.
+placement · D54 runtime override in M3 · D55 no health overlay in the MVP
+· D56 log search through `planchette_core`. Proposals awaiting the owner
+close the section; they are not decisions.
 
 ### Shape and scope
 
@@ -503,26 +504,40 @@ Proposals awaiting the owner close the section; they are not decisions.
   maths (the wrap and reset rules of 6.4) and computes every derived value
   (percentages, load per core, the memory breakdown) before an event
   leaves it; the UI paints values and never holds counters. "Client-side"
-  in 02 CN-04 means the engine isolate. The v2 `Sample` still carries the
-  raw counters of an `OverviewSnapshot`
+  in 02 CN-04 means the engine isolate. The v2 `Sample` carried the raw
+  counters of an `OverviewSnapshot`
   (`klabautermann_core/lib/src/engine/protocol.dart:293-308` [V]); the
-  sampling protocol replaces it. Why: parsing already runs in the engine
-  (6.5), the previous reading and `btime` belong with the sampler session
-  that sees restarts and gaps, and the v1 rollups (D29) need the same
-  values. *Rejected:* rates in the app's controllers (a second owner of
-  the reset and gap rules, and per-tick work on the UI isolate).
+  v3 sampling protocol replaced it (10.1). Why: parsing already runs in
+  the engine (6.5), the previous reading and `btime` belong with the
+  sampler session that sees restarts and gaps, and the v1 rollups (D29)
+  need the same values. *Rejected:* rates in the app's controllers (a
+  second owner of the reset and gap rules, and per-tick work on the UI
+  isolate).
 - **D44. The engine owns `Sample.seq`.** A `Sample`'s `seq` is a per-server
   counter the engine assigns; it rises monotonically for the engine's
   lifetime, across sampler restarts and reconnects. The HWS/1 request
   number (`hw_t <seq>`, 6.2) belongs to one sampler session, restarts with
-  it and stays inside the engine. Today `Sample.seq` is that number
+  it and stays inside the engine. In v2 `Sample.seq` was that number
   (`protocol.dart:293-294` [V]), and the UI drops a sample whose `seq` is
   not above the last one it kept
   (`klabautermann_app/lib/controllers/monitoring_controller.dart:52-54`
-  [V]), so every sample after a sampler restart would be dropped. The UI
-  resets that floor on `EngineReady`, because a new engine counts from
-  the start. *Rejected:* the request number with a UI reset on restart
-  (the UI does not see sampler restarts).
+  [V]), so every sample after a sampler restart would have been dropped.
+  A new engine counts from the start, so the floor lasts one engine run:
+  it lives in the monitoring controller, built over one `EngineClient`,
+  and a client is one run, since its handshake consumes `EngineReady` and
+  the engine's exit closes its events. A restarted engine is a new client
+  with new controllers, whose floors start empty. Routes and surfaces keep
+  the controllers they were built with, so the app's view remounts its
+  tree for new controllers, which reopens and resubscribes every surface
+  on the new engine. It shows nothing for one frame in between, since the
+  old tree must be gone before the new one mounts: macOS has one native
+  menu bar, and the old one clears it as it goes. A server that leaves
+  the fleet loses its floor too. *Rejected:* the request number with a
+  UI reset on restart (the UI does not see sampler restarts); a reset on
+  an `EngineReady` in the event stream (the handshake consumes it, so the
+  reset would never run, and a client outliving its engine would also
+  have to replay subscriptions, links and the app's activity into the
+  next one).
 - **D45. Subscriptions are keyed by `(serverId, subscriptionId)`.** Each
   surface that shows a server's data (a fleet row, the overview, a visible
   panel) holds its own subscription with its own collector set. The engine
@@ -532,15 +547,17 @@ Proposals awaiting the owner close the section; they are not decisions.
   columns of 6.4) and the app's activity (foreground or background, D34)
   are requests of their own. One 6.4 cadence depends on the surface:
   `units` runs every 15 s for the Services panel and every 60 s for the
-  health card, so the engine has to tell those subscriptions apart; the
-  sampling protocol settles how (a surface kind on the subscription, or a
-  separate failed-units collector). Today the engine keeps one
-  subscription per server and a second `Subscribe` replaces the first
+  health card, so the engine has to tell those subscriptions apart: the
+  sampling protocol gives the health card a `failedUnits` stream of its
+  own (10.1). The M1 engine kept one subscription per server and a second
+  `Subscribe` replaced the first
   (`klabautermann_core/lib/src/engine/engine_isolate.dart:45,74-77` [V]),
-  so closing a panel would also stop the fleet row's sampling. *Rejected:*
-  one subscription per server (surfaces overwrite each other); cadence per
-  subscription (the profile and the app's activity hold for every
-  subscription at once, so each change would resend all of them).
+  so closing a panel would also have stopped the fleet row's sampling.
+  *Rejected:* one subscription per server (surfaces overwrite each
+  other); cadence per subscription (the profile and the app's activity
+  hold for every subscription at once, so each change would resend all
+  of them); a surface kind on the subscription (a cadence hint by another
+  name, and the health card would still receive the full unit list).
 - **D46. Link vocabulary: `SshLinkState` plus `blocked`.** Across the
   isolate boundary a link is in one of the eight states of `seance_core`'s
   `SshLinkState` (`idle`, `connecting`, `authenticating`, `ready`,
@@ -559,24 +576,106 @@ Proposals awaiting the owner close the section; they are not decisions.
   own READY deadline [E], and a fast request keeps 5 s [E]. A slow
   request's deadline is derived from the guarded commands its collectors
   can run, each bounded by `timeout 10` (6.2), plus a margin [E], instead
-  of a fixed 30 s: the probe alone can run 17 guarded commands (`hw_qrun` in
-  `klabautermann_host/lib/src/hws/program.dart:340-572` [V]), up to 170 s
-  when each runs into its timeout, and a fixed deadline would keep
-  restarting a slow but working sampler. Without `timeout` on the host
-  (6.3) the commands run unguarded, and the derived deadline still bounds
-  the request. Supersedes the slow figure in 6.2. *Rejected:* one fixed
-  slow deadline (too short for the probe, too long for one `df`).
+  of a fixed 30 s: the probe alone can run 16 guarded commands
+  (`Collector.guardedCommands` declares each collector's count, and a test
+  ties it to the fragment text), up to 160 s when each runs into its
+  timeout, and a fixed deadline would keep restarting a slow but working
+  sampler. Without `timeout` on the host (6.3) the commands run unguarded,
+  and the derived deadline still bounds the request. Supersedes the slow
+  figure in 6.2. *Rejected:* one fixed slow deadline (too short for the
+  probe, too long for one `df`).
 - **D48. Core and overview payloads are filtered on the host.** The `core`
   and `overview` fragments keep only the rows and fields the engine uses
-  before anything crosses the link, as the meminfo subset already does
-  (`hw_meminfo`, `program.dart:192-201` [V]); today both still send all
-  of `/proc/net/dev`, and `core` all of `/proc/diskstats`
-  (`program.dart:248,267-268` [V]). The rules are fixed against spike S2's
-  measurements and the 11.4 tick budget, with builtins only (6.2, fork
-  budget); each change bumps the collector-set version
-  (`kCollectorSetVersion`, `program.dart:21` [V]). *Rejected:* filtering
-  only in the engine (the bytes still cross the link on every tick,
-  against 11.4's 1 KB/s for 10 hosts).
+  before anything crosses the link, with builtins only (6.2, fork budget);
+  each change bumps the collector-set version (`kCollectorSetVersion`).
+  Until version 4 both sent all of `/proc/net/dev` and `core` all of
+  `/proc/diskstats`, and spike S2 measured a 4-CPU `core` reply of 2,773 B
+  and an `overview` reply of 1,227 B (`klabautermann/docs/evidence/s2/`).
+  K15 fixes the rules in version 4. `stat` keeps the aggregate `cpu` line
+  whole: CPU-01's shares need its total, which spans every field but the
+  two guest fields, so trimming would save only those, and CPU-04 in v1
+  uses the breakdown. It sends each `cpuN` line as busy and idle jiffies,
+  because CPU-02 shows only busy per core: idle is idle plus iowait, busy
+  is user, nice, system, irq, softirq and steal, and the kernel already
+  counts guest time in user and nice [V: Linux `kernel/sched/cputime.c`,
+  `account_guest_time`]. mksh, and BusyBox on a 32-bit CPU without
+  `SH_MATH_64`, do shell arithmetic in 32 bits [V: mksh R59 prints
+  -2147483648 for `$((2147483647 + 1))`; BusyBox `shell/math.h`], so a
+  core's idle sum would wrap after about 248 days at USER_HZ 100: the fast
+  program tests the width once at start, and such a shell sends each
+  `cpuN` line's first eight counters instead, about 67 B per core instead
+  of 26 B [U], so its `core` reply passes 2.5 KB from 22 CPUs, which 11.4
+  exempts. `meminfo` keeps MEM-01's
+  nine keys without padding or unit. `netdev` keeps the bytes received and
+  sent (NET-01) of each interface with a `device` link in sysfs whose
+  master, if it has one, has none: loopback, bridges, bonds, VLANs, veths
+  and tunnels have no device and carry traffic a device already counts,
+  and Hyper-V's synthetic NIC and the failover master add their enslaved
+  VF's counters to their own [V: Linux `drivers/base/core.c`
+  (`device_add_class_symlinks`), `drivers/net/hyperv/netvsc_drv.c`
+  (`netvsc_get_stats64`), `drivers/net/net_failover.c`]. A Xen netback
+  port (`vif<domid>.<handle>` in dom0) has a `device` link too, to its
+  xenbus backend device, yet it is a guest's NIC, and the bridge or Open
+  vSwitch forwards its traffic across the uplink or another port again,
+  so an interface whose device's `nodename` lies under `backend/` counts
+  as virtual [V: Linux `drivers/net/xen-netback/interface.c`
+  (`xenvif_alloc`), `drivers/xen/xenbus/xenbus_probe.c` (`nodename`),
+  `drivers/xen/xenbus/xenbus_probe_backend.c`]; the test reads the
+  device, not the name, which a toolstack may change [V: Xen 4.19
+  `tools/hotplug/Linux/vif-common.sh` (`rename_vif`)]. Without such an
+  interface, inside a container whose `eth0` is a veth peer, the
+  interfaces that are neither a bridge (a `bridge/` directory) nor
+  enslaved (a `master` link) stay, because a nested Docker bridge and its
+  veth ports count forwarded traffic again, in the opposite direction to
+  `eth0` [V: Linux `net/bridge/br_device.c` (`br_dev_xmit`),
+  `net/bridge/br_input.c` (`br_pass_frame_up`), `drivers/net/veth.c`
+  (`veth_get_stats64`)]. When that leaves none, as when `eth0` is itself a
+  bridge port, or without sysfs, every interface but `lo` stays, and
+  forwarded traffic then counts on the uplink, the bridge and its ports; a
+  tunnel inside a container counts again on `eth0` either way. `diskstats`
+  keeps reads, sectors read, writes and sectors written (CN-04) of whole
+  disks: a partition (a `partition` file in sysfs) or a stacked device
+  (entries under `slaves/`, which device-mapper and md create) repeats its
+  disks' I/O [V: Linux `block/partitions/core.c`, `block/holder.c`,
+  `drivers/md/dm.c`, `drivers/md/md.c`] (without sysfs neither test
+  matches, so partitions and stacked devices stay and count again), loop
+  devices count again on their backing file's disk, `ram` and `zram` hold
+  memory, and ZFS volumes (`zd*` [V: OpenZFS `include/sys/fs/zfs.h`])
+  count again on the pool's disks. A hidden NVMe multipath path
+  (`nvme<S>c<C>n<N>`) has neither a `partition` file nor `slaves/`, yet
+  its head `nvme<S>n<N>` counts the same I/O on kernels that account it
+  there [V: Linux `block/genhd.c` (`diskstats_show` lists hidden disks),
+  `drivers/nvme/host/core.c` (`nvme_alloc_ns`),
+  `drivers/nvme/host/multipath.c` (`nvme_mpath_start_request`)], so a path
+  row stays only when its head row shows no I/O, as on kernels before the
+  head accounted it. The four counters serve DSK-03's rates; DSK-04's
+  latency and utilization fields (ms reading, ms writing, `io_ticks`,
+  weighted ms) stay out until v1 brings DSK-04 and bumps the collector-set
+  version. A `netdev` or `diskstats` row whose counters are all zero (an
+  unused NIC, idle `nbd` devices) is left out; its first non-zero reading
+  starts its series. PSI keeps `avg10`, `avg60` and `avg300` (7.1),
+  without the cumulative `total`. The cpu file's `full` line stays: the
+  kernel reports zero for it at the system level [V: Linux
+  `Documentation/accounting/psi.rst`], but an lxcfs `pressure/cpu` (D50)
+  is the container's cgroup `cpu.pressure`, copied verbatim, where `full`
+  is defined [V: lxcfs `src/proc_fuse.c` (`proc_pressure_read`) at
+  v7.0.0]. Where `/proc/spl/kstat/zfs/arcstats` exists, `core` adds the
+  ARC's `c_min` and `size` [V: OpenZFS `module/zfs/arc.c`], for MEM-01's
+  "ZFS ARC counted as used" and MEM-05's reclaimable part above `c_min`
+  (v1.x); a host without the file sends no block, which reads as not
+  present, never as zero. Inside a container the file is the host's ARC
+  [U], which an lxcfs `meminfo` does not contain, so the engine applies
+  MEM-01's note outside containers only. On synthetic `/proc` trees [U] a
+  `core` reply is 1,151 B at 4 CPUs, 1,880 B at 32 and 2,714 B at 64, 26 B
+  for each further CPU, and an `overview` reply 507 B, so 2.5 KB holds to
+  about 55 CPUs and 11.4 allows 30 B for each CPU beyond 32; under mksh a
+  `core` reply is 1,315 B at 4 CPUs, 2,453 B at 21, 2,520 B at 22 and
+  3,192 B at 32. Real hosts remain for S2.
+  *Rejected:* filtering only in the engine (the bytes still cross the link
+  on every tick, against 11.4's 1 KB/s for 10 hosts); name lists of
+  virtual interfaces and partitions (never complete); leaving out every
+  interface with a master (that drops bond slaves and bridge ports, the
+  only devices under a bond or a bridge).
 - **D49. Collector locale.** Collectors that render text for people
   (A11Y-08) run their command under `LC_ALL=C.UTF-8`, or under the
   sampler's `LC_ALL=C` when the host lacks `C.UTF-8`. The program decides
@@ -598,7 +697,48 @@ Proposals awaiting the owner close the section; they are not decisions.
   6.6 and 7.1 said "virtualized"; the catalog's "unknown" replaces that
   wording. The probe gains an lxcfs line (6.1): which `/proc` files are
   `fuse.lxcfs` mounts, because `systemd-detect-virt -c` tells that the
-  host is a container, not which values are its own.
+  host is a container, not which values are its own. K09 refines this:
+  an lxcfs mount is not proof for every file. lxcfs passes the host's
+  `/proc/loadavg` through unless it runs with `-l`, which its upstream
+  systemd unit does not pass. It takes the CPU times in `/proc/stat`
+  from the cgroup v1 `cpuacct` controller; without one it copies the
+  host's `cpuN` lines for the CPUs in the container's cpuset and writes
+  their sum as the `cpu` line. It reads `diskstats` and `pressure/io`
+  through a controller named `blkio`, which cgroup v2 calls `io`, and
+  passes the host's file through when that lookup fails. For
+  `diskstats` it also needs the cgroup v1 `blkio.io_*_recursive` files,
+  which only the CFQ scheduler provided and Linux 5.0 removed. So lxcfs
+  5.0 and 6.0, which also run on legacy and hybrid cgroup layouts, serve
+  the container's own `stat` CPU times only on such a host and its own
+  `diskstats` only there on a kernel older than 5.0, serve the host's on
+  a cgroup v2 host, and serve no `/proc/pressure`; lxcfs 7.0 and main
+  support cgroup v2 only and always serve the host's `stat` CPU times,
+  `diskstats` and `pressure/io` [R: lxcfs `src/proc_loadavg.c`,
+  `src/proc_fuse.c` (`proc_stat_read`, `proc_diskstats_read`, the
+  pressure reader), `src/proc_cpuview.c` (`read_cpuacct_usage_all`),
+  `src/cgroups/cgfsng.c` (`cg_init`, `cgfsng_get_io`) and
+  `config/init/systemd/lxcfs.service.in`, at lxcfs-5.0.4, v6.0.6,
+  v7.0.0 and main `e1c5a7d`; `4e95204` removed cgroup v1 support;
+  Linux `block/cfq-iosched.c` at v4.20 and `block/Makefile` at v5.0].
+  Neither the flag, the lxcfs version nor, reliably, the host's cgroup
+  layout shows inside the container, so these four files count as the
+  host's there even as lxcfs mounts; `meminfo`, `uptime`,
+  `pressure/cpu` and `pressure/memory` under lxcfs are the container's.
+  lxcfs serves the host's `meminfo`, `pressure/cpu` and
+  `pressure/memory` too when it cannot use the memory or cpu
+  controller, as on a kernel booted with `cgroup_disable=memory`; the
+  probe still trusts them there, because that setup is rare and does
+  not show reliably inside the container.
+  Any lxcfs mount over `/proc` also marks a container when
+  `systemd-detect-virt -c` answers `none`. *Rejected:* trusting every
+  lxcfs mount (a default lxcfs container would show the host's load,
+  CPU times and disk I/O as its own); trusting `stat` and `diskstats`
+  when the container sees no cgroup v2 (a container without a cgroup2
+  mount on a cgroup v2 host looks the same), at the cost of hiding the
+  container's own CPU times that lxcfs 5.0 and 6.0 serve on cgroup v1
+  hosts (their `diskstats` there also needs a kernel older than 5.0);
+  an unknown answer for those files (unknown already means that the
+  container question is open, which it is not here).
 - **D52. Runtime code lives outside `src/engine/`.** In
   `klabautermann_core`, links, sampling, logs and capabilities live in
   `lib/src/links/`, `lib/src/sampling/`, `lib/src/logs/` and
@@ -886,6 +1026,19 @@ Proposals awaiting the owner close the section; they are not decisions.
   it would be a shared-package change off the MVP path. Its first planned
   use stays 9.3's health overlay for Séance and Poltergeist (v1.x).
   Supersedes 10.3's overlay for the MVP.
+- **D56. The app searches logs with `planchette_core`.** The log viewer's
+  text search (LOG-05, 7.6) runs `planchette_core`'s `findSearchMatches`
+  over each loaded row's visible text, so `klabautermann_app` gains a
+  path dependency on `planchette_core` (3.2), as the Séance app has
+  (`seance/app/seance_app/pubspec.yaml:13-14` [V]). It is the search
+  behind Planchette's find bar, with tests for case folding and match
+  windows (`planchette/packages/planchette_core/test/editor_syntax_test.dart`
+  [V]). The package is pure Dart; it adds `unorm_dart`, `uuid` and
+  `fixnum` to the app's lockfile, at the versions the Séance and
+  Planchette apps resolve [V]. `planchette_editor` stays out of the log
+  viewer (10.8). *Rejected:* a search of the app's own (a second copy of
+  the same rules); `planchette_editor`'s find (an editor for one text
+  buffer, 10.8).
 
 ### Proposals awaiting the owner
 
@@ -1013,6 +1166,7 @@ graph TD
   APP --> GM
   APP --> GD
   APP --> PE
+  APP --> PCO
   APP --> ST
   CORE --> SC
   CORE --> HOST
@@ -1070,10 +1224,12 @@ import 'package:seance_core/catalog.dart' show syncLocalDirectory;
 import 'package:seance_core/seance_core.dart' show uuidV4;
 ```
 
-The barrel's `klabautermann_host` export shows `Collector`, `CoreSnapshot`
-and `OverviewSnapshot`; each list grows only as a milestone wires a type
-in. No `ghost_*` package depends on `seance_core`; `klabautermann_core`
-is a product package, and the curated lines above are its only
+The barrel's `klabautermann_host` export shows only the plain-data types
+that sampling results and `HostProfileChanged` carry (10.1), and
+`JournalEntry` (the log viewer's journal rows, 10.8); each list changes
+only as a milestone wires a type in or retires one. No `ghost_*` package
+depends on `seance_core`; `klabautermann_core` is a product package, and
+the curated lines above are its only
 `seance_core` edge. Poltergeist's and
 Séance's edges to the new shared packages appear as each extraction
 switches them (3.5). The Rust workspace
@@ -1891,7 +2047,7 @@ the probe returns:
 | Kernel, architecture | `uname -s -r -m` |
 | Distribution | `/etc/os-release` (`ID`, `ID_LIKE`, `VERSION_ID`, `PRETTY_NAME`) |
 | Init and systemd | `/proc/1/comm`, `/run/systemd/system`, `systemctl --version` first line |
-| Virtualization | `systemd-detect-virt`, `systemd-detect-virt -c` (SYS-04); the `fuse.lxcfs` mounts in `/proc/mounts`, which tell which system-wide `/proc` files show the container's own values (D50) |
+| Virtualization | `systemd-detect-virt`, `systemd-detect-virt -c` (SYS-04); the `fuse.lxcfs` mounts in `/proc/mounts`. An lxcfs mount shows the container's own `meminfo` and `uptime`, and from lxcfs 7.0, the first to serve `/proc/pressure`, its own `pressure/cpu` and `pressure/memory`; `stat`, `loadavg`, `diskstats` and `pressure/io` count as the host's even as mounts (D50) |
 | Identity | `id -u`, `id -un`, `id -nG` (journal and docker groups) |
 | Elevation | `sudo -V` first line (sudo or sudo-rs), `sudo -n true` result, `command -v doas run0`, `doas -n true` result when doas exists, `run0 --no-ask-password true` result when run0 exists (8.3 rung 6), `command -V printf` (builtin or not, 8.3); the Identity row's `id -u` decides the root-login rung |
 | Tools | `command -v` for about 30 tools: `journalctl`, `crontab`, `ss`, `ip`, `lsblk`, `findmnt`, `smartctl`, `sensors`, `docker`, `podman`, `socat`, `timeout`, `setsid`, `ncdu`, `gdu`, `sadf`, `logger`, `systemd-run`, `apt-get`, `dnf`, `dnf5`, `apk`, `pacman`, `zypper`, `nvidia-smi`, ... |
@@ -2034,7 +2190,7 @@ and is the single source for every runner, including the T1 scripts (9.3).
 | Collector | Sampler | Source | Desktop | Phone | Cellular saver |
 |---|---|---|---|---|---|
 | `overview` (fleet rows) | fast | `cpu` lines of `/proc/stat`, filtered `/proc/meminfo`, `/proc/loadavg`, `/proc/net/dev` | 5 s | 10 s | 30 s |
-| `core` (focused server) | fast | the above plus per-core lines, `/proc/diskstats`, `/proc/pressure/*`, `/proc/uptime`, `btime` | 2 s | 3 s | 10 s |
+| `core` (focused server) | fast | the above plus per-core lines, `/proc/diskstats`, `/proc/pressure/*`, `/proc/uptime`, `btime`, the ZFS `arcstats` subset (D48) | 2 s | 3 s | 10 s |
 | `fs` | slow | `df -PT -B1`, `df -Pi` under `timeout 10` | 30 s | 60 s | 120 s |
 | `procs` | slow | `/proc/<pid>/stat` and `status` with builtins; every `/proc/<pid>/cmdline` through one `head` piped into `tr '\000' '\037'` (7.2); `ps -eo ...` or BusyBox `ps w` fallback | 3 s while visible | 5 s while visible | 10 s |
 | `units` | slow | `systemctl list-units --all --output=json` (systemd 246+), else `--plain --no-legend`; `systemctl --failed` | 15 s while visible; 60 s for the health card | same | same |
@@ -2048,8 +2204,9 @@ Everything pauses when its view is hidden or the app is backgrounded; the
 polling budget (SAF-19, v1) caps per-server cadence. A collector runs
 while at least one subscription for the server names it; the Desktop,
 Phone and Cellular saver columns are cadence profiles, chosen by a request
-of their own rather than per subscription, and the sampling protocol
-settles how the engine tells the two `units` surfaces apart (D45). Rates
+of their own rather than per subscription, and the health card's failed
+units are a stream of their own, apart from the Services panel's `units`
+(D45, 10.1). Rates
 are computed in the engine isolate (D43) from counter deltas with wrap
 detection and reset detection (a changed `btime` or a decreasing counter
 starts a new series); disk throughput uses 512-byte sectors (CN-04). A
@@ -2060,8 +2217,9 @@ fragments (D48).
 ### 6.5 Parsing and fixtures
 
 - One pure parser per collector in `klabautermann_host`, tolerant of truncation,
-  extra fields (`diskstats` field counts vary by kernel), wrapped `df` lines
-  and non-UTF-8 bytes; it returns a value plus warnings and never throws.
+  extra fields (the aggregate `cpu` line gains fields with the kernel; rows
+  the host trims have the fixed shape of D48), wrapped `df` lines and
+  non-UTF-8 bytes; it returns a value plus warnings and never throws.
   Parsing runs in the engine isolate; UI code never parses.
 - Fixtures: `klabautermann_host/test/fixtures/<platform-id>/<collector>.txt`
   with a JSON golden per fixture, captured by
@@ -2082,7 +2240,7 @@ fragments (D48).
 |---|---|---|---|---|---|---|
 | Debian 12/13, Ubuntu 22.04 to 26.04, RHEL 9/10, Fedora, Arch (glibc, systemd >= 246) | A, MVP | full | JSON | journald JSON | cron and timers | full |
 | RHEL/Alma/Rocky 8 (systemd 239 [U]), Ubuntu 20.04 (245 [U]) | A, MVP | full | text fallback (CN-10) | journald | cron and timers | full |
-| LXC and containers | A, marked | system-wide `/proc` files that are not lxcfs mounts show the host's figures: those values show "unknown" with a reason; namespaced ones (`/proc/net/dev`, `/proc/<pid>`) are the container's (SYS-04, D50) | as host | as host | as host | needs nesting |
+| LXC and containers | A, marked | system-wide `/proc` files show the host's figures unless lxcfs serves the container's own: those values show "unknown" with a reason; namespaced ones (`/proc/net/dev`, `/proc/<pid>`) are the container's (SYS-04, D50) | as host | as host | as host | needs nesting |
 | Alpine, BusyBox, OpenRC | B, v1.x | reduced (`ps w`, `df -k`, builtins) | `rc-status`, `rc-service` | `/var/log/messages` | `/etc/crontabs/<user>` | full if a socket exists |
 | Non-systemd glibc (Devuan, Void, Gentoo with OpenRC) | B, v1.x | full | per init | syslog files | cron | full |
 | OpenWrt (procd, Dropbear) | B, v1.x | reduced | `/etc/init.d`, `ubus` | `logread` | BusyBox crond | rare |
@@ -2117,9 +2275,9 @@ unless the user enables admin mode for that panel.
   Staleness text and grey values (OV-04). Docker summary card (OV-05) from
   the event-driven container cache plus `/system/df` on demand (slow on
   large hosts). Fleet rows (FL-07) show a three-segment pressure bar for
-  monitored servers only, fixed row height, grey when stale. Inside LXC
-  without lxcfs, affected values show "unknown" with a reason (SYS-04,
-  D50).
+  monitored servers only, fixed row height, grey when stale. Inside LXC,
+  values from files that show the host's figures show "unknown" with a
+  reason (SYS-04, D50).
 - **v1.** CPU breakdown with plain-language hints (iowait called unreliable,
   steal explained), PSI (absence is normal), model and topology, OOM kills
   linked to journal entries, configurable cards, top lists, quick actions,
@@ -2167,11 +2325,12 @@ unless the user enables admin mode for that panel.
   by type (tmpfs, devtmpfs, overlay, squashfs, erofs), not by device name;
   inodes from `df -Pi`; both under `timeout 10` because stale NFS mounts hang
   `df`.
-- **v1.** I/O rates and latency from `/proc/diskstats` deltas (loop and ram
-  devices skipped); mount details from `findmnt -J -b` (util-linux 2.27+);
-  swap devices; the disk space explorer (DSK-07), which streams `ncdu -x -o -`
-  or `gdu -o-` when installed, else incremental `du -x -B1 -d1` per opened
-  directory, read-only, sudo for a complete tree.
+- **v1.** I/O rates and latency from `/proc/diskstats` deltas (devices
+  filtered on the host by D48; the `core` rows gain DSK-04's latency fields
+  with a collector-set version bump); mount details from `findmnt -J -b`
+  (util-linux 2.27+); swap devices; the disk space explorer (DSK-07), which
+  streams `ncdu -x -o -` or `gdu -o-` when installed, else incremental `du -x
+  -B1 -d1` per opened directory, read-only, sudo for a complete tree.
 - **v1.x.** "Open in Poltergeist" for deletion (DSK-08), layout (`lsblk -J
   -b`, LVM JSON reports with sudo), ZFS, mdraid, network mounts with
   stale-mount detection, cleanup suggestions with sizes and previews, fill
@@ -3457,6 +3616,22 @@ localization catalog from the first build:
    keeps only a limited buffer".
 9. **Action previews** list every host write the action causes (8.11).
 
+As built in M2 (`app/klabautermann_app/lib/ui/charts/`), the
+time-series chart (10.7) reads a `TimeSeriesRing` whose lanes share each
+tick's time. The caller opens a gap with its reason when sampling stops;
+the next sample closes it and is never joined to the sample before it,
+nor is any sample joined across an unknown one. A band is at least 3 px
+wide and carries its label where the label fits; the legend names every
+reason in view, each series and the source, which the caller words. The
+hatching's strokes are 2 px wide, so that drawn at one pixel per point
+each still holds 3:1 against the band on the chart surfaces. Time ticks
+fall on round local times, and the chart never animates: it moves when a
+sample arrives or a rebuild moves its right edge later. The lanes differ
+by hue alone, short of 10.10's "never colour alone" for two to four
+series: the colour-blind check (10.7) and the per-series summaries are
+no second visual cue, and a dash pattern would read as missed samples,
+so that cue is still open.
+
 ---
 
 ## 10. UI shell
@@ -3478,8 +3653,9 @@ localization catalog from the first build:
 | `ImportSshConfig(text)` (FL-02, desktop) | `CatalogReplaced(entries)` with the imports, then `SshConfigImported(importedCount, skippedCount, saved)` |
 | `ConfirmEndpoints(ids)`, `SetMonitorSet(ids)` | `EndpointChanged(serverId)` |
 | `Connect(serverId)`, `Disconnect(serverId)` | `LinkState(serverId, status)` (D46's states plus `blocked`; typed reasons inside the status) |
-| `Subscribe(serverId, subscriptionId, collectorSet)`, `Unsubscribe(serverId, subscriptionId)`; the cadence profile and app activity are separate requests (D45) | `Sample(serverId, seq, snapshot)` (coalesced per tick; engine-owned `seq`, D44; rates and derived values, D43) |
-| `OpenLogStream(spec)`, `CloseStream(id)` | `LogBatch(streamId, lines, dropped)` (at most 20 per second per stream [E]) |
+| `Subscribe(serverId, subscriptionId, streams)`, `Unsubscribe(serverId, subscriptionId)`, `SetCadenceProfile(profile)`; app activity is a separate request too (D45) | `Sample(serverId, stream, seq, at, result)` (engine-owned `seq`, D44; rates and derived values, D43), `SamplingState(serverId, phase, since)`, `Gap(serverId, streams, from, until, cause)` |
+| none: the engine probes after connecting (6.1) | `HostProfileChanged(serverId, profile)` |
+| `OpenLogStream(streamId, spec)`, `CloseStream(streamId)` | `LogBatch(streamId, records, dropped)` (at most 20 per second per stream [E]), `LogStreamState(streamId, status)` |
 | `DockerQuery(serverId, query)` | `DockerResult`, `DockerEvent` |
 | `PlanAction(intent)`, `RunAction(planId, confirmation)` | `ActionPlanned(preview)`, `ActionProgress`, `ActionFinished` |
 | `AnswerPrompt(promptId, answer)` | `Prompt(promptId, serverId, host, port, request)` (host key, keyboard-interactive, credential, elevation), `PromptWithdrawn(promptId, reason)` |
@@ -3489,9 +3665,7 @@ localization catalog from the first build:
 | `OpenTerminal(serverId, containerId, shell)` (v1) | `TerminalBytes`, `TerminalClosed` |
 
 The `LinkState`, `Subscribe` and `Sample` rows carry what D43 to D46
-decide. `LinkState` took its version 3 shape with the links protocol
-(below); the M2 sampling changes fix the other fields of `Subscribe` and
-`Sample`, which keep their M1 shape in `protocol.dart` until then.
+decide, in their version 3 shapes (below).
 
 The protocol as built in M1 (PR #151; types in
 `klabautermann/packages/klabautermann_core/lib/src/engine/protocol.dart`,
@@ -3745,6 +3919,96 @@ the engine in `engine_isolate.dart` beside it):
   `ghost_servers`' `GhostSessionState.failed`) unless the engine closed
   it on purpose with no failure kind: the kinds name only what the
   engine classified, and a lost link is a failure its reason explains.
+- **Version 3 (M2 sampling).** Sampling joined version 3 without a bump,
+  as the import store's fields joined version 2, before any version 3
+  build shipped. `Subscribe` names the surface's `SampleStream`s: the 6.4
+  collectors as surfaces see them, with `units` split into the Services
+  panel's `units` and the health card's `failedUnits` (D45), and without
+  the probe, which the engine runs itself after connecting and reports as
+  `HostProfileChanged` when it first knows a server's profile in a run or
+  a later probe finds a different one, ignoring the clock and session
+  fields that change with every probe. The same ids again replace a
+  subscription's streams, and an empty set drops it. `SetCadenceProfile`
+  picks the 6.4 column (Desktop until the app sends one); a stream the
+  column reads on demand is read once per `Subscribe` naming it, a
+  repeat included, so a surface refreshes it by resending. While the
+  server is `waitingForLink` or `pausedInBackground`, that reading waits
+  until the link is ready and the app is in the foreground, and resends
+  in the meantime add no further reading. The engine
+  sends one `Sample` per subscribed stream and reading: `seq` counts per
+  server across its streams (D44), `at` is the engine's own clock in UTC,
+  since a host's clock may be off, and `result` is a sealed value per
+  stream holding derived values (D43): for `overview` and `core`, CPU
+  percentages, memory in bytes with `MemAvailable` semantics and whether
+  a ZFS ARC counts as used (7.1), load per core and byte rates per
+  interface (`core` adds each core's busy share, disk rates, the pressure
+  averages without the kernel's cumulative stall counter, and uptime; the
+  host sends no per-core breakdown, D48), each rate
+  map null until a previous reading exists, so unknown never sums to
+  zero; for `procs`, per-process CPU shares with the start time PRC-02
+  checks; for `identity`, the strings SYS-01 shows, resolved in the
+  engine so the host's JSON never crosses (6.5); and the parsed tables
+  for `fs`, `units`, `failedUnits`, `timers` and `cron`. A
+  stream whose collector reports a section status other than `ok` (6.2)
+  gets `CollectorUnavailable` with that status as an enum and the
+  collector's error output, control characters stripped. Requests and
+  events name streams instead of `klabautermann_host`'s `Collector`,
+  whose argument validators are functions (D52). `SamplingState` says
+  per server whether no subscription names it, the link is not ready,
+  the samplers run or the app's background pauses them, and since when
+  (9.5 item 4); "not watched on this device" follows the app's monitor
+  set (FL-21), since a monitored server's surfaces may all be hidden.
+  `Gap` arrives once readings resume, with both ends and its cause
+  (background, disconnected, or a reading lost to a deadline, a framing
+  error or a sampler restart, 6.2), so a chart labels the band (9.5 item
+  5, whose labels do not yet word a lost reading). While a gap is open,
+  a background or disconnected one shows in `SamplingState`; a lost
+  reading leaves the phase at sampling and shows only as an ageing
+  `Sample.at`. Until the samplers are wired, the engine records
+  subscriptions and the profile and sends none of these events.
+- **Version 3 (M2 logs).** Log streams joined version 3 the same way.
+  The app picks the `streamId` of `OpenLogStream(streamId, spec)`, so it
+  can close a stream before any answer arrives. Unlike a subscription
+  id, it is never reused for the engine's lifetime (a counter will do):
+  stream events carry no generation, so a closed stream's last batch or
+  end can arrive after the next open, and an open the engine rejects
+  outright gets a `RequestRejected`, which names no stream. The engine
+  rejects an open whose id an earlier open used. The spec names the
+  server, a sealed source with its filters, a `window`, `follow` and
+  `afterCursor`. The sources are the
+  journal with LOG-01's unit, identifier, priority, current-boot and
+  time-range filters (SVC-04's unit logs are a 50-record window of one
+  unit), the current boot's kernel log (LOG-03: `journalctl -k`, with
+  `dmesg --json` only as a fallback), and one file by absolute path
+  (LOG-22). There is no text filter: LOG-05 searches the records the
+  view holds, and `journalctl -g` waits for LOG-06 (v1). Container logs
+  (CTX-01) are no source until M3, so the M1 scaffold's `docker` source
+  and untyped `target` are gone. A window reads the newest `window` records and
+  ends; they arrive newest first, so `afterCursor`, a journal record's
+  cursor, reads on to older records, as `journalctl --reverse
+  --after-cursor` does. journalctl refuses `--since` with a cursor, so
+  with one the engine applies the `since` filter itself: a window stops
+  at the first record older than it and ends as oldest record reached,
+  and a follow reads on from the cursor alone. A follow delivers up to
+  `window` earlier records oldest first, then each new one as the host
+  writes it, and `afterCursor` resumes it after a record the app holds
+  instead: it delivers every record after that one, so a reconnect
+  leaves no gap, and `window` does not apply.
+  `LogBatch(streamId, records, dropped)` carries sealed records, which
+  the engine resolves so the app parses nothing (6.5): a journal entry's
+  cursor, time, priority as a syslog severity, unit, identifier, PID,
+  message and every field as parsed, where a value its column cannot
+  hold (a time beyond `DateTime`'s range, a priority outside 0 to 7)
+  arrives as unknown instead of throwing; a `dmesg` record's message,
+  time since boot and level; or a file's line. `dropped` counts the
+  records discarded since the stream's previous batch.
+  `LogStreamState(streamId, status)` carries a sealed status that
+  compares by value: waiting (for the link, a free channel under 5.2's
+  budget, or the foreground), running, or ended with a reason (window
+  filled, oldest record reached, closed, spec refused, source missing,
+  read denied, or failed) and the host's error output. Until the log
+  service is wired, the engine rejects `OpenLogStream` and ignores
+  `CloseStream`, since no stream is open.
 - **`SetAppActivity(activity)`** is a request of its own and applies to
   every subscription, link and probe at once: 6.4 pauses everything while
   the app is in the background, and D34 adds the phones' grace period
@@ -3756,6 +4020,42 @@ the engine in `engine_isolate.dart` beside it):
   resent on return, and a background pause indistinguishable from
   surfaces that closed); a field on `Subscribe` (D45). Until the link
   supervisor lands, the engine answers it with `RequestRejected`.
+- **Visibility and lifecycle (M2, app side).** The monitoring controller
+  sends `Connect` when the first view of a server opens (the desktop
+  workspace's selection, the phone's pushed screen) and `Disconnect` 30 s
+  after the last one closes, as long as 5.1's background grace, so
+  stepping between servers keeps one connection (5.12). A panel
+  subscribes its 6.4 streams, under an id minted per mounted surface,
+  while its tab or destination is selected: Overview `core`, `fs`,
+  `identity` and `failedUnits`; Processes `procs`; Services `units`; Jobs
+  `timers` and `cron`; System `identity`, `fs` and `core`; Logs, Docker
+  and Access none. Hidden pages stay built, so visibility comes from the
+  tab controller's index. The app sends `SetAppActivity` only on a change,
+  and the engine starts with the app in the foreground. Phones report the
+  background while hidden, paused or detached. A desktop app stays in the
+  foreground while it runs, minimized (hidden) too: 02 pauses in the
+  background on phones only (FL-04, FL-21, D34), and the background
+  pause, which stops every subscription, link and probe, would stop the
+  alerts 9.5 item 7 promises while the app is open.
+  Samples feed a ring of 300 readings per server, stream and series (CPU
+  busy, used memory, used swap and one-minute load, from `overview` and
+  `core`). A clock ticking each second while shown turns the `Sample.at`
+  of a stream's latest sample into an age (9.5 item 4); freshness is per
+  stream, since a slow stream's newer reading would hide a stalled fast
+  one. The engine reports no `Gap` for a stream no subscription names, so
+  the controller puts a null in that stream's rings before its next
+  reading once no subscription named it at the end of a turn; a tab
+  switch that hands `core` from one panel to another in one turn leaves
+  no hole. A `CatalogReplaced` without
+  a server drops these and its seq floor (SYN-08). SYN-08's endpoint
+  change is deferred: an entry that keeps its id under a new endpoint (a
+  re-import that points an alias at another host) keeps them, since the
+  client hands the startup fleet to the fleet controller alone, so the
+  monitoring controller has no endpoint to compare on the first import
+  after launch; that purge needs the engine to report the change
+  (`EndpointChanged`) or the startup entries. The engine's rejections of
+  `Connect`, `Disconnect` and `SetAppActivity` until links land show
+  nothing.
 - **`Reachability(serverId, status)`** reports one server's latest probe
   answer, `online`, `offline` or `unknown` as `seance_core`'s
   `ProbeStatus` gives it, apart from `LinkState`: a probe is a TCP
@@ -3899,7 +4199,7 @@ heap test checks both kinds, so the caps bound the text's memory. The
 16 KiB line cap keeps 16,384 Latin-1 or 8,192 other code units, never half
 a surrogate pair. A cut line keeps its full length for the marker, which
 the app words. A `LogBatch`'s drops become one "dropped N lines" entry
-ahead of its lines, merged into an adjacent one; it counts against the
+ahead of its records, merged into an adjacent one; it counts against the
 50,000-entry cap and holds no bytes, while eviction past a cap leaves no
 entry. Lines are stored as received and styled for display by `parseSgr`,
 each from the plain style, so no style carries from one line to the next.
@@ -3911,6 +4211,74 @@ colours (`30;40`, or equal RGB values) still hide it, so the viewer must
 hold each span's foreground and background to a minimum contrast
 (`contrastRatio`, A11Y-04), RGB included. Full at the caps with either
 kind of text, the buffer holds about 35 MiB of the 64 MiB budget (11.4).
+
+The viewer (`app/klabautermann_app/lib/ui/logs/`) forces a strut, so
+every row is a whole number of lines. Without wrap a line takes one row,
+and a journal row one more for each field it shows; a long line ends in
+an ellipsis until sideways scrolling lands, which also keeps a cut
+line's note out of sight, though screen readers read it. The row counts
+sit in a Fenwick tree and a sliver of the viewer's own finds offsets and
+indexes in O(log n), where `SliverVariedExtentList` sums every extent
+before an index. It lays out both modes, so a journal row keeps its
+element, and with it keyboard and accessibility focus, when its fields
+open (M2; K06b used a fixed-extent list without wrap). Each mode keeps
+its own counts in step, so turning wrap off and on keeps the wrapped
+ones. With wrap, only the lines a layout shows, and as many rows above
+its offset so a page up lands on measured lines, are measured, once per
+width, font and locale: one row without a layout when the line is all
+Latin-1 and fits at a monospace advance per code unit (two per tab),
+allowing for the rounding of the engine's single-precision sum,
+otherwise laid out, since a fallback font can draw any other glyph
+wider than a fixed count of advances and a line or paragraph separator
+breaks the row. Other lines keep an earlier count or, once the viewer
+has a width, an estimate from their length, and a measurement above the
+view moves the offset by the difference while the offset, moving by
+whole rows, keeps its share of the line it is in to within a row, so a
+line that starts at the offset still does; the lines in sight hold still
+and a resize lays out only the lines near them. Tabs
+are not expanded to stops yet. Any scroll that leaves the
+newest line pauses following, and reaching it again, End or Follow resumes
+it; the scroll position holds the end during layout, and while paused it
+drops the extent of evicted lines from its offset and converts the
+offset when the line height or wrap changes, keeping the line at the top
+and, to within a row, its share above the edge. Content that no longer
+fills the view below the offset ends the view at the newest line
+instead, still paused. Every span keeps 4.5:1
+on its background, moved toward black or white as little as needed. SGR
+colours 1 to 6 and 9 to 14 take the family's glyph hues, 8 its graphite;
+0, 7 and 15 stay black, light grey and white. The caller supplies a line's
+level; journal priorities 0 to 3 are errors, 4 warnings, 5 and 6 plain, 7
+debug, each with a spoken gutter icon. Levels are never guessed from text
+(CTX-05, v1). Its goldens draw with flutter_test's font rather than the
+bundled font of 11.1 until they share K05a's approach.
+
+Journal rows and search (LOG-01, LOG-05, as built in M2): `LogBuffer`
+keeps a journal entry's MESSAGE as the line's text under the same cut,
+and its unit (else its syslog identifier), priority and PID typed beside
+it. Every other field is kept in the order received, encoded once as
+UTF-8 JSON in a byte list, so an entry costs a few objects however many
+fields it has, and those bytes count against the 32 MiB cap. With the
+unit they get up to one 16 KiB line cap beside the text, within what the
+text leaves of the byte cap; fields past it are left out and counted. A
+buffer full of typical service entries (15 fields, 671 bytes each) holds
+about 42 MiB in the heap test. A row reads `unit[PID]:
+message`, its level from `PRIORITY`. A MESSAGE's newline shows as a
+return mark (⏎) and a line separator: without wrap the row ends at its
+first line, where the text engine draws no ellipsis, and with wrap each
+line takes its own rows. A tap or Enter pauses following and shows the
+fields beneath the row, `NAME=value` on one row each without wrap, and a
+JSON null, which `journalctl -o json` sends for a field over 4,096 bytes
+unless run with `--all`, reads as not sent. In a paused view, fields that
+open or close above the top edge move no line in sight, and a row in
+sight keeps its place while its fields open. Search (D56) reads a row's
+visible text, unit and PID included, and ignores case unless told not
+to. It keeps a match count for each matching line and searches only new
+lines as they arrive; stepping wraps around, pauses following and scrolls
+the match's row into sight. Without wrap, a match past a row's ellipsis
+stays hidden until sideways scrolling lands, and one after a journal
+row's first line until wrap is on. Only the current match is underlined,
+whatever the line's SGR underline, so it differs by more than colour.
+Matches in a line are found again when it is drawn.
 
 ### 10.9 Theme
 
@@ -4052,7 +4420,11 @@ palette) and presets in the preview. v1: paste from Séance and Poltergeist
 
 ### 11.4 Performance budgets (gated from M2)
 
-- Fast tick at most 2.5 KB and 5 ms of server CPU on the reference VM [E].
+- Fast tick at most 2.5 KB, plus 30 B for each CPU beyond 32 (D48), and
+  5 ms of server CPU on the reference VM [E]. A shell with 32-bit
+  arithmetic, such as mksh, is exempt from the size limit: its `core`
+  reply carries eight counters per core and passes 2.5 KB from 22 CPUs
+  (D48).
 - 10 monitored hosts at default phone cadence: under 1 KB/s in total.
 - UI frame p99 under 16 ms with 10 hosts and one 1,000 lines/s follow on a
   low-end Android phone (spike S5 baseline; a device measurement, manual
@@ -4076,12 +4448,13 @@ test grows with each release's rows; in v1.x it covers the helper,
 | Job | Change |
 |---|---|
 | `guards` (new; replaces the guard steps of `dart_tools`, `.github/workflows/ci.yml:206` [V]) | Resolves each product workspace once and runs the root import, protocol and license guards for every product |
-| `klabautermann_dart` (new) | Resolves the `klabautermann` workspace; analyzes and tests `packages/*` by discovery loop (pattern `poltergeist_dart`, `ci.yml:153` [V]); Ubuntu only |
+| `klabautermann_dart` (new) | Resolves the `klabautermann` workspace; analyzes and tests `packages/*` by discovery loop (pattern `poltergeist_dart`, `ci.yml:153` [V]), and `test/integration` (the fixture tools and the integration jobs' contract tests); Ubuntu only |
 | `seance_dart` (`ci.yml:122`) | Runs the new `seance_core` tests (catalog, exec, elevation, links); from v1.x the inbox marker skip and the sync server's sender quota tests (D42) |
 | `planchette_flutter` (`ci.yml:884`) | Adds `ghost_servers`, `ghost_keystore` and `ghost_theme` (all MVP) lines |
 | `seance_flutter` (`ci.yml:938`) | Adds `seance/packages/seance_terminal` (v1) |
 | `klabautermann_flutter` (new) | App analyze and test (copy of `poltergeist_flutter`, `ci.yml:965`) |
-| `detect_klabautermann_integration`, `klabautermann_integration` (new) | sshd plus privileged `docker:dind` fixture (pinned by digest, no ports beyond loopback) on ephemeral GitHub-hosted `ubuntu-latest` runners, path-filtered to `klabautermann/**` and the shared packages it consumes, always on main (pattern `detect_integration` and `integration`, `ci.yml:339,397` [V]) |
+| `detect_klabautermann_integration`, `klabautermann_integration` (new) | sshd plus privileged `docker:dind` fixture (pinned by digest, no ports beyond loopback) on ephemeral GitHub-hosted `ubuntu-latest` runners, path-filtered to `klabautermann/**` and the shared packages it consumes, always on main (pattern `detect_integration` and `integration`, `ci.yml:339,397` [V]). The jobs run entry points committed under `klabautermann/`, so the fixture, runner-VM, soak and capture PRs change no root file: `test/integration/run.sh` (the runner-VM leg and the soak run from it too) once `test/integration/docker-compose.yml` exists, and `test/integration/capture.sh` for the container shell and userland captures. Until an entry point is committed its step is skipped with a notice; once committed, its absence fails the detector on every event, judged on the first-parent history of the checked-out commit (full clone). On a PR that commit is GitHub's test merge, whose first parent is the base, so the PR and the merge commit or squash that lands it agree, and a file only a merged branch ever had counts as never committed; a rebase merge, which puts the branch's own commits on the main line, can disagree. Entry points leave evidence in `$KLABAUTERMANN_EVIDENCE_DIR`, uploaded as an artifact |
+| `klabautermann_frame_timing` (new) | S5's provisional UI frame p99 (11.4): `klabautermann/scripts/bench-frame-timing.sh` runs the app in profile mode under Xvfb with software GLES, as Poltergeist's tier-B bench does; main pushes and dispatch only, never PRs; the same entry-point rule |
 | `klabautermann_client` (new) | Five legs: android, linux, macos, ios, windows (pattern `poltergeist_client`, `ci.yml:1216` [V]); builds on every PR, no path filter (D37) |
 | `klabautermann_rust` (new, M8; owner decision 2026-10-10 (21/22), D42) | Rust toolchain pinned by `rust-toolchain.toml` (rustup, cargo); `cargo fmt --check`, `cargo clippy`, `cargo test` for `klabautermann/rust/`; musl cross-builds for Linux x86_64 and aarch64; `cargo deny check` (3.4, rule 7); the cross-language sealing and alert-format vectors; from M9 also the Dart and Rust parity tests over the shared fixture corpus (9.4). Every PR, no path filter (D37) |
 | `seance_pin_audit` and Poltergeist's integration and bench detectors | Triggered by `seance_core` changes; expect `audit-seance-pin.sh --write-record` commits during F2 and F3 |

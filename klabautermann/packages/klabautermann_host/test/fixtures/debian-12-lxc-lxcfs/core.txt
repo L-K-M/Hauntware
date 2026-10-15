@@ -1,0 +1,36 @@
+== stat ==
+cpu  183456 1204 61230 9876543 4321 0 2345 0 0 0
+cpu0 124070 4940460
+cpu1 124165 4940404
+btime 1749000000
+== meminfo ==
+MemTotal: 2097152
+MemFree: 1310720
+MemAvailable: 1730560
+Buffers: 0
+Cached: 393216
+SReclaimable: 24576
+Shmem: 16384
+SwapTotal: 524288
+SwapFree: 524288
+== loadavg ==
+1.42 1.37 1.30 3/1876 912345
+== netdev ==
+eth0 734002111 41234567
+== diskstats ==
+nvme0n1 22345678 1187654320 33456789 2234567890
+nvme1n1 22301234 1186543210 33401234 2233456789
+== pressure_cpu ==
+some avg10=1.25 avg60=0.98 avg300=0.80
+full avg10=0.00 avg60=0.00 avg300=0.00
+== pressure_io ==
+some avg10=0.30 avg60=0.25 avg300=0.20
+full avg10=0.10 avg60=0.08 avg300=0.06
+== pressure_memory ==
+some avg10=0.00 avg60=0.00 avg300=0.00
+full avg10=0.00 avg60=0.00 avg300=0.00
+== uptime ==
+86400.25 172000.50
+== arcstats ==
+c_min 2147483648
+size 6871947674

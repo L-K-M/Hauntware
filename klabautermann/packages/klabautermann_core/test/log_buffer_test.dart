@@ -218,6 +218,131 @@ void main() {
       });
     });
 
+    group('journal lines (LOG-01)', () {
+      JournalEntry entry(Map<String, String?> fields) => JournalEntry(fields);
+      LogLine line(LogBuffer buffer, int i) => buffer[i] as LogLine;
+
+      test('MESSAGE is the text; the row\'s columns are typed', () {
+        final buffer = LogBuffer()
+          ..addJournal([
+            entry({
+              '__CURSOR': 's=1',
+              'PRIORITY': '3',
+              '_SYSTEMD_UNIT': 'nginx.service',
+              'SYSLOG_IDENTIFIER': 'nginx',
+              '_PID': '812',
+              'MESSAGE': 'bind() failed',
+              'CODE_LINE': null,
+            }),
+          ]);
+
+        final journal = line(buffer, 0).journal!;
+        expect(line(buffer, 0).text, 'bind() failed');
+        expect(journal.priority, 3);
+        expect(journal.source, 'nginx.service');
+        expect(journal.pid, 812);
+        expect(journal.messageNotSent, isFalse);
+        expect(journal.fields, [
+          ('__CURSOR', 's=1'),
+          ('PRIORITY', '3'),
+          ('_SYSTEMD_UNIT', 'nginx.service'),
+          ('SYSLOG_IDENTIFIER', 'nginx'),
+          ('_PID', '812'),
+          ('CODE_LINE', null),
+        ]);
+        expect(journal.fieldsLeftOut, 0);
+      });
+
+      test('missing columns stay null; a MESSAGE sent as null is marked', () {
+        final buffer = LogBuffer()
+          ..addJournal([
+            entry({'SYSLOG_IDENTIFIER': 'kernel', 'MESSAGE': null}),
+            entry({'PRIORITY': 'x', '_PID': ''}),
+          ]);
+
+        final kernel = line(buffer, 0).journal!;
+        expect(kernel.source, 'kernel', reason: 'no unit: the identifier');
+        expect(line(buffer, 0).text, '');
+        expect(kernel.messageNotSent, isTrue);
+        expect(kernel.fields, [('SYSLOG_IDENTIFIER', 'kernel')]);
+        final bare = line(buffer, 1).journal!;
+        expect(line(buffer, 1).text, '');
+        expect(bare.messageNotSent, isFalse, reason: 'no MESSAGE at all');
+        expect([bare.source, bare.priority, bare.pid], [null, null, null]);
+      });
+
+      test('counts the text, the source and the encoded fields', () {
+        final buffer = LogBuffer()
+          ..addJournal([
+            entry({'SYSLOG_IDENTIFIER': 'cron', 'MESSAGE': 'Ж'}),
+          ]);
+
+        // 'Ж' is two bytes; 'cron' four; {"SYSLOG_IDENTIFIER":"cron"} 28.
+        expect(buffer.bytes, 2 + 4 + 28);
+
+        final evicting = LogBuffer(maxBytes: 40, maxLineBytes: 32)
+          ..addJournal([
+            entry({'SYSLOG_IDENTIFIER': 'cron', 'MESSAGE': 'Ж'}),
+          ])
+          ..add(['x' * 10]);
+        expect(evicting.length, 1);
+        expect(evicting.bytes, 10);
+      });
+
+      test('a long MESSAGE is cut at the line cap like a line', () {
+        final buffer = LogBuffer(maxLineBytes: 8)
+          ..addJournal([
+            entry({'MESSAGE': 'abcdefghij'}),
+          ]);
+
+        expect(line(buffer, 0).text, 'abcdefgh');
+        expect(line(buffer, 0).originalLength, 10);
+      });
+
+      test('fields that would pass the line cap are left out and counted', () {
+        final buffer = LogBuffer(maxLineBytes: 32)
+          ..addJournal([
+            entry({
+              'A': 'x' * 40,
+              'B': '1',
+              'MESSAGE': 'm',
+              'C': 'y' * 20,
+              'D': '2',
+            }),
+          ]);
+
+        final journal = line(buffer, 0).journal!;
+        // {"B":"1","D":"2"} is 17 bytes; "A" or "C" would pass 32.
+        expect(journal.fields, [('B', '1'), ('D', '2')]);
+        expect(journal.fieldsLeftOut, 2);
+        expect(buffer.bytes, 1 + 17);
+      });
+
+      test('an entry never takes more than the byte cap', () {
+        final buffer = LogBuffer(maxBytes: 12, maxLineBytes: 8)
+          ..addJournal([
+            entry({'SYSLOG_IDENTIFIER': 'a-long-name', 'MESSAGE': 'm' * 9}),
+          ]);
+
+        expect(buffer.length, 1);
+        expect(line(buffer, 0).text, 'm' * 8);
+        // 8 bytes of text leave 4 for the source and none for its field.
+        expect(line(buffer, 0).journal!.source, 'a-lo');
+        expect(line(buffer, 0).journal!.fieldsLeftOut, 1);
+        expect(buffer.bytes, 12);
+      });
+
+      test('drops come before the entries', () {
+        final buffer = LogBuffer()
+          ..add(['a'])
+          ..addJournal([
+            entry({'MESSAGE': 'b'}),
+          ], dropped: 2);
+
+        expect(_texts(buffer), ['a', '<dropped 2>', 'b']);
+      });
+    });
+
     test('rejects caps that cannot hold a line', () {
       expect(() => LogBuffer(maxLines: 0), throwsArgumentError);
       expect(() => LogBuffer(maxLineBytes: 1), throwsArgumentError);

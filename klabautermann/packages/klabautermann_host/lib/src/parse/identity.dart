@@ -100,24 +100,28 @@ final class IdentitySnapshot {
   final bool timeoutAbsent;
 
   /// Kernel name: hostnamectl wins, then uname.
-  String? get effectiveKernelName =>
-      hostnamectl['KernelName'] as String? ?? kernelName;
+  String? get effectiveKernelName => _text('KernelName') ?? kernelName;
 
   /// Kernel release: hostnamectl wins, then uname.
-  String? get effectiveKernelRelease =>
-      hostnamectl['KernelRelease'] as String? ?? kernelRelease;
+  String? get effectiveKernelRelease => _text('KernelRelease') ?? kernelRelease;
 
   /// OS pretty name: hostnamectl wins, then os-release (03 §6.1).
   String? get effectiveOsPrettyName =>
-      hostnamectl['OperatingSystemPrettyName'] as String? ??
-      osRelease?.prettyName;
+      _text('OperatingSystemPrettyName') ?? osRelease?.prettyName;
 
   /// Architecture: hostnamectl wins, then uname -m.
-  String? get effectiveArch =>
-      hostnamectl['Architecture'] as String? ?? kernelArch;
+  String? get effectiveArch => _text('Architecture') ?? kernelArch;
 
   /// Static hostname, only present through hostnamectl JSON.
-  String? get hostname => hostnamectl['Hostname'] as String?;
+  String? get hostname => _text('Hostname');
+
+  /// The hostnamectl field [key] when it is a string. The object is the
+  /// host's JSON, unchecked by the parser, so a field of another type
+  /// reads as absent rather than throwing (03 §6.5).
+  String? _text(String key) => switch (hostnamectl[key]) {
+    final String text => text,
+    _ => null,
+  };
 
   Map<String, Object?> toJson() => {
     'osRelease': osRelease?.toJson(),

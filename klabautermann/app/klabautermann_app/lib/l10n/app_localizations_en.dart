@@ -346,6 +346,49 @@ class AppLocalizationsEn extends AppLocalizations {
   String get chartUnknownValue => 'unknown';
 
   @override
+  String get chartGapAppClosed => 'app closed';
+
+  @override
+  String get chartGapBackground => 'in background';
+
+  @override
+  String get chartGapDisconnected => 'disconnected';
+
+  @override
+  String chartGapSummary(DateTime start, DateTime end, String reason) {
+    final intl.DateFormat startDateFormat = intl.DateFormat.jms(localeName);
+    final String startString = startDateFormat.format(start);
+    final intl.DateFormat endDateFormat = intl.DateFormat.jms(localeName);
+    final String endString = endDateFormat.format(end);
+
+    return 'No data from $startString to $endString: $reason';
+  }
+
+  @override
+  String chartGapOngoing(DateTime start, String reason) {
+    final intl.DateFormat startDateFormat = intl.DateFormat.jms(localeName);
+    final String startString = startDateFormat.format(start);
+
+    return 'No data since $startString: $reason';
+  }
+
+  @override
+  String chartTime(DateTime time) {
+    final intl.DateFormat timeDateFormat = intl.DateFormat.jm(localeName);
+    final String timeString = timeDateFormat.format(time);
+
+    return '$timeString';
+  }
+
+  @override
+  String chartTimeWithSeconds(DateTime time) {
+    final intl.DateFormat timeDateFormat = intl.DateFormat.jms(localeName);
+    final String timeString = timeDateFormat.format(time);
+
+    return '$timeString';
+  }
+
+  @override
   String get chartTrendRising => 'rising';
 
   @override
@@ -411,4 +454,67 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get tableRowActions => 'Row actions';
+
+  @override
+  String get logViewLabel => 'Log';
+
+  @override
+  String get logFollow => 'Follow';
+
+  @override
+  String get logLevelError => 'Error';
+
+  @override
+  String get logLevelWarning => 'Warning';
+
+  @override
+  String get logLevelDebug => 'Debug';
+
+  @override
+  String logDroppedLines(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$countString lines dropped here',
+      one: '1 line dropped here',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String logLineCut(int total) {
+    final intl.NumberFormat totalNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String totalString = totalNumberFormat.format(total);
+
+    return '[line cut: $totalString characters in all]';
+  }
+
+  @override
+  String get logJournalNotSent => '[not sent: over 4,096 bytes]';
+
+  @override
+  String logJournalFieldsLeftOut(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$countString more fields not kept',
+      one: '1 more field not kept',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get logJournalShowFields => 'Show fields';
+
+  @override
+  String get logJournalHideFields => 'Hide fields';
 }

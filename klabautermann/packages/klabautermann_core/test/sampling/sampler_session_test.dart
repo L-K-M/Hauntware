@@ -109,7 +109,7 @@ void main() {
     await p.firstWrite;
     final bytes = latin1.encode(
       'Last login: today\r\n\x1e partial \x1e'
-      '\x1e${p.nonce} READY HWS/1 2\n',
+      '\x1e${p.nonce} READY HWS/1 $kCollectorSetVersion\n',
     );
     for (final b in bytes) {
       p.emit([b]);
@@ -448,22 +448,11 @@ void main() {
     test('a slow request gets its guarded commands plus a margin', () {
       const d = SamplerDeadlines();
       expect(d.forRequest(SamplerKind.fast, [Collector.core]), _seconds(5));
-      expect(d.forRequest(SamplerKind.slow, [Collector.probe]), _seconds(175));
+      expect(d.forRequest(SamplerKind.slow, [Collector.probe]), _seconds(165));
       expect(
         d.forRequest(SamplerKind.slow, [Collector.fs, Collector.identity]),
         _seconds(45),
       );
-    });
-
-    test('each bound counts the guarded calls in its fragment', () {
-      final call = RegExp(r'\bhw_q?run [a-z]');
-      for (final c in Collector.values) {
-        final code = collectorFragments[c]!
-            .split('\n')
-            .where((l) => !l.trimLeft().startsWith('#'));
-        final calls = code.fold(0, (n, l) => n + call.allMatches(l).length);
-        expect(guardedCommandBound(c), calls, reason: c.name);
-      }
     });
   });
 

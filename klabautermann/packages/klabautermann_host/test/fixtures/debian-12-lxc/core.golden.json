@@ -1,0 +1,186 @@
+{
+  "result": {
+    "cpu": {
+      "name": "cpu",
+      "jiffies": [
+        1124440,
+        6520,
+        337320,
+        145593640,
+        49720,
+        0,
+        14520,
+        0,
+        0,
+        0
+      ]
+    },
+    "perCpu": {
+      "cpu0": {
+        "name": "cpu0",
+        "busy": 92300,
+        "idle": 9103100
+      },
+      "cpu1": {
+        "name": "cpu1",
+        "busy": 92350,
+        "idle": 9103048
+      },
+      "cpu2": {
+        "name": "cpu2",
+        "busy": 92400,
+        "idle": 9102996
+      },
+      "cpu3": {
+        "name": "cpu3",
+        "busy": 92450,
+        "idle": 9102944
+      },
+      "cpu4": {
+        "name": "cpu4",
+        "busy": 92500,
+        "idle": 9102892
+      },
+      "cpu5": {
+        "name": "cpu5",
+        "busy": 92550,
+        "idle": 9102840
+      },
+      "cpu6": {
+        "name": "cpu6",
+        "busy": 92600,
+        "idle": 9102788
+      },
+      "cpu7": {
+        "name": "cpu7",
+        "busy": 92650,
+        "idle": 9102736
+      },
+      "cpu8": {
+        "name": "cpu8",
+        "busy": 92700,
+        "idle": 9102684
+      },
+      "cpu9": {
+        "name": "cpu9",
+        "busy": 92750,
+        "idle": 9102632
+      },
+      "cpu10": {
+        "name": "cpu10",
+        "busy": 92800,
+        "idle": 9102580
+      },
+      "cpu11": {
+        "name": "cpu11",
+        "busy": 92850,
+        "idle": 9102528
+      },
+      "cpu12": {
+        "name": "cpu12",
+        "busy": 92900,
+        "idle": 9102476
+      },
+      "cpu13": {
+        "name": "cpu13",
+        "busy": 92950,
+        "idle": 9102424
+      },
+      "cpu14": {
+        "name": "cpu14",
+        "busy": 93000,
+        "idle": 9102372
+      },
+      "cpu15": {
+        "name": "cpu15",
+        "busy": 93050,
+        "idle": 9102320
+      }
+    },
+    "btime": 1749000000,
+    "meminfo": {
+      "fields": {
+        "MemTotal": 65842312,
+        "MemFree": 21474836,
+        "MemAvailable": 48318382,
+        "Buffers": 1048576,
+        "Cached": 22020096,
+        "SReclaimable": 2097152,
+        "Shmem": 524288,
+        "SwapTotal": 8388604,
+        "SwapFree": 8388604
+      }
+    },
+    "loadavg": {
+      "load1": 2.15,
+      "load5": 1.98,
+      "load15": 1.75,
+      "running": 3,
+      "total": 1234,
+      "lastPid": 987654
+    },
+    "netdev": [
+      {
+        "name": "eth0",
+        "rxBytes": 734002111,
+        "txBytes": 41234567
+      }
+    ],
+    "diskstats": [
+      {
+        "name": "sda",
+        "readsCompleted": 1234567,
+        "sectorsRead": 98765432,
+        "writesCompleted": 2345678,
+        "sectorsWritten": 123456780
+      },
+      {
+        "name": "nvme0n1",
+        "readsCompleted": 22345678,
+        "sectorsRead": 1187654320,
+        "writesCompleted": 33456789,
+        "sectorsWritten": 2234567890
+      }
+    ],
+    "cpuPressure": {
+      "some": {
+        "avg10": 1.25,
+        "avg60": 0.98,
+        "avg300": 0.8
+      },
+      "full": {
+        "avg10": 0.0,
+        "avg60": 0.0,
+        "avg300": 0.0
+      }
+    },
+    "ioPressure": {
+      "some": {
+        "avg10": 0.3,
+        "avg60": 0.25,
+        "avg300": 0.2
+      },
+      "full": {
+        "avg10": 0.1,
+        "avg60": 0.08,
+        "avg300": 0.06
+      }
+    },
+    "memoryPressure": {
+      "some": {
+        "avg10": 0.0,
+        "avg60": 0.0,
+        "avg300": 0.0
+      },
+      "full": {
+        "avg10": 0.0,
+        "avg60": 0.0,
+        "avg300": 0.0
+      }
+    },
+    "uptimeSeconds": 1234567.89,
+    "idleSeconds": 18765432.1,
+    "zfsArc": null
+  },
+  "warnings": []
+}

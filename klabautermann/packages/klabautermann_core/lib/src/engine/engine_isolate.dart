@@ -7,6 +7,7 @@ import 'package:seance_core/seance_core.dart' show ImportedHost;
 import '../fleet/imported_fleet.dart';
 import '../fleet/ssh_config_entries.dart';
 import '../fleet/ssh_config_import_store.dart';
+import '../sampling/subscriptions.dart';
 import 'protocol.dart';
 
 /// What the engine isolate starts with, sent once by `Isolate.spawn`
@@ -32,19 +33,22 @@ final class EngineStart {
 /// [start] names the client isolate's port and the support directory. The
 /// engine first returns its command port, then answers requests on the
 /// client's port: [Hello] gets [EngineReady] and the fleet it started with
-/// in a [CatalogReplaced], [Subscribe]/[Unsubscribe] update the (still
-/// silent) stub sampler's bookkeeping, [ImportSshConfig] gets
-/// [CatalogReplaced] and [SshConfigImported], [Shutdown] exits, and every
-/// other 03 §10.1 row gets [RequestRejected] until its milestone lands.
+/// in a [CatalogReplaced], [Subscribe], [Unsubscribe] and
+/// [SetCadenceProfile] update the sampling subscriptions (silently: no
+/// sampler runs them yet), [ImportSshConfig] gets
+/// [CatalogReplaced] and [SshConfigImported], [CloseStream] does nothing
+/// (no log stream is open), [Shutdown] exits, and every other 03 §10.1
+/// row, [OpenLogStream] included, gets [RequestRejected] until its
+/// milestone lands.
 void engineMain(EngineStart start) {
   final uiPort = start.uiPort;
   final commands = ReceivePort('klabautermann engine commands');
   uiPort.send(commands.sendPort);
 
-  // The stub sampler's bookkeeping: which server ticks with which collectors
-  // and cadence. It emits nothing yet (M1a); the fast/slow samplers of
-  // 03 §6.2 fill this map's consumers in M2.
-  final subscriptions = <String, Subscribe>{};
+  // Which streams each server's surfaces subscribed, and the cadence
+  // profile (D45). Nothing samples them yet; the scheduler of 03 §6.4
+  // reads them once the samplers are wired.
+  final sampling = SamplingSubscriptions();
 
   // FL-02's imported hosts, in D13's device-local store (03 §4.10),
   // opened before the first request is handled. Each import replaces the
@@ -87,9 +91,16 @@ void engineMain(EngineStart start) {
         // them before the user does anything.
         uiPort.send(fleet());
       case Subscribe():
-        subscriptions[message.serverId] = message;
+        sampling.subscribe(message);
       case Unsubscribe():
-        subscriptions.remove(message.serverId);
+        sampling.unsubscribe(message);
+      case SetCadenceProfile(:final profile):
+        sampling.profile = profile;
+      case CloseStream():
+        // Closing a stream that is not open does nothing (03 §10.1), and
+        // none is: until the log service lands, OpenLogStream gets
+        // RequestRejected, since no answer would leave its view waiting.
+        break;
       case ImportSshConfig(:final text):
         final ({
           List<ImportedHost> hosts,

@@ -1,7 +1,8 @@
 /// Parsers for the `overview` and `core` fast-collector payloads
-/// (03 §6.4). The payloads share their sub-blocks; `core` carries
-/// everything `overview` has plus per-core cpu lines, btime, diskstats,
-/// pressure and uptime.
+/// (03 §6.4, filtered on the host per D48). The payloads share their
+/// sub-blocks; `core` carries everything `overview` has plus per-core
+/// busy and idle jiffies, btime, diskstats, pressure, uptime and the ZFS
+/// ARC.
 library;
 
 import '../hws/program.dart' show kTimeoutAbsentMarker;
@@ -15,7 +16,7 @@ import 'parse_result.dart';
 final class OverviewSnapshot {
   OverviewSnapshot({
     this.cpu,
-    Map<String, CpuTimes>? perCpu,
+    Map<String, CoreCpuTimes>? perCpu,
     this.btime,
     required this.meminfo,
     this.loadavg,
@@ -26,8 +27,9 @@ final class OverviewSnapshot {
   /// The aggregate `cpu` line, when the block carried one.
   final CpuTimes? cpu;
 
-  /// Per-core lines (normally empty on `overview`, kept when present).
-  final Map<String, CpuTimes> perCpu;
+  /// Per-core busy and idle jiffies (normally empty on `overview`, kept
+  /// when present).
+  final Map<String, CoreCpuTimes> perCpu;
 
   /// Boot epoch from `btime` (normally only on `core`).
   final int? btime;
@@ -39,7 +41,9 @@ final class OverviewSnapshot {
   /// Load averages, when the block parsed.
   final LoadAvg? loadavg;
 
-  /// Interface counters.
+  /// Interface counters: of the device-backed interfaces, else of those
+  /// that are neither a bridge nor enslaved, else of every interface but
+  /// lo (D48).
   final List<NetDevEntry> netdev;
 
   Map<String, Object?> toJson() => {
@@ -68,9 +72,11 @@ final class CoreSnapshot extends OverviewSnapshot {
     this.memoryPressure,
     this.uptimeSeconds,
     this.idleSeconds,
+    this.zfsArc,
   }) : diskstats = List.unmodifiable(diskstats ?? []);
 
-  /// /proc/diskstats rows (all devices; filtering happens at the view).
+  /// /proc/diskstats rows of whole disks, and of partitions and stacked
+  /// devices too when the host has no sysfs (D48).
   final List<DiskStatEntry> diskstats;
 
   /// /proc/pressure/{cpu,io,memory}; absent blocks stay null because PSI
@@ -79,6 +85,9 @@ final class CoreSnapshot extends OverviewSnapshot {
 
   /// /proc/uptime fields 1 and 2; field 1 also rides the `B` marker.
   final double? uptimeSeconds, idleSeconds;
+
+  /// The ZFS ARC; null on a host without /proc/spl/kstat/zfs/arcstats.
+  final ZfsArc? zfsArc;
 
   @override
   Map<String, Object?> toJson() => {
@@ -89,6 +98,7 @@ final class CoreSnapshot extends OverviewSnapshot {
     'memoryPressure': memoryPressure?.toJson(),
     'uptimeSeconds': uptimeSeconds,
     'idleSeconds': idleSeconds,
+    'zfsArc': zfsArc?.toJson(),
   };
 }
 
@@ -147,6 +157,10 @@ ParseResult<CoreSnapshot> parseCore(String raw, ParseContext ctx) {
       memoryPressure: pressure('pressure_memory'),
       uptimeSeconds: uptime?.uptimeSeconds,
       idleSeconds: uptime?.idleSeconds,
+      zfsArc: switch (blocks['arcstats']) {
+        final lines? => parseArcStatsBlock(lines, warnings),
+        null => null,
+      },
     ),
     warnings,
   );

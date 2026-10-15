@@ -161,9 +161,9 @@ List<SystemdTimer> _parseTimersJson(List<String> lines, List<String> warnings) {
       SystemdTimer(
         unit: unit,
         activates: _str(e['activates']),
-        nextUs: _usec(e['next']),
+        nextUs: _instantUsec(e['next'], warnings),
         leftUs: _usec(e['left']),
-        lastUs: _usec(e['last']),
+        lastUs: _instantUsec(e['last'], warnings),
         passedUs: _usec(e['passed']),
       ),
     );
@@ -183,6 +183,20 @@ String? _str(Object? v) {
 int? _usec(Object? v) {
   if (v is int) return v;
   if (v is String) return int.tryParse(v);
+  return null;
+}
+
+/// The furthest instant [DateTime] holds either side of the epoch, in
+/// microseconds (100,000,000 days).
+const _maxInstantUs = 8640000000000000000;
+
+/// An absolute microsecond field ([_usec]) that [SystemdTimer.nextUtc] and
+/// [SystemdTimer.lastUtc] can convert: a value beyond [DateTime]'s range
+/// warns and reads as unknown instead of making those getters throw.
+int? _instantUsec(Object? v, List<String> warnings) {
+  final us = _usec(v);
+  if (us == null || (us >= -_maxInstantUs && us <= _maxInstantUs)) return us;
+  warnings.add('timers_json: instant out of range');
   return null;
 }
 

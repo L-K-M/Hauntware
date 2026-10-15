@@ -23,6 +23,13 @@ final class ChartStrings {
     required this.seriesEmpty,
     required this.seriesUnknown,
     required this.unknownValue,
+    required this.gapAppClosed,
+    required this.gapBackground,
+    required this.gapDisconnected,
+    required this.gapSummary,
+    required this.gapOngoing,
+    required this.time,
+    required this.timeWithSeconds,
     required this.trendRising,
     required this.trendFalling,
     required this.trendSteady,
@@ -55,6 +62,25 @@ final class ChartStrings {
 
   /// A value the host did not report; never shown as zero (03 §10.4).
   final String unknownValue;
+
+  /// The labels of a time-series chart's bands without data (03 §9.5
+  /// item 5): the app was not running, was in the background, or had no
+  /// link to the server.
+  final String gapAppClosed;
+  final String gapBackground;
+  final String gapDisconnected;
+
+  /// A band without data as a screen reader hears it: when it began and
+  /// ended, and its label.
+  final String Function(DateTime start, DateTime end, String reason) gapSummary;
+
+  /// A band without data that has not ended yet.
+  final String Function(DateTime start, String reason) gapOngoing;
+
+  /// A time axis label to the minute, and to the second for ticks less
+  /// than a minute apart.
+  final String Function(DateTime time) time;
+  final String Function(DateTime time) timeWithSeconds;
 
   final String trendRising;
   final String trendFalling;

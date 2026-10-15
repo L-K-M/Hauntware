@@ -3,6 +3,8 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:klabautermann_host/klabautermann_host.dart'
+    show kCollectorSetVersion;
 import 'package:seance_core/seance_core.dart';
 
 /// The parts of [SshLink] the sampler does not use throw.
@@ -90,7 +92,7 @@ final class ScriptedProcess implements RemoteProcess {
   void emitStderr(List<int> bytes) => _stderr.add(bytes);
 
   /// The program's READY line with [version].
-  void ready([String version = '2']) =>
+  void ready([String version = kCollectorSetVersion]) =>
       emitText('\x1e$nonce READY HWS/1 $version\n');
 
   /// A complete reply to [seq] with one section per entry of [sections].

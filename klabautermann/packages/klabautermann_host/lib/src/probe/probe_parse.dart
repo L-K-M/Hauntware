@@ -67,6 +67,8 @@ ParseResult<HostProfile> parseProbe(
         p.init(s.payload, warnings);
       case 'virt':
         p.virt(s.payload, warnings);
+      case 'lxcfs':
+        p.lxcfs(s.payload, warnings);
       case 'identity':
         p.identity(s.payload, warnings);
       case 'elev':
@@ -100,6 +102,7 @@ final class _ProfileBuilder {
   bool? systemdDir;
   int? systemdVersion;
   String? virtualization, container;
+  List<String>? lxcfsMounts;
   int? uid;
   String? user;
   List<String>? groups;
@@ -158,10 +161,35 @@ final class _ProfileBuilder {
 
   void virt(String payload, List<String> w) {
     final kv = _kv(payload);
-    // systemd-detect-virt prints 'none' when nothing is detected; that is
-    // an answer, not an unknown.
-    virtualization = _emptyNull(kv['virt']);
-    container = _emptyNull(kv['container']);
+    virtualization = _detected(kv['virt_rc'], kv['virt'], 'virt', w);
+    container = _detected(kv['container_rc'], kv['container'], 'container', w);
+  }
+
+  /// One `systemd-detect-virt` answer: exit 0 with the technology's
+  /// name, or 'none', which is an answer, not an unknown. Any other
+  /// output (an error message) leaves it unknown.
+  String? _detected(String? rc, String? out, String what, List<String> w) {
+    final name = _emptyNull(out);
+    if (name == 'none' || (rc == '0' && name != null)) return name;
+    if (name != null) w.add('probe virt: unparsed $what answer "$name"');
+    return null;
+  }
+
+  void lxcfs(String payload, List<String> w) {
+    final mounts = _kv(payload)['mounts'];
+    if (mounts == null) {
+      w.add('probe lxcfs: no mounts line');
+      return;
+    }
+    final out = <String>[];
+    for (final m in mounts.split(' ')) {
+      if (m.startsWith('/proc/')) {
+        out.add(m);
+      } else if (m.isNotEmpty) {
+        w.add('probe lxcfs: ignored mount point "$m"');
+      }
+    }
+    lxcfsMounts = out;
   }
 
   void identity(String payload, List<String> w) {
@@ -269,6 +297,7 @@ final class _ProfileBuilder {
     systemdVersion: systemdVersion,
     virtualization: virtualization,
     container: container,
+    lxcfsMounts: lxcfsMounts,
     uid: uid,
     user: user,
     groups: groups,

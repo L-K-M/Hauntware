@@ -5,6 +5,9 @@
 library;
 
 export 'src/engine/engine_client.dart';
+// What a substitute engine for IsolateEngineClient.spawn's entryPoint is
+// handed; the app's restart test runs one.
+export 'src/engine/engine_isolate.dart' show EngineStart;
 export 'src/engine/protocol.dart';
 // The log viewer's line store and SGR reader (03 §10.8).
 export 'src/logs/log_buffer.dart';
@@ -34,9 +37,23 @@ export 'src/settings/instance_lock.dart'
 
 // 03 §3.2: the app reaches seance_core, klabautermann_host and
 // klabautermann_docker types only through this barrel, each behind an
-// explicit `show` list that grows as its milestone wires the types in.
+// explicit `show` list that changes as a milestone wires types in or
+// retires them.
+// The host types are the plain data that sampling results and
+// HostProfileChanged carry (D52), and the log viewer's journal rows.
 export 'package:klabautermann_host/klabautermann_host.dart'
-    show Collector, CoreSnapshot, OverviewSnapshot;
+    show
+        CpuPercentages,
+        CronSnapshot,
+        DiskRate,
+        FsSnapshot,
+        HostProfile,
+        JournalEntry,
+        LoadAvg,
+        NetRate,
+        SystemdUnit,
+        TimersSnapshot,
+        UnitsSnapshot;
 // The app resolves `~/.ssh/config` for the FL-02 import with Séance's home
 // rule, which also undoes a macOS sandbox's container `HOME`.
 export 'package:seance_core/seance_core.dart' show expandHomePath;

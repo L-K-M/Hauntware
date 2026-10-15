@@ -628,6 +628,48 @@ abstract class AppLocalizations {
   /// **'unknown'**
   String get chartUnknownValue;
 
+  /// The label on a chart's hatched band for a period without data because Klabautermann was not running (03 §9.5).
+  ///
+  /// In en, this message translates to:
+  /// **'app closed'**
+  String get chartGapAppClosed;
+
+  /// The label on a chart's hatched band for a period without data because the app was in the background, where it stops sampling.
+  ///
+  /// In en, this message translates to:
+  /// **'in background'**
+  String get chartGapBackground;
+
+  /// The label on a chart's hatched band for a period without data because the connection to the server was down.
+  ///
+  /// In en, this message translates to:
+  /// **'disconnected'**
+  String get chartGapDisconnected;
+
+  /// A screen reader's description of a chart's band without data: when it began and ended, and why, one of chartGapAppClosed, chartGapBackground or chartGapDisconnected.
+  ///
+  /// In en, this message translates to:
+  /// **'No data from {start} to {end}: {reason}'**
+  String chartGapSummary(DateTime start, DateTime end, String reason);
+
+  /// A screen reader's description of a chart's band without data that has not ended: when it began and why, one of chartGapAppClosed, chartGapBackground or chartGapDisconnected.
+  ///
+  /// In en, this message translates to:
+  /// **'No data since {start}: {reason}'**
+  String chartGapOngoing(DateTime start, String reason);
+
+  /// A time label on a chart's time axis, to the minute, in the UI locale.
+  ///
+  /// In en, this message translates to:
+  /// **'{time}'**
+  String chartTime(DateTime time);
+
+  /// A time label on a chart's time axis, to the second, in the UI locale, for axes whose ticks are less than a minute apart.
+  ///
+  /// In en, this message translates to:
+  /// **'{time}'**
+  String chartTimeWithSeconds(DateTime time);
+
   /// A series' trend in its screen-reader summary: it has gone up over the chart's window.
   ///
   /// In en, this message translates to:
@@ -723,6 +765,72 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Row actions'**
   String get tableRowActions;
+
+  /// Screen-reader name of a log view, the scrolling list of a server's log lines.
+  ///
+  /// In en, this message translates to:
+  /// **'Log'**
+  String get logViewLabel;
+
+  /// Button shown while a log view is paused: scrolls to the newest line and keeps it in sight as lines arrive (LOG-02).
+  ///
+  /// In en, this message translates to:
+  /// **'Follow'**
+  String get logFollow;
+
+  /// Spoken name of the icon beside a log line logged as an error or worse.
+  ///
+  /// In en, this message translates to:
+  /// **'Error'**
+  String get logLevelError;
+
+  /// Spoken name of the icon beside a log line logged as a warning.
+  ///
+  /// In en, this message translates to:
+  /// **'Warning'**
+  String get logLevelWarning;
+
+  /// Spoken name of the icon beside a log line logged as debug output.
+  ///
+  /// In en, this message translates to:
+  /// **'Debug'**
+  String get logLevelDebug;
+
+  /// A row in a log view where lines arrived faster than the view could keep and were left out; count is how many.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 line dropped here} other{{count} lines dropped here}}'**
+  String logDroppedLines(int count);
+
+  /// Note after a log line too long to keep whole; total is the full line's length.
+  ///
+  /// In en, this message translates to:
+  /// **'[line cut: {total} characters in all]'**
+  String logLineCut(int total);
+
+  /// Stands in for a journal message or field value the server did not send because it is larger than 4,096 bytes.
+  ///
+  /// In en, this message translates to:
+  /// **'[not sent: over 4,096 bytes]'**
+  String get logJournalNotSent;
+
+  /// Last row of a journal entry's expanded fields when the log view kept only some of them; count is how many it left out.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 more field not kept} other{{count} more fields not kept}}'**
+  String logJournalFieldsLeftOut(int count);
+
+  /// Screen-reader hint for activating a journal row: shows all of the entry's journal fields beneath it.
+  ///
+  /// In en, this message translates to:
+  /// **'Show fields'**
+  String get logJournalShowFields;
+
+  /// Screen-reader hint for activating a journal row that shows its fields: hides them again.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide fields'**
+  String get logJournalHideFields;
 }
 
 class _AppLocalizationsDelegate

@@ -101,7 +101,7 @@ void main() {
       ]);
     });
 
-    test('Subscribe/Unsubscribe are accepted without a reply', () async {
+    test('sampling subscriptions are accepted without a reply', () async {
       final client = await spawnEngine();
       final (:events, fleet: _) = await started(client);
 
@@ -109,15 +109,42 @@ void main() {
         ..send(
           const Subscribe(
             serverId: 'srv-1',
-            collectors: {Collector.overview},
-            cadence: Duration(seconds: 2),
+            subscriptionId: 'row',
+            streams: {SampleStream.overview},
           ),
         )
-        ..send(const Unsubscribe('srv-1'))
-        // The probe proves the engine handled both silently instead of
+        ..send(const SetCadenceProfile(CadenceProfile.cellularSaver))
+        ..send(const Unsubscribe(serverId: 'srv-1', subscriptionId: 'row'))
+        // The probe proves the engine handled them silently instead of
         // dying or rejecting them.
         ..send(const Connect('probe'));
 
+      final event = await next(events);
+      expect((event as RequestRejected).requestName, 'Connect');
+    });
+
+    test('a log stream is rejected and closing one is a no-op', () async {
+      final client = await spawnEngine();
+      final (:events, fleet: _) = await started(client);
+
+      client
+        ..send(
+          OpenLogStream(
+            streamId: 'logs-1',
+            spec: LogStreamSpec(
+              serverId: 'srv-1',
+              source: const JournalLogSource(unit: 'nginx.service'),
+              window: 50,
+              follow: false,
+            ),
+          ),
+        )
+        // Not open, since the open was rejected: closing does nothing.
+        ..send(const CloseStream('logs-1'))
+        ..send(const Connect('probe'));
+
+      final rejected = await next(events) as RequestRejected;
+      expect(rejected.requestName, 'OpenLogStream');
       final event = await next(events);
       expect((event as RequestRejected).requestName, 'Connect');
     });

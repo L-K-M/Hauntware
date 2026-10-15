@@ -450,7 +450,9 @@ void main() {
     );
 
     // Full history is deliberate: the M0 bundle validation here, the
-    // preserved-history gate (contracts) and the Séance audit's lineage.
+    // preserved-history gate (contracts), the Séance audit's lineage and
+    // the Klabautermann entry-point check, which tells a deleted entry
+    // point from one not committed yet by its first-parent history.
     // A renamed job must not silently fall out of the exemption.
     expect(jobs.keys, containsAll(_fullHistoryJobs));
     for (final entry in jobs.entries) {
@@ -770,7 +772,12 @@ void main() {
   });
 }
 
-const _fullHistoryJobs = {'dart_tools', 'contracts', 'seance_pin_audit'};
+const _fullHistoryJobs = {
+  'dart_tools',
+  'contracts',
+  'seance_pin_audit',
+  'detect_klabautermann_integration',
+};
 
 /// GitHub runs only the monorepo root's workflows; the subtree's own
 /// `.github/workflows/ci.yml` is a frozen copy of the standalone one.

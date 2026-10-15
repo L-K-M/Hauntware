@@ -19,28 +19,6 @@ const kFastRequestDeadline = Duration(seconds: 5);
 /// the JSON-or-text choice and the transport.
 const kSlowRequestMargin = Duration(seconds: 5);
 
-/// An upper bound on the guarded commands (`hw_run`, `hw_qrun`) one run
-/// of [collector]'s fragment starts, each bounded by `timeout 10` when
-/// the host has `timeout` (03 §6.2, D47). The count is the calls written in
-/// the fragment; where calls sit on exclusive branches (`procs`' `head`
-/// or `ps`, the JSON or text calls of `units` and `timers`) only one
-/// branch runs, so the bound is high by those. No guarded call sits
-/// inside a loop. A test ties each figure to the fragment text, so a
-/// program change has to revisit it. The count belongs with the
-/// fragments in `klabautermann_host`: once that package exposes it
-/// (`Collector.guardedCommands` is planned), this table goes, so the
-/// count has one owner.
-int guardedCommandBound(Collector collector) => switch (collector) {
-  Collector.overview || Collector.core => 0,
-  Collector.probe => 17,
-  Collector.fs => 2,
-  Collector.identity => 2,
-  Collector.procs => 3,
-  Collector.units => 4,
-  Collector.timers => 2,
-  Collector.cron => 1,
-};
-
 /// A sampler's READY and request deadlines (D47). Tests inject short
 /// ones; production takes the defaults.
 final class SamplerDeadlines {
@@ -66,13 +44,13 @@ final class SamplerDeadlines {
 
   /// The deadline for one request naming [collectors] on a [kind]
   /// sampler. A slow request gets [slowMargin] plus [perGuardedCommand]
-  /// for every guarded command its collectors can start, instead of
-  /// one fixed figure: the probe alone may need 17 of them (D47). Without
-  /// `timeout` on the host the commands run unguarded, and this deadline
-  /// still bounds the request.
+  /// for every guarded command its collectors can start
+  /// ([Collector.guardedCommands]), instead of one fixed figure: the probe
+  /// alone may need 16 of them (D47). Without `timeout` on the host the
+  /// commands run unguarded, and this deadline still bounds the request.
   Duration forRequest(SamplerKind kind, Iterable<Collector> collectors) {
     if (kind == SamplerKind.fast) return fastRequest;
-    final commands = collectors.fold(0, (n, c) => n + guardedCommandBound(c));
+    final commands = collectors.fold(0, (n, c) => n + c.guardedCommands);
     return slowMargin + perGuardedCommand * commands;
   }
 }

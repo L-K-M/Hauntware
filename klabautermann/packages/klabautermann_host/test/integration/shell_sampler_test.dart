@@ -177,7 +177,9 @@ void _expectMetricBlocks(HwsSection s, {required bool core}) {
   );
   if (core) {
     expect(stat.any((l) => l.startsWith('btime ')), isTrue);
-    expect(b['diskstats'], isNotEmpty);
+    // The rows are filtered to whole disks with I/O (D48), which a
+    // container may not have.
+    expect(b.containsKey('diskstats'), isTrue);
     expect(b['uptime'], isNotEmpty);
   }
 }
@@ -298,6 +300,35 @@ void main() {
         if (osrelease.existsSync()) {
           expect(profile.kernelRelease, osrelease.readAsStringSync().trim());
         }
+
+        // The lxcfs area lists exactly the local fuse.lxcfs mounts over
+        // /proc files (D50), and an empty list on a host without them.
+        expect(profile.areaStatuses['lxcfs'], SectionStatus.ok);
+        expect(profile.lxcfsMounts, [
+          for (final line in File('/proc/mounts').readAsLinesSync())
+            if (line.split(' ') case [
+              _,
+              final m,
+              'fuse.lxcfs',
+              ...,
+            ] when m.startsWith('/proc/'))
+              m,
+        ]);
+
+        // The locale area reports the program's start-up HW_UTF8 check
+        // (D49), which agrees with the local `locale -a`.
+        final locale = Process.runSync('sh', ['-c', 'command -v locale']);
+        if (locale.exitCode == 0) {
+          final all = Process.runSync('locale', ['-a']).stdout.toString();
+          final hasCUtf8 = RegExp(
+            r'^C\.UTF-?8$',
+            caseSensitive: false,
+            multiLine: true,
+          ).hasMatch(all);
+          expect(profile.cUtf8, hasCUtf8);
+        } else {
+          expect(profile.areaStatuses['locale'], SectionStatus.missing);
+        }
       });
 
       test('slow program: procs, units, timers and cron', () async {
@@ -359,6 +390,38 @@ void main() {
           () => parseCron(utf8.decode(cron.payload), ParseContext.standard),
           returnsNormally,
         );
+      });
+
+      test('the lxcfs area keeps only fuse.lxcfs mounts over /proc', () {
+        // The program's own _probe_lxcfs, pointed at a hand-written
+        // mounts table so the test does not need lxcfs on the host (D50).
+        final program = buildSamplerProgram(
+          kind: SamplerKind.slow,
+          nonce: '0123456789abcdef0123456789abcdef',
+        );
+        final start = program.indexOf('_probe_lxcfs() {');
+        final function = program.substring(
+          start,
+          program.indexOf('\n}\n', start) + 3,
+        );
+        final dir = Directory.systemTemp.createTempSync('klab-lxcfs');
+        addTearDown(() => dir.deleteSync(recursive: true));
+        final mounts = File('${dir.path}/mounts')
+          ..writeAsStringSync(
+            'rpool/data/subvol-101-disk-0 / zfs rw,relatime 0 0\n'
+            'proc /proc proc rw,nosuid,nodev,noexec,relatime 0 0\n'
+            'lxcfs /proc/cpuinfo fuse.lxcfs rw,nosuid,nodev 0 0\n'
+            'lxcfs /proc/meminfo fuse.lxcfs rw,nosuid,nodev 0 0\n'
+            'lxcfs /sys/devices/system/cpu fuse.lxcfs rw,nosuid,nodev 0 0\n'
+            'tmpfs /proc/fake tmpfs rw 0 0\n',
+          );
+        final script =
+            "psec() { printf '%s|%s|%s' \"\$1\" \"\$2\" \"\$3\"; }\n"
+            '${function.replaceAll('/proc/mounts', mounts.path)}'
+            '_probe_lxcfs\n';
+        final r = Process.runSync(path, ['-c', script]);
+        expect(r.stderr, isEmpty);
+        expect(r.stdout, 'lxcfs|ok|mounts=/proc/cpuinfo /proc/meminfo');
       });
 
       test('the start command runs from it as the login shell', () async {
