@@ -11,6 +11,7 @@ import 'package:flutter/services.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
 
 import '../l10n/app_localizations.dart';
+import '../theme/app_theme.dart' show poltergeistMonoTextStyle;
 
 /// Mirrors the per-attempt transcript bound (seance_core's
 /// `SshConnectionLog` and the engine-side coalescer both cap at 400).
@@ -283,8 +284,7 @@ class _ConnectionLogView extends StatelessWidget {
               reverse: true,
               child: SelectableText(
                 text.isEmpty ? l10n.connectionLogEmpty : text,
-                style: const TextStyle(
-                  fontFamily: 'monospace',
+                style: poltergeistMonoTextStyle.copyWith(
                   fontSize: 12,
                   height: 1.4,
                 ),

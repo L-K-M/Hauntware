@@ -943,10 +943,9 @@ class SessionStatusBar extends StatelessWidget {
     // displayTarget, not the config's address: a local shell has no config,
     // and names the machine the shell runs on instead.
     final target = session.displayTarget;
-    final style = theme.textTheme.labelSmall?.copyWith(
-      color: scheme.onSurfaceVariant,
-      fontFamily: 'monospace',
-    );
+    final style = theme.textTheme.labelSmall
+        ?.copyWith(color: scheme.onSurfaceVariant)
+        .merge(SeanceTheme.mono);
     // Match SidebarBottomBar's desktop extent and accessibility scaling so
     // their top borders stay aligned across the workspace.
     final minimumHeight = switch (theme.platform) {

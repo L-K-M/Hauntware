@@ -863,8 +863,10 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
             row,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
+            // Patterns, in the document's face like the find fields.
             style: theme.textTheme.labelSmall?.copyWith(
-              fontFamily: 'monospace',
+              fontFamily: _style.fontFamily,
+              fontFamilyFallback: _style.fontFamilyFallback,
             ),
           ),
       ],

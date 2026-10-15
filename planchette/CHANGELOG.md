@@ -7,6 +7,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Fixed
+- The grep cheat sheet in the find bar shows its patterns in the
+  document's font. On macOS and Windows they were in the proportional
+  system font.
 - Selected text stands out in the dark look. Its indigo highlight was
   barely lighter than the page; it is now lighter and bluer, and comments
   are a little lighter so they stay readable on it.
