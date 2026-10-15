@@ -22,8 +22,9 @@ dependencies:
     path: ../../../planchette/packages/ghost_ui
   # The shared status-dot vocabulary the fleet rows resolve through (03
   # §3.2's APP -> GS edge, F4): ghostServerIndicator and ghostStatusDot,
-  # fed by the app's adapter in lib/ui/fleet_row_state.dart. It brings
-  # seance_protocol into the lockfile; the app still never imports it
+  # fed by the app's adapter in lib/ui/fleet_row_state.dart. Its
+  # seance_protocol dependency is already transitive through
+  # klabautermann_core; the app still never imports it
   # (test/architecture_contract_test.dart).
   ghost_servers:
     path: ../../../planchette/packages/ghost_servers

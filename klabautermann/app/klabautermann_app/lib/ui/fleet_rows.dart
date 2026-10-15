@@ -24,8 +24,9 @@ import 'sidebar_kit.dart';
 /// as connecting still reads "Waiting to reconnect"; the probe answers
 /// take FL-04's words. A block carries no detail: its reasons are worded
 /// where the user resolves them. The section header's words for hidden
-/// live servers stay unset, since the rail folds no live server away
-/// behind a summary (groups and sections are K42).
+/// live servers keep the bag's defaults and go unused: a collapsed or
+/// filtered rail does hide live servers, and saying so in the header
+/// (`ghostHiddenLiveIndicator`) is deferred to a follow-up on the header.
 GhostServerStatusStrings fleetStatusStrings(
   AppLocalizations l10n,
   LinkStatus link,

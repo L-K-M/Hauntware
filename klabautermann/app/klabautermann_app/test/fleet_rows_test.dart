@@ -56,6 +56,7 @@ Future<_Rows> _pump(
   Brightness brightness = Brightness.light,
   String? fontFamily,
   Size size = const Size(260, 480),
+  bool collapsed = false,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -91,6 +92,7 @@ Future<_Rows> _pump(
                 child: FleetServerList(
                   fleet: rows.fleet,
                   monitoring: rows.monitoring,
+                  collapsed: collapsed,
                   showSelection: true,
                   onOpen: (server) {
                     rows.opened.add(server.id);
@@ -245,6 +247,18 @@ void main() {
       await tester.sendKeyEvent(LogicalKeyboardKey.escape);
       await tester.pump();
       expect(find.text('web-1'), findsOneWidget);
+    });
+
+    testWidgets('a query shows its matches in a collapsed section', (
+      tester,
+    ) async {
+      await _pump(tester, servers: servers, collapsed: true);
+      expect(find.byType(FleetServerRow), findsNothing);
+
+      await tester.enterText(find.byType(TextField), 'db');
+      await tester.pump();
+      expect(find.text('db-1'), findsOneWidget);
+      expect(find.text('web-1'), findsNothing);
     });
   });
 
