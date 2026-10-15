@@ -39,6 +39,21 @@ Normalized form: *-*-* 00:00:00
     );
   });
 
+  test('in a zero-offset GMT zone the elapse is the instant too', () {
+    // systemd 255 under TZ=Etc/GMT, Atlantic/Reykjavik or Africa/Abidjan:
+    // no `(in UTC)` line, since the offset is zero all year.
+    const raw = '''
+  Original form: daily
+Normalized form: *-*-* 00:00:00
+    Next elapse: Fri 2026-10-16 00:00:00 GMT
+       From now: 11h left
+''';
+    expect(
+      parseOnCalendar(raw).value.elapses.single.atUtc,
+      DateTime.parse('2026-10-16T00:00:00Z'),
+    );
+  });
+
   test('a non-UTC zone keeps the text but leaves atUtc unknown', () {
     const raw = '''
 Original form: daily
