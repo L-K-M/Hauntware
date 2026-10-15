@@ -79,6 +79,21 @@ void main() {
       ]);
     });
 
+    test('a name after any systemd escape', () {
+      const units =
+          r'mnt-Backup\x20web1.mount media-x\x20anke.mount '
+          r'"home-x\\x40anke.mount"';
+      expect(
+        _redact(units, literals: literals),
+        r'mnt-Backup\x20fixture-host.mount media-x\x20user.mount '
+        r'"home-x\\x40user.mount"',
+      );
+      expect(Redactor(literals).review(units), [
+        (1, 'still names the host'),
+        (1, 'still names a user'),
+      ]);
+    });
+
     test('a home directory goes before the user name', () {
       expect(
         _redact('/srv/anke-home/bin /srv/anke-home2', literals: literals),

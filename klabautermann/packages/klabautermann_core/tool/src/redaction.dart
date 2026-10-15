@@ -98,6 +98,9 @@ final _wordChar = RegExp('[A-Za-z0-9]');
 /// doubled inside JSON strings.
 const _x2d = r'\\{1,2}x2d';
 
+/// Any character as systemd escapes it in a unit name.
+const _escape = r'\\{1,2}x[0-9a-fA-F]{2}';
+
 /// The `/dev/disk/by-*` links that name a disk by its serial, WWN, UUID
 /// or label rather than by its bus position.
 const _diskLinkKinds = 'id|uuid|partuuid|label|partlabel';
@@ -425,7 +428,7 @@ final class Redactor {
   /// home directory as a whole path, a `--redact` value anywhere. A `-`
   /// also matches device-mapper's `--` and systemd's `\x2d`, so that
   /// `web-01` matches in `/dev/mapper/web--01--vg-root`; a name may
-  /// follow a `\x2d`.
+  /// follow any systemd escape (`\x2d`, a space's `\x20`).
   static String _literalPattern(_Literal kind, String value) {
     final escaped = latin1
         .decode(utf8.encode(value))
@@ -433,8 +436,8 @@ final class Redactor {
         .map(RegExp.escape)
         .join('(?:-{1,2}|(?:$_x2d){1,2})');
     return switch (kind) {
-      _Literal.host ||
-      _Literal.user => '(?:(?<![A-Za-z0-9])|(?<=$_x2d))$escaped(?![A-Za-z0-9])',
+      _Literal.host || _Literal.user =>
+        '(?:(?<![A-Za-z0-9])|(?<=$_escape))$escaped(?![A-Za-z0-9])',
       _Literal.home => '$escaped(?![A-Za-z0-9._-])',
       _Literal.extra => escaped,
     };
