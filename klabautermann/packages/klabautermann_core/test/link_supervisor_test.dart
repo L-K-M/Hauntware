@@ -637,6 +637,36 @@ void main() {
       ]);
     });
 
+    test('a server that comes back waits for a slot without a deadline once '
+        'its old dial returns', () async {
+      // Dials waiting on the user hold their slots with no deadline.
+      void ask(_Call call) => call.onPhase!(
+        LinkNeedsUser(promptId: call.serverId, kind: PromptKind.hostKey),
+      );
+      for (final id in ['s1', 's2', 's3', 's4']) {
+        supervisor.connect(id, purpose: _interactive);
+      }
+      final old = calls.first..onDialing!();
+      calls.skip(1).forEach(ask);
+      supervisor
+        ..forget(['s1'])
+        ..connect('s9', purpose: _interactive)
+        // Queued behind s9, with a deadline while the old dial runs.
+        ..connect('s1', purpose: _interactive);
+      await clock.elapse(const Duration(seconds: 10));
+      old.fail(LinkFailureKind.unreachable);
+      await clock.elapse(Duration.zero);
+      expect(calls.map((c) => c.serverId).skip(4), ['s9']);
+      ask(calls.last);
+
+      await clock.elapse(kConnectAttemptDeadline);
+      expect(statuses(), [const LinkConnecting(), const LinkConnecting()]);
+
+      calls.last.fail(LinkFailureKind.unreachable);
+      await clock.elapse(Duration.zero);
+      expect(calls.map((c) => c.serverId).skip(5), ['s1']);
+    });
+
     test('several go together: a slot one frees does not dial another\'s '
         'queued attempt', () async {
       final servers = [
