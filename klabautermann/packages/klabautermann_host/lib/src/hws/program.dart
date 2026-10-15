@@ -299,10 +299,14 @@ hw_netdev() {
 # in sysfs) or a stacked device (entries under `slaves/`: LVM, dm-crypt,
 # multipath, md) repeats its disks' I/O; loop, ram, zram and ZFS volume
 # (zd) devices are files or memory, or count again on the pool's disks.
-# Rows that never did I/O are left out.
+# A hidden NVMe multipath path (nvme<S>c<C>n<N>) waits for the end: its
+# head nvme<S>n<N> counts the same I/O on kernels that account it there,
+# so the path stays only when the head has none. Rows that never did I/O
+# are left out.
 hw_diskstats() {
   o="$o$NL== diskstats =="
   hw_readable /proc/diskstats || return 0
+  _k=; _p=
   while read -r _x _x _n _r _x _sr _x _w _x _sw _x; do
     case $_n in
       loop* | ram* | zram* | zd*)
@@ -315,8 +319,22 @@ hw_diskstats() {
     [ -e "/sys/class/block/$_n/partition" ] && continue
     for _s in "/sys/class/block/$_n/slaves/"*; do break; done
     [ -e "$_s" ] && continue
-    o="$o$NL$_n $_r $_sr $_w $_sw"
+    case $_n in
+      nvme[0-9]*c[0-9]*n[0-9]*)
+        _p="$_p$NL$_n $_r $_sr $_w $_sw" ;;
+      *)
+        _k="$_k$NL$_n $_r $_sr $_w $_sw" ;;
+    esac
   done </proc/diskstats || st=error
+  while [ -n "$_p" ]; do
+    _p=${_p#"$NL"}; _e=${_p%%"$NL"*}; _p=${_p#"$_e"}
+    _n=${_e%% *}
+    case $_k in
+      *"$NL${_n%%c*}n${_n##*n} "*) ;;
+      *) _k="$_k$NL$_e" ;;
+    esac
+  done
+  o="$o$_k"
 }
 """;
 

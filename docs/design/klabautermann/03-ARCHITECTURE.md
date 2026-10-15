@@ -604,12 +604,19 @@ Proposals awaiting the owner close the section; they are not decisions.
   `block/holder.c`, `drivers/md/dm.c`, `drivers/md/md.c`], loop devices
   count again on their backing file's disk, `ram` and `zram` hold memory,
   and ZFS volumes (`zd*` [V: OpenZFS `include/sys/fs/zfs.h`]) count again
-  on the pool's disks. A `netdev` or `diskstats` row whose counters are
-  all zero (an unused NIC, idle `nbd` devices) is left out; its first
-  non-zero reading starts its series. PSI keeps `avg10`, `avg60` and
-  `avg300` (7.1), without the cumulative `total` and without the cpu
-  file's `full` line, which the kernel sets to zero at the system level
-  [V: Linux `Documentation/accounting/psi.rst`]. Where
+  on the pool's disks. A hidden NVMe multipath path (`nvme<S>c<C>n<N>`)
+  has neither a `partition` file nor `slaves/`, yet its head `nvme<S>n<N>`
+  counts the same I/O on kernels that account it there [V: Linux
+  `block/genhd.c` (`diskstats_show` lists hidden disks),
+  `drivers/nvme/host/core.c` (`nvme_alloc_ns`),
+  `drivers/nvme/host/multipath.c` (`nvme_mpath_start_request`)], so a path
+  row stays only when its head row shows no I/O, as on kernels before the
+  head accounted it. A `netdev` or `diskstats` row whose counters are all
+  zero (an unused NIC, idle `nbd` devices) is left out; its first non-zero
+  reading starts its series. PSI keeps `avg10`, `avg60` and `avg300`
+  (7.1), without the cumulative `total` and without the cpu file's `full`
+  line, which the kernel sets to zero at the system level [V: Linux
+  `Documentation/accounting/psi.rst`]. Where
   `/proc/spl/kstat/zfs/arcstats` exists, `core` adds the ARC's `c_min` and
   `size` [V: OpenZFS `module/zfs/arc.c`], for MEM-01's "ZFS ARC counted as
   used" and MEM-05's reclaimable part above `c_min` (v1.x); a host without

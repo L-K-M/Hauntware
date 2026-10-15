@@ -221,6 +221,8 @@ Directory _bigHost(int cpus) {
     ..write(disk(259, 3, 'nvme0n1p3', 53085297, 53086375))
     ..write(disk(259, 4, 'nvme1n1', 45670000, 34560000))
     ..write(disk(259, 5, 'nvme1n1p1', 45669000, 34559000))
+    // nvme1n1's hidden multipath path, which the head counts again.
+    ..write(disk(259, 6, 'nvme1c1n1', 45670000, 34560000))
     ..write(disk(8, 0, 'sda', 7654321, 6543210))
     ..write(disk(8, 1, 'sda1', 7654000, 6543000))
     ..write(disk(9, 0, 'md0', 91347901, 69126890))
@@ -246,7 +248,14 @@ Directory _bigHost(int cpus) {
   ]) {
     _write(root, 'sys/class/block/$part/partition', '1\n');
   }
-  for (final whole in ['nvme0n1', 'nvme1n1', 'sda', 'sr0', 'zram0']) {
+  for (final whole in [
+    'nvme0n1',
+    'nvme1n1',
+    'nvme1c1n1',
+    'sda',
+    'sr0',
+    'zram0',
+  ]) {
     _mark(root, 'sys/class/block/$whole/slaves');
   }
   for (final (holder, slave) in [
@@ -379,6 +388,21 @@ void main() {
           expect(core.cpuPressure, isNull);
         },
       );
+
+      test('NVMe path rows stay only while their head has no I/O', () async {
+        // A kernel that accounts multipath I/O on the paths only.
+        final root = _smallHost({
+          'proc/diskstats':
+              ' 259       0 nvme0n1 0 0 0 0 0 0 0 0 0 0 0\n'
+              ' 259       1 nvme0c0n1 5 0 40 0 6 0 48 0 0 0 0\n'
+              ' 259       2 nvme0c1n1 7 0 56 0 8 0 64 0 0 0 0\n',
+        });
+        final core = await _core(shell, root);
+        expect(core.value.diskstats.map((d) => d.name), [
+          'nvme0c0n1',
+          'nvme0c1n1',
+        ]);
+      });
 
       test('per-core counters above 2^31 keep their value', () async {
         // A core idle for 254 days at USER_HZ 100.
