@@ -1,5 +1,3 @@
-import 'dart:io' show FileSystemException;
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -53,24 +51,16 @@ void main() {
   });
 
   group('the first-run card (03 §9.5 item 1)', () {
-    test('a dismissal applies at once, is saved once, and a failed save '
-        'still hides the card', () async {
+    test('a second dismissal saves and notifies nothing', () async {
       final saves = <String>[];
-      final coverage = _firstLaunch(
-        saves,
-        failWith: const FileSystemException('disk full'),
-      );
+      final coverage = _firstLaunch(saves);
       addTearDown(coverage.dispose);
       var heard = 0;
       coverage.addListener(() => heard++);
 
-      await expectLater(
-        coverage.dismissFirstRunCard(),
-        throwsA(isA<FileSystemException>()),
-      );
+      await coverage.dismissFirstRunCard();
       await coverage.dismissFirstRunCard();
 
-      expect(coverage.showsFirstRunCard, isFalse);
       expect(heard, 1);
       expect(saves, ['dismissed']);
     });
@@ -117,32 +107,6 @@ void main() {
       );
     });
 
-    testWidgets('heads the phone fleet list, over the chip', (tester) async {
-      final saves = <String>[];
-      await pumpApp(
-        tester,
-        size: _phone,
-        servers: twoServers,
-        coverage: _firstLaunch(saves),
-      );
-
-      expect(
-        tester.getTopLeft(find.text(_cardTitle)).dy,
-        lessThan(tester.getTopLeft(find.text(_chipOfTwo)).dy),
-      );
-      expect(
-        tester.getTopLeft(find.text(_chipOfTwo)).dy,
-        lessThan(tester.getTopLeft(find.text('web-1')).dy),
-      );
-
-      await tester.tap(find.text('Got it'));
-      await tester.pumpAndSettle();
-
-      expect(_card, findsNothing);
-      expect(find.text(_chipOfTwo), findsOneWidget);
-      expect(saves, ['dismissed']);
-    });
-
     testWidgets('a dismissal that cannot be saved says it will return', (
       tester,
     ) async {
@@ -172,8 +136,10 @@ void main() {
       await _letToastsGo(tester);
     });
 
-    testWidgets('fits a phone at twice the text size: its words scroll and '
-        'its buttons stay in view', (tester) async {
+    testWidgets('heads the phone fleet list over the chip, and at twice the '
+        'text size its words scroll and its buttons stay in view', (
+      tester,
+    ) async {
       tester.platformDispatcher.textScaleFactorTestValue = 2;
       addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
       final saves = <String>[];
@@ -192,10 +158,16 @@ void main() {
         findsOneWidget,
       );
       expect(card.contains(tester.getBottomRight(find.text('Got it'))), isTrue);
+      expect(card.bottom, lessThan(tester.getTopLeft(_chip).dy));
+      expect(
+        tester.getBottomLeft(_chip).dy,
+        lessThanOrEqualTo(tester.getTopLeft(find.text('web-1')).dy),
+      );
 
       await tester.tap(find.text('Got it'));
       await tester.pumpAndSettle();
       expect(saves, ['dismissed']);
+      expect(_chip, findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   });
