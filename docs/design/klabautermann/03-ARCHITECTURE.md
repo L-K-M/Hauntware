@@ -2348,7 +2348,9 @@ fragments (D48).
   `ID_LIKE` words stay, as fixtures need them. IPv4 and IPv6 addresses
   other than loopback and `0.0.0.0`, MAC addresses (also in `enx`/`wlx`
   names), UUIDs, hex ids of 32 or more digits (machine and boot ids),
-  `/dev/disk/by-id/` names, network mount servers in `fs`,
+  the names in `/dev/disk/by-{id,uuid,partuuid,label,partlabel}/` links
+  and in their device units, UUIDs too in systemd's `\x2d` escaping,
+  network mount servers in `fs`,
   hostnamectl's serial, asset-tag, pretty-name and location fields,
   email addresses, URL credentials, private-key headers and what
   `SecretRedactor` masks become placeholders too (documentation

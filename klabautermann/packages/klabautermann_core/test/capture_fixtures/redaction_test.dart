@@ -131,6 +131,30 @@ void main() {
       expect(_redact(units, collector: 'units'), units);
     });
 
+    test('disk names and UUIDs in systemd-escaped unit names', () {
+      const uuid = r'6f1d2c3b\x2daaaa\x2d4bbb\x2d8ccc\x2d0123456789ab';
+      const zero = r'00000000\x2d0000\x2d0000\x2d0000\x2d000000000000';
+      expect(
+        _redact(
+          'dev-disk-by\\x2did-ata\\x2dSSD_S3Z1NB0K123456X\\x2dpart1.device\n'
+          'dev-disk-by\\x2did-wwn\\x2d0x5002538e40a1b2c3.device x\n'
+          '"systemd-fsck@dev-disk-by\\\\x2duuid-0A1B\\\\x2d2C3D.service"\n'
+          'File System Check on /dev/disk/by-uuid/0A1B-2C3D\n'
+          'systemd-cryptsetup@luks\\x2d$uuid.service',
+          collector: 'units',
+        ),
+        'dev-disk-by\\x2did-fixture\\x2ddisk.device\n'
+        'dev-disk-by\\x2did-fixture\\x2ddisk.device x\n'
+        '"systemd-fsck@dev-disk-by\\\\x2duuid-fixture\\\\x2ddisk.service"\n'
+        'File System Check on /dev/disk/by-uuid/fixture-disk\n'
+        'systemd-cryptsetup@luks\\x2d$zero.service',
+      );
+      expect(
+        _redact('/dev/mapper/luks-6f1d2c3b-aaaa-4bbb-8ccc-0123456789ab /'),
+        '/dev/mapper/luks-00000000-0000-0000-0000-000000000000 /',
+      );
+    });
+
     test('MACs in interface names, disk ids and hostnamectl fields', () {
       expect(
         _redact(

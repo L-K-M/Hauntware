@@ -56,7 +56,7 @@ const _serverPlaceholder = 'fixture-nas';
 const _emailPlaceholder = 'user@example.com';
 const _uuidPlaceholder = '00000000-0000-0000-0000-000000000000';
 const _macPlaceholder = '00:00:5e:00:53:01';
-const _diskPlaceholder = '/dev/disk/by-id/fixture-disk';
+const _diskPlaceholder = 'fixture-disk';
 const _ipv6Placeholder = '2001:db8::1';
 const _ipv4Placeholder = '192.0.2.1';
 const _macNamePlaceholder = '00005e005301';
@@ -85,11 +85,20 @@ final _placeholder = RegExp(
         RegExp.escape(p),
         if (_wordChar.hasMatch(p[p.length - 1])) '(?![A-Za-z0-9])',
       ].join(),
-    '(?<![A-Za-z0-9])(0{32,}|(enx|wlx)$_macNamePlaceholder)(?![A-Za-z0-9])',
+    '(?<![A-Za-z0-9])(0{32,}|(enx|wlx)$_macNamePlaceholder|fixture$_x2d'
+        'disk)(?![A-Za-z0-9])',
   ].join('|'),
 );
 
 final _wordChar = RegExp('[A-Za-z0-9]');
+
+/// A `-` as systemd escapes it in a unit name (`\x2d`), its backslash
+/// doubled inside JSON strings.
+const _x2d = r'\\{1,2}x2d';
+
+/// The `/dev/disk/by-*` links that name a disk by its serial, WWN, UUID
+/// or label rather than by its bus position.
+const _diskLinkKinds = 'id|uuid|partuuid|label|partlabel';
 
 enum _Literal {
   host('host name', _hostPlaceholder, 'still names the host'),
@@ -139,13 +148,28 @@ final _patterns = <(String, RegExp, String Function(Match))>[
     // shape; its unit type is the last label.
     (m) => _unitType.hasMatch(m[0]!) ? m[0]! : _emailPlaceholder,
   ),
+  // udev's links carry the drive's model and serial number or a volume
+  // UUID; device unit names hold them systemd-escaped.
+  (
+    'disk id',
+    RegExp('/dev/disk/by-($_diskLinkKinds)/[^\\s"\']+'),
+    (m) => '/dev/disk/by-${m[1]}/$_diskPlaceholder',
+  ),
+  (
+    'disk id',
+    RegExp(
+      '(dev-disk-by($_x2d)($_diskLinkKinds)-)[^\\s"\']+?'
+      r'''(?=\.(device|swap|service|target)(?![A-Za-z0-9])|[\s"']|$)''',
+    ),
+    (m) => '${m[1]}fixture${m[2]}disk',
+  ),
   (
     'UUID',
     RegExp(
-      r'(?<![0-9A-Fa-f-])[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-'
-      r'[0-9a-fA-F]{4}-[0-9a-fA-F]{12}(?![0-9A-Fa-f-])',
+      '(?:(?<![0-9A-Fa-f])|(?<=$_x2d))[0-9a-fA-F]{8}(-|$_x2d)[0-9a-fA-F]{4}'
+      r'\1[0-9a-fA-F]{4}\1[0-9a-fA-F]{4}\1[0-9a-fA-F]{12}(?![0-9A-Fa-f-])',
     ),
-    (_) => _uuidPlaceholder,
+    (m) => _uuidPlaceholder.replaceAll('-', m[1]!),
   ),
   // Machine and boot ids, container ids, digests.
   (
@@ -166,8 +190,6 @@ final _patterns = <(String, RegExp, String Function(Match))>[
     RegExp(r'(?<![A-Za-z0-9])(enx|wlx)[0-9a-fA-F]{12}(?![A-Za-z0-9])'),
     (m) => '${m[1]}$_macNamePlaceholder',
   ),
-  // udev's by-id names carry the drive's model and serial number.
-  ('disk id', RegExp(r'''/dev/disk/by-id/[^\s"']+'''), (_) => _diskPlaceholder),
   // hostnamectl's serial, asset tag and free-text naming fields.
   (
     'identity field',
