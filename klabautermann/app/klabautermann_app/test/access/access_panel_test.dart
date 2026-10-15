@@ -151,7 +151,7 @@ void main() {
     const confirmation = 'Copied. Run it yourself on the server.';
     expect(
       tester.getSemantics(find.text(confirmation)),
-      containsSemantics(label: confirmation, isLiveRegion: true),
+      isSemantics(label: confirmation, isLiveRegion: true),
     );
     expect(harness.engine.sent, sentBefore);
   });
