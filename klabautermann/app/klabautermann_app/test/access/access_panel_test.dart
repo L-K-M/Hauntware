@@ -314,7 +314,7 @@ void main() {
     expect(find.byType(AccessPanel), findsOneWidget);
     expect(focusInAccess(), isTrue);
 
-    // The tab itself is no stop: Tab reaches its first control.
+    // From there, Tab reaches its first control.
     await tester.sendKeyEvent(LogicalKeyboardKey.tab);
     await tester.pumpAndSettle();
     expect(focusInAccess(), isTrue);
@@ -323,6 +323,90 @@ void main() {
           ?.findAncestorWidgetOfExactType<OutlinedButton>(),
       isNotNull,
     );
+  });
+
+  testWidgets('Tab walks from the tab strip past the Access tab onto its '
+      'first control', (tester) async {
+    await _openWeb1(tester, _desktop, profile: debianHost());
+    await _openTab(tester, 'Access');
+    final tab = find.descendant(
+      of: find.byType(TabBar),
+      matching: find.text('Access'),
+    );
+    Focus.of(tester.element(tab)).requestFocus();
+    await tester.pump();
+
+    // The tab's own focus node, there for a hidden panel's link, is no
+    // stop: the first focus inside the tab is its first copy button.
+    BuildContext? focused() => FocusManager.instance.primaryFocus?.context;
+    for (var presses = 0; presses < 20; presses++) {
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pump();
+      if (focused()?.findAncestorWidgetOfExactType<AccessPanel>() != null) {
+        break;
+      }
+    }
+    expect(focused()?.findAncestorWidgetOfExactType<AccessPanel>(), isNotNull);
+    expect(
+      focused()?.findAncestorWidgetOfExactType<OutlinedButton>(),
+      isNotNull,
+    );
+  });
+
+  testWidgets('keeps its controls together in Tab order beside another '
+      'pane', (tester) async {
+    final engine = FakeEngineClient();
+    final monitoring = MonitoringController(engine);
+    addTearDown(() async {
+      monitoring.dispose();
+      await engine.close();
+    });
+    tester.view.physicalSize = _desktop;
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      _frame(
+        Brightness.light,
+        Row(
+          children: [
+            Expanded(
+              child: AccessPanel(monitoring: monitoring, serverId: 'srv-1'),
+            ),
+            // A pane whose buttons sit level with the tab's rows.
+            Column(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                for (final name in ['top', 'middle', 'bottom'])
+                  TextButton(onPressed: () {}, child: Text(name)),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+    engine.emit(HostProfileChanged('srv-1', debianHost()));
+    await tester.pumpAndSettle();
+
+    Focus.of(tester.element(find.text('bottom'))).requestFocus();
+    await tester.pump();
+    String stop() {
+      final context = FocusManager.instance.primaryFocus!.context!;
+      if (context.findAncestorWidgetOfExactType<OutlinedButton>() != null) {
+        return 'copy';
+      }
+      if (context.findAncestorWidgetOfExactType<TextButton>() != null) {
+        return 'side';
+      }
+      return 'other';
+    }
+
+    final stops = <String>[];
+    for (var presses = 0; presses < 5; presses++) {
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pump();
+      stops.add(stop());
+    }
+    expect(stops, ['copy', 'copy', 'side', 'side', 'side']);
   });
 
   testWidgets('gates the Docker tab and shows the detected runtime '

@@ -57,6 +57,8 @@ class AccessPanel extends StatelessWidget {
   /// press reaches its first one; it is no stop of its own.
   final FocusNode? focusNode;
 
+  // One unit in Tab order: the tab's controls come together rather than
+  // interleaved, row by row, with a pane's controls beside it.
   @override
   Widget build(BuildContext context) => FocusTraversalGroup(
     child: Focus(
