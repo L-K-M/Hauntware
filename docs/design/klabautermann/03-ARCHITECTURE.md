@@ -3532,8 +3532,19 @@ the engine in `engine_isolate.dart` beside it):
     `IdentityFile`, the hop's own port and user first; as a first hop,
     the final pass's route must still loop on the hop's own port and as
     its own user, else that pass's. Otherwise the host behind it is left
-    out and counted. A host whose two passes give two routes ssh would
-    take is left out and counted. For a
+    out and counted. The import makes this check for every hop, even
+    where ssh's final pass already fails before reaching it (for a host
+    that keeps its first pass, or behind a first hop that holds only by
+    looping). It is conservative there: it may leave out a host that
+    plain ssh reaches, but never keeps a route ssh does not take. With
+    `Host *.example.com` / `User ops` / `ProxyJump bastion.example.com`,
+    `Host bastion` / `HostName bastion.example.com`, `Host bastion2` /
+    `HostName b2.example.com` and `Host web` / `HostName 10.0.0.5` /
+    `ProxyJump bastion,bastion2`, plain ssh reaches web through bastion
+    and bastion2 and the final pass fails at bastion with a jumphost
+    loop, yet web is left out, because bastion2's final pass as a later
+    hop gives `User ops`. A host whose two passes give two routes ssh
+    would take is left out and counted. For a
     `HostName` whose final form the import cannot know (an address with
     a scope, or one the system resolver may read where Dart does not), a
     block whose pattern may match it counts as a `Match` that may apply.

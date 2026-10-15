@@ -353,6 +353,11 @@ final class _Router {
 
       final alias = _byAlias[hopHost];
       final finalPass = alias == null ? null : _loopingPasses[alias.alias];
+      // Conservative (03 §10.1): this checks every hop, also where ssh's
+      // final pass fails before it (for a [host] that keeps its first
+      // pass, or behind a first hop that holds only by looping). There it
+      // can only leave out a host that plain ssh reaches, never keep a
+      // route ssh does not take.
       if (finalPass != null &&
           !finalPass._firstPassHolds(alias!, index, user, port)) {
         return unfollowable;
