@@ -3900,7 +3900,11 @@ the engine in `engine_isolate.dart` beside it):
     first pass, and behind a first hop that holds only by looping,
     directly or through its own first hops. ssh reaches such a hop only
     where no final pass is asked for, and every name then takes its
-    first pass, so the import keeps the only route ssh can take. With
+    first pass. This assumes a system config asks for the final pass
+    for every name or for none, as `Match final all` does; one that asks
+    for it for some names only, such as a `CanonicalizeHostname` in a
+    `Host` block, falls outside what the import models, like any other
+    value that file sets. With
     `Host *.example.com` / `User ops` / `ProxyJump bastion.example.com`,
     `Host bastion` / `HostName bastion.example.com`, `Host bastion2` /
     `HostName b2.example.com` and `Host web` / `HostName 10.0.0.5` /

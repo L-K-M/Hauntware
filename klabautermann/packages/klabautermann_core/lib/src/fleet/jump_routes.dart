@@ -142,7 +142,9 @@ final class JumpHop {
 ///   before the hop: on the route of such a key, and on the rest of
 ///   every route whose first hops lead to one. ssh reaches those hops
 ///   only where no final pass is asked for, and every name then takes
-///   its first pass.
+///   its first pass. That assumes a system config asks for the final
+///   pass for every name or for none, as `Match final all` does (03
+///   §10.1).
 ///
 /// The work is linear in the hosts: following a route stops past 16 hops,
 /// and each null route reaches the hosts that name it once.
