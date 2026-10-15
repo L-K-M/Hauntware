@@ -1,7 +1,8 @@
 /// Parser for `systemd-analyze calendar` output (03 §7.7): the
 /// `Original form`, `Normalized form` and one elapse per `Next elapse`
-/// or `Iteration #N` row, each optionally followed by `(in UTC)` and
-/// `From now` detail lines.
+/// or later-run row (`Iter. #N:` in systemd 242 to 252, `Iteration #N`
+/// from 253), each optionally followed by `(in UTC)` and `From now`
+/// detail lines.
 library;
 
 import 'package:meta/meta.dart';
@@ -48,7 +49,7 @@ final class OnCalendarResult {
   /// jobs view offers to write back.
   final String? normalizedForm;
 
-  /// `Next elapse` plus every `Iteration #N`, in order.
+  /// `Next elapse` plus every later-run row, in order.
   final List<OnCalendarElapse> elapses;
 
   Map<String, Object?> toJson() => {
@@ -85,7 +86,7 @@ ParseResult<OnCalendarResult> parseOnCalendar(String raw) {
     open = false;
   }
 
-  final iter = RegExp(r'^Iteration #\d+:');
+  final iter = RegExp(r'^Iter(?:\.|ation) #\d+:');
   for (final line in raw.split('\n')) {
     final t = line.trim();
     if (t.isEmpty) continue;

@@ -27,4 +27,6 @@ expression in Europe/Berlin), `journal.txt` (`journalctl -o json` lines:
 a kernel row, a byte-array `MESSAGE` with invalid UTF-8 and a `null`
 one) and `dmesg.txt` (util-linux's `dmesg --json --decode` layout) are
 hand-written from systemctl(1), systemd-analyze(1), systemd.time(7),
-journalctl(1), systemd.journal-fields(7) and dmesg(1).
+journalctl(1), systemd.journal-fields(7) and dmesg(1). The calendar
+read uses systemd 252's `Iter. #N:` label for later runs
+(`analyze-calendar.c`), which 253 renamed to `Iteration #N`.
