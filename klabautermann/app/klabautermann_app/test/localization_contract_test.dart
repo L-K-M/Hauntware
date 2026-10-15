@@ -8,13 +8,15 @@ import 'package:l10n_contract/l10n_contract.dart';
 // suite's shared scanner (`tool/l10n_contract`, 03 §3.5 F1b) rejects every
 // authored literal in lib/ outside the ARB catalogue and this reviewed
 // allowlist, as in Poltergeist's localization_contract_test.dart. The
-// allowlist holds technical literals and one marked exception, UI copy
-// that docs/STATUS.md tracks until it moves to the ARB. Two
+// allowlist holds technical literals only. Two
 // checks the scanner does not make stay from the app's interim test: every
 // ARB key is referenced from lib/, and no literal fills a slot that
 // _userFacingSlotLiteral lists, so a reviewed literal reused in such a slot
 // of its own file fails too. Other parameters a surface shows, such as
-// Tooltip's message or InputDecoration's labelText, are not checked.
+// Tooltip's message or InputDecoration's labelText, are not checked, and
+// neither is a literal routed through a variable before a listed slot
+// (`final words = '...'; Text(words)`): the slot check reads the slot's
+// own argument, so the allowlist review is what keeps such a literal out.
 
 const _generatedLocalizationPrefix = 'lib/l10n/app_localizations';
 const _generatedLocalizationPaths = {
@@ -27,7 +29,7 @@ const _generatedLocalizationPaths = {
 const _generatedDartSuffixes = <String>{};
 
 // Literals are reviewed per file so an allowlist cannot hide UI copy. Every
-// entry is technical except the one marked "Exception", which STATUS tracks.
+// entry is technical.
 const _allowedTechnicalLiterals = <String, Set<String>>{
   'lib/app.dart': {
     // The settings route's Navigator name.
@@ -74,6 +76,12 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     // The rejected request's class name, which RequestRejected carries.
     r"'$ImportSshConfig'",
   },
+  'lib/controllers/log_streams.dart': {
+    // A log stream id the engine keys a stream's events by (03 §10.1), and
+    // the rejected request's class name, which RequestRejected carries.
+    r"'log-${_count++}'",
+    r"'$OpenLogStream'",
+  },
   'lib/controllers/monitoring_controller.dart': {
     // Assert messages; programmer diagnostics, never rendered.
     r"'$stream carries no metrics'",
@@ -86,10 +94,6 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   'lib/controllers/log_reads.dart': {
     // An assert message; programmer diagnostic, never rendered.
     "'a follow is not a bounded read'",
-    // A log stream id, never reused in an engine run (03 §10.1).
-    r"'log-read-${_count++}'",
-    // The rejected request's class name, which RequestRejected carries.
-    r"'$OpenLogStream'",
   },
   'lib/ui/services_view.dart': {
     // systemd's spelling of load and sub states and the dot before a unit
@@ -197,6 +201,27 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     // An assert message; programmer diagnostic, never rendered.
     "'new controllers come with a new tree (KlabautermannApp, D44)'",
   },
+  'lib/ui/logs/log_query.dart': {
+    // The path rule's separators and dot parts (03 §8.8), and the empty
+    // defaults of the text filters.
+    "'/'",
+    "'..'",
+    "'/.'",
+    "'/./'",
+    "''",
+    // LOG-22's common paths: paths on the server, shown verbatim as
+    // server data (03 §10.10).
+    "'/var/log/syslog'",
+    "'/var/log/messages'",
+    "'/var/log/auth.log'",
+    "'/var/log/secure'",
+    "'/var/log/nginx/access.log'",
+    "'/var/log/nginx/error.log'",
+    "'/var/log/apache2/access.log'",
+    "'/var/log/apache2/error.log'",
+    "'/var/log/httpd/access_log'",
+    "'/var/log/httpd/error_log'",
+  },
   // The search's initial empty query.
   'lib/ui/logs/log_search.dart': {"''"},
   'lib/ui/logs/log_text.dart': {
@@ -225,11 +250,6 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     // Glyph probes that measure the line height (the space above) and the
     // advance, never shown.
     "'W'",
-    // Exception, UI copy: a field row joins the field name and
-    // logJournalNotSent in code, so a translation cannot place the name.
-    // docs/STATUS.md (Localization contract) tracks the follow-up, an ARB
-    // message with a {name} placeholder that replaces this entry.
-    r"'$name ${_l10n.logJournalNotSent}'",
   },
   // The command registry's ids, keys of the menus and shortcuts.
   'lib/ui/menus/app_commands.dart': {

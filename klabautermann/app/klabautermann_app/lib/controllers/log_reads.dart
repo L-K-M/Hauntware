@@ -3,6 +3,8 @@ import 'dart:collection';
 import 'package:flutter/foundation.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 
+import 'log_streams.dart';
+
 /// What a [LogRead] is doing, as far as the app knows.
 @immutable
 sealed class LogReadState {
@@ -21,10 +23,13 @@ final class LogReadReported extends LogReadState {
   final LogStreamStatus status;
 }
 
-/// The engine refused the open outright with a [RequestRejected], as it
-/// does for every open until its log service is wired (03 §10.1).
+/// No answer for the read follows: the engine refused the open outright
+/// with a [RequestRejected], as it does for every open until its log
+/// service is wired (03 §10.1), or it stopped and will answer nothing.
 final class LogReadRefused extends LogReadState {
-  const LogReadRefused();
+  const LogReadRefused(this.rejection);
+
+  final LogRejection rejection;
 }
 
 /// One bounded log read the app opened: a window, which reads the newest
@@ -33,9 +38,15 @@ final class LogReadRefused extends LogReadState {
 /// [close] once it no longer shows the read, which stops a read still
 /// running and releases this notifier.
 final class LogRead extends ChangeNotifier {
-  LogRead._(this._onClose);
+  /// Opens [spec], a window, through [streams], the app's one sender of
+  /// [OpenLogStream] (03 §10.1), which `MonitoringController.openLogRead`
+  /// passes.
+  LogRead(LogStreams streams, LogStreamSpec spec)
+    : assert(!spec.follow, 'a follow is not a bounded read') {
+    _stream = streams.open(spec, _ReadListener(this));
+  }
 
-  final VoidCallback _onClose;
+  late final LogStreamHandle _stream;
 
   LogReadState _state = const LogReadRequested();
   final List<LogRecord> _records = [];
@@ -60,7 +71,8 @@ final class LogRead extends ChangeNotifier {
   void close() {
     if (_closed) return;
     _closed = true;
-    _onClose();
+    // A read that ended or was refused has nothing left to stop.
+    _stream.close();
     dispose();
   }
 
@@ -76,66 +88,21 @@ final class LogRead extends ChangeNotifier {
   }
 }
 
-/// The log reads of one engine run by stream id, fed the engine's log
-/// events by [MonitoringController], which owns it.
-///
-/// [RequestRejected] names no stream (03 §10.1), so a rejection of an
-/// [OpenLogStream] goes to the oldest open without an answer. The engine
-/// handles requests one at a time in arrival order, so this is exact
-/// while it refuses every open; once its log service is wired it refuses
-/// one outright only for a stream id an earlier open used, which a
-/// counter never repeats. A read closed before its answer keeps its place
-/// until the answer arrives, so a late rejection cannot land on the next.
-/// All of this needs every [OpenLogStream] the app sends to go through
-/// here: a second sender keeping its own queue would also take each
-/// rejection as its own.
-final class LogReads {
-  LogReads(this._send);
+/// Hands a [LogRead]'s stream events to it, keeping the listener calls off
+/// its public surface.
+final class _ReadListener implements LogStreamListener {
+  _ReadListener(this._read);
 
-  final void Function(EngineRequest request) _send;
+  final LogRead _read;
 
-  /// The reads that have not ended or been closed.
-  final Map<String, LogRead> _reads = {};
+  @override
+  void onLogBatch(LogBatch batch) => _read._add(batch.records, batch.dropped);
 
-  /// The stream ids of the opens without an answer, oldest first.
-  final Queue<String> _unanswered = Queue();
+  @override
+  void onLogStatus(LogStreamStatus status) =>
+      _read._report(LogReadReported(status));
 
-  int _count = 0;
-
-  /// Sends an open for [spec], a window, under an id no other open of
-  /// this engine run used.
-  LogRead open(LogStreamSpec spec) {
-    assert(!spec.follow, 'a follow is not a bounded read');
-    final streamId = 'log-read-${_count++}';
-    final read = LogRead._(() {
-      // A read that ended has nothing left to stop.
-      if (_reads.remove(streamId) != null) _send(CloseStream(streamId));
-    });
-    _reads[streamId] = read;
-    _unanswered.add(streamId);
-    _send(OpenLogStream(streamId: streamId, spec: spec));
-    return read;
-  }
-
-  /// Applies [event] to the read it concerns, if any.
-  void accept(EngineEvent event) {
-    switch (event) {
-      case LogStreamState(:final streamId, :final status):
-        _unanswered.remove(streamId);
-        final read = status is LogStreamEnded
-            ? _reads.remove(streamId)
-            : _reads[streamId];
-        read?._report(LogReadReported(status));
-      case LogBatch(:final streamId, :final records, :final dropped):
-        _unanswered.remove(streamId);
-        _reads[streamId]?._add(records, dropped);
-      case RequestRejected(:final requestName)
-          when requestName == '$OpenLogStream' && _unanswered.isNotEmpty:
-        _reads
-            .remove(_unanswered.removeFirst())
-            ?._report(const LogReadRefused());
-      case EngineEvent():
-        break;
-    }
-  }
+  @override
+  void onLogRejected(LogRejection rejection) =>
+      _read._report(LogReadRefused(rejection));
 }

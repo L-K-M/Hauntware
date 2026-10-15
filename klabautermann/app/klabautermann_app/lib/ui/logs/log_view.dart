@@ -373,7 +373,7 @@ class _LogViewState extends State<LogView> {
   List<String> _fieldLines(LogLine line, List<(String, String?)> fields) => [
     for (final (name, value) in fields)
       value == null
-          ? '$name ${_l10n.logJournalNotSent}'
+          ? _l10n.logJournalFieldNotSent(name)
           : parseSgr(
               '$name=$value'.replaceAll('\n', ' '),
             ).text.replaceAll(_rowBreaks, ' '),

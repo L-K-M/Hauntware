@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart' show ChangeNotifier, FlutterError;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:klabautermann_app/controllers/log_reads.dart';
+import 'package:klabautermann_app/controllers/log_streams.dart';
 import 'package:klabautermann_app/controllers/monitoring_controller.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 
@@ -38,6 +40,38 @@ FleetEntry _entry(String serverId) => FleetEntry(
   port: kSshDefaultPort,
   origin: FleetEntryOrigin.sshConfig,
 );
+
+/// A Logs panel stream's side of [LogStreamListener], in arrival order.
+final class _PanelStream implements LogStreamListener {
+  final events = <Object>[];
+
+  @override
+  void onLogBatch(LogBatch batch) => events.add(batch.records.length);
+
+  @override
+  void onLogStatus(LogStreamStatus status) => events.add(status);
+
+  @override
+  void onLogRejected(LogRejection rejection) => events.add(rejection);
+}
+
+/// SVC-04's unit logs: a bounded window of one unit.
+LogStreamSpec _unitLogs(String unit) => LogStreamSpec(
+  serverId: 'srv-1',
+  source: JournalLogSource(unit: unit),
+  window: 50,
+  follow: false,
+);
+
+/// The Logs panel's live journal.
+final _panelLog = LogStreamSpec(
+  serverId: 'srv-1',
+  source: const JournalLogSource(),
+  window: 500,
+  follow: true,
+);
+
+const _openRejected = RequestRejected('OpenLogStream', 'not implemented yet');
 
 /// Whether [notifier] was disposed: only then does adding a listener fail.
 bool _disposed(ChangeNotifier notifier) {
@@ -616,6 +650,109 @@ void main() {
       engine.emit(CatalogReplaced([_entry('srv-1')]));
       await settle();
       expect(engine.sent, hasLength(sent));
+    });
+  });
+
+  // A RequestRejected names no stream, so every OpenLogStream the app
+  // sends, a unit-log read's or a Logs panel stream's, waits in one line
+  // for its answer (03 §10.1).
+  group('log streams (03 §10.1)', () {
+    List<String> openIds() => [
+      for (final open in engine.sentOfType<OpenLogStream>())
+        (open as OpenLogStream).streamId,
+    ];
+
+    test('reads and panel streams take ids from one counter and get '
+        'their own events', () async {
+      final read = monitoring.openLogRead(_unitLogs('nginx.service'));
+      final panel = _PanelStream();
+      monitoring.logs.open(_panelLog, panel);
+      final second = monitoring.openLogRead(_unitLogs('ssh.service'));
+      final secondPanel = _PanelStream();
+      monitoring.logs.open(_panelLog, secondPanel);
+
+      final ids = openIds();
+      expect(ids, ['log-0', 'log-1', 'log-2', 'log-3']);
+
+      // Each event goes to the later stream of its kind, so none reaches
+      // a stream merely for being the oldest open or the oldest of its
+      // kind.
+      engine
+        ..emit(LogStreamState(ids[3], const LogStreamRunning()))
+        ..emit(
+          LogBatch(
+            streamId: ids[2],
+            records: const [JournalRecord(message: 'started')],
+          ),
+        );
+      await settle();
+      expect(read.records, isEmpty);
+      expect(read.state, isA<LogReadRequested>());
+      expect(second.records, hasLength(1));
+      expect(panel.events, isEmpty);
+      expect(secondPanel.events, [const LogStreamRunning()]);
+    });
+
+    test('one rejection refuses only the oldest open, a read before a '
+        'panel stream', () async {
+      final read = monitoring.openLogRead(_unitLogs('nginx.service'));
+      final panel = _PanelStream();
+      monitoring.logs.open(_panelLog, panel);
+
+      engine.emit(_openRejected);
+      await settle();
+      expect(read.state, isA<LogReadRefused>());
+      expect(panel.events, isEmpty);
+
+      engine.emit(_openRejected);
+      await settle();
+      expect(panel.events, [LogRejection.refused]);
+    });
+
+    test('one rejection refuses only the oldest open, a panel stream '
+        'before a read', () async {
+      final panel = _PanelStream();
+      monitoring.logs.open(_panelLog, panel);
+      final read = monitoring.openLogRead(_unitLogs('nginx.service'));
+
+      engine.emit(_openRejected);
+      await settle();
+      expect(panel.events, [LogRejection.refused]);
+      expect(read.state, isA<LogReadRequested>());
+
+      engine.emit(_openRejected);
+      await settle();
+      expect(read.state, isA<LogReadRefused>());
+    });
+
+    test('a later open\'s answer also answers a read sent before it', () async {
+      final read = monitoring.openLogRead(_unitLogs('nginx.service'));
+      final panel = _PanelStream();
+      monitoring.logs.open(_panelLog, panel);
+
+      // Answered in order, the read was accepted before the panel stream's
+      // answer, so the later rejection is nobody's.
+      engine
+        ..emit(LogStreamState(openIds()[1], const LogStreamRunning()))
+        ..emit(_openRejected);
+      await settle();
+      expect(read.state, isA<LogReadRequested>());
+      expect(panel.events, [const LogStreamRunning()]);
+    });
+
+    test('a disposed controller lets go of its streams', () async {
+      // A controller of its own, since tearDown disposes the shared one.
+      final ownEngine = FakeEngineClient();
+      final own = MonitoringController(ownEngine);
+      final read = own.openLogRead(_unitLogs('nginx.service'));
+      final panel = _PanelStream();
+      own.logs.open(_panelLog, panel);
+
+      own.dispose();
+      await ownEngine.close();
+      await pumpEventQueue();
+      expect(read.state, isA<LogReadRequested>());
+      expect(panel.events, isEmpty);
     });
   });
 

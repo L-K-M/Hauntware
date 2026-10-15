@@ -197,7 +197,10 @@ final class SetCadenceProfile extends EngineRequest {
 
 /// Opens a log stream on [spec]'s server (03 §10.1, §7.6): its records
 /// arrive as [LogBatch]es and its progress as [LogStreamState]s, all
-/// under [streamId], until it ends or [CloseStream] closes it.
+/// under [streamId], until it ends or [CloseStream] closes it. The engine
+/// answers an open it accepts with a [LogStreamState] before it handles
+/// the next request, so the app can give a [RequestRejected] to the
+/// oldest open with no answer yet.
 final class OpenLogStream extends EngineRequest {
   const OpenLogStream({required this.streamId, required this.spec});
 
@@ -522,8 +525,9 @@ final class LogBatch extends EngineEvent {
 }
 
 /// What the [OpenLogStream] stream [streamId] is doing, for LOG-02's
-/// connection chip (03 §10.1). The engine sends it whenever [status]
-/// changes; a [LogStreamEnded] status is the stream's last event.
+/// connection chip (03 §10.1). The engine sends it as it accepts the open,
+/// before the next request, and whenever [status] changes; a
+/// [LogStreamEnded] status is the stream's last event.
 final class LogStreamState extends EngineEvent {
   const LogStreamState(this.streamId, this.status);
 

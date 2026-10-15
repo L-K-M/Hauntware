@@ -5,6 +5,7 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 
 import '../ui/charts/series_ring.dart';
 import 'log_reads.dart';
+import 'log_streams.dart';
 
 /// How long a server's link outlives the last view that opened it, as long
 /// as the grace 03 §5.1 and D34 give a backgrounded phone's link: stepping
@@ -111,7 +112,15 @@ final class MonitoringController extends ChangeNotifier {
     DateTime Function() now = DateTime.now,
   }) : _clock = _FreshnessClock(now) {
     _events = _engine.events.listen(_onEngineEvent, onDone: _onEngineDone);
+    logs = LogStreams(_engine);
   }
+
+  /// The log streams panels open, and each server's journal access for
+  /// LOG-04's notice (03 §10.1, §10.8): a concern of its own that lasts
+  /// this engine run, listening to the engine beside this controller. It
+  /// sends every [OpenLogStream] the app sends, [openLogRead]'s included,
+  /// since a rejection names no stream.
+  late final LogStreams logs;
 
   final EngineClient _engine;
   final Duration _linkGrace;
@@ -265,14 +274,11 @@ final class MonitoringController extends ChangeNotifier {
     });
   }
 
-  /// Bounded log reads such as SVC-04's unit logs (03 §7.5), fed the log
-  /// events from [_onEngineEvent].
-  late final LogReads _logReads = LogReads(_send);
-
   /// Opens a bounded read of [spec], a window ([LogStreamSpec.follow]
-  /// false), whose records and state the returned [LogRead] reports. The
-  /// caller closes it once it no longer shows it.
-  LogRead openLogRead(LogStreamSpec spec) => _logReads.open(spec);
+  /// false) such as SVC-04's unit logs (03 §7.5), through [logs]. The
+  /// returned [LogRead] reports its records and state; the caller closes
+  /// it once it no longer shows it.
+  LogRead openLogRead(LogStreamSpec spec) => LogRead(logs, spec);
 
   /// A view of [serverId] opened (the desktop workspace, the phone's pushed
   /// screen). The first sends [Connect]; within the grace after the last
@@ -353,8 +359,6 @@ final class MonitoringController extends ChangeNotifier {
         _server(serverId).profile.value = profile;
       case CatalogReplaced(:final entries):
         _replaceFleet({for (final entry in entries) entry.serverId});
-      case LogStreamState() || LogBatch() || RequestRejected():
-        _logReads.accept(event);
       case SamplingState(:final serverId):
         // As for a sample: a server that left the fleet stays purged.
         if (_fleetIds case final ids? when !ids.contains(serverId)) return;
@@ -418,6 +422,7 @@ final class MonitoringController extends ChangeNotifier {
   @override
   void dispose() {
     unawaited(_events.cancel());
+    logs.dispose();
     _onEngineDone();
     for (final readings in _readings.values) {
       readings.dispose();

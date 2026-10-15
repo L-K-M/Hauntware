@@ -6,6 +6,7 @@ import '../controllers/monitoring_controller.dart';
 import '../l10n/app_localizations.dart';
 import 'fleet_rail.dart' show linkStatusWord;
 import 'inspector_pane.dart' show PlaceholderPaneBody;
+import 'logs/logs_panel.dart';
 import 'server_surfaces.dart';
 import 'services_panel.dart';
 import 'system_panel.dart';
@@ -137,6 +138,11 @@ class _Panels extends StatelessWidget {
                 visible: tabs.index == index,
                 child: switch (panel) {
                   ServerPanel.services => ServicesPanel(
+                    monitoring: monitoring,
+                    serverId: serverId,
+                    visible: tabs.index == index,
+                  ),
+                  ServerPanel.logs => LogsPanel(
                     monitoring: monitoring,
                     serverId: serverId,
                     visible: tabs.index == index,
