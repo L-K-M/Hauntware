@@ -296,6 +296,58 @@ void main() {
       expect(_redact(plain, collector: 'cron'), plain);
     });
 
+    test('secret-named options and the password options of clients', () {
+      const lines = [
+        (
+          'gpg --batch --passphrase Hunter2 -c /x',
+          'gpg --batch --passphrase [redacted] -c /x',
+        ),
+        (
+          "wget --http-password 'a b' https://x/y",
+          'wget --http-password [redacted] https://x/y',
+        ),
+        (
+          'backup --auth-token abc123 -client-secret "Zz9',
+          'backup --auth-token [redacted] -client-secret [redacted]',
+        ),
+        (
+          'mongodump -u admin -p Hunter2 --out /x',
+          'mongodump -u admin -p [redacted] --out /x',
+        ),
+        (
+          'ldapsearch -x -w Hunter2 -b dc=x',
+          'ldapsearch -x -w [redacted] -b dc=x',
+        ),
+        (
+          'redis-cli -h db -a Hunter2 ping',
+          'redis-cli -h db -a [redacted] ping',
+        ),
+        ('smbclient -U anke%Hunter2 //h/s', 'smbclient -U [redacted] //h/s'),
+        (
+          'curl -U p:Hunter2 --proxy-user p:Hunter2 x',
+          'curl -U [redacted] --proxy-user [redacted] x',
+        ),
+        (
+          'zip -P Hunter2 o.zip x; 7z a -pHunter2 o.7z',
+          'zip -P [redacted] o.zip x; 7z a -p[redacted] o.7z',
+        ),
+      ];
+      final redactor = Redactor(const RedactionLiterals());
+      final text = lines.map((l) => l.$1).join('\n');
+      final redacted = _redact(text, collector: 'cron');
+      expect(redacted, lines.map((l) => l.$2).join('\n'));
+      expect(redactor.review(text), [
+        for (var i = 1; i <= lines.length; i++) (i, 'looks like a secret'),
+      ]);
+      expect(redactor.review(redacted), isEmpty);
+      // Prompts, the same letters in other programs, on the next line too.
+      const plain =
+          'ldapsearch -W -x; 7z x -p a.7z; ls -a /x; tar -P -cf x\n'
+          '0 3 * * * mysqldump db\n0 4 * * * pigz -p4 x\n'
+          'systemctl --no-ask-password stop x';
+      expect(_redact(plain, collector: 'cron'), plain);
+    });
+
     test('a private-key header without its end becomes a placeholder', () {
       expect(
         _redact('$_pemBegin\nb3Blbg', collector: 'cron'),
@@ -328,17 +380,12 @@ void main() {
     test('what the rules cannot judge blocks the write', () {
       expect(
         redactor.review(
-          'ExecStart=/usr/bin/agent --token abc123\n'
           'Description=Load the private key\n'
           'x QWxhZGRpbjpvcGVuIHNlc2FtZQ0123456789ABCDEFab\n'
           '/usr/lib/Abc0123456789012345678901234567890xyz.service\n'
           '--password=[redacted] /etc/cron.daily/passwd',
         ),
-        [
-          (1, 'passes a secret option'),
-          (2, 'mentions a private key'),
-          (3, 'holds a long base64 run'),
-        ],
+        [(1, 'mentions a private key'), (2, 'holds a long base64 run')],
       );
     });
 

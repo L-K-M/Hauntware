@@ -121,19 +121,38 @@ final _secretMask = _secrets.redact('token=x').substring('token='.length);
 
 final _privateKeyHeader = RegExp(r'-----BEGIN [A-Z ]*PRIVATE KEY-----');
 
-/// A shell word: quoted parts and unquoted characters, no whitespace.
-const _shellValue = r'''(?!\[redacted\])(?:"[^"\n]*"|'[^'\n]*'|[^\s"'])+''';
+/// A shell word: quoted parts and unquoted characters, no whitespace. A
+/// quote left open runs to the end of the line.
+const _shellValue = r'''(?!\[redacted\])(?:"[^"\n]*"?|'[^'\n]*'?|[^\s"'])+''';
+
+/// Whitespace within a line.
+const _blank = r'[^\S\n]';
+
+/// Words that make an assignment's name or an option's name secret.
+const _secretWord = 'PASS|PWD|SECRET|TOKEN|KEY|AUTH|CRED';
+
+/// Clients whose short option takes a password, as (program, option,
+/// gap): the MySQL clients' `-p<password>` (`-p` alone prompts), sshpass,
+/// the MongoDB tools, the OpenLDAP clients, redis-cli, zip and unzip,
+/// 7-Zip's `-p<password>`. Elsewhere these letters are ports and flags.
+const _passwordOptions = [
+  (r'(?:mysql|mariadb)[a-z-]*', '-p', ''),
+  ('sshpass', '-p', '$_blank*'),
+  ('mongo[a-z]*', '-p', '$_blank*'),
+  ('ldap[a-z]*', '-w', '$_blank*'),
+  ('redis-cli', '-a', '$_blank*'),
+  ('(?:un)?zip', '-P', '$_blank*'),
+  ('7z[arz]?', '-p', ''),
+];
 
 /// Credential shapes `SecretRedactor` misses, common in crontabs; the
-/// value after group 1 is replaced. An assignment to a name holding
-/// PASS, PWD, SECRET, TOKEN or KEY (`PGPASSWORD=`, `MYSQL_PWD=`), HTTP
-/// basic auth, curl's `-u user:password`, and the `-p<password>` of the
-/// MySQL clients and of sshpass. `-p` alone is a port or a flag in most
-/// programs and the MySQL clients' password prompt.
+/// value after group 1 is replaced. An assignment to a name or an option
+/// whose name holds a [_secretWord] (`PGPASSWORD=`, `--passphrase x`),
+/// HTTP basic auth, curl's `-u` and `-U user:password`, Samba's
+/// `-U user%password` and the [_passwordOptions].
 final _credentials = [
   RegExp(
-    '(?<![A-Za-z0-9_])([A-Za-z0-9_]*(?:PASS|PWD|SECRET|TOKEN|KEY)'
-    '[A-Za-z0-9_]*=)'
+    '(?<![A-Za-z0-9_])([A-Za-z0-9_]*(?:$_secretWord)[A-Za-z0-9_]*=)'
     '$_shellValue',
     caseSensitive: false,
   ),
@@ -142,15 +161,21 @@ final _credentials = [
     caseSensitive: false,
   ),
   RegExp(
-    '''(?<!\\S)(-u\\s*|--user[=\\s]\\s*)['"]?[^\\s:'"]+:(?!/)$_shellValue''',
+    r'(?<!\S)(-[uU]\s*|--(?:proxy-)?user[=\s]\s*)'
+    '''['"]?[^\\s:%'"]+[:%](?!/)$_shellValue''',
   ),
+  for (final (program, option, gap) in _passwordOptions)
+    RegExp(
+      '(?<![A-Za-z0-9])($program(?:$_blank+(?!$option)[^\\s|;&]+)*?'
+      '$_blank+$option$gap)$_shellValue',
+    ),
+  // Last, so that a client's `-pPassw0rd` is its value, not an option.
+  // A `--no-` option is a flag.
   RegExp(
-    r'(?<![A-Za-z0-9])((?:mysql|mariadb)[a-z-]*(?:\s+(?!-p)[^\s|;&]+)*?\s+-p)'
-    '$_shellValue',
-  ),
-  RegExp(
-    r'(?<![A-Za-z0-9])(sshpass\s+(?:-\S+\s+)*?-p\s*)'
-    '$_shellValue',
+    '(?<![A-Za-z0-9_-])(--?(?!-|no-)[A-Za-z0-9_-]*?(?:$_secretWord)'
+    '[A-Za-z0-9_-]*'
+    '(?:=|$_blank+))$_shellValue',
+    caseSensitive: false,
   ),
 ];
 
@@ -260,14 +285,6 @@ final _patterns = <(String, RegExp, String Function(Match))>[
 // text no rule rewrites, because a guess could hide what a parser needs.
 final _reviewPatterns = <(String, RegExp)>[
   ('mentions a private key', RegExp('private key', caseSensitive: false)),
-  (
-    'passes a secret option',
-    RegExp(
-      r'(?<![A-Za-z0-9])--?(pass(word)?|passwd|token|secret|api-?key)'
-      r'(\s+|=)(?!\[redacted\])\S',
-      caseSensitive: false,
-    ),
-  ),
   // Key material: 40 or more base64 characters mixing digits and both
   // cases, not starting a path.
   (

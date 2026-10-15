@@ -119,11 +119,11 @@ void main() {
 
   test('a line the review flags is reported, with file and line', () {
     final f = renderFixtureFiles(
-      _capture(cron: '== crontab ==\n0 3 * * * backup --password hunter2'),
+      _capture(cron: '== crontab ==\n0 3 * * * backup # its private key'),
       Redactor(const RedactionLiterals(userNames: ['anke'])),
       capturedAt: at,
     );
-    expect(f.residue.map((r) => '$r'), ['cron.txt:2: passes a secret option']);
+    expect(f.residue.map((r) => '$r'), ['cron.txt:2: mentions a private key']);
     expect(_text(f, 'probe.sections'), contains('user=user\ngroups=user sudo'));
   });
 

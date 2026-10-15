@@ -2357,16 +2357,17 @@ fragments (D48).
   hostnamectl's serial, asset-tag, pretty-name and location fields,
   email addresses, URL credentials, private-key headers, what
   `SecretRedactor` masks and the crontab credentials it misses (values
-  of names holding PASS, PWD, SECRET, TOKEN or KEY, HTTP basic auth,
-  `-u user:password`, the MySQL clients' and sshpass's `-p<password>`)
+  of assignments and options whose names hold PASS, PWD, SECRET, TOKEN,
+  KEY, AUTH or CRED, HTTP basic auth, `-u`/`-U user:password`, Samba's
+  `-U user%password`, the password options of the MySQL, MongoDB and
+  OpenLDAP clients, sshpass, redis-cli, zip and 7-Zip)
   become placeholders too (documentation
   addresses where an address is expected). In `procs` every command
   line keeps argv[0] up to its first space and the rest reads
   `[redacted]`: arguments carry secrets, process titles user names. A
   review then reads every file; a line that still holds a literal
-  outside a placeholder, a secret, a private-key mention, a
-  secret-valued option or 40 or more mixed base64 characters stops the
-  tool before it writes anything. A `.txt` fixture holds the payload
+  outside a placeholder, a secret, a private-key mention or 40 or more
+  mixed base64 characters stops the tool before it writes anything. A `.txt` fixture holds the payload
   only, so `SOURCE.md` records each section's status.
 
 ### 6.6 Portability matrix (CN-11 to CN-14)
