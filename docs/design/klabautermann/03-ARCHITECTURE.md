@@ -2517,16 +2517,11 @@ no longer holds that value.
   read does until lines arrive: waiting for an answer, the link, a
   channel or the foreground, reading, no lines, or the end's reason with
   the host's error text. A read still running when its tab hides stops
-  and starts over once shown. Since `RequestRejected` names no stream,
-  the controller gives a rejection of `OpenLogStream` to its oldest open
-  without an answer: exact while the engine refuses every open, and once
-  the log service is wired it refuses one outright only for a reused id,
-  which the app's counter never sends. A read closed before its answer
-  keeps its place until that answer arrives. This needs the controller
-  to send every `OpenLogStream` the app sends, since a second sender
-  with its own queue would also take each rejection as its own. Until
-  the service is wired, the page says unit logs are not available in
-  this version.
+  and starts over once shown. The read opens through the controller's
+  one owner of log streams, which the Logs panel shares and which gives
+  each rejection of `OpenLogStream` to the oldest open without an answer
+  (10.1). Until the service is wired, the page says unit logs are not
+  available in this version.
 
 ### 7.6 Logs (LOG)
 
@@ -4231,14 +4226,19 @@ the engine in `engine_isolate.dart` beside it):
   read denied, or failed) and the host's error output. Until the log
   service is wired, the engine rejects `OpenLogStream` and ignores
   `CloseStream`, since no stream is open.
-  On the app side (M2), `MonitoringController.logs` owns the run's
-  streams: it mints `log-N` ids, routes each stream's events to the
-  surface that opened it, and stops routing once that surface closes
-  the stream. It gives a rejection of `OpenLogStream` to the oldest open
-  with no event yet, and takes any stream's first event as answering
-  every open sent before it. That is only sound if the log service
-  answers each open it accepts with a `LogStreamState` before it
-  handles the next request, which it must therefore do.
+  On the app side (M2), `MonitoringController.logs` owns every stream
+  of the run, the Logs panel's and the bounded reads `openLogRead`
+  opens through it (SVC-04's unit logs, 7.5): it mints `log-N` ids,
+  routes each stream's events to the surface that opened it, and stops
+  routing once that surface closes the stream. It gives a rejection of
+  `OpenLogStream` to the oldest open with no event yet, a closed one
+  included, so a late rejection cannot land on a later open, and takes
+  any stream's first event as answering every open sent before it.
+  That is only sound if the log service answers each open it accepts
+  with a `LogStreamState` before it handles the next request, which it
+  must therefore do, and if nothing else in the app sends
+  `OpenLogStream`: a second sender with its own queue would take each
+  rejection as its own as well.
 - **`SetAppActivity(activity)`** is a request of its own and applies to
   every subscription, link and probe at once: 6.4 pauses everything while
   the app is in the background, and D34 adds the phones' grace period
