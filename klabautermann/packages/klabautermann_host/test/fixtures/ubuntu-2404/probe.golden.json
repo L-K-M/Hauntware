@@ -13,6 +13,7 @@
     "systemdVersion": 255,
     "virtualization": "vmware",
     "container": "none",
+    "lxcfsMounts": null,
     "uid": 1000,
     "user": "anke",
     "groups": [

@@ -27,6 +27,8 @@ packages/
 app/
   klabautermann_app/      Flutter client — NOT a workspace member (it needs
                           the Flutter SDK; members must not)
+test/integration/         integration fixture tools and the contract tests of
+                          the CI jobs that run them (03 §11.3, D53)
 docs/STATUS.md            what's done / tested / still open
 media-sources/            the owner-supplied master icon
 ```
@@ -48,6 +50,7 @@ for the app.
 dart pub get
 dart analyze packages/klabautermann_core
 dart test    packages/klabautermann_core
+dart test    test/integration
 
 # Flutter app
 cd app/klabautermann_app
@@ -97,6 +100,9 @@ after every Flutter upgrade: both fixes rely on private engine selectors.
   pass explicit package paths.
 - The Flutter app must stay **out** of the root `workspace:` list; it
   path-depends on the workspace members instead.
+- **`dart test` reads `dart_test.yaml` from the directory it runs in.**
+  CI and `scripts/test.sh` run the suites from `klabautermann/`, so a tag
+  or timeout a package declares must also be in `klabautermann/dart_test.yaml`.
 - **`pkill -f <name>` kills your own shell** when the pattern matches the
   bash command line running it. Kill by PID.
 - **file_picker ≥11 breaks APK builds** on AGP 9+ unless Kotlin is

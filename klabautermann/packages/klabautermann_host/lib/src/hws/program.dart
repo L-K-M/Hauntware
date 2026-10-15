@@ -28,7 +28,9 @@ const kSamplerStartCommand =
 /// Collector-set version carried by the READY marker (03 §6.3 "the program
 /// text is versioned"). Bumped whenever the shipped fragment set changes.
 /// Version 2 adds `procs`, `units`, `timers` and `cron` to the slow sampler.
-const kCollectorSetVersion = '2';
+/// Version 3 adds `dmesg` and `tail` to the probe's tool list, the probe's
+/// `lxcfs` area (D50) and the slow program's `HW_UTF8` check (D49).
+const kCollectorSetVersion = '3';
 
 /// The `timeout` guard applied to forking collectors (03 §6.2).
 const kCollectorTimeoutSeconds = 10;
@@ -116,6 +118,7 @@ String buildSamplerProgram({required SamplerKind kind, required String nonce}) {
   final b = StringBuffer()
     ..writeln('N=$nonce')
     ..writeln(_kHelpers);
+  if (kind == SamplerKind.slow) b.writeln(_kSlowLocale);
   for (final c in collectors) {
     b.writeln(collectorFragments[c]);
   }
@@ -242,6 +245,21 @@ hw_o() {
 }
 """;
 
+/// The slow program's locale decision (D49), made once at start so the
+/// program text stays a constant: `HW_UTF8` is 1 when `locale -a` lists
+/// C.UTF-8. A collector that renders text for people (A11Y-08) prefixes
+/// `LC_ALL=C.UTF-8` on its own command when it is set and otherwise keeps
+/// the sampler's `LC_ALL=C`; none of the version 3 collectors does yet.
+/// The probe's `locale` area reports the decision. The fast program runs
+/// builtin collectors only, forks nothing and so has no such check.
+const _kSlowLocale = r"""
+HW_UTF8=
+if command -v locale >/dev/null 2>&1 &&
+  hw_qrun locale -a </dev/null 2>/dev/null | grep -qiE '^C\.UTF-?8$'; then
+  HW_UTF8=1
+fi
+""";
+
 /// `overview` (03 §6.4): total `cpu` line of /proc/stat, filtered meminfo,
 /// /proc/loadavg, /proc/net/dev. Builtin reads only (03 §6.2 fork budget).
 const _kOverviewFragment = r"""
@@ -357,6 +375,7 @@ c_probe() {
   _probe_distro
   _probe_init
   _probe_virt
+  _probe_lxcfs
   _probe_id
   _probe_elev
   _probe_tools
@@ -417,6 +436,26 @@ _probe_virt() {
   _v=$(hw_qrun systemd-detect-virt </dev/null 2>&1); _vr=$?
   _c=$(hw_qrun systemd-detect-virt -c </dev/null 2>&1); _cr=$?
   psec virt ok "virt_rc=$_vr${NL}virt=$_v${NL}container_rc=$_cr${NL}container=$_c"
+}
+
+# The /proc paths that are fuse.lxcfs mounts (D50): inside a container
+# lxcfs serves the container's own figures for most of them, and
+# HostProfile.showsHostFigures names the exceptions. Builtins read
+# /proc/mounts (`<source> <mount point> <type> ...`); mount points escape
+# blanks as \040, so the space-joined list splits cleanly.
+_probe_lxcfs() {
+  if [ ! -r /proc/mounts ]; then
+    psec lxcfs error ''
+    return 0
+  fi
+  _st=ok; _o=''
+  while read -r _s _m _t _r; do
+    case $_t:$_m in
+      fuse.lxcfs:/proc/*)
+        _o="$_o $_m" ;;
+    esac
+  done </proc/mounts || _st=error
+  psec lxcfs "$_st" "mounts=${_o# }"
 }
 
 _probe_id() {
@@ -493,7 +532,7 @@ _probe_locale() {
     psec locale missing ''
     return 0
   fi
-  if hw_qrun locale -a </dev/null 2>/dev/null | grep -qiE '^C\.UTF-?8$'; then
+  if [ -n "$HW_UTF8" ]; then
     psec locale ok 'c_utf8=yes'
   else
     psec locale ok 'c_utf8=no'

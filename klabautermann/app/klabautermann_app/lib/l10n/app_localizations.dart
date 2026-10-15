@@ -628,6 +628,48 @@ abstract class AppLocalizations {
   /// **'unknown'**
   String get chartUnknownValue;
 
+  /// The label on a chart's hatched band for a period without data because Klabautermann was not running (03 §9.5).
+  ///
+  /// In en, this message translates to:
+  /// **'app closed'**
+  String get chartGapAppClosed;
+
+  /// The label on a chart's hatched band for a period without data because the app was in the background, where it stops sampling.
+  ///
+  /// In en, this message translates to:
+  /// **'in background'**
+  String get chartGapBackground;
+
+  /// The label on a chart's hatched band for a period without data because the connection to the server was down.
+  ///
+  /// In en, this message translates to:
+  /// **'disconnected'**
+  String get chartGapDisconnected;
+
+  /// A screen reader's description of a chart's band without data: when it began and ended, and why, one of chartGapAppClosed, chartGapBackground or chartGapDisconnected.
+  ///
+  /// In en, this message translates to:
+  /// **'No data from {start} to {end}: {reason}'**
+  String chartGapSummary(DateTime start, DateTime end, String reason);
+
+  /// A screen reader's description of a chart's band without data that has not ended: when it began and why, one of chartGapAppClosed, chartGapBackground or chartGapDisconnected.
+  ///
+  /// In en, this message translates to:
+  /// **'No data since {start}: {reason}'**
+  String chartGapOngoing(DateTime start, String reason);
+
+  /// A time label on a chart's time axis, to the minute, in the UI locale.
+  ///
+  /// In en, this message translates to:
+  /// **'{time}'**
+  String chartTime(DateTime time);
+
+  /// A time label on a chart's time axis, to the second, in the UI locale, for axes whose ticks are less than a minute apart.
+  ///
+  /// In en, this message translates to:
+  /// **'{time}'**
+  String chartTimeWithSeconds(DateTime time);
+
   /// A series' trend in its screen-reader summary: it has gone up over the chart's window.
   ///
   /// In en, this message translates to:

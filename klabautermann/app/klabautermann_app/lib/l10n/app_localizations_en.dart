@@ -346,6 +346,49 @@ class AppLocalizationsEn extends AppLocalizations {
   String get chartUnknownValue => 'unknown';
 
   @override
+  String get chartGapAppClosed => 'app closed';
+
+  @override
+  String get chartGapBackground => 'in background';
+
+  @override
+  String get chartGapDisconnected => 'disconnected';
+
+  @override
+  String chartGapSummary(DateTime start, DateTime end, String reason) {
+    final intl.DateFormat startDateFormat = intl.DateFormat.jms(localeName);
+    final String startString = startDateFormat.format(start);
+    final intl.DateFormat endDateFormat = intl.DateFormat.jms(localeName);
+    final String endString = endDateFormat.format(end);
+
+    return 'No data from $startString to $endString: $reason';
+  }
+
+  @override
+  String chartGapOngoing(DateTime start, String reason) {
+    final intl.DateFormat startDateFormat = intl.DateFormat.jms(localeName);
+    final String startString = startDateFormat.format(start);
+
+    return 'No data since $startString: $reason';
+  }
+
+  @override
+  String chartTime(DateTime time) {
+    final intl.DateFormat timeDateFormat = intl.DateFormat.jm(localeName);
+    final String timeString = timeDateFormat.format(time);
+
+    return '$timeString';
+  }
+
+  @override
+  String chartTimeWithSeconds(DateTime time) {
+    final intl.DateFormat timeDateFormat = intl.DateFormat.jms(localeName);
+    final String timeString = timeDateFormat.format(time);
+
+    return '$timeString';
+  }
+
+  @override
   String get chartTrendRising => 'rising';
 
   @override

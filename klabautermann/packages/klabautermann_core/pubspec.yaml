@@ -16,8 +16,8 @@ dependencies:
   # here in M2 and later; declared now so the dependency is fixed early.
   seance_core:
     path: ../../../seance/packages/seance_core
-  # Host sampling protocol, parsers and snapshot types (Collector,
-  # OverviewSnapshot) the engine protocol carries.
+  # Host sampling protocol, parsers, rate maths and the plain snapshot
+  # types the sampling results carry.
   klabautermann_host:
     path: ../klabautermann_host
   # Docker API client, models and parsers the engine drives for
