@@ -527,6 +527,33 @@ void main() {
       expect(engine.sentOfType<Disconnect>(), isEmpty);
       // The test binding fails a grace timer still pending here.
     });
+
+    test('a view that opens while it is gone connects only once it comes '
+        'back', () async {
+      monitoring.openServer('srv-1');
+      engine.emit(CatalogReplaced(const []));
+      await settle();
+      monitoring
+        ..leaveServer('srv-1')
+        ..openServer('srv-1');
+      expect(engine.sentOfType<Connect>(), hasLength(1));
+
+      engine.emit(CatalogReplaced([_entry('srv-1')]));
+      await settle();
+      expect(engine.sentOfType<Connect>(), hasLength(2));
+    });
+
+    test('the first fleet replays nothing: the views and surfaces open '
+        'before it were sent already', () async {
+      monitoring
+        ..openServer('srv-1')
+        ..subscribe('srv-1', 'overview', {SampleStream.core});
+      final sent = engine.sent.length;
+
+      engine.emit(CatalogReplaced([_entry('srv-1')]));
+      await settle();
+      expect(engine.sent, hasLength(sent));
+    });
   });
 
   test('the app activity reaches the engine only when it changes', () {
