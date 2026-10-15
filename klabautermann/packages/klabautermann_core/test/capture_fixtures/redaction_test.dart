@@ -137,6 +137,25 @@ void main() {
       );
     });
 
+    test('IPv6 before an unbracketed port and after a word', () {
+      // systemd's Accept=yes instance names print local and peer addresses
+      // as `<address>:<port>`.
+      expect(
+        _redact(
+          'sshd@3-2a01:4f8:c17:1234::1:22-2a02:8070:abcd:1::5:51234.service\n'
+          'x@4-12-2a01:4f8:c17:1234:1:2:3:4:22-2a02:807:a:1:2:3:4:5:51234.y\n'
+          'host:2a01:4f8:c17:1234::1 code:2a01::5 deadbeef:2a01::5',
+          collector: 'units',
+        ),
+        'sshd@3-2001:db8::1-2001:db8::1:51234.service\n'
+        'x@4-12-2001:db8::1:22-2001:db8::1:51234.y\n'
+        'host:2001:db8::1 code:2001:db8::1 deadbeef:2001:db8::1',
+      );
+      // Still no address: the tail of a longer colon run, a C++ name.
+      const runs = 'a:b:c:d:e:f:1:2:3:4 std::abc a:b::c:12345678';
+      expect(_redact(runs), runs);
+    });
+
     test('MAC, UUID, hex ids and email addresses', () {
       expect(
         _redact(

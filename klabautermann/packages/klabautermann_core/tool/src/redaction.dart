@@ -274,9 +274,13 @@ final _patterns = <(String, RegExp, String Function(Match))>[
   (
     'IPv6 address',
     RegExp(
-      r'(?<![0-9A-Za-z:])(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|'
+      // Not inside a longer colon run, but after a word's `:`, and before
+      // a port printed without brackets (systemd's socket instance names).
+      r'(?<![0-9A-Za-z]|(?<![0-9A-Za-z])[0-9a-fA-F]{1,4}:|::)'
+      r'(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|'
       r'([0-9a-fA-F]{1,4}:){1,7}:([0-9a-fA-F]{1,4}(:[0-9a-fA-F]{1,4}){0,6})?|'
-      r'::[0-9a-fA-F]{1,4}(:[0-9a-fA-F]{1,4}){0,6})(?![0-9A-Za-z:]|\.\d)',
+      r'::[0-9a-fA-F]{1,4}(:[0-9a-fA-F]{1,4}){0,6})'
+      r'(?=(:\d{1,5})?(?![0-9A-Za-z:]|\.\d))',
     ),
     (m) => m[0] == '::1' ? '::1' : _ipv6Placeholder,
   ),
