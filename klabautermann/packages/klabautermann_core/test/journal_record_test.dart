@@ -105,9 +105,21 @@ void main() {
   });
 
   test('each syslog severity maps to its priority', () async {
-    for (final priority in LogPriority.values) {
-      final record = await crossed('{"PRIORITY":"${priority.index}"}');
-      expect(record.priority, priority);
+    // Literal numbers (RFC 5424), so reordering LogPriority fails here.
+    const severities = {
+      '0': LogPriority.emergency,
+      '1': LogPriority.alert,
+      '2': LogPriority.critical,
+      '3': LogPriority.error,
+      '4': LogPriority.warning,
+      '5': LogPriority.notice,
+      '6': LogPriority.info,
+      '7': LogPriority.debug,
+    };
+    expect(severities.values.toSet(), LogPriority.values.toSet());
+    for (final MapEntry(key: number, value: priority) in severities.entries) {
+      final record = await crossed('{"PRIORITY":"$number"}');
+      expect(record.priority, priority, reason: 'PRIORITY $number');
     }
     expect((await crossed('{"PRIORITY":"warning"}')).priority, isNull);
   });
