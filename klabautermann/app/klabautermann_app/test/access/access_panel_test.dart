@@ -18,6 +18,10 @@ import 'profiles.dart';
 const _desktop = Size(1280, 800);
 const _phone = Size(390, 800);
 
+const _notChecked =
+    'Not checked yet. Klabautermann checks access after it connects to this '
+    'server.';
+
 /// Pumps the app at [size], opens web-1 (srv-1) and, when [profile] is
 /// given, delivers it as the probe's answer.
 Future<AppHarness> _openWeb1(
@@ -83,11 +87,13 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Root-equivalent access'), findsOneWidget);
+    expect(find.text(_notChecked), findsOneWidget);
     expect(find.text('Unknown'), findsNWidgets(AccessItem.values.length));
     expect(find.text('Copy command'), findsNothing);
 
     harness.engine.emit(HostProfileChanged('srv-1', debianHost()));
     await tester.pumpAndSettle();
+    expect(find.text(_notChecked), findsNothing);
 
     // State in a word and an icon shape, never colour alone; the row is one
     // node in reading order.
@@ -142,7 +148,11 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(copied, ['sudo usermod -aG systemd-journal alice']);
-    expect(find.text('Copied. Run it yourself on the server.'), findsOneWidget);
+    const confirmation = 'Copied. Run it yourself on the server.';
+    expect(
+      tester.getSemantics(find.text(confirmation)),
+      containsSemantics(label: confirmation, isLiveRegion: true),
+    );
     expect(harness.engine.sent, sentBefore);
   });
 
@@ -184,6 +194,39 @@ void main() {
     expect(find.text(unknown), findsNothing);
   });
 
+  testWidgets('words the systemd tiers with the version', (tester) async {
+    final engine = FakeEngineClient();
+    final monitoring = MonitoringController(engine);
+    addTearDown(() async {
+      monitoring.dispose();
+      await engine.close();
+    });
+    await tester.pumpWidget(
+      _frame(
+        Brightness.light,
+        AccessPanel(monitoring: monitoring, serverId: 'srv-1'),
+      ),
+    );
+
+    for (final (version, wording) in [
+      (
+        240,
+        'Version 240: older than 246, so unit and timer lists are read from '
+            'text output.',
+      ),
+      (238, 'Version 238 is older than any tested version (239).'),
+    ]) {
+      engine.emit(
+        HostProfileChanged(
+          'srv-1',
+          debianHost(overrides: {'systemdVersion': version}),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text(wording), findsOneWidget);
+    }
+  });
+
   testWidgets('hides a panel the host cannot serve and links to the '
       'Access tab', (tester) async {
     final harness = await _openWeb1(
@@ -216,11 +259,16 @@ void main() {
 
   testWidgets('gates the Docker tab and shows the detected runtime '
       'read-only', (tester) async {
-    await _openWeb1(tester, _desktop, profile: alpineContainer());
+    final harness = await _openWeb1(tester, _desktop);
     await _openTab(tester, 'Docker');
 
     expect(find.text('Arrives with Docker support'), findsOneWidget);
     expect(find.text('Detected runtime'), findsOneWidget);
+    expect(find.text(_notChecked), findsOneWidget);
+
+    harness.engine.emit(HostProfileChanged('srv-1', alpineContainer()));
+    await tester.pumpAndSettle();
+    expect(find.text(_notChecked), findsNothing);
     expect(
       find.text('Podman, rootless at /run/user/0/podman/podman.sock'),
       findsOneWidget,
