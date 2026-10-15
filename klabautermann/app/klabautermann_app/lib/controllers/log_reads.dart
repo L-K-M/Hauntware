@@ -86,6 +86,9 @@ final class LogRead extends ChangeNotifier {
 /// one outright only for a stream id an earlier open used, which a
 /// counter never repeats. A read closed before its answer keeps its place
 /// until the answer arrives, so a late rejection cannot land on the next.
+/// All of this needs every [OpenLogStream] the app sends to go through
+/// here: a second sender keeping its own queue would also take each
+/// rejection as its own.
 final class LogReads {
   LogReads(this._send);
 

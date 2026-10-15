@@ -2419,8 +2419,11 @@ no longer holds that value.
   without an answer: exact while the engine refuses every open, and once
   the log service is wired it refuses one outright only for a reused id,
   which the app's counter never sends. A read closed before its answer
-  keeps its place until that answer arrives. Until the service is wired,
-  the page says unit logs are not available in this version.
+  keeps its place until that answer arrives. This needs the controller
+  to send every `OpenLogStream` the app sends, since a second sender
+  with its own queue would also take each rejection as its own. Until
+  the service is wired, the page says unit logs are not available in
+  this version.
 
 ### 7.6 Logs (LOG)
 
