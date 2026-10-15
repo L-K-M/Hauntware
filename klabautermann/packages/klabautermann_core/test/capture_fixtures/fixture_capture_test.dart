@@ -1,0 +1,241 @@
+// Fixture rendering of the capture tool (03 §6.5): the files
+// klabautermann_host's fixture test reads, SOURCE.md, the review that
+// blocks a write, the platform id, the literals and the overwrite guard.
+import 'dart:convert';
+import 'dart:io';
+import 'dart:typed_data';
+
+import 'package:klabautermann_host/klabautermann_host.dart';
+import 'package:test/test.dart';
+
+import '../../tool/src/fixture_capture.dart';
+import '../../tool/src/local_sampler.dart';
+import '../../tool/src/redaction.dart';
+
+HwsSection _section(String name, String payload, [SectionStatus? status]) =>
+    HwsSection(
+      name,
+      status ?? SectionStatus.ok,
+      Uint8List.fromList(utf8.encode(payload)),
+    );
+
+Capture _capture({
+  String distro = 'ID=ubuntu\nVERSION_ID="24.04"',
+  String cron = 'cron at 10.0.0.7',
+  String? identity,
+}) => Capture(
+  const SamplerLaunch.stdinShell('dash'),
+  {
+    for (final c in kFixtureCollectors)
+      c: _section(c.wireName, switch (c) {
+        Collector.cron => cron,
+        Collector.identity when identity != null => identity,
+        _ => '== x ==\n${c.wireName} at 10.0.0.7',
+      }, c == Collector.units ? SectionStatus.error : null),
+  },
+  [
+    _section('probe_kernel', 'Linux 6.1.0 x86_64'),
+    _section('probe_distro', distro),
+    _section('probe_identity', 'uid=1000\nuser=anke\ngroups=anke sudo'),
+    _section('probe_session', 'hw_timeout=absent\nssh_connection='),
+  ],
+);
+
+HostProfile _profile(String distro) => _capture(distro: distro).profile;
+
+String _text(FixtureFiles f, String name) => utf8.decode(f.files[name]!);
+
+FixtureFiles _files(Map<String, List<int>> files) =>
+    FixtureFiles(files, const {}, const []);
+
+void main() {
+  final redactor = Redactor(const RedactionLiterals());
+  final at = DateTime.utc(2026, 10, 14);
+
+  test('the fixture collectors are the tick collectors but the probe', () {
+    expect(kFixtureCollectors.map((c) => c.wireName), [
+      'overview',
+      'core',
+      'fs',
+      'identity',
+      'procs',
+      'units',
+      'timers',
+      'cron',
+    ]);
+  });
+
+  test('renders every fixture file, redacted, with a final newline', () {
+    final f = renderFixtureFiles(_capture(), redactor, capturedAt: at);
+    expect(f.files.keys, {
+      for (final c in kFixtureCollectors) '${c.wireName}.txt',
+      'probe.sections',
+      'SOURCE.md',
+    });
+    expect(_text(f, 'procs.txt'), '== x ==\nprocs at 192.0.2.1\n');
+    expect(f.counts, {'IPv4 address': 8});
+    expect(f.residue, isEmpty);
+  });
+
+  test('probe.sections holds one ### block per area, marker stripped', () {
+    final f = renderFixtureFiles(_capture(), redactor, capturedAt: at);
+    expect(
+      _text(f, 'probe.sections'),
+      '### kernel ok\nLinux 6.1.0 x86_64\n'
+      '### distro ok\nID=ubuntu\nVERSION_ID="24.04"\n'
+      '### identity ok\nuid=1000\nuser=anke\ngroups=anke sudo\n'
+      '### session ok\nssh_connection=\n',
+    );
+  });
+
+  test('a probe line that reads as a block header is refused', () {
+    expect(
+      () => renderFixtureFiles(
+        _capture(distro: 'ID=x\n### kernel ok'),
+        redactor,
+        capturedAt: at,
+      ),
+      throwsA(isA<CaptureFailure>()),
+    );
+  });
+
+  test('SOURCE.md records the launch, statuses and redaction', () {
+    final source = _text(
+      renderFixtureFiles(_capture(), redactor, capturedAt: at),
+      'SOURCE.md',
+    );
+    expect(source, contains('Captured on 2026-10-14'));
+    expect(source, contains('`dash -s`'));
+    expect(source, contains('| `units` | error |'));
+    expect(source, contains('| `overview` | ok |'));
+    expect(
+      source,
+      contains('Probe areas: kernel ok, distro ok, identity ok, session ok.'),
+    );
+    expect(source, contains('Redaction (03 §6.5): IPv4 address 8.'));
+  });
+
+  test('a line the review flags is reported, with file and line', () {
+    final f = renderFixtureFiles(
+      _capture(cron: '== crontab ==\n0 3 * * * backup --password hunter2'),
+      Redactor(const RedactionLiterals(userNames: ['anke'])),
+      capturedAt: at,
+    );
+    expect(f.residue.map((r) => '$r'), ['cron.txt:2: passes a secret option']);
+    expect(_text(f, 'probe.sections'), contains('user=user\ngroups=user sudo'));
+  });
+
+  test('platform id from os-release, as the fixture directories name it', () {
+    for (final (distro, id) in [
+      ('ID=ubuntu\nVERSION_ID="24.04"', 'ubuntu-2404'),
+      ('ID=debian\nVERSION_ID="12"', 'debian-12'),
+      ('ID="rhel"\nID_LIKE="fedora"\nVERSION_ID="8.10"', 'rhel-8'),
+      ('ID="rocky"\nID_LIKE="rhel centos fedora"\nVERSION_ID="9.4"', 'rocky-9'),
+      ('ID=alpine\nVERSION_ID=3.22.1', 'alpine-322'),
+      ('ID=arch', null),
+      ('ID=../x\nVERSION_ID=1', null),
+    ]) {
+      expect(platformIdFor(_profile(distro)), id, reason: distro);
+    }
+    expect(isPlatformId('debian-12-lxc'), isTrue);
+    expect(isPlatformId('../x'), isFalse);
+  });
+
+  test('literals: host names, personal accounts, no generic names', () {
+    final literals = captureLiterals(
+      _profile('ID=ubuntu\nVERSION_ID="24.04"'),
+      hostNames: ['web1.corp.example.org', 'localhost', 'ubuntu'],
+      home: '/home/anke',
+      passwd:
+          'root:x:0:0:root:/root:/bin/bash\n'
+          'ubuntu:x:1001:1001::/home/ubuntu:/bin/sh\n'
+          'bob:x:1002:1002:Bob,,,:/srv/bob:/bin/bash\n'
+          'nobody:x:65534:65534::/nonexistent:/usr/sbin/nologin\n'
+          'broken line\n',
+      extra: ['nas07'],
+    );
+    expect(literals.hostNames, ['web1.corp.example.org', 'web1']);
+    expect(literals.userNames, ['anke', 'bob']);
+    expect(literals.homeDirs, ['/home/anke', '/srv/bob']);
+    expect(literals.extra, ['nas07']);
+  });
+
+  test('host names from hostnamectl in the identity section', () {
+    expect(
+      _capture(
+        identity:
+            '== hostnamectl ==\n'
+            '{"Hostname":"web1","StaticHostname":"web1.corp.example.org",'
+            '"PrettyHostname":"Web 1","DefaultHostname":"localhost"}',
+      ).hostNames,
+      ['web1', 'web1.corp.example.org'],
+    );
+    expect(_capture().hostNames, isEmpty);
+  });
+
+  test('an existing platform directory needs replace, which empties it', () {
+    final root = Directory.systemTemp.createTempSync('klab-fixtures-');
+    addTearDown(() => root.deleteSync(recursive: true));
+    final dir = Directory('${root.path}/p');
+    expect(
+      writeFixtureDir(
+        dir,
+        _files({
+          'a.txt': [0x61],
+          'old.txt': [0x6f],
+          'a.golden.json': [0x7b, 0x7d],
+        }),
+        replace: false,
+      ),
+      isEmpty,
+    );
+    expect(
+      () => writeFixtureDir(
+        dir,
+        _files({
+          'a.txt': [0x62],
+        }),
+        replace: false,
+      ),
+      throwsA(isA<CaptureFailure>()),
+    );
+    expect(
+      writeFixtureDir(
+        dir,
+        _files({
+          'a.txt': [0x62],
+        }),
+        replace: true,
+      ),
+      ['old.txt'],
+    );
+    expect(dir.listSync().map((e) => e.uri.pathSegments.last), ['a.txt']);
+    expect(File('${dir.path}/a.txt').readAsStringSync(), 'b');
+  });
+
+  test('residue writes nothing, not even with replace', () {
+    final root = Directory.systemTemp.createTempSync('klab-fixtures-');
+    addTearDown(() => root.deleteSync(recursive: true));
+    final flagged = renderFixtureFiles(
+      _capture(cron: 'Description=Load the private key'),
+      redactor,
+      capturedAt: at,
+    );
+    expect(flagged.residue, isNotEmpty);
+
+    final fresh = Directory('${root.path}/fresh');
+    expect(
+      () => writeFixtureDir(fresh, flagged, replace: false),
+      throwsA(isA<CaptureFailure>()),
+    );
+    expect(fresh.existsSync(), isFalse);
+
+    final kept = Directory('${root.path}/kept')..createSync();
+    File('${kept.path}/core.txt').writeAsStringSync('old');
+    expect(
+      () => writeFixtureDir(kept, flagged, replace: true),
+      throwsA(isA<CaptureFailure>()),
+    );
+    expect(File('${kept.path}/core.txt').readAsStringSync(), 'old');
+  });
+}

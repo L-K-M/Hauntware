@@ -2340,6 +2340,26 @@ fragments (D48).
   wrapped `df` lines; Swarm task names (ServerBox #1226 [R]).
 - The diagnostic bundle (CN-18, v1) exports the same raw format, redacted
   by `SecretRedactor`, so a user report becomes a fixture.
+- Capture redaction: the host's names (kernel, `/etc/hostname`,
+  hostnamectl) and each FQDN's first label, the names and home
+  directories of personal accounts (uid 1000 to 60000, login.defs'
+  defaults) and `--redact` values become fixed placeholders, names as
+  whole words in any case; `localhost` and the os-release `ID` and
+  `ID_LIKE` words stay, as fixtures need them. IPv4 and IPv6 addresses
+  other than loopback and `0.0.0.0`, MAC addresses (also in `enx`/`wlx`
+  names), UUIDs, hex ids of 32 or more digits (machine and boot ids),
+  `/dev/disk/by-id/` names, network mount servers in `fs`,
+  hostnamectl's serial, asset-tag, pretty-name and location fields,
+  email addresses, URL credentials, private-key headers and what
+  `SecretRedactor` masks become placeholders too (documentation
+  addresses where an address is expected). In `procs` every command
+  line keeps argv[0] up to its first space and the rest reads
+  `[redacted]`: arguments carry secrets, process titles user names. A
+  review then reads every file; a line that still holds a literal
+  outside a placeholder, a secret, a private-key mention, a
+  secret-valued option or 40 or more mixed base64 characters stops the
+  tool before it writes anything. A `.txt` fixture holds the payload
+  only, so `SOURCE.md` records each section's status.
 
 ### 6.6 Portability matrix (CN-11 to CN-14)
 
