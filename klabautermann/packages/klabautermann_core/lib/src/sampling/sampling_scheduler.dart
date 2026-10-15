@@ -169,8 +169,9 @@ final class SamplingScheduler {
   }
 
   /// Follows a new [SamplingSubscriptions.profile]: periods change at
-  /// the next aligned tick, and owed on-demand reads lapse once the
-  /// profile reads those streams on its own.
+  /// the next aligned tick, a stream not read yet stays due at once, and
+  /// owed on-demand reads lapse once the profile reads those streams on
+  /// its own.
   void profileChanged() {
     final profile = _subscriptions.profile;
     for (final server in _servers.values) {
@@ -183,10 +184,12 @@ final class SamplingScheduler {
       for (final stream in run.streams) {
         final period = samplingPeriod(stream, profile);
         if (period != null) {
-          if (!run.due.containsKey(stream)) run.unread.add(stream);
-          run.due[stream] = run.due.containsKey(stream)
-              ? _aligned(run.epoch, period, now)
-              : now;
+          if (!run.due.containsKey(stream)) {
+            run.unread.add(stream);
+            run.due[stream] = now;
+          } else if (!run.unread.contains(stream)) {
+            run.due[stream] = _aligned(run.epoch, period, now);
+          }
         } else if (_onDemand(stream) && !server.owed.contains(stream)) {
           run.due.remove(stream);
         }

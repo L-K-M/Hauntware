@@ -2310,7 +2310,8 @@ the due streams of one sampler go out as one tick, `procs` first. While
 `core` is subscribed, `overview` rides on its ticks, and `failedUnits`
 rides on those of `units`, since one reply serves both. A stream newly
 subscribed is read at once, and a new profile takes over at each
-stream's next aligned tick. `identity` is read once per link, and a
+stream's next aligned tick (one not read yet stays due at once).
+`identity` is read once per link, and a
 stream the profile reads on demand once per `Subscribe` naming it
 (10.1); such a read that brings no reply is tried again after 15 s [E].
 Due times follow a monotonic clock, so a changed wall clock cannot stall

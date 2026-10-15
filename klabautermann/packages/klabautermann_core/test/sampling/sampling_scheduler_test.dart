@@ -250,6 +250,20 @@ void main() {
     ]);
   });
 
+  test('a new profile leaves streams not read yet due at once', () async {
+    link.stalled.add(_slow);
+    subscribe({SampleStream.core, SampleStream.fs});
+    await clock.elapse(const Duration(seconds: 1));
+    subscriptions.profile = CadenceProfile.cellularSaver;
+    scheduler.profileChanged();
+
+    final slow = link.running.singleWhere((p) => p.kind == _slow);
+    link.stalled.clear();
+    slow.answer(slow.held.single);
+    await settle();
+    expect(samples(), unorderedEquals(['core@1', 'fs@1']));
+  });
+
   test(
     'the cellular saver reads timers and cron once per Subscribe naming '
     'them, a repeat included, also one sent while the link is down',
