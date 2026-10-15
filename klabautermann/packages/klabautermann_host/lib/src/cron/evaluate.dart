@@ -4,6 +4,8 @@
 /// are detected as offset jumps and annotated so the UI can mark runs
 /// that fire inside a spring-forward gap, in the first pass of a
 /// fall-back overlap, or otherwise within an hour of a transition (D57).
+/// A line follows the server's clock or, under `CRON_TZ`, its own
+/// zone's ([CronClock]).
 library;
 
 import 'package:meta/meta.dart';
@@ -34,6 +36,23 @@ final class ServerZone {
       offsetAt?.call(utcInstant) ?? offset;
 }
 
+/// Which clock a cron line's schedule follows across DST transitions
+/// (03 §7.7, D57), after cronie's `find_jobs` [R: cron.c].
+enum CronClock {
+  /// The cron daemon's own clock in the server's zone, for a line
+  /// without `CRON_TZ`. A fixed-time job runs the minutes a forward jump
+  /// skips at the jump, and a backward jump's repeated minutes once.
+  server,
+
+  /// The line's `CRON_TZ` zone. cron converts each minute of its own
+  /// clock into that zone and matches there, so a fixed-time job misses
+  /// the minutes the zone's forward jump skips and matches the minutes
+  /// its backward jump repeats twice. While the server's zone repeats an
+  /// hour, cron runs no fixed-time job at all, which leaves one run when
+  /// both zones fall back at the same instant.
+  line,
+}
+
 /// DST annotation for one predicted run (03 §7.7).
 enum CronDst {
   /// An ordinary wall-clock minute.
@@ -41,15 +60,22 @@ enum CronDst {
 
   /// The wall minute is skipped by a forward transition; a fixed-time
   /// job fires at the transition instant, which is cronie's gap behavior.
+  /// A [CronClock.line] job misses the minute instead, so its runs never
+  /// carry this mark.
   gap,
 
   /// The wall minute occurs twice around a backward transition; a
-  /// fixed-time job fires at the first occurrence only.
+  /// fixed-time job fires at the first occurrence only. A
+  /// [CronClock.line] job does so only when the second occurrence falls
+  /// in the server zone's repeated hour; otherwise it fires twice, each
+  /// run marked [nearTransition].
   overlap,
 
-  /// An ordinary wall minute within an hour of a transition. The
+  /// An ordinary wall minute within an hour of a transition, of the
+  /// line's zone or, for a [CronClock.line] job, the server's. The
   /// client's zone database may place the transition elsewhere than the
-  /// server's, which cron reads, so the run may fire an hour off (D57).
+  /// server's, which cron reads, so the run may fire an hour off, or
+  /// not at all near the server zone's fall-back (D57).
   nearTransition,
 }
 
@@ -84,8 +110,13 @@ final class CronRun {
 }
 
 /// Lists up to [count] runs of [expression] strictly after [afterUtc]
-/// (03 §7.7). Never throws: a reboot expression or a nonpositive count
-/// yields an empty list, and the scan gives up after [horizonDays].
+/// (03 §7.7) by [clock] in [zone]: the server's zone for
+/// [CronClock.server], the line's for [CronClock.line]. A line clock
+/// takes the server's zone as [serverZone], whose repeated hours hold
+/// back fixed-time runs and whose transitions mark the runs near them;
+/// null when it is unknown, which does neither. Never throws: a reboot
+/// expression or a nonpositive count yields an empty list, and the scan
+/// gives up after [horizonDays].
 ///
 /// Stepping happens in instants: days that cannot match jump to the next
 /// wall day that can, matching days walk minute by minute, and a wall-clock
@@ -102,14 +133,24 @@ List<CronRun> nextCronRuns(
   CronExpression expression, {
   required DateTime afterUtc,
   required ServerZone zone,
+  CronClock clock = CronClock.server,
+  ServerZone? serverZone,
   int count = 5,
   int horizonDays = 3653,
 }) {
+  assert(
+    clock == CronClock.line || serverZone == null,
+    'the server clock runs in zone; only a line clock takes serverZone',
+  );
   final runs = <CronRun>[];
   if (expression.isReboot || count <= 0 || horizonDays <= 0) return runs;
 
   final limit = afterUtc.add(Duration(days: horizonDays));
   final wildcard = expression.hasWildcardTime;
+  // cron catches up only its own clock's gaps, and its repeated hour
+  // holds back every fixed-time job, whatever zone the line names.
+  final catchUp = !wildcard && clock == CronClock.server;
+  final server = clock == CronClock.server ? zone : serverZone;
   var t = _afterMinute(afterUtc);
   // The wall clock one minute before [t]: a forward jump into [t] runs
   // its skipped minutes at [t] even when [t] is the first instant.
@@ -118,7 +159,7 @@ List<CronRun> nextCronRuns(
     final offset = zone.offsetFor(t);
     final wallMs = t.millisecondsSinceEpoch + offset.inMilliseconds;
     final wall = DateTime.fromMillisecondsSinceEpoch(wallMs, isUtc: true);
-    if (!wildcard) {
+    if (catchUp) {
       final advance = wallMs - prevWallMs;
       if (advance > 60000 && advance <= _maxGapMs) {
         // Forward jump: skipped wall minutes that match fire at the
@@ -159,12 +200,16 @@ List<CronRun> nextCronRuns(
           : _wallMsAt(zone, t.subtract(_minute));
       continue;
     }
-    // A fixed-time job's minute in the repeated pass has already run.
+    // cron runs no fixed-time job in its repeated pass: on its own
+    // clock, that minute has already run.
     if (expression.matches(wall) &&
-        (wildcard || !_repeatOf(zone, t, wallMs, offset))) {
-      final dst = !wildcard && _repeatsWithin(zone, t, wallMs, offset)
+        (wildcard || server == null || !_repeatedPass(server, t))) {
+      final second = wildcard ? null : _secondPass(zone, t, wallMs, offset);
+      final dst =
+          second != null && server != null && _repeatedPass(server, second)
           ? CronDst.overlap
-          : _nearTransition(zone, t)
+          : _nearTransition(zone, t) ||
+                (server != null && _nearTransition(server, t))
           ? CronDst.nearTransition
           : CronDst.none;
       _emit(runs, wallMs, t, offset, dst, count);
@@ -233,26 +278,32 @@ bool _nearTransition(ServerZone zone, DateTime t) =>
 
 const _hour = Duration(hours: 1);
 
-/// True when [wallMs] already occurred within 4 hours before instant
-/// [t]: [t] lies in the repeated pass of a backward transition, whose
-/// first pass ran at the earlier offset.
-bool _repeatOf(ServerZone zone, DateTime t, int wallMs, Duration offNow) {
+/// True when [zone]'s wall clock at instant [t] already occurred within
+/// 4 hours before: [t] lies in the repeated pass of a backward
+/// transition, whose first pass ran at the earlier offset.
+bool _repeatedPass(ServerZone zone, DateTime t) {
+  final offNow = zone.offsetFor(t);
   final offBefore = zone.offsetFor(t.subtract(const Duration(hours: 4)));
   if (offBefore <= offNow) return false;
   final first = DateTime.fromMillisecondsSinceEpoch(
-    wallMs - offBefore.inMilliseconds,
+    t.millisecondsSinceEpoch + offNow.inMilliseconds - offBefore.inMilliseconds,
     isUtc: true,
   );
   return first.isBefore(t) && zone.offsetFor(first) == offBefore;
 }
 
-/// True when [wallMs] occurs a second time within 4 hours after instant
-/// [t] — a backward offset transition repeats the wall interval
-/// `[t_s + offNew, t_s + offOld)`.
-bool _repeatsWithin(ServerZone zone, DateTime t, int wallMs, Duration offNow) {
+/// The instant [wallMs] occurs a second time within 4 hours after
+/// instant [t], or null: a backward offset transition at `t_s` repeats
+/// the wall interval `[t_s + offNew, t_s + offOld)`.
+DateTime? _secondPass(
+  ServerZone zone,
+  DateTime t,
+  int wallMs,
+  Duration offNow,
+) {
   final probeEnd = t.add(const Duration(hours: 4));
   final offEnd = zone.offsetFor(probeEnd);
-  if (offEnd >= offNow) return false;
+  if (offEnd >= offNow) return null;
   // The offset decreases inside the window: find the transition instant
   // (the first minute carrying a different offset).
   for (
@@ -264,7 +315,11 @@ bool _repeatsWithin(ServerZone zone, DateTime t, int wallMs, Duration offNow) {
     if (o == offNow) continue;
     final repStart = tt.millisecondsSinceEpoch + o.inMilliseconds;
     final repEnd = tt.millisecondsSinceEpoch + offNow.inMilliseconds;
-    return wallMs >= repStart && wallMs < repEnd;
+    if (wallMs < repStart || wallMs >= repEnd) return null;
+    return DateTime.fromMillisecondsSinceEpoch(
+      wallMs - o.inMilliseconds,
+      isUtc: true,
+    );
   }
-  return false;
+  return null;
 }

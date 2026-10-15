@@ -261,6 +261,72 @@ void main() {
     ]);
   });
 
+  test('a line clock follows its zone under the server\'s repeats', () {
+    // A CRON_TZ line (D57) under modelled Berlin, which repeats
+    // 01:00Z to 02:00Z on 2026-10-25. Modelled New York (-5, -4 from
+    // 2026-03-08T07:00Z to 2026-11-01T06:00Z) falls back apart from
+    // it; modelled London (+0, +1 over Berlin's window) with it.
+    final newYork = _dstZone(
+      -5,
+      DateTime.utc(2026, 3, 8, 7),
+      DateTime.utc(2026, 11, 1, 6),
+    );
+    final london = _dstZone(
+      0,
+      DateTime.utc(2026, 3, 29, 1),
+      DateTime.utc(2026, 10, 25, 1),
+    );
+    final utc = _fixed(0);
+    List<(DateTime, CronDst)> line(
+      String text,
+      DateTime after,
+      ServerZone zone, {
+      bool serverKnown = true,
+    }) => [
+      for (final r in nextCronRuns(
+        CronExpression.parse(text)!,
+        afterUtc: after,
+        zone: zone,
+        clock: CronClock.line,
+        serverZone: serverKnown ? _berlinZone() : null,
+        count: 3,
+      ))
+        (r.atUtc, r.dst),
+    ];
+
+    // The line zone's gap is missed: 02:30 next runs on 2026-03-09.
+    expect(line('30 2 * * *', DateTime.utc(2026, 3, 7, 12), newYork).first, (
+      DateTime.utc(2026, 3, 9, 6, 30),
+      CronDst.none,
+    ));
+    // Its repeated 01:30 runs twice, or once in the server's window.
+    expect(line('30 1 * * *', DateTime.utc(2026, 10, 31, 12), newYork), [
+      (DateTime.utc(2026, 11, 1, 5, 30), CronDst.nearTransition),
+      (DateTime.utc(2026, 11, 1, 6, 30), CronDst.nearTransition),
+      (DateTime.utc(2026, 11, 2, 6, 30), CronDst.none),
+    ]);
+    expect(line('30 1 * * *', DateTime.utc(2026, 10, 24, 12), london), [
+      (DateTime.utc(2026, 10, 25, 0, 30), CronDst.overlap),
+      (DateTime.utc(2026, 10, 26, 1, 30), CronDst.none),
+      (DateTime.utc(2026, 10, 27, 1, 30), CronDst.none),
+    ]);
+    // A wildcard job runs in the server's window, a fixed-time one not;
+    // without a known server zone nothing marks or drops them.
+    final window = DateTime.utc(2026, 10, 25, 0, 45);
+    expect(line('30 * * * *', window, utc).first, (
+      DateTime.utc(2026, 10, 25, 1, 30),
+      CronDst.nearTransition,
+    ));
+    expect(line('30 0-23 * * *', window, utc).first, (
+      DateTime.utc(2026, 10, 25, 2, 30),
+      CronDst.none,
+    ));
+    expect(line('30 0-23 * * *', window, utc, serverKnown: false).first, (
+      DateTime.utc(2026, 10, 25, 1, 30),
+      CronDst.none,
+    ));
+  });
+
   test('@reboot and nonpositive counts yield no runs', () {
     expect(
       nextCronRuns(

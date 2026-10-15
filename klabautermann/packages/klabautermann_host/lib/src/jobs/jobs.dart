@@ -206,12 +206,14 @@ typedef CronZoneResolver = ServerZone? Function(String timeZone);
 ///
 /// Cron lines run in [zone], the server zone from the probe, unless a
 /// `CRON_TZ` applies: [zoneFor] resolves it first, then a name equal to
-/// the server zone's or a UTC alias. A null [zone] means the server zone
-/// is unknown, and lines without a `CRON_TZ` list no runs. Each lists up
-/// to [runCount] runs strictly after [nowUtc]; with an [evaluateLimit],
-/// only that many lines in payload order get their runs evaluated, and
-/// later ones give [JobRunsUnknown.notEvaluated]. Pure; throws only for
-/// a nonpositive [runCount], a caller error.
+/// the server zone's or a UTC alias, and the line follows that zone's
+/// clock under [zone]'s repeated hours ([CronClock.line]). A null [zone]
+/// means the server zone is unknown, and lines without a `CRON_TZ` list
+/// no runs. Each lists up to [runCount] runs strictly after [nowUtc];
+/// with an [evaluateLimit], only that many lines in payload order get
+/// their runs evaluated, and later ones give
+/// [JobRunsUnknown.notEvaluated]. Pure; throws only for a nonpositive
+/// [runCount], a caller error.
 List<JobEntry> mergeJobs({
   CronSnapshot? cron,
   TimersSnapshot? timers,
@@ -226,7 +228,11 @@ List<JobEntry> mergeJobs({
   }
 
   var evaluated = 0;
-  List<CronRun>? evaluate(CronExpression expression, ServerZone runZone) {
+  List<CronRun>? evaluate(
+    CronExpression expression,
+    ServerZone runZone,
+    CronClock clock,
+  ) {
     if (evaluateLimit != null && evaluated >= evaluateLimit) return null;
 
     evaluated++;
@@ -234,6 +240,8 @@ List<JobEntry> mergeJobs({
       expression,
       afterUtc: nowUtc,
       zone: runZone,
+      clock: clock,
+      serverZone: clock == CronClock.line ? zone : null,
       count: runCount,
     );
   }
@@ -285,14 +293,15 @@ List<JobEntry> mergeJobs({
   ];
 }
 
-/// The row of [job]; [evaluate] lists its runs in a zone, or returns
-/// null past the evaluation limit.
+/// The row of [job]; [evaluate] lists its runs in a zone by a clock, or
+/// returns null past the evaluation limit.
 CronJobEntry _cronEntry(
   String id,
   CronJob job, {
   required ServerZone? zone,
   required CronZoneResolver? zoneFor,
-  required List<CronRun>? Function(CronExpression, ServerZone) evaluate,
+  required List<CronRun>? Function(CronExpression, ServerZone, CronClock)
+  evaluate,
 }) {
   final expression = job.expression;
   if (expression == null) {
@@ -331,7 +340,10 @@ CronJobEntry _cronEntry(
     );
   }
 
-  final runs = evaluate(expression, runZone);
+  // cronie converts its minutes into any CRON_TZ zone, even one named
+  // like its own, and matches the line there (D57).
+  final clock = cronTz == null ? CronClock.server : CronClock.line;
+  final runs = evaluate(expression, runZone, clock);
   if (runs == null) {
     return CronJobEntry._(
       id: id,

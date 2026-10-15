@@ -204,8 +204,23 @@ void main() {
         ),
       );
       expect(job.schedule!.timeZone, 'Europe/Berlin');
-      expect(job.nextRuns.first.dst, CronDst.gap);
-      expect(job.nextRuns.last.atUtc, DateTime.utc(2026, 3, 30, 0, 30));
+      // A CRON_TZ line misses its zone's gap (D57): 02:30 CEST next runs
+      // on 2026-03-30, where the fixed +1 would give 01:30Z.
+      expect(job.nextRuns.first.atUtc, DateTime.utc(2026, 3, 30, 0, 30));
+      expect(job.nextRuns.first.offset, const Duration(hours: 2));
+    });
+
+    test('the server zone\'s repeated hour runs no fixed-time line', () {
+      // cronie runs only wildcard jobs while its own zone repeats an
+      // hour, 01:00Z to 02:00Z here, whatever zone a line names.
+      final jobs = _merge(
+        _cron(crontab: 'CRON_TZ=UTC\n30 1 * * * a\n30 * * * * b'),
+        now: DateTime.utc(2026, 10, 25, 0, 45),
+        zone: _berlin(),
+      ).cast<CronJobEntry>();
+      expect(jobs[0].nextRuns.first.atUtc, DateTime.utc(2026, 10, 26, 1, 30));
+      expect(jobs[1].nextRuns.first.atUtc, DateTime.utc(2026, 10, 25, 1, 30));
+      expect(jobs[1].nextRuns.first.dst, CronDst.nearTransition);
     });
 
     test('the server zone answers for its own name', () {

@@ -831,15 +831,26 @@ Proposals awaiting the owner close the section; they are not decisions.
   `CronRun`s (D52). The database can disagree with the server's own zone
   files, which cron reads, so a run within an hour of a transition is
   marked `nearTransition` beside the gap and overlap marks. Across a
-  transition the runs follow cronie and Debian's cron [R: `cron.c`
-  `find_jobs`]: a fixed-time job runs a gap's minutes at the jump and an
-  overlap's minutes once, and a job whose minute or hour field starts
-  with `*` runs by the clock, never in a gap and in both passes of an
-  overlap. BusyBox crond runs every job by the clock, which the runs do
-  not model yet. The database's transition tables end at the 32-bit
-  time limit, early in 2038; a run after a zone's last listed
-  transition keeps the offset in force after it. The jobs goldens live in
-  `klabautermann_core/test/fixtures/cron_jobs/`, because
+  transition of the server's zone the runs follow cronie and Debian's
+  cron [R: `cron.c` `find_jobs`]: a fixed-time job runs a gap's minutes
+  at the jump and an overlap's minutes once, and a job whose minute or
+  hour field starts with `*` runs by the clock, never in a gap and in
+  both passes of an overlap. A `CRON_TZ` line follows cronie's rule for
+  it [R: cronie `cron.c` `find_jobs`]: cron converts each of its own
+  minutes into the line's zone, matches there and catches up no such
+  line, so a fixed-time job misses the minutes its zone's gap skips and
+  runs the minutes its zone's overlap repeats twice. While the server's
+  zone repeats an hour cron runs only wildcard jobs, so a fixed-time
+  `CRON_TZ` job runs once when both zones fall back at the same instant
+  and misses any other match inside that hour. Such a run within an
+  hour of either zone's transition is marked; without a known server
+  zone, or at the probe's fixed offset, the runs ignore the server's
+  repeated hour. Debian's cron ignores `CRON_TZ` [R: Debian cron
+  3.0pl1-211 `cron.c`] and BusyBox crond runs every job by the clock,
+  which the runs do not model yet. The database's transition tables
+  end at the 32-bit time limit, early in 2038; a run after a zone's
+  last listed transition keeps the offset in force after it. The jobs
+  goldens live in `klabautermann_core/test/fixtures/cron_jobs/`, because
   `klabautermann_host` stays on meta and collection (3.1). Why: Dart
   ships no zone database, and a fixed offset puts every run after a DST
   change an hour off. *Rejected:* reading the server's own zone file
