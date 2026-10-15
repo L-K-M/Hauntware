@@ -24,10 +24,12 @@ const double _coreNameWidth = 44;
 final RegExp _coreNumber = RegExp(r'\d+$');
 
 /// [perCpu]'s cores in the host's numeric order, `cpu2` before `cpu10`; a
-/// name without a number follows the numbered ones.
+/// name without a number, or with one past any integer, follows the
+/// numbered ones. The names are server data, which the host parser takes
+/// with any number of digits, so this never throws on them.
 List<(String, double)> orderedCores(Map<String, double> perCpu) {
   num number(String name) => switch (_coreNumber.firstMatch(name)) {
-    final match? => int.parse(match[0]!),
+    final match? => int.tryParse(match[0]!) ?? double.infinity,
     null => double.infinity,
   };
   return [for (final MapEntry(:key, :value) in perCpu.entries) (key, value)]

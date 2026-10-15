@@ -149,6 +149,15 @@ void main() {
       orderedCores({'cpu10': 1, 'cpu2': 2, 'cpu0': 3, 'cpu': 4, 'cpu1': 5}),
       [('cpu0', 3), ('cpu1', 5), ('cpu2', 2), ('cpu10', 1), ('cpu', 4)],
     );
+    // The names are server data: a number past any integer orders after
+    // the others rather than throwing in the CPU card's build.
+    const huge = 'cpu99999999999999999999';
+    expect(orderedCores({huge: 1, 'cpu10': 2, 'cpu': 3, 'cpu2': 4}), [
+      ('cpu2', 4),
+      ('cpu10', 2),
+      ('cpu', 3),
+      (huge, 1),
+    ]);
   });
 
   for (final (name, size) in [
