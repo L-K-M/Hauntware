@@ -56,10 +56,32 @@ UnitsResult _result({
   );
 }
 
+JournalRecord _record(String message, LogPriority priority) => JournalRecord(
+  message: message,
+  priority: priority,
+  fields: {
+    'MESSAGE': message,
+    'PRIORITY': '${priority.index}',
+    '_SYSTEMD_UNIT': 'nginx.service',
+  },
+);
+
+/// The journal's newest lines first, as a window delivers them.
+final _lines = [
+  _record('nginx.service: Failed with result exit-code.', LogPriority.warning),
+  _record(
+    'bind() to 0.0.0.0:80 failed (98: Address in use)',
+    LogPriority.error,
+  ),
+  _record('Starting nginx.service - A web server...', LogPriority.info),
+];
+
 final class _Panel {
-  _Panel(this.engine);
+  _Panel(this.engine, this.visible, this.serverId);
 
   final FakeEngineClient engine;
+  final ValueNotifier<bool> visible;
+  final ValueNotifier<String> serverId;
   int _seq = 0;
 
   Future<void> emit(WidgetTester tester, EngineEvent event) async {
@@ -70,13 +92,34 @@ final class _Panel {
   Future<void> sample(WidgetTester tester, [SampleResult? result]) => emit(
     tester,
     Sample(
-      serverId: 'srv-1',
+      serverId: serverId.value,
       stream: SampleStream.units,
       seq: ++_seq,
       at: DateTime.utc(2026, 10, 15, 12),
       result: result ?? _result(),
     ),
   );
+
+  List<OpenLogStream> get opens =>
+      engine.sentOfType<OpenLogStream>().cast<OpenLogStream>();
+
+  List<String> get closes => [
+    for (final close in engine.sentOfType<CloseStream>())
+      (close as CloseStream).streamId,
+  ];
+
+  Future<void> report(WidgetTester tester, LogStreamStatus status) =>
+      emit(tester, LogStreamState(opens.last.streamId, status));
+
+  /// The latest read's lines: running, then the window, then its end.
+  Future<void> readLines(WidgetTester tester) async {
+    await report(tester, const LogStreamRunning());
+    await emit(
+      tester,
+      LogBatch(streamId: opens.last.streamId, records: _lines),
+    );
+    await report(tester, const LogStreamEnded(LogStreamEndReason.windowFilled));
+  }
 }
 
 Future<_Panel> _pump(
@@ -92,8 +135,12 @@ Future<_Panel> _pump(
 
   final engine = FakeEngineClient();
   final monitoring = MonitoringController(engine);
+  final visible = ValueNotifier(true);
+  final serverId = ValueNotifier('srv-1');
   addTearDown(() async {
     monitoring.dispose();
+    visible.dispose();
+    serverId.dispose();
     await engine.close();
   });
 
@@ -116,7 +163,14 @@ Future<_Panel> _pump(
           body: RepaintBoundary(
             child: ColoredBox(
               color: theme.colorScheme.surface,
-              child: ServicesPanel(monitoring: monitoring, serverId: 'srv-1'),
+              child: ListenableBuilder(
+                listenable: Listenable.merge([visible, serverId]),
+                builder: (context, _) => ServicesPanel(
+                  monitoring: monitoring,
+                  serverId: serverId.value,
+                  visible: visible.value,
+                ),
+              ),
             ),
           ),
         ),
@@ -124,10 +178,12 @@ Future<_Panel> _pump(
     ),
   );
   await tester.pumpAndSettle();
-  return _Panel(engine);
+  return _Panel(engine, visible, serverId);
 }
 
 Finder _row(String unit) => find.byKey(ValueKey('units.row.$unit'));
+
+Finder _line(String text) => find.textContaining(text, findRichText: true);
 
 Finder _unknownIn(String unit) =>
     find.descendant(of: _row(unit), matching: find.text('unknown'));
@@ -145,8 +201,13 @@ Future<void> _choose(WidgetTester tester, _Menu menu, String choice) async {
   await tester.pumpAndSettle();
 }
 
+Future<void> _open(WidgetTester tester, String unit) async {
+  await tester.tap(_row(unit));
+  await tester.pumpAndSettle();
+}
+
 /// 03 §10.2's Services tab: SVC-01's units and filters, SVC-02's failed
-/// units and CN-10's unknown states.
+/// units, SVC-04's unit logs and CN-10's unknown states.
 void main() {
   setUpAll(() async {
     if (goldensCompareHere) await loadGoldenFonts();
@@ -183,7 +244,6 @@ void main() {
     expect(_row('ssh.service'), findsOneWidget);
     expect(_row('ssh.socket'), findsNothing);
     expect(find.text('2 failed units'), findsOneWidget);
-    expect(find.text('nginx.service: failed'), findsOneWidget);
   });
 
   testWidgets('filters by type and by active state', (tester) async {
@@ -262,12 +322,126 @@ void main() {
     expect(find.text('systemctl: not found'), findsOneWidget);
   });
 
-  testWidgets('the keyboard reaches the filters and the table', (tester) async {
+  testWidgets('a failed unit opens its page, which reads 50 journal lines', (
+    tester,
+  ) async {
     final panel = await _pump(tester);
     await panel.sample(tester);
 
-    // Reading order: the filters, the sortable headers, then the table's
-    // body.
+    await tester.tap(find.text('nginx.service: failed'));
+    await tester.pumpAndSettle();
+
+    final spec = panel.opens.single.spec;
+    expect((spec.serverId, spec.window, spec.follow), ('srv-1', 50, false));
+    expect((spec.source as JournalLogSource).unit, 'nginx.service');
+    expect(find.text('A high performance web server'), findsWidgets);
+    expect(
+      find.text('Asking the server for recent log lines…'),
+      findsOneWidget,
+    );
+
+    // Until its log service is wired, the engine refuses every open.
+    await panel.emit(
+      tester,
+      const RequestRejected('OpenLogStream', 'not implemented yet'),
+    );
+    expect(
+      find.text('Reading unit logs is not available in this version yet.'),
+      findsOneWidget,
+    );
+    expect(_line('Address in use'), findsNothing);
+  });
+
+  testWidgets('shows the lines oldest first; reopening reads again', (
+    tester,
+  ) async {
+    final panel = await _pump(tester);
+    await panel.sample(tester);
+    await _open(tester, 'nginx.service');
+
+    await panel.report(tester, const LogStreamRunning());
+    expect(find.text('Reading recent log lines…'), findsOneWidget);
+    await panel.readLines(tester);
+    expect(find.text('Reading recent log lines…'), findsNothing);
+    final tops = [
+      for (final text in ['Starting', 'Address in use', 'Failed with'])
+        tester.getTopLeft(_line(text)).dy,
+    ];
+    expect(tops, orderedEquals([...tops]..sort()));
+
+    await tester.tap(find.byTooltip('Close unit details'));
+    await tester.pumpAndSettle();
+    await _open(tester, 'nginx.service');
+    expect(panel.opens, hasLength(2));
+    // The finished read had nothing left to stop.
+    expect(panel.closes, isEmpty);
+    await panel.report(
+      tester,
+      const LogStreamEnded(
+        LogStreamEndReason.denied,
+        detail: 'No journal files were opened due to insufficient permissions.',
+      ),
+    );
+    expect(
+      find.text("The server refused to read this unit's journal."),
+      findsOneWidget,
+    );
+    expect(find.textContaining('insufficient permissions'), findsOneWidget);
+  });
+
+  testWidgets('a hidden tab stops a running read and reads again when shown', (
+    tester,
+  ) async {
+    final panel = await _pump(tester);
+    await panel.sample(tester);
+    await _open(tester, 'nginx.service');
+    await panel.report(tester, const LogStreamRunning());
+
+    panel.visible.value = false;
+    await tester.pumpAndSettle();
+    expect(panel.closes, [panel.opens.single.streamId]);
+    panel.visible.value = true;
+    await tester.pumpAndSettle();
+    expect(panel.opens, hasLength(2));
+
+    // A finished read stays across a tab switch.
+    await panel.readLines(tester);
+    panel.visible.value = false;
+    await tester.pumpAndSettle();
+    panel.visible.value = true;
+    await tester.pumpAndSettle();
+    expect(panel.opens, hasLength(2));
+    expect(_line('Address in use'), findsOneWidget);
+  });
+
+  testWidgets('closing the page or switching servers stops its read', (
+    tester,
+  ) async {
+    final panel = await _pump(tester);
+    await panel.sample(tester);
+    await _open(tester, 'nginx.service');
+    await panel.report(tester, const LogStreamRunning());
+
+    await tester.tap(find.byTooltip('Close unit details'));
+    await tester.pumpAndSettle();
+    expect(panel.closes, [panel.opens.last.streamId]);
+    expect(find.text('Recent log lines'), findsNothing);
+
+    await _open(tester, 'cron.service');
+    panel.serverId.value = 'srv-2';
+    await tester.pumpAndSettle();
+    expect(panel.closes, hasLength(2));
+    expect(find.text('Recent log lines'), findsNothing);
+  });
+
+  testWidgets('the keyboard reaches the filters, the table and the page', (
+    tester,
+  ) async {
+    final panel = await _pump(tester);
+    await panel.sample(tester);
+
+    // Reading order: the failed units, the filters, the sortable headers,
+    // then the table's body.
     final stops = <String?>[];
     while (stops.length < 12 && stops.lastOrNull != 'SortableTable') {
       await tester.sendKeyEvent(LogicalKeyboardKey.tab);
@@ -279,19 +453,44 @@ void main() {
       contains('UnitActiveState'),
     ]);
     expect(stops.last, 'SortableTable');
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    expect(panel.opens, hasLength(1));
+    // Opening the page leaves the table focused, and the page's close
+    // button comes next.
+    expect(FocusManager.instance.primaryFocus?.debugLabel, 'SortableTable');
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    expect(find.text('Recent log lines'), findsNothing);
   });
 
-  testWidgets('a phone keeps the unit and state columns', (tester) async {
+  testWidgets('a phone shows the page in place of the list, and Back closes', (
+    tester,
+  ) async {
     final panel = await _pump(
       tester,
       size: _phone,
       platform: TargetPlatform.android,
     );
     await panel.sample(tester);
-
-    expect(find.text('Active'), findsOneWidget);
     expect(find.text('Description'), findsNothing);
     expect(find.text('Load'), findsNothing);
+
+    await _open(tester, 'nginx.service');
+    expect(_row('cron.service'), findsNothing);
+    expect(find.text('Recent log lines'), findsOneWidget);
+    await tester.tap(find.byTooltip('Close unit details'));
+    await tester.pumpAndSettle();
+    expect(_row('cron.service'), findsOneWidget);
+
+    await _open(tester, 'nginx.service');
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(_row('cron.service'), findsOneWidget);
+    expect(panel.closes, hasLength(2));
   });
 
   testWidgets('touch platforms give the filters 48 dp tap targets', (
@@ -328,19 +527,23 @@ void main() {
         platform: platform,
       );
       await panel.sample(tester, _result(format: UnitListFormat.text));
+      await _open(tester, 'nginx.service');
+      await panel.readLines(tester);
 
       expect(tester.takeException(), isNull);
-      expect(_row('nginx.service'), findsOneWidget);
+      expect(find.text('Recent log lines'), findsOneWidget);
     });
   }
 
   group('golden', () {
-    // 03 §11.1: the desktop scene lists services with two failed; the
-    // phone scene is old systemd's list.
+    // 03 §11.1: the desktop scene lists services with two failed and the
+    // page of one with its lines; the phone scene is old systemd's list.
     for (final brightness in Brightness.values) {
       testWidgets('desktop, ${brightness.name}', (tester) async {
         final panel = await _pump(tester, brightness: brightness);
         await panel.sample(tester);
+        await _open(tester, 'nginx.service');
+        await panel.readLines(tester);
         await expectLater(
           find.byType(ServicesPanel),
           matchesGoldenFile(

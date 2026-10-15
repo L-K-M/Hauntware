@@ -1,5 +1,12 @@
 import 'package:klabautermann_core/klabautermann_core.dart';
 
+import '../controllers/log_reads.dart';
+import '../l10n/app_localizations.dart';
+
+/// How many recent journal records a unit's page reads (SVC-04, 03 §7.5:
+/// `journalctl -u <unit> -o json -n 50`).
+const int kUnitLogWindow = 50;
+
 /// systemd's unit types, which a unit's name ends in (`unit_type_table`
 /// in systemd's `src/basic/unit-def.c`).
 enum UnitType {
@@ -122,4 +129,31 @@ List<UnitFilter<T>> filterChoices<T extends Enum>(
       if (shown.contains(value)) (any: false, value: value),
     if (shown.contains(null)) (any: false, value: null),
   ];
+}
+
+/// What a unit's page says about its log [read] in place of, or above,
+/// its lines; null once lines show and there is nothing to add.
+String? unitLogsNotice(AppLocalizations l10n, LogRead read) {
+  final empty = read.records.isEmpty;
+  return switch (read.state) {
+    LogReadRequested() => l10n.servicesLogsRequested,
+    LogReadRefused() => l10n.servicesLogsRefused,
+    LogReadReported(:final status) => switch (status) {
+      LogStreamWaiting(:final reason) => switch (reason) {
+        LogStreamWaitReason.link => l10n.servicesLogsWaitingLink,
+        LogStreamWaitReason.channel => l10n.servicesLogsWaitingChannel,
+        LogStreamWaitReason.background => l10n.servicesLogsWaitingBackground,
+      },
+      LogStreamRunning() => empty ? l10n.servicesLogsReading : null,
+      LogStreamEnded(:final reason) => switch (reason) {
+        LogStreamEndReason.windowFilled ||
+        LogStreamEndReason.oldestReached ||
+        LogStreamEndReason.closed => empty ? l10n.servicesLogsEmpty : null,
+        LogStreamEndReason.invalid => l10n.servicesLogsInvalid,
+        LogStreamEndReason.missing => l10n.servicesLogsMissing,
+        LogStreamEndReason.denied => l10n.servicesLogsDenied,
+        LogStreamEndReason.failed => l10n.servicesLogsFailed,
+      },
+    },
+  };
 }

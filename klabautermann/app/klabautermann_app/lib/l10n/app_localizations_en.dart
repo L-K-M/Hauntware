@@ -605,4 +605,50 @@ class AppLocalizationsEn extends AppLocalizations {
     );
     return '$_temp0';
   }
+
+  @override
+  String get servicesUnitClose => 'Close unit details';
+
+  @override
+  String get servicesLogsTitle => 'Recent log lines';
+
+  @override
+  String get servicesLogsRequested => 'Asking the server for recent log lines…';
+
+  @override
+  String get servicesLogsWaitingLink =>
+      'Waiting for the connection to the server…';
+
+  @override
+  String get servicesLogsWaitingChannel =>
+      'Waiting for a free session on the server…';
+
+  @override
+  String get servicesLogsWaitingBackground =>
+      'Paused while the app is in the background.';
+
+  @override
+  String get servicesLogsReading => 'Reading recent log lines…';
+
+  @override
+  String get servicesLogsEmpty => 'The journal holds no lines for this unit.';
+
+  @override
+  String get servicesLogsRefused =>
+      'Reading unit logs is not available in this version yet.';
+
+  @override
+  String get servicesLogsInvalid =>
+      'This unit\'s name cannot be used to read its logs.';
+
+  @override
+  String get servicesLogsMissing =>
+      'This server has no journalctl, so unit logs cannot be read.';
+
+  @override
+  String get servicesLogsDenied =>
+      'The server refused to read this unit\'s journal.';
+
+  @override
+  String get servicesLogsFailed => 'Reading this unit\'s journal failed.';
 }

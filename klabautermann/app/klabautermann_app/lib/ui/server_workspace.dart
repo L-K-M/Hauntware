@@ -128,6 +128,7 @@ class _Panels extends StatelessWidget {
                   ServerPanel.services => ServicesPanel(
                     monitoring: monitoring,
                     serverId: serverId,
+                    visible: tabs.index == index,
                   ),
                   _ => const PlaceholderPaneBody(),
                 },

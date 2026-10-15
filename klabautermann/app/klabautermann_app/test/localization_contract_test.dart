@@ -83,6 +83,14 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'$surface-${_subscriptionCount++}'",
   },
   // Services panel (SVC-01 to SVC-04, CN-10).
+  'lib/controllers/log_reads.dart': {
+    // An assert message; programmer diagnostic, never rendered.
+    "'a follow is not a bounded read'",
+    // A log stream id, never reused in an engine run (03 §10.1).
+    r"'log-read-${_count++}'",
+    // The rejected request's class name, which RequestRejected carries.
+    r"'$OpenLogStream'",
+  },
   'lib/ui/services_view.dart': {
     // systemd's spelling of load and sub states and the dot before a unit
     // type, matched against server data; the panel shows ARB text for

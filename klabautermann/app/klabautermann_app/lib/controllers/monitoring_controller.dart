@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 
 import '../ui/charts/series_ring.dart';
+import 'log_reads.dart';
 
 /// How long a server's link outlives the last view that opened it, as long
 /// as the grace 03 §5.1 and D34 give a backgrounded phone's link: stepping
@@ -217,6 +218,15 @@ final class MonitoringController extends ChangeNotifier {
     });
   }
 
+  /// Bounded log reads such as SVC-04's unit logs (03 §7.5), fed the log
+  /// events from [_onEngineEvent].
+  late final LogReads _logReads = LogReads(_send);
+
+  /// Opens a bounded read of [spec], a window ([LogStreamSpec.follow]
+  /// false), whose records and state the returned [LogRead] reports. The
+  /// caller closes it once it no longer shows it.
+  LogRead openLogRead(LogStreamSpec spec) => _logReads.open(spec);
+
   /// A view of [serverId] opened (the desktop workspace, the phone's pushed
   /// screen). The first sends [Connect]; within the grace after the last
   /// leave the link is still held and nothing is sent.
@@ -290,6 +300,8 @@ final class MonitoringController extends ChangeNotifier {
         _server(serverId).accept(event);
       case CatalogReplaced(:final entries):
         _purge({for (final entry in entries) entry.serverId});
+      case LogStreamState() || LogBatch() || RequestRejected():
+        _logReads.accept(event);
       case EngineEvent():
         break;
     }

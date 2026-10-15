@@ -3,41 +3,53 @@ import 'package:flutter/material.dart';
 import 'package:ghost_ui/ghost_ui.dart' show ghostIsDesktopPlatform;
 import 'package:klabautermann_core/klabautermann_core.dart';
 
+import '../controllers/log_reads.dart';
 import '../controllers/monitoring_controller.dart';
 import '../l10n/app_localizations.dart';
 import 'failed_units_summary.dart';
+import 'logs/log_level.dart';
+import 'logs/log_view.dart';
+import 'logs/log_view_controller.dart';
 import 'services_view.dart';
 import 'sortable_table.dart';
 
 /// The panel width from which the unit table adds its load and description
-/// columns. It grows with the text scale, as the table's columns do, so
+/// columns and a unit's page opens under the table instead of in its
+/// place. It grows with the text scale, as the table's columns do, so
 /// larger text takes the narrow layout before the table would scroll
 /// sideways.
 const double _wideWidth = 600;
 
 /// The share of its height a header takes before it scrolls, so large
-/// text never pushes the table out of sight.
+/// text never pushes a table or log view out of sight.
 const double _headerShare = 0.4;
 
 /// The unit table's columns, whose names key them.
 enum _Column { unit, load, active, sub, description }
 
 /// The Services tab (03 §10.2, §7.5): SVC-01's units with their load,
-/// active and sub states, filtered by type and active state, and SVC-02's
-/// failed units.
+/// active and sub states, filtered by type and active state; SVC-02's
+/// failed units; and a unit's page with its states and SVC-04's recent
+/// journal lines.
 ///
 /// It reads the `units` stream its [SampledSurface] subscribes from
-/// [MonitoringController]'s box. States the host could not read show as
-/// unknown (CN-10). Nothing animates (A11Y-11).
+/// [MonitoringController]'s box. A unit's page reads its journal lines
+/// with [MonitoringController.openLogRead] while [visible], and says what
+/// the read is doing until lines arrive. States the host could not read
+/// show as unknown (CN-10). Nothing animates (A11Y-11).
 class ServicesPanel extends StatefulWidget {
   const ServicesPanel({
     super.key,
     required this.monitoring,
     required this.serverId,
+    required this.visible,
   });
 
   final MonitoringController monitoring;
   final String serverId;
+
+  /// Whether the panel's tab shows; see [SampledSurface.visible].
+  final bool visible;
 
   @override
   State<ServicesPanel> createState() => _ServicesPanelState();
@@ -46,12 +58,14 @@ class ServicesPanel extends StatefulWidget {
 class _ServicesPanelState extends State<ServicesPanel> {
   late ValueListenable<Sample?> _units;
 
-  /// The filters and order, which outlive tab switches: the
+  /// The filters, order and open unit, which outlive tab switches: the
   /// workspace keeps a panel built once opened. Services lead, since most
   /// other units are devices, mounts and slices.
   UnitFilter<UnitType> _type = (any: false, value: UnitType.service);
   UnitFilter<UnitActiveState> _state = (any: true, value: null);
   TableSort? _sort;
+  String? _open;
+  final _listKey = GlobalKey();
 
   @override
   void initState() {
@@ -69,6 +83,7 @@ class _ServicesPanelState extends State<ServicesPanel> {
 
     _units.removeListener(_onUnits);
     _attach();
+    _open = null;
   }
 
   @override
@@ -84,6 +99,10 @@ class _ServicesPanelState extends State<ServicesPanel> {
 
   void _onUnits() => setState(() {});
 
+  void _openUnit(SystemdUnit unit) => setState(() => _open = unit.unit);
+
+  void _close() => setState(() => _open = null);
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -94,9 +113,59 @@ class _ServicesPanelState extends State<ServicesPanel> {
         final wide =
             constraints.maxWidth >=
             MediaQuery.textScalerOf(context).scale(_wideWidth);
-        return Padding(
-          padding: EdgeInsets.all(wide ? 20 : 16),
+        final padding = EdgeInsets.all(wide ? 20 : 16);
+        final name = _open;
+        final page = name == null
+            ? null
+            : _UnitPage(
+                // A page per unit and server, each with a read of its own.
+                key: ValueKey((widget.serverId, name)),
+                monitoring: widget.monitoring,
+                serverId: widget.serverId,
+                name: name,
+                unit: _find(units, name),
+                visible: widget.visible,
+                wide: wide,
+                onClose: _close,
+              );
+        // The list keeps its place in the tree, so opening a unit keeps the
+        // table's focus, active row and scroll position.
+        final list = KeyedSubtree(
+          key: _listKey,
           child: _list(l10n, units, result, wide: wide),
+        );
+        if (page == null) return Padding(padding: padding, child: list);
+        if (wide) {
+          return Padding(
+            padding: padding,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(flex: 3, child: list),
+                const Divider(height: 24),
+                Expanded(flex: 2, child: page),
+              ],
+            ),
+          );
+        }
+
+        // A narrow panel shows the page in the list's place, as a phone
+        // pushes details (03 §10.5), and Back returns to the list.
+        return PopScope(
+          canPop: false,
+          onPopInvokedWithResult: (didPop, _) {
+            if (!didPop) _close();
+          },
+          child: Padding(
+            padding: padding,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                Visibility(visible: false, maintainState: true, child: list),
+                page,
+              ],
+            ),
+          ),
         );
       },
     );
@@ -132,7 +201,7 @@ class _ServicesPanelState extends State<ServicesPanel> {
         children: [
           if (units.format == UnitListFormat.text)
             _notice(theme, Icons.info_outline, l10n.servicesTextFallback),
-          FailedUnitsSummary(failed: units.failed),
+          FailedUnitsSummary(failed: units.failed, onUnitSelected: _openUnit),
           Wrap(
             spacing: 24,
             runSpacing: 8,
@@ -180,6 +249,7 @@ class _ServicesPanelState extends State<ServicesPanel> {
         rowKey: (unit) => unit.unit,
         sort: _sort,
         onSort: (sort) => setState(() => _sort = sort),
+        onRowActivated: _openUnit,
         empty: Padding(
           padding: const EdgeInsets.all(16),
           child: Text(l10n.servicesEmpty),
@@ -187,6 +257,14 @@ class _ServicesPanelState extends State<ServicesPanel> {
       ),
     );
   }
+}
+
+/// [name]'s row in [units], or null once the list no longer holds it.
+SystemdUnit? _find(UnitsSnapshot? units, String name) {
+  for (final unit in [...?units?.units, ...?units?.failed]) {
+    if (unit.unit == name) return unit;
+  }
+  return null;
 }
 
 List<SortableTableColumn<SystemdUnit>> _columns(
@@ -263,6 +341,174 @@ Widget _activeState(BuildContext context, UnitActiveState? state, String text) {
   );
 }
 
+/// A unit's page: its name, description and states, then up to
+/// [kUnitLogWindow] recent journal lines, oldest first (SVC-04).
+class _UnitPage extends StatefulWidget {
+  const _UnitPage({
+    super.key,
+    required this.monitoring,
+    required this.serverId,
+    required this.name,
+    required this.unit,
+    required this.visible,
+    required this.wide,
+    required this.onClose,
+  });
+
+  final MonitoringController monitoring;
+  final String serverId;
+  final String name;
+
+  /// The unit's row in the latest list; null leaves its states unknown.
+  final SystemdUnit? unit;
+
+  final bool visible;
+  final bool wide;
+  final VoidCallback onClose;
+
+  @override
+  State<_UnitPage> createState() => _UnitPageState();
+}
+
+class _UnitPageState extends State<_UnitPage> {
+  final _lines = LogViewController();
+  LogRead? _read;
+
+  @override
+  void initState() {
+    super.initState();
+    _sync();
+  }
+
+  @override
+  void didUpdateWidget(_UnitPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _sync();
+  }
+
+  @override
+  void dispose() {
+    _release();
+    _lines.dispose();
+    super.dispose();
+  }
+
+  /// Reads while the page shows. A read still running when its tab hides
+  /// stops and starts over once the tab shows again, as nothing samples
+  /// for a hidden view (03 §6.4); a finished one stays.
+  void _sync() {
+    final read = _read;
+    if (!widget.visible) {
+      if (read != null && !read.ended) _release();
+      return;
+    }
+    if (read == null) _start();
+  }
+
+  void _start() {
+    _read = widget.monitoring.openLogRead(
+      LogStreamSpec(
+        serverId: widget.serverId,
+        source: JournalLogSource(unit: widget.name),
+        window: kUnitLogWindow,
+        follow: false,
+      ),
+    )..addListener(_onRead);
+  }
+
+  void _release() {
+    final read = _read;
+    if (read == null) return;
+
+    _read = null;
+    read
+      ..removeListener(_onRead)
+      ..close();
+  }
+
+  /// A window arrives newest first and the view lists oldest first, so
+  /// each batch rebuilds the lines, [kUnitLogWindow] at most.
+  void _onRead() {
+    final read = _read!;
+    _lines
+      ..clear()
+      ..addJournal([
+        for (final record in read.records.reversed)
+          if (record is JournalRecord) JournalEntry(record.fields),
+      ], dropped: read.dropped);
+    setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+    final read = _read;
+    final unit = widget.unit;
+    final states = unit == null ? null : unitStatesOf(unit);
+    String shown(String? value) => value ?? l10n.chartUnknownValue;
+    final notice = read == null ? null : unitLogsNotice(l10n, read);
+    return _headed(
+      header: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        spacing: 8,
+        children: [
+          Row(
+            children: [
+              IconButton(
+                tooltip: l10n.servicesUnitClose,
+                icon: Icon(widget.wide ? Icons.close : Icons.arrow_back),
+                onPressed: widget.onClose,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Semantics(
+                  header: true,
+                  child: Text(widget.name, style: theme.textTheme.titleMedium),
+                ),
+              ),
+            ],
+          ),
+          if (unit?.description case final description?) Text(description),
+          Wrap(
+            spacing: 24,
+            runSpacing: 4,
+            children: [
+              for (final (label, value) in [
+                (l10n.servicesColumnLoad, states?.load),
+                (l10n.servicesColumnActive, states?.active?.name),
+                (l10n.servicesColumnSub, states?.sub),
+              ])
+                _labelled(theme, label, Text(shown(value))),
+            ],
+          ),
+          Semantics(
+            header: true,
+            child: Text(
+              l10n.servicesLogsTitle,
+              style: theme.textTheme.titleSmall,
+            ),
+          ),
+          if (read != null && notice != null)
+            _notice(
+              theme,
+              read.ended ? Icons.info_outline : Icons.hourglass_empty,
+              notice,
+              switch (read.state) {
+                LogReadReported(status: LogStreamEnded(:final detail)) =>
+                  detail,
+                _ => null,
+              },
+            ),
+        ],
+      ),
+      body: read == null || read.records.isEmpty
+          ? const SizedBox.shrink()
+          : LogView(controller: _lines, levelOf: LogLevel.ofJournalLine),
+    );
+  }
+}
+
 Widget _unavailable(
   AppLocalizations l10n,
   ThemeData theme,
@@ -317,7 +563,7 @@ Widget _notice(ThemeData theme, IconData icon, String text, [String? detail]) =>
       ),
     );
 
-/// A label beside its control, read as one.
+/// A label beside its value or control, read as one.
 Widget _labelled(ThemeData theme, String label, Widget child) => MergeSemantics(
   child: Row(
     mainAxisSize: MainAxisSize.min,

@@ -1,4 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:klabautermann_app/controllers/log_reads.dart';
+import 'package:klabautermann_app/l10n/app_localizations_en.dart';
 import 'package:klabautermann_app/ui/services_view.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 
@@ -7,8 +9,8 @@ SystemdUnit _unit(String name, [String? load, String? active, String? sub]) =>
 
 const UnitStates _unknown = (type: null, load: null, active: null, sub: null);
 
-/// SVC-01's states and filters and CN-10's unknowns: the Services panel's
-/// rules without a widget.
+/// SVC-01's states and filters, CN-10's unknowns, and SVC-04's read
+/// notices: the Services panel's rules without a widget.
 void main() {
   test('keeps the values systemd uses in each column', () {
     expect(
@@ -125,5 +127,82 @@ void main() {
         (any: false, value: UnitActiveState.failed),
       ],
     );
+  });
+
+  group('unitLogsNotice', () {
+    final l10n = AppLocalizationsEn();
+    late LogReads reads;
+    late LogRead read;
+    late String streamId;
+
+    setUp(() {
+      final sent = <EngineRequest>[];
+      reads = LogReads(sent.add);
+      read = reads.open(
+        LogStreamSpec(
+          serverId: 'srv-1',
+          source: const JournalLogSource(unit: 'nginx.service'),
+          window: kUnitLogWindow,
+          follow: false,
+        ),
+      );
+      streamId = (sent.single as OpenLogStream).streamId;
+    });
+
+    String? after(LogStreamStatus status) {
+      reads.accept(LogStreamState(streamId, status));
+      return unitLogsNotice(l10n, read);
+    }
+
+    test('says what an unanswered, refused or waiting read does', () {
+      expect(unitLogsNotice(l10n, read), l10n.servicesLogsRequested);
+      expect(
+        after(const LogStreamWaiting(LogStreamWaitReason.link)),
+        l10n.servicesLogsWaitingLink,
+      );
+      expect(
+        after(const LogStreamWaiting(LogStreamWaitReason.channel)),
+        l10n.servicesLogsWaitingChannel,
+      );
+      expect(
+        after(const LogStreamWaiting(LogStreamWaitReason.background)),
+        l10n.servicesLogsWaitingBackground,
+      );
+      expect(after(const LogStreamRunning()), l10n.servicesLogsReading);
+    });
+
+    test('words a refused open', () {
+      reads.accept(const RequestRejected('OpenLogStream', 'not yet'));
+
+      expect(unitLogsNotice(l10n, read), l10n.servicesLogsRefused);
+    });
+
+    test('says nothing over lines', () {
+      reads.accept(
+        LogBatch(
+          streamId: streamId,
+          records: const [JournalRecord(message: 'started')],
+        ),
+      );
+
+      expect(after(const LogStreamRunning()), isNull);
+      expect(
+        after(const LogStreamEnded(LogStreamEndReason.windowFilled)),
+        isNull,
+      );
+    });
+
+    for (final (reason, words) in [
+      (LogStreamEndReason.oldestReached, l10n.servicesLogsEmpty),
+      (LogStreamEndReason.windowFilled, l10n.servicesLogsEmpty),
+      (LogStreamEndReason.invalid, l10n.servicesLogsInvalid),
+      (LogStreamEndReason.missing, l10n.servicesLogsMissing),
+      (LogStreamEndReason.denied, l10n.servicesLogsDenied),
+      (LogStreamEndReason.failed, l10n.servicesLogsFailed),
+    ]) {
+      test('words an end for ${reason.name}', () {
+        expect(after(LogStreamEnded(reason)), words);
+      });
+    }
   });
 }

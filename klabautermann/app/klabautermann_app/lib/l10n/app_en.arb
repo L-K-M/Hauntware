@@ -618,5 +618,57 @@
         "format": "decimalPattern"
       }
     }
+  },
+  "servicesUnitClose": "Close unit details",
+  "@servicesUnitClose": {
+    "description": "Tooltip of the button that closes a unit's details and returns to the unit list."
+  },
+  "servicesLogsTitle": "Recent log lines",
+  "@servicesLogsTitle": {
+    "description": "Heading of a unit's recent journal lines on its details (SVC-04)."
+  },
+  "servicesLogsRequested": "Asking the server for recent log lines…",
+  "@servicesLogsRequested": {
+    "description": "A unit's log lines were requested and the app has no answer yet."
+  },
+  "servicesLogsWaitingLink": "Waiting for the connection to the server…",
+  "@servicesLogsWaitingLink": {
+    "description": "A unit's log read waits until the connection to the server is ready."
+  },
+  "servicesLogsWaitingChannel": "Waiting for a free session on the server…",
+  "@servicesLogsWaitingChannel": {
+    "description": "A unit's log read waits until the connection has a free session for it."
+  },
+  "servicesLogsWaitingBackground": "Paused while the app is in the background.",
+  "@servicesLogsWaitingBackground": {
+    "description": "A unit's log read waits until the app returns to the foreground."
+  },
+  "servicesLogsReading": "Reading recent log lines…",
+  "@servicesLogsReading": {
+    "description": "A unit's log read is running on the server."
+  },
+  "servicesLogsEmpty": "The journal holds no lines for this unit.",
+  "@servicesLogsEmpty": {
+    "description": "A unit's log read finished without any journal line."
+  },
+  "servicesLogsRefused": "Reading unit logs is not available in this version yet.",
+  "@servicesLogsRefused": {
+    "description": "The app's engine cannot read logs yet and refused the request; no log lines are shown."
+  },
+  "servicesLogsInvalid": "This unit's name cannot be used to read its logs.",
+  "@servicesLogsInvalid": {
+    "description": "The app refused to read logs for a unit name that fails its validation."
+  },
+  "servicesLogsMissing": "This server has no journalctl, so unit logs cannot be read.",
+  "@servicesLogsMissing": {
+    "description": "A unit's log read failed because the server lacks journalctl."
+  },
+  "servicesLogsDenied": "The server refused to read this unit's journal.",
+  "@servicesLogsDenied": {
+    "description": "A unit's log read failed with a permission error."
+  },
+  "servicesLogsFailed": "Reading this unit's journal failed.",
+  "@servicesLogsFailed": {
+    "description": "A unit's log read failed for another reason; the server's error output may follow."
   }
 }

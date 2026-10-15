@@ -945,6 +945,84 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{count, plural, =1{and 1 more} other{and {count} more}}'**
   String servicesFailedMore(int count);
+
+  /// Tooltip of the button that closes a unit's details and returns to the unit list.
+  ///
+  /// In en, this message translates to:
+  /// **'Close unit details'**
+  String get servicesUnitClose;
+
+  /// Heading of a unit's recent journal lines on its details (SVC-04).
+  ///
+  /// In en, this message translates to:
+  /// **'Recent log lines'**
+  String get servicesLogsTitle;
+
+  /// A unit's log lines were requested and the app has no answer yet.
+  ///
+  /// In en, this message translates to:
+  /// **'Asking the server for recent log lines…'**
+  String get servicesLogsRequested;
+
+  /// A unit's log read waits until the connection to the server is ready.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for the connection to the server…'**
+  String get servicesLogsWaitingLink;
+
+  /// A unit's log read waits until the connection has a free session for it.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for a free session on the server…'**
+  String get servicesLogsWaitingChannel;
+
+  /// A unit's log read waits until the app returns to the foreground.
+  ///
+  /// In en, this message translates to:
+  /// **'Paused while the app is in the background.'**
+  String get servicesLogsWaitingBackground;
+
+  /// A unit's log read is running on the server.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading recent log lines…'**
+  String get servicesLogsReading;
+
+  /// A unit's log read finished without any journal line.
+  ///
+  /// In en, this message translates to:
+  /// **'The journal holds no lines for this unit.'**
+  String get servicesLogsEmpty;
+
+  /// The app's engine cannot read logs yet and refused the request; no log lines are shown.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading unit logs is not available in this version yet.'**
+  String get servicesLogsRefused;
+
+  /// The app refused to read logs for a unit name that fails its validation.
+  ///
+  /// In en, this message translates to:
+  /// **'This unit\'s name cannot be used to read its logs.'**
+  String get servicesLogsInvalid;
+
+  /// A unit's log read failed because the server lacks journalctl.
+  ///
+  /// In en, this message translates to:
+  /// **'This server has no journalctl, so unit logs cannot be read.'**
+  String get servicesLogsMissing;
+
+  /// A unit's log read failed with a permission error.
+  ///
+  /// In en, this message translates to:
+  /// **'The server refused to read this unit\'s journal.'**
+  String get servicesLogsDenied;
+
+  /// A unit's log read failed for another reason; the server's error output may follow.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading this unit\'s journal failed.'**
+  String get servicesLogsFailed;
 }
 
 class _AppLocalizationsDelegate
