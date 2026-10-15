@@ -62,6 +62,20 @@ void main() {
       expect(CronExpression.parse('@midnight')!.hours, {0});
     });
 
+    test('a minute or hour field starting with * makes a wildcard job', () {
+      bool wildcard(String text) => CronExpression.parse(text)!.hasWildcardTime;
+
+      expect(wildcard('30 * * * *'), isTrue);
+      expect(wildcard('*/5 3 * * *'), isTrue);
+      expect(wildcard('0 *,5 * * *'), isTrue);
+      expect(wildcard('@hourly'), isTrue);
+      // cronie flags the text, not the values it selects.
+      expect(wildcard('0-59 0-23 * * *'), isFalse);
+      expect(wildcard('30 2 * * *'), isFalse);
+      expect(wildcard('@daily'), isFalse);
+      expect(wildcard('@reboot'), isFalse);
+    });
+
     test('@reboot parses to a reboot expression with no clock', () {
       final e = CronExpression.parse('@REBOOT')!;
       expect(e.isReboot, isTrue);

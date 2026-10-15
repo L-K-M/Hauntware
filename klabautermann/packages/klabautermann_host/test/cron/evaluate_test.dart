@@ -1,6 +1,7 @@
 // Next-run evaluation tests (03 §7.7): fixed-offset evaluation, the
 // day jump, and DST gap, overlap and near-transition annotation on a
-// modelled Europe/Berlin zone. The evaluator is pure and never throws.
+// modelled Europe/Berlin zone, for fixed-time and wildcard jobs. The
+// evaluator is pure and never throws.
 import 'package:klabautermann_host/klabautermann_host.dart';
 import 'package:test/test.dart';
 
@@ -22,6 +23,22 @@ ServerZone _berlinZone() => ServerZone(
   ianaName: 'Europe/Berlin',
   offsetAt: _berlin,
 );
+
+/// The `(instant, annotation)` of the next five runs of [text] after
+/// [after] in [zone], modelled Berlin by default.
+List<(DateTime, CronDst)> _runs(
+  String text,
+  DateTime after, [
+  ServerZone? zone,
+]) => [
+  for (final r in nextCronRuns(
+    CronExpression.parse(text)!,
+    afterUtc: after,
+    zone: zone ?? _berlinZone(),
+    count: 5,
+  ))
+    (r.atUtc, r.dst),
+];
 
 void main() {
   test('a daily job at a fixed offset', () {
@@ -143,16 +160,22 @@ void main() {
     expect(runs.first.atUtc, DateTime.utc(2026, 6, 11));
   });
 
+  test('a fixed-time job does not run again in the repeated hour', () {
+    // Once the first 02:30 has passed, cron skips the repeated one.
+    final runs = nextCronRuns(
+      CronExpression.parse('30 2 * * *')!,
+      afterUtc: DateTime.utc(2026, 10, 25, 0, 45),
+      zone: _berlinZone(),
+      count: 1,
+    );
+    expect(runs.single.atUtc, DateTime.utc(2026, 10, 26, 1, 30));
+    expect(runs.single.dst, CronDst.none);
+  });
+
   test('runs within an hour of a transition are marked near it', () {
-    List<(DateTime, CronDst)> runs(DateTime after, {ServerZone? zone}) => [
-      for (final r in nextCronRuns(
-        CronExpression.parse('30 * * * *')!,
-        afterUtc: after,
-        zone: zone ?? _berlinZone(),
-        count: 5,
-      ))
-        (r.atUtc, r.dst),
-    ];
+    // A fixed-time job: its hour field does not start with `*`.
+    List<(DateTime, CronDst)> runs(DateTime after, {ServerZone? zone}) =>
+        _runs('30 0-23 * * *', after, zone ?? _berlinZone());
 
     // Spring forward at 01:00Z: wall 01:30 CET is half an hour before
     // the jump, 02:30 does not exist, 03:30 CEST is half an hour after.
@@ -163,17 +186,36 @@ void main() {
       (DateTime.utc(2026, 3, 29, 1, 30), CronDst.nearTransition),
       (DateTime.utc(2026, 3, 29, 2, 30), CronDst.none),
     ]);
-    // Fall back at 01:00Z: once the first 02:30 has passed, the next is
-    // the repeated one, half an hour after the transition.
-    expect(runs(DateTime.utc(2026, 10, 25, 0, 45)).first, (
-      DateTime.utc(2026, 10, 25, 1, 30),
-      CronDst.nearTransition,
-    ));
     // A fixed offset has no transitions.
     expect(
       runs(DateTime.utc(2026, 3, 28, 23), zone: _fixed(1)).map((r) => r.$2),
       everyElement(CronDst.none),
     );
+  });
+
+  test('a wildcard job runs by the clock at transitions', () {
+    // cronie and Debian's cron run a job whose minute or hour field
+    // starts with `*` by the clock: not for minutes a forward jump
+    // skips, and again in the hour a backward one repeats.
+    expect(_runs('30 * * * *', DateTime.utc(2026, 3, 28, 23)), [
+      (DateTime.utc(2026, 3, 28, 23, 30), CronDst.none),
+      (DateTime.utc(2026, 3, 29, 0, 30), CronDst.nearTransition),
+      (DateTime.utc(2026, 3, 29, 1, 30), CronDst.nearTransition),
+      (DateTime.utc(2026, 3, 29, 2, 30), CronDst.none),
+      (DateTime.utc(2026, 3, 29, 3, 30), CronDst.none),
+    ]);
+    expect(_runs('30 * * * *', DateTime.utc(2026, 10, 24, 23)), [
+      (DateTime.utc(2026, 10, 24, 23, 30), CronDst.none),
+      (DateTime.utc(2026, 10, 25, 0, 30), CronDst.nearTransition),
+      (DateTime.utc(2026, 10, 25, 1, 30), CronDst.nearTransition),
+      (DateTime.utc(2026, 10, 25, 2, 30), CronDst.none),
+      (DateTime.utc(2026, 10, 25, 3, 30), CronDst.none),
+    ]);
+    // `@hourly` is `0 * * * *`: wall 02:00 is skipped, 03:00 runs once.
+    expect(_runs('@hourly', DateTime.utc(2026, 3, 29, 0, 30)).take(2), [
+      (DateTime.utc(2026, 3, 29, 1), CronDst.nearTransition),
+      (DateTime.utc(2026, 3, 29, 2), CronDst.none),
+    ]);
   });
 
   test('@reboot and nonpositive counts yield no runs', () {

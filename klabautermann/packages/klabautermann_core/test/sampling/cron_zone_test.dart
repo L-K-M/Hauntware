@@ -74,6 +74,21 @@ void main() {
         (DateTime.utc(2026, 10, 25, 5, 47), 60, CronDst.none),
       ]);
     });
+
+    test('an hourly line runs in both passes of the repeated hour', () {
+      // Debian's cron.hourly line: its hour field is `*`, so cron runs
+      // it by the clock, at 02:17 CEST and again at 02:17 CET.
+      final hourly = cronResult(
+        _crontab('17 * * * * a'),
+        _berlin,
+        DateTime.utc(2026, 10, 24, 23, 30),
+      );
+      expect(_runs(hourly).take(3), [
+        (DateTime.utc(2026, 10, 25, 0, 17), 120, CronDst.nearTransition),
+        (DateTime.utc(2026, 10, 25, 1, 17), 60, CronDst.nearTransition),
+        (DateTime.utc(2026, 10, 25, 2, 17), 60, CronDst.none),
+      ]);
+    });
   });
 
   group('America/New_York', () {
@@ -116,8 +131,9 @@ void main() {
     });
 
     test('runs within an hour of the jump are marked near it', () {
+      // A fixed-time job, so cron catches up the skipped 02:30.
       final result = cronResult(
-        _crontab('30 * * * * a'),
+        _crontab('30 0-23 * * * a'),
         _newYork,
         DateTime.utc(2026, 3, 8, 5),
       );

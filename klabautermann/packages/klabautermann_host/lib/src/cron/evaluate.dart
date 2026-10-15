@@ -39,12 +39,12 @@ enum CronDst {
   /// An ordinary wall-clock minute.
   none,
 
-  /// The wall minute is skipped by a forward transition; the run fires
-  /// at the transition instant, which is cronie's gap behavior.
+  /// The wall minute is skipped by a forward transition; a fixed-time
+  /// job fires at the transition instant, which is cronie's gap behavior.
   gap,
 
-  /// The wall minute occurs twice around a backward transition; the run
-  /// fires at the first occurrence.
+  /// The wall minute occurs twice around a backward transition; a
+  /// fixed-time job fires at the first occurrence only.
   overlap,
 
   /// An ordinary wall minute within an hour of a transition. The
@@ -93,6 +93,11 @@ final class CronRun {
 /// (cronie fires them at the transition instant, within a 3-hour
 /// window), first-occurrence overlap jobs and other runs within an hour
 /// of a transition are annotated [CronDst].
+///
+/// cronie and Debian's cron catch up skipped minutes and skip repeated
+/// ones only for fixed-time jobs. A wildcard job
+/// ([CronExpression.hasWildcardTime]) runs by the clock: never in a gap,
+/// and in both passes of an overlap.
 List<CronRun> nextCronRuns(
   CronExpression expression, {
   required DateTime afterUtc,
@@ -104,7 +109,7 @@ List<CronRun> nextCronRuns(
   if (expression.isReboot || count <= 0 || horizonDays <= 0) return runs;
 
   final limit = afterUtc.add(Duration(days: horizonDays));
-  final emitted = <int>{};
+  final wildcard = expression.hasWildcardTime;
   var t = _afterMinute(afterUtc);
   int? prevWallMs;
   while (runs.length < count && t.isBefore(limit)) {
@@ -135,7 +140,7 @@ List<CronRun> nextCronRuns(
       prevWallMs = null;
       continue;
     }
-    if (prevWallMs != null) {
+    if (prevWallMs != null && !wildcard) {
       final advance = wallMs - prevWallMs;
       if (advance > 60000 && advance <= _maxGapMs) {
         // Forward jump: skipped wall minutes that match fire at the
@@ -143,18 +148,20 @@ List<CronRun> nextCronRuns(
         for (var w = prevWallMs + 60000; w < wallMs; w += 60000) {
           final skipped = DateTime.fromMillisecondsSinceEpoch(w, isUtc: true);
           if (expression.matches(skipped)) {
-            _emit(runs, emitted, w, t, offset, CronDst.gap, count);
+            _emit(runs, w, t, offset, CronDst.gap, count);
           }
         }
       }
     }
-    if (expression.matches(wall)) {
-      final dst = _repeatsWithin(zone, t, wallMs, offset)
+    // A fixed-time job's minute in the repeated pass has already run.
+    if (expression.matches(wall) &&
+        (wildcard || !_repeatOf(zone, t, wallMs, offset))) {
+      final dst = !wildcard && _repeatsWithin(zone, t, wallMs, offset)
           ? CronDst.overlap
           : _nearTransition(zone, t)
           ? CronDst.nearTransition
           : CronDst.none;
-      _emit(runs, emitted, wallMs, t, offset, dst, count);
+      _emit(runs, wallMs, t, offset, dst, count);
     }
     prevWallMs = wallMs;
     t = t.add(const Duration(minutes: 1));
@@ -185,16 +192,17 @@ bool _dayCanMatch(CronExpression e, DateTime wall) {
 /// cronie runs them when noticed within 3 hours.
 const _maxGapMs = 3 * 3600 * 1000;
 
+/// Adds a run unless [count] are listed. Instants only move forward and
+/// skipped wall minutes never recur, so no run repeats.
 void _emit(
   List<CronRun> runs,
-  Set<int> emitted,
   int wallMs,
   DateTime atUtc,
   Duration offset,
   CronDst dst,
   int count,
 ) {
-  if (runs.length >= count || !emitted.add(wallMs)) return;
+  if (runs.length >= count) return;
   runs.add(
     CronRun(
       atUtc: atUtc,
@@ -212,6 +220,19 @@ bool _nearTransition(ServerZone zone, DateTime t) =>
     zone.offsetFor(t.subtract(_hour)) != zone.offsetFor(t.add(_hour));
 
 const _hour = Duration(hours: 1);
+
+/// True when [wallMs] already occurred within 4 hours before instant
+/// [t]: [t] lies in the repeated pass of a backward transition, whose
+/// first pass ran at the earlier offset.
+bool _repeatOf(ServerZone zone, DateTime t, int wallMs, Duration offNow) {
+  final offBefore = zone.offsetFor(t.subtract(const Duration(hours: 4)));
+  if (offBefore <= offNow) return false;
+  final first = DateTime.fromMillisecondsSinceEpoch(
+    wallMs - offBefore.inMilliseconds,
+    isUtc: true,
+  );
+  return first.isBefore(t) && zone.offsetFor(first) == offBefore;
+}
 
 /// True when [wallMs] occurs a second time within 4 hours after instant
 /// [t] — a backward offset transition repeats the wall interval

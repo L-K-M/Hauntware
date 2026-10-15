@@ -827,10 +827,15 @@ Proposals awaiting the owner close the section; they are not decisions.
   carries the rules inside the engine, and the rows cross with plain
   `CronRun`s (D52). The database can disagree with the server's own zone
   files, which cron reads, so a run within an hour of a transition is
-  marked `nearTransition` beside the gap and overlap marks. Its
-  transition tables end at the 32-bit time limit, early in 2038; a run
-  after a zone's last listed transition keeps the offset in force after
-  it. The jobs goldens live in
+  marked `nearTransition` beside the gap and overlap marks. Across a
+  transition the runs follow cronie and Debian's cron [R: `cron.c`
+  `find_jobs`]: a fixed-time job runs a gap's minutes at the jump and an
+  overlap's minutes once, and a job whose minute or hour field starts
+  with `*` runs by the clock, never in a gap and in both passes of an
+  overlap. BusyBox crond runs every job by the clock, which the runs do
+  not model yet. The database's transition tables end at the 32-bit
+  time limit, early in 2038; a run after a zone's last listed
+  transition keeps the offset in force after it. The jobs goldens live in
   `klabautermann_core/test/fixtures/cron_jobs/`, because
   `klabautermann_host` stays on meta and collection (3.1). Why: Dart
   ships no zone database, and a fixed offset puts every run after a DST
