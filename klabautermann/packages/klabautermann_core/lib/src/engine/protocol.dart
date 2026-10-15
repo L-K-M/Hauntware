@@ -1771,8 +1771,8 @@ final class CoreResult extends SampleResult {
 }
 
 /// A value of [OverviewResult] or [CoreResult] that
-/// [OverviewResult.withheld] can name, after the `/proc` file it comes
-/// from (D50).
+/// [OverviewResult.withheld] or [CoreResult.withheld] can name, after
+/// the `/proc` file it comes from (D50).
 enum MetricField {
   /// `cpu`, from `/proc/stat`.
   cpu,
