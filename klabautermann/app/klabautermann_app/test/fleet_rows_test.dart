@@ -370,6 +370,36 @@ void main() {
         reason: 'the summary is said only inside the row\'s label',
       );
     });
+
+    testWidgets('a tap on the locator warning shows what it means', (
+      tester,
+    ) async {
+      final rows = await _pump(
+        tester,
+        servers: const [
+          FleetServer(
+            id: 'srv-1',
+            displayName: 'web-1',
+            address: '10.0.0.4',
+            locatorConflict: ['srv-2'],
+          ),
+          FleetServer(id: 'srv-2', displayName: 'db-1', address: '10.0.0.4'),
+        ],
+      );
+
+      await tester.tap(find.byIcon(Icons.warning_amber_rounded));
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(
+        find.text(
+          'Host key conflict with db-1: they reach the same address '
+          'through a different jump route.',
+        ),
+        findsOneWidget,
+      );
+      expect(rows.opened, isEmpty);
+      await tester.pump(const Duration(seconds: 2));
+      await tester.pumpAndSettle();
+    });
   });
 
   testWidgets('the locator warning shows on the row with the other '

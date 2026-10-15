@@ -259,9 +259,9 @@ class FleetServerRow extends StatelessWidget {
   final bool selected;
 
   /// The widest the warning, pressure bar and age beside the row grow:
-  /// the warning (16 px), the bar with its severity icon (64), the gaps,
-  /// and room for an age wider than the bar at large text sizes, so the
-  /// kit's row keeps room for its mark, icon and a title on a 260 px rail.
+  /// the warning's target (24 px), the bar with its severity icon (64),
+  /// the gaps, and room for an age wider than the bar, so the kit's row
+  /// keeps room for its mark, icon and a title on a 260 px rail.
   static const double _extrasMaxWidth = 120;
 
   /// How wide a row must be, per 100 % of text, for the pressure bar and
@@ -430,12 +430,19 @@ class FleetServerRow extends StatelessWidget {
         : Tooltip(
             message: conflict,
             excludeFromSemantics: true,
-            // Hover only, as on the row: a touch long-press opens its menu.
-            triggerMode: TooltipTriggerMode.manual,
-            child: Icon(
-              Icons.warning_amber_rounded,
-              size: 16,
-              color: ChartPalette.of(context).warning,
+            // A touch on the warning shows its words, since on a phone the
+            // row's tooltip never shows (it opens on hover only). Tap mode
+            // ignores mice: a click opens the server and hover shows these.
+            triggerMode: TooltipTriggerMode.tap,
+            // 24 px square, WCAG 2.5.8's smallest target, and no taller
+            // than a compact row.
+            child: SizedBox.square(
+              dimension: 24,
+              child: Icon(
+                Icons.warning_amber_rounded,
+                size: 16,
+                color: ChartPalette.of(context).warning,
+              ),
             ),
           );
     final bar = cells == null
