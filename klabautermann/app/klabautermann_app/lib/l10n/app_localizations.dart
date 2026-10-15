@@ -856,6 +856,12 @@ abstract class AppLocalizations {
   /// **'No data yet'**
   String get coverageFreshnessNoData;
 
+  /// The server header's coverage chip (03 §10.2): the server's execution tier, T0 (kept as written), and that Klabautermann reads this server only while a view has it open, since no monitor set watches it yet. Opens the coverage sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'T0: read only while open'**
+  String get coverageServerChip;
+
   /// No description provided for @serverTitle.
   ///
   /// In en, this message translates to:
@@ -2193,6 +2199,186 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Next match'**
   String get logsPanelSearchNext;
+
+  /// The server header's detected container runtime (CN-09), read-only: the engines the probe found, such as "Docker, rootful", joined by overviewHeaderRuntimeSeparator.
+  ///
+  /// In en, this message translates to:
+  /// **'Runtime: {engines}'**
+  String overviewHeaderRuntime(String engines);
+
+  /// Between two engines in overviewHeaderRuntime; each engine's own words already hold a comma.
+  ///
+  /// In en, this message translates to:
+  /// **'; '**
+  String get overviewHeaderRuntimeSeparator;
+
+  /// The server header's detected container runtime when the probe found no Docker or Podman engine socket.
+  ///
+  /// In en, this message translates to:
+  /// **'Runtime: none found'**
+  String get overviewHeaderRuntimeNone;
+
+  /// The server header's detected container runtime when the probe could not tell.
+  ///
+  /// In en, this message translates to:
+  /// **'Runtime: unknown'**
+  String get overviewHeaderRuntimeUnknown;
+
+  /// The server header's detected container runtime before the server's capability probe has reported.
+  ///
+  /// In en, this message translates to:
+  /// **'Runtime: not checked yet'**
+  String get overviewHeaderRuntimeNotChecked;
+
+  /// The Overview tab before the server sent its first reading.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for the first reading.'**
+  String get overviewWaiting;
+
+  /// Why the Overview tab's latest reading has no values; the values of the last reading, if any, stay shown below it.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, missing{The server lacks a file or tool this reading needs.} denied{The server refused this reading.} timeout{This reading took too long, so the server stopped it.} other{This reading failed on the server.}}'**
+  String overviewUnavailable(String reason);
+
+  /// An Overview value the server did not report, or that is not shown for a reason given beside it; never shown as zero.
+  ///
+  /// In en, this message translates to:
+  /// **'Unknown'**
+  String get overviewUnknown;
+
+  /// Reason in an Overview card whose figures are unknown: in a container, the system file they come from shows the host's figures instead of the container's (SYS-04).
+  ///
+  /// In en, this message translates to:
+  /// **'Inside this container these figures would be the host\'s, so they are not shown.'**
+  String get overviewUnknownContainer;
+
+  /// Heading of the Overview's CPU card (OV-01), also the name its chart summaries give.
+  ///
+  /// In en, this message translates to:
+  /// **'CPU'**
+  String get overviewCpuTitle;
+
+  /// The CPU gauge's part: the share of time the CPUs were busy (not idle or waiting on I/O).
+  ///
+  /// In en, this message translates to:
+  /// **'Busy'**
+  String get overviewCpuBusy;
+
+  /// CPU-01: the share of CPU time spent in user programs.
+  ///
+  /// In en, this message translates to:
+  /// **'User'**
+  String get overviewCpuUser;
+
+  /// CPU-01: the share of CPU time spent in the kernel.
+  ///
+  /// In en, this message translates to:
+  /// **'System'**
+  String get overviewCpuSystem;
+
+  /// CPU-01: the share of CPU time spent idle.
+  ///
+  /// In en, this message translates to:
+  /// **'Idle'**
+  String get overviewCpuIdle;
+
+  /// CPU-02: heading over each core's busy share.
+  ///
+  /// In en, this message translates to:
+  /// **'Per core'**
+  String get overviewPerCoreTitle;
+
+  /// Heading of the Overview's load card (CPU-03): the load averages.
+  ///
+  /// In en, this message translates to:
+  /// **'Load'**
+  String get overviewLoadTitle;
+
+  /// The one-minute load average's label.
+  ///
+  /// In en, this message translates to:
+  /// **'1 min'**
+  String get overviewLoad1;
+
+  /// The five-minute load average's label.
+  ///
+  /// In en, this message translates to:
+  /// **'5 min'**
+  String get overviewLoad5;
+
+  /// The fifteen-minute load average's label.
+  ///
+  /// In en, this message translates to:
+  /// **'15 min'**
+  String get overviewLoad15;
+
+  /// The one-minute load divided by the number of CPUs (CPU-03's core context).
+  ///
+  /// In en, this message translates to:
+  /// **'Per core'**
+  String get overviewLoadPerCore;
+
+  /// A load average in the UI locale's number format, with two decimals.
+  ///
+  /// In en, this message translates to:
+  /// **'{load}'**
+  String overviewLoadValue(double load);
+
+  /// Heading of the Overview's memory card (MEM-01), also the name its chart summaries give.
+  ///
+  /// In en, this message translates to:
+  /// **'Memory'**
+  String get overviewMemoryTitle;
+
+  /// Used memory or swap: for memory, the installed memory less what is available.
+  ///
+  /// In en, this message translates to:
+  /// **'Used'**
+  String get overviewMemoryUsed;
+
+  /// MEM-01: memory the kernel uses as block-device buffers.
+  ///
+  /// In en, this message translates to:
+  /// **'Buffers'**
+  String get overviewMemoryBuffers;
+
+  /// MEM-01: memory holding the page cache and reclaimable kernel caches.
+  ///
+  /// In en, this message translates to:
+  /// **'Cache'**
+  String get overviewMemoryCache;
+
+  /// MEM-01: memory available to new programs without swapping.
+  ///
+  /// In en, this message translates to:
+  /// **'Available'**
+  String get overviewMemoryAvailable;
+
+  /// MEM-01: shared memory, mostly tmpfs, which is part of the cache.
+  ///
+  /// In en, this message translates to:
+  /// **'Shared'**
+  String get overviewMemoryShared;
+
+  /// MEM-01: on a server with ZFS, its cache (the ARC) is counted in used memory, so used reads higher than the memory programs hold. ZFS and ARC are kept as written.
+  ///
+  /// In en, this message translates to:
+  /// **'ZFS ARC counted as used'**
+  String get overviewMemoryArc;
+
+  /// Heading of the Overview's swap card (MEM-02), also the name its chart summaries give.
+  ///
+  /// In en, this message translates to:
+  /// **'Swap'**
+  String get overviewSwapTitle;
+
+  /// The swap card of a server with no swap space.
+  ///
+  /// In en, this message translates to:
+  /// **'No swap is set up.'**
+  String get overviewSwapNone;
 }
 
 class _AppLocalizationsDelegate

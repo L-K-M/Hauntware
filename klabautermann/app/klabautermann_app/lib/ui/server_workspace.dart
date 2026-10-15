@@ -6,9 +6,10 @@ import '../controllers/monitoring_controller.dart';
 import '../l10n/app_localizations.dart';
 import 'access/access_panel.dart';
 import 'access/panel_gate.dart';
-import 'fleet_rail.dart' show linkStatusWord;
 import 'inspector_pane.dart' show PlaceholderPaneBody;
 import 'logs/logs_panel.dart';
+import 'overview_panel.dart';
+import 'server_header.dart';
 import 'server_surfaces.dart';
 import 'services_panel.dart';
 import 'system_panel.dart';
@@ -83,20 +84,11 @@ class ServerWorkspace extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    l10n.serverTitle(server.displayName),
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                ),
-                Text(
-                  linkStatusWord(l10n, fleet.linkStatusFor(server.id)),
-                  style: Theme.of(context).textTheme.labelMedium,
-                ),
-              ],
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+            child: ServerHeader(
+              server: server,
+              fleet: fleet,
+              monitoring: monitoring,
             ),
           ),
           TabBar(
@@ -170,6 +162,11 @@ class _PanelsState extends State<_Panels> {
                   streams: panel.streams,
                   visible: tabs.index == index,
                   child: switch (panel) {
+                    ServerPanel.overview => OverviewPanel(
+                      monitoring: monitoring,
+                      serverId: serverId,
+                      visible: tabs.index == index,
+                    ),
                     ServerPanel.services => ServicesPanel(
                       monitoring: monitoring,
                       serverId: serverId,

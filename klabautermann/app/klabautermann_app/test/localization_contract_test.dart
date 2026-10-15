@@ -277,6 +277,9 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   'lib/ui/server_surfaces.dart': {
     "'new controllers come with a new tree (KlabautermannApp, D44)'",
   },
+  // The trailing core number of a /proc/stat name such as cpu12, which
+  // orders the per-core figures; the names themselves are server data.
+  'lib/ui/overview_panel.dart': {r"r'\d+$'"},
   // debugPrint of a failed theme change; the toast is ARB text.
   'lib/ui/settings_page.dart': {r"'$error'"},
   'lib/ui/sortable_table.dart': {

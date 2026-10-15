@@ -510,6 +510,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get coverageFreshnessNoData => 'No data yet';
 
   @override
+  String get coverageServerChip => 'T0: read only while open';
+
+  @override
   String serverTitle(String name) {
     return '$name';
   }
@@ -1529,4 +1532,114 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get logsPanelSearchNext => 'Next match';
+
+  @override
+  String overviewHeaderRuntime(String engines) {
+    return 'Runtime: $engines';
+  }
+
+  @override
+  String get overviewHeaderRuntimeSeparator => '; ';
+
+  @override
+  String get overviewHeaderRuntimeNone => 'Runtime: none found';
+
+  @override
+  String get overviewHeaderRuntimeUnknown => 'Runtime: unknown';
+
+  @override
+  String get overviewHeaderRuntimeNotChecked => 'Runtime: not checked yet';
+
+  @override
+  String get overviewWaiting => 'Waiting for the first reading.';
+
+  @override
+  String overviewUnavailable(String reason) {
+    String _temp0 = intl.Intl.selectLogic(reason, {
+      'missing': 'The server lacks a file or tool this reading needs.',
+      'denied': 'The server refused this reading.',
+      'timeout': 'This reading took too long, so the server stopped it.',
+      'other': 'This reading failed on the server.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get overviewUnknown => 'Unknown';
+
+  @override
+  String get overviewUnknownContainer =>
+      'Inside this container these figures would be the host\'s, so they are not shown.';
+
+  @override
+  String get overviewCpuTitle => 'CPU';
+
+  @override
+  String get overviewCpuBusy => 'Busy';
+
+  @override
+  String get overviewCpuUser => 'User';
+
+  @override
+  String get overviewCpuSystem => 'System';
+
+  @override
+  String get overviewCpuIdle => 'Idle';
+
+  @override
+  String get overviewPerCoreTitle => 'Per core';
+
+  @override
+  String get overviewLoadTitle => 'Load';
+
+  @override
+  String get overviewLoad1 => '1 min';
+
+  @override
+  String get overviewLoad5 => '5 min';
+
+  @override
+  String get overviewLoad15 => '15 min';
+
+  @override
+  String get overviewLoadPerCore => 'Per core';
+
+  @override
+  String overviewLoadValue(double load) {
+    final intl.NumberFormat loadNumberFormat =
+        intl.NumberFormat.decimalPatternDigits(
+          locale: localeName,
+          decimalDigits: 2,
+        );
+    final String loadString = loadNumberFormat.format(load);
+
+    return '$loadString';
+  }
+
+  @override
+  String get overviewMemoryTitle => 'Memory';
+
+  @override
+  String get overviewMemoryUsed => 'Used';
+
+  @override
+  String get overviewMemoryBuffers => 'Buffers';
+
+  @override
+  String get overviewMemoryCache => 'Cache';
+
+  @override
+  String get overviewMemoryAvailable => 'Available';
+
+  @override
+  String get overviewMemoryShared => 'Shared';
+
+  @override
+  String get overviewMemoryArc => 'ZFS ARC counted as used';
+
+  @override
+  String get overviewSwapTitle => 'Swap';
+
+  @override
+  String get overviewSwapNone => 'No swap is set up.';
 }

@@ -6,13 +6,14 @@ import '../controllers/monitoring_controller.dart';
 import '../l10n/app_localizations.dart';
 import 'access/access_panel.dart' show AccessPage;
 import 'access/panel_gate.dart';
-import 'fleet_rail.dart' show linkStatusWord;
 import 'inspector_pane.dart' show PlaceholderPaneBody;
 import 'logs/logs_panel.dart';
+import 'overview_panel.dart';
+import 'server_header.dart';
 import 'server_surfaces.dart';
 
-/// The pushed server screen of 03 §10.5: the server's title, its link
-/// state, and the bottom bar (Overview, Docker, Logs, More). The
+/// The pushed server screen of 03 §10.5: the server's title, the server
+/// header, and the bottom bar (Overview, Docker, Logs, More). The
 /// destinations' bodies land with their panels.
 ///
 /// The server stays open while the screen is pushed, and only the
@@ -88,19 +89,15 @@ class _ServerDetailPageState extends State<ServerDetailPage>
   }
 
   Widget _build(BuildContext context, AppLocalizations l10n) {
-    final status = widget.fleet.linkStatusFor(widget.server.id);
     return Scaffold(
-      appBar: AppBar(
-        title: Text(l10n.serverTitle(widget.server.displayName)),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(20),
-          child: Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: Text(linkStatusWord(l10n, status)),
-          ),
+      appBar: AppBar(title: Text(l10n.serverTitle(widget.server.displayName))),
+      body: _HeaderedBody(
+        header: ServerHeader(
+          server: widget.server,
+          fleet: widget.fleet,
+          monitoring: widget.monitoring,
+          showTitle: false,
         ),
-      ),
-      body: SafeArea(
         child: SelectedTabView(
           controller: _destinations,
           children: [
@@ -117,6 +114,11 @@ class _ServerDetailPageState extends State<ServerDetailPage>
                   streams: panel.streams,
                   visible: _destinations.index == index,
                   child: switch (panel) {
+                    ServerPanel.overview => OverviewPanel(
+                      monitoring: widget.monitoring,
+                      serverId: widget.server.id,
+                      visible: _destinations.index == index,
+                    ),
                     ServerPanel.logs => LogsPanel(
                       monitoring: widget.monitoring,
                       serverId: widget.server.id,
@@ -148,6 +150,30 @@ class _ServerDetailPageState extends State<ServerDetailPage>
       ),
     );
   }
+}
+
+/// The safe area with [header] over [child]: the header heads the body
+/// rather than the app bar's fixed-height bottom, so it grows with large
+/// text instead of clipping (A11Y-09).
+class _HeaderedBody extends StatelessWidget {
+  const _HeaderedBody({required this.header, required this.child});
+
+  final Widget header;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => SafeArea(
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          child: header,
+        ),
+        Expanded(child: child),
+      ],
+    ),
+  );
 }
 
 const Map<ServerPanel, IconData> _destinationIcons = {
