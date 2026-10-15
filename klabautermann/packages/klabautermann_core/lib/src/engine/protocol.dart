@@ -1823,7 +1823,8 @@ final class MemoryUsage {
 
   /// Whether the ZFS ARC is part of [usedBytes], and MEM-01's bar says
   /// "ZFS ARC counted as used" (7.1): true where
-  /// `/proc/spl/kstat/zfs/arcstats` exists outside a container (D48).
+  /// `/proc/spl/kstat/zfs/arcstats` exists and the `meminfo` shown is the
+  /// kernel's own, outside a container or without an lxcfs mount (D48).
   /// Null while the engine does not know.
   final bool? zfsArcCountedAsUsed;
 }

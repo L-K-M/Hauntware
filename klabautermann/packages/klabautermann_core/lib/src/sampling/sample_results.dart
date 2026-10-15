@@ -160,9 +160,13 @@ final class MetricDeriver {
     final withheld = withheldMetrics(profile);
     T? keep<T>(MetricField field, T? value) =>
         withheld.containsKey(field) ? null : value;
+    // An lxcfs meminfo leaves the host's ARC out (D48). Without an lxcfs
+    // mount the meminfo shown is the kernel's own, which counts it as
+    // used, also while the container question is open.
     final zfsArcCountedAsUsed = switch ((_zfsArc, profile?.inContainer)) {
       (false, _) => false,
       (true, final inContainer?) => !inContainer,
+      (true, null) when profile?.lxcfsMounts != null => true,
       _ => null,
     };
 

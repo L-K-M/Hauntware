@@ -651,7 +651,8 @@ Proposals awaiting the owner close the section; they are not decisions.
   (v1.x); a host without the file sends no block, which reads as not
   present, never as zero. Inside a container the file is the host's ARC
   [U], which an lxcfs `meminfo` does not contain, so the engine applies
-  MEM-01's note outside containers only. On synthetic `/proc` trees [U] a
+  MEM-01's note outside containers only (and, while that question is
+  open, without an lxcfs mount, D50). On synthetic `/proc` trees [U] a
   `core` reply is 1,151 B at 4 CPUs, 1,880 B at 32 and 2,714 B at 64, 26 B
   for each further CPU, and an `overview` reply 507 B, so 2.5 KB holds to
   about 55 CPUs and 11.4 allows 30 B for each CPU beyond 32; under mksh a
@@ -729,8 +730,10 @@ Proposals awaiting the owner close the section; they are not decisions.
   `CoreResult`, and the result's `withheld` map names the field with
   the typed reason `containerHostFigures`, also on a reading that did
   not carry it, so the app never shows "no previous reading" instead.
-  `/proc/net/dev` is namespaced and never withheld, and MEM-01's ARC
-  note does not apply in a container (D48). Where the container
+  `/proc/net/dev` is namespaced and never withheld. MEM-01's ARC note
+  applies outside containers and, while the container question is open,
+  where the probe found no lxcfs mount, since the `meminfo` shown is then
+  the kernel's own (D48). Where the container
   question is open (no `systemd-detect-virt` and no lxcfs mount, or no
   probe answer yet), values show as measured: withholding them would
   blank every such host, Alpine and BusyBox ones included.

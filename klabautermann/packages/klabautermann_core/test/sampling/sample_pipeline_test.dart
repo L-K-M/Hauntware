@@ -491,5 +491,20 @@ void main() {
         ]),
       );
     });
+
+    test('without an lxcfs mount the meminfo shown counts the ARC as used, '
+        'even while the container question is open (D48)', () {
+      final p = _sampling();
+      // An empty answer leaves the container unknown, as without
+      // systemd-detect-virt; `mounts=` says that no lxcfs mount exists.
+      p.addProbe(_probe(container: ''));
+      final arc = reply(1, 1000, [
+        ok('core', '${_blocks(0)}\n== arcstats ==\nsize 1024\nc_min 512'),
+      ]);
+      final core = _result<CoreResult>(p.addTick(_fast, arc, _at(0)));
+      expect(p.profile!.inContainer, isNull);
+      expect(core.withheld, isEmpty);
+      expect(core.memory!.zfsArcCountedAsUsed, isTrue);
+    });
   });
 }
