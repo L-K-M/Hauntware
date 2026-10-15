@@ -99,8 +99,13 @@ class _FailedUnit extends StatelessWidget {
             )
           : TextButton(
               onPressed: () => onSelected(unit),
+              // The plain rows' start inset at every text scale: the
+              // default scales from 12 down to 4 with the text, setting
+              // the label off the rows beside it. Only the horizontal
+              // padding changes, so the minimum tap size stays.
               style: TextButton.styleFrom(
                 alignment: AlignmentDirectional.centerStart,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
               ),
               child: Text(label),
             ),
