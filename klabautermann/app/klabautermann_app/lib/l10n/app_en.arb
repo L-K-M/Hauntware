@@ -503,6 +503,16 @@
   "@logJournalNotSent": {
     "description": "Stands in for a journal message or field value the server did not send because it is larger than 4,096 bytes."
   },
+  "logJournalFieldNotSent": "{name} [not sent: over 4,096 bytes]",
+  "@logJournalFieldNotSent": {
+    "description": "Row of a journal entry's expanded fields for a field whose value the server did not send because it is larger than 4,096 bytes; name is the journal field's name as the server sent it, such as CODE_LINE.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "CODE_LINE"
+      }
+    }
+  },
   "logJournalFieldsLeftOut": "{count, plural, =1{1 more field not kept} other{{count} more fields not kept}}",
   "@logJournalFieldsLeftOut": {
     "description": "Last row of a journal entry's expanded fields when the log view kept only some of them; count is how many it left out.",

@@ -498,6 +498,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get logJournalNotSent => '[not sent: over 4,096 bytes]';
 
   @override
+  String logJournalFieldNotSent(String name) {
+    return '$name [not sent: over 4,096 bytes]';
+  }
+
+  @override
   String logJournalFieldsLeftOut(int count) {
     final intl.NumberFormat countNumberFormat =
         intl.NumberFormat.decimalPattern(localeName);

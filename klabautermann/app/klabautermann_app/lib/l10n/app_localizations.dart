@@ -814,6 +814,12 @@ abstract class AppLocalizations {
   /// **'[not sent: over 4,096 bytes]'**
   String get logJournalNotSent;
 
+  /// Row of a journal entry's expanded fields for a field whose value the server did not send because it is larger than 4,096 bytes; name is the journal field's name as the server sent it, such as CODE_LINE.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} [not sent: over 4,096 bytes]'**
+  String logJournalFieldNotSent(String name);
+
   /// Last row of a journal entry's expanded fields when the log view kept only some of them; count is how many it left out.
   ///
   /// In en, this message translates to:
