@@ -47,9 +47,12 @@ void main() {
           if (code.startsWith('#')) continue;
           if (code == 'done' || code.startsWith('done ')) depth--;
           final n = call.allMatches(code).length;
-          // A guarded call in a loop would run once per pass.
+          // A guarded call in a loop would run once per pass, and so
+          // would one in a while or until condition on the header line.
           final inLoop =
-              depth > 0 || RegExp(r'\bdo\b.*\bdone\b').hasMatch(code);
+              depth > 0 ||
+              RegExp(r'\bdo\b.*\bdone\b').hasMatch(code) ||
+              RegExp(r'^(while|until)\b').hasMatch(code);
           expect(inLoop && n > 0, isFalse, reason: '${c.name}: $code');
           calls += n;
           if (loopStart.hasMatch(code)) depth++;

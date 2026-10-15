@@ -14,14 +14,15 @@ import 'dart:math';
 import 'package:klabautermann_host/klabautermann_host.dart';
 import 'package:test/test.dart';
 
+/// Each shell's first hit on PATH, then in /bin or /usr/bin.
 final _shells = <String, String>{
   for (final name in ['dash', 'bash', 'mksh'])
-    for (final dir in [
-      ...?Platform.environment['PATH']?.split(':'),
-      '/bin',
-      '/usr/bin',
-    ])
-      if (File('$dir/$name').existsSync()) name: '$dir/$name',
+    if ([...?Platform.environment['PATH']?.split(':'), '/bin', '/usr/bin']
+            .map((dir) => '$dir/$name')
+            .where((path) => File(path).existsSync())
+            .firstOrNull
+        case final path?)
+      name: path,
 };
 
 /// Whether [shell] does 64-bit arithmetic; mksh does 32-bit, so its
@@ -185,7 +186,7 @@ List<int> _cpuFields(int i) => [
   0,
   1700000 + i * 7,
   35000 + i,
-  0,
+  9000 + i,
   0,
 ];
 
