@@ -517,4 +517,92 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get logJournalHideFields => 'Hide fields';
+
+  @override
+  String get servicesWaiting => 'Waiting for the first list of units…';
+
+  @override
+  String get servicesUnavailableMissing =>
+      'This server has no systemctl, so there are no units to list.';
+
+  @override
+  String get servicesUnavailableDenied =>
+      'The server refused to list its units.';
+
+  @override
+  String get servicesUnavailableTimeout =>
+      'Listing units took too long and was stopped.';
+
+  @override
+  String get servicesUnavailableError => 'Listing units failed.';
+
+  @override
+  String get servicesTextFallback =>
+      'This server\'s systemd is older than version 246, so units are read from text. States that could not be read show as unknown.';
+
+  @override
+  String get servicesFilterType => 'Type';
+
+  @override
+  String get servicesFilterTypeAll => 'All types';
+
+  @override
+  String get servicesFilterState => 'State';
+
+  @override
+  String get servicesFilterStateAll => 'All states';
+
+  @override
+  String get servicesEmpty => 'No units match these filters.';
+
+  @override
+  String get servicesColumnUnit => 'Unit';
+
+  @override
+  String get servicesColumnLoad => 'Load';
+
+  @override
+  String get servicesColumnActive => 'Active';
+
+  @override
+  String get servicesColumnSub => 'Sub';
+
+  @override
+  String get servicesColumnDescription => 'Description';
+
+  @override
+  String servicesFailedCount(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$countString failed units',
+      one: '1 failed unit',
+      zero: 'No failed units',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String servicesFailedUnit(String unit, String state) {
+    return '$unit: $state';
+  }
+
+  @override
+  String servicesFailedMore(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'and $countString more',
+      one: 'and 1 more',
+    );
+    return '$_temp0';
+  }
 }

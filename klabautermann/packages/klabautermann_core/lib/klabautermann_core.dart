@@ -54,6 +54,7 @@ export 'package:klabautermann_host/klabautermann_host.dart'
         ProcsSelection,
         SystemdUnit,
         TimersSnapshot,
+        UnitListFormat,
         UnitsSnapshot;
 // The app resolves `~/.ssh/config` for the FL-02 import with Séance's home
 // rule, which also undoes a macOS sandbox's container `HOME`.
