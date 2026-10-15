@@ -136,17 +136,50 @@ class DetectedRuntime extends StatelessWidget {
   }
 }
 
-class _AccessBody extends StatelessWidget {
+/// What the tab's last copy did.
+enum _CopyOutcome { copied, failed }
+
+/// The tab's last copy: which row's command, and whether the clipboard
+/// took it.
+typedef _Copy = ({AccessItem item, String command, _CopyOutcome outcome});
+
+class _AccessBody extends StatefulWidget {
   const _AccessBody({super.key, required this.profile});
 
   final HostProfile? profile;
+
+  @override
+  State<_AccessBody> createState() => _AccessBodyState();
+}
+
+class _AccessBodyState extends State<_AccessBody> {
+  /// One for the whole tab: the clipboard holds only the last text
+  /// copied, so a copy clears every other row's line about an earlier
+  /// one, which a user could otherwise paste into a root shell.
+  _Copy? _lastCopy;
+
+  Future<void> _copy(AccessItem item, String command) async {
+    var outcome = _CopyOutcome.copied;
+    try {
+      await Clipboard.setData(ClipboardData(text: command));
+    } on PlatformException {
+      // Windows refuses while another process holds the clipboard
+      // (OpenClipboard fails). The clipboard keeps its earlier text, so
+      // the row says the copy failed rather than leave the screen as it was.
+      outcome = _CopyOutcome.failed;
+    }
+    if (!mounted) return;
+    setState(
+      () => _lastCopy = (item: item, command: command, outcome: outcome),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final scheme = Theme.of(context).colorScheme;
     final textScaler = MediaQuery.textScalerOf(context);
-    final profile = this.profile;
+    final profile = widget.profile;
     final access = profile == null ? null : evaluateAccess(profile);
     final rootShellNote = access == null
         ? null
@@ -197,6 +230,8 @@ class _AccessBody extends StatelessWidget {
                       reason: _reasonText(l10n, row.reason, profile),
                       rootEquivalent: row.rootEquivalent,
                       fix: row.fix,
+                      lastCopy: _lastCopy,
+                      onCopy: (command) => _copy(row.item, command),
                       rootShellNote: rootShellNote,
                       details: row.item == AccessItem.runtime
                           ? _engineLines(context, access.engines)
@@ -261,13 +296,15 @@ class _Note extends StatelessWidget {
 
 /// One access-check row: the state as an icon and a word (never colour
 /// alone, 03 §10.10), the reason, the SAF-08 badge, and the fix to copy.
-class _AccessRowTile extends StatefulWidget {
+class _AccessRowTile extends StatelessWidget {
   const _AccessRowTile({
     required this.item,
     required this.status,
     required this.reason,
     this.rootEquivalent = false,
     this.fix,
+    this.lastCopy,
+    this.onCopy,
     this.rootShellNote,
     this.details = const [],
   });
@@ -278,6 +315,12 @@ class _AccessRowTile extends StatefulWidget {
   final bool rootEquivalent;
   final AccessFix? fix;
 
+  /// The tab's last copy, which the row words while it is the fix shown.
+  final _Copy? lastCopy;
+
+  /// Copies the fix's command; a row without a fix needs none.
+  final void Function(String command)? onCopy;
+
   /// The note under a [FixElevation.rootShell] fix, which carries no
   /// prefix: K04 gives one both when the probe found neither sudo nor doas
   /// and when it did not answer.
@@ -287,34 +330,11 @@ class _AccessRowTile extends StatefulWidget {
   final List<Widget> details;
 
   @override
-  State<_AccessRowTile> createState() => _AccessRowTileState();
-}
-
-class _AccessRowTileState extends State<_AccessRowTile> {
-  /// The command last copied, which the row confirms while it is still
-  /// the fix shown.
-  String? _copied;
-
-  Future<void> _copy(String command) async {
-    try {
-      await Clipboard.setData(ClipboardData(text: command));
-    } on PlatformException {
-      // Windows refuses while another process holds the clipboard
-      // (OpenClipboard fails). The clipboard keeps its earlier text, so
-      // an earlier copy's confirmation must not stay on screen.
-      if (mounted) setState(() => _copied = null);
-      return;
-    }
-    if (!mounted) return;
-    setState(() => _copied = command);
-  }
-
-  @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final (icon, color, word) = switch (widget.status) {
+    final (icon, color, word) = switch (status) {
       AccessStatus.ok => (
         Icons.check_circle_outline,
         scheme.primary,
@@ -331,7 +351,7 @@ class _AccessRowTileState extends State<_AccessRowTile> {
         l10n.accessStatusUnknown,
       ),
     };
-    final fix = widget.fix;
+    final fix = this.fix;
     return DecoratedBox(
       decoration: BoxDecoration(
         border: Border.all(color: scheme.outlineVariant),
@@ -362,7 +382,7 @@ class _AccessRowTileState extends State<_AccessRowTile> {
                           crossAxisAlignment: WrapCrossAlignment.center,
                           children: [
                             Text(
-                              _itemTitle(l10n, widget.item),
+                              _itemTitle(l10n, item),
                               style: theme.textTheme.titleSmall,
                             ),
                             Text(
@@ -371,24 +391,24 @@ class _AccessRowTileState extends State<_AccessRowTile> {
                                 color: color,
                               ),
                             ),
-                            if (widget.rootEquivalent) const _RootBadge(),
+                            if (rootEquivalent) const _RootBadge(),
                           ],
                         ),
-                        Text(widget.reason, style: theme.textTheme.bodyMedium),
+                        Text(reason, style: theme.textTheme.bodyMedium),
                       ],
                     ),
                   ),
                 ],
               ),
             ),
-            if (widget.details.isNotEmpty || fix != null)
+            if (details.isNotEmpty || fix != null)
               Padding(
                 padding: const EdgeInsetsDirectional.only(start: _detailIndent),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   spacing: 8,
                   children: [
-                    ...widget.details,
+                    ...details,
                     if (fix != null) ..._fixLines(context, l10n, fix),
                   ],
                 ),
@@ -407,11 +427,15 @@ class _AccessRowTileState extends State<_AccessRowTile> {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final command = fixCommandText(fix);
-    final copied = _copied == command;
+    final copy = lastCopy;
+    final outcome = copy?.item == item && copy?.command == command
+        ? copy?.outcome
+        : null;
+    final onCopy = this.onCopy;
     final mono = klabautermannThemeStyle.monoFontFamilies;
     return [
       // The SAF-08 notice beside docker-group advice (03 §8.4).
-      if (widget.item == AccessItem.dockerSocket)
+      if (item == AccessItem.dockerSocket)
         _Note(
           icon: Icons.warning_amber_outlined,
           text: l10n.accessDockerGroupWarning,
@@ -434,11 +458,11 @@ class _AccessRowTileState extends State<_AccessRowTile> {
           ),
         ),
       ),
-      if (widget.rootShellNote case final note?
+      if (rootShellNote case final note?
           when fix.elevation == FixElevation.rootShell)
         Text(note, style: theme.textTheme.bodySmall),
       // The journal and Docker fixes add the account to a group.
-      if (widget.item case AccessItem.journal || AccessItem.dockerSocket)
+      if (item case AccessItem.journal || AccessItem.dockerSocket)
         Text(l10n.accessFixNextLogin, style: theme.textTheme.bodySmall),
       Wrap(
         spacing: 12,
@@ -446,23 +470,36 @@ class _AccessRowTileState extends State<_AccessRowTile> {
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
           OutlinedButton.icon(
-            onPressed: () => _copy(command),
-            icon: Icon(copied ? Icons.check : Icons.copy_outlined, size: 18),
+            onPressed: onCopy == null ? null : () => onCopy(command),
+            icon: Icon(
+              outcome == _CopyOutcome.copied
+                  ? Icons.check
+                  : Icons.copy_outlined,
+              size: 18,
+            ),
             // Read with its row's name: a host shows several such buttons.
             label: Text(
               l10n.accessFixCopy,
-              semanticsLabel: l10n.accessFixCopyLabel(
-                _itemTitle(l10n, widget.item),
-              ),
+              semanticsLabel: l10n.accessFixCopyLabel(_itemTitle(l10n, item)),
             ),
           ),
           // Announced as it appears; the app has run nothing.
-          if (copied)
+          if (outcome == _CopyOutcome.copied)
             Semantics(
               liveRegion: true,
               child: Text(
                 l10n.accessFixCopied,
                 style: theme.textTheme.bodySmall,
+              ),
+            ),
+          // Announced too: the clipboard still holds older text, which
+          // must not be pasted as this fix.
+          if (outcome == _CopyOutcome.failed)
+            Semantics(
+              liveRegion: true,
+              child: Text(
+                l10n.accessFixCopyFailed,
+                style: theme.textTheme.bodySmall?.copyWith(color: scheme.error),
               ),
             ),
         ],

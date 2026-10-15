@@ -1214,6 +1214,10 @@
   "@accessFixCopied": {
     "description": "Access tab: confirmation after copying a fix command, reminding that the app has not run it."
   },
+  "accessFixCopyFailed": "Not copied. The clipboard still holds its earlier text; try again before you paste.",
+  "@accessFixCopyFailed": {
+    "description": "Access tab: shown instead of the confirmation when the system refused to put a fix command on the clipboard (on Windows, while another app holds it), so pasting now would paste older text."
+  },
   "accessEngineDockerRootful": "Docker, rootful",
   "@accessEngineDockerRootful": {
     "description": "Access tab and Docker tab: an engine socket of Docker running as root."

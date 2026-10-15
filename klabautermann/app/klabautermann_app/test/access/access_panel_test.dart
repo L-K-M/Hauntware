@@ -172,6 +172,29 @@ void main() {
     expect(harness.engine.sent, sentBefore);
   });
 
+  testWidgets('confirms only the last copy, which the clipboard '
+      'holds', (tester) async {
+    final copied = _recordClipboard(tester);
+    const confirmation = 'Copied. Run it yourself on the server.';
+    const dockerFix = 'sudo usermod -aG docker alice';
+    await _openWeb1(tester, _desktop, profile: debianHost());
+    await _openTab(tester, 'Access');
+    for (final item in ['Journal group', 'Docker socket']) {
+      final copy = find.bySemanticsLabel('Copy command for $item');
+      await tester.ensureVisible(copy);
+      await tester.tap(copy);
+      await tester.pumpAndSettle();
+    }
+
+    expect(copied, ['sudo usermod -aG systemd-journal alice', dockerFix]);
+    // The Docker row's, under its fix: the journal row's would be stale.
+    expect(find.text(confirmation), findsOneWidget);
+    expect(
+      tester.getTopLeft(find.text(confirmation)).dy,
+      greaterThan(tester.getTopLeft(find.text(dockerFix)).dy),
+    );
+  });
+
   testWidgets('confirms a copy on its own server only', (tester) async {
     _recordClipboard(tester);
     const confirmation = 'Copied. Run it yourself on the server.';
@@ -225,12 +248,26 @@ void main() {
     expect(find.text(confirmation), findsOneWidget);
 
     // The clipboard still holds the earlier text, so the row must not
-    // say this copy worked.
+    // say this copy worked, and says it did not.
     refuse = true;
     await tester.tap(copy);
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
     expect(find.text(confirmation), findsNothing);
+    const failure =
+        'Not copied. The clipboard still holds its earlier text; try again '
+        'before you paste.';
+    expect(
+      tester.getSemantics(find.text(failure)),
+      isSemantics(label: failure, isLiveRegion: true),
+    );
+
+    // A copy that works replaces it.
+    refuse = false;
+    await tester.tap(copy);
+    await tester.pumpAndSettle();
+    expect(find.text(failure), findsNothing);
+    expect(find.text(confirmation), findsOneWidget);
   });
 
   testWidgets('says the server lacks sudo and doas only when the probe '

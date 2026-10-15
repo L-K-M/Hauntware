@@ -1588,6 +1588,12 @@ abstract class AppLocalizations {
   /// **'Copied. Run it yourself on the server.'**
   String get accessFixCopied;
 
+  /// Access tab: shown instead of the confirmation when the system refused to put a fix command on the clipboard (on Windows, while another app holds it), so pasting now would paste older text.
+  ///
+  /// In en, this message translates to:
+  /// **'Not copied. The clipboard still holds its earlier text; try again before you paste.'**
+  String get accessFixCopyFailed;
+
   /// Access tab and Docker tab: an engine socket of Docker running as root.
   ///
   /// In en, this message translates to:

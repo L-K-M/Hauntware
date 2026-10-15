@@ -1046,6 +1046,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get accessFixCopied => 'Copied. Run it yourself on the server.';
 
   @override
+  String get accessFixCopyFailed =>
+      'Not copied. The clipboard still holds its earlier text; try again before you paste.';
+
+  @override
   String get accessEngineDockerRootful => 'Docker, rootful';
 
   @override
