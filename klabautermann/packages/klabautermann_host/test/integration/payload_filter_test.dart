@@ -510,6 +510,71 @@ void main() {
         expect(core.value.perCpu['cpu1']!.busy, 19);
         expect(core.value.perCpu['cpu1']!.idle, 9);
       });
+
+      test('procs keeps 500 of 2,000 processes by CPU share and RSS', () async {
+        final root = Directory.systemTemp.createTempSync('klab-procs');
+        addTearDown(() => root.deleteSync(recursive: true));
+        // 2,000 s up and every process started at boot, so pid i's share
+        // is 5 * i; its RSS falls with i. The kept rows are pids 1 to 250
+        // (most RSS) and 1751 to 2000 (most CPU).
+        _write(root, 'proc/uptime', '2000.00 7000.00\n');
+        for (var pid = 1; pid <= 2000; pid++) {
+          final comm = pid == 1999 ? 'a) b (c' : 'worker-$pid';
+          final rest = List.filled(32, 0).join(' ');
+          _write(
+            root,
+            'proc/$pid/stat',
+            '$pid ($comm) S 1 $pid $pid 0 -1 4194560 0 0 0 0 '
+                '${pid * 600} ${pid * 400} 0 0 20 0 1 0 0 $rest\n',
+          );
+          _write(
+            root,
+            'proc/$pid/status',
+            'Name:\tworker\nUmask:\t0022\nState:\tS (sleeping)\nTgid:\t$pid\n'
+                'Pid:\t$pid\nPPid:\t1\nUid:\t${1000 + pid % 3}\t0\t0\t0\n'
+                'Gid:\t100\t100\t100\t100\nVmPeak:\t  99999 kB\n'
+                '${pid == 2000 ? '' : 'VmRSS:\t  ${(2001 - pid) * 10} kB\n'}'
+                'Threads:\t1\n',
+          );
+          _write(
+            root,
+            'proc/$pid/cmdline',
+            '/usr/bin/worker\x00--id\x00$pid\x00',
+          );
+        }
+
+        final r = await _tick(shell, root, Collector.procs);
+        final parsed = parseProcs(
+          utf8.decode(r.section.payload),
+          ParseContext.standard,
+        );
+        final snap = parsed.value;
+        expect(parsed.warnings, isEmpty);
+        expect(snap.totalProcesses, 2000);
+        expect(snap.selection, ProcsSelection.cpuAndMemory);
+        expect(snap.truncated, isTrue);
+        expect(snap.processes, hasLength(kProcsRowCap));
+        expect(snap.processes.map((p) => p.pid).toSet(), {
+          for (var i = 1; i <= 250; i++) i,
+          for (var i = 1751; i <= 2000; i++) i,
+        });
+        // Rows and command-line headers follow the pids' byte order.
+        final texts = snap.processes.map((p) => '${p.pid}').toList();
+        expect(texts, [...texts]..sort());
+        expect(snap.forgedHeaders, 0);
+        expect(snap.skippedPids, 0);
+        for (final p in snap.processes) {
+          expect(p.argv, ['/usr/bin/worker', '--id', '${p.pid}']);
+          expect(p.utime, p.pid * 600);
+          expect(p.uid, 1000 + p.pid % 3);
+        }
+        expect(snap.processes.firstWhere((p) => p.pid == 1999).comm, 'a) b (c');
+        expect(snap.processes.firstWhere((p) => p.pid == 2000).rssKb, isNull);
+        expect(snap.processes.firstWhere((p) => p.pid == 1).rssKb, 20000);
+        // Far below the 1 MiB section cap that 2,083 untrimmed processes
+        // nearly filled in spike S2.
+        expect(r.section.payload.length, lessThan(64 * 1024));
+      });
     });
   }
 

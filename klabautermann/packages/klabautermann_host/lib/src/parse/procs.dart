@@ -1,7 +1,7 @@
-/// Parser for the `procs` slow-collector payload (03 §6.4, §7.2):
-/// `/proc/<pid>/stat` and `status` rows read with builtins, the
-/// `head|tr` `cmdline` dump with its forged-header rules, and the
-/// `ps -eo`/`ps w` fallback blocks.
+/// Parser for the `procs` slow-collector payload (03 §6.4, §7.2, D48):
+/// the `meta` block with the total and how rows were chosen, one trimmed
+/// row per kept process, the `head|tr` `cmdline` dump with its
+/// forged-header rules, and the `ps -eo`/`ps w` fallback blocks.
 library;
 
 import 'package:meta/meta.dart';
@@ -14,6 +14,21 @@ import 'parse_result.dart';
 /// `/proc/<pid>/cmdline` dump, `ps -eo`, BusyBox `ps w`, or none.
 enum ProcsArgvSource { cmdline, ps, psW, none }
 
+/// How the `procs` fragment chose its rows (D48): every process; above
+/// `kProcsRowCap` processes, the union of the top halves by CPU share since
+/// start and by resident memory; or, on a host without `sort` or `head`,
+/// the first rows in pid order.
+enum ProcsSelection {
+  all('all'),
+  cpuAndMemory('cpu_rss'),
+  pidOrder('pid');
+
+  const ProcsSelection(this.wireName);
+
+  /// The `selection=` value in the payload's `meta` block.
+  final String wireName;
+}
+
 /// One process row of a `procs` tick (03 §7.2).
 @immutable
 final class ProcEntry {
@@ -23,9 +38,6 @@ final class ProcEntry {
     this.comm,
     this.state,
     this.uid,
-    this.gid,
-    this.name,
-    this.threads,
     this.rssKb,
     this.userName,
     this.utime,
@@ -41,23 +53,17 @@ final class ProcEntry {
   final int? ppid;
 
   /// `/proc/<pid>/stat` comm: the text between the first `(` and the
-  /// last `)`; may itself contain spaces and `)`.
+  /// last `)`; may itself contain spaces and `)`. It is the label when
+  /// the command line is empty (kernel threads).
   final String? comm;
 
   /// `/proc/<pid>/stat` field 3 (one-letter run state).
   final String? state;
 
-  /// Real and effective uid from `status` `Uid:`.
-  final int? uid, gid;
+  /// The real uid from `status` `Uid:`.
+  final int? uid;
 
-  /// `status` `Name:`; the fallback label when the command line is
-  /// absent (kernel threads have an empty `cmdline`).
-  final String? name;
-
-  /// `status` `Threads:`.
-  final int? threads;
-
-  /// `status` `VmRSS:` in kB.
+  /// `status` `VmRSS:` in kB; null for kernel threads, which have none.
   final int? rssKb;
 
   /// The `USER` column of a `ps` fallback row, when no status `Uid:`
@@ -94,9 +100,6 @@ final class ProcEntry {
     'comm': comm,
     'state': state,
     'uid': uid,
-    'gid': gid,
-    'name': name,
-    'threads': threads,
     'rssKb': rssKb,
     'userName': userName,
     'utime': utime,
@@ -112,6 +115,8 @@ final class ProcEntry {
 final class ProcsSnapshot {
   ProcsSnapshot({
     List<ProcEntry>? processes,
+    this.totalProcesses,
+    this.selection,
     this.argvSource = ProcsArgvSource.none,
     this.forgedHeaders = 0,
     this.skippedPids = 0,
@@ -121,6 +126,19 @@ final class ProcsSnapshot {
   /// Rows keyed by pid, in `/proc` glob order.
   final List<ProcEntry> processes;
 
+  /// How many processes the host's stat pass read, of which [processes]
+  /// holds the kept ones; null when the `meta` block lacked it.
+  final int? totalProcesses;
+
+  /// How the host chose the rows; null when the `meta` block lacked it.
+  final ProcsSelection? selection;
+
+  /// Whether the host left processes out (PRC-01's "showing N of M":
+  /// [processes] of [totalProcesses]).
+  bool get truncated =>
+      selection != null && selection != ProcsSelection.all ||
+      totalProcesses != null && totalProcesses! > processes.length;
+
   /// Where the argv data came from (03 §7.2).
   final ProcsArgvSource argvSource;
 
@@ -128,8 +146,9 @@ final class ProcsSnapshot {
   /// glob-order rule (03 §7.2).
   final int forgedHeaders;
 
-  /// Headers for pids absent from the stat pass: new processes and the
-  /// collector's own pipeline, skipped per 03 §7.2.
+  /// Headers for pids absent from the rows, skipped per 03 §7.2. The
+  /// fragment passes `head` the kept rows' paths only, so these are
+  /// forged headers that kept the glob order.
   final int skippedPids;
 
   /// True when the payload reports the collector ran without `timeout`
@@ -138,6 +157,8 @@ final class ProcsSnapshot {
 
   Map<String, Object?> toJson() => {
     'processes': processes.map((p) => p.toJson()).toList(),
+    'totalProcesses': totalProcesses,
+    'selection': selection?.name,
     'argvSource': argvSource.name,
     'forgedHeaders': forgedHeaders,
     'skippedPids': skippedPids,
@@ -157,29 +178,20 @@ ParseResult<ProcsSnapshot> parseProcs(String raw, ParseContext ctx) {
   }
   final blocks = split.blocks;
 
-  final statRows = <int, _StatRow>{};
+  final rows = <int, _Row>{};
   final order = <int>[];
-  if (blocks['stat'] case final lines?) {
+  if (blocks['rows'] case final lines?) {
     for (final line in lines) {
-      final row = _parseStatLine(line, warnings);
-      if (row != null && !statRows.containsKey(row.pid)) {
-        statRows[row.pid] = row;
+      final row = _parseRow(line, warnings);
+      if (row != null && !rows.containsKey(row.pid)) {
+        rows[row.pid] = row;
         order.add(row.pid);
       }
     }
   } else {
-    warnings.add('procs: missing stat block');
+    warnings.add('procs: missing rows block');
   }
-
-  final statusRows = <int, _StatusRow>{};
-  if (blocks['status'] case final lines?) {
-    for (final line in lines) {
-      final row = _parseStatusLine(line, warnings);
-      if (row != null) statusRows[row.pid] = row.merge(statusRows[row.pid]);
-    }
-  } else {
-    warnings.add('procs: missing status block');
-  }
+  final meta = _parseMeta(blocks['meta'], warnings);
 
   // The argv source is exclusive: `cmdline` from the head|tr dump, else
   // the first working `ps` fallback (03 §7.2).
@@ -190,7 +202,7 @@ ParseResult<ProcsSnapshot> parseProcs(String raw, ParseContext ctx) {
   var skippedPids = 0;
   if (blocks['cmdline'] case final lines? when lines.isNotEmpty) {
     argvSource = ProcsArgvSource.cmdline;
-    final r = _parseCmdline(lines, statRows.keys.toSet(), warnings);
+    final r = _parseCmdline(lines, rows.keys.toSet(), warnings);
     argv = r.entries;
     forgedHeaders = r.forged;
     skippedPids = r.skipped;
@@ -204,49 +216,50 @@ ParseResult<ProcsSnapshot> parseProcs(String raw, ParseContext ctx) {
     warnings.add('procs: no argv source (cmdline, ps and ps_w absent)');
   }
 
-  final rows = <ProcEntry>[];
+  final entries = <ProcEntry>[];
   for (final pid in order) {
-    final s = statRows[pid]!;
-    final st = statusRows[pid];
+    final r = rows[pid]!;
     final ps = psRows[pid];
-    rows.add(
+    entries.add(
       ProcEntry(
         pid: pid,
-        ppid: s.ppid,
-        comm: s.comm,
-        state: s.state ?? ps?.state,
-        uid: st?.uid,
-        gid: st?.gid,
-        name: st?.name,
-        threads: st?.threads ?? s.threads,
-        rssKb: st?.rssKb ?? ps?.rssKb,
+        ppid: r.ppid,
+        comm: r.comm,
+        state: r.state,
+        uid: r.uid,
+        rssKb: r.rssKb ?? ps?.rssKb,
         userName: ps?.user,
-        utime: s.utime,
-        stime: s.stime,
-        startTicks: s.startTicks,
+        utime: r.utime,
+        stime: r.stime,
+        startTicks: r.startTicks,
         argv: argv[pid],
         argsJoined: argv.containsKey(pid) ? null : ps?.args,
       ),
     );
   }
-  // A `ps` fallback also lists processes missing from the stat pass.
-  for (final e in psRows.entries) {
-    if (statRows.containsKey(e.key)) continue;
-    rows.add(
-      ProcEntry(
-        pid: e.key,
-        ppid: e.value.ppid,
-        state: e.value.state,
-        rssKb: e.value.rssKb,
-        userName: e.value.user,
-        argsJoined: e.value.args,
-      ),
-    );
+  // A `ps` fallback also lists processes missing from the rows, unless the
+  // host left processes out on purpose: those would come back here.
+  if (meta.selection == null || meta.selection == ProcsSelection.all) {
+    for (final e in psRows.entries) {
+      if (rows.containsKey(e.key)) continue;
+      entries.add(
+        ProcEntry(
+          pid: e.key,
+          ppid: e.value.ppid,
+          state: e.value.state,
+          rssKb: e.value.rssKb,
+          userName: e.value.user,
+          argsJoined: e.value.args,
+        ),
+      );
+    }
   }
 
   return ParseResult(
     ProcsSnapshot(
-      processes: rows,
+      processes: entries,
+      totalProcesses: meta.total,
+      selection: meta.selection,
       argvSource: argvSource,
       forgedHeaders: forgedHeaders,
       skippedPids: skippedPids,
@@ -256,117 +269,72 @@ ParseResult<ProcsSnapshot> parseProcs(String raw, ParseContext ctx) {
   );
 }
 
-/// The `== stat ==` row: `<pid> <pid> (<comm>) <field3> <field4> ...`
-/// where `comm` is text between parens that may hold `)` itself.
-/// Fields after the last `)` count from 3 (03 §7.2), so comm survives
-/// embedded spaces and parentheses.
-final class _StatRow {
-  _StatRow({required this.pid, required this.comm, required this.fields});
+/// One row of the `rows` block (D48): eight space-separated fields, then
+/// the comm verbatim, which may hold spaces and `)`. The fields are pid,
+/// state, ppid, utime, stime and starttime (fields 3, 4, 14, 15 and 22 of
+/// `/proc/<pid>/stat`), then the uid and the RSS in kB, `-` when unknown.
+final class _Row {
+  _Row(List<String> f, List<int?> n, this.comm)
+    : pid = n[0]!,
+      state = f[1],
+      ppid = n[2],
+      utime = n[3],
+      stime = n[4],
+      startTicks = n[5],
+      uid = n[6],
+      rssKb = n[7];
 
   final int pid;
-  final String? comm;
-
-  /// Field k of the stat line sits at `fields[k - 3]`; field 3 is the
-  /// one-letter state and the rest are numeric where needed.
-  final List<String> fields;
-
-  String? get state => fields.isNotEmpty ? fields[0] : null;
-  int? get ppid => _at(1);
-  int? get utime => _at(11);
-  int? get stime => _at(12);
-  int? get threads => _at(17);
-  int? get startTicks => _at(19);
-  int? _at(int i) => i < fields.length ? int.tryParse(fields[i]) : null;
+  final String state, comm;
+  final int? ppid, utime, stime, startTicks, uid, rssKb;
 }
 
-_StatRow? _parseStatLine(String line, List<String> warnings) {
-  final t = line.trim();
-  if (t.isEmpty) return null;
-  final sp = t.indexOf(' ');
-  if (sp < 0) {
-    warnings.add('procs stat: short line');
-    return null;
-  }
-  final pathPid = int.tryParse(t.substring(0, sp));
-  final stat = t.substring(sp + 1).trim();
-  // The raw line is `<pid> (<comm>) <fields>`; comm ends at the LAST
-  // `)` because the kernel quotes nothing inside it (03 §7.2).
-  final open = stat.indexOf('(');
-  final close = stat.lastIndexOf(')');
-  if (pathPid == null || open < 0 || close < open) {
-    warnings.add('procs stat: malformed line');
-    return null;
-  }
-  final comm = stat.substring(open + 1, close);
-  final fields = stat.substring(close + 1).trim().split(RegExp(r'\s+'));
-  if (fields.length < 20 || fields.any((f) => f.isEmpty)) {
-    warnings.add('procs stat: short field list for pid $pathPid');
-    return null;
-  }
-  return _StatRow(pid: pathPid, comm: comm, fields: fields);
-}
-
-/// A `status` row keeps the fields the list needs (03 §7.2): Name, the
-/// Uid/Gid real ids, VmRSS and Threads.
-final class _StatusRow {
-  _StatusRow({required this.pid});
-
-  final int pid;
-  String? name;
-  int? uid, gid, rssKb, threads;
-
-  /// Accumulates the fields of an earlier row for the same pid.
-  _StatusRow merge(_StatusRow? prev) {
-    if (prev == null) return this;
-    name ??= prev.name;
-    uid ??= prev.uid;
-    gid ??= prev.gid;
-    rssKb ??= prev.rssKb;
-    threads ??= prev.threads;
-    return this;
-  }
-}
-
-/// One `<pid> <Key>: <value>` row of the `status` block.
-_StatusRow? _parseStatusLine(String line, List<String> warnings) {
-  final t = line.trimRight();
-  if (t.trim().isEmpty) return null;
-  final sp = t.indexOf(' ');
-  if (sp < 0) {
-    warnings.add('procs status: short line');
-    return null;
-  }
-  final pid = int.tryParse(t.substring(0, sp));
-  if (pid == null) {
-    warnings.add('procs status: bad pid prefix');
-    return null;
-  }
-  final rest = t.substring(sp + 1);
-  final colon = rest.indexOf(':');
-  if (colon <= 0) {
-    warnings.add('procs status: malformed line for pid $pid');
-    return null;
-  }
-  final key = rest.substring(0, colon);
-  final value = rest.substring(colon + 1).trim();
-  final row = _StatusRow(pid: pid);
-  final firstInt = RegExp(r'^-?\d+').firstMatch(value)?.group(0);
-  switch (key) {
-    case 'Name':
-      row.name = value.isEmpty ? null : value;
-    case 'Uid':
-      row.uid = int.tryParse(firstInt ?? '');
-    case 'Gid':
-      row.gid = int.tryParse(firstInt ?? '');
-    case 'VmRSS':
-      row.rssKb = int.tryParse(firstInt ?? '');
-    case 'Threads':
-      row.threads = int.tryParse(firstInt ?? '');
-    default:
-      // Forward-compatible: the fragment filters, but extra keys parse.
+_Row? _parseRow(String line, List<String> warnings) {
+  if (line.trim().isEmpty) return null;
+  final fields = <String>[];
+  var rest = line;
+  for (var i = 0; i < 8; i++) {
+    final sp = rest.indexOf(' ');
+    if (sp <= 0) {
+      warnings.add('procs row: too few fields');
       return null;
+    }
+    fields.add(rest.substring(0, sp));
+    rest = rest.substring(sp + 1);
   }
-  return row;
+  final numbers = fields.map(int.tryParse).toList();
+  if (const [0, 2, 3, 4, 5].any((i) => numbers[i] == null) ||
+      const [6, 7].any((i) => numbers[i] == null && fields[i] != '-')) {
+    warnings.add('procs row: malformed fields "${fields.join(' ')}"');
+    return null;
+  }
+  return _Row(fields, numbers, rest);
+}
+
+/// The `meta` block: the `total=` count and the `selection=` wire name.
+({int? total, ProcsSelection? selection}) _parseMeta(
+  List<String>? lines,
+  List<String> warnings,
+) {
+  if (lines == null) {
+    warnings.add('procs: missing meta block');
+    return (total: null, selection: null);
+  }
+  int? total;
+  ProcsSelection? selection;
+  for (final line in lines) {
+    if (line.startsWith('total=')) {
+      total = int.tryParse(line.substring(6));
+    } else if (line.startsWith('selection=')) {
+      final name = line.substring(10);
+      selection = ProcsSelection.values
+          .where((s) => s.wireName == name)
+          .firstOrNull;
+    }
+  }
+  if (total == null) warnings.add('procs: meta block lacks the total');
+  if (selection == null) warnings.add('procs: meta block lacks the selection');
+  return (total: total, selection: selection);
 }
 
 /// The result of the `cmdline` block pass.

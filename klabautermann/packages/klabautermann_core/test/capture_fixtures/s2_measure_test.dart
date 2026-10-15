@@ -6,6 +6,7 @@ library;
 
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:klabautermann_host/klabautermann_host.dart';
 import 'package:test/test.dart';
@@ -158,8 +159,9 @@ void main() {
     for (final r in runs) {
       expect(r['outcome'], 'ok');
       // The `S` marker's size, not a seq or another small number: each
-      // process adds a stat line, five status lines and its cmdline.
-      expect(r['bytesPerProcess'], inInclusiveRange(100, 4096));
+      // kept process adds a row, a `head` header and its cmdline (D48).
+      final kept = min(r['processes']! as int, kProcsRowCap);
+      expect((r['payloadBytes']! as int) / kept, inInclusiveRange(40, 4096));
       expect(r['capFraction'], lessThan(1));
     }
   }, skip: dash == null ? 'dash is not installed' : false);

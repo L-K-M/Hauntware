@@ -13,3 +13,7 @@ filtered shapes, keeping the values: per-core busy and idle sums, the
 netdev counters of the interfaces the fragment keeps (lo, docker0 and
 unused interfaces go), whole-disk diskstats rows (partitions, dm and
 loop devices go), and PSI lines without `total`.
+
+For version 5 the same script turned the `stat` and `status` blocks of
+`procs.txt` into the `meta` block and one trimmed row per process,
+keeping the `cmdline` block as it was.

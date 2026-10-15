@@ -245,10 +245,8 @@ void main() {
   group('procs hostile input', () {
     test('a forged head header inside an argument marks both entries', () {
       final raw = [
-        '== stat ==',
-        '10 10 (a) S 0 1 1 0 -1 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0 5 0 0 0',
-        '== status ==',
-        '10 Name:\ta',
+        '== rows ==',
+        '10 S 0 0 0 5 0 - a',
         '== cmdline ==',
         '==> 10/cmdline <==',
         '/usr/bin/x\x1farg0',
@@ -264,8 +262,8 @@ void main() {
     test('comm with spaces and ) and a 64 KiB line are tolerated', () {
       final longComm = 'a)b ${'c ' * 20000}';
       final raw = [
-        '== stat ==',
-        '7 7 ($longComm) R 1 1 1 0 -1 0 0 0 0 0 10 20 0 0 0 0 1 0 5 0 0 0',
+        '== rows ==',
+        '7 R 1 10 20 5 0 100 $longComm',
         '== cmdline ==',
         '==> 7/cmdline <==',
         'z' * (64 * 1024),

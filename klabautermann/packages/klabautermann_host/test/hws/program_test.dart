@@ -126,6 +126,16 @@ void main() {
       }
     });
 
+    test('procs keeps kProcsRowCap rows, half by CPU and half by RSS', () {
+      final procs = collectorFragments[Collector.procs]!;
+      expect(procs, contains('if [ "\$_n" -gt $kProcsRowCap ]; then'));
+      expect(procs, contains('[ "\$_i" -lt $kProcsRowCap ] || break'));
+      expect(
+        RegExp('head -n ${kProcsRowCap ~/ 2}(?![0-9])').allMatches(procs),
+        hasLength(2),
+      );
+    });
+
     test('the READY marker is the program last line', () {
       for (final kind in SamplerKind.values) {
         final program = buildSamplerProgram(kind: kind, nonce: nonce);
