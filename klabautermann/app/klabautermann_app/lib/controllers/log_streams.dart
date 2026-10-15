@@ -32,15 +32,18 @@ final class LogStreamHandle {
 
 /// The app's log streams for one engine run (03 §10.1): mints stream ids
 /// never reused, sends [OpenLogStream] and [CloseStream], and hands each
-/// stream's events to its listener. Also follows each server's journal
-/// access from the probe for LOG-04's notice.
+/// stream's events to its listener, a Logs panel stream or a bounded
+/// `LogRead`. Also follows each server's journal access from the probe
+/// for LOG-04's notice.
 ///
 /// A [RequestRejected] names no stream, so a rejection of [OpenLogStream]
 /// goes to the oldest open with no event yet. That is sound only because
 /// the engine handles requests in order and its log service must answer
 /// each open it accepts with a [LogStreamState] before the next request
 /// ([OpenLogStream]), so the first event of any stream also answers every
-/// open before it.
+/// open before it. It also needs every [OpenLogStream] the app sends to
+/// go through here: a second sender with its own queue would take each
+/// rejection as its own as well.
 final class LogStreams {
   LogStreams(this._engine) {
     _events = _engine.events.listen(_onEvent, onDone: _onEngineDone);

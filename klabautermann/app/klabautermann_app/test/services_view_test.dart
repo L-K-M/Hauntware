@@ -1,8 +1,11 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:klabautermann_app/controllers/log_reads.dart';
+import 'package:klabautermann_app/controllers/log_streams.dart';
 import 'package:klabautermann_app/l10n/app_localizations_en.dart';
 import 'package:klabautermann_app/ui/services_view.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
+
+import 'support/fake_engine.dart';
 
 SystemdUnit _unit(String name, [String? load, String? active, String? sub]) =>
     SystemdUnit(unit: name, load: load, active: active, sub: sub);
@@ -131,14 +134,16 @@ void main() {
 
   group('unitLogsNotice', () {
     final l10n = AppLocalizationsEn();
-    late LogReads reads;
+    late FakeEngineClient engine;
+    late LogStreams streams;
     late LogRead read;
     late String streamId;
 
     setUp(() {
-      final sent = <EngineRequest>[];
-      reads = LogReads(sent.add);
-      read = reads.open(
+      engine = FakeEngineClient();
+      streams = LogStreams(engine);
+      read = LogRead(
+        streams,
         LogStreamSpec(
           serverId: 'srv-1',
           source: const JournalLogSource(unit: 'nginx.service'),
@@ -146,48 +151,58 @@ void main() {
           follow: false,
         ),
       );
-      streamId = (sent.single as OpenLogStream).streamId;
+      streamId = (engine.sent.single as OpenLogStream).streamId;
     });
 
-    String? after(LogStreamStatus status) {
-      reads.accept(LogStreamState(streamId, status));
+    tearDown(() async {
+      streams.dispose();
+      await engine.close();
+    });
+
+    Future<void> accept(EngineEvent event) async {
+      engine.emit(event);
+      await pumpEventQueue();
+    }
+
+    Future<String?> after(LogStreamStatus status) async {
+      await accept(LogStreamState(streamId, status));
       return unitLogsNotice(l10n, read);
     }
 
-    test('says what an unanswered, refused or waiting read does', () {
+    test('says what an unanswered, refused or waiting read does', () async {
       expect(unitLogsNotice(l10n, read), l10n.servicesLogsRequested);
       expect(
-        after(const LogStreamWaiting(LogStreamWaitReason.link)),
+        await after(const LogStreamWaiting(LogStreamWaitReason.link)),
         l10n.servicesLogsWaitingLink,
       );
       expect(
-        after(const LogStreamWaiting(LogStreamWaitReason.channel)),
+        await after(const LogStreamWaiting(LogStreamWaitReason.channel)),
         l10n.servicesLogsWaitingChannel,
       );
       expect(
-        after(const LogStreamWaiting(LogStreamWaitReason.background)),
+        await after(const LogStreamWaiting(LogStreamWaitReason.background)),
         l10n.servicesLogsWaitingBackground,
       );
-      expect(after(const LogStreamRunning()), l10n.servicesLogsReading);
+      expect(await after(const LogStreamRunning()), l10n.servicesLogsReading);
     });
 
-    test('words a refused open', () {
-      reads.accept(const RequestRejected('OpenLogStream', 'not yet'));
+    test('words a refused open', () async {
+      await accept(const RequestRejected('OpenLogStream', 'not yet'));
 
       expect(unitLogsNotice(l10n, read), l10n.servicesLogsRefused);
     });
 
-    test('says nothing over lines', () {
-      reads.accept(
+    test('says nothing over lines', () async {
+      await accept(
         LogBatch(
           streamId: streamId,
           records: const [JournalRecord(message: 'started')],
         ),
       );
 
-      expect(after(const LogStreamRunning()), isNull);
+      expect(await after(const LogStreamRunning()), isNull);
       expect(
-        after(const LogStreamEnded(LogStreamEndReason.windowFilled)),
+        await after(const LogStreamEnded(LogStreamEndReason.windowFilled)),
         isNull,
       );
     });
@@ -200,8 +215,8 @@ void main() {
       (LogStreamEndReason.denied, l10n.servicesLogsDenied),
       (LogStreamEndReason.failed, l10n.servicesLogsFailed),
     ]) {
-      test('words an end for ${reason.name}', () {
-        expect(after(LogStreamEnded(reason)), words);
+      test('words an end for ${reason.name}', () async {
+        expect(await after(LogStreamEnded(reason)), words);
       });
     }
   });
