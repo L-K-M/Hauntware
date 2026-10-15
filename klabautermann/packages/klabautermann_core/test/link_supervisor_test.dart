@@ -263,13 +263,16 @@ void main() {
     expect((calls.last.serverId, calls.last.purpose), ('s6', _interactive));
   });
 
-  test('a server that leaves the fleet before its dial is closed', () async {
+  test('a server that leaves the fleet before its dial is closed, and its '
+      'slot goes to the next attempt', () async {
     supervisor = make(random: 0.5);
-    supervisor.connect('s1', purpose: _background);
+    for (final id in ['s1', 's2', 's3', 's4', 's5']) {
+      supervisor.connect(id, purpose: _background);
+    }
     gone.add('s1');
     await clock.elapse(kConnectJitter);
 
-    expect(calls, isEmpty);
+    expect(calls.map((c) => c.serverId), ['s2', 's3', 's4', 's5']);
     expect(statuses(), [const LinkConnecting(), _ownerClosed]);
   });
 
@@ -295,8 +298,12 @@ void main() {
     calls.last.fail(LinkFailureKind.unreachable);
     await clock.elapse(Duration.zero);
     final firstUntil = clock.now.add(const Duration(seconds: 1));
+    // An unattended request does not cut the backoff short.
+    supervisor.connect('s1', purpose: _background);
+    await clock.elapse(const Duration(milliseconds: 999));
+    expect(calls, hasLength(1));
 
-    await clock.elapse(const Duration(seconds: 1));
+    await clock.elapse(const Duration(milliseconds: 1));
     expect(calls.last.purpose, _background);
     calls.last.fail(LinkFailureKind.timedOut);
     await clock.elapse(Duration.zero);
@@ -386,6 +393,15 @@ void main() {
       expect(late.closes, 1);
       expect(calls, hasLength(2));
       expect(supervisor.link('s1'), isNull);
+    });
+
+    test('frees the slot of an attempt not on the network yet', () async {
+      for (final id in ['s1', 's2', 's3', 's4', 's5']) {
+        supervisor.connect(id, purpose: _interactive);
+      }
+      await clock.elapse(kConnectAttemptDeadline);
+
+      expect(calls.map((c) => c.serverId).skip(4), ['s5']);
     });
 
     test('also gives up an attempt waiting for the stalled dial', () async {
@@ -612,6 +628,8 @@ void main() {
       () async {
         supervisor = make(policy: BackgroundLinkPolicy.closeAfterGrace);
         final link = await linked();
+        supervisor.connect('s2', purpose: _interactive);
+        calls.last.succeed();
 
         supervisor.setActivity(AppActivity.background);
         await clock.elapse(const Duration(seconds: 10));
@@ -622,10 +640,16 @@ void main() {
         await clock.elapse(const Duration(seconds: 1));
         expect(link.closes, 1);
         expect(statuses().last, _ownerClosed);
+        // One disconnected meanwhile stays closed.
+        supervisor.disconnect('s2');
 
         supervisor.setActivity(AppActivity.foreground);
         await clock.elapse(Duration.zero);
-        expect(calls.map((c) => c.purpose), [_interactive, _background]);
+        expect(calls.map((c) => (c.serverId, c.purpose)), [
+          ('s1', _interactive),
+          ('s2', _interactive),
+          ('s1', _background),
+        ]);
       },
     );
   });
