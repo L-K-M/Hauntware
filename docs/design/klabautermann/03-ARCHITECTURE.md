@@ -612,10 +612,10 @@ close the section; they are not decisions.
   device, not the name, which a toolstack may change [V: Xen 4.19
   `tools/hotplug/Linux/vif-common.sh` (`rename_vif`)]. Without such an
   interface, inside a container whose `eth0` is a veth peer, the
-  interfaces that are neither a bridge (a `bridge/` directory) nor
-  enslaved (a `master` link) stay, because a nested Docker bridge and its
-  veth ports count forwarded traffic again, in the opposite direction to
-  `eth0` [V: Linux `net/bridge/br_device.c` (`br_dev_xmit`),
+  interfaces other than `lo` that are neither a bridge (a `bridge/`
+  directory) nor enslaved (a `master` link) stay, because a nested Docker
+  bridge and its veth ports count forwarded traffic again, in the opposite
+  direction to `eth0` [V: Linux `net/bridge/br_device.c` (`br_dev_xmit`),
   `net/bridge/br_input.c` (`br_pass_frame_up`), `drivers/net/veth.c`
   (`veth_get_stats64`)]. When that leaves none, as when `eth0` is itself a
   bridge port, or without sysfs, every interface but `lo` stays, and

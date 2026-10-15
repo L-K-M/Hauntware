@@ -284,10 +284,10 @@ hw_meminfo() {
 # netback port (a xenbus device whose nodename is under `backend/`) is
 # a guest's NIC seen from dom0 and counts as virtual. Without such an
 # interface (inside a container, whose eth0 is a veth peer) the
-# interfaces that are neither a bridge nor enslaved stay, because a
-# nested bridge and its ports repeat what eth0 counts; when that leaves
-# none, or without sysfs, every interface but lo stays. Rows that never
-# moved a byte are left out.
+# interfaces other than lo that are neither a bridge nor enslaved stay,
+# because a nested bridge and its ports repeat what eth0 counts; when
+# that leaves none, or without sysfs, every interface but lo stays. Rows
+# that never moved a byte are left out.
 hw_netdev() {
   o="$o$NL== netdev =="
   hw_readable /proc/net/dev || return 0
