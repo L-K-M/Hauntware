@@ -196,9 +196,13 @@ final class SetCadenceProfile extends EngineRequest {
 final class OpenLogStream extends EngineRequest {
   const OpenLogStream({required this.streamId, required this.spec});
 
-  /// The app's own id for the stream, unique among the streams it has
-  /// open. The app picks it, as a surface picks its [Subscribe] id, so it
-  /// can close the stream before the engine has answered.
+  /// The app's own id for the stream, which it picks so it can close the
+  /// stream before the engine has answered. Unlike a [Subscribe] id, it
+  /// is never reused for the engine's lifetime (a counter will do):
+  /// stream events carry no generation, so a closed stream's last batch
+  /// or end can arrive after the next open, and an open the engine
+  /// rejects outright gets a [RequestRejected], which names no stream.
+  /// The engine rejects an open whose id an earlier open used.
   final String streamId;
 
   final LogStreamSpec spec;

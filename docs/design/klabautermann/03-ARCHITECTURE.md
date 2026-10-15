@@ -3568,10 +3568,15 @@ the engine in `engine_isolate.dart` beside it):
   `Sample.at`. Until the samplers are wired, the engine records
   subscriptions and the profile and sends none of these events.
 - **Version 3 (M2 logs).** Log streams joined version 3 the same way.
-  The app picks the `streamId` of `OpenLogStream(streamId, spec)`, as a
-  surface picks its subscription id, so it can close a stream before any
-  answer arrives. The spec names the server, a sealed source with its
-  filters, a `window`, `follow` and `afterCursor`. The sources are the
+  The app picks the `streamId` of `OpenLogStream(streamId, spec)`, so it
+  can close a stream before any answer arrives. Unlike a subscription
+  id, it is never reused for the engine's lifetime (a counter will do):
+  stream events carry no generation, so a closed stream's last batch or
+  end can arrive after the next open, and an open the engine rejects
+  outright gets a `RequestRejected`, which names no stream. The engine
+  rejects an open whose id an earlier open used. The spec names the
+  server, a sealed source with its filters, a `window`, `follow` and
+  `afterCursor`. The sources are the
   journal with LOG-01's unit, identifier, priority, current-boot and
   time-range filters (SVC-04's unit logs are a 50-record window of one
   unit), the current boot's kernel log (LOG-03: `journalctl -k`, with
