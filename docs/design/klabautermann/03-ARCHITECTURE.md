@@ -3534,6 +3534,22 @@ localization catalog from the first build:
    keeps only a limited buffer".
 9. **Action previews** list every host write the action causes (8.11).
 
+As built in M2 (`app/klabautermann_app/lib/ui/charts/`), the
+time-series chart (10.7) reads a `TimeSeriesRing` whose lanes share each
+tick's time. The caller opens a gap with its reason when sampling stops;
+the next sample closes it and is never joined to the sample before it,
+nor is any sample joined across an unknown one. A band is at least 3 px
+wide and carries its label where the label fits; the legend names every
+reason in view, each series and the source, which the caller words. The
+hatching's strokes are 2 px wide, so that drawn at one pixel per point
+each still holds 3:1 against the band on the chart surfaces. Time ticks
+fall on round local times, and the chart never animates: it moves when a
+sample arrives or a rebuild moves its right edge later. The lanes differ
+by hue alone, short of 10.10's "never colour alone" for two to four
+series: the colour-blind check (10.7) and the per-series summaries are
+no second visual cue, and a dash pattern would read as missed samples,
+so that cue is still open.
+
 ---
 
 ## 10. UI shell
@@ -3557,7 +3573,7 @@ localization catalog from the first build:
 | `Connect(serverId)`, `Disconnect(serverId)` | `LinkState(serverId, status)` (D46's states plus `blocked`; typed reasons inside the status) |
 | `Subscribe(serverId, subscriptionId, streams)`, `Unsubscribe(serverId, subscriptionId)`, `SetCadenceProfile(profile)`; app activity is a separate request too (D45) | `Sample(serverId, stream, seq, at, result)` (engine-owned `seq`, D44; rates and derived values, D43), `SamplingState(serverId, phase, since)`, `Gap(serverId, streams, from, until, cause)` |
 | none: the engine probes after connecting (6.1) | `HostProfileChanged(serverId, profile)` |
-| `OpenLogStream(spec)`, `CloseStream(id)` | `LogBatch(streamId, lines, dropped)` (at most 20 per second per stream [E]) |
+| `OpenLogStream(streamId, spec)`, `CloseStream(streamId)` | `LogBatch(streamId, records, dropped)` (at most 20 per second per stream [E]), `LogStreamState(streamId, status)` |
 | `DockerQuery(serverId, query)` | `DockerResult`, `DockerEvent` |
 | `PlanAction(intent)`, `RunAction(planId, confirmation)` | `ActionPlanned(preview)`, `ActionProgress`, `ActionFinished` |
 | `AnswerPrompt(promptId, answer)` | `Prompt(promptId, serverId, host, port, request)` (host key, keyboard-interactive, credential, elevation), `PromptWithdrawn(promptId, reason)` |
@@ -3693,6 +3709,49 @@ the engine in `engine_isolate.dart` beside it):
   reading leaves the phase at sampling and shows only as an ageing
   `Sample.at`. Until the samplers are wired, the engine records
   subscriptions and the profile and sends none of these events.
+- **Version 3 (M2 logs).** Log streams joined version 3 the same way.
+  The app picks the `streamId` of `OpenLogStream(streamId, spec)`, so it
+  can close a stream before any answer arrives. Unlike a subscription
+  id, it is never reused for the engine's lifetime (a counter will do):
+  stream events carry no generation, so a closed stream's last batch or
+  end can arrive after the next open, and an open the engine rejects
+  outright gets a `RequestRejected`, which names no stream. The engine
+  rejects an open whose id an earlier open used. The spec names the
+  server, a sealed source with its filters, a `window`, `follow` and
+  `afterCursor`. The sources are the
+  journal with LOG-01's unit, identifier, priority, current-boot and
+  time-range filters (SVC-04's unit logs are a 50-record window of one
+  unit), the current boot's kernel log (LOG-03: `journalctl -k`, with
+  `dmesg --json` only as a fallback), and one file by absolute path
+  (LOG-22). There is no text filter: LOG-05 searches the records the
+  view holds, and `journalctl -g` waits for LOG-06 (v1). Container logs
+  (CTX-01) are no source until M3, so the M1 scaffold's `docker` source
+  and untyped `target` are gone. A window reads the newest `window` records and
+  ends; they arrive newest first, so `afterCursor`, a journal record's
+  cursor, reads on to older records, as `journalctl --reverse
+  --after-cursor` does. journalctl refuses `--since` with a cursor, so
+  with one the engine applies the `since` filter itself: a window stops
+  at the first record older than it and ends as oldest record reached,
+  and a follow reads on from the cursor alone. A follow delivers up to
+  `window` earlier records oldest first, then each new one as the host
+  writes it, and `afterCursor` resumes it after a record the app holds
+  instead: it delivers every record after that one, so a reconnect
+  leaves no gap, and `window` does not apply.
+  `LogBatch(streamId, records, dropped)` carries sealed records, which
+  the engine resolves so the app parses nothing (6.5): a journal entry's
+  cursor, time, priority as a syslog severity, unit, identifier, PID,
+  message and every field as parsed, where a value its column cannot
+  hold (a time beyond `DateTime`'s range, a priority outside 0 to 7)
+  arrives as unknown instead of throwing; a `dmesg` record's message,
+  time since boot and level; or a file's line. `dropped` counts the
+  records discarded since the stream's previous batch.
+  `LogStreamState(streamId, status)` carries a sealed status that
+  compares by value: waiting (for the link, a free channel under 5.2's
+  budget, or the foreground), running, or ended with a reason (window
+  filled, oldest record reached, closed, spec refused, source missing,
+  read denied, or failed) and the host's error output. Until the log
+  service is wired, the engine rejects `OpenLogStream` and ignores
+  `CloseStream`, since no stream is open.
 - **`SetAppActivity(activity)`** is a request of its own and applies to
   every subscription, link and probe at once: 6.4 pauses everything while
   the app is in the background, and D34 adds the phones' grace period
@@ -3847,7 +3906,7 @@ heap test checks both kinds, so the caps bound the text's memory. The
 16 KiB line cap keeps 16,384 Latin-1 or 8,192 other code units, never half
 a surrogate pair. A cut line keeps its full length for the marker, which
 the app words. A `LogBatch`'s drops become one "dropped N lines" entry
-ahead of its lines, merged into an adjacent one; it counts against the
+ahead of its records, merged into an adjacent one; it counts against the
 50,000-entry cap and holds no bytes, while eviction past a cap leaves no
 entry. Lines are stored as received and styled for display by `parseSgr`,
 each from the plain style, so no style carries from one line to the next.
@@ -3859,6 +3918,41 @@ colours (`30;40`, or equal RGB values) still hide it, so the viewer must
 hold each span's foreground and background to a minimum contrast
 (`contrastRatio`, A11Y-04), RGB included. Full at the caps with either
 kind of text, the buffer holds about 35 MiB of the 64 MiB budget (11.4).
+
+The viewer (`app/klabautermann_app/lib/ui/logs/`) forces a strut, so every
+row is a whole number of lines. Without wrap a row is one line, and a long
+line ends in an ellipsis until sideways scrolling lands; that also keeps a
+cut line's note out of sight, though screen readers read it. With wrap,
+the row counts sit in a Fenwick tree and a sliver of the viewer's own
+finds offsets and indexes in O(log n), where `SliverVariedExtentList` sums
+every extent before an index. Only the lines a layout shows, and as many
+rows above its offset so a page up lands on measured lines, are measured,
+once per width, font and locale: one row without a layout when the line
+is all Latin-1 and fits at a monospace advance per code unit (two per
+tab), allowing for the rounding of the engine's single-precision sum,
+otherwise laid out, since a fallback font can draw any other glyph
+wider than a fixed count of advances and a line or paragraph separator
+breaks the row. Other lines keep an earlier count or, once the viewer
+has a width, an estimate from their length, and a measurement above the
+view moves the offset by the difference while the offset, moving by
+whole rows, keeps its share of the line it is in to within a row, so a
+line that starts at the offset still does; the lines in sight hold still
+and a resize lays out only the lines near them. Tabs
+are not expanded to stops yet. Any scroll that leaves the
+newest line pauses following, and reaching it again, End or Follow resumes
+it; the scroll position holds the end during layout, and while paused it
+drops the extent of evicted lines from its offset and converts the
+offset when the line height or wrap changes, keeping the line at the top
+and, to within a row, its share above the edge. Content that no longer
+fills the view below the offset ends the view at the newest line
+instead, still paused. Every span keeps 4.5:1
+on its background, moved toward black or white as little as needed. SGR
+colours 1 to 6 and 9 to 14 take the family's glyph hues, 8 its graphite;
+0, 7 and 15 stay black, light grey and white. The caller supplies a line's
+level; journal priorities 0 to 3 are errors, 4 warnings, 5 and 6 plain, 7
+debug, each with a spoken gutter icon. Levels are never guessed from text
+(CTX-05, v1). Its goldens draw with flutter_test's font rather than the
+bundled font of 11.1 until they share K05a's approach.
 
 ### 10.9 Theme
 
@@ -4028,12 +4122,13 @@ test grows with each release's rows; in v1.x it covers the helper,
 | Job | Change |
 |---|---|
 | `guards` (new; replaces the guard steps of `dart_tools`, `.github/workflows/ci.yml:206` [V]) | Resolves each product workspace once and runs the root import, protocol and license guards for every product |
-| `klabautermann_dart` (new) | Resolves the `klabautermann` workspace; analyzes and tests `packages/*` by discovery loop (pattern `poltergeist_dart`, `ci.yml:153` [V]); Ubuntu only |
+| `klabautermann_dart` (new) | Resolves the `klabautermann` workspace; analyzes and tests `packages/*` by discovery loop (pattern `poltergeist_dart`, `ci.yml:153` [V]), and `test/integration` (the fixture tools and the integration jobs' contract tests); Ubuntu only |
 | `seance_dart` (`ci.yml:122`) | Runs the new `seance_core` tests (catalog, exec, elevation, links); from v1.x the inbox marker skip and the sync server's sender quota tests (D42) |
 | `planchette_flutter` (`ci.yml:884`) | Adds `ghost_servers`, `ghost_keystore` and `ghost_theme` (all MVP) lines |
 | `seance_flutter` (`ci.yml:938`) | Adds `seance/packages/seance_terminal` (v1) |
 | `klabautermann_flutter` (new) | App analyze and test (copy of `poltergeist_flutter`, `ci.yml:965`) |
-| `detect_klabautermann_integration`, `klabautermann_integration` (new) | sshd plus privileged `docker:dind` fixture (pinned by digest, no ports beyond loopback) on ephemeral GitHub-hosted `ubuntu-latest` runners, path-filtered to `klabautermann/**` and the shared packages it consumes, always on main (pattern `detect_integration` and `integration`, `ci.yml:339,397` [V]) |
+| `detect_klabautermann_integration`, `klabautermann_integration` (new) | sshd plus privileged `docker:dind` fixture (pinned by digest, no ports beyond loopback) on ephemeral GitHub-hosted `ubuntu-latest` runners, path-filtered to `klabautermann/**` and the shared packages it consumes, always on main (pattern `detect_integration` and `integration`, `ci.yml:339,397` [V]). The jobs run entry points committed under `klabautermann/`, so the fixture, runner-VM, soak and capture PRs change no root file: `test/integration/run.sh` (the runner-VM leg and the soak run from it too) once `test/integration/docker-compose.yml` exists, and `test/integration/capture.sh` for the container shell and userland captures. Until an entry point is committed its step is skipped with a notice; once committed, its absence fails the detector on every event, judged on the first-parent history of the checked-out commit (full clone). On a PR that commit is GitHub's test merge, whose first parent is the base, so the PR and the merge commit or squash that lands it agree, and a file only a merged branch ever had counts as never committed; a rebase merge, which puts the branch's own commits on the main line, can disagree. Entry points leave evidence in `$KLABAUTERMANN_EVIDENCE_DIR`, uploaded as an artifact |
+| `klabautermann_frame_timing` (new) | S5's provisional UI frame p99 (11.4): `klabautermann/scripts/bench-frame-timing.sh` runs the app in profile mode under Xvfb with software GLES, as Poltergeist's tier-B bench does; main pushes and dispatch only, never PRs; the same entry-point rule |
 | `klabautermann_client` (new) | Five legs: android, linux, macos, ios, windows (pattern `poltergeist_client`, `ci.yml:1216` [V]); builds on every PR, no path filter (D37) |
 | `klabautermann_rust` (new, M8; owner decision 2026-10-10 (21/22), D42) | Rust toolchain pinned by `rust-toolchain.toml` (rustup, cargo); `cargo fmt --check`, `cargo clippy`, `cargo test` for `klabautermann/rust/`; musl cross-builds for Linux x86_64 and aarch64; `cargo deny check` (3.4, rule 7); the cross-language sealing and alert-format vectors; from M9 also the Dart and Rust parity tests over the shared fixture corpus (9.4). Every PR, no path filter (D37) |
 | `seance_pin_audit` and Poltergeist's integration and bench detectors | Triggered by `seance_core` changes; expect `audit-seance-pin.sh --write-record` commits during F2 and F3 |

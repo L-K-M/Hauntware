@@ -116,10 +116,11 @@ final class LogBuffer {
     return _entries.elementAt(index);
   }
 
-  /// Appends one `LogBatch`: a [LogDroppedLines] record for [dropped] lines
-  /// first, merged into the newest entry when that is a drop record too,
-  /// then [lines], each cut at the line cap. [lines] are already split;
-  /// a line's newlines and other controls are dropped when it is styled.
+  /// Appends one batch, such as a `LogBatch`'s records as text: a
+  /// [LogDroppedLines] record for [dropped] lines first, merged into the
+  /// newest entry when that is a drop record too, then [lines], each cut
+  /// at the line cap. [lines] are already split; a line's newlines and
+  /// other controls are dropped when it is styled.
   void add(Iterable<String> lines, {int dropped = 0}) {
     RangeError.checkNotNegative(dropped, 'dropped');
 

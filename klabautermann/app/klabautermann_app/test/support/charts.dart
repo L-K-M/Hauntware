@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:ghost_theme/ghost_theme.dart';
+import 'package:intl/date_symbol_data_local.dart';
 import 'package:klabautermann_app/l10n/app_localizations_en.dart';
 import 'package:klabautermann_app/theme/app_theme.dart';
 import 'package:klabautermann_app/ui/chart_strings.dart';
@@ -12,6 +13,10 @@ import 'package:klabautermann_app/ui/charts/charts.dart';
 final ChartStrings testChartStrings = klabautermannChartStrings(
   AppLocalizationsEn(),
 );
+
+/// Loads the date formats behind the chart strings' times, which the app's
+/// Material localizations load at start.
+Future<void> loadChartDateFormats() => initializeDateFormatting('en');
 
 /// The brand theme a chart test draws in: the Linux build's, so the golden
 /// scenes match the platform that compares them. Built once per variant,

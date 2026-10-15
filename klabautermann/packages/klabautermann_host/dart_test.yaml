@@ -1,3 +1,6 @@
+# Serves runs from this package. package:test reads dart_test.yaml from
+# the working directory, so runs from klabautermann/ (CI) load
+# klabautermann/dart_test.yaml, which repeats the tag and the cap.
 tags:
   shell:
 # A wedged sampler test (an unread pipe or a hung child shell) would pin the

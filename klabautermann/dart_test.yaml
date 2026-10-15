@@ -1,0 +1,9 @@
+# `dart test` reads the dart_test.yaml of the directory it runs from, not
+# those of the packages it is given. CI and scripts/test.sh run every
+# suite from here, so this repeats what packages/*/dart_test.yaml declare.
+tags:
+  # Real-shell tests: dash and bash where installed.
+  shell:
+# A wedged shell test (an unread pipe or a hung child shell) would pin the
+# VM; cap every test instead.
+timeout: 60s
