@@ -593,6 +593,67 @@ void main() {
       );
     });
 
+    test('a hop\'s final pass counts only where ssh\'s final pass reaches '
+        'the hop', () {
+      // bastion and bastion2 keep their first pass: on their final pass
+      // both jump through bastion.example.com, which jumps through itself.
+      const loops =
+          'Host *.example.com\n  User ops\n  ProxyJump bastion.example.com\n'
+          'Host bastion\n  HostName bastion.example.com\n'
+          'Host bastion2\n  HostName b2.example.com\n';
+
+      // As a later hop, bastion2's final pass gives User ops, but ssh's
+      // final pass already fails at bastion, the first hop, so ssh reaches
+      // bastion2 only on its first pass.
+      const behindFirstHop =
+          '${loops}Host web\n  HostName 10.0.0.5\n'
+          '  ProxyJump bastion,bastion2\n';
+      expect(_dials(behindFirstHop)['web'], [
+        'me@bastion.example.com:22',
+        'me@b2.example.com:22',
+        'me@10.0.0.5:22',
+      ]);
+      expect(importedHostsFromSshConfig(behindFirstHop).skippedCount, 0);
+
+      // The same where the first hop's own route holds only by looping.
+      const behindUpstream =
+          '${loops}Host gw\n  HostName gw.internal\n  ProxyJump bastion\n'
+          'Host web\n  HostName 10.0.0.5\n  ProxyJump gw,bastion2\n';
+      expect(_dials(behindUpstream)['web'], [
+        'me@bastion.example.com:22',
+        'me@gw.internal:22',
+        'me@b2.example.com:22',
+        'me@10.0.0.5:22',
+      ]);
+      expect(importedHostsFromSshConfig(behindUpstream).skippedCount, 0);
+
+      // web's final pass gives it Port 2222, where its last hop is a
+      // jumphost loop, so web keeps its first pass, and ssh's final pass
+      // fails before any of its hops.
+      const ownPass =
+          '${loops}Host 10.0.0.*\n  Port 2222\n'
+          'Host gw\n  HostName gw.internal\n'
+          'Host web\n  HostName 10.0.0.5\n'
+          '  ProxyJump gw,bastion2,10.0.0.5:2222\n';
+      expect(_dials(ownPass)['web'], [
+        'me@gw.internal:22',
+        'me@b2.example.com:22',
+        'me@10.0.0.5:2222',
+        'me@10.0.0.5:22',
+      ]);
+      expect(importedHostsFromSshConfig(ownPass).skippedCount, 0);
+
+      // x is left out: ssh's final pass reaches bastion2 behind gw, as
+      // ops. So is web, which names x, although ssh's final pass fails
+      // at web: the import keeps no settings for a host it leaves out.
+      const leftOutFirstHop =
+          '${loops}Host 10.0.0.*\n  Port 2222\n'
+          'Host gw\n  HostName gw.internal\n'
+          'Host x\n  HostName x.internal\n  ProxyJump gw,bastion2\n'
+          'Host web\n  HostName 10.0.0.5\n  ProxyJump x,10.0.0.5:2222\n';
+      expect(_dials(leftOutFirstHop).keys, ['bastion', 'bastion2', 'gw']);
+    });
+
     test('a wildcard block before the host\'s own block comes first', () {
       expect(
         _dials(

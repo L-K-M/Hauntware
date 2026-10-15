@@ -138,7 +138,11 @@ final class JumpHop {
 /// - names a host or hop record that keeps its first pass, a key of
 ///   [loopingPasses], where ssh would take its final pass: that pass
 ///   loops where ssh dials the name as itself, but not as this hop (see
-///   [LoopingPass]).
+///   [LoopingPass]). This is not checked where ssh's final pass fails
+///   before the hop: on the route of such a key, and on the rest of
+///   every route whose first hops lead to one. ssh reaches those hops
+///   only where no final pass is asked for, and every name then takes
+///   its first pass.
 ///
 /// The work is linear in the hosts: following a route stops past 16 hops,
 /// and each null route reaches the hosts that name it once.
@@ -286,8 +290,31 @@ enum _LoopTest {
   mustLoop,
 }
 
-/// A route, or null with whether it failed because it loops.
-typedef _Followed = ({List<JumpHop>? route, bool loops});
+/// Whether ssh's final pass, where a system config asks for it, reaches
+/// the hops [_Router.follow] comes to.
+enum _FinalPass {
+  /// It may, so a hop that keeps its first pass must keep it there too.
+  mayReach,
+
+  /// It fails before them: ssh reaches them only where no final pass is
+  /// asked for, and every name then takes its first pass.
+  failsBefore,
+}
+
+/// A route and whether ssh's final pass fails on the way, or null with
+/// whether it failed because it loops.
+typedef _Followed = ({List<JumpHop>? route, bool loops, _FinalPass finalPass});
+
+const _Followed _unfollowable = (
+  route: null,
+  loops: false,
+  finalPass: _FinalPass.mayReach,
+);
+const _Followed _looping = (
+  route: null,
+  loops: true,
+  finalPass: _FinalPass.mayReach,
+);
 
 /// Follows routes through a set of named hosts and hop records.
 final class _Router {
@@ -330,46 +357,51 @@ final class _Router {
       host.user,
       _test,
     );
-    return loops ? (route: null, loops: true) : followed;
+    return loops ? _looping : followed;
   }
 
   /// The route of [host] in at most [limit] hops. [visiting] holds the
-  /// hosts whose first hop led here, to catch a loop.
+  /// hosts whose first hop led here, to catch a loop, and [reached] says
+  /// whether ssh's final pass gets this far.
   _Followed follow(
     ImportedHost host, [
     Set<String>? visiting,
     int limit = _maxJumpHops,
+    _FinalPass reached = _FinalPass.mayReach,
   ]) {
-    const unfollowable = (route: null, loops: false);
-    const looping = (route: null, loops: true);
     visiting ??= {host.alias};
 
     final own = parsed[host.alias];
-    if (own == null || own.length > limit) return unfollowable;
+    if (own == null || own.length > limit) return _unfollowable;
 
+    // ssh's final pass fails for a name that keeps its first pass, where
+    // this follows its route: as itself, or as a first hop whose first
+    // pass holds, which it does only where that pass loops. That pass
+    // then reaches none of this route's hops, nor the rest of a route
+    // whose first hops lead here.
+    var finalPass = _loopingPasses.containsKey(host.alias)
+        ? _FinalPass.failsBefore
+        : reached;
     final route = <JumpHop>[];
     for (final (index, (:name, :user, host: hopHost, :port)) in own.indexed) {
-      if (_leftOut.contains(hopHost)) return unfollowable;
+      if (_leftOut.contains(hopHost)) return _unfollowable;
 
       final alias = _byAlias[hopHost];
-      final finalPass = alias == null ? null : _loopingPasses[alias.alias];
-      // Conservative (03 §10.1): this checks every hop, also where ssh's
-      // final pass fails before it (for a [host] that keeps its first
-      // pass, or behind a first hop that holds only by looping). There it
-      // can only leave out a host that plain ssh reaches, never keep a
-      // route ssh does not take.
-      if (finalPass != null &&
-          !finalPass._firstPassHolds(alias!, index, user, port)) {
-        return unfollowable;
+      final pass = alias == null ? null : _loopingPasses[alias.alias];
+      if (finalPass == _FinalPass.mayReach &&
+          pass != null &&
+          !pass._firstPassHolds(alias!, index, user, port)) {
+        return _unfollowable;
       }
       if (index == 0 && alias != null) {
-        if (!visiting.add(alias.alias)) return looping;
+        if (!visiting.add(alias.alias)) return _looping;
 
         // ssh reaches the first hop through its own ProxyJump, so that
         // route comes first and leaves room for this host's hops.
-        final upstream = follow(alias, visiting, limit - own.length);
+        final upstream = follow(alias, visiting, limit - own.length, finalPass);
         if (upstream.route == null) return upstream;
         route.addAll(upstream.route!);
+        finalPass = upstream.finalPass;
       }
 
       final previous = route.lastOrNull;
@@ -384,11 +416,15 @@ final class _Router {
       );
       if (previous != null &&
           _isJumpLoop(previous._written, hop.host, hop.port, hop.user, _test)) {
-        return looping;
+        return _looping;
       }
       route.add(hop);
     }
-    return (route: List.unmodifiable(route), loops: false);
+    return (
+      route: List.unmodifiable(route),
+      loops: false,
+      finalPass: finalPass,
+    );
   }
 }
 

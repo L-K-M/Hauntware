@@ -32,7 +32,7 @@ import 'ssh_config_settings.dart';
 ///   name itself), ssh cannot be taking that pass for it, so the name
 ///   keeps its first pass's settings. A route that reaches such a name
 ///   as a hop is followed only where that pass would loop there too
-///   ([LoopingPass]).
+///   ([LoopingPass]), or where ssh's final pass fails before that hop.
 ///
 /// The text is parsed in the calling isolate: the engine's, so a large
 /// config never stalls the UI (CN-19). Both lists are unmodifiable, in
