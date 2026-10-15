@@ -1097,5 +1097,155 @@
   "logJournalHideFields": "Hide fields",
   "@logJournalHideFields": {
     "description": "Screen-reader hint for activating a journal row that shows its fields: hides them again."
+  },
+  "servicesWaiting": "Waiting for the first list of units…",
+  "@servicesWaiting": {
+    "description": "Services panel: shown until the server's first list of systemd units arrives."
+  },
+  "servicesUnavailableMissing": "This server has no systemctl, so there are no units to list.",
+  "@servicesUnavailableMissing": {
+    "description": "Services panel: the server lacks the systemctl tool, as on a system without systemd."
+  },
+  "servicesUnavailableDenied": "The server refused to list its units.",
+  "@servicesUnavailableDenied": {
+    "description": "Services panel: listing systemd units failed with a permission error."
+  },
+  "servicesUnavailableTimeout": "Listing units took too long and was stopped.",
+  "@servicesUnavailableTimeout": {
+    "description": "Services panel: the unit listing ran past its time limit on the server."
+  },
+  "servicesUnavailableError": "Listing units failed.",
+  "@servicesUnavailableError": {
+    "description": "Services panel: listing systemd units failed for another reason; the server's error output may follow."
+  },
+  "servicesTextFallback": "This server's systemd is older than version 246, so units are read from text. States that could not be read show as unknown.",
+  "@servicesTextFallback": {
+    "description": "Services panel notice for old systemd, whose unit list has no JSON output (CN-10)."
+  },
+  "servicesFilterType": "Type",
+  "@servicesFilterType": {
+    "description": "Label of the Services panel's filter by unit type, such as service or socket."
+  },
+  "servicesFilterTypeAll": "All types",
+  "@servicesFilterTypeAll": {
+    "description": "The unit type filter's choice that shows units of every type."
+  },
+  "servicesFilterState": "State",
+  "@servicesFilterState": {
+    "description": "Label of the Services panel's filter by a unit's active state, such as active or failed."
+  },
+  "servicesFilterStateAll": "All states",
+  "@servicesFilterStateAll": {
+    "description": "The unit state filter's choice that shows units in every state."
+  },
+  "servicesEmpty": "No units match these filters.",
+  "@servicesEmpty": {
+    "description": "Services panel: the unit list is empty under the chosen type and state filters."
+  },
+  "servicesColumnUnit": "Unit",
+  "@servicesColumnUnit": {
+    "description": "Column header of the unit list: the systemd unit's name."
+  },
+  "servicesColumnLoad": "Load",
+  "@servicesColumnLoad": {
+    "description": "Column header and label: whether systemd loaded the unit's configuration (its load state)."
+  },
+  "servicesColumnActive": "Active",
+  "@servicesColumnActive": {
+    "description": "Column header and label: the unit's high-level state, such as active, inactive or failed (its active state)."
+  },
+  "servicesColumnSub": "Sub",
+  "@servicesColumnSub": {
+    "description": "Column header and label: the unit's detailed state, such as running or exited (its sub state)."
+  },
+  "servicesColumnDescription": "Description",
+  "@servicesColumnDescription": {
+    "description": "Column header of the unit list: the unit's description from its configuration."
+  },
+  "servicesFailedCount": "{count, plural, =0{No failed units} =1{1 failed unit} other{{count} failed units}}",
+  "@servicesFailedCount": {
+    "description": "Heading of the failed units summary (SVC-02); count is how many systemd units failed.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "servicesFailedUnit": "{unit}: {state}",
+  "@servicesFailedUnit": {
+    "description": "One failed unit in the failed units summary: its name, then its detailed (sub) state as the server reports it, or the word for unknown.",
+    "placeholders": {
+      "unit": {
+        "type": "String",
+        "example": "nginx.service"
+      },
+      "state": {
+        "type": "String",
+        "example": "failed"
+      }
+    }
+  },
+  "servicesFailedMore": "{count, plural, =1{and 1 more} other{and {count} more}}",
+  "@servicesFailedMore": {
+    "description": "Last line of the failed units summary when it lists only some of them; count is how many it leaves out.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "servicesUnitClose": "Close unit details",
+  "@servicesUnitClose": {
+    "description": "Tooltip of the button that closes a unit's details and returns to the unit list."
+  },
+  "servicesLogsTitle": "Recent log lines",
+  "@servicesLogsTitle": {
+    "description": "Heading of a unit's recent journal lines on its details (SVC-04)."
+  },
+  "servicesLogsRequested": "Asking the server for recent log lines…",
+  "@servicesLogsRequested": {
+    "description": "A unit's log lines were requested and the app has no answer yet."
+  },
+  "servicesLogsWaitingLink": "Waiting for the connection to the server…",
+  "@servicesLogsWaitingLink": {
+    "description": "A unit's log read waits until the connection to the server is ready."
+  },
+  "servicesLogsWaitingChannel": "Waiting for a free session on the server…",
+  "@servicesLogsWaitingChannel": {
+    "description": "A unit's log read waits until the connection has a free session for it."
+  },
+  "servicesLogsWaitingBackground": "Paused while the app is in the background.",
+  "@servicesLogsWaitingBackground": {
+    "description": "A unit's log read waits until the app returns to the foreground."
+  },
+  "servicesLogsReading": "Reading recent log lines…",
+  "@servicesLogsReading": {
+    "description": "A unit's log read is running on the server."
+  },
+  "servicesLogsEmpty": "The journal holds no lines for this unit.",
+  "@servicesLogsEmpty": {
+    "description": "A unit's log read finished without any journal line."
+  },
+  "servicesLogsRefused": "Reading unit logs is not available in this version yet.",
+  "@servicesLogsRefused": {
+    "description": "The app's engine cannot read logs yet and refused the request; no log lines are shown."
+  },
+  "servicesLogsInvalid": "This unit's name cannot be used to read its logs.",
+  "@servicesLogsInvalid": {
+    "description": "The app refused to read logs for a unit name that fails its validation."
+  },
+  "servicesLogsMissing": "This server has no journalctl, so unit logs cannot be read.",
+  "@servicesLogsMissing": {
+    "description": "A unit's log read failed because the server lacks journalctl."
+  },
+  "servicesLogsDenied": "The server refused to read this unit's journal.",
+  "@servicesLogsDenied": {
+    "description": "A unit's log read failed with a permission error."
+  },
+  "servicesLogsFailed": "Reading this unit's journal failed.",
+  "@servicesLogsFailed": {
+    "description": "A unit's log read failed for another reason; the server's error output may follow."
   }
 }

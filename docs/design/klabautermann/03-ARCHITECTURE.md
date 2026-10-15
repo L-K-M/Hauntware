@@ -2489,6 +2489,43 @@ unless the user enables admin mode for that panel.
   `daemon-reload`), "make resilient" (`Restart=on-failure` drop-in),
   dependencies, OpenRC and procd adapters.
 
+As built in M2 (`app/klabautermann_app/lib/ui/services_panel.dart`), the
+Services tab lists the `units` stream's units in the sortable table with
+their load, active and sub states, filtered by unit type (services by
+default) and by active state; a filter keeps its choice when a refresh
+no longer holds that value.
+
+- A state shows as systemd's own word, never translated (10.10), only
+  when systemd uses it in that column: a load or active state from
+  systemd's tables, or a sub state spelled as systemd spells them.
+  Anything else reads "unknown", and so do every state and the
+  description of a row whose name ends in no unit type, as a text row
+  the host read by position after a status bullet would (CN-10). Such
+  a row opens no page, since its name is not a unit's. A notice names
+  the text fallback.
+- SVC-02's summary (`failed_units_summary.dart`, which the health card
+  is to share over `failedUnits`) counts `UnitsSnapshot.failed` and
+  names up to five, each with its sub state: systemd's `Result` property
+  needs `systemctl show` (SVC-08, v1).
+- A unit's page opens under the table, or in its place below a 600 px
+  panel width that grows with the text scale (Back returns), where it
+  takes the focus the hidden list held to its close button and gives it
+  back on closing (10.10). It reads SVC-04's lines as one 50-record
+  journal window through the monitoring controller and says what the
+  read does until lines arrive: waiting for an answer, the link, a
+  channel or the foreground, reading, no lines, or the end's reason with
+  the host's error text. A read still running when its tab hides stops
+  and starts over once shown. Since `RequestRejected` names no stream,
+  the controller gives a rejection of `OpenLogStream` to its oldest open
+  without an answer: exact while the engine refuses every open, and once
+  the log service is wired it refuses one outright only for a reused id,
+  which the app's counter never sends. A read closed before its answer
+  keeps its place until that answer arrives. This needs the controller
+  to send every `OpenLogStream` the app sends, since a second sender
+  with its own queue would also take each rejection as its own. Until
+  the service is wired, the page says unit logs are not available in
+  this version.
+
 ### 7.6 Logs (LOG)
 
 - **MVP.** Journal viewer (LOG-01): `journalctl -o json --no-pager` with

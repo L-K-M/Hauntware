@@ -82,6 +82,24 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     // A subscription id the engine keys a surface's streams by (D45).
     r"'$surface-${_subscriptionCount++}'",
   },
+  // Services panel (SVC-01 to SVC-04, CN-10).
+  'lib/controllers/log_reads.dart': {
+    // An assert message; programmer diagnostic, never rendered.
+    "'a follow is not a bounded read'",
+    // A log stream id, never reused in an engine run (03 §10.1).
+    r"'log-read-${_count++}'",
+    // The rejected request's class name, which RequestRejected carries.
+    r"'$OpenLogStream'",
+  },
+  'lib/ui/services_view.dart': {
+    // systemd's spelling of load and sub states and the dot before a unit
+    // type, matched against server data; the panel shows ARB text for
+    // what does not match (chartUnknownValue).
+    "'[A-Z]'",
+    r"'-${capital[0]!.toLowerCase()}'",
+    r"r'^[a-z][a-z0-9]*(-[a-z0-9]+)*$'",
+    "'.'",
+  },
   'lib/services/macos_titlebar.dart': {
     // The 04 §12.3 method channel name.
     "'klabautermann/window'",

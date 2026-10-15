@@ -1407,6 +1407,198 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Hide fields'**
   String get logJournalHideFields;
+
+  /// Services panel: shown until the server's first list of systemd units arrives.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for the first list of units…'**
+  String get servicesWaiting;
+
+  /// Services panel: the server lacks the systemctl tool, as on a system without systemd.
+  ///
+  /// In en, this message translates to:
+  /// **'This server has no systemctl, so there are no units to list.'**
+  String get servicesUnavailableMissing;
+
+  /// Services panel: listing systemd units failed with a permission error.
+  ///
+  /// In en, this message translates to:
+  /// **'The server refused to list its units.'**
+  String get servicesUnavailableDenied;
+
+  /// Services panel: the unit listing ran past its time limit on the server.
+  ///
+  /// In en, this message translates to:
+  /// **'Listing units took too long and was stopped.'**
+  String get servicesUnavailableTimeout;
+
+  /// Services panel: listing systemd units failed for another reason; the server's error output may follow.
+  ///
+  /// In en, this message translates to:
+  /// **'Listing units failed.'**
+  String get servicesUnavailableError;
+
+  /// Services panel notice for old systemd, whose unit list has no JSON output (CN-10).
+  ///
+  /// In en, this message translates to:
+  /// **'This server\'s systemd is older than version 246, so units are read from text. States that could not be read show as unknown.'**
+  String get servicesTextFallback;
+
+  /// Label of the Services panel's filter by unit type, such as service or socket.
+  ///
+  /// In en, this message translates to:
+  /// **'Type'**
+  String get servicesFilterType;
+
+  /// The unit type filter's choice that shows units of every type.
+  ///
+  /// In en, this message translates to:
+  /// **'All types'**
+  String get servicesFilterTypeAll;
+
+  /// Label of the Services panel's filter by a unit's active state, such as active or failed.
+  ///
+  /// In en, this message translates to:
+  /// **'State'**
+  String get servicesFilterState;
+
+  /// The unit state filter's choice that shows units in every state.
+  ///
+  /// In en, this message translates to:
+  /// **'All states'**
+  String get servicesFilterStateAll;
+
+  /// Services panel: the unit list is empty under the chosen type and state filters.
+  ///
+  /// In en, this message translates to:
+  /// **'No units match these filters.'**
+  String get servicesEmpty;
+
+  /// Column header of the unit list: the systemd unit's name.
+  ///
+  /// In en, this message translates to:
+  /// **'Unit'**
+  String get servicesColumnUnit;
+
+  /// Column header and label: whether systemd loaded the unit's configuration (its load state).
+  ///
+  /// In en, this message translates to:
+  /// **'Load'**
+  String get servicesColumnLoad;
+
+  /// Column header and label: the unit's high-level state, such as active, inactive or failed (its active state).
+  ///
+  /// In en, this message translates to:
+  /// **'Active'**
+  String get servicesColumnActive;
+
+  /// Column header and label: the unit's detailed state, such as running or exited (its sub state).
+  ///
+  /// In en, this message translates to:
+  /// **'Sub'**
+  String get servicesColumnSub;
+
+  /// Column header of the unit list: the unit's description from its configuration.
+  ///
+  /// In en, this message translates to:
+  /// **'Description'**
+  String get servicesColumnDescription;
+
+  /// Heading of the failed units summary (SVC-02); count is how many systemd units failed.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{No failed units} =1{1 failed unit} other{{count} failed units}}'**
+  String servicesFailedCount(int count);
+
+  /// One failed unit in the failed units summary: its name, then its detailed (sub) state as the server reports it, or the word for unknown.
+  ///
+  /// In en, this message translates to:
+  /// **'{unit}: {state}'**
+  String servicesFailedUnit(String unit, String state);
+
+  /// Last line of the failed units summary when it lists only some of them; count is how many it leaves out.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{and 1 more} other{and {count} more}}'**
+  String servicesFailedMore(int count);
+
+  /// Tooltip of the button that closes a unit's details and returns to the unit list.
+  ///
+  /// In en, this message translates to:
+  /// **'Close unit details'**
+  String get servicesUnitClose;
+
+  /// Heading of a unit's recent journal lines on its details (SVC-04).
+  ///
+  /// In en, this message translates to:
+  /// **'Recent log lines'**
+  String get servicesLogsTitle;
+
+  /// A unit's log lines were requested and the app has no answer yet.
+  ///
+  /// In en, this message translates to:
+  /// **'Asking the server for recent log lines…'**
+  String get servicesLogsRequested;
+
+  /// A unit's log read waits until the connection to the server is ready.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for the connection to the server…'**
+  String get servicesLogsWaitingLink;
+
+  /// A unit's log read waits until the connection has a free session for it.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for a free session on the server…'**
+  String get servicesLogsWaitingChannel;
+
+  /// A unit's log read waits until the app returns to the foreground.
+  ///
+  /// In en, this message translates to:
+  /// **'Paused while the app is in the background.'**
+  String get servicesLogsWaitingBackground;
+
+  /// A unit's log read is running on the server.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading recent log lines…'**
+  String get servicesLogsReading;
+
+  /// A unit's log read finished without any journal line.
+  ///
+  /// In en, this message translates to:
+  /// **'The journal holds no lines for this unit.'**
+  String get servicesLogsEmpty;
+
+  /// The app's engine cannot read logs yet and refused the request; no log lines are shown.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading unit logs is not available in this version yet.'**
+  String get servicesLogsRefused;
+
+  /// The app refused to read logs for a unit name that fails its validation.
+  ///
+  /// In en, this message translates to:
+  /// **'This unit\'s name cannot be used to read its logs.'**
+  String get servicesLogsInvalid;
+
+  /// A unit's log read failed because the server lacks journalctl.
+  ///
+  /// In en, this message translates to:
+  /// **'This server has no journalctl, so unit logs cannot be read.'**
+  String get servicesLogsMissing;
+
+  /// A unit's log read failed with a permission error.
+  ///
+  /// In en, this message translates to:
+  /// **'The server refused to read this unit\'s journal.'**
+  String get servicesLogsDenied;
+
+  /// A unit's log read failed for another reason; the server's error output may follow.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading this unit\'s journal failed.'**
+  String get servicesLogsFailed;
 }
 
 class _AppLocalizationsDelegate
