@@ -1,4 +1,6 @@
+import 'package:flutter/foundation.dart' show defaultTargetPlatform;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show SystemChannels;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:klabautermann_app/app.dart';
 import 'package:klabautermann_app/controllers/monitoring_controller.dart';
@@ -134,6 +136,20 @@ void main() {
 
   testWidgets('a restarted engine\'s controllers get every surface anew '
       '(D44)', (tester) async {
+    final menuPushes = <Object?>[];
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.menu,
+      (call) async {
+        if (call.method == 'Menu.setMenus') menuPushes.add(call.arguments);
+        return null;
+      },
+    );
+    addTearDown(
+      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.menu,
+        null,
+      ),
+    );
     final harness = await _openWeb1(tester, _desktop);
     final restarted = FakeEngineClient();
     final monitoring = MonitoringController(
@@ -161,7 +177,12 @@ void main() {
       'disconnect srv-1',
     ]);
     expect(_unsubscribes(harness.engine), hasLength(1));
-  });
+    // macOS has one native menu bar: the old tree's bar clears it as it
+    // goes, so the new tree's must set it after that, not before.
+    if (defaultTargetPlatform == TargetPlatform.macOS) {
+      expect('${menuPushes.last}', contains('Settings…'));
+    }
+  }, variant: TargetPlatformVariant.all());
 
   testWidgets('the phone screen holds its server open and samples the '
       'selected destination', (tester) async {

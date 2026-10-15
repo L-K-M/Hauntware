@@ -91,8 +91,8 @@ class KlabautermannApp extends StatelessWidget {
     // Controllers last one engine run (D44), and routes and surfaces keep
     // the ones they were built with, so new ones remount the whole tree:
     // every surface then opens and subscribes on the new engine.
-    return KeyedSubtree(
-      key: ValueKey((fleet, monitoring)),
+    return _RemountOnChange(
+      identity: (fleet, monitoring),
       // On phones the engine pauses sampling while the user cannot see the
       // app (03 §6.4); the reporter tells it when that changes.
       child: AppActivityReporter(
@@ -155,5 +155,46 @@ class KlabautermannApp extends StatelessWidget {
         );
       },
     );
+  }
+}
+
+/// Remounts [child] when [identity] changes, across two frames: the first
+/// shows nothing and disposes the old tree as it ends, and the next mounts
+/// the new one. A swap within one frame would mount the new tree while the
+/// old one is only deactivated, but some platform state has one owner at a
+/// time: macOS's [PlatformMenuBar] asserts on a second bar, and the old
+/// bar's dispose would clear the native menus the new one had just set.
+/// The blank frame only comes with new controllers, an engine restart.
+class _RemountOnChange extends StatefulWidget {
+  const _RemountOnChange({required this.identity, required this.child});
+
+  final Object identity;
+  final Widget child;
+
+  @override
+  State<_RemountOnChange> createState() => _RemountOnChangeState();
+}
+
+class _RemountOnChangeState extends State<_RemountOnChange> {
+  bool _clearing = false;
+
+  @override
+  void didUpdateWidget(_RemountOnChange oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.identity == oldWidget.identity) return;
+
+    _clearing = true;
+    // Post-frame callbacks run after the frame has disposed what it
+    // unmounted, so the old tree is gone when the new one builds.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      setState(() => _clearing = false);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_clearing) return const SizedBox.shrink();
+    return widget.child;
   }
 }
