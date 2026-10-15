@@ -305,7 +305,8 @@ class _SystemPanelState extends State<SystemPanel> {
       if (rows.isEmpty)
         Text(l10n.systemDisksEmpty)
       else
-        // Every row shows: the page scrolls, not the table.
+        // Every row shows: the page scrolls, not the table, and follows
+        // the keyboard's active row.
         SizedBox(
           height: (rows.length + 1) * scaledGhostFileRowExtent(context),
           child: SortableTable<FsMount>(

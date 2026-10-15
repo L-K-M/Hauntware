@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show LogicalKeyboardKey;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ghost_theme/ghost_theme.dart';
 import 'package:intl/intl.dart' show DateFormat;
@@ -375,6 +376,67 @@ void main() {
     expect(find.text(noTimeout), findsOneWidget);
     handle.dispose();
   });
+
+  // At 200 % the table also scrolls sideways.
+  for (final (textScale, count) in [(1.0, 40), (2.0, 16)]) {
+    testWidgets('the keyboard\'s active mount row stays on screen while the '
+        'page scrolls the table, at ${textScale}x text', (tester) async {
+      final handle = tester.ensureSemantics();
+      final panel = await _pump(
+        tester,
+        size: const Size(718, 600),
+        textScale: textScale,
+      );
+      final many = FsSnapshot([
+        for (var index = 0; index < count; index++)
+          _mount('/dev/vd$index', 'ext4', '/m$index', (10, 1, 9), 10, 1),
+      ]);
+      await panel.sample(tester, SampleStream.fs, FsResult(many));
+
+      // Past the sortable headers to the table body.
+      for (var stop = 0; stop < 10; stop++) {
+        if (FocusManager.instance.primaryFocus?.debugLabel == 'SortableTable') {
+          break;
+        }
+        await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+        await tester.pumpAndSettle();
+      }
+      final view = tester.getRect(find.byType(SystemPanel));
+      int active() => [
+        for (var index = 0; index < count; index++)
+          if (isSemantics(
+            isFocused: true,
+          ).matches(tester.getSemantics(_row('/m$index')), {}))
+            index,
+      ].single;
+      void expectShown() {
+        final row = tester.getRect(_row('/m${active()}'));
+        expect(
+          row.top >= view.top && row.bottom <= view.bottom,
+          isTrue,
+          reason: '/m${active()} at $row in $view',
+        );
+      }
+
+      expectShown();
+      for (final (key, expected) in [
+        (LogicalKeyboardKey.end, count - 1),
+        (LogicalKeyboardKey.home, 0),
+      ]) {
+        await tester.sendKeyEvent(key);
+        await tester.pumpAndSettle();
+        expect(active(), expected);
+        expectShown();
+      }
+
+      // A page is what the screen shows, not the whole table.
+      await tester.sendKeyEvent(LogicalKeyboardKey.pageDown);
+      await tester.pumpAndSettle();
+      expect(active(), inExclusiveRange(1, count - 1));
+      expectShown();
+      handle.dispose();
+    });
+  }
 
   testWidgets('a narrow table opens a mount\'s bytes and device in a sheet', (
     tester,

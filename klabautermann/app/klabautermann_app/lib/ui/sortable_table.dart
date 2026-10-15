@@ -182,7 +182,9 @@ List<R> sortTableRows<R>(
 /// Sort state is the caller's ([sort], [onSort]): a tab view disposes the
 /// panes it hides, and the panel's controller keeps the order across
 /// that. The table needs a bounded height; when the columns do not fit
-/// the width it scrolls sideways rather than overflow.
+/// the width it scrolls sideways rather than overflow. Sized to show
+/// every row inside a scrolling page, it scrolls that page to the active
+/// row and pages by what the page shows.
 ///
 /// Flutter's table semantics roles are not used: their debug checks
 /// require table, row and cell nodes to nest directly, which the
@@ -420,8 +422,7 @@ class _SortableTableState<R> extends State<SortableTable<R>> {
     }
 
     final current = _activeIndex;
-    final viewport = _scroll.position.viewportDimension;
-    final page = math.max(1, (viewport / _rowExtent).floor() - 1);
+    final page = math.max(1, (_shownHeight() / _rowExtent).floor() - 1);
     // With no active row yet, any key makes the first row active.
     final target = current == null
         ? 0
@@ -437,8 +438,18 @@ class _SortableTableState<R> extends State<SortableTable<R>> {
     _reveal();
   }
 
-  /// Scrolls the least distance that shows the active row whole; the
-  /// fixed extent makes its offset exact without building it.
+  /// How much of the body a screen shows: its own viewport, or less where
+  /// a page scrolling around the table is shorter, as for a table sized
+  /// to show every row.
+  double _shownHeight() {
+    final own = _scroll.position.viewportDimension;
+    final page = Scrollable.maybeOf(context, axis: Axis.vertical);
+    return page == null ? own : math.min(own, page.position.viewportDimension);
+  }
+
+  /// Scrolls the least distance that shows the active row whole, in the
+  /// body and then in any page around the table; the fixed extent makes
+  /// its offset exact without building it.
   void _reveal() {
     final index = _activeIndex;
     if (index == null || !_scroll.hasClients) return;
@@ -453,6 +464,13 @@ class _SortableTableState<R> extends State<SortableTable<R>> {
       shown
           .clamp(position.minScrollExtent, position.maxScrollExtent)
           .toDouble(),
+    );
+
+    // The row's full width, so a sideways scroll stays where it is.
+    final body = _bodyKey.currentContext?.findRenderObject();
+    if (body is! RenderBox || !body.hasSize) return;
+    body.showOnScreen(
+      rect: Rect.fromLTWH(0, top - _scroll.offset, body.size.width, _rowExtent),
     );
   }
 
