@@ -1069,8 +1069,26 @@ final class LogStreamWaiting extends LogStreamStatus {
 }
 
 /// The read runs on the host: a window until it ends, a follow live.
+/// [reader] says which of its source's readers serves it, so the view can
+/// name where a kernel log came from (LOG-03).
 final class LogStreamRunning extends LogStreamStatus {
-  const LogStreamRunning();
+  const LogStreamRunning({this.reader = LogReader.primary});
+
+  final LogReader reader;
+
+  @override
+  List<Object?> get _values => [reader];
+}
+
+/// Which reader a [LogStreamRunning] stream reads with (03 §7.6).
+enum LogReader {
+  /// The source's own: `journalctl` for the journal and the kernel log,
+  /// `tail` for a file.
+  primary,
+
+  /// The kernel log's fallback, `dmesg --json --decode`, read as
+  /// [KernelRecord]s when `journalctl -k -b` gives no kernel record.
+  fallback,
 }
 
 /// The stream ended for [reason], and nothing more arrives for it.

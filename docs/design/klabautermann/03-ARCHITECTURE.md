@@ -4156,7 +4156,8 @@ the engine in `engine_isolate.dart` beside it):
   records discarded since the stream's previous batch.
   `LogStreamState(streamId, status)` carries a sealed status that
   compares by value: waiting (for the link, a free channel under 5.2's
-  budget, or the foreground), running, or ended with a reason (window
+  budget, or the foreground), running (with the source's own reader or
+  the kernel log's `dmesg` fallback, 7.6), or ended with a reason (window
   filled, oldest record reached, closed, spec refused, source missing,
   read denied, or failed) and the host's error output. Until the log
   service is wired, the engine rejects `OpenLogStream` and ignores

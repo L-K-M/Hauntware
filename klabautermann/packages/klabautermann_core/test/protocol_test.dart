@@ -753,7 +753,7 @@ void main() {
       final statuses = <LogStreamStatus>[
         for (final reason in LogStreamWaitReason.values)
           LogStreamWaiting(reason),
-        const LogStreamRunning(),
+        for (final reader in LogReader.values) LogStreamRunning(reader: reader),
         for (final reason in LogStreamEndReason.values) LogStreamEnded(reason),
         const LogStreamEnded(
           LogStreamEndReason.denied,
@@ -769,8 +769,8 @@ void main() {
         expect(state.status.hashCode, status.hashCode);
       }
 
-      // Every status differs from every other: by variant, reason or
-      // detail.
+      // Every status differs from every other: by variant, reader, reason
+      // or detail.
       for (var i = 0; i < statuses.length; i++) {
         for (var j = i + 1; j < statuses.length; j++) {
           expect(statuses[i], isNot(statuses[j]));
