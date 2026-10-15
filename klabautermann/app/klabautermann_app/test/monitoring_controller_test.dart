@@ -341,6 +341,27 @@ void main() {
     expect(monitoring.sampleFor('srv-1', overview).value?.seq, 1);
   });
 
+  test('the latest host profile lands in its server\'s box and leaves '
+      'with the server (SYN-08)', () async {
+    final kvm = HostProfile(virtualization: 'kvm', container: 'none');
+    final lxc = HostProfile(virtualization: 'lxc', container: 'lxc');
+    engine
+      ..emit(HostProfileChanged('srv-1', kvm))
+      ..emit(HostProfileChanged('srv-1', lxc));
+    await settle();
+    final box = monitoring.profileFor('srv-1');
+    expect(box.value, same(lxc));
+    expect(monitoring.profileFor('srv-2').value, isNull);
+
+    engine
+      ..emit(CatalogReplaced([_entry('srv-2')]))
+      // Still in flight when the server left: it must not come back.
+      ..emit(HostProfileChanged('srv-1', kvm));
+    await settle();
+    expect(_disposed(box as ChangeNotifier), isTrue);
+    expect(monitoring.profileFor('srv-1').value, isNull);
+  });
+
   group('links (03 §5.12)', () {
     testWidgets('the first view connects; the last leave disconnects after '
         'the grace', (tester) async {

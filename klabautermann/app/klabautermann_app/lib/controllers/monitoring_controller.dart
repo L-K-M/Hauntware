@@ -128,6 +128,12 @@ final class MonitoringController extends ChangeNotifier {
   ValueListenable<Sample?> sampleFor(String serverId, SampleStream stream) =>
       _server(serverId).box(stream);
 
+  /// What the probe last found on [serverId] ([HostProfileChanged]), or
+  /// null before its first answer this engine run: SYS-01's
+  /// virtualization and the container facts behind D50's unknowns.
+  ValueListenable<HostProfile?> profileFor(String serverId) =>
+      _server(serverId).profile;
+
   /// The session ring of [serverId]'s [series] as [stream] reports it
   /// (OV-03): one reading per kept sample of [stream], null where it had no
   /// value.
@@ -288,6 +294,10 @@ final class MonitoringController extends ChangeNotifier {
         // back what the purge dropped.
         if (_fleetIds case final ids? when !ids.contains(serverId)) return;
         _server(serverId).accept(event);
+      case HostProfileChanged(:final serverId, :final profile):
+        // As for a sample: a server that left the fleet stays purged.
+        if (_fleetIds case final ids? when !ids.contains(serverId)) return;
+        _server(serverId).profile.value = profile;
       case CatalogReplaced(:final entries):
         _purge({for (final entry in entries) entry.serverId});
       case EngineEvent():
@@ -295,8 +305,9 @@ final class MonitoringController extends ChangeNotifier {
     }
   }
 
-  /// SYN-08: a server that leaves the fleet takes its readings, rings and
-  /// seq floor with it, and comes back, if it does, without them.
+  /// SYN-08: a server that leaves the fleet takes its readings, rings,
+  /// profile and seq floor with it, and comes back, if it does, without
+  /// them.
   void _purge(Set<String> fleetIds) {
     _fleetIds = fleetIds;
     _readings.removeWhere((serverId, readings) {
@@ -368,8 +379,8 @@ final class _FreshnessClock extends ChangeNotifier
   }
 }
 
-/// One server's readings: its seq floor, latest sample per stream and
-/// rings.
+/// One server's readings: its seq floor, latest sample per stream, rings
+/// and probe profile.
 final class _ServerReadings {
   /// The highest [Sample.seq] kept: the engine counts one sequence per
   /// server across its streams (D44).
@@ -377,6 +388,7 @@ final class _ServerReadings {
 
   final Map<SampleStream, ValueNotifier<Sample?>> _boxes = {};
   final Map<SampleStream, Map<MetricSeries, SeriesRing>> _rings = {};
+  final ValueNotifier<HostProfile?> profile = ValueNotifier(null);
 
   /// Ring streams no subscription names, and those named again since,
   /// whose next reading follows a hole.
@@ -431,5 +443,6 @@ final class _ServerReadings {
     for (final ring in _rings.values.expand((rings) => rings.values)) {
       ring.dispose();
     }
+    profile.dispose();
   }
 }
