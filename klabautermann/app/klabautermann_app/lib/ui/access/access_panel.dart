@@ -46,15 +46,26 @@ class AccessPanel extends StatelessWidget {
     super.key,
     required this.monitoring,
     required this.serverId,
+    this.focusNode,
   });
 
   final MonitoringController monitoring;
   final String serverId;
 
+  /// Focuses the tab as a whole, ahead of its controls, so the next Tab
+  /// press reaches its first one; it is no stop of its own.
+  final FocusNode? focusNode;
+
   @override
-  Widget build(BuildContext context) => ValueListenableBuilder<HostProfile?>(
-    valueListenable: monitoring.profileFor(serverId),
-    builder: (context, profile, _) => _AccessBody(profile: profile),
+  Widget build(BuildContext context) => FocusTraversalGroup(
+    child: Focus(
+      focusNode: focusNode,
+      skipTraversal: true,
+      child: ValueListenableBuilder<HostProfile?>(
+        valueListenable: monitoring.profileFor(serverId),
+        builder: (context, profile, _) => _AccessBody(profile: profile),
+      ),
+    ),
   );
 }
 

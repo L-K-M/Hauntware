@@ -103,14 +103,39 @@ class ServerWorkspace extends StatelessWidget {
 /// open. A panel stays built once opened, so whether it samples follows
 /// the tab controller's index (03 §6.4). A panel the access rules hide
 /// links to the Access tab instead (03 §10.4).
-class _Panels extends StatelessWidget {
+class _Panels extends StatefulWidget {
   const _Panels({required this.monitoring, required this.serverId});
 
   final MonitoringController monitoring;
   final String serverId;
 
   @override
+  State<_Panels> createState() => _PanelsState();
+}
+
+class _PanelsState extends State<_Panels> {
+  /// Where a hidden panel's link puts the keyboard: the link hides with
+  /// its panel, so focus moves into the Access tab (03 §10.10).
+  final FocusNode _accessFocus = FocusNode();
+
+  @override
+  void dispose() {
+    _accessFocus.dispose();
+    super.dispose();
+  }
+
+  void _openAccess(TabController tabs) {
+    tabs.index = ServerWorkspace._panels.indexOf(ServerPanel.access);
+    // The tab is built on the next frame.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _accessFocus.requestFocus();
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final monitoring = widget.monitoring;
+    final serverId = widget.serverId;
     final tabs = DefaultTabController.of(context);
     return OpenServer(
       monitoring: monitoring,
@@ -124,8 +149,7 @@ class _Panels extends StatelessWidget {
                 monitoring: monitoring,
                 serverId: serverId,
                 panel: panel,
-                onOpenAccess: () => tabs.index = ServerWorkspace._panels
-                    .indexOf(ServerPanel.access),
+                onOpenAccess: () => _openAccess(tabs),
                 child: SampledSurface(
                   monitoring: monitoring,
                   serverId: serverId,
@@ -136,6 +160,7 @@ class _Panels extends StatelessWidget {
                     ServerPanel.access => AccessPanel(
                       monitoring: monitoring,
                       serverId: serverId,
+                      focusNode: _accessFocus,
                     ),
                     _ => const PlaceholderPaneBody(),
                   },

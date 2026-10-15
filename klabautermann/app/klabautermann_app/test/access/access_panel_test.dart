@@ -257,6 +257,38 @@ void main() {
     );
   });
 
+  testWidgets('moves the keyboard into the Access tab from a hidden '
+      'panel\'s link', (tester) async {
+    await _openWeb1(
+      tester,
+      _desktop,
+      profile: debianHost(overrides: {'systemdDir': false}),
+    );
+    await _openTab(tester, 'Services');
+    Focus.of(tester.element(find.text('Open Access'))).requestFocus();
+    await tester.pump();
+
+    // The link hides with its panel (03 §10.10).
+    bool focusInAccess() =>
+        FocusManager.instance.primaryFocus?.context
+            ?.findAncestorWidgetOfExactType<AccessPanel>() !=
+        null;
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    expect(find.byType(AccessPanel), findsOneWidget);
+    expect(focusInAccess(), isTrue);
+
+    // The tab itself is no stop: Tab reaches its first control.
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pumpAndSettle();
+    expect(focusInAccess(), isTrue);
+    expect(
+      FocusManager.instance.primaryFocus?.context
+          ?.findAncestorWidgetOfExactType<OutlinedButton>(),
+      isNotNull,
+    );
+  });
+
   testWidgets('gates the Docker tab and shows the detected runtime '
       'read-only', (tester) async {
     final harness = await _openWeb1(tester, _desktop);
