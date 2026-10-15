@@ -1656,9 +1656,10 @@ abstract interface class RemoteProcess {
   handshake and authentication 5 minutes, and a key file on a stalled
   mount blocks its stat and read without bound. A given-up attempt
   (deadline, `Disconnect`, the background grace) withdraws its prompts
-  and, if its route is not resolved yet, never dials; the server's next
-  dial waits until it returns, and a link it still brings is closed, so
-  a server has one dial at a time.
+  and, if its route is not resolved yet, never dials. The server's next
+  attempt waits for it to return, and that wait counts against the next
+  attempt's own deadline; a link the given-up attempt still brings is
+  closed, so a server has one dial at a time.
 - **States** cross the isolate boundary as plain data: `idle`,
   `connecting`, `authenticating`, `ready(capabilities)`, `degraded(reason)`,
   `backoff(until)`, `needsUser(prompt)`, `closed(reason)`, plus the

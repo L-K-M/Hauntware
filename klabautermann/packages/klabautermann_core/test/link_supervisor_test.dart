@@ -359,6 +359,20 @@ void main() {
       expect(supervisor.link('s1'), isNull);
     });
 
+    test('also gives up an attempt waiting for the stalled dial', () async {
+      supervisor.connect('s1', purpose: _interactive);
+      await clock.elapse(kConnectAttemptDeadline);
+      supervisor.connect('s1', purpose: _interactive);
+      await clock.elapse(kConnectAttemptDeadline);
+
+      expect(calls, hasLength(1));
+      expect(statuses().skip(3), [
+        const LinkConnecting(),
+        _failed(LinkFailureKind.timedOut),
+        LinkBackoff(clock.now.add(const Duration(seconds: 2))),
+      ]);
+    });
+
     test('leaves out the time a prompt waits on the user', () async {
       supervisor.connect('s1', purpose: _interactive);
       final call = calls.single;

@@ -28,11 +28,12 @@ const int kMaxConnectsInFlight = 4;
 /// servers queued together do not connect in step (03 §5.12).
 const Duration kConnectJitter = Duration(seconds: 1);
 
-/// How long an attempt may work before it is given up as timed out [E];
-/// the clock stops while a prompt waits on the user and starts over once
-/// it is answered. `SshLink.connect` bounds each socket connect but gives
-/// a handshake and authentication five minutes, and a stat or read of a
-/// key file stalled on a mount has no bound at all.
+/// How long an attempt may work, or wait for its server's given-up dial
+/// to return, before it is given up as timed out [E]; the clock stops
+/// while a prompt waits on the user and starts over once it is answered.
+/// `SshLink.connect` bounds each socket connect but gives a handshake and
+/// authentication five minutes, and a stat or read of a key file stalled
+/// on a mount has no bound at all.
 const Duration kConnectAttemptDeadline = Duration(seconds: 60);
 
 /// How long links stay open after a phone app goes to the background
@@ -229,6 +230,10 @@ final class LinkSupervisor {
         : -1;
     _queue.insert(at < 0 ? _queue.length : at, attempt);
     _set(server, const LinkConnecting());
+    // Waiting for a given-up dial, such as a key read stalled on a mount,
+    // counts against the deadline, so the wait shows as a timeout and
+    // backs off rather than staying connecting.
+    if (server.dialPending) _armDeadline(attempt);
     _pump();
   }
 
@@ -240,6 +245,7 @@ final class LinkSupervisor {
       if (index < 0) return;
 
       final attempt = _queue.removeAt(index);
+      attempt.timer?.cancel();
       _inFlight++;
       attempt.holdsSlot = true;
       if (attempt.purpose == ConnectPurpose.interactive) {
