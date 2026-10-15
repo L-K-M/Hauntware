@@ -516,6 +516,181 @@ void main() {
     });
   });
 
+  group('forget, for a server that left the fleet', () {
+    test('closes its link and reports nothing', () async {
+      final link = await linked();
+      gone.add('s1');
+      supervisor.forget(['s1']);
+      link.become(const SshLinkClosed(SshLinkClosedReason.closedByOwner));
+      await clock.elapse(const Duration(minutes: 5));
+
+      expect(link.closes, 1);
+      expect(supervisor.link('s1'), isNull);
+      expect(calls, hasLength(1));
+      expect(statuses(), [const LinkConnecting(), const LinkReady()]);
+    });
+
+    test('gives up its attempt and backoff, and closes a link the attempt '
+        'brings late', () async {
+      supervisor.connect('s1', purpose: _interactive);
+      final call = calls.single;
+      supervisor.connect('s2', purpose: _interactive);
+      calls.last.fail(LinkFailureKind.unreachable);
+      await clock.elapse(Duration.zero);
+      gone.addAll(['s1', 's2']);
+      supervisor.forget(['s1', 's2']);
+      final late = call.succeed();
+      await clock.elapse(const Duration(minutes: 5));
+
+      expect(call.wasAbandoned, isTrue);
+      expect(late.closes, 1);
+      expect(calls, hasLength(2), reason: 's2 is not redialed');
+      expect(statuses(), [const LinkConnecting()]);
+      expect(statuses('s2'), [
+        const LinkConnecting(),
+        _failed(LinkFailureKind.unreachable),
+        isA<LinkBackoff>(),
+      ]);
+    });
+
+    test('keeps nothing it learned, so a server that comes back starts '
+        'over', () async {
+      supervisor.connect('s1', purpose: _interactive);
+      calls.last._result.complete(
+        LinkConnectBlocked(LinkBlockedReason.hostKeyChanged, Exception('key')),
+      );
+      await clock.elapse(Duration.zero);
+      supervisor.forget(['s1']);
+      supervisor.connect('s1', purpose: _interactive);
+      expect(calls, hasLength(2), reason: 'no longer blocked');
+
+      calls.last.succeed(keyboardInteractive: true);
+      await clock.elapse(Duration.zero);
+      supervisor.forget(['s1']);
+      supervisor.connect('s1', purpose: _background);
+      await clock.elapse(kConnectJitter);
+      expect(calls, hasLength(3), reason: 'dialed unattended again');
+
+      // Two failures in, a server that comes back backs off from 1 s.
+      calls.last.fail(LinkFailureKind.unreachable);
+      await clock.elapse(const Duration(seconds: 1));
+      calls.last.fail(LinkFailureKind.unreachable);
+      await clock.elapse(Duration.zero);
+      supervisor.forget(['s1']);
+      events.clear();
+      supervisor.connect('s1', purpose: _interactive);
+      calls.last.fail(LinkFailureKind.unreachable);
+      await clock.elapse(Duration.zero);
+
+      expect(statuses(), [
+        const LinkConnecting(),
+        _failed(LinkFailureKind.unreachable),
+        LinkBackoff(clock.now.add(const Duration(seconds: 1))),
+      ]);
+    });
+
+    test('a dial on its way to the network still holds the server\'s next '
+        'attempt until it returns', () async {
+      supervisor.connect('s1', purpose: _interactive);
+      final first = calls.single..onDialing!();
+      supervisor.forget(['s1']);
+      supervisor.connect('s1', purpose: _interactive);
+      await clock.elapse(Duration.zero);
+      expect(calls, hasLength(1));
+
+      final late = first.succeed();
+      await clock.elapse(Duration.zero);
+      expect(late.closes, 1);
+      expect(calls, hasLength(2));
+      // Forgetting reported nothing, so the comeback reports connecting.
+      expect(statuses(), [const LinkConnecting(), const LinkConnecting()]);
+    });
+
+    test('a dial on its way keeps nothing learned either: the server that '
+        'comes back before it returns starts over', () async {
+      supervisor.connect('s1', purpose: _interactive);
+      calls.last.fail(LinkFailureKind.unreachable);
+      await clock.elapse(Duration.zero);
+      supervisor.connect('s1', purpose: _interactive);
+      // One failure in, and asked keyboard-interactive questions.
+      final pending = calls.last
+        ..onPhase!(
+          const LinkNeedsUser(
+            promptId: 'p1',
+            kind: PromptKind.keyboardInteractive,
+          ),
+        );
+      supervisor
+        ..forget(['s1'])
+        ..connect('s1', purpose: _background);
+      pending.fail(null);
+      await clock.elapse(Duration.zero);
+      expect(calls, hasLength(3), reason: 'dialed unattended again');
+      expect(calls.last.purpose, _background);
+
+      events.clear();
+      calls.last.fail(LinkFailureKind.unreachable);
+      await clock.elapse(Duration.zero);
+      expect(statuses(), [
+        _failed(LinkFailureKind.unreachable),
+        LinkBackoff(clock.now.add(const Duration(seconds: 1))),
+      ]);
+    });
+
+    test('a server that comes back waits for a slot without a deadline once '
+        'its old dial returns', () async {
+      // Dials waiting on the user hold their slots with no deadline.
+      void ask(_Call call) => call.onPhase!(
+        LinkNeedsUser(promptId: call.serverId, kind: PromptKind.hostKey),
+      );
+      for (final id in ['s1', 's2', 's3', 's4']) {
+        supervisor.connect(id, purpose: _interactive);
+      }
+      final old = calls.first..onDialing!();
+      calls.skip(1).forEach(ask);
+      supervisor
+        ..forget(['s1'])
+        ..connect('s9', purpose: _interactive)
+        // Queued behind s9, with a deadline while the old dial runs.
+        ..connect('s1', purpose: _interactive);
+      await clock.elapse(const Duration(seconds: 10));
+      old.fail(LinkFailureKind.unreachable);
+      await clock.elapse(Duration.zero);
+      expect(calls.map((c) => c.serverId).skip(4), ['s9']);
+      ask(calls.last);
+
+      await clock.elapse(kConnectAttemptDeadline);
+      expect(statuses(), [const LinkConnecting(), const LinkConnecting()]);
+
+      calls.last.fail(LinkFailureKind.unreachable);
+      await clock.elapse(Duration.zero);
+      expect(calls.map((c) => c.serverId).skip(5), ['s1']);
+    });
+
+    test('several go together: a slot one frees does not dial another\'s '
+        'queued attempt', () async {
+      final servers = [
+        for (var i = 1; i <= kMaxConnectsInFlight + 1; i++) 's$i',
+      ];
+      for (final serverId in servers) {
+        supervisor.connect(serverId, purpose: _interactive);
+      }
+      expect(calls, hasLength(kMaxConnectsInFlight));
+      final queued = servers.last;
+      gone.addAll(['s1', queued]);
+      supervisor.forget(['s1', queued]);
+      await clock.elapse(const Duration(minutes: 5));
+
+      expect(calls, hasLength(kMaxConnectsInFlight));
+      expect(statuses(queued), [const LinkConnecting()]);
+    });
+
+    test('a server it does not hold is ignored', () {
+      supervisor.forget(['s1']);
+      expect(events, isEmpty);
+    });
+  });
+
   group('a user\'s request while an unattended dial runs', () {
     Future<void> askDuringDial() async {
       supervisor.connect('s1', purpose: _background);

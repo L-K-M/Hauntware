@@ -62,12 +62,14 @@ final class IsolateEngineClient implements EngineClient {
   /// Spawns the engine isolate over [supportDirectory], the app's support
   /// directory where the engine keeps its files (03 §4.10), and completes
   /// the [Hello]/[EngineReady] handshake, so a returned client is ready
-  /// for feature requests.
+  /// for feature requests. [linksEnabled] turns on the engine's SSH links
+  /// ([EngineStart.linksEnabled]); they stay off unless a caller asks.
   ///
   /// Throws [StateError] when the engine exits or refuses [Hello] before
   /// it is ready. [entryPoint] lets tests substitute a misbehaving engine.
   static Future<IsolateEngineClient> spawn({
     required String supportDirectory,
+    bool linksEnabled = false,
     @visibleForTesting void Function(EngineStart start) entryPoint = engineMain,
   }) async {
     final fromEngine = ReceivePort('klabautermann engine events');
@@ -77,6 +79,7 @@ final class IsolateEngineClient implements EngineClient {
       EngineStart(
         uiPort: fromEngine.sendPort,
         supportDirectory: supportDirectory,
+        linksEnabled: linksEnabled,
       ),
       onExit: exitPort.sendPort,
     );
