@@ -887,7 +887,8 @@ void main() {
       expect(statuses(), [const LinkConnecting(), const LinkReady()]);
     });
 
-    test('ends with the link, closed underneath or by the owner', () async {
+    test('ends with a link lost underneath, so the redialed link\'s hint '
+        'runs a grace of its own', () async {
       final lost = await linked();
       supervisor.deadPeerHint('s1', lost);
       lost.become(const SshLinkClosed(SshLinkClosedReason.linkLost));
@@ -897,11 +898,24 @@ void main() {
       await clock.elapse(Duration.zero);
 
       supervisor.deadPeerHint('s1', redial);
-      supervisor.disconnect('s1');
       await clock.elapse(kDeadPeerGrace);
-      expect(statuses().where((s) => s == pingTimeout), isEmpty);
-      expect(statuses().last, _ownerClosed);
       expect(redial.closes, 1);
+      expect(statuses().where((s) => s == pingTimeout), hasLength(1));
+    });
+
+    test('ends with a link its owner closes, so the next link\'s hint runs '
+        'a grace of its own', () async {
+      final first = await linked();
+      supervisor.deadPeerHint('s1', first);
+      await clock.elapse(const Duration(seconds: 10));
+      supervisor.disconnect('s1');
+      expect(statuses().last, _ownerClosed);
+
+      final next = await linked();
+      supervisor.deadPeerHint('s1', next);
+      await clock.elapse(kDeadPeerGrace);
+      expect(next.closes, 1);
+      expect(statuses().where((s) => s == pingTimeout), hasLength(1));
     });
   });
 }

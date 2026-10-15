@@ -25,6 +25,8 @@ import 'package:seance_core/seance_core.dart'
         TofuVerifier;
 import 'package:test/test.dart';
 
+import 'support/answering_link.dart';
+
 const _web = 'ssh-config:web';
 const _webConfig = 'Host web\n  HostName 192.0.2.10\n  User me\n';
 const _otherConfig = 'Host other\n  HostName 192.0.2.11\n  User me\n';
@@ -121,6 +123,13 @@ final class _Engine {
   /// The name of the request the next event rejects.
   Future<String> rejected() async =>
       (await next() as RequestRejected).requestName;
+
+  /// Reads events until one of type [T].
+  Future<T> until<T extends EngineEvent>() async {
+    while (true) {
+      if (await next() case final T event) return event;
+    }
+  }
 }
 
 void main() {
@@ -420,6 +429,59 @@ void main() {
       engine.send(AnswerPrompt(prompt.promptId, const PromptTrustAnswer(true)));
       expect(await engine.rejected(), 'AnswerPrompt');
       expect(links, isEmpty);
+    });
+  });
+
+  group('sampling (K22, 03 §6.4)', () {
+    late AnsweringLink link;
+
+    /// Connects web over [link], whose processes play a sampler host,
+    /// after subscribing it to `core`, as the app does when a view opens.
+    Future<_Engine> sampleWeb() async {
+      link = AnsweringLink();
+      final engine = await _Engine.start(
+        support.path,
+        linksEnabled: true,
+        dial:
+            ({
+              required config,
+              required credentials,
+              required tofu,
+              required onHostKey,
+              onKeyboardInteractive,
+              resolveJumpHost,
+            }) async => link,
+      );
+      await engine.import(_webConfig);
+      engine.send(
+        const Subscribe(
+          serverId: _web,
+          subscriptionId: 'overview',
+          streams: {SampleStream.core},
+        ),
+      );
+      expect(await engine.next(), _waitingForLink);
+      engine.send(const Connect(_web));
+      return engine;
+    }
+
+    test('starts once the link of a server already subscribed is '
+        'ready', () async {
+      final engine = await sampleWeb();
+      final sample = await engine.until<Sample>();
+      expect(sample.stream, SampleStream.core);
+      expect(link.running, hasLength(2));
+    });
+
+    test('stops without an event when the server leaves the fleet', () async {
+      final engine = await sampleWeb();
+      await engine.until<Sample>();
+
+      engine.send(const ImportSshConfig(_otherConfig));
+      await engine.until<SshConfigImported>();
+      expect(link.running, isEmpty);
+      engine.send(const Connect('ssh-config:gone'));
+      expect(await engine.rejected(), 'Connect');
     });
   });
 }
