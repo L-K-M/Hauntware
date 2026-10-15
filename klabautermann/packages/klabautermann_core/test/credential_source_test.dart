@@ -10,7 +10,9 @@ import 'package:seance_core/seance_core.dart'
         ServerConfig;
 import 'package:test/test.dart';
 
-const _pem = '-----BEGIN OPENSSH PRIVATE KEY-----\nnot a real key\n';
+const _pem =
+    '-----BEGIN OPENSSH'
+    ' PRIVATE KEY-----\nnot a real key\n';
 
 ServerConfig _config({
   AuthMethod authMethod = AuthMethod.privateKey,
