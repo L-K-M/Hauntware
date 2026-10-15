@@ -2354,7 +2354,8 @@ fragments (D48).
   the names in `/dev/disk/by-{id,uuid,partuuid,label,partlabel}/` links
   and in their device units, UUIDs too in systemd's `\x2d` escaping,
   network mount servers in `fs`,
-  hostnamectl's serial, asset-tag, pretty-name and location fields,
+  hostnamectl's serial, asset-tag, pretty-name and location fields
+  (also as machine-info's `PRETTY_HOSTNAME`, `LOCATION` and `TAGS`),
   email addresses, URL credentials, private-key headers, what
   `SecretRedactor` masks and the crontab credentials it misses (values
   of assignments and options whose names hold PASS, PWD, SECRET, TOKEN,

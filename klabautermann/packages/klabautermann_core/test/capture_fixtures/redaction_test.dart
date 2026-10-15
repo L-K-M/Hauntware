@@ -192,6 +192,20 @@ void main() {
       );
     });
 
+    test('machine-info fields hostnamectl repeats since systemd 256', () {
+      expect(
+        _redact(
+          '{"MachineInformationData":["PRETTY_HOSTNAME=Anke\'s \\"Box\\"",'
+          '"LOCATION=Rack 3, Berlin office","DEPLOYMENT=production",'
+          '"TAGS=web:berlin"],"MachineTags":["web","berlin"]}',
+        ),
+        '{"MachineInformationData":["PRETTY_HOSTNAME=[redacted]",'
+        '"LOCATION=[redacted]","DEPLOYMENT=production",'
+        '"TAGS=[redacted]"],"MachineTags":["[redacted]"]}',
+      );
+      expect(_redact('"MachineTags":[ ]'), '"MachineTags":[ ]');
+    });
+
     test('network mount sources in fs lose their server names', () {
       const fs =
           '== blocks ==\n'

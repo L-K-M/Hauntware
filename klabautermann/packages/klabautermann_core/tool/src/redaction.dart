@@ -259,6 +259,18 @@ final _patterns = <(String, RegExp, String Function(Match))>[
     ),
     (m) => '"${m[1]}"${m[2]}"$kRedacted"',
   ),
+  // systemd 256 and later repeat /etc/machine-info, 262 adds its TAGS= as
+  // a list.
+  (
+    'identity field',
+    RegExp(r'"(PRETTY_HOSTNAME|LOCATION|TAGS)=(?:[^"\\]|\\.)*"'),
+    (m) => '"${m[1]}=$kRedacted"',
+  ),
+  (
+    'identity field',
+    RegExp(r'"MachineTags"(\s*:\s*)\[((?:[^\]"]|"(?:[^"\\]|\\.)*")*)\]'),
+    (m) => m[2]!.contains('"') ? '"MachineTags"${m[1]}["$kRedacted"]' : m[0]!,
+  ),
   (
     'IPv6 address',
     RegExp(
