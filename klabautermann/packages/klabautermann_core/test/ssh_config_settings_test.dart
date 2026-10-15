@@ -98,6 +98,8 @@ void main() {
         for (final c in '\'`"\$\\;&<>|(){}'.split('')) 'a${c}b',
         for (final c in [' ', '\t', '\n', '\v', '\f', '\r', '\x01', '\x7f'])
           'a${c}b',
+        // ssh.c reads these as user@host or as an ssh URI.
+        'me@web', '@web', 'web@', 'ssh://db', 'ssh://',
       ]) {
         expect(
           _resolve('Host *\n  HostName 10.0.0.5\n', name),
@@ -105,7 +107,15 @@ void main() {
           reason: name,
         );
       }
-      for (final name in ['a-b', 'a!b', 'caf\u00e9', 'a~b', 'a#b', 'a[b]']) {
+      for (final name in [
+        'a-b',
+        'a!b',
+        'caf\u00e9',
+        'a~b',
+        'a#b',
+        'a[b]',
+        'SSH://db',
+      ]) {
         expect(_resolve('Host *\n  HostName 10.0.0.5\n', name), (
           '10.0.0.5',
           22,

@@ -25,7 +25,9 @@
   own key will refuse Klabautermann. A host Klabautermann cannot connect
   to as ssh would is skipped and counted in the import message: one
   whose name ssh refuses as a host name (a leading `-`, whitespace, a
-  control character or a character the shell reads), one that uses a
+  control character or a character the shell reads) or reads as
+  something else (a name holding `@`, which ssh reads as a user and a
+  host, or starting with `ssh://`), one that uses a
   `ProxyCommand`, one an `Include` or a `Match` block it cannot
   evaluate could change, one whose port, user, key or jump host would
   change when ssh reads the file a second time for the name it dials (as

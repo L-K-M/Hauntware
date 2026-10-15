@@ -108,6 +108,8 @@ enum UnresolvedReason {
   /// it starts with `-`, or holds whitespace or a control character, as
   /// the C locale reads them, or one of [_refusedInHostName]. Lines split
   /// only at spaces and tabs, so a `Host` pattern may hold `\v` or `\f`.
+  /// Or ssh never reads the config for the name as given: it holds `@`
+  /// or starts with `ssh://` (see [_isPlainDestination]).
   rejectedName,
 
   /// The `HostName` holds a token other than `%h` or `%%`, or ends in
@@ -377,7 +379,7 @@ final class SshConfigSettings {
     if (_rejected) {
       return const UnresolvedSshSettings(UnresolvedReason.rejectedLine);
     }
-    if (!_isValidHostName(name)) {
+    if (!_isValidHostName(name) || !_isPlainDestination(name)) {
       return const UnresolvedSshSettings(UnresolvedReason.rejectedName);
     }
     if (name.contains(_replacement)) {
@@ -1098,6 +1100,15 @@ bool _isValidHostName(String name) =>
           c == _delete ||
           _refusedInHostName.codeUnits.contains(c),
     );
+
+/// Whether ssh, given [name] as its destination, reads the config for
+/// [name] itself. `ssh.c` parses the destination first: one that starts
+/// with `ssh://` is an ssh URI (`parse_ssh_uri()`, whose `parse_uri()`
+/// takes the scheme in lowercase only), and any other is split at its
+/// last `@` into a user and a host, or makes ssh exit where nothing comes
+/// before it. So a `Host` block for such a name never applies to it.
+bool _isPlainDestination(String name) =>
+    !name.startsWith('ssh://') && !name.contains('@');
 
 /// ssh's expansion of a `HostName` [value] for [name] (`ssh.c` calls
 /// `percent_expand()` with `h` alone): `%h` is the name and `%%` is `%`.

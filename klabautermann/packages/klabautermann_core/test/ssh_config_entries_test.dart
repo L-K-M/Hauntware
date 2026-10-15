@@ -151,6 +151,27 @@ void main() {
       expect(result.skippedCount, 10);
     });
 
+    test('leaves out a host whose name ssh reads as user@host or an ssh '
+        'URI', () {
+      // ssh.c reads a destination that starts with ssh:// as an ssh URI
+      // (parse_uri() compares the scheme in this case only), and splits
+      // any other at its last @, before it reads the config: `ssh me@web`
+      // dials web as me, `ssh ssh://db` dials db, `ssh web@` dials an
+      // empty host as web, and `ssh @web` and `ssh ssh://` exit. So no
+      // such Host block applies. ssh -G (9.9p1) gives me@10.0.0.9:22 and
+      // 10.0.0.7:22 for the first two, and 10.0.0.7:22 for SSH://db.
+      final result = importedHostsFromSshConfig(
+        'Host me@web\n  HostName 10.0.0.5\n'
+        'Host ssh://db\n  HostName 10.0.0.6\n'
+        'Host @web web@ ssh://\n  HostName 10.0.0.8\n'
+        'Host web\n  HostName 10.0.0.9\n'
+        'Host db SSH://db\n  HostName 10.0.0.7\n',
+      );
+
+      expect(result.hosts.map((h) => h.alias), ['web', 'db', 'SSH://db']);
+      expect(result.skippedCount, 5);
+    });
+
     test('a ProxyJump or CanonicalizeHostname line ssh rejects anywhere '
         'leaves out every host', () {
       // parse_jump() checks every ProxyJump line, in a block that applies
