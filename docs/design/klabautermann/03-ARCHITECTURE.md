@@ -657,7 +657,7 @@ Proposals awaiting the owner close the section; they are not decisions.
   for each further CPU, and an `overview` reply 507 B, so 2.5 KB holds to
   about 55 CPUs and 11.4 allows 30 B for each CPU beyond 32; under mksh a
   `core` reply is 1,315 B at 4 CPUs, 2,453 B at 21, 2,520 B at 22 and
-  3,192 B at 32. Real hosts remain for S2. Version 5 bounds `procs` the
+  3,192 B at 32. Real hosts remain for S2. Version 5 trims `procs` the
   same way. Each row carries only what PRC-01 and PRC-02 use (pid, state,
   ppid, utime, stime, starttime, uid, RSS and comm, from `stat` and the
   `Uid:` and `VmRSS:` lines of `status`), and both loops join rows in
@@ -686,7 +686,14 @@ Proposals awaiting the owner close the section; they are not decisions.
   the fragment adds PID 1's start back; otherwise every process inside
   such a container would seem younger than it is. Only the kept rows'
   command lines are read, in the byte order of their pids, which keeps
-  7.2's header rules. With linear loops D47 needs no process-count term:
+  7.2's header rules. The row cap does not bound bytes: `head -n 1000`
+  limits each command line's lines, so 500 kept rows whose command lines
+  average more than about 2 KB, or fewer with longer ones, still pass the
+  1 MiB section cap, and the reply is lost as a gap with every collector
+  in it (6.2); 300 synthetic processes with 3.8 KB command lines made a
+  1,159,835 B section under dash and bash [U]. A per-file byte cap that
+  marks the argument vector truncated is a follow-up.
+  With linear loops D47 needs no process-count term:
   synthetic trees [U] took about 0.6 s under dash and bash at 2,000
   processes and 2.8 s at 10,000, and a container with 2,080 sleeping
   processes took 0.7 s under dash and 0.8 s under bash per tick and sent
