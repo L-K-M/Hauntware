@@ -399,7 +399,17 @@ void main() {
           detail: 'journal read interrupted',
         ),
       ]);
-      expect(link.commands, hasLength(2));
+
+      const notice = 'insufficient permissions to read the kernel log';
+      (await open('d', _spec(_kernel)))
+        ..emitStderr(utf8.encode('$notice\n'))
+        ..end(const RemoteExit(exitSignal: 'TERM'));
+      await _until(() => statuses('d').length == 2);
+      expect(statuses('d'), [
+        const LogStreamRunning(),
+        const LogStreamEnded(LogStreamEndReason.failed, detail: notice),
+      ]);
+      expect(link.commands, hasLength(3));
     });
 
     test('an empty page after a cursor is the oldest record', () async {
@@ -516,6 +526,24 @@ void main() {
       final p = await open('a', _spec(_journal));
       p.end(const RemoteExit(exitSignal: 'KILL'));
       expect(await ended('a'), _failed);
+    });
+
+    test('a signal or a lost link is failed whatever stderr names', () async {
+      const refusal =
+          'Failed to open /var/log/journal/x/user-1001.journal: '
+          'Permission denied';
+      const failed = LogStreamEnded(LogStreamEndReason.failed, detail: refusal);
+      for (final (id, exit) in [
+        ('s', const RemoteExit(exitSignal: 'KILL')),
+        ('l', const RemoteExit()),
+      ]) {
+        (await open(id, _spec(_journal)))
+          ..emitStderr(utf8.encode('$refusal\n'))
+          ..emitText(_entries(3, 1))
+          ..end(exit);
+        expect(await ended(id), failed, reason: id);
+        expect(records(id), hasLength(3), reason: id);
+      }
     });
 
     test('a deadline ends the read as failed and closes the process', () async {

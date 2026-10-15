@@ -517,6 +517,9 @@ LogStreamEnded? _failure(_Output out) {
 
   final stderr = out.stderr;
   final reason = switch (exit.exitCode) {
+    // A signal or a lost link stopped the command before its end, so
+    // stderr naming a refusal does not explain the end.
+    null => LogStreamEndReason.failed,
     // The shell's `exec` found no such command, or could not run it.
     127 => LogStreamEndReason.missing,
     126 => LogStreamEndReason.denied,
