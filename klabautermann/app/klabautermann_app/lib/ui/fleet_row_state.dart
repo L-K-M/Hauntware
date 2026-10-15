@@ -57,7 +57,6 @@ final class FleetRowReading {
   const FleetRowReading({
     required this.age,
     required this.stale,
-    this.linkDown = false,
     this.cpuPercent,
     this.memoryPercent,
     this.diskPercent,
@@ -67,12 +66,9 @@ final class FleetRowReading {
   final Duration age;
 
   /// Whether the values are the last ones before sampling stopped: the
-  /// link is down, or the reading is older than [kFleetRowStaleAfter].
+  /// link is connecting, failed, blocked or closed, or the reading is
+  /// older than [kFleetRowStaleAfter].
   final bool stale;
-
-  /// Whether the link is connecting, failed, blocked or closed, which made
-  /// the reading [stale] at once; the row's state word then says why.
-  final bool linkDown;
 
   /// Shares from 0 to 100; null when unknown, never zero (03 §10.4).
   final double? cpuPercent, memoryPercent, diskPercent;
@@ -116,7 +112,6 @@ FleetRowReading? fleetRowReading({
   return FleetRowReading(
     age: age,
     stale: linkDown || age >= kFleetRowStaleAfter[metrics.stream]!,
-    linkDown: linkDown,
     cpuPercent: cpu?.busy,
     memoryPercent: _share(memory?.usedBytes, memory?.totalBytes),
     diskPercent: _rootDiskPercent(fs, now),

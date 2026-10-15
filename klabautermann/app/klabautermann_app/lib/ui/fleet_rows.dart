@@ -399,13 +399,21 @@ class FleetServerRow extends StatelessWidget {
     );
 
     // The age, short, under the pressure bar, level with the second line;
-    // the tooltip and the label say it in full. A link that is down shows
-    // its word instead, and the grey bar the rest. Not the kit's trailing
-    // text: beside the bar it would crowd the state word out of a 260 px
-    // rail, and it never gives way, so 200 % text would overflow the row.
-    final age = reading == null || reading.linkDown
-        ? null
-        : fleetRowAge(l10n, reading.age);
+    // the tooltip and the label say it in full. It shows whatever the link
+    // says: a lost link's word does not say how old the values are, and
+    // after a clean close the probe's word says nothing of them. Stale
+    // values add an icon to the bar's grey, and the word "Stale" unless
+    // the state word already says the link is down (03 §9.5 item 4,
+    // A11Y-01), which keeps that word's room on a 260 px rail. Not the
+    // kit's trailing text: beside the bar it would crowd the state word
+    // out, and it never gives way, so 200 % text would overflow the row.
+    final secondaryText = SidebarThemeTokens.of(context).secondaryText;
+    final linkWordSaysStale = switch (indicator.glyph) {
+      GhostServerGlyph.connecting ||
+      GhostServerGlyph.failed ||
+      GhostServerGlyph.blocked => true,
+      _ => false,
+    };
     final extras = [
       if (conflict != null)
         Tooltip(
@@ -431,18 +439,31 @@ class FleetServerRow extends StatelessWidget {
                 strings: chartStrings,
                 stale: reading!.stale,
               ),
-              if (age != null)
-                Text(
-                  age,
-                  key: kFleetRowAgeKey,
-                  maxLines: 1,
-                  softWrap: false,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    color: SidebarThemeTokens.of(context).secondaryText,
-                    fontFeatures: const [FontFeature.tabularFigures()],
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                spacing: 2,
+                children: [
+                  if (reading.stale)
+                    Icon(Icons.history, size: 14, color: secondaryText),
+                  Flexible(
+                    child: Text(
+                      switch (fleetRowAge(l10n, reading.age)) {
+                        final age when reading.stale && !linkWordSaysStale =>
+                          l10n.fleetRowStaleAge(age),
+                        final age => age,
+                      },
+                      key: kFleetRowAgeKey,
+                      maxLines: 1,
+                      softWrap: false,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        color: secondaryText,
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                      ),
+                    ),
                   ),
-                ),
+                ],
+              ),
             ],
           ),
         ),

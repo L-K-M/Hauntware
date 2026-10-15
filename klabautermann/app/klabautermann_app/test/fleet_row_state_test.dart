@@ -277,7 +277,6 @@ void main() {
         };
         final reading = read(core: _core(cpu: 1), session: session)!;
         expect(reading.stale, down, reason: '$session');
-        expect(reading.linkDown, down, reason: '$session');
       }
     });
   });

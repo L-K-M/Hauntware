@@ -206,6 +206,11 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String fleetRowStaleAge(String age) {
+    return 'Stale · $age';
+  }
+
+  @override
   String get fleetRowCpu => 'CPU';
 
   @override

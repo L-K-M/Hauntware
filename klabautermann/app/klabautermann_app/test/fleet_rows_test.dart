@@ -279,15 +279,49 @@ void main() {
       expect(_age(tester, 'srv-1'), '5 s');
       expect(_row(tester, 'srv-1').tooltip, contains('Updated 5 s ago'));
 
-      // A lost link greys the last values at once (03 §5.3), and its word
-      // takes the age's place.
+      // A lost link greys the last values at once (03 §5.3); its word
+      // says why, and the age beside the stale icon how old they are.
       await rows.emit(tester, const [
         LinkState('srv-1', LinkClosed(LinkClosedReason.pingTimeout)),
       ]);
       expect(tester.widget<PressureBar>(find.byType(PressureBar)).stale, true);
       expect(find.text('Connection lost · web-1.example'), findsOneWidget);
-      expect(_age(tester, 'srv-1'), isNull);
+      expect(_age(tester, 'srv-1'), '5 s');
+      expect(find.byIcon(Icons.history), findsOneWidget);
       expect(_row(tester, 'srv-1').tooltip, contains('Updated 5 s ago'));
+    });
+
+    testWidgets('stale values say so in an icon and words, whatever the '
+        'link says (03 §9.5 item 4, A11Y-01)', (tester) async {
+      final rows = await _pump(tester);
+      Finder staleIcon() => find.descendant(
+        of: find.byKey(const ValueKey('srv-1')),
+        matching: find.byIcon(Icons.history),
+      );
+      await rows.emit(tester, [
+        const LinkState('srv-1', LinkReady()),
+        const Reachability('srv-1', ReachabilityStatus.online),
+        rows.sample('srv-1', SampleStream.core, _core(cpu: 12)),
+      ]);
+      expect(_age(tester, 'srv-1'), '0 s');
+      expect(staleIcon(), findsNothing);
+
+      // Past core's 20 s with the link still up.
+      rows.now = _t0.add(const Duration(seconds: 25));
+      await tester.pump(kFreshnessTick);
+      expect(tester.widget<PressureBar>(find.byType(PressureBar)).stale, true);
+      expect(_age(tester, 'srv-1'), 'Stale · 25 s');
+      expect(staleIcon(), findsOneWidget);
+
+      // A clean close lets the probe's word speak, which says nothing of
+      // the values, so the age still does.
+      rows.now = _t0.add(const Duration(seconds: 40));
+      await rows.emit(tester, const [
+        LinkState('srv-1', LinkClosed(LinkClosedReason.closedByOwner)),
+      ]);
+      expect(find.text('Online · web-1.example'), findsOneWidget);
+      expect(_age(tester, 'srv-1'), 'Stale · 40 s');
+      expect(staleIcon(), findsOneWidget);
     });
   });
 
@@ -483,7 +517,7 @@ void main() {
           tester,
           brightness: brightness,
           fontFamily: goldenFontFamily,
-          size: const Size(260, 440),
+          size: const Size(260, 492),
           servers: const [
             FleetServer(id: 'web', displayName: 'web-1', address: 'web-1'),
             FleetServer(id: 'db', displayName: 'db-1', address: '10.0.0.4'),
@@ -497,6 +531,7 @@ void main() {
               locatorConflict: ['db'],
             ),
             FleetServer(id: 'new', displayName: 'new-host', address: 'n1'),
+            FleetServer(id: 'left', displayName: 'left-1', address: 'l1'),
           ],
         );
         await rows.emit(tester, [
@@ -505,10 +540,14 @@ void main() {
           rows.sample('web', SampleStream.fs, _fs(93)),
           const LinkState('db', LinkReady()),
           rows.sample('db', SampleStream.core, _core(cpu: 20, usedGiB: 6)),
+          const LinkState('left', LinkReady()),
+          const Reachability('left', ReachabilityStatus.online),
+          rows.sample('left', SampleStream.core, _core(cpu: 40, usedGiB: 4)),
         ]);
         rows.now = _t0.add(const Duration(seconds: 12));
         await rows.emit(tester, [
           const LinkState('db', LinkClosed(LinkClosedReason.linkLost)),
+          const LinkState('left', LinkClosed(LinkClosedReason.closedByOwner)),
           const Reachability('cache', ReachabilityStatus.online),
           const Reachability('mail', ReachabilityStatus.offline),
           const Reachability('edge', ReachabilityStatus.unknown),

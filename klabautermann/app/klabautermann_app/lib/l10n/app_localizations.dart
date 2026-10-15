@@ -364,19 +364,19 @@ abstract class AppLocalizations {
   /// **'Reachability unknown'**
   String get fleetRowProbeUnknown;
 
-  /// A reading's age under a minute: beside a fleet row's state icon, and as fleetRowUpdated's age.
+  /// A reading's age under a minute: under a fleet row's pressure bar, and as the age in fleetRowUpdated and fleetRowStaleAge.
   ///
   /// In en, this message translates to:
   /// **'{seconds} s'**
   String fleetRowAgeSeconds(int seconds);
 
-  /// A reading's age under an hour, in whole minutes: beside a fleet row's state icon, and as fleetRowUpdated's age.
+  /// A reading's age under an hour, in whole minutes: under a fleet row's pressure bar, and as the age in fleetRowUpdated and fleetRowStaleAge.
   ///
   /// In en, this message translates to:
   /// **'{minutes} min'**
   String fleetRowAgeMinutes(int minutes);
 
-  /// A reading's age of an hour or more, in whole hours: beside a fleet row's state icon, and as fleetRowUpdated's age.
+  /// A reading's age of an hour or more, in whole hours: under a fleet row's pressure bar, and as the age in fleetRowUpdated and fleetRowStaleAge.
   ///
   /// In en, this message translates to:
   /// **'{hours} h'**
@@ -387,6 +387,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Updated {age} ago'**
   String fleetRowUpdated(String age);
+
+  /// Under a fleet row's grey pressure bar, beside a history icon (03 §9.5 item 4, A11Y-01): the values are stale, and age says how old they are. Used when the row's state word (for example Connected or Online) does not already say the connection is down.
+  ///
+  /// In en, this message translates to:
+  /// **'Stale · {age}'**
+  String fleetRowStaleAge(String age);
 
   /// The CPU cell of a fleet row's pressure bar (FL-07), as its summary names it.
   ///
