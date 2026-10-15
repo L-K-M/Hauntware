@@ -3764,7 +3764,7 @@ heap test checks both kinds, so the caps bound the text's memory. The
 16 KiB line cap keeps 16,384 Latin-1 or 8,192 other code units, never half
 a surrogate pair. A cut line keeps its full length for the marker, which
 the app words. A `LogBatch`'s drops become one "dropped N lines" entry
-ahead of its lines, merged into an adjacent one; it counts against the
+ahead of its records, merged into an adjacent one; it counts against the
 50,000-entry cap and holds no bytes, while eviction past a cap leaves no
 entry. Lines are stored as received and styled for display by `parseSgr`,
 each from the plain style, so no style carries from one line to the next.
