@@ -148,6 +148,14 @@ final class MonitoringController extends ChangeNotifier {
   /// a slow stream's newer reading says nothing about a stalled fast one.
   ValueListenable<DateTime> get clock => _clock;
 
+  /// What the engine last said sampling [serverId] is doing
+  /// ([SamplingState]), or null before it said anything this engine run.
+  /// With [sampleFor] and [clock] it gives a stream's freshness line
+  /// (`ui/freshness.dart`, 03 §9.5 item 4): paused in the background, or
+  /// disconnected since the phase began.
+  ValueListenable<SamplingState?> samplingFor(String serverId) =>
+      _server(serverId).sampling;
+
   bool isSubscribed(String serverId, String subscriptionId) =>
       _subscribed.containsKey((serverId, subscriptionId));
 
@@ -290,6 +298,10 @@ final class MonitoringController extends ChangeNotifier {
         _server(serverId).accept(event);
       case CatalogReplaced(:final entries):
         _purge({for (final entry in entries) entry.serverId});
+      case SamplingState(:final serverId):
+        // As for a sample: a server that left the fleet stays purged.
+        if (_fleetIds case final ids? when !ids.contains(serverId)) return;
+        _server(serverId).sampling.value = event;
       case EngineEvent():
         break;
     }
@@ -383,6 +395,9 @@ final class _ServerReadings {
   final Set<SampleStream> _unnamed = {};
   final Set<SampleStream> _afterHole = {};
 
+  /// The engine's latest [SamplingState] for the server.
+  final ValueNotifier<SamplingState?> sampling = ValueNotifier(null);
+
   void unnamed(SampleStream stream) => _unnamed.add(stream);
 
   void named(SampleStream stream) {
@@ -425,6 +440,7 @@ final class _ServerReadings {
   }
 
   void dispose() {
+    sampling.dispose();
     for (final box in _boxes.values) {
       box.dispose();
     }

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:klabautermann_app/app.dart';
 import 'package:klabautermann_app/controllers/appearance_controller.dart';
+import 'package:klabautermann_app/controllers/coverage_controller.dart';
 import 'package:klabautermann_app/controllers/fleet_controller.dart';
 import 'package:klabautermann_app/controllers/monitoring_controller.dart';
 import 'package:klabautermann_app/services/settings_window/settings_window_link.dart';
@@ -20,17 +21,20 @@ final class AppHarness {
     required this.fleet,
     required this.monitoring,
     required this.appearance,
+    required this.coverage,
   });
 
   final FakeEngineClient engine;
   final FleetController fleet;
   final MonitoringController monitoring;
   final AppearanceController appearance;
+  final CoverageController coverage;
 
   void dispose() {
     fleet.dispose();
     monitoring.dispose();
     appearance.dispose();
+    coverage.dispose();
   }
 }
 
@@ -46,15 +50,18 @@ final class AppHarness {
 /// stands in for what the engine's handshake reported about its import
 /// store, [instanceLockIssue] for an instance lock that could not be
 /// taken, and [toolbarBand] for the macOS integrated titlebar's band
-/// state. [linkGrace] defaults to zero, which disconnects a server as its
-/// last view closes: the tree unmounts at the end of every test, and the
-/// test binding fails a test that leaves a grace timer pending.
+/// state. [coverage] replaces a controller whose first-run card was
+/// already dismissed, so the card shows only in the tests that want it.
+/// [linkGrace] defaults to zero, which disconnects a server as its last
+/// view closes: the tree unmounts at the end of every test, and the test
+/// binding fails a test that leaves a grace timer pending.
 Future<AppHarness> pumpApp(
   WidgetTester tester, {
   Size size = const Size(1280, 800),
   List<FleetServer> servers = const [],
   SshConfigSource? sshConfig,
   AppearanceController? appearance,
+  CoverageController? coverage,
   DeviceSettingsIssue? settingsIssue,
   ImportStoreIssue? importStoreIssue,
   InstanceLockUnavailable? instanceLockIssue,
@@ -72,6 +79,7 @@ Future<AppHarness> pumpApp(
     fleet: FleetController(engine, servers: servers, sshConfig: sshConfig),
     monitoring: MonitoringController(engine, linkGrace: linkGrace),
     appearance: appearance ?? AppearanceController(),
+    coverage: coverage ?? CoverageController(firstRunCardDismissed: true),
   );
   addTearDown(() async {
     harness.dispose();
@@ -83,6 +91,7 @@ Future<AppHarness> pumpApp(
       fleet: harness.fleet,
       monitoring: harness.monitoring,
       appearance: harness.appearance,
+      coverage: harness.coverage,
       settingsIssue: settingsIssue,
       importStoreIssue: importStoreIssue,
       instanceLockIssue: instanceLockIssue,

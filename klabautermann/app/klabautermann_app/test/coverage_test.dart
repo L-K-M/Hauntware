@@ -1,0 +1,373 @@
+import 'dart:io' show FileSystemException;
+
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:ghost_ui/ghost_ui.dart' show contrastRatio;
+import 'package:klabautermann_app/controllers/coverage_controller.dart';
+import 'package:klabautermann_app/ui/coverage.dart';
+import 'package:klabautermann_app/ui/sidebar_kit.dart'
+    show SidebarSectionHeader;
+import 'package:klabautermann_core/klabautermann_core.dart';
+
+import 'support/charts.dart' show chartTheme;
+import 'support/harness.dart';
+
+const _desktop = Size(1280, 800);
+const _phone = Size(390, 800);
+
+const _cardTitle = 'How Klabautermann watches your servers';
+const _chipOfTwo = 'Watching 0 of 2 servers on this device, only while open';
+
+final _chip = find.byType(FleetCoverageChip);
+final _card = find.byType(FirstRunCoverageCard);
+final _sheet = find.byType(CoverageSheet);
+
+/// A controller on its first launch, recording each save.
+CoverageController _firstLaunch(List<String> saves, {Object? failWith}) =>
+    CoverageController(
+      saveDismissal: () async {
+        saves.add('dismissed');
+        if (failWith != null) throw failWith;
+      },
+    );
+
+/// The toast's timer has to run out before the test ends.
+Future<void> _letToastsGo(WidgetTester tester) async {
+  await tester.pump(const Duration(seconds: 10));
+  await tester.pumpAndSettle();
+}
+
+void main() {
+  group('the fleet coverage (03 §9.5 item 2)', () {
+    test('counts the fleet and the monitor set\'s servers in it', () {
+      final coverage = FleetCoverage.of(
+        twoServers,
+        monitorSet: {'srv-2', 'gone'},
+      );
+
+      expect(coverage.serverCount, 2);
+      expect(coverage.watchedCount, 1);
+      expect(FleetCoverage.of(twoServers).watchedCount, 0);
+    });
+  });
+
+  group('the first-run card (03 §9.5 item 1)', () {
+    test('a dismissal applies at once, is saved once, and a failed save '
+        'still hides the card', () async {
+      final saves = <String>[];
+      final coverage = _firstLaunch(
+        saves,
+        failWith: const FileSystemException('disk full'),
+      );
+      addTearDown(coverage.dispose);
+      var heard = 0;
+      coverage.addListener(() => heard++);
+
+      await expectLater(
+        coverage.dismissFirstRunCard(),
+        throwsA(isA<FileSystemException>()),
+      );
+      await coverage.dismissFirstRunCard();
+
+      expect(coverage.showsFirstRunCard, isFalse);
+      expect(heard, 1);
+      expect(saves, ['dismissed']);
+    });
+
+    testWidgets('heads the desktop workspace until dismissed, and the '
+        'workspace keeps its state', (tester) async {
+      final saves = <String>[];
+      final harness = await pumpApp(
+        tester,
+        size: _desktop,
+        servers: twoServers,
+        coverage: _firstLaunch(saves),
+      );
+      expect(find.text(_cardTitle), findsOneWidget);
+      expect(
+        find.text(
+          'Klabautermann connects over SSH only while it is open. It '
+          'installs nothing on your servers unless you ask it to. Charts '
+          'cover only the time this device was connected.',
+        ),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.text('web-1'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Logs'));
+      await tester.pumpAndSettle();
+      final sentBefore = harness.engine.sent.length;
+
+      await tester.tap(find.text('Got it'));
+      await tester.pumpAndSettle();
+
+      expect(_card, findsNothing);
+      expect(saves, ['dismissed']);
+      expect(
+        DefaultTabController.of(tester.element(find.text('Logs'))).index,
+        3,
+        reason: 'the workspace was not rebuilt from scratch',
+      );
+      expect(
+        harness.engine.sent.skip(sentBefore),
+        isEmpty,
+        reason: 'no reconnect and no resubscribe',
+      );
+    });
+
+    testWidgets('heads the phone fleet list, over the chip', (tester) async {
+      final saves = <String>[];
+      await pumpApp(
+        tester,
+        size: _phone,
+        servers: twoServers,
+        coverage: _firstLaunch(saves),
+      );
+
+      expect(
+        tester.getTopLeft(find.text(_cardTitle)).dy,
+        lessThan(tester.getTopLeft(find.text(_chipOfTwo)).dy),
+      );
+      expect(
+        tester.getTopLeft(find.text(_chipOfTwo)).dy,
+        lessThan(tester.getTopLeft(find.text('web-1')).dy),
+      );
+
+      await tester.tap(find.text('Got it'));
+      await tester.pumpAndSettle();
+
+      expect(_card, findsNothing);
+      expect(find.text(_chipOfTwo), findsOneWidget);
+      expect(saves, ['dismissed']);
+    });
+
+    testWidgets('a dismissal that cannot be saved says it will return', (
+      tester,
+    ) async {
+      final saves = <String>[];
+      await pumpApp(
+        tester,
+        size: _desktop,
+        coverage: _firstLaunch(
+          saves,
+          failWith: const DeviceSettingsReadOnlyException(
+            DeviceSettingsIssueKind.newerVersion,
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Got it'));
+      await tester.pumpAndSettle();
+
+      expect(_card, findsNothing);
+      expect(
+        find.text(
+          'Klabautermann could not save that you dismissed the coverage '
+          'note, so it shows again after a restart.',
+        ),
+        findsOneWidget,
+      );
+      await _letToastsGo(tester);
+    });
+
+    testWidgets('fits a phone at twice the text size: its words scroll and '
+        'its buttons stay in view', (tester) async {
+      tester.platformDispatcher.textScaleFactorTestValue = 2;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      final saves = <String>[];
+      await pumpApp(
+        tester,
+        size: const Size(360, 640),
+        servers: twoServers,
+        coverage: _firstLaunch(saves),
+      );
+
+      expect(tester.takeException(), isNull);
+      final card = tester.getRect(_card);
+      expect(card.height, lessThanOrEqualTo(640 / 2));
+      expect(
+        find.descendant(of: _card, matching: find.byType(Scrollable)),
+        findsOneWidget,
+      );
+      expect(card.contains(tester.getBottomRight(find.text('Got it'))), isTrue);
+
+      await tester.tap(find.text('Got it'));
+      await tester.pumpAndSettle();
+      expect(saves, ['dismissed']);
+      expect(tester.takeException(), isNull);
+    });
+  });
+
+  for (final brightness in Brightness.values) {
+    test('the coverage surfaces keep 4.5:1 text contrast '
+        '(${brightness.name}, 10.10)', () {
+      final scheme = chartTheme(brightness).colorScheme;
+      final pairs = {
+        'chip label': (scheme.onSecondaryContainer, scheme.secondaryContainer),
+        'card text': (scheme.onSurface, scheme.surfaceContainerLow),
+        'card buttons': (scheme.primary, scheme.surfaceContainerLow),
+        'sheet bodies': (scheme.onSurfaceVariant, scheme.surfaceContainerHigh),
+        'tier badge': (scheme.primary, scheme.surfaceContainerHigh),
+      };
+      for (final MapEntry(key: name, value: (fore, back)) in pairs.entries) {
+        expect(
+          contrastRatio(fore, back),
+          greaterThanOrEqualTo(4.5),
+          reason: name,
+        );
+      }
+    });
+  }
+
+  group('the coverage chip and sheet (03 §9.5 item 2)', () {
+    testWidgets('the rail\'s chip counts the fleet and opens the sheet as a '
+        'dialog', (tester) async {
+      await pumpApp(tester, size: _desktop, servers: twoServers);
+
+      expect(find.text(_chipOfTwo), findsOneWidget);
+      expect(
+        tester.getBottomLeft(_chip).dy,
+        tester.getTopLeft(find.byType(SidebarSectionHeader)).dy,
+        reason: 'the chip heads the rail, over the fleet\'s section',
+      );
+      await tester.tap(_chip);
+      await tester.pumpAndSettle();
+
+      expect(find.byType(Dialog), findsOneWidget);
+      expect(find.text('Coverage on this device'), findsOneWidget);
+      expect(find.text('T0'), findsOneWidget);
+      expect(find.text('SSH while Klabautermann is open'), findsOneWidget);
+      for (final item in [
+        'Covered',
+        'Live readings while open',
+        'Watched servers',
+        'No server is watched on this device, so each is read only while '
+            'you have it open.',
+        'Not covered',
+        'While Klabautermann is closed',
+        'A server going down',
+        'History before you connected',
+      ]) {
+        expect(find.text(item), findsOneWidget, reason: item);
+      }
+      expect(
+        find.text('While in the background'),
+        findsNothing,
+        reason: 'desktops keep sampling in the background',
+      );
+
+      await tester.tap(find.byTooltip('Close'));
+      await tester.pumpAndSettle();
+      expect(_sheet, findsNothing);
+    }, variant: TargetPlatformVariant.desktop());
+
+    testWidgets('the chip is one button for screen readers and the keyboard', (
+      tester,
+    ) async {
+      final semantics = tester.ensureSemantics();
+      await pumpApp(tester, size: _desktop, servers: twoServers);
+
+      expect(
+        tester.getSemantics(find.bySemanticsLabel(_chipOfTwo)),
+        matchesSemantics(
+          label: _chipOfTwo,
+          onTapHint: 'Show coverage details',
+          isButton: true,
+          hasTapAction: true,
+          isFocusable: true,
+          hasFocusAction: true,
+        ),
+      );
+
+      // The chip's own focus node, as a Tab stop would give it focus.
+      Focus.of(tester.element(find.text(_chipOfTwo))).requestFocus();
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pumpAndSettle();
+      expect(_sheet, findsOneWidget);
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pumpAndSettle();
+      expect(_sheet, findsNothing);
+      semantics.dispose();
+    });
+
+    testWidgets('opens without motion when the platform asks for none '
+        '(A11Y-11)', (tester) async {
+      tester.platformDispatcher.accessibilityFeaturesTestValue =
+          const FakeAccessibilityFeatures(disableAnimations: true);
+      addTearDown(
+        tester.platformDispatcher.clearAccessibilityFeaturesTestValue,
+      );
+      for (final size in [_desktop, _phone]) {
+        await pumpApp(tester, size: size, servers: twoServers);
+
+        await tester.tap(_chip);
+        await tester.pump();
+
+        final route = ModalRoute.of(tester.element(_sheet))!;
+        expect(route.animation!.status, AnimationStatus.completed);
+        Navigator.of(tester.element(_sheet)).pop();
+        await tester.pump();
+        expect(_sheet, findsNothing, reason: '$size');
+      }
+    });
+
+    testWidgets('an empty fleet shows no chip', (tester) async {
+      final harness = await pumpApp(tester, size: _desktop);
+      expect(_chip, findsOneWidget);
+      expect(find.textContaining('Watching'), findsNothing);
+
+      harness.engine.emit(
+        CatalogReplaced([
+          FleetEntry(
+            serverId: 'srv-1',
+            label: 'web-1',
+            host: 'web-1.example',
+            port: kSshDefaultPort,
+            origin: FleetEntryOrigin.sshConfig,
+          ),
+        ]),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Watching 0 of 1 server on this device, only while open'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets(
+      'on a phone the sheet rises from the bottom and says that '
+      'reading stops in the background',
+      (tester) async {
+        await pumpApp(tester, size: _phone, servers: twoServers);
+
+        await tester.tap(_chip);
+        await tester.pumpAndSettle();
+
+        expect(find.byType(BottomSheet), findsOneWidget);
+        await tester.scrollUntilVisible(
+          find.text('While in the background'),
+          100,
+          scrollable: find.descendant(
+            of: _sheet,
+            matching: find.byType(Scrollable),
+          ),
+        );
+        expect(
+          find.text(
+            'Reading stops while Klabautermann is in the background and '
+            'resumes when you return.',
+          ),
+          findsOneWidget,
+        );
+      },
+      variant: const TargetPlatformVariant({
+        TargetPlatform.android,
+        TargetPlatform.iOS,
+      }),
+    );
+  });
+}

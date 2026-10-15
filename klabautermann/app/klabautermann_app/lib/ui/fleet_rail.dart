@@ -5,6 +5,7 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 import '../controllers/fleet_controller.dart';
 import '../l10n/app_localizations.dart';
 import '../theme/app_theme.dart';
+import 'coverage.dart';
 import 'sidebar_kit.dart';
 import 'ssh_config_import_action.dart';
 
@@ -49,6 +50,8 @@ class _FleetRailState extends State<FleetRail> {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                // 03 §9.5 item 2: the fleet's coverage, over its section.
+                FleetCoverageChip(fleet: widget.fleet),
                 SidebarSectionHeader(
                   title: l10n.fleetSectionServers,
                   count: servers.length,

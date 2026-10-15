@@ -305,6 +305,29 @@ void main() {
       // The test binding also fails a periodic timer left running here.
       timed.dispose();
     });
+
+    test('the latest sampling state lands in its server\'s box and leaves '
+        'with the server (SYN-08)', () async {
+      final since = DateTime.utc(2026, 10, 14, 12);
+      SamplingState state(String serverId, SamplingPhase phase) =>
+          SamplingState(serverId: serverId, phase: phase, since: since);
+      final paused = state('srv-1', SamplingPhase.pausedInBackground);
+      engine
+        ..emit(state('srv-1', SamplingPhase.sampling))
+        ..emit(paused);
+      await settle();
+      final box = monitoring.samplingFor('srv-1');
+      expect(box.value, same(paused));
+      expect(monitoring.samplingFor('srv-2').value, isNull);
+
+      engine
+        ..emit(CatalogReplaced([_entry('srv-2')]))
+        // Still in flight when the server left: it must not come back.
+        ..emit(state('srv-1', SamplingPhase.sampling));
+      await settle();
+      expect(_disposed(box as ChangeNotifier), isTrue);
+      expect(monitoring.samplingFor('srv-1').value, isNull);
+    });
   });
 
   test('a server that leaves the fleet loses its readings and seq floor '

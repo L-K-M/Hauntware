@@ -3596,6 +3596,32 @@ series: the colour-blind check (10.7) and the per-series summaries are
 no second visual cue, and a dash pattern would read as missed samples,
 so that cue is still open.
 
+As built in M2 for items 1, 2 and 4 (`app/klabautermann_app/lib/ui/`
+`coverage.dart` and `freshness.dart`), the card and the chip leave out
+alerts, which arrive with ALR-01 (v1): the card's last sentence is
+"Charts cover only the time this device was connected", and the chip
+reads "Watching 4 of 12 servers on this device, only while open". The
+card heads the desktop workspace and the phone's fleet list, taking at
+most half of that column, its words scrolling above buttons that stay in
+view, until "Got it", which `settings.json` keeps (4.10); a dismissal
+that cannot be saved hides it for the session and says it returns. The
+chip heads the rail, above its section header, and the phone's list,
+under the card; it shows nothing for an empty fleet and counts the
+fleet's servers in FL-21's monitor set, none until the app stores one.
+It opens the coverage sheet, a bottom sheet under 600 dp and a dialog
+above: the T0 badge with its meaning, what is covered (the open servers'
+live readings, the watched servers) and what is not (anything while the
+app is closed, a server going down, history from before this device
+connected, and on iOS and Android the background pause), with no
+control. One formatter words freshness for the rows and cards, which
+adopt it as they land: the background pause first; "not watched on this
+device" for a server outside the monitor set that nothing samples;
+"disconnected 3 min ago" from the start of a `waitingForLink` phase once
+readings have arrived; otherwise the latest reading's age in its largest
+whole unit (s, min, h, d), "stale" once it reaches the caller's limit
+for that stream; "no data yet" before the first reading. The monitoring
+controller keeps each server's latest `SamplingState` for it.
+
 ---
 
 ## 10. UI shell

@@ -204,6 +204,197 @@
   "inspectorTitle": "Inspector",
   "inspectorEmptyBody": "Details, alerts, operations and coverage appear here once you select a server.",
   "placeholderMilestone": "Available in a later milestone.",
+  "coverageFirstRunTitle": "How Klabautermann watches your servers",
+  "@coverageFirstRunTitle": {
+    "description": "Heading of the first-run coverage card (03 §9.5 item 1), shown above the fleet on phones and above the workspace on desktops until the user dismisses it."
+  },
+  "coverageFirstRunBody": "Klabautermann connects over SSH only while it is open. It installs nothing on your servers unless you ask it to. Charts cover only the time this device was connected.",
+  "@coverageFirstRunBody": {
+    "description": "Body of the first-run coverage card: what the app does and does not cover. It names no alerts, since this version has none."
+  },
+  "coverageFirstRunDismiss": "Got it",
+  "@coverageFirstRunDismiss": {
+    "description": "Button that dismisses the first-run coverage card for good on this device."
+  },
+  "coverageFirstRunDetails": "Coverage details",
+  "@coverageFirstRunDetails": {
+    "description": "Button on the first-run coverage card that opens the coverage sheet."
+  },
+  "coverageFirstRunNotSaved": "Klabautermann could not save that you dismissed the coverage note, so it shows again after a restart.",
+  "@coverageFirstRunNotSaved": {
+    "description": "Top toast when dismissing the first-run coverage card could not be written to the device's settings file; the card stays hidden for this session."
+  },
+  "coverageChip": "{total, plural, =1{Watching {watched} of 1 server on this device, only while open} other{Watching {watched} of {total} servers on this device, only while open}}",
+  "@coverageChip": {
+    "description": "The fleet header's coverage chip (03 §9.5 item 2): how many fleet servers this device watches continuously (its monitor set) out of all of them; watching happens only while the app is open. Opens the coverage sheet.",
+    "placeholders": {
+      "watched": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "coverageChipHint": "Show coverage details",
+  "@coverageChipHint": {
+    "description": "Screen-reader hint for activating the fleet header's coverage chip."
+  },
+  "coverageSheetTitle": "Coverage on this device",
+  "@coverageSheetTitle": {
+    "description": "Heading of the coverage sheet the fleet header's chip opens."
+  },
+  "coverageTierBadge": "T0",
+  "@coverageTierBadge": {
+    "description": "Badge naming the execution tier the fleet runs at: T0, SSH only while the app is open (03 §9). Kept as written."
+  },
+  "coverageTierTitle": "SSH while Klabautermann is open",
+  "@coverageTierTitle": {
+    "description": "What the T0 badge means, beside it in the coverage sheet."
+  },
+  "coverageTierBody": "Klabautermann reads your servers over SSH only while it is open. It installs nothing on them unless you ask it to.",
+  "@coverageTierBody": {
+    "description": "Explanation under the tier title in the coverage sheet."
+  },
+  "coverageCoveredHeading": "Covered",
+  "@coverageCoveredHeading": {
+    "description": "Heading of the coverage sheet's list of what this device covers."
+  },
+  "coverageLiveTitle": "Live readings while open",
+  "@coverageLiveTitle": {
+    "description": "Coverage sheet item: the servers the user has open are read live."
+  },
+  "coverageLiveBody": "Metrics, processes, services, logs and jobs of the servers you have open.",
+  "@coverageLiveBody": {
+    "description": "Body of the coverage sheet's live-readings item."
+  },
+  "coverageWatchedTitle": "Watched servers",
+  "@coverageWatchedTitle": {
+    "description": "Coverage sheet item about the servers this device watches continuously (its monitor set, FL-21)."
+  },
+  "coverageWatchedBody": "{watched, plural, =0{No server is watched on this device, so each is read only while you have it open.} =1{1 server is read continuously while Klabautermann is open. The others are read only while you have them open.} other{{watched} servers are read continuously while Klabautermann is open. The others are read only while you have them open.}}",
+  "@coverageWatchedBody": {
+    "description": "Body of the coverage sheet's watched-servers item; watched is the size of this device's monitor set within the fleet.",
+    "placeholders": {
+      "watched": {
+        "type": "int"
+      }
+    }
+  },
+  "coverageNotCoveredHeading": "Not covered",
+  "@coverageNotCoveredHeading": {
+    "description": "Heading of the coverage sheet's list of what this device does not cover."
+  },
+  "coverageClosedTitle": "While Klabautermann is closed",
+  "@coverageClosedTitle": {
+    "description": "Coverage sheet item: nothing is covered while the app is closed."
+  },
+  "coverageClosedBody": "Nothing checks your servers, so nothing can warn you about them.",
+  "@coverageClosedBody": {
+    "description": "Body of the coverage sheet's while-closed item."
+  },
+  "coverageHostDownTitle": "A server going down",
+  "@coverageHostDownTitle": {
+    "description": "Coverage sheet item: a server that goes down while the app is closed goes unnoticed."
+  },
+  "coverageHostDownBody": "If a server stops while Klabautermann is closed, you find out the next time you open it.",
+  "@coverageHostDownBody": {
+    "description": "Body of the coverage sheet's server-down item."
+  },
+  "coverageHistoryTitle": "History before you connected",
+  "@coverageHistoryTitle": {
+    "description": "Coverage sheet item: charts hold no history from before this device connected."
+  },
+  "coverageHistoryBody": "Charts cover only the time this device was connected. Gaps are marked, never filled in.",
+  "@coverageHistoryBody": {
+    "description": "Body of the coverage sheet's history item."
+  },
+  "coverageBackgroundTitle": "While in the background",
+  "@coverageBackgroundTitle": {
+    "description": "Coverage sheet item shown on iOS and Android only: reading stops in the background (PLT-04)."
+  },
+  "coverageBackgroundBody": "Reading stops while Klabautermann is in the background and resumes when you return.",
+  "@coverageBackgroundBody": {
+    "description": "Body of the coverage sheet's background item, on iOS and Android only."
+  },
+  "coverageFreshnessSeconds": "{seconds} s",
+  "@coverageFreshnessSeconds": {
+    "description": "An age under a minute in a freshness line (03 §9.5 item 4), as in \"Updated 4 s ago\".",
+    "placeholders": {
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "coverageFreshnessMinutes": "{minutes} min",
+  "@coverageFreshnessMinutes": {
+    "description": "An age under an hour, in whole minutes, in a freshness line.",
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "coverageFreshnessHours": "{hours} h",
+  "@coverageFreshnessHours": {
+    "description": "An age under a day, in whole hours, in a freshness line.",
+    "placeholders": {
+      "hours": {
+        "type": "int"
+      }
+    }
+  },
+  "coverageFreshnessDays": "{days} d",
+  "@coverageFreshnessDays": {
+    "description": "An age of a day or more, in whole days, in a freshness line.",
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "coverageFreshnessUpdated": "Updated {age} ago",
+  "@coverageFreshnessUpdated": {
+    "description": "Freshness line of a server's or panel's values while they are current; age is one of the coverageFreshness age strings.",
+    "placeholders": {
+      "age": {
+        "type": "String",
+        "example": "4 s"
+      }
+    }
+  },
+  "coverageFreshnessStale": "Stale: updated {age} ago",
+  "@coverageFreshnessStale": {
+    "description": "Freshness line of values older than their stream's limit, which are drawn grey beside it.",
+    "placeholders": {
+      "age": {
+        "type": "String",
+        "example": "3 min"
+      }
+    }
+  },
+  "coverageFreshnessDisconnected": "Disconnected {age} ago",
+  "@coverageFreshnessDisconnected": {
+    "description": "Freshness line while the server's connection is down after readings arrived; age is how long it has been down.",
+    "placeholders": {
+      "age": {
+        "type": "String",
+        "example": "3 min"
+      }
+    }
+  },
+  "coverageFreshnessPaused": "Paused: app in background",
+  "@coverageFreshnessPaused": {
+    "description": "Freshness line while a phone app is in the background and reading is paused."
+  },
+  "coverageFreshnessNotWatched": "Not watched on this device",
+  "@coverageFreshnessNotWatched": {
+    "description": "Freshness line of a server outside this device's monitor set that nothing reads."
+  },
+  "coverageFreshnessNoData": "No data yet",
+  "@coverageFreshnessNoData": {
+    "description": "Freshness line before the first reading has arrived."
+  },
   "serverTitle": "{name}",
   "@serverTitle": {
     "placeholders": {

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../controllers/coverage_controller.dart';
 import '../controllers/fleet_controller.dart';
 import '../controllers/monitoring_controller.dart';
+import 'coverage.dart';
 import 'fleet_rail.dart';
 import 'inspector_pane.dart';
 import 'server_workspace.dart';
@@ -14,12 +16,16 @@ class DesktopShell extends StatelessWidget {
     super.key,
     required this.fleet,
     required this.monitoring,
+    required this.coverage,
     required this.onOpenSettings,
     this.onAddServer,
   });
 
   final FleetController fleet;
   final MonitoringController monitoring;
+
+  /// Heads the workspace with the first-run card (03 §9.5 item 1).
+  final CoverageController coverage;
   final VoidCallback onOpenSettings;
   final VoidCallback? onAddServer;
 
@@ -67,9 +73,14 @@ class DesktopShell extends StatelessWidget {
                 Expanded(
                   child: _BelowTopInset(
                     inset: top,
-                    child: ServerWorkspace(
+                    child: CoverageHeader(
+                      placement: CoveragePlacement.desktopWorkspace,
+                      coverage: coverage,
                       fleet: fleet,
-                      monitoring: monitoring,
+                      child: ServerWorkspace(
+                        fleet: fleet,
+                        monitoring: monitoring,
+                      ),
                     ),
                   ),
                 ),

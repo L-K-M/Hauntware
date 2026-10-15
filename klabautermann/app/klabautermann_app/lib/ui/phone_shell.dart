@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
+import '../controllers/coverage_controller.dart';
 import '../controllers/fleet_controller.dart';
 import '../controllers/monitoring_controller.dart';
 import '../l10n/app_localizations.dart';
+import 'coverage.dart';
 import 'fleet_rail.dart';
 import 'server_detail_page.dart';
 import 'sidebar_kit.dart';
@@ -16,12 +18,17 @@ class PhoneShell extends StatelessWidget {
     super.key,
     required this.fleet,
     required this.monitoring,
+    required this.coverage,
     required this.onOpenSettings,
     this.onAddServer,
   });
 
   final FleetController fleet;
   final MonitoringController monitoring;
+
+  /// Heads the fleet list with the first-run card and the coverage chip
+  /// (03 §9.5).
+  final CoverageController coverage;
   final VoidCallback onOpenSettings;
   final VoidCallback? onAddServer;
 
@@ -58,7 +65,11 @@ class PhoneShell extends StatelessWidget {
           ),
         ],
       ),
-      body: SafeArea(
+      // In the SafeArea's place: it keeps the card, chip and list inside.
+      body: CoverageHeader(
+        placement: CoveragePlacement.phoneFleetList,
+        coverage: coverage,
+        fleet: fleet,
         child: SidebarKitScope(
           strings: klabautermannSidebarStrings(l10n),
           layout: SidebarKitLayout.list,
