@@ -542,6 +542,224 @@ class AppLocalizationsEn extends AppLocalizations {
   String get serverTabMore => 'More';
 
   @override
+  String get systemIdentityTitle => 'Identity';
+
+  @override
+  String get systemUptimeTitle => 'Uptime';
+
+  @override
+  String get systemNetworkTitle => 'Network';
+
+  @override
+  String get systemDisksTitle => 'Disks';
+
+  @override
+  String get systemHostname => 'Host name';
+
+  @override
+  String get systemOperatingSystem => 'Operating system';
+
+  @override
+  String get systemKernel => 'Kernel';
+
+  @override
+  String systemKernelValue(String name, String release) {
+    return '$name $release';
+  }
+
+  @override
+  String get systemArchitecture => 'Architecture';
+
+  @override
+  String get systemVirtualization => 'Virtualization';
+
+  @override
+  String get systemVirtualizationNone => 'None detected';
+
+  @override
+  String systemVirtualizationMachine(String name) {
+    return 'Virtual machine ($name)';
+  }
+
+  @override
+  String systemVirtualizationContainer(String name) {
+    return 'Container ($name)';
+  }
+
+  @override
+  String get systemVirtualizationContainerUnnamed => 'Container';
+
+  @override
+  String get systemContainerNotice =>
+      'This server is a container. Figures that would come from its host read as unknown.';
+
+  @override
+  String get systemUnknown => 'Unknown';
+
+  @override
+  String get systemUnknownContainer =>
+      'Inside this container this figure would be the host\'s, so it is not shown.';
+
+  @override
+  String get systemUptime => 'Up for';
+
+  @override
+  String systemUptimeDays(int days, int hours) {
+    final intl.NumberFormat daysNumberFormat = intl.NumberFormat.decimalPattern(
+      localeName,
+    );
+    final String daysString = daysNumberFormat.format(days);
+    final intl.NumberFormat hoursNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String hoursString = hoursNumberFormat.format(hours);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      days,
+      locale: localeName,
+      other: '$daysString days',
+      one: '1 day',
+    );
+    String _temp1 = intl.Intl.pluralLogic(
+      hours,
+      locale: localeName,
+      other: '$hoursString hours',
+      one: '1 hour',
+    );
+    return '$_temp0, $_temp1';
+  }
+
+  @override
+  String systemUptimeHours(int hours, int minutes) {
+    final intl.NumberFormat hoursNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String hoursString = hoursNumberFormat.format(hours);
+    final intl.NumberFormat minutesNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String minutesString = minutesNumberFormat.format(minutes);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      hours,
+      locale: localeName,
+      other: '$hoursString hours',
+      one: '1 hour',
+    );
+    String _temp1 = intl.Intl.pluralLogic(
+      minutes,
+      locale: localeName,
+      other: '$minutesString minutes',
+      one: '1 minute',
+    );
+    return '$_temp0, $_temp1';
+  }
+
+  @override
+  String systemUptimeMinutes(int minutes) {
+    final intl.NumberFormat minutesNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String minutesString = minutesNumberFormat.format(minutes);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      minutes,
+      locale: localeName,
+      other: '$minutesString minutes',
+      one: '1 minute',
+      zero: 'Less than a minute',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get systemBooted => 'Booted';
+
+  @override
+  String systemBootedValue(DateTime time) {
+    final intl.DateFormat timeDateFormat = intl.DateFormat.yMMMd(
+      localeName,
+    ).add_jm();
+    final String timeString = timeDateFormat.format(time);
+
+    return '$timeString';
+  }
+
+  @override
+  String get systemReceive => 'Receive';
+
+  @override
+  String get systemTransmit => 'Transmit';
+
+  @override
+  String get systemWaiting => 'Waiting for the first reading.';
+
+  @override
+  String get systemUnavailableMissing =>
+      'The server lacks the tool this reading needs.';
+
+  @override
+  String get systemUnavailableDenied => 'The server refused this reading.';
+
+  @override
+  String get systemUnavailableTimeout => 'This reading did not finish in time.';
+
+  @override
+  String get systemUnavailableError => 'This reading failed.';
+
+  @override
+  String get systemDisksTimedOut =>
+      'Disk usage did not finish in time. A network mount (NFS or SMB) that stopped answering is the usual cause.';
+
+  @override
+  String systemDisksLastListed(DateTime time) {
+    final intl.DateFormat timeDateFormat = intl.DateFormat.yMMMd(
+      localeName,
+    ).add_jm();
+    final String timeString = timeDateFormat.format(time);
+
+    return 'These mounts are from the reading at $timeString; their usage is unknown now.';
+  }
+
+  @override
+  String get systemDisksNoTimeout =>
+      'This server has no timeout command, so a network mount that stops answering can stall disk readings.';
+
+  @override
+  String systemDisksShowPseudo(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    return 'Show pseudo filesystems ($countString)';
+  }
+
+  @override
+  String get systemDisksEmpty => 'No mounts to show.';
+
+  @override
+  String get systemDevice => 'Device';
+
+  @override
+  String get systemColumnMount => 'Mount';
+
+  @override
+  String get systemColumnType => 'Type';
+
+  @override
+  String get systemColumnUsed => 'Used';
+
+  @override
+  String get systemColumnUse => 'Use';
+
+  @override
+  String get systemColumnInodes => 'Inodes';
+
+  @override
+  String get systemColumnUsage => 'Usage';
+
+  @override
+  String systemUsedOf(String used, String size) {
+    return '$used of $size';
+  }
+
+  @override
   String chartSeriesSummary(
     String label,
     String current,

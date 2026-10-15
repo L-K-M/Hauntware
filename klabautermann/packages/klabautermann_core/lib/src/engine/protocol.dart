@@ -931,8 +931,8 @@ final class JournalLogSource extends LogSource {
 }
 
 /// The kernel's messages for the current boot (LOG-03): `journalctl -k`,
-/// read as [JournalRecord]s, with `dmesg --json` only as a fallback, read
-/// as [KernelRecord]s. Past boots arrive with LOG-09 (v1).
+/// read as [JournalRecord]s, with `dmesg --json --decode` only as a
+/// fallback, read as [KernelRecord]s. Past boots arrive with LOG-09 (v1).
 final class KernelLogSource extends LogSource {
   const KernelLogSource();
 }
@@ -1015,7 +1015,8 @@ final class JournalRecord extends LogRecord {
   final Map<String, String?> fields;
 }
 
-/// One kernel ring-buffer record from `dmesg --json`, LOG-03's fallback.
+/// One kernel ring-buffer record from `dmesg --json --decode`, LOG-03's
+/// fallback.
 final class KernelRecord extends LogRecord {
   const KernelRecord({required this.message, this.sinceBoot, this.priority});
 
@@ -1025,8 +1026,7 @@ final class KernelRecord extends LogRecord {
   /// `time`: how long after boot the kernel logged it.
   final Duration? sinceBoot;
 
-  /// The level in `pri`, which also holds the facility; null when dmesg
-  /// sent no `pri`.
+  /// The level that `pri` names; null when dmesg sent no level name.
   final LogPriority? priority;
 }
 

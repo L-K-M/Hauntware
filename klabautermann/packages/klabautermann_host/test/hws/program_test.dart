@@ -98,6 +98,7 @@ void main() {
         'units',
         'timers',
         'cron',
+        'timer_detail',
       ]) {
         expect(program, isNot(contains('c_$c()')), reason: c);
       }
@@ -113,11 +114,25 @@ void main() {
         'units',
         'timers',
         'cron',
+        'timer_detail',
       ]) {
         expect(program, contains('c_$c()'), reason: c);
       }
       expect(program, isNot(contains('c_overview()')));
       expect(program, isNot(contains('c_core()')));
+    });
+
+    test('timer_detail shows one timer, refusing a tick without it', () {
+      final fragment = collectorFragments[Collector.timerDetail]!;
+      expect(fragment, contains('c_timer_detail() {'));
+      expect(fragment, contains(r'if [ $# -ne 1 ]; then st=error;'));
+      expect(
+        fragment,
+        contains(
+          'hw_run systemctl show -p TimersCalendar -p TimersMonotonic '
+          r'-p RandomizedDelayUSec -- "$1" </dev/null 2>&1',
+        ),
+      );
     });
 
     test('only the fast program carries the filtering readers (D48)', () {

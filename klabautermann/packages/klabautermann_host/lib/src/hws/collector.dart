@@ -65,12 +65,23 @@ enum Collector {
 
   /// Cron jobs: own `crontab -l`, `/etc/crontab`, `/etc/cron.d/*` and the
   /// `cron.{hourly,daily,weekly,monthly}` directory names (03 §6.4, §7.7).
-  cron(SamplerKind.slow, [], guardedCommands: 1);
+  cron(SamplerKind.slow, [], guardedCommands: 1),
+
+  /// One timer's `OnCalendar=` and monotonic triggers and its randomized
+  /// delay from `systemctl show` (03 §7.7, D57), on demand only: its one
+  /// argument is the timer unit (slow sampler).
+  timerDetail(
+    SamplerKind.slow,
+    [ArgValidators.timerUnit],
+    guardedCommands: 1,
+    wireName: 'timer_detail',
+  );
 
   const Collector(
     this.sampler,
     this.argValidators, {
     required this.guardedCommands,
+    this._wireName,
   });
 
   /// Which sampler's program contains this collector's fragment.
@@ -89,18 +100,22 @@ enum Collector {
 
   /// Positional validators for `hw_o` arguments; the request is refused
   /// when the argument count differs from this list's length or any
-  /// validator rejects its argument. Part-1 collectors take no arguments:
-  /// `hw_o <seq> <name>` is a bare on-demand re-read.
+  /// validator rejects its argument. A collector without arguments reads
+  /// the same in a tick and in a bare `hw_o <seq> <name>`; one with
+  /// arguments is requested through `hw_o` only.
   final List<ArgValidator> argValidators;
 
-  /// Wire name on `hw_t`/`hw_o` and in `S` section markers. Enum names all
-  /// satisfy [collectorWireNamePattern].
-  String get wireName => name;
+  final String? _wireName;
+
+  /// Wire name on `hw_t`/`hw_o`, in the program's `c_<name>` function and
+  /// in `S` section markers: the enum name, unless the collector declares
+  /// a snake_case one. Every wire name satisfies [collectorWireNamePattern].
+  String get wireName => _wireName ?? name;
 
   /// Looks up a collector by wire name; `null` when unknown.
   static Collector? byName(String name) {
     for (final c in values) {
-      if (c.name == name) return c;
+      if (c.wireName == name) return c;
     }
     return null;
   }
@@ -174,9 +189,19 @@ abstract final class ArgValidators {
   /// validated as a regex.
   static String? journalGrep(String value) => _freeText(value, 'pattern');
 
-  /// A `--since`/`--until` time expression: free text without control
-  /// bytes (03 §7.6).
-  static String? journalSince(String value) => _freeText(value, 'time');
+  /// A syslog identifier for `journalctl -t` (03 §7.6): free text
+  /// without control bytes, matched by journald as written.
+  static String? syslogIdentifier(String value) =>
+      _freeText(value, 'identifier');
+
+  /// A timer unit for `timer_detail` (03 §7.7): the unit-name grammar
+  /// with the `.timer` suffix.
+  static String? timerUnit(String value) {
+    final reason = unitName(value);
+    if (reason != null) return reason;
+    if (!value.endsWith('.timer')) return 'not a timer unit';
+    return null;
+  }
 
   /// A systemd calendar expression for `systemd-analyze calendar`
   /// (03 §7.7): free text without control bytes; `systemd-analyze` is

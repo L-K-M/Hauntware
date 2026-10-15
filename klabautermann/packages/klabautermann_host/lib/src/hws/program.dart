@@ -33,7 +33,8 @@ const kSamplerStartCommand =
 /// Version 4 filters `overview` and `core` on the host and adds the ZFS
 /// ARC to `core` (D48).
 /// Version 5 bounds `procs` to [kProcsRowCap] trimmed rows (D48).
-const kCollectorSetVersion = '5';
+/// Version 6 adds the on-demand `timer_detail` to the slow sampler (D57).
+const kCollectorSetVersion = '6';
 
 /// The most `procs` rows one reply carries (D48). With more processes the
 /// fragment keeps the union of the [kProcsRowCap] / 2 with the highest CPU
@@ -110,6 +111,7 @@ const collectorFragments = <Collector, String>{
   Collector.units: _kUnitsFragment,
   Collector.timers: _kTimersFragment,
   Collector.cron: _kCronFragment,
+  Collector.timerDetail: _kTimerDetailFragment,
 };
 
 /// Assembles the program text for [kind]: the nonce line first, then the
@@ -951,6 +953,20 @@ c_cron() {
       o="$o$NL$_d ${_f##*/}"
     done
   done
+}
+""";
+
+/// `timer_detail` (03 §7.7, D57): one timer's triggers and randomized
+/// delay from `systemctl show`, which has no JSON output, for the timer
+/// unit `hw_o` passes as `$1`; a request without exactly one unit gets an
+/// error section. The sampler's `TZ=UTC` prints each `next_elapse` in UTC.
+const _kTimerDetailFragment = r"""
+c_timer_detail() {
+  st=ok; o=''
+  if [ $# -ne 1 ]; then st=error; o='timer_detail: expects one timer unit'; return 0; fi
+  if ! command -v systemctl >/dev/null 2>&1; then st=missing; return 0; fi
+  o=$(hw_run systemctl show -p TimersCalendar -p TimersMonotonic -p RandomizedDelayUSec -- "$1" </dev/null 2>&1); _rd=$?
+  st=$(hw_st "$_rd" "$o")
 }
 """;
 

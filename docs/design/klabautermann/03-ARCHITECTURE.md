@@ -244,8 +244,8 @@ engine · D44 sample sequence · D45 subscriptions · D46 link vocabulary ·
 D47 sampler deadlines · D48 host-side filtering · D49 collector locale ·
 D50 LXC values · D51 Access tab · D52 runtime placement · D53 integration
 placement · D54 runtime override in M3 · D55 no health overlay in the MVP
-· D56 log search through `planchette_core`. Proposals awaiting the owner
-close the section; they are not decisions.
+· D56 log search through `planchette_core` · D57 timer triggers.
+Proposals awaiting the owner close the section; they are not decisions.
 
 ### Shape and scope
 
@@ -813,6 +813,29 @@ close the section; they are not decisions.
   class it names (`tool/protocol_guard/lib/protocol_guard.dart:167-183`
   [V]), so a `ServerZone` field would pass it. *Rejected:* callback-owner
   entries in `tool/guards.yaml` (a root-file change for each class).
+- **D57. A timer's triggers come from `systemctl show` through `hw_o`.**
+  JOB-02's schedule and `RandomizedDelaySec` of one systemd timer are an
+  on-demand read on the slow sampler, `hw_o <seq> timer_detail <timer>`,
+  which runs `systemctl show -p TimersCalendar -p TimersMonotonic -p
+  RandomizedDelayUSec -- <timer>`, guarded by `timeout` where the host
+  has it (collector-set version 6). `TimersCalendar` holds each `OnCalendar=` in systemd's
+  normalized form, `TimersMonotonic` the monotonic triggers, without
+  which a timer that has only those would list none, and
+  `RandomizedDelayUSec` the delay as a `format_timespan` span. A tick
+  passes no arguments, so it never names `timer_detail`. The next runs
+  of each expression come from `HostCommands.onCalendar`, a command of
+  its own outside the sampler, as 7.7 describes, with one run below
+  systemd 242; `timerCalendarCommands` builds those reads and
+  `TimerJobEntry.withDetail` merges their results; a later PR wires
+  both into the engine. A read with neither trigger leaves the timer's
+  triggers and delay unknown: `systemctl show` prints that for a unit
+  no longer loaded, with a default delay, and for a timer with only
+  `OnClockChange=` or `OnTimezoneChange=`. *Rejected:* evaluating the expressions inside
+  the sampler (one guarded call per trigger would tie the request's
+  guarded-command count, and with it D47's deadline, to the timer, and
+  the run count would be a program constant); reading the unit files
+  (`systemctl cat` leaves drop-ins, specifiers and normalization to the
+  client); `TimersCalendar` without `TimersMonotonic`.
 
 ### Privilege and safety
 
@@ -2266,6 +2289,7 @@ and is the single source for every runner, including the T1 scripts (9.3).
 | `procs` | slow | `/proc/<pid>/stat` and `status` with builtins, at most 500 trimmed rows (D48); the kept rows' `/proc/<pid>/cmdline` through one `head` piped into `tr '\000' '\037'` (7.2); `ps -eo ...` or BusyBox `ps w` fallback | 3 s while visible | 5 s while visible | 10 s |
 | `units` | slow | `systemctl list-units --all --output=json` (systemd 246+), else `--plain --no-legend`; `systemctl --failed` | 15 s while visible; 60 s for the health card | same | same |
 | `timers`, `cron` | slow | `systemctl list-timers --all --output=json`; `crontab -l`; `/etc/crontab`; `/etc/cron.d/*`; `cron.{hourly,...}` | 60 s while visible | same | on demand |
+| `timer_detail` | slow | `systemctl show -p TimersCalendar -p TimersMonotonic -p RandomizedDelayUSec -- <timer>` (D57) | on demand | same | same |
 | `identity` | slow | `/etc/os-release`, `uname`, `hostnamectl --json=short` (systemd 249+) | once per session | same | same |
 | `temps`, `gpu`, `smart` (v1) | slow | hwmon and thermal sysfs, `nvidia-smi --query-gpu=...`, `smartctl -n standby -j` | 10 s, 30 s, 10 min | same | on demand |
 | `packages` (v1) | slow | `apt-get -s upgrade`, `dnf check-update`, ... (7.8) | on demand, 60 min | on demand | on demand |
@@ -2468,14 +2492,18 @@ unless the user enables admin mode for that panel.
 ### 7.6 Logs (LOG)
 
 - **MVP.** Journal viewer (LOG-01): `journalctl -o json --no-pager` with
-  unit, identifier, priority, boot and time filters, newest first, windows
-  of 500 entries, older pages addressed by `__CURSOR` [U: exact paging flags,
-  spike S2]. Byte-array values (non-UTF-8) and `null` over-threshold fields
-  are handled. Follow (LOG-02): `journalctl -f -o json --after-cursor=<c>` on
+  unit, identifier, priority, boot and time filters (times as
+  `@<epoch seconds>`, so the session's zone plays no part), newest
+  first, windows of 500 entries, older pages addressed by `__CURSOR`
+  [U: exact paging flags, spike S2]. Byte-array values (non-UTF-8) and
+  `null` over-threshold fields are handled. Follow (LOG-02): `journalctl -f -o json --after-cursor=<c>` on
   its own `RemoteProcess`; stop with `TERM`, then close; resume from the last
   cursor after a reconnect; a per-view ring by lines and bytes with a
   line-length cap; a Live, Connecting, Paused or Disconnected chip. Kernel
-  log (LOG-03): `journalctl -k -b`, `dmesg --json` only as a fallback.
+  log (LOG-03): `journalctl -k -b`, `dmesg --json --decode` only as a
+  fallback; `--decode` names facility and level, because the single
+  `pri` number util-linux prints without it is `facility | level` in
+  2.38 and 2.39 and `(facility << 3) | level` from 2.40.
   Access notice (LOG-04): without `systemd-journal`, `adm` or `wheel`,
   `journalctl` silently returns only the user's own entries; the probe's
   `id -nG` drives a notice with the least-privileged fix. Text search
@@ -2498,9 +2526,11 @@ unless the user enables admin mode for that panel.
   (JOB-02): a Dart cron parser in `klabautermann_host` (5 fields, ranges, steps,
   names, macros, `CRON_TZ`) evaluated in the server's time zone and offset from
   the probe, with DST transitions and `RandomizedDelaySec` annotated;
-  `OnCalendar` expressions use `(unset TZ; systemd-analyze calendar
-  --iterations=N '<expr>')` on the host instead of a reimplementation
-  (`--iterations` from systemd 242 [R: systemd NEWS]; below that, one next
+  `OnCalendar` expressions, which a timer's `timer_detail` read gives
+  with its `RandomizedDelaySec` (D57), use `(unset TZ; systemd-analyze
+  calendar --iterations=N -- '<expr>')` on the host instead of a
+  reimplementation (`--` keeps an expression the host sent an operand;
+  `--iterations` from systemd 242 [R: systemd NEWS]; below that, one next
   run without `--iterations`, so RHEL 8 shows one run),
   because PID 1 evaluates zone-less expressions in the system zone [R:
   systemd.time(7)] (6.2); phrases come from ARB templates, worded from
@@ -3213,7 +3243,13 @@ names (enum), absolute normalized paths without NUL, collector names (enum),
 cron expressions (parsed before writing). Every remote command is wrapped as
 `sh -c <quoted>` with `LC_ALL=C TZ=UTC` inside, so the login shell's syntax
 never matters; only the clock and calendar reads of 6.2 unset `TZ` in a
-subshell. Property tests run quoted output through a real `sh` on Linux
+subshell. `HostCommands.commandLine` does it with a constant script,
+`export LC_ALL=C TZ=UTC SYSTEMD_PAGER= NO_COLOR=1; exec "$@"` (6.2's
+sampler variables), followed by the command's words as positional
+parameters, so each word is quoted once, for the login shell. A command
+that renders text for people exports `LC_ALL=C.UTF-8` instead when the
+probe found that locale (A11Y-08; the sampler decides on the host,
+D49). Property tests run quoted output through a real `sh` on Linux
 CI.
 
 ### 8.9 Secret masking and redaction (SAF-07, SYN-03)
@@ -4305,6 +4341,32 @@ tab (10.2, D51), which lists sudo NOPASSWD, journal group, Docker socket
 rights, streamlocal, compose plugin and systemd version, each with a
 copyable fix command that is never run implicitly. Unknown values show
 "unknown", never zero.
+
+As built in M2 (`app/klabautermann_app/lib/ui/system_panel.dart`), the
+System tab shows SYS-01's identity, BOOT-01's uptime and boot time,
+NET-01's total receive and transmit rates over every reported interface,
+and DSK-01's and DSK-02's mounts in the sortable table, in IEC units:
+
+- A figure whose `/proc` file `HostProfile.showsHostFigures` reports as
+  the container host's (uptime from `uptime`, boot time from `stat`)
+  reads "unknown" with that reason whatever the reading holds (SYS-04,
+  D50); while the probe cannot tell, figures stay as measured. Network
+  rates and mounts come from the container's own namespaces and stay.
+- Pseudo filesystems (`FsMount.isPseudo`) sit behind a filter, off by
+  default. In a panel narrower than 600 px, a width that grows with the
+  text scale, the table keeps the mount, use and inode columns, so
+  larger text does not scroll the wide table sideways. Any row opens
+  its full mount point, device, type and figures in a sheet, since the
+  mount column can cut a long mount point short (A11Y-09).
+- When `df` times out, the reply cannot tell which mount hung, so the
+  mounts of the last complete reading stay listed with that reading's
+  time, each with its usage unknown instead of old figures. The
+  monitoring controller keeps each server's latest reading per stream
+  (`lastReadingFor`) beside its latest sample, so a reading taken
+  while only Overview sampled `fs`, or before a switch to another
+  server, still counts; it leaves with the server (SYN-08). A host
+  without `timeout` is told that a stale mount can stall disk readings.
+- The usage bars carry no thresholds until OV-11 (v1) sets them.
 
 ### 10.5 Phone (under 600 dp) and tablet
 
