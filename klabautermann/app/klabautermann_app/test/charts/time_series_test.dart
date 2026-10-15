@@ -43,6 +43,17 @@ void main() {
       expect([for (var i = 0; i < 3; i++) ring.valueAt(1, i)], [null, 5, 8]);
     });
 
+    // A lane past the last would read the next sample's first lane, or an
+    // unwritten slot as a known zero.
+    test('refuses a lane it does not have', () {
+      final ring = _ring(capacity: 3, lanes: 2);
+      ring.add(_at(0), [1, 2]);
+      ring.add(_at(1), [3, 4]);
+
+      expect(() => ring.valueAt(2, 0), throwsRangeError);
+      expect(() => ring.valueAt(-1, 1), throwsRangeError);
+    });
+
     test('closes an open gap with the next sample, which does not join', () {
       final ring = _ring();
       ring.add(_at(0), [1]);
@@ -134,7 +145,7 @@ void main() {
         );
       }
 
-      expect(ring.gaps, hasLength(2));
+      expect([for (final gap in ring.gaps) gap.start], [_at(4), _at(5)]);
       expect(ring.gaps.last.end, isNull);
     });
 

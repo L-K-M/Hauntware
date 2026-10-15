@@ -80,6 +80,7 @@ final class TimeSeriesRing extends ChangeNotifier {
 
   /// Sample [index]'s value in [lane], or null when unknown.
   double? valueAt(int lane, int index) {
+    RangeError.checkValidIndex(lane, null, 'lane', lanes);
     final value = _values[_slot(index) * lanes + lane];
     return value.isNaN ? null : value;
   }
