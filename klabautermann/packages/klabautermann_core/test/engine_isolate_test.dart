@@ -123,6 +123,32 @@ void main() {
       expect((event as RequestRejected).requestName, 'Connect');
     });
 
+    test('a log stream is rejected and closing one is a no-op', () async {
+      final client = await spawnEngine();
+      final (:events, fleet: _) = await started(client);
+
+      client
+        ..send(
+          OpenLogStream(
+            streamId: 'logs-1',
+            spec: LogStreamSpec(
+              serverId: 'srv-1',
+              source: const JournalLogSource(unit: 'nginx.service'),
+              window: 50,
+              follow: false,
+            ),
+          ),
+        )
+        // Not open, since the open was rejected: closing does nothing.
+        ..send(const CloseStream('logs-1'))
+        ..send(const Connect('probe'));
+
+      final rejected = await next(events) as RequestRejected;
+      expect(rejected.requestName, 'OpenLogStream');
+      final event = await next(events);
+      expect((event as RequestRejected).requestName, 'Connect');
+    });
+
     test('ImportSshConfig answers the fleet, then the counts', () async {
       final client = await spawnEngine();
       final (:events, fleet: _) = await started(client);

@@ -18,3 +18,5 @@ workspace:
 dev_dependencies:
   lints: ^5.0.0
   test: ^1.25.0
+  # test/integration reads the root CI workflow.
+  yaml: ^3.1.4

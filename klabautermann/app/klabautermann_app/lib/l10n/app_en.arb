@@ -458,5 +458,45 @@
   "tableRowActions": "Row actions",
   "@tableRowActions": {
     "description": "Tooltip and screen-reader label of the button at the end of a table row that opens the row's actions."
+  },
+  "logViewLabel": "Log",
+  "@logViewLabel": {
+    "description": "Screen-reader name of a log view, the scrolling list of a server's log lines."
+  },
+  "logFollow": "Follow",
+  "@logFollow": {
+    "description": "Button shown while a log view is paused: scrolls to the newest line and keeps it in sight as lines arrive (LOG-02)."
+  },
+  "logLevelError": "Error",
+  "@logLevelError": {
+    "description": "Spoken name of the icon beside a log line logged as an error or worse."
+  },
+  "logLevelWarning": "Warning",
+  "@logLevelWarning": {
+    "description": "Spoken name of the icon beside a log line logged as a warning."
+  },
+  "logLevelDebug": "Debug",
+  "@logLevelDebug": {
+    "description": "Spoken name of the icon beside a log line logged as debug output."
+  },
+  "logDroppedLines": "{count, plural, =1{1 line dropped here} other{{count} lines dropped here}}",
+  "@logDroppedLines": {
+    "description": "A row in a log view where lines arrived faster than the view could keep and were left out; count is how many.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "logLineCut": "[line cut: {total} characters in all]",
+  "@logLineCut": {
+    "description": "Note after a log line too long to keep whole; total is the full line's length.",
+    "placeholders": {
+      "total": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
   }
 }

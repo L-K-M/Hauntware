@@ -34,8 +34,10 @@ final class EngineStart {
 /// in a [CatalogReplaced], [Subscribe], [Unsubscribe] and
 /// [SetCadenceProfile] update the sampling subscriptions (silently: no
 /// sampler runs them yet), [ImportSshConfig] gets
-/// [CatalogReplaced] and [SshConfigImported], [Shutdown] exits, and every
-/// other 03 §10.1 row gets [RequestRejected] until its milestone lands.
+/// [CatalogReplaced] and [SshConfigImported], [CloseStream] does nothing
+/// (no log stream is open), [Shutdown] exits, and every other 03 §10.1
+/// row, [OpenLogStream] included, gets [RequestRejected] until its
+/// milestone lands.
 void engineMain(EngineStart start) {
   final uiPort = start.uiPort;
   final commands = ReceivePort('klabautermann engine commands');
@@ -79,6 +81,11 @@ void engineMain(EngineStart start) {
         sampling.unsubscribe(message);
       case SetCadenceProfile(:final profile):
         sampling.profile = profile;
+      case CloseStream():
+        // Closing a stream that is not open does nothing (03 §10.1), and
+        // none is: until the log service lands, OpenLogStream gets
+        // RequestRejected, since no answer would leave its view waiting.
+        break;
       case ImportSshConfig(:final text):
         final ({List<FleetEntry> entries, int skippedCount}) result;
         try {

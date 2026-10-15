@@ -30,10 +30,15 @@ final class JournalEntry {
   /// `__MONOTONIC_TIMESTAMP` in microseconds since boot.
   int? get monotonicUs => int.tryParse(fields['__MONOTONIC_TIMESTAMP'] ?? '');
 
-  /// The wall-clock instant, when `__REALTIME_TIMESTAMP` parsed.
-  DateTime? get timestampUtc => realtimeUs == null
-      ? null
-      : DateTime.fromMicrosecondsSinceEpoch(realtimeUs!, isUtc: true);
+  /// The wall-clock instant, when `__REALTIME_TIMESTAMP` parsed to one
+  /// [DateTime] can hold; a value beyond its range reads as unknown
+  /// instead of throwing.
+  DateTime? get timestampUtc {
+    final us = realtimeUs;
+    if (us == null || us < -_maxInstantUs || us > _maxInstantUs) return null;
+
+    return DateTime.fromMicrosecondsSinceEpoch(us, isUtc: true);
+  }
 
   /// `PRIORITY`: syslog severity 0-7.
   int? get priority => int.tryParse(fields['PRIORITY'] ?? '');
@@ -61,6 +66,10 @@ final class JournalEntry {
     'message': message,
   };
 }
+
+/// The furthest instant [DateTime] holds either side of the epoch, in
+/// microseconds (100,000,000 days).
+const _maxInstantUs = 8640000000000000000;
 
 /// Parses the lines of a `journalctl -o json` stream; never throws.
 /// Blank lines skip, malformed JSON warns per line.

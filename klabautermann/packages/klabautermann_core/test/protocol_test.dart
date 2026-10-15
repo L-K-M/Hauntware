@@ -72,11 +72,13 @@ void main() {
         const Unsubscribe(serverId: 'srv-1', subscriptionId: 'row'),
         const SetCadenceProfile(CadenceProfile.phone),
         const ImportSshConfig('Host web-1\n  HostName web-1.example\n'),
-        const OpenLogStream(
-          LogStreamSpec(
+        OpenLogStream(
+          streamId: 'stream-1',
+          spec: LogStreamSpec(
             serverId: 'srv-1',
-            source: LogStreamSource.journal,
-            target: 'docker.service',
+            source: const JournalLogSource(unit: 'docker.service'),
+            window: 50,
+            follow: false,
           ),
         ),
         const CloseStream('stream-1'),
@@ -144,7 +146,12 @@ void main() {
           cause: GapCause.readingLost,
         ),
         HostProfileChanged('srv-1', HostProfile()),
-        const LogBatch(streamId: 'stream-1', lines: ['a'], dropped: 2),
+        LogBatch(
+          streamId: 'stream-1',
+          records: const [FileRecord('a')],
+          dropped: 2,
+        ),
+        const LogStreamState('stream-1', LogStreamRunning()),
         const DockerResult(serverId: 'srv-1', payload: {'Id': 'x'}),
         const DockerEvent('srv-1', {'status': 'start'}),
         const ActionPlanned('plan-1', ActionPreview(title: 'restart')),
@@ -529,6 +536,231 @@ void main() {
       expect(changed.profile.kernelRelease, isNull);
     });
 
+    test('log stream requests survive with their specs', () async {
+      Future<LogStreamSpec> spec(LogStreamSpec value) async {
+        final open =
+            await roundTrip(OpenLogStream(streamId: 'logs-1', spec: value))
+                as OpenLogStream;
+        expect(open.streamId, 'logs-1');
+        return open.spec;
+      }
+
+      // LOG-01's filters, paging on from the oldest record held.
+      final journal = await spec(
+        LogStreamSpec(
+          serverId: 'srv-1',
+          source: JournalLogSource(
+            unit: 'nginx.service',
+            identifier: 'nginx',
+            priority: LogPriority.warning,
+            currentBootOnly: true,
+            since: DateTime.utc(2026, 10, 14),
+            until: DateTime.utc(2026, 10, 15),
+          ),
+          window: 500,
+          follow: false,
+          afterCursor: 's=ab;i=1f;b=cd;m=2;t=3;x=4',
+        ),
+      );
+      expect(journal.serverId, 'srv-1');
+      expect(journal.window, 500);
+      expect(journal.follow, isFalse);
+      expect(journal.afterCursor, 's=ab;i=1f;b=cd;m=2;t=3;x=4');
+      final filters = journal.source as JournalLogSource;
+      expect(filters.unit, 'nginx.service');
+      expect(filters.identifier, 'nginx');
+      expect(filters.priority, LogPriority.warning);
+      expect(filters.currentBootOnly, isTrue);
+      expect(filters.since, DateTime.utc(2026, 10, 14));
+      expect(filters.until, DateTime.utc(2026, 10, 15));
+
+      final unfiltered = await spec(
+        LogStreamSpec(
+          serverId: 'srv-1',
+          source: const JournalLogSource(),
+          window: 100,
+          follow: true,
+        ),
+      );
+      final none = unfiltered.source as JournalLogSource;
+      expect(none.unit, isNull);
+      expect(none.priority, isNull);
+      expect(none.currentBootOnly, isFalse);
+      expect(none.since, isNull);
+      expect(unfiltered.afterCursor, isNull);
+
+      final kernel = await spec(
+        LogStreamSpec(
+          serverId: 'srv-1',
+          source: const KernelLogSource(),
+          window: 0,
+          follow: true,
+        ),
+      );
+      expect(kernel.source, isA<KernelLogSource>());
+      expect(kernel.window, 0);
+      expect(kernel.follow, isTrue);
+
+      final file = await spec(
+        LogStreamSpec(
+          serverId: 'srv-1',
+          source: const FileLogSource('/var/log/nginx/access.log'),
+          window: 200,
+          follow: true,
+        ),
+      );
+      expect((file.source as FileLogSource).path, '/var/log/nginx/access.log');
+
+      final close = await roundTrip(const CloseStream('logs-1')) as CloseStream;
+      expect(close.streamId, 'logs-1');
+    });
+
+    test('a log spec holds only what its source and mode can read', () {
+      LogStreamSpec spec({
+        LogSource source = const JournalLogSource(),
+        int window = 10,
+        bool follow = false,
+        String? afterCursor,
+      }) => LogStreamSpec(
+        serverId: 'srv-1',
+        source: source,
+        window: window,
+        follow: follow,
+        afterCursor: afterCursor,
+      );
+
+      expect(() => spec(window: -1), throwsA(isA<AssertionError>()));
+      expect(
+        () => spec(
+          source: const FileLogSource('/var/log/syslog'),
+          afterCursor: 's=1',
+        ),
+        throwsA(isA<AssertionError>()),
+        reason: 'a file tail has no cursor',
+      );
+      final bounded = JournalLogSource(until: DateTime.utc(2026, 10, 15));
+      expect(
+        () => spec(source: bounded, follow: true),
+        throwsA(isA<AssertionError>()),
+        reason: 'a follow reads up to the present',
+      );
+
+      expect(spec(source: bounded).follow, isFalse);
+      expect(
+        spec(source: const KernelLogSource(), afterCursor: 's=1').afterCursor,
+        's=1',
+      );
+      expect(
+        () => LogBatch(streamId: 'logs-1', records: const [], dropped: -1),
+        throwsA(isA<AssertionError>()),
+      );
+    });
+
+    test('every log record survives with its values', () async {
+      final batch =
+          await roundTrip(
+                LogBatch(
+                  streamId: 'logs-1',
+                  // Growable, so the read-only check below proves the
+                  // batch holds its own copy.
+                  records: [
+                    JournalRecord(
+                      cursor: 's=ab;i=1f',
+                      at: DateTime.utc(2026, 10, 14, 12, 0, 0, 0, 7),
+                      priority: LogPriority.error,
+                      unit: 'nginx.service',
+                      identifier: 'nginx',
+                      pid: 812,
+                      message: 'bind() failed',
+                      fields: Map.unmodifiable({
+                        '__CURSOR': 's=ab;i=1f',
+                        'MESSAGE': 'bind() failed',
+                        'CODE_LINE': null,
+                      }),
+                    ),
+                    const KernelRecord(
+                      message: 'usb 1-1: new high-speed USB device',
+                      sinceBoot: Duration(seconds: 3, microseconds: 12),
+                      priority: LogPriority.info,
+                    ),
+                    const KernelRecord(message: 'no level'),
+                    const FileRecord('GET / HTTP/1.1 200'),
+                  ],
+                  dropped: 41,
+                ),
+              )
+              as LogBatch;
+      expect(batch.streamId, 'logs-1');
+      expect(batch.dropped, 41);
+      expect(batch.records.map((r) => r.runtimeType), [
+        JournalRecord,
+        KernelRecord,
+        KernelRecord,
+        FileRecord,
+      ]);
+      expect(() => batch.records.clear(), throwsUnsupportedError);
+
+      final journal = batch.records[0] as JournalRecord;
+      expect(journal.cursor, 's=ab;i=1f');
+      expect(journal.at, DateTime.utc(2026, 10, 14, 12, 0, 0, 0, 7));
+      expect(journal.priority, LogPriority.error);
+      expect(journal.unit, 'nginx.service');
+      expect(journal.identifier, 'nginx');
+      expect(journal.pid, 812);
+      expect(journal.message, 'bind() failed');
+      expect(journal.fields, {
+        '__CURSOR': 's=ab;i=1f',
+        'MESSAGE': 'bind() failed',
+        'CODE_LINE': null,
+      });
+      expect(journal.fields.containsKey('CODE_LINE'), isTrue);
+      expect(() => journal.fields.clear(), throwsUnsupportedError);
+
+      final kernel = batch.records[1] as KernelRecord;
+      expect(kernel.message, 'usb 1-1: new high-speed USB device');
+      expect(kernel.sinceBoot, const Duration(seconds: 3, microseconds: 12));
+      expect(kernel.priority, LogPriority.info);
+      final unleveled = batch.records[2] as KernelRecord;
+      expect(unleveled.sinceBoot, isNull);
+      expect(unleveled.priority, isNull);
+
+      expect((batch.records[3] as FileRecord).text, 'GET / HTTP/1.1 200');
+
+      final empty = await roundTrip(const JournalRecord()) as JournalRecord;
+      expect(empty.fields, isEmpty);
+      expect(empty.cursor, isNull);
+      expect(empty.at, isNull);
+    });
+
+    test('log stream states survive and compare by value', () async {
+      final statuses = <LogStreamStatus>[
+        for (final reason in LogStreamWaitReason.values)
+          LogStreamWaiting(reason),
+        const LogStreamRunning(),
+        for (final reason in LogStreamEndReason.values) LogStreamEnded(reason),
+        const LogStreamEnded(
+          LogStreamEndReason.denied,
+          detail: "tail: cannot open '/var/log/auth.log': Permission denied",
+        ),
+      ];
+
+      for (final status in statuses) {
+        final state =
+            await roundTrip(LogStreamState('logs-1', status)) as LogStreamState;
+        expect(state.streamId, 'logs-1');
+        expect(state.status, status);
+        expect(state.status.hashCode, status.hashCode);
+      }
+
+      // Every status differs from every other: by variant, reason or
+      // detail.
+      for (var i = 0; i < statuses.length; i++) {
+        for (var j = i + 1; j < statuses.length; j++) {
+          expect(statuses[i], isNot(statuses[j]));
+        }
+      }
+    });
+
     test('fleet entries survive with every field and stay read-only', () async {
       final event =
           await roundTrip(
@@ -886,5 +1118,8 @@ void main() {
     // Pressure holds the cumulative stall counter, which stays in the
     // engine (D43); StallShares carries the averages.
     expect(names, isNot(contains('Pressure')));
+    // A JournalEntry parses its columns on every read; the engine resolves
+    // it into a JournalRecord.
+    expect(names, isNot(contains('JournalEntry')));
   });
 }

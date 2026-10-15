@@ -27,6 +27,22 @@ void main() {
     );
   });
 
+  test('a time beyond the DateTime range reads as unknown', () {
+    // 100,000,000 days either side of the epoch, in microseconds.
+    const maxUs = 8640000000000000000;
+    DateTime? at(String realtime) =>
+        parseJournalLine('{"__REALTIME_TIMESTAMP":"$realtime"}')!.timestampUtc;
+
+    expect(at('${maxUs + 1}'), isNull);
+    expect(at('-${maxUs + 1}'), isNull);
+    expect(at('-9223372036854775808'), isNull);
+    expect(
+      at('$maxUs'),
+      DateTime.fromMicrosecondsSinceEpoch(maxUs, isUtc: true),
+    );
+    expect(at('-$maxUs'), isNotNull);
+  });
+
   test('a byte-array MESSAGE decodes leniently', () {
     final line = '{"__CURSOR":"s=1","PRIORITY":"6","MESSAGE":[104,105,255,33]}';
     final e = parseJournalLine(line)!;
