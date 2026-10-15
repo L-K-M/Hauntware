@@ -19,6 +19,7 @@ const int deviceSettingsSchemaVersion = 1;
 const String _versionKey = 'klabautermann.settings.version';
 const String _deviceIdKey = 'klabautermann.sync.deviceId';
 const String _appearanceKey = 'klabautermann.appearance';
+const String _firstRunCardKey = 'klabautermann.coverage.firstRunCardDismissed';
 
 /// Replaces a file's contents. [DeviceSettingsStore] writes the settings
 /// document and the copy of a damaged file through it.
@@ -92,8 +93,9 @@ final class DeviceSettingsReadOnlyException implements Exception {
       'this session (${kind.name}), so the change was not saved';
 }
 
-/// This device's `settings.json` (03 §4.10): the device id, the appearance
-/// and, later, the monitor set and per-server device preferences.
+/// This device's `settings.json` (03 §4.10): the device id, the appearance,
+/// whether the first-run coverage card was dismissed and, later, the
+/// monitor set and per-server device preferences.
 ///
 /// The app's isolate owns it: the composition root opens it once and the
 /// controllers write through it. The desktop settings window runs no store
@@ -228,6 +230,19 @@ final class DeviceSettingsStore {
   Future<void> setAppearance(Map<String, Object?> appearance) async {
     _values[_appearanceKey] =
         jsonDecode(jsonEncode(appearance)) as Map<String, Object?>;
+    await _save();
+  }
+
+  /// Whether the user dismissed the first-run coverage card (03 §9.5 item
+  /// 1). Anything but `true` reads as not dismissed, so a damaged value
+  /// shows the card again rather than failing the file.
+  bool get firstRunCardDismissed => _values[_firstRunCardKey] == true;
+
+  /// Records the card's dismissal and writes the document. Throws when the
+  /// write fails or this session is read-only; the dismissal stays in
+  /// memory either way.
+  Future<void> dismissFirstRunCard() async {
+    _values[_firstRunCardKey] = true;
     await _save();
   }
 

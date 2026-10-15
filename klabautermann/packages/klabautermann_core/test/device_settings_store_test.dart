@@ -7,6 +7,7 @@ import 'package:test/test.dart';
 const _versionKey = 'klabautermann.settings.version';
 const _deviceIdKey = 'klabautermann.sync.deviceId';
 const _appearanceKey = 'klabautermann.appearance';
+const _firstRunCardKey = 'klabautermann.coverage.firstRunCardDismissed';
 
 final _uuidV4 = RegExp(
   r'^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
@@ -120,6 +121,59 @@ void main() {
       expect(store.issue, isNull);
       expect(store.appearance, isNull);
       expect(store.deviceId, 'device-a');
+    });
+
+    test('keeps the first-run card dismissed across reloads, beside keys it '
+        'does not know', () async {
+      writeDocument({
+        _versionKey: 1,
+        _deviceIdKey: 'device-a',
+        'klabautermann.later': {'nested': true},
+      });
+
+      final store = await DeviceSettingsStore.open(file);
+      expect(store.firstRunCardDismissed, isFalse);
+      await store.dismissFirstRunCard();
+      final reopened = await DeviceSettingsStore.open(file);
+
+      expect(reopened.firstRunCardDismissed, isTrue);
+      expect(document(), {
+        _versionKey: 1,
+        _deviceIdKey: 'device-a',
+        'klabautermann.later': {'nested': true},
+        _firstRunCardKey: true,
+      });
+    });
+
+    for (final (name, value) in [('a string', 'true'), ('a number', 1)]) {
+      test('a first-run card dismissal holding $name reads as not '
+          'dismissed', () async {
+        writeDocument({
+          _versionKey: 1,
+          _deviceIdKey: 'device-a',
+          _firstRunCardKey: value,
+        });
+
+        final store = await DeviceSettingsStore.open(file);
+
+        expect(store.issue, isNull);
+        expect(store.firstRunCardDismissed, isFalse);
+      });
+    }
+
+    test('a dismissal a read-only session cannot save stays in memory and '
+        'throws', () async {
+      writeDocument({_versionKey: 2, _deviceIdKey: 'device-a'});
+      final store = await DeviceSettingsStore.open(file);
+      final before = file.readAsStringSync();
+
+      await expectLater(
+        store.dismissFirstRunCard(),
+        throwsA(isA<DeviceSettingsReadOnlyException>()),
+      );
+
+      expect(store.firstRunCardDismissed, isTrue);
+      expect(file.readAsStringSync(), before);
     });
 
     test('overlapping writes land in call order', () async {
