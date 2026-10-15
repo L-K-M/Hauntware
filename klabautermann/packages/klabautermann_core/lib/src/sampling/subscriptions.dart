@@ -9,13 +9,30 @@ final class SamplingSubscriptions {
   /// Server id to subscription id to streams; no entry holds an empty set.
   final Map<String, Map<String, Set<SampleStream>>> _byServer = {};
 
+  /// The servers that may hold subscriptions, once [fleet] named them;
+  /// until then, any server.
+  Set<String>? _fleet;
+
   /// The 03 §6.4 cadence column for every subscription.
   CadenceProfile profile = CadenceProfile.desktop;
 
+  /// Names the fleet's servers (03 §5.1): one it no longer lists loses
+  /// its subscriptions, and a [Subscribe] for a server outside it is
+  /// ignored, so a request that crossed the server's removal cannot bring
+  /// them back.
+  set fleet(Set<String> serverIds) {
+    _fleet = Set.unmodifiable(serverIds);
+    _byServer.removeWhere((serverId, _) => !serverIds.contains(serverId));
+  }
+
   /// Records [request], replacing the streams an earlier subscription with
   /// the same ids named. One that names no stream holds nothing, so it is
-  /// dropped instead.
+  /// dropped instead, and one for a server outside the [fleet] is
+  /// ignored.
   void subscribe(Subscribe request) {
+    if (_fleet case final fleet? when !fleet.contains(request.serverId)) {
+      return;
+    }
     if (request.streams.isEmpty) {
       _drop(request.serverId, request.subscriptionId);
       return;

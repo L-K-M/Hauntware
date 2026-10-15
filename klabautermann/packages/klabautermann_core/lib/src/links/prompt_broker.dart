@@ -47,8 +47,13 @@ final class PromptBroker {
   final Map<String, _OpenPrompt> _open = {};
 
   /// Opens the scope of one connect attempt or operation on [serverId]:
-  /// its prompts name that server and end with it.
-  PromptAttempt attempt(String serverId) => PromptAttempt._(this, serverId);
+  /// its prompts name that server and end with it. [onSent] sees each of
+  /// its [Prompt]s right after the event goes out, so the attempt can say
+  /// it waits on that prompt.
+  PromptAttempt attempt(
+    String serverId, {
+    void Function(Prompt prompt)? onSent,
+  }) => PromptAttempt._(this, serverId, onSent);
 
   /// Routes [answer] to the open prompt [promptId]. Any other result than
   /// [PromptAnswerResult.answered] leaves the request for the engine to
@@ -76,15 +81,15 @@ final class PromptBroker {
       _expiry,
       () => _withdraw(promptId, PromptWithdrawnReason.expired),
     );
-    _emit(
-      Prompt(
-        promptId: promptId,
-        serverId: attempt.serverId,
-        host: host,
-        port: port,
-        request: request,
-      ),
+    final event = Prompt(
+      promptId: promptId,
+      serverId: attempt.serverId,
+      host: host,
+      port: port,
+      request: request,
     );
+    _emit(event);
+    attempt._onSent?.call(event);
     return prompt.answer.future;
   }
 
@@ -128,9 +133,10 @@ final class PromptBroker {
 /// ([PromptBroker.attempt]). [end] withdraws those still open, so the app
 /// closes them once nothing waits on their answers.
 final class PromptAttempt {
-  PromptAttempt._(this._broker, this.serverId);
+  PromptAttempt._(this._broker, this.serverId, this._onSent);
 
   final PromptBroker _broker;
+  final void Function(Prompt prompt)? _onSent;
 
   /// The fleet server the attempt belongs to, which every [Prompt] names.
   final String serverId;
