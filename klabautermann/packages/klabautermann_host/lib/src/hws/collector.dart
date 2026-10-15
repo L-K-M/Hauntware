@@ -39,8 +39,8 @@ enum Collector {
   overview(SamplerKind.fast, [], guardedCommands: 0),
 
   /// Focused-server metrics: overview plus per-core busy and idle jiffies,
-  /// btime, whole-disk diskstats counters, PSI averages, uptime and the
-  /// ZFS ARC (03 §6.4, D48, fast sampler).
+  /// btime, the diskstats counters D48 keeps, PSI averages, uptime and
+  /// the ZFS ARC (03 §6.4, fast sampler).
   core(SamplerKind.fast, [], guardedCommands: 0),
 
   /// Mount usage and inodes from `df -PT -B1` and `df -Pi` (03 §6.4, §7.3,

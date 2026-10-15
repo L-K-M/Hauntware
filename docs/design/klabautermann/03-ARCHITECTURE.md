@@ -575,54 +575,60 @@ Proposals awaiting the owner close the section; they are not decisions.
   `/proc/diskstats`, and spike S2 measured a 4-CPU `core` reply of 2,773 B
   and an `overview` reply of 1,227 B (`klabautermann/docs/evidence/s2/`).
   K15 fixes the rules in version 4. `stat` keeps the aggregate `cpu` line
-  whole (CPU-01, and CPU-04 in v1) and sends each `cpuN` line as busy and
-  idle jiffies, because CPU-02 shows only busy per core: idle is idle plus
-  iowait, busy is user, nice, system, irq, softirq and steal, and the
-  kernel already counts guest time in user and nice [V: Linux
-  `kernel/sched/cputime.c`, `account_guest_time`]. mksh, and BusyBox on a
-  32-bit CPU without `SH_MATH_64`, do shell arithmetic in 32 bits [V: mksh
-  R59 prints -2147483648 for `$((2147483647 + 1))`; BusyBox
-  `shell/math.h`], so a core's idle sum would wrap after about 248 days at
-  USER_HZ 100: the fast program tests the width once at start, and such a
-  shell sends each `cpuN` line's first eight counters instead, about 41 B
-  more per core [U], outside 11.4's per-CPU allowance. `meminfo` keeps
-  MEM-01's nine keys without padding or unit. `netdev` keeps the bytes
-  received and sent (NET-01) of each interface with a `device` link in
-  sysfs whose master, if it has one, has none: loopback, bridges, bonds,
-  VLANs, veths and tunnels have no device and carry traffic a device
-  already counts, and Hyper-V's synthetic NIC and the failover master add
-  their enslaved VF's counters to their own [V: Linux
-  `drivers/base/core.c` (`device_add_class_symlinks`),
-  `drivers/net/hyperv/netvsc_drv.c` (`netvsc_get_stats64`),
-  `drivers/net/net_failover.c`]. Without such an interface, inside a
-  container whose `eth0` is a veth peer, the interfaces that are neither a
-  bridge (a `bridge/` directory) nor enslaved (a `master` link) stay,
-  because a nested Docker bridge and its veth ports count forwarded
-  traffic again, in the opposite direction to `eth0` [V: Linux
-  `net/bridge/br_device.c` (`br_dev_xmit`), `net/bridge/br_input.c`
-  (`br_pass_frame_up`), `drivers/net/veth.c` (`veth_get_stats64`)]. When
-  that leaves none, as when `eth0` is itself a bridge port, or without
-  sysfs, every interface but `lo` stays, and forwarded traffic then counts
-  on the uplink, the bridge and its ports; a tunnel inside a container
-  counts again on `eth0` either way. `diskstats` keeps reads, sectors
-  read, writes and sectors written (CN-04) of whole disks: a partition (a
-  `partition` file in sysfs) or a stacked device (entries under `slaves/`,
-  which device-mapper and md create) repeats its disks' I/O [V: Linux
-  `block/partitions/core.c`, `block/holder.c`, `drivers/md/dm.c`,
-  `drivers/md/md.c`], loop devices count again on their backing file's
-  disk, `ram` and `zram` hold memory, and ZFS volumes (`zd*` [V: OpenZFS
-  `include/sys/fs/zfs.h`]) count again on the pool's disks. A hidden NVMe
-  multipath path (`nvme<S>c<C>n<N>`) has neither a `partition` file nor
-  `slaves/`, yet its head `nvme<S>n<N>` counts the same I/O on kernels
-  that account it there [V: Linux `block/genhd.c` (`diskstats_show` lists
-  hidden disks), `drivers/nvme/host/core.c` (`nvme_alloc_ns`),
+  whole: CPU-01's shares need its total, which spans every field but the
+  two guest fields, so trimming would save only those, and CPU-04 in v1
+  uses the breakdown. It sends each `cpuN` line as busy and idle jiffies,
+  because CPU-02 shows only busy per core: idle is idle plus iowait, busy
+  is user, nice, system, irq, softirq and steal, and the kernel already
+  counts guest time in user and nice [V: Linux `kernel/sched/cputime.c`,
+  `account_guest_time`]. mksh, and BusyBox on a 32-bit CPU without
+  `SH_MATH_64`, do shell arithmetic in 32 bits [V: mksh R59 prints
+  -2147483648 for `$((2147483647 + 1))`; BusyBox `shell/math.h`], so a
+  core's idle sum would wrap after about 248 days at USER_HZ 100: the fast
+  program tests the width once at start, and such a shell sends each
+  `cpuN` line's first eight counters instead, about 67 B per core instead
+  of 26 B [U], outside 11.4's per-CPU allowance. `meminfo` keeps MEM-01's
+  nine keys without padding or unit. `netdev` keeps the bytes received and
+  sent (NET-01) of each interface with a `device` link in sysfs whose
+  master, if it has one, has none: loopback, bridges, bonds, VLANs, veths
+  and tunnels have no device and carry traffic a device already counts,
+  and Hyper-V's synthetic NIC and the failover master add their enslaved
+  VF's counters to their own [V: Linux `drivers/base/core.c`
+  (`device_add_class_symlinks`), `drivers/net/hyperv/netvsc_drv.c`
+  (`netvsc_get_stats64`), `drivers/net/net_failover.c`]. Without such an
+  interface, inside a container whose `eth0` is a veth peer, the
+  interfaces that are neither a bridge (a `bridge/` directory) nor
+  enslaved (a `master` link) stay, because a nested Docker bridge and its
+  veth ports count forwarded traffic again, in the opposite direction to
+  `eth0` [V: Linux `net/bridge/br_device.c` (`br_dev_xmit`),
+  `net/bridge/br_input.c` (`br_pass_frame_up`), `drivers/net/veth.c`
+  (`veth_get_stats64`)]. When that leaves none, as when `eth0` is itself a
+  bridge port, or without sysfs, every interface but `lo` stays, and
+  forwarded traffic then counts on the uplink, the bridge and its ports; a
+  tunnel inside a container counts again on `eth0` either way. `diskstats`
+  keeps reads, sectors read, writes and sectors written (CN-04) of whole
+  disks: a partition (a `partition` file in sysfs) or a stacked device
+  (entries under `slaves/`, which device-mapper and md create) repeats its
+  disks' I/O [V: Linux `block/partitions/core.c`, `block/holder.c`,
+  `drivers/md/dm.c`, `drivers/md/md.c`] (without sysfs neither test
+  matches, so partitions and stacked devices stay and count again), loop
+  devices count again on their backing file's disk, `ram` and `zram` hold
+  memory, and ZFS volumes (`zd*` [V: OpenZFS `include/sys/fs/zfs.h`])
+  count again on the pool's disks. A hidden NVMe multipath path
+  (`nvme<S>c<C>n<N>`) has neither a `partition` file nor `slaves/`, yet
+  its head `nvme<S>n<N>` counts the same I/O on kernels that account it
+  there [V: Linux `block/genhd.c` (`diskstats_show` lists hidden disks),
+  `drivers/nvme/host/core.c` (`nvme_alloc_ns`),
   `drivers/nvme/host/multipath.c` (`nvme_mpath_start_request`)], so a path
   row stays only when its head row shows no I/O, as on kernels before the
-  head accounted it. A `netdev` or `diskstats` row whose counters are all
-  zero (an unused NIC, idle `nbd` devices) is left out; its first non-zero
-  reading starts its series. PSI keeps `avg10`, `avg60` and `avg300`
-  (7.1), without the cumulative `total`. The cpu file's `full` line stays:
-  the kernel reports zero for it at the system level [V: Linux
+  head accounted it. The four counters serve DSK-03's rates; DSK-04's
+  latency and utilization fields (ms reading, ms writing, `io_ticks`,
+  weighted ms) stay out until v1 brings DSK-04 and bumps the collector-set
+  version. A `netdev` or `diskstats` row whose counters are all zero (an
+  unused NIC, idle `nbd` devices) is left out; its first non-zero reading
+  starts its series. PSI keeps `avg10`, `avg60` and `avg300` (7.1),
+  without the cumulative `total`. The cpu file's `full` line stays: the
+  kernel reports zero for it at the system level [V: Linux
   `Documentation/accounting/psi.rst`], but an lxcfs `pressure/cpu` (D50)
   is the container's cgroup `cpu.pressure`, copied verbatim, where `full`
   is defined [V: lxcfs `src/proc_fuse.c` (`proc_pressure_read`) at
@@ -633,14 +639,15 @@ Proposals awaiting the owner close the section; they are not decisions.
   present, never as zero. Inside a container the file is the host's ARC
   [U], which an lxcfs `meminfo` does not contain, so the engine applies
   MEM-01's note outside containers only. On synthetic `/proc` trees [U] a
-  `core` reply is 1,111 B at 4 CPUs, 1,841 B at 32 and 2,675 B at 64, 26 B
+  `core` reply is 1,151 B at 4 CPUs, 1,880 B at 32 and 2,714 B at 64, 26 B
   for each further CPU, and an `overview` reply 507 B, so 2.5 KB holds to
-  about 56 CPUs and 11.4 allows 30 B for each CPU beyond 32; real hosts
-  remain for S2. *Rejected:* filtering only in the engine (the bytes still
-  cross the link on every tick, against 11.4's 1 KB/s for 10 hosts); name
-  lists of virtual interfaces and partitions (never complete); leaving out
-  every interface with a master (that drops bond slaves and bridge ports,
-  the only devices under a bond or a bridge).
+  about 55 CPUs and 11.4 allows 30 B for each CPU beyond 32; under mksh a
+  `core` reply is 3,192 B at 32 CPUs. Real hosts remain for S2.
+  *Rejected:* filtering only in the engine (the bytes still cross the link
+  on every tick, against 11.4's 1 KB/s for 10 hosts); name lists of
+  virtual interfaces and partitions (never complete); leaving out every
+  interface with a master (that drops bond slaves and bridge ports, the
+  only devices under a bond or a bridge).
 - **D49. Collector locale.** Collectors that render text for people
   (A11Y-08) run their command under `LC_ALL=C.UTF-8`, or under the
   sampler's `LC_ALL=C` when the host lacks `C.UTF-8`. The program decides
@@ -2112,8 +2119,9 @@ fragments (D48).
 ### 6.5 Parsing and fixtures
 
 - One pure parser per collector in `klabautermann_host`, tolerant of truncation,
-  extra fields (`diskstats` field counts vary by kernel), wrapped `df` lines
-  and non-UTF-8 bytes; it returns a value plus warnings and never throws.
+  extra fields (the aggregate `cpu` line gains fields with the kernel; rows
+  the host trims have the fixed shape of D48), wrapped `df` lines and
+  non-UTF-8 bytes; it returns a value plus warnings and never throws.
   Parsing runs in the engine isolate; UI code never parses.
 - Fixtures: `klabautermann_host/test/fixtures/<platform-id>/<collector>.txt`
   with a JSON golden per fixture, captured by
@@ -2219,11 +2227,12 @@ unless the user enables admin mode for that panel.
   by type (tmpfs, devtmpfs, overlay, squashfs, erofs), not by device name;
   inodes from `df -Pi`; both under `timeout 10` because stale NFS mounts hang
   `df`.
-- **v1.** I/O rates and latency from `/proc/diskstats` deltas (loop and ram
-  devices skipped); mount details from `findmnt -J -b` (util-linux 2.27+);
-  swap devices; the disk space explorer (DSK-07), which streams `ncdu -x -o -`
-  or `gdu -o-` when installed, else incremental `du -x -B1 -d1` per opened
-  directory, read-only, sudo for a complete tree.
+- **v1.** I/O rates and latency from `/proc/diskstats` deltas (devices
+  filtered on the host by D48; the `core` rows gain DSK-04's latency fields
+  with a collector-set version bump); mount details from `findmnt -J -b`
+  (util-linux 2.27+); swap devices; the disk space explorer (DSK-07), which
+  streams `ncdu -x -o -` or `gdu -o-` when installed, else incremental `du -x
+  -B1 -d1` per opened directory, read-only, sudo for a complete tree.
 - **v1.x.** "Open in Poltergeist" for deletion (DSK-08), layout (`lsblk -J
   -b`, LVM JSON reports with sudo), ZFS, mdraid, network mounts with
   stale-mount detection, cleanup suggestions with sizes and previews, fill

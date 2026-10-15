@@ -75,7 +75,8 @@ final class CoreSnapshot extends OverviewSnapshot {
     this.zfsArc,
   }) : diskstats = List.unmodifiable(diskstats ?? []);
 
-  /// /proc/diskstats rows of whole disks (D48).
+  /// /proc/diskstats rows of whole disks, and of partitions and stacked
+  /// devices too when the host has no sysfs (D48).
   final List<DiskStatEntry> diskstats;
 
   /// /proc/pressure/{cpu,io,memory}; absent blocks stay null because PSI

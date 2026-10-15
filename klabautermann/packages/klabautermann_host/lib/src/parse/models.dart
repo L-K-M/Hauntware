@@ -191,7 +191,8 @@ final class MemInfo {
   Map<String, Object?> toJson() => {'fields': fields};
 }
 
-/// Parses the filtered `== meminfo ==` block (`Key: <n> kB` lines).
+/// Parses the filtered `== meminfo ==` block: `Key: <n>` lines in kB, as
+/// the collector sends them (D48); a trailing `kB` is accepted.
 MemInfo parseMemInfoBlock(List<String> lines, List<String> warnings) {
   final fields = <String, int>{};
   for (final line in lines) {
@@ -301,7 +302,7 @@ List<NetDevEntry> parseNetDevBlock(List<String> lines, List<String> warnings) {
   return out;
 }
 
-/// One whole disk as the core collector sends it (D48): the name, then
+/// One disk as the core collector sends it (D48): the name, then
 /// fields 4, 6, 8 and 10 of /proc/diskstats (reads completed, sectors
 /// read, writes completed, sectors written).
 @immutable

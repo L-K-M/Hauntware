@@ -299,10 +299,11 @@ hw_netdev() {
 }
 
 # DSK-03's counters as `<device> <reads> <sectors read> <writes>
-# <sectors written>`, whole disks only. A partition (a `partition` file
+# <sectors written>` of whole disks. A partition (a `partition` file
 # in sysfs) or a stacked device (entries under `slaves/`: LVM, dm-crypt,
-# multipath, md) repeats its disks' I/O; loop, ram, zram and ZFS volume
-# (zd) devices are files or memory, or count again on the pool's disks.
+# multipath, md) repeats its disks' I/O, and without sysfs both stay;
+# loop, ram, zram and ZFS volume (zd) devices are files or memory, or
+# count again on the pool's disks.
 # A hidden NVMe multipath path (nvme<S>c<C>n<N>) waits for the end: its
 # head nvme<S>n<N> counts the same I/O on kernels that account it there,
 # so the path stays only when the head has none. Rows that never did I/O
