@@ -4630,6 +4630,14 @@ palette) and presets in the preview. v1: paste from Séance and Poltergeist
   10-minute run in the `klabautermann_integration` job (every job needs a
   `timeout-minutes`, `scripts/check-workflows.sh` [V]) and a 24 h run
   before M4 and M7 (manual sign-off).
+- Engine side (spike S5 part 1): `klabautermann_core/tool/engine_budget.dart`
+  replays the host fixtures for ten hosts at the Phone cadence and a
+  1,000 lines/s journal follow through the frame reader, the sample
+  pipeline, the journal parser and an isolate send, and reports time per
+  tick and per second, reply bytes, lines per second, the resident set
+  and (under `dart run`) the live heap. Its runs are provisional
+  evidence in `klabautermann/docs/evidence/s5/` and set no budget; CI
+  runs only its smoke test.
 
 ### 11.5 Host write inventory test
 
