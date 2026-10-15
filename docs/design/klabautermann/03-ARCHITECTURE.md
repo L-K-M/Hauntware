@@ -2205,7 +2205,9 @@ unless the user enables admin mode for that panel.
 
 - **MVP.** Live overview (OV-01) from the `core` collector: CPU total and
   per core from `/proc/stat` deltas, load with core context, memory
-  breakdown from `MemAvailable` (with "ZFS ARC counted as used" when
+  breakdown from `MemAvailable` (used is `MemTotal` less `MemAvailable`;
+  cache is `Cached` plus `SReclaimable`, as procps' `free` counts it
+  [R: free(1)]; with "ZFS ARC counted as used" when
   `/proc/spl/kstat/zfs/arcstats` exists), swap, root and other mounts from
   `fs`, network throughput, uptime and last boot, OS and kernel (SYS-01).
   Health card (OV-02): failed units, mounts over threshold, unhealthy
