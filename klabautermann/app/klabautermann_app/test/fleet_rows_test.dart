@@ -602,6 +602,7 @@ void main() {
 
         expect(tester.takeException(), isNull);
         expect(find.byType(PressureBar), findsOneWidget);
+        expect(find.byType(FleetServerRow), findsNWidgets(3));
         final heights = {
           for (final row in tester.widgetList<FleetServerRow>(
             find.byType(FleetServerRow),
