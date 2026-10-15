@@ -360,6 +360,27 @@ void main() {
       expect(end.reason, LogStreamEndReason.missing);
     });
 
+    test('a signal or a lost link ends it as failed, without dmesg', () async {
+      final killed = await open('s', _spec(_kernel));
+      killed.end(const RemoteExit(exitSignal: 'KILL'));
+      await _until(() => statuses('s').length == 2);
+      expect(statuses('s'), [const LogStreamRunning(), _failed]);
+
+      final p = await open('k', _spec(_kernel));
+      p.emitStderr(utf8.encode('journal read interrupted\n'));
+      link.state = const SshLinkClosed(SshLinkClosedReason.pingTimeout);
+      p.end(const RemoteExit());
+      await _until(() => statuses('k').length == 2);
+      expect(statuses('k'), [
+        const LogStreamRunning(),
+        const LogStreamEnded(
+          LogStreamEndReason.failed,
+          detail: 'journal read interrupted',
+        ),
+      ]);
+      expect(link.commands, hasLength(2));
+    });
+
     test('an empty page after a cursor is the oldest record', () async {
       expect(await read('k', _spec(_kernel, after: _cursor(1))), _oldest);
       expect(link.commands, hasLength(1));

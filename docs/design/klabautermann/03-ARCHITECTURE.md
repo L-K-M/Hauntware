@@ -2542,16 +2542,17 @@ time through `HostCommands.commandLine`, and answers each open with a
   last complete lines or records. Journal lines that are not JSON
   objects count as dropped.
 - The kernel log reads `journalctl -k -b` and falls back to
-  `dmesg --json --decode` when that ran to its end without a kernel
-  record, whatever its exit status. That is what an account outside
+  `dmesg --json --decode` when that exited without a kernel record,
+  whatever its exit code. That is what an account outside
   `systemd-journal`, `adm` and `wheel` sees, since kernel entries are
   never its own (K04's `kPanelNeeds`), and what a host without
   journalctl or without kernel entries in its journal gives, so the
   fallback needs neither the profile nor another probe. It never
   follows a cursor (an empty older page is the oldest record), a cut, a
-  timeout or a lost link. `LogStreamRunning` names the reader
-  (`LogReader.fallback`), so the view can say where even an empty read
-  came from; a failed fallback ends with `dmesg`'s reason and output.
+  signal, a timeout or a lost link, which end the read as failed.
+  `LogStreamRunning` names the reader (`LogReader.fallback`), so the view
+  can say where even an empty read came from; a failed fallback ends
+  with `dmesg`'s reason and output.
 - Exit 0 ends as window filled when the window is full, otherwise as
   oldest record reached, which a window after a cursor also reaches at
   its first entry older than `since` (10.1). Exit 127 (the shell's

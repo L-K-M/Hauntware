@@ -192,7 +192,11 @@ final class LogService {
         _deliver(read, out, _fileWindow(out, spec.window));
       case KernelLogSource():
         final journal = _journalWindow(out, spec.window);
-        if (spec.afterCursor != null || out.cut || journal.records.isNotEmpty) {
+        // Without an exit code journalctl did not run to its end: a cut,
+        // a signal or a lost link, which _failure reads.
+        if (spec.afterCursor != null ||
+            out.exit?.exitCode == null ||
+            journal.records.isNotEmpty) {
           return _deliver(read, out, journal);
         }
         await _fallBack(read);
@@ -200,13 +204,13 @@ final class LogService {
   }
 
   /// Reads the kernel log from `dmesg` (LOG-03) after `journalctl -k -b`
-  /// ran to its end without a kernel record, whatever its status. That is
+  /// exited without a kernel record, whatever its exit code. That is
   /// what an account outside `systemd-journal`, `adm` and `wheel` sees,
   /// since kernel entries are never its own (`kPanelNeeds`, K04), and what
   /// a host without journalctl or without kernel entries in its journal
   /// gives. Never after a cursor, where an empty older page is the oldest
-  /// record and `dmesg` has no cursor, nor after a cut, timeout or lost
-  /// link.
+  /// record and `dmesg` has no cursor, nor after a cut, signal, timeout or
+  /// lost link.
   Future<void> _fallBack(_Read read) async {
     _emit(
       LogStreamState(
