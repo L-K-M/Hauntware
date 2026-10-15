@@ -1,0 +1,475 @@
+// The sample pipeline's rules (03 §6.4, §10.1): rates and their resets
+// (D43), the engine-owned seq (D44), gaps and sampling phases, collector
+// errors, profile changes and values withheld inside containers (D50).
+import 'dart:convert';
+
+import 'package:klabautermann_core/klabautermann_core.dart';
+import 'package:klabautermann_core/src/sampling/sample_pipeline.dart';
+import 'package:klabautermann_core/src/sampling/sample_results.dart';
+import 'package:klabautermann_core/src/sampling/sampler_session.dart';
+import 'package:klabautermann_host/klabautermann_host.dart'
+    show HwsSection, SectionStatus;
+import 'package:test/test.dart';
+
+import '../support/sample_frames.dart';
+
+final _t0 = DateTime.utc(2026, 10, 15, 12);
+DateTime _at(int seconds) => _t0.add(Duration(seconds: seconds));
+
+const _fast = {SampleStream.overview, SampleStream.core};
+
+/// Counters of one reading; [n] steps every counter by a fixed amount
+/// (CPU by 100 jiffies with 40 busy, `cpu0` by 100 with 25 busy, `eth0`
+/// by 2,000 bytes in and 1,000 out, `sda` by 8 sectors read and 16
+/// written).
+String _blocks(int n, {int btime = 1700000000, bool core = true}) {
+  final stat = [
+    '== stat ==',
+    'cpu  ${1000 + 30 * n} 0 ${500 + 10 * n} ${9000 + 60 * n} 0 0 0 0 0 0',
+    if (core) ...['cpu0 ${400 + 25 * n} ${4000 + 75 * n}', 'btime $btime'],
+  ];
+  return [
+    ...stat,
+    '== meminfo ==',
+    'MemTotal: 1000',
+    'MemAvailable: 400',
+    '== loadavg ==',
+    '2.00 1.00 0.50 1/100 42',
+    '== netdev ==',
+    'eth0 ${10000 + 2000 * n} ${5000 + 1000 * n}',
+    if (core) ...[
+      '== diskstats ==',
+      'sda 10 ${800 + 8 * n} 10 ${1600 + 16 * n}',
+      '== uptime ==',
+      '${1000 + 2 * n}.00 50.00',
+    ],
+  ].join('\n');
+}
+
+/// A fast reply carrying the given sections, [n] readings in.
+SamplerReplied _fastReply(
+  int n, {
+  int btime = 1700000000,
+  double? uptime,
+  bool overview = true,
+  bool core = true,
+}) => reply(n + 1, uptime ?? 1000.0 + 2 * n, [
+  if (overview) ok('overview', _blocks(n, core: false)),
+  if (core) ok('core', _blocks(n, btime: btime)),
+]);
+
+ServerSamplePipeline _sampling({
+  SampleSequence? sequence,
+  Set<SampleStream> streams = _fast,
+}) {
+  final pipeline = ServerSamplePipeline(
+    serverId: 'srv',
+    sequence: sequence ?? SampleSequence(),
+  );
+  pipeline.updateConditions(
+    streams: streams,
+    linkReady: true,
+    activity: AppActivity.foreground,
+    at: _t0,
+  );
+  return pipeline;
+}
+
+T _result<T extends SampleResult>(List<EngineEvent> events) =>
+    events.whereType<Sample>().map((s) => s.result).whereType<T>().single;
+
+List<String> _describe(List<EngineEvent> events) => [
+  for (final e in events)
+    switch (e) {
+      Sample(:final stream, :final seq) => 'sample ${stream.name} $seq',
+      Gap(:final streams, :final from, :final until, :final cause) =>
+        'gap ${(streams.map((s) => s.name).toList()..sort()).join(',')} '
+            '${from.difference(_t0).inSeconds}-'
+            '${until.difference(_t0).inSeconds} ${cause.name}',
+      SamplingState(:final phase, :final since) =>
+        'state ${phase.name} ${since.difference(_t0).inSeconds}',
+      HostProfileChanged() => 'profile',
+      _ => '$e',
+    },
+];
+
+/// A probe reply: the clock (Europe/Berlin at +0200) and the
+/// virtualization answers.
+SamplerReplied _probe({
+  String container = 'none',
+  String lxcfs = '',
+  int epoch = 1750000000,
+  String session = '10.0.0.1 50000 10.0.0.2 22',
+}) => reply(1, 1, [
+  ok('probe_kernel', 'Linux 6.1.0 x86_64'),
+  ok(
+    'probe_virt',
+    'virt_rc=0\nvirt=kvm\ncontainer_rc=${container == 'none' ? 1 : 0}\n'
+        'container=$container',
+  ),
+  ok('probe_lxcfs', 'mounts=$lxcfs'),
+  ok('probe_session', 'ssh_connection=$session'),
+  ok(
+    'probe_clock',
+    'epoch=$epoch\noffset=+0200\nTimezone=Europe/Berlin\n'
+        'etc_timezone=Europe/Berlin',
+  ),
+]);
+
+HwsSection _section(String name, SectionStatus status, String payload) =>
+    HwsSection(name, status, utf8.encode(payload));
+
+/// [p]'s conditions as of [at] seconds, described.
+List<String> _set(
+  ServerSamplePipeline p,
+  int at, {
+  Set<SampleStream> streams = _fast,
+  bool ready = true,
+  AppActivity activity = AppActivity.foreground,
+}) => _describe(
+  p.updateConditions(
+    streams: streams,
+    linkReady: ready,
+    activity: activity,
+    at: _at(at),
+  ),
+);
+
+void main() {
+  group('rates (D43)', () {
+    test('a reading diffs against the one before; a changed btime starts '
+        'a new series (reboot)', () {
+      final p = _sampling();
+      expect(
+        _result<CoreResult>(p.addTick(_fast, _fastReply(0), _at(0))).network,
+        isNull,
+      );
+      final core = _result<CoreResult>(p.addTick(_fast, _fastReply(1), _at(2)));
+      expect(core.cpu!.busy, closeTo(40, 1e-9));
+      expect(core.perCpu, {'cpu0': closeTo(25, 1e-9)});
+      expect(core.network!['eth0']!.txBytesPerSecond, 500);
+      expect(core.disks!['sda']!.writeBytesPerSecond, 4096);
+      expect(core.loadPerCore, 2);
+      expect(core.uptime, const Duration(seconds: 1002));
+
+      final rebooted = _result<CoreResult>(
+        p.addTick(_fast, _fastReply(2, btime: 1700009999), _at(4)),
+      );
+      expect(
+        [rebooted.cpu, rebooted.perCpu, rebooted.network, rebooted.disks],
+        [null, null, null, null],
+      );
+      expect(rebooted.bootedAt!.millisecondsSinceEpoch, 1700009999000);
+      final next = p.addTick(_fast, _fastReply(3, btime: 1700009999), _at(6));
+      expect(_result<CoreResult>(next).cpu!.busy, closeTo(40, 1e-9));
+    });
+
+    test('an uptime that went back starts a new series', () {
+      final p = _sampling()..addTick(_fast, _fastReply(0), _at(0));
+      final back = _result<OverviewResult>(
+        p.addTick(_fast, _fastReply(1, core: false, uptime: 5), _at(2)),
+      );
+      expect(back.cpu, isNull);
+      expect(back.network, isNull);
+
+      // The reboot's new btime then starts no second series.
+      final core = _result<CoreResult>(
+        p.addTick(
+          _fast,
+          _fastReply(2, overview: false, btime: 1700009999, uptime: 7),
+          _at(4),
+        ),
+      );
+      expect(core.cpu!.busy, closeTo(40, 1e-9));
+      expect(core.perCpu, isNull);
+    });
+
+    test('counters that all reset read as unknown, not as none', () {
+      final p = _sampling()..addTick(_fast, _fastReply(3), _at(0));
+      // Lower counters at a later uptime: each one reset (CN-04).
+      final lower = _result<CoreResult>(
+        p.addTick(_fast, _fastReply(0, uptime: 1010), _at(2)),
+      );
+      expect(
+        [lower.cpu, lower.network, lower.disks, lower.perCpu],
+        [null, null, null, null],
+      );
+    });
+
+    test('a core section serves the overview stream too', () {
+      final p = _sampling()
+        ..addTick(_fast, _fastReply(0, overview: false), _at(0));
+      final events = p.addTick(_fast, _fastReply(1, overview: false), _at(2));
+      expect(_describe(events), ['sample overview 3', 'sample core 4']);
+      expect(_result<OverviewResult>(events).cpu!.busy, closeTo(40, 1e-9));
+    });
+
+    test('load per core and the ARC wait for a core reading', () {
+      const overview = {SampleStream.overview};
+      final p = _sampling();
+      final before = _result<OverviewResult>(
+        p.addTick(overview, _fastReply(0, core: false), _at(0)),
+      );
+      expect(before.loadPerCore, isNull);
+      expect(before.memory!.zfsArcCountedAsUsed, isNull);
+
+      p.addTick({SampleStream.core}, _fastReply(1, overview: false), _at(2));
+      final after = _result<OverviewResult>(
+        p.addTick(overview, _fastReply(2, core: false), _at(4)),
+      );
+      expect(after.loadPerCore, 2);
+      // No arcstats block: no ARC to count.
+      expect(after.memory!.zfsArcCountedAsUsed, isFalse);
+    });
+  });
+
+  test('seq stays monotonic across sampler restarts and reconnects (D44)', () {
+    final sequence = SampleSequence();
+    final p = _sampling(sequence: sequence);
+    final seqs = <int>[];
+    void read(SamplerReplied r, int at) => seqs.addAll(
+      p.addTick(_fast, r, _at(at)).whereType<Sample>().map((s) => s.seq),
+    );
+
+    read(_fastReply(0), 0);
+    read(_fastReply(1), 2);
+    // The sampler restarts: its request numbers start again at 1.
+    p.addTick(_fast, const SamplerGap(3, SamplerGapReason.deadline), _at(4));
+    p.addTick(_fast, const SamplerSkipped(SamplerSkipReason.notReady), _at(6));
+    read(_fastReply(0), 8);
+    // The link drops and comes back.
+    _set(p, 9, ready: false);
+    _set(p, 9);
+    read(_fastReply(0), 10);
+    expect(seqs, [1, 2, 3, 4, 5, 6, 7, 8]);
+
+    // A pipeline built again for the server continues its count; another
+    // server counts on its own.
+    final again = _sampling(sequence: sequence);
+    expect(_describe(again.addTick(_fast, _fastReply(0), _at(12))), [
+      'sample overview 9',
+      'sample core 10',
+    ]);
+    expect(sequence.next('other'), 1);
+  });
+
+  group('gaps and phases', () {
+    test('a lost reading is a gap, and the next rate spans it', () {
+      final p = _sampling()..addTick(_fast, _fastReply(0), _at(0));
+      p.addTick(_fast, const SamplerGap(2, SamplerGapReason.lost), _at(2));
+      p.addTick(
+        _fast,
+        const SamplerSkipped(SamplerSkipReason.notReady),
+        _at(4),
+      );
+
+      final events = p.addTick(_fast, _fastReply(2), _at(6));
+      expect(_describe(events), [
+        'gap core,overview 0-6 readingLost',
+        'sample overview 3',
+        'sample core 4',
+      ]);
+      // Two steps of counters over four seconds of host uptime.
+      expect(
+        _result<CoreResult>(events).network!['eth0']!.rxBytesPerSecond,
+        1000,
+      );
+    });
+
+    test('a reply without a stream\'s section loses its reading', () {
+      final p = _sampling()..addTick(_fast, _fastReply(0), _at(0));
+      expect(_describe(p.addTick(_fast, _fastReply(1, core: false), _at(2))), [
+        'sample overview 3',
+      ]);
+      expect(_describe(p.addTick(_fast, _fastReply(2), _at(4))), [
+        'gap core 0-4 readingLost',
+        'sample overview 4',
+        'sample core 5',
+      ]);
+    });
+
+    test('no gap without an earlier reading, a busy sampler or a close', () {
+      final p = _sampling();
+      p.addTick(_fast, const SamplerGap(1, SamplerGapReason.lost), _at(0));
+      p.addTick(_fast, _fastReply(0), _at(2));
+      p.addTick(_fast, const SamplerSkipped(SamplerSkipReason.busy), _at(4));
+      p.addTick(_fast, const SamplerGap(2, SamplerGapReason.closed), _at(6));
+      expect(_describe(p.addTick(_fast, _fastReply(1), _at(8))), [
+        'sample overview 3',
+        'sample core 4',
+      ]);
+    });
+
+    test('the background pauses sampling and starts a new series', () {
+      final p = _sampling()..addTick(_fast, _fastReply(0), _at(0));
+      expect(_set(p, 3, activity: AppActivity.background), [
+        'state pausedInBackground 3',
+      ]);
+      expect(_set(p, 30), ['state sampling 30']);
+
+      final events = p.addTick(_fast, _fastReply(1), _at(32));
+      expect(_describe(events).first, 'gap core,overview 0-32 background');
+      expect(_result<CoreResult>(events).cpu, isNull);
+    });
+
+    test('a lost link outranks a lost reading and keeps its start', () {
+      final streams = {..._fast, SampleStream.fs};
+      final p = _sampling(streams: streams)
+        ..addTick(_fast, _fastReply(0), _at(0))
+        ..addTick({SampleStream.fs}, reply(1, 1001, [ok('fs', '')]), _at(1))
+        ..addTick(
+          _fast,
+          const SamplerGap(2, SamplerGapReason.deadline),
+          _at(5),
+        );
+      _set(p, 8, streams: streams, ready: false);
+      _set(p, 20, streams: streams);
+
+      expect(
+        _describe(p.addTick(_fast, _fastReply(1), _at(22))).first,
+        'gap core,overview 0-22 disconnected',
+      );
+      // Each stream closes its own gap when it is read again.
+      expect(
+        _describe(
+          p.addTick({SampleStream.fs}, reply(1, 1023, [ok('fs', '')]), _at(23)),
+        ),
+        ['gap fs 1-23 disconnected', 'sample fs 6'],
+      );
+    });
+
+    test('a stream subscribed again has no gap and starts a new series', () {
+      final streams = {..._fast, SampleStream.procs};
+      // pid 1 with [utime] user jiffies, read at [uptime].
+      SamplerReplied procs(int utime, double uptime) => reply(1, uptime, [
+        ok(
+          'procs',
+          '== stat ==\n1 1 (init) S 0 1 1 0 -1 0 0 0 0 0 $utime 0 0 0 20 0 1 '
+              '0 500 0 0',
+        ),
+      ]);
+      final p = _sampling(streams: streams)
+        ..addTick(_fast, _fastReply(0), _at(0))
+        ..addTick({SampleStream.procs}, procs(100, 1000), _at(1))
+        ..addTick(_fast, const SamplerGap(2, SamplerGapReason.lost), _at(2));
+      double? share(int utime, double uptime, int at) => _result<ProcsResult>(
+        p.addTick({SampleStream.procs}, procs(utime, uptime), _at(at)),
+      ).processes.single.cpuPercent;
+      _set(p, 3, streams: {SampleStream.overview});
+      _set(p, 3, streams: streams);
+
+      final events = p.addTick(_fast, _fastReply(1), _at(4));
+      expect(_describe(events).first, 'gap overview 0-4 readingLost');
+      final core = _result<CoreResult>(events);
+      expect(core.perCpu, isNull);
+      expect(core.disks, isNull);
+      // The overview counters went on, as the overview stream did.
+      expect(core.cpu, isNotNull);
+      expect(share(300, 1002, 5), isNull);
+      // 200 jiffies at 100 per second over two seconds: one full CPU.
+      expect(share(500, 1004, 7), 100);
+
+      // Without either metric stream, the overview counters go too.
+      _set(p, 8, streams: {SampleStream.procs});
+      _set(p, 9, streams: streams);
+      final overview = p.addTick(_fast, _fastReply(2), _at(10));
+      expect(_result<OverviewResult>(overview).cpu, isNull);
+    });
+
+    test('phases follow the conditions; readings count only while '
+        'sampling', () {
+      final p = ServerSamplePipeline(
+        serverId: 'srv',
+        sequence: SampleSequence(),
+      );
+      expect(_set(p, 1, ready: false), ['state waitingForLink 1']);
+      expect(p.addTick(_fast, _fastReply(0), _at(2)), isEmpty);
+      expect(_set(p, 3, ready: false), isEmpty);
+      expect(_set(p, 4, ready: false, activity: AppActivity.background), [
+        'state pausedInBackground 4',
+      ]);
+      expect(_set(p, 5), ['state sampling 5']);
+      expect(_set(p, 6, streams: const {}), ['state unsubscribed 6']);
+    });
+  });
+
+  test('a collector error becomes CollectorUnavailable with its stderr', () {
+    const units = {SampleStream.units, SampleStream.failedUnits};
+    final events = _sampling(streams: units).addTick(
+      units,
+      reply(1, 1000, [
+        (
+          'units',
+          SectionStatus.error,
+          'hw_timeout=absent\nFailed to connect to bus\x1b[0m\x07\n',
+        ),
+      ]),
+      _at(0),
+    );
+    expect(events.whereType<Sample>(), hasLength(2));
+    for (final sample in events.whereType<Sample>()) {
+      final result = sample.result as CollectorUnavailable;
+      expect(result.reason, CollectorUnavailableReason.error);
+      expect(result.detail, 'Failed to connect to bus[0m');
+    }
+
+    // No output is no detail; a long one keeps its end.
+    expect(
+      collectorUnavailable(_section('fs', SectionStatus.missing, ''))!.detail,
+      isNull,
+    );
+    final long = '${'x' * kCollectorDetailMaxChars}tail';
+    final detail = collectorUnavailable(
+      _section('fs', SectionStatus.timeout, long),
+    )!.detail!;
+    expect(detail, hasLength(kCollectorDetailMaxChars));
+    expect(detail, endsWith('tail'));
+  });
+
+  group('host profile', () {
+    test('a changed profile is reported, a new clock or session is not', () {
+      final p = _sampling();
+      expect(_describe(p.addProbe(_probe())), ['profile']);
+      final again = _probe(
+        epoch: 1750000100,
+        session: '10.0.0.9 1 10.0.0.2 22',
+      );
+      expect(p.addProbe(again), isEmpty);
+      expect(p.profile!.epochSeconds, 1750000100);
+      expect(_describe(p.addProbe(_probe(container: 'lxc'))), ['profile']);
+      expect(
+        p.addProbe(const SamplerGap(1, SamplerGapReason.deadline)),
+        isEmpty,
+      );
+    });
+
+    test('container values are withheld once the probe tells (D50)', () {
+      final p = _sampling();
+      final before = _result<CoreResult>(
+        p.addTick(_fast, _fastReply(0), _at(0)),
+      );
+      expect(before.withheld, isEmpty);
+      expect(before.load, isNotNull);
+
+      p.addProbe(_probe(container: 'lxc', lxcfs: '/proc/meminfo'));
+      final events = p.addTick(_fast, _fastReply(1), _at(2));
+      final core = _result<CoreResult>(events);
+      expect([core.cpu, core.load, core.disks], [null, null, null]);
+      expect(
+        core.withheld[MetricField.cpu],
+        MetricWithheldReason.containerHostFigures,
+      );
+      expect(core.withheld.containsKey(MetricField.memory), isFalse);
+      expect(core.memory!.zfsArcCountedAsUsed, isFalse);
+      expect(core.network!['eth0']!.rxBytesPerSecond, 1000);
+      expect(
+        _result<OverviewResult>(events).withheld.keys,
+        unorderedEquals([
+          MetricField.cpu,
+          MetricField.load,
+          MetricField.loadPerCore,
+        ]),
+      );
+    });
+  });
+}

@@ -461,8 +461,9 @@ final class Gap extends EngineEvent {
   /// The streams without readings. Pass an unmodifiable set.
   final Set<SampleStream> streams;
 
-  /// The last reading before the gap, or when sampling stopped, and when
-  /// readings resumed; both by the engine's clock in UTC.
+  /// The streams' last reading before the gap and the reading that
+  /// resumed them, which follows this event; both by the engine's clock
+  /// in UTC. A stream without an earlier reading has no gap.
   final DateTime from, until;
 
   final GapCause cause;
@@ -1647,8 +1648,8 @@ sealed class SampleResult {
 
 /// The stream's collector produced no value this time (03 §6.2). The app
 /// words [reason] through its catalog (D35); [detail] is the collector's
-/// error output as the host sent it, control characters stripped, or null
-/// when there was none.
+/// error output as the host sent it, control characters stripped and
+/// at most its last 4,096 characters kept, or null when there was none.
 final class CollectorUnavailable extends SampleResult {
   const CollectorUnavailable(this.reason, {this.detail});
 

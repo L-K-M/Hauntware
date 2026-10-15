@@ -1,0 +1,360 @@
+/// The sealed [SampleResult]s the engine derives from parsed collector
+/// payloads (03 §6.4, §10.1): rates and derived values (D43), values a
+/// container host's `/proc` would supply withheld with a reason (D50),
+/// and the error output of a collector without a value.
+library;
+
+import 'dart:convert';
+import 'dart:math';
+
+import 'package:klabautermann_host/klabautermann_host.dart';
+
+import '../engine/protocol.dart';
+
+/// The collector a [SampleStream] reads (03 §6.4): `units` serves both
+/// the Services panel and the health card (D45).
+Collector sampleStreamCollector(SampleStream stream) => switch (stream) {
+  SampleStream.overview => Collector.overview,
+  SampleStream.core => Collector.core,
+  SampleStream.fs => Collector.fs,
+  SampleStream.identity => Collector.identity,
+  SampleStream.procs => Collector.procs,
+  SampleStream.units || SampleStream.failedUnits => Collector.units,
+  SampleStream.timers => Collector.timers,
+  SampleStream.cron => Collector.cron,
+};
+
+/// The most a [CollectorUnavailable.detail] keeps of a collector's error
+/// output: its end, the latest output, as the sampler's stderr ring
+/// keeps. A section may carry up to 1 MiB, which would otherwise cross
+/// the isolate on every tick while the collector keeps failing.
+const kCollectorDetailMaxChars = 4096;
+
+/// [section]'s status as a [CollectorUnavailable], with its payload (the
+/// collector's captured error output) decoded, the program's
+/// `hw_timeout=absent` lines dropped and control characters stripped
+/// (03 §6.2); null for an `ok` section.
+CollectorUnavailable? collectorUnavailable(HwsSection section) {
+  final reason = switch (section.status) {
+    SectionStatus.ok => null,
+    SectionStatus.missing => CollectorUnavailableReason.missing,
+    SectionStatus.denied => CollectorUnavailableReason.denied,
+    SectionStatus.timeout => CollectorUnavailableReason.timeout,
+    SectionStatus.error => CollectorUnavailableReason.error,
+  };
+  if (reason == null) return null;
+
+  final text = stripControlChars(
+    utf8
+        .decode(section.payload, allowMalformed: true)
+        .split('\n')
+        .where((line) => line != kTimeoutAbsentMarker)
+        .join('\n'),
+  ).trim();
+  final detail = text.length > kCollectorDetailMaxChars
+      ? text.substring(text.length - kCollectorDetailMaxChars)
+      : text;
+  return CollectorUnavailable(reason, detail: detail.isEmpty ? null : detail);
+}
+
+/// The fields whose `/proc` file shows a container host's figures on the
+/// system [profile] describes (D50), each with that reason. Empty when
+/// the probe found no container, when it could not tell (no
+/// `systemd-detect-virt` and no lxcfs mount, which would otherwise blank
+/// every such host), and before the first probe answer.
+Map<MetricField, MetricWithheldReason> withheldMetrics(HostProfile? profile) {
+  if (profile == null) return const {};
+
+  bool host(SystemWideProcFile file) => profile.showsHostFigures(file) ?? false;
+  final stat = host(SystemWideProcFile.stat);
+  final loadavg = host(SystemWideProcFile.loadavg);
+  return {
+    for (final (field, withheld) in [
+      (MetricField.cpu, stat),
+      (MetricField.perCpu, stat),
+      (MetricField.bootedAt, stat),
+      (MetricField.memory, host(SystemWideProcFile.meminfo)),
+      (MetricField.load, loadavg),
+      (MetricField.loadPerCore, loadavg || stat),
+      (MetricField.disks, host(SystemWideProcFile.diskstats)),
+      (MetricField.cpuPressure, host(SystemWideProcFile.pressureCpu)),
+      (MetricField.ioPressure, host(SystemWideProcFile.pressureIo)),
+      (MetricField.memoryPressure, host(SystemWideProcFile.pressureMemory)),
+      (MetricField.uptime, host(SystemWideProcFile.uptime)),
+    ])
+      if (withheld) field: MetricWithheldReason.containerHostFigures,
+  };
+}
+
+/// The [OverviewResult] fields; [CoreResult] adds its own.
+const _overviewFields = {
+  MetricField.cpu,
+  MetricField.memory,
+  MetricField.load,
+  MetricField.loadPerCore,
+};
+
+/// One metric reading as the next one diffs against it: the snapshot
+/// and the host's uptime at the reply's start (the `B` marker, 03 §6.2).
+typedef _Reading<T> = ({T snapshot, double? uptime});
+
+/// Derives one server's [OverviewResult]s and [CoreResult]s (D43). It
+/// keeps the latest counters, so each reading's rates span the time since
+/// the reading before, as the host's uptime measures it, also across a
+/// lost reading or a sampler restart. A changed `btime` (a reboot), an
+/// uptime that went back, or [reset] starts a new series: the next
+/// reading has no rates. Both collectors read the same counters, so an
+/// `overview` reading after a `core` one diffs against it, and back.
+final class MetricDeriver {
+  _Reading<OverviewSnapshot>? _last;
+  _Reading<CoreSnapshot>? _lastCore;
+
+  // Facts about the host rather than counters, which survive [reset]:
+  // the boot time, the CPU count and whether a ZFS ARC exists, all from
+  // the latest `core` reading, since `overview` carries none of them.
+  int? _btime;
+  int? _cpuCount;
+  bool? _zfsArc;
+
+  /// Drops the counters, so the next reading starts a new series.
+  void reset() {
+    _last = null;
+    _lastCore = null;
+  }
+
+  /// Drops the counters only `core` reads (per-core and disk), so the
+  /// next `core` reading starts their series while `overview` goes on.
+  void forgetCore() => _lastCore = null;
+
+  /// The results of one reply that carried [overview], [core] or both,
+  /// with the host's [uptime] at its start. [profile] supplies the
+  /// counter width and the container facts.
+  ({OverviewResult? overview, CoreResult? core}) derive({
+    OverviewSnapshot? overview,
+    CoreSnapshot? core,
+    required double? uptime,
+    required HostProfile? profile,
+  }) {
+    final lastUptime = _last?.uptime;
+    if (uptime != null && lastUptime != null && uptime < lastUptime) {
+      // A reboot that an `overview` reading saw first: the next `core`
+      // reading's new `btime` must not start yet another series.
+      _btime = null;
+      reset();
+    } else if (core?.btime != null && _btime != null && core!.btime != _btime) {
+      reset();
+    }
+    if (core != null) {
+      _btime = core.btime ?? _btime;
+      if (core.perCpu.isNotEmpty) _cpuCount = core.perCpu.length;
+      _zfsArc = core.zfsArc != null;
+    }
+
+    final width = profile?.counterWidth ?? CounterWidth.bits64;
+    final withheld = withheldMetrics(profile);
+    T? keep<T>(MetricField field, T? value) =>
+        withheld.containsKey(field) ? null : value;
+    final zfsArcCountedAsUsed = switch ((_zfsArc, profile?.inContainer)) {
+      (false, _) => false,
+      (true, final inContainer?) => !inContainer,
+      _ => null,
+    };
+
+    // The values both results hold, against the latest reading.
+    OverviewResult shared(OverviewSnapshot next) {
+      final last = _last;
+      final elapsed = _elapsed(last?.uptime, uptime);
+      final (lastCpu, nextCpu, load) = (
+        last?.snapshot.cpu,
+        next.cpu,
+        next.loadavg,
+      );
+      final cpuCount = _cpuCount;
+      return OverviewResult(
+        cpu: lastCpu != null && nextCpu != null
+            ? keep(MetricField.cpu, cpuDeltaPercent(lastCpu, nextCpu))
+            : null,
+        memory: keep(
+          MetricField.memory,
+          _memory(next.meminfo, zfsArcCountedAsUsed),
+        ),
+        load: keep(MetricField.load, load),
+        loadPerCore: load != null && cpuCount != null && cpuCount > 0
+            ? keep(MetricField.loadPerCore, load.load1 / cpuCount)
+            : null,
+        // Namespaced: a container's own interfaces (D50).
+        network: last != null && elapsed != null
+            ? _known(
+                netRates(
+                  last.snapshot.netdev,
+                  next.netdev,
+                  elapsed,
+                  width: width,
+                ),
+                next.netdev.length,
+              )
+            : null,
+        withheld: {
+          for (final e in withheld.entries)
+            if (_overviewFields.contains(e.key)) e.key: e.value,
+        },
+      );
+    }
+
+    CoreResult? coreResult;
+    if (core != null) {
+      final o = shared(core);
+      final last = _lastCore;
+      final elapsed = _elapsed(last?.uptime, uptime);
+      final (seconds, btime) = (core.uptimeSeconds, core.btime);
+      coreResult = CoreResult(
+        cpu: o.cpu,
+        perCpu: last == null
+            ? null
+            : keep(
+                MetricField.perCpu,
+                _known(
+                  perCpuBusyPercent(last.snapshot.perCpu, core.perCpu),
+                  core.perCpu.length,
+                ),
+              ),
+        memory: o.memory,
+        load: o.load,
+        loadPerCore: o.loadPerCore,
+        network: o.network,
+        disks: last == null || elapsed == null
+            ? null
+            : keep(
+                MetricField.disks,
+                _known(
+                  diskRates(
+                    last.snapshot.diskstats,
+                    core.diskstats,
+                    elapsed,
+                    width: width,
+                  ),
+                  core.diskstats.length,
+                ),
+              ),
+        cpuPressure: keep(MetricField.cpuPressure, _stall(core.cpuPressure)),
+        ioPressure: keep(MetricField.ioPressure, _stall(core.ioPressure)),
+        memoryPressure: keep(
+          MetricField.memoryPressure,
+          _stall(core.memoryPressure),
+        ),
+        uptime: seconds == null
+            ? null
+            : keep(
+                MetricField.uptime,
+                Duration(microseconds: (seconds * 1e6).round()),
+              ),
+        bootedAt: btime == null
+            ? null
+            : keep(
+                MetricField.bootedAt,
+                DateTime.fromMillisecondsSinceEpoch(btime * 1000, isUtc: true),
+              ),
+        withheld: withheld,
+      );
+    }
+    final overviewResult = overview == null ? null : shared(overview);
+
+    // The latest counters: a core reading follows its reply's overview
+    // section, and holds every overview counter too.
+    if (core != null) {
+      _last = _lastCore = (snapshot: core, uptime: uptime);
+    } else if (overview != null) {
+      _last = (snapshot: overview, uptime: uptime);
+    }
+    return (overview: overviewResult, core: coreResult);
+  }
+}
+
+/// Seconds between two uptimes; null when either is unknown or time did
+/// not advance, since no rate spans that.
+double? _elapsed(double? previous, double? next) {
+  if (previous == null || next == null || next <= previous) return null;
+  return next - previous;
+}
+
+/// [rates] unless every one of the [reported] entries reset: an empty map
+/// means the host reported none (03 §1.2 principle 6), not that none
+/// could be computed.
+Map<String, V>? _known<V>(Map<String, V> rates, int reported) =>
+    rates.isEmpty && reported > 0 ? null : rates;
+
+/// MEM-01's breakdown in bytes from `/proc/meminfo`'s kB (7.1): used is
+/// total less `MemAvailable`, and cache counts reclaimable slab as
+/// procps' `free` does (`Cached` plus `SReclaimable`).
+MemoryUsage? _memory(MemInfo m, bool? zfsArcCountedAsUsed) {
+  if (m.fields.isEmpty) return null;
+
+  int? bytes(int? kb) => kb == null ? null : kb * 1024;
+  final cached = m.cachedKb;
+  final swapTotal = m.swapTotalKb;
+  final swapFree = m.swapFreeKb;
+  return MemoryUsage(
+    totalBytes: bytes(m.totalKb),
+    usedBytes: bytes(m.usedKb),
+    availableBytes: bytes(m.availableKb),
+    buffersBytes: bytes(m.buffersKb),
+    cachedBytes: bytes(
+      cached == null ? null : cached + (m.sReclaimableKb ?? 0),
+    ),
+    sharedBytes: bytes(m.shmemKb),
+    swapTotalBytes: bytes(swapTotal),
+    swapUsedBytes: swapTotal != null && swapFree != null
+        ? bytes(max(0, swapTotal - swapFree))
+        : null,
+    zfsArcCountedAsUsed: zfsArcCountedAsUsed,
+  );
+}
+
+StallShares? _stall(Pressure? p) {
+  if (p == null) return null;
+
+  StallAverages? averages(PressureLine? line) =>
+      line == null ? null : StallAverages(line.avg10, line.avg60, line.avg300);
+  return StallShares(some: averages(p.some), full: averages(p.full));
+}
+
+/// The process list with each process's CPU share since [previous], a
+/// reading [elapsed] seconds earlier (7.2, PRC-03); shares are null
+/// without one.
+ProcsResult procsResult(
+  ProcsSnapshot next, {
+  ProcsSnapshot? previous,
+  double? elapsed,
+}) {
+  final cpu = previous != null && elapsed != null
+      ? procCpuPercent(previous, next, elapsed)
+      : const <int, double>{};
+  return ProcsResult([
+    for (final p in next.processes)
+      ProcessRow(
+        pid: p.pid,
+        parentPid: p.ppid,
+        name: p.comm ?? p.name,
+        state: p.state,
+        userName: p.userName,
+        uid: p.uid,
+        threads: p.threads,
+        residentBytes: p.rssKb == null ? null : p.rssKb! * 1024,
+        cpuPercent: cpu[p.pid],
+        startTicks: p.startTicks,
+        // A `ps` fallback row joined its arguments with spaces, so their
+        // boundaries are lost (7.2); it reads as unavailable.
+        arguments: p.argv,
+      ),
+  ]);
+}
+
+/// SYS-01's identity, resolved from hostnamectl, then os-release and
+/// `uname` (03 §6.5).
+IdentityResult identityResult(IdentitySnapshot s) => IdentityResult(
+  hostname: s.hostname,
+  osPrettyName: s.effectiveOsPrettyName,
+  kernelName: s.effectiveKernelName,
+  kernelRelease: s.effectiveKernelRelease,
+  arch: s.effectiveArch,
+);

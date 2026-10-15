@@ -2134,9 +2134,15 @@ Phone and Cellular saver columns are cadence profiles, chosen by a request
 of their own rather than per subscription, and the health card's failed
 units are a stream of their own, apart from the Services panel's `units`
 (D45, 10.1). Rates
-are computed in the engine isolate (D43) from counter deltas with wrap
-detection and reset detection (a changed `btime` or a decreasing counter
-starts a new series); disk throughput uses 512-byte sectors (CN-04). A
+are computed in the engine isolate (D43) from counter deltas over the
+host's uptime between two replies, with wrap detection and reset
+detection: a changed `btime`, an uptime that went back or a decreasing
+counter starts a new series, and so do sampling that stopped for the
+background or a lost link and a stream no longer subscribed, so no rate
+averages over a pause. A lost reading keeps the series, and the next
+rate spans it. Disk throughput uses 512-byte sectors (CN-04). A reply
+with a `core` section and no `overview` one also serves the `overview`
+stream, since `core` reads every counter `overview` does. A
 filtered core sample is about 1.5 to 2.5 KB and an overview sample about
 600 B [R: r5 §3.3]; the filtering happens on the host, in the collector
 fragments (D48).
@@ -3697,27 +3703,36 @@ the engine in `engine_isolate.dart` beside it):
   averages without the kernel's cumulative stall counter, and uptime; the
   host sends no per-core breakdown, D48), each rate
   map null until a previous reading exists, so unknown never sums to
-  zero; for `procs`, per-process CPU shares with the start time PRC-02
-  checks; for `identity`, the strings SYS-01 shows, resolved in the
-  engine so the host's JSON never crosses (6.5); and the parsed tables
-  for `fs`, `units`, `failedUnits`, `timers` and `cron`. A
-  stream whose collector reports a section status other than `ok` (6.2)
-  gets `CollectorUnavailable` with that status as an enum and the
-  collector's error output, control characters stripped. Requests and
+  zero, and a `withheld` map naming each value left null because a
+  container host's `/proc` would supply it (D50); for `procs`,
+  per-process CPU shares with the start time PRC-02 checks; for
+  `identity`, the strings SYS-01 shows, resolved in the engine so the
+  host's JSON never crosses (6.5); and the parsed tables for `fs`,
+  `units`, `failedUnits`, `timers` and `cron`. A stream whose collector
+  reports a section status other than `ok` (6.2) gets
+  `CollectorUnavailable` with that status as an enum and the end of the
+  collector's error output (at most 4,096 characters), control
+  characters stripped. Requests and
   events name streams instead of `klabautermann_host`'s `Collector`,
   whose argument validators are functions (D52). `SamplingState` says
   per server whether no subscription names it, the link is not ready,
   the samplers run or the app's background pauses them, and since when
   (9.5 item 4); "not watched on this device" follows the app's monitor
   set (FL-21), since a monitored server's surfaces may all be hidden.
-  `Gap` arrives once readings resume, with both ends and its cause
-  (background, disconnected, or a reading lost to a deadline, a framing
-  error or a sampler restart, 6.2), so a chart labels the band (9.5 item
-  5, whose labels do not yet word a lost reading). While a gap is open,
+  `Gap` arrives once readings resume, before their samples, from the
+  streams' last reading (a stream without one has no gap) to the
+  resuming one, with its cause (background, disconnected, or a reading
+  lost to a deadline, a framing error or a sampler restart, 6.2), so a
+  chart labels the band (9.5 item 5, whose labels do not yet word a lost
+  reading). While a gap is open,
   a background or disconnected one shows in `SamplingState`; a lost
   reading leaves the phase at sampling and shows only as an ageing
-  `Sample.at`. Until the samplers are wired, the engine records
-  subscriptions and the profile and sends none of these events.
+  `Sample.at`. A lost link or the background outranks a lost reading
+  as the cause of a gap already open. The sample pipeline
+  (`klabautermann_core/lib/src/sampling/sample_pipeline.dart`, K23)
+  builds these events from sampler outcomes; until the scheduler wires
+  it (K22), the engine records subscriptions and the profile and sends
+  none of them.
 - **Version 3 (M2 logs).** Log streams joined version 3 the same way.
   The app picks the `streamId` of `OpenLogStream(streamId, spec)`, so it
   can close a stream before any answer arrives. Unlike a subscription
