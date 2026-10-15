@@ -152,12 +152,11 @@ void main() {
     await _openTab(tester, 'Access');
     final sentBefore = [...harness.engine.sent];
 
-    // Each button names the right whose fix it copies (03 §10.10).
+    // Each button names the right whose fix it copies (03 §10.10), after
+    // its visible label, so a voice command that says the label finds it
+    // (WCAG 2.5.3).
     for (final item in ['Journal group', 'Docker socket']) {
-      expect(
-        find.bySemanticsLabel('Copy the $item fix command'),
-        findsOneWidget,
-      );
+      expect(find.bySemanticsLabel('Copy command for $item'), findsOneWidget);
     }
     final copy = find.widgetWithText(OutlinedButton, 'Copy command').first;
     await tester.ensureVisible(copy);

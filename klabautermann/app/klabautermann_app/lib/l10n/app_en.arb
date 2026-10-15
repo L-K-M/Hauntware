@@ -623,9 +623,9 @@
   "@accessFixCopy": {
     "description": "Access tab: button that copies a fix command to the clipboard. The app never runs it."
   },
-  "accessFixCopyLabel": "Copy the {item} fix command",
+  "accessFixCopyLabel": "Copy command for {item}",
   "@accessFixCopyLabel": {
-    "description": "Access tab: screen-reader name of the Copy command button; item is the title of the row whose fix it copies.",
+    "description": "Access tab: screen-reader name of the Copy command button; item is the title of the row whose fix it copies. Starts with the button's visible text (accessFixCopy) so voice control finds it by that text.",
     "placeholders": {
       "item": {
         "type": "String",

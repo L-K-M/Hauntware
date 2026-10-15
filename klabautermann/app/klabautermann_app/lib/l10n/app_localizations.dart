@@ -1000,10 +1000,10 @@ abstract class AppLocalizations {
   /// **'Copy command'**
   String get accessFixCopy;
 
-  /// Access tab: screen-reader name of the Copy command button; item is the title of the row whose fix it copies.
+  /// Access tab: screen-reader name of the Copy command button; item is the title of the row whose fix it copies. Starts with the button's visible text (accessFixCopy) so voice control finds it by that text.
   ///
   /// In en, this message translates to:
-  /// **'Copy the {item} fix command'**
+  /// **'Copy command for {item}'**
   String accessFixCopyLabel(String item);
 
   /// Access tab: confirmation after copying a fix command, reminding that the app has not run it.

@@ -601,7 +601,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String accessFixCopyLabel(String item) {
-    return 'Copy the $item fix command';
+    return 'Copy command for $item';
   }
 
   @override
