@@ -510,7 +510,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get coverageFreshnessNoData => 'No data yet';
 
   @override
-  String get coverageServerChip => 'T0: read only while open';
+  String get coverageServerChip => 'T0: sampled only while open';
 
   @override
   String serverTitle(String name) {

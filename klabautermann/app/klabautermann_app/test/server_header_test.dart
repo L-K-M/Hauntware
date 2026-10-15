@@ -108,12 +108,12 @@ void main() {
   testWidgets('the coverage chip opens the coverage sheet', (tester) async {
     await _openWeb1(tester, const Size(1280, 800));
 
-    final chip = _inHeader(find.text('T0: read only while open'));
+    final chip = _inHeader(find.text('T0: sampled only while open'));
     expect(chip, findsOneWidget);
     expect(
       tester.getSemantics(chip),
       matchesSemantics(
-        label: 'T0: read only while open',
+        label: 'T0: sampled only while open',
         isButton: true,
         hasTapAction: true,
         hasFocusAction: true,

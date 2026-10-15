@@ -856,10 +856,10 @@ abstract class AppLocalizations {
   /// **'No data yet'**
   String get coverageFreshnessNoData;
 
-  /// The server header's coverage chip (03 §10.2): the server's execution tier, T0 (kept as written), and that Klabautermann reads this server only while a view has it open, since no monitor set watches it yet. Opens the coverage sheet.
+  /// The server header's coverage chip (03 §10.2): the server's execution tier, T0 (kept as written), and that Klabautermann takes readings from this server only while a view has it open, since no monitor set watches it yet. Not about read-only access, which the header shows separately. Opens the coverage sheet.
   ///
   /// In en, this message translates to:
-  /// **'T0: read only while open'**
+  /// **'T0: sampled only while open'**
   String get coverageServerChip;
 
   /// No description provided for @serverTitle.

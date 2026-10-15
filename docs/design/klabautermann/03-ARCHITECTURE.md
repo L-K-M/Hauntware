@@ -4449,8 +4449,9 @@ The state resolves through `ghost_servers`' indicator under the rail
 rule, as the server's row does, as a dot, an icon and a word, with
 the link's own word where the indicator shows none; the kit keeps its
 dot painter private, so the header draws the indicator's dot itself.
-The chip reads "T0: read only while open" until FL-21's monitor set
-exists, and opens the coverage sheet. The runtime is the access
+The chip reads "T0: sampled only while open" until FL-21's monitor set
+exists, and opens the coverage sheet; it avoids "read only", which the
+header's read-only indicator means. The runtime is the access
 check's engines over the probe's profile, as the Access tab lists
 them. On phones the header heads the body under the app bar, whose
 fixed-height bottom would clip it at large text.
