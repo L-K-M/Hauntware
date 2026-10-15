@@ -259,9 +259,8 @@ void main() {
     expect(find.text('18 pt'), findsOneWidget);
   });
 
-  testWidgets('the editor font follows the text size, and writes the app\'s', (
-    tester,
-  ) async {
+  testWidgets('the editor font follows the text size, and writes the app\'s '
+      'font', (tester) async {
     await pumpWindow(tester, SettingsWindowTab.appearance);
     final ligatures = find.byKey(const ValueKey('editor.ligatures'));
     await tester.scrollUntilVisible(

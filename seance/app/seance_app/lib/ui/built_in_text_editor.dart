@@ -354,7 +354,7 @@ class BuiltInTextEditorScreenState extends State<BuiltInTextEditorScreen>
               // on Séance's stack.
               textStyle: TextStyle(
                 fontFamily: widget.fontFamily.trim().isEmpty
-                    ? SeanceTheme.monoFallback.first
+                    ? editorDefaultFont.family
                     : widget.fontFamily.trim(),
                 fontFamilyFallback: SeanceTheme.monoFallback,
                 fontSize: widget.fontSize.toDouble(),

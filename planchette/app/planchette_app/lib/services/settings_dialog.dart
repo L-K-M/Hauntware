@@ -227,8 +227,8 @@ class _SettingsDialogState extends State<SettingsDialog> {
   );
 
   /// The included fonts, each drawn in its own face, with the editor's
-  /// default first among equals and marked. A family a hand-edited settings
-  /// file names leads the list, so opening it changes nothing.
+  /// default marked. A family a hand-edited settings file names leads the
+  /// list, so opening it changes nothing.
   Widget _fontMenu(ThemeData theme) {
     // The menu's value for the editor's default: storing no family keeps
     // the document on the default should it ever change.
