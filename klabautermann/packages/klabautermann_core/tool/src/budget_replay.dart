@@ -220,10 +220,11 @@ const _batchInterval = Duration(
 /// A stand-in for the follower K26 builds (03 §7.6, §10.1): it takes
 /// `journalctl -f -o json` output in the chunks a channel delivers,
 /// decodes and splits it into lines, parses each into a [JournalRecord]
-/// and hands out [LogBatch]es at most [kMaxLogBatchesPerSecond] a second.
-/// At most [maxPending] records wait for a batch; older ones are dropped
-/// and counted in the next batch's [LogBatch.dropped], so memory stays
-/// bounded when the engine falls behind.
+/// and hands out [LogBatch]es on a 50 ms beat, never more than
+/// [kMaxLogBatchesPerSecond] in any second. At most [maxPending] records
+/// wait for a batch; older ones are dropped and counted in the next
+/// batch's [LogBatch.dropped], so memory stays bounded when the engine
+/// falls behind.
 final class FollowReplay {
   FollowReplay({required this.streamId, required this.maxPending})
     : assert(maxPending > 0) {
@@ -239,6 +240,9 @@ final class FollowReplay {
   final _pending = ListQueue<LogRecord>();
   int _droppedSinceBatch = 0;
   Duration? _lastBatch;
+
+  /// When the latest [kMaxLogBatchesPerSecond] batches went, oldest first.
+  final _sentAt = ListQueue<Duration>(kMaxLogBatchesPerSecond);
 
   /// Lines parsed into records.
   int get linesParsed => _linesParsed;
@@ -279,10 +283,18 @@ final class FollowReplay {
   }
 
   /// The next batch at [now], from the follow's start: null until 50 ms
-  /// after the last one was due, or while nothing is waiting or dropped.
+  /// after the last one was due, while that would make more than
+  /// [kMaxLogBatchesPerSecond] in a second, or while nothing is waiting
+  /// or dropped.
   LogBatch? flush(Duration now) {
     final last = _lastBatch;
     if (last != null && now - last < _batchInterval) return null;
+    // A batch sent late on the beat can go less than 50 ms before the
+    // next, so the beat alone allows a 21st within a second.
+    if (_sentAt.length == kMaxLogBatchesPerSecond &&
+        now - _sentAt.first < const Duration(seconds: 1)) {
+      return null;
+    }
     if (_pending.isEmpty && _droppedSinceBatch == 0) return null;
 
     final batch = LogBatch(
@@ -292,6 +304,8 @@ final class FollowReplay {
     );
     _pending.clear();
     _droppedSinceBatch = 0;
+    if (_sentAt.length == kMaxLogBatchesPerSecond) _sentAt.removeFirst();
+    _sentAt.add(now);
     // A 50 ms beat rather than one that drifts by the caller's step;
     // after a longer pause it starts again from [now].
     _lastBatch = last != null && now - last < _batchInterval * 2

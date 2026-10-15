@@ -53,10 +53,12 @@ void main() {
     final log = json['log']! as Map<String, Object?>;
     expect(log['malformed'], 0);
     expect(log['linesFed']! as int, greaterThan(0));
-    // At most one batch per 50 ms, with one more for the window's edge.
+    // At most 20 batches in any second (03 §10.1).
     expect(
       log['batches']! as int,
-      lessThanOrEqualTo((json['windowSeconds']! as num) * 20 + 1),
+      lessThanOrEqualTo(
+        kMaxLogBatchesPerSecond * (json['windowSeconds']! as num).ceil(),
+      ),
     );
     // Every line the follow parsed reached the UI, was counted dropped or
     // was still waiting for its batch.

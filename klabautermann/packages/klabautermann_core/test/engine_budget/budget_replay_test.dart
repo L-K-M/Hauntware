@@ -2,6 +2,7 @@
 // fixture counters advancing with time, HWS/1 framing, the staggered
 // schedule and the follow's batches.
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:klabautermann_core/klabautermann_core.dart';
 import 'package:klabautermann_host/klabautermann_host.dart';
@@ -171,8 +172,8 @@ some avg10=0.05 avg60=0.02 avg300=0.01
     List<int> rows(Iterable<int> ids) =>
         utf8.encode([for (final i in ids) '${row(i)}\n'].join());
 
-    test('sends at most one batch per 50 ms, holding the records parsed '
-        'since the last', () {
+    test('sends batches on a 50 ms beat, holding the records parsed since '
+        'the last', () {
       final follow = FollowReplay(streamId: 's', maxPending: 100);
       expect(follow.flush(Duration.zero), isNull, reason: 'nothing pending');
 
@@ -208,6 +209,35 @@ some avg10=0.05 avg60=0.02 avg300=0.01
       follow.add(rows([7]));
       expect(follow.flush(const Duration(milliseconds: 349)), isNull);
       expect(follow.flush(const Duration(milliseconds: 350)), isNotNull);
+    });
+
+    test('sends at most 20 batches in any second and about 20 a second '
+        'whatever the steps', () {
+      // 10 ms steps with up to 2 ms of jitter, as the harness's timer
+      // fires, and one step 45 ms late, as a loaded machine delays one.
+      final random = math.Random(1);
+      final steps = [
+        for (var ms = 0; ms < 10000; ms += 10)
+          ms == 50
+              ? const Duration(milliseconds: 95)
+              : Duration(microseconds: ms * 1000 + random.nextInt(2000)),
+      ];
+      final follow = FollowReplay(streamId: 's', maxPending: 100);
+      final sent = <Duration>[];
+      for (final (i, now) in steps.indexed) {
+        follow.add(rows([i]));
+        if (follow.flush(now) != null) sent.add(now);
+      }
+
+      for (var i = kMaxLogBatchesPerSecond; i < sent.length; i++) {
+        expect(
+          sent[i] - sent[i - kMaxLogBatchesPerSecond],
+          greaterThanOrEqualTo(const Duration(seconds: 1)),
+          reason: 'batch $i at ${sent[i]}',
+        );
+      }
+      // The beat holds rather than drifting by the steps' jitter.
+      expect(sent.length, greaterThan(190));
     });
 
     test('drops the oldest records beyond maxPending and counts them in '
