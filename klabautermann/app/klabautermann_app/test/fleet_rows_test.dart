@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -136,11 +137,13 @@ SidebarRow _row(WidgetTester tester, String id) => tester.widget<SidebarRow>(
   ),
 );
 
-/// The age beside the row of the server [id], or null without one.
-String? _age(WidgetTester tester, String id) {
+/// The age beside the row of the server [id], or null without one;
+/// [skipOffstage] false finds it under a pushed route too.
+String? _age(WidgetTester tester, String id, {bool skipOffstage = true}) {
   final ages = find.descendant(
-    of: find.byKey(ValueKey(id)),
-    matching: find.byKey(kFleetRowAgeKey),
+    of: find.byKey(ValueKey(id), skipOffstage: skipOffstage),
+    matching: find.byKey(kFleetRowAgeKey, skipOffstage: skipOffstage),
+    skipOffstage: skipOffstage,
   );
   return ages.evaluate().isEmpty ? null : tester.widget<Text>(ages).data;
 }
@@ -353,6 +356,30 @@ void main() {
       expect(find.text('Online · web-1.example'), findsOneWidget);
       expect(_age(tester, 'srv-1'), 'Stale · 40 s');
       expect(staleIcon(), findsOneWidget);
+    });
+
+    testWidgets('a row under a pushed screen stops counting until it shows '
+        'again', (tester) async {
+      final rows = await _pump(tester, size: _barColumn);
+      await rows.emit(tester, [
+        const LinkState('srv-1', LinkReady()),
+        rows.sample('srv-1', SampleStream.core, _core(cpu: 12)),
+      ]);
+      unawaited(
+        tester
+            .state<NavigatorState>(find.byType(Navigator))
+            .push(MaterialPageRoute<void>(builder: (_) => const Scaffold())),
+      );
+      await tester.pumpAndSettle();
+      expect(_age(tester, 'srv-1'), isNull, reason: 'offstage');
+
+      rows.now = _t0.add(const Duration(seconds: 7));
+      await tester.pump(kFreshnessTick);
+      expect(_age(tester, 'srv-1', skipOffstage: false), '0 s');
+
+      tester.state<NavigatorState>(find.byType(Navigator)).pop();
+      await tester.pumpAndSettle();
+      expect(_age(tester, 'srv-1'), '7 s');
     });
   });
 

@@ -308,6 +308,9 @@ class FleetServerRow extends StatelessWidget {
     final overview = monitoring.sampleFor(id, SampleStream.overview);
     final core = monitoring.sampleFor(id, SampleStream.core);
     final fs = monitoring.sampleFor(id, SampleStream.fs);
+    // False while the row is offstage, as under a phone's pushed server
+    // screen; the row rebuilds when it changes.
+    final onstage = TickerMode.valuesOf(context).enabled;
     return ListenableBuilder(
       listenable: Listenable.merge([overview, core, fs]),
       builder: (context, _) {
@@ -317,12 +320,14 @@ class FleetServerRow extends StatelessWidget {
           fs: fs.value,
         );
         // Only a row with a reading has an age to keep counting, so only
-        // such a row keeps the clock ticking. The builder is the same
-        // either way: a subtree that changed shape when the first reading
-        // lands would remount the kit's row and drop its keyboard focus.
+        // such a row keeps the clock ticking, and only while it is on
+        // screen; back on stage it rebuilds with the clock's current time.
+        // The builder is the same either way: a subtree that changed shape
+        // when the first reading lands would remount the kit's row and drop
+        // its keyboard focus.
         final counting = samples.overview != null || samples.core != null;
         return ListenableBuilder(
-          listenable: counting ? monitoring.clock : _silent,
+          listenable: counting && onstage ? monitoring.clock : _silent,
           builder: (context, _) => _build(
             context,
             samples,
