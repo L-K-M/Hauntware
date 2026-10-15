@@ -4043,8 +4043,9 @@ the engine in `engine_isolate.dart` beside it):
   host's JSON never crosses (6.5); the parsed tables for `fs`,
   `units`, `failedUnits`, `timers` and `cron`; and for `cron` also the
   jobs rows of its lines and `cron.<period>` scripts, with next runs from
-  the sample's time in the server zone, and that zone's name or why the
-  runs use the probe's fixed offset (7.7, D57). A stream whose collector
+  the sample's time in the server zone, and that zone's name, why the
+  runs use the probe's fixed offset, or that no server zone is known
+  (7.7, D57). A stream whose collector
   reports a section status other than `ok` (6.2) gets
   `CollectorUnavailable` with that status as an enum and the end of the
   collector's error output (at most 4,096 characters), control

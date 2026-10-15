@@ -1995,7 +1995,11 @@ final class CronResult extends SampleResult {
     this.zoneName,
     this.zoneFallback,
   }) : jobs = List.unmodifiable(jobs),
-       assert(zoneName == null || zoneFallback == null);
+       assert(
+         zoneName == null || zoneFallback == null,
+         'zoneName and zoneFallback are mutually exclusive '
+         '(both null means the server zone is unknown)',
+       );
 
   final CronSnapshot cron;
 
