@@ -1,0 +1,107 @@
+{
+  "result": {
+    "processes": [
+      {
+        "pid": 1,
+        "ppid": 0,
+        "comm": "systemd",
+        "state": "S",
+        "uid": 0,
+        "gid": 0,
+        "name": "systemd",
+        "threads": 1,
+        "rssKb": 12288,
+        "userName": null,
+        "utime": 310,
+        "stime": 120,
+        "startTicks": 1200,
+        "argv": [
+          "/sbin/init"
+        ],
+        "argsJoined": null
+      },
+      {
+        "pid": 118,
+        "ppid": 1,
+        "comm": "cron",
+        "state": "S",
+        "uid": 0,
+        "gid": 0,
+        "name": "cron",
+        "threads": 1,
+        "rssKb": 2560,
+        "userName": null,
+        "utime": 12,
+        "stime": 4,
+        "startTicks": 1600,
+        "argv": [
+          "/usr/sbin/cron",
+          "-f"
+        ],
+        "argsJoined": null
+      },
+      {
+        "pid": 123,
+        "ppid": 1,
+        "comm": "sshd",
+        "state": "S",
+        "uid": 0,
+        "gid": 0,
+        "name": "sshd",
+        "threads": 1,
+        "rssKb": 7168,
+        "userName": null,
+        "utime": 40,
+        "stime": 9,
+        "startTicks": 1610,
+        "argv": [
+          "sshd: /usr/sbin/sshd -D [listener] 0 of 10-100 startups"
+        ],
+        "argsJoined": null
+      },
+      {
+        "pid": 2290,
+        "ppid": 123,
+        "comm": "bash",
+        "state": "S",
+        "uid": 1000,
+        "gid": 1000,
+        "name": "bash",
+        "threads": 1,
+        "rssKb": 5120,
+        "userName": null,
+        "utime": 3,
+        "stime": 1,
+        "startTicks": 8550000,
+        "argv": [
+          "-bash"
+        ],
+        "argsJoined": null
+      },
+      {
+        "pid": 52,
+        "ppid": 1,
+        "comm": "systemd-journal",
+        "state": "S",
+        "uid": 0,
+        "gid": 0,
+        "name": "systemd-journal",
+        "threads": 1,
+        "rssKb": 8192,
+        "userName": null,
+        "utime": 95,
+        "stime": 60,
+        "startTicks": 1350,
+        "argv": [
+          "/lib/systemd/systemd-journald"
+        ],
+        "argsJoined": null
+      }
+    ],
+    "argvSource": "cmdline",
+    "forgedHeaders": 0,
+    "skippedPids": 0,
+    "timeoutAbsent": false
+  },
+  "warnings": []
+}

@@ -111,6 +111,89 @@ void main() {
     expect(r.value.timezone, 'Europe/Berlin');
   });
 
+  group('virt', () {
+    test('names and none are answers', () {
+      final r = parseProbe([
+        ProbeSection(
+          'virt',
+          SectionStatus.ok,
+          'virt_rc=0\nvirt=lxc\ncontainer_rc=0\ncontainer=lxc',
+        ),
+        ProbeSection(
+          'lxcfs',
+          SectionStatus.ok,
+          'mounts=/proc/cpuinfo /proc/meminfo',
+        ),
+      ], _ctx);
+      expect(r.value.virtualization, 'lxc');
+      expect(r.value.container, 'lxc');
+      expect(r.value.lxcfsMounts, ['/proc/cpuinfo', '/proc/meminfo']);
+      expect(r.warnings, isEmpty);
+
+      final vm = parseProbe([
+        ProbeSection(
+          'virt',
+          SectionStatus.ok,
+          'virt_rc=0\nvirt=kvm\ncontainer_rc=1\ncontainer=none',
+        ),
+      ], _ctx);
+      expect(vm.value.virtualization, 'kvm');
+      expect(vm.value.container, 'none');
+    });
+
+    test('an error message is not a container name', () {
+      final r = parseProbe([
+        ProbeSection(
+          'virt',
+          SectionStatus.ok,
+          'virt_rc=1\nvirt=Failed to check for virtualization: Permission '
+              'denied\ncontainer_rc=1\ncontainer=Failed to check for '
+              'container: Permission denied',
+        ),
+      ], _ctx);
+      expect(r.value.virtualization, isNull);
+      expect(r.value.container, isNull);
+      expect(r.warnings, hasLength(2));
+    });
+  });
+
+  group('lxcfs', () {
+    test('no lxcfs mounts is an empty list, not unknown', () {
+      final r = parseProbe([
+        ProbeSection('lxcfs', SectionStatus.ok, 'mounts='),
+      ], _ctx);
+      expect(r.value.lxcfsMounts, isEmpty);
+      expect(r.value.lxcfsMounts, isNotNull);
+    });
+
+    test('an older probe without the area leaves it unknown', () {
+      final r = parseProbe([
+        ProbeSection('kfeat', SectionStatus.ok, 'psi=yes\ncgroup_v2=yes'),
+      ], _ctx);
+      expect(r.value.lxcfsMounts, isNull);
+    });
+
+    test('an unreadable /proc/mounts leaves it unknown', () {
+      final r = parseProbe([
+        ProbeSection('lxcfs', SectionStatus.error, ''),
+      ], _ctx);
+      expect(r.value.lxcfsMounts, isNull);
+      expect(r.value.areaStatuses['lxcfs'], SectionStatus.error);
+    });
+
+    test('paths outside /proc are dropped with a warning', () {
+      final r = parseProbe([
+        ProbeSection(
+          'lxcfs',
+          SectionStatus.ok,
+          'mounts=/proc/meminfo  /var/lib/lxcfs',
+        ),
+      ], _ctx);
+      expect(r.value.lxcfsMounts, ['/proc/meminfo']);
+      expect(r.warnings, hasLength(1));
+    });
+  });
+
   group('ProbeSection.fromEvent', () {
     test('strips the probe prefix and the timeout-absent marker', () {
       final s = ProbeSection.fromEvent(
