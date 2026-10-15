@@ -73,7 +73,10 @@ Duration? sampleAge(DateTime? at, DateTime now) {
 /// Views open and leave servers: the first open sends [Connect], the last
 /// leave [Disconnect] after the grace. Visible surfaces hold subscriptions,
 /// each under its own id (D45). The app's activity goes out when it
-/// changes. Samples land in a listenable per server and stream and a ring
+/// changes. A server that leaves the fleet takes its link and subscriptions
+/// with it in the engine (03 §5.1), so it is sent nothing while it is gone,
+/// and if it comes back, the views still holding it connect and subscribe
+/// again. Samples land in a listenable per server and stream and a ring
 /// per [MetricSeries], so a tick repaints only the surfaces painting it
 /// (§10.1 forbids a whole-app rebuild every 1 to 5 s).
 ///
@@ -105,7 +108,7 @@ final class MonitoringController extends ChangeNotifier {
   /// The engine's startup fleet goes to the fleet controller, its client's
   /// first listener (`main.dart`), so this is null until the next import;
   /// no sample can precede the views that subscribe it, which show fleet
-  /// servers only.
+  /// servers only, so until then every server counts as listed.
   Set<String>? _fleetIds;
 
   /// The streams the engine was asked to sample, by `(serverId,
@@ -187,6 +190,7 @@ final class MonitoringController extends ChangeNotifier {
       streams,
     );
     _followRingStreams(serverId, named);
+    if (!_listed(serverId)) return;
     _send(
       Subscribe(
         serverId: serverId,
@@ -200,8 +204,13 @@ final class MonitoringController extends ChangeNotifier {
     final named = _ringStreamsNamed(serverId);
     if (_subscribed.remove((serverId, subscriptionId)) == null) return;
     _followRingStreams(serverId, named);
+    if (!_listed(serverId)) return;
     _send(Unsubscribe(serverId: serverId, subscriptionId: subscriptionId));
   }
+
+  /// Whether the fleet lists [serverId]. The engine holds no link or
+  /// subscription for a server it does not list (03 §5.1).
+  bool _listed(String serverId) => _fleetIds?.contains(serverId) ?? true;
 
   /// The ring streams some subscription of [serverId] names.
   Set<SampleStream> _ringStreamsNamed(String serverId) => {
@@ -236,9 +245,10 @@ final class MonitoringController extends ChangeNotifier {
   /// screen). The first sends [Connect]; within the grace after the last
   /// leave the link is still held and nothing is sent.
   ///
-  /// Until links land the engine answers [Connect] and [Disconnect] with
-  /// [RequestRejected], which this controller ignores like every event it
-  /// does not consume: the views stay as they are and show no error.
+  /// An engine with links off, as the app spawns it until they are ready,
+  /// answers [Connect] with [RequestRejected], which this controller
+  /// ignores like every event it does not consume: the views stay as they
+  /// are and show no error.
   void openServer(String serverId) {
     final views = _openViews[serverId] ?? 0;
     _openViews[serverId] = views + 1;
@@ -249,7 +259,7 @@ final class MonitoringController extends ChangeNotifier {
       leaving.cancel();
       return;
     }
-    _send(Connect(serverId));
+    if (_listed(serverId)) _send(Connect(serverId));
   }
 
   /// A view [openServer] counted closed. The last sends [Disconnect] once
@@ -264,9 +274,10 @@ final class MonitoringController extends ChangeNotifier {
     }
 
     _openViews.remove(serverId);
-    // A stopped engine (or a disposed controller) holds no link, and a
-    // grace timer would only keep this controller alive to send nothing.
-    if (_engineStopped) return;
+    // A stopped engine (or a disposed controller) holds no link, nor does
+    // the engine hold one for a server the fleet no longer lists, so no
+    // grace timer waits to disconnect it.
+    if (_engineStopped || !_listed(serverId)) return;
     if (_linkGrace == Duration.zero) {
       _send(Disconnect(serverId));
       return;
@@ -308,7 +319,7 @@ final class MonitoringController extends ChangeNotifier {
         if (_fleetIds case final ids? when !ids.contains(serverId)) return;
         _server(serverId).profile.value = profile;
       case CatalogReplaced(:final entries):
-        _purge({for (final entry in entries) entry.serverId});
+        _replaceFleet({for (final entry in entries) entry.serverId});
       case EngineEvent():
         break;
     }
@@ -316,14 +327,41 @@ final class MonitoringController extends ChangeNotifier {
 
   /// SYN-08: a server that leaves the fleet takes its readings, last
   /// readings, rings, profile and seq floor with it, and comes back, if it
-  /// does, without them.
-  void _purge(Set<String> fleetIds) {
+  /// does, without them. The engine forgets its link and subscriptions too
+  /// (03 §5.1), so its pending [Disconnect] goes, and a server that comes
+  /// back gets [Connect] and [Subscribe] again for the views and surfaces
+  /// still holding it. Their counts and subscriptions stay meanwhile: the
+  /// views leave and unsubscribe when they unmount.
+  void _replaceFleet(Set<String> fleetIds) {
+    final before = _fleetIds;
     _fleetIds = fleetIds;
     _readings.removeWhere((serverId, readings) {
       if (fleetIds.contains(serverId)) return false;
       readings.dispose();
       return true;
     });
+    _leaving.removeWhere((serverId, timer) {
+      if (fleetIds.contains(serverId)) return false;
+      timer.cancel();
+      return true;
+    });
+
+    // Until the first fleet this controller saw, every server was listed.
+    if (before == null) return;
+    for (final serverId in fleetIds.difference(before)) {
+      if (_openViews.containsKey(serverId)) _send(Connect(serverId));
+      for (final MapEntry(key: (id, subscriptionId), value: streams)
+          in _subscribed.entries) {
+        if (id != serverId) continue;
+        _send(
+          Subscribe(
+            serverId: serverId,
+            subscriptionId: subscriptionId,
+            streams: streams,
+          ),
+        );
+      }
+    }
   }
 
   void _onEngineDone() {
