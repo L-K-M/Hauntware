@@ -33,9 +33,8 @@ final class LogReadRefused extends LogReadState {
 /// [close] once it no longer shows the read, which stops a read still
 /// running and releases this notifier.
 final class LogRead extends ChangeNotifier {
-  LogRead._(this.spec, this._onClose);
+  LogRead._(this._onClose);
 
-  final LogStreamSpec spec;
   final VoidCallback _onClose;
 
   LogReadState _state = const LogReadRequested();
@@ -105,7 +104,7 @@ final class LogReads {
   LogRead open(LogStreamSpec spec) {
     assert(!spec.follow, 'a follow is not a bounded read');
     final streamId = 'log-read-${_count++}';
-    final read = LogRead._(spec, () {
+    final read = LogRead._(() {
       // A read that ended has nothing left to stop.
       if (_reads.remove(streamId) != null) _send(CloseStream(streamId));
     });
