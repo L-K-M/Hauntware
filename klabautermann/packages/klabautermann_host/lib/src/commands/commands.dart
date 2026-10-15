@@ -166,10 +166,12 @@ abstract final class HostCommands {
     ];
   }
 
-  /// `dmesg --json`, the kernel log's fallback (LOG-03, 03 §7.6), read
-  /// by `parseDmesgJson`. It prints the whole ring buffer:
-  /// dmesg takes no record count, so the reader keeps the newest itself.
-  static List<String> dmesgJson() => const ['dmesg', '--json'];
+  /// `dmesg --json --decode`, the kernel log's fallback (LOG-03, 03
+  /// §7.6), read by `parseDmesgJson`. `--decode` names each record's
+  /// facility and level: the one number util-linux prints without it
+  /// changed layout in 2.40. It prints the whole ring buffer: dmesg takes
+  /// no record count, so the reader keeps the newest itself.
+  static List<String> dmesgJson() => const ['dmesg', '--json', '--decode'];
 
   /// `tail -n <lines> [-F] -- <path>` for one file (LOG-22, 03 §7.6): its
   /// last [lines] lines, then with [follow] each appended line, following

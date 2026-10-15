@@ -159,8 +159,8 @@ void main() {
   });
 
   group('dmesg and tail', () {
-    test('dmesg asks for JSON and takes nothing else', () {
-      expect(HostCommands.dmesgJson(), ['dmesg', '--json']);
+    test('dmesg asks for decoded JSON and takes nothing else', () {
+      expect(HostCommands.dmesgJson(), ['dmesg', '--json', '--decode']);
     });
 
     test('tail ends its options before the path', () {

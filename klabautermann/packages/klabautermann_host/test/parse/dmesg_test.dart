@@ -1,6 +1,6 @@
-// `dmesg --json` parser tests (03 §7.6, LOG-03): records decode one by
-// one, so a cut-off document keeps its complete records, and hostile
-// message text (03 §6.5) stays data.
+// `dmesg --json --decode` parser tests (03 §7.6, LOG-03): records decode
+// one by one, so a cut-off document keeps its complete records, and
+// hostile message text (03 §6.5) stays data.
 import 'dart:convert';
 
 import 'package:klabautermann_host/klabautermann_host.dart';
@@ -10,16 +10,21 @@ import 'package:test/test.dart';
 String _doc(List<String> records) =>
     '{\n   "dmesg": [\n      ${records.join(',')}\n   ]\n}\n';
 
-String _rec(String msg, {int pri = 6, String time = '    1.000000'}) =>
-    '{\n         "pri": $pri,\n         "time": $time,\n'
-    '         "msg": ${jsonEncode(msg)}\n      }';
+String _rec(
+  String msg, {
+  String fac = 'kern',
+  String pri = 'info',
+  String time = '    1.000000',
+}) =>
+    '{\n         "fac": "$fac",\n         "pri": "$pri",\n'
+    '         "time": $time,\n         "msg": ${jsonEncode(msg)}\n      }';
 
 void main() {
-  test('pri splits into level and facility, time into a duration', () {
+  test('fac and pri name the facility and level, time is a duration', () {
     final r = parseDmesgJson(
       _doc([
-        _rec('Linux version 6.1.0', pri: 5, time: '    0.000000'),
-        _rec('systemd[1]: Started', pri: 30, time: '12345.678901'),
+        _rec('Linux version 6.1.0', pri: 'notice', time: '    0.000000'),
+        _rec('systemd[1]: Started', fac: 'daemon', time: '12345.678901'),
       ]),
     );
     expect(r.warnings, isEmpty);
@@ -89,19 +94,51 @@ void main() {
     expect(r.value.map((e) => e.message), hostile);
   });
 
-  test('odd pri and time values read as unknown', () {
+  test('every util-linux name maps to its syslog number', () {
+    final r = parseDmesgJson(
+      _doc([
+        _rec('a', fac: 'kern', pri: 'emerg'),
+        _rec('b', fac: 'authpriv', pri: 'warn'),
+        _rec('c', fac: 'local7', pri: 'debug'),
+      ]),
+    );
+    expect(r.value.map((e) => (e.facility, e.level)), [
+      (0, 0),
+      (10, 4),
+      (23, 7),
+    ]);
+  });
+
+  test('a numeric pri reads as unknown: its layout changed in 2.40', () {
+    // daemon.info: util-linux 2.38 and 2.39 print 3 | 6 = 7, the number
+    // kern.debug has, and 2.40 prints (3 << 3) | 6 = 30.
+    final r = parseDmesgJson(
+      _doc([
+        '{"pri": 7, "time": 1.0, "msg": "a"}',
+        '{"pri": 30, "time": 1.0, "msg": "b"}',
+        '{"pri": "14", "time": 1.0, "msg": "c"}',
+      ]),
+    );
+    expect(r.warnings, isEmpty);
+    expect(
+      r.value.map((e) => (e.level, e.facility)),
+      everyElement((null, null)),
+    );
+  });
+
+  test('odd fac, pri and time values read as unknown', () {
     final r = parseDmesgJson(
       _doc([
         '{"pri": -1, "time": -2.0, "msg": "a"}',
-        '{"pri": "info", "time": "soon", "msg": "b"}',
-        '{"pri": "14", "time": "3.5", "msg": "c"}',
+        '{"fac": "kernel", "pri": "warning", "time": "soon", "msg": "b"}',
+        '{"fac": 3, "pri": "info", "time": "3.5", "msg": "c"}',
         '{"time": 1e300, "msg": "d"}',
       ]),
     );
     expect(r.value.map((e) => (e.level, e.facility, e.sinceBoot)), [
       (null, null, null),
       (null, null, null),
-      (6, 1, const Duration(milliseconds: 3500)),
+      (6, null, const Duration(milliseconds: 3500)),
       (null, null, null),
     ]);
   });

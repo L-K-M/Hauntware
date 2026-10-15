@@ -1,7 +1,15 @@
-/// Parser for `dmesg --json` output, the kernel log's fallback (LOG-03,
-/// 03 §7.6): one JSON document whose `dmesg` array holds an object per
-/// ring-buffer record with `pri` (facility and level), `time` (seconds
-/// since boot) and `msg`.
+/// Parser for `dmesg --json --decode` output, the kernel log's fallback
+/// (LOG-03, 03 §7.6): one JSON document whose `dmesg` array holds an
+/// object per ring-buffer record with `fac` and `pri` (the facility and
+/// level by name), `time` (seconds since boot) and `msg`.
+///
+/// Without `--decode`, util-linux prints facility and level as one `pri`
+/// number whose layout changed in 2.40: 2.38 and 2.39 OR the unshifted
+/// facility into the level (`LOG_MAKEPRI(rec->facility, rec->level)`, so
+/// daemon.info is 7, like kern.debug), and 2.40 shifts it
+/// (`(fac << 3) | pri`). Nothing in the output says which version wrote
+/// it, so a number reads as unknown; the names are the same in every
+/// version with `--json` (2.38 and later).
 ///
 /// The document is read record by record rather than in one decode, so
 /// output cut short by a byte cap or a closed channel keeps every complete
@@ -31,10 +39,14 @@ final class DmesgRecord {
   /// or not a non-negative number.
   final Duration? sinceBoot;
 
-  /// The syslog level (0 to 7) in `pri`; null when dmesg sent no number.
+  /// The syslog level (0 to 7) that `pri` names; null when absent or not
+  /// a util-linux level name.
   final int? level;
 
-  /// The syslog facility in `pri` (0 for the kernel's own records).
+  /// The syslog facility that `fac` names (0 for the kernel's own
+  /// records); null when absent or not a util-linux facility name.
+  /// util-linux 2.38 and 2.39 name facilities up to `ftp` (11) and print
+  /// neither field for a record with a later one.
   final int? facility;
 
   Map<String, Object?> toJson() => {
@@ -111,18 +123,62 @@ DmesgRecord? _record(String text) {
   final message = decoded['msg'];
   if (message is! String) return null;
 
-  final pri = switch (decoded['pri']) {
-    final int p when p >= 0 => p,
-    final String p => int.tryParse(p),
-    _ => null,
-  };
   return DmesgRecord(
     message: message,
     sinceBoot: _sinceBoot(decoded['time']),
-    level: pri == null || pri < 0 ? null : pri & 7,
-    facility: pri == null || pri < 0 ? null : pri >> 3,
+    level: _syslogNumber(_levelNames, decoded['pri']),
+    facility: _syslogNumber(_facilityNames, decoded['fac']),
   );
 }
+
+/// The index of [name] in [names], which is its syslog number; null for
+/// anything else, a number included.
+int? _syslogNumber(List<String> names, Object? name) {
+  if (name is! String) return null;
+  final i = names.indexOf(name);
+  return i < 0 ? null : i;
+}
+
+/// util-linux's `level_names`, indexed by syslog level.
+const _levelNames = [
+  'emerg',
+  'alert',
+  'crit',
+  'err',
+  'warn',
+  'notice',
+  'info',
+  'debug',
+];
+
+/// util-linux's `facility_names`, indexed by syslog facility (2.40 and
+/// later; 2.38 and 2.39 end at `ftp`).
+const _facilityNames = [
+  'kern',
+  'user',
+  'mail',
+  'daemon',
+  'auth',
+  'syslog',
+  'lpr',
+  'news',
+  'uucp',
+  'cron',
+  'authpriv',
+  'ftp',
+  'res0',
+  'res1',
+  'res2',
+  'res3',
+  'local0',
+  'local1',
+  'local2',
+  'local3',
+  'local4',
+  'local5',
+  'local6',
+  'local7',
+];
 
 /// The furthest `time` read, in seconds: about 31,700 years of uptime,
 /// far past any kernel and well inside a [Duration].

@@ -2420,7 +2420,10 @@ unless the user enables admin mode for that panel.
   its own `RemoteProcess`; stop with `TERM`, then close; resume from the last
   cursor after a reconnect; a per-view ring by lines and bytes with a
   line-length cap; a Live, Connecting, Paused or Disconnected chip. Kernel
-  log (LOG-03): `journalctl -k -b`, `dmesg --json` only as a fallback.
+  log (LOG-03): `journalctl -k -b`, `dmesg --json --decode` only as a
+  fallback; `--decode` names facility and level, because the single
+  `pri` number util-linux prints without it is `facility | level` in
+  2.38 and 2.39 and `(facility << 3) | level` from 2.40.
   Access notice (LOG-04): without `systemd-journal`, `adm` or `wheel`,
   `journalctl` silently returns only the user's own entries; the probe's
   `id -nG` drives a notice with the least-privileged fix. Text search
