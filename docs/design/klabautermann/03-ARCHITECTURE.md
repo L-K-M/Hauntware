@@ -598,7 +598,16 @@ Proposals awaiting the owner close the section; they are not decisions.
   and Hyper-V's synthetic NIC and the failover master add their enslaved
   VF's counters to their own [V: Linux `drivers/base/core.c`
   (`device_add_class_symlinks`), `drivers/net/hyperv/netvsc_drv.c`
-  (`netvsc_get_stats64`), `drivers/net/net_failover.c`]. Without such an
+  (`netvsc_get_stats64`), `drivers/net/net_failover.c`]. A Xen netback
+  port (`vif<domid>.<handle>` in dom0) has a `device` link too, to its
+  xenbus backend device, yet it is a guest's NIC, and the bridge or Open
+  vSwitch forwards its traffic across the uplink or another port again,
+  so an interface whose device's `nodename` lies under `backend/` counts
+  as virtual [V: Linux `drivers/net/xen-netback/interface.c`
+  (`xenvif_alloc`), `drivers/xen/xenbus/xenbus_probe.c` (`nodename`),
+  `drivers/xen/xenbus/xenbus_probe_backend.c`]; the test reads the
+  device, not the name, which a toolstack may change [V: Xen 4.19
+  `tools/hotplug/Linux/vif-common.sh` (`rename_vif`)]. Without such an
   interface, inside a container whose `eth0` is a veth peer, the
   interfaces that are neither a bridge (a `bridge/` directory) nor
   enslaved (a `master` link) stay, because a nested Docker bridge and its

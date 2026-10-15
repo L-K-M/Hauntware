@@ -273,8 +273,10 @@ hw_meminfo() {
 # interfaces backed by a device (a `device` link in sysfs) whose master,
 # if any, has none: bridges, bonds, VLANs, veths, tunnels and loopback
 # have no device and carry traffic a device already counts, and the
-# Hyper-V and failover masters already count their enslaved VF. Without
-# such an interface (inside a container, whose eth0 is a veth peer) the
+# Hyper-V and failover masters already count their enslaved VF. A Xen
+# netback port (a xenbus device whose nodename is under `backend/`) is
+# a guest's NIC seen from dom0 and counts as virtual. Without such an
+# interface (inside a container, whose eth0 is a veth peer) the
 # interfaces that are neither a bridge nor enslaved stay, because a
 # nested bridge and its ports repeat what eth0 counts; when that leaves
 # none, or without sysfs, every interface but lo stays. Rows that never
@@ -289,7 +291,10 @@ hw_netdev() {
         continue ;;
     esac
     _a="$_a$NL$_n $_rb $_tb"
-    if [ -e "/sys/class/net/$_n/device" ]; then
+    _b=
+    [ -r "/sys/class/net/$_n/device/nodename" ] &&
+      read -r _b <"/sys/class/net/$_n/device/nodename"
+    if [ -e "/sys/class/net/$_n/device" ] && [ "${_b%%/*}" != backend ]; then
       [ -e "/sys/class/net/$_n/master/device" ] || _d="$_d$NL$_n $_rb $_tb"
     elif [ ! -d "/sys/class/net/$_n/bridge" ] && [ ! -e "/sys/class/net/$_n/master" ]; then
       _v="$_v$NL$_n $_rb $_tb"

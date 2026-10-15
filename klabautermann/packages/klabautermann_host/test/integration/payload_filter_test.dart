@@ -411,6 +411,37 @@ void main() {
         expect(core.cpuPressure, isNull);
       });
 
+      test('Xen netback ports go, a netfront NIC stays', () async {
+        // A dom0: each guest port hangs off a xenbus backend device, and
+        // OVS forwards its traffic across eth0 or another port again.
+        const dev =
+            'h|\nh|\n  eth0: 1000 1 0 0 0 0 0 0 10 1 0 0 0 0 0 0\n'
+            'vif1.0: 60 1 0 0 0 0 0 0 1000 1 0 0 0 0 0 0\n'
+            'vif2.0: 0 1 0 0 0 0 0 0 50 1 0 0 0 0 0 0\n';
+        final dom0 = _smallHost({
+          'proc/net/dev': dev,
+          'sys/class/net/vif1.0/device/nodename': 'backend/vif/1/0\n',
+          'sys/class/net/vif2.0/device/nodename': 'backend/vif/2/0\n',
+        });
+        _mark(dom0, 'sys/class/net/eth0/device');
+        for (final port in ['eth0', 'vif1.0']) {
+          Link(
+            '${dom0.path}/sys/class/net/$port/master',
+          ).createSync('../ovs-system', recursive: true);
+        }
+        final core = (await _core(shell, dom0)).value;
+        expect(core.netdev.map((n) => '${n.name} ${n.rxBytes} ${n.txBytes}'), [
+          'eth0 1000 10',
+        ]);
+
+        // A PV guest, whose NIC is a xenbus frontend device.
+        final domU = _smallHost({
+          'sys/class/net/eth0/device/nodename': 'device/vif/0\n',
+        });
+        final guest = (await _core(shell, domU)).value;
+        expect(guest.netdev.map((n) => n.name), ['eth0']);
+      });
+
       test('NVMe path rows stay only while their head has no I/O', () async {
         // A kernel that accounts multipath I/O on the paths only.
         final root = _smallHost({
