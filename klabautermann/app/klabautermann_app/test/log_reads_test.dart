@@ -94,7 +94,14 @@ void main() {
 
     await accept([_rejected]);
     expect(first.state, isA<LogReadReported>());
-    expect(second.state, isA<LogReadRefused>());
+    expect(
+      second.state,
+      isA<LogReadRefused>().having(
+        (state) => state.rejection,
+        'rejection',
+        LogRejection.refused,
+      ),
+    );
     expect(second.ended, isTrue);
     expect(third.state, isA<LogReadRequested>());
 
@@ -145,8 +152,13 @@ void main() {
 
     await engine.close();
     await pumpEventQueue();
-    expect(running.state, isA<LogReadRefused>());
-    expect(requested.state, isA<LogReadRefused>());
+    final stopped = isA<LogReadRefused>().having(
+      (state) => state.rejection,
+      'rejection',
+      LogRejection.engineStopped,
+    );
+    expect(running.state, stopped);
+    expect(requested.state, stopped);
     expect(ended.state, isA<LogReadReported>());
   });
 }

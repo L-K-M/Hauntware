@@ -1242,6 +1242,10 @@
   "@servicesLogsRefused": {
     "description": "The app's engine cannot read logs yet and refused the request; no log lines are shown."
   },
+  "servicesLogsEngineStopped": "The app's engine stopped. Restart the app to read unit logs.",
+  "@servicesLogsEngineStopped": {
+    "description": "The app's engine, which starts once per launch, stopped before answering the unit-log read; no log lines are shown until the app restarts."
+  },
   "servicesLogsInvalid": "This unit's name cannot be used to read its logs.",
   "@servicesLogsInvalid": {
     "description": "The app refused to read logs for a unit name that fails its validation."

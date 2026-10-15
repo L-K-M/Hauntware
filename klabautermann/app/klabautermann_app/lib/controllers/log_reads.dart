@@ -23,11 +23,13 @@ final class LogReadReported extends LogReadState {
   final LogStreamStatus status;
 }
 
-/// The engine refused the open outright with a [RequestRejected], as it
-/// does for every open until its log service is wired (03 §10.1), or it
-/// stopped and will answer nothing.
+/// No answer for the read follows: the engine refused the open outright
+/// with a [RequestRejected], as it does for every open until its log
+/// service is wired (03 §10.1), or it stopped and will answer nothing.
 final class LogReadRefused extends LogReadState {
-  const LogReadRefused();
+  const LogReadRefused(this.rejection);
+
+  final LogRejection rejection;
 }
 
 /// One bounded log read the app opened: a window, which reads the newest
@@ -101,5 +103,6 @@ final class _ReadListener implements LogStreamListener {
       _read._report(LogReadReported(status));
 
   @override
-  void onLogRejected() => _read._report(const LogReadRefused());
+  void onLogRejected(LogRejection rejection) =>
+      _read._report(LogReadRefused(rejection));
 }

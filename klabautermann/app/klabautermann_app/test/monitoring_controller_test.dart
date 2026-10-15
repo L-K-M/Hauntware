@@ -52,7 +52,7 @@ final class _PanelStream implements LogStreamListener {
   void onLogStatus(LogStreamStatus status) => events.add(status);
 
   @override
-  void onLogRejected() => events.add('rejected');
+  void onLogRejected(LogRejection rejection) => events.add(rejection);
 }
 
 /// SVC-04's unit logs: a bounded window of one unit.
@@ -706,7 +706,7 @@ void main() {
 
       engine.emit(_openRejected);
       await settle();
-      expect(panel.events, ['rejected']);
+      expect(panel.events, [LogRejection.refused]);
     });
 
     test('one rejection refuses only the oldest open, a panel stream '
@@ -717,7 +717,7 @@ void main() {
 
       engine.emit(_openRejected);
       await settle();
-      expect(panel.events, ['rejected']);
+      expect(panel.events, [LogRejection.refused]);
       expect(read.state, isA<LogReadRequested>());
 
       engine.emit(_openRejected);

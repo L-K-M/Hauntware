@@ -14,7 +14,7 @@ final class _Recorder implements LogStreamListener {
   void onLogStatus(LogStreamStatus status) => events.add(status);
 
   @override
-  void onLogRejected() => events.add('rejected');
+  void onLogRejected(LogRejection rejection) => events.add(rejection);
 }
 
 /// A listener that runs [_onRejected] when refused, as a surface closing
@@ -31,7 +31,7 @@ final class _Closing implements LogStreamListener {
   void onLogStatus(LogStreamStatus status) {}
 
   @override
-  void onLogRejected() => _onRejected();
+  void onLogRejected(LogRejection rejection) => _onRejected();
 }
 
 final _spec = LogStreamSpec(
@@ -125,7 +125,7 @@ void main() {
     expect(recorder.events, isEmpty);
     engine.emit(_rejected);
     await pumpEventQueue();
-    expect(recorder.events, ['rejected']);
+    expect(recorder.events, [LogRejection.refused]);
   });
 
   test('an engine that stops refuses the streams still open', () async {
@@ -140,8 +140,11 @@ void main() {
 
     await engine.close();
     await pumpEventQueue();
-    expect(running.events, [const LogStreamRunning(), 'rejected']);
-    expect(waiting.events, ['rejected']);
+    expect(running.events, [
+      const LogStreamRunning(),
+      LogRejection.engineStopped,
+    ]);
+    expect(waiting.events, [LogRejection.engineStopped]);
     expect(closed.events, isEmpty);
   });
 
@@ -163,7 +166,7 @@ void main() {
 
     expect(recorder.events, isEmpty);
     await pumpEventQueue();
-    expect(recorder.events, ['rejected']);
+    expect(recorder.events, [LogRejection.engineStopped]);
   });
 
   test('tells from the probe whether only own journal entries show', () async {

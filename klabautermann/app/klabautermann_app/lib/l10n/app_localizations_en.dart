@@ -1081,6 +1081,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'Reading unit logs is not available in this version yet.';
 
   @override
+  String get servicesLogsEngineStopped =>
+      'The app\'s engine stopped. Restart the app to read unit logs.';
+
+  @override
   String get servicesLogsInvalid =>
       'This unit\'s name cannot be used to read its logs.';
 
