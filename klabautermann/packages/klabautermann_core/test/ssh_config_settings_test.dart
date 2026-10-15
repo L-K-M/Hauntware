@@ -115,6 +115,8 @@ void main() {
         'a#b',
         'a[b]',
         'SSH://db',
+        // Only the full scheme marks a URI.
+        'ssh:db',
       ]) {
         expect(_resolve('Host *\n  HostName 10.0.0.5\n', name), (
           '10.0.0.5',

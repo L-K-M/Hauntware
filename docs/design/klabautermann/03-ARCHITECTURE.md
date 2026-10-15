@@ -3624,8 +3624,8 @@ the engine in `engine_isolate.dart` beside it):
     `` '`"$\;&<>|(){} ``), and so is a host whose name holds `@` or
     starts with `ssh://` (lowercase only, as `parse_uri()` compares):
     `ssh.c` splits such a name at its last `@` into a user and a host,
-    or reads it as an ssh URI, before it reads the config, so that block
-    never applies.
+    or reads it as an ssh URI, before it reads the config, so no block
+    applies to such a name.
   - `ProxyJump` follows ssh (`parse_jump()` and `ssh.c`): `a,b` dials
     `a`, then `b` through `a`; `none` is direct. ssh reaches each hop
     with a nested ssh that reads the config for the hop's name, so a hop
