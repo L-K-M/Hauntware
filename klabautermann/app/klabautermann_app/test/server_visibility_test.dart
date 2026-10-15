@@ -127,11 +127,17 @@ void main() {
     expect(second.serverId, 'srv-2');
     expect(second.streams, first.streams);
 
-    // Deselected (the server left the fleet): everything is let go.
+    // Deselected (the server left the fleet): everything is let go, with
+    // nothing sent, since the engine dropped the link and subscription
+    // with the entry (03 §5.1).
+    final sent = engine.sent.length;
     engine.emit(CatalogReplaced(const []));
     await tester.pumpAndSettle();
-    expect(_linkRequests(engine).last, 'disconnect srv-2');
-    expect(_unsubscribes(engine).last.serverId, 'srv-2');
+    expect(engine.sent, hasLength(sent));
+    expect(
+      harness.monitoring.isSubscribed('srv-2', second.subscriptionId),
+      isFalse,
+    );
   });
 
   testWidgets('a restarted engine\'s controllers get every surface anew '

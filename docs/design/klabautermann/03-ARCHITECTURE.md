@@ -1836,9 +1836,11 @@ abstract interface class RemoteProcess {
   dial still on its way delays its next attempt as above. The engine
   drops the server's subscriptions and ignores a `Subscribe` for a
   server outside the fleet, which only a request that crossed the
-  removal sends. An entry that keeps its id under a new endpoint keeps
-  its link until it closes, as it keeps its readings (10.1, SYN-08's
-  endpoint change).
+  removal sends. The app sends nothing for the server while it is gone
+  and drops its pending `Disconnect`; when it comes back, the views and
+  surfaces still holding it send `Connect` and `Subscribe` again. An
+  entry that keeps its id under a new endpoint keeps its link until it
+  closes, as it keeps its readings (10.1, SYN-08's endpoint change).
 - `SshSession.runCommand` is re-implemented on the same exec core, so
   Séance's RemoteGit and command flows gain classification and exit signals
   with no other behaviour change; Séance adopting dead-peer detection for
@@ -4081,7 +4083,9 @@ the engine in `engine_isolate.dart` beside it):
   monitoring controller has no endpoint to compare on the first import
   after launch; that purge needs the engine to report the change
   (`EndpointChanged`) or the startup entries. With links off, the
-  engine's rejection of `Connect` shows nothing.
+  engine's rejection of `Connect` shows nothing. A server that leaves
+  the fleet is sent nothing until it comes back, when the views and
+  surfaces still holding it connect and subscribe again (5.1).
 - **`Reachability(serverId, status)`** reports one server's latest probe
   answer, `online`, `offline` or `unknown` as `seance_core`'s
   `ProbeStatus` gives it, apart from `LinkState`: a probe is a TCP
