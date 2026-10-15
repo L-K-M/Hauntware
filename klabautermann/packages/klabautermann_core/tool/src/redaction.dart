@@ -346,12 +346,19 @@ final class Redactor {
 
   /// Host and user names match as whole words (a letter or digit on
   /// neither side, so `home-anke.mount` matches and `anker` does not), a
-  /// home directory as a whole path, a `--redact` value anywhere.
+  /// home directory as a whole path, a `--redact` value anywhere. A `-`
+  /// also matches device-mapper's `--` and systemd's `\x2d`, so that
+  /// `web-01` matches in `/dev/mapper/web--01--vg-root`; a name may
+  /// follow a `\x2d`.
   static String _literalPattern(_Literal kind, String value) {
-    final escaped = RegExp.escape(latin1.decode(utf8.encode(value)));
+    final escaped = latin1
+        .decode(utf8.encode(value))
+        .split('-')
+        .map(RegExp.escape)
+        .join('(?:-{1,2}|(?:$_x2d){1,2})');
     return switch (kind) {
       _Literal.host ||
-      _Literal.user => '(?<![A-Za-z0-9])$escaped(?![A-Za-z0-9])',
+      _Literal.user => '(?:(?<![A-Za-z0-9])|(?<=$_x2d))$escaped(?![A-Za-z0-9])',
       _Literal.home => '$escaped(?![A-Za-z0-9._-])',
       _Literal.extra => escaped,
     };

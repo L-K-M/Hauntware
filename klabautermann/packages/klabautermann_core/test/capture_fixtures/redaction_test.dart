@@ -59,6 +59,26 @@ void main() {
       );
     });
 
+    test('a hyphenated name in its device-mapper and systemd forms', () {
+      const hyphenated = RedactionLiterals(
+        hostNames: ['web-01'],
+        userNames: ['anke-m'],
+      );
+      const units =
+          r'dev-mapper-web\x2d\x2d01\x2d\x2dvg\x2droot.device '
+          r'dev-mapper-vg0\x2dweb\x2d\x2d01.device "home-anke\\x2dm.mount"';
+      expect(
+        _redact('/dev/mapper/web--01--vg-root\n$units', literals: hyphenated),
+        '/dev/mapper/fixture-host--vg-root\n'
+        r'dev-mapper-fixture-host\x2d\x2dvg\x2droot.device '
+        r'dev-mapper-vg0\x2dfixture-host.device "home-user.mount"',
+      );
+      expect(Redactor(hyphenated).review(units), [
+        (1, 'still names the host'),
+        (1, 'still names a user'),
+      ]);
+    });
+
     test('a home directory goes before the user name', () {
       expect(
         _redact('/srv/anke-home/bin', literals: literals),

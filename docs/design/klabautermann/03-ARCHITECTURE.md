@@ -2344,7 +2344,8 @@ fragments (D48).
   hostnamectl) and each FQDN's first label, the names and home
   directories of personal accounts (uid 1000 to 60000, login.defs'
   defaults) and `--redact` values become fixed placeholders, names as
-  whole words in any case; `localhost` and the os-release `ID` and
+  whole words in any case, a `-` in them also as device-mapper's `--`
+  and systemd's `\x2d`; `localhost` and the os-release `ID` and
   `ID_LIKE` words stay, as fixtures need them. IPv4 and IPv6 addresses
   other than loopback and `0.0.0.0`, MAC addresses (also in `enx`/`wlx`
   names), UUIDs, hex ids of 32 or more digits (machine and boot ids),
