@@ -3489,11 +3489,14 @@ the engine in `engine_isolate.dart` beside it):
   - Lines split as `readconf.c` splits them: only space, tab, CR, LF and
     form feed are stripped from a line's end, and only space and tab
     separate arguments, so U+00A0, U+FEFF, `\v` and other whitespace are
-    part of a value, as they are of a `ProxyJump` hop. ssh reads a
-    byte-order mark at the top of the file as part of the first keyword
-    and rejects the whole config, so such a file imports no host and
-    counts every one; the app keeps the mark, which Dart's UTF-8 decoder
-    drops.
+    part of a value. A `ProxyJump` value ends sooner: `parse_jump()`
+    cuts it at the first C whitespace character after its first, `\v`
+    and `\f` among them, so the import drops those from its end and
+    refuses a hop that still holds one, while U+00A0 and U+FEFF stay
+    part of the hop. ssh reads a byte-order mark at the top of the file
+    as part of the first keyword and rejects the whole config, so such a
+    file imports no host and counts every one; the app keeps the mark,
+    which Dart's UTF-8 decoder drops.
   - Every block that applies to the name sets each value it names unless
     an earlier line set it, so the first value wins within a block and
     across blocks, and a later block for an alias adds only what earlier
