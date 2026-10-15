@@ -6,6 +6,7 @@ import 'package:klabautermann_app/l10n/app_localizations.dart';
 import 'package:klabautermann_app/ui/charts/charts.dart' show StackedBar;
 import 'package:klabautermann_app/ui/overview_panel.dart';
 import 'package:klabautermann_app/ui/server_surfaces.dart';
+import 'package:klabautermann_app/ui/system_panel.dart' show PanelSection;
 import 'package:klabautermann_core/klabautermann_core.dart';
 
 import 'support/charts.dart'
@@ -322,6 +323,9 @@ void main() {
 
   testWidgets('SYS-04: figures a container withholds say why', (tester) async {
     const reason = MetricWithheldReason.containerHostFigures;
+    const note =
+        'Inside this container these figures would be the host\'s, so they '
+        'are not shown.';
     final panel = await _pump(tester);
     await panel.sample(
       tester,
@@ -336,14 +340,39 @@ void main() {
     );
 
     // The per-core figures, memory and swap: three notes.
-    expect(
-      find.text(
-        'Inside this container these figures would be the host\'s, so they '
-        'are not shown.',
-      ),
-      findsNWidgets(3),
-    );
+    expect(find.text(note), findsNWidgets(3));
     expect(find.text('Busy 17%'), findsOneWidget);
+
+    // CPU and the load averages: one note in each of their cards.
+    await panel.sample(
+      tester,
+      CoreResult(
+        perCpu: const {'cpu0': 12},
+        memory: _memory,
+        withheld: const {
+          MetricField.cpu: reason,
+          MetricField.load: reason,
+          MetricField.loadPerCore: reason,
+        },
+      ),
+    );
+    for (final (title, notes) in [
+      ('CPU', 1),
+      ('Load', 1),
+      ('Memory', 0),
+      ('Swap', 0),
+    ]) {
+      expect(
+        find.descendant(
+          of: find.byWidgetPredicate(
+            (widget) => widget is PanelSection && widget.title == title,
+          ),
+          matching: find.text(note),
+        ),
+        findsNWidgets(notes),
+        reason: title,
+      );
+    }
   });
 
   testWidgets('OV-04: values grey once older than the core stream\'s limit, '

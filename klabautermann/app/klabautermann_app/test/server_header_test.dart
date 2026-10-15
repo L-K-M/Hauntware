@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ghost_theme/ghost_theme.dart' show GhostChrome;
 import 'package:klabautermann_app/controllers/fleet_controller.dart';
 import 'package:klabautermann_app/controllers/monitoring_controller.dart';
 import 'package:klabautermann_app/l10n/app_localizations.dart';
+import 'package:klabautermann_app/theme/app_theme.dart';
 import 'package:klabautermann_app/ui/server_header.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 
@@ -29,6 +31,28 @@ const _twoEnginesText =
 
 Finder _inHeader(Finder finder) =>
     find.descendant(of: find.byType(ServerHeader), matching: finder);
+
+/// The link state's dot: the one circle it draws, or null for none.
+BoxDecoration? _dot(WidgetTester tester) => tester
+    .widgetList<Container>(
+      find.descendant(
+        of: find.byType(ServerLinkState),
+        matching: find.byType(Container),
+      ),
+    )
+    .map((container) => container.decoration)
+    .whereType<BoxDecoration>()
+    .where((decoration) => decoration.shape == BoxShape.circle)
+    .singleOrNull;
+
+/// Whether the dot carries the bar of a refusal.
+bool _dotBarred(WidgetTester tester) => find
+    .descendant(
+      of: find.byType(ServerLinkState),
+      matching: find.byType(ColoredBox),
+    )
+    .evaluate()
+    .isNotEmpty;
 
 Future<AppHarness> _openWeb1(
   WidgetTester tester,
@@ -90,14 +114,23 @@ void main() {
     expect(_inHeader(find.text('web-1')), findsOneWidget);
     expect(_inHeader(find.text('Disconnected')), findsOneWidget);
     expect(_inHeader(find.byIcon(Icons.link_off)), findsOneWidget);
+    expect(_dot(tester), isNull, reason: 'nothing known, nothing to show');
     expect(_inHeader(find.text('Runtime: not checked yet')), findsOneWidget);
 
     harness.engine
       ..emit(const LinkState('srv-1', LinkReady()))
       ..emit(HostProfileChanged('srv-1', debianHost()));
     await tester.pumpAndSettle();
+    final chrome = GhostChrome.of(
+      tester.element(find.byType(ServerLinkState)),
+      klabautermannThemeStyle,
+    );
     expect(_inHeader(find.text('Connected')), findsOneWidget);
     expect(_inHeader(find.byIcon(Icons.link)), findsOneWidget);
+    // Live truth: a solid dot.
+    expect(_dot(tester)?.color, chrome.statusConnected);
+    expect(_dot(tester)?.border, isNull);
+    expect(_dotBarred(tester), isFalse);
     expect(
       find.bySemanticsLabel('Server status: Connected'),
       findsOneWidget,
@@ -116,6 +149,20 @@ void main() {
     await tester.pumpAndSettle();
     expect(_inHeader(find.text('Online')), findsOneWidget);
     expect(_inHeader(find.byIcon(Icons.cloud_done_outlined)), findsOneWidget);
+    // A probe's observation: a ring.
+    expect(_dot(tester)?.color, isNull);
+    expect(
+      _dot(tester)?.border,
+      Border.all(color: chrome.statusConnected, width: 2),
+    );
+
+    // A refusal: the offline colour with a bar through the dot.
+    harness.engine.emit(
+      const LinkState('srv-1', LinkBlocked(LinkBlockedReason.hostKeyChanged)),
+    );
+    await tester.pumpAndSettle();
+    expect(_dot(tester)?.color, chrome.statusFailed);
+    expect(_dotBarred(tester), isTrue);
   });
 
   testWidgets('the coverage chip opens the coverage sheet', (tester) async {
