@@ -187,9 +187,12 @@ final class ServerSamplePipeline {
   /// `overview` does. A reading lost to a deadline, a framing error or a
   /// sampler that is restarting opens a gap instead, as does a reply
   /// without a stream's section.
-  /// Outcomes outside [SamplingPhase.sampling] are ignored, as are ticks
-  /// skipped while another request is outstanding (their streams are
-  /// read by that one) and samplers that closed (the conditions say why).
+  /// Outcomes outside [SamplingPhase.sampling] are ignored, as are
+  /// samplers that closed (the conditions say why) and ticks skipped
+  /// while another request is outstanding. The pipeline opens no gap for
+  /// those, so the scheduler (K22) must hand over a busy skip only for
+  /// streams the outstanding request reads; a stream that request does
+  /// not read needs an outcome that opens a gap.
   List<EngineEvent> addTick(
     Set<SampleStream> streams,
     SamplerOutcome outcome,
