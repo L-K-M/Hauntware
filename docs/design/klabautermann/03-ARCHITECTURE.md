@@ -3587,9 +3587,12 @@ the engine in `engine_isolate.dart` beside it):
   and untyped `target` are gone. A window reads the newest `window` records and
   ends; they arrive newest first, so `afterCursor`, a journal record's
   cursor, reads on to older records, as `journalctl --reverse
-  --after-cursor` does. A follow delivers up to `window` earlier records
-  oldest first, then each new one as the host writes it, and
-  `afterCursor` resumes it after a record the app holds.
+  --after-cursor` does. journalctl refuses `--since` with a cursor, so
+  with one the engine applies the `since` filter itself: a window stops
+  at the first record older than it and ends as oldest record reached,
+  and a follow reads on from the cursor alone. A follow delivers up to
+  `window` earlier records oldest first, then each new one as the host
+  writes it, and `afterCursor` resumes it after a record the app holds.
   `LogBatch(streamId, records, dropped)` carries sealed records, which
   the engine resolves so the app parses nothing (6.5): a journal entry's
   cursor, time, priority as a syslog severity, unit, identifier, PID,

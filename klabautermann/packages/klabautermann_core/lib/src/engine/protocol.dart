@@ -864,7 +864,10 @@ final class LogStreamSpec {
   /// A [JournalRecord.cursor] the read continues after, in the stream's
   /// order: a window reads older records, a follow the ones written after
   /// it. File tails and `dmesg` have no cursor. Null starts at the newest
-  /// record.
+  /// record. journalctl refuses `--since` together with a cursor, so with
+  /// one the engine applies [JournalLogSource.since] itself: a window ends
+  /// with [LogStreamEndReason.oldestReached] at the first record older
+  /// than it, and a follow reads on from the cursor alone.
   final String? afterCursor;
 }
 
