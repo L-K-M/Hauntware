@@ -338,6 +338,22 @@ void main() {
       DateTime.utc(2026, 10, 25, 1, 30),
       CronDst.none,
     ));
+    // Nor does a line zone that falls back stand in for the unknown
+    // server's: London's repeated 01:30 runs in both passes, marked for
+    // London's own transition only.
+    expect(
+      line(
+        '30 1 * * *',
+        DateTime.utc(2026, 10, 24, 12),
+        london,
+        serverKnown: false,
+      ),
+      [
+        (DateTime.utc(2026, 10, 25, 0, 30), CronDst.nearTransition),
+        (DateTime.utc(2026, 10, 25, 1, 30), CronDst.nearTransition),
+        (DateTime.utc(2026, 10, 26, 1, 30), CronDst.none),
+      ],
+    );
   });
 
   test('@reboot and nonpositive counts yield no runs', () {
