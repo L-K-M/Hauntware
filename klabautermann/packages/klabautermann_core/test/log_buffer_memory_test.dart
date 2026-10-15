@@ -13,9 +13,15 @@ const _budgetBytes = 64 * 1024 * 1024;
 /// A line's index, so every line is its own string, then a space.
 String _prefix(int i) => '${i.toString().padLeft(6, '0')} ';
 
-/// The isolate group's live heap after a full collection, read with the VM
-/// service's `getAllocationProfile` (`gc: true`). Plain JSON-RPC over a
-/// WebSocket keeps `package:vm_service` out of the dependencies.
+/// The isolate group's live heap after a full collection: the VM service's
+/// private `_collectAllGarbage`, then `getMemoryUsage`. Plain JSON-RPC over
+/// a WebSocket keeps `package:vm_service` out of the dependencies.
+///
+/// Both replies are small on purpose. `getAllocationProfile` (`gc: true`)
+/// answers with about 3 MB of per-class JSON, and under load the socket
+/// can still hold one or two earlier replies at the next collection, so a
+/// reading could be 3 or 6 MB high. That is more than the margin the cut
+/// tests below leave between the heap and the text.
 final class _HeapProbe {
   _HeapProbe._(this._socket, this._isolateId, this._stopServiceOnClose)
     : _replies = StreamIterator<dynamic>(_socket);
@@ -42,13 +48,19 @@ final class _HeapProbe {
   }
 
   Future<int> liveHeapBytes() async {
+    await _call('_collectAllGarbage');
+    final usage = await _call('getMemoryUsage');
+    return usage['heapUsage']! as int;
+  }
+
+  Future<Map<String, Object?>> _call(String method) async {
     final id = '${_nextId++}';
     _socket.add(
       jsonEncode({
         'jsonrpc': '2.0',
         'id': id,
-        'method': 'getAllocationProfile',
-        'params': {'isolateId': _isolateId, 'gc': true},
+        'method': method,
+        'params': {'isolateId': _isolateId},
       }),
     );
     while (await _replies.moveNext()) {
@@ -58,10 +70,9 @@ final class _HeapProbe {
 
       final result = reply['result'];
       if (result is! Map<String, Object?>) {
-        throw StateError('getAllocationProfile failed: ${reply['error']}');
+        throw StateError('$method failed: ${reply['error']}');
       }
-      final usage = result['memoryUsage']! as Map<String, Object?>;
-      return usage['heapUsage']! as int;
+      return result;
     }
     throw StateError('The VM service closed the connection.');
   }
