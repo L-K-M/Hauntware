@@ -351,7 +351,9 @@ void main() {
         _expectDeclaredByteCounts(r.raw, r.nonce);
 
         // The local /proc exists, so procs must parse into the process
-        // table with pid 1 present and no fabricated framing.
+        // table with no fabricated framing, and with pid 1 present unless
+        // the host counted more than 500 processes and sent a subset,
+        // which need not include it (D48).
         final procs = r.ticks[1]!.section('procs')!;
         expect(procs.status, SectionStatus.ok);
         final parsed = parseProcs(
@@ -359,7 +361,12 @@ void main() {
           ParseContext.standard,
         );
         expect(parsed.value.processes, isNotEmpty);
-        if (File('/proc/1/stat').existsSync()) {
+        expect(
+          parsed.value.totalProcesses,
+          greaterThanOrEqualTo(parsed.value.processes.length),
+        );
+        if (parsed.value.selection == ProcsSelection.all &&
+            File('/proc/1/stat').existsSync()) {
           expect(parsed.value.processes.any((p) => p.pid == 1), isTrue);
         }
 

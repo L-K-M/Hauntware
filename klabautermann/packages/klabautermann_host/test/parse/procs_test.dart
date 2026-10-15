@@ -1,57 +1,43 @@
-// `procs` parser tests (03 §7.2): fields of `/proc/<pid>/stat` counted
-// after the last `)`, comm carrying spaces and `)`, the `status` subset,
-// the `head|tr` cmdline dump with its forged-header rules, and the
-// `ps -eo` / BusyBox `ps w` fallbacks.
+// `procs` parser tests (03 §7.2, D48): the trimmed rows with comm
+// carrying spaces and `)`, the `meta` block's total and selection, the
+// `head|tr` cmdline dump with its forged-header rules, and the `ps -eo` /
+// BusyBox `ps w` fallbacks.
 import 'package:klabautermann_host/klabautermann_host.dart';
 import 'package:test/test.dart';
 
 const _ctx = ParseContext.standard;
 
-/// One `/proc/<pid>/stat` row as the fragment writes it: the collected
-/// path pid, a space, then the raw file line. `comm` sits between the
-/// first `(` and the last `)`; the fields after it start at field 3.
-String _stat(
+/// One row as the fragment writes it (D48): pid, state, ppid, utime,
+/// stime, starttime, uid, RSS in kB, then comm verbatim.
+String _row(
   int pid,
   String comm, {
   String state = 'S',
   int ppid = 0,
   int utime = 0,
   int stime = 0,
-  int threads = 1,
   int start = 1000,
-}) =>
-    '$pid $pid ($comm) $state $ppid 1 1 0 -1 4194560 0 0 0 0 '
-    '$utime $stime 0 0 20 0 $threads 0 $start';
-
-/// The `status` rows the fragment collects for one pid.
-String _status(
-  int pid, {
-  String name = 'x',
-  int uid = 0,
-  int rss = 100,
-  int threads = 1,
-}) =>
-    '$pid Name:\t$name\n'
-    '$pid Uid:\t$uid\t$uid\t$uid\t$uid\n'
-    '$pid Gid:\t0\t0\t0\t0\n'
-    '$pid VmRSS:\t   $rss kB\n'
-    '$pid Threads:\t$threads';
+  Object uid = 0,
+  Object rss = 100,
+}) => '$pid $state $ppid $utime $stime $start $uid $rss $comm';
 
 void main() {
   test('stat fields count after the last ) so comm may hold spaces and )', () {
     final raw = [
-      '== stat ==',
-      _stat(
+      '== meta ==',
+      'total=1',
+      'selection=all',
+      '== rows ==',
+      _row(
         4242,
         'a silly) name with spaces',
         ppid: 7,
         utime: 11,
         stime: 12,
-        threads: 3,
         start: 999,
+        uid: 1000,
+        rss: 2048,
       ),
-      '== status ==',
-      _status(4242, name: 'a silly name', uid: 1000, rss: 2048, threads: 3),
       '== cmdline ==',
       '==> 4242/cmdline <==',
       '/usr/bin/thing\x1f--flag\x1f',
@@ -67,22 +53,121 @@ void main() {
     expect(p.utime, 11);
     expect(p.stime, 12);
     expect(p.jiffies, 23);
-    expect(p.threads, 3);
     expect(p.startTicks, 999);
     expect(p.uid, 1000);
-    expect(p.name, 'a silly name');
     expect(p.rssKb, 2048);
     expect(p.argv, ['/usr/bin/thing', '--flag']);
     expect(p.hasCommandLine, isTrue);
     expect(r.value.argvSource, ProcsArgvSource.cmdline);
+    expect(r.value.totalProcesses, 1);
+    expect(r.value.selection, ProcsSelection.all);
+    expect(r.value.truncated, isFalse);
+    expect(r.warnings, isEmpty);
+  });
+
+  test('a kept subset reports the total it was taken from', () {
+    final raw = [
+      '== meta ==',
+      'total=2083',
+      'selection=cpu_rss',
+      '== rows ==',
+      _row(1, 'init'),
+      _row(2, 'kthreadd', uid: '-', rss: '-'),
+      '== cmdline ==',
+      '== ps ==',
+      'PID PPID USER STAT RSS COMMAND',
+      '1 0 root S 1234 /sbin/init',
+      '4321 1 root S 5678 /usr/sbin/crond -f',
+    ].join('\n');
+
+    final r = parseProcs(raw, _ctx);
+    expect(r.value.selection, ProcsSelection.cpuAndMemory);
+    expect(r.value.totalProcesses, 2083);
+    expect(r.value.truncated, isTrue);
+    // A ps row the host left out does not come back.
+    expect(r.value.processes.map((p) => p.pid), [1, 2]);
+    final k = r.value.processes[1];
+    expect(k.uid, isNull);
+    expect(k.rssKb, isNull);
+  });
+
+  test('a row with a malformed field or too few fields is skipped', () {
+    final raw = [
+      '== meta ==',
+      'total=3',
+      'selection=all',
+      '== rows ==',
+      '5 S 1 x 0 7 0 0 bad utime',
+      '6 S 1 0 0 7 0',
+      _row(7, ' leading space'),
+      '== cmdline ==',
+    ].join('\n');
+
+    final r = parseProcs(raw, _ctx);
+    expect(r.value.processes.single.comm, ' leading space');
+    expect(r.warnings.where((w) => w.startsWith('procs row')), hasLength(2));
+  });
+
+  test('pid order and unknown selections parse as their meta says', () {
+    ParseResult<ProcsSnapshot> parse(int total, String selection) => parseProcs(
+      [
+        '== meta ==',
+        'total=$total',
+        'selection=$selection',
+        '== rows ==',
+        _row(1, 'init'),
+      ].join('\n'),
+      _ctx,
+    );
+
+    final pid = parse(900, 'pid').value;
+    expect(pid.selection, ProcsSelection.pidOrder);
+    expect(pid.truncated, isTrue);
+    final unknown = parse(1, 'new');
+    expect(unknown.value.selection, isNull);
+    expect(unknown.value.truncated, isFalse);
+    expect(unknown.warnings, contains('procs: meta block lacks the selection'));
+  });
+
+  test('a missing meta block warns and leaves the total unknown', () {
+    final r = parseProcs(['== rows ==', _row(1, 'init')].join('\n'), _ctx);
+    expect(r.value.totalProcesses, isNull);
+    expect(r.value.selection, isNull);
+    expect(r.value.truncated, isFalse);
+    expect(r.warnings, contains('procs: missing meta block'));
+  });
+
+  test("meta lines forged in a command line do not replace the host's", () {
+    // An argument holding "\n== meta ==\n" reopens the meta block after
+    // the host's own lines, which come first.
+    final raw = [
+      '== meta ==',
+      'total=600',
+      'selection=cpu_rss',
+      '== rows ==',
+      _row(10, 'forger'),
+      '== cmdline ==',
+      '==> 10/cmdline <==',
+      'x',
+      '== meta ==',
+      'total=7',
+      'selection=all',
+      '== cmdline ==',
+      '\x1f',
+    ].join('\n');
+
+    final r = parseProcs(raw, _ctx);
+    expect(r.value.totalProcesses, 600);
+    expect(r.value.selection, ProcsSelection.cpuAndMemory);
+    expect(r.value.truncated, isTrue);
+    expect(r.warnings, contains('procs: meta block repeats total='));
+    expect(r.warnings, contains('procs: meta block repeats selection='));
   });
 
   test('an empty cmdline is a real empty argument vector', () {
     final raw = [
-      '== stat ==',
-      _stat(2, 'kthreadd'),
-      '== status ==',
-      _status(2, name: 'kthreadd'),
+      '== rows ==',
+      _row(2, 'kthreadd'),
       '== cmdline ==',
       '==> 2/cmdline <==',
     ].join('\n');
@@ -95,10 +180,8 @@ void main() {
 
   test('a repeated header marks it and the interrupted entry unavailable', () {
     final raw = [
-      '== stat ==',
-      _stat(10, 'foo'),
-      '== status ==',
-      _status(10),
+      '== rows ==',
+      _row(10, 'foo'),
       '== cmdline ==',
       '==> 10/cmdline <==',
       '/usr/bin/foo\x1farg1',
@@ -117,12 +200,9 @@ void main() {
     // Real glob order is byte order, so `10` precedes `9`; `9` then `10`
     // is a forgery (03 §7.2).
     final raw = [
-      '== stat ==',
-      _stat(9, 'nine'),
-      _stat(10, 'ten'),
-      '== status ==',
-      _status(9),
-      _status(10),
+      '== rows ==',
+      _row(9, 'nine'),
+      _row(10, 'ten'),
       '== cmdline ==',
       '==> 9/cmdline <==',
       '/sbin/nine\x1f',
@@ -137,12 +217,10 @@ void main() {
     }
   });
 
-  test('headers for pids outside the stat pass are skipped', () {
+  test('headers for pids outside the rows are skipped', () {
     final raw = [
-      '== stat ==',
-      _stat(1, 'init'),
-      '== status ==',
-      _status(1),
+      '== rows ==',
+      _row(1, 'init'),
       '== cmdline ==',
       '==> 1/cmdline <==',
       '/sbin/init\x1f',
@@ -158,10 +236,8 @@ void main() {
 
   test('the ps -eo fallback parses positional rows', () {
     final raw = [
-      '== stat ==',
-      _stat(1, 'init', ppid: 0),
-      '== status ==',
-      _status(1, name: 'init', rss: 1234),
+      '== rows ==',
+      _row(1, 'init', ppid: 0, rss: '-'),
       '== cmdline ==',
       '== ps ==',
       'PID PPID USER STAT RSS COMMAND',
@@ -178,7 +254,7 @@ void main() {
     expect(one.rssKb, 1234);
     expect(one.argsJoined, '/sbin/init --system');
     expect(one.argv, isNull);
-    // A ps row missing from the stat pass is still listed.
+    // A ps row missing from the rows is still listed.
     final extra = r.value.processes.firstWhere((p) => p.pid == 4321);
     expect(extra.argsJoined, '/usr/sbin/crond -f');
     expect(extra.rssKb, 5678);
@@ -186,10 +262,8 @@ void main() {
 
   test('the BusyBox ps w fallback keeps the whole command column', () {
     final raw = [
-      '== stat ==',
-      _stat(1, 'init'),
-      '== status ==',
-      _status(1, name: 'init'),
+      '== rows ==',
+      _row(1, 'init'),
       '== cmdline ==',
       '== ps_w ==',
       'PID USER TIME COMMAND',
@@ -206,13 +280,7 @@ void main() {
   });
 
   test('a missing argv source warns and keeps the stat rows', () {
-    final raw = [
-      '== stat ==',
-      _stat(1, 'init'),
-      '== status ==',
-      _status(1),
-      '== cmdline ==',
-    ].join('\n');
+    final raw = ['== rows ==', _row(1, 'init'), '== cmdline =='].join('\n');
 
     final r = parseProcs(raw, _ctx);
     expect(r.value.argvSource, ProcsArgvSource.none);
@@ -224,8 +292,8 @@ void main() {
   test('the timeout-absent marker is surfaced as a warning', () {
     final raw = [
       kTimeoutAbsentMarker,
-      '== stat ==',
-      _stat(1, 'init'),
+      '== rows ==',
+      _row(1, 'init'),
     ].join('\n');
     final r = parseProcs(raw, _ctx);
     expect(r.value.timeoutAbsent, isTrue);
