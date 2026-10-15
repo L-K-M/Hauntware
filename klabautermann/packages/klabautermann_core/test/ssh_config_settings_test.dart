@@ -189,6 +189,24 @@ void main() {
         null,
         null,
       ));
+      // argv_split() reads a backslash and a space as a space only outside
+      // quotes.
+      expect(_resolve('Host web\n  HostName "a\\ b"\n  User u\\ v\n', 'web'), (
+        'a\\ b',
+        22,
+        'u v',
+        null,
+        null,
+      ));
+      // strdelim() skips one `=` after the keyword, with the whitespace
+      // around it, so a second one starts the value.
+      expect(_resolve('Host web\n  HostName==x\n  User=  =u\n', 'web'), (
+        '=x',
+        22,
+        '=u',
+        null,
+        null,
+      ));
     });
 
     test('a negated Host pattern turns the block off wherever it '
