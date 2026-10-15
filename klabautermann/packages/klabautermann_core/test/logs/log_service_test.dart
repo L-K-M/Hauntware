@@ -658,6 +658,13 @@ void main() {
       ]);
     });
 
+    test('a deeply nested journal value still ends the read', () async {
+      final deep = '${'{"a":' * 20000}1${'}' * 20000}';
+      final stdout = '{"__CURSOR":"${_cursor(1)}","MESSAGE":$deep}\n';
+      expect(await read('a', _spec(_journal), stdout: stdout), _oldest);
+      expect(texts('a'), ['<null>']);
+    });
+
     test('dmesg records arrive whole, a malformed one skipped', () async {
       const brackets = r'} ] { [ " \ },{';
       await fallBack(
