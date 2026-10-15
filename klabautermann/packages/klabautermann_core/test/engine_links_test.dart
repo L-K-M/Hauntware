@@ -7,6 +7,7 @@ import 'package:klabautermann_core/src/engine/engine_isolate.dart';
 import 'package:klabautermann_core/src/links/link_connector.dart';
 import 'package:klabautermann_core/src/links/link_supervisor.dart'
     show kMaxConnectsInFlight;
+import 'package:klabautermann_core/src/sampling/subscriptions.dart';
 import 'package:seance_core/seance_core.dart'
     show
         HostKey,
@@ -74,6 +75,7 @@ final class _Engine {
     String supportDirectory, {
     required bool linksEnabled,
     required LinkDialer dial,
+    SamplingSubscriptions? subscriptions,
   }) async {
     final port = ReceivePort();
     final messages = StreamIterator<Object?>(port);
@@ -85,6 +87,7 @@ final class _Engine {
         linksEnabled: linksEnabled,
       ),
       dial: dial,
+      subscriptions: subscriptions,
     );
     expect(await messages.moveNext(), isTrue);
     final engine = _Engine._(messages.current as SendPort, messages)
@@ -346,6 +349,34 @@ void main() {
       expect(await engine.next(), isA<CatalogReplaced>());
       expect(await engine.next(), isA<SshConfigImported>());
       expect(await engine.rejected(), 'Connect');
+    });
+
+    test('loses its subscriptions, links on or off', () async {
+      for (final linksEnabled in [true, false]) {
+        final subscriptions = SamplingSubscriptions();
+        final engine = await _Engine.start(
+          support.path,
+          linksEnabled: linksEnabled,
+          dial: dial,
+          subscriptions: subscriptions,
+        );
+        await engine.import(_webConfig);
+        engine
+          ..send(
+            const Subscribe(
+              serverId: _web,
+              subscriptionId: 'rail',
+              streams: {SampleStream.overview},
+            ),
+          )
+          // Rejected after the engine handled the Subscribe.
+          ..send(const Connect('ssh-config:gone'));
+        expect(await engine.rejected(), 'Connect');
+        expect(subscriptions.servers, {_web});
+
+        await engine.import(_otherConfig);
+        expect(subscriptions.servers, isEmpty);
+      }
     });
 
     test('withdraws the prompt its attempt waits on', () async {

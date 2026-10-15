@@ -59,10 +59,13 @@ final class EngineStart {
 /// included, gets [RequestRejected] until its milestone lands.
 ///
 /// [dial] replaces `SshLink.connect`, so tests can run the engine's links
-/// without a network.
+/// without a network. [subscriptions], when given, holds the sampling
+/// subscriptions, so tests can read what no event shows until samplers
+/// run them.
 void engineMain(
   EngineStart start, {
   @visibleForTesting LinkDialer dial = SshLink.connect,
+  @visibleForTesting SamplingSubscriptions? subscriptions,
 }) {
   final uiPort = start.uiPort;
   final commands = ReceivePort('klabautermann engine commands');
@@ -74,7 +77,7 @@ void engineMain(
   // Which streams each server's surfaces subscribed, and the cadence
   // profile (D45). Nothing samples them yet; the scheduler of 03 §6.4
   // reads them once the samplers are wired.
-  final sampling = SamplingSubscriptions();
+  final sampling = subscriptions ?? SamplingSubscriptions();
 
   // FL-02's imported hosts, in D13's device-local store (03 §4.10),
   // opened before the first request is handled. Each import replaces the
