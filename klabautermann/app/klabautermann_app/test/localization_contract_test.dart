@@ -7,7 +7,9 @@ import 'package:l10n_contract/l10n_contract.dart';
 // Klabautermann's localization contract (03 §10.10, D35, A11Y-05): the
 // suite's shared scanner (`tool/l10n_contract`, 03 §3.5 F1b) rejects every
 // authored literal in lib/ outside the ARB catalogue and this reviewed
-// allowlist, as in Poltergeist's localization_contract_test.dart. Two
+// allowlist, as in Poltergeist's localization_contract_test.dart. The
+// allowlist holds technical literals and one marked exception, UI copy
+// that docs/STATUS.md tracks until it moves to the ARB. Two
 // checks the scanner does not make stay from the app's interim test: every
 // ARB key is referenced from lib/, and no literal fills a slot that
 // _userFacingSlotLiteral lists, so a reviewed literal reused in such a slot
@@ -24,7 +26,8 @@ const _generatedLocalizationPaths = {
 // file suffix here.
 const _generatedDartSuffixes = <String>{};
 
-// Technical literals are reviewed per file so an allowlist cannot hide UI copy.
+// Literals are reviewed per file so an allowlist cannot hide UI copy. Every
+// entry is technical except the one marked "Exception", which STATUS tracks.
 const _allowedTechnicalLiterals = <String, Set<String>>{
   'lib/app.dart': {
     // The settings route's Navigator name.
@@ -181,8 +184,10 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     // Glyph probes that measure the line height (the space above) and the
     // advance, never shown.
     "'W'",
-    // User-visible, tracked for ARB: a field row joins the field name and
+    // Exception, UI copy: a field row joins the field name and
     // logJournalNotSent in code, so a translation cannot place the name.
+    // docs/STATUS.md (Localization contract) tracks the follow-up, an ARB
+    // message with a {name} placeholder that replaces this entry.
     r"'$name ${_l10n.logJournalNotSent}'",
   },
   // The command registry's ids, keys of the menus and shortcuts.
