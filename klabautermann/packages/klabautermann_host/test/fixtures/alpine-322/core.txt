@@ -1,35 +1,31 @@
 == stat ==
 cpu  2211 45 980 180044 210 0 33 0 0 0
-cpu0 1105 22 490 90022 105 0 16 0 0 0
-cpu1 1106 23 490 90022 105 0 17 0 0 0
+cpu0 1633 90127
+cpu1 1636 90127
 btime 1720000000
 == meminfo ==
-MemTotal:        1024000 kB
-MemFree:          409600 kB
-MemAvailable:     716800 kB
-Buffers:           20480 kB
-Cached:           245760 kB
-SReclaimable:      30720 kB
-Shmem:             10240 kB
-SwapTotal:        262144 kB
-SwapFree:         262144 kB
+MemTotal: 1024000
+MemFree: 409600
+MemAvailable: 716800
+Buffers: 20480
+Cached: 245760
+SReclaimable: 30720
+Shmem: 10240
+SwapTotal: 262144
+SwapFree: 262144
 == loadavg ==
 0.15 0.10 0.05 1/210 9876
 == netdev ==
-Inter-|   Receive                                                |  Transmit
- face |bytes    packets errs drop fifo frame compressed multicast|bytes    packets errs drop fifo colls carrier compressed
-    lo:  456789    3210    0    0    0     0          0         0   456789    3210    0    0    0     0       0        0
-  eth0: 55667788   65432    0    0    0     0          0         0 11223344   23456    0    0    0     0       0        0
+eth0 55667788 11223344
 == diskstats ==
- 254       0 vda 123456 123 9876543 654321 234567 234 12345678 987654 0 123456 1234567 0 0 0 0 0 0
- 254       1 vda1 500 0 40000 2000 10 0 5120 100 0 2000 2100 0 0 0 0 0 0
+vda 123456 9876543 234567 12345678
 == pressure_cpu ==
-some avg10=0.00 avg60=0.00 avg300=0.00 total=0
+some avg10=0.00 avg60=0.00 avg300=0.00
 == pressure_io ==
-some avg10=0.01 avg60=0.00 avg300=0.00 total=4321
-full avg10=0.00 avg60=0.00 avg300=0.00 total=2100
+some avg10=0.01 avg60=0.00 avg300=0.00
+full avg10=0.00 avg60=0.00 avg300=0.00
 == pressure_memory ==
-some avg10=0.00 avg60=0.00 avg300=0.00 total=0
-full avg10=0.00 avg60=0.00 avg300=0.00 total=0
+some avg10=0.00 avg60=0.00 avg300=0.00
+full avg10=0.00 avg60=0.00 avg300=0.00
 == uptime ==
 234567.89 468900.10

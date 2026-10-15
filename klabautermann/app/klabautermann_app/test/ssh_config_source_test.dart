@@ -110,6 +110,18 @@ void main() {
       expect((read as SshConfigText).text, '# caf\uFFFD\nHost a\n');
     });
 
+    test('keeps a byte-order mark, which ssh rejects the file for', () async {
+      // Dart's UTF-8 decoder drops a leading mark; ssh reads its bytes as
+      // part of the first keyword, so the engine must see it.
+      File(
+        '${dir.path}/config',
+      ).writeAsBytesSync([0xEF, 0xBB, 0xBF, ...'Host a\n'.codeUnits]);
+
+      final read = await readAt('config');
+
+      expect((read as SshConfigText).text, '\u{FEFF}Host a\n');
+    });
+
     test('refuses a file over the size cap', () async {
       File(
         '${dir.path}/config',

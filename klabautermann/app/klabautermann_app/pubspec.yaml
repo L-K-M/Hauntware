@@ -24,6 +24,10 @@ dependencies:
   # value the light and dark themes are built from (03 D9, §10.9).
   ghost_theme:
     path: ../../../planchette/packages/ghost_theme
+  # The log viewer's text search (LOG-05, 03 D56): Planchette's find-bar
+  # search with its case folding.
+  planchette_core:
+    path: ../../../planchette/packages/planchette_core
   # getApplicationSupportDirectory() for settings.json (03 §4.10); pinned
   # to Poltergeist's version.
   path_provider: 2.1.6

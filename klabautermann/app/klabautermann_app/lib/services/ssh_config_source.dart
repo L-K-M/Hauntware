@@ -8,6 +8,13 @@ import 'package:klabautermann_core/klabautermann_core.dart' show expandHomePath;
 /// the cap keeps a stray huge file from being copied into the engine.
 const int kSshConfigMaxBytes = 1024 * 1024;
 
+/// Whether [bytes] start with a UTF-8 byte-order mark.
+bool _startsWithByteOrderMark(List<int> bytes) =>
+    bytes.length >= 3 &&
+    bytes[0] == 0xEF &&
+    bytes[1] == 0xBB &&
+    bytes[2] == 0xBF;
+
 /// Why the ssh_config text is not available.
 enum SshConfigReadFailure {
   /// Nothing exists at the path: this computer has no ssh_config.
@@ -78,7 +85,13 @@ final class FileSshConfigSource implements SshConfigSource {
       }
       // ssh reads the config as bytes; a stray Latin-1 byte in a comment
       // must not make the whole file unreadable.
-      return SshConfigText(utf8.decode(bytes, allowMalformed: true));
+      final text = utf8.decode(bytes, allowMalformed: true);
+      // The decoder drops a leading byte-order mark, which ssh reads as
+      // part of the first keyword, rejecting the whole file. The engine
+      // must see it to import nothing too.
+      return SshConfigText(
+        _startsWithByteOrderMark(bytes) ? '\u{FEFF}$text' : text,
+      );
     } on FileSystemException {
       return const SshConfigUnavailable(SshConfigReadFailure.unreadable);
     }

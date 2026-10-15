@@ -19,4 +19,14 @@ host's too although lxcfs mounts both files: lxcfs passes
 cgroup v2 calls `io`. The `/proc/pressure` files, which lxcfs 5.0 does
 not serve, carry the host's values. `btime` is the host's boot time,
 because lxcfs passes the other lines of `/proc/stat` through unchanged.
-`/proc/net/dev` and the processes are the container's own.
+`/proc/net/dev` and the processes are the container's own. `core.txt`
+ends with the host's ZFS ARC, larger than the container's 2 GiB: lxcfs
+does not serve `/proc/spl/kstat/zfs/arcstats`, so the container is
+assumed to read the host's file [U] (03 D48).
+
+For collector-set version 4 (03 D48) a one-off script rewrote the
+`overview` and `core` payloads from their version 3 form into the
+filtered shapes, keeping the values: per-core busy and idle sums, the
+netdev counters of the interfaces the fragment keeps (lo, docker0 and
+unused interfaces go), whole-disk diskstats rows (partitions, dm and
+loop devices go), and PSI lines without `total`.
