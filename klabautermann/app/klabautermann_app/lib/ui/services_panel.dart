@@ -446,6 +446,7 @@ class _UnitPageState extends State<_UnitPage> {
     final read = _read;
     final unit = widget.unit;
     final states = unit == null ? null : unitStatesOf(unit);
+    final description = unit == null ? null : unitDescriptionOf(unit);
     String shown(String? value) => value ?? l10n.chartUnknownValue;
     final notice = read == null ? null : unitLogsNotice(l10n, read);
     return _headed(
@@ -469,7 +470,7 @@ class _UnitPageState extends State<_UnitPage> {
               ),
             ],
           ),
-          if (unit?.description case final description?) Text(description),
+          if (description != null) Text(description),
           Wrap(
             spacing: 24,
             runSpacing: 4,

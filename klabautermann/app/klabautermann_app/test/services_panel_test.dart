@@ -303,6 +303,11 @@ void main() {
     expect(_unknownIn('●'), findsNWidgets(4));
     expect(find.text('loaded'), findsNothing);
     expect(find.text('failed A web server'), findsNothing);
+
+    // Nor does the row's page show the shifted description.
+    await _open(tester, '●');
+    expect(find.text('Recent log lines'), findsOneWidget);
+    expect(find.text('failed A web server'), findsNothing);
   });
 
   testWidgets('words an unavailable unit list', (tester) async {
