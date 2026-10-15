@@ -78,10 +78,10 @@ void main() {
     // The shown panel only: the others are not built or not visible.
     expect(find.byType(PlaceholderPaneBody), findsOneWidget);
 
-    // Until links land the engine rejects these; nothing shows it.
-    engine
-      ..emit(const RequestRejected('Connect', 'not implemented yet'))
-      ..emit(const RequestRejected('SetAppActivity', 'not implemented yet'));
+    // An engine with links off rejects the connect; nothing shows it.
+    engine.emit(
+      const RequestRejected('Connect', 'links are off in this engine'),
+    );
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
     expect(find.byType(SnackBar), findsNothing);

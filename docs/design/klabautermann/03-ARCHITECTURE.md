@@ -1826,6 +1826,19 @@ abstract interface class RemoteProcess {
   queued attempts and redials wait for its return. A desktop keeps its
   links open (sampling pauses, 6.4), and a phone's closed links redial
   unattended on return.
+- **Fleet removal.** A server that leaves the fleet is forgotten. The
+  supervisor gives up its attempt and backoff and closes its link
+  without a `LinkState`, since the app drops a status with its entry
+  (10.1), and keeps nothing it learned: a server that comes back is
+  dialed as a new one, its block, keyboard-interactive mark and failure
+  count gone, while its host-key pins, kept by `host:port` (4.6), still
+  hold, so a changed key blocks it again on its first dial. A given-up
+  dial still on its way delays its next attempt as above. The engine
+  drops the server's subscriptions and ignores a `Subscribe` for a
+  server outside the fleet, which only a request that crossed the
+  removal sends. An entry that keeps its id under a new endpoint keeps
+  its link until it closes, as it keeps its readings (10.1, SYN-08's
+  endpoint change).
 - `SshSession.runCommand` is re-implemented on the same exec core, so
   Séance's RemoteGit and command flows gain classification and exit signals
   with no other behaviour change; Séance adopting dead-peer detection for
@@ -3919,6 +3932,20 @@ the engine in `engine_isolate.dart` beside it):
   `ghost_servers`' `GhostSessionState.failed`) unless the engine closed
   it on purpose with no failure kind: the kinds name only what the
   engine classified, and a lost link is a failure its reason explains.
+- **Links in the engine (M2).** The engine hands `Connect`,
+  `Disconnect` and `SetAppActivity` to its link supervisor (5.1, 5.12)
+  and `AnswerPrompt` to its prompt broker. `Connect` is the user's
+  connect, since the app sends it when a view opens, so it may prompt.
+  `RequestRejected` answers a `Connect` for a server the engine cannot
+  dial (outside the fleet, or without a config) and an `AnswerPrompt`
+  for a prompt that is not open or with an answer that does not fit it.
+  `IsolateEngineClient.spawn(linksEnabled:)` (`EngineStart.linksEnabled`,
+  off unless given) turns links on. Off, the engine has no supervisor,
+  so `Connect` gets `RequestRejected` and nothing dials, while
+  `Disconnect` and `SetAppActivity` change nothing. The composition root
+  keeps them off until pins outlive the engine (the catalog library's
+  `host_keys.json`, 4.10; until then the engine pins in memory) and the
+  app can show prompts; tests turn them on.
 - **Version 3 (M2 sampling).** Sampling joined version 3 without a bump,
   as the import store's fields joined version 2, before any version 3
   build shipped. `Subscribe` names the surface's `SampleStream`s: the 6.4
@@ -4018,8 +4045,8 @@ the engine in `engine_isolate.dart` beside it):
   gap copy names them ("paused: app in background", "in background").
   *Rejected:* unsubscribing everything on background (every subscription
   resent on return, and a background pause indistinguishable from
-  surfaces that closed); a field on `Subscribe` (D45). Until the link
-  supervisor lands, the engine answers it with `RequestRejected`.
+  surfaces that closed); a field on `Subscribe` (D45). The engine hands
+  it to the link supervisor (5.1).
 - **Visibility and lifecycle (M2, app side).** The monitoring controller
   sends `Connect` when the first view of a server opens (the desktop
   workspace's selection, the phone's pushed screen) and `Disconnect` 30 s
@@ -4053,9 +4080,8 @@ the engine in `engine_isolate.dart` beside it):
   client hands the startup fleet to the fleet controller alone, so the
   monitoring controller has no endpoint to compare on the first import
   after launch; that purge needs the engine to report the change
-  (`EndpointChanged`) or the startup entries. The engine's rejections of
-  `Connect`, `Disconnect` and `SetAppActivity` until links land show
-  nothing.
+  (`EndpointChanged`) or the startup entries. With links off, the
+  engine's rejection of `Connect` shows nothing.
 - **`Reachability(serverId, status)`** reports one server's latest probe
   answer, `online`, `offline` or `unknown` as `seance_core`'s
   `ProbeStatus` gives it, apart from `LinkState`: a probe is a TCP

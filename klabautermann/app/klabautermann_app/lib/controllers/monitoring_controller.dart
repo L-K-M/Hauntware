@@ -221,9 +221,10 @@ final class MonitoringController extends ChangeNotifier {
   /// screen). The first sends [Connect]; within the grace after the last
   /// leave the link is still held and nothing is sent.
   ///
-  /// Until links land the engine answers [Connect] and [Disconnect] with
-  /// [RequestRejected], which this controller ignores like every event it
-  /// does not consume: the views stay as they are and show no error.
+  /// An engine with links off, as the app spawns it until they are ready,
+  /// answers [Connect] with [RequestRejected], which this controller
+  /// ignores like every event it does not consume: the views stay as they
+  /// are and show no error.
   void openServer(String serverId) {
     final views = _openViews[serverId] ?? 0;
     _openViews[serverId] = views + 1;

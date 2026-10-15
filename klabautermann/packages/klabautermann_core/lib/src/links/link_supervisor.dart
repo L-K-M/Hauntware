@@ -77,9 +77,10 @@ typedef LinkConnect =
 /// - No attempt starts while the app is in the background; under
 ///   [BackgroundLinkPolicy.closeAfterGrace] links close after
 ///   [kBackgroundGracePeriod] and redial on return.
+/// - A server that leaves the fleet is forgotten ([forget]).
 ///
-/// Not wired into the engine yet, which still rejects `Connect`,
-/// `Disconnect` and `SetAppActivity`.
+/// The engine isolate owns it and hands it `Connect`, `Disconnect` and
+/// `SetAppActivity`.
 final class LinkSupervisor {
   /// [configFor] looks up a fleet server's config by id, null for an
   /// unknown or undialable one. [startTimer], [now] and [random] are test
@@ -165,6 +166,32 @@ final class LinkSupervisor {
     if (!_tearDown(server)) return;
 
     _set(server, const LinkClosed(LinkClosedReason.closedByOwner));
+    _pump();
+  }
+
+  /// Forgets [serverId], which left the fleet (03 §5.1): gives up its
+  /// attempt and backoff and closes its link as [disconnect] does, but
+  /// reports nothing, since the app drops a server's status with its
+  /// entry, and keeps nothing learned about it (a block, a
+  /// keyboard-interactive last connect, the failure count), so a server
+  /// that comes back starts over. A given-up dial still on its way keeps
+  /// the server's record until it returns, so the server's next attempt
+  /// waits for it.
+  void forget(String serverId) {
+    final server = _servers[serverId];
+    if (server == null) return;
+
+    _tearDown(server);
+    if (server.dialPending) {
+      server
+        ..status = const LinkIdle()
+        ..wanted = false
+        ..failures = 0
+        ..hold = _Hold.none
+        ..keyboardInteractive = false;
+    } else {
+      _servers.remove(serverId);
+    }
     _pump();
   }
 
@@ -276,7 +303,8 @@ final class LinkSupervisor {
     final server = attempt.server;
     final config = _configFor(server.id);
     if (config == null) {
-      // The server left the fleet while it waited.
+      // The server lost its config while the attempt waited: its entry
+      // can no longer be dialed, or it left the fleet without [forget].
       _drop(attempt);
       server.wanted = false;
       _set(server, const LinkClosed(LinkClosedReason.closedByOwner));
