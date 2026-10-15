@@ -1,0 +1,14 @@
+== os-release ==
+PRETTY_NAME="Debian GNU/Linux 12 (bookworm)"
+NAME="Debian GNU/Linux"
+VERSION_ID="12"
+VERSION="12 (bookworm)"
+VERSION_CODENAME=bookworm
+ID=debian
+HOME_URL="https://www.debian.org/"
+SUPPORT_URL="https://www.debian.org/support"
+BUG_REPORT_URL="https://bugs.debian.org/"
+== uname ==
+Linux 6.1.0-37-amd64 x86_64
+== hostnamectl ==
+{"Hostname":"web1","StaticHostname":"web1","IconName":"computer-container","Chassis":"container","MachineID":"1f2e3d4c5b6a79880796a5b4c3d2e1f0","BootID":"8a9b7c6d5e4f30211203f4e5d6c7b8a9","OperatingSystemPrettyName":"Debian GNU/Linux 12 (bookworm)","KernelName":"Linux","KernelRelease":"6.1.0-37-amd64","KernelVersion":"#1 SMP PREEMPT_DYNAMIC Debian 6.1.140-1 (2025-05-22)"}

@@ -1,0 +1,16 @@
+== crontab_meta ==
+rc=1
+== crontab ==
+no crontab for root
+== etc_crontab ==
+SHELL=/bin/sh
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+17 *	* * *	root	cd / && run-parts --report /etc/cron.hourly
+25 6	* * *	root	test -x /usr/sbin/anacron || run-parts --report /etc/cron.daily
+47 6	* * 7	root	test -x /usr/sbin/anacron || run-parts --report /etc/cron.weekly
+52 6	1 * *	root	test -x /usr/sbin/anacron || run-parts --report /etc/cron.monthly
+== cron_d ==
+e2scrub_all	30 3 * * 0 root test -e /run/systemd/system || SERVICE_MODE=1 /usr/lib/x86_64-linux-gnu/e2fsprogs/e2scrub_all_cron
+== cron_dirs ==
+daily apt-compat
+daily dpkg

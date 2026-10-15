@@ -1,0 +1,2 @@
+== timers_json ==
+[{"next":1750003600000000,"left":3600000000,"last":1749996400000000,"passed":3600000000,"unit":"apt-daily.timer","activates":"apt-daily.service"},{"next":1750032000000000,"left":32000000000,"last":1749945600000000,"passed":54400000000,"unit":"logrotate.timer","activates":"logrotate.service"}]

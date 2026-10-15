@@ -1,0 +1,14 @@
+== blocks ==
+Filesystem                   Type    1B-blocks       Used   Available Capacity Mounted on
+rpool/data/subvol-101-disk-0 zfs    8589934592 1395864371  7194070221      17% /
+none                         tmpfs      524288          0      524288       0% /dev
+tmpfs                        tmpfs 67467005952          0 67467005952       0% /dev/shm
+tmpfs                        tmpfs 26986803200     110592 26986692608       1% /run
+tmpfs                        tmpfs     5242880          0     5242880       0% /run/lock
+== inodes ==
+Filesystem                     Inodes IUsed    IFree IUse% Mounted on
+rpool/data/subvol-101-disk-0 14051056 38211 14012845    1% /
+none                          4116798    25  4116773    1% /dev
+tmpfs                        16471437     1 16471436    1% /dev/shm
+tmpfs                        16471437   142 16471295    1% /run
+tmpfs                        16471437     2 16471435    1% /run/lock

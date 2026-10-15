@@ -52,6 +52,7 @@ List<ProbeSection> _randomSections(Random rnd) {
     'distro',
     'init',
     'virt',
+    'lxcfs',
     'identity',
     'elev',
     'tools',

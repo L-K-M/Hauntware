@@ -142,6 +142,42 @@ void main() {
     expect(loops.single.group(1)!.split(' '), kProbeTools);
   });
 
+  group('HW_UTF8 (D49)', () {
+    const nonce = '0123456789abcdef0123456789abcdef';
+
+    test('the slow program decides it once, before any collector', () {
+      final program = buildSamplerProgram(kind: SamplerKind.slow, nonce: nonce);
+      expect('locale -a'.allMatches(program), hasLength(1));
+      final decided = program.indexOf('HW_UTF8=1');
+      expect(decided, greaterThan(program.indexOf('hw_qrun()')));
+      expect(decided, lessThan(program.indexOf('c_fs()')));
+      expect(decided, lessThan(program.indexOf('c_probe()')));
+    });
+
+    test('the probe reports the decision instead of checking again', () {
+      final program = buildSamplerProgram(kind: SamplerKind.slow, nonce: nonce);
+      final start = program.indexOf('_probe_locale() {');
+      final body = program.substring(start, program.indexOf('\n}\n', start));
+      expect(body, contains(r'"$HW_UTF8"'));
+      expect(body, isNot(contains('locale -a')));
+    });
+
+    test('the fast program forks no locale check', () {
+      final program = buildSamplerProgram(kind: SamplerKind.fast, nonce: nonce);
+      expect(program, isNot(contains('HW_UTF8')));
+      expect(program, isNot(contains('locale')));
+    });
+  });
+
+  test('the probe reads the lxcfs mounts (D50)', () {
+    final program = buildSamplerProgram(
+      kind: SamplerKind.slow,
+      nonce: '0123456789abcdef0123456789abcdef',
+    );
+    expect(program, contains('\n  _probe_lxcfs\n'));
+    expect(program, contains('fuse.lxcfs:/proc/*)'));
+  });
+
   group('kSamplerStartCommand', () {
     test('execs sh -s under the sampler environment', () {
       expect(

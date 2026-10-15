@@ -1,0 +1,45 @@
+{
+  "result": {
+    "units": [
+      {
+        "unit": "cron.service",
+        "load": "loaded",
+        "active": "active",
+        "sub": "running",
+        "description": "Regular background program processing daemon"
+      },
+      {
+        "unit": "ssh.service",
+        "load": "loaded",
+        "active": "active",
+        "sub": "running",
+        "description": "OpenBSD Secure Shell server"
+      },
+      {
+        "unit": "systemd-journald.service",
+        "load": "loaded",
+        "active": "active",
+        "sub": "running",
+        "description": "Journal Service"
+      },
+      {
+        "unit": "systemd-logind.service",
+        "load": "loaded",
+        "active": "active",
+        "sub": "running",
+        "description": "User Login Management"
+      },
+      {
+        "unit": "sys-kernel-config.mount",
+        "load": "loaded",
+        "active": "inactive",
+        "sub": "dead",
+        "description": "Kernel Configuration File System"
+      }
+    ],
+    "failed": [],
+    "format": "json",
+    "timeoutAbsent": false
+  },
+  "warnings": []
+}
