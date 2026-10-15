@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ghost_fonts/ghost_fonts.dart' show BundledMonoFont;
 import 'package:seance_app/services/managed_remote_file_store.dart';
 import 'package:seance_app/services/remote_files_controller.dart';
 import 'package:seance_app/ui/built_in_text_editor.dart';
@@ -292,6 +293,31 @@ void main() {
 
     await tester.pumpWidget(editor(11));
     expect(tester.widget<TextField>(find.byType(TextField)).style?.fontSize, 11);
+  });
+
+  testWidgets('draws in the app\'s editor font and ligature choice', (
+    tester,
+  ) async {
+    Widget editor(String family, EditorLigatures ligatures) => MaterialApp(
+      home: BuiltInTextEditorScreen(
+        file: file,
+        remotePath: '/etc/config.txt',
+        initialText: 'a -> b\n',
+        fontFamily: family,
+        ligatures: ligatures,
+      ),
+    );
+    TextStyle style() =>
+        tester.widget<TextField>(find.byType(TextField)).style!;
+
+    await tester.pumpWidget(editor('', EditorLigatures.on));
+    expect(style().fontFamily, editorDefaultFont.family);
+    expect(style().fontFeatures ?? const [], isEmpty);
+
+    // A bundled font's name draws the bundled copy.
+    await tester.pumpWidget(editor('Fira Code', EditorLigatures.off));
+    expect(style().fontFamily, BundledMonoFont.firaCode.family);
+    expect(style().fontFeatures, contains(const FontFeature.disable('calt')));
   });
 
   testWidgets('protects unsaved changes when its tab is closed', (

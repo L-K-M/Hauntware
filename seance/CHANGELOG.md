@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Settings › General › Built-in editor has a font field with the same
+  picker as the terminal's, and a Ligatures switch. Editor tabs draw in
+  JetBrains Mono with ligatures unless you choose otherwise.
 - Fixed-width text, such as host key fingerprints, private keys, paths,
   commands and the keyboard bar's keys, draws in JetBrains Mono on
   macOS, iOS and Windows. It used to fall back to the proportional

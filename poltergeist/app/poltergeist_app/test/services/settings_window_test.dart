@@ -5,10 +5,13 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ghost_desktop/ghost_desktop.dart' show GhostSettingsLinkMethod;
+import 'package:planchette_editor/planchette_editor.dart' show EditorLigatures;
 import 'package:poltergeist_app/services/appearance_controller.dart';
 import 'package:poltergeist_app/services/directory_grouping_controller.dart';
 import 'package:poltergeist_app/services/double_click_action.dart';
 import 'package:poltergeist_app/services/double_click_action_controller.dart';
+import 'package:poltergeist_app/services/editor_font.dart';
+import 'package:poltergeist_app/services/editor_font_controller.dart';
 import 'package:poltergeist_app/services/editor_text_size_controller.dart';
 import 'package:poltergeist_app/services/bookmark_backup_service.dart'
     show BackupSwitchOutcome, RetainedBackupAccount;
@@ -183,6 +186,8 @@ void main() {
   late AppearanceController appearance;
   late EditorTextSizeController editorTextSize;
   late List<int> savedTextSizes;
+  late EditorFontController editorFont;
+  late List<EditorFont> savedFonts;
   late DirectoryGroupingController directoryGrouping;
   late List<DirectoryGrouping> savedGroupings;
   Object? groupingSaveFailure;
@@ -234,6 +239,7 @@ void main() {
     ),
     appearance: appearance,
     editorTextSize: editorTextSize,
+    editorFont: editorFont,
     directoryGrouping: directoryGrouping,
     doubleClickAction: doubleClickAction,
   );
@@ -259,6 +265,11 @@ void main() {
       save: (size) async => savedTextSizes.add(size),
     );
     addTearDown(editorTextSize.dispose);
+    savedFonts = [];
+    editorFont = EditorFontController(
+      save: (font) async => savedFonts.add(font),
+    );
+    addTearDown(editorFont.dispose);
     backup = _FakeBackup();
     editors = _FakeEditors();
     checkForUpdates = true;
@@ -344,6 +355,7 @@ void main() {
     // No Appearance tab, and the window draws the default theme.
     expect(remote.appearance, isNull);
     expect(remote.editorTextSize, isNull);
+    expect(remote.editorFont, isNull);
     expect(remote.directoryGrouping, isNull);
     expect(remote.doubleClickAction, isNull);
     expect(remote.theme.value, AppAppearance.initial);
@@ -451,6 +463,36 @@ void main() {
       await pumpEventQueue();
 
       expect(remote.editorTextSize!.value, 11);
+    });
+  });
+
+  group('the editor font', () {
+    const fira = EditorFont(
+      family: 'Fira Code',
+      ligatures: EditorLigatures.off,
+    );
+
+    test('crosses in the first snapshot', () async {
+      await editorFont.setFont(fira);
+
+      final remote = await openWindow(SettingsWindowTab.appearance);
+
+      expect(remote.editorFont?.value, fira);
+    });
+
+    test('set in the window, redraws the app\'s editors', () async {
+      final remote = await openWindow();
+      var moved = 0;
+      remote.editorFont!.addListener(() => moved++);
+
+      await remote.editorFont!.setFont(fira);
+
+      expect(editorFont.value, fira);
+      expect(savedFonts, [fira]);
+      // The window's rows follow through the snapshot that write sent.
+      await pumpEventQueue();
+      expect(remote.editorFont!.value, fira);
+      expect(moved, 1);
     });
   });
 

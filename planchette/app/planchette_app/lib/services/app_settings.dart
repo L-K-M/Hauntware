@@ -19,6 +19,7 @@ final class AppSettings {
     this.fontSize = defaultFontSize,
     this.indentation = const Indentation.spaces(),
     this.fontFamily,
+    this.ligatures = EditorLigatures.on,
     this.recentTextTools = const [],
     this.saveOptions = const TextSaveOptions(),
   });
@@ -41,9 +42,13 @@ final class AppSettings {
   /// tabs, still win: this is the editor's `indentationPreference`.
   final Indentation indentation;
 
-  /// A family to try before the platform's monospace one, read from a
-  /// hand-edited settings file. Null means the platform's face.
+  /// A family to try before the editor's own face, as Settings › Text ›
+  /// Font or a hand-edited settings file names it ('Fira Code'). Null means
+  /// the editor's face.
   final String? fontFamily;
+
+  /// Whether the document's font draws ligatures such as `->`.
+  final EditorLigatures ligatures;
 
   /// The Recent text-tool runs, as [TextToolHistory.encode] wrote them.
   /// Kept opaque: the editor package owns the shape, and entries with a
@@ -57,13 +62,16 @@ final class AppSettings {
     ThemeMode? themeMode,
     int? fontSize,
     Indentation? indentation,
+    String? Function()? fontFamily,
+    EditorLigatures? ligatures,
     List<Object?>? recentTextTools,
     TextSaveOptions? saveOptions,
   }) => AppSettings(
     themeMode: themeMode ?? this.themeMode,
     fontSize: fontSize ?? this.fontSize,
     indentation: indentation ?? this.indentation,
-    fontFamily: fontFamily,
+    fontFamily: fontFamily == null ? this.fontFamily : fontFamily(),
+    ligatures: ligatures ?? this.ligatures,
     recentTextTools: recentTextTools ?? this.recentTextTools,
     saveOptions: saveOptions ?? this.saveOptions,
   );
@@ -79,6 +87,7 @@ final class AppSettings {
         saveOptions.trailingWhitespace == TrailingWhitespacePolicy.trim,
     'ensureFinalNewline': saveOptions.finalNewline == FinalNewlinePolicy.ensure,
     if (fontFamily != null) 'fontFamily': fontFamily,
+    'ligatures': ligatures.name,
     if (recentTextTools.isNotEmpty) 'recentTextTools': recentTextTools,
   };
 
@@ -95,6 +104,7 @@ final class AppSettings {
       fontFamily: family is String && family.trim().isNotEmpty
           ? family.trim()
           : null,
+      ligatures: EditorLigatures.named(json['ligatures']),
       recentTextTools: json['recentTextTools'] is List
           ? List<Object?>.of(json['recentTextTools'] as List)
           : const [],
@@ -149,6 +159,7 @@ final class AppSettings {
       other.fontSize == fontSize &&
       other.indentation == indentation &&
       other.fontFamily == fontFamily &&
+      other.ligatures == ligatures &&
       other.saveOptions == saveOptions &&
       _listsEqual(other.recentTextTools, recentTextTools);
 
@@ -165,6 +176,7 @@ final class AppSettings {
     fontSize,
     indentation,
     fontFamily,
+    ligatures,
     saveOptions,
     jsonEncode(recentTextTools),
   );

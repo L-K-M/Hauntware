@@ -16,6 +16,7 @@ import '../theme/theme_palette.dart';
 import 'bookmark_backup_service.dart'
     show BackupSwitchOutcome, RetainedBackupAccount;
 import 'double_click_action.dart';
+import 'editor_font.dart';
 import 'external_file_opener.dart';
 
 /// The Settings → Appearance section's model: [AppearanceController] in the
@@ -42,6 +43,17 @@ abstract interface class EditorTextSizeModel implements ValueListenable<int> {
   /// the write fails, after the editors have taken the change: the next
   /// write carries it.
   Future<void> setTextSize(int size);
+}
+
+/// The built-in editor's font on this device: [EditorFontController] in
+/// the app. Settings → Appearance writes it, and every open editor and
+/// compare view redraws for it.
+abstract interface class EditorFontModel
+    implements ValueListenable<EditorFont> {
+  /// Redraws every open editor, then persists; an unchanged font is a
+  /// no-op. Throws when the write fails, after the editors have taken the
+  /// change: the next write carries it.
+  Future<void> setFont(EditorFont font);
 }
 
 /// Whether file lists keep folders on top or sort them in among files:

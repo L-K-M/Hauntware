@@ -3,7 +3,8 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ghost_fonts/ghost_fonts.dart';
-import 'package:planchette_editor/planchette_editor.dart' show EditorTextSize;
+import 'package:planchette_editor/planchette_editor.dart'
+    show EditorLigatures, EditorTextSize;
 import 'package:seance_app/services/app_settings.dart';
 import 'package:seance_app/theme.dart';
 import 'package:seance_app/theme/contrast.dart';
@@ -301,9 +302,34 @@ void main() {
       );
     });
 
+    test('the editor font round-trips, and a bad value falls back', () {
+      final restored = AppSettings.fromJson(
+        jsonDecode(
+              jsonEncode(
+                AppSettings(
+                  editorFontFamily: 'Maple Mono',
+                  editorLigatures: EditorLigatures.off,
+                ).toJson(),
+              ),
+            )
+            as Map<String, dynamic>,
+      );
+      expect(restored.editorFontFamily, 'Maple Mono');
+      expect(restored.editorLigatures, EditorLigatures.off);
+
+      final bad = AppSettings.fromJson({
+        'editorFontFamily': 7,
+        'editorLigatures': 'nonsense',
+      });
+      expect(bad.editorFontFamily, isEmpty);
+      expect(bad.editorLigatures, EditorLigatures.on);
+    });
+
     test('a settings file written before this feature keeps the default', () {
       final restored = AppSettings.fromJson({'deviceId': 'abc'});
       expect(restored.editorFontSize, EditorTextSize.standard);
+      expect(restored.editorFontFamily, isEmpty);
+      expect(restored.editorLigatures, EditorLigatures.on);
       expect(restored.terminalFontSize, kDefaultTerminalFontSize);
       expect(restored.terminalFontFamily, isEmpty);
       expect(restored.terminalPalette, TerminalPalette.followApp);

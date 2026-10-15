@@ -51,9 +51,10 @@ enum Collector {
   /// (03 §6.4, slow sampler).
   identity(SamplerKind.slow, [], guardedCommands: 2),
 
-  /// Process list: `/proc/<pid>/stat` and `status` with builtins, every
-  /// `cmdline` through one `head|tr` pipeline, `ps` fallback (03 §7.2,
-  /// slow sampler while the view is visible).
+  /// Process list: at most `kProcsRowCap` rows from `/proc/<pid>/stat`
+  /// and `status` with builtins, their `cmdline` through one `head|tr`
+  /// pipeline, `ps` fallback (03 §7.2, D48, slow sampler while the view
+  /// is visible).
   procs(SamplerKind.slow, [], guardedCommands: 3),
 
   /// systemd units and failed units (03 §6.4, §7.5).

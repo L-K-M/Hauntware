@@ -57,6 +57,7 @@ import '../services/settings_models.dart'
         AppearanceSettingsModel,
         DirectoryGroupingModel,
         DoubleClickActionModel,
+        EditorFontModel,
         EditorTextSizeModel;
 import '../services/settings_window/settings_window_host.dart';
 import '../services/settings_window/settings_window_link.dart';
@@ -209,6 +210,7 @@ class WorkspaceShell extends StatefulWidget {
     this.checkoutPrompts,
     this.appearance,
     this.editorTextSize,
+    this.editorFont,
     this.directoryGrouping,
     this.skipRuleSets,
     this.deepLinks,
@@ -512,6 +514,11 @@ class WorkspaceShell extends StatefulWidget {
   /// and route draws in it, and Settings → Appearance shows it beside the
   /// theme. Null keeps editors at the standard size.
   final EditorTextSizeModel? editorTextSize;
+
+  /// The built-in editor's font on this device, shown and drawn like
+  /// [editorTextSize]. Null keeps editors in the default font, ligatures
+  /// on.
+  final EditorFontModel? editorFont;
 
   /// Whether lists keep folders on top: every pane sorts by it, and
   /// Settings → General shows it. Null keeps folders on top.
@@ -1706,6 +1713,7 @@ class _WorkspaceShellState extends State<WorkspaceShell>
     backup: widget.bookmarkBackup,
     appearance: widget.appearance,
     editorTextSize: widget.editorTextSize,
+    editorFont: widget.editorFont,
     directoryGrouping: widget.directoryGrouping,
     doubleClickAction: widget.doubleClickAction,
     changes: [?widget.updateCheck],
@@ -1784,6 +1792,7 @@ class _WorkspaceShellState extends State<WorkspaceShell>
           directoryGrouping: widget.directoryGrouping,
           appearance: widget.appearance,
           editorTextSize: widget.editorTextSize,
+          editorFont: widget.editorFont,
           enabled: () => !_commandSessionActive,
           openWindow: _openSettingsWindow,
         ),
@@ -3467,6 +3476,7 @@ class _WorkspaceShellState extends State<WorkspaceShell>
             monoFontFallback: poltergeistMonoFontFamilies,
             basenameOf: basenameOf,
             textSize: widget.editorTextSize,
+            font: widget.editorFont,
           ),
         ),
       );
@@ -3523,6 +3533,7 @@ class _WorkspaceShellState extends State<WorkspaceShell>
         monoFontFallback: poltergeistMonoFontFamilies,
         basenameOf: basenameOf,
         textSize: widget.editorTextSize,
+        font: widget.editorFont,
       ),
     );
     _editorRoutes[key] = route;
@@ -4182,6 +4193,7 @@ class _WorkspaceShellState extends State<WorkspaceShell>
       builder: (_) => CompareView(
         controller: comparison,
         textSize: widget.editorTextSize,
+        font: widget.editorFont,
       ),
     );
     unawaited(Navigator.of(context).push(route));
@@ -4208,6 +4220,7 @@ class _WorkspaceShellState extends State<WorkspaceShell>
         controller: controller,
         title: title,
         textSize: widget.editorTextSize,
+        font: widget.editorFont,
       ),
     );
     unawaited(Navigator.of(context).push(route));
