@@ -10,3 +10,11 @@ package ships only the environment lines there, and cronie-anacron runs
 `cron.daily`, `cron.weekly` and `cron.monthly` through
 `/etc/cron.hourly/0anacron` (`test/jobs/jobs_test.dart` covers that
 layout).
+
+For collector-set version 4 (03 D48) a one-off script rewrote the
+`overview` and `core` payloads from their version 3 form into the
+filtered shapes, keeping the values: per-core busy and idle sums, the
+netdev counters of the interfaces the fragment keeps (lo, docker0 and
+unused interfaces go), whole-disk diskstats rows (partitions, dm and
+loop devices go), and PSI lines without `total` and without cpu's
+`full` line.

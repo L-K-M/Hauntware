@@ -30,7 +30,9 @@ const kSamplerStartCommand =
 /// Version 2 adds `procs`, `units`, `timers` and `cron` to the slow sampler.
 /// Version 3 adds `dmesg` and `tail` to the probe's tool list, the probe's
 /// `lxcfs` area (D50) and the slow program's `HW_UTF8` check (D49).
-const kCollectorSetVersion = '3';
+/// Version 4 filters `overview` and `core` on the host and adds the ZFS
+/// ARC to `core` (D48).
+const kCollectorSetVersion = '4';
 
 /// The `timeout` guard applied to forking collectors (03 §6.2).
 const kCollectorTimeoutSeconds = 10;
@@ -117,8 +119,8 @@ String buildSamplerProgram({required SamplerKind kind, required String nonce}) {
   final collectors = Collector.values.where((c) => c.sampler == kind);
   final b = StringBuffer()
     ..writeln('N=$nonce')
-    ..writeln(_kHelpers);
-  if (kind == SamplerKind.slow) b.writeln(_kSlowLocale);
+    ..writeln(_kHelpers)
+    ..writeln(kind == SamplerKind.fast ? _kFastHelpers : _kSlowLocale);
   for (final c in collectors) {
     b.writeln(collectorFragments[c]);
   }
@@ -192,31 +194,6 @@ hw_st() {
   esac
 }
 
-# Appends a `== <name> ==` block with every line of $2 to $o (03 §6.4
-# payloads); a present but unreadable file is `denied`, an absent one
-# `error` (03 §6.2 status vocabulary).
-hw_file() {
-  o="$o$NL== $1 =="
-  if [ ! -r "$2" ]; then
-    if [ -e "$2" ]; then st=denied; else st=error; fi
-    return 0
-  fi
-  while IFS= read -r l; do
-    o="$o$NL$l"
-  done <"$2" || st=error
-}
-
-# The meminfo subset the overview needs (03 §7.1).
-hw_meminfo() {
-  o="$o$NL== meminfo =="
-  while IFS= read -r l; do
-    case $l in
-      MemTotal:* | MemFree:* | MemAvailable:* | Buffers:* | Cached:* | SReclaimable:* | Shmem:* | SwapTotal:* | SwapFree:*)
-        o="$o$NL$l" ;;
-    esac
-  done </proc/meminfo || st=error
-}
-
 # Tick request: `hw_t <seq> <collector>...` (03 §6.2). Every collector
 # runs with stdin from /dev/null so none can consume the request stream.
 hw_t() {
@@ -260,8 +237,84 @@ if command -v locale >/dev/null 2>&1 &&
 fi
 """;
 
-/// `overview` (03 §6.4): total `cpu` line of /proc/stat, filtered meminfo,
-/// /proc/loadavg, /proc/net/dev. Builtin reads only (03 §6.2 fork budget).
+/// The fast program's readers (D48): each keeps only the rows and fields
+/// the engine uses, with builtins only (03 §6.2 fork budget), so the
+/// filtering happens before anything crosses the link. The slow program
+/// does not carry them.
+const _kFastHelpers = r"""
+# A file the fast collectors cannot do without: unreadable is `denied`,
+# absent `error` (03 §6.2 status vocabulary), and the caller skips it.
+hw_readable() {
+  [ -r "$1" ] && return 0
+  if [ -e "$1" ]; then st=denied; else st=error; fi
+  return 1
+}
+
+# MEM-01's meminfo subset as `<key>: <kB>`, without the padding.
+hw_meminfo() {
+  o="$o$NL== meminfo =="
+  hw_readable /proc/meminfo || return 0
+  while read -r _k _v _x; do
+    case $_k in
+      MemTotal: | MemFree: | MemAvailable: | Buffers: | Cached: | SReclaimable: | Shmem: | SwapTotal: | SwapFree:)
+        o="$o$NL$_k $_v" ;;
+    esac
+  done </proc/meminfo || st=error
+}
+
+# NET-01's counters as `<interface> <rx bytes> <tx bytes>`. Only
+# interfaces backed by a device (a `device` link in sysfs) whose master,
+# if any, has none: bridges, bonds, VLANs, veths, tunnels and loopback
+# have no device and carry traffic a device already counts, and the
+# Hyper-V and failover masters already count their enslaved VF. Without
+# such an interface (inside a container, or without sysfs) every
+# interface but lo stays. Rows that never moved a byte are left out.
+hw_netdev() {
+  o="$o$NL== netdev =="
+  hw_readable /proc/net/dev || return 0
+  _d=; _a=
+  while IFS=': ' read -r _n _rb _x _x _x _x _x _x _x _tb _x; do
+    case $_n:$_rb:$_tb in
+      lo:* | *:0:0 | *::* | *: | *:*[!0-9]*:* | *:*:*[!0-9]*)
+        continue ;;
+    esac
+    if [ -e "/sys/class/net/$_n/device" ] && [ ! -e "/sys/class/net/$_n/master/device" ]; then
+      _d="$_d$NL$_n $_rb $_tb"
+    else
+      _a="$_a$NL$_n $_rb $_tb"
+    fi
+  done </proc/net/dev || st=error
+  o="$o${_d:-$_a}"
+}
+
+# DSK-03's counters as `<device> <reads> <sectors read> <writes>
+# <sectors written>`, whole disks only. A partition (a `partition` file
+# in sysfs) or a stacked device (entries under `slaves/`: LVM, dm-crypt,
+# multipath, md) repeats its disks' I/O; loop, ram, zram and ZFS volume
+# (zd) devices are files or memory, or count again on the pool's disks.
+# Rows that never did I/O are left out.
+hw_diskstats() {
+  o="$o$NL== diskstats =="
+  hw_readable /proc/diskstats || return 0
+  while read -r _x _x _n _r _x _sr _x _w _x _sw _x; do
+    case $_n in
+      loop* | ram* | zram* | zd*)
+        continue ;;
+    esac
+    case $_r:$_sr:$_w:$_sw in
+      0:0:0:0 | *::* | :* | *: | *[!0-9:]*)
+        continue ;;
+    esac
+    [ -e "/sys/class/block/$_n/partition" ] && continue
+    for _s in "/sys/class/block/$_n/slaves/"*; do break; done
+    [ -e "$_s" ] && continue
+    o="$o$NL$_n $_r $_sr $_w $_sw"
+  done </proc/diskstats || st=error
+}
+""";
+
+/// `overview` (03 §6.4): the total `cpu` line of /proc/stat, then the
+/// meminfo subset, /proc/loadavg and the netdev rows of [_kFastHelpers].
 const _kOverviewFragment = r"""
 c_overview() {
   st=ok
@@ -277,32 +330,65 @@ c_overview() {
   hw_meminfo
   o="$o$NL== loadavg =="
   read -r l </proc/loadavg && o="$o$NL$l" || st=error
-  hw_file netdev /proc/net/dev
+  hw_netdev
 }
 """;
 
-/// `core` (03 §6.4): all `cpu*` lines and `btime` of /proc/stat, filtered
-/// meminfo, loadavg, netdev, diskstats, pressure, uptime.
+/// `core` (03 §6.4): the overview's blocks with the per-core `cpuN` lines
+/// as `cpuN <busy> <idle>` jiffies (CPU-02 shows busy per core; idle is
+/// idle plus iowait, busy the other fields but guest, which user and
+/// nice already include), `btime`, the diskstats rows, PSI averages
+/// without the cumulative `total` and without cpu's `full` line, which
+/// the kernel sets to zero at the system level
+/// (Documentation/accounting/psi.rst), /proc/uptime and, where ZFS is
+/// loaded, the ARC's `c_min` and `size`.
 const _kCoreFragment = r"""
 c_core() {
   st=ok
   o='== stat =='
   while IFS= read -r l; do
     case $l in
-      cpu* | btime\ *)
+      'cpu '*)
         o="$o$NL$l" ;;
+      cpu[0-9]*)
+        set -- $l
+        o="$o$NL$1 $((${2:-0} + ${3:-0} + ${4:-0} + ${7:-0} + ${8:-0} + ${9:-0})) $((${5:-0} + ${6:-0}))" ;;
+      btime\ *)
+        o="$o$NL$l"
+        break ;;
     esac
   done </proc/stat || st=error
   hw_meminfo
   o="$o$NL== loadavg =="
   read -r l </proc/loadavg && o="$o$NL$l" || st=error
-  hw_file netdev /proc/net/dev
-  hw_file diskstats /proc/diskstats
+  hw_netdev
+  hw_diskstats
   for p in cpu io memory; do
-    [ -r "/proc/pressure/$p" ] && hw_file "pressure_$p" "/proc/pressure/$p"
+    [ -r "/proc/pressure/$p" ] || continue
+    o="$o$NL== pressure_$p =="
+    while read -r _k _a _b _c _x; do
+      case $p:$_k in
+        cpu:full) ;;
+        *:some | *:full)
+          o="$o$NL$_k $_a $_b $_c" ;;
+      esac
+    done <"/proc/pressure/$p"
   done
   o="$o$NL== uptime ==";
   read -r l </proc/uptime && o="$o$NL$l" || st=error
+  if [ -e /proc/spl/kstat/zfs/arcstats ]; then
+    o="$o$NL== arcstats =="
+    _m=; _z=
+    while read -r _n _t _v; do
+      case $_n in
+        c_min) _m=$_v ;;
+        size) _z=$_v ;;
+        *) continue ;;
+      esac
+      o="$o$NL$_n $_v"
+      [ -n "$_m" ] && [ -n "$_z" ] && break
+    done 2>/dev/null </proc/spl/kstat/zfs/arcstats
+  fi
 }
 """;
 

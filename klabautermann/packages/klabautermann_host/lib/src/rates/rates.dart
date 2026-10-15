@@ -108,17 +108,21 @@ CpuPercentages? cpuDeltaPercent(CpuTimes previous, CpuTimes next) {
   return CpuPercentages(perField, 100 - idleD * 100.0 / total);
 }
 
-/// CPU occupancy per `cpuN` name present in both maps (03 §6.4).
-Map<String, CpuPercentages> perCpuDeltaPercent(
-  Map<String, CpuTimes> previous,
-  Map<String, CpuTimes> next,
+/// Busy percent per `cpuN` name present in both maps (03 §6.4, CPU-02):
+/// the busy jiffy delta over the busy plus idle delta. A decrease (a
+/// reset, CN-04) or a zero total delta yields no entry.
+Map<String, double> perCpuBusyPercent(
+  Map<String, CoreCpuTimes> previous,
+  Map<String, CoreCpuTimes> next,
 ) {
-  final out = <String, CpuPercentages>{};
+  final out = <String, double>{};
   for (final e in next.entries) {
     final p = previous[e.key];
     if (p == null) continue;
-    final pct = cpuDeltaPercent(p, e.value);
-    if (pct != null) out[e.key] = pct;
+    final busy = e.value.busy - p.busy;
+    final idle = e.value.idle - p.idle;
+    if (busy < 0 || idle < 0 || busy + idle <= 0) continue;
+    out[e.key] = busy * 100.0 / (busy + idle);
   }
   return out;
 }
@@ -231,8 +235,8 @@ final class CoreDelta {
   /// Aggregate CPU occupancy.
   final CpuPercentages? cpu;
 
-  /// Per-core occupancy.
-  final Map<String, CpuPercentages> perCpu;
+  /// Per-core busy percent.
+  final Map<String, double> perCpu;
 
   /// Per-interface byte rates.
   final Map<String, NetRate> net;
@@ -269,7 +273,7 @@ CoreDelta diffCoreSnapshots(
     cpu: prevCpu != null && nextCpu != null
         ? cpuDeltaPercent(prevCpu, nextCpu)
         : null,
-    perCpu: perCpuDeltaPercent(previous.perCpu, next.perCpu),
+    perCpu: perCpuBusyPercent(previous.perCpu, next.perCpu),
     net: netRates(previous.netdev, next.netdev, elapsed, width: width),
     disk: diskRates(previous.diskstats, next.diskstats, elapsed, width: width),
   );

@@ -20,3 +20,11 @@ cgroup v2 calls `io`. The `/proc/pressure` files, which lxcfs 5.0 does
 not serve, carry the host's values. `btime` is the host's boot time,
 because lxcfs passes the other lines of `/proc/stat` through unchanged.
 `/proc/net/dev` and the processes are the container's own.
+
+For collector-set version 4 (03 D48) a one-off script rewrote the
+`overview` and `core` payloads from their version 3 form into the
+filtered shapes, keeping the values: per-core busy and idle sums, the
+netdev counters of the interfaces the fragment keeps (lo, docker0 and
+unused interfaces go), whole-disk diskstats rows (partitions, dm and
+loop devices go), and PSI lines without `total` and without cpu's
+`full` line.

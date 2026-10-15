@@ -1,38 +1,37 @@
 == stat ==
 cpu  4705 356 1831 74933 1020 0 45 0 0 0
-cpu0 1176 89 457 18733 255 0 11 0 0 0
-cpu1 1177 89 458 18733 255 0 11 0 0 0
-cpu2 1176 89 458 18733 255 0 11 0 0 0
-cpu3 1176 89 458 18734 255 0 12 0 0 0
+cpu0 1733 18988
+cpu1 1735 18988
+cpu2 1734 18988
+cpu3 1735 18989
 btime 1700000000
 == meminfo ==
-MemTotal:       16384000 kB
-MemFree:         8192000 kB
-MemAvailable:   12288000 kB
-Buffers:          524288 kB
-Cached:          3145728 kB
-SReclaimable:     262144 kB
-Shmem:            131072 kB
-SwapTotal:       2097152 kB
-SwapFree:        2097152 kB
+MemTotal: 16384000
+MemFree: 8192000
+MemAvailable: 12288000
+Buffers: 524288
+Cached: 3145728
+SReclaimable: 262144
+Shmem: 131072
+SwapTotal: 2097152
+SwapFree: 2097152
 == loadavg ==
 0.42 0.38 0.30 2/512 12345
 == netdev ==
-Inter-|   Receive                                                |  Transmit
- face |bytes    packets errs drop fifo frame compressed multicast|bytes    packets errs drop fifo colls carrier compressed
-    lo: 1234567   12345    0    0    0     0          0         0  1234567   12345    0    0    0     0       0        0
-  eth0: 987654321  654321    0    3    0     0          0         0 123456789  234567    0    0    0     0       0        0
+eth0 987654321 123456789
 == diskstats ==
-   8       0 sda 1234567 1234 98765432 7654321 2345678 2345 123456780 9876543 0 1234567 8765432 0 0 0 0 0 0
-   8       1 sda1 100000 100 8000000 600000 200000 200 16000000 800000 0 100000 1400000 0 0 0 0 0 0
- 259       0 nvme0n1 2345678 2345 187654320 1765432 3456789 3456 234567890 1987654 0 2345678 9876543 0 0 0 0 0 0
+sda 1234567 98765432 2345678 123456780
+nvme0n1 2345678 187654320 3456789 234567890
 == pressure_cpu ==
-some avg10=0.00 avg60=0.00 avg300=0.00 total=0
+some avg10=0.00 avg60=0.00 avg300=0.00
 == pressure_io ==
-some avg10=0.05 avg60=0.02 avg300=0.01 total=123456
-full avg10=0.01 avg60=0.00 avg300=0.00 total=65432
+some avg10=0.05 avg60=0.02 avg300=0.01
+full avg10=0.01 avg60=0.00 avg300=0.00
 == pressure_memory ==
-some avg10=0.00 avg60=0.00 avg300=0.00 total=0
-full avg10=0.00 avg60=0.00 avg300=0.00 total=0
+some avg10=0.00 avg60=0.00 avg300=0.00
+full avg10=0.00 avg60=0.00 avg300=0.00
 == uptime ==
 458100.73 1832400.50
+== arcstats ==
+c_min 524288000
+size 2147483648

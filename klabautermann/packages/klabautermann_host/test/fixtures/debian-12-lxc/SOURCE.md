@@ -10,3 +10,11 @@ load, uptime and disks, while `/proc/net/dev` and the processes are the
 container's own. The probe's `lxcfs` area reports no mounts, and
 `systemd-detect-virt` answers `lxc` for both questions. `df` shows the
 host filesystem that holds the container's root directory.
+
+For collector-set version 4 (03 D48) a one-off script rewrote the
+`overview` and `core` payloads from their version 3 form into the
+filtered shapes, keeping the values: per-core busy and idle sums, the
+netdev counters of the interfaces the fragment keeps (lo, docker0 and
+unused interfaces go), whole-disk diskstats rows (partitions, dm and
+loop devices go), and PSI lines without `total` and without cpu's
+`full` line.

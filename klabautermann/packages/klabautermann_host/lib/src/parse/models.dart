@@ -71,26 +71,43 @@ final class CpuTimes {
   Map<String, Object?> toJson() => {'name': name, 'jiffies': jiffies};
 }
 
+/// One core as the `core` collector sends it (D48): `cpuN <busy> <idle>`,
+/// where idle is the line's idle plus iowait jiffies and busy its user,
+/// nice, system, irq, softirq and steal jiffies (guest time is already in
+/// user and nice). CPU-02 shows only busy per core.
+@immutable
+final class CoreCpuTimes {
+  const CoreCpuTimes(this.name, {required this.busy, required this.idle});
+
+  /// `cpu0`, `cpu1` and so on.
+  final String name;
+
+  final int busy, idle;
+
+  Map<String, Object?> toJson() => {'name': name, 'busy': busy, 'idle': idle};
+}
+
 /// The result of parsing the `== stat ==` block.
 @immutable
 final class StatBlock {
-  StatBlock({this.aggregate, Map<String, CpuTimes>? cores, this.btime})
+  StatBlock({this.aggregate, Map<String, CoreCpuTimes>? cores, this.btime})
     : cores = Map.unmodifiable(cores ?? {});
 
   /// The aggregate `cpu` line.
   final CpuTimes? aggregate;
 
   /// `cpu0`..`cpuN` keyed by name.
-  final Map<String, CpuTimes> cores;
+  final Map<String, CoreCpuTimes> cores;
 
   /// `btime`: boot epoch seconds, when the block carried it (core only).
   final int? btime;
 }
 
-/// Parses the cpu lines and `btime` of /proc/stat (03 §6.4).
+/// Parses the `stat` block (03 §6.4, D48): the whole aggregate `cpu`
+/// line, `cpuN <busy> <idle>` per core and `btime`.
 StatBlock parseStatBlock(List<String> lines, List<String> warnings) {
   CpuTimes? aggregate;
-  final cores = <String, CpuTimes>{};
+  final cores = <String, CoreCpuTimes>{};
   int? btime;
   for (final line in lines) {
     final t = line.trim();
@@ -125,15 +142,14 @@ StatBlock parseStatBlock(List<String> lines, List<String> warnings) {
       }
       fields.add(v);
     }
-    if (bad || fields.isEmpty) {
+    if (bad || fields.isEmpty || (name != 'cpu' && fields.length != 2)) {
       warnings.add('stat: malformed cpu line "$t"');
       continue;
     }
-    final ct = CpuTimes(name, fields);
     if (name == 'cpu') {
-      aggregate = ct;
+      aggregate = CpuTimes(name, fields);
     } else {
-      cores[name] = ct;
+      cores[name] = CoreCpuTimes(name, busy: fields[0], idle: fields[1]);
     }
   }
   return StatBlock(aggregate: aggregate, cores: cores, btime: btime);
@@ -249,158 +265,122 @@ LoadAvg? parseLoadAvgBlock(List<String> lines, List<String> warnings) {
   );
 }
 
-/// One interface row of /proc/net/dev (03 §6.4). [rx] and [tx] hold the
-/// eight counters in file order each.
+/// One interface as the overview and core collectors send it (D48):
+/// `<name> <rx bytes> <tx bytes>` from /proc/net/dev.
 @immutable
 final class NetDevEntry {
-  NetDevEntry(this.name, List<int> rx, List<int> tx)
-    : rx = List.unmodifiable(rx),
-      tx = List.unmodifiable(tx);
+  const NetDevEntry(this.name, {required this.rxBytes, required this.txBytes});
 
   final String name;
+  final int rxBytes, txBytes;
 
-  /// rx: bytes, packets, errs, drop, fifo, frame, compressed, multicast.
-  final List<int> rx;
-
-  /// tx: bytes, packets, errs, drop, fifo, colls, carrier, compressed.
-  final List<int> tx;
-
-  int get rxBytes => rx[0];
-  int get txBytes => tx[0];
-  int get rxPackets => rx[1];
-  int get txPackets => tx[1];
-  int get rxErrors => rx[2];
-  int get txErrors => tx[2];
-  int get rxDropped => rx[3];
-  int get txDropped => tx[3];
-
-  Map<String, Object?> toJson() => {'name': name, 'rx': rx, 'tx': tx};
+  Map<String, Object?> toJson() => {
+    'name': name,
+    'rxBytes': rxBytes,
+    'txBytes': txBytes,
+  };
 }
 
-/// Parses `== netdev ==`, skipping the two `|`-header lines.
+/// Parses `== netdev ==` rows of `<name> <rx bytes> <tx bytes>`.
 List<NetDevEntry> parseNetDevBlock(List<String> lines, List<String> warnings) {
   final out = <NetDevEntry>[];
-  for (final line in lines) {
-    final t = line.trim();
-    if (t.isEmpty || t.contains('|')) continue;
-    final colon = t.indexOf(':');
-    if (colon < 0) {
-      warnings.add('netdev: malformed line "$t"');
-      continue;
-    }
-    final name = t.substring(0, colon).trim();
-    final counters = t
-        .substring(colon + 1)
-        .trim()
-        .split(RegExp(r'\s+'))
-        .map(int.tryParse)
-        .toList();
-    if (counters.length != 16 || counters.any((c) => c == null || c < 0)) {
-      warnings.add('netdev: bad counter row for "$name"');
-      continue;
-    }
+  for (final (name, counters) in _counterRows(lines, 2, 'netdev', warnings)) {
+    out.add(NetDevEntry(name, rxBytes: counters[0], txBytes: counters[1]));
+  }
+  return out;
+}
+
+/// One whole disk as the core collector sends it (D48): the name, then
+/// fields 4, 6, 8 and 10 of /proc/diskstats (reads completed, sectors
+/// read, writes completed, sectors written).
+@immutable
+final class DiskStatEntry {
+  const DiskStatEntry(
+    this.name, {
+    required this.readsCompleted,
+    required this.sectorsRead,
+    required this.writesCompleted,
+    required this.sectorsWritten,
+  });
+
+  final String name;
+  final int readsCompleted, sectorsRead, writesCompleted, sectorsWritten;
+
+  /// /proc/diskstats counts sectors of 512 bytes (CN-04).
+  static const sectorBytes = 512;
+
+  Map<String, Object?> toJson() => {
+    'name': name,
+    'readsCompleted': readsCompleted,
+    'sectorsRead': sectorsRead,
+    'writesCompleted': writesCompleted,
+    'sectorsWritten': sectorsWritten,
+  };
+}
+
+/// Parses `== diskstats ==` rows of `<name>` and four counters.
+List<DiskStatEntry> parseDiskStatsBlock(
+  List<String> lines,
+  List<String> warnings,
+) {
+  final out = <DiskStatEntry>[];
+  for (final (name, c) in _counterRows(lines, 4, 'diskstats', warnings)) {
     out.add(
-      NetDevEntry(
+      DiskStatEntry(
         name,
-        counters.sublist(0, 8).cast<int>(),
-        counters.sublist(8).cast<int>(),
+        readsCompleted: c[0],
+        sectorsRead: c[1],
+        writesCompleted: c[2],
+        sectorsWritten: c[3],
       ),
     );
   }
   return out;
 }
 
-/// One device row of /proc/diskstats (03 §6.4, §7.3). Field counts vary by
-/// kernel (14 fields since 2.6.25, +4 discard fields since 4.18, +2 flush
-/// fields since 5.5); [fields] keeps everything after the name.
-@immutable
-final class DiskStatEntry {
-  DiskStatEntry(this.major, this.minor, this.name, List<int> fields)
-    : fields = List.unmodifiable(fields);
-
-  final int major, minor;
-  final String name;
-
-  /// Counter fields in file order: reads completed, reads merged, sectors
-  /// read, ms reading, writes completed, writes merged, sectors written,
-  /// ms writing, ios in progress, ms doing io, weighted ms doing io, then
-  /// discard and flush fields on newer kernels.
-  final List<int> fields;
-
-  int get sectorsRead => fields.length > 2 ? fields[2] : 0;
-  int get sectorsWritten => fields.length > 6 ? fields[6] : 0;
-  int get readsCompleted => fields.isNotEmpty ? fields[0] : 0;
-  int get writesCompleted => fields.length > 4 ? fields[4] : 0;
-
-  /// /proc/diskstats counts sectors of 512 bytes (CN-04).
-  static const sectorBytes = 512;
-
-  Map<String, Object?> toJson() => {
-    'major': major,
-    'minor': minor,
-    'name': name,
-    'fields': fields,
-  };
-}
-
-/// Parses `== diskstats ==`; rows with too few fields warn and skip.
-List<DiskStatEntry> parseDiskStatsBlock(
+/// The rows of a `<name> <counter>...` block with exactly [count]
+/// non-negative counters each; any other row warns and is skipped.
+Iterable<(String, List<int>)> _counterRows(
   List<String> lines,
+  int count,
+  String block,
   List<String> warnings,
-) {
-  final out = <DiskStatEntry>[];
+) sync* {
   for (final line in lines) {
     final t = line.trim();
     if (t.isEmpty) continue;
     final parts = t.split(RegExp(r'\s+'));
-    if (parts.length < 14) {
-      warnings.add('diskstats: short row "$t"');
+    final counters = parts.skip(1).map(int.tryParse).toList();
+    if (counters.length != count || counters.any((c) => c == null || c < 0)) {
+      warnings.add('$block: malformed row "$t"');
       continue;
     }
-    final major = int.tryParse(parts[0]);
-    final minor = int.tryParse(parts[1]);
-    final fields = <int>[];
-    var bad = major == null || minor == null;
-    for (final p in parts.skip(3)) {
-      final v = int.tryParse(p);
-      if (v == null || v < 0) {
-        bad = true;
-        break;
-      }
-      fields.add(v);
-    }
-    if (bad) {
-      warnings.add('diskstats: malformed row "$t"');
-      continue;
-    }
-    out.add(DiskStatEntry(major!, minor!, parts[2], fields));
+    yield (parts[0], counters.cast<int>());
   }
-  return out;
 }
 
-/// One `some`/`full` line of a /proc/pressure file (03 §6.4).
+/// One `some`/`full` line of a /proc/pressure file (03 §6.4); the core
+/// collector drops the cumulative `total` (D48).
 @immutable
 final class PressureLine {
   const PressureLine({
     required this.avg10,
     required this.avg60,
     required this.avg300,
-    this.total,
   });
 
   final double avg10, avg60, avg300;
-  final int? total;
 
   Map<String, Object?> toJson() => {
     'avg10': avg10,
     'avg60': avg60,
     'avg300': avg300,
-    'total': total,
   };
 }
 
-/// One /proc/pressure file: cpu has only `some`, io and memory add `full`
-/// (03 §7.1 "PSI (absence is normal)").
+/// One /proc/pressure file: the core collector sends cpu's `some` only,
+/// io's and memory's `some` and `full` (03 §7.1 "PSI (absence is
+/// normal)").
 @immutable
 final class Pressure {
   const Pressure({this.some, this.full});
@@ -426,7 +406,6 @@ Pressure parsePressureBlock(List<String> lines, List<String> warnings) {
       continue;
     }
     double? a10, a60, a300;
-    int? total;
     var bad = false;
     for (final kv in parts.skip(1)) {
       final eq = kv.indexOf('=');
@@ -443,8 +422,6 @@ Pressure parsePressureBlock(List<String> lines, List<String> warnings) {
           a60 = double.tryParse(v);
         case 'avg300':
           a300 = double.tryParse(v);
-        case 'total':
-          total = int.tryParse(v);
         default:
           break; // forward-compatible: ignore unknown keys
       }
@@ -453,7 +430,7 @@ Pressure parsePressureBlock(List<String> lines, List<String> warnings) {
       warnings.add('pressure: malformed line "$t"');
       continue;
     }
-    final pl = PressureLine(avg10: a10, avg60: a60, avg300: a300, total: total);
+    final pl = PressureLine(avg10: a10, avg60: a60, avg300: a300);
     if (kind == 'some') {
       some = pl;
     } else {
@@ -480,4 +457,41 @@ Pressure parsePressureBlock(List<String> lines, List<String> warnings) {
   }
   final idle = parts.length > 1 ? double.tryParse(parts[1]) : null;
   return (uptimeSeconds: up, idleSeconds: idle);
+}
+
+/// The ZFS ARC as the core collector sends it (D48): `c_min` and `size`
+/// from /proc/spl/kstat/zfs/arcstats, in bytes. A host without that file
+/// has no block, and its snapshot no [ZfsArc] at all: absent is not zero.
+@immutable
+final class ZfsArc {
+  const ZfsArc({this.sizeBytes, this.minBytes});
+
+  /// The ARC's current size, which MEM-01 counts as used memory; null
+  /// when the block lacked it.
+  final int? sizeBytes;
+
+  /// `c_min`, the size the ARC does not shrink below.
+  final int? minBytes;
+
+  Map<String, Object?> toJson() => {
+    'sizeBytes': sizeBytes,
+    'minBytes': minBytes,
+  };
+}
+
+/// Parses `== arcstats ==` rows of `<name> <bytes>`.
+ZfsArc parseArcStatsBlock(List<String> lines, List<String> warnings) {
+  int? size, min;
+  for (final (name, c) in _counterRows(lines, 1, 'arcstats', warnings)) {
+    switch (name) {
+      case 'size':
+        size = c.single;
+      case 'c_min':
+        min = c.single;
+      default:
+        warnings.add('arcstats: unexpected row "$name"');
+    }
+  }
+  if (size == null) warnings.add('arcstats: no size row');
+  return ZfsArc(sizeBytes: size, minBytes: min);
 }

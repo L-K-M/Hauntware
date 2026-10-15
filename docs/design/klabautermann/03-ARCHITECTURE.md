@@ -559,24 +559,66 @@ Proposals awaiting the owner close the section; they are not decisions.
   own READY deadline [E], and a fast request keeps 5 s [E]. A slow
   request's deadline is derived from the guarded commands its collectors
   can run, each bounded by `timeout 10` (6.2), plus a margin [E], instead
-  of a fixed 30 s: the probe alone can run 17 guarded commands (`hw_qrun` in
-  `klabautermann_host/lib/src/hws/program.dart:340-572` [V]), up to 170 s
-  when each runs into its timeout, and a fixed deadline would keep
-  restarting a slow but working sampler. Without `timeout` on the host
-  (6.3) the commands run unguarded, and the derived deadline still bounds
-  the request. Supersedes the slow figure in 6.2. *Rejected:* one fixed
-  slow deadline (too short for the probe, too long for one `df`).
+  of a fixed 30 s: the probe alone can run 16 guarded commands
+  (`Collector.guardedCommands` declares each collector's count, and a test
+  ties it to the fragment text), up to 160 s when each runs into its
+  timeout, and a fixed deadline would keep restarting a slow but working
+  sampler. Without `timeout` on the host (6.3) the commands run unguarded,
+  and the derived deadline still bounds the request. Supersedes the slow
+  figure in 6.2. *Rejected:* one fixed slow deadline (too short for the
+  probe, too long for one `df`).
 - **D48. Core and overview payloads are filtered on the host.** The `core`
   and `overview` fragments keep only the rows and fields the engine uses
-  before anything crosses the link, as the meminfo subset already does
-  (`hw_meminfo`, `program.dart:192-201` [V]); today both still send all
-  of `/proc/net/dev`, and `core` all of `/proc/diskstats`
-  (`program.dart:248,267-268` [V]). The rules are fixed against spike S2's
-  measurements and the 11.4 tick budget, with builtins only (6.2, fork
-  budget); each change bumps the collector-set version
-  (`kCollectorSetVersion`, `program.dart:21` [V]). *Rejected:* filtering
-  only in the engine (the bytes still cross the link on every tick,
-  against 11.4's 1 KB/s for 10 hosts).
+  before anything crosses the link, with builtins only (6.2, fork budget);
+  each change bumps the collector-set version (`kCollectorSetVersion`).
+  Until version 4 both sent all of `/proc/net/dev` and `core` all of
+  `/proc/diskstats`, and spike S2 measured a 4-CPU `core` reply of 2,773 B
+  and an `overview` reply of 1,227 B (`klabautermann/docs/evidence/s2/`).
+  K15 fixes the rules in version 4. `stat` keeps the aggregate `cpu` line
+  whole (CPU-01, and CPU-04 in v1) and sends each `cpuN` line as busy and
+  idle jiffies, because CPU-02 shows only busy per core: idle is idle plus
+  iowait, busy is user, nice, system, irq, softirq and steal, and the
+  kernel already counts guest time in user and nice [V: Linux
+  `kernel/sched/cputime.c`, `account_guest_time`]. `meminfo` keeps
+  MEM-01's nine keys without padding or unit. `netdev` keeps the bytes
+  received and sent (NET-01) of each interface with a `device` link in
+  sysfs whose master, if it has one, has none: loopback, bridges, bonds,
+  VLANs, veths and tunnels have no device and carry traffic a device
+  already counts, and Hyper-V's synthetic NIC and the failover master add
+  their enslaved VF's counters to their own [V: Linux
+  `drivers/base/core.c` (`device_add_class_symlinks`),
+  `drivers/net/hyperv/netvsc_drv.c` (`netvsc_get_stats64`),
+  `drivers/net/net_failover.c`]. Without such an interface, inside a
+  container whose `eth0` is a veth peer or without sysfs, every interface
+  but `lo` stays, so a Docker bridge nested in such a container counts
+  twice. `diskstats` keeps reads, sectors read, writes and sectors written
+  (CN-04) of whole disks: a partition (a `partition` file in sysfs) or a
+  stacked device (entries under `slaves/`, which device-mapper and md
+  create) repeats its disks' I/O [V: Linux `block/partitions/core.c`,
+  `block/holder.c`, `drivers/md/dm.c`, `drivers/md/md.c`], loop devices
+  count again on their backing file's disk, `ram` and `zram` hold memory,
+  and ZFS volumes (`zd*` [V: OpenZFS `include/sys/fs/zfs.h`]) count again
+  on the pool's disks. A `netdev` or `diskstats` row whose counters are
+  all zero (an unused NIC, idle `nbd` devices) is left out; its first
+  non-zero reading starts its series. PSI keeps `avg10`, `avg60` and
+  `avg300` (7.1), without the cumulative `total` and without the cpu
+  file's `full` line, which the kernel sets to zero at the system level
+  [V: Linux `Documentation/accounting/psi.rst`]. Where
+  `/proc/spl/kstat/zfs/arcstats` exists, `core` adds the ARC's `c_min` and
+  `size` [V: OpenZFS `module/zfs/arc.c`], for MEM-01's "ZFS ARC counted as
+  used" and MEM-05's reclaimable part above `c_min` (v1.x); a host without
+  the file sends no block, which reads as not present, never as zero.
+  Inside a container the file is the host's ARC [U], which an lxcfs
+  `meminfo` does not contain, so the engine applies MEM-01's note outside
+  containers only. On synthetic `/proc` trees [U] a `core` reply is
+  1,111 B at 4 CPUs, 1,841 B at 32 and 2,675 B at 64, 26 B for each
+  further CPU, and an `overview` reply 507 B, so 2.5 KB holds to about 56
+  CPUs and 11.4 allows 30 B for each CPU beyond 32; real hosts remain for
+  S2. *Rejected:* filtering only in the engine (the bytes still cross the
+  link on every tick, against 11.4's 1 KB/s for 10 hosts); name lists of
+  virtual interfaces and partitions (never complete); leaving out every
+  interface with a master (that drops bond slaves and bridge ports, the
+  only devices under a bond or a bridge).
 - **D49. Collector locale.** Collectors that render text for people
   (A11Y-08) run their command under `LC_ALL=C.UTF-8`, or under the
   sampler's `LC_ALL=C` when the host lacks `C.UTF-8`. The program decides
@@ -2022,7 +2064,7 @@ and is the single source for every runner, including the T1 scripts (9.3).
 | Collector | Sampler | Source | Desktop | Phone | Cellular saver |
 |---|---|---|---|---|---|
 | `overview` (fleet rows) | fast | `cpu` lines of `/proc/stat`, filtered `/proc/meminfo`, `/proc/loadavg`, `/proc/net/dev` | 5 s | 10 s | 30 s |
-| `core` (focused server) | fast | the above plus per-core lines, `/proc/diskstats`, `/proc/pressure/*`, `/proc/uptime`, `btime` | 2 s | 3 s | 10 s |
+| `core` (focused server) | fast | the above plus per-core lines, `/proc/diskstats`, `/proc/pressure/*`, `/proc/uptime`, `btime`, the ZFS `arcstats` subset (D48) | 2 s | 3 s | 10 s |
 | `fs` | slow | `df -PT -B1`, `df -Pi` under `timeout 10` | 30 s | 60 s | 120 s |
 | `procs` | slow | `/proc/<pid>/stat` and `status` with builtins; every `/proc/<pid>/cmdline` through one `head` piped into `tr '\000' '\037'` (7.2); `ps -eo ...` or BusyBox `ps w` fallback | 3 s while visible | 5 s while visible | 10 s |
 | `units` | slow | `systemctl list-units --all --output=json` (systemd 246+), else `--plain --no-legend`; `systemctl --failed` | 15 s while visible; 60 s for the health card | same | same |
@@ -3865,7 +3907,8 @@ palette) and presets in the preview. v1: paste from Séance and Poltergeist
 
 ### 11.4 Performance budgets (gated from M2)
 
-- Fast tick at most 2.5 KB and 5 ms of server CPU on the reference VM [E].
+- Fast tick at most 2.5 KB, plus 30 B for each CPU beyond 32 (D48), and
+  5 ms of server CPU on the reference VM [E].
 - 10 monitored hosts at default phone cadence: under 1 KB/s in total.
 - UI frame p99 under 16 ms with 10 hosts and one 1,000 lines/s follow on a
   low-end Android phone (spike S5 baseline; a device measurement, manual
