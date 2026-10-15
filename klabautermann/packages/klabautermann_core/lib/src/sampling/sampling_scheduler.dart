@@ -180,6 +180,7 @@ final class SamplingScheduler {
       for (final stream in run.streams) {
         final period = samplingPeriod(stream, profile);
         if (period != null) {
+          if (!run.due.containsKey(stream)) run.unread.add(stream);
           run.due[stream] = run.due.containsKey(stream)
               ? _aligned(run.epoch, period, now)
               : now;
@@ -279,6 +280,7 @@ final class SamplingScheduler {
     final now = _elapsed();
     run.streams = streams;
     run.due.removeWhere((stream, _) => !streams.contains(stream));
+    run.unread.retainAll(streams);
     for (final stream in streams) {
       if (run.due.containsKey(stream)) continue;
       final read = switch (stream) {
@@ -286,7 +288,10 @@ final class SamplingScheduler {
         _ when _onDemand(stream) => server.owed.contains(stream),
         _ => true,
       };
-      if (read) run.due[stream] = now;
+      if (read) {
+        run.due[stream] = now;
+        run.unread.add(stream);
+      }
     }
     _schedule(server, run, run.fast);
     _schedule(server, run, run.slow);
@@ -363,7 +368,11 @@ final class SamplingScheduler {
 
     Duration? next;
     for (final MapEntry(key: stream, value: due) in run.due.entries) {
-      if (_kindOf(stream) != sampler.kind || _rides(run, stream)) continue;
+      if (_kindOf(stream) != sampler.kind ||
+          _rides(run, stream) ||
+          _held(run, sampler, stream)) {
+        continue;
+      }
       if (next == null || due < next) next = due;
     }
     if (next == null) return;
@@ -381,6 +390,14 @@ final class SamplingScheduler {
     return coverer != null && run.streams.contains(coverer);
   }
 
+  /// Whether [stream] waits for [sampler]'s outstanding tick to settle
+  /// rather than go out in a tick the session skips: a first reading, or
+  /// one owed once, is no cadence tick, and skipping it would lose it.
+  bool _held(_Run run, _Sampler sampler, SampleStream stream) =>
+      sampler.busy &&
+      (run.unread.contains(stream) ||
+          samplingPeriod(stream, _subscriptions.profile) == null);
+
   void _tick(_Server server, _Run run, _Sampler sampler) {
     sampler.timer = null;
     if (!identical(server.run, run)) return;
@@ -391,7 +408,10 @@ final class SamplingScheduler {
     final now = _elapsed();
     final read = {
       for (final MapEntry(key: stream, value: due) in run.due.entries)
-        if (_kindOf(stream) == sampler.kind && due <= now) stream,
+        if (_kindOf(stream) == sampler.kind &&
+            due <= now &&
+            !_held(run, sampler, stream))
+          stream,
     };
     read.removeWhere(
       (stream) => _rides(run, stream) && !read.contains(_coverer(stream)),
@@ -408,15 +428,25 @@ final class SamplingScheduler {
           ? now + _owedReadRetry
           : _aligned(run.epoch, period, now);
     }
+    run.unread.removeAll(read);
+    // The session skips and counts a tick while another is outstanding;
+    // only a tick it sends makes the sampler busy.
+    final sent = !sampler.busy;
+    sampler.busy = true;
     final outcome = sampler.session.tick(_collectors(read));
     _schedule(server, run, sampler);
-    unawaited(outcome.then((o) => _onTick(server, run, sampler.kind, read, o)));
+    unawaited(
+      outcome.then((o) {
+        if (sent) sampler.busy = false;
+        _onTick(server, run, sampler, read, o);
+      }),
+    );
   }
 
   void _onTick(
     _Server server,
     _Run run,
-    SamplerKind kind,
+    _Sampler sampler,
     Set<SampleStream> read,
     SamplerOutcome outcome,
   ) {
@@ -441,7 +471,7 @@ final class SamplingScheduler {
         // The program answered; only the reply was lost.
         _answered(server, run);
       case SamplerGap(reason: SamplerGapReason.deadline)
-          when kind == SamplerKind.fast:
+          when sampler.kind == SamplerKind.fast:
         // The fast collectors read /proc with builtins only, so a missed
         // deadline means a stalled sampler or a silent peer (03 §6.2).
         run.hinted = true;
@@ -451,6 +481,8 @@ final class SamplingScheduler {
     }
     // By the engine's clock as the reply arrived (03 §10.1).
     _emitAll(server.pipeline.addTick(read, outcome, _now()));
+    // A reading held while the tick was outstanding goes out now.
+    _schedule(server, run, sampler);
   }
 
   /// A sign of life on [run]'s link clears a dead-peer hint.
@@ -520,6 +552,10 @@ final class _Run {
   /// clock.
   final Map<SampleStream, Duration> due = {};
 
+  /// Streams due at once since they joined the run, until a tick sends
+  /// them.
+  final Set<SampleStream> unread = {};
+
   /// The fast sampler waits for the probe (see `_probe`).
   bool holdFast;
   bool probeSent = false;
@@ -536,4 +572,7 @@ final class _Sampler {
   final SamplerSession session;
   StreamSubscription<SamplerState>? states;
   Timer? timer;
+
+  /// A tick it sent is outstanding.
+  bool busy = false;
 }

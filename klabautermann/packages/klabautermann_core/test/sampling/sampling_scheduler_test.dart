@@ -289,6 +289,29 @@ void main() {
     expect(events.whereType<Gap>(), isEmpty);
   });
 
+  test('streams subscribed while their sampler is busy are read once the '
+      'outstanding request settles, and cost no skipped tick', () async {
+    subscribe({SampleStream.procs});
+    await settle();
+    link.stalled.add(_slow);
+    await clock.elapse(const Duration(seconds: 3));
+    subscribe({SampleStream.fs, SampleStream.identity}, id: 'system');
+    await clock.elapse(const Duration(seconds: 1));
+
+    link.stalled.clear();
+    final process = link.running.singleWhere((p) => p.kind == _slow);
+    process.answer(process.held.single);
+    await settle();
+    expect(link.linesOf(_slow), [
+      'hw_o probe',
+      'hw_t procs',
+      'hw_t procs',
+      'hw_t fs identity',
+    ]);
+    expect(samples().skip(2), ['fs@4', 'identity@4']);
+    expect(sessions.singleWhere((s) => s.kind == _slow).skippedTicks, 0);
+  });
+
   test('the background stops the samplers at once, and the foreground '
       'resumes them on the same link without a probe', () async {
     subscribe({SampleStream.core});

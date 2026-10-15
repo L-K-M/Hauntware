@@ -2316,7 +2316,9 @@ stream the profile reads on demand once per `Subscribe` naming it
 Due times follow a monotonic clock, so a changed wall clock cannot stall
 sampling. A sampler ticks only while it is ready, so its restarts (6.2)
 cost no skipped ticks, and a tick that would overlap its outstanding
-request is skipped and counted, never queued. The slow sampler's first
+request is skipped and counted, never queued. A first or owed reading
+due meanwhile waits for that request to settle instead, since a skipped
+tick would lose it. The slow sampler's first
 request on a link is the probe (6.1), sent again on a later run on the
 same link only if it went unanswered. Until it settles the slow sampler
 sends nothing else and, for a server whose profile the engine does not
