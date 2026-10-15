@@ -165,6 +165,7 @@ class FirstRunCoverageCard extends StatelessWidget {
               alignment: MainAxisAlignment.end,
               overflowAlignment: OverflowBarAlignment.end,
               spacing: 8,
+              overflowSpacing: 8,
               children: [
                 TextButton(
                   onPressed: () => unawaited(showCoverageSheet(context, fleet)),

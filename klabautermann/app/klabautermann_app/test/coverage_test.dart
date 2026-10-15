@@ -159,9 +159,8 @@ void main() {
     });
 
     testWidgets('heads the phone fleet list over the chip, and at twice the '
-        'text size its words scroll and its buttons stay in view', (
-      tester,
-    ) async {
+        'text size its words scroll and its buttons stay in view, stacked '
+        'apart', (tester) async {
       tester.platformDispatcher.textScaleFactorTestValue = 2;
       addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
       final saves = <String>[];
@@ -180,6 +179,12 @@ void main() {
         findsOneWidget,
       );
       expect(card.contains(tester.getBottomRight(find.text('Got it'))), isTrue);
+      final details = tester.getRect(
+        find.widgetWithText(TextButton, 'Coverage details'),
+      );
+      final dismiss = tester.getRect(find.widgetWithText(TextButton, 'Got it'));
+      expect(dismiss.top, greaterThanOrEqualTo(details.bottom));
+      expect(dismiss.top - details.bottom, 8);
       expect(card.bottom, lessThan(tester.getTopLeft(_chip).dy));
       expect(
         tester.getBottomLeft(_chip).dy,
