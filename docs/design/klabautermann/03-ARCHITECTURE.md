@@ -2540,7 +2540,10 @@ time through `HostCommands.commandLine`, and answers each open with a
   reading at the cap and keeps its complete entries, so its last cursor
   reads on; `tail` and `dmesg`, which print oldest first, keep their
   last complete lines or records. Journal lines that are not JSON
-  objects count as dropped.
+  objects count as dropped, as does an entry longer than the cap. A
+  full journal window left without a record ends as failed: it has no
+  cursor to read on from, and journalctl prints an entry's keys in hash
+  order, so a cut entry's cursor may lie past the cap.
 - The kernel log reads `journalctl -k -b` and falls back to
   `dmesg --json --decode` when that exited without a kernel record,
   whatever its exit code. That is what an account outside

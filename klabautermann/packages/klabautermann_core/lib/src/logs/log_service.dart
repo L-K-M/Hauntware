@@ -380,9 +380,13 @@ const _newline = 0x0a;
 
 /// A `journalctl -o json -r` window: newest first, as printed. A cut
 /// keeps the complete lines, so the last record's cursor reads on. A
-/// line that is not a JSON object counts as dropped. [since] is the time
-/// range's start the engine applies after a cursor: the window ends at
-/// the first record older than it.
+/// line that is not a JSON object counts as dropped, as does an entry
+/// longer than the cap, which leaves no complete line. A full window
+/// without a record fails: it has no cursor to read on from, and
+/// journalctl prints an entry's keys in hash order, so a cut entry's
+/// cursor may lie past the cap. [since] is the time range's start the
+/// engine applies after a cursor: the window ends at the first record
+/// older than it.
 _Window _journalWindow(_Output out, int window, {DateTime? since}) {
   final bytes = out.stdout;
   final end = out.cut ? bytes.lastIndexOf(_newline) + 1 : bytes.length;
@@ -392,7 +396,7 @@ _Window _journalWindow(_Output out, int window, {DateTime? since}) {
   );
 
   final records = <LogRecord>[];
-  var dropped = 0;
+  var dropped = out.cut && end == 0 ? 1 : 0;
   var oldest = false;
   for (final line in text.split('\n')) {
     if (line.isEmpty || line == _noEntries) continue;
@@ -415,9 +419,11 @@ _Window _journalWindow(_Output out, int window, {DateTime? since}) {
   return (
     records: records,
     dropped: dropped,
-    end: full
-        ? LogStreamEndReason.windowFilled
-        : LogStreamEndReason.oldestReached,
+    end: switch (full) {
+      false => LogStreamEndReason.oldestReached,
+      true when records.isEmpty => LogStreamEndReason.failed,
+      true => LogStreamEndReason.windowFilled,
+    },
   );
 }
 

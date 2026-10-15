@@ -271,6 +271,17 @@ void main() {
       await _until(() => p.closeCalls == 1);
     });
 
+    test('an entry longer than the cap is dropped and fails the window, '
+        'which has no cursor to read on from', () async {
+      start(maxOutputBytes: 1024);
+      final p = await open('a', _spec(_journal, window: 10));
+      final huge = {for (var i = 0; i < 8; i++) 'F$i': 'x' * 1000};
+      _emitChunks(p, '${jsonEncode(huge)}\n${_entries(10, 1)}');
+      expect(await ended('a'), _failed);
+      expect(events.whereType<LogBatch>().single.dropped, 1);
+      expect(records('a'), isEmpty);
+    });
+
     test('a line that is not a JSON object is dropped and counted', () async {
       final stdout =
           '${_entries(3, 3)}{"MESSAGE": "cut\n[1]\n-- No entries --\n'
