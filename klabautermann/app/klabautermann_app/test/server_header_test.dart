@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ghost_theme/ghost_theme.dart' show GhostChrome;
+import 'package:ghost_ui/ghost_ui.dart' show SelectedTabView;
 import 'package:klabautermann_app/controllers/fleet_controller.dart';
 import 'package:klabautermann_app/controllers/monitoring_controller.dart';
 import 'package:klabautermann_app/l10n/app_localizations.dart';
@@ -236,6 +237,49 @@ void main() {
         _inHeader(find.text('web-1')),
         name == 'phone' ? findsNothing : findsOneWidget,
       );
+    });
+  }
+
+  // Short phone screens: landscape, a split screen and the smallest
+  // portrait one. The header scrolls before it takes the panel's room.
+  for (final size in const [
+    Size(640, 360),
+    Size(667, 375),
+    Size(390, 500),
+    Size(320, 568),
+  ]) {
+    testWidgets('a ${size.width.round()} x ${size.height.round()} phone '
+        'keeps most of its body for the panel at 200 % text', (tester) async {
+      final harness = await _openWeb1(tester, size, textScale: 2);
+      harness.engine
+        ..emit(const LinkState('srv-1', LinkReady()))
+        ..emit(HostProfileChanged('srv-1', _twoEngines));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      final panel = find.byType(SelectedTabView);
+      final body = find.ancestor(of: panel, matching: find.byType(Column));
+      expect(
+        tester.getSize(panel).height,
+        greaterThanOrEqualTo(tester.getSize(body.first).height * 0.6 - 0.5),
+      );
+
+      // What the header cuts off scrolls into view: its last line, the
+      // runtime, ends inside it once scrolled to the end.
+      final viewport = find
+          .ancestor(
+            of: find.byType(ServerHeader),
+            matching: find.byType(Scrollable),
+          )
+          .first;
+      final runtime = _inHeader(find.text(_twoEnginesText));
+      await tester.drag(viewport, const Offset(0, -2000));
+      await tester.pumpAndSettle();
+      expect(
+        tester.getRect(runtime).bottom,
+        lessThanOrEqualTo(tester.getRect(viewport).bottom),
+      );
+      expect(tester.takeException(), isNull);
     });
   }
 }

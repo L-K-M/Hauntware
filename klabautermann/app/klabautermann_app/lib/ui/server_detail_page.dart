@@ -152,9 +152,14 @@ class _ServerDetailPageState extends State<ServerDetailPage>
   }
 }
 
+/// The most of the body's height the header takes; past it, it scrolls.
+const double _headerMaxShare = 0.4;
+
 /// The safe area with [header] over [child]: the header heads the body
 /// rather than the app bar's fixed-height bottom, so it grows with large
-/// text instead of clipping (A11Y-09).
+/// text instead of clipping (A11Y-09). On a short screen at large text,
+/// such as a landscape phone, it scrolls within [_headerMaxShare] of the
+/// body, so the panel keeps the rest.
 class _HeaderedBody extends StatelessWidget {
   const _HeaderedBody({required this.header, required this.child});
 
@@ -163,15 +168,25 @@ class _HeaderedBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => SafeArea(
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-          child: header,
-        ),
-        Expanded(child: child),
-      ],
+    child: LayoutBuilder(
+      builder: (context, box) => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: box.maxHeight * _headerMaxShare,
+            ),
+            // Not primary: the panel's scroll view answers a status bar
+            // tap.
+            child: SingleChildScrollView(
+              primary: false,
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: header,
+            ),
+          ),
+          Expanded(child: child),
+        ],
+      ),
     ),
   );
 }

@@ -4456,7 +4456,8 @@ check's engines over the probe's profile, as the Access tab lists
 them, with its caveat that Podman can also answer on Docker's socket
 path whenever a Docker engine is named. On phones the header heads the
 body under the app bar, whose fixed-height bottom would clip it at
-large text.
+large text; past 40 % of the body's height, as on a landscape phone at
+200 % text, it scrolls, so the panel keeps the rest.
 
 As built in M2 for OV-01, OV-03 and OV-04
 (`app/klabautermann_app/lib/ui/overview_panel.dart`), the Overview tab
