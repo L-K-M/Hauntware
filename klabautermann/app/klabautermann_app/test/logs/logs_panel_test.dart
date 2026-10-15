@@ -197,6 +197,26 @@ void main() {
     expect(find.textContaining(_notice), findsNothing);
   });
 
+  testWidgets('says the journal hides kernel messages from a limited account', (
+    tester,
+  ) async {
+    final panel = await _pump(tester);
+    await panel.emit(tester, HostProfileChanged('srv-1', _limited));
+    await tester.tap(find.text('Kernel'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Kernel messages may be missing'), findsOne);
+
+    await panel.emit(
+      tester,
+      LogStreamState(
+        panel.opens.last.streamId,
+        const LogStreamEnded(LogStreamEndReason.oldestReached),
+      ),
+    );
+    expect(find.text('No entries are visible to your account.'), findsOne);
+    expect(find.text('This log has no entries.'), findsNothing);
+  });
+
   testWidgets('tells the source and case matching by more than colour', (
     tester,
   ) async {

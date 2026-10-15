@@ -4335,7 +4335,9 @@ for screen readers, says the same in a sentence with any host error
 output, and offers Retry after a refusal or a failed read. LOG-04's
 notice shows above the journal when the access check's journal row
 says the account sees only its own entries (K04), from the probe's
-profile. Rows from `dmesg`, which has no journal fields, carry no
+profile, and above the kernel log, of which the journal then shows it
+nothing; an empty read says no entries are visible to the account.
+Rows from `dmesg`, which has no journal fields, carry no
 level yet, and LOG-01's "load older" waits for a buffer that can add
 entries before its oldest.
 

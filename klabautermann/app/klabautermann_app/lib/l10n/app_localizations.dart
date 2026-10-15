@@ -952,6 +952,12 @@ abstract class AppLocalizations {
   /// **'Only your own journal entries are shown: your account on this server is not in the systemd-journal, adm or wheel group. The server\'s Access section shows how to add it.'**
   String get logsPanelJournalLimited;
 
+  /// Notice above the kernel log when the server's journal shows the signed-in account only its own entries, which never include kernel messages. The group names are names on the server and stay as they are.
+  ///
+  /// In en, this message translates to:
+  /// **'Kernel messages may be missing: your account on this server is not in the systemd-journal, adm or wheel group, so the journal shows it none. The server\'s Access section shows how to add it.'**
+  String get logsPanelKernelLimited;
+
   /// Status line above the log saying what reading it is doing or why it stopped.
   ///
   /// In en, this message translates to:
@@ -964,7 +970,7 @@ abstract class AppLocalizations {
   /// **'Retry'**
   String get logsPanelRetry;
 
-  /// Shown in place of the log when reading a kernel log, a file or an unfiltered journal finished without any entry.
+  /// Shown in place of the log when reading a kernel log, a file or an unfiltered journal finished without any entry, unless the kernel log or journal is limited to the account's own entries.
   ///
   /// In en, this message translates to:
   /// **'This log has no entries.'**
@@ -975,6 +981,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'No entries match these filters.'**
   String get logsPanelEmptyFiltered;
+
+  /// Shown in place of the log when reading an unfiltered journal or the kernel log finished without any entry while the server shows the signed-in account only its own journal entries.
+  ///
+  /// In en, this message translates to:
+  /// **'No entries are visible to your account.'**
+  String get logsPanelEmptyLimited;
 
   /// Label of the log search field, also its name for screen readers once it holds text; the search covers the entries the panel holds, not the whole log on the server.
   ///

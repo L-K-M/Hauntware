@@ -640,6 +640,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'Only your own journal entries are shown: your account on this server is not in the systemd-journal, adm or wheel group. The server\'s Access section shows how to add it.';
 
   @override
+  String get logsPanelKernelLimited =>
+      'Kernel messages may be missing: your account on this server is not in the systemd-journal, adm or wheel group, so the journal shows it none. The server\'s Access section shows how to add it.';
+
+  @override
   String logsPanelStatus(String status) {
     String _temp0 = intl.Intl.selectLogic(status, {
       'opening': 'Opening the log…',
@@ -665,6 +669,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get logsPanelEmptyFiltered => 'No entries match these filters.';
+
+  @override
+  String get logsPanelEmptyLimited => 'No entries are visible to your account.';
 
   @override
   String get logsPanelSearchLabel => 'Search loaded entries';

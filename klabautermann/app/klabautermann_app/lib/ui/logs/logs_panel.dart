@@ -184,13 +184,21 @@ class _LogsPanelState extends State<LogsPanel> {
                     widget.serverId,
                   ),
                   builder: (context, limited, _) =>
-                      limited == true &&
-                          _panel.query.source == LogSourceKind.journal
-                      ? _Notice(
+                      switch (_panel.query.source) {
+                        _ when limited != true => const SizedBox.shrink(),
+                        LogSourceKind.journal => _Notice(
                           icon: Icons.info_outline,
                           text: l10n.logsPanelJournalLimited,
-                        )
-                      : const SizedBox.shrink(),
+                        ),
+                        // The journal shows such an account no kernel
+                        // messages (K04's kPanelNeeds); `dmesg` may.
+                        LogSourceKind.kernel => _Notice(
+                          icon: Icons.info_outline,
+                          text: l10n.logsPanelKernelLimited,
+                        ),
+                        // A file is read with the file's rights.
+                        LogSourceKind.file => const SizedBox.shrink(),
+                      },
                 ),
                 ?_status(l10n),
               ],
@@ -321,20 +329,34 @@ class _LogsPanelState extends State<LogsPanel> {
       if (_panel.logs.length == 0 &&
           _panel.status is LogStreamEnded &&
           _statusWord(_panel) == null)
-        Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Text(
-              _panel.query.source == LogSourceKind.journal &&
-                      _panel.query.filterCount > 0
-                  ? l10n.logsPanelEmptyFiltered
-                  : l10n.logsPanelEmpty,
-              textAlign: TextAlign.center,
+        ValueListenableBuilder(
+          valueListenable: widget.monitoring.logs.journalLimitedFor(
+            widget.serverId,
+          ),
+          builder: (context, limited, _) => Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Text(
+                _emptyText(l10n, limited: limited == true),
+                textAlign: TextAlign.center,
+              ),
             ),
           ),
         ),
     ],
   );
+
+  String _emptyText(AppLocalizations l10n, {required bool limited}) {
+    final query = _panel.query;
+    if (query.source == LogSourceKind.journal && query.filterCount > 0) {
+      return l10n.logsPanelEmptyFiltered;
+    }
+    // LOG-04: the server may hold entries this account cannot read.
+    if (limited && query.source != LogSourceKind.file) {
+      return l10n.logsPanelEmptyLimited;
+    }
+    return l10n.logsPanelEmpty;
+  }
 
   Future<T?> _sheet<T>(Widget Function(BuildContext context) body) =>
       showModalBottomSheet<T>(

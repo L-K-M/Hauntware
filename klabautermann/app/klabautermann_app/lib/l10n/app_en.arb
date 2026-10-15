@@ -638,6 +638,10 @@
   "@logsPanelJournalLimited": {
     "description": "Notice above the journal when the server shows the signed-in account only its own entries. The group names are names on the server and stay as they are."
   },
+  "logsPanelKernelLimited": "Kernel messages may be missing: your account on this server is not in the systemd-journal, adm or wheel group, so the journal shows it none. The server's Access section shows how to add it.",
+  "@logsPanelKernelLimited": {
+    "description": "Notice above the kernel log when the server's journal shows the signed-in account only its own entries, which never include kernel messages. The group names are names on the server and stay as they are."
+  },
   "logsPanelStatus": "{status, select, opening{Opening the log…} waitingLink{Waiting for the connection to the server.} waitingChannel{Waiting for a free session on the server.} waitingBackground{Paused while the app is in the background.} loading{Loading entries…} invalid{The engine refused this filter or path.} missing{The server has no such file or log tool.} denied{The server denied access to this log.} failed{Reading the log failed.} rejected{The engine did not open this log.} other{Choose or type the absolute path of a file to tail.}}",
   "@logsPanelStatus": {
     "description": "Status line above the log saying what reading it is doing or why it stopped.",
@@ -653,11 +657,15 @@
   },
   "logsPanelEmpty": "This log has no entries.",
   "@logsPanelEmpty": {
-    "description": "Shown in place of the log when reading a kernel log, a file or an unfiltered journal finished without any entry."
+    "description": "Shown in place of the log when reading a kernel log, a file or an unfiltered journal finished without any entry, unless the kernel log or journal is limited to the account's own entries."
   },
   "logsPanelEmptyFiltered": "No entries match these filters.",
   "@logsPanelEmptyFiltered": {
     "description": "Shown in place of the log when reading the journal with filters set finished without any entry."
+  },
+  "logsPanelEmptyLimited": "No entries are visible to your account.",
+  "@logsPanelEmptyLimited": {
+    "description": "Shown in place of the log when reading an unfiltered journal or the kernel log finished without any entry while the server shows the signed-in account only its own journal entries."
   },
   "logsPanelSearchLabel": "Search loaded entries",
   "@logsPanelSearchLabel": {
