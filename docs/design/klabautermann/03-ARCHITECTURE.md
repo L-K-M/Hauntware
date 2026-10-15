@@ -3460,6 +3460,22 @@ localization catalog from the first build:
    keeps only a limited buffer".
 9. **Action previews** list every host write the action causes (8.11).
 
+As built in M2 (`app/klabautermann_app/lib/ui/charts/`), the
+time-series chart (10.7) reads a `TimeSeriesRing` whose lanes share each
+tick's time. The caller opens a gap with its reason when sampling stops;
+the next sample closes it and is never joined to the sample before it,
+nor is any sample joined across an unknown one. A band is at least 3 px
+wide and carries its label where the label fits; the legend names every
+reason in view, each series and the source, which the caller words. The
+hatching's strokes are 2 px wide, so that drawn at one pixel per point
+each still holds 3:1 against the band on the chart surfaces. Time ticks
+fall on round local times, and the chart never animates: it moves when a
+sample arrives or a rebuild moves its right edge later. The lanes differ
+by hue alone, short of 10.10's "never colour alone" for two to four
+series: the colour-blind check (10.7) and the per-series summaries are
+no second visual cue, and a dash pattern would read as missed samples,
+so that cue is still open.
+
 ---
 
 ## 10. UI shell
