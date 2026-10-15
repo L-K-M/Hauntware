@@ -4101,12 +4101,14 @@ values add a history icon, and "Stale" before the age unless the state
 word already says the link is down. The bar, its age and the locator
 warning (4.6) sit beside the kit's row, which takes no trailing widget,
 so the selection pill, hover fill and focus ring stop short of them
-until `SidebarRow` gains a trailing slot (a `ghost_ui` follow-up). They
-need a row 180 px wide per 100 % of body text, about 140 % text on the
-260 px rail, and beyond that the bar and age give way to the name and
-state word, staying in the tooltip and the label. A touch on the warning
-shows its words. A collapsed or filtered section that hides a live
-server does not yet say so in its header (`ghostHiddenLiveIndicator`).
+until `SidebarRow` gains a trailing slot (a `ghost_ui` follow-up), and
+the app mirrors the kit's private row metrics to measure the room left.
+The bar and age show only where the row still fits the name and state
+word in full and the age fits beside it, each measured as drawn at the
+current text scale; elsewhere they give way, staying in the tooltip and
+the label. The warning always shows, and a touch on it shows its
+words. A collapsed or filtered section that hides a live server does
+not yet say so in its header (`ghostHiddenLiveIndicator`).
 The filter (FL-05) is the kit's `SidebarFilterField`
 over `FleetEntry.searchText`, name and address standing in without it:
 every term must occur, Enter opens the first match and Esc clears.

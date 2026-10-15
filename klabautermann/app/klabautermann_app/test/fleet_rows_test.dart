@@ -1,4 +1,7 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter/semantics.dart' show SemanticsAction;
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -17,6 +20,11 @@ import 'support/harness.dart';
 final _t0 = DateTime.utc(2026, 10, 15, 12);
 const _gibibyte = 1024 * 1024 * 1024;
 const _sceneKey = ValueKey('fleet-rows');
+
+/// A column wide enough for the bar beside a connected row in the test
+/// font, whose glyphs are 1 em wide; the 260 px rail fits it in the
+/// goldens' Roboto.
+const _barColumn = Size(420, 480);
 
 /// The controllers a row test drives, with the clock it reads.
 final class _Rows {
@@ -49,7 +57,8 @@ final class _Rows {
 }
 
 /// The rail's list in a 260 px column (03 §10.2) on the Linux brand theme,
-/// over controllers whose clock reads [_Rows.now].
+/// over controllers whose clock reads [_Rows.now]; [layout], [density]
+/// and [platform] pick the kit's other row geometries.
 Future<_Rows> _pump(
   WidgetTester tester, {
   List<FleetServer> servers = twoServers,
@@ -57,6 +66,9 @@ Future<_Rows> _pump(
   String? fontFamily,
   Size size = const Size(260, 480),
   bool collapsed = false,
+  SidebarKitLayout layout = SidebarKitLayout.rail,
+  SidebarKitDensity density = SidebarKitDensity.comfortable,
+  TargetPlatform? platform,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -78,13 +90,18 @@ Future<_Rows> _pump(
   await tester.pumpWidget(
     MaterialApp(
       debugShowCheckedModeBanner: false,
-      theme: chartTheme(brightness, fontFamily: fontFamily),
+      theme: chartTheme(
+        brightness,
+        fontFamily: fontFamily,
+      ).copyWith(platform: platform),
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       home: Material(
         child: Builder(
           builder: (context) => SidebarKitScope(
             strings: klabautermannSidebarStrings(AppLocalizations.of(context)),
+            layout: layout,
+            density: density,
             child: RepaintBoundary(
               key: _sceneKey,
               child: ColoredBox(
@@ -265,7 +282,7 @@ void main() {
   group('pressure bar and freshness (FL-07, 03 §9.5 item 4)', () {
     testWidgets('only a server with a reading shows the bar, and its age '
         'counts on', (tester) async {
-      final rows = await _pump(tester);
+      final rows = await _pump(tester, size: _barColumn);
       expect(find.byType(PressureBar), findsNothing);
 
       await rows.emit(tester, [
@@ -307,7 +324,7 @@ void main() {
 
     testWidgets('stale values say so in an icon and words, whatever the '
         'link says (03 §9.5 item 4, A11Y-01)', (tester) async {
-      final rows = await _pump(tester);
+      final rows = await _pump(tester, size: _barColumn);
       Finder staleIcon() => find.descendant(
         of: find.byKey(const ValueKey('srv-1')),
         matching: find.byIcon(Icons.history),
@@ -342,7 +359,7 @@ void main() {
   group('keyboard and screen reader (03 §10.10)', () {
     testWidgets('a focused row keeps its focus when its first reading '
         'lands', (tester) async {
-      final rows = await _pump(tester);
+      final rows = await _pump(tester, size: _barColumn);
       await tester.tap(find.text('web-1'));
       await tester.pump();
       final focused = FocusManager.instance.primaryFocus;
@@ -361,7 +378,7 @@ void main() {
 
     testWidgets('a monitored row is one named stop, its bar folded into '
         'it', (tester) async {
-      final rows = await _pump(tester);
+      final rows = await _pump(tester, size: _barColumn);
       await rows.emit(tester, [
         const LinkState('srv-1', LinkReady()),
         rows.sample('srv-1', SampleStream.core, _core(cpu: 12)),
@@ -529,7 +546,7 @@ void main() {
         addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
         final harness = await pumpApp(
           tester,
-          size: const Size(400, 800),
+          size: const Size(480, 800),
           servers: const [
             FleetServer(id: 'srv-1', displayName: 'web-1', address: 'a'),
             FleetServer(id: 'srv-2', displayName: 'db-1', address: 'b'),
@@ -598,6 +615,106 @@ void main() {
       expect(tooltip, contains('Updated 0 s ago'));
       expect(tooltip, contains('CPU 85%'), reason: 'the bar\'s values too');
     });
+
+    for (final (layout, density, platform) in const [
+      (
+        SidebarKitLayout.rail,
+        SidebarKitDensity.comfortable,
+        TargetPlatform.linux,
+      ),
+      (SidebarKitLayout.rail, SidebarKitDensity.compact, TargetPlatform.linux),
+      (
+        SidebarKitLayout.rail,
+        SidebarKitDensity.comfortable,
+        TargetPlatform.android,
+      ),
+      (
+        SidebarKitLayout.rail,
+        SidebarKitDensity.compact,
+        TargetPlatform.android,
+      ),
+      (
+        SidebarKitLayout.list,
+        SidebarKitDensity.comfortable,
+        TargetPlatform.android,
+      ),
+    ]) {
+      for (final scale in [1.0, 1.4, 2.0]) {
+        testWidgets('the bar and age show only where the name, state word '
+            'and age fit in full: ${layout.name}, ${density.name}, '
+            '${platform.name}, ${scale}x text', (tester) async {
+          tester.platformDispatcher.textScaleFactorTestValue = scale;
+          addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+          const name = 'prod-web-01';
+          // No address, so the second line is the state word alone.
+          final rows = await _pump(
+            tester,
+            servers: const [FleetServer(id: 'srv-1', displayName: name)],
+            size: const Size(900, 480),
+            layout: layout,
+            density: density,
+            platform: platform,
+          );
+          await rows.emit(tester, [
+            const LinkState('srv-1', LinkReady()),
+            rows.sample('srv-1', SampleStream.core, _core(cpu: 12)),
+          ]);
+          // Past core's 20 s: the widest age a connected row shows.
+          rows.now = _t0.add(const Duration(seconds: 25));
+          await tester.pump(kFreshnessTick);
+          expect(_age(tester, 'srv-1'), 'Stale · 25 s');
+
+          Future<bool> barAt(double width) async {
+            tester.view.physicalSize = Size(width, 480);
+            await tester.pump();
+            return find.byType(PressureBar).evaluate().isNotEmpty;
+          }
+
+          // The narrowest row that shows the bar.
+          var (fits, short) = (900.0, 200.0);
+          expect(await barAt(fits), isTrue);
+          expect(await barAt(short), isFalse);
+          while (fits - short > 1) {
+            final mid = ((fits + short) / 2).roundToDouble();
+            if (await barAt(mid)) {
+              fits = mid;
+            } else {
+              short = mid;
+            }
+          }
+          await barAt(fits);
+          expect(tester.takeException(), isNull);
+
+          RenderParagraph paragraph(Finder text) => tester.renderObject(
+            find.descendant(of: text, matching: find.byType(RichText)),
+          );
+          final age = paragraph(find.byKey(kFleetRowAgeKey));
+          expect(age.didExceedMaxLines, isFalse, reason: 'the age in full');
+          // Found only while not middle-ellipsized.
+          final title = paragraph(find.text(name));
+          var need = title.getMaxIntrinsicWidth(double.infinity);
+          if (density == SidebarKitDensity.comfortable) {
+            final word = paragraph(find.text('Connected'));
+            expect(word.didExceedMaxLines, isFalse, reason: 'the word in full');
+            need = math.max(need, word.getMaxIntrinsicWidth(double.infinity));
+          }
+          // Rounding aside, the label has no room to spare at that width:
+          // the bar does not give way while all of it fits.
+          final room = tester
+              .renderObject<RenderBox>(
+                find
+                    .ancestor(
+                      of: find.text(name),
+                      matching: find.byType(LayoutBuilder),
+                    )
+                    .first,
+              )
+              .constraints
+              .maxWidth;
+          expect(room - need, inInclusiveRange(0, 3));
+        });
+      }
+    }
   });
 
   group('golden', () {

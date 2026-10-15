@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'dart:ui' show FlutterView;
 
 import 'package:flutter/material.dart';
@@ -260,22 +261,42 @@ class FleetServerRow extends StatelessWidget {
   final VoidCallback onActivate;
   final bool selected;
 
-  /// The widest the warning, pressure bar and age beside the row grow:
-  /// the warning's target (24 px), the bar with its severity icon (64),
-  /// the gaps, and room for an age wider than the bar, so the kit's row
-  /// keeps room for its mark, icon and a title on a 260 px rail.
-  static const double _extrasMaxWidth = 120;
+  /// The locator warning's target: 24 px square, WCAG 2.5.8's smallest,
+  /// and no taller than a compact row.
+  static const double _warningExtent = 24;
 
-  /// How wide a row must be, per 100 % of text, for the pressure bar and
-  /// age to sit beside it: the 260 px rail keeps them up to about 140 %
-  /// text, a 360 dp phone up to 200 %. A narrower row would cut the
-  /// server's name and state word to an ellipsis, so they give way there;
-  /// the tooltip and the label still say what they show.
-  static const double _barRowWidthPerText = 180;
+  /// [PressureBar]'s width: its 46 px bar, a 4 px gap and the 14 px slot
+  /// of the severity icon, which the rows' thresholds always draw.
+  static const double _barWidth = 64;
 
-  /// The text size whose growth [_barRowWidthPerText] follows: body text,
-  /// as on the row's second line.
-  static const double _bodyTextSize = 14;
+  /// The history icon before a stale age, and the gap after it.
+  static const double _staleIconSize = 14;
+  static const double _staleIconGap = 2;
+
+  /// Between the warning and the bar, and after the last of them.
+  static const double _extrasGap = 6;
+  static const double _extrasEndPadding = 8;
+
+  /// The width `SidebarRow` keeps beside its label in [layout] at
+  /// [density], on touch or desktop: its two margins, the start inset, the
+  /// mark and the gap after it, the trailing icon with its gap (counted
+  /// even for a row with nothing known, which has none), and the end
+  /// padding of a row with no menu button, in that order. ghost_ui keeps
+  /// these metrics private, so they are mirrored here; the tests that
+  /// find the narrowest row showing the bar fail when they drift.
+  static double _kitRowChrome(
+    SidebarKitLayout layout,
+    SidebarKitDensity density, {
+    required bool touch,
+  }) => switch ((layout, density, touch)) {
+    (SidebarKitLayout.list, _, _) => 2 * 8.0 + 8 + 40 + 16 + 6 + 16 + 4,
+    (_, SidebarKitDensity.comfortable, false) =>
+      2 * 6.0 + 12 + 32 + 10 + 6 + 14 + 4,
+    (_, SidebarKitDensity.comfortable, true) =>
+      2 * 6.0 + 12 + 32 + 12 + 6 + 14 + 4,
+    (_, SidebarKitDensity.compact, false) => 2 * 6.0 + 8 + 18 + 6 + 6 + 12 + 4,
+    (_, SidebarKitDensity.compact, true) => 2 * 6.0 + 8 + 24 + 12 + 6 + 12 + 4,
+  };
 
   /// What a row with no age to count listens to instead of the clock: it
   /// never notifies, so the clock stops once no row shows an age.
@@ -430,6 +451,17 @@ class FleetServerRow extends StatelessWidget {
       GhostServerGlyph.blocked => true,
       _ => false,
     };
+    final ageText = reading == null
+        ? null
+        : switch (fleetRowAge(l10n, reading.age)) {
+            final age when reading.stale && !linkWordSaysStale =>
+              l10n.fleetRowStaleAge(age),
+            final age => age,
+          };
+    final ageStyle = Theme.of(context).textTheme.labelMedium?.copyWith(
+      color: secondaryText,
+      fontFeatures: const [FontFeature.tabularFigures()],
+    );
     final warning = conflict == null
         ? null
         : Tooltip(
@@ -439,10 +471,8 @@ class FleetServerRow extends StatelessWidget {
             // row's tooltip never shows (it opens on hover only). Tap mode
             // ignores mice: a click opens the server and hover shows these.
             triggerMode: TooltipTriggerMode.tap,
-            // 24 px square, WCAG 2.5.8's smallest target, and no taller
-            // than a compact row.
             child: SizedBox.square(
-              dimension: 24,
+              dimension: _warningExtent,
               child: Icon(
                 Icons.warning_amber_rounded,
                 size: 16,
@@ -465,28 +495,22 @@ class FleetServerRow extends StatelessWidget {
                 ),
                 Row(
                   mainAxisSize: MainAxisSize.min,
-                  spacing: 2,
+                  spacing: _staleIconGap,
                   children: [
                     if (reading.stale)
-                      Icon(Icons.history, size: 14, color: secondaryText),
+                      Icon(
+                        Icons.history,
+                        size: _staleIconSize,
+                        color: secondaryText,
+                      ),
                     Flexible(
                       child: Text(
-                        switch (fleetRowAge(l10n, reading.age)) {
-                          final age when reading.stale && !linkWordSaysStale =>
-                            l10n.fleetRowStaleAge(age),
-                          final age => age,
-                        },
+                        ageText!,
                         key: kFleetRowAgeKey,
                         maxLines: 1,
                         softWrap: false,
                         overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.labelMedium
-                            ?.copyWith(
-                              color: secondaryText,
-                              fontFeatures: const [
-                                FontFeature.tabularFigures(),
-                              ],
-                            ),
+                        style: ageStyle,
                       ),
                     ),
                   ],
@@ -500,21 +524,39 @@ class FleetServerRow extends StatelessWidget {
     // semantics tree, and a tap on them opens the server like the row.
     // The kit's row stays this Row's first child with or without them, so
     // it keeps its state (focus, hover) when they come and go.
+    //
+    // The bar and age sit there only where the row keeps the server's name
+    // and state word in full and the age fits too, each measured as drawn
+    // at this text scale (03 §10.10); elsewhere they give way, and the
+    // tooltip and the label still say what they show. The warning stays:
+    // on touch it is the only way to its words.
+    final barExtrasWidth = ageText == null
+        ? null
+        : (warning == null ? 0 : _warningExtent + _extrasGap) +
+              math.max(
+                _barWidth,
+                (reading!.stale ? _staleIconSize + _staleIconGap : 0) +
+                    _textWidth(context, ageText, ageStyle),
+              ) +
+              _extrasEndPadding;
+    final barRowWidth = barExtrasWidth == null
+        ? null
+        : barExtrasWidth.ceilToDouble() + _rowNeed(context, label);
     return LayoutBuilder(
       builder: (context, constraints) {
-        final textGrowth =
-            MediaQuery.textScalerOf(context).scale(_bodyTextSize) /
-            _bodyTextSize;
-        final extras = [
-          ?warning,
-          if (constraints.maxWidth >= _barRowWidthPerText * textGrowth) ?bar,
-        ];
+        final showsBar =
+            barRowWidth != null && constraints.maxWidth >= barRowWidth;
+        final extras = [?warning, if (showsBar) ?bar];
         return Row(
           children: [
             Expanded(child: row),
             if (extras.isNotEmpty)
               ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: _extrasMaxWidth),
+                constraints: BoxConstraints(
+                  maxWidth: showsBar
+                      ? barExtrasWidth!.ceilToDouble()
+                      : _warningExtent + _extrasEndPadding,
+                ),
                 child: GestureDetector(
                   behavior: HitTestBehavior.opaque,
                   // The row's node has the tap already; the detector's own
@@ -523,10 +565,12 @@ class FleetServerRow extends StatelessWidget {
                   onTap: onActivate,
                   child: ExcludeSemantics(
                     child: Padding(
-                      padding: const EdgeInsetsDirectional.only(end: 8),
+                      padding: const EdgeInsetsDirectional.only(
+                        end: _extrasEndPadding,
+                      ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
-                        spacing: 6,
+                        spacing: _extrasGap,
                         children: extras,
                       ),
                     ),
@@ -537,6 +581,37 @@ class FleetServerRow extends StatelessWidget {
         );
       },
     );
+  }
+
+  /// The width the kit's row needs to show the server's name and
+  /// [stateWord] in full: its label's widest line, styled as `SidebarRow`
+  /// styles it, and the kit's room around the label.
+  double _rowNeed(BuildContext context, String? stateWord) {
+    final theme = Theme.of(context);
+    final scope = context.dependOnInheritedWidgetOfExactType<SidebarKitScope>();
+    // The kit's defaults outside a scope; a list is always comfortable.
+    final layout = scope?.layout ?? SidebarKitLayout.rail;
+    final density = scope?.density ?? SidebarKitDensity.comfortable;
+    final comfortable = density == SidebarKitDensity.comfortable;
+    final titleStyle =
+        (comfortable ? theme.textTheme.bodyLarge : theme.textTheme.bodyMedium)
+            ?.copyWith(
+              fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+            );
+    final label = math.max(
+      _textWidth(context, server.displayName, titleStyle),
+      // Only a comfortable row draws the second line.
+      comfortable && stateWord != null
+          ? _textWidth(context, stateWord, theme.textTheme.bodySmall)
+          : 0.0,
+    );
+    final touch = switch (theme.platform) {
+      TargetPlatform.macOS ||
+      TargetPlatform.linux ||
+      TargetPlatform.windows => false,
+      _ => true,
+    };
+    return _kitRowChrome(layout, density, touch: touch) + label.ceilToDouble();
   }
 
   /// The locator warning K14's import flags (03 §4.6), naming the other
@@ -555,6 +630,24 @@ class FleetServerRow extends StatelessWidget {
     ];
     return l10n.fleetRowLocatorConflict(names.join(l10n.fleetRowListSeparator));
   }
+}
+
+/// How wide [text] lays out on one line in [style] over the ambient text
+/// style and scale: what a [Text] there takes to show it in full.
+double _textWidth(BuildContext context, String text, TextStyle? style) {
+  final painter = TextPainter(
+    text: TextSpan(
+      text: text,
+      style: DefaultTextStyle.of(context).style.merge(style),
+    ),
+    textDirection: Directionality.of(context),
+    textScaler: MediaQuery.textScalerOf(context),
+    maxLines: 1,
+  )..layout();
+  final width = painter.width;
+  // A painter holds a native paragraph until disposed.
+  painter.dispose();
+  return width;
 }
 
 /// Tells the screen reader when a server's link changes state (A11Y-15),
