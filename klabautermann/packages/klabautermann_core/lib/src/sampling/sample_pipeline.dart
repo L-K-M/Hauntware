@@ -191,10 +191,10 @@ final class ServerSamplePipeline {
   /// behind another has no shares, nor does the next one.
   /// Outcomes outside [SamplingPhase.sampling] are ignored, as are
   /// samplers that closed (the conditions say why) and ticks skipped
-  /// while another request is outstanding. The pipeline opens no gap for
-  /// those, so the scheduler (K22) must hand over a busy skip only for
-  /// streams the outstanding request reads; a stream that request does
-  /// not read needs an outcome that opens a gap.
+  /// while another request is outstanding. A busy skip is counted, not
+  /// lost (03 §6.2), so it opens no gap, also for streams the
+  /// outstanding request does not read: their latest [Sample.at] ages
+  /// until a later tick reads them.
   List<EngineEvent> addTick(
     Set<SampleStream> streams,
     SamplerOutcome outcome,
