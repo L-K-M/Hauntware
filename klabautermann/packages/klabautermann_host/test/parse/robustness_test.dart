@@ -134,6 +134,7 @@ void main() {
         'cpu  1 2 3 4 5 6 7 8 9 10',
         'cpu0 5 6',
         'cpu1 1 2 3 4 5 6 7 8 9 10',
+        'cpu2 1 2 3 4 5 6 7 8',
         '== diskstats ==',
         'sda 1 2 3 4',
         'sdb 1 2 3',
@@ -143,7 +144,10 @@ void main() {
         'c_min -1',
       ].join('\n');
       final r = parseCore(raw, _ctx);
-      expect(r.value.perCpu.keys, ['cpu0']);
+      expect(r.value.perCpu.keys, ['cpu0', 'cpu2']);
+      // A 32-bit shell's eight counters (D48).
+      expect(r.value.perCpu['cpu2']!.busy, 1 + 2 + 3 + 6 + 7 + 8);
+      expect(r.value.perCpu['cpu2']!.idle, 4 + 5);
       expect(r.value.diskstats.map((d) => d.name), ['sda']);
       expect(r.value.zfsArc!.sizeBytes, 4096);
       expect(r.value.zfsArc!.minBytes, isNull);

@@ -74,7 +74,9 @@ final class CpuTimes {
 /// One core as the `core` collector sends it (D48): `cpuN <busy> <idle>`,
 /// where idle is the line's idle plus iowait jiffies and busy its user,
 /// nice, system, irq, softirq and steal jiffies (guest time is already in
-/// user and nice). CPU-02 shows only busy per core.
+/// user and nice). CPU-02 shows only busy per core. A shell with 32-bit
+/// arithmetic sends the line's first eight counters instead, and the
+/// parser sums them.
 @immutable
 final class CoreCpuTimes {
   const CoreCpuTimes(this.name, {required this.busy, required this.idle});
@@ -104,7 +106,8 @@ final class StatBlock {
 }
 
 /// Parses the `stat` block (03 §6.4, D48): the whole aggregate `cpu`
-/// line, `cpuN <busy> <idle>` per core and `btime`.
+/// line, `cpuN <busy> <idle>` or the eight counters per core, and
+/// `btime`.
 StatBlock parseStatBlock(List<String> lines, List<String> warnings) {
   CpuTimes? aggregate;
   final cores = <String, CoreCpuTimes>{};
@@ -142,14 +145,22 @@ StatBlock parseStatBlock(List<String> lines, List<String> warnings) {
       }
       fields.add(v);
     }
-    if (bad || fields.isEmpty || (name != 'cpu' && fields.length != 2)) {
+    final core = name != 'cpu';
+    if (bad || fields.isEmpty || (core && ![2, 8].contains(fields.length))) {
       warnings.add('stat: malformed cpu line "$t"');
       continue;
     }
-    if (name == 'cpu') {
+    if (!core) {
       aggregate = CpuTimes(name, fields);
-    } else {
+    } else if (fields.length == 2) {
       cores[name] = CoreCpuTimes(name, busy: fields[0], idle: fields[1]);
+    } else {
+      final f = fields;
+      cores[name] = CoreCpuTimes(
+        name,
+        busy: f[0] + f[1] + f[2] + f[5] + f[6] + f[7],
+        idle: f[3] + f[4],
+      );
     }
   }
   return StatBlock(aggregate: aggregate, cores: cores, btime: btime);

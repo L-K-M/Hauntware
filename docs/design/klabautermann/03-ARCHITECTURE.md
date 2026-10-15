@@ -579,7 +579,13 @@ Proposals awaiting the owner close the section; they are not decisions.
   idle jiffies, because CPU-02 shows only busy per core: idle is idle plus
   iowait, busy is user, nice, system, irq, softirq and steal, and the
   kernel already counts guest time in user and nice [V: Linux
-  `kernel/sched/cputime.c`, `account_guest_time`]. `meminfo` keeps
+  `kernel/sched/cputime.c`, `account_guest_time`]. mksh, and BusyBox on a
+  32-bit CPU without `SH_MATH_64`, do shell arithmetic in 32 bits [V: mksh
+  R59 prints -2147483648 for `$((2147483647 + 1))`; BusyBox
+  `shell/math.h`], so a core's idle sum would wrap after about 248 days at
+  USER_HZ 100: the fast program tests the width once at start, and such a
+  shell sends each `cpuN` line's first eight counters instead, about 41 B
+  more per core [U], outside 11.4's per-CPU allowance. `meminfo` keeps
   MEM-01's nine keys without padding or unit. `netdev` keeps the bytes
   received and sent (NET-01) of each interface with a `device` link in
   sysfs whose master, if it has one, has none: loopback, bridges, bonds,

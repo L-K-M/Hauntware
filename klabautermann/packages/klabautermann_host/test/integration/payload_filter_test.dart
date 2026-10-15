@@ -1,6 +1,7 @@
 // Host-side filtering through the real program (D48, 03 §11.4). Each
 // test writes a synthetic /proc and /sys tree, points the assembled
-// program at it, runs one tick under dash and bash and parses the reply.
+// program at it, runs one tick under dash, bash and, when installed,
+// mksh, and parses the reply.
 // The trees are hand-made [U]: their shapes follow procfs(5), the kernel's
 // sysfs layout and OpenZFS's arcstats, not a captured host.
 @Tags(['shell'])
@@ -14,10 +15,21 @@ import 'package:klabautermann_host/klabautermann_host.dart';
 import 'package:test/test.dart';
 
 final _shells = <String, String>{
-  for (final name in ['dash', 'bash'])
-    for (final dir in ['/bin', '/usr/bin'])
+  for (final name in ['dash', 'bash', 'mksh'])
+    for (final dir in [
+      ...?Platform.environment['PATH']?.split(':'),
+      '/bin',
+      '/usr/bin',
+    ])
       if (File('$dir/$name').existsSync()) name: '$dir/$name',
 };
+
+/// Whether [shell] does 64-bit arithmetic; mksh does 32-bit, so its
+/// replies carry eight counters per core and miss the size budget (D48).
+bool _wide(String shell) =>
+    '${Process.runSync(shell, ['-c', r'echo $((2147483647 + 1))']).stdout}'
+        .trim() ==
+    '2147483648';
 
 /// One tick of [collector] over [root]: the parsed section and the reply's
 /// size on the wire, from the `B` marker to the end of the `E` marker.
@@ -68,6 +80,32 @@ void _write(Directory root, String path, String text) => (File(
 
 void _mark(Directory root, String path) =>
     Directory('${root.path}/$path').createSync(recursive: true);
+
+/// A one-CPU host with one disk and one interface without a device link,
+/// as inside a container; [files] adds or replaces paths.
+Directory _smallHost([Map<String, String> files = const {}]) {
+  final root = Directory.systemTemp.createTempSync('klab-ct');
+  addTearDown(() => root.deleteSync(recursive: true));
+  ({
+    'proc/stat':
+        'cpu  1 2 3 4 5 6 7 8 0 0\ncpu0 1 2 3 4 5 6 7 8 0 0\nbtime 5\n',
+    'proc/meminfo': 'MemTotal:  1024 kB\nMemAvailable:  512 kB\n',
+    'proc/loadavg': '0.00 0.01 0.05 1/9 99\n',
+    'proc/uptime': '12.50 40.00\n',
+    'proc/diskstats': '   8       0 sda 1 0 8 0 2 0 16 0 0 0 0\n',
+    'proc/net/dev':
+        'h|\nh|\n    lo: 9 1 0 0 0 0 0 0 9 1 0 0 0 0 0 0\n'
+        '  eth0: 100 1 0 0 0 0 0 0 200 1 0 0 0 0 0 0\n',
+    ...files,
+  }).forEach((path, text) => _write(root, path, text));
+  return root;
+}
+
+/// One `core` tick over [root] under [shell], parsed.
+Future<ParseResult<CoreSnapshot>> _core(String shell, Directory root) async {
+  final r = await _tick(shell, root, Collector.core);
+  return parseCore(utf8.decode(r.section.payload), ParseContext.standard);
+}
 
 /// A /proc/stat line for one CPU with counters of a host up for 100 days
 /// at USER_HZ 100: user nice system idle iowait irq softirq steal guest
@@ -253,6 +291,7 @@ Directory _bigHost(int cpus) {
 
 void main() {
   for (final MapEntry(key: name, value: shell) in _shells.entries) {
+    final wide = _wide(shell);
     group(name, () {
       test(
         'core keeps whole disks, device NICs, per-core sums (32 CPUs)',
@@ -295,7 +334,7 @@ void main() {
           expect(core.zfsArc!.minBytes, 8589934592);
 
           // 03 §11.4 as amended by D48: 2.5 KB at 32 CPUs.
-          expect(r.replyBytes, lessThanOrEqualTo(2500));
+          if (wide) expect(r.replyBytes, lessThanOrEqualTo(2500));
         },
       );
 
@@ -303,7 +342,7 @@ void main() {
         final at32 = await _tick(shell, _bigHost(32), Collector.core);
         final at64 = await _tick(shell, _bigHost(64), Collector.core);
         expect((at64.replyBytes - at32.replyBytes) / 32, lessThanOrEqualTo(32));
-      });
+      }, skip: wide ? false : 'eight counters per core on 32-bit shells (D48)');
 
       test('overview stays inside the ten-host budget', () async {
         final r = await _tick(shell, _bigHost(32), Collector.overview);
@@ -323,37 +362,13 @@ void main() {
       test(
         'without a device-backed NIC every interface but lo stays',
         () async {
-          final root = Directory.systemTemp.createTempSync('klab-ct');
-          addTearDown(() => root.deleteSync(recursive: true));
-          _write(
-            root,
-            'proc/stat',
-            'cpu  1 2 3 4 5 6 7 8 0 0\ncpu0 1 2 3 4 5 6 7 8 0 0\nbtime 5\n',
-          );
-          _write(
-            root,
-            'proc/meminfo',
-            'MemTotal:  1024 kB\nMemAvailable:  512 kB\n',
-          );
-          _write(root, 'proc/loadavg', '0.00 0.01 0.05 1/9 99\n');
-          _write(root, 'proc/uptime', '12.50 40.00\n');
-          _write(
-            root,
-            'proc/diskstats',
-            '   8       0 sda 1 0 8 0 2 0 16 0 0 0 0\n',
-          );
-          _write(
-            root,
-            'proc/net/dev',
-            'h|\nh|\n    lo: 9 1 0 0 0 0 0 0 9 1 0 0 0 0 0 0\n'
+          final root = _smallHost({
+            'proc/net/dev':
+                'h|\nh|\n    lo: 9 1 0 0 0 0 0 0 9 1 0 0 0 0 0 0\n'
                 '  eth0: 100 1 0 0 0 0 0 0 200 1 0 0 0 0 0 0\n'
                 'docker0: 30 1 0 0 0 0 0 0 40 1 0 0 0 0 0 0\n',
-          );
-          final r = await _tick(shell, root, Collector.core);
-          final core = parseCore(
-            utf8.decode(r.section.payload),
-            ParseContext.standard,
-          ).value;
+          });
+          final core = (await _core(shell, root)).value;
           expect(
             core.netdev.map((n) => '${n.name} ${n.rxBytes} ${n.txBytes}'),
             ['eth0 100 200', 'docker0 30 40'],
@@ -364,6 +379,20 @@ void main() {
           expect(core.cpuPressure, isNull);
         },
       );
+
+      test('per-core counters above 2^31 keep their value', () async {
+        // A core idle for 254 days at USER_HZ 100.
+        final root = _smallHost({
+          'proc/stat':
+              'cpu  1 2 3 4 5 6 7 8 0 0\n'
+              'cpu0 120000000 1500000 45000000 2200000000 2400000 0 '
+              '1700000 35000 0 0\nbtime 5\n',
+        });
+        final core = await _core(shell, root);
+        expect(core.warnings, isEmpty);
+        expect(core.value.perCpu['cpu0']!.busy, 168235000);
+        expect(core.value.perCpu['cpu0']!.idle, 2202400000);
+      });
     });
   }
 

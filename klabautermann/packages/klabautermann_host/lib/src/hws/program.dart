@@ -242,6 +242,13 @@ fi
 /// filtering happens before anything crosses the link. The slow program
 /// does not carry them.
 const _kFastHelpers = r"""
+# mksh, and BusyBox on a 32-bit CPU without SH_MATH_64, do shell
+# arithmetic in 32 bits, and a core's idle sum passes 2^31 jiffies after
+# about 248 days at USER_HZ 100. Such a shell sends a core's eight
+# counters instead (D48).
+HW_W64=
+[ $((2147483647 + 1)) -gt 0 ] && HW_W64=1
+
 # A file the fast collectors cannot do without: unreadable is `denied`,
 # absent `error` (03 §6.2 status vocabulary), and the caller skips it.
 hw_readable() {
@@ -337,7 +344,8 @@ c_overview() {
 /// `core` (03 §6.4): the overview's blocks with the per-core `cpuN` lines
 /// as `cpuN <busy> <idle>` jiffies (CPU-02 shows busy per core; idle is
 /// idle plus iowait, busy the other fields but guest, which user and
-/// nice already include), `btime`, the diskstats rows, PSI averages
+/// nice already include), or their first eight counters from a shell
+/// with 32-bit arithmetic, `btime`, the diskstats rows, PSI averages
 /// without the cumulative `total` and without cpu's `full` line, which
 /// the kernel sets to zero at the system level
 /// (Documentation/accounting/psi.rst), /proc/uptime and, where ZFS is
@@ -352,7 +360,11 @@ c_core() {
         o="$o$NL$l" ;;
       cpu[0-9]*)
         set -- $l
-        o="$o$NL$1 $((${2:-0} + ${3:-0} + ${4:-0} + ${7:-0} + ${8:-0} + ${9:-0})) $((${5:-0} + ${6:-0}))" ;;
+        if [ -n "$HW_W64" ]; then
+          o="$o$NL$1 $((${2:-0} + ${3:-0} + ${4:-0} + ${7:-0} + ${8:-0} + ${9:-0})) $((${5:-0} + ${6:-0}))"
+        else
+          o="$o$NL$1 ${2:-0} ${3:-0} ${4:-0} ${5:-0} ${6:-0} ${7:-0} ${8:-0} ${9:-0}"
+        fi ;;
       btime\ *)
         o="$o$NL$l"
         break ;;
