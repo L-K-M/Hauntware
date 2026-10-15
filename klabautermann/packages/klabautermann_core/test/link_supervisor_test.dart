@@ -412,6 +412,15 @@ void main() {
       expect(calls.map((c) => c.purpose), [_background, _interactive]);
     });
 
+    test('does not take over a failure no prompt resolves', () async {
+      await askDuringDial();
+      calls.single.fail(LinkFailureKind.unsupportedAlgorithm);
+      await clock.elapse(Duration.zero);
+
+      expect(calls, hasLength(1));
+      expect(statuses().last, _failed(LinkFailureKind.unsupportedAlgorithm));
+    });
+
     test('ends when that dial is given up', () async {
       await askDuringDial();
       await clock.elapse(kConnectAttemptDeadline);

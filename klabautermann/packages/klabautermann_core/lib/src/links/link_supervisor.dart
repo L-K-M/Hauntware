@@ -347,7 +347,7 @@ final class LinkSupervisor {
         );
         if (_redials(failure)) {
           _backoff(server);
-        } else if (attempt.userAsked) {
+        } else if (attempt.userAsked && _promptMayResolve(failure)) {
           _enqueue(_Attempt(server, ConnectPurpose.interactive));
         } else {
           server.hold = _Hold.forUser;
@@ -358,6 +358,16 @@ final class LinkSupervisor {
   /// A failure to reach the server; any other waits for the user.
   static bool _redials(LinkFailureKind? failure) => switch (failure) {
     LinkFailureKind.unreachable || LinkFailureKind.timedOut => true,
+    _ => false,
+  };
+
+  /// A failure of an unattended attempt that an interactive one may not
+  /// meet: a declined first-seen host key, or a sign-in that may have
+  /// needed answers, rejected or not classified.
+  static bool _promptMayResolve(LinkFailureKind? failure) => switch (failure) {
+    null ||
+    LinkFailureKind.hostKeyDeclined ||
+    LinkFailureKind.authenticationRejected => true,
     _ => false,
   };
 
