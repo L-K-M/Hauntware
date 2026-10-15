@@ -57,10 +57,10 @@ final class DmesgRecord {
   };
 }
 
-/// Parses `dmesg --json` output; never throws. Each balanced object in
-/// the record array decodes on its own: one that is not valid JSON or has
-/// no string `msg` warns and is skipped, and an object still open at the
-/// end warns as truncated.
+/// Parses `dmesg --json --decode` output; never throws. Each balanced
+/// object in the record array decodes on its own: one that is not valid
+/// JSON or has no string `msg` warns and is skipped, and an object still
+/// open at the end warns as truncated.
 ParseResult<List<DmesgRecord>> parseDmesgJson(String raw) {
   final warnings = <String>[];
   final out = <DmesgRecord>[];
