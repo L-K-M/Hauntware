@@ -290,6 +290,27 @@ void main() {
     });
   });
 
+  group('keyboard and screen reader (03 §10.10)', () {
+    testWidgets('a focused row keeps its focus when its first reading '
+        'lands', (tester) async {
+      final rows = await _pump(tester);
+      await tester.tap(find.text('web-1'));
+      await tester.pump();
+      final focused = FocusManager.instance.primaryFocus;
+      expect(
+        focused?.context?.findAncestorWidgetOfExactType<SidebarRow>()?.title,
+        'web-1',
+      );
+
+      await rows.emit(tester, [
+        const LinkState('srv-1', LinkReady()),
+        rows.sample('srv-1', SampleStream.core, _core(cpu: 12)),
+      ]);
+      expect(find.byType(PressureBar), findsOneWidget);
+      expect(FocusManager.instance.primaryFocus, same(focused));
+    });
+  });
+
   testWidgets('the locator warning shows on the row with the other '
       'server\'s name (03 §4.6)', (tester) async {
     await _pump(

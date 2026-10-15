@@ -264,6 +264,10 @@ class FleetServerRow extends StatelessWidget {
   /// kit's row keeps room for its mark, icon and a title on a 260 px rail.
   static const double _extrasMaxWidth = 120;
 
+  /// What a row with no age to count listens to instead of the clock: it
+  /// never notifies, so the clock stops once no row shows an age.
+  static final Listenable _silent = Listenable.merge(const []);
+
   @override
   Widget build(BuildContext context) {
     final id = server.id;
@@ -279,13 +283,17 @@ class FleetServerRow extends StatelessWidget {
           fs: fs.value,
         );
         // Only a row with a reading has an age to keep counting, so only
-        // such a row keeps the clock ticking.
-        if (samples.overview == null && samples.core == null) {
-          return _build(context, samples, null);
-        }
-        return ValueListenableBuilder(
-          valueListenable: monitoring.clock,
-          builder: (context, now, _) => _build(context, samples, now),
+        // such a row keeps the clock ticking. The builder is the same
+        // either way: a subtree that changed shape when the first reading
+        // lands would remount the kit's row and drop its keyboard focus.
+        final counting = samples.overview != null || samples.core != null;
+        return ListenableBuilder(
+          listenable: counting ? monitoring.clock : _silent,
+          builder: (context, _) => _build(
+            context,
+            samples,
+            counting ? monitoring.clock.value : null,
+          ),
         );
       },
     );
@@ -439,33 +447,34 @@ class FleetServerRow extends StatelessWidget {
           ),
         ),
     ];
-    if (extras.isEmpty) return row;
-
     // Beside the row rather than in it: the kit's row takes no trailing
     // widget, and ghost_ui is a shared package outside this change. The
     // row's label already says what these show, so they stay out of the
     // semantics tree, and a tap on them opens the server like the row.
-    // Capped, so that at 200 % text the age gives way before the row.
+    // Capped, so that at 200 % text the age gives way before the row. The
+    // kit's row stays this Row's first child with or without them, so it
+    // keeps its state (focus, hover) when they come and go.
     return Row(
       children: [
         Expanded(child: row),
-        ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: _extrasMaxWidth),
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: onActivate,
-            child: ExcludeSemantics(
-              child: Padding(
-                padding: const EdgeInsetsDirectional.only(end: 8),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  spacing: 6,
-                  children: extras,
+        if (extras.isNotEmpty)
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: _extrasMaxWidth),
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: onActivate,
+              child: ExcludeSemantics(
+                child: Padding(
+                  padding: const EdgeInsetsDirectional.only(end: 8),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    spacing: 6,
+                    children: extras,
+                  ),
                 ),
               ),
             ),
           ),
-        ),
       ],
     );
   }
