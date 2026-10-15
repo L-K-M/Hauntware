@@ -93,8 +93,9 @@ here sets a budget.
   1,000 lines a second asks for.
 - **JIT.** `dart run` took 0.75 ms per tick at the median and 2.89 ms at
   p99, three times the AOT figures, and was busy 18.0 ms a second. Its
-  maximum includes the ten full collections the heap readings forced,
-  and its resident set (367 to 402 MB) is the JIT VM's.
+  39 ms maximum may come from a forced collection, a compilation or the
+  loaded machine; the run cannot tell which. Its resident set (367 to
+  402 MB) is the JIT VM's.
 
 ## Not covered here
 
