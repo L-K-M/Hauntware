@@ -2329,17 +2329,21 @@ sends nothing else and, for a server whose profile the engine does not
 know yet, the fast sampler waits too, so the first readings already
 withhold what a container host's `/proc` would supply (D50); a slow
 sampler that fails to start releases the fast one, and probes once it is
-ready. A missed fast deadline is a dead-peer hint to the link
-supervisor: the fast collectors read `/proc` with builtins only, so a
-reply later than 5 s means a stalled sampler or a silent peer. The
-supervisor closes a hinted link that shows no sign of life (a reply, a
-reply lost to framing, or a sampler's READY) within 20 s [E], the
-restarted sampler's first restart delay and READY deadline rounded up,
-reports it `closed(pingTimeout)` (CN-06) and redials as after a lost
-link. A sampler that only stalled answers in time, and a run that stops
+ready. A missed fast deadline makes the restarted fast sampler's start
+a dead-peer hint to the link supervisor: the fast collectors read
+`/proc` with builtins only, so a reply later than 5 s means a stalled
+sampler or a silent peer, and the restart tells which. The supervisor
+closes a hinted link that shows no sign of life (a reply, a reply lost
+to framing, or a sampler's READY) within 20 s [E], the READY deadline
+from the opened channel and 5 s for the open, reports it
+`closed(pingTimeout)` (CN-06) and redials as after a lost link. A
+sampler that only stalled answers in time, and a run that stops
 withdraws its hint, which leaves liveness to the link's ping (5.1).
-*Rejected:* closing the link on the hint (a stalled sampler would cost a
-reconnect); a liveness command over the link on the hint (one more
+*Rejected:* a hint from the missed deadline itself (the restart delay
+before the start grows with each failure without a reply, past 20 s
+from the sixth, so a live but overloaded host would be redialed about
+once a minute); closing the link on the hint (a stalled sampler would
+cost a reconnect); a liveness command over the link on the hint (one more
 channel and process on a link that may be dead, bounded only by the
 channel-open timeout); holding the fast sampler for the probe without
 the release (a host that refuses the second session channel would

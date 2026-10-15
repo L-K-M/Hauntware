@@ -87,8 +87,9 @@ Duration Function() _monotonicClock() {
 /// [profileChanged], [activity], and [retain] for the fleet. A tick that
 /// would overlap its sampler's outstanding request is skipped and
 /// counted by the session ([SamplerSession.skippedTicks]), never queued,
-/// and a missed fast deadline is a dead-peer hint to the link supervisor
-/// until the link next shows a sign of life.
+/// and a missed fast deadline makes the restarted fast sampler's start a
+/// dead-peer hint to the link supervisor until the link next shows a
+/// sign of life.
 final class SamplingScheduler {
   /// [linkFor] gives a server's ready link, null while it has none.
   /// [deadPeerHint] and [clearDeadPeerHint] reach the link supervisor.
@@ -319,6 +320,13 @@ final class SamplingScheduler {
           run.holdFast = false;
           _schedule(server, run, run.fast);
         }
+      case SamplerStarting()
+          when sampler.kind == SamplerKind.fast && run.deadlineMissed:
+        // The hint's grace covers this start, not the restart delay
+        // before it, which grows with each failure (6.2).
+        run.deadlineMissed = false;
+        run.hinted = true;
+        _deadPeerHint(server.pipeline.serverId, run.link);
       case SamplerIdle() || SamplerStarting():
         break;
     }
@@ -497,9 +505,9 @@ final class SamplingScheduler {
       case SamplerGap(reason: SamplerGapReason.deadline)
           when sampler.kind == SamplerKind.fast:
         // The fast collectors read /proc with builtins only, so a missed
-        // deadline means a stalled sampler or a silent peer (03 §6.2).
-        run.hinted = true;
-        _deadPeerHint(server.pipeline.serverId, run.link);
+        // deadline means a stalled sampler or a silent peer (03 §6.2);
+        // whether the restarted sampler starts tells which.
+        run.deadlineMissed = true;
       case SamplerGap() || SamplerSkipped():
         break;
     }
@@ -509,8 +517,10 @@ final class SamplingScheduler {
     _schedule(server, run, sampler);
   }
 
-  /// A sign of life on [run]'s link clears a dead-peer hint.
+  /// A sign of life on [run]'s link clears a dead-peer hint, or makes
+  /// one that a missed deadline would open unnecessary.
   void _answered(_Server server, _Run run) {
+    run.deadlineMissed = false;
     if (!run.hinted) return;
     run.hinted = false;
     _clearDeadPeerHint(server.pipeline.serverId, run.link);
@@ -592,6 +602,10 @@ final class _Run {
   /// owes one; null once one is answered.
   Duration? probeAt;
   bool probing = false;
+
+  /// The fast sampler missed a deadline: its restart's start opens a
+  /// dead-peer hint.
+  bool deadlineMissed = false;
 
   /// A dead-peer hint about [link] is open with the supervisor.
   bool hinted = false;

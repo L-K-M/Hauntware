@@ -39,6 +39,7 @@ void main() {
   late List<(String, String, SshLink)> hints;
   late List<SamplerSession> sessions;
   late SamplerDeadlines deadlines;
+  late Duration restartDelay;
   late SamplingScheduler scheduler;
   late AnsweringLink link;
 
@@ -51,6 +52,7 @@ void main() {
     hints = [];
     sessions = [];
     deadlines = const SamplerDeadlines();
+    restartDelay = const Duration(milliseconds: 5);
     scheduler = SamplingScheduler(
       subscriptions: subscriptions,
       linkFor: (id) => links[id],
@@ -63,7 +65,7 @@ void main() {
           kind: kind,
           quote: quoteShellWord,
           deadlines: deadlines,
-          restartDelay: (_) => const Duration(milliseconds: 5),
+          restartDelay: (_) => restartDelay,
         );
         sessions.add(session);
         return session;
@@ -389,14 +391,19 @@ void main() {
     );
   });
 
-  test('a missed fast deadline is a dead-peer hint, cleared by the '
-      'restarted sampler\'s READY', () async {
+  test('a missed fast deadline is a dead-peer hint from the restarted '
+      'sampler\'s start, so its restart delay, which grows with each '
+      'failure, takes nothing from the grace, and READY clears it', () async {
     deadlines = const SamplerDeadlines(fastRequest: Duration(milliseconds: 50));
+    restartDelay = const Duration(milliseconds: 300);
     subscribe({SampleStream.core});
     await settle();
     link.stalled.add(_fast);
     await clock.elapse(const Duration(seconds: 2));
 
+    final fast = sessions.singleWhere((s) => s.kind == _fast);
+    await _until(() => fast.state is SamplerBackoff);
+    expect(hints, isEmpty);
     await _until(() => hints.length == 2);
     expect(hints, [('hint', _s1, link), ('clear', _s1, link)]);
   });

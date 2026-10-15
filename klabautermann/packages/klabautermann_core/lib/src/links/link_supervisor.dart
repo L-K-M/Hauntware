@@ -41,9 +41,11 @@ const Duration kConnectAttemptDeadline = Duration(seconds: 60);
 const Duration kBackgroundGracePeriod = Duration(seconds: 30);
 
 /// How long a link may stay silent after a dead-peer hint before the
-/// supervisor closes it as a dead peer [E]: the restarted fast sampler's
-/// first restart delay (at most 1 s) and READY deadline (15 s, 03 §6.2),
-/// rounded up, so a live peer whose sampler only stalled answers in time.
+/// supervisor closes it as a dead peer [E]. The hint comes as the
+/// restarted fast sampler starts, after its restart delay, so the grace
+/// covers only the start: the READY deadline (15 s from the opened
+/// channel, 03 §6.2) and 5 s for the channel to open. A live peer whose
+/// sampler only stalled answers in time, however often it stalled.
 const Duration kDeadPeerGrace = Duration(seconds: 20);
 
 /// What the platform does with links while the app is in the background.
@@ -226,7 +228,8 @@ final class LinkSupervisor {
 
   /// Takes a dead-peer hint about [link], [serverId]'s current link: a
   /// fast-sampler request missed its deadline (03 §6.2), which only a
-  /// stalled sampler or a silent peer explains. Unless
+  /// stalled sampler or a silent peer explains, and the restarted
+  /// sampler is starting. Unless
   /// [clearDeadPeerHint] follows within [kDeadPeerGrace], the link is
   /// closed and reported [LinkClosedReason.pingTimeout], and the server
   /// backs off and redials as after a lost link. A hint about any other
