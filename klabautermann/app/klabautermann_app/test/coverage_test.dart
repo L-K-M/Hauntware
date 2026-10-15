@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ghost_ui/ghost_ui.dart' show contrastRatio;
 import 'package:klabautermann_app/controllers/coverage_controller.dart';
 import 'package:klabautermann_app/ui/coverage.dart';
+import 'package:klabautermann_app/ui/fleet_rail.dart' show FleetEmptyState;
 import 'package:klabautermann_app/ui/sidebar_kit.dart'
     show SidebarSectionHeader;
 import 'package:klabautermann_core/klabautermann_core.dart';
@@ -16,6 +17,7 @@ const _phone = Size(390, 800);
 
 const _cardTitle = 'How Klabautermann watches your servers';
 const _chipOfTwo = 'Watching 0 of 2 servers on this device, only while open';
+const _fleetEmptyBody = 'Add a server to start monitoring your fleet.';
 
 final _chip = find.byType(FleetCoverageChip);
 final _card = find.byType(FirstRunCoverageCard);
@@ -169,6 +171,40 @@ void main() {
       expect(saves, ['dismissed']);
       expect(_chip, findsOneWidget);
       expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('over a phone\'s empty fleet at twice the text size, the '
+        'empty state scrolls under the card, and is centred once it fits', (
+      tester,
+    ) async {
+      tester.platformDispatcher.textScaleFactorTestValue = 2;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      // A small phone's system bars; the fleet is empty until enrollment.
+      tester.view.padding = const FakeViewPadding(top: 24, bottom: 48);
+      await pumpApp(
+        tester,
+        size: const Size(360, 640),
+        coverage: _firstLaunch([]),
+      );
+
+      expect(tester.takeException(), isNull);
+      expect(_card, findsOneWidget);
+      await tester.scrollUntilVisible(
+        find.text(_fleetEmptyBody),
+        50,
+        scrollable: find.descendant(
+          of: find.byType(FleetEmptyState),
+          matching: find.byType(Scrollable),
+        ),
+      );
+
+      await tester.tap(find.text('Got it'));
+      await tester.pumpAndSettle();
+      final region = tester.getRect(find.byType(FleetEmptyState));
+      final content = tester
+          .getRect(find.byIcon(Icons.dns_outlined))
+          .expandToInclude(tester.getRect(find.text(_fleetEmptyBody)));
+      expect(content.center.dy, moreOrLessEquals(region.center.dy));
     });
   });
 

@@ -187,7 +187,7 @@ class FleetEmptyState extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
-    return Padding(
+    final invitation = Padding(
       padding: const EdgeInsets.all(24),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -210,6 +210,16 @@ class FleetEmptyState extends StatelessWidget {
             textAlign: TextAlign.center,
           ),
         ],
+      ),
+    );
+    // Centred while it fits, and scrolls when large text outgrows a short
+    // column (A11Y-09), as under the phone's first-run card (03 §9.5).
+    return LayoutBuilder(
+      builder: (context, box) => SingleChildScrollView(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minHeight: box.maxHeight),
+          child: invitation,
+        ),
       ),
     );
   }
