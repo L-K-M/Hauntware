@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show Clipboard, ClipboardData;
+import 'package:flutter/services.dart'
+    show Clipboard, ClipboardData, PlatformException;
 import 'package:klabautermann_core/klabautermann_core.dart';
 
 import '../../controllers/fleet_controller.dart';
@@ -295,7 +296,15 @@ class _AccessRowTileState extends State<_AccessRowTile> {
   String? _copied;
 
   Future<void> _copy(String command) async {
-    await Clipboard.setData(ClipboardData(text: command));
+    try {
+      await Clipboard.setData(ClipboardData(text: command));
+    } on PlatformException {
+      // Windows refuses while another process holds the clipboard
+      // (OpenClipboard fails). The clipboard keeps its earlier text, so
+      // an earlier copy's confirmation must not stay on screen.
+      if (mounted) setState(() => _copied = null);
+      return;
+    }
     if (!mounted) return;
     setState(() => _copied = command);
   }

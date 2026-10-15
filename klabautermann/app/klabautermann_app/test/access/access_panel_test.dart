@@ -192,6 +192,47 @@ void main() {
     expect(find.text(confirmation), findsNothing);
   });
 
+  testWidgets('drops its confirmation when the clipboard refuses a '
+      'copy', (tester) async {
+    // As the Windows embedder answers while another process holds the
+    // clipboard and OpenClipboard fails (its platform_handler.cc).
+    var refuse = false;
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      (call) async {
+        if (call.method == 'Clipboard.setData' && refuse) {
+          throw PlatformException(
+            code: 'Clipboard error',
+            message: 'Unable to open clipboard',
+          );
+        }
+        return null;
+      },
+    );
+    addTearDown(
+      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        null,
+      ),
+    );
+    const confirmation = 'Copied. Run it yourself on the server.';
+    await _openWeb1(tester, _desktop, profile: debianHost());
+    await _openTab(tester, 'Access');
+    final copy = find.widgetWithText(OutlinedButton, 'Copy command').first;
+    await tester.ensureVisible(copy);
+    await tester.tap(copy);
+    await tester.pumpAndSettle();
+    expect(find.text(confirmation), findsOneWidget);
+
+    // The clipboard still holds the earlier text, so the row must not
+    // say this copy worked.
+    refuse = true;
+    await tester.tap(copy);
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(find.text(confirmation), findsNothing);
+  });
+
   testWidgets('says the server lacks sudo and doas only when the probe '
       'found neither', (tester) async {
     const absent = 'Run this as root: the server has neither sudo nor doas.';
