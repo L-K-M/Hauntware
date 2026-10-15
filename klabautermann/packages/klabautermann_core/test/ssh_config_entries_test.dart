@@ -663,6 +663,19 @@ void main() {
           'Host web\n  HostName 10.0.0.5\n'
           '  ProxyJump gw.internal,10.0.0.5:2222\n';
       expect(_dials(leftOutRecord).keys, ['bastion', 'bastion2']);
+
+      // bastion2's final pass gives it User ops without a loop, so it is
+      // left out, and so is web, which names it, although ssh's final
+      // pass fails at bastion first and plain ssh reaches web through
+      // bastion2's first pass. That is conservative.
+      const leftOutLaterHop =
+          'Host *.example.com\n  User ops\n'
+          'Host *.example.com !b2.example.com\n'
+          '  ProxyJump bastion.example.com\n'
+          'Host bastion\n  HostName bastion.example.com\n'
+          'Host bastion2\n  HostName b2.example.com\n'
+          'Host web\n  HostName 10.0.0.5\n  ProxyJump bastion,bastion2\n';
+      expect(_dials(leftOutLaterHop).keys, ['bastion']);
     });
 
     test('a wildcard block before the host\'s own block comes first', () {

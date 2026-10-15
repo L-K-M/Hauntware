@@ -147,7 +147,10 @@ final class JumpHop {
 ///   §10.1). A first hop's own route counts as where ssh dials that
 ///   hop as itself, so a first hop whose own route fails this check
 ///   leaves out every host behind it, where ssh may still reach them.
-///   That is conservative, not what ssh does.
+///   That is conservative, not what ssh does. So is a null route through
+///   a name in [leftOut] only for what its final pass sets, where ssh's
+///   final pass fails before that name: ssh then dials it with its first
+///   pass, which the import keeps only for a key of [loopingPasses].
 ///
 /// The work is linear in the hosts: following a route stops past 16 hops,
 /// and each null route reaches the hosts that name it once.
