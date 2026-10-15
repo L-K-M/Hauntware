@@ -3657,8 +3657,9 @@ the engine in `engine_isolate.dart` beside it):
   stream holding derived values (D43): for `overview` and `core`, CPU
   percentages, memory in bytes with `MemAvailable` semantics and whether
   a ZFS ARC counts as used (7.1), load per core and byte rates per
-  interface (`core` adds per-core CPU, disk rates, the pressure averages
-  without the kernel's cumulative stall counter, and uptime), each rate
+  interface (`core` adds each core's busy share, disk rates, the pressure
+  averages without the kernel's cumulative stall counter, and uptime; the
+  host sends no per-core breakdown, D48), each rate
   map null until a previous reading exists, so unknown never sums to
   zero; for `procs`, per-process CPU shares with the start time PRC-02
   checks; for `identity`, the strings SYS-01 shows, resolved in the

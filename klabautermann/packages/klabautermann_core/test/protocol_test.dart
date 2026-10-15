@@ -5,7 +5,7 @@ import 'dart:typed_data';
 
 import 'package:klabautermann_core/klabautermann_core.dart';
 import 'package:klabautermann_host/klabautermann_host.dart'
-    show CronJob, FsMount, SystemdTimer;
+    show CoreCpuTimes, CronJob, FsMount, SystemdTimer, perCpuBusyPercent;
 import 'package:test/test.dart';
 
 /// Echoes every message back; protocol values cross a real isolate boundary
@@ -273,7 +273,12 @@ void main() {
                 SampleStream.core,
                 CoreResult(
                   cpu: cpu,
-                  perCpu: const {'cpu0': cpu},
+                  // The host sends each core's busy and idle jiffies only
+                  // (D48), so the engine can fill exactly this map.
+                  perCpu: perCpuBusyPercent(
+                    const {'cpu0': CoreCpuTimes('cpu0', busy: 10, idle: 90)},
+                    const {'cpu0': CoreCpuTimes('cpu0', busy: 25, idle: 175)},
+                  ),
                   disks: const {
                     'sda': DiskRate(
                       readBytesPerSecond: 512,
@@ -286,7 +291,7 @@ void main() {
                 ),
               )
               as CoreResult;
-      expect(core.perCpu!['cpu0']!.busy, 15);
+      expect(core.perCpu, {'cpu0': 15});
       expect(core.disks!['sda']!.writeBytesPerSecond, 1024);
       expect(core.ioPressure!.some!.avg60, 2);
       expect(core.cpuPressure, isNull);
