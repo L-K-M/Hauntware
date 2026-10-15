@@ -666,6 +666,39 @@ void main() {
         expect(snap.processes.every((p) => p.argv != null), isTrue);
       });
 
+      test('an empty selection falls back to the glob order', () async {
+        // A `sort` that rejects -k leaves the selection empty, as mksh's
+        // external printf does above about 2,000 processes (D48). Its
+        // complaint must not reach stderr, which _tick rejects.
+        final root = _procRoot();
+        for (var pid = 1; pid <= 600; pid++) {
+          _proc(root, pid, cpu: pid, rssKb: pid);
+        }
+        // By path, since BusyBox ash may prefer its own sort applet.
+        final sort = File('${root.path}/bin/sort')
+          ..createSync(recursive: true)
+          ..writeAsStringSync(
+            "#!/bin/sh\necho \"sort: invalid option -- 'k'\" >&2\nexit 1\n",
+          );
+        expect(Process.runSync('chmod', ['+x', sort.path]).exitCode, 0);
+        String sortWithoutK(String program) {
+          const call = '| sort -';
+          expect(call.allMatches(program), hasLength(3));
+          return program.replaceAll(call, '| ${sort.path} -');
+        }
+
+        final r = await _procs(shell, root, edit: sortWithoutK);
+        final snap = r.parsed.value;
+        expect(r.parsed.warnings, isEmpty);
+        expect(snap.selection, ProcsSelection.pidOrder);
+        expect(snap.totalProcesses, 600);
+        final glob = [for (var pid = 1; pid <= 600; pid++) '$pid']..sort();
+        expect(snap.processes.map((p) => '${p.pid}'), glob.take(kProcsRowCap));
+        for (final p in snap.processes) {
+          expect(p.argv, ['/usr/bin/worker', '--id', '${p.pid}']);
+        }
+      });
+
       test('procs skips a process that ends during the tick', () async {
         // Pid 11 lost its status after its stat was read; pid 12 was gone
         // before its stat could be read. _tick fails on any stderr.
@@ -687,6 +720,21 @@ void main() {
         expect(gone.uid, isNull);
         expect(gone.rssKb, isNull);
         expect(gone.argv, ['/usr/bin/worker', '--id', '11']);
+      });
+
+      test('procs skips a stat line cut short by its comm', () async {
+        // Any process can name itself "a) \nb" (PR_SET_NAME). The first
+        // line of its stat then ends in ") " and holds no fields, which
+        // the share's arithmetic must never see: the syntax error would
+        // end the sampler. _tick fails on a non-zero exit or any stderr.
+        final root = _procRoot();
+        _proc(root, 10, rssKb: 10);
+        _proc(root, 11, comm: 'a) \nb', rssKb: 11);
+        _proc(root, 12, rssKb: 12);
+
+        final snap = (await _procs(shell, root)).parsed.value;
+        expect(snap.totalProcesses, 2);
+        expect(snap.processes.map((p) => p.pid), [10, 12]);
       });
     });
   }
