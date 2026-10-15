@@ -1868,10 +1868,12 @@ One long-lived connection per host per device keeps login records and
 `MaxStartups` pressure low (r5 §3.2). Fleet connects are capped at 4
 concurrent with jitter: every connection attempt takes one of 4 slots
 (D19), the user's ahead of the queue and dialing as soon as it has one,
-an unattended one after a random wait of up to 1 s [E] in its slot. Reachability
-probes reuse `ProbeService`
-(`SC/src/probe/probe_service.dart:64`, 45 s jittered sweeps, at most 6
-concurrent [V]) and run only for confirmed endpoints.
+an unattended one after a random wait of up to 1 s [E] in its slot. A
+given-up attempt frees its slot at once only while its route is
+unresolved; a dial past that point cannot be stopped, so it keeps the
+slot until `SshLink.connect` returns. Reachability probes reuse
+`ProbeService` (`SC/src/probe/probe_service.dart:64`, 45 s jittered
+sweeps, at most 6 concurrent [V]) and run only for confirmed endpoints.
 
 ---
 

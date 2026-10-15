@@ -108,13 +108,20 @@ final class _Link implements SshLink {
 
 /// One dial the supervisor asked for; the test settles it.
 final class _Call {
-  _Call(this.serverId, this.purpose, this.onPhase, this.abandoned) {
+  _Call(
+    this.serverId,
+    this.purpose,
+    this.onPhase,
+    this.onDialing,
+    this.abandoned,
+  ) {
     unawaited(abandoned!.then((_) => wasAbandoned = true));
   }
 
   final String serverId;
   final ConnectPurpose purpose;
   final void Function(LinkStatus phase)? onPhase;
+  final void Function()? onDialing;
   final Future<void>? abandoned;
   final _result = Completer<LinkConnectResult>();
   bool wasAbandoned = false;
@@ -160,8 +167,8 @@ void main() {
     BackgroundLinkPolicy policy = BackgroundLinkPolicy.keepOpen,
     double random = 0,
   }) => LinkSupervisor(
-    connect: (config, {required purpose, onPhase, abandoned}) {
-      final call = _Call(config.id, purpose, onPhase, abandoned);
+    connect: (config, {required purpose, onPhase, onDialing, abandoned}) {
+      final call = _Call(config.id, purpose, onPhase, onDialing, abandoned);
       calls.add(call);
       return call._result.future;
     },
@@ -235,6 +242,22 @@ void main() {
     expect(calls.map((c) => c.serverId).skip(4), ['s6']);
     expect(calls.last.purpose, _interactive);
     expect(statuses('s5'), [const LinkConnecting()]);
+  });
+
+  test('a given-up dial keeps its slot until it returns once it is on its '
+      'way to the network', () async {
+    for (final id in ['s1', 's2', 's3', 's4', 's5', 's6']) {
+      supervisor.connect(id, purpose: _interactive);
+    }
+    calls[0].onDialing!();
+    supervisor.disconnect('s1');
+    supervisor.disconnect('s2');
+    await clock.elapse(Duration.zero);
+    expect(calls.map((c) => c.serverId).skip(4), ['s5']);
+
+    calls[0].fail(LinkFailureKind.unreachable);
+    await clock.elapse(Duration.zero);
+    expect(calls.map((c) => c.serverId).skip(4), ['s5', 's6']);
   });
 
   test('backs off from 1 s, doubling, and redials unattended; a link '

@@ -20,7 +20,8 @@ import 'link_connector.dart';
 
 /// Connect attempts in flight at once, across the fleet (D19, 03 §5.12):
 /// bursts of new connections trip `MaxStartups` and fail2ban (c2 R11),
-/// also on a jump host many servers share.
+/// also on a jump host many servers share. A given-up attempt whose dial
+/// is on its way to the network keeps its slot until the dial returns.
 const int kMaxConnectsInFlight = 4;
 
 /// The longest random wait before an unattended attempt dials [E], so
@@ -54,6 +55,7 @@ typedef LinkConnect =
       ServerConfig config, {
       required ConnectPurpose purpose,
       void Function(LinkStatus phase)? onPhase,
+      void Function()? onDialing,
       Future<void>? abandoned,
     });
 
@@ -274,11 +276,13 @@ final class LinkSupervisor {
         config,
         purpose: attempt.purpose,
         onPhase: (phase) => _onPhase(attempt, phase),
+        onDialing: () => attempt.onNetwork = true,
         abandoned: attempt.abandon.future,
       );
     } on Object catch (error) {
       result = LinkConnectFailed(error);
     }
+    _freeSlot(attempt);
     attempt.server.dialPending = false;
     _settle(attempt, result);
     _pump();
@@ -330,7 +334,7 @@ final class LinkSupervisor {
       return;
     }
 
-    _release(attempt);
+    _detach(attempt);
     switch (result) {
       case LinkConnected(:final link, :final keyboardInteractive):
         server.failures = 0;
@@ -433,23 +437,28 @@ final class LinkSupervisor {
     return any;
   }
 
-  /// Gives [attempt] up: [_release], and a dial still running stops.
+  /// Gives [attempt] up: a dial still running stops if it can. One on
+  /// its way to the network cannot, so it keeps its slot until it
+  /// returns, which `SshLink.connect` bounds.
   void _drop(_Attempt attempt) {
-    _release(attempt);
+    _detach(attempt);
+    if (!attempt.onNetwork) _freeSlot(attempt);
     if (!attempt.abandon.isCompleted) attempt.abandon.complete();
   }
 
-  /// Takes [attempt] out of its server, the queue and its slot.
-  void _release(_Attempt attempt) {
+  /// Takes [attempt] out of its server and the queue, and stops its timer.
+  void _detach(_Attempt attempt) {
     attempt.timer?.cancel();
     _queue.remove(attempt);
-    if (attempt.holdsSlot) {
-      attempt.holdsSlot = false;
-      _inFlight--;
-    }
     if (identical(attempt.server.attempt, attempt)) {
       attempt.server.attempt = null;
     }
+  }
+
+  void _freeSlot(_Attempt attempt) {
+    if (!attempt.holdsSlot) return;
+    attempt.holdsSlot = false;
+    _inFlight--;
   }
 
   /// Closes [link] without waiting; `SshLink.close` is bounded.
@@ -527,6 +536,9 @@ final class _Attempt {
   ConnectPurpose purpose;
   bool holdsSlot = false;
   bool dialing = false;
+
+  /// The dial's route is resolved, so giving it up no longer stops it.
+  bool onNetwork = false;
 
   /// An interactive request arrived while this unattended attempt dialed.
   bool userAsked = false;
