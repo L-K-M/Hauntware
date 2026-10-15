@@ -89,6 +89,17 @@ void main() {
     expect(events, hasLength(1));
   });
 
+  test('onSent sees each prompt once its event is out', () {
+    final seen = <(Prompt, int)>[];
+    broker
+        .attempt('ssh-config:web', onSent: (p) => seen.add((p, events.length)))
+        .ask(host: 'h', port: 22, request: _hostKey);
+
+    final (prompt, eventsSoFar) = seen.single;
+    expect(prompt, same(events.single));
+    expect(eventsSoFar, 1);
+  });
+
   test('an unanswered prompt expires and is withdrawn', () async {
     final answer = broker
         .attempt('ssh-config:web')

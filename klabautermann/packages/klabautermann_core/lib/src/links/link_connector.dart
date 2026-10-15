@@ -6,6 +6,7 @@ import 'package:seance_core/seance_core.dart'
         CredentialMissingException,
         CredentialResolver,
         CredentialSource,
+        HostKey,
         HostKeyDecision,
         HostKeyPrompter,
         HostKeyStore,
@@ -59,9 +60,15 @@ sealed class LinkConnectResult {
 
 /// Connected and authenticated; the caller owns [link].
 final class LinkConnected extends LinkConnectResult {
-  const LinkConnected(this.link);
+  const LinkConnected(this.link, {this.keyboardInteractive = false});
 
   final SshLink link;
+
+  /// The server or a jump host asked keyboard-interactive questions the
+  /// user answered, so a new connection would ask again: such a server
+  /// gets one connection and is never redialed unattended (03 §4.5, §5.2;
+  /// c2 R10).
+  final bool keyboardInteractive;
 }
 
 /// The server, or a jump host on its route, presented a key other than
@@ -94,7 +101,9 @@ final class LinkConnectFailed extends LinkConnectResult {
 /// the user through the [PromptBroker] only on an interactive connect.
 /// Each attempt's prompts are withdrawn when it ends. A changed host key
 /// never prompts: it blocks the link (03 §10.1). Reconnects, backoff and
-/// the connect cap belong to the link supervisor above it.
+/// the connect cap belong to the link supervisor above it, which hears
+/// the attempt's phases through `onPhase` and gives it up through
+/// `abandoned`.
 final class LinkConnector {
   /// [hostKeys] holds the pins. Until the suite's file-backed host-key
   /// store lands (F3b), the engine passes an in-memory one, so pins last
@@ -102,26 +111,64 @@ final class LinkConnector {
   /// config by id, such as `ImportedFleet.serverConfig`.
   LinkConnector({
     required CredentialSource credentials,
-    required HostKeyStore hostKeys,
+    required this._hostKeys,
     required this._prompts,
     required this._hopConfig,
     this._dial = SshLink.connect,
-  }) : _credentials = CredentialResolver(credentials),
-       _tofu = TofuVerifier(hostKeys);
+  }) : _credentials = CredentialResolver(credentials);
 
   final CredentialResolver _credentials;
-  final TofuVerifier _tofu;
+  final HostKeyStore _hostKeys;
   final PromptBroker _prompts;
   final ServerConfig? Function(String id) _hopConfig;
   final LinkDialer _dial;
 
   /// Connects to [config], a fleet server's config, for [purpose].
+  ///
+  /// `SshLink.connect` shows no state before it returns, so [onPhase]
+  /// hears the attempt's own: [LinkNeedsUser] once each prompt is out,
+  /// [LinkAuthenticating] once the server's own host key has passed, and
+  /// after an answered prompt [LinkAuthenticating], or [LinkConnecting]
+  /// while a jump host asked. Once [abandoned] completes, prompts get no
+  /// answer and an unresolved route opens no socket; a dial under way can
+  /// still bring a link, for the caller to close.
   Future<LinkConnectResult> connect(
     ServerConfig config, {
     required ConnectPurpose purpose,
+    void Function(LinkStatus phase)? onPhase,
+    Future<void>? abandoned,
   }) async {
-    final attempt = _prompts.attempt(config.id);
+    final phase = onPhase ?? (_) {};
+    final attempt = _prompts.attempt(
+      config.id,
+      onSent: (prompt) => phase(
+        LinkNeedsUser(promptId: prompt.promptId, kind: prompt.request.kind),
+      ),
+    );
     final interactive = purpose == ConnectPurpose.interactive;
+    var gaveUp = false;
+    unawaited(
+      abandoned?.then((_) {
+        gaveUp = true;
+        attempt.end();
+      }),
+    );
+
+    // seance_core resolves the whole route, then checks one host key per
+    // hop in dial order, the server's last: the check after [hops] of
+    // them is the server's own, after which its user authentication runs.
+    var hops = 0;
+    var checks = 0;
+    LinkStatus progress() =>
+        checks > hops ? const LinkAuthenticating() : const LinkConnecting();
+    final tofu = _ReportingTofu(_hostKeys, (decision) {
+      checks++;
+      if (checks > hops && decision.isTrusted) phase(progress());
+    });
+    final resolveHop = _credentials.jumpHostResolver(
+      (id) async => _hopConfig(id),
+    );
+    var answeredQuestions = false;
 
     // The verdict of a host key the attempt refused, declined or expired:
     // only this tells a declined key from a changed one, which
@@ -141,14 +188,18 @@ final class LinkConnector {
             );
       final trusted = answer is PromptTrustAnswer && answer.accepted;
       if (!trusted) refused ??= decision.verdict;
+      if (trusted) phase(progress());
       return trusted;
     }
 
     try {
+      final credentials = await _credentials.resolve(config);
+      if (gaveUp) return LinkConnectFailed(_abandonedError);
+
       final link = await _dial(
         config: config,
-        credentials: await _credentials.resolve(config),
-        tofu: _tofu,
+        credentials: credentials,
+        tofu: tofu,
         onHostKey: onHostKey,
         onKeyboardInteractive: interactive
             ? (challenge) async {
@@ -170,16 +221,22 @@ final class LinkConnector {
                 // A withdrawn prompt answers with no responses: dartssh2
                 // rejects a count other than the question count by closing
                 // the connection, so no made-up answer reaches the server.
-                return answer is PromptResponsesAnswer
-                    ? answer.responses
-                    : const [];
+                if (answer is! PromptResponsesAnswer) return const [];
+                answeredQuestions = true;
+                phase(progress());
+                return answer.responses;
               }
             : null,
-        resolveJumpHost: _credentials.jumpHostResolver(
-          (id) async => _hopConfig(id),
-        ),
+        resolveJumpHost: (id) async {
+          final hop = await resolveHop(id);
+          // Hops resolve before any socket opens: an abandoned attempt
+          // stops here, its route left incomplete, instead of dialing.
+          if (gaveUp) return null;
+          if (hop != null) hops++;
+          return hop;
+        },
       );
-      return LinkConnected(link);
+      return LinkConnected(link, keyboardInteractive: answeredQuestions);
     } on Exception catch (error) {
       return _classify(error, refused);
     } finally {
@@ -228,5 +285,23 @@ final class LinkConnector {
       // empty agent, the client limitations of 03 §5.3.
       _ => LinkConnectFailed(error),
     };
+  }
+}
+
+/// What an attempt given up before it dialed fails with; nobody reads it.
+final StateError _abandonedError = StateError('connect attempt abandoned');
+
+/// A [TofuVerifier] that reports each check's decision, so the connector
+/// can tell when the server's own key has passed.
+final class _ReportingTofu extends TofuVerifier {
+  _ReportingTofu(super.store, this._onChecked);
+
+  final void Function(HostKeyDecision decision) _onChecked;
+
+  @override
+  Future<HostKeyDecision> check(HostKey presented) async {
+    final decision = await super.check(presented);
+    _onChecked(decision);
+    return decision;
   }
 }
