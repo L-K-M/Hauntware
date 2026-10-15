@@ -2355,8 +2355,11 @@ fragments (D48).
   and in their device units, UUIDs too in systemd's `\x2d` escaping,
   network mount servers in `fs`,
   hostnamectl's serial, asset-tag, pretty-name and location fields,
-  email addresses, URL credentials, private-key headers and what
-  `SecretRedactor` masks become placeholders too (documentation
+  email addresses, URL credentials, private-key headers, what
+  `SecretRedactor` masks and the crontab credentials it misses (values
+  of names holding PASS, PWD, SECRET, TOKEN or KEY, HTTP basic auth,
+  `-u user:password`, the MySQL clients' and sshpass's `-p<password>`)
+  become placeholders too (documentation
   addresses where an address is expected). In `procs` every command
   line keeps argv[0] up to its first space and the rest reads
   `[redacted]`: arguments carry secrets, process titles user names. A

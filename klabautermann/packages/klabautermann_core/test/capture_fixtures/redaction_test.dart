@@ -251,6 +251,51 @@ void main() {
       expect(r.counts, {'secret': 3, 'URL credentials': 1});
     });
 
+    test('crontab credential shapes SecretRedactor misses', () {
+      const lines = [
+        ('PGPASSWORD=Hunter2 pg_dump', 'PGPASSWORD=[redacted] pg_dump'),
+        (
+          'MYSQL_PWD="a b" BORG_PASSPHRASE=c',
+          'MYSQL_PWD=[redacted] BORG_PASSPHRASE=[redacted]',
+        ),
+        (
+          'mysqldump -u backup -pHunter2 shop',
+          'mysqldump -u backup -p[redacted] shop',
+        ),
+        (
+          "/usr/bin/mysql -uroot -p'S3 cr'",
+          '/usr/bin/mysql -uroot -p[redacted]',
+        ),
+        (
+          'curl -u admin:Hunter2 https://x.org',
+          'curl -u [redacted] https://x.org',
+        ),
+        (
+          'sshpass -p Hunter2 rsync -a x y:z',
+          'sshpass -p [redacted] rsync -a x y:z',
+        ),
+        (
+          '-H "Authorization: Basic YWRtaW46aHVudGVyMg=="',
+          '-H "Authorization: Basic [redacted]"',
+        ),
+      ];
+      final redactor = Redactor(const RedactionLiterals());
+      final text = lines.map((l) => l.$1).join('\n');
+      final r = redactor.redact('cron', latin1.encode(text));
+      final redacted = latin1.decode(r.bytes);
+      expect(redacted, lines.map((l) => l.$2).join('\n'));
+      expect(r.counts, {'secret': 8});
+      expect(redactor.review(text), [
+        for (var i = 1; i <= lines.length; i++) (i, 'looks like a secret'),
+      ]);
+      expect(redactor.review(redacted), isEmpty);
+      // `-p` as a port, a path flag or a prompt, `-u` without a password.
+      const plain =
+          'mkdir -p /x; ssh -p 2222 h; mysqldump -p db | pigz -p4\n'
+          'rsync -u h:/src /dst; sudo -u www-data x; mysql -uroot';
+      expect(_redact(plain, collector: 'cron'), plain);
+    });
+
     test('a private-key header without its end becomes a placeholder', () {
       expect(
         _redact('$_pemBegin\nb3Blbg', collector: 'cron'),

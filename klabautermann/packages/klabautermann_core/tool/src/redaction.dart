@@ -119,6 +119,39 @@ final _secretMask = _secrets.redact('token=x').substring('token='.length);
 
 final _privateKeyHeader = RegExp(r'-----BEGIN [A-Z ]*PRIVATE KEY-----');
 
+/// A shell word: quoted parts and unquoted characters, no whitespace.
+const _shellValue = r'''(?!\[redacted\])(?:"[^"\n]*"|'[^'\n]*'|[^\s"'])+''';
+
+/// Credential shapes `SecretRedactor` misses, common in crontabs; the
+/// value after group 1 is replaced. An assignment to a name holding
+/// PASS, PWD, SECRET, TOKEN or KEY (`PGPASSWORD=`, `MYSQL_PWD=`), HTTP
+/// basic auth, curl's `-u user:password`, and the `-p<password>` of the
+/// MySQL clients and of sshpass. `-p` alone is a port or a flag in most
+/// programs and the MySQL clients' password prompt.
+final _credentials = [
+  RegExp(
+    '(?<![A-Za-z0-9_])([A-Za-z0-9_]*(?:PASS|PWD|SECRET|TOKEN|KEY)'
+    '[A-Za-z0-9_]*=)'
+    '$_shellValue',
+    caseSensitive: false,
+  ),
+  RegExp(
+    r'(Authorization:\s*Basic\s+)(?!\[redacted\])[A-Za-z0-9+/]+=*',
+    caseSensitive: false,
+  ),
+  RegExp(
+    '''(?<!\\S)(-u\\s*|--user[=\\s]\\s*)['"]?[^\\s:'"]+:(?!/)$_shellValue''',
+  ),
+  RegExp(
+    r'(?<![A-Za-z0-9])((?:mysql|mariadb)[a-z-]*(?:\s+(?!-p)[^\s|;&]+)*?\s+-p)'
+    '$_shellValue',
+  ),
+  RegExp(
+    r'(?<![A-Za-z0-9])(sshpass\s+(?:-\S+\s+)*?-p\s*)'
+    '$_shellValue',
+  ),
+];
+
 /// A network filesystem's source starting a `df` row: NFS and sshfs
 /// `[user@]server:/path`, CIFS `//server/share`. A server given by
 /// address is left to the address rules.
@@ -298,6 +331,12 @@ final class Redactor {
     final secrets = _secretMask.allMatches(text).length - masks;
     if (secrets > 0) counts['secret'] = secrets;
     text = text.replaceAll(_secretMask, kRedacted);
+    for (final re in _credentials) {
+      text = text.replaceAllMapped(re, (m) {
+        count('secret');
+        return '${m[1]}$kRedacted';
+      });
+    }
     text = text.replaceAllMapped(_privateKeyHeader, (_) {
       count('secret');
       return kRedacted;
@@ -327,7 +366,8 @@ final class Redactor {
             line.replaceAll(_placeholder, ' '),
           ))
             _kindOf(m).residue,
-        if (_secrets.redact(line).replaceAll(_secretMask, kRedacted) != line)
+        if (_secrets.redact(line).replaceAll(_secretMask, kRedacted) != line ||
+            _credentials.any((re) => re.hasMatch(line)))
           'looks like a secret',
         for (final (reason, re) in _reviewPatterns)
           if (re.hasMatch(line)) reason,
