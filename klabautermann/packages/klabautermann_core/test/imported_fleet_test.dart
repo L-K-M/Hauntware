@@ -454,6 +454,24 @@ void main() {
       expect(hops('a,ssh://u;fp=1@h'), hasLength(2));
     });
 
+    test('refuses a hop the shell would read as a home directory', () {
+      // /bin/sh expands a word that starts with `~`: `-J ~root` and
+      // `-l ~root` become /root, and so does a last hop's host.
+      for (final value in [
+        '~root',
+        '~root,gw',
+        '~root@gw',
+        'gw,~root',
+        'u@~gw:2222',
+        'ssh://~root@gw',
+      ]) {
+        expect(hops(value), isNull, reason: value);
+      }
+      // Only a `~` at the start of a word.
+      expect(hops('gw,a~b'), hasLength(2));
+      expect(hops('a~b@gw'), [('a~b@gw', 'a~b', 'gw', 22)]);
+    });
+
     test('refuses a hop with a character the shell globs', () {
       // ssh passes the hops before the last, and the last one's user and
       // host, to /bin/sh unquoted: `-J [2001:db8::1]` becomes `-J 1`

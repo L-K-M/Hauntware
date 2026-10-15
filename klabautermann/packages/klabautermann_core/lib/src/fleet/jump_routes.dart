@@ -104,12 +104,13 @@ final class JumpHop {
 ///   (ssh also resolves service names);
 /// - has a hop whose user or host holds whitespace, a quote, a glob
 ///   character or another character the shell reads, or starts with
-///   `-`, or a hop before the last that holds such a character as
-///   written: ssh runs the route as a `ProxyCommand` through `/bin/sh`,
-///   putting the last hop's user and host in it and the hops before as
-///   written, unquoted, so the shell globs such a word into file names,
-///   or the nested ssh rejects such a host name or reads it as an
-///   option;
+///   `-` or `~`, or a hop before the last that holds such a character
+///   or starts with `~` as written: ssh runs the route as a
+///   `ProxyCommand` through `/bin/sh`, putting the last hop's user and
+///   host in it and the hops before as written, unquoted, so the shell
+///   globs such a word into file names or expands it to a home
+///   directory, or the nested ssh rejects such a host name or reads it
+///   as an option;
 /// - has a `#` comment holding a comma: ssh hands the hops before the
 ///   last on from the value as written, up to its last comma, so the
 ///   comment reaches the shell;
@@ -548,10 +549,13 @@ String _rtrim(String text) {
 }
 
 /// Whether [text] holds no whitespace, control character or
-/// [_shellCharacters], so the shell reads it as written.
-bool _isShellWord(String text) => !text.codeUnits.any(
-  (c) => c <= 0x20 || c == 0x7f || _shellCharacters.codeUnits.contains(c),
-);
+/// [_shellCharacters], and does not start with `~`, which the shell reads
+/// as a home directory, so the shell reads it as written.
+bool _isShellWord(String text) =>
+    !text.startsWith('~') &&
+    !text.codeUnits.any(
+      (c) => c <= 0x20 || c == 0x7f || _shellCharacters.codeUnits.contains(c),
+    );
 
 /// `[user@]host[:port]` as ssh's `parse_user_host_port()` reads it: the
 /// user ends at the last `@`, and a host in brackets may hold colons.
