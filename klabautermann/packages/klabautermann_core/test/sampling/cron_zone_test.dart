@@ -190,6 +190,26 @@ void main() {
     });
   });
 
+  test('without a clock reading the name is checked at evaluation', () {
+    final noClock = _profile('+0100', 'Europe/Berlin');
+    final january = cronResult(
+      _crontab('0 3 * * * a'),
+      noClock,
+      DateTime.utc(2026, 1, 10),
+    );
+    expect(january.zoneName, 'Europe/Berlin');
+
+    // Berlin is +0200 in July, so the probe's +0100 no longer confirms
+    // the name.
+    final july = cronResult(
+      _crontab('0 3 * * * a'),
+      noClock,
+      DateTime.utc(2026, 7, 10),
+    );
+    expect(july.zoneName, isNull);
+    expect(july.zoneFallback, CronZoneFallback.offsetMismatch);
+  });
+
   test('a clock reading outside DateTime\'s range counts as none', () {
     // The server sends `epoch=`; past about 8.64e12 s no DateTime holds
     // it, and near the int64 limit the milliseconds overflow.
