@@ -22,8 +22,9 @@ const double _iconGap = 12;
 const double _detailIndent = _iconSize + _iconGap;
 
 /// A word the shell reads as itself, which the copied command keeps bare
-/// for legibility; anything else goes through [quoteShellWord].
-final _plainWord = RegExp(r'^[A-Za-z0-9_./:=@%+,-]+$');
+/// for legibility; anything else goes through [quoteShellWord]. `=` and
+/// `%` are left out: zsh expands a leading `=word` to a command path.
+final _plainWord = RegExp(r'^[A-Za-z0-9_./:@+,-]+$');
 
 /// [fix] as one line to paste into a shell on the server: its elevation
 /// prefix, then each word, quoted where the shell would split or expand

@@ -316,6 +316,14 @@ void main() {
     });
   }
 
+  test('quotes a fix word a shell could expand', () {
+    // zsh expands a leading `=word` to a command path (its EQUALS option).
+    expect(
+      fixCommandText(AccessFix(['usermod', '=ls', '50%'], FixElevation.sudo)),
+      "sudo usermod '=ls' '50%'",
+    );
+  });
+
   test('draws its marks at contrast in light and dark', () {
     for (final brightness in Brightness.values) {
       final scheme = chartTheme(brightness).colorScheme;
