@@ -112,16 +112,12 @@ final class CronJobEntry extends JobEntry {
 /// schedules and merged runs of every cron line that runs its directory
 /// through `run-parts` without deferring to anacron.
 final class PeriodicJobEntry extends JobEntry {
-  PeriodicJobEntry._({
-    required this.entry,
-    List<String> driverIds = const [],
-    List<CronSchedule> schedules = const [],
-    List<CronRun> nextRuns = const [],
-    this.runsUnknown,
-  }) : driverIds = List.unmodifiable(driverIds),
-       schedules = List.unmodifiable(schedules),
-       nextRuns = List.unmodifiable(nextRuns),
-       assert(nextRuns.isEmpty != (runsUnknown == null));
+  /// The scripts of one directory share [drivers]' lists.
+  PeriodicJobEntry._(this.entry, _DirectoryDrivers drivers)
+    : driverIds = drivers.driverIds,
+      schedules = drivers.schedules,
+      nextRuns = drivers.nextRuns,
+      runsUnknown = drivers.runsUnknown;
 
   final CronDirEntry entry;
 
@@ -265,9 +261,20 @@ List<JobEntry> mergeJobs({
   final anacron =
       dirEntries.any((e) => e.name == '0anacron') ||
       cronEntries.any((e) => e.job.source == '/etc/cron.d/anacron');
+  // Once per directory, not per script: matching every script against
+  // every line is quadratic in a large payload.
+  final drivers = <CronPeriod, _DirectoryDrivers>{};
   final periodic = [
     for (final entry in dirEntries)
-      _periodicEntry(entry, cronEntries, runCount, anacron: anacron),
+      PeriodicJobEntry._(
+        entry,
+        drivers[entry.period] ??= _directoryDrivers(
+          entry.period,
+          cronEntries,
+          runCount,
+          anacron: anacron,
+        ),
+      ),
   ];
 
   return [
@@ -363,19 +370,38 @@ ServerZone? _cronZone(
   return null;
 }
 
-/// A periodic script with the schedules of the `run-parts` lines for its
-/// directory that do not defer to anacron, and the first [runCount] of
-/// their runs. Debian's `test -x /usr/sbin/anacron || run-parts ...`
-/// lines do nothing while [anacron] is installed and run the directory
-/// otherwise; anacron's own delays are v1 (JOB-04). Without runs, the
-/// first direct line's reason stands.
-PeriodicJobEntry _periodicEntry(
-  CronDirEntry entry,
+/// What every script in one `cron.<period>` directory takes from the
+/// cron lines (see [PeriodicJobEntry]'s fields).
+final class _DirectoryDrivers {
+  _DirectoryDrivers({
+    List<String> driverIds = const [],
+    List<CronSchedule> schedules = const [],
+    List<CronRun> nextRuns = const [],
+    this.runsUnknown,
+  }) : driverIds = List.unmodifiable(driverIds),
+       schedules = List.unmodifiable(schedules),
+       nextRuns = List.unmodifiable(nextRuns),
+       assert(nextRuns.isEmpty != (runsUnknown == null));
+
+  final List<String> driverIds;
+  final List<CronSchedule> schedules;
+  final List<CronRun> nextRuns;
+  final JobRunsUnknown? runsUnknown;
+}
+
+/// The schedules of the `run-parts` lines for [period]'s directory that
+/// do not defer to anacron, and the first [runCount] of their runs.
+/// Debian's `test -x /usr/sbin/anacron || run-parts ...` lines do
+/// nothing while [anacron] is installed and run the directory otherwise;
+/// anacron's own delays are v1 (JOB-04). Without runs, the first direct
+/// line's reason stands.
+_DirectoryDrivers _directoryDrivers(
+  CronPeriod period,
   List<CronJobEntry> cronEntries,
   int runCount, {
   required bool anacron,
 }) {
-  final directory = _periodDirectory(entry.period);
+  final directory = _periodDirectory(period);
   final drivers = cronEntries
       .where((e) => _runsParts(e.job.command, directory))
       .toList();
@@ -388,9 +414,8 @@ PeriodicJobEntry _periodicEntry(
     // anacron's default anacrontab runs the daily, weekly and monthly
     // directories, not the hourly one.
     final byAnacron =
-        drivers.isNotEmpty || (anacron && entry.period != CronPeriod.hourly);
-    return PeriodicJobEntry._(
-      entry: entry,
+        drivers.isNotEmpty || (anacron && period != CronPeriod.hourly);
+    return _DirectoryDrivers(
       driverIds: driverIds,
       runsUnknown: byAnacron ? JobRunsUnknown.anacron : JobRunsUnknown.noDriver,
     );
@@ -402,8 +427,7 @@ PeriodicJobEntry _periodicEntry(
       .where((r) => instants.add(r.atUtc))
       .take(runCount)
       .toList();
-  return PeriodicJobEntry._(
-    entry: entry,
+  return _DirectoryDrivers(
     driverIds: driverIds,
     schedules: [for (final d in direct) ?d.schedule],
     nextRuns: merged,

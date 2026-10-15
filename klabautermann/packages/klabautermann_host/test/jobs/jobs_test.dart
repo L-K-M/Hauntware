@@ -376,6 +376,22 @@ void main() {
       ]);
     });
 
+    test('the scripts of one directory share its drivers and runs', () {
+      // Matching every script against every line was quadratic: 4,000
+      // lines by 4,000 scripts took 37 s and copied each list per row.
+      final jobs = _merge(
+        _cron(
+          etc: '0 3 * * * root run-parts /etc/cron.daily',
+          dirs: 'daily a\ndaily b\nhourly c',
+        ),
+      ).whereType<PeriodicJobEntry>().toList();
+      expect(jobs[0].driverIds, ['cron|/etc/crontab|0']);
+      expect(jobs[1].driverIds, same(jobs[0].driverIds));
+      expect(jobs[1].schedules, same(jobs[0].schedules));
+      expect(jobs[1].nextRuns, same(jobs[0].nextRuns));
+      expect(jobs[2].runsUnknown, JobRunsUnknown.noDriver);
+    });
+
     test('a driver without runs passes its reason on', () {
       final jobs = _merge(
         _cron(
