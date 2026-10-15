@@ -1499,7 +1499,8 @@ enum LinkClosedReason {
   /// The transport reported an error before it ended.
   transportError,
 
-  /// A keepalive ping went unanswered past its deadline (CN-06).
+  /// A keepalive ping went unanswered past its deadline, or the samplers
+  /// stayed silent after one missed a deadline (CN-06, 03 §6.4).
   pingTimeout,
 
   /// Connecting or authenticating never produced a transport.
