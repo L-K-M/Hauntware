@@ -584,10 +584,11 @@ close the section; they are not decisions.
   and the derived deadline still bounds the request. Supersedes the slow
   figure in 6.2. *Rejected:* one fixed slow deadline (too short for the
   probe, too long for one `df`).
-- **D48. Core and overview payloads are filtered on the host.** The `core`
-  and `overview` fragments keep only the rows and fields the engine uses
-  before anything crosses the link, with builtins only (6.2, fork budget);
-  each change bumps the collector-set version (`kCollectorSetVersion`).
+- **D48. Core, overview and procs payloads are trimmed on the host.** The
+  `core` and `overview` fragments keep only the rows and fields the
+  engine uses before anything crosses the link, with builtins only (6.2,
+  fork budget); each change bumps the collector-set version
+  (`kCollectorSetVersion`).
   Until version 4 both sent all of `/proc/net/dev` and `core` all of
   `/proc/diskstats`, and spike S2 measured a 4-CPU `core` reply of 2,773 B
   and an `overview` reply of 1,227 B (`klabautermann/docs/evidence/s2/`).
@@ -624,10 +625,10 @@ close the section; they are not decisions.
   device, not the name, which a toolstack may change [V: Xen 4.19
   `tools/hotplug/Linux/vif-common.sh` (`rename_vif`)]. Without such an
   interface, inside a container whose `eth0` is a veth peer, the
-  interfaces that are neither a bridge (a `bridge/` directory) nor
-  enslaved (a `master` link) stay, because a nested Docker bridge and its
-  veth ports count forwarded traffic again, in the opposite direction to
-  `eth0` [V: Linux `net/bridge/br_device.c` (`br_dev_xmit`),
+  interfaces other than `lo` that are neither a bridge (a `bridge/`
+  directory) nor enslaved (a `master` link) stay, because a nested Docker
+  bridge and its veth ports count forwarded traffic again, in the opposite
+  direction to `eth0` [V: Linux `net/bridge/br_device.c` (`br_dev_xmit`),
   `net/bridge/br_input.c` (`br_pass_frame_up`), `drivers/net/veth.c`
   (`veth_get_stats64`)]. When that leaves none, as when `eth0` is itself a
   bridge port, or without sysfs, every interface but `lo` stays, and
@@ -670,12 +671,55 @@ close the section; they are not decisions.
   for each further CPU, and an `overview` reply 507 B, so 2.5 KB holds to
   about 55 CPUs and 11.4 allows 30 B for each CPU beyond 32; under mksh a
   `core` reply is 1,315 B at 4 CPUs, 2,453 B at 21, 2,520 B at 22 and
-  3,192 B at 32. Real hosts remain for S2.
+  3,192 B at 32. Real hosts remain for S2. Version 5 trims `procs` the
+  same way. Each row carries only what PRC-01 and PRC-02 use (pid, state,
+  ppid, utime, stime, starttime, uid, RSS and comm, from `stat` and the
+  `Uid:` and `VmRSS:` lines of `status`), and both loops join rows in
+  chunks of 64, because appending each line to one growing variable copies
+  it every time: S2 measured the old loops at 10.3 s under dash for 2,083
+  processes and 67.5 s under bash for 2,091, growing with the square of
+  the count. Above 500 processes `sort` keeps the union of the 250 with
+  the highest CPU share since their start and the 250 with the most
+  resident memory, PRC-01's first sort keys, and a `meta` block reports
+  the total and how the rows were chosen, so the list can say "showing N
+  of M" (`ProcsResult` carries both, 10.1); PRC-01's search and its other
+  sort keys then see the kept rows only. The selection forks about nine
+  processes per tick (`sort`, `head` and their subshells), which 6.2's
+  fork budget allows as execs the collector needs; up to 500 processes a
+  tick forks as often as version 4 [U]. Without `sort` or `head`, or when
+  the selection fails, the first 500 in glob order stay; mksh runs
+  `printf` as an external command, and the kernel refuses an argument
+  longer than 32 pages (128 KiB with 4 KiB pages), so there the selection
+  fails above about 2,000 processes [U]. The share since start only ranks:
+  a long-running process that just turned busy can stay below the cut
+  until its share rises, while the CPU shown remains the engine's delta
+  (PRC-01). `starttime` counts from the host's boot [V: Linux
+  `fs/proc/array.c` (`do_task_stat`)], but an lxcfs `/proc/uptime` (D50)
+  counts from the container's init [V: lxcfs `src/proc_fuse.c`
+  (`get_reaper_age`) at v7.0.0], so where `/proc/uptime` is an lxcfs mount
+  the fragment adds PID 1's start back; otherwise every process inside
+  such a container would seem younger than it is. Only the kept rows'
+  command lines are read, in the byte order of their pids, which keeps
+  7.2's header rules. The row cap does not bound bytes: `head -n 1000`
+  limits each command line's lines, so 500 kept rows whose command lines
+  average more than about 2 KB, or fewer with longer ones, still pass the
+  1 MiB section cap, and the reply is lost as a gap with every collector
+  in it (6.2); 300 synthetic processes with 3.8 KB command lines made a
+  1,159,835 B section under dash and bash [U]. A per-file byte cap that
+  marks the argument vector truncated is a follow-up.
+  With linear loops D47 needs no process-count term:
+  synthetic trees [U] took about 0.6 s under dash and bash at 2,000
+  processes and 2.8 s at 10,000, and a container with 2,080 sleeping
+  processes took 0.7 s under dash and 0.8 s under bash per tick and sent
+  30 KB, where version 4 took 9.6 s under dash and sent 900 KB [U].
   *Rejected:* filtering only in the engine (the bytes still cross the link
   on every tick, against 11.4's 1 KB/s for 10 hosts); name lists of
   virtual interfaces and partitions (never complete); leaving out every
   interface with a master (that drops bond slaves and bridge ports, the
-  only devices under a bond or a bridge).
+  only devices under a bond or a bridge); ranking processes by CPU since
+  the previous tick (per-pid state kept in the long-lived shell); trimmed
+  rows for every process (a host with 10,000 processes and their command
+  lines would still reach the 1 MiB section cap [E]).
 - **D49. Collector locale.** Collectors that render text for people
   (A11Y-08) run their command under `LC_ALL=C.UTF-8`, or under the
   sampler's `LC_ALL=C` when the host lacks `C.UTF-8`. The program decides
@@ -2156,7 +2200,7 @@ and is the single source for every runner, including the T1 scripts (9.3).
 | `overview` (fleet rows) | fast | `cpu` lines of `/proc/stat`, filtered `/proc/meminfo`, `/proc/loadavg`, `/proc/net/dev` | 5 s | 10 s | 30 s |
 | `core` (focused server) | fast | the above plus per-core lines, `/proc/diskstats`, `/proc/pressure/*`, `/proc/uptime`, `btime`, the ZFS `arcstats` subset (D48) | 2 s | 3 s | 10 s |
 | `fs` | slow | `df -PT -B1`, `df -Pi` under `timeout 10` | 30 s | 60 s | 120 s |
-| `procs` | slow | `/proc/<pid>/stat` and `status` with builtins; every `/proc/<pid>/cmdline` through one `head` piped into `tr '\000' '\037'` (7.2); `ps -eo ...` or BusyBox `ps w` fallback | 3 s while visible | 5 s while visible | 10 s |
+| `procs` | slow | `/proc/<pid>/stat` and `status` with builtins, at most 500 trimmed rows (D48); the kept rows' `/proc/<pid>/cmdline` through one `head` piped into `tr '\000' '\037'` (7.2); `ps -eo ...` or BusyBox `ps w` fallback | 3 s while visible | 5 s while visible | 10 s |
 | `units` | slow | `systemctl list-units --all --output=json` (systemd 246+), else `--plain --no-legend`; `systemctl --failed` | 15 s while visible; 60 s for the health card | same | same |
 | `timers`, `cron` | slow | `systemctl list-timers --all --output=json`; `crontab -l`; `/etc/crontab`; `/etc/cron.d/*`; `cron.{hourly,...}` | 60 s while visible | same | on demand |
 | `identity` | slow | `/etc/os-release`, `uname`, `hostnamectl --json=short` (systemd 249+) | once per session | same | same |
@@ -2253,21 +2297,27 @@ unless the user enables admin mode for that panel.
 
 - **MVP.** The `procs` collector (slow sampler, only while visible) reads
   `/proc/<pid>/stat` and `status` with builtins; current CPU from utime
-  plus stime deltas, not lifetime `pcpu`. Argument vectors cannot use
-  `read`: `/proc/<pid>/cmdline` separates arguments with NUL bytes, which
-  shell variables cannot hold, and dash and bash drop them, so `sleep 30`
-  reads as `sleep30` [L] (04, Appendix A, E11). Instead one
-  `cd /proc && head -n 1000 [0-9]*/cmdline | tr '\000' '\037'` per tick
-  (POSIX `tr`, and GNU and BusyBox `head`: POSIX defines `head -n` only
-  for text files, which hold no NUL bytes; the line cap is [E]) turns every
-  separator into `\037` before the output reaches a shell variable. `head`
+  plus stime deltas, not lifetime `pcpu`. Above 500 processes it sends at
+  most 500 rows, and the list says "showing N of M" (D48). Argument
+  vectors cannot use `read`: `/proc/<pid>/cmdline` separates arguments
+  with NUL bytes, which shell variables cannot hold, and dash and bash
+  drop them, so `sleep 30` reads as `sleep30` [L] (04, Appendix A, E11).
+  Instead one
+  `cd /proc && head -n 1000 <pid>/cmdline... | tr '\000' '\037'` per tick
+  over the kept rows (POSIX `tr`, and GNU and BusyBox `head`: POSIX
+  defines `head -n` only for text files, which hold no NUL bytes; the line
+  cap is [E]) turns every separator into `\037` before the output reaches
+  a shell variable. `head`
   precedes each file with a `==> <pid>/cmdline <==` line, which an argument
   containing newlines can forge. Real headers appear once each and in the
   byte order in which the `LC_ALL=C` glob sorts them; a header that repeats
   a PID or breaks that order marks the PID it names and the entry it
-  interrupts "command line unavailable" instead of guessing. Headers for
-  PIDs missing from the tick's `stat` pass (new processes, the collector's
-  own pipeline) are skipped. Command lines are masked per argument (8.9);
+  interrupts "command line unavailable" instead of guessing. `head` gets
+  the kept rows' paths in that order, and headers for PIDs missing from
+  the rows are skipped. A command line can also forge a `== meta ==`
+  line, so only the first `total=` and `selection=` count: the `meta`
+  block precedes every command line. Command lines are masked per
+  argument (8.9);
   the `ps` fallback joins arguments with spaces, so masking there works on
   whitespace tokens. Kill and signal
   (PRC-02): the plan records the PID and its start
@@ -3910,7 +3960,8 @@ the engine in `engine_isolate.dart` beside it):
   host sends no per-core breakdown, D48), each rate
   map null until a previous reading exists, so unknown never sums to
   zero; for `procs`, per-process CPU shares with the start time PRC-02
-  checks; for `identity`, the strings SYS-01 shows, resolved in the
+  checks, plus the host's process count and how it chose the rows it
+  sent (D48); for `identity`, the strings SYS-01 shows, resolved in the
   engine so the host's JSON never crosses (6.5); and the parsed tables
   for `fs`, `units`, `failedUnits`, `timers` and `cron`. A
   stream whose collector reports a section status other than `ok` (6.2)

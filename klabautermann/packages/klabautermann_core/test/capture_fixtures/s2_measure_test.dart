@@ -158,8 +158,15 @@ void main() {
     for (final r in runs) {
       expect(r['outcome'], 'ok');
       // The `S` marker's size, not a seq or another small number: each
-      // process adds a stat line, five status lines and its cmdline.
-      expect(r['bytesPerProcess'], inInclusiveRange(100, 4096));
+      // kept process adds a row, a `head` header and its cmdline (D48).
+      expect(r['bytesPerRow'], inInclusiveRange(40, 4096));
+      // Over the rows the host sent, which above the cap can be fewer
+      // than the cap.
+      expect(r['rows'], allOf(isA<int>(), greaterThan(0)));
+      expect(
+        r['bytesPerRow'],
+        (r['payloadBytes']! as int) / (r['rows']! as int),
+      );
       expect(r['capFraction'], lessThan(1));
     }
   }, skip: dash == null ? 'dash is not installed' : false);
@@ -179,6 +186,14 @@ void main() {
       expect((r['wallMs']! as Map<String, num>)['min'], greaterThan(0));
     }
   }, skip: dash == null ? 'dash is not installed' : false);
+
+  test('block lines leave out the headers', () {
+    final payload = utf8.encode(
+      '== meta ==\ntotal=600\n== rows ==\n1 S\n2 S\n3 S\n'
+      '== cmdline ==\n==> 1/cmdline <==\n/sbin/init\x1f',
+    );
+    expect(blockLines(payload), {'meta': 1, 'rows': 3, 'cmdline': 2});
+  });
 
   test('block sizes add up to the payload', () {
     final payload = utf8.encode('== stat ==\ncpu 1 2\n== uptime ==\n9.5 1.0');

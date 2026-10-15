@@ -32,7 +32,14 @@ const kSamplerStartCommand =
 /// `lxcfs` area (D50) and the slow program's `HW_UTF8` check (D49).
 /// Version 4 filters `overview` and `core` on the host and adds the ZFS
 /// ARC to `core` (D48).
-const kCollectorSetVersion = '4';
+/// Version 5 bounds `procs` to [kProcsRowCap] trimmed rows (D48).
+const kCollectorSetVersion = '5';
+
+/// The most `procs` rows one reply carries (D48). With more processes the
+/// fragment keeps the union of the [kProcsRowCap] / 2 with the highest CPU
+/// share since their start and the [kProcsRowCap] / 2 with the most
+/// resident memory, and its `meta` block reports the total.
+const kProcsRowCap = 500;
 
 /// The `timeout` guard applied to forking collectors (03 §6.2).
 const kCollectorTimeoutSeconds = 10;
@@ -277,10 +284,10 @@ hw_meminfo() {
 # netback port (a xenbus device whose nodename is under `backend/`) is
 # a guest's NIC seen from dom0 and counts as virtual. Without such an
 # interface (inside a container, whose eth0 is a veth peer) the
-# interfaces that are neither a bridge nor enslaved stay, because a
-# nested bridge and its ports repeat what eth0 counts; when that leaves
-# none, or without sysfs, every interface but lo stays. Rows that never
-# moved a byte are left out.
+# interfaces other than lo that are neither a bridge nor enslaved stay,
+# because a nested bridge and its ports repeat what eth0 counts; when
+# that leaves none, or without sysfs, every interface but lo stays. Rows
+# that never moved a byte are left out.
 hw_netdev() {
   o="$o$NL== netdev =="
   hw_readable /proc/net/dev || return 0
@@ -748,35 +755,107 @@ psec() {
 }
 """;
 
-/// `procs` (03 §7.2): `/proc/<pid>/stat` and the needed `status` fields
-/// with builtins, every `/proc/<pid>/cmdline` through one `head -n 1000`
+/// `procs` (03 §7.2, D48): one row per process with the fields PRC-01 and
+/// PRC-02 use, read with builtins from `/proc/<pid>/stat` and the `Uid:`
+/// and `VmRSS:` lines of `status`: pid, state, ppid, utime, stime,
+/// starttime, uid, RSS in kB (`-` for an unknown uid or RSS) and comm.
+/// Both loops join rows in chunks of 64, so a tick's time grows about
+/// linearly with the process count instead of with its square. Any
+/// process can put a newline in its comm, which leaves comm text after
+/// the last `) ` of the first stat line, so the fields there are split
+/// with globbing off and fewer than 20 skip the process.
+///
+/// Above [kProcsRowCap] processes `sort` keeps the union of the top halves
+/// by CPU share since start and by RSS (`selection=cpu_rss`); without
+/// `sort` or `head`, or when the selection comes back empty, the first rows
+/// in glob order stay (`selection=pid`). The `meta` block carries the
+/// total. The share is per mille of one CPU: (utime + stime) * 10 over the
+/// whole seconds since start, at USER_HZ 100 (Linux's on every architecture
+/// but Alpha). 32-bit shell arithmetic (mksh) wraps it for a process with
+/// more than about 24 days of CPU time or started more than 248 days after
+/// boot, which only misranks that process. starttime counts from the host's
+/// boot but an lxcfs `/proc/uptime` from the container's init (D50), so
+/// where `/proc/uptime` is an lxcfs mount PID 1's start goes back onto the
+/// clock; `HW_LXUP` caches that check for the sampler's life.
+///
+/// The selection writes no stderr: `head` closing its pipe early makes
+/// `sort` report a broken pipe where SIGPIPE is ignored, and mksh, whose
+/// `printf` is an external command, cannot run it once the rows pass the
+/// kernel's 128 KiB limit for one argument (above about 2,000 processes),
+/// which leaves the glob order.
+///
+/// The kept rows' `/proc/<pid>/cmdline` go through one `head -n 1000`
 /// piped into `tr '\000' '\037'` (shell variables cannot hold NULs; 04
-/// App. A, E11). When head or tr is absent the fallbacks are
+/// App. A, E11), in the byte order of the pids, which is the glob's (03
+/// §7.2); without head or tr the fallbacks are
 /// `ps -eo pid,ppid,user,stat,rss,args` then BusyBox `ps w`. The `==> `
 /// headers head prints and the forgery they enable are the parser's
-/// problem (03 §7.2), so the bytes go into the `cmdline` block verbatim.
+/// problem (03 §7.2).
 const _kProcsFragment = r"""
 c_procs() {
   st=ok
-  o='== stat =='
+  if [ -z "$HW_LXUP" ]; then
+    HW_LXUP=0
+    while read -r _a _b _c _x; do
+      case $_c:$_b in fuse.lxcfs:/proc/uptime) HW_LXUP=1 ;; esac
+    done 2>/dev/null </proc/mounts
+  fi
+  _z=0
+  if [ "$HW_LXUP" = 1 ] && IFS= read -r _l 2>/dev/null </proc/1/stat; then
+    set -f; set -- ${_l##*) }; set +f; _z=$((${20:-0} / 100))
+  fi
+  _up=; read -r _up _x 2>/dev/null </proc/uptime
+  _up=${_up%%.*}; _now=$((${_up:-0} + _z))
+  _r=; _k=; _i=0; _n=0
   for _f in /proc/[0-9]*/stat; do
+    IFS= read -r _l 2>/dev/null <"$_f" || continue
+    case $_l in
+      *') '*) ;;
+      *) continue ;;
+    esac
     _p=${_f#/proc/}; _p=${_p%/stat}
-    if IFS= read -r _l <"$_f"; then o="$o$NL$_p $_l"; fi
-  done
-  o="$o$NL== status =="
-  for _f in /proc/[0-9]*/status; do
-    _p=${_f#/proc/}; _p=${_p%/status}
-    [ -r "$_f" ] || continue
-    while IFS= read -r _l; do
-      case $_l in
-        Name:* | Uid:* | Gid:* | VmRSS:* | Threads:*)
-          o="$o$NL$_p $_l" ;;
+    _c=${_l#*\(}; _c=${_c%\)*}
+    set -f; set -- ${_l##*) }; set +f
+    [ $# -ge 20 ] || continue
+    _u=-; _m=-
+    while read -r _a _b _x; do
+      case $_a in
+        Uid:) _u=$_b ;;
+        VmRSS:) _m=$_b; break ;;
+        Threads:) break ;;
       esac
-    done <"$_f"
+    done 2>/dev/null <"/proc/$_p/status"
+    _e=$((_now - ${20} / 100)); [ "$_e" -gt 0 ] || _e=1
+    _k="$_k$NL$(((${12} + ${13}) * 10 / _e)) $_p $1 $2 ${12} ${13} ${20} $_u $_m $_c"
+    _n=$((_n + 1)); _i=$((_i + 1))
+    if [ "$_i" -ge 64 ]; then _r="$_r$_k"; _k=; _i=0; fi
   done
+  _r="$_r$_k"; _r=${_r#"$NL"}
+  _sel=all
+  if [ "$_n" -gt 500 ]; then
+    _sel=pid
+    if command -v sort >/dev/null 2>&1 && command -v head >/dev/null 2>&1; then
+      _s=$({ printf '%s\n' "$_r" 2>/dev/null | sort -k1,1nr 2>/dev/null | head -n 250
+        printf '%s\n' "$_r" 2>/dev/null | sort -k9,9nr 2>/dev/null | head -n 250
+      } | sort -u -k2,2 2>/dev/null)
+      if [ -n "$_s" ]; then _r=$_s; _sel=cpu_rss; fi
+    fi
+  fi
+  o="== meta ==${NL}total=$_n${NL}selection=$_sel$NL== rows =="
+  _q=; _k=; _w=; _i=0; _j=0
+  set -f; _ifs=$IFS; IFS=$NL
+  for _l in $_r; do
+    [ "$_i" -lt 500 ] || break
+    _l=${_l#* }
+    _k="$_k$NL$_l"; _w="$_w ${_l%% *}/cmdline"
+    _i=$((_i + 1)); _j=$((_j + 1))
+    if [ "$_j" -ge 64 ]; then o="$o$_k"; _q="$_q$_w"; _k=; _w=; _j=0; fi
+  done
+  o="$o$_k"; _q="$_q$_w"
+  IFS=$_ifs; set +f
   o="$o$NL== cmdline =="
   if command -v head >/dev/null 2>&1 && command -v tr >/dev/null 2>&1; then
-    _c=$(cd /proc 2>/dev/null && hw_run head -n 1000 [0-9]*/cmdline 2>/dev/null </dev/null | tr '\000' '\037')
+    _c=$(cd /proc 2>/dev/null && hw_run head -n 1000 $_q 2>/dev/null </dev/null | tr '\000' '\037')
     o="$o$NL$_c"
   elif command -v ps >/dev/null 2>&1; then
     _c=$(hw_run ps -eo pid,ppid,user,stat,rss,args </dev/null 2>&1)

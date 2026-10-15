@@ -51,6 +51,7 @@ export 'package:klabautermann_host/klabautermann_host.dart'
         JournalEntry,
         LoadAvg,
         NetRate,
+        ProcsSelection,
         SystemdUnit,
         TimersSnapshot,
         UnitsSnapshot;
