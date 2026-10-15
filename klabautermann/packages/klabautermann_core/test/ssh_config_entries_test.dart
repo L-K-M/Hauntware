@@ -724,6 +724,23 @@ void main() {
       expect(result.skippedCount, 2);
     });
 
+    test('leaves out a ProxyJump whose first hop of several is none', () {
+      // ssh hands the nested ssh the hops before the last as written, with
+      // -J, and `-J none` means no jump: ssh reaches gw directly, without
+      // gw's own route, and not through a host named none. With three
+      // hops, the nested ssh for gw hands on `-J none` in turn.
+      final result = importedHostsFromSshConfig(
+        'Host web\n  HostName 10.0.0.5\n  ProxyJump none,gw\n'
+        'Host web2\n  HostName 10.0.0.6\n  ProxyJump NONE,gw\n'
+        'Host web3\n  HostName 10.0.0.7\n  ProxyJump none,a,gw\n'
+        'Host gw\n  HostName 10.0.0.9\n  ProxyJump bastion\n'
+        'Host bastion\n  HostName 10.0.0.1\n',
+      );
+
+      expect(result.hosts.map((h) => h.alias), ['gw', 'bastion']);
+      expect(result.skippedCount, 3);
+    });
+
     test('leaves out a route ssh refuses as a jumphost loop', () {
       // ssh.c exits when the jump host as written is the host it would
       // dial next, on the same port (the hop's own, else 22) and as the

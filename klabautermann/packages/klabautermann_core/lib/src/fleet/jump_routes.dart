@@ -113,6 +113,9 @@ final class JumpHop {
 /// - has a `#` comment holding a comma: ssh hands the hops before the
 ///   last on from the value as written, up to its last comma, so the
 ///   comment reaches the shell;
+/// - has `none`, in any case, as the first of several hops: a nested ssh
+///   then gets `-J none`, which means no jump, and dials the next hop
+///   directly, without that hop's own route;
 /// - contains `%`, which ssh expands as a token (ssh_config(5), TOKENS);
 /// - has a hop whose user holds U+FFFD, in place of bytes that are not
 ///   UTF-8, which ssh would sign in with;
@@ -501,6 +504,10 @@ List<_Hop>? _parseProxyJump(String value) {
   if (text.contains('%')) return null;
 
   final names = text.split(',');
+  // The nested ssh that gets `-J none` takes it for no jump, so the hop
+  // after none is dialed directly, without its own route.
+  if (names.length > 1 && names.first.toLowerCase() == 'none') return null;
+
   final hops = <_Hop>[];
   for (final (index, name) in names.indexed) {
     // ssh hands the hops before the last to the nested ssh with `-J`, as

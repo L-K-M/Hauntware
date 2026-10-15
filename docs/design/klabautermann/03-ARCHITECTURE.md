@@ -3604,15 +3604,17 @@ the engine in `engine_isolate.dart` beside it):
     `[2001:db8::1]`, which the shell globs into the names of matching
     files, or a leading `-`), has a `#` comment holding a comma (ssh
     cuts the hops it hands on with `-J` from the value as written, at
-    its last comma, so the comment reaches the shell), loops through
-    first hops, makes a route of more than 16 hops (the first hop's own
-    included; Séance's connector refuses a longer one), has a hop that
-    as written is the host or hop it leads to as ssh dials it (an
-    address as `getnameinfo()` writes it, unless only its case differs;
-    any address where the import cannot tell that form), on that one's
-    port and as its user (ssh's "jumphost loop"), or names a host or hop
-    left out (whose settings the engine would lack). That last rule also
-    covers a later hop left out only for its own route (a
+    its last comma, so the comment reaches the shell), has `none` as
+    the first of several hops (a nested ssh then gets `-J none`, which
+    means no jump, and dials the next hop without its own route), loops
+    through first hops, makes a route of more than 16 hops (the first
+    hop's own included; Séance's connector refuses a longer one), has a
+    hop that as written is the host or hop it leads to as ssh dials it
+    (an address as `getnameinfo()` writes it, unless only its case
+    differs; any address where the import cannot tell that form), on
+    that one's port and as its user (ssh's "jumphost loop"), or names a
+    host or hop left out (whose settings the engine would lack). That
+    last rule also covers a later hop left out only for its own route (a
     `ProxyCommand`, a `ProxyJump` the engine cannot follow, or a `Match`
     that could set the route), which ssh ignores: the import is
     conservative there and leaves out every host behind such a hop,
