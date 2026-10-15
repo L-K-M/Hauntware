@@ -4177,8 +4177,8 @@ tab:
   answers, or when it did not report a capability, the tab shows and
   its values read "unknown". A hidden tab is not built, so it samples
   nothing; it names what is missing and links to the Access tab, which
-  the desktop strip selects and a phone pushes (More lists it with the
-  phone server screen).
+  the desktop strip selects and a phone pushes. The phone's More
+  destination does not list Access yet, so there the link is the way in.
 - Each row shows its state as an icon and a word, its reason, SAF-08's
   badge on a root-equivalent right, and its fix as one line: the
   elevation prefix, then each word, quoted (8.8) only where a shell
