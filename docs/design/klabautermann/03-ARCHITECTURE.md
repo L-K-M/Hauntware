@@ -3939,8 +3939,9 @@ the engine in `engine_isolate.dart` beside it):
   and `AnswerPrompt` to its prompt broker. `Connect` is the user's
   connect, since the app sends it when a view opens, so it may prompt.
   `RequestRejected` answers a `Connect` for a server the engine cannot
-  dial (outside the fleet, or without a config) and an `AnswerPrompt`
-  for a prompt that is not open or with an answer that does not fit it.
+  dial (outside the fleet, a jump hop's id included, or without a
+  config) and an `AnswerPrompt` for a prompt that is not open or with
+  an answer that does not fit it.
   `IsolateEngineClient.spawn(linksEnabled:)` (`EngineStart.linksEnabled`,
   off unless given) turns links on. Off, the engine has no supervisor,
   so `Connect` gets `RequestRejected` and nothing dials, while

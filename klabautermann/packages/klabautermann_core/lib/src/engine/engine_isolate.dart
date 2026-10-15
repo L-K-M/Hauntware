@@ -112,7 +112,9 @@ void engineMain(
             hopConfig: (id) => fleet.serverConfig(id),
             dial: dial,
           ).connect,
-          configFor: (id) => fleet.serverConfig(id),
+          // Fleet entries only: the fleet's hop configs serve their routes.
+          configFor: (id) =>
+              fleetIds.contains(id) ? fleet.serverConfig(id) : null,
           emit: uiPort.send,
           policy: Platform.isAndroid || Platform.isIOS
               ? BackgroundLinkPolicy.closeAfterGrace
@@ -129,12 +131,12 @@ void engineMain(
       localUser: localUser,
       detail: imports.detail,
     );
-    final ids = {for (final entry in fleet.entries) entry.serverId};
-    sampling.fleet = ids;
-    for (final serverId in fleetIds.difference(ids)) {
+    final before = fleetIds;
+    fleetIds = {for (final entry in fleet.entries) entry.serverId};
+    sampling.fleet = fleetIds;
+    for (final serverId in before.difference(fleetIds)) {
       links?.forget(serverId);
     }
-    fleetIds = ids;
   }
 
   Future<void> handle(Object? message) async {

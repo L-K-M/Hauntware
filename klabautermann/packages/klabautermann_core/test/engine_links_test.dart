@@ -25,6 +25,7 @@ import 'package:test/test.dart';
 const _web = 'ssh-config:web';
 const _webConfig = 'Host web\n  HostName 192.0.2.10\n  User me\n';
 const _otherConfig = 'Host other\n  HostName 192.0.2.11\n  User me\n';
+const _bastionConfig = 'Host bastion\n  HostName 192.0.2.1\n  User me\n';
 
 /// A [LinkState] of [serverId] with [status].
 Matcher _state(LinkStatus status, {String serverId = _web}) => isA<LinkState>()
@@ -231,11 +232,16 @@ void main() {
     expect(dialed.onKeyboardInteractive, isNotNull, reason: 'interactive');
   });
 
-  test('Connect for a server outside the fleet is rejected', () async {
+  test('Connect for a server outside the fleet is rejected, a jump hop '
+      'included', () async {
     final engine = await startEngine();
-    await engine.import(_webConfig);
+    await engine.import('$_bastionConfig$_webConfig  ProxyJump bastion\n');
 
-    engine.send(const Connect('ssh-config:gone'));
+    engine
+      ..send(const Connect('ssh-config:gone'))
+      // The hop has a config for web's route, but no entry.
+      ..send(const Connect('ssh-config-hop:bastion'));
+    expect(await engine.rejected(), 'Connect');
     expect(await engine.rejected(), 'Connect');
     expect(dials, isEmpty);
   });
