@@ -149,11 +149,13 @@ void main() {
     ConnectPurpose purpose = ConnectPurpose.background,
     bool realDial = false,
     void Function(LinkStatus phase)? onPhase,
+    void Function()? onDialing,
     Future<void>? abandoned,
   }) => connector(realDial: realDial).connect(
     server ?? _server(),
     purpose: purpose,
     onPhase: onPhase,
+    onDialing: onDialing,
     abandoned: abandoned,
   );
 
@@ -386,6 +388,27 @@ void main() {
         const LinkAuthenticating(),
       ]);
     });
+
+    test('onDialing hears once the route is resolved', () async {
+      hops['ssh-config-hop:gw'] = _server(id: 'ssh-config-hop:gw');
+      final seen = <String>[];
+      onDial = (dial) async {
+        seen.add('dial');
+        if (dial.config.jumpHostId case final hop?) {
+          await dial.resolveJumpHost!(hop);
+          seen.add('route');
+        }
+        return _FakeLink();
+      };
+
+      await connect(onDialing: () => seen.add('dialing'));
+      await connect(
+        server: _server(jumpHostId: 'ssh-config-hop:gw'),
+        onDialing: () => seen.add('dialing'),
+      );
+
+      expect(seen, ['dialing', 'dial', 'dial', 'dialing', 'route']);
+    });
   });
 
   group('abandoned', () {
@@ -434,12 +457,15 @@ void main() {
         throw _connectError(StateError('Missing jump host'));
       };
 
+      var dialing = false;
       await connect(
         server: _server(jumpHostId: 'ssh-config-hop:gw'),
+        onDialing: () => dialing = true,
         abandoned: abandon.future,
       );
 
       expect(hop, isNull);
+      expect(dialing, isFalse);
     });
   });
 

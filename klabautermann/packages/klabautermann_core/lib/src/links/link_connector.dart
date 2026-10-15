@@ -129,13 +129,16 @@ final class LinkConnector {
   /// hears the attempt's own: [LinkNeedsUser] once each prompt is out,
   /// [LinkAuthenticating] once the server's own host key has passed, and
   /// after an answered prompt [LinkAuthenticating], or [LinkConnecting]
-  /// while a jump host asked. Once [abandoned] completes, prompts get no
-  /// answer and an unresolved route opens no socket; a dial under way can
-  /// still bring a link, for the caller to close.
+  /// while a jump host asked. [onDialing] hears once that the route is
+  /// resolved: the dial opens its first socket next. Once [abandoned]
+  /// completes, prompts get no answer and an unresolved route opens no
+  /// socket; a dial under way can still bring a link, for the caller to
+  /// close.
   Future<LinkConnectResult> connect(
     ServerConfig config, {
     required ConnectPurpose purpose,
     void Function(LinkStatus phase)? onPhase,
+    void Function()? onDialing,
     Future<void>? abandoned,
   }) async {
     final phase = onPhase ?? (_) {};
@@ -195,6 +198,7 @@ final class LinkConnector {
     try {
       final credentials = await _credentials.resolve(config);
       if (gaveUp) return LinkConnectFailed(_abandonedError);
+      if (config.jumpHostId == null) onDialing?.call();
 
       final link = await _dial(
         config: config,
@@ -232,7 +236,10 @@ final class LinkConnector {
           // Hops resolve before any socket opens: an abandoned attempt
           // stops here, its route left incomplete, instead of dialing.
           if (gaveUp) return null;
-          if (hop != null) hops++;
+          if (hop == null) return null;
+          hops++;
+          // The first hop to dial ends the route.
+          if (hop.config.jumpHostId == null) onDialing?.call();
           return hop;
         },
       );
