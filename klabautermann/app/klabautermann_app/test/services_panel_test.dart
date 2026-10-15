@@ -294,6 +294,26 @@ void main() {
     expect(find.text('Load'), findsNothing);
   });
 
+  testWidgets('touch platforms give the filters 48 dp tap targets', (
+    tester,
+  ) async {
+    final panel = await _pump(
+      tester,
+      size: _phone,
+      platform: TargetPlatform.android,
+    );
+    await panel.sample(tester);
+
+    // androidTapTargetGuideline skips these: they touch the edge of the
+    // scrolling header. Each menu's button is its whole tap target.
+    for (final menu in _Menu.values) {
+      final button = find
+          .byWidgetPredicate((widget) => widget is DropdownButton)
+          .at(menu.index);
+      expect(tester.getSize(button).height, 48, reason: menu.name);
+    }
+  });
+
   for (final (name, size, platform) in [
     ('desktop', const Size(1280, 800), TargetPlatform.linux),
     ('phone', _phone, TargetPlatform.android),

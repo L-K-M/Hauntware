@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
+import 'package:ghost_ui/ghost_ui.dart' show ghostIsDesktopPlatform;
 import 'package:klabautermann_core/klabautermann_core.dart';
 
 import '../controllers/monitoring_controller.dart';
@@ -141,6 +142,7 @@ class _ServicesPanelState extends State<ServicesPanel> {
                 l10n.servicesFilterType,
                 _filterMenu(
                   l10n,
+                  theme,
                   anyLabel: l10n.servicesFilterTypeAll,
                   choices: filterChoices(
                     states.map((unit) => unit.type),
@@ -156,6 +158,7 @@ class _ServicesPanelState extends State<ServicesPanel> {
                 l10n.servicesFilterState,
                 _filterMenu(
                   l10n,
+                  theme,
                   anyLabel: l10n.servicesFilterStateAll,
                   choices: filterChoices(
                     states.map((unit) => unit.active),
@@ -332,16 +335,18 @@ Widget _labelled(ThemeData theme, String label, Widget child) => MergeSemantics(
 );
 
 /// A filter's menu: every unit, or one value, a type or state being
-/// systemd's word, never translated (03 §10.10).
+/// systemd's word, never translated (03 §10.10). It is compact on desktop
+/// and 48 dp tall on touch, as the table's rows are.
 Widget _filterMenu<T extends Enum>(
-  AppLocalizations l10n, {
+  AppLocalizations l10n,
+  ThemeData theme, {
   required String anyLabel,
   required List<UnitFilter<T>> choices,
   required UnitFilter<T> selected,
   required ValueChanged<UnitFilter<T>> onSelected,
 }) => DropdownButton<UnitFilter<T>>(
   value: selected,
-  isDense: true,
+  isDense: ghostIsDesktopPlatform(theme.platform),
   items: [
     for (final choice in choices)
       DropdownMenuItem(
