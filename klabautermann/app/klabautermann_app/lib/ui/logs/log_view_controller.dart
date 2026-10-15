@@ -33,6 +33,13 @@ class LogViewController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Appends one batch of journal entries (LOG-01); see
+  /// [LogBuffer.addJournal].
+  void addJournal(Iterable<JournalEntry> entries, {int dropped = 0}) {
+    _buffer.addJournal(entries, dropped: dropped);
+    notifyListeners();
+  }
+
   /// Empties the view and follows again, since an empty view has no place
   /// to hold; see [LogBuffer.clear].
   void clear() {

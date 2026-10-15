@@ -1,7 +1,10 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:ghost_ui/ghost_ui.dart'
     show FamilyHue, FamilyPalette, contrastRatio, legibleOn;
 import 'package:klabautermann_core/klabautermann_core.dart';
+import 'package:planchette_core/planchette_core.dart' show TextMatch;
 
 import 'log_level.dart';
 
@@ -24,6 +27,11 @@ const String _noteGap = ' ';
 /// before the contrast floor applies.
 const double _faintMix = 0.35;
 
+/// How much of the family's yellow, and of its orange for the current
+/// match, a search match's background mixes into the log background.
+const double _matchMix = 0.3;
+const double _currentMatchMix = 0.55;
+
 /// The most resolved styles and colours a palette keeps. Lines can name
 /// any of 16.7 million RGB colours, so the caches start over past this.
 const int _cacheLimit = 1024;
@@ -45,6 +53,8 @@ final class LogPalette {
     required this._secondary,
     required this._error,
     required this._warning,
+    required this._match,
+    required this._currentMatch,
     required List<Color> ansi,
   }) : assert(ansi.length == 16),
        _ansi = List.unmodifiable(ansi);
@@ -71,6 +81,16 @@ final class LogPalette {
       secondary: scheme.onSurfaceVariant,
       error: family.glyph(FamilyHue.red),
       warning: family.glyph(FamilyHue.yellow),
+      match: Color.lerp(
+        scheme.surfaceContainerLowest,
+        family.glyph(FamilyHue.yellow),
+        _matchMix,
+      )!,
+      currentMatch: Color.lerp(
+        scheme.surfaceContainerLowest,
+        family.glyph(FamilyHue.orange),
+        _currentMatchMix,
+      )!,
       ansi: [
         const Color(0xFF000000),
         ...hues,
@@ -89,6 +109,8 @@ final class LogPalette {
   final Color _secondary;
   final Color _error;
   final Color _warning;
+  final Color _match;
+  final Color _currentMatch;
   final List<Color> _ansi;
 
   final _styles = <(SgrStyle, LogLevel?), TextStyle>{};
@@ -107,6 +129,29 @@ final class LogPalette {
     color: _legible(_secondary, background),
     fontStyle: FontStyle.italic,
   );
+
+  /// The style of a journal row's unit and PID.
+  late final TextStyle sourceStyle = TextStyle(
+    color: _legible(_secondary, background),
+  );
+
+  /// [style] inside a search match (LOG-05): the match background, with
+  /// the text held to [logTextMinContrast] on it. Only the current match
+  /// is underlined, whatever the line's SGR underline, so it differs by
+  /// more than colour; a strikethrough stays.
+  TextStyle matchStyle(TextStyle style, {required bool current}) {
+    final background = current ? _currentMatch : _match;
+    final struck =
+        style.decoration?.contains(TextDecoration.lineThrough) ?? false;
+    return style.copyWith(
+      backgroundColor: background,
+      color: _legible(style.color ?? _foreground, background),
+      decoration: TextDecoration.combine([
+        if (struck) TextDecoration.lineThrough,
+        if (current) TextDecoration.underline,
+      ]),
+    );
+  }
 
   /// The colours and attributes of [style] on a line at [level]: the
   /// level's colour stands in for the default foreground.
@@ -195,38 +240,102 @@ final class LogPalette {
   }
 }
 
-/// [line] as a log view draws it: its visible text styled by [palette],
-/// then [cutNote] when the line was cut.
+/// What a journal MESSAGE's newline shows as: a return mark, then a line
+/// separator, which breaks the row with wrap on. Without wrap the row
+/// ends at the separator with no ellipsis, so the mark tells that more
+/// lines follow.
+const String _messageNewline = '\u23ce\u2028';
+
+/// The text of [line]'s row before styling: a journal line's unit and PID
+/// (LOG-01), then what `parseSgr` leaves of its text, with a MESSAGE's
+/// newlines shown instead of dropped.
+({String source, SgrText body}) _rowParts(LogLine line) {
+  final journal = line.journal;
+  if (journal == null) return (source: '', body: parseSgr(line.text));
+
+  final pid = journal.pid == null ? '' : '[${journal.pid}]';
+  final source = '${journal.source ?? ''}$pid';
+  return (
+    source: source.isEmpty ? '' : '$source: ',
+    body: parseSgr(line.text.replaceAll('\n', _messageNewline)),
+  );
+}
+
+/// The visible text of [line]'s row without its note: what a search reads
+/// and the width the view measures.
+String logRowText(LogLine line) {
+  final (:source, :body) = _rowParts(line);
+  return source + body.text;
+}
+
+/// [line] as a log view draws it: a journal line's unit and PID, its
+/// visible text styled by [palette], then [note] (a cut line's, or a
+/// journal MESSAGE's that was not sent). [matches] are search matches in
+/// [logRowText], in order; the one at [currentMatch] is the current one.
 TextSpan logLineSpan(
   LogLine line, {
   required LogPalette palette,
   required TextStyle base,
   LogLevel? level,
-  String? cutNote,
+  String? note,
+  List<TextMatch> matches = const [],
+  int? currentMatch,
 }) {
-  final parsed = parseSgr(line.text);
-  final children = <InlineSpan>[];
-  void add(int start, int end, SgrStyle style) {
+  final (:source, :body) = _rowParts(line);
+  final text = source + body.text;
+  final runs = <(int, int, TextStyle)>[
+    if (source.isNotEmpty) (0, source.length, palette.sourceStyle),
+  ];
+  void run(int start, int end, SgrStyle style) {
     if (start == end) return;
-    children.add(
-      TextSpan(
-        text: parsed.text.substring(start, end),
-        style: palette.styleFor(style, level),
-      ),
-    );
+    runs.add((
+      source.length + start,
+      source.length + end,
+      palette.styleFor(style, level),
+    ));
   }
 
   var at = 0;
-  for (final span in parsed.spans) {
-    add(at, span.start, SgrStyle.plain);
-    add(span.start, span.end, span.style);
+  for (final span in body.spans) {
+    run(at, span.start, SgrStyle.plain);
+    run(span.start, span.end, span.style);
     at = span.end;
   }
-  add(at, parsed.text.length, SgrStyle.plain);
-  if (cutNote != null) {
-    children.add(
-      TextSpan(text: _noteGap + cutNote, style: palette.markerStyle),
-    );
+  run(at, body.text.length, SgrStyle.plain);
+
+  // Each run is split where a match starts or ends inside it.
+  final children = <InlineSpan>[];
+  var next = 0;
+  for (final (start, end, style) in runs) {
+    var from = start;
+    while (from < end) {
+      while (next < matches.length && matches[next].end <= from) {
+        next++;
+      }
+      final match = next < matches.length ? matches[next] : null;
+      if (match == null || match.start >= end) {
+        children.add(TextSpan(text: text.substring(from, end), style: style));
+        break;
+      }
+
+      if (match.start > from) {
+        children.add(
+          TextSpan(text: text.substring(from, match.start), style: style),
+        );
+        from = match.start;
+      }
+      final stop = math.min(match.end, end);
+      children.add(
+        TextSpan(
+          text: text.substring(from, stop),
+          style: palette.matchStyle(style, current: next == currentMatch),
+        ),
+      );
+      from = stop;
+    }
+  }
+  if (note != null) {
+    children.add(TextSpan(text: _noteGap + note, style: palette.markerStyle));
   }
 
   return TextSpan(style: base, children: children);

@@ -243,8 +243,9 @@ password · D42 alert delivery through the sync server · D43 rates in the
 engine · D44 sample sequence · D45 subscriptions · D46 link vocabulary ·
 D47 sampler deadlines · D48 host-side filtering · D49 collector locale ·
 D50 LXC values · D51 Access tab · D52 runtime placement · D53 integration
-placement · D54 runtime override in M3 · D55 no health overlay in the MVP.
-Proposals awaiting the owner close the section; they are not decisions.
+placement · D54 runtime override in M3 · D55 no health overlay in the MVP
+· D56 log search through `planchette_core`. Proposals awaiting the owner
+close the section; they are not decisions.
 
 ### Shape and scope
 
@@ -930,6 +931,19 @@ Proposals awaiting the owner close the section; they are not decisions.
   it would be a shared-package change off the MVP path. Its first planned
   use stays 9.3's health overlay for Séance and Poltergeist (v1.x).
   Supersedes 10.3's overlay for the MVP.
+- **D56. The app searches logs with `planchette_core`.** The log viewer's
+  text search (LOG-05, 7.6) runs `planchette_core`'s `findSearchMatches`
+  over each loaded row's visible text, so `klabautermann_app` gains a
+  path dependency on `planchette_core` (3.2), as the Séance app has
+  (`seance/app/seance_app/pubspec.yaml:13-14` [V]). It is the search
+  behind Planchette's find bar, with tests for case folding and match
+  windows (`planchette/packages/planchette_core/test/editor_syntax_test.dart`
+  [V]). The package is pure Dart; it adds `unorm_dart`, `uuid` and
+  `fixnum` to the app's lockfile, at the versions the Séance and
+  Planchette apps resolve [V]. `planchette_editor` stays out of the log
+  viewer (10.8). *Rejected:* a search of the app's own (a second copy of
+  the same rules); `planchette_editor`'s find (an editor for one text
+  buffer, 10.8).
 
 ### Proposals awaiting the owner
 
@@ -1057,6 +1071,7 @@ graph TD
   APP --> GM
   APP --> GD
   APP --> PE
+  APP --> PCO
   APP --> ST
   CORE --> SC
   CORE --> HOST
@@ -1115,10 +1130,11 @@ import 'package:seance_core/seance_core.dart' show uuidV4;
 ```
 
 The barrel's `klabautermann_host` export shows only the plain-data types
-that sampling results and `HostProfileChanged` carry (10.1); each list
-changes only as a milestone wires a type in or retires one. No
-`ghost_*` package depends on `seance_core`; `klabautermann_core` is a
-product package, and the curated lines above are its only
+that sampling results and `HostProfileChanged` carry (10.1), and
+`JournalEntry` (the log viewer's journal rows, 10.8); each list changes
+only as a milestone wires a type in or retires one. No `ghost_*` package
+depends on `seance_core`; `klabautermann_core` is a product package, and
+the curated lines above are its only
 `seance_core` edge. Poltergeist's and
 Séance's edges to the new shared packages appear as each extraction
 switches them (3.5). The Rust workspace
@@ -4026,17 +4042,22 @@ hold each span's foreground and background to a minimum contrast
 (`contrastRatio`, A11Y-04), RGB included. Full at the caps with either
 kind of text, the buffer holds about 35 MiB of the 64 MiB budget (11.4).
 
-The viewer (`app/klabautermann_app/lib/ui/logs/`) forces a strut, so every
-row is a whole number of lines. Without wrap a row is one line, and a long
-line ends in an ellipsis until sideways scrolling lands; that also keeps a
-cut line's note out of sight, though screen readers read it. With wrap,
-the row counts sit in a Fenwick tree and a sliver of the viewer's own
-finds offsets and indexes in O(log n), where `SliverVariedExtentList` sums
-every extent before an index. Only the lines a layout shows, and as many
-rows above its offset so a page up lands on measured lines, are measured,
-once per width, font and locale: one row without a layout when the line
-is all Latin-1 and fits at a monospace advance per code unit (two per
-tab), allowing for the rounding of the engine's single-precision sum,
+The viewer (`app/klabautermann_app/lib/ui/logs/`) forces a strut, so
+every row is a whole number of lines. Without wrap a line takes one row,
+and a journal row one more for each field it shows; a long line ends in
+an ellipsis until sideways scrolling lands, which also keeps a cut
+line's note out of sight, though screen readers read it. The row counts
+sit in a Fenwick tree and a sliver of the viewer's own finds offsets and
+indexes in O(log n), where `SliverVariedExtentList` sums every extent
+before an index. It lays out both modes, so a journal row keeps its
+element, and with it keyboard and accessibility focus, when its fields
+open (M2; K06b used a fixed-extent list without wrap). Each mode keeps
+its own counts in step, so turning wrap off and on keeps the wrapped
+ones. With wrap, only the lines a layout shows, and as many rows above
+its offset so a page up lands on measured lines, are measured, once per
+width, font and locale: one row without a layout when the line is all
+Latin-1 and fits at a monospace advance per code unit (two per tab),
+allowing for the rounding of the engine's single-precision sum,
 otherwise laid out, since a fallback font can draw any other glyph
 wider than a fixed count of advances and a line or paragraph separator
 breaks the row. Other lines keep an earlier count or, once the viewer
@@ -4060,6 +4081,34 @@ level; journal priorities 0 to 3 are errors, 4 warnings, 5 and 6 plain, 7
 debug, each with a spoken gutter icon. Levels are never guessed from text
 (CTX-05, v1). Its goldens draw with flutter_test's font rather than the
 bundled font of 11.1 until they share K05a's approach.
+
+Journal rows and search (LOG-01, LOG-05, as built in M2): `LogBuffer`
+keeps a journal entry's MESSAGE as the line's text under the same cut,
+and its unit (else its syslog identifier), priority and PID typed beside
+it. Every other field is kept in the order received, encoded once as
+UTF-8 JSON in a byte list, so an entry costs a few objects however many
+fields it has, and those bytes count against the 32 MiB cap. With the
+unit they get up to one 16 KiB line cap beside the text, within what the
+text leaves of the byte cap; fields past it are left out and counted. A
+buffer full of typical service entries (15 fields, 671 bytes each) holds
+about 42 MiB in the heap test. A row reads `unit[PID]:
+message`, its level from `PRIORITY`. A MESSAGE's newline shows as a
+return mark (⏎) and a line separator: without wrap the row ends at its
+first line, where the text engine draws no ellipsis, and with wrap each
+line takes its own rows. A tap or Enter pauses following and shows the
+fields beneath the row, `NAME=value` on one row each without wrap, and a
+JSON null, which `journalctl -o json` sends for a field over 4,096 bytes
+unless run with `--all`, reads as not sent. In a paused view, fields that
+open or close above the top edge move no line in sight, and a row in
+sight keeps its place while its fields open. Search (D56) reads a row's
+visible text, unit and PID included, and ignores case unless told not
+to. It keeps a match count for each matching line and searches only new
+lines as they arrive; stepping wraps around, pauses following and scrolls
+the match's row into sight. Without wrap, a match past a row's ellipsis
+stays hidden until sideways scrolling lands, and one after a journal
+row's first line until wrap is on. Only the current match is underlined,
+whatever the line's SGR underline, so it differs by more than colour.
+Matches in a line are found again when it is drawn.
 
 ### 10.9 Theme
 
