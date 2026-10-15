@@ -16,6 +16,7 @@ import 'ui/adaptive_shell.dart';
 import 'ui/macos_toolbar_band.dart';
 import 'ui/menus/app_commands.dart';
 import 'ui/menus/app_menu_host.dart';
+import 'ui/server_surfaces.dart' show AppActivityReporter;
 import 'ui/settings_page.dart';
 import 'ui/startup_issue_notice.dart';
 
@@ -87,6 +88,15 @@ class KlabautermannApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // The engine pauses sampling while the user cannot see the app (03
+    // §6.4); the reporter tells it when that changes.
+    return AppActivityReporter(
+      monitoring: monitoring,
+      child: _buildApp(context),
+    );
+  }
+
+  Widget _buildApp(BuildContext context) {
     return ListenableBuilder(
       listenable: appearance,
       builder: (context, _) {

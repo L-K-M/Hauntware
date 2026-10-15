@@ -521,9 +521,17 @@ Proposals awaiting the owner close the section; they are not decisions.
   not above the last one it kept
   (`klabautermann_app/lib/controllers/monitoring_controller.dart:52-54`
   [V]), so every sample after a sampler restart would have been dropped.
-  The UI resets that floor on `EngineReady`, because a new engine counts
-  from the start. *Rejected:* the request number with a UI reset on restart
-  (the UI does not see sampler restarts).
+  A new engine counts from the start, so the floor lasts one engine run:
+  it lives in the monitoring controller, built over one `EngineClient`,
+  and a client is one run, since its handshake consumes `EngineReady` and
+  the engine's exit closes its events. A restarted engine is a new client
+  with new controllers, whose floors start empty and whose surfaces
+  resubscribe as they mount; a server that leaves the fleet loses its
+  floor too. *Rejected:* the request number with a UI reset on restart
+  (the UI does not see sampler restarts); a reset on an `EngineReady` in
+  the event stream (the handshake consumes it, so the reset would never
+  run, and a client outliving its engine would also have to replay
+  subscriptions, links and the app's activity into the next one).
 - **D45. Subscriptions are keyed by `(serverId, subscriptionId)`.** Each
   surface that shows a server's data (a fleet row, the overview, a visible
   panel) holds its own subscription with its own collector set. The engine
@@ -3578,6 +3586,26 @@ the engine in `engine_isolate.dart` beside it):
   resent on return, and a background pause indistinguishable from
   surfaces that closed); a field on `Subscribe` (D45). Until the link
   supervisor lands, the engine answers it with `RequestRejected`.
+- **Visibility and lifecycle (M2, app side).** The monitoring controller
+  sends `Connect` when the first view of a server opens (the desktop
+  workspace's selection, the phone's pushed screen) and `Disconnect` 30 s
+  after the last one closes, as long as 5.1's background grace, so
+  stepping between servers keeps one connection (5.12). A panel
+  subscribes its 6.4 streams, under an id minted per mounted surface,
+  while its tab or destination is selected: Overview `core`, `fs`,
+  `identity` and `failedUnits`; Processes `procs`; Services `units`; Jobs
+  `timers` and `cron`; System `identity`, `fs` and `core`; Logs, Docker
+  and Access none. Hidden pages stay built, so visibility comes from the
+  tab controller's index. The app sends `SetAppActivity` only on a change
+  (foreground while resumed or inactive, background while hidden, paused
+  or detached), and the engine starts with the app in the foreground.
+  Samples feed a ring of 300 readings per server, stream and series (CPU
+  busy, used memory, used swap and one-minute load, from `overview` and
+  `core`) and a newest reading time, which a clock ticking each second
+  while shown turns into an age (9.5 item 4). A `CatalogReplaced` without
+  a server drops these and its seq floor (SYN-08). The engine's
+  rejections of `Connect`, `Disconnect` and `SetAppActivity` until links
+  land show nothing.
 - **`Reachability(serverId, status)`** reports one server's latest probe
   answer, `online`, `offline` or `unknown` as `seance_core`'s
   `ProbeStatus` gives it, apart from `LinkState`: a probe is a TCP

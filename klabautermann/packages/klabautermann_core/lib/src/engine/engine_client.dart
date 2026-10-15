@@ -9,6 +9,11 @@ import 'protocol.dart';
 /// How the app talks to the engine (03 §10.1, D18). Requests are plain data;
 /// events arrive in engine order. Widget tests substitute a fake; production
 /// uses [IsolateEngineClient].
+///
+/// A client is one engine run: [events] closes when that engine stops, and
+/// a restarted engine is a new client. The app's controllers keep per-run
+/// state, such as the sample seq floor (D44), so they are built anew over
+/// the new client rather than handed it.
 abstract interface class EngineClient {
   /// Every [EngineEvent] the engine emits, in order. Broadcast so each
   /// concern's controller can subscribe its own slice (03 §10.1). Events

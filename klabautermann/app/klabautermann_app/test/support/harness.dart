@@ -46,7 +46,9 @@ final class AppHarness {
 /// stands in for what the engine's handshake reported about its import
 /// store, [instanceLockIssue] for an instance lock that could not be
 /// taken, and [toolbarBand] for the macOS integrated titlebar's band
-/// state.
+/// state. [linkGrace] defaults to zero, which disconnects a server as its
+/// last view closes: the tree unmounts at the end of every test, and the
+/// test binding fails a test that leaves a grace timer pending.
 Future<AppHarness> pumpApp(
   WidgetTester tester, {
   Size size = const Size(1280, 800),
@@ -58,6 +60,7 @@ Future<AppHarness> pumpApp(
   InstanceLockUnavailable? instanceLockIssue,
   OpenSettingsWindow? openSettingsWindow,
   ValueListenable<bool>? toolbarBand,
+  Duration linkGrace = Duration.zero,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -67,7 +70,7 @@ Future<AppHarness> pumpApp(
   final harness = AppHarness(
     engine: engine,
     fleet: FleetController(engine, servers: servers, sshConfig: sshConfig),
-    monitoring: MonitoringController(engine),
+    monitoring: MonitoringController(engine, linkGrace: linkGrace),
     appearance: appearance ?? AppearanceController(),
   );
   addTearDown(() async {
