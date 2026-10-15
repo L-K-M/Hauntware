@@ -2321,8 +2321,10 @@ due meanwhile waits for that request to settle instead, since a skipped
 tick would lose it, and the streams of a skipped tick join the next tick
 the sampler sends, so a period that keeps landing on skipped ticks
 cannot starve its stream. The slow sampler's first
-request on a link is the probe (6.1), sent again on a later run on the
-same link only if it went unanswered. Until it settles the slow sampler
+request on a link is the probe (6.1), until one is answered on that
+link: a probe that brings no reply goes out again after 15 s [E], as an
+owed read does, and on a later run on the same link. Until it settles
+the slow sampler
 sends nothing else and, for a server whose profile the engine does not
 know yet, the fast sampler waits too, so the first readings already
 withhold what a container host's `/proc` would supply (D50); a slow

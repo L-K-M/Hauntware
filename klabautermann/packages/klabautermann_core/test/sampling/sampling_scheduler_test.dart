@@ -159,6 +159,28 @@ void main() {
     expect(link.linesOf(_slow), ['hw_o probe']);
   });
 
+  test('a probe that brings no reply releases the fast sampler and goes '
+      'out again 15 s later', () async {
+    deadlines = const SamplerDeadlines(
+      slowMargin: Duration(milliseconds: 50),
+      perGuardedCommand: Duration.zero,
+    );
+    link.stalled.add(_slow);
+    subscribe({SampleStream.core});
+    await settle();
+    final slow = sessions.singleWhere((s) => s.kind == _slow);
+    await _until(() => slow.restarts == 1 && slow.state is SamplerReady);
+    link.stalled.clear();
+    await settle();
+    expect(link.linesOf(_fast), ['hw_t core']);
+
+    await clock.elapse(const Duration(seconds: 14));
+    expect(link.linesOf(_slow), ['hw_o probe']);
+    await clock.elapse(const Duration(seconds: 1));
+    expect(link.linesOf(_slow), ['hw_o probe', 'hw_o probe']);
+    expect(events.whereType<HostProfileChanged>(), hasLength(1));
+  });
+
   test('a new link is probed again, and a profile known from the last one '
       'does not hold the fast sampler', () async {
     subscribe({SampleStream.overview});

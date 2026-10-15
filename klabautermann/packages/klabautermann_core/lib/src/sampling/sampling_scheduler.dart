@@ -238,10 +238,12 @@ final class SamplingScheduler {
   // -- runs -----------------------------------------------------------
 
   _Run _start(_Server server, SshLink link) {
+    final now = _elapsed();
     final run = _Run(
       link,
-      _elapsed(),
+      now,
       holdFast: server.pipeline.profile == null,
+      probeAt: identical(server.probedOn, link) ? null : now,
     );
     // The slow sampler first: its first request is the probe (03 §6.1).
     run.slow = _open(server, run, SamplerKind.slow);
@@ -328,9 +330,10 @@ final class SamplingScheduler {
   /// the slow sampler sends nothing else and, for a server whose profile
   /// is not known yet, the fast one waits too, so the first readings
   /// already withhold what a container host's `/proc` would supply
-  /// (D50).
+  /// (D50). A probe that brings no reply goes out again after
+  /// [_owedReadRetry], as a read owed once does; a reply that framing
+  /// loses every time therefore cannot turn into a loop.
   void _probe(_Server server, _Run run) {
-    run.probeSent = true;
     run.probing = true;
     unawaited(
       run.slow.session.onDemand(Collector.probe, const []).then((outcome) {
@@ -340,7 +343,10 @@ final class SamplingScheduler {
         run.holdFast = false;
         if (outcome is SamplerReplied) {
           server.probedOn = run.link;
+          run.probeAt = null;
           _answered(server, run);
+        } else {
+          run.probeAt = _elapsed() + _owedReadRetry;
         }
         _emitAll(server.pipeline.addProbe(outcome));
         _schedule(server, run, run.slow);
@@ -352,20 +358,22 @@ final class SamplingScheduler {
   // -- ticks ----------------------------------------------------------
 
   /// Arms [sampler]'s timer for its earliest due stream that drives
-  /// ticks, if it may tick; a ready slow sampler owing the probe sends
-  /// it first. The session's state is read here rather than from its
+  /// ticks, if it may tick; a free slow sampler owing the probe sends it
+  /// first. The session's state is read here rather than from its
   /// [SamplerSession.states], which reports a change a turn later.
   void _schedule(_Server server, _Run run, _Sampler sampler) {
     sampler.timer?.cancel();
     sampler.timer = null;
     if (sampler.session.state is! SamplerReady) return;
-    if (sampler.kind == SamplerKind.fast) {
-      if (run.holdFast) return;
-    } else {
-      if (!identical(server.probedOn, run.link) && !run.probeSent) {
-        _probe(server, run);
-      }
-      if (run.probing) return;
+    if (sampler.kind == SamplerKind.fast && run.holdFast) return;
+    if (sampler.kind == SamplerKind.slow && run.probing) return;
+
+    final probeAt = sampler.kind == SamplerKind.slow && !sampler.busy
+        ? run.probeAt
+        : null;
+    if (probeAt != null && probeAt <= _elapsed()) {
+      _probe(server, run);
+      return;
     }
 
     Duration? next;
@@ -377,12 +385,18 @@ final class SamplingScheduler {
       }
       if (next == null || due < next) next = due;
     }
-    if (next == null) return;
+    if (probeAt != null && (next == null || probeAt <= next)) {
+      _arm(sampler, probeAt, () => _schedule(server, run, sampler));
+    } else if (next != null) {
+      _arm(sampler, next, () => _tick(server, run, sampler));
+    }
+  }
 
-    final wait = next - _elapsed();
+  void _arm(_Sampler sampler, Duration at, void Function() callback) {
+    final wait = at - _elapsed();
     sampler.timer = _startTimer(
       wait.isNegative ? Duration.zero : wait,
-      () => _tick(server, run, sampler),
+      callback,
     );
   }
 
@@ -548,7 +562,7 @@ final class _Server {
 
 /// The samplers of one stretch of sampling on one link.
 final class _Run {
-  _Run(this.link, this.epoch, {required this.holdFast});
+  _Run(this.link, this.epoch, {required this.holdFast, required this.probeAt});
 
   final SshLink link;
 
@@ -573,7 +587,10 @@ final class _Run {
 
   /// The fast sampler waits for the probe (see `_probe`).
   bool holdFast;
-  bool probeSent = false;
+
+  /// When the probe goes out, by the monotonic clock, while the link
+  /// owes one; null once one is answered.
+  Duration? probeAt;
   bool probing = false;
 
   /// A dead-peer hint about [link] is open with the supervisor.
