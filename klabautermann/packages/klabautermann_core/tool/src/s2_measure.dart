@@ -7,7 +7,6 @@ library;
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:math';
 
 import 'package:klabautermann_host/klabautermann_host.dart';
 
@@ -218,15 +217,33 @@ Map<String, int> blockSizes(List<int> payload) {
   return sizes;
 }
 
+/// Lines per `== name ==` block of a payload, header lines left out.
+Map<String, int> blockLines(List<int> payload) {
+  final lines = <String, int>{};
+  String? current;
+  for (final line in latin1.decode(payload).split('\n')) {
+    if (blockHeaderPattern.firstMatch(line)?[1] case final name?) {
+      current = name;
+      lines[name] ??= 0;
+    } else if (current != null) {
+      lines[current] = lines[current]! + 1;
+    }
+  }
+  return lines;
+}
+
 /// The `procs` collector with [extraProcesses] more sleeping processes
 /// than the machine runs, up to three requests per shell and count (one
 /// when it takes over 10 s). The payload size is the `S` marker's
 /// declared byte count, which the reply carries even when the frame
-/// parser rejects it for exceeding [kMaxSectionBytes]. `bytesPerRow`
-/// divides it by the rows the host sends: every process, or
-/// [kProcsRowCap] above that many (D48). Before collector-set version 5
-/// the host sent every process, and the S2 evidence records that
-/// quotient as `bytesPerProcess`.
+/// parser rejects it for exceeding [kMaxSectionBytes]. `rows` counts
+/// the lines of the payload's `rows` block, the rows the host sent: every
+/// process up to [kProcsRowCap], and above that from half the cap to the
+/// cap (D48). `bytesPerRow` divides the size by it;
+/// both are null when the reply was lost, which keeps no payload. Before
+/// collector-set version 5 the host sent every process, and the S2
+/// evidence records the size over the process count as
+/// `bytesPerProcess`.
 Future<List<Map<String, Object?>>> measureProcs(
   List<String> shells,
   List<int> extraProcesses,
@@ -261,12 +278,17 @@ Future<List<Map<String, Object?>>> measureProcs(
                 r'\x1e[0-9a-f]{32} S procs [a-z]+ (\d+)\n',
               ).firstMatch(latin1.decode(reply.head))![1]!,
             );
+            final payload = reply.tick
+                ?.section(Collector.procs.wireName)
+                ?.payload;
+            final rows = payload == null ? null : blockLines(payload)['rows'];
             return {
               'shell': shell,
               'extraProcesses': extra,
               'processes': processes,
               'payloadBytes': bytes,
-              'bytesPerRow': bytes / min(processes, kProcsRowCap),
+              'rows': rows,
+              'bytesPerRow': rows == null || rows == 0 ? null : bytes / rows,
               'capFraction': bytes / kMaxSectionBytes,
               'outcome': reply.tick == null
                   ? 'lost: ${reply.lostDetail}'
