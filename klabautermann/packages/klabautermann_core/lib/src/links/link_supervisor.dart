@@ -13,7 +13,9 @@ import 'package:seance_core/seance_core.dart'
         SshLinkState;
 
 import '../engine/protocol.dart';
-import 'backoff.dart';
+// Sampler restarts use the link backoff figures of 03 §5.1, so the
+// supervisor shares their function.
+import '../sampling/sampler_timing.dart' show samplerRestartDelay;
 import 'link_connector.dart';
 
 /// Connect attempts in flight at once, across the fleet (D19, 03 §5.12):
@@ -65,7 +67,7 @@ typedef LinkConnect =
 ///   slot. A server never has two dials at once, and a link that a
 ///   given-up attempt brings late is closed.
 /// - Only a failure to reach the server and a lost link back off
-///   ([backoffDelay]) and redial unattended; any other failure, an
+///   ([samplerRestartDelay]) and redial unattended; any other failure, an
 ///   unclassified one included, waits for the user (fail2ban, c2 R11),
 ///   and so does a server whose last connect needed keyboard-interactive
 ///   answers (c2 R10).
@@ -382,7 +384,7 @@ final class LinkSupervisor {
   }
 
   void _backoff(_Server server) {
-    final delay = backoffDelay(server.failures++, _random);
+    final delay = samplerRestartDelay(server.failures++, _random);
     _set(server, LinkBackoff(_now().add(delay)));
     server.retry = _startTimer(delay, () {
       server.retry = null;
@@ -494,7 +496,7 @@ final class _Server {
   bool dialPending = false;
   Timer? retry;
 
-  /// Failed attempts since the last link, for [backoffDelay].
+  /// Failed attempts since the last link, for [samplerRestartDelay].
   int failures = 0;
   _Hold hold = _Hold.none;
 

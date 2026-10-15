@@ -1,6 +1,8 @@
-/// Deadlines for one sampler session (03 §6.2, D47). Its restart delay
-/// is the link backoff, `backoffDelay`.
+/// Deadlines and restart delays for one sampler session (03 §6.2, D47;
+/// the link backoff constants of 03 §5.1).
 library;
+
+import 'dart:math';
 
 import 'package:klabautermann_host/klabautermann_host.dart';
 
@@ -73,4 +75,24 @@ final class SamplerDeadlines {
     final commands = collectors.fold(0, (n, c) => n + guardedCommandBound(c));
     return slowMargin + perGuardedCommand * commands;
   }
+}
+
+const _restartBaseDelay = Duration(seconds: 1);
+const _restartDelayCap = Duration(seconds: 30);
+const _restartJitterFraction = 0.3;
+
+/// The delay before restarting a sampler after [failures] earlier
+/// restarts without a reply in between: 1 s doubling to a 30 s cap, less
+/// up to 30 % of downward jitter from [random], so samplers that failed
+/// together do not restart together. These are the link backoff figures
+/// of 03 §5.1.
+Duration samplerRestartDelay(int failures, Random random) {
+  var micros = _restartBaseDelay.inMicroseconds;
+  final cap = _restartDelayCap.inMicroseconds;
+  // Stop doubling at the cap, so a long outage cannot overflow.
+  for (var i = 0; i < failures && micros < cap; i++) {
+    micros *= 2;
+  }
+  final jitter = 1 - _restartJitterFraction * random.nextDouble();
+  return Duration(microseconds: (min(micros, cap) * jitter).round());
 }
