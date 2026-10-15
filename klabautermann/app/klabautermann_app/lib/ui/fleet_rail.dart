@@ -4,6 +4,7 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 import '../controllers/fleet_controller.dart';
 import '../controllers/monitoring_controller.dart';
 import '../l10n/app_localizations.dart';
+import 'coverage.dart';
 import 'fleet_rows.dart';
 import 'sidebar_kit.dart';
 import 'ssh_config_import_action.dart';
@@ -53,6 +54,8 @@ class _FleetRailState extends State<FleetRail> {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                // 03 §9.5 item 2: the fleet's coverage, over its section.
+                FleetCoverageChip(fleet: widget.fleet),
                 SidebarSectionHeader(
                   title: l10n.fleetSectionServers,
                   count: servers.length,
@@ -135,7 +138,7 @@ class FleetEmptyState extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
-    return Padding(
+    final invitation = Padding(
       padding: const EdgeInsets.all(24),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -158,6 +161,16 @@ class FleetEmptyState extends StatelessWidget {
             textAlign: TextAlign.center,
           ),
         ],
+      ),
+    );
+    // Centred while it fits, and scrolls when large text outgrows a short
+    // column (A11Y-09), as under the phone's first-run card (03 §9.5).
+    return LayoutBuilder(
+      builder: (context, box) => SingleChildScrollView(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minHeight: box.maxHeight),
+          child: invitation,
+        ),
       ),
     );
   }

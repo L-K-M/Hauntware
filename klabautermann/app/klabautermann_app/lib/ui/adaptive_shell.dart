@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../controllers/coverage_controller.dart';
 import '../controllers/fleet_controller.dart';
 import '../controllers/monitoring_controller.dart';
 import 'desktop_shell.dart';
@@ -16,12 +17,14 @@ class AdaptiveShell extends StatelessWidget {
     super.key,
     required this.fleet,
     required this.monitoring,
+    required this.coverage,
     required this.onOpenSettings,
     this.onAddServer,
   });
 
   final FleetController fleet;
   final MonitoringController monitoring;
+  final CoverageController coverage;
   final VoidCallback onOpenSettings;
   final VoidCallback? onAddServer;
 
@@ -31,6 +34,7 @@ class AdaptiveShell extends StatelessWidget {
       return DesktopShell(
         fleet: fleet,
         monitoring: monitoring,
+        coverage: coverage,
         onOpenSettings: onOpenSettings,
         onAddServer: onAddServer,
       );
@@ -38,6 +42,7 @@ class AdaptiveShell extends StatelessWidget {
     return PhoneShell(
       fleet: fleet,
       monitoring: monitoring,
+      coverage: coverage,
       onOpenSettings: onOpenSettings,
       onAddServer: onAddServer,
     );

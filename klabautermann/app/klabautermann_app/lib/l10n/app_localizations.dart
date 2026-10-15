@@ -646,6 +646,216 @@ abstract class AppLocalizations {
   /// **'Available in a later milestone.'**
   String get placeholderMilestone;
 
+  /// Heading of the first-run coverage card (03 §9.5 item 1), shown above the fleet on phones and above the workspace on desktops until the user dismisses it.
+  ///
+  /// In en, this message translates to:
+  /// **'How Klabautermann watches your servers'**
+  String get coverageFirstRunTitle;
+
+  /// Body of the first-run coverage card: what the app does and does not cover. It names no alerts, since this version has none.
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann connects over SSH only while it is open. It installs nothing on your servers unless you ask it to. Charts cover only the time this device was connected.'**
+  String get coverageFirstRunBody;
+
+  /// Button that dismisses the first-run coverage card for good on this device.
+  ///
+  /// In en, this message translates to:
+  /// **'Got it'**
+  String get coverageFirstRunDismiss;
+
+  /// Button on the first-run coverage card that opens the coverage sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'Coverage details'**
+  String get coverageFirstRunDetails;
+
+  /// Top toast when dismissing the first-run coverage card could not be written to the device's settings file; the card stays hidden for this session.
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann could not save that you dismissed the coverage note, so it shows again after a restart.'**
+  String get coverageFirstRunNotSaved;
+
+  /// The fleet header's coverage chip (03 §9.5 item 2): how many fleet servers this device watches continuously (its monitor set) out of all of them; watching happens only while the app is open. Opens the coverage sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'{total, plural, =1{Watching {watched} of 1 server on this device, only while open} other{Watching {watched} of {total} servers on this device, only while open}}'**
+  String coverageChip(int watched, int total);
+
+  /// Screen-reader hint for activating the fleet header's coverage chip.
+  ///
+  /// In en, this message translates to:
+  /// **'Show coverage details'**
+  String get coverageChipHint;
+
+  /// Heading of the coverage sheet the fleet header's chip opens.
+  ///
+  /// In en, this message translates to:
+  /// **'Coverage on this device'**
+  String get coverageSheetTitle;
+
+  /// Badge naming the execution tier the fleet runs at: T0, SSH only while the app is open (03 §9). Kept as written.
+  ///
+  /// In en, this message translates to:
+  /// **'T0'**
+  String get coverageTierBadge;
+
+  /// What the T0 badge means, beside it in the coverage sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'SSH while Klabautermann is open'**
+  String get coverageTierTitle;
+
+  /// Explanation under the tier title in the coverage sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann reads your servers over SSH only while it is open. It installs nothing on them unless you ask it to.'**
+  String get coverageTierBody;
+
+  /// Heading of the coverage sheet's list of what this device covers.
+  ///
+  /// In en, this message translates to:
+  /// **'Covered'**
+  String get coverageCoveredHeading;
+
+  /// Coverage sheet item: the servers the user has open are read live.
+  ///
+  /// In en, this message translates to:
+  /// **'Live readings while open'**
+  String get coverageLiveTitle;
+
+  /// Body of the coverage sheet's live-readings item.
+  ///
+  /// In en, this message translates to:
+  /// **'Metrics, processes, services, logs and jobs of the servers you have open.'**
+  String get coverageLiveBody;
+
+  /// Coverage sheet item about the servers this device watches continuously (its monitor set, FL-21): listed as covered once one is watched, and as not covered while none is.
+  ///
+  /// In en, this message translates to:
+  /// **'Continuous watching'**
+  String get coverageWatchedTitle;
+
+  /// Body of the coverage sheet's watched-servers item; watched is the size of this device's monitor set within the fleet.
+  ///
+  /// In en, this message translates to:
+  /// **'{watched, plural, =0{No server is watched on this device, so each is read only while you have it open.} =1{1 server is read continuously while Klabautermann is open. Any others are read only while you have them open.} other{{watched} servers are read continuously while Klabautermann is open. Any others are read only while you have them open.}}'**
+  String coverageWatchedBody(int watched);
+
+  /// Heading of the coverage sheet's list of what this device does not cover.
+  ///
+  /// In en, this message translates to:
+  /// **'Not covered'**
+  String get coverageNotCoveredHeading;
+
+  /// Coverage sheet item: nothing is covered while the app is closed.
+  ///
+  /// In en, this message translates to:
+  /// **'While Klabautermann is closed'**
+  String get coverageClosedTitle;
+
+  /// Body of the coverage sheet's while-closed item.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing checks your servers, so nothing can warn you about them.'**
+  String get coverageClosedBody;
+
+  /// Coverage sheet item: a server that goes down while the app is closed goes unnoticed.
+  ///
+  /// In en, this message translates to:
+  /// **'A server going down'**
+  String get coverageHostDownTitle;
+
+  /// Body of the coverage sheet's server-down item.
+  ///
+  /// In en, this message translates to:
+  /// **'If a server stops while Klabautermann is closed, you find out the next time you open it.'**
+  String get coverageHostDownBody;
+
+  /// Coverage sheet item: charts hold no history from before this device connected.
+  ///
+  /// In en, this message translates to:
+  /// **'History before you connected'**
+  String get coverageHistoryTitle;
+
+  /// Body of the coverage sheet's history item.
+  ///
+  /// In en, this message translates to:
+  /// **'Charts cover only the time this device was connected. Gaps are marked, never filled in.'**
+  String get coverageHistoryBody;
+
+  /// Coverage sheet item shown on iOS and Android only: reading stops in the background (PLT-04).
+  ///
+  /// In en, this message translates to:
+  /// **'While in the background'**
+  String get coverageBackgroundTitle;
+
+  /// Body of the coverage sheet's background item, on iOS and Android only.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading stops while Klabautermann is in the background and resumes when you return.'**
+  String get coverageBackgroundBody;
+
+  /// An age under a minute in a freshness line (03 §9.5 item 4), as in "Updated 4 s ago".
+  ///
+  /// In en, this message translates to:
+  /// **'{seconds} s'**
+  String coverageFreshnessSeconds(int seconds);
+
+  /// An age under an hour, in whole minutes, in a freshness line.
+  ///
+  /// In en, this message translates to:
+  /// **'{minutes} min'**
+  String coverageFreshnessMinutes(int minutes);
+
+  /// An age under a day, in whole hours, in a freshness line.
+  ///
+  /// In en, this message translates to:
+  /// **'{hours} h'**
+  String coverageFreshnessHours(int hours);
+
+  /// An age of a day or more, in whole days, in a freshness line.
+  ///
+  /// In en, this message translates to:
+  /// **'{days} d'**
+  String coverageFreshnessDays(int days);
+
+  /// Freshness line of a server's or panel's values while they are current; age is one of the coverageFreshness age strings.
+  ///
+  /// In en, this message translates to:
+  /// **'Updated {age} ago'**
+  String coverageFreshnessUpdated(String age);
+
+  /// Freshness line of values older than their stream's limit, which are drawn grey beside it.
+  ///
+  /// In en, this message translates to:
+  /// **'Stale: updated {age} ago'**
+  String coverageFreshnessStale(String age);
+
+  /// Freshness line while the server's connection is down after readings arrived; age is how long it has been down.
+  ///
+  /// In en, this message translates to:
+  /// **'Disconnected {age} ago'**
+  String coverageFreshnessDisconnected(String age);
+
+  /// Freshness line while a phone app is in the background and reading is paused.
+  ///
+  /// In en, this message translates to:
+  /// **'Paused: app in background'**
+  String get coverageFreshnessPaused;
+
+  /// Freshness line of a server outside this device's monitor set that nothing reads.
+  ///
+  /// In en, this message translates to:
+  /// **'Not watched on this device'**
+  String get coverageFreshnessNotWatched;
+
+  /// Freshness line before the first reading has arrived.
+  ///
+  /// In en, this message translates to:
+  /// **'No data yet'**
+  String get coverageFreshnessNoData;
+
   /// No description provided for @serverTitle.
   ///
   /// In en, this message translates to:

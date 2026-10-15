@@ -156,6 +156,8 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'the window spans time'",
     "'the scale needs a positive top'",
   },
+  // debugPrint of a dismissal that was not saved; the toast is ARB text.
+  'lib/ui/coverage.dart': {r"'$error'"},
   'lib/ui/fleet_row_state.dart': {
     // The root mount point whose use the pressure bar shows.
     "'/'",

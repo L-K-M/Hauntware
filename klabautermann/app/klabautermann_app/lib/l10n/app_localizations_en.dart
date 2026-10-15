@@ -362,6 +362,154 @@ class AppLocalizationsEn extends AppLocalizations {
   String get placeholderMilestone => 'Available in a later milestone.';
 
   @override
+  String get coverageFirstRunTitle => 'How Klabautermann watches your servers';
+
+  @override
+  String get coverageFirstRunBody =>
+      'Klabautermann connects over SSH only while it is open. It installs nothing on your servers unless you ask it to. Charts cover only the time this device was connected.';
+
+  @override
+  String get coverageFirstRunDismiss => 'Got it';
+
+  @override
+  String get coverageFirstRunDetails => 'Coverage details';
+
+  @override
+  String get coverageFirstRunNotSaved =>
+      'Klabautermann could not save that you dismissed the coverage note, so it shows again after a restart.';
+
+  @override
+  String coverageChip(int watched, int total) {
+    String _temp0 = intl.Intl.pluralLogic(
+      total,
+      locale: localeName,
+      other:
+          'Watching $watched of $total servers on this device, only while open',
+      one: 'Watching $watched of 1 server on this device, only while open',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get coverageChipHint => 'Show coverage details';
+
+  @override
+  String get coverageSheetTitle => 'Coverage on this device';
+
+  @override
+  String get coverageTierBadge => 'T0';
+
+  @override
+  String get coverageTierTitle => 'SSH while Klabautermann is open';
+
+  @override
+  String get coverageTierBody =>
+      'Klabautermann reads your servers over SSH only while it is open. It installs nothing on them unless you ask it to.';
+
+  @override
+  String get coverageCoveredHeading => 'Covered';
+
+  @override
+  String get coverageLiveTitle => 'Live readings while open';
+
+  @override
+  String get coverageLiveBody =>
+      'Metrics, processes, services, logs and jobs of the servers you have open.';
+
+  @override
+  String get coverageWatchedTitle => 'Continuous watching';
+
+  @override
+  String coverageWatchedBody(int watched) {
+    String _temp0 = intl.Intl.pluralLogic(
+      watched,
+      locale: localeName,
+      other:
+          '$watched servers are read continuously while Klabautermann is open. Any others are read only while you have them open.',
+      one:
+          '1 server is read continuously while Klabautermann is open. Any others are read only while you have them open.',
+      zero:
+          'No server is watched on this device, so each is read only while you have it open.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get coverageNotCoveredHeading => 'Not covered';
+
+  @override
+  String get coverageClosedTitle => 'While Klabautermann is closed';
+
+  @override
+  String get coverageClosedBody =>
+      'Nothing checks your servers, so nothing can warn you about them.';
+
+  @override
+  String get coverageHostDownTitle => 'A server going down';
+
+  @override
+  String get coverageHostDownBody =>
+      'If a server stops while Klabautermann is closed, you find out the next time you open it.';
+
+  @override
+  String get coverageHistoryTitle => 'History before you connected';
+
+  @override
+  String get coverageHistoryBody =>
+      'Charts cover only the time this device was connected. Gaps are marked, never filled in.';
+
+  @override
+  String get coverageBackgroundTitle => 'While in the background';
+
+  @override
+  String get coverageBackgroundBody =>
+      'Reading stops while Klabautermann is in the background and resumes when you return.';
+
+  @override
+  String coverageFreshnessSeconds(int seconds) {
+    return '$seconds s';
+  }
+
+  @override
+  String coverageFreshnessMinutes(int minutes) {
+    return '$minutes min';
+  }
+
+  @override
+  String coverageFreshnessHours(int hours) {
+    return '$hours h';
+  }
+
+  @override
+  String coverageFreshnessDays(int days) {
+    return '$days d';
+  }
+
+  @override
+  String coverageFreshnessUpdated(String age) {
+    return 'Updated $age ago';
+  }
+
+  @override
+  String coverageFreshnessStale(String age) {
+    return 'Stale: updated $age ago';
+  }
+
+  @override
+  String coverageFreshnessDisconnected(String age) {
+    return 'Disconnected $age ago';
+  }
+
+  @override
+  String get coverageFreshnessPaused => 'Paused: app in background';
+
+  @override
+  String get coverageFreshnessNotWatched => 'Not watched on this device';
+
+  @override
+  String get coverageFreshnessNoData => 'No data yet';
+
+  @override
   String serverTitle(String name) {
     return '$name';
   }
