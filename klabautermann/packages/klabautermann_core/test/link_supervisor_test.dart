@@ -397,15 +397,31 @@ void main() {
     });
   });
 
-  test('a user\'s request while an unattended dial runs takes over when '
-      'that dial needs the user', () async {
-    supervisor.connect('s1', purpose: _background);
-    await clock.elapse(Duration.zero);
-    supervisor.connect('s1', purpose: _interactive);
-    calls.single.fail(LinkFailureKind.hostKeyDeclined);
-    await clock.elapse(Duration.zero);
+  group('a user\'s request while an unattended dial runs', () {
+    Future<void> askDuringDial() async {
+      supervisor.connect('s1', purpose: _background);
+      await clock.elapse(Duration.zero);
+      supervisor.connect('s1', purpose: _interactive);
+    }
 
-    expect(calls.map((c) => c.purpose), [_background, _interactive]);
+    test('takes over when that dial needs the user', () async {
+      await askDuringDial();
+      calls.single.fail(LinkFailureKind.hostKeyDeclined);
+      await clock.elapse(Duration.zero);
+
+      expect(calls.map((c) => c.purpose), [_background, _interactive]);
+    });
+
+    test('ends when that dial is given up', () async {
+      await askDuringDial();
+      await clock.elapse(kConnectAttemptDeadline);
+      calls.first.fail(LinkFailureKind.unreachable);
+      await clock.elapse(const Duration(seconds: 1));
+      calls.last.fail(LinkFailureKind.authenticationRejected);
+      await clock.elapse(Duration.zero);
+
+      expect(calls.map((c) => c.purpose), [_background, _background]);
+    });
   });
 
   group('a keyboard-interactive server is never dialed unattended', () {

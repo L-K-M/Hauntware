@@ -158,7 +158,6 @@ final class LinkSupervisor {
     if (server == null) return;
 
     server.wanted = false;
-    server.userAsked = false;
     if (server.hold == _Hold.untilForeground) server.hold = _Hold.none;
     if (!_tearDown(server)) return;
 
@@ -205,7 +204,7 @@ final class LinkSupervisor {
   /// followed by an interactive one if it fails for want of the user.
   void _promote(_Attempt attempt) {
     if (attempt.dialing) {
-      attempt.server.userAsked = true;
+      attempt.userAsked = true;
       return;
     }
 
@@ -332,8 +331,6 @@ final class LinkSupervisor {
     }
 
     _release(attempt);
-    final userAsked = server.userAsked;
-    server.userAsked = false;
     switch (result) {
       case LinkConnected(:final link, :final keyboardInteractive):
         server.failures = 0;
@@ -350,7 +347,7 @@ final class LinkSupervisor {
         );
         if (_redials(failure)) {
           _backoff(server);
-        } else if (userAsked && attempt.purpose == ConnectPurpose.background) {
+        } else if (attempt.userAsked) {
           _enqueue(_Attempt(server, ConnectPurpose.interactive));
         } else {
           server.hold = _Hold.forUser;
@@ -511,9 +508,6 @@ final class _Server {
 
   /// The last connect asked keyboard-interactive questions.
   bool keyboardInteractive = false;
-
-  /// An interactive request arrived while an unattended attempt dialed.
-  bool userAsked = false;
 }
 
 final class _Attempt {
@@ -523,6 +517,9 @@ final class _Attempt {
   ConnectPurpose purpose;
   bool holdsSlot = false;
   bool dialing = false;
+
+  /// An interactive request arrived while this unattended attempt dialed.
+  bool userAsked = false;
 
   /// The jitter before the dial, then the attempt's deadline.
   Timer? timer;
