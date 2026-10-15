@@ -244,8 +244,8 @@ engine · D44 sample sequence · D45 subscriptions · D46 link vocabulary ·
 D47 sampler deadlines · D48 host-side filtering · D49 collector locale ·
 D50 LXC values · D51 Access tab · D52 runtime placement · D53 integration
 placement · D54 runtime override in M3 · D55 no health overlay in the MVP
-· D56 log search through `planchette_core`. Proposals awaiting the owner
-close the section; they are not decisions.
+· D56 log search through `planchette_core` · D57 cron zone rules.
+Proposals awaiting the owner close the section; they are not decisions.
 
 ### Shape and scope
 
@@ -813,6 +813,35 @@ close the section; they are not decisions.
   class it names (`tool/protocol_guard/lib/protocol_guard.dart:167-183`
   [V]), so a `ServerZone` field would pass it. *Rejected:* callback-owner
   entries in `tool/guards.yaml` (a root-file change for each class).
+- **D57. Cron next runs follow `package:timezone`'s zone rules.**
+  `klabautermann_core` depends on `package:timezone` and embeds its
+  `latest_all` database (about 0.4 MB, loaded on first use). The engine
+  evaluates each `cron` reading's jobs rows at the sample's time. The
+  server zone takes the database's rules for the probe's IANA name when
+  the database knows the name and gives the offset the server reported
+  at the probe's clock reading. Otherwise the runs use the probe's fixed
+  offset, and `CronResult` says why: no name, a name the database lacks,
+  or an offset mismatch (a stale name or diverging zone data). Without a
+  probed offset the server zone is unknown, and its rows say so. A
+  `CRON_TZ` resolves through the same database. `ServerZone.offsetAt`
+  carries the rules inside the engine, and the rows cross with plain
+  `CronRun`s (D52). The database can disagree with the server's own zone
+  files, which cron reads, so a run within an hour of a transition is
+  marked `nearTransition` beside the gap and overlap marks. Its
+  transition tables end at the 32-bit time limit, early in 2038; a run
+  after a zone's last listed transition keeps the offset in force after
+  it. The jobs goldens live in
+  `klabautermann_core/test/fixtures/cron_jobs/`, because
+  `klabautermann_host` stays on meta and collection (3.1). Why: Dart
+  ships no zone database, and a fixed offset puts every run after a DST
+  change an hour off. *Rejected:* reading the server's own zone file
+  through the probe (exact, but a program change and a TZif parser; a v1
+  candidate); the smaller `latest` database (it lacks backward links
+  such as `US/Eastern` and `Europe/Kiev`, which older servers report);
+  `latest_10y` (it ends five years out, inside the ten-year evaluation
+  horizon); the dependency in `klabautermann_host` (3.1); fixed-offset
+  goldens labelled as such (every run after the next change stays
+  wrong).
 
 ### Privilege and safety
 
@@ -1170,7 +1199,7 @@ klabautermann/
   packages/
     klabautermann_host/          pure Dart; dependencies meta, collection
     klabautermann_docker/        pure Dart; dependencies meta, collection; no dart:io in lib/
-    klabautermann_core/          pure Dart; dependencies seance_core, klabautermann_host, klabautermann_docker
+    klabautermann_core/          pure Dart; dependencies seance_core, klabautermann_host, klabautermann_docker, timezone (D57)
       lib/src/{links,sampling,logs,capabilities}/   runtime services beside lib/src/engine/ (D52)
       test/integration/          engine tests against the fixture, tagged, skipped without it (D53)
       tool/capture_fixtures.dart                    fixture capture (6.5, D53)
@@ -2445,8 +2474,10 @@ unless the user enables admin mode for that panel.
   `cron.{hourly,daily,weekly,monthly}` names, and
   `systemctl list-timers --all --output=json`. Schedules in words and next runs
   (JOB-02): a Dart cron parser in `klabautermann_host` (5 fields, ranges, steps,
-  names, macros, `CRON_TZ`) evaluated in the server's time zone and offset from
-  the probe, with DST transitions and `RandomizedDelaySec` annotated;
+  names, macros, `CRON_TZ`) evaluated in the engine in the server's time
+  zone: the zone database's rules for the probe's zone name, else the
+  probe's offset with the reason (D57), with DST transitions, runs within
+  an hour of one and `RandomizedDelaySec` annotated;
   `OnCalendar` expressions use `(unset TZ; systemd-analyze calendar
   --iterations=N '<expr>')` on the host instead of a reimplementation
   (`--iterations` from systemd 242 [R: systemd NEWS]; below that, one next
@@ -3990,8 +4021,11 @@ the engine in `engine_isolate.dart` beside it):
   per-process CPU shares with the start time PRC-02 checks, plus the
   host's process count and how it chose the rows it sent (D48); for
   `identity`, the strings SYS-01 shows, resolved in the engine so the
-  host's JSON never crosses (6.5); and the parsed tables for `fs`,
-  `units`, `failedUnits`, `timers` and `cron`. A stream whose collector
+  host's JSON never crosses (6.5); the parsed tables for `fs`,
+  `units`, `failedUnits`, `timers` and `cron`; and for `cron` also the
+  jobs rows of its lines and `cron.<period>` scripts, with next runs from
+  the sample's time in the server zone, and that zone's name or why the
+  runs use the probe's fixed offset (7.7, D57). A stream whose collector
   reports a section status other than `ok` (6.2) gets
   `CollectorUnavailable` with that status as an enum and the end of the
   collector's error output (at most 4,096 characters), control

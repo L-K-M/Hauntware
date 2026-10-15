@@ -2,8 +2,8 @@
 /// (03 §7.7). The zone is the probe's fixed offset plus an optional
 /// IANA rule carrier, because Dart ships no zoneinfo; DST transitions
 /// are detected as offset jumps and annotated so the UI can mark runs
-/// that fire inside a spring-forward gap or the first pass of a
-/// fall-back overlap.
+/// that fire inside a spring-forward gap, in the first pass of a
+/// fall-back overlap, or otherwise within an hour of a transition (D57).
 library;
 
 import 'package:meta/meta.dart';
@@ -24,9 +24,9 @@ final class ServerZone {
   /// The IANA name from the probe's `timezone` (`Europe/Berlin`).
   final String? ianaName;
 
-  /// Returns the zone's offset at an instant, or null when unknown.
-  /// Supplied by the consumer (e.g. a `timezone` package lookup in
-  /// klabautermann_core); absent means fixed-offset evaluation.
+  /// Returns the zone's offset at an instant. klabautermann_core
+  /// supplies it from `package:timezone`'s rules for [ianaName] (D57);
+  /// absent means fixed-offset evaluation.
   final Duration Function(DateTime utcInstant)? offsetAt;
 
   /// The offset at [utcInstant]; falls back to the fixed offset.
@@ -46,6 +46,11 @@ enum CronDst {
   /// The wall minute occurs twice around a backward transition; the run
   /// fires at the first occurrence.
   overlap,
+
+  /// An ordinary wall minute within an hour of a transition. The
+  /// client's zone database may place the transition elsewhere than the
+  /// server's, which cron reads, so the run may fire an hour off (D57).
+  nearTransition,
 }
 
 /// One predicted run (03 §7.7).
@@ -86,7 +91,8 @@ final class CronRun {
 /// wall day that can, matching days walk minute by minute, and a wall-clock
 /// jump between consecutive instants marks a DST transition. Gap jobs
 /// (cronie fires them at the transition instant, within a 3-hour
-/// window) and first-occurrence overlap jobs are annotated [CronDst].
+/// window), first-occurrence overlap jobs and other runs within an hour
+/// of a transition are annotated [CronDst].
 List<CronRun> nextCronRuns(
   CronExpression expression, {
   required DateTime afterUtc,
@@ -145,6 +151,8 @@ List<CronRun> nextCronRuns(
     if (expression.matches(wall)) {
       final dst = _repeatsWithin(zone, t, wallMs, offset)
           ? CronDst.overlap
+          : _nearTransition(zone, t)
+          ? CronDst.nearTransition
           : CronDst.none;
       _emit(runs, emitted, wallMs, t, offset, dst, count);
     }
@@ -196,6 +204,14 @@ void _emit(
     ),
   );
 }
+
+/// Whether the offset changes in `(t - 1h, t + 1h]`: a run at [t] fires
+/// within an hour of a transition. Two transitions inside that window
+/// would cancel out and leave the run unmarked.
+bool _nearTransition(ServerZone zone, DateTime t) =>
+    zone.offsetFor(t.subtract(_hour)) != zone.offsetFor(t.add(_hour));
+
+const _hour = Duration(hours: 1);
 
 /// True when [wallMs] occurs a second time within 4 hours after instant
 /// [t] — a backward offset transition repeats the wall interval

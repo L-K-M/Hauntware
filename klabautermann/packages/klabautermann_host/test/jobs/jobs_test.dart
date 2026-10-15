@@ -218,6 +218,17 @@ void main() {
       expect(job.runsUnknown, JobRunsUnknown.timeZoneUnresolved);
     });
 
+    test('without a server zone only CRON_TZ lines have runs', () {
+      final jobs = mergeJobs(
+        cron: _cron(crontab: '30 2 * * * a\nCRON_TZ=UTC\n30 2 * * * b'),
+        nowUtc: _now,
+        zone: null,
+      ).cast<CronJobEntry>();
+      expect(jobs[0].nextRuns, isEmpty);
+      expect(jobs[0].runsUnknown, JobRunsUnknown.serverZoneUnknown);
+      expect(jobs[1].nextRuns.first.atUtc, DateTime.utc(2026, 6, 2, 2, 30));
+    });
+
     test('an empty CRON_TZ counts as unset', () {
       final job = _only(
         _merge(_cron(crontab: 'CRON_TZ=\n30 2 * * * a'), zone: _fixed(2)),

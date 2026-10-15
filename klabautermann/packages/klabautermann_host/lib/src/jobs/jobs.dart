@@ -22,6 +22,10 @@ enum JobRunsUnknown {
   /// `CRON_TZ` names a zone the client cannot resolve.
   timeZoneUnresolved,
 
+  /// The line runs in the server's zone, which is not known, such as
+  /// before a probe has reported its offset.
+  serverZoneUnknown,
+
   /// No minute within the evaluation horizon matches (`0 0 30 2 *`).
   noRunInHorizon,
 
@@ -201,14 +205,15 @@ typedef CronZoneResolver = ServerZone? Function(String timeZone);
 ///
 /// Cron lines run in [zone], the server zone from the probe, unless a
 /// `CRON_TZ` applies: [zoneFor] resolves it first, then a name equal to
-/// the server zone's or a UTC alias. Each lists up to [runCount] runs
-/// strictly after [nowUtc]. Pure; throws only for a nonpositive
-/// [runCount], a caller error.
+/// the server zone's or a UTC alias. A null [zone] means the server zone
+/// is unknown, and lines without a `CRON_TZ` list no runs. Each lists up
+/// to [runCount] runs strictly after [nowUtc]. Pure; throws only for a
+/// nonpositive [runCount], a caller error.
 List<JobEntry> mergeJobs({
   CronSnapshot? cron,
   TimersSnapshot? timers,
   required DateTime nowUtc,
-  required ServerZone zone,
+  required ServerZone? zone,
   CronZoneResolver? zoneFor,
   int runCount = 5,
 }) {
@@ -257,7 +262,7 @@ CronJobEntry _cronEntry(
   String id,
   CronJob job, {
   required DateTime nowUtc,
-  required ServerZone zone,
+  required ServerZone? zone,
   required CronZoneResolver? zoneFor,
   required int runCount,
 }) {
@@ -292,7 +297,9 @@ CronJobEntry _cronEntry(
       id: id,
       job: job,
       schedule: schedule,
-      runsUnknown: JobRunsUnknown.timeZoneUnresolved,
+      runsUnknown: cronTz == null
+          ? JobRunsUnknown.serverZoneUnknown
+          : JobRunsUnknown.timeZoneUnresolved,
     );
   }
 
@@ -318,14 +325,14 @@ const _utcNames = {'UTC', 'Etc/UTC', 'GMT', 'Etc/GMT'};
 /// resolved.
 ServerZone? _cronZone(
   String? cronTz,
-  ServerZone server,
+  ServerZone? server,
   CronZoneResolver? zoneFor,
 ) {
   if (cronTz == null) return server;
 
   final resolved = zoneFor?.call(cronTz);
   if (resolved != null) return resolved;
-  if (cronTz == server.ianaName) return server;
+  if (server != null && cronTz == server.ianaName) return server;
   if (_utcNames.contains(cronTz)) {
     return ServerZone(offset: Duration.zero, ianaName: cronTz);
   }

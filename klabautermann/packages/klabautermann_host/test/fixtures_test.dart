@@ -1,7 +1,9 @@
 // Golden tests for the platform fixture shapes (03 §6.5). Each
 // fixture directory holds hand-written collector payloads plus a
 // `<collector>.golden.json` per payload; `tool/regen_goldens.dart`
-// rewrites the goldens. Fixture provenance is in each SOURCE.md.
+// rewrites the goldens. Fixture provenance is in each SOURCE.md. The
+// jobs list built from these fixtures has its golden in
+// klabautermann_core, whose zone database the next runs need (D57).
 import 'dart:convert';
 import 'dart:io';
 
@@ -129,13 +131,6 @@ void main() {
           json,
         );
       });
-
-      test('jobs', () {
-        expect(
-          _jobsJson('$root/$platform'),
-          equals(_golden('$root/$platform/jobs.golden.json')),
-        );
-      });
     });
   }
 }
@@ -145,40 +140,6 @@ HostProfile _profile(String root, String platform) => parseProbe(
   _probeSections(File('$root/$platform/probe.sections').readAsStringSync()),
   _ctx,
 ).value;
-
-/// The merged jobs list (03 §7.7) of a fixture's `cron` and `timers`
-/// payloads, two runs each, evaluated at a fixed instant in the probe's
-/// zone at its fixed offset. `tool/regen_goldens.dart` mirrors it.
-Map<String, Object?> _jobsJson(String dir) {
-  final now = DateTime.utc(2026, 10, 14, 12);
-  final profile = parseProbe(
-    _probeSections(File('$dir/probe.sections').readAsStringSync()),
-    _ctx,
-  ).value;
-  final offset = RegExp(
-    r'^([+-])(\d\d)(\d\d)$',
-  ).firstMatch(profile.zoneOffset ?? '');
-  final minutes = offset == null
-      ? 0
-      : (int.parse(offset[2]!) * 60 + int.parse(offset[3]!)) *
-            (offset[1] == '-' ? -1 : 1);
-  final jobs = mergeJobs(
-    cron: parseCron(File('$dir/cron.txt').readAsStringSync(), _ctx).value,
-    timers: parseTimers(File('$dir/timers.txt').readAsStringSync(), _ctx).value,
-    nowUtc: now,
-    zone: ServerZone(
-      offset: Duration(minutes: minutes),
-      ianaName: profile.timezone,
-    ),
-    runCount: 2,
-  );
-  return {
-    'nowUtc': now.toIso8601String(),
-    'zoneOffsetMinutes': minutes,
-    'zoneName': profile.timezone,
-    'jobs': jobs.map((j) => j.toJson()).toList(),
-  };
-}
 
 /// The shared `{"result": ..., "warnings": [...]}` golden shape.
 extension on ParseResult<Object?> {

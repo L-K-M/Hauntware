@@ -1,6 +1,6 @@
 // Next-run evaluation tests (03 §7.7): fixed-offset evaluation, the
-// day jump, and DST gap/overlap annotation on a modelled Europe/Berlin
-// zone. The evaluator is pure and never throws.
+// day jump, and DST gap, overlap and near-transition annotation on a
+// modelled Europe/Berlin zone. The evaluator is pure and never throws.
 import 'package:klabautermann_host/klabautermann_host.dart';
 import 'package:test/test.dart';
 
@@ -141,6 +141,39 @@ void main() {
     expect(runs.map((r) => r.dst).toList(), [CronDst.none, CronDst.none]);
     // Wall 02:00 at +02:00 is 00:00Z.
     expect(runs.first.atUtc, DateTime.utc(2026, 6, 11));
+  });
+
+  test('runs within an hour of a transition are marked near it', () {
+    List<(DateTime, CronDst)> runs(DateTime after, {ServerZone? zone}) => [
+      for (final r in nextCronRuns(
+        CronExpression.parse('30 * * * *')!,
+        afterUtc: after,
+        zone: zone ?? _berlinZone(),
+        count: 5,
+      ))
+        (r.atUtc, r.dst),
+    ];
+
+    // Spring forward at 01:00Z: wall 01:30 CET is half an hour before
+    // the jump, 02:30 does not exist, 03:30 CEST is half an hour after.
+    expect(runs(DateTime.utc(2026, 3, 28, 23)), [
+      (DateTime.utc(2026, 3, 28, 23, 30), CronDst.none),
+      (DateTime.utc(2026, 3, 29, 0, 30), CronDst.nearTransition),
+      (DateTime.utc(2026, 3, 29, 1), CronDst.gap),
+      (DateTime.utc(2026, 3, 29, 1, 30), CronDst.nearTransition),
+      (DateTime.utc(2026, 3, 29, 2, 30), CronDst.none),
+    ]);
+    // Fall back at 01:00Z: once the first 02:30 has passed, the next is
+    // the repeated one, half an hour after the transition.
+    expect(runs(DateTime.utc(2026, 10, 25, 0, 45)).first, (
+      DateTime.utc(2026, 10, 25, 1, 30),
+      CronDst.nearTransition,
+    ));
+    // A fixed offset has no transitions.
+    expect(
+      runs(DateTime.utc(2026, 3, 28, 23), zone: _fixed(1)).map((r) => r.$2),
+      everyElement(CronDst.none),
+    );
   });
 
   test('@reboot and nonpositive counts yield no runs', () {

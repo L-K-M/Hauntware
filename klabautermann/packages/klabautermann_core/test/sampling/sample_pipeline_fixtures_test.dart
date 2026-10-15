@@ -1,7 +1,10 @@
 // Every platform fixture through the sample pipeline (03 §6.4, §6.5,
 // K23): the probe, two fast readings whose counters advance by known
 // amounts, and one reading of each slow collector, framed as the sampler
-// prints them. The second reading's rates follow from those amounts.
+// prints them. The second reading's rates follow from those amounts, and
+// the cron reading's jobs rows match `test/fixtures/cron_jobs/` (7.7,
+// D57); `KLAB_REGEN_GOLDENS=1` rewrites those goldens.
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:klabautermann_core/klabautermann_core.dart';
@@ -20,6 +23,18 @@ String _fixturesRoot() {
     if (Directory(path).existsSync()) return path;
   }
   throw StateError('klabautermann_host fixtures not found');
+}
+
+/// This package's cron jobs goldens, from the package or the workspace
+/// root.
+String _goldensRoot() {
+  for (final path in const [
+    'test/fixtures/cron_jobs',
+    'packages/klabautermann_core/test/fixtures/cron_jobs',
+  ]) {
+    if (Directory(path).existsSync()) return path;
+  }
+  throw StateError('cron_jobs goldens not found');
 }
 
 const _fast = {SampleStream.overview, SampleStream.core};
@@ -186,7 +201,20 @@ void main() {
         units.units.failed.length,
       );
       expect(slow[SampleStream.timers], isA<TimersResult>());
-      expect(slow[SampleStream.cron], isA<CronResult>());
+      final cron = slow[SampleStream.cron]! as CronResult;
+      final golden = File('${_goldensRoot()}/$platform.golden.json');
+      final json = {
+        'at': t0.add(const Duration(seconds: 3)).toIso8601String(),
+        'zoneName': cron.zoneName,
+        'zoneFallback': cron.zoneFallback?.name,
+        'jobs': [for (final job in cron.jobs) job.toJson()],
+      };
+      if (Platform.environment['KLAB_REGEN_GOLDENS'] == '1') {
+        golden.writeAsStringSync(
+          '${const JsonEncoder.withIndent('  ').convert(json)}\n',
+        );
+      }
+      expect(json, jsonDecode(golden.readAsStringSync()));
     });
   }
 }
