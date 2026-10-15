@@ -2,6 +2,8 @@ import 'dart:ui' show lerpDouble;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:ghost_fonts/ghost_fonts.dart'
+    show ghostMonoFontFamilies, ghostMonoFontFamily;
 import 'package:ghost_ui/ghost_ui.dart' show SidebarThemeTokens, GhostFileTheme;
 import 'package:planchette_editor/planchette_editor.dart' show GhostMenuTheme;
 
@@ -20,21 +22,14 @@ const _seedColor = Color(0xFF3D8A78);
 /// default theme preset's accent.
 const poltergeistSeedColor = _seedColor;
 
-/// The app's monospace family stack — primary first, then the
-/// cross-platform fallbacks (a bare 'monospace' does not resolve on
-/// every platform, notably macOS/iOS). Also the built-in editor's
-/// `monoFontFallback` seam value (06 §2.3).
-const poltergeistMonoFontFamilies = [
-  'JetBrains Mono',
-  'SF Mono',
-  'Menlo',
-  'Consolas',
-  'DejaVu Sans Mono',
-  'monospace',
-];
+/// The app's monospace family stack — the family's shared stack: bundled
+/// JetBrains Mono, then the cross-platform fallbacks (a bare 'monospace'
+/// does not resolve on every platform, notably macOS/iOS). Also the
+/// built-in editor's `monoFontFallback` seam value (06 §2.3).
+const poltergeistMonoFontFamilies = ghostMonoFontFamilies;
 
 const poltergeistMonoTextStyle = TextStyle(
-  fontFamily: 'JetBrains Mono',
+  fontFamily: ghostMonoFontFamily,
   fontFamilyFallback: poltergeistMonoFontFamilies,
   fontFeatures: [FontFeature.tabularFigures()],
 );

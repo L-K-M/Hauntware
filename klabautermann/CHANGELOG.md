@@ -13,13 +13,32 @@
   damaged file is kept aside as `ssh_config_imports.json.corrupt-<time>`
   and you are told at startup; an import that cannot be saved still shows
   until you quit, and you are told it will not be kept.
-- The `~/.ssh/config` import keeps each host's `IdentityFile` and
-  `ProxyJump` for the connections to come, and reads `%h` in `HostName`
-  as the host's name, as ssh does. A host whose `ProxyJump` ssh would
-  reject or Klabautermann cannot follow as ssh does (a route of more than
-  16 hops included), or whose `HostName` or `IdentityFile` needs
-  something Klabautermann cannot fill in, is skipped and counted in the
-  import message.
+- The `~/.ssh/config` import reads each host as ssh does, for the
+  connections to come: settings from `Host *`, wildcard and repeated
+  blocks and lines before the first `Host` apply, the first value wins,
+  `Match` blocks count where Klabautermann can evaluate them, and `%h`
+  in `HostName` is the host's name. It keeps each host's `IdentityFile`
+  and `ProxyJump`, and the settings of jump hosts the file names only in
+  a `ProxyJump`. Of several `IdentityFile` lines it keeps only the first
+  ssh would offer, so a key that `Host *` sets at the top of the file
+  comes before a host's own, and a server that accepts only the host's
+  own key will refuse Klabautermann. A host Klabautermann cannot connect
+  to as ssh would is skipped and counted in the import message: one
+  whose name ssh refuses as a host name (a leading `-`, whitespace, a
+  control character or a character the shell reads) or reads as
+  something else (a name holding `@`, which ssh reads as a user and a
+  host, or starting with `ssh://`), one that uses a
+  `ProxyCommand`, one an `Include` or a `Match` block it cannot
+  evaluate could change, one whose port, user, key or jump host would
+  change when ssh reads the file a second time for the name it dials (as
+  Fedora's and RHEL's `/etc/ssh/ssh_config` make it do), unless that
+  reading would route it through itself, one whose `HostName` or
+  `IdentityFile` needs something it cannot fill in, one whose
+  `HostName`, `User` or `IdentityFile` holds bytes that are not UTF-8,
+  or one whose `ProxyJump` ssh would refuse or it cannot follow (a route
+  of more than 16 hops included). A file ssh refuses as a whole imports
+  no host: one that starts with a byte-order mark, or holds a
+  `ProxyJump` or `CanonicalizeHostname` line ssh rejects anywhere.
 - Desktop settings window: on macOS, Linux and Windows, Settings opens in
   a window of its own, and a theme change there applies to the app.
   Phones keep the settings page.

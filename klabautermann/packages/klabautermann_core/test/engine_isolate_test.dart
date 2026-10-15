@@ -234,6 +234,33 @@ void main() {
       expect(emptied.entries, isEmpty);
     });
 
+    test('hop records reach the fleet and survive a restart', () async {
+      // a reaches gw.corp through the `*.corp` hop record, on 2222, where
+      // b is behind another hop, so each entry names the other.
+      const config =
+          'Host *.corp\n  Port 2222\n'
+          'Host a\n  HostName 10.0.0.5\n  ProxyJump gw.corp\n'
+          'Host b\n  HostName gw.corp\n  Port 2222\n  ProxyJump other\n';
+      Map<String, List<String>?> conflicts(CatalogReplaced fleet) => {
+        for (final entry in fleet.entries) entry.label: entry.locatorConflict,
+      };
+      const expected = {
+        'a': ['ssh-config:b'],
+        'b': ['ssh-config:a'],
+      };
+
+      final first = await spawnEngine();
+      final (events: firstEvents, fleet: _) = await started(first);
+      first.send(const ImportSshConfig(config));
+      expect(conflicts((await next(firstEvents)) as CatalogReplaced), expected);
+      expect(((await next(firstEvents)) as SshConfigImported).saved, isTrue);
+      await firstEvents.cancel();
+      await first.shutdown();
+
+      final (events: _, :fleet) = await started(await spawnEngine());
+      expect(conflicts(fleet), expected);
+    });
+
     test('a damaged store is reported at start and kept aside', () async {
       const damaged = '{"version": 1, "entries": [{"alias": "web-1"';
       importsFile.writeAsStringSync(damaged);

@@ -95,9 +95,9 @@ class AppLocalizationsEn extends AppLocalizations {
       skippedCount,
       locale: localeName,
       other:
-          '$skippedCount hosts were skipped because their port, HostName, IdentityFile or ProxyJump is unsupported, or their name repeats an earlier host.',
+          '$skippedCount hosts were skipped because of settings Klabautermann cannot follow as ssh would, such as a ProxyCommand, Include or Match block.',
       one:
-          '1 host was skipped because its port, HostName, IdentityFile or ProxyJump is unsupported, or its name repeats an earlier host.',
+          '1 host was skipped because of settings Klabautermann cannot follow as ssh would, such as a ProxyCommand, Include or Match block.',
     );
     return '$_temp0 $_temp1';
   }
@@ -320,6 +320,80 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get serverTabMore => 'More';
+
+  @override
+  String chartSeriesSummary(
+    String label,
+    String current,
+    String lowest,
+    String highest,
+    String trend,
+  ) {
+    return '$label: now $current, lowest $lowest, highest $highest, $trend';
+  }
+
+  @override
+  String chartSeriesEmpty(String label) {
+    return '$label: no data yet';
+  }
+
+  @override
+  String chartSeriesUnknown(String label) {
+    return '$label: unknown';
+  }
+
+  @override
+  String get chartUnknownValue => 'unknown';
+
+  @override
+  String get chartTrendRising => 'rising';
+
+  @override
+  String get chartTrendFalling => 'falling';
+
+  @override
+  String get chartTrendSteady => 'steady';
+
+  @override
+  String chartPercent(double share) {
+    final intl.NumberFormat shareNumberFormat =
+        intl.NumberFormat.decimalPercentPattern(
+          locale: localeName,
+          decimalDigits: 0,
+        );
+    final String shareString = shareNumberFormat.format(share);
+
+    return '$shareString';
+  }
+
+  @override
+  String chartBarSummary(String label, String parts, String total) {
+    return '$label: $parts of $total';
+  }
+
+  @override
+  String chartBarPart(String label, String value) {
+    return '$label $value';
+  }
+
+  @override
+  String get chartListSeparator => ', ';
+
+  @override
+  String chartWithSeverity(String part, String severity) {
+    return '$part ($severity)';
+  }
+
+  @override
+  String get chartSeverityWarning => 'warning';
+
+  @override
+  String get chartSeverityCritical => 'critical';
+
+  @override
+  String chartStale(String summary) {
+    return '$summary, stale';
+  }
 
   @override
   String tableCellSemantics(String column, String value) {

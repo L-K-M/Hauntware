@@ -16,11 +16,14 @@ import 'package:test/test.dart';
 
 import 'fixtures/ssh_config_fixture.dart';
 
-ImportedFleet _fleet(String config, {String? localUser = 'me'}) =>
-    ImportedFleet(
-      importedHostsFromSshConfig(config).hosts,
-      localUser: localUser,
-    );
+ImportedFleet _fleet(String config, {String? localUser = 'me'}) {
+  final imported = importedHostsFromSshConfig(config);
+  return ImportedFleet(
+    imported.hosts,
+    hops: imported.hops,
+    localUser: localUser,
+  );
+}
 
 Map<String, FleetEntry> _byLabel(ImportedFleet fleet) => {
   for (final entry in fleet.entries) entry.label: entry,
@@ -334,6 +337,24 @@ void main() {
       expect(entries['jumpbox']!.locatorConflict, isNull);
     });
 
+    test('routes differ by a hop\'s port, and an entry never conflicts with '
+        'itself', () {
+      final entries = _byLabel(
+        _fleet(
+          // Two machines behind one address, reached through two ports.
+          'Host a\n  HostName 10.0.0.5\n  ProxyJump gw\n'
+          'Host b\n  HostName 10.0.0.5\n  ProxyJump gw:2222\n'
+          // jump:22 is this entry's first hop and, behind it and h, its
+          // server: one entry, so no conflict.
+          'Host loop\n  HostName jump\n  ProxyJump jump,h\n',
+        ),
+      );
+
+      expect(entries['a']!.locatorConflict, ['ssh-config:b']);
+      expect(entries['b']!.locatorConflict, ['ssh-config:a']);
+      expect(entries['loop']!.locatorConflict, isNull);
+    });
+
     test('finds conflicts in linear time', () {
       // Comparing every pair took about 35 s for this many hosts, with
       // the engine isolate answering nothing meanwhile.
@@ -377,8 +398,8 @@ void main() {
       expect(hops('h:'), [('h:', null, 'h', 22)]);
       // An ssh URI drops `;` parameters and one trailing dot, and may end
       // in `/`.
-      expect(hops('ssh://u+x;fp=1@h.example.:2202/'), [
-        ('ssh://u+x;fp=1@h.example.:2202/', 'u x', 'h.example', 2202),
+      expect(hops('ssh://u;fp=1@h.example.:2202/'), [
+        ('ssh://u;fp=1@h.example.:2202/', 'u', 'h.example', 2202),
       ]);
       // A `#` starts a comment.
       expect(hops('h#note'), [('h', null, 'h', 22)]);
@@ -394,9 +415,79 @@ void main() {
         'ssh://[2001:db8::1]',
         'ssh://h..example',
         'ssh://@h',
+        // ssh puts the last hop's host in the command without brackets,
+        // and the nested ssh reads it as an ssh URI: gw on port 2222.
+        '[ssh://gw:2222]',
+        'u@[ssh://gw]',
+        'a,[ssh://gw]',
       ]) {
         expect(hops(value), isNull, reason: value);
       }
+    });
+
+    test('refuses a hop with whitespace, a quote or another character the '
+        'shell reads', () {
+      // ssh runs the hops as a ProxyCommand through /bin/sh, and the
+      // nested ssh rejects such a host name (`valid_hostname()`) or reads
+      // a leading `-` as an option.
+      for (final value in [
+        'a, b',
+        'a ,b',
+        'a b',
+        '"bastion"',
+        "'bastion'",
+        'a;b',
+        r'u$x@h',
+        'h`id`',
+        'a|b',
+        '-oProxyCommand=x',
+        '-u@h',
+        'ssh://-h',
+        // ssh decodes `+` in a URI's user to a space.
+        'ssh://u+x@h',
+        // A hop before the last reaches the shell as written.
+        'ssh://u;fp=1@h,last',
+      ]) {
+        expect(hops(value), isNull, reason: value);
+      }
+      expect(hops('a,b'), hasLength(2));
+      expect(hops('a,ssh://u;fp=1@h'), hasLength(2));
+    });
+
+    test('refuses a hop the shell would read as a home directory', () {
+      // /bin/sh expands a word that starts with `~`: `-J ~root` and
+      // `-l ~root` become /root, and so does a last hop's host.
+      for (final value in [
+        '~root',
+        '~root,gw',
+        '~root@gw',
+        'gw,~root',
+        'u@~gw:2222',
+        'ssh://~root@gw',
+      ]) {
+        expect(hops(value), isNull, reason: value);
+      }
+      // Only a `~` at the start of a word.
+      expect(hops('gw,a~b'), hasLength(2));
+      expect(hops('a~b@gw'), [('a~b@gw', 'a~b', 'gw', 22)]);
+    });
+
+    test('refuses a hop with a character the shell globs', () {
+      // ssh passes the hops before the last, and the last one's user and
+      // host, to /bin/sh unquoted: `-J [2001:db8::1]` becomes `-J 1`
+      // where ssh runs in a directory holding a file named 1.
+      for (final value in [
+        '[2001:db8::1],web',
+        'gw*,web',
+        'g?w,web',
+        'u*@gw',
+        'gw[1]',
+        'ssh://u?@gw',
+      ]) {
+        expect(hops(value), isNull, reason: value);
+      }
+      // ssh drops the brackets around the last hop's host.
+      expect(hops('web,[2001:db8::1]'), hasLength(2));
     });
   });
 }

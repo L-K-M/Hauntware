@@ -24,6 +24,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ghost_fonts/testing.dart';
 import 'package:poltergeist_app/l10n/app_localizations.dart';
 import 'package:poltergeist_app/services/editor_registry_controller.dart';
 import 'package:poltergeist_app/services/preview_session.dart';
@@ -46,10 +47,11 @@ Future<ByteData> _fontBytes(String path) async =>
     ByteData.view(File(path).readAsBytesSync().buffer);
 
 /// Registers a readable face under the names the theme resolves — the
-/// same loader the other capture suites carry, plus a 'JetBrains Mono'
-/// alias: the code row's primary family, since the test engine does not
-/// apply fontFamilyFallback to dynamically registered faces.
+/// same loader the other capture suites carry, plus the bundled fonts: the
+/// code row's primary family, since the test engine does not apply
+/// fontFamilyFallback to dynamically registered faces.
 Future<void> _loadRealFonts() async {
+  await loadBundledMonoFonts();
   final dir =
       Platform.environment['POLTERGEIST_CAPTURE_FONT_DIR'] ??
       '${Platform.environment['HOME']}/.local/share/fonts';
@@ -64,7 +66,6 @@ Future<void> _loadRealFonts() async {
   if (mono.existsSync()) {
     final monoBytes = _fontBytes(mono.path);
     await (FontLoader('DejaVu Sans Mono')..addFont(monoBytes)).load();
-    await (FontLoader('JetBrains Mono')..addFont(monoBytes)).load();
   }
   final icons = File(
     '${Platform.environment['FLUTTER_ROOT'] ?? ''}'

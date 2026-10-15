@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:ghost_fonts/ghost_fonts.dart' show BundledMonoFont;
 import 'package:planchette_editor/planchette_editor.dart'
     show EditorTextSize, normalizeEditorExtensions, validateEditorDisplayName;
 import 'package:seance_core/seance_core.dart';
@@ -119,6 +120,7 @@ class _SettingsScreenState extends State<SettingsScreen>
   late double _terminalFontSize;
   late int _editorFontSize;
   late TerminalPalette _terminalPalette;
+  late TerminalLigatures _terminalLigatures;
   final _terminalFont = TextEditingController();
   SyncEnrollmentMode _syncMode = SyncEnrollmentMode.login;
   bool _saving = false;
@@ -174,6 +176,7 @@ class _SettingsScreenState extends State<SettingsScreen>
     _terminalFontSize = clampTerminalFontSize(s.terminalFontSize);
     _editorFontSize = EditorTextSize.clamp(s.editorFontSize);
     _terminalPalette = s.terminalPalette;
+    _terminalLigatures = s.terminalLigatures;
     _terminalFont.text = s.terminalFontFamily;
     _syncUrl.text = s.syncBaseUrl ?? '';
     _syncUser.text = s.syncUsername ?? '';
@@ -506,14 +509,16 @@ class _SettingsScreenState extends State<SettingsScreen>
         'Terminal',
         helpTitle: 'Terminal appearance',
         help:
-            'Font size, family, and colors apply to every session on this '
-            'device. With the terminal focused you can zoom without opening '
-            'Settings: ⌘ with +, − or 0 on macOS and iPadOS, Ctrl+Shift with '
-            'the same keys elsewhere (plain Ctrl chords belong to the shell). '
-            'Leave the font family blank to use Séance’s own monospace '
-            'stack. On desktop the button in the field lists the fonts '
-            'installed here, previewed in their own face; you can also type '
-            'any family name the system knows.',
+            'Font size, family, colors and ligatures apply to every session '
+            'on this device. With the terminal focused you can zoom without '
+            'opening Settings: ⌘ with +, − or 0 on macOS and iPadOS, '
+            'Ctrl+Shift with the same keys elsewhere (plain Ctrl chords belong '
+            'to the shell). '
+            'Leave the font family blank to use Iosevka Term, which ships '
+            'with Séance and draws ligatures. The button in the field lists '
+            'the fonts Séance includes and, on desktop, the ones installed '
+            'here, each previewed in its own face; you can also type any '
+            'family name the system knows.',
       ),
       Row(
         children: [
@@ -547,18 +552,17 @@ class _SettingsScreenState extends State<SettingsScreen>
         controller: _terminalFont,
         decoration: InputDecoration(
           labelText: 'Font family (optional)',
-          hintText: 'e.g. JetBrains Mono — blank uses the built-in stack',
-          // Only where there is an installed collection to read: on mobile an
-          // app sees the system faces it is given rather than a user-managed
-          // library, so a picker there would list the fallback stack back at
-          // the user. The field itself stays typeable everywhere.
-          suffixIcon: _systemFonts.isSupported
-              ? IconButton(
-                  tooltip: 'Choose an installed font',
-                  icon: const Icon(Icons.font_download_outlined),
-                  onPressed: _pickTerminalFont,
-                )
-              : null,
+          hintText:
+              'e.g. Fira Code — blank uses ${kDefaultTerminalFont.displayName}',
+          // Everywhere: the fonts Séance includes are always there to pick.
+          // Installed ones join them only where there is a collection to
+          // read (on mobile an app sees the system faces it is given rather
+          // than a user-managed library).
+          suffixIcon: IconButton(
+            tooltip: 'Choose a font',
+            icon: const Icon(Icons.font_download_outlined),
+            onPressed: _pickTerminalFont,
+          ),
         ),
         onSubmitted: (_) => _persistTerminalAppearance(),
         onTapOutside: (_) {
@@ -590,6 +594,23 @@ class _SettingsScreenState extends State<SettingsScreen>
         onChanged: (value) {
           if (value == null) return;
           setState(() => _terminalPalette = value);
+          _persistTerminalAppearance();
+        },
+      ),
+      SwitchListTile(
+        contentPadding: EdgeInsets.zero,
+        title: const Text('Ligatures'),
+        subtitle: const Text(
+          'Join character pairs such as -> and != into one symbol, in fonts '
+          'that draw them.',
+        ),
+        value: _terminalLigatures == TerminalLigatures.on,
+        onChanged: (on) {
+          setState(
+            () => _terminalLigatures = on
+                ? TerminalLigatures.on
+                : TerminalLigatures.off,
+          );
           _persistTerminalAppearance();
         },
       ),
@@ -1262,6 +1283,7 @@ class _SettingsScreenState extends State<SettingsScreen>
       fontSize: _terminalFontSize,
       fontFamily: _terminalFont.text.trim(),
       palette: _terminalPalette,
+      ligatures: _terminalLigatures,
     ),
   );
 
@@ -1279,6 +1301,8 @@ class _SettingsScreenState extends State<SettingsScreen>
       context,
       fonts: _systemFonts,
       current: _terminalFont.text.trim(),
+      builtInLabel: 'Use ${kDefaultTerminalFont.displayName}',
+      bundled: BundledMonoFont.values,
     );
     if (chosen == null || !mounted) return;
     _terminalFont.text = chosen;

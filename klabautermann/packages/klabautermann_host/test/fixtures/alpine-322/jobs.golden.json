@@ -1,0 +1,236 @@
+{
+  "nowUtc": "2026-10-14T12:00:00.000Z",
+  "zoneOffsetMinutes": 0,
+  "zoneName": null,
+  "jobs": [
+    {
+      "kind": "cron",
+      "id": "cron|/etc/crontab|0",
+      "source": "/etc/crontab",
+      "user": "run-parts",
+      "command": "/etc/periodic/15min",
+      "raw": "*/15\t*\t*\t*\t*\trun-parts /etc/periodic/15min",
+      "schedule": {
+        "type": "cron",
+        "text": "*/15 * * * *",
+        "macro": null,
+        "fields": {
+          "minute": "*/15",
+          "hour": "*",
+          "dayOfMonth": "*",
+          "month": "*",
+          "dayOfWeek": "*"
+        },
+        "dayMatch": "both",
+        "timeZone": null
+      },
+      "nextRuns": [
+        {
+          "atUtc": "2026-10-14T12:15:00.000Z",
+          "wall": "2026-10-14T12:15:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-14T12:30:00.000Z",
+          "wall": "2026-10-14T12:30:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        }
+      ],
+      "runsUnknown": null
+    },
+    {
+      "kind": "cron",
+      "id": "cron|/etc/crontab|1",
+      "source": "/etc/crontab",
+      "user": "run-parts",
+      "command": "/etc/periodic/hourly",
+      "raw": "0\t*\t*\t*\t*\trun-parts /etc/periodic/hourly",
+      "schedule": {
+        "type": "cron",
+        "text": "0 * * * *",
+        "macro": null,
+        "fields": {
+          "minute": "0",
+          "hour": "*",
+          "dayOfMonth": "*",
+          "month": "*",
+          "dayOfWeek": "*"
+        },
+        "dayMatch": "both",
+        "timeZone": null
+      },
+      "nextRuns": [
+        {
+          "atUtc": "2026-10-14T13:00:00.000Z",
+          "wall": "2026-10-14T13:00:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-14T14:00:00.000Z",
+          "wall": "2026-10-14T14:00:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        }
+      ],
+      "runsUnknown": null
+    },
+    {
+      "kind": "cron",
+      "id": "cron|/etc/crontab|2",
+      "source": "/etc/crontab",
+      "user": "run-parts",
+      "command": "/etc/periodic/daily",
+      "raw": "0\t2\t*\t*\t*\trun-parts /etc/periodic/daily",
+      "schedule": {
+        "type": "cron",
+        "text": "0 2 * * *",
+        "macro": null,
+        "fields": {
+          "minute": "0",
+          "hour": "2",
+          "dayOfMonth": "*",
+          "month": "*",
+          "dayOfWeek": "*"
+        },
+        "dayMatch": "both",
+        "timeZone": null
+      },
+      "nextRuns": [
+        {
+          "atUtc": "2026-10-15T02:00:00.000Z",
+          "wall": "2026-10-15T02:00:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-16T02:00:00.000Z",
+          "wall": "2026-10-16T02:00:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        }
+      ],
+      "runsUnknown": null
+    },
+    {
+      "kind": "cron",
+      "id": "cron|/etc/crontab|3",
+      "source": "/etc/crontab",
+      "user": "run-parts",
+      "command": "/etc/periodic/weekly",
+      "raw": "0\t3\t*\t*\t6\trun-parts /etc/periodic/weekly",
+      "schedule": {
+        "type": "cron",
+        "text": "0 3 * * 6",
+        "macro": null,
+        "fields": {
+          "minute": "0",
+          "hour": "3",
+          "dayOfMonth": "*",
+          "month": "*",
+          "dayOfWeek": "6"
+        },
+        "dayMatch": "both",
+        "timeZone": null
+      },
+      "nextRuns": [
+        {
+          "atUtc": "2026-10-17T03:00:00.000Z",
+          "wall": "2026-10-17T03:00:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-24T03:00:00.000Z",
+          "wall": "2026-10-24T03:00:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        }
+      ],
+      "runsUnknown": null
+    },
+    {
+      "kind": "cron",
+      "id": "cron|/etc/crontab|4",
+      "source": "/etc/crontab",
+      "user": "run-parts",
+      "command": "/etc/periodic/monthly",
+      "raw": "0\t5\t1\t*\t*\trun-parts /etc/periodic/monthly",
+      "schedule": {
+        "type": "cron",
+        "text": "0 5 1 * *",
+        "macro": null,
+        "fields": {
+          "minute": "0",
+          "hour": "5",
+          "dayOfMonth": "1",
+          "month": "*",
+          "dayOfWeek": "*"
+        },
+        "dayMatch": "both",
+        "timeZone": null
+      },
+      "nextRuns": [
+        {
+          "atUtc": "2026-11-01T05:00:00.000Z",
+          "wall": "2026-11-01T05:00:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-12-01T05:00:00.000Z",
+          "wall": "2026-12-01T05:00:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        }
+      ],
+      "runsUnknown": null
+    },
+    {
+      "kind": "periodic",
+      "id": "periodic|hourly|0anacron",
+      "period": "hourly",
+      "name": "0anacron",
+      "directory": "/etc/cron.hourly",
+      "driverIds": [],
+      "schedules": [],
+      "nextRuns": [],
+      "runsUnknown": "noDriver"
+    },
+    {
+      "kind": "periodic",
+      "id": "periodic|daily|0anacron",
+      "period": "daily",
+      "name": "0anacron",
+      "directory": "/etc/cron.daily",
+      "driverIds": [],
+      "schedules": [],
+      "nextRuns": [],
+      "runsUnknown": "anacron"
+    },
+    {
+      "kind": "periodic",
+      "id": "periodic|weekly|0anacron",
+      "period": "weekly",
+      "name": "0anacron",
+      "directory": "/etc/cron.weekly",
+      "driverIds": [],
+      "schedules": [],
+      "nextRuns": [],
+      "runsUnknown": "anacron"
+    },
+    {
+      "kind": "periodic",
+      "id": "periodic|monthly|0anacron",
+      "period": "monthly",
+      "name": "0anacron",
+      "directory": "/etc/cron.monthly",
+      "driverIds": [],
+      "schedules": [],
+      "nextRuns": [],
+      "runsUnknown": "anacron"
+    }
+  ]
+}

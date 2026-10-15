@@ -1,12 +1,16 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:ghost_fonts/ghost_fonts.dart';
 import 'package:xterm/xterm.dart' show TerminalStyle, TerminalTheme;
 
 import '../services/app_settings.dart';
 import '../theme.dart';
 import '../theme/contrast.dart';
 import '../theme/theme_palette.dart';
+
+// The ligature mode is part of the terminal's look, stored with the rest.
+export 'package:xterm/xterm.dart' show TerminalLigatures;
 
 /// How the terminal picks its colors.
 enum TerminalPalette {
@@ -164,6 +168,11 @@ class SeanceTerminalThemes {
       );
 }
 
+/// The terminal's face while [AppSettings.terminalFontFamily] is blank:
+/// narrow, so a window holds more columns, and drawn with ligatures
+/// ([AppSettings.terminalLigatures]).
+const BundledMonoFont kDefaultTerminalFont = BundledMonoFont.iosevkaTerm;
+
 /// The resolved terminal look for one build: the text style and the palette.
 @immutable
 class TerminalAppearance {
@@ -174,9 +183,11 @@ class TerminalAppearance {
 
   /// Resolve [settings] against the ambient [brightness].
   ///
-  /// An empty [AppSettings.terminalFontFamily] means "use the app's own
-  /// monospace stack" ([SeanceTheme.monoFallback]) rather than xterm's, so the
-  /// terminal matches the code shown elsewhere in the app. Following the app,
+  /// An empty [AppSettings.terminalFontFamily] means [kDefaultTerminalFont];
+  /// a bundled font's name draws the bundled copy, and any other family is
+  /// left to the platform. Behind it comes the app's own monospace stack
+  /// ([SeanceTheme.monoFallback]) rather than xterm's, so characters the
+  /// face lacks match the code shown elsewhere in the app. Following the app,
   /// the colours are the theme's own terminal colours when its palette
   /// ([AppSettings.themePalette]) has them; the two pinned choices keep the
   /// built-in palettes whatever the theme says.
@@ -185,14 +196,16 @@ class TerminalAppearance {
     Brightness brightness,
   ) {
     final family = settings.terminalFontFamily.trim();
-    final fallback = family.isEmpty
-        ? SeanceTheme.monoFallback
-        : <String>[family, ...SeanceTheme.monoFallback];
+    final fallback = <String>[
+      family.isEmpty ? kDefaultTerminalFont.family : resolveMonoFamily(family),
+      ...SeanceTheme.monoFallback,
+    ];
     return TerminalAppearance(
       style: TerminalStyle(
         fontSize: clampTerminalFontSize(settings.terminalFontSize),
         fontFamily: fallback.first,
         fontFamilyFallback: fallback,
+        ligatures: settings.terminalLigatures,
       ),
       theme: switch (settings.terminalPalette) {
         TerminalPalette.alwaysDark => SeanceTerminalThemes.dark,

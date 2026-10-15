@@ -1,5 +1,29 @@
 # Séance ports and pin audits
 
+## Catalog library move, PR 1c (2026-10-13)
+
+The shared coordinator gains the pull-only policy Klabautermann's MVP
+needs (`../../docs/design/catalog-library.md` sections 4, 5.1 item 4, 11
+and 12(c); decision D14). No Poltergeist code moves: Poltergeist passes
+`PushPolicy.normal`, under which every path runs as before, and its
+suite is unchanged.
+
+- `PushPolicy.none`: every `CatalogWriter` mutation (`saveServer`,
+  `deleteServer`, `secretSaved`, `publishPin`, `forgetPin`) returns
+  `WriteOutcome.refusedPullOnly` before touching a store; `sealLocal`
+  refuses before `crypto.seal`; a round skips its push half; both re-seal
+  passes return 0; credential publication stops before its vault bump;
+  and an own-device `serverConfig` tombstone applies instead of reviving
+  the row, since the revive is a local write. Pulling, applying and the
+  pin-conflict resolutions still run; keep-local's re-push stops at
+  `sealLocal`.
+- The writer's mutations now return `WriteOutcome` (`written` under
+  `normal`), and so do Poltergeist's `onBookmarkSaved` and
+  `onBookmarkDeleted`; the app ignores the result.
+- Tests: `seance_core/test/catalog/push_policy_test.dart` (the design's
+  pull-only test plus the re-seal, catch-up, dirty-record and revive
+  paths) counts seals through the codec.
+
 ## Catalog library move, PR 1b (2026-10-13)
 
 The sync coordinator follows the leaf files into
@@ -2190,6 +2214,6 @@ the commit-level detail, without adding names to docs.
 - Identity: 32 lines; `sha256:2e10b1bab6544e2c08709838075d83be92605d33beb72ed328cb15b1579ce232`
 - Unmatched attributions: 1 lines; `sha256:41240f7bf814a29257ba1dcf6ca3af20d744a98f374fdd6781eef8d4950b4bab`
 - License scan: 63 lines; `sha256:8b61e1556adb906492d2257b3911df631ff45815e7f47304401e645f7470242f`
-- Vendored paths: 152 lines; `sha256:e7745f2f0331e95079ba6bfb63eebfc142fa7654f34869805c6957e0e8bad11c`
+- Vendored paths: 153 lines; `sha256:56cad425a70d20f266b6a29746c2d88e24589671b29c9ce7d7c0e34900d088e4`
 - Gitlinks: 0 lines; `sha256:8c9771035e10619d9c2e084cc0f914772bfff45bd0b0a37c831f98bdf4a94839`
 <!-- SEANCE_PIN_AUDIT_V3:END -->

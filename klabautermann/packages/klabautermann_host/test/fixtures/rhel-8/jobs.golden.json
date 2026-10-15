@@ -1,0 +1,434 @@
+{
+  "nowUtc": "2026-10-14T12:00:00.000Z",
+  "zoneOffsetMinutes": -240,
+  "zoneName": "America/New_York",
+  "jobs": [
+    {
+      "kind": "cron",
+      "id": "cron|/etc/crontab|0",
+      "source": "/etc/crontab",
+      "user": "root",
+      "command": "run-parts /etc/cron.hourly",
+      "raw": "01 * * * * root run-parts /etc/cron.hourly",
+      "schedule": {
+        "type": "cron",
+        "text": "01 * * * *",
+        "macro": null,
+        "fields": {
+          "minute": "1",
+          "hour": "*",
+          "dayOfMonth": "*",
+          "month": "*",
+          "dayOfWeek": "*"
+        },
+        "dayMatch": "both",
+        "timeZone": null
+      },
+      "nextRuns": [
+        {
+          "atUtc": "2026-10-14T12:01:00.000Z",
+          "wall": "2026-10-14T08:01:00.000Z",
+          "offsetMinutes": -240,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-14T13:01:00.000Z",
+          "wall": "2026-10-14T09:01:00.000Z",
+          "offsetMinutes": -240,
+          "dst": "none"
+        }
+      ],
+      "runsUnknown": null
+    },
+    {
+      "kind": "cron",
+      "id": "cron|/etc/crontab|1",
+      "source": "/etc/crontab",
+      "user": "root",
+      "command": "run-parts /etc/cron.daily",
+      "raw": "02 4 * * * root run-parts /etc/cron.daily",
+      "schedule": {
+        "type": "cron",
+        "text": "02 4 * * *",
+        "macro": null,
+        "fields": {
+          "minute": "2",
+          "hour": "4",
+          "dayOfMonth": "*",
+          "month": "*",
+          "dayOfWeek": "*"
+        },
+        "dayMatch": "both",
+        "timeZone": null
+      },
+      "nextRuns": [
+        {
+          "atUtc": "2026-10-15T08:02:00.000Z",
+          "wall": "2026-10-15T04:02:00.000Z",
+          "offsetMinutes": -240,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-16T08:02:00.000Z",
+          "wall": "2026-10-16T04:02:00.000Z",
+          "offsetMinutes": -240,
+          "dst": "none"
+        }
+      ],
+      "runsUnknown": null
+    },
+    {
+      "kind": "cron",
+      "id": "cron|/etc/crontab|2",
+      "source": "/etc/crontab",
+      "user": "root",
+      "command": "run-parts /etc/cron.weekly",
+      "raw": "22 4 * * 0 root run-parts /etc/cron.weekly",
+      "schedule": {
+        "type": "cron",
+        "text": "22 4 * * 0",
+        "macro": null,
+        "fields": {
+          "minute": "22",
+          "hour": "4",
+          "dayOfMonth": "*",
+          "month": "*",
+          "dayOfWeek": "0"
+        },
+        "dayMatch": "both",
+        "timeZone": null
+      },
+      "nextRuns": [
+        {
+          "atUtc": "2026-10-18T08:22:00.000Z",
+          "wall": "2026-10-18T04:22:00.000Z",
+          "offsetMinutes": -240,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-25T08:22:00.000Z",
+          "wall": "2026-10-25T04:22:00.000Z",
+          "offsetMinutes": -240,
+          "dst": "none"
+        }
+      ],
+      "runsUnknown": null
+    },
+    {
+      "kind": "cron",
+      "id": "cron|/etc/crontab|3",
+      "source": "/etc/crontab",
+      "user": "root",
+      "command": "run-parts /etc/cron.monthly",
+      "raw": "42 4 1 * * root run-parts /etc/cron.monthly",
+      "schedule": {
+        "type": "cron",
+        "text": "42 4 1 * *",
+        "macro": null,
+        "fields": {
+          "minute": "42",
+          "hour": "4",
+          "dayOfMonth": "1",
+          "month": "*",
+          "dayOfWeek": "*"
+        },
+        "dayMatch": "both",
+        "timeZone": null
+      },
+      "nextRuns": [
+        {
+          "atUtc": "2026-11-01T08:42:00.000Z",
+          "wall": "2026-11-01T04:42:00.000Z",
+          "offsetMinutes": -240,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-12-01T08:42:00.000Z",
+          "wall": "2026-12-01T04:42:00.000Z",
+          "offsetMinutes": -240,
+          "dst": "none"
+        }
+      ],
+      "runsUnknown": null
+    },
+    {
+      "kind": "cron",
+      "id": "cron|/etc/cron.d/0hourly|0",
+      "source": "/etc/cron.d/0hourly",
+      "user": "root",
+      "command": "run-parts /etc/cron.hourly",
+      "raw": "01 * * * * root run-parts /etc/cron.hourly",
+      "schedule": {
+        "type": "cron",
+        "text": "01 * * * *",
+        "macro": null,
+        "fields": {
+          "minute": "1",
+          "hour": "*",
+          "dayOfMonth": "*",
+          "month": "*",
+          "dayOfWeek": "*"
+        },
+        "dayMatch": "both",
+        "timeZone": null
+      },
+      "nextRuns": [
+        {
+          "atUtc": "2026-10-14T12:01:00.000Z",
+          "wall": "2026-10-14T08:01:00.000Z",
+          "offsetMinutes": -240,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-14T13:01:00.000Z",
+          "wall": "2026-10-14T09:01:00.000Z",
+          "offsetMinutes": -240,
+          "dst": "none"
+        }
+      ],
+      "runsUnknown": null
+    },
+    {
+      "kind": "periodic",
+      "id": "periodic|hourly|0anacron",
+      "period": "hourly",
+      "name": "0anacron",
+      "directory": "/etc/cron.hourly",
+      "driverIds": [
+        "cron|/etc/crontab|0",
+        "cron|/etc/cron.d/0hourly|0"
+      ],
+      "schedules": [
+        {
+          "type": "cron",
+          "text": "01 * * * *",
+          "macro": null,
+          "fields": {
+            "minute": "1",
+            "hour": "*",
+            "dayOfMonth": "*",
+            "month": "*",
+            "dayOfWeek": "*"
+          },
+          "dayMatch": "both",
+          "timeZone": null
+        },
+        {
+          "type": "cron",
+          "text": "01 * * * *",
+          "macro": null,
+          "fields": {
+            "minute": "1",
+            "hour": "*",
+            "dayOfMonth": "*",
+            "month": "*",
+            "dayOfWeek": "*"
+          },
+          "dayMatch": "both",
+          "timeZone": null
+        }
+      ],
+      "nextRuns": [
+        {
+          "atUtc": "2026-10-14T12:01:00.000Z",
+          "wall": "2026-10-14T08:01:00.000Z",
+          "offsetMinutes": -240,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-14T13:01:00.000Z",
+          "wall": "2026-10-14T09:01:00.000Z",
+          "offsetMinutes": -240,
+          "dst": "none"
+        }
+      ],
+      "runsUnknown": null
+    },
+    {
+      "kind": "periodic",
+      "id": "periodic|hourly|0yum-hourly.cron",
+      "period": "hourly",
+      "name": "0yum-hourly.cron",
+      "directory": "/etc/cron.hourly",
+      "driverIds": [
+        "cron|/etc/crontab|0",
+        "cron|/etc/cron.d/0hourly|0"
+      ],
+      "schedules": [
+        {
+          "type": "cron",
+          "text": "01 * * * *",
+          "macro": null,
+          "fields": {
+            "minute": "1",
+            "hour": "*",
+            "dayOfMonth": "*",
+            "month": "*",
+            "dayOfWeek": "*"
+          },
+          "dayMatch": "both",
+          "timeZone": null
+        },
+        {
+          "type": "cron",
+          "text": "01 * * * *",
+          "macro": null,
+          "fields": {
+            "minute": "1",
+            "hour": "*",
+            "dayOfMonth": "*",
+            "month": "*",
+            "dayOfWeek": "*"
+          },
+          "dayMatch": "both",
+          "timeZone": null
+        }
+      ],
+      "nextRuns": [
+        {
+          "atUtc": "2026-10-14T12:01:00.000Z",
+          "wall": "2026-10-14T08:01:00.000Z",
+          "offsetMinutes": -240,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-14T13:01:00.000Z",
+          "wall": "2026-10-14T09:01:00.000Z",
+          "offsetMinutes": -240,
+          "dst": "none"
+        }
+      ],
+      "runsUnknown": null
+    },
+    {
+      "kind": "periodic",
+      "id": "periodic|daily|0yum-daily.cron",
+      "period": "daily",
+      "name": "0yum-daily.cron",
+      "directory": "/etc/cron.daily",
+      "driverIds": [
+        "cron|/etc/crontab|1"
+      ],
+      "schedules": [
+        {
+          "type": "cron",
+          "text": "02 4 * * *",
+          "macro": null,
+          "fields": {
+            "minute": "2",
+            "hour": "4",
+            "dayOfMonth": "*",
+            "month": "*",
+            "dayOfWeek": "*"
+          },
+          "dayMatch": "both",
+          "timeZone": null
+        }
+      ],
+      "nextRuns": [
+        {
+          "atUtc": "2026-10-15T08:02:00.000Z",
+          "wall": "2026-10-15T04:02:00.000Z",
+          "offsetMinutes": -240,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-16T08:02:00.000Z",
+          "wall": "2026-10-16T04:02:00.000Z",
+          "offsetMinutes": -240,
+          "dst": "none"
+        }
+      ],
+      "runsUnknown": null
+    },
+    {
+      "kind": "periodic",
+      "id": "periodic|weekly|0yum-weekly.cron",
+      "period": "weekly",
+      "name": "0yum-weekly.cron",
+      "directory": "/etc/cron.weekly",
+      "driverIds": [
+        "cron|/etc/crontab|2"
+      ],
+      "schedules": [
+        {
+          "type": "cron",
+          "text": "22 4 * * 0",
+          "macro": null,
+          "fields": {
+            "minute": "22",
+            "hour": "4",
+            "dayOfMonth": "*",
+            "month": "*",
+            "dayOfWeek": "0"
+          },
+          "dayMatch": "both",
+          "timeZone": null
+        }
+      ],
+      "nextRuns": [
+        {
+          "atUtc": "2026-10-18T08:22:00.000Z",
+          "wall": "2026-10-18T04:22:00.000Z",
+          "offsetMinutes": -240,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-25T08:22:00.000Z",
+          "wall": "2026-10-25T04:22:00.000Z",
+          "offsetMinutes": -240,
+          "dst": "none"
+        }
+      ],
+      "runsUnknown": null
+    },
+    {
+      "kind": "timer",
+      "id": "timer|logrotate.timer",
+      "timer": {
+        "unit": "logrotate.timer",
+        "activates": "logrotate.service",
+        "nextUs": 1699911958000000,
+        "leftUs": 8100000000,
+        "lastUs": 1699903800000000,
+        "passedUs": 600000000,
+        "nextText": "Mon 2023-11-13 21:45:58 UTC",
+        "lastText": "Mon 2023-11-13 19:30:00 UTC"
+      },
+      "triggers": null,
+      "randomizedDelayUs": null
+    },
+    {
+      "kind": "timer",
+      "id": "timer|mdadm-last-resort.timer",
+      "timer": {
+        "unit": "mdadm-last-resort.timer",
+        "activates": "mdadm-last-resort.service",
+        "nextUs": 1699912800000000,
+        "leftUs": 9000000000,
+        "lastUs": null,
+        "passedUs": null,
+        "nextText": "Mon 2023-11-13 22:00:00 UTC",
+        "lastText": "n/a"
+      },
+      "triggers": null,
+      "randomizedDelayUs": null
+    },
+    {
+      "kind": "timer",
+      "id": "timer|fstrim.timer",
+      "timer": {
+        "unit": "fstrim.timer",
+        "activates": "fstrim.service",
+        "nextUs": null,
+        "leftUs": null,
+        "lastUs": null,
+        "passedUs": null,
+        "nextText": "n/a",
+        "lastText": "n/a"
+      },
+      "triggers": null,
+      "randomizedDelayUs": null
+    }
+  ]
+}

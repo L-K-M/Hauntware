@@ -24,12 +24,19 @@ void main() {
     }
   });
 
-  RecentLocationsStore store({void Function(Object, StackTrace)? onError}) =>
-      RecentLocationsStore(
-        store: SettingsStore(path: settingsFile.path),
-        saveDelay: Duration.zero,
-        onError: onError,
-      );
+  // A store writes on a zero-delay debounce that a test need not await.
+  // Flushing before the directory is deleted keeps that write from
+  // landing mid-delete, which failed the delete with "Directory not
+  // empty". Tear-downs added in a test run before the one above.
+  RecentLocationsStore store({void Function(Object, StackTrace)? onError}) {
+    final recents = RecentLocationsStore(
+      store: SettingsStore(path: settingsFile.path),
+      saveDelay: Duration.zero,
+      onError: onError,
+    );
+    addTearDown(recents.flush);
+    return recents;
+  }
 
   Bookmark remoteBookmark(String id, {String? remotePath}) => Bookmark(
     id: id,
