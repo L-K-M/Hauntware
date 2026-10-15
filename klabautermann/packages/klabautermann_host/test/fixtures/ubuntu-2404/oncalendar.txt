@@ -1,0 +1,7 @@
+Normalized form: *-*-* 00:00:00
+    Next elapse: Mon 2025-06-16 00:00:00 CEST
+       (in UTC): Sun 2025-06-15 22:00:00 UTC
+       From now: 6h 30min left
+   Iteration #2: Tue 2025-06-17 00:00:00 CEST
+       (in UTC): Mon 2025-06-16 22:00:00 UTC
+       From now: 1 day 6h left

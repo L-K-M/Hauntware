@@ -109,6 +109,144 @@
       }
     }
   },
+  "fleetRowProbeOnline": "Online",
+  "@fleetRowProbeOnline": {
+    "description": "Fleet row state (FL-04): the reachability probe reached the server's SSH port, and nothing is connected to it."
+  },
+  "fleetRowProbeOffline": "Offline",
+  "@fleetRowProbeOffline": {
+    "description": "Fleet row state (FL-04): the reachability probe was refused, or the host had no route or no address."
+  },
+  "fleetRowProbeUnknown": "Reachability unknown",
+  "@fleetRowProbeUnknown": {
+    "description": "Fleet row state (FL-04): the reachability probe could not tell, for example after a timeout. Not the same as offline: a host behind a firewall or a jump host may be up."
+  },
+  "fleetRowAgeSeconds": "{seconds} s",
+  "@fleetRowAgeSeconds": {
+    "description": "A reading's age under a minute: under a fleet row's pressure bar, and as the age in fleetRowUpdated and fleetRowStaleAge.",
+    "placeholders": {
+      "seconds": {
+        "type": "int",
+        "example": "4"
+      }
+    }
+  },
+  "fleetRowAgeMinutes": "{minutes} min",
+  "@fleetRowAgeMinutes": {
+    "description": "A reading's age under an hour, in whole minutes: under a fleet row's pressure bar, and as the age in fleetRowUpdated and fleetRowStaleAge.",
+    "placeholders": {
+      "minutes": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  },
+  "fleetRowAgeHours": "{hours} h",
+  "@fleetRowAgeHours": {
+    "description": "A reading's age of an hour or more, in whole hours: under a fleet row's pressure bar, and as the age in fleetRowUpdated and fleetRowStaleAge.",
+    "placeholders": {
+      "hours": {
+        "type": "int",
+        "example": "2"
+      }
+    }
+  },
+  "fleetRowUpdated": "Updated {age} ago",
+  "@fleetRowUpdated": {
+    "description": "Fleet row freshness (03 §9.5 item 4, OV-04): how long ago the row's CPU and memory reading arrived, in the row's tooltip and screen-reader label.",
+    "placeholders": {
+      "age": {
+        "type": "String",
+        "example": "4 s"
+      }
+    }
+  },
+  "fleetRowStaleAge": "Stale · {age}",
+  "@fleetRowStaleAge": {
+    "description": "Under a fleet row's grey pressure bar, beside a history icon (03 §9.5 item 4, A11Y-01): the values are stale, and age says how old they are. Used when the row's state word (for example Connected or Online) does not already say the connection is down.",
+    "placeholders": {
+      "age": {
+        "type": "String",
+        "example": "25 s"
+      }
+    }
+  },
+  "fleetRowCpu": "CPU",
+  "@fleetRowCpu": {
+    "description": "The CPU cell of a fleet row's pressure bar (FL-07), as its summary names it."
+  },
+  "fleetRowMemory": "Memory",
+  "@fleetRowMemory": {
+    "description": "The memory cell of a fleet row's pressure bar (FL-07), as its summary names it."
+  },
+  "fleetRowDisk": "Disk",
+  "@fleetRowDisk": {
+    "description": "The disk cell of a fleet row's pressure bar (FL-07): how full the server's root file system is."
+  },
+  "fleetRowLocatorConflict": "Host key conflict with {servers}: they reach the same address through a different jump route.",
+  "@fleetRowLocatorConflict": {
+    "description": "Fleet row warning (03 §4.6): saved host keys are keyed by address and port, so this server's would collide with those of the named servers, which reach the same address through other jump hosts.",
+    "placeholders": {
+      "servers": {
+        "type": "String",
+        "example": "db-1, db-2"
+      }
+    }
+  },
+  "fleetRowPartSeparator": " · ",
+  "@fleetRowPartSeparator": {
+    "description": "Between the parts of a fleet row's second line: its state and its address."
+  },
+  "fleetRowListSeparator": ", ",
+  "@fleetRowListSeparator": {
+    "description": "Between the parts of a fleet row's screen-reader label, and between server names in fleetRowLocatorConflict."
+  },
+  "fleetRowLinkAnnouncement": "{server}: {status}",
+  "@fleetRowLinkAnnouncement": {
+    "description": "Screen-reader announcement when a server's connection state changes (A11Y-15); status is a word such as Connected or Connection lost.",
+    "placeholders": {
+      "server": {
+        "type": "String",
+        "example": "web-1"
+      },
+      "status": {
+        "type": "String",
+        "example": "Connection lost"
+      }
+    }
+  },
+  "fleetFilterCount": "{matches} of {total}",
+  "@fleetFilterCount": {
+    "description": "Under the fleet filter field while a query matches no server: how many servers match out of all.",
+    "placeholders": {
+      "matches": {
+        "type": "int",
+        "example": "0"
+      },
+      "total": {
+        "type": "int",
+        "example": "12"
+      }
+    }
+  },
+  "fleetFilterCountOpensFirst": "{matches} of {total} · Enter opens the first",
+  "@fleetFilterCountOpensFirst": {
+    "description": "Under the fleet filter field while a query matches servers: how many match out of all, and that the Enter key opens the first match.",
+    "placeholders": {
+      "matches": {
+        "type": "int",
+        "example": "3"
+      },
+      "total": {
+        "type": "int",
+        "example": "12"
+      }
+    }
+  },
+  "fleetFilterNoMatches": "No servers match",
+  "@fleetFilterNoMatches": {
+    "description": "Shown in place of the fleet list when the filter matches no server."
+  },
   "settingsTitle": "Settings",
   "settingsTabGeneral": "General",
   "settingsTabAppearance": "Appearance",
@@ -204,6 +342,197 @@
   "inspectorTitle": "Inspector",
   "inspectorEmptyBody": "Details, alerts, operations and coverage appear here once you select a server.",
   "placeholderMilestone": "Available in a later milestone.",
+  "coverageFirstRunTitle": "How Klabautermann watches your servers",
+  "@coverageFirstRunTitle": {
+    "description": "Heading of the first-run coverage card (03 §9.5 item 1), shown above the fleet on phones and above the workspace on desktops until the user dismisses it."
+  },
+  "coverageFirstRunBody": "Klabautermann connects over SSH only while it is open. It installs nothing on your servers unless you ask it to. Charts cover only the time this device was connected.",
+  "@coverageFirstRunBody": {
+    "description": "Body of the first-run coverage card: what the app does and does not cover. It names no alerts, since this version has none."
+  },
+  "coverageFirstRunDismiss": "Got it",
+  "@coverageFirstRunDismiss": {
+    "description": "Button that dismisses the first-run coverage card for good on this device."
+  },
+  "coverageFirstRunDetails": "Coverage details",
+  "@coverageFirstRunDetails": {
+    "description": "Button on the first-run coverage card that opens the coverage sheet."
+  },
+  "coverageFirstRunNotSaved": "Klabautermann could not save that you dismissed the coverage note, so it shows again after a restart.",
+  "@coverageFirstRunNotSaved": {
+    "description": "Top toast when dismissing the first-run coverage card could not be written to the device's settings file; the card stays hidden for this session."
+  },
+  "coverageChip": "{total, plural, =1{Watching {watched} of 1 server on this device, only while open} other{Watching {watched} of {total} servers on this device, only while open}}",
+  "@coverageChip": {
+    "description": "The fleet header's coverage chip (03 §9.5 item 2): how many fleet servers this device watches continuously (its monitor set) out of all of them; watching happens only while the app is open. Opens the coverage sheet.",
+    "placeholders": {
+      "watched": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "coverageChipHint": "Show coverage details",
+  "@coverageChipHint": {
+    "description": "Screen-reader hint for activating the fleet header's coverage chip."
+  },
+  "coverageSheetTitle": "Coverage on this device",
+  "@coverageSheetTitle": {
+    "description": "Heading of the coverage sheet the fleet header's chip opens."
+  },
+  "coverageTierBadge": "T0",
+  "@coverageTierBadge": {
+    "description": "Badge naming the execution tier the fleet runs at: T0, SSH only while the app is open (03 §9). Kept as written."
+  },
+  "coverageTierTitle": "SSH while Klabautermann is open",
+  "@coverageTierTitle": {
+    "description": "What the T0 badge means, beside it in the coverage sheet."
+  },
+  "coverageTierBody": "Klabautermann reads your servers over SSH only while it is open. It installs nothing on them unless you ask it to.",
+  "@coverageTierBody": {
+    "description": "Explanation under the tier title in the coverage sheet."
+  },
+  "coverageCoveredHeading": "Covered",
+  "@coverageCoveredHeading": {
+    "description": "Heading of the coverage sheet's list of what this device covers."
+  },
+  "coverageLiveTitle": "Live readings while open",
+  "@coverageLiveTitle": {
+    "description": "Coverage sheet item: the servers the user has open are read live."
+  },
+  "coverageLiveBody": "Metrics, processes, services, logs and jobs of the servers you have open.",
+  "@coverageLiveBody": {
+    "description": "Body of the coverage sheet's live-readings item."
+  },
+  "coverageWatchedTitle": "Continuous watching",
+  "@coverageWatchedTitle": {
+    "description": "Coverage sheet item about the servers this device watches continuously (its monitor set, FL-21): listed as covered once one is watched, and as not covered while none is."
+  },
+  "coverageWatchedBody": "{watched, plural, =0{No server is watched on this device, so each is read only while you have it open.} =1{1 server is read continuously while Klabautermann is open. Any others are read only while you have them open.} other{{watched} servers are read continuously while Klabautermann is open. Any others are read only while you have them open.}}",
+  "@coverageWatchedBody": {
+    "description": "Body of the coverage sheet's watched-servers item; watched is the size of this device's monitor set within the fleet.",
+    "placeholders": {
+      "watched": {
+        "type": "int"
+      }
+    }
+  },
+  "coverageNotCoveredHeading": "Not covered",
+  "@coverageNotCoveredHeading": {
+    "description": "Heading of the coverage sheet's list of what this device does not cover."
+  },
+  "coverageClosedTitle": "While Klabautermann is closed",
+  "@coverageClosedTitle": {
+    "description": "Coverage sheet item: nothing is covered while the app is closed."
+  },
+  "coverageClosedBody": "Nothing checks your servers, so nothing can warn you about them.",
+  "@coverageClosedBody": {
+    "description": "Body of the coverage sheet's while-closed item."
+  },
+  "coverageHostDownTitle": "A server going down",
+  "@coverageHostDownTitle": {
+    "description": "Coverage sheet item: a server that goes down while the app is closed goes unnoticed."
+  },
+  "coverageHostDownBody": "If a server stops while Klabautermann is closed, you find out the next time you open it.",
+  "@coverageHostDownBody": {
+    "description": "Body of the coverage sheet's server-down item."
+  },
+  "coverageHistoryTitle": "History before you connected",
+  "@coverageHistoryTitle": {
+    "description": "Coverage sheet item: charts hold no history from before this device connected."
+  },
+  "coverageHistoryBody": "Charts cover only the time this device was connected. Gaps are marked, never filled in.",
+  "@coverageHistoryBody": {
+    "description": "Body of the coverage sheet's history item."
+  },
+  "coverageBackgroundTitle": "While in the background",
+  "@coverageBackgroundTitle": {
+    "description": "Coverage sheet item shown on iOS and Android only: reading stops in the background (PLT-04)."
+  },
+  "coverageBackgroundBody": "Reading stops while Klabautermann is in the background and resumes when you return.",
+  "@coverageBackgroundBody": {
+    "description": "Body of the coverage sheet's background item, on iOS and Android only."
+  },
+  "coverageFreshnessSeconds": "{seconds} s",
+  "@coverageFreshnessSeconds": {
+    "description": "An age under a minute in a freshness line (03 §9.5 item 4), as in \"Updated 4 s ago\".",
+    "placeholders": {
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "coverageFreshnessMinutes": "{minutes} min",
+  "@coverageFreshnessMinutes": {
+    "description": "An age under an hour, in whole minutes, in a freshness line.",
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "coverageFreshnessHours": "{hours} h",
+  "@coverageFreshnessHours": {
+    "description": "An age under a day, in whole hours, in a freshness line.",
+    "placeholders": {
+      "hours": {
+        "type": "int"
+      }
+    }
+  },
+  "coverageFreshnessDays": "{days} d",
+  "@coverageFreshnessDays": {
+    "description": "An age of a day or more, in whole days, in a freshness line.",
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "coverageFreshnessUpdated": "Updated {age} ago",
+  "@coverageFreshnessUpdated": {
+    "description": "Freshness line of a server's or panel's values while they are current; age is one of the coverageFreshness age strings.",
+    "placeholders": {
+      "age": {
+        "type": "String",
+        "example": "4 s"
+      }
+    }
+  },
+  "coverageFreshnessStale": "Stale: updated {age} ago",
+  "@coverageFreshnessStale": {
+    "description": "Freshness line of values older than their stream's limit, which are drawn grey beside it.",
+    "placeholders": {
+      "age": {
+        "type": "String",
+        "example": "3 min"
+      }
+    }
+  },
+  "coverageFreshnessDisconnected": "Disconnected {age} ago",
+  "@coverageFreshnessDisconnected": {
+    "description": "Freshness line while the server's connection is down after readings arrived; age is how long it has been down.",
+    "placeholders": {
+      "age": {
+        "type": "String",
+        "example": "3 min"
+      }
+    }
+  },
+  "coverageFreshnessPaused": "Paused: app in background",
+  "@coverageFreshnessPaused": {
+    "description": "Freshness line while a phone app is in the background and reading is paused."
+  },
+  "coverageFreshnessNotWatched": "Not watched on this device",
+  "@coverageFreshnessNotWatched": {
+    "description": "Freshness line of a server outside this device's monitor set that nothing reads."
+  },
+  "coverageFreshnessNoData": "No data yet",
+  "@coverageFreshnessNoData": {
+    "description": "Freshness line before the first reading has arrived."
+  },
   "serverTitle": "{name}",
   "@serverTitle": {
     "placeholders": {
@@ -222,6 +551,254 @@
   "workspaceTabSystem": "System",
   "workspaceTabAccess": "Access",
   "serverTabMore": "More",
+  "systemIdentityTitle": "Identity",
+  "@systemIdentityTitle": {
+    "description": "Heading of the System tab's section about what the server is: host name, operating system, kernel, architecture and virtualization (SYS-01)."
+  },
+  "systemUptimeTitle": "Uptime",
+  "@systemUptimeTitle": {
+    "description": "Heading of the System tab's section with how long the server has been up and when it booted (BOOT-01)."
+  },
+  "systemNetworkTitle": "Network",
+  "@systemNetworkTitle": {
+    "description": "Heading of the System tab's section with the server's total network throughput (NET-01)."
+  },
+  "systemDisksTitle": "Disks",
+  "@systemDisksTitle": {
+    "description": "Heading of the System tab's section with the space and inodes each mounted filesystem uses (DSK-01, DSK-02)."
+  },
+  "systemHostname": "Host name",
+  "@systemHostname": {
+    "description": "Label of the server's static host name in the System tab."
+  },
+  "systemOperatingSystem": "Operating system",
+  "@systemOperatingSystem": {
+    "description": "Label of the server's operating system and version, as the server names it, in the System tab."
+  },
+  "systemKernel": "Kernel",
+  "@systemKernel": {
+    "description": "Label of the server's kernel name and release in the System tab."
+  },
+  "systemKernelValue": "{name} {release}",
+  "@systemKernelValue": {
+    "description": "The server's kernel as the System tab shows it: its name and its release, both as the server reports them.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Linux"
+      },
+      "release": {
+        "type": "String",
+        "example": "6.8.0-45-generic"
+      }
+    }
+  },
+  "systemArchitecture": "Architecture",
+  "@systemArchitecture": {
+    "description": "Label of the server's machine architecture, such as x86_64 or aarch64, in the System tab."
+  },
+  "systemVirtualization": "Virtualization",
+  "@systemVirtualization": {
+    "description": "Label of whether the server runs on bare metal, in a virtual machine or in a container, in the System tab."
+  },
+  "systemVirtualizationNone": "None detected",
+  "@systemVirtualizationNone": {
+    "description": "The System tab's virtualization value when the server detected neither a virtual machine nor a container."
+  },
+  "systemVirtualizationMachine": "Virtual machine ({name})",
+  "@systemVirtualizationMachine": {
+    "description": "The System tab's virtualization value for a server in a virtual machine; name is the technology as the server reports it.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "kvm"
+      }
+    }
+  },
+  "systemVirtualizationContainer": "Container ({name})",
+  "@systemVirtualizationContainer": {
+    "description": "The System tab's virtualization value for a server that is a container; name is the technology as the server reports it.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "lxc"
+      }
+    }
+  },
+  "systemVirtualizationContainerUnnamed": "Container",
+  "@systemVirtualizationContainerUnnamed": {
+    "description": "The System tab's virtualization value for a server that is a container of a technology the server did not name."
+  },
+  "systemContainerNotice": "This server is a container. Figures that would come from its host read as unknown.",
+  "@systemContainerNotice": {
+    "description": "Note in the System tab's identity section for a container: values the container would read from its host's system files are not shown as its own (SYS-04)."
+  },
+  "systemUnknown": "Unknown",
+  "@systemUnknown": {
+    "description": "A System tab value the server did not report, or that is not shown for a reason given beside it; never shown as zero."
+  },
+  "systemUnknownContainer": "Inside this container this figure would be the host's, so it is not shown.",
+  "@systemUnknownContainer": {
+    "description": "Reason beside an unknown System tab value: in a container, the system file it comes from shows the host's figures instead of the container's (SYS-04)."
+  },
+  "systemUptime": "Up for",
+  "@systemUptime": {
+    "description": "Label of how long the server has been running since it booted, in the System tab."
+  },
+  "systemUptimeDays": "{days, plural, =1{1 day} other{{days} days}}, {hours, plural, =1{1 hour} other{{hours} hours}}",
+  "@systemUptimeDays": {
+    "description": "How long a server has been up, from one day on: whole days and the hours past them.",
+    "placeholders": {
+      "days": {
+        "type": "int",
+        "format": "decimalPattern"
+      },
+      "hours": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "systemUptimeHours": "{hours, plural, =1{1 hour} other{{hours} hours}}, {minutes, plural, =1{1 minute} other{{minutes} minutes}}",
+  "@systemUptimeHours": {
+    "description": "How long a server has been up, from one hour to a day: whole hours and the minutes past them.",
+    "placeholders": {
+      "hours": {
+        "type": "int",
+        "format": "decimalPattern"
+      },
+      "minutes": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "systemUptimeMinutes": "{minutes, plural, =0{Less than a minute} =1{1 minute} other{{minutes} minutes}}",
+  "@systemUptimeMinutes": {
+    "description": "How long a server has been up, under an hour: whole minutes.",
+    "placeholders": {
+      "minutes": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "systemBooted": "Booted",
+  "@systemBooted": {
+    "description": "Label of when the server last booted, in the System tab."
+  },
+  "systemBootedValue": "{time}",
+  "@systemBootedValue": {
+    "description": "When the server last booted: a date and time in the UI locale and this device's time zone.",
+    "placeholders": {
+      "time": {
+        "type": "DateTime",
+        "format": "yMMMd+jm"
+      }
+    }
+  },
+  "systemReceive": "Receive",
+  "@systemReceive": {
+    "description": "Label of the server's total receive rate over all its network interfaces, in the System tab."
+  },
+  "systemTransmit": "Transmit",
+  "@systemTransmit": {
+    "description": "Label of the server's total transmit rate over all its network interfaces, in the System tab."
+  },
+  "systemWaiting": "Waiting for the first reading.",
+  "@systemWaiting": {
+    "description": "A System tab section before the server sent its first reading for it."
+  },
+  "systemUnavailableMissing": "The server lacks the tool this reading needs.",
+  "@systemUnavailableMissing": {
+    "description": "A System tab section whose reading failed because a command it runs is not installed on the server."
+  },
+  "systemUnavailableDenied": "The server refused this reading.",
+  "@systemUnavailableDenied": {
+    "description": "A System tab section whose reading failed because the server denied permission."
+  },
+  "systemUnavailableTimeout": "This reading did not finish in time.",
+  "@systemUnavailableTimeout": {
+    "description": "A System tab section whose reading the server stopped because it took too long."
+  },
+  "systemUnavailableError": "This reading failed.",
+  "@systemUnavailableError": {
+    "description": "A System tab section whose reading failed for another reason; the server's error output may follow."
+  },
+  "systemDisksTimedOut": "Disk usage did not finish in time. A network mount (NFS or SMB) that stopped answering is the usual cause.",
+  "@systemDisksTimedOut": {
+    "description": "The Disks section when the server stopped the disk usage command because it hung, which a stale network mount causes (DSK-01)."
+  },
+  "systemDisksLastListed": "These mounts are from the reading at {time}; their usage is unknown now.",
+  "@systemDisksLastListed": {
+    "description": "Under systemDisksTimedOut, when an earlier reading listed the mounts: the list below is that reading's, and none of its figures is current. time is when that reading was taken, as a date and time in the UI locale and this device's time zone, since a stale mount can keep failing for days.",
+    "placeholders": {
+      "time": {
+        "type": "DateTime",
+        "format": "yMMMd+jm"
+      }
+    }
+  },
+  "systemDisksNoTimeout": "This server has no timeout command, so a network mount that stops answering can stall disk readings.",
+  "@systemDisksNoTimeout": {
+    "description": "The Disks section on a server without the timeout command, which normally stops a disk usage command that hangs (DSK-01)."
+  },
+  "systemDisksShowPseudo": "Show pseudo filesystems ({count})",
+  "@systemDisksShowPseudo": {
+    "description": "Checkbox in the Disks section that also lists in-memory and image filesystems such as tmpfs, overlay and squashfs, hidden by default; count is how many there are.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "systemDisksEmpty": "No mounts to show.",
+  "@systemDisksEmpty": {
+    "description": "In place of the Disks table when the server's reading listed no filesystem, or only pseudo filesystems while they are hidden."
+  },
+  "systemDevice": "Device",
+  "@systemDevice": {
+    "description": "Label of the device or source a filesystem is mounted from, such as /dev/sda1 or nas:/export, in a mount's details."
+  },
+  "systemColumnMount": "Mount",
+  "@systemColumnMount": {
+    "description": "Disks table column: where the filesystem is mounted."
+  },
+  "systemColumnType": "Type",
+  "@systemColumnType": {
+    "description": "Disks table column: the filesystem type, such as ext4 or nfs4."
+  },
+  "systemColumnUsed": "Used",
+  "@systemColumnUsed": {
+    "description": "Disks table column: the space used out of the filesystem's size."
+  },
+  "systemColumnUse": "Use",
+  "@systemColumnUse": {
+    "description": "Disks table column: the share of the filesystem's space in use, as df reports it."
+  },
+  "systemColumnInodes": "Inodes",
+  "@systemColumnInodes": {
+    "description": "Disks table column: the share of the filesystem's inodes (file entries) in use; a full inode table stops new files like a full disk."
+  },
+  "systemColumnUsage": "Usage",
+  "@systemColumnUsage": {
+    "description": "Disks table column, and label in a mount's details, shown after the disk usage command timed out: what is known of the mount's usage now."
+  },
+  "systemUsedOf": "{used} of {size}",
+  "@systemUsedOf": {
+    "description": "A Disks table cell: the space used and the filesystem's size, both already formatted with binary units such as GiB.",
+    "placeholders": {
+      "used": {
+        "type": "String",
+        "example": "21 GiB"
+      },
+      "size": {
+        "type": "String",
+        "example": "50 GiB"
+      }
+    }
+  },
   "chartSeriesSummary": "{label}: now {current}, lowest {lowest}, highest {highest}, {trend}",
   "@chartSeriesSummary": {
     "description": "A chart's screen-reader summary of one series: what it measures, its current, lowest and highest values (already formatted with their units) and its trend, one of chartTrendRising, chartTrendFalling or chartTrendSteady.",

@@ -305,6 +305,30 @@ void main() {
       // The test binding also fails a periodic timer left running here.
       timed.dispose();
     });
+
+    test('the latest sampling state lands in its server\'s box with the '
+        'phase it left, and leaves with the server (SYN-08)', () async {
+      final since = DateTime.utc(2026, 10, 14, 12);
+      SamplingState state(String serverId, SamplingPhase phase) =>
+          SamplingState(serverId: serverId, phase: phase, since: since);
+      final paused = state('srv-1', SamplingPhase.pausedInBackground);
+      engine
+        ..emit(state('srv-1', SamplingPhase.sampling))
+        ..emit(paused);
+      await settle();
+      final box = monitoring.samplingFor('srv-1');
+      expect(box.value!.state, same(paused));
+      expect(box.value!.previous, SamplingPhase.sampling);
+      expect(monitoring.samplingFor('srv-2').value, isNull);
+
+      engine
+        ..emit(CatalogReplaced([_entry('srv-2')]))
+        // Still in flight when the server left: it must not come back.
+        ..emit(state('srv-1', SamplingPhase.sampling));
+      await settle();
+      expect(_disposed(box as ChangeNotifier), isTrue);
+      expect(monitoring.samplingFor('srv-1').value, isNull);
+    });
   });
 
   test('a server that leaves the fleet loses its readings and seq floor '
@@ -339,6 +363,45 @@ void main() {
       ..emit(_sample('srv-1', overview, 1));
     await settle();
     expect(monitoring.sampleFor('srv-1', overview).value?.seq, 1);
+  });
+
+  test('the latest host profile lands in its server\'s box and leaves '
+      'with the server (SYN-08)', () async {
+    final kvm = HostProfile(virtualization: 'kvm', container: 'none');
+    final lxc = HostProfile(virtualization: 'lxc', container: 'lxc');
+    engine
+      ..emit(HostProfileChanged('srv-1', kvm))
+      ..emit(HostProfileChanged('srv-1', lxc));
+    await settle();
+    final box = monitoring.profileFor('srv-1');
+    expect(box.value, same(lxc));
+    expect(monitoring.profileFor('srv-2').value, isNull);
+
+    engine
+      ..emit(CatalogReplaced([_entry('srv-2')]))
+      // Still in flight when the server left: it must not come back.
+      ..emit(HostProfileChanged('srv-1', kvm));
+    await settle();
+    expect(_disposed(box as ChangeNotifier), isTrue);
+    expect(monitoring.profileFor('srv-1').value, isNull);
+  });
+
+  test('each stream\'s latest reading outlives a collector that fails '
+      'after it, and leaves with the server (SYN-08)', () async {
+    const fs = SampleStream.fs;
+    final listed = _sample('srv-1', fs, 1, result: FsResult(FsSnapshot([])));
+    engine
+      ..emit(listed)
+      ..emit(_sample('srv-1', fs, 2));
+    await settle();
+    final box = monitoring.lastReadingFor('srv-1', fs);
+    expect(box.value, same(listed));
+    expect(monitoring.sampleFor('srv-1', fs).value?.seq, 2);
+
+    engine.emit(CatalogReplaced([_entry('srv-2')]));
+    await settle();
+    expect(_disposed(box as ChangeNotifier), isTrue);
+    expect(monitoring.lastReadingFor('srv-1', fs).value, isNull);
   });
 
   group('links (03 §5.12)', () {

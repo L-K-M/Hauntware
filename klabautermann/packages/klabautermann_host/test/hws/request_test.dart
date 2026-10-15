@@ -25,6 +25,19 @@ void main() {
         throwsA(isA<HwsRequestError>()),
       );
     });
+
+    test('refuses a collector that takes arguments', () {
+      expect(
+        () => encodeTickRequest(1, [Collector.fs, Collector.timerDetail]),
+        throwsA(
+          isA<HwsRequestError>().having(
+            (e) => e.collector,
+            'collector',
+            Collector.timerDetail,
+          ),
+        ),
+      );
+    });
   });
 
   group('encodeOnDemandRequest', () {
@@ -49,6 +62,33 @@ void main() {
         () => encodeOnDemandRequest(-1, Collector.fs, const [], quote: _quote),
         throwsA(isA<HwsRequestError>()),
       );
+    });
+
+    test('timer_detail takes one quoted timer unit by its wire name', () {
+      expect(
+        encodeOnDemandRequest(4, Collector.timerDetail, const [
+          'apt-daily.timer',
+        ], quote: _quote),
+        "hw_o 4 timer_detail 'apt-daily.timer'\n",
+      );
+      for (final args in [
+        const <String>[],
+        const ['a.timer', 'b.timer'],
+        const ['nginx.service'],
+        const ['-x.timer;reboot'],
+        const ['a\nb.timer'],
+      ]) {
+        expect(
+          () => encodeOnDemandRequest(
+            1,
+            Collector.timerDetail,
+            args,
+            quote: _quote,
+          ),
+          throwsA(isA<HwsRequestError>()),
+          reason: '$args',
+        );
+      }
     });
   });
 

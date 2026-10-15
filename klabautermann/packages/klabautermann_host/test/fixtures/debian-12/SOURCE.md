@@ -20,3 +20,13 @@ For version 5 the same script turned the `stat` and `status` blocks of
 keeping the `cmdline` block as it was.
 The `arcstats` block of `core.txt`, a ZFS ARC of 2 GiB with a 500 MiB
 `c_min`, was added by hand for version 4.
+
+`timer_detail.txt` (the on-demand read of `logrotate.timer`, 03 D57),
+`oncalendar.txt` (`systemd-analyze calendar --iterations=2` of its
+expression in Europe/Berlin), `journal.txt` (`journalctl -o json` lines:
+a kernel row, a byte-array `MESSAGE` with invalid UTF-8 and a `null`
+one) and `dmesg.txt` (util-linux's `dmesg --json --decode` layout) are
+hand-written from systemctl(1), systemd-analyze(1), systemd.time(7),
+journalctl(1), systemd.journal-fields(7) and dmesg(1). The calendar
+read uses systemd 252's `Iter. #N:` label for later runs
+(`analyze-calendar.c`), which 253 renamed to `Iteration #N`.
