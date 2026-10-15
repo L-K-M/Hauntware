@@ -8,7 +8,7 @@ import 'package:klabautermann_core/src/sampling/sample_pipeline.dart';
 import 'package:klabautermann_core/src/sampling/sample_results.dart';
 import 'package:klabautermann_core/src/sampling/sampler_session.dart';
 import 'package:klabautermann_host/klabautermann_host.dart'
-    show HwsSection, ProcEntry, ProcsSnapshot, SectionStatus;
+    show HostProfile, HwsSection, ProcEntry, ProcsSnapshot, SectionStatus;
 import 'package:test/test.dart';
 
 import '../support/sample_frames.dart';
@@ -61,10 +61,12 @@ SamplerReplied _fastReply(
 ServerSamplePipeline _sampling({
   SampleSequence? sequence,
   Set<SampleStream> streams = _fast,
+  HostProfile? profile,
 }) {
   final pipeline = ServerSamplePipeline(
     serverId: 'srv',
     sequence: sequence ?? SampleSequence(),
+    profile: profile,
   );
   pipeline.updateConditions(
     streams: streams,
@@ -480,6 +482,16 @@ void main() {
         p.addProbe(const SamplerGap(1, SamplerGapReason.deadline)),
         isEmpty,
       );
+    });
+
+    test('a pipeline built again keeps the last profile', () {
+      final p = _sampling()..addProbe(_probe(container: 'lxc'));
+      final again = _sampling(profile: p.profile);
+      final core = _result<CoreResult>(
+        again.addTick(_fast, _fastReply(0), _at(0)),
+      );
+      expect(core.load, isNull);
+      expect(again.addProbe(_probe(container: 'lxc', epoch: 1)), isEmpty);
     });
 
     test('container values are withheld once the probe tells (D50)', () {

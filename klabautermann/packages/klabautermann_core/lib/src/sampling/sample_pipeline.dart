@@ -62,6 +62,12 @@ const _volatileProfileKeys = {
   'sessionParentComm',
 };
 
+/// [profile] without its [_volatileProfileKeys], for comparing.
+String _stableKey(HostProfile profile) => jsonEncode({
+  for (final e in profile.toJson().entries)
+    if (!_volatileProfileKeys.contains(e.key)) e.key: e.value,
+});
+
 /// An open [Gap] of one stream: no reading since [from], for [cause].
 typedef _OpenGap = ({DateTime from, GapCause cause});
 
@@ -74,7 +80,16 @@ typedef _OpenGap = ({DateTime from, GapCause cause});
 /// framing error or a sampler restart keeps them: the next rate spans
 /// the loss, measured by the host's uptime.
 final class ServerSamplePipeline {
-  ServerSamplePipeline({required this.serverId, required this._sequence});
+  /// [profile] is the server's latest known profile when a pipeline is
+  /// built again, so the values it withholds (D50) stay withheld before
+  /// the next probe answers, and that answer is reported only if it
+  /// differs.
+  ServerSamplePipeline({
+    required this.serverId,
+    required this._sequence,
+    HostProfile? profile,
+  }) : _profile = profile,
+       _profileKey = profile == null ? null : _stableKey(profile);
 
   final String serverId;
   final SampleSequence _sequence;
@@ -94,7 +109,7 @@ final class ServerSamplePipeline {
   /// What sampling the server is doing.
   SamplingPhase get phase => _phase;
 
-  /// The latest probe's findings; null before the first probe answer.
+  /// The latest probe's findings, else the profile it was built with.
   HostProfile? get profile => _profile;
 
   /// Records the server's subscribed [streams] (the union of its
@@ -145,10 +160,10 @@ final class ServerSamplePipeline {
   }
 
   /// Takes the outcome of a probe request (03 §6.1). Returns a
-  /// [HostProfileChanged] for the first profile and whenever a later one
-  /// differs in more than its clock and session fields (03 §10.1); every
-  /// answer replaces [profile]. A probe without an answer changes
-  /// nothing.
+  /// [HostProfileChanged] for the first profile (unless the pipeline was
+  /// built with it) and whenever a later one differs in more than its
+  /// clock and session fields (03 §10.1); every answer replaces
+  /// [profile]. A probe without an answer changes nothing.
   List<EngineEvent> addProbe(SamplerOutcome outcome) {
     if (outcome is! SamplerReplied) return const [];
 
@@ -156,10 +171,7 @@ final class ServerSamplePipeline {
       for (final s in outcome.reply.sections) ?ProbeSection.fromEvent(s),
     ];
     final profile = parseProbe(sections, ParseContext.standard).value;
-    final key = jsonEncode({
-      for (final e in profile.toJson().entries)
-        if (!_volatileProfileKeys.contains(e.key)) e.key: e.value,
-    });
+    final key = _stableKey(profile);
     _profile = profile;
     if (key == _profileKey) return const [];
 
