@@ -43,6 +43,11 @@ import 'package:meta/meta.dart';
 /// [SetCadenceProfile] picks the cadence column, [Sample] carries an
 /// engine-owned `seq` (D44) and a sealed [SampleResult] of derived values
 /// (D43), and [SamplingState], [Gap] and [HostProfileChanged] join.
+///
+/// Log streams joined v3 the same way: [OpenLogStream] names its stream
+/// and reads a [LogStreamSpec] (a sealed [LogSource] with its filters, a
+/// window, follow and a resume cursor), [LogBatch] carries sealed
+/// [LogRecord]s the engine resolved, and [LogStreamState] joins.
 const int kEngineProtocolVersion = 3;
 
 /// Every message the UI isolate sends the engine (03 §10.1, D18). Plain data
@@ -185,14 +190,29 @@ final class SetCadenceProfile extends EngineRequest {
   final CadenceProfile profile;
 }
 
-/// Opens a server log stream; batches arrive as [LogBatch] (03 §10.1, §10.8).
+/// Opens a log stream on [spec]'s server (03 §10.1, §7.6): its records
+/// arrive as [LogBatch]es and its progress as [LogStreamState]s, all
+/// under [streamId], until it ends or [CloseStream] closes it.
 final class OpenLogStream extends EngineRequest {
-  const OpenLogStream(this.spec);
+  const OpenLogStream({required this.streamId, required this.spec});
+
+  /// The app's own id for the stream, which it picks so it can close the
+  /// stream before the engine has answered. Unlike a [Subscribe] id, it
+  /// is never reused for the engine's lifetime (a counter will do):
+  /// stream events carry no generation, so a closed stream's last batch
+  /// or end can arrive after the next open, and an open the engine
+  /// rejects outright gets a [RequestRejected], which names no stream.
+  /// The engine rejects an open whose id an earlier open used.
+  final String streamId;
 
   final LogStreamSpec spec;
 }
 
-/// Closes an open [LogBatch] stream (03 §10.1).
+/// Closes the stream [OpenLogStream] opened as [streamId] (03 §10.1). The
+/// engine stops the read, and its last event for the stream is a
+/// [LogStreamState] with [LogStreamEndReason.closed]; batches it sent
+/// before it handled this request arrive ahead of that. Closing a stream
+/// that is not open, because it ended or never opened, does nothing.
 final class CloseStream extends EngineRequest {
   const CloseStream(this.streamId);
 
@@ -465,18 +485,37 @@ final class HostProfileChanged extends EngineEvent {
   final HostProfile profile;
 }
 
-/// One batch of an [OpenLogStream] stream, capped by 03 §10.1's rate;
-/// [dropped] counts lines the buffer discarded since the last batch.
+/// The next records of the [OpenLogStream] stream [streamId], in the
+/// stream's order ([LogStreamSpec]). The engine sends at most 20 batches
+/// a second per stream (03 §10.1), so a busy follow arrives in batches
+/// rather than record by record.
 final class LogBatch extends EngineEvent {
-  const LogBatch({
+  LogBatch({
     required this.streamId,
-    required this.lines,
+    required Iterable<LogRecord> records,
     this.dropped = 0,
-  });
+  }) : records = List.unmodifiable(records),
+       assert(dropped >= 0, 'dropped counts records');
 
   final String streamId;
-  final List<String> lines;
+
+  /// The records, of the variants the stream's [LogSource] names.
+  final List<LogRecord> records;
+
+  /// How many records the engine discarded since the stream's previous
+  /// batch, before [records]; the view shows them as one "dropped N
+  /// lines" entry (LOG-02, 03 §10.8).
   final int dropped;
+}
+
+/// What the [OpenLogStream] stream [streamId] is doing, for LOG-02's
+/// connection chip (03 §10.1). The engine sends it whenever [status]
+/// changes; a [LogStreamEnded] status is the stream's last event.
+final class LogStreamState extends EngineEvent {
+  const LogStreamState(this.streamId, this.status);
+
+  final String streamId;
+  final LogStreamStatus status;
 }
 
 /// The answer to one [DockerQuery] (03 §10.1): the endpoint's decoded JSON
@@ -782,36 +821,296 @@ final class ImportStoreIssue {
   final String? detail;
 }
 
-/// Which log source an [OpenLogStream] follows (03 §7.6).
-enum LogStreamSource {
-  /// `journalctl` over the unit or priority in [LogStreamSpec.target].
-  journal,
-
-  /// A file path in [LogStreamSpec.target].
-  file,
-
-  /// A container's logs; [LogStreamSpec.target] is the container id.
-  docker,
-}
-
-/// What an [OpenLogStream] request follows (03 §10.1).
+/// What an [OpenLogStream] reads, on which server, and how much (03 §7.6,
+/// §10.1).
+///
+/// A window ([follow] false) reads the newest [window] records, older than
+/// [afterCursor] when it is set, and ends. They arrive newest first, so
+/// the last one's cursor reads on to older records (LOG-01's "load
+/// older"; SVC-04's unit logs are one window). A follow delivers up to
+/// [window] earlier records oldest first, then each new record as the
+/// host writes it, until [CloseStream]. With [afterCursor] it resumes
+/// after a record the app already holds instead (LOG-02): it delivers
+/// every record after that one, so a reconnect leaves no gap, and
+/// [window] does not apply.
 @immutable
 final class LogStreamSpec {
-  const LogStreamSpec({
+  LogStreamSpec({
     required this.serverId,
     required this.source,
-    this.target,
-    this.follow = true,
-  });
+    required this.window,
+    required this.follow,
+    this.afterCursor,
+  }) : assert(window >= 0, 'window counts records'),
+       assert(
+         afterCursor == null || source is! FileLogSource,
+         'a file tail has no cursor',
+       ),
+       assert(
+         !follow || source is! JournalLogSource || source.until == null,
+         'a follow reads up to the present',
+       );
 
   final String serverId;
-  final LogStreamSource source;
+  final LogSource source;
 
-  /// Unit name, file path, or container id, per [source].
-  final String? target;
+  /// How many records: a window's size (LOG-01's pages hold 500, SVC-04's
+  /// unit logs 50), or how many earlier records a follow without
+  /// [afterCursor] delivers before the new ones.
+  final int window;
 
-  /// `tail -f`-style streaming when true; a bounded read when false.
+  /// Whether the stream follows new records instead of ending after its
+  /// window.
   final bool follow;
+
+  /// A [JournalRecord.cursor] the read continues after, in the stream's
+  /// order: a window reads older records, a follow the ones written after
+  /// it. File tails and `dmesg` have no cursor. Null starts at the newest
+  /// record. journalctl refuses `--since` together with a cursor, so with
+  /// one the engine applies [JournalLogSource.since] itself: a window ends
+  /// with [LogStreamEndReason.oldestReached] at the first record older
+  /// than it, and a follow reads on from the cursor alone.
+  final String? afterCursor;
+}
+
+/// Where an [OpenLogStream] reads (03 §7.6). Container logs (CTX-01) are
+/// not a source yet: they come from the Docker Engine API with M3.
+@immutable
+sealed class LogSource {
+  const LogSource();
+}
+
+/// The systemd journal through `journalctl -o json`, read as
+/// [JournalRecord]s, with LOG-01's filters; SVC-04's unit logs filter by
+/// [unit]. A null filter matches every record. There is no text filter:
+/// LOG-05 searches the records the view holds, and `journalctl -g`
+/// arrives with LOG-06 (v1).
+final class JournalLogSource extends LogSource {
+  const JournalLogSource({
+    this.unit,
+    this.identifier,
+    this.priority,
+    this.currentBootOnly = false,
+    this.since,
+    this.until,
+  });
+
+  /// A systemd unit name (`-u`).
+  final String? unit;
+
+  /// A syslog identifier (`-t`).
+  final String? identifier;
+
+  /// The least urgent priority shown (`-p`): records at it or more urgent.
+  final LogPriority? priority;
+
+  /// Only the current boot's records (`-b`); past boots arrive with
+  /// LOG-09's boot picker (v1).
+  final bool currentBootOnly;
+
+  /// The time range (`--since`, `--until`). A follow takes no [until],
+  /// since it reads up to the present.
+  final DateTime? since, until;
+}
+
+/// The kernel's messages for the current boot (LOG-03): `journalctl -k`,
+/// read as [JournalRecord]s, with `dmesg --json` only as a fallback, read
+/// as [KernelRecord]s. Past boots arrive with LOG-09 (v1).
+final class KernelLogSource extends LogSource {
+  const KernelLogSource();
+}
+
+/// One file's lines as [FileRecord]s (LOG-22): `tail -n` for a window,
+/// and `tail -F`, which follows the file by name across rotation, for a
+/// follow. No archives.
+final class FileLogSource extends LogSource {
+  const FileLogSource(this.path);
+
+  /// The absolute path, typed or picked from the common paths; the engine
+  /// validates it (03 §8.8) before it quotes it into the command.
+  final String path;
+}
+
+/// A syslog severity as journald and the kernel record it, most urgent
+/// first, so a value's [Enum.index] is its number (0 to 7, RFC 5424).
+enum LogPriority {
+  emergency,
+  alert,
+  critical,
+  error,
+  warning,
+  notice,
+  info,
+  debug,
+}
+
+/// One record of a [LogBatch]; the stream's [LogSource] decides the
+/// variant. Each is plain data the engine resolved from what the host sent
+/// (D52, 03 §6.5), so the app parses nothing.
+@immutable
+sealed class LogRecord {
+  const LogRecord();
+}
+
+/// One journal entry from `journalctl -o json` (LOG-01 to LOG-03, SVC-04).
+/// The engine reads its columns once; a value the host sent that does not
+/// fit its column, such as a time beyond [DateTime]'s range or a priority
+/// outside 0 to 7, is null, as a missing one is.
+final class JournalRecord extends LogRecord {
+  const JournalRecord({
+    this.cursor,
+    this.at,
+    this.priority,
+    this.unit,
+    this.identifier,
+    this.pid,
+    this.message,
+    this.fields = const {},
+  });
+
+  /// `__CURSOR`, which [LogStreamSpec.afterCursor] continues after.
+  final String? cursor;
+
+  /// `__REALTIME_TIMESTAMP`: when journald received the entry, by the
+  /// host's clock.
+  final DateTime? at;
+
+  /// `PRIORITY`.
+  final LogPriority? priority;
+
+  /// `_SYSTEMD_UNIT`, or `_SYSTEMD_USER_UNIT` or `UNIT` without one.
+  final String? unit;
+
+  /// `SYSLOG_IDENTIFIER`.
+  final String? identifier;
+
+  /// `_PID`, when it is a positive number.
+  final int? pid;
+
+  /// `MESSAGE`; null when the entry has none or journalctl sent it as
+  /// null, which `-o json` does for a field over 4,096 bytes unless it
+  /// runs with `--all`.
+  final String? message;
+
+  /// Every field as `klabautermann_host`'s journal parser decoded it, the
+  /// ones above included, for the row's expandable fields (03 §10.8); null
+  /// where journalctl sent null. Pass an unmodifiable map.
+  final Map<String, String?> fields;
+}
+
+/// One kernel ring-buffer record from `dmesg --json`, LOG-03's fallback.
+final class KernelRecord extends LogRecord {
+  const KernelRecord({required this.message, this.sinceBoot, this.priority});
+
+  /// `msg`.
+  final String message;
+
+  /// `time`: how long after boot the kernel logged it.
+  final Duration? sinceBoot;
+
+  /// The level in `pri`, which also holds the facility; null when dmesg
+  /// sent no `pri`.
+  final LogPriority? priority;
+}
+
+/// One line of a tailed file (LOG-22), without its line break.
+final class FileRecord extends LogRecord {
+  const FileRecord(this.text);
+
+  final String text;
+}
+
+/// A log stream's state behind [LogStreamState]. Compares by value, as
+/// [LinkStatus] does, because a status that crosses the boundary may
+/// arrive as a copy.
+@immutable
+sealed class LogStreamStatus {
+  const LogStreamStatus();
+
+  /// The values that tell two statuses of one variant apart.
+  List<Object?> get _values => const [];
+
+  @override
+  bool operator ==(Object other) =>
+      other is LogStreamStatus &&
+      other.runtimeType == runtimeType &&
+      _sameItems(other._values, _values);
+
+  @override
+  int get hashCode => Object.hash(runtimeType, Object.hashAll(_values));
+}
+
+/// The read waits for [reason] to clear, then runs on its own: a window
+/// starts, and a follow starts or resumes after its last record.
+final class LogStreamWaiting extends LogStreamStatus {
+  const LogStreamWaiting(this.reason);
+
+  final LogStreamWaitReason reason;
+
+  @override
+  List<Object?> get _values => [reason];
+}
+
+/// The read runs on the host: a window until it ends, a follow live.
+final class LogStreamRunning extends LogStreamStatus {
+  const LogStreamRunning();
+}
+
+/// The stream ended for [reason], and nothing more arrives for it.
+/// [detail] is the host's error output when the host ended it, control
+/// characters stripped, or null.
+final class LogStreamEnded extends LogStreamStatus {
+  const LogStreamEnded(this.reason, {this.detail});
+
+  final LogStreamEndReason reason;
+  final String? detail;
+
+  @override
+  List<Object?> get _values => [reason, detail];
+}
+
+/// What a [LogStreamWaiting] stream waits for.
+enum LogStreamWaitReason {
+  /// The server's link; [LinkState] says why it is not ready.
+  link,
+
+  /// A free session channel: reads of its kind already hold their share
+  /// of the budget (03 §5.2), or the server allows fewer sessions than
+  /// the budget ([LinkDegraded]).
+  channel,
+
+  /// The app's return to the foreground ([SetAppActivity]): 03 §6.4
+  /// pauses everything while it is in the background.
+  background,
+}
+
+/// Why a [LogStreamEnded] stream ended.
+enum LogStreamEndReason {
+  /// A window delivered [LogStreamSpec.window] records, or fewer when the
+  /// engine's output cap for the read stopped it first. Older records may
+  /// remain; a journal window after the last record's cursor reads on.
+  windowFilled,
+
+  /// A window reached the oldest record its source holds within its
+  /// filters: nothing older remains.
+  oldestReached,
+
+  /// [CloseStream] closed it.
+  closed,
+
+  /// The engine refused the spec without running anything, such as a
+  /// unit name or path its validation rejects (03 §8.8).
+  invalid,
+
+  /// The tool or file the source reads is absent on the host.
+  missing,
+
+  /// The host refused the read, such as a file only `adm` or root may
+  /// read; admin mode (03 §8.2), which reads such files, arrives with M4.
+  denied,
+
+  /// The read failed otherwise.
+  failed,
 }
 
 /// Which read-only endpoint a [DockerQuery] runs (03 §7.12 to §7.15).

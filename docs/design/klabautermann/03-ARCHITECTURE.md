@@ -3489,7 +3489,7 @@ so that cue is still open.
 | `Connect(serverId)`, `Disconnect(serverId)` | `LinkState(serverId, status)` (D46's states plus `blocked`; typed reasons inside the status) |
 | `Subscribe(serverId, subscriptionId, streams)`, `Unsubscribe(serverId, subscriptionId)`, `SetCadenceProfile(profile)`; app activity is a separate request too (D45) | `Sample(serverId, stream, seq, at, result)` (engine-owned `seq`, D44; rates and derived values, D43), `SamplingState(serverId, phase, since)`, `Gap(serverId, streams, from, until, cause)` |
 | none: the engine probes after connecting (6.1) | `HostProfileChanged(serverId, profile)` |
-| `OpenLogStream(spec)`, `CloseStream(id)` | `LogBatch(streamId, lines, dropped)` (at most 20 per second per stream [E]) |
+| `OpenLogStream(streamId, spec)`, `CloseStream(streamId)` | `LogBatch(streamId, records, dropped)` (at most 20 per second per stream [E]), `LogStreamState(streamId, status)` |
 | `DockerQuery(serverId, query)` | `DockerResult`, `DockerEvent` |
 | `PlanAction(intent)`, `RunAction(planId, confirmation)` | `ActionPlanned(preview)`, `ActionProgress`, `ActionFinished` |
 | `AnswerPrompt(promptId, answer)` | `Prompt(promptId, serverId, host, port, request)` (host key, keyboard-interactive, credential, elevation), `PromptWithdrawn(promptId, reason)` |
@@ -3624,6 +3624,49 @@ the engine in `engine_isolate.dart` beside it):
   reading leaves the phase at sampling and shows only as an ageing
   `Sample.at`. Until the samplers are wired, the engine records
   subscriptions and the profile and sends none of these events.
+- **Version 3 (M2 logs).** Log streams joined version 3 the same way.
+  The app picks the `streamId` of `OpenLogStream(streamId, spec)`, so it
+  can close a stream before any answer arrives. Unlike a subscription
+  id, it is never reused for the engine's lifetime (a counter will do):
+  stream events carry no generation, so a closed stream's last batch or
+  end can arrive after the next open, and an open the engine rejects
+  outright gets a `RequestRejected`, which names no stream. The engine
+  rejects an open whose id an earlier open used. The spec names the
+  server, a sealed source with its filters, a `window`, `follow` and
+  `afterCursor`. The sources are the
+  journal with LOG-01's unit, identifier, priority, current-boot and
+  time-range filters (SVC-04's unit logs are a 50-record window of one
+  unit), the current boot's kernel log (LOG-03: `journalctl -k`, with
+  `dmesg --json` only as a fallback), and one file by absolute path
+  (LOG-22). There is no text filter: LOG-05 searches the records the
+  view holds, and `journalctl -g` waits for LOG-06 (v1). Container logs
+  (CTX-01) are no source until M3, so the M1 scaffold's `docker` source
+  and untyped `target` are gone. A window reads the newest `window` records and
+  ends; they arrive newest first, so `afterCursor`, a journal record's
+  cursor, reads on to older records, as `journalctl --reverse
+  --after-cursor` does. journalctl refuses `--since` with a cursor, so
+  with one the engine applies the `since` filter itself: a window stops
+  at the first record older than it and ends as oldest record reached,
+  and a follow reads on from the cursor alone. A follow delivers up to
+  `window` earlier records oldest first, then each new one as the host
+  writes it, and `afterCursor` resumes it after a record the app holds
+  instead: it delivers every record after that one, so a reconnect
+  leaves no gap, and `window` does not apply.
+  `LogBatch(streamId, records, dropped)` carries sealed records, which
+  the engine resolves so the app parses nothing (6.5): a journal entry's
+  cursor, time, priority as a syslog severity, unit, identifier, PID,
+  message and every field as parsed, where a value its column cannot
+  hold (a time beyond `DateTime`'s range, a priority outside 0 to 7)
+  arrives as unknown instead of throwing; a `dmesg` record's message,
+  time since boot and level; or a file's line. `dropped` counts the
+  records discarded since the stream's previous batch.
+  `LogStreamState(streamId, status)` carries a sealed status that
+  compares by value: waiting (for the link, a free channel under 5.2's
+  budget, or the foreground), running, or ended with a reason (window
+  filled, oldest record reached, closed, spec refused, source missing,
+  read denied, or failed) and the host's error output. Until the log
+  service is wired, the engine rejects `OpenLogStream` and ignores
+  `CloseStream`, since no stream is open.
 - **`SetAppActivity(activity)`** is a request of its own and applies to
   every subscription, link and probe at once: 6.4 pauses everything while
   the app is in the background, and D34 adds the phones' grace period
@@ -3778,7 +3821,7 @@ heap test checks both kinds, so the caps bound the text's memory. The
 16 KiB line cap keeps 16,384 Latin-1 or 8,192 other code units, never half
 a surrogate pair. A cut line keeps its full length for the marker, which
 the app words. A `LogBatch`'s drops become one "dropped N lines" entry
-ahead of its lines, merged into an adjacent one; it counts against the
+ahead of its records, merged into an adjacent one; it counts against the
 50,000-entry cap and holds no bytes, while eviction past a cap leaves no
 entry. Lines are stored as received and styled for display by `parseSgr`,
 each from the plain style, so no style carries from one line to the next.
