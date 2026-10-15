@@ -125,8 +125,8 @@ List<int> _cpuFields(int i) => [
 
 /// A host with [cpus] CPUs, a NIC in use, an unused one, a VF its master
 /// counts, Docker's bridge and veths, a WireGuard tunnel, partitioned
-/// NVMe and SATA disks under md and LVM, snap loop devices, zram, idle
-/// nbd devices, PSI and a ZFS ARC.
+/// NVMe and SATA disks under md and LVM, snap loop devices, ram, zram, a
+/// ZFS volume, idle nbd devices, PSI and a ZFS ARC.
 Directory _bigHost(int cpus) {
   final root = Directory.systemTemp.createTempSync('klab-host');
   addTearDown(() => root.deleteSync(recursive: true));
@@ -229,6 +229,8 @@ Directory _bigHost(int cpus) {
     ..write(disk(253, 0, 'dm-0', 50000000, 50000000))
     ..write(disk(253, 1, 'dm-1', 3085297, 3086375))
     ..write(disk(251, 0, 'zram0', 1234567, 2345678))
+    ..write(disk(1, 0, 'ram0', 2345, 0))
+    ..write(disk(230, 0, 'zd0', 3456789, 4567890))
     ..write(disk(11, 0, 'sr0', 0, 0));
   for (var i = 0; i < 10; i++) {
     disks.write(disk(7, i, 'loop$i', 1234 + i, 0));
@@ -255,6 +257,8 @@ Directory _bigHost(int cpus) {
     'sda',
     'sr0',
     'zram0',
+    'ram0',
+    'zd0',
   ]) {
     _mark(root, 'sys/class/block/$whole/slaves');
   }
@@ -348,10 +352,11 @@ void main() {
         },
       );
 
-      test('each CPU beyond 32 adds at most 32 bytes to core', () async {
+      // 03 §11.4 as amended by D48: 30 B for each CPU beyond 32.
+      test('each CPU beyond 32 adds at most 30 bytes to core', () async {
         final at32 = await _tick(shell, _bigHost(32), Collector.core);
         final at64 = await _tick(shell, _bigHost(64), Collector.core);
-        expect((at64.replyBytes - at32.replyBytes) / 32, lessThanOrEqualTo(32));
+        expect((at64.replyBytes - at32.replyBytes) / 32, lessThanOrEqualTo(30));
       }, skip: wide ? false : 'eight counters per core on 32-bit shells (D48)');
 
       test('overview stays inside the ten-host budget', () async {
