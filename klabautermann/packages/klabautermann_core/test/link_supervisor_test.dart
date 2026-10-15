@@ -402,6 +402,20 @@ void main() {
       ]);
     });
 
+    test('leaves out a slot wait after the stalled dial returns', () async {
+      supervisor.connect('s1', purpose: _interactive);
+      await clock.elapse(kConnectAttemptDeadline);
+      supervisor.connect('s1', purpose: _interactive);
+      await clock.elapse(const Duration(seconds: 10));
+      for (final id in ['s2', 's3', 's4', 's5']) {
+        supervisor.connect(id, purpose: _interactive);
+      }
+      calls.first.fail(LinkFailureKind.unreachable);
+      await clock.elapse(const Duration(seconds: 55));
+
+      expect(statuses().skip(3), [const LinkConnecting()]);
+    });
+
     test('runs on through a phase without a prompt', () async {
       supervisor.connect('s1', purpose: _interactive);
       await clock.elapse(const Duration(seconds: 30));

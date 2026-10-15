@@ -304,7 +304,12 @@ final class LinkSupervisor {
       result = LinkConnectFailed(error);
     }
     _freeSlot(attempt);
-    attempt.server.dialPending = false;
+    final server = attempt.server;
+    server.dialPending = false;
+    // An attempt queued behind this dial now waits only for a slot, which
+    // the deadline leaves out.
+    final next = server.attempt;
+    if (next != null && !next.holdsSlot) next.timer?.cancel();
     _settle(attempt, result);
     _pump();
   }
