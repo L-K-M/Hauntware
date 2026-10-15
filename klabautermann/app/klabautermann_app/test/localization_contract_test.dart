@@ -71,6 +71,14 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     // The rejected request's class name, which RequestRejected carries.
     r"'$ImportSshConfig'",
   },
+  'lib/controllers/monitoring_controller.dart': {
+    // Assert messages; programmer diagnostics, never rendered.
+    r"'$stream carries no metrics'",
+    "'unsubscribe instead of naming no stream'",
+    r"'leaveServer without openServer for $serverId'",
+    // A subscription id the engine keys a surface's streams by (D45).
+    r"'$surface-${_subscriptionCount++}'",
+  },
   'lib/services/macos_titlebar.dart': {
     // The 04 §12.3 method channel name.
     "'klabautermann/window'",
@@ -96,29 +104,33 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   'lib/services/settings_window/remote_settings.dart': {
     "'Settings link closed'",
   },
-  // The environment variable the Windows home directory is read from, and
-  // the file path the import expands.
-  'lib/services/ssh_config_source.dart': {"'USERPROFILE'", "'~/.ssh/config'"},
+  'lib/services/ssh_config_source.dart': {
+    // The environment variable the Windows home directory is read from, and
+    // the file path the import expands.
+    "'USERPROFILE'",
+    "'~/.ssh/config'",
+    // The config text with the byte-order mark the decoder dropped, which
+    // the engine must see as ssh does.
+    r"'\u{FEFF}$text'",
+  },
   'lib/services/window_state.dart': {
     // The state file's name in the support directory (03 §4.10).
     "'window_state.json'",
     // debugPrint diagnostic of a failed restore or save.
     r"'Window state: $error'",
   },
-  'lib/theme/app_theme.dart': {
-    // The brand preset's stored name, English across the family like the
-    // siblings' preset names; no surface shows it yet.
-    "'Klabautermann'",
-    // The siblings' monospace font stack.
-    "'JetBrains Mono'",
-    "'SF Mono'",
-    "'Menlo'",
-    "'Consolas'",
-    "'DejaVu Sans Mono'",
-    "'monospace'",
-  },
-  // Chart assert messages, a RangeError's argument name and the read-only
+  // The brand preset's stored name, English across the family like the
+  // siblings' preset names; no surface shows it yet.
+  'lib/theme/app_theme.dart': {"'Klabautermann'"},
+  // Chart assert messages, RangeError argument names and the read-only
   // ring view's UnsupportedError: programmer diagnostics, never rendered.
+  'lib/ui/charts/bars.dart': {
+    "'a stacked bar needs a segment'",
+    "'a colour per segment'",
+    "'a pressure bar needs a cell'",
+    "'a colour per cell'",
+    "'a bar has a cell'",
+  },
   'lib/ui/charts/chart_style.dart': {"'warning must not exceed critical'"},
   'lib/ui/charts/chart_values.dart': {"'samples are finite'"},
   'lib/ui/charts/series_ring.dart': {
@@ -128,6 +140,51 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'a column holds at least one sample'",
   },
   'lib/ui/charts/sparkline.dart': {"'the scale needs a positive top'"},
+  'lib/ui/charts/time_series.dart': {
+    "'a series needs two slots to draw a line'",
+    r"'a chart draws 1 to $_maxLanes series'",
+    "'lane'",
+    "'one value per lane'",
+    "'index'",
+    "'a column spans time'",
+  },
+  'lib/ui/charts/time_series_chart.dart': {
+    "'one label per lane'",
+    "'the window spans time'",
+    "'the scale needs a positive top'",
+  },
+  // The search's initial empty query.
+  'lib/ui/logs/log_search.dart': {"''"},
+  'lib/ui/logs/log_text.dart': {
+    // A row's unit and PID prefix in classic syslog notation, as
+    // journalctl's short format prints it, or none.
+    "''",
+    r"'[${journal.pid}]'",
+    r"'${journal.source ?? ''}$pid'",
+    r"'$source: '",
+    // The newline a journal MESSAGE's return mark and line separator
+    // replace, the mark itself (a symbol, not words) and the space before
+    // a cut line's note, whose words are ARB text (logLineCut).
+    r"'\n'",
+    r"'\u23ce\u2028'",
+    "' '",
+  },
+  'lib/ui/logs/log_view.dart': {
+    // A FocusNode debug label.
+    "'LogView'",
+    // A journal field in journald's NAME=value notation, with newlines and
+    // line or paragraph separators flattened to spaces to keep one row.
+    r"'$name=$value'",
+    r"'\n'",
+    "' '",
+    r"'[\u2028\u2029]'",
+    // Glyph probes that measure the line height (the space above) and the
+    // advance, never shown.
+    "'W'",
+    // User-visible, tracked for ARB: a field row joins the field name and
+    // logJournalNotSent in code, so a translation cannot place the name.
+    r"'$name ${_l10n.logJournalNotSent}'",
+  },
   // The command registry's ids, keys of the menus and shortcuts.
   'lib/ui/menus/app_commands.dart': {
     "'app.settings'",
@@ -146,6 +203,10 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'commands reach the macOS application menu through appMenuOnMac'",
     r"'${placement.group}:${placement.order}'",
     r"'${command.id} shares menu slot ${placement.group}:${placement.order}'",
+  },
+  // An assert message; programmer diagnostic, never rendered.
+  'lib/ui/server_surfaces.dart': {
+    "'new controllers come with a new tree (KlabautermannApp, D44)'",
   },
   // debugPrint of a failed theme change; the toast is ARB text.
   'lib/ui/settings_page.dart': {r"'$error'"},
