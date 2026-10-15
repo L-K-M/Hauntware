@@ -1,0 +1,356 @@
+import 'dart:io' show Platform;
+
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:ghost_fonts/testing.dart' show loadBundledMonoFonts;
+import 'package:ghost_ui/ghost_ui.dart' show contrastRatio;
+import 'package:klabautermann_app/controllers/monitoring_controller.dart';
+import 'package:klabautermann_app/l10n/app_localizations.dart';
+import 'package:klabautermann_app/ui/access/access_panel.dart';
+import 'package:klabautermann_core/klabautermann_core.dart';
+
+import '../support/charts.dart';
+import '../support/fake_engine.dart';
+import '../support/harness.dart';
+import 'profiles.dart';
+
+const _desktop = Size(1280, 800);
+const _phone = Size(390, 800);
+
+/// Pumps the app at [size], opens web-1 (srv-1) and, when [profile] is
+/// given, delivers it as the probe's answer.
+Future<AppHarness> _openWeb1(
+  WidgetTester tester,
+  Size size, {
+  HostProfile? profile,
+}) async {
+  final harness = await pumpApp(tester, size: size, servers: twoServers);
+  await tester.tap(find.text('web-1'));
+  await tester.pumpAndSettle();
+  if (profile != null) {
+    harness.engine.emit(HostProfileChanged('srv-1', profile));
+    await tester.pumpAndSettle();
+  }
+  return harness;
+}
+
+Future<void> _openTab(WidgetTester tester, String label) async {
+  final tab = find.descendant(
+    of: find.byType(TabBar),
+    matching: find.text(label),
+  );
+  await tester.ensureVisible(tab);
+  await tester.pumpAndSettle();
+  await tester.tap(tab);
+  await tester.pumpAndSettle();
+}
+
+/// What the app put on the clipboard, in order.
+List<String> _recordClipboard(WidgetTester tester) {
+  final copied = <String>[];
+  tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+    SystemChannels.platform,
+    (call) async {
+      if (call.method == 'Clipboard.setData') {
+        copied.add((call.arguments as Map)['text'] as String);
+      }
+      return null;
+    },
+  );
+  addTearDown(
+    () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      null,
+    ),
+  );
+  return copied;
+}
+
+/// CN-24, SAF-08 and CN-09 (03 §10.4, D51): the Access tab, the panels the
+/// access rules hide and the Docker tab's gate.
+void main() {
+  testWidgets('lists every right as unknown until the probe answers, '
+      'then its state, reason and fix', (tester) async {
+    final harness = await _openWeb1(tester, _desktop);
+    await _openTab(tester, 'Access');
+
+    expect(
+      find.text(
+        'Klabautermann never runs these fix commands. Copy one and run it '
+        'yourself on the server.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Root-equivalent access'), findsOneWidget);
+    expect(find.text('Unknown'), findsNWidgets(AccessItem.values.length));
+    expect(find.text('Copy command'), findsNothing);
+
+    harness.engine.emit(HostProfileChanged('srv-1', debianHost()));
+    await tester.pumpAndSettle();
+
+    // State in a word and an icon shape, never colour alone; the row is one
+    // node in reading order.
+    expect(
+      find.bySemanticsLabel(
+        RegExp(r'^Passwordless sudo\nMissing\nRoot-equivalent\nsudo asks'),
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Missing'), findsNWidgets(3));
+    expect(find.text('OK'), findsNWidgets(2));
+    expect(find.text('Unknown'), findsNWidgets(2));
+    expect(find.text('Checked once Docker support arrives.'), findsNWidgets(2));
+    expect(
+      find.text('Version 252: unit and timer lists are read in full.'),
+      findsOneWidget,
+    );
+    expect(find.text('sudo usermod -aG systemd-journal alice'), findsOneWidget);
+    expect(find.text('sudo usermod -aG docker alice'), findsOneWidget);
+    // SAF-08: docker-group advice never comes without its notice.
+    expect(
+      find.text(
+        'Members of the docker group are root-equivalent. A rootless '
+        'engine, which equals your user, is the safer choice.',
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.text('Docker, rootful at /var/run/docker.sock'),
+      findsOneWidget,
+    );
+    expect(find.text('Your account cannot use it.'), findsOneWidget);
+  });
+
+  testWidgets('copies a fix to the clipboard and sends the engine '
+      'nothing', (tester) async {
+    final copied = _recordClipboard(tester);
+    final harness = await _openWeb1(tester, _desktop, profile: debianHost());
+    await _openTab(tester, 'Access');
+    final sentBefore = [...harness.engine.sent];
+
+    final copy = find.widgetWithText(OutlinedButton, 'Copy command').first;
+    await tester.ensureVisible(copy);
+    await tester.tap(copy);
+    await tester.pumpAndSettle();
+
+    expect(copied, ['sudo usermod -aG systemd-journal alice']);
+    expect(find.text('Copied. Run it yourself on the server.'), findsOneWidget);
+    expect(harness.engine.sent, sentBefore);
+  });
+
+  testWidgets('hides a panel the host cannot serve and links to the '
+      'Access tab', (tester) async {
+    final harness = await _openWeb1(
+      tester,
+      _desktop,
+      profile: alpineContainer(),
+    );
+    final subscribed = harness.engine.sentOfType<Subscribe>().length;
+
+    await _openTab(tester, 'Services');
+    expect(
+      find.text('Services is not available on this server'),
+      findsOneWidget,
+    );
+    expect(find.text('This server does not run systemd.'), findsOneWidget);
+    // A hidden panel samples nothing.
+    expect(harness.engine.sentOfType<Subscribe>(), hasLength(subscribed));
+
+    await tester.tap(find.text('Open Access'));
+    await tester.pumpAndSettle();
+    expect(find.byType(AccessPanel), findsOneWidget);
+    expect(
+      find.text(
+        'You log in as root, so no elevation or group is '
+        'needed.',
+      ),
+      findsWidgets,
+    );
+  });
+
+  testWidgets('gates the Docker tab and shows the detected runtime '
+      'read-only', (tester) async {
+    await _openWeb1(tester, _desktop, profile: alpineContainer());
+    await _openTab(tester, 'Docker');
+
+    expect(find.text('Arrives with Docker support'), findsOneWidget);
+    expect(find.text('Detected runtime'), findsOneWidget);
+    expect(
+      find.text('Podman, rootless at /run/user/0/podman/podman.sock'),
+      findsOneWidget,
+    );
+    expect(
+      find.text('Your account can use it, which equals the user that runs it.'),
+      findsOneWidget,
+    );
+    expect(find.text('Copy command'), findsNothing);
+  });
+
+  testWidgets('a phone gates Docker and pushes Access from a hidden '
+      'panel', (tester) async {
+    await _openWeb1(
+      tester,
+      _phone,
+      profile: alpineContainer(tools: {'tail': null}),
+    );
+
+    await tester.tap(find.text('Docker'));
+    await tester.pumpAndSettle();
+    expect(find.text('Arrives with Docker support'), findsOneWidget);
+
+    await tester.tap(find.text('Logs'));
+    await tester.pumpAndSettle();
+    expect(find.text('Logs is not available on this server'), findsOneWidget);
+    expect(find.text('This server has no tail command.'), findsOneWidget);
+
+    await tester.tap(find.text('Open Access'));
+    await tester.pumpAndSettle();
+    expect(find.text('Access on web-1'), findsOneWidget);
+    expect(find.byType(AccessPanel), findsOneWidget);
+  });
+
+  testWidgets('drops a server\'s profile when it leaves the fleet '
+      '(SYN-08)', (tester) async {
+    final harness = await _openWeb1(tester, _desktop, profile: debianHost());
+    final profile = harness.monitoring.profileFor('srv-1');
+    expect(profile.value, isNotNull);
+
+    harness.engine.emit(
+      CatalogReplaced(const [
+        FleetEntry(
+          serverId: 'srv-2',
+          label: 'db-1',
+          host: '10.0.0.4',
+          port: 22,
+          origin: FleetEntryOrigin.sshConfig,
+        ),
+      ]),
+    );
+    await tester.pumpAndSettle();
+    harness.engine.emit(HostProfileChanged('srv-1', debianHost()));
+    await tester.pumpAndSettle();
+    expect(harness.monitoring.profileFor('srv-1').value, isNull);
+  });
+
+  for (final size in [_desktop, _phone]) {
+    testWidgets('lays out at 200 % text on ${size.width.toInt()} px', (
+      tester,
+    ) async {
+      tester.platformDispatcher.textScaleFactorTestValue = 2;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      final engine = FakeEngineClient();
+      final monitoring = MonitoringController(engine);
+      addTearDown(() async {
+        monitoring.dispose();
+        await engine.close();
+      });
+      tester.view.physicalSize = size;
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      await tester.pumpWidget(
+        _frame(
+          Brightness.light,
+          AccessPage(
+            monitoring: monitoring,
+            serverId: 'srv-1',
+            serverName: 'web-1',
+          ),
+        ),
+      );
+      engine.emit(HostProfileChanged('srv-1', debianHost()));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      await tester.scrollUntilVisible(
+        find.text('Container runtime'),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  test('draws its marks at contrast in light and dark', () {
+    for (final brightness in Brightness.values) {
+      final scheme = chartTheme(brightness).colorScheme;
+      final surface = scheme.surface;
+      // The state colours draw the icon and the state word beside it.
+      for (final state in [
+        scheme.primary,
+        scheme.error,
+        scheme.onSurfaceVariant,
+      ]) {
+        expect(contrastRatio(state, surface), greaterThanOrEqualTo(4.5));
+      }
+      expect(
+        contrastRatio(scheme.onErrorContainer, scheme.errorContainer),
+        greaterThanOrEqualTo(4.5),
+      );
+      expect(
+        contrastRatio(scheme.onSecondaryContainer, scheme.secondaryContainer),
+        greaterThanOrEqualTo(4.5),
+      );
+      expect(
+        contrastRatio(scheme.onSurface, scheme.surfaceContainerHighest),
+        greaterThanOrEqualTo(4.5),
+      );
+    }
+  });
+
+  group('golden', () {
+    setUpAll(() async {
+      await loadGoldenFonts();
+      // The fix commands draw in the bundled monospace family.
+      await loadBundledMonoFonts();
+    });
+
+    for (final (name, size) in [
+      ('desktop', const Size(720, 1040)),
+      ('phone', const Size(390, 1240)),
+    ]) {
+      for (final brightness in Brightness.values) {
+        testWidgets('$name, ${brightness.name}', (tester) async {
+          final engine = FakeEngineClient();
+          final monitoring = MonitoringController(engine);
+          addTearDown(() async {
+            monitoring.dispose();
+            await engine.close();
+          });
+          tester.view.physicalSize = size;
+          tester.view.devicePixelRatio = 1;
+          addTearDown(tester.view.reset);
+
+          await tester.pumpWidget(
+            _frame(
+              brightness,
+              AccessPanel(monitoring: monitoring, serverId: 'srv-1'),
+              fontFamily: goldenFontFamily,
+            ),
+          );
+          engine.emit(HostProfileChanged('srv-1', debianHost()));
+          await tester.pumpAndSettle();
+
+          await expectLater(
+            find.byType(AccessPanel),
+            matchesGoldenFile(
+              'goldens/access_panel_${name}_${brightness.name}.png',
+            ),
+          );
+        }, skip: !Platform.isLinux);
+      }
+    }
+  });
+}
+
+/// [child] in the app's theme and localizations, outside the shell.
+Widget _frame(Brightness brightness, Widget child, {String? fontFamily}) {
+  final theme = chartTheme(brightness, fontFamily: fontFamily);
+  return MaterialApp(
+    debugShowCheckedModeBanner: false,
+    theme: theme,
+    localizationsDelegates: AppLocalizations.localizationsDelegates,
+    supportedLocales: AppLocalizations.supportedLocales,
+    home: Material(color: theme.colorScheme.surface, child: child),
+  );
+}

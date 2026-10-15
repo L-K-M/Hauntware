@@ -439,6 +439,234 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get accessNeverRuns =>
+      'Klabautermann never runs these fix commands. Copy one and run it yourself on the server.';
+
+  @override
+  String get accessRootEquivalenceTitle => 'Root-equivalent access';
+
+  @override
+  String get accessRootEquivalenceBody =>
+      'Using a rootful Docker or Podman socket, or a broad passwordless sudo rule, gives the same power as root on this server. A rootless engine gives only the power of the user that runs it.';
+
+  @override
+  String get accessNotChecked =>
+      'Not checked yet. Klabautermann checks access after it connects to this server.';
+
+  @override
+  String get accessRowNotChecked => 'Not checked yet.';
+
+  @override
+  String get accessStatusOk => 'OK';
+
+  @override
+  String get accessStatusMissing => 'Missing';
+
+  @override
+  String get accessStatusUnknown => 'Unknown';
+
+  @override
+  String get accessItemSudo => 'Passwordless sudo';
+
+  @override
+  String get accessItemJournal => 'Journal group';
+
+  @override
+  String get accessItemDockerSocket => 'Docker socket';
+
+  @override
+  String get accessItemStreamlocal => 'Streamlocal forwarding';
+
+  @override
+  String get accessItemCompose => 'Compose plugin';
+
+  @override
+  String get accessItemSystemd => 'systemd version';
+
+  @override
+  String get accessItemRuntime => 'Container runtime';
+
+  @override
+  String get accessReasonProbeUnavailable =>
+      'The server\'s probe could not answer this.';
+
+  @override
+  String get accessReasonRootLogin =>
+      'You log in as root, so no elevation or group is needed.';
+
+  @override
+  String get accessReasonSudoNoPassword =>
+      'sudo runs without asking for a password.';
+
+  @override
+  String get accessReasonDoasNoPassword =>
+      'doas runs without asking for a password. sudo is not installed.';
+
+  @override
+  String get accessReasonSudoNotPasswordless =>
+      'sudo asks for a password, or your account may not use it. No fix is offered: a broad passwordless rule equals root.';
+
+  @override
+  String get accessReasonDoasNotPasswordless =>
+      'doas asks for a password, which Klabautermann cannot enter. sudo is not installed.';
+
+  @override
+  String get accessReasonNoElevationTool =>
+      'Neither sudo nor doas is installed.';
+
+  @override
+  String get accessReasonJournalGroup =>
+      'You are in a group that can read the whole system journal.';
+
+  @override
+  String get accessReasonNotInJournalGroup =>
+      'The journal shows only your own entries. Members of systemd-journal can read all of them.';
+
+  @override
+  String get accessReasonNoJournal => 'This server has no journalctl.';
+
+  @override
+  String get accessReasonRootfulSocket =>
+      'You can use a rootful engine socket.';
+
+  @override
+  String get accessReasonRootlessSocket =>
+      'You can use rootless engine sockets only.';
+
+  @override
+  String get accessReasonSocketNotWritable =>
+      'Engine sockets exist, but your account cannot use any of them.';
+
+  @override
+  String get accessReasonNoEngineSocket =>
+      'No Docker or Podman socket was found.';
+
+  @override
+  String get accessReasonPendingDocker =>
+      'Checked once Docker support arrives.';
+
+  @override
+  String accessReasonSystemdJson(int version) {
+    return 'Version $version: unit and timer lists are read in full.';
+  }
+
+  @override
+  String accessReasonSystemdTextFallback(int version) {
+    return 'Version $version: older than 246, so unit and timer lists are read from text output.';
+  }
+
+  @override
+  String accessReasonSystemdOlderThanTested(int version) {
+    return 'Version $version is older than any tested version (239).';
+  }
+
+  @override
+  String get accessReasonSystemdVersionUnparsed =>
+      'systemd runs, but its version could not be read.';
+
+  @override
+  String get accessReasonNotSystemd => 'This server does not run systemd.';
+
+  @override
+  String get accessReasonEnginesDetected => 'Found on this server:';
+
+  @override
+  String get accessReasonEngineCliWithoutSocket =>
+      'A docker or podman command exists, but no engine socket was found.';
+
+  @override
+  String get accessReasonNoEngine => 'No Docker or Podman engine was found.';
+
+  @override
+  String get accessRootEquivalentBadge => 'Root-equivalent';
+
+  @override
+  String get accessDockerGroupWarning =>
+      'Members of the docker group are root-equivalent. A rootless engine, which equals your user, is the safer choice.';
+
+  @override
+  String get accessFixRootShell =>
+      'Run this as root: the server has neither sudo nor doas.';
+
+  @override
+  String get accessFixNextLogin =>
+      'Group changes take effect at your next login.';
+
+  @override
+  String get accessFixCopy => 'Copy command';
+
+  @override
+  String get accessFixCopied => 'Copied. Run it yourself on the server.';
+
+  @override
+  String get accessEngineDockerRootful => 'Docker, rootful';
+
+  @override
+  String get accessEngineDockerRootless => 'Docker, rootless';
+
+  @override
+  String get accessEnginePodmanRootful => 'Podman, rootful';
+
+  @override
+  String get accessEnginePodmanRootless => 'Podman, rootless';
+
+  @override
+  String accessEngineAt(String engine, String path) {
+    return '$engine at $path';
+  }
+
+  @override
+  String get accessEngineUsableRootful =>
+      'Your account can use it, which is root-equivalent.';
+
+  @override
+  String get accessEngineUsableRootless =>
+      'Your account can use it, which equals the user that runs it.';
+
+  @override
+  String get accessEngineNotUsable => 'Your account cannot use it.';
+
+  @override
+  String get accessRuntimeAlias =>
+      'Podman can also answer on Docker\'s socket path. Docker support will tell them apart.';
+
+  @override
+  String get accessDockerPendingTitle => 'Arrives with Docker support';
+
+  @override
+  String get accessDockerPendingBody =>
+      'Containers, images and stacks arrive with Docker support. Until then, this tab shows the runtime Klabautermann detected, read-only.';
+
+  @override
+  String get accessDetectedRuntime => 'Detected runtime';
+
+  @override
+  String accessPanelHiddenTitle(String panel) {
+    return '$panel is not available on this server';
+  }
+
+  @override
+  String get accessNeedJournalAccess =>
+      'Your account cannot read the whole journal.';
+
+  @override
+  String get accessNeedDmesg => 'dmesg is not available.';
+
+  @override
+  String get accessNeedTail => 'This server has no tail command.';
+
+  @override
+  String get accessNeedCrontab => 'This server has no crontab command.';
+
+  @override
+  String get accessOpen => 'Open Access';
+
+  @override
+  String accessPageTitle(String name) {
+    return 'Access on $name';
+  }
+
+  @override
   String tableCellSemantics(String column, String value) {
     return '$column: $value';
   }
