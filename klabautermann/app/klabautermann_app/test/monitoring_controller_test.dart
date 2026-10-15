@@ -385,6 +385,20 @@ void main() {
       expect(engine.sentOfType<Disconnect>(), hasLength(1));
     });
 
+    testWidgets('a view back after the grace connects again', (tester) async {
+      final links = MonitoringController(engine);
+      addTearDown(links.dispose);
+
+      links
+        ..openServer('srv-1')
+        ..leaveServer('srv-1');
+      await tester.pump(kLinkLeaveGrace);
+      expect(engine.sentOfType<Disconnect>(), hasLength(1));
+
+      links.openServer('srv-1');
+      expect(engine.sentOfType<Connect>(), hasLength(2));
+    });
+
     test('a zero grace disconnects as the last view leaves', () {
       final links = MonitoringController(engine, linkGrace: Duration.zero);
       addTearDown(links.dispose);
