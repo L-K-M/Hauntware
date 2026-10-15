@@ -3,8 +3,9 @@ import 'package:seance_core/seance_core.dart';
 
 import '../services/missing_credential.dart';
 import '../services/private_key_file.dart';
+import '../theme.dart' show SeanceTheme;
 
-const _mono = TextStyle(fontFamily: 'monospace', fontSize: 12);
+final _mono = SeanceTheme.mono.copyWith(fontSize: 12);
 
 /// Asks for the credential a tab could not find on this device (CRED-05's
 /// inline prompt): the server's password, or its private key. Null when the

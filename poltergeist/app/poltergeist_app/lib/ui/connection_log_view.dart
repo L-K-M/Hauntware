@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 
 import '../l10n/app_localizations.dart';
 import '../services/application_error_reporter.dart';
+import '../theme/app_theme.dart' show poltergeistMonoTextStyle;
 import 'top_toast.dart';
 
 /// A collapsible view of a raw SSH connection transcript, with a copy button.
@@ -88,13 +89,10 @@ class ConnectionLogView extends StatelessWidget {
                 scrollDirection: Axis.horizontal,
                 child: SelectableText(
                   text.isEmpty ? l10n.connectionLogEmpty : text,
-                  style: const TextStyle(
-                    fontFamily: 'monospace',
-                    // `monospace` is a real family on Android and Linux only.
-                    // Elsewhere the bare name falls back to the proportional
-                    // system font, and a transcript whose columns do not line
-                    // up is the thing this view exists to avoid.
-                    fontFamilyFallback: ['Menlo', 'Consolas', 'Courier New'],
+                  // Fixed-width on every platform: a transcript whose
+                  // columns do not line up is the thing this view exists to
+                  // avoid.
+                  style: poltergeistMonoTextStyle.copyWith(
                     fontSize: 12,
                     height: 1.4,
                   ),

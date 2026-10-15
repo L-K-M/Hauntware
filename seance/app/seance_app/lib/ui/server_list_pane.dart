@@ -830,7 +830,7 @@ class _ServerListPaneState extends State<ServerListPane> {
           child: TextField(
             controller: controller,
             maxLines: 12,
-            style: const TextStyle(fontFamily: 'monospace'),
+            style: SeanceTheme.mono,
             decoration: const InputDecoration(
               hintText: 'Paste the contents of ~/.ssh/config …',
               border: OutlineInputBorder(),
