@@ -17,6 +17,23 @@ final class _Recorder implements LogStreamListener {
   void onLogRejected() => events.add('rejected');
 }
 
+/// A listener that runs [_onRejected] when refused, as a surface closing
+/// another stream would.
+final class _Closing implements LogStreamListener {
+  _Closing(this._onRejected);
+
+  final void Function() _onRejected;
+
+  @override
+  void onLogBatch(LogBatch batch) {}
+
+  @override
+  void onLogStatus(LogStreamStatus status) {}
+
+  @override
+  void onLogRejected() => _onRejected();
+}
+
 final _spec = LogStreamSpec(
   serverId: 'srv-1',
   source: const JournalLogSource(),
@@ -126,6 +143,17 @@ void main() {
     expect(running.events, [const LogStreamRunning(), 'rejected']);
     expect(waiting.events, ['rejected']);
     expect(closed.events, isEmpty);
+  });
+
+  test('an engine stop skips a stream an earlier refusal closed', () async {
+    final later = _Recorder();
+    late final LogStreamHandle laterStream;
+    streams.open(_spec, _Closing(() => laterStream.close()));
+    laterStream = streams.open(_spec, later);
+
+    await engine.close();
+    await pumpEventQueue();
+    expect(later.events, isEmpty);
   });
 
   test('a stopped engine refuses opens after they return', () async {

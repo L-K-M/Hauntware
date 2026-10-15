@@ -134,14 +134,14 @@ final class LogStreams {
   }
 
   /// A stopped engine answers nothing more, so every stream still open
-  /// is refused, as `FleetController` ends a pending import.
+  /// is refused, as `FleetController` ends a pending import. Each goes
+  /// as it is refused, so one a refused surface closes meanwhile hears
+  /// nothing more.
   void _onEngineDone() {
     _stopped = true;
     _unanswered.clear();
-    final listeners = [..._listeners.values];
-    _listeners.clear();
-    for (final listener in listeners) {
-      listener.onLogRejected();
+    for (final id in [..._listeners.keys]) {
+      _listeners.remove(id)?.onLogRejected();
     }
   }
 
