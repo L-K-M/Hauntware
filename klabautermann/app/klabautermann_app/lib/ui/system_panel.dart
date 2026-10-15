@@ -280,7 +280,7 @@ class _SystemPanelState extends State<SystemPanel> {
     );
   }
 
-  /// [fs]'s pseudo filter and table: every mount's usage as timed out when
+  /// [fs]'s pseudo filter and table: every mount's usage as unknown when
   /// [timedOut], since that reading's figures are no longer current.
   List<Widget> _mounts(
     BuildContext context,
@@ -342,8 +342,8 @@ enum _MountColumn { mount, type, used, use, inodes, usage }
 
 /// The mounts table's columns: the type, the bytes and a usage bar only
 /// when [wide] ([_showMountDetails] shows them for a narrow row), and after
-/// a timeout one usage column saying so instead of the figures. Figures
-/// sort with their largest first; an unknown one sorts last.
+/// a timeout one usage column reading unknown instead of the figures.
+/// Figures sort with their largest first; an unknown one sorts last.
 List<SortableTableColumn<FsMount>> _mountColumns(
   AppLocalizations l10n, {
   required bool wide,
@@ -369,16 +369,17 @@ List<SortableTableColumn<FsMount>> _mountColumns(
       SortableTableColumn<FsMount>(
         id: _MountColumn.usage.name,
         label: l10n.systemColumnUsage,
-        text: (_) => l10n.systemTimedOut,
+        // The run as a whole timed out, not this mount: which one hung is
+        // not known, so the usage is unknown, beside the timeout's shape.
+        text: (_) => l10n.systemUnknown,
         extent: const FixedColumnExtent(120),
-        // The word with a timer's shape beside it (A11Y-01).
         cell: (context, _) => Row(
           spacing: 4,
           children: [
             const Icon(Icons.timer_off_outlined, size: 14),
             Flexible(
               child: Text(
-                l10n.systemTimedOut,
+                l10n.systemUnknown,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),

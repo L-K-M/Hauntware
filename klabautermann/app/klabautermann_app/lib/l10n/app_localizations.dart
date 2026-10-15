@@ -856,12 +856,6 @@ abstract class AppLocalizations {
   /// **'{used} of {size}'**
   String systemUsedOf(String used, String size);
 
-  /// A Disks table cell for a mount whose usage is unknown because the disk usage command timed out.
-  ///
-  /// In en, this message translates to:
-  /// **'Timed out'**
-  String get systemTimedOut;
-
   /// A chart's screen-reader summary of one series: what it measures, its current, lowest and highest values (already formatted with their units) and its trend, one of chartTrendRising, chartTrendFalling or chartTrendSteady.
   ///
   /// In en, this message translates to:

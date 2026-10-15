@@ -468,8 +468,8 @@ void main() {
     handle.dispose();
   });
 
-  testWidgets('a df that timed out keeps the last listed mounts, each marked '
-      'timed out', (tester) async {
+  testWidgets('a df that timed out keeps the last listed mounts, their '
+      'usage unknown', (tester) async {
     final handle = tester.ensureSemantics();
     final panel = await _pump(tester);
     await panel.sample(
@@ -500,8 +500,9 @@ void main() {
     );
     expect(_mountOrder(tester), ['/', '/mnt/backup', '/data']);
     expect(
-      tester.getSemantics(_row('/mnt/backup')),
-      isSemantics(label: 'Mount: /mnt/backup\nType: nfs4\nUsage: Timed out'),
+      tester.getSemantics(_row('/')),
+      // Which mount hung is not known, so none is said to have timed out.
+      isSemantics(label: 'Mount: /\nType: ext4\nUsage: Unknown'),
     );
     expect(find.text('21 GiB of 50 GiB'), findsNothing);
     handle.dispose();

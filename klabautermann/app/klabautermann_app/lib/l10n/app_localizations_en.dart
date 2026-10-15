@@ -538,9 +538,6 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get systemTimedOut => 'Timed out';
-
-  @override
   String chartSeriesSummary(
     String label,
     String current,
