@@ -46,6 +46,7 @@ export 'package:klabautermann_host/klabautermann_host.dart'
         CpuPercentages,
         CronSnapshot,
         DiskRate,
+        FsMount,
         FsSnapshot,
         HostProfile,
         JournalEntry,

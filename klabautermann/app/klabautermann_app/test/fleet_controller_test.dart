@@ -93,6 +93,23 @@ void main() {
       expect(address(_entry('a', host: '2001:db8::1')), '2001:db8::1');
     });
 
+    test('rows carry the engine\'s search text and locator flag', () {
+      const entry = FleetEntry(
+        serverId: 'ssh-config:web-1',
+        label: 'web-1',
+        host: '10.0.0.4',
+        port: kSshDefaultPort,
+        origin: FleetEntryOrigin.sshConfig,
+        searchText: 'web-1 deploy@10.0.0.4:22 ',
+        locatorConflict: ['ssh-config:db-1'],
+      );
+      final server = FleetServer.fromEntry(entry);
+
+      expect(server.searchText, 'web-1 deploy@10.0.0.4:22 ');
+      expect(server.locatorConflict, ['ssh-config:db-1']);
+      expect(FleetServer.fromEntry(_entry('a')).locatorConflict, isNull);
+    });
+
     test(
       'keeps a selection the new fleet lists and drops one it does not',
       () async {

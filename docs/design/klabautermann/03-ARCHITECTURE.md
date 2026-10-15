@@ -4225,6 +4225,47 @@ and in the pressure bar. The optional `HealthMark` overlay (`ok`,
 the MVP (D55). v1 adds density modes, the summary strip, attention-first
 sort and the faults-only filter.
 
+As built in M2 (`app/klabautermann_app/lib/ui/fleet_rows.dart`,
+`fleet_row_state.dart`), the desktop rail and the phone list share one
+row over the kit's `SidebarRow`, resolved through `ghost_servers`'
+indicator under its rail rule. The app's adapter maps a degraded link to
+connected, a backoff to connecting, waiting on the user or a block to
+blocked, and a close to failed unless the engine closed it on purpose
+with no failure; session states take the link's own word, probe answers
+read "Online", "Offline" and "Reachability unknown". A state with a dot
+also shows its word on the second line and an icon at the row's end, a
+connected mark is framed, and nothing known shows no dot and no word. The
+row is one screen-reader node naming everything it shows. A change of the
+link's word is announced once, connecting, authenticating and waiting to
+reconnect counting as one attempt; samples and probe answers are not.
+Where the platform takes no announcements (Android), the latest change is
+the label of a live region around the list, as in Flutter's date picker.
+Until the monitor set (FL-21) exists, a server counts as monitored
+while the app holds an `overview` or `core` reading for it in this engine
+run, and rows subscribe nothing themselves; with links off, rows show
+reachability only. The bar reads CPU busy, used out of total memory, and
+the root file system's `df` capacity, warns at 80 % and turns critical at
+90 % until OV-11's thresholds, and is stale once the link is down or the
+reading is older than twice its stream's slowest 6.4 cadence (60 s for
+`overview`, 20 s for `core`); an `fs` reading past 240 s leaves the disk
+unknown. The reading's age sits under the bar whatever the link says,
+and in full ("Updated 4 s ago") in the tooltip and the label; stale
+values add a history icon, and "Stale" before the age unless the state
+word already says the link is down. The bar, its age and the locator
+warning (4.6) sit beside the kit's row, which takes no trailing widget,
+so the selection pill, hover fill and focus ring stop short of them
+until `SidebarRow` gains a trailing slot (a `ghost_ui` follow-up), and
+the app mirrors the kit's private row metrics to measure the room left.
+The bar and age show only where the row still fits the name and state
+word in full and the age fits beside it, each measured as drawn at the
+current text scale; elsewhere they give way, staying in the tooltip and
+the label. The warning always shows, and a touch on it shows its
+words. A collapsed or filtered section that hides a live server does
+not yet say so in its header (`ghostHiddenLiveIndicator`).
+The filter (FL-05) is the kit's `SidebarFilterField`
+over `FleetEntry.searchText`, name and address standing in without it:
+every term must occur, Enter opens the first match and Esc clears.
+
 ### 10.4 Server view and panels
 
 Each panel declares the capabilities it needs; missing ones hide the panel

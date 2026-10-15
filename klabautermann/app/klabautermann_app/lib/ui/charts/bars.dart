@@ -324,10 +324,7 @@ class PressureBar extends StatelessWidget {
 
     final percents = [for (final cell in cells) _reading(cell.percent)];
     final severities = [
-      for (final (index, cell) in cells.indexed)
-        stale || cell.thresholds == null || percents[index] == null
-            ? ChartSeverity.normal
-            : cell.thresholds!.severityOf(percents[index]!),
+      for (final cell in cells) _pressureSeverity(cell, stale: stale),
     ];
     final runs = <BarRun>[
       for (final (index, percent) in percents.indexed)
@@ -352,22 +349,7 @@ class PressureBar extends StatelessWidget {
           ),
     ];
 
-    final parts = [
-      for (final (index, cell) in cells.indexed)
-        _withSeverity(
-          strings.barPart(
-            cell.label,
-            percents[index] == null
-                ? strings.unknownValue
-                : strings.percent(percents[index]!),
-          ),
-          severities[index],
-          strings,
-        ),
-    ];
-    var summary = parts.join(strings.listSeparator);
-    if (stale) summary = strings.stale(summary);
-
+    final summary = pressureSummary(cells, strings, stale: stale);
     return Semantics(
       container: true,
       label: summary,
@@ -397,6 +379,41 @@ class PressureBar extends StatelessWidget {
       ),
     );
   }
+}
+
+/// The summary a [PressureBar] of [cells] gives screen readers and its
+/// tooltip (A11Y-02): each metric with its value and any severity, marked
+/// stale while [stale]. A host that folds the bar into a larger node, such
+/// as a fleet row's label, says this and excludes the bar's own.
+String pressureSummary(
+  List<PressureCell> cells,
+  ChartStrings strings, {
+  bool stale = false,
+}) {
+  final parts = [
+    for (final cell in cells)
+      _withSeverity(
+        strings.barPart(cell.label, switch (_reading(cell.percent)) {
+          null => strings.unknownValue,
+          final percent => strings.percent(percent),
+        }),
+        _pressureSeverity(cell, stale: stale),
+        strings,
+      ),
+  ];
+  final summary = parts.join(strings.listSeparator);
+  return stale ? strings.stale(summary) : summary;
+}
+
+/// How far [cell] has crossed its thresholds; a stale or unknown value
+/// carries no severity.
+ChartSeverity _pressureSeverity(PressureCell cell, {required bool stale}) {
+  final percent = _reading(cell.percent);
+  final thresholds = cell.thresholds;
+  if (stale || thresholds == null || percent == null) {
+    return ChartSeverity.normal;
+  }
+  return thresholds.severityOf(percent);
 }
 
 /// A value the bars can draw: null, negative or not finite is no reading,

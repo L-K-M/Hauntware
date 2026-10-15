@@ -363,6 +363,14 @@ void main() {
       expect(find.byIcon(Icons.error_rounded), findsOneWidget);
       const summary = 'CPU 50%, Memory 92% (critical), Disk 85% (warning)';
       expect(_label(tester, PressureBar), summary);
+      // A host that folds the bar into its own node says the same words.
+      expect(
+        pressureSummary(
+          _cells(50, 92, 85, thresholds: _thresholds),
+          testChartStrings,
+        ),
+        summary,
+      );
       // The tooltip shows the same words on hover, and leaves a touch
       // long-press to the row around the bar.
       final tooltip = tester.widget<Tooltip>(find.byType(Tooltip));
