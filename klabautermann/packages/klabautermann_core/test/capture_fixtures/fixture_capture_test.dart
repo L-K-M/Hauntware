@@ -24,8 +24,9 @@ Capture _capture({
   String cron = 'cron at 10.0.0.7',
   String? identity,
   String uid = '1000',
+  String shell = 'dash',
 }) => Capture(
-  const SamplerLaunch.stdinShell('dash'),
+  SamplerLaunch.stdinShell(shell),
   {
     for (final c in kFixtureCollectors)
       c: _section(c.wireName, switch (c) {
@@ -124,6 +125,22 @@ void main() {
     );
     expect(f.residue.map((r) => '$r'), ['cron.txt:2: passes a secret option']);
     expect(_text(f, 'probe.sections'), contains('user=user\ngroups=user sudo'));
+  });
+
+  test('SOURCE.md and probe.sections are redacted and reviewed too', () {
+    final f = renderFixtureFiles(
+      _capture(
+        shell: '/home/anke/bin/dash',
+        distro: 'ID=ubuntu\nVERSION_ID=1\nPRETTY_NAME="Load the private key"',
+      ),
+      Redactor(const RedactionLiterals(homeDirs: ['/home/anke'])),
+      capturedAt: at,
+    );
+    expect(_text(f, 'SOURCE.md'), contains('`/home/user/bin/dash -s`'));
+    expect(f.residue.map((r) => '${r.file} ${r.reason}'), [
+      'probe.sections mentions a private key',
+      'SOURCE.md mentions a private key',
+    ]);
   });
 
   test('platform id from os-release, as the fixture directories name it', () {

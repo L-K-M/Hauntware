@@ -27,7 +27,7 @@ String _redact(
 void main() {
   group('literals', () {
     const literals = RedactionLiterals(
-      hostNames: ['vm', 'web1.corp.example.org', 'web1'],
+      hostNames: ['vm', 'web1', 'web1.corp.example.org'],
       userNames: ['anke'],
       homeDirs: ['/srv/anke-home'],
       extra: ['nas07'],
@@ -81,8 +81,8 @@ void main() {
 
     test('a home directory goes before the user name', () {
       expect(
-        _redact('/srv/anke-home/bin', literals: literals),
-        '/home/user/bin',
+        _redact('/srv/anke-home/bin /srv/anke-home2', literals: literals),
+        '/home/user/bin /srv/user-home2',
       );
     });
 
