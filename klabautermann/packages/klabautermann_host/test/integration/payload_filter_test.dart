@@ -31,18 +31,33 @@ bool _wide(String shell) =>
         .trim() ==
     '2147483648';
 
+/// The fast program's arithmetic width probe (D48).
+const _widthProbe = r'[ $((2147483647 + 1)) -gt 0 ] && HW_W64=1';
+
+/// [program] without [_widthProbe], so any shell takes the 32-bit
+/// branch and CI covers it without mksh.
+String _narrow(String program) {
+  expect(program, contains(_widthProbe));
+  return program.replaceAll(_widthProbe, '');
+}
+
+String _asIs(String program) => program;
+
 /// One tick of [collector] over [root]: the parsed section and the reply's
 /// size on the wire, from the `B` marker to the end of the `E` marker.
+/// [edit] rewrites the program before the tree's paths go in.
 Future<({HwsSection section, int replyBytes})> _tick(
   String shell,
   Directory root,
-  Collector collector,
-) async {
+  Collector collector, {
+  String Function(String program) edit = _asIs,
+}) async {
   final nonce = generateNonce(Random(1));
-  final program = buildSamplerProgram(kind: collector.sampler, nonce: nonce)
-      .replaceAll('/proc/', '${root.path}/proc/')
-      .replaceAll('cd /proc ', 'cd ${root.path}/proc ')
-      .replaceAll('/sys/', '${root.path}/sys/');
+  final program =
+      edit(buildSamplerProgram(kind: collector.sampler, nonce: nonce))
+          .replaceAll('/proc/', '${root.path}/proc/')
+          .replaceAll('cd /proc ', 'cd ${root.path}/proc ')
+          .replaceAll('/sys/', '${root.path}/sys/');
   final proc = await Process.start('env', ['LC_ALL=C', 'TZ=UTC', shell, '-s']);
   final out = <int>[];
   final err = StringBuffer();
@@ -469,6 +484,31 @@ void main() {
         expect(core.warnings, isEmpty);
         expect(core.value.perCpu['cpu0']!.busy, 168235000);
         expect(core.value.perCpu['cpu0']!.idle, 2202400000);
+      });
+
+      test('the 32-bit branch sends eight counters that parse', () async {
+        final root = _smallHost({
+          'proc/stat':
+              'cpu  1 2 3 4 5 6 7 8 0 0\n'
+              'cpu0 120000000 1500000 45000000 2200000000 2400000 0 '
+              '1700000 35000 0 0\n'
+              'cpu1 1 2 3 4 5 6 7\nbtime 5\n',
+        });
+        final r = await _tick(shell, root, Collector.core, edit: _narrow);
+        final payload = utf8.decode(r.section.payload);
+        expect(
+          payload,
+          contains(
+            '\ncpu0 120000000 1500000 45000000 2200000000 2400000 0 '
+            '1700000 35000\ncpu1 1 2 3 4 5 6 7 0\n',
+          ),
+        );
+        final core = parseCore(payload, ParseContext.standard);
+        expect(core.warnings, isEmpty);
+        expect(core.value.perCpu['cpu0']!.busy, 168235000);
+        expect(core.value.perCpu['cpu0']!.idle, 2202400000);
+        expect(core.value.perCpu['cpu1']!.busy, 19);
+        expect(core.value.perCpu['cpu1']!.idle, 9);
       });
     });
   }
