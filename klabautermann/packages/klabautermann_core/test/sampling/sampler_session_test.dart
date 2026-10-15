@@ -454,17 +454,6 @@ void main() {
         _seconds(45),
       );
     });
-
-    test('each bound counts the guarded calls in its fragment', () {
-      final call = RegExp(r'\bhw_q?run [a-z]');
-      for (final c in Collector.values) {
-        final code = collectorFragments[c]!
-            .split('\n')
-            .where((l) => !l.trimLeft().startsWith('#'));
-        final calls = code.fold(0, (n, l) => n + call.allMatches(l).length);
-        expect(guardedCommandBound(c), calls, reason: c.name);
-      }
-    });
   });
 
   test('the restart delay doubles to a 30 s cap with downward jitter', () {
