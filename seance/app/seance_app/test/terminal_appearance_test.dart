@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ghost_fonts/ghost_fonts.dart';
 import 'package:planchette_editor/planchette_editor.dart' show EditorTextSize;
 import 'package:seance_app/services/app_settings.dart';
 import 'package:seance_app/theme.dart';
@@ -13,14 +14,46 @@ import 'package:xterm/xterm.dart' show TerminalTheme;
 
 void main() {
   group('terminal appearance', () {
-    test('defaults keep xterm\'s size but adopt the app font stack', () {
+    test('defaults keep xterm\'s size and draw bundled Iosevka Term', () {
       final appearance = TerminalAppearance.resolve(
         AppSettings(),
         Brightness.dark,
       );
       expect(appearance.style.fontSize, kDefaultTerminalFontSize);
-      expect(appearance.style.fontFamilyFallback, SeanceTheme.monoFallback);
-      expect(appearance.style.fontFamily, SeanceTheme.monoFallback.first);
+      expect(appearance.style.fontFamily, BundledMonoFont.iosevkaTerm.family);
+      // The app stack behind it for characters the subset leaves out.
+      expect(appearance.style.fontFamilyFallback, [
+        BundledMonoFont.iosevkaTerm.family,
+        ...SeanceTheme.monoFallback,
+      ]);
+    });
+
+    test('ligatures follow the setting, on by default', () {
+      expect(
+        TerminalAppearance.resolve(AppSettings(), Brightness.dark)
+            .style
+            .ligatures,
+        TerminalLigatures.on,
+      );
+      expect(
+        TerminalAppearance.resolve(
+          AppSettings(terminalLigatures: TerminalLigatures.off),
+          Brightness.dark,
+        ).style.ligatures,
+        TerminalLigatures.off,
+      );
+    });
+
+    test("a bundled font's name draws the bundled copy", () {
+      final appearance = TerminalAppearance.resolve(
+        AppSettings(terminalFontFamily: ' fira code'),
+        Brightness.dark,
+      );
+      expect(appearance.style.fontFamily, BundledMonoFont.firaCode.family);
+      expect(
+        appearance.style.fontFamilyFallback.sublist(1),
+        SeanceTheme.monoFallback,
+      );
     });
 
     test('a chosen family leads, with the app stack behind it', () {
@@ -57,8 +90,10 @@ void main() {
     test('a new device\'s terminal is the Terminal preset\'s', () {
       final terminal = ThemePresets.terminal.terminal!;
       for (final brightness in Brightness.values) {
-        final theme = TerminalAppearance.resolve(AppSettings(), brightness)
-            .theme;
+        final theme = TerminalAppearance.resolve(
+          AppSettings(),
+          brightness,
+        ).theme;
         expect(theme.background, terminal.background, reason: '$brightness');
         expect(theme.foreground, terminal.foreground, reason: '$brightness');
       }
@@ -228,6 +263,7 @@ void main() {
         terminalFontSize: 17,
         terminalFontFamily: 'Fira Code',
         terminalPalette: TerminalPalette.alwaysLight,
+        terminalLigatures: TerminalLigatures.off,
       );
       final restored = AppSettings.fromJson(
         jsonDecode(jsonEncode(settings.toJson())) as Map<String, dynamic>,
@@ -235,15 +271,18 @@ void main() {
       expect(restored.terminalFontSize, 17);
       expect(restored.terminalFontFamily, 'Fira Code');
       expect(restored.terminalPalette, TerminalPalette.alwaysLight);
+      expect(restored.terminalLigatures, TerminalLigatures.off);
     });
 
     test('an out-of-range or unknown stored value falls back safely', () {
       final restored = AppSettings.fromJson({
         'terminalFontSize': 400,
         'terminalPalette': 'nonsense',
+        'terminalLigatures': 'nonsense',
       });
       expect(restored.terminalFontSize, kMaxTerminalFontSize);
       expect(restored.terminalPalette, TerminalPalette.followApp);
+      expect(restored.terminalLigatures, TerminalLigatures.on);
     });
 
     test('the editor text size round-trips and is clamped on read', () {
@@ -268,6 +307,8 @@ void main() {
       expect(restored.terminalFontSize, kDefaultTerminalFontSize);
       expect(restored.terminalFontFamily, isEmpty);
       expect(restored.terminalPalette, TerminalPalette.followApp);
+      // Ligatures on: the bundled fonts draw them, and nobody turned them off.
+      expect(restored.terminalLigatures, TerminalLigatures.on);
     });
   });
 }

@@ -110,9 +110,10 @@ Matcher _blockedError() => isA<RemoteFileException>().having(
 
 /// Waits until the store's records satisfy [check]. The manager's
 /// persistence writes are unawaited by design, so store assertions poll
-/// briefly instead of racing them. [load] must return a fresh read: a
-/// file-backed store caches its first load, so the caller supplies a new
-/// instance per poll.
+/// briefly instead of racing them. [load] reads the store instance the
+/// manager writes to: a file-backed store queues each load behind its
+/// pending writes. A second instance polling the file would hold it open,
+/// and on Windows an open file fails the writer's rename over it.
 Future<void> _eventually<T>(
   Future<T> Function() load,
   bool Function(T value) check,
@@ -668,16 +669,13 @@ void main() {
         }
       });
       final path = '${dir.path}/incidents.json';
+      final store = FileIncidentStore(File(path));
 
-      final first = await _harness([
-        _originalKey,
-        _changedKey,
-      ], store: FileIncidentStore(File(path)));
+      final first = await _harness([_originalKey, _changedKey], store: store);
       await _declineViaGrowth(first);
-      await _eventually(
-        () => FileIncidentStore(File(path)).load(),
-        (records) => records.length == 2,
-      );
+      await _eventually(() => store.load(), (records) => records.length == 2);
+      // One read of the file once the writes have landed.
+      expect(await FileIncidentStore(File(path)).load(), hasLength(2));
 
       final restarted = await _harness([
         _changedKey,

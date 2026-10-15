@@ -16,8 +16,29 @@ slice:
   READY up to 64 KiB and reads an empty `B` uptime as unknown;
   `HwsTickAssembler` turns frames into replies (READY version check, a
   reply lost to a framing error, out-of-order markers ending the
-  session), and `kSamplerStartCommand` is the start line. No engine code
-  uses them yet; the real-shell test runs on them.
+  session), and `kSamplerStartCommand` is the start line. The sampler
+  session below and the real-shell test use them.
+- Sampler session (M2): `klabautermann_core`'s `SamplerSession` runs one
+  sampler over an `SshLink`: the start command, the program with a fresh
+  nonce, a READY deadline, one request at a time (an overlapping tick
+  is skipped and counted), slow deadlines from the guarded commands
+  (D47), and on a missed deadline or a broken stream
+  `RemoteProcess.close()` and a restart after a backoff of 1 s doubling
+  to a 30 s cap, less up to 30 % of downward jitter (so the first
+  restart comes after 0.7 s to 1 s). Tested against a scripted process
+  and local dash and bash (a SIGSTOP stall included); nothing starts it
+  yet, and no SSH fixture test covers it.
+- Spike S2 part 1: `klabautermann_core/tool/capture_fixtures.dart
+  measure` runs the real program locally under dash and bash (as
+  `sh -s`, and as `<login shell> -c '<start command>'` the way sshd
+  runs a command) and records [the evidence](evidence/s2/README.md):
+  output before READY, fast-tick bytes and CPU, `procs` beyond 1,000
+  processes and slow-tick times. The unguarded `procs` loops reach the
+  10 s guarded budget near 2,000 processes under dash, where passing
+  the D47 deadline depends on its margin, not yet fixed, and pass it by
+  1,079 under bash; K15 has to resolve that. Fixture capture with its
+  redaction review, SSH mode, the other shells (CI images, else the
+  manual list) and systemd collectors (runner VM) remain.
 - Jobs model (JOB-01, JOB-02 data): `klabautermann_host`'s `mergeJobs`
   turns a `cron` and a `timers` tick into one list of cron lines,
   periodic scripts and timers, each with an English-free
