@@ -201,6 +201,17 @@ Finder _inSection(SystemSection section, Finder finder) =>
 
 Finder _row(String mountPoint) => find.byKey(ValueKey('disks.row.$mountPoint'));
 
+/// Tabs past the sortable headers to the mounts table's body.
+Future<void> _tabToTable(WidgetTester tester) async {
+  for (var stop = 0; stop < 10; stop++) {
+    if (FocusManager.instance.primaryFocus?.debugLabel == 'SortableTable') {
+      return;
+    }
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pumpAndSettle();
+  }
+}
+
 /// The mount points the table shows, top to bottom.
 List<String> _mountOrder(WidgetTester tester) {
   const prefix = 'disks.row.';
@@ -390,14 +401,18 @@ void main() {
     handle.dispose();
   });
 
-  // At 200 % the table also scrolls sideways.
-  for (final (textScale, count) in [(1.0, 40), (2.0, 16)]) {
+  // At 200 % in the narrowest desktop window, a 398 px panel, the table
+  // also scrolls sideways.
+  for (final (textScale, count, width) in [
+    (1.0, 40, 718.0),
+    (2.0, 16, 398.0),
+  ]) {
     testWidgets('the keyboard\'s active mount row stays on screen while the '
         'page scrolls the table, at ${textScale}x text', (tester) async {
       final handle = tester.ensureSemantics();
       final panel = await _pump(
         tester,
-        size: const Size(718, 600),
+        size: Size(width, 600),
         textScale: textScale,
       );
       final many = FsSnapshot([
@@ -406,14 +421,7 @@ void main() {
       ]);
       await panel.sample(tester, SampleStream.fs, FsResult(many));
 
-      // Past the sortable headers to the table body.
-      for (var stop = 0; stop < 10; stop++) {
-        if (FocusManager.instance.primaryFocus?.debugLabel == 'SortableTable') {
-          break;
-        }
-        await tester.sendKeyEvent(LogicalKeyboardKey.tab);
-        await tester.pumpAndSettle();
-      }
+      await _tabToTable(tester);
       final view = tester.getRect(find.byType(SystemPanel));
       int active() => [
         for (var index = 0; index < count; index++)
@@ -450,6 +458,24 @@ void main() {
       handle.dispose();
     });
   }
+
+  testWidgets('at 200 % text a 1280 px window\'s mounts table keeps the '
+      'keyboard\'s mount point on screen', (tester) async {
+    final panel = await _pump(tester, size: const Size(718, 600), textScale: 2);
+    await panel.sample(tester, SampleStream.fs, FsResult(_fs));
+
+    await _tabToTable(tester);
+    expect(FocusManager.instance.primaryFocus?.debugLabel, 'SortableTable');
+    final view = tester.getRect(find.byType(SystemPanel));
+    final mount = tester.getRect(
+      find.descendant(of: _row('/'), matching: find.text('/')),
+    );
+    expect(
+      mount.left >= view.left && mount.right <= view.right,
+      isTrue,
+      reason: '/ at $mount in $view',
+    );
+  });
 
   testWidgets('focus handed back to the table leaves the page where it '
       'was read', (tester) async {

@@ -4092,10 +4092,11 @@ and DSK-01's and DSK-02's mounts in the sortable table, in IEC units:
   D50); while the probe cannot tell, figures stay as measured. Network
   rates and mounts come from the container's own namespaces and stay.
 - Pseudo filesystems (`FsMount.isPseudo`) sit behind a filter, off by
-  default. In a panel narrower than 600 px the table keeps the mount,
-  use and inode columns. Any row opens its full mount point, device,
-  type and figures in a sheet, since the mount column can cut a long
-  mount point short (A11Y-09).
+  default. In a panel narrower than 600 px, a width that grows with the
+  text scale, the table keeps the mount, use and inode columns, so
+  larger text does not scroll the wide table sideways. Any row opens
+  its full mount point, device, type and figures in a sheet, since the
+  mount column can cut a long mount point short (A11Y-09).
 - When `df` times out, the reply cannot tell which mount hung, so the
   mounts of the last complete reading stay listed with that reading's
   time, each with its usage unknown instead of old figures. The

@@ -20,7 +20,9 @@ enum SystemSection { identity, uptime, network, disks }
 /// The panel width from which the fact sections sit side by side and the
 /// mounts table adds its type and bytes columns and usage bars. The desktop
 /// workspace passes it at a 1280 px window; at the desktop shell's
-/// narrowest, 960 px, it has about 400 px and lays out as on a phone.
+/// narrowest, 960 px, it has about 400 px and lays out as on a phone. It
+/// grows with the text scale, as the table's columns do, so larger text
+/// takes the narrow layout before the wide table would scroll sideways.
 const double _wideWidth = 600;
 
 const double _gap = 16;
@@ -117,7 +119,9 @@ class _SystemPanelState extends State<SystemPanel> {
     final profile = _profile.value;
     return LayoutBuilder(
       builder: (context, constraints) {
-        final wide = constraints.maxWidth >= _wideWidth;
+        final wide =
+            constraints.maxWidth >=
+            MediaQuery.textScalerOf(context).scale(_wideWidth);
         final identity = _identitySection(l10n, profile);
         final uptime = ListenableBuilder(
           listenable: _core,
