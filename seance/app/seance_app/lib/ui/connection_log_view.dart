@@ -3,6 +3,7 @@ import 'dart:developer' as developer;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../theme.dart' show SeanceTheme;
 import 'top_toast.dart';
 
 /// A collapsible view of a raw SSH connection transcript, with a copy button.
@@ -88,16 +89,10 @@ class ConnectionLogView extends StatelessWidget {
                 scrollDirection: Axis.horizontal,
                 child: SelectableText(
                   text.isEmpty ? '(no log captured)' : text,
-                  style: const TextStyle(
-                    fontFamily: 'monospace',
-                    // `monospace` is a real family on Android and Linux only.
-                    // Elsewhere the bare name falls back to the proportional
-                    // system font, and a transcript whose columns do not line
-                    // up is the thing this view exists to avoid.
-                    fontFamilyFallback: ['Menlo', 'Consolas', 'Courier New'],
-                    fontSize: 12,
-                    height: 1.4,
-                  ),
+                  // Fixed-width on every platform: a transcript whose
+                  // columns do not line up is the thing this view exists to
+                  // avoid.
+                  style: SeanceTheme.mono.copyWith(fontSize: 12, height: 1.4),
                 ),
               ),
             ),

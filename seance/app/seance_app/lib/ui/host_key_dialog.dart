@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:seance_core/seance_core.dart';
 
+import '../theme.dart' show SeanceTheme;
+
 /// Shows the trust-on-first-use prompt. On a *changed* key this is a hard,
 /// visually alarming block that requires explicit re-pinning — never a
 /// one-click dismiss. Returns true to trust (and pin) the presented key.
@@ -98,7 +100,7 @@ class _Fingerprint extends StatelessWidget {
         Text(label, style: Theme.of(context).textTheme.labelSmall),
         SelectableText(
           '$type\n$value',
-          style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+          style: SeanceTheme.mono.copyWith(fontSize: 12),
         ),
       ],
     );

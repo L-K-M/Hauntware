@@ -4,6 +4,7 @@ import 'package:seance_core/seance_core.dart';
 
 import '../app_state.dart';
 import '../family_hues.dart';
+import '../theme.dart' show SeanceTheme;
 import 'top_toast.dart';
 
 /// Above the server list while proposals wait: how many, and a way in.
@@ -349,10 +350,7 @@ class _ProposalReviewState extends State<ProposalReview> {
                 ),
                 child: SelectableText(
                   revealed.text,
-                  style: const TextStyle(
-                    fontFamily: 'monospace',
-                    fontSize: 12,
-                  ),
+                  style: SeanceTheme.mono.copyWith(fontSize: 12),
                 ),
               ),
               for (final finding in findings)

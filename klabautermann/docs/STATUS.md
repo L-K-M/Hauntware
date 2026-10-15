@@ -91,6 +91,21 @@ slice:
   built through `ghost_theme` from the Klabautermann brand preset (D9;
   the appearance persists in `settings.json`, below), and the English
   ARB catalogue (D35, A11Y-05).
+- Localization contract (D35, A11Y-05):
+  `app/klabautermann_app/test/localization_contract_test.dart` runs the
+  suite's shared scanner (`tool/l10n_contract`, 03 §3.5 F1b) over `lib/`
+  with a per-file allowlist of reviewed technical literals (such as
+  channel and file names, command ids and diagnostics), as Poltergeist's
+  contract does. It replaces the interim `localization_test.dart` and
+  keeps the two checks the scanner does not make: every ARB key is
+  referenced from `lib/`, and no `Text`, `text`, `title`, `subtitle`,
+  `label`, `tooltip`, `hintText` or `semanticLabel` slot takes a literal
+  (other parameters, such as `message`, are not checked). One entry is
+  UI copy, not technical: the log viewer's row for a journal field not
+  sent (`lib/ui/logs/log_view.dart`) joins the field name and
+  `logJournalNotSent` in code, so a translation cannot place the name.
+  Follow-up: an ARB message with a `{name}` placeholder replaces it and
+  its allowlist entry.
 - Chart foundations (03 §10.7, M2): `lib/ui/charts/` holds `Sparkline`
   over a fixed-capacity `SeriesRing` that repaints on its version
   counter, with min-max downsampling to the pixel width, gaps for unknown

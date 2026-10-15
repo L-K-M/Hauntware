@@ -9,6 +9,7 @@ import '../family_hues.dart';
 import '../main.dart';
 import '../services/remote_git_controller.dart';
 import '../services/xterm_engine.dart';
+import '../theme.dart' show SeanceTheme;
 import 'middle_ellipsis_text.dart';
 import 'top_toast.dart';
 
@@ -562,10 +563,9 @@ class _RepoHeader extends StatelessWidget {
               Expanded(
                 child: MiddleEllipsisText(
                   root ?? directory,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    fontFamily: 'monospace',
-                    color: scheme.onSurfaceVariant,
-                  ),
+                  style: theme.textTheme.bodySmall
+                      ?.copyWith(color: scheme.onSurfaceVariant)
+                      .merge(SeanceTheme.mono),
                 ),
               ),
               IconButton(
@@ -714,8 +714,7 @@ class _ChangeRow extends StatelessWidget {
         child: Text(
           letter,
           textAlign: TextAlign.center,
-          style: TextStyle(
-            fontFamily: 'monospace',
+          style: SeanceTheme.mono.copyWith(
             fontWeight: FontWeight.bold,
             color: color,
           ),
@@ -723,7 +722,7 @@ class _ChangeRow extends StatelessWidget {
       ),
       title: MiddleEllipsisText(
         change.path,
-        style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
+        style: SeanceTheme.mono.copyWith(fontSize: 13),
       ),
       subtitle: change.originalPath == null
           ? null
@@ -772,10 +771,7 @@ class _CommitRow extends StatelessWidget {
       contentPadding: const EdgeInsets.only(left: 16, right: 12),
       leading: SizedBox(
         width: 64,
-        child: Text(
-          commit.id,
-          style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
-        ),
+        child: Text(commit.id, style: SeanceTheme.mono.copyWith(fontSize: 12)),
       ),
       title: Text(
         commit.subject,
@@ -929,10 +925,11 @@ class _NotARepository extends StatelessWidget {
           Text(
             directory,
             textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              fontFamily: 'monospace',
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
+            style: Theme.of(context).textTheme.bodySmall
+                ?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                )
+                .merge(SeanceTheme.mono),
           ),
           const SizedBox(height: 16),
           FilledButton.tonalIcon(
