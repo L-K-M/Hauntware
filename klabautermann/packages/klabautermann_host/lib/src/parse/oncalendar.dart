@@ -17,8 +17,8 @@ final class OnCalendarElapse {
   /// UTC` or a zone abbreviation we cannot resolve).
   final String? text;
 
-  /// The `(in UTC)` line decoded, when systemd-analyze printed it (it is
-  /// omitted when the server zone is already UTC).
+  /// The instant in UTC: the `(in UTC)` line decoded, or in a server zone
+  /// of UTC, where systemd-analyze omits that line, the timestamp itself.
   final DateTime? atUtc;
 
   /// The `From now` detail (`9h left`).
@@ -74,7 +74,7 @@ ParseResult<OnCalendarResult> parseOnCalendar(String raw) {
     elapses.add(
       OnCalendarElapse(
         text: text.isEmpty ? null : text.join('\n'),
-        atUtc: utc,
+        atUtc: utc ?? (text.length == 1 ? _utcStamp(text.single) : null),
         fromNow: fromNow,
       ),
     );

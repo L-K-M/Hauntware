@@ -1,0 +1,25 @@
+{
+   "dmesg": [
+      {
+         "pri": 5,
+         "time":     0.000000,
+         "msg": "Linux version 6.1.0-28-amd64 (debian-kernel@lists.debian.org) (gcc-12 (Debian 12.2.0-14) 12.2.0, GNU ld (GNU Binutils for Debian) 2.40) #1 SMP PREEMPT_DYNAMIC Debian 6.1.119-1 (2024-11-22)"
+      },{
+         "pri": 6,
+         "time":     0.000000,
+         "msg": "Command line: BOOT_IMAGE=/boot/vmlinuz-6.1.0-28-amd64 root=UUID=00000000-0000-4000-8000-000000000000 ro quiet"
+      },{
+         "pri": 4,
+         "time":     0.912345,
+         "msg": "ACPI: \\_SB_.PCI0.S08_: Can't read PCI config space"
+      },{
+         "pri": 30,
+         "time":     2.468013,
+         "msg": "systemd[1]: Started systemd-journald.service - Journal Service."
+      },{
+         "pri": 6,
+         "time":  4321.000001,
+         "msg": "bash[4321]: segfault at 0 ip 000055d5c0a1b2c3 sp 00007ffd1e2f3a40 error 4 in bash[55d5c0a00000+f6000]"
+      }
+   ]
+}

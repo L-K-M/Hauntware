@@ -396,5 +396,86 @@ void main() {
         'monotonic',
       ]);
     });
+
+    group('detail (D57)', () {
+      final detail = TimerDetail(
+        calendar: ['*-*-* 06,18:00:00', 'Mon *-*-* 00:00:00'],
+        monotonic: [
+          const MonotonicSchedule(
+            base: MonotonicBase.boot,
+            span: Duration(minutes: 15),
+          ),
+        ],
+        randomizedDelay: const Duration(hours: 12),
+      );
+
+      test('one systemd-analyze read per calendar expression', () {
+        final reads = timerCalendarCommands(detail, runCount: 5);
+        expect(reads.keys, detail.calendar);
+        expect(
+          reads['Mon *-*-* 00:00:00'],
+          HostCommands.onCalendar('Mon *-*-* 00:00:00', iterations: 5),
+        );
+      });
+
+      test('below systemd 242 a read asks for one run', () {
+        final reads = timerCalendarCommands(
+          detail,
+          runCount: 5,
+          systemdMajor: 239,
+        );
+        expect(
+          reads.values.map((argv) => argv[2]),
+          everyElement('(unset TZ; systemd-analyze calendar "\$1")'),
+        );
+      });
+
+      test('an expression the builder refuses gets no read', () {
+        final hostile = TimerDetail(calendar: ['daily\nreboot', 'x' * 600]);
+        expect(timerCalendarCommands(hostile, runCount: 2), isEmpty);
+      });
+
+      test('triggers take their calendar results, then the monotonic', () {
+        final result = parseOnCalendar('''
+  Original form: *-*-* 06,18:00:00
+Normalized form: *-*-* 06,18:00:00
+    Next elapse: Thu 2026-10-15 18:00:00 UTC
+''').value;
+        final entry = TimerJobEntry(
+          timer: const SystemdTimer(unit: 'apt-daily.timer'),
+        ).withDetail(detail, calendars: {'*-*-* 06,18:00:00': result});
+        expect(entry.randomizedDelay, const Duration(hours: 12));
+        expect(entry.triggers!.map((t) => t.toJson()), [
+          {
+            'type': 'calendar',
+            'normalized': '*-*-* 06,18:00:00',
+            'elapses': [
+              {
+                'text': 'Thu 2026-10-15 18:00:00 UTC',
+                'atUtc': '2026-10-15T18:00:00.000Z',
+                'fromNow': null,
+              },
+            ],
+          },
+          // Not read yet: the expression, with elapses unknown.
+          {
+            'type': 'calendar',
+            'normalized': 'Mon *-*-* 00:00:00',
+            'elapses': null,
+          },
+          {'type': 'monotonic', 'base': 'boot', 'spanUs': 900000000},
+        ]);
+      });
+
+      test('a rejected expression keeps its text without elapses', () {
+        final rejected = parseOnCalendar('Failed to parse: x\n').value;
+        final entry = TimerJobEntry(
+          timer: const SystemdTimer(unit: 'x.timer'),
+        ).withDetail(TimerDetail(calendar: ['x']), calendars: {'x': rejected});
+        final trigger = entry.triggers!.single as CalendarSchedule;
+        expect(trigger.normalized, 'x');
+        expect(trigger.elapses, isNull);
+      });
+    });
   });
 }

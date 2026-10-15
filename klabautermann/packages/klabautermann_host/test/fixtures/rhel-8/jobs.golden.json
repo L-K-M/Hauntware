@@ -395,8 +395,20 @@
         "nextText": "Mon 2023-11-13 21:45:58 UTC",
         "lastText": "Mon 2023-11-13 19:30:00 UTC"
       },
-      "triggers": null,
-      "randomizedDelayUs": null
+      "triggers": [
+        {
+          "type": "calendar",
+          "normalized": "*-*-* 00:00:00",
+          "elapses": [
+            {
+              "text": "Tue 2023-11-14 00:00:00 EST",
+              "atUtc": "2023-11-14T05:00:00.000Z",
+              "fromNow": "3h 14min left"
+            }
+          ]
+        }
+      ],
+      "randomizedDelayUs": 0
     },
     {
       "kind": "timer",
@@ -430,5 +442,14 @@
       "triggers": null,
       "randomizedDelayUs": null
     }
-  ]
+  ],
+  "timerCalendarReads": {
+    "*-*-* 00:00:00": [
+      "sh",
+      "-c",
+      "(unset TZ; systemd-analyze calendar \"$1\")",
+      "hws-cal",
+      "*-*-* 00:00:00"
+    ]
+  }
 }

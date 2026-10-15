@@ -171,11 +171,11 @@ void main() {
     }
   }, skip: dash == null ? 'dash is not installed' : false);
 
-  test('slow-tick measurement covers every slow collector', () async {
+  test('slow-tick measurement covers every slow tick collector', () async {
     final runs = await measureSlowTick(dash!, await clockTicksPerSecond(), env);
     final slow = [
       for (final c in Collector.values)
-        if (c.sampler == SamplerKind.slow) c.name,
+        if (c.sampler == SamplerKind.slow && c.argValidators.isEmpty) c.name,
     ];
     expect(runs.map((r) => (r['collectors']! as List).join(',')), [
       ...slow,

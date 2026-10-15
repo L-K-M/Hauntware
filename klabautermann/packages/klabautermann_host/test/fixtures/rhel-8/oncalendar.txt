@@ -1,0 +1,5 @@
+  Original form: *-*-* 00:00:00
+Normalized form: *-*-* 00:00:00
+    Next elapse: Tue 2023-11-14 00:00:00 EST
+       (in UTC): Tue 2023-11-14 05:00:00 UTC
+       From now: 3h 14min left

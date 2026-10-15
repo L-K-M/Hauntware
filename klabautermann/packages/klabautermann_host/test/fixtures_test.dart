@@ -114,6 +114,18 @@ void main() {
         });
       }
 
+      // K18's reads, where a platform carries them (SOURCE.md).
+      for (final read in _optionalReads) {
+        final file = File('$root/$platform/$read.txt');
+        if (!file.existsSync()) continue;
+        test(read, () {
+          expect(
+            _optionalJson(read, file.readAsStringSync()),
+            equals(_golden('$root/$platform/$read.golden.json')),
+          );
+        });
+      }
+
       test('probe', () {
         final sections = _probeSections(
           File('$root/$platform/probe.sections').readAsStringSync(),
@@ -146,9 +158,25 @@ HostProfile _profile(String root, String platform) => parseProbe(
   _ctx,
 ).value;
 
+/// Payloads that are not tick collectors: the on-demand `timer_detail`,
+/// `systemd-analyze calendar`, `journalctl -o json` and `dmesg --json`.
+const _optionalReads = ['timer_detail', 'oncalendar', 'journal', 'dmesg'];
+
+Map<String, Object?> _optionalJson(String read, String payload) =>
+    switch (read) {
+      'timer_detail' => parseTimerDetail(payload, _ctx).toJsonResult(),
+      'oncalendar' => parseOnCalendar(payload).toJsonResult(),
+      'journal' => parseJournalLines(payload).toJsonResult(),
+      'dmesg' => parseDmesgJson(payload).toJsonResult(),
+      _ => throw StateError(read),
+    };
+
 /// The merged jobs list (03 §7.7) of a fixture's `cron` and `timers`
 /// payloads, two runs each, evaluated at a fixed instant in the probe's
-/// zone at its fixed offset. `tool/regen_goldens.dart` mirrors it.
+/// zone at its fixed offset. Where the fixture has a `timer_detail`
+/// payload, the first timer takes it (D57) with the `oncalendar` read of
+/// the expression that read echoes, and the golden records the reads the
+/// probe's systemd version gets. `tool/regen_goldens.dart` mirrors it.
 Map<String, Object?> _jobsJson(String dir) {
   final now = DateTime.utc(2026, 10, 14, 12);
   final profile = parseProbe(
@@ -172,11 +200,34 @@ Map<String, Object?> _jobsJson(String dir) {
     ),
     runCount: 2,
   );
+  final detailFile = File('$dir/timer_detail.txt');
+  final detail = detailFile.existsSync()
+      ? parseTimerDetail(detailFile.readAsStringSync(), _ctx).value
+      : null;
+  if (detail != null) {
+    final read = parseOnCalendar(
+      File('$dir/oncalendar.txt').readAsStringSync(),
+    ).value;
+    final first = jobs.indexWhere((j) => j is TimerJobEntry);
+    jobs[first] = (jobs[first] as TimerJobEntry).withDetail(
+      detail,
+      calendars: {
+        for (final e in detail.calendar)
+          if (e == read.originalForm) e: read,
+      },
+    );
+  }
   return {
     'nowUtc': now.toIso8601String(),
     'zoneOffsetMinutes': minutes,
     'zoneName': profile.timezone,
     'jobs': jobs.map((j) => j.toJson()).toList(),
+    if (detail != null)
+      'timerCalendarReads': timerCalendarCommands(
+        detail,
+        runCount: 2,
+        systemdMajor: profile.systemdVersion,
+      ),
   };
 }
 
@@ -199,6 +250,11 @@ Object? _toJson(Object? v) {
   if (v is UnitsSnapshot) return v.toJson();
   if (v is TimersSnapshot) return v.toJson();
   if (v is CronSnapshot) return v.toJson();
+  if (v is TimerDetail) return v.toJson();
+  if (v is OnCalendarResult) return v.toJson();
+  if (v is JournalEntry) return v.toJson();
+  if (v is DmesgRecord) return v.toJson();
+  if (v is List) return v.map(_toJson).toList();
   throw ArgumentError(v);
 }
 

@@ -37,10 +37,13 @@ void main() {
       expect(
         HostCommands.journalctl(
           unit: 'sshd.service',
+          identifier: 'sshd',
+          currentBoot: true,
           priority: 'warning',
-          since: '1 hour ago',
+          until: DateTime.utc(2026, 10, 15, 12),
           cursor: 's=abc;i=1',
           lines: 500,
+          order: JournalOrder.newestFirst,
           grep: 'denied',
         ),
         [
@@ -48,15 +51,18 @@ void main() {
           '-o',
           'json',
           '--no-pager',
+          '-b',
           '-u',
           'sshd.service',
+          '-t',
+          'sshd',
           '-p',
           'warning',
-          '--since',
-          '1 hour ago',
+          '--until=@1792065600',
           '--after-cursor=s=abc;i=1',
           '-n',
           '500',
+          '-r',
           '-g',
           'denied',
         ],
@@ -72,21 +78,157 @@ void main() {
       ]);
     });
 
-    test('bad priority, cursor, since and lines are refused', () {
+    test('the kernel log is -k -b, and a follow is -f', () {
       expect(
+        HostCommands.journalctl(
+          kernel: true,
+          currentBoot: true,
+          lines: 0,
+          order: JournalOrder.follow,
+        ),
+        ['journalctl', '-o', 'json', '--no-pager', '-k', '-b', '-n', '0', '-f'],
+      );
+    });
+
+    test('times are epoch seconds, with microseconds when present', () {
+      final since = DateTime.fromMicrosecondsSinceEpoch(
+        1792065600000042,
+        isUtc: true,
+      );
+      expect(
+        HostCommands.journalctl(since: since),
+        contains('--since=@1792065600.000042'),
+      );
+      // The instant counts, not the zone it is written in.
+      expect(
+        HostCommands.journalctl(since: DateTime.utc(1970, 1, 1, 0, 0, 5)),
+        contains('--since=@5'),
+      );
+    });
+
+    test('combinations journalctl refuses or cannot answer are refused', () {
+      final t = DateTime.utc(2026, 10, 15);
+      for (final build in <void Function()>[
+        () => HostCommands.journalctl(since: t, cursor: 's=1'),
+        () => HostCommands.journalctl(until: t, order: JournalOrder.follow),
+        () => HostCommands.journalctl(
+          since: t.add(const Duration(seconds: 1)),
+          until: t,
+        ),
+        () => HostCommands.journalctl(kernel: true, unit: 'a.service'),
+        () => HostCommands.journalctl(kernel: true, identifier: 'kernel'),
+        () => HostCommands.journalctl(since: DateTime.utc(1969, 12, 31)),
+      ]) {
+        expect(build, throwsA(isA<HostCommandError>()));
+      }
+    });
+
+    test('hostile filters are refused before any argv exists', () {
+      for (final build in <void Function()>[
         () => HostCommands.journalctl(priority: 'nope'),
-        throwsA(isA<HostCommandError>()),
-      );
-      expect(
         () => HostCommands.journalctl(cursor: 'not a cursor'),
-        throwsA(isA<HostCommandError>()),
-      );
-      expect(
-        () => HostCommands.journalctl(since: 'a\nb'),
-        throwsA(isA<HostCommandError>()),
-      );
-      expect(
+        () => HostCommands.journalctl(cursor: 's=1;\$(id)'),
+        () => HostCommands.journalctl(unit: 'a.service; reboot'),
+        () => HostCommands.journalctl(unit: '-a.service\n'),
+        () => HostCommands.journalctl(identifier: ''),
+        () => HostCommands.journalctl(identifier: 'cron\nx'),
+        () => HostCommands.journalctl(identifier: 'cron\x1b[2J'),
+        () => HostCommands.journalctl(grep: 'a\x00b'),
         () => HostCommands.journalctl(lines: -1),
+      ]) {
+        expect(build, throwsA(isA<HostCommandError>()));
+      }
+    });
+
+    test('a cursor journalctl printed feeds back as --after-cursor', () {
+      final cursor = parseJournalLine(
+        '{"__CURSOR":"s=7b1d3c2a;i=1a2b;b=0f1e2d3c;m=2dc6c0;'
+        't=63a1b2c3d4e5f;x=9c8b7a6f"}',
+      )!.cursor!;
+      expect(
+        HostCommands.journalctl(cursor: cursor, order: JournalOrder.follow),
+        contains('--after-cursor=$cursor'),
+      );
+    });
+
+    test('shell syntax in a filter stays one argument', () {
+      const identifier = r"x'; rm -rf / #$(id)`id`";
+      final argv = HostCommands.journalctl(identifier: identifier);
+      expect(argv.sublist(argv.indexOf('-t')), ['-t', identifier]);
+    });
+  });
+
+  group('dmesg and tail', () {
+    test('dmesg asks for JSON and takes nothing else', () {
+      expect(HostCommands.dmesgJson(), ['dmesg', '--json']);
+    });
+
+    test('tail ends its options before the path', () {
+      expect(HostCommands.tail('/var/log/syslog', lines: 500), [
+        'tail',
+        '-n',
+        '500',
+        '--',
+        '/var/log/syslog',
+      ]);
+      expect(HostCommands.tail("/var/log/a b'\$(id)", lines: 0, follow: true), [
+        'tail',
+        '-n',
+        '0',
+        '-F',
+        '--',
+        "/var/log/a b'\$(id)",
+      ]);
+    });
+
+    test('tail refuses relative, unnormalized and NUL paths', () {
+      for (final path in [
+        '',
+        'var/log/syslog',
+        '-n1',
+        '/var/log/../../etc/shadow',
+        '/var/log/./syslog',
+        '/var/log/.',
+        '/var/log/a\x00b',
+      ]) {
+        expect(
+          () => HostCommands.tail(path, lines: 10),
+          throwsA(isA<HostCommandError>()),
+          reason: path,
+        );
+      }
+      expect(
+        () => HostCommands.tail('/var/log/syslog', lines: -1),
+        throwsA(isA<HostCommandError>()),
+      );
+    });
+  });
+
+  group('commandLine', () {
+    String quote(String w) => '<$w>';
+
+    test('exports the sampler environment and execs the argv', () {
+      expect(
+        HostCommands.commandLine(['journalctl', '-k'], quote: quote),
+        '<sh> <-c> <export LC_ALL=C TZ=UTC SYSTEMD_PAGER= NO_COLOR=1; '
+        'exec "\$@"> <sh> <journalctl> <-k>',
+      );
+    });
+
+    test('C.UTF-8 replaces C only when asked', () {
+      expect(
+        HostCommands.commandLine(
+          ['tail', '--', '/x'],
+          quote: quote,
+          locale: CommandLocale.cUtf8,
+        ),
+        contains('<export LC_ALL=C.UTF-8 TZ=UTC '),
+      );
+    });
+
+    test('an empty argv is refused', () {
+      expect(
+        () => HostCommands.commandLine(const [], quote: quote),
         throwsA(isA<HostCommandError>()),
       );
     });

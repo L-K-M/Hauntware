@@ -1,0 +1,19 @@
+{
+  "result": {
+    "originalForm": "*-*-* 00:00:00",
+    "normalizedForm": "*-*-* 00:00:00",
+    "elapses": [
+      {
+        "text": "Mon 2025-06-16 00:00:00 CEST",
+        "atUtc": "2025-06-15T22:00:00.000Z",
+        "fromNow": "6h left"
+      },
+      {
+        "text": "Tue 2025-06-17 00:00:00 CEST",
+        "atUtc": "2025-06-16T22:00:00.000Z",
+        "fromNow": "1 day 6h left"
+      }
+    ]
+  },
+  "warnings": []
+}

@@ -25,6 +25,20 @@ Normalized form: *-*-* 00:00:00
     expect(r.value.elapses.last.atUtc, DateTime.parse('2026-10-14T00:00:00Z'));
   });
 
+  test('in a UTC server zone the elapse itself is the instant', () {
+    // systemd-analyze prints no `(in UTC)` line when the zone is UTC.
+    const raw = '''
+  Original form: daily
+Normalized form: *-*-* 00:00:00
+    Next elapse: Tue 2026-10-13 00:00:00 UTC
+       From now: 3h left
+''';
+    expect(
+      parseOnCalendar(raw).value.elapses.single.atUtc,
+      DateTime.parse('2026-10-13T00:00:00Z'),
+    );
+  });
+
   test('a non-UTC zone keeps the text but leaves atUtc unknown', () {
     const raw = '''
 Original form: daily
