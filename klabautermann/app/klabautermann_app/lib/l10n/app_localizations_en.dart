@@ -589,6 +589,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'Run this as root: the server has neither sudo nor doas.';
 
   @override
+  String get accessFixElevationUnknown =>
+      'Run this as root. The probe could not tell whether the server has sudo or doas.';
+
+  @override
   String get accessFixNextLogin =>
       'Group changes take effect at your next login.';
 

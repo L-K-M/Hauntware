@@ -139,6 +139,44 @@ void main() {
     expect(harness.engine.sent, sentBefore);
   });
 
+  testWidgets('says the server lacks sudo and doas only when the probe '
+      'found neither', (tester) async {
+    const absent = 'Run this as root: the server has neither sudo nor doas.';
+    const unknown =
+        'Run this as root. The probe could not tell whether the server '
+        'has sudo or doas.';
+    final harness = await _openWeb1(
+      tester,
+      _desktop,
+      profile: debianHost(
+        overrides: {'sudoKind': null, 'sudoNonInteractive': null},
+      ),
+    );
+    await _openTab(tester, 'Access');
+
+    // Elevation unanswered: the row says unknown, and so does the note.
+    expect(find.text('usermod -aG systemd-journal alice'), findsOneWidget);
+    expect(find.text(unknown), findsNWidgets(2));
+    expect(find.text(absent), findsNothing);
+
+    harness.engine.emit(
+      HostProfileChanged(
+        'srv-1',
+        debianHost(
+          overrides: {
+            'sudoKind': 'none',
+            'sudoNonInteractive': null,
+            'doasPresent': false,
+          },
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Neither sudo nor doas is installed.'), findsOneWidget);
+    expect(find.text(absent), findsNWidgets(2));
+    expect(find.text(unknown), findsNothing);
+  });
+
   testWidgets('hides a panel the host cannot serve and links to the '
       'Access tab', (tester) async {
     final harness = await _openWeb1(

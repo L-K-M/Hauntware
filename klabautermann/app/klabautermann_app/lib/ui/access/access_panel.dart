@@ -120,6 +120,9 @@ class _AccessBody extends StatelessWidget {
     final textScaler = MediaQuery.textScalerOf(context);
     final profile = this.profile;
     final access = profile == null ? null : evaluateAccess(profile);
+    final rootShellNote = access == null
+        ? null
+        : _rootShellNote(l10n, access.row(AccessItem.sudoNoPassword));
     return LayoutBuilder(
       builder: (context, box) => SingleChildScrollView(
         padding: EdgeInsets.all(box.maxWidth >= 600 ? 20 : 16),
@@ -166,6 +169,7 @@ class _AccessBody extends StatelessWidget {
                       reason: _reasonText(l10n, row.reason, profile),
                       rootEquivalent: row.rootEquivalent,
                       fix: row.fix,
+                      rootShellNote: rootShellNote,
                       details: row.item == AccessItem.runtime
                           ? _engineLines(context, access.engines)
                           : const [],
@@ -236,6 +240,7 @@ class _AccessRowTile extends StatefulWidget {
     required this.reason,
     this.rootEquivalent = false,
     this.fix,
+    this.rootShellNote,
     this.details = const [],
   });
 
@@ -244,6 +249,11 @@ class _AccessRowTile extends StatefulWidget {
   final String reason;
   final bool rootEquivalent;
   final AccessFix? fix;
+
+  /// The note under a [FixElevation.rootShell] fix, which carries no
+  /// prefix: K04 gives one both when the probe found neither sudo nor doas
+  /// and when it did not answer.
+  final String? rootShellNote;
 
   /// Lines under the reason: the runtime row's engines.
   final List<Widget> details;
@@ -388,8 +398,9 @@ class _AccessRowTileState extends State<_AccessRowTile> {
           ),
         ),
       ),
-      if (fix.elevation == FixElevation.rootShell)
-        Text(l10n.accessFixRootShell, style: theme.textTheme.bodySmall),
+      if (widget.rootShellNote case final note?
+          when fix.elevation == FixElevation.rootShell)
+        Text(note, style: theme.textTheme.bodySmall),
       // The journal and Docker fixes add the account to a group.
       if (widget.item case AccessItem.journal || AccessItem.dockerSocket)
         Text(l10n.accessFixNextLogin, style: theme.textTheme.bodySmall),
@@ -502,6 +513,13 @@ String _engineName(AppLocalizations l10n, EngineEndpoint engine) => switch ((
   (EngineRuntime.podman, EngineMode.rootless) =>
     l10n.accessEnginePodmanRootless,
 };
+
+/// Says the server lacks sudo and doas only when the probe found neither
+/// ([sudo] is the elevation row); an unanswered elevation stays unknown.
+String _rootShellNote(AppLocalizations l10n, AccessRow sudo) =>
+    sudo.reason == AccessReason.noElevationTool
+    ? l10n.accessFixRootShell
+    : l10n.accessFixElevationUnknown;
 
 String _itemTitle(AppLocalizations l10n, AccessItem item) => switch (item) {
   AccessItem.sudoNoPassword => l10n.accessItemSudo,

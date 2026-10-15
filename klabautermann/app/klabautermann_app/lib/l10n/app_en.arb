@@ -611,6 +611,10 @@
   "@accessFixRootShell": {
     "description": "Access tab: note under a fix command on a server without any elevation tool."
   },
+  "accessFixElevationUnknown": "Run this as root. The probe could not tell whether the server has sudo or doas.",
+  "@accessFixElevationUnknown": {
+    "description": "Access tab: note under a fix command shown without a sudo or doas prefix because the server's probe did not report which elevation tool, if any, is installed."
+  },
   "accessFixNextLogin": "Group changes take effect at your next login.",
   "@accessFixNextLogin": {
     "description": "Access tab: note under a fix command that adds the account to a group."

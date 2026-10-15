@@ -982,6 +982,12 @@ abstract class AppLocalizations {
   /// **'Run this as root: the server has neither sudo nor doas.'**
   String get accessFixRootShell;
 
+  /// Access tab: note under a fix command shown without a sudo or doas prefix because the server's probe did not report which elevation tool, if any, is installed.
+  ///
+  /// In en, this message translates to:
+  /// **'Run this as root. The probe could not tell whether the server has sudo or doas.'**
+  String get accessFixElevationUnknown;
+
   /// Access tab: note under a fix command that adds the account to a group.
   ///
   /// In en, this message translates to:
