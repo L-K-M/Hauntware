@@ -4082,9 +4082,12 @@ with no failure; session states take the link's own word, probe answers
 read "Online", "Offline" and "Reachability unknown". A state with a dot
 also shows its word on the second line and an icon at the row's end, a
 connected mark is framed, and nothing known shows no dot and no word. The
-row is one screen-reader node naming everything it shows, and a change of
-the shared session state is announced once; samples and probe answers are
-not. Until the monitor set (FL-21) exists, a server counts as monitored
+row is one screen-reader node naming everything it shows. A change of the
+link's word is announced once, connecting, authenticating and waiting to
+reconnect counting as one attempt; samples and probe answers are not.
+Where the platform takes no announcements (Android), the latest change is
+the label of a live region around the list, as in Flutter's date picker.
+Until the monitor set (FL-21) exists, a server counts as monitored
 while the app holds an `overview` or `core` reading for it in this engine
 run, and rows subscribe nothing themselves; with links off, rows show
 reachability only. The bar reads CPU busy, used out of total memory, and
@@ -4092,10 +4095,19 @@ the root file system's `df` capacity, warns at 80 % and turns critical at
 90 % until OV-11's thresholds, and is stale once the link is down or the
 reading is older than twice its stream's slowest 6.4 cadence (60 s for
 `overview`, 20 s for `core`); an `fs` reading past 240 s leaves the disk
-unknown. The reading's age sits under the bar, and in full
-("Updated 4 s ago") in the tooltip and the label. The bar, its age and
-the locator warning (4.6) sit beside the kit's row, which takes no
-trailing widget. The filter (FL-05) is the kit's `SidebarFilterField`
+unknown. The reading's age sits under the bar whatever the link says,
+and in full ("Updated 4 s ago") in the tooltip and the label; stale
+values add a history icon, and "Stale" before the age unless the state
+word already says the link is down. The bar, its age and the locator
+warning (4.6) sit beside the kit's row, which takes no trailing widget,
+so the selection pill, hover fill and focus ring stop short of them
+until `SidebarRow` gains a trailing slot (a `ghost_ui` follow-up). They
+need a row 180 px wide per 100 % of body text, about 140 % text on the
+260 px rail, and beyond that the bar and age give way to the name and
+state word, staying in the tooltip and the label. A touch on the warning
+shows its words. A collapsed or filtered section that hides a live
+server does not yet say so in its header (`ghostHiddenLiveIndicator`).
+The filter (FL-05) is the kit's `SidebarFilterField`
 over `FleetEntry.searchText`, name and address standing in without it:
 every term must occur, Enter opens the first match and Esc clears.
 
