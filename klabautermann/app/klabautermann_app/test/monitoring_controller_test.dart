@@ -268,23 +268,22 @@ void main() {
   });
 
   group('freshness (03 §9.5 item 4)', () {
-    test('the newest kept sample\'s time gives its age', () async {
+    test('each stream\'s latest sample gives its own age', () async {
       const second = Duration(seconds: 1);
       final at = DateTime.utc(2026, 10, 14, 12, 0, 4);
       engine
-        ..emit(_sample('srv-1', SampleStream.overview, 1, at: at))
-        // A later seq read earlier, such as a slow stream's reading, does
-        // not make the server look older.
-        ..emit(
-          _sample('srv-1', SampleStream.fs, 2, at: at.subtract(second * 3)),
-        );
+        ..emit(_sample('srv-1', SampleStream.core, 1, at: at))
+        // A slow stream's newer reading does not make core look fresh.
+        ..emit(_sample('srv-1', SampleStream.fs, 2, at: at.add(second * 25)));
       await settle();
+      DateTime? latest(String serverId, SampleStream stream) =>
+          monitoring.sampleFor(serverId, stream).value?.at;
 
-      final newest = monitoring.newestSampleAt('srv-1').value;
-      expect(newest, at);
-      expect(sampleAge(newest, at.add(second * 6)), second * 6);
-      expect(sampleAge(newest, at.subtract(second)), Duration.zero);
-      expect(sampleAge(monitoring.newestSampleAt('srv-2').value, at), isNull);
+      final now = at.add(second * 26);
+      expect(sampleAge(latest('srv-1', SampleStream.core), now), second * 26);
+      expect(sampleAge(latest('srv-1', SampleStream.fs), now), second);
+      expect(sampleAge(at, at.subtract(second)), Duration.zero);
+      expect(sampleAge(latest('srv-2', SampleStream.core), now), isNull);
     });
 
     testWidgets('the clock ticks while something listens, and only then', (
@@ -319,7 +318,6 @@ void main() {
     await settle();
     final dropped = [
       monitoring.sampleFor('srv-1', overview) as ChangeNotifier,
-      monitoring.newestSampleAt('srv-1') as ChangeNotifier,
       cpu('srv-1'),
     ];
     final kept = cpu('srv-2');

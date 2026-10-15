@@ -73,10 +73,9 @@ Duration? sampleAge(DateTime? at, DateTime now) {
 /// Views open and leave servers: the first open sends [Connect], the last
 /// leave [Disconnect] after the grace. Visible surfaces hold subscriptions,
 /// each under its own id (D45). The app's activity goes out when it
-/// changes. Samples land in a listenable per server and stream, a ring per
-/// [MetricSeries] and a newest-reading time per server, so a tick repaints
-/// only the surfaces painting it (§10.1 forbids a whole-app rebuild every
-/// 1 to 5 s).
+/// changes. Samples land in a listenable per server and stream and a ring
+/// per [MetricSeries], so a tick repaints only the surfaces painting it
+/// (§10.1 forbids a whole-app rebuild every 1 to 5 s).
 ///
 /// Everything here lasts one engine run. An [EngineClient] is one run (its
 /// handshake consumes [EngineReady], and the engine's exit closes its
@@ -140,14 +139,12 @@ final class MonitoringController extends ChangeNotifier {
     return _server(serverId).rings(stream)[series]!;
   }
 
-  /// When [serverId]'s newest kept sample was taken, or null before one.
-  /// With [clock] it gives the sample's age ([sampleAge], 03 §9.5 item 4).
-  ValueListenable<DateTime?> newestSampleAt(String serverId) =>
-      _server(serverId).newestAt;
-
   /// The freshness clock: this device's time, notifying every
   /// [kFreshnessTick] while anything listens, so an age keeps counting
-  /// between samples. Nothing ticks while nothing shows one.
+  /// between samples. Nothing ticks while nothing shows one. With the
+  /// [Sample.at] of a stream's latest sample ([sampleFor]) it gives that
+  /// reading's age ([sampleAge], 03 §9.5 item 4). Freshness is per stream:
+  /// a slow stream's newer reading says nothing about a stalled fast one.
   ValueListenable<DateTime> get clock => _clock;
 
   bool isSubscribed(String serverId, String subscriptionId) =>
@@ -367,8 +364,8 @@ final class _FreshnessClock extends ChangeNotifier
   }
 }
 
-/// One server's readings: its seq floor, latest sample per stream, rings
-/// and newest reading time.
+/// One server's readings: its seq floor, latest sample per stream and
+/// rings.
 final class _ServerReadings {
   /// The highest [Sample.seq] kept: the engine counts one sequence per
   /// server across its streams (D44).
@@ -376,7 +373,6 @@ final class _ServerReadings {
 
   final Map<SampleStream, ValueNotifier<Sample?>> _boxes = {};
   final Map<SampleStream, Map<MetricSeries, SeriesRing>> _rings = {};
-  final ValueNotifier<DateTime?> newestAt = ValueNotifier(null);
 
   /// Ring streams no subscription names, and those named again since,
   /// whose next reading follows a hole.
@@ -422,9 +418,6 @@ final class _ServerReadings {
       }
     }
     box(sample.stream).value = sample;
-    // A slow stream's reading may be older than the last fast one.
-    final newest = newestAt.value;
-    if (newest == null || sample.at.isAfter(newest)) newestAt.value = sample.at;
   }
 
   void dispose() {
@@ -434,6 +427,5 @@ final class _ServerReadings {
     for (final ring in _rings.values.expand((rings) => rings.values)) {
       ring.dispose();
     }
-    newestAt.dispose();
   }
 }
