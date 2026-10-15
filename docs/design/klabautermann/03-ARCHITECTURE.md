@@ -3616,11 +3616,14 @@ connected, and on iOS and Android the background pause), with no
 control. One formatter words freshness for the rows and cards, which
 adopt it as they land: the background pause first; "not watched on this
 device" for a server outside the monitor set that nothing samples;
-"disconnected 3 min ago" from the start of a `waitingForLink` phase once
-readings have arrived; otherwise the latest reading's age in its largest
-whole unit (s, min, h, d), "stale" once it reaches the caller's limit
-for that stream; "no data yet" before the first reading. The monitoring
-controller keeps each server's latest `SamplingState` for it.
+"disconnected 3 min ago" from the start of a `waitingForLink` phase
+entered from `sampling`, once readings have arrived; otherwise the
+latest reading's age in its largest whole unit (s, min, h, d), "stale"
+once it reaches the caller's limit for that stream; "no data yet" before
+the first reading. A link already down when a view or the return from
+the background subscribes again reads the reading's age, since its
+phase began only then. The monitoring controller keeps each server's
+latest `SamplingState` and the phase before it.
 
 ---
 

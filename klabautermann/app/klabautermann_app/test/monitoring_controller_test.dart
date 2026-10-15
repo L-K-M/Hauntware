@@ -306,8 +306,8 @@ void main() {
       timed.dispose();
     });
 
-    test('the latest sampling state lands in its server\'s box and leaves '
-        'with the server (SYN-08)', () async {
+    test('the latest sampling state lands in its server\'s box with the '
+        'phase it left, and leaves with the server (SYN-08)', () async {
       final since = DateTime.utc(2026, 10, 14, 12);
       SamplingState state(String serverId, SamplingPhase phase) =>
           SamplingState(serverId: serverId, phase: phase, since: since);
@@ -317,7 +317,8 @@ void main() {
         ..emit(paused);
       await settle();
       final box = monitoring.samplingFor('srv-1');
-      expect(box.value, same(paused));
+      expect(box.value!.state, same(paused));
+      expect(box.value!.previous, SamplingPhase.sampling);
       expect(monitoring.samplingFor('srv-2').value, isNull);
 
       engine

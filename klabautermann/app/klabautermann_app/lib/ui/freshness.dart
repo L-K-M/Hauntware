@@ -1,8 +1,9 @@
 import 'package:flutter/foundation.dart' show immutable;
 import 'package:klabautermann_core/klabautermann_core.dart'
-    show Sample, SamplingPhase, SamplingState;
+    show Sample, SamplingPhase;
 
-import '../controllers/monitoring_controller.dart' show sampleAge;
+import '../controllers/monitoring_controller.dart'
+    show SamplingStatus, sampleAge;
 import '../l10n/app_localizations.dart';
 
 /// What a freshness line says about one stream of one server (03 §9.5 item
@@ -40,7 +41,8 @@ final class FreshnessNotWatched extends Freshness {
   const FreshnessNotWatched();
 }
 
-/// The server's link has been down for [age], after readings arrived.
+/// The server's link was lost [age] ago while sampling, after readings
+/// arrived.
 final class FreshnessDisconnected extends Freshness {
   const FreshnessDisconnected(this.age);
 
@@ -56,23 +58,25 @@ final class FreshnessNoData extends Freshness {
 /// (null without one), as of [now], usually the monitoring clock's value.
 ///
 /// [staleAfter] is the caller's limit for that stream, since cadences
-/// differ per stream (03 §6.4). [sampling] is the engine's last
-/// [SamplingState] for the server; none reads as unsubscribed, the phase
+/// differ per stream (03 §6.4). [sampling] is what the engine last said
+/// sampling the server is doing; none reads as unsubscribed, the phase
 /// every server starts in, since the engine sends one at each change.
 /// [watched] says whether the server is in this device's monitor set
 /// (FL-21); a server outside it that an open view samples anyway still
 /// reads its age. In order: the background pause wins; an unwatched
-/// server nothing samples is not watched; a link down after readings is
-/// disconnected since its phase began; otherwise the latest reading gives
-/// the age.
+/// server nothing samples is not watched; a link lost while sampling,
+/// after readings, is disconnected since then; otherwise the latest
+/// reading gives the age. A link already down when a view or the return
+/// from the background subscribed again began its phase only then, so it
+/// reads the reading's age.
 Freshness freshnessOf({
   required DateTime now,
   required Duration staleAfter,
   DateTime? lastSampleAt,
   required bool watched,
-  SamplingState? sampling,
+  SamplingStatus? sampling,
 }) {
-  final phase = sampling?.phase;
+  final phase = sampling?.state.phase;
   if (phase == SamplingPhase.pausedInBackground) return const FreshnessPaused();
 
   final sampled = phase != null && phase != SamplingPhase.unsubscribed;
@@ -80,8 +84,9 @@ Freshness freshnessOf({
 
   final age = sampleAge(lastSampleAt, now);
   if (age == null) return const FreshnessNoData();
-  if (phase == SamplingPhase.waitingForLink) {
-    return FreshnessDisconnected(sampleAge(sampling!.since, now)!);
+  if (phase == SamplingPhase.waitingForLink &&
+      sampling!.previous == SamplingPhase.sampling) {
+    return FreshnessDisconnected(sampleAge(sampling.state.since, now)!);
   }
   return FreshnessUpdated(age, stale: age >= staleAfter);
 }

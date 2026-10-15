@@ -67,6 +67,21 @@ Duration? sampleAge(DateTime? at, DateTime now) {
   return age.isNegative ? Duration.zero : age;
 }
 
+/// What the engine last said sampling a server is doing ([state]), and
+/// the phase before it ([previous]; null for the first this engine run).
+/// The engine sends a [SamplingState] at each phase change, so the pair
+/// tells a link lost while sampling, whose loss `state.since` dates, from
+/// one already down when a view or the return from the background
+/// subscribed the server again, whose phase began only then (03 §9.5
+/// item 4).
+@immutable
+final class SamplingStatus {
+  const SamplingStatus(this.state, {this.previous});
+
+  final SamplingState state;
+  final SamplingPhase? previous;
+}
+
 /// The monitoring concern (03 §10.1): what the engine should keep linked
 /// and sample for what the user can see, and what comes back.
 ///
@@ -148,12 +163,12 @@ final class MonitoringController extends ChangeNotifier {
   /// a slow stream's newer reading says nothing about a stalled fast one.
   ValueListenable<DateTime> get clock => _clock;
 
-  /// What the engine last said sampling [serverId] is doing
-  /// ([SamplingState]), or null before it said anything this engine run.
-  /// With [sampleFor] and [clock] it gives a stream's freshness line
-  /// (`ui/freshness.dart`, 03 §9.5 item 4): paused in the background, or
-  /// disconnected since the phase began.
-  ValueListenable<SamplingState?> samplingFor(String serverId) =>
+  /// What the engine last said sampling [serverId] is doing, or null
+  /// before it said anything this engine run. With [sampleFor] and [clock]
+  /// it gives a stream's freshness line (`ui/freshness.dart`, 03 §9.5 item
+  /// 4): paused in the background, or disconnected since the link was lost
+  /// while sampling.
+  ValueListenable<SamplingStatus?> samplingFor(String serverId) =>
       _server(serverId).sampling;
 
   bool isSubscribed(String serverId, String subscriptionId) =>
@@ -301,7 +316,8 @@ final class MonitoringController extends ChangeNotifier {
       case SamplingState(:final serverId):
         // As for a sample: a server that left the fleet stays purged.
         if (_fleetIds case final ids? when !ids.contains(serverId)) return;
-        _server(serverId).sampling.value = event;
+        final box = _server(serverId).sampling;
+        box.value = SamplingStatus(event, previous: box.value?.state.phase);
       case EngineEvent():
         break;
     }
@@ -395,8 +411,9 @@ final class _ServerReadings {
   final Set<SampleStream> _unnamed = {};
   final Set<SampleStream> _afterHole = {};
 
-  /// The engine's latest [SamplingState] for the server.
-  final ValueNotifier<SamplingState?> sampling = ValueNotifier(null);
+  /// The engine's latest [SamplingState] for the server, with the phase
+  /// before it.
+  final ValueNotifier<SamplingStatus?> sampling = ValueNotifier(null);
 
   void unnamed(SampleStream stream) => _unnamed.add(stream);
 
