@@ -169,7 +169,7 @@ final class TimerJobEntry extends JobEntry {
   final SystemdTimer timer;
 
   /// The timer's `OnCalendar=` and monotonic triggers; null until the
-  /// timer properties are collected, so an empty list means none.
+  /// timer properties are collected, and when a read listed none.
   final List<ScheduleDescription>? triggers;
 
   /// `RandomizedDelaySec=`; null until the timer properties are
@@ -181,18 +181,29 @@ final class TimerJobEntry extends JobEntry {
   /// its entry in [calendars], the [parseOnCalendar] results of
   /// [timerCalendarCommands]' reads keyed by expression; without one, or
   /// when systemd rejected the expression, its elapses stay unknown.
+  ///
+  /// A [detail] without a calendar or monotonic trigger leaves triggers
+  /// and delay unknown: `systemctl show` prints that for a unit no longer
+  /// loaded, with a default delay of 0, and for a timer with only
+  /// `OnClockChange=` or `OnTimezoneChange=`, which it does not list.
   TimerJobEntry withDetail(
     TimerDetail detail, {
     Map<String, OnCalendarResult> calendars = const {},
-  }) => TimerJobEntry(
-    timer: timer,
-    triggers: [
-      for (final expression in detail.calendar)
-        _calendarTrigger(expression, calendars[expression]),
-      ...detail.monotonic,
-    ],
-    randomizedDelay: detail.randomizedDelay,
-  );
+  }) {
+    if (detail.calendar.isEmpty && detail.monotonic.isEmpty) {
+      return TimerJobEntry(timer: timer);
+    }
+
+    return TimerJobEntry(
+      timer: timer,
+      triggers: [
+        for (final expression in detail.calendar)
+          _calendarTrigger(expression, calendars[expression]),
+        ...detail.monotonic,
+      ],
+      randomizedDelay: detail.randomizedDelay,
+    );
+  }
 
   @override
   String get id => 'timer|${timer.unit}';

@@ -815,7 +815,10 @@ Proposals awaiting the owner close the section; they are not decisions.
   its own outside the sampler, as 7.7 describes, with one run below
   systemd 242; `timerCalendarCommands` builds those reads and
   `TimerJobEntry.withDetail` merges their results; a later PR wires
-  both into the engine. *Rejected:* evaluating the expressions inside
+  both into the engine. A read with neither trigger leaves the timer's
+  triggers and delay unknown: `systemctl show` prints that for a unit
+  no longer loaded, with a default delay, and for a timer with only
+  `OnClockChange=` or `OnTimezoneChange=`. *Rejected:* evaluating the expressions inside
   the sampler (one guarded call per trigger would tie the request's
   guarded-command count, and with it D47's deadline, to the timer, and
   the run count would be a program constant); reading the unit files

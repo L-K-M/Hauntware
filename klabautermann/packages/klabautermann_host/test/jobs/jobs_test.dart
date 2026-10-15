@@ -467,6 +467,21 @@ Normalized form: *-*-* 06,18:00:00
         ]);
       });
 
+      test('a read without triggers leaves triggers and delay unknown', () {
+        // What `systemctl show` prints for a unit that is no longer
+        // loaded; a loaded timer without these triggers has only
+        // OnClockChange= or OnTimezoneChange=.
+        final empty = parseTimerDetail(
+          'RandomizedDelayUSec=0\n',
+          ParseContext.standard,
+        ).value;
+        final entry = TimerJobEntry(
+          timer: const SystemdTimer(unit: 'gone.timer'),
+        ).withDetail(empty);
+        expect(entry.triggers, isNull);
+        expect(entry.randomizedDelay, isNull);
+      });
+
       test('a rejected expression keeps its text without elapses', () {
         final rejected = parseOnCalendar('Failed to parse: x\n').value;
         final entry = TimerJobEntry(

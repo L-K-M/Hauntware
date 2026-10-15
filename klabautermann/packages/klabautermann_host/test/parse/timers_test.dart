@@ -200,12 +200,24 @@ void main() {
     });
 
     test('zero and absent delays differ; empty values are skipped', () {
-      final zero = parseTimerDetail('RandomizedDelayUSec=0\n', _ctx);
+      const trigger = 'TimersMonotonic={ OnBootUSec=1h ; next_elapse=1h }\n';
+      final zero = parseTimerDetail('${trigger}RandomizedDelayUSec=0\n', _ctx);
       expect(zero.value.randomizedDelay, Duration.zero);
-      final old = parseTimerDetail('TimersCalendar=\nTimersMonotonic=\n', _ctx);
+      expect(zero.warnings, isEmpty);
+      final old = parseTimerDetail(
+        '${trigger}TimersCalendar=\nTimersMonotonic=\n',
+        _ctx,
+      );
       expect(old.value.randomizedDelay, isNull);
       expect(old.value.calendar, isEmpty);
       expect(old.warnings, isEmpty);
+    });
+
+    test('a read without calendar or monotonic triggers warns', () {
+      final r = parseTimerDetail('RandomizedDelayUSec=0\n', _ctx);
+      expect(r.value.calendar, isEmpty);
+      expect(r.value.monotonic, isEmpty);
+      expect(r.warnings.single, contains('no calendar or monotonic trigger'));
     });
 
     test('spans systemd prints parse, others warn instead of throwing', () {
@@ -234,7 +246,11 @@ void main() {
         '1.500000y',
         '1.5min',
       ]) {
-        final r = parseTimerDetail('RandomizedDelayUSec=$bad', _ctx);
+        final r = parseTimerDetail(
+          'TimersCalendar={ OnCalendar=daily ; next_elapse=n/a }\n'
+          'RandomizedDelayUSec=$bad',
+          _ctx,
+        );
         expect(r.value.randomizedDelay, isNull, reason: bad);
         expect(r.warnings, hasLength(1), reason: bad);
       }
@@ -251,7 +267,8 @@ void main() {
       );
       expect(r.value.calendar, isEmpty);
       expect(r.value.monotonic, isEmpty);
-      expect(r.warnings, hasLength(5));
+      // Five broken lines, then no trigger at all.
+      expect(r.warnings, hasLength(6));
     });
   });
 }

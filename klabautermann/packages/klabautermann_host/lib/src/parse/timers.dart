@@ -176,7 +176,8 @@ final class TimerDetail {
 /// ```
 ///
 /// Spans are systemd's `format_timespan` text (`1h 30min`, `1.500000s`,
-/// `0`).
+/// `0`). A payload without a calendar or monotonic trigger warns:
+/// [TimerJobEntry.withDetail] leaves such a timer's triggers unknown.
 ParseResult<TimerDetail> parseTimerDetail(String raw, ParseContext ctx) {
   final warnings = <String>[];
   final calendar = <String>[];
@@ -228,6 +229,13 @@ ParseResult<TimerDetail> parseTimerDetail(String raw, ParseContext ctx) {
       default:
         warnings.add('timer_detail: "$line"');
     }
+  }
+  // A loaded timer has one of these unless it uses only OnClockChange=
+  // or OnTimezoneChange= (timer_verify refuses it otherwise), and for a
+  // unit no longer loaded systemctl prints the defaults, so a read
+  // without either says nothing about the timer's triggers or delay.
+  if (calendar.isEmpty && monotonic.isEmpty) {
+    warnings.add('timer_detail: no calendar or monotonic trigger');
   }
   return ParseResult(
     TimerDetail(
