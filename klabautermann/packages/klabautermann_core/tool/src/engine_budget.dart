@@ -18,7 +18,6 @@ library;
 
 import 'dart:async';
 import 'dart:convert';
-import 'dart:developer' show Service;
 import 'dart:io';
 import 'dart:isolate';
 import 'dart:math' as math;
@@ -31,6 +30,7 @@ import 'package:klabautermann_core/src/sampling/sampler_session.dart'
 import 'package:klabautermann_host/klabautermann_host.dart';
 
 import 'budget_replay.dart';
+import 'heap_probe.dart';
 import 'local_sampler.dart' show clockTicksPerSecond, readProcessCpu;
 
 /// The loads the harness knows by name.
@@ -181,7 +181,7 @@ Future<Map<String, Object?>> runEngineBudget(
   final loadStart = _loadavg();
   final heap = switch (plan.heap) {
     HeapReadings.off => null,
-    HeapReadings.afterFullCollection => await _HeapProbe.open(),
+    HeapReadings.afterFullCollection => await HeapProbe.open(),
   };
   final port = ReceivePort('klabautermann engine budget');
   final report = Completer<Map<String, Object?>>();
@@ -297,73 +297,6 @@ Future<Map<String, Object?>> runEngineBudget(
     engine?.kill(priority: Isolate.immediate);
     port.close();
     await heap?.close();
-  }
-}
-
-/// Reads the isolate group's live heap, which the engine isolate shares,
-/// after a full collection, as `test/log_buffer_memory_test.dart` does
-/// (whose comment says why these two small calls): the VM service's
-/// private `_collectAllGarbage`, then `getMemoryUsage`, as plain JSON-RPC
-/// so `package:vm_service` stays out of the dependencies.
-final class _HeapProbe {
-  _HeapProbe._(this._socket, this._isolateId, this._stopServiceOnClose)
-    : _replies = StreamIterator<dynamic>(_socket);
-
-  final WebSocket _socket;
-  final String _isolateId;
-  final bool _stopServiceOnClose;
-  final StreamIterator<dynamic> _replies;
-  var _nextId = 0;
-
-  static Future<_HeapProbe> open() async {
-    var info = await Service.getInfo();
-    final startedHere = info.serverUri == null;
-    if (startedHere) {
-      info = await Service.controlWebServer(enable: true, silenceOutput: true);
-    }
-    final uri = info.serverWebSocketUri;
-    final isolateId = Service.getIsolateId(Isolate.current);
-    if (uri == null || isolateId == null) {
-      throw StateError('no VM service: heap readings need `dart run` (JIT)');
-    }
-    return _HeapProbe._(
-      await WebSocket.connect('$uri'),
-      isolateId,
-      startedHere,
-    );
-  }
-
-  Future<int> liveHeapBytes() async {
-    await _call('_collectAllGarbage');
-    return (await _call('getMemoryUsage'))['heapUsage'] as int;
-  }
-
-  Future<Map> _call(String method) async {
-    final id = '${_nextId++}';
-    _socket.add(
-      jsonEncode({
-        'jsonrpc': '2.0',
-        'id': id,
-        'method': method,
-        'params': {'isolateId': _isolateId},
-      }),
-    );
-    while (await _replies.moveNext()) {
-      final reply = jsonDecode(_replies.current as String) as Map;
-      if (reply['id'] != id) continue;
-
-      final result = reply['result'];
-      if (result is! Map) throw StateError('$method failed: ${reply['error']}');
-      return result;
-    }
-    throw StateError('the VM service closed the connection');
-  }
-
-  Future<void> close() async {
-    await _socket.close();
-    if (_stopServiceOnClose) {
-      await Service.controlWebServer(enable: false, silenceOutput: true);
-    }
   }
 }
 
