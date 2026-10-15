@@ -207,7 +207,7 @@ void main() {
 
   test('the test clock fires timers due at once in start order', () async {
     // The dial order tests rely on this, as with real timers. More than
-    // the 32 timers List.sort happens to keep in order today.
+    // the 33 timers List.sort happens to keep in order today.
     final fired = <int>[];
     for (var i = 0; i < 40; i++) {
       clock.start(const Duration(seconds: 1), () => fired.add(i));
