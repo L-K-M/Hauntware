@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:klabautermann_app/controllers/monitoring_controller.dart';
 import 'package:klabautermann_app/l10n/app_localizations.dart';
@@ -213,6 +214,37 @@ void main() {
     expect(source.unit, 'nginx.service');
     expect(source.priority, LogPriority.warning);
     expect(source.currentBootOnly, isTrue);
+  });
+
+  testWidgets('keeps the keyboard focus where it was after applying', (
+    tester,
+  ) async {
+    final panel = await _pump(tester);
+    bool focused(Finder finder) =>
+        Focus.of(tester.element(finder)).hasPrimaryFocus;
+
+    final apply = find.text('Apply');
+    Focus.of(tester.element(apply)).requestFocus();
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    expect(panel.opens, hasLength(2));
+    expect(focused(apply), isTrue);
+
+    final unit = find.widgetWithText(TextField, 'Unit');
+    await tester.enterText(unit, 'nginx.service');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+    expect(panel.opens, hasLength(3));
+    expect(
+      tester
+          .widget<EditableText>(
+            find.descendant(of: unit, matching: find.byType(EditableText)),
+          )
+          .focusNode
+          .hasPrimaryFocus,
+      isTrue,
+    );
   });
 
   testWidgets('a file path must be absolute; a common path opens at once', (

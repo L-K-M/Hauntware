@@ -264,7 +264,9 @@ class _LogsPanelState extends State<LogsPanel> {
           )
         else if (filters)
           _FilterForm(
-            key: ObjectKey(query),
+            // Only a new source resets the fields; after Apply the drafts
+            // already match, and a new form would drop the focus.
+            key: ValueKey(query.source),
             query: query,
             sheet: false,
             onApply: _panel.apply,
@@ -529,6 +531,8 @@ class _FilterFormState extends State<_FilterForm> {
         controller: controller,
         autocorrect: false,
         decoration: _decoration(label),
+        // Enter applies and keeps the focus in the field.
+        onEditingComplete: () {},
         onSubmitted: (_) => _apply(),
       );
 
@@ -538,6 +542,7 @@ class _FilterFormState extends State<_FilterForm> {
       controller: _path,
       autocorrect: false,
       onChanged: (_) => setState(() {}),
+      onEditingComplete: () {},
       onSubmitted: (_) => _apply(),
       decoration: _decoration(l10n.logsPanelPath, hint: l10n.logsPanelPathHint)
           .copyWith(
