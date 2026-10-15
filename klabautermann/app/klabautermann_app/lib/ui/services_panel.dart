@@ -64,7 +64,11 @@ class _ServicesPanelState extends State<ServicesPanel> {
   UnitFilter<UnitType> _type = (any: false, value: UnitType.service);
   UnitFilter<UnitActiveState> _state = (any: true, value: null);
   TableSort? _sort;
-  String? _open;
+
+  /// The open unit, with its page's key: the page and its read keep their
+  /// place in the tree across the wide and narrow layouts, as the list
+  /// does, and a page per unit and server has a read of its own.
+  ({String name, GlobalKey key})? _open;
   final _listKey = GlobalKey();
 
   @override
@@ -99,7 +103,10 @@ class _ServicesPanelState extends State<ServicesPanel> {
 
   void _onUnits() => setState(() {});
 
-  void _openUnit(SystemdUnit unit) => setState(() => _open = unit.unit);
+  void _openUnit(SystemdUnit unit) {
+    if (_open?.name == unit.unit) return;
+    setState(() => _open = (name: unit.unit, key: GlobalKey()));
+  }
 
   void _close() => setState(() => _open = null);
 
@@ -114,16 +121,15 @@ class _ServicesPanelState extends State<ServicesPanel> {
             constraints.maxWidth >=
             MediaQuery.textScalerOf(context).scale(_wideWidth);
         final padding = EdgeInsets.all(wide ? 20 : 16);
-        final name = _open;
-        final page = name == null
+        final open = _open;
+        final page = open == null
             ? null
             : _UnitPage(
-                // A page per unit and server, each with a read of its own.
-                key: ValueKey((widget.serverId, name)),
+                key: open.key,
                 monitoring: widget.monitoring,
                 serverId: widget.serverId,
-                name: name,
-                unit: _find(units, name),
+                name: open.name,
+                unit: _find(units, open.name),
                 visible: widget.visible,
                 wide: wide,
                 onClose: _close,

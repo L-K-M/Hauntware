@@ -498,6 +498,29 @@ void main() {
     expect(panel.closes, hasLength(2));
   });
 
+  testWidgets('a page keeps its read across the wide and narrow layouts', (
+    tester,
+  ) async {
+    final panel = await _pump(tester);
+    await panel.sample(tester);
+    await _open(tester, 'nginx.service');
+    await panel.report(tester, const LogStreamRunning());
+
+    // The panel crosses the 600 px width that moves the page in place.
+    tester.view.physicalSize = _phone;
+    await tester.pumpAndSettle();
+    expect(_row('cron.service'), findsNothing);
+    expect(panel.opens, hasLength(1));
+    expect(panel.closes, isEmpty);
+
+    await panel.readLines(tester);
+    tester.view.physicalSize = _wide;
+    await tester.pumpAndSettle();
+    expect(_row('cron.service'), findsOneWidget);
+    expect(panel.opens, hasLength(1));
+    expect(_line('Address in use'), findsOneWidget);
+  });
+
   testWidgets('Back on another tab leaves the hidden page open', (
     tester,
   ) async {
