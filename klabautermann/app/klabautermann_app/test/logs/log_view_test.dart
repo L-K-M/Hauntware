@@ -745,6 +745,107 @@ void main() {
       }
     }
 
+    for (final wrap in LogWrap.values) {
+      testWidgets(
+        'an animation to a line while paused lands on it as the lines in '
+        'view leave, wrap ${wrap.name}',
+        (tester) async {
+          // Animates a paused view down from line 8 to line [aim] for
+          // 100 ms, as a click on the scrollbar's track does, with lines 0
+          // to 19, the view's own among them, leaving 40 ms in. Returns
+          // where it lands.
+          Future<_TopHold> run({required int aim}) async {
+            await tester.pumpWidget(const SizedBox());
+            final logs = await _pump(
+              tester,
+              wrap: wrap,
+              controller: LogViewController(buffer: LogBuffer(maxLines: 100)),
+              platform: defaultTargetPlatform,
+            );
+            logs.add(_lines(0, 100));
+            await tester.pump();
+            await _pauseAtLineTop(tester, logs);
+            final position = _position(tester);
+            final row = _rowHeight(tester);
+            position.jumpTo(position.pixels - (_topLine(tester) - 8) * row);
+            await tester.pump();
+            expect(_topLine(tester), 8);
+
+            unawaited(
+              position.animateTo(
+                position.pixels + (aim - 8) * row,
+                duration: const Duration(milliseconds: 100),
+                curve: Curves.easeInOut,
+              ),
+            );
+            await tester.pump();
+            await tester.pump(const Duration(milliseconds: 40));
+            logs.add(_lines(100, 20));
+            await tester.pumpAndSettle();
+            expect(logs.firstSeq, 20);
+            expect(logs.following.value, isFalse);
+            return _topHold(tester);
+          }
+
+          final kept = await run(aim: 30);
+          expect(kept.line, 30, reason: 'the line it was aimed at');
+          expect(kept.hidden, closeTo(0, 1e-3));
+
+          // Line 18 leaves too, so it lands on the oldest line left.
+          final left = await run(aim: 18);
+          expect(left.line, 20, reason: 'the oldest line left');
+          expect(left.hidden, closeTo(0, 1e-3));
+        },
+        variant: _desktops,
+      );
+    }
+
+    for (final wrap in LogWrap.values) {
+      testWidgets(
+        'an animation to the top that runs past it while paused lands on '
+        'the oldest line as lines leave, wrap ${wrap.name}',
+        (tester) async {
+          final logs = await _pump(
+            tester,
+            wrap: wrap,
+            controller: LogViewController(buffer: LogBuffer(maxLines: 100)),
+            platform: defaultTargetPlatform,
+          );
+          logs.add(_lines(0, 100));
+          await tester.pump();
+          await _pauseAtLineTop(tester, logs);
+          final position = _position(tester);
+          position.jumpTo(
+            position.pixels - (_topLine(tester) - 25) * _rowHeight(tester),
+          );
+          await tester.pump();
+          expect(_topLine(tester), 25);
+
+          // easeOutBack runs past the top before it settles there, which
+          // bouncing physics show as blank space above the oldest line.
+          unawaited(
+            position.animateTo(
+              0,
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeOutBack,
+            ),
+          );
+          await tester.pump();
+          await tester.pump(const Duration(milliseconds: 200));
+          expect(position.pixels, lessThan(0), reason: 'above the top');
+
+          // Lines 0 to 19 leave while the view is above the oldest line.
+          logs.add(_lines(100, 20));
+          await tester.pumpAndSettle();
+          expect(logs.firstSeq, 20);
+          expect(logs.following.value, isFalse);
+          expect(_topLine(tester), 20);
+          expect(_topHold(tester).hidden, closeTo(0, 1e-3));
+        },
+        variant: TargetPlatformVariant.only(TargetPlatform.macOS),
+      );
+    }
+
     testWidgets('clearing a paused view follows again', (tester) async {
       final logs = await _pump(tester);
       logs.add(_lines(0, 100));

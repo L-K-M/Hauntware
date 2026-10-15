@@ -164,12 +164,16 @@ class _LogViewState extends State<LogView> {
   void _onLines() {
     final removed = _rows.sync(widget.controller, _estimateRows);
     // While paused, keep the lines in sight where they are: the entries
-    // that left the buffer took their extent from above them.
+    // that left the buffer took their extent from above them. When the
+    // lines in sight left too, the offset stops at the oldest line left,
+    // but an animation's path still moves by all of it, so it ends on the
+    // line it was aimed at.
     if (removed.entries > 0 && !widget.controller.following.value) {
       final position = _vertical.hasClients ? _vertical.position : null;
       if (position is _TailScrollPosition && position.hasPixels) {
         final rows = widget.wrap == LogWrap.on ? removed.rows : removed.entries;
-        position.shiftBy(-math.min(rows * _text!.lineHeight, position.pixels));
+        final extent = rows * _text!.lineHeight;
+        position.shiftBy(-math.min(extent, position.pixels), path: -extent);
       }
     }
     setState(() {});
@@ -1010,13 +1014,17 @@ final class _TailScrollPosition extends ScrollPositionWithSingleContext {
   /// again. A drag carries on from the new offset; a fling, whose
   /// simulation sets absolute offsets, starts again from it at its current
   /// velocity; an animation, which also sets absolute offsets, moves the
-  /// rest of its path with the lines ([_ShiftableScrollAnimation]). Sends
-  /// no scroll notification: the user did not scroll.
-  void shiftBy(double delta) {
+  /// rest of its path with the lines ([_ShiftableScrollAnimation]) by
+  /// [path], or by [delta] when it is null. [path] differs from [delta]
+  /// when the offset cannot move as far as the lines did. Sends no scroll
+  /// notification: the user did not scroll.
+  void shiftBy(double delta, {double? path}) {
     correctBy(delta);
     final current = activity;
     if (current is BallisticScrollActivity) goBallistic(current.velocity);
-    if (current is _ShiftableScrollAnimation) current.shiftBy(delta);
+    if (current is _ShiftableScrollAnimation) {
+      current.shiftBy(delta, path: path ?? delta);
+    }
     notifyListeners();
   }
 
@@ -1110,12 +1118,14 @@ final class _ShiftableScrollAnimation extends DrivenScrollActivity {
   /// the value was from [_to] when it came.
   final _endShifts = <({double left, double delta})>[];
 
-  /// Moves the rest of the path by [delta]: all of it when it ends on a
-  /// line, and when it ends at the newest line, [delta] where it is now
-  /// and less on the way to none at the end.
-  void shiftBy(double delta) {
+  /// Moves the rest of the path with the lines. When it ends on a line,
+  /// all of it moves by [path], how far the lines moved, even where the
+  /// offset could not follow them all the way ([delta]). When it ends at
+  /// the newest line, it moves by [delta] where it is now, the shift the
+  /// offset just took, and less on the way to none at the end.
+  void shiftBy(double delta, {required double path}) {
     if (!_toEnd) {
-      _targetShift += delta;
+      _targetShift += path;
       return;
     }
 
@@ -1136,10 +1146,10 @@ final class _ShiftableScrollAnimation extends DrivenScrollActivity {
     for (final (:left, :delta) in _endShifts) {
       shift += delta * ((_to - value) / left).clamp(0.0, 1.0);
     }
-    // A line aimed at may have left the buffer, which would put the end of
-    // the path above the oldest line left. Bouncing physics would show the
-    // blank space there, so the path goes no further above the oldest line
-    // than its curve does.
+    // When the lines in sight left, the moved path runs above the oldest
+    // line left, and when the line aimed at left too, so does its end.
+    // Bouncing physics would show the blank space there, so the path goes
+    // no further above the oldest line than its curve does.
     final minExtent = (delegate as ScrollPosition).minScrollExtent;
     return super.applyMoveTo(
       math.max(value + shift, math.min(value, minExtent)),
