@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
 
 import '../../l10n/app_localizations.dart';
+import '../../theme/app_theme.dart' show poltergeistMonoTextStyle;
 
 /// Shows the trust-on-first-use prompt. On a *changed* key this is a hard,
 /// visually alarming block that requires explicit re-pinning — never a
@@ -118,7 +119,7 @@ class _Fingerprint extends StatelessWidget {
         Text(label, style: Theme.of(context).textTheme.labelSmall),
         SelectableText(
           '$type\n$value',
-          style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+          style: poltergeistMonoTextStyle.copyWith(fontSize: 12),
         ),
       ],
     );

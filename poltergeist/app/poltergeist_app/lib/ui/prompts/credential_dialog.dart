@@ -4,6 +4,7 @@ import 'package:poltergeist_core/poltergeist_core.dart';
 
 import '../../l10n/app_localizations.dart';
 import '../../services/identity_file_reader.dart';
+import '../../theme/app_theme.dart' show poltergeistMonoTextStyle;
 
 /// What the user answered to a credential prompt. Exactly one secret shape
 /// is set — the password, or the identity file's key material (read from
@@ -169,7 +170,7 @@ class _CredentialDialogState extends State<_CredentialDialog> {
               widget.data.host,
               widget.data.port,
             ),
-            style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+            style: poltergeistMonoTextStyle.copyWith(fontSize: 12),
           ),
           if (widget.vaultUnavailable) ...[
             const SizedBox(height: 12),
