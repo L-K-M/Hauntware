@@ -122,14 +122,15 @@ final class CronRun {
 /// Stepping happens in instants: days that cannot match jump to the next
 /// wall day that can, matching days walk minute by minute, and a wall-clock
 /// jump between consecutive instants marks a DST transition. Gap jobs
-/// (cronie fires them at the transition instant, within a 3-hour
-/// window), first-occurrence overlap jobs and other runs within an hour
-/// of a transition are annotated [CronDst].
+/// on the server clock (cronie fires them at the transition instant,
+/// within a 3-hour window), first-occurrence overlap jobs and other runs
+/// within an hour of a transition are annotated [CronDst].
 ///
-/// cronie and Debian's cron catch up skipped minutes and skip repeated
-/// ones only for fixed-time jobs. A wildcard job
-/// ([CronExpression.hasWildcardTime]) runs by the clock: never in a gap,
-/// and in both passes of an overlap.
+/// On the server clock, cronie and Debian's cron catch up skipped
+/// minutes and skip repeated ones only for fixed-time jobs;
+/// [CronClock.line] gives cronie's `CRON_TZ` rule. A wildcard job
+/// ([CronExpression.hasWildcardTime]) runs by the clock on either:
+/// never in a gap, and in both passes of an overlap.
 List<CronRun> nextCronRuns(
   CronExpression expression, {
   required DateTime afterUtc,
