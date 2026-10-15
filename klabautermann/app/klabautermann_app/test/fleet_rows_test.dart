@@ -477,9 +477,8 @@ void main() {
       });
     }
 
-    testWidgets('the desktop rail fits a monitored, flagged row at 2x text', (
-      tester,
-    ) async {
+    testWidgets('at 2x text the rail\'s bar and age give way to the name, '
+        'the warning stays', (tester) async {
       tester.platformDispatcher.textScaleFactorTestValue = 2;
       addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
       final rows = await _pump(
@@ -487,11 +486,11 @@ void main() {
         servers: const [
           FleetServer(
             id: 'srv-1',
-            displayName: 'a-long-server-name.example',
-            address: 'deploy@a-long-server-name.example:2222',
+            displayName: 'db-1',
+            address: '10.0.0.4',
             locatorConflict: ['srv-2'],
           ),
-          FleetServer(id: 'srv-2', displayName: 'db-1', address: '10.0.0.4'),
+          FleetServer(id: 'srv-2', displayName: 'db-2', address: '10.0.0.4'),
         ],
       );
       await rows.emit(tester, [
@@ -500,7 +499,11 @@ void main() {
       ]);
 
       expect(tester.takeException(), isNull);
-      expect(find.byType(PressureBar), findsOneWidget);
+      expect(find.byType(PressureBar), findsNothing);
+      expect(find.byKey(kFleetRowAgeKey), findsNothing);
+      expect(find.byIcon(Icons.warning_amber_rounded), findsOneWidget);
+      expect(find.text('db-1'), findsOneWidget, reason: 'not ellipsized');
+      expect(_row(tester, 'srv-1').tooltip, contains('Updated 0 s ago'));
     });
   });
 

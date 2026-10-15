@@ -264,6 +264,17 @@ class FleetServerRow extends StatelessWidget {
   /// kit's row keeps room for its mark, icon and a title on a 260 px rail.
   static const double _extrasMaxWidth = 120;
 
+  /// How wide a row must be, per 100 % of text, for the pressure bar and
+  /// age to sit beside it: the 260 px rail keeps them up to about 140 %
+  /// text, a 360 dp phone up to 200 %. A narrower row would cut the
+  /// server's name and state word to an ellipsis, so they give way there;
+  /// the tooltip and the label still say what they show.
+  static const double _barRowWidthPerText = 180;
+
+  /// The text size whose growth [_barRowWidthPerText] follows: body text,
+  /// as on the row's second line.
+  static const double _bodyTextSize = 14;
+
   /// What a row with no age to count listens to instead of the clock: it
   /// never notifies, so the clock stops once no row shows an age.
   static final Listenable _silent = Listenable.merge(const []);
@@ -414,92 +425,105 @@ class FleetServerRow extends StatelessWidget {
       GhostServerGlyph.blocked => true,
       _ => false,
     };
-    final extras = [
-      if (conflict != null)
-        Tooltip(
-          message: conflict,
-          excludeFromSemantics: true,
-          // Hover only, as on the row: a touch long-press opens its menu.
-          triggerMode: TooltipTriggerMode.manual,
-          child: Icon(
-            Icons.warning_amber_rounded,
-            size: 16,
-            color: ChartPalette.of(context).warning,
-          ),
-        ),
-      if (cells != null)
-        Flexible(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.end,
-            spacing: 4,
-            children: [
-              PressureBar(
-                cells: cells,
-                strings: chartStrings,
-                stale: reading!.stale,
-              ),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                spacing: 2,
-                children: [
-                  if (reading.stale)
-                    Icon(Icons.history, size: 14, color: secondaryText),
-                  Flexible(
-                    child: Text(
-                      switch (fleetRowAge(l10n, reading.age)) {
-                        final age when reading.stale && !linkWordSaysStale =>
-                          l10n.fleetRowStaleAge(age),
-                        final age => age,
-                      },
-                      key: kFleetRowAgeKey,
-                      maxLines: 1,
-                      softWrap: false,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                        color: secondaryText,
-                        fontFeatures: const [FontFeature.tabularFigures()],
+    final warning = conflict == null
+        ? null
+        : Tooltip(
+            message: conflict,
+            excludeFromSemantics: true,
+            // Hover only, as on the row: a touch long-press opens its menu.
+            triggerMode: TooltipTriggerMode.manual,
+            child: Icon(
+              Icons.warning_amber_rounded,
+              size: 16,
+              color: ChartPalette.of(context).warning,
+            ),
+          );
+    final bar = cells == null
+        ? null
+        : Flexible(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              spacing: 4,
+              children: [
+                PressureBar(
+                  cells: cells,
+                  strings: chartStrings,
+                  stale: reading!.stale,
+                ),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  spacing: 2,
+                  children: [
+                    if (reading.stale)
+                      Icon(Icons.history, size: 14, color: secondaryText),
+                    Flexible(
+                      child: Text(
+                        switch (fleetRowAge(l10n, reading.age)) {
+                          final age when reading.stale && !linkWordSaysStale =>
+                            l10n.fleetRowStaleAge(age),
+                          final age => age,
+                        },
+                        key: kFleetRowAgeKey,
+                        maxLines: 1,
+                        softWrap: false,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.labelMedium
+                            ?.copyWith(
+                              color: secondaryText,
+                              fontFeatures: const [
+                                FontFeature.tabularFigures(),
+                              ],
+                            ),
                       ),
                     ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-    ];
+                  ],
+                ),
+              ],
+            ),
+          );
     // Beside the row rather than in it: the kit's row takes no trailing
     // widget, and ghost_ui is a shared package outside this change. The
     // row's label already says what these show, so they stay out of the
     // semantics tree, and a tap on them opens the server like the row.
-    // Capped, so that at 200 % text the age gives way before the row. The
-    // kit's row stays this Row's first child with or without them, so it
-    // keeps its state (focus, hover) when they come and go.
-    return Row(
-      children: [
-        Expanded(child: row),
-        if (extras.isNotEmpty)
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: _extrasMaxWidth),
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              // The row's node has the tap already; the detector's own
-              // would merge into the list item as a second, unnamed stop.
-              excludeFromSemantics: true,
-              onTap: onActivate,
-              child: ExcludeSemantics(
-                child: Padding(
-                  padding: const EdgeInsetsDirectional.only(end: 8),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    spacing: 6,
-                    children: extras,
+    // The kit's row stays this Row's first child with or without them, so
+    // it keeps its state (focus, hover) when they come and go.
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final textGrowth =
+            MediaQuery.textScalerOf(context).scale(_bodyTextSize) /
+            _bodyTextSize;
+        final extras = [
+          ?warning,
+          if (constraints.maxWidth >= _barRowWidthPerText * textGrowth) ?bar,
+        ];
+        return Row(
+          children: [
+            Expanded(child: row),
+            if (extras.isNotEmpty)
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: _extrasMaxWidth),
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  // The row's node has the tap already; the detector's own
+                  // would merge into the list item as a second, unnamed stop.
+                  excludeFromSemantics: true,
+                  onTap: onActivate,
+                  child: ExcludeSemantics(
+                    child: Padding(
+                      padding: const EdgeInsetsDirectional.only(end: 8),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        spacing: 6,
+                        children: extras,
+                      ),
+                    ),
                   ),
                 ),
               ),
-            ),
-          ),
-      ],
+          ],
+        );
+      },
     );
   }
 
