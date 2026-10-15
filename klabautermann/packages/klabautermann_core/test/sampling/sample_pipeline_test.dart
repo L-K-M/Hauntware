@@ -65,8 +65,8 @@ SamplerReplied _fastReply(
 /// A `procs` section listing pid 1 with [utime] user jiffies.
 TestSection _procsSection(int utime) => ok(
   'procs',
-  '== stat ==\n1 1 (init) S 0 1 1 0 -1 0 0 0 0 0 $utime 0 0 0 20 0 1 '
-      '0 500 0 0',
+  '== meta ==\ntotal=1\nselection=all\n'
+      '== rows ==\n1 S 0 $utime 0 500 - - init',
 );
 
 /// A `procs` reply listing pid 1 with [utime] user jiffies, read at

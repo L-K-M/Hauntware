@@ -344,11 +344,10 @@ ProcsResult procsResult(
       ProcessRow(
         pid: p.pid,
         parentPid: p.ppid,
-        name: p.comm ?? p.name,
+        name: p.comm,
         state: p.state,
         userName: p.userName,
         uid: p.uid,
-        threads: p.threads,
         residentBytes: p.rssKb == null ? null : p.rssKb! * 1024,
         cpuPercent: cpu[p.pid],
         startTicks: p.startTicks,
