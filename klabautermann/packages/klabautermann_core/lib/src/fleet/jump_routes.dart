@@ -127,7 +127,11 @@ final class JumpHop {
 ///   too, although ssh ignores a later hop's own route: a hop left out
 ///   only for its `ProxyCommand`, its `ProxyJump` or a `Match` that could
 ///   set its route leaves out every host behind it, where ssh would
-///   still reach them. That is conservative, not what ssh does.
+///   still reach them. That is conservative, not what ssh does;
+/// - names a host or hop record that keeps its first pass, a key of
+///   [loopingPasses], where ssh would take its final pass: that pass
+///   loops where ssh dials the name as itself, but not as this hop (see
+///   [LoopingPass]).
 ///
 /// The work is linear in the hosts: following a route stops past 16 hops,
 /// and each null route reaches the hosts that name it once.
@@ -135,8 +139,14 @@ Map<String, List<JumpHop>?> jumpRoutes(
   List<ImportedHost> hosts, {
   List<ImportedHost> hops = const [],
   Set<String> leftOut = const {},
+  Map<String, LoopingPass> loopingPasses = const {},
 }) {
-  final router = _Router([...hosts, ...hops], leftOut, _LoopTest.mayLoop);
+  final router = _Router(
+    [...hosts, ...hops],
+    leftOut,
+    _LoopTest.mayLoop,
+    loopingPasses,
+  );
 
   // A hop record's own last hop is checked where a route reaches it as a
   // first hop, with that route's user and port.
@@ -181,18 +191,81 @@ Map<String, List<JumpHop>?> jumpRoutes(
 ///
 /// The import reads the config as if `/etc/ssh/ssh_config` asked for the
 /// final pass, and keeps a name's first pass where that pass gives one of
-/// these routes (03 §10.1).
-Set<String> loopingRoutes(
+/// these routes (03 §10.1), each as a [LoopingPass] keyed by the name.
+Map<String, LoopingPass> loopingRoutes(
   List<ImportedHost> hosts, {
   List<ImportedHost> hops = const [],
   Set<String> leftOut = const {},
 }) {
   final named = [...hosts, ...hops];
   final router = _Router(named, leftOut, _LoopTest.mustLoop);
-  return {
-    for (final host in named)
-      if (router.followToEnd(host).loops) host.alias,
+  final looping = <String, LoopingPass>{};
+  for (final host in named) {
+    final followed = router.follow(host);
+    final pass = followed.loops
+        ? LoopingPass._(host, null)
+        : switch (followed.route?.lastOrNull) {
+            null => null,
+            final last => LoopingPass._(host, last._written),
+          };
+    if (pass != null &&
+        pass._loopsAs(host.port ?? kSshDefaultPort, host.user)) {
+      looping[host.alias] = pass;
+    }
+  }
+  return looping;
+}
+
+/// A final pass that gives a name a route ssh refuses where ssh dials the
+/// name as itself, so the name keeps its first pass ([loopingRoutes]).
+///
+/// ssh reaches a hop with a nested ssh that may dial the name on another
+/// port or as another user, and that takes the final pass wherever it
+/// does not loop. As a later hop, the nested ssh gets the hops before it
+/// with `-J`, which overrides the route of either pass, so the first pass
+/// holds only where both give the same `HostName`, `Port`, `User` and
+/// `IdentityFile`, the hop's own port and user first. As a first hop, its
+/// route applies, so the first pass holds only where the route still
+/// loops on the hop's own port, else the final pass's, and as its own
+/// user, else the final pass's.
+final class LoopingPass {
+  const LoopingPass._(this.settings, this._lastHop);
+
+  /// The settings the final pass gives.
+  final ImportedHost settings;
+
+  /// The route's last hop where only its jumphost loop to the name makes
+  /// the route one ssh refuses; null where the route loops before that,
+  /// on whatever port and as whatever user ssh dials the name.
+  final _Hop? _lastHop;
+
+  /// Whether the route certainly loops where ssh dials the name on [port]
+  /// as [user].
+  bool _loopsAs(int port, String? user) => switch (_lastHop) {
+    null => true,
+    final last => _isJumpLoop(
+      last,
+      settings.effectiveHost,
+      port,
+      user,
+      _LoopTest.mustLoop,
+    ),
   };
+
+  /// Whether ssh takes the first pass, [first], for the name as hop
+  /// [index] of a route that gives it its own [user] and [port].
+  bool _firstPassHolds(ImportedHost first, int index, String? user, int? port) {
+    if (index == 0) {
+      return _loopsAs(
+        port ?? settings.port ?? kSshDefaultPort,
+        user ?? settings.user,
+      );
+    }
+    return first.hostName == settings.hostName &&
+        (port ?? first.port) == (port ?? settings.port) &&
+        (user ?? first.user) == (user ?? settings.user) &&
+        first.identityFile == settings.identityFile;
+  }
 }
 
 /// Which jumps [_isJumpLoop] counts.
@@ -211,18 +284,26 @@ typedef _Followed = ({List<JumpHop>? route, bool loops});
 
 /// Follows routes through a set of named hosts and hop records.
 final class _Router {
-  _Router(List<ImportedHost> named, this._leftOut, this._test)
-    : _byAlias = {for (final host in named) host.alias: host},
-      parsed = {
-        for (final host in named)
-          host.alias: switch (host.proxyJump) {
-            null => const <_Hop>[],
-            final value => _parseProxyJump(value),
-          },
-      };
+  _Router(
+    List<ImportedHost> named,
+    this._leftOut,
+    this._test, [
+    this._loopingPasses = const {},
+  ]) : _byAlias = {for (final host in named) host.alias: host},
+       parsed = {
+         for (final host in named)
+           host.alias: switch (host.proxyJump) {
+             null => const <_Hop>[],
+             final value => _parseProxyJump(value),
+           },
+       };
 
   final Set<String> _leftOut;
   final _LoopTest _test;
+
+  /// The final pass of each name that keeps its first pass.
+  final Map<String, LoopingPass> _loopingPasses;
+
   final Map<String, ImportedHost> _byAlias;
 
   /// Each name's hops, null where the engine cannot read its `ProxyJump`.
@@ -264,6 +345,11 @@ final class _Router {
       if (_leftOut.contains(hopHost)) return unfollowable;
 
       final alias = _byAlias[hopHost];
+      final finalPass = alias == null ? null : _loopingPasses[alias.alias];
+      if (finalPass != null &&
+          !finalPass._firstPassHolds(alias!, index, user, port)) {
+        return unfollowable;
+      }
       if (index == 0 && alias != null) {
         if (!visiting.add(alias.alias)) return looping;
 

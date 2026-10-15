@@ -450,6 +450,55 @@ void main() {
       expect(unknownUser.skippedCount, 1);
     });
 
+    test('a hop keeps its first pass only where its final pass would loop '
+        'there too', () {
+      // Reached as itself, bastion's final pass routes it through
+      // bastion.example.com, a jumphost loop, so bastion keeps its first
+      // pass. As a later hop the nested ssh gets -J, which overrides that
+      // route but not the final pass's User, so ssh takes that pass there.
+      const later =
+          'Host *.example.com\n  User ops\n  ProxyJump bastion.example.com\n'
+          'Host bastion\n  HostName bastion.example.com\n'
+          'Host gw\n  HostName 10.0.0.9\n'
+          'Host web\n  HostName 10.0.0.5\n  ProxyJump gw,bastion\n'
+          'Host web2\n  HostName 10.0.0.6\n  ProxyJump gw,ops@bastion\n';
+      expect(_dials(later), {
+        'bastion': ['me@bastion.example.com:22'],
+        'gw': ['me@10.0.0.9:22'],
+        // The hop's own user is the one both passes give.
+        'web2': [
+          'me@10.0.0.9:22',
+          'ops@bastion.example.com:22',
+          'me@10.0.0.6:22',
+        ],
+      });
+      expect(importedHostsFromSshConfig(later).skippedCount, 1);
+
+      // As a first hop on another port, the loop test no longer matches.
+      const firstHop =
+          'Match originalhost bastion.example.com\n  ProxyJump none\n'
+          'Host *.example.com\n  ProxyJump bastion.example.com\n'
+          'Host bastion\n  HostName bastion.example.com\n'
+          'Host web\n  HostName 10.0.0.5\n  ProxyJump bastion:2222\n'
+          'Host web2\n  HostName 10.0.0.6\n  ProxyJump bastion\n';
+      expect(_dials(firstHop), {
+        'bastion': ['me@bastion.example.com:22'],
+        'web2': ['me@bastion.example.com:22', 'me@10.0.0.6:22'],
+      });
+      expect(importedHostsFromSshConfig(firstHop).skippedCount, 1);
+
+      // A final pass that routes bastion back through itself loops on
+      // any port.
+      expect(
+        _dials(
+          'Host prod-web\n  HostName 10.0.0.5\n  ProxyJump bastion:2222\n'
+          'Host * !bastion\n  ProxyJump bastion\n'
+          'Host bastion\n  HostName bastion.example.com\n',
+        )['prod-web'],
+        ['me@bastion.example.com:2222', 'me@10.0.0.5:22'],
+      );
+    });
+
     test('a wildcard block before the host\'s own block comes first', () {
       expect(
         _dials(

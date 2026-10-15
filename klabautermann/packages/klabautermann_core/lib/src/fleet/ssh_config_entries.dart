@@ -30,7 +30,9 @@ import 'ssh_config_settings.dart';
 ///   changes a name's settings, and it would give the name a route ssh
 ///   refuses ([loopingRoutes]: a jumphost loop, or a route through the
 ///   name itself), ssh cannot be taking that pass for it, so the name
-///   keeps its first pass's settings.
+///   keeps its first pass's settings. A route that reaches such a name
+///   as a hop is followed only where that pass would loop there too
+///   ([LoopingPass]).
 ///
 /// The text is parsed in the calling isolate: the engine's, so a large
 /// config never stalls the UI (CN-19). Both lists are unmodifiable, in
@@ -85,7 +87,7 @@ importedHostsFromSshConfig(String text) {
 
   // With the final pass that /etc/ssh/ssh_config may ask for, a name
   // whose route ssh would refuse cannot be taking that pass, so it keeps
-  // its first pass's settings.
+  // its first pass's settings, where it is reached as itself.
   final finalPass = split(
     (resolution) => switch (resolution) {
       ResolvedSshSettings(:final host) => host,
@@ -98,16 +100,27 @@ importedHostsFromSshConfig(String text) {
     hops: finalPass.hops,
     leftOut: finalPass.leftOut,
   );
+  final keptFirstPass = {
+    for (final name in names)
+      if (looping[name] case final pass?
+          when resolved[name] is UnresolvedSshSettings)
+        name: pass,
+  };
   final (:hosts, :hops, :leftOut) = split(
     (resolution) => switch (resolution) {
       ResolvedSshSettings(:final host) => host,
       UnresolvedSshSettings(:final passes?)
-          when looping.contains(passes.firstPass.alias) =>
+          when keptFirstPass.containsKey(passes.firstPass.alias) =>
         passes.firstPass,
       UnresolvedSshSettings() => null,
     },
   );
-  final routes = jumpRoutes(hosts, hops: hops, leftOut: leftOut);
+  final routes = jumpRoutes(
+    hosts,
+    hops: hops,
+    leftOut: leftOut,
+    loopingPasses: keptFirstPass,
+  );
   final followed = [
     for (final host in hosts)
       if (routes[host.alias] != null) host,

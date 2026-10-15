@@ -3522,8 +3522,15 @@ the engine in `engine_isolate.dart` beside it):
     taking that pass for it, so the host keeps its first pass's
     settings. Only loops that are certain count: a jump with its own
     user, to a host without `User`, or to an address whose final form
-    the import cannot know, does not. A host whose two passes give two
-    routes ssh would take is left out and counted. For a
+    the import cannot know, does not. A route that reaches such a host
+    as a hop keeps its first pass only where the final pass would loop
+    there too: as a later hop, which ssh hands the hops before it with
+    `-J`, both passes must give the same `HostName`, `Port`, `User` and
+    `IdentityFile`, the hop's own port and user first; as a first hop,
+    the final pass's route must still loop on the hop's own port and as
+    its own user, else that pass's. Otherwise the host behind it is left
+    out and counted. A host whose two passes give two routes ssh would
+    take is left out and counted. For a
     `HostName` whose final form the import cannot know (an address with
     a scope, or one the system resolver may read where Dart does not), a
     block whose pattern may match it counts as a `Match` that may apply.
