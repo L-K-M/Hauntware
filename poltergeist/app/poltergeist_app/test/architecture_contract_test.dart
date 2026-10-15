@@ -16,6 +16,10 @@ const _sharedLocalSyncDeviceId =
 const _failureFreeCancellation =
     'outcome.cancelled && outcome.failures.isEmpty';
 
+// A real family only on Linux and Android: CoreText and DirectWrite skip it
+// and draw the proportional system font.
+final _bareMonospace = RegExp(r'''fontFamily:\s*['"]monospace['"]''');
+
 void main() {
   test('recognizes reserved filesystem declaration variants', () {
     const declarations = [
@@ -82,5 +86,22 @@ void main() {
     ).readAsStringSync();
 
     expect(source, contains(_failureFreeCancellation));
+  });
+
+  test('code text never names the bare monospace family', () {
+    final offenders = <String>[];
+    for (final entity in Directory('lib').listSync(recursive: true)) {
+      if (entity is! File || !entity.path.endsWith('.dart')) continue;
+
+      for (final (index, line) in entity.readAsLinesSync().indexed) {
+        if (line.trimLeft().startsWith('//')) continue;
+        if (!_bareMonospace.hasMatch(line)) continue;
+
+        offenders.add('${entity.path}:${index + 1}');
+      }
+    }
+
+    // poltergeistMonoTextStyle carries the bundled stack.
+    expect(offenders, isEmpty);
   });
 }
