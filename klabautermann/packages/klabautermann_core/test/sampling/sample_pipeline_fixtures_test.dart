@@ -176,6 +176,9 @@ void main() {
       );
       final procs = slow[SampleStream.procs]! as ProcsResult;
       expect(procs.processes, isNotEmpty);
+      // Every fixture lists all of its processes (D48).
+      expect(procs.totalProcesses, procs.processes.length);
+      expect(procs.selection, ProcsSelection.all);
       expect(procs.processes.map((p) => p.cpuPercent), everyElement(isNull));
       final units = slow[SampleStream.units]! as UnitsResult;
       expect(

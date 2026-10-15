@@ -518,6 +518,39 @@ void main() {
     expect(share([_procsSection(1000), fs], 1018, 18), 100);
   });
 
+  test('a truncated process list carries the host\'s count and how it '
+      'chose the rows; a full one counts every row (D48)', () {
+    // Above 500 processes the host keeps the top rows by CPU share and by
+    // memory and reports how many it counted: "showing N of M" (PRC-01).
+    TestSection procs(int total, String selection, int utime) => ok(
+      'procs',
+      '== meta ==\ntotal=$total\nselection=$selection\n'
+          '== rows ==\n1 S 0 $utime 0 500 0 2048 init\n'
+          '7 R 1 9000 0 700 1000 409600 java',
+    );
+    final p = _sampling(streams: {SampleStream.procs});
+    ProcsResult read(TestSection section, double uptime, int at) =>
+        _result<ProcsResult>(
+          p.addTick({SampleStream.procs}, reply(1, uptime, [section]), _at(at)),
+        );
+
+    final truncated = read(procs(900, 'cpu_rss', 100), 1000, 0);
+    expect(truncated.processes.map((r) => r.pid), [1, 7]);
+    expect(truncated.totalProcesses, 900);
+    expect(truncated.selection, ProcsSelection.cpuAndMemory);
+    // The kept rows are timed as before while procs leads the reply: 200
+    // jiffies at 100 per second over two seconds, one full CPU.
+    expect(
+      read(procs(900, 'cpu_rss', 300), 1002, 2).processes.first.cpuPercent,
+      100,
+    );
+
+    final full = read(procs(2, 'all', 500), 1004, 4);
+    expect(full.processes, hasLength(2));
+    expect(full.totalProcesses, 2);
+    expect(full.selection, ProcsSelection.all);
+  });
+
   test('process rows: RSS in bytes; a ps fallback row lists its '
       'whitespace tokens (7.2)', () {
     final rows = procsResult(

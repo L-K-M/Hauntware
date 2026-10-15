@@ -330,7 +330,8 @@ StallShares? _stall(Pressure? p) {
 
 /// The process list with each process's CPU share since [previous], a
 /// reading [elapsed] seconds earlier (7.2, PRC-03); shares are null
-/// without one.
+/// without one. The host's process count and how it chose the rows pass
+/// through, so a truncated list can say "showing N of M" (D48).
 ProcsResult procsResult(
   ProcsSnapshot next, {
   ProcsSnapshot? previous,
@@ -339,24 +340,28 @@ ProcsResult procsResult(
   final cpu = previous != null && elapsed != null
       ? procCpuPercent(previous, next, elapsed)
       : const <int, double>{};
-  return ProcsResult([
-    for (final p in next.processes)
-      ProcessRow(
-        pid: p.pid,
-        parentPid: p.ppid,
-        name: p.comm,
-        state: p.state,
-        userName: p.userName,
-        uid: p.uid,
-        residentBytes: p.rssKb == null ? null : p.rssKb! * 1024,
-        cpuPercent: cpu[p.pid],
-        startTicks: p.startTicks,
-        // A `ps` fallback row joined its arguments with spaces, so their
-        // boundaries are lost; it lists the whitespace tokens, so 8.9's
-        // per-argument masking works on those (7.2).
-        arguments: p.argv ?? _tokens(p.argsJoined),
-      ),
-  ]);
+  return ProcsResult(
+    [
+      for (final p in next.processes)
+        ProcessRow(
+          pid: p.pid,
+          parentPid: p.ppid,
+          name: p.comm,
+          state: p.state,
+          userName: p.userName,
+          uid: p.uid,
+          residentBytes: p.rssKb == null ? null : p.rssKb! * 1024,
+          cpuPercent: cpu[p.pid],
+          startTicks: p.startTicks,
+          // A `ps` fallback row joined its arguments with spaces, so their
+          // boundaries are lost; it lists the whitespace tokens, so 8.9's
+          // per-argument masking works on those (7.2).
+          arguments: p.argv ?? _tokens(p.argsJoined),
+        ),
+    ],
+    totalProcesses: next.totalProcesses,
+    selection: next.selection,
+  );
 }
 
 /// The tokens of a `ps` command line, which the host parser joins with
