@@ -230,6 +230,41 @@ void main() {
       expect(cpu.samples.first, 6);
       expect(cpu.samples.last, total);
     });
+
+    CoreResult cpuAt(double busy) =>
+        CoreResult(cpu: CpuPercentages(const [], busy));
+
+    test('a stream no subscription named for a while resumes after a '
+        'gap', () async {
+      monitoring.subscribe('srv-1', 'overview-0', {core});
+      emit(core, 1, cpuAt(10));
+      emit(core, 2, cpuAt(20));
+      await settle();
+      monitoring.unsubscribe('srv-1', 'overview-0');
+      await settle();
+
+      // The engine reports no Gap for a stream it was not asked for.
+      monitoring.subscribe('srv-1', 'overview-0', {core});
+      emit(core, 3, cpuAt(90));
+      await settle();
+      expect(ring(core, MetricSeries.cpuBusy), [10, 20, null, 90]);
+      expect(ring(core, MetricSeries.load1), [null, null, null, null]);
+    });
+
+    test('a stream handed between surfaces in one turn has no gap', () async {
+      monitoring.subscribe('srv-1', 'overview-0', {core});
+      emit(core, 1, cpuAt(10));
+      await settle();
+
+      // A tab switch: the old panel lets go before the new one subscribes.
+      monitoring
+        ..unsubscribe('srv-1', 'overview-0')
+        ..subscribe('srv-1', 'system-1', {core, SampleStream.fs});
+      await settle();
+      emit(core, 2, cpuAt(20));
+      await settle();
+      expect(ring(core, MetricSeries.cpuBusy), [10, 20]);
+    });
   });
 
   group('freshness (03 §9.5 item 4)', () {

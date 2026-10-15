@@ -3602,7 +3602,11 @@ the engine in `engine_isolate.dart` beside it):
   Samples feed a ring of 300 readings per server, stream and series (CPU
   busy, used memory, used swap and one-minute load, from `overview` and
   `core`) and a newest reading time, which a clock ticking each second
-  while shown turns into an age (9.5 item 4). A `CatalogReplaced` without
+  while shown turns into an age (9.5 item 4). The engine reports no `Gap`
+  for a stream no subscription names, so the controller puts a null in
+  that stream's rings before its next reading once no subscription named
+  it at the end of a turn; a tab switch that hands `core` from one panel
+  to another in one turn leaves no hole. A `CatalogReplaced` without
   a server drops these and its seq floor (SYN-08). The engine's
   rejections of `Connect`, `Disconnect` and `SetAppActivity` until links
   land show nothing.

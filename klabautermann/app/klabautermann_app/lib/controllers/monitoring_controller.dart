@@ -108,8 +108,9 @@ final class MonitoringController extends ChangeNotifier {
   /// servers only.
   Set<String>? _fleetIds;
 
-  /// The `(serverId, subscriptionId)` pairs the engine was asked to sample.
-  final Set<(String, String)> _subscribed = {};
+  /// The streams the engine was asked to sample, by `(serverId,
+  /// subscriptionId)`.
+  final Map<(String, String), Set<SampleStream>> _subscribed = {};
   int _subscriptionCount = 0;
 
   /// How many views have each server open, and the [Disconnect]s waiting
@@ -150,7 +151,7 @@ final class MonitoringController extends ChangeNotifier {
   ValueListenable<DateTime> get clock => _clock;
 
   bool isSubscribed(String serverId, String subscriptionId) =>
-      _subscribed.contains((serverId, subscriptionId));
+      _subscribed.containsKey((serverId, subscriptionId));
 
   /// A subscription id no other surface holds: [surface] names the kind,
   /// and a count keeps two of a kind apart, such as a closing page and the
@@ -168,19 +169,54 @@ final class MonitoringController extends ChangeNotifier {
     Set<SampleStream> streams,
   ) {
     assert(streams.isNotEmpty, 'unsubscribe instead of naming no stream');
-    _subscribed.add((serverId, subscriptionId));
+    final named = _ringStreamsNamed(serverId);
+    final kept = _subscribed[(serverId, subscriptionId)] = Set.unmodifiable(
+      streams,
+    );
+    _followRingStreams(serverId, named);
     _send(
       Subscribe(
         serverId: serverId,
         subscriptionId: subscriptionId,
-        streams: Set.unmodifiable(streams),
+        streams: kept,
       ),
     );
   }
 
   void unsubscribe(String serverId, String subscriptionId) {
-    if (!_subscribed.remove((serverId, subscriptionId))) return;
+    final named = _ringStreamsNamed(serverId);
+    if (_subscribed.remove((serverId, subscriptionId)) == null) return;
+    _followRingStreams(serverId, named);
     _send(Unsubscribe(serverId: serverId, subscriptionId: subscriptionId));
+  }
+
+  /// The ring streams some subscription of [serverId] names.
+  Set<SampleStream> _ringStreamsNamed(String serverId) => {
+    for (final MapEntry(key: (id, _), value: streams) in _subscribed.entries)
+      if (id == serverId) ...streams.where(_ringStreams.contains),
+  };
+
+  /// Marks where a ring stream of [serverId] went unsampled, given the
+  /// streams [before] a change: the engine samples a stream only while a
+  /// subscription names it (03 §6.4) and reports no [Gap] for one nobody
+  /// asked for, so only this controller knows its rings have a hole, which
+  /// they must not draw across (9.5 item 5). A stream handed from one
+  /// surface to another within one turn (a tab switch lets the old panel
+  /// go before the new one subscribes) has no hole, so a stream counts as
+  /// unnamed only if no subscription names it once the turn is over.
+  void _followRingStreams(String serverId, Set<SampleStream> before) {
+    final now = _ringStreamsNamed(serverId);
+    for (final stream in now.difference(before)) {
+      _readings[serverId]?.named(stream);
+    }
+    final left = before.difference(now);
+    if (left.isEmpty) return;
+    scheduleMicrotask(() {
+      final unnamed = left.difference(_ringStreamsNamed(serverId));
+      for (final stream in unnamed) {
+        _readings[serverId]?.unnamed(stream);
+      }
+    });
   }
 
   /// A view of [serverId] opened (the desktop workspace, the phone's pushed
@@ -342,6 +378,17 @@ final class _ServerReadings {
   final Map<SampleStream, Map<MetricSeries, SeriesRing>> _rings = {};
   final ValueNotifier<DateTime?> newestAt = ValueNotifier(null);
 
+  /// Ring streams no subscription names, and those named again since,
+  /// whose next reading follows a hole.
+  final Set<SampleStream> _unnamed = {};
+  final Set<SampleStream> _afterHole = {};
+
+  void unnamed(SampleStream stream) => _unnamed.add(stream);
+
+  void named(SampleStream stream) {
+    if (_unnamed.remove(stream)) _afterHole.add(stream);
+  }
+
   ValueNotifier<Sample?> box(SampleStream stream) =>
       _boxes.putIfAbsent(stream, () => ValueNotifier<Sample?>(null));
 
@@ -364,9 +411,13 @@ final class _ServerReadings {
 
     // Rings first: a surface that hears the box may read them too.
     if (_ringStreams.contains(sample.stream)) {
+      // Marked as the next reading arrives rather than when the stream is
+      // named again: a reading still in flight then belongs before it.
+      final hole = _afterHole.remove(sample.stream);
       for (final MapEntry(key: series, value: ring) in rings(
         sample.stream,
       ).entries) {
+        if (hole && ring.length > 0) ring.add(null);
         ring.add(series.readFrom(sample.result));
       }
     }
