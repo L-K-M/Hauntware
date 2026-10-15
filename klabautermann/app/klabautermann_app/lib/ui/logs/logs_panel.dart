@@ -167,7 +167,7 @@ class _LogsPanelState extends State<LogsPanel> {
           builder: (context, constraints) {
             final compact = constraints.maxWidth < scaler.scale(_phoneWidth);
             final search = _SearchField(search: _panel.search);
-            return Column(
+            final header = Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Padding(
@@ -193,6 +193,19 @@ class _LogsPanelState extends State<LogsPanel> {
                       : const SizedBox.shrink(),
                 ),
                 ?_status(l10n),
+              ],
+            );
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Large text on a small phone: the header scrolls within
+                // half the panel, so the log keeps the other half.
+                ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxHeight: constraints.maxHeight / 2,
+                  ),
+                  child: SingleChildScrollView(child: header),
+                ),
                 Expanded(child: _logView(l10n)),
               ],
             );

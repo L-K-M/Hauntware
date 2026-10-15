@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:klabautermann_app/controllers/monitoring_controller.dart';
 import 'package:klabautermann_app/l10n/app_localizations.dart';
+import 'package:klabautermann_app/ui/logs/log_view.dart';
 import 'package:klabautermann_app/ui/logs/logs_panel.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 
@@ -308,6 +309,32 @@ void main() {
       expect(tester.takeException(), isNull);
     });
   }
+
+  testWidgets('keeps the log in sight at 200 % text on a small phone with '
+      'the notice and a refusal', (tester) async {
+    tester.platformDispatcher.textScaleFactorTestValue = 2;
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    final harness = await pumpApp(
+      tester,
+      size: const Size(375, 667),
+      servers: twoServers,
+    );
+    await tester.tap(find.text('web-1'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Logs'));
+    await tester.pumpAndSettle();
+
+    harness.engine
+      ..emit(HostProfileChanged('srv-1', _limited))
+      ..emit(const RequestRejected('OpenLogStream', 'not implemented yet'));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(find.textContaining(_notice), findsOneWidget);
+    expect(
+      tester.getSize(find.byType(LogView)).height,
+      greaterThanOrEqualTo(tester.getSize(find.byType(LogsPanel)).height / 2),
+    );
+  });
 
   group('golden', () {
     for (final brightness in Brightness.values) {
