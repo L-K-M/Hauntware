@@ -6,6 +6,7 @@ import '../controllers/monitoring_controller.dart';
 import '../l10n/app_localizations.dart';
 import 'fleet_rail.dart' show linkStatusWord;
 import 'inspector_pane.dart' show PlaceholderPaneBody;
+import 'logs/logs_panel.dart';
 import 'server_surfaces.dart';
 
 /// The pushed server screen of 03 §10.5: the server's title, its link
@@ -95,7 +96,14 @@ class _ServerDetailPageState extends State<ServerDetailPage>
                 surface: panel.name,
                 streams: panel.streams,
                 visible: _destinations.index == index,
-                child: const PlaceholderPaneBody(),
+                child: switch (panel) {
+                  ServerPanel.logs => LogsPanel(
+                    monitoring: widget.monitoring,
+                    serverId: widget.server.id,
+                    visible: _destinations.index == index,
+                  ),
+                  _ => const PlaceholderPaneBody(),
+                },
               ),
             // More: the other panels, pushed further (03 §10.5).
             const PlaceholderPaneBody(),

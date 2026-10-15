@@ -837,6 +837,174 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Hide fields'**
   String get logJournalHideFields;
+
+  /// Label of the Logs panel's source picker, which chooses between the journal, the kernel log and a file; also the title of the phone's source sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'Source'**
+  String get logsPanelSource;
+
+  /// Name of a Logs panel source: the systemd journal, the kernel's messages, or one file on the server.
+  ///
+  /// In en, this message translates to:
+  /// **'{source, select, journal{Journal} kernel{Kernel} other{File}}'**
+  String logsPanelSourceName(String source);
+
+  /// Label of the Logs panel's filter field for a systemd unit name.
+  ///
+  /// In en, this message translates to:
+  /// **'Unit'**
+  String get logsPanelUnit;
+
+  /// Label of the Logs panel's filter field for a syslog identifier (the program's syslog tag).
+  ///
+  /// In en, this message translates to:
+  /// **'Identifier'**
+  String get logsPanelIdentifier;
+
+  /// Label of the Logs panel's priority filter, which shows entries at a syslog priority or more urgent.
+  ///
+  /// In en, this message translates to:
+  /// **'Priority'**
+  String get logsPanelPriority;
+
+  /// Priority filter choice that shows entries of every priority.
+  ///
+  /// In en, this message translates to:
+  /// **'Any priority'**
+  String get logsPanelPriorityAny;
+
+  /// Priority filter choice: entries at this syslog priority or more urgent ones.
+  ///
+  /// In en, this message translates to:
+  /// **'{level, select, emergency{Emergency} alert{Alert and above} critical{Critical and above} error{Error and above} warning{Warning and above} notice{Notice and above} info{Info and above} other{Debug and above}}'**
+  String logsPanelPriorityLevel(String level);
+
+  /// Toggle of the Logs panel's journal filters that shows only entries since the server last started.
+  ///
+  /// In en, this message translates to:
+  /// **'Current boot only'**
+  String get logsPanelCurrentBoot;
+
+  /// Label of the Logs panel's time range filter.
+  ///
+  /// In en, this message translates to:
+  /// **'Time range'**
+  String get logsPanelTimeRange;
+
+  /// Time range filter choice: how far back entries are shown, counted from when the log opens.
+  ///
+  /// In en, this message translates to:
+  /// **'{range, select, last15Minutes{Last 15 minutes} lastHour{Last hour} last24Hours{Last 24 hours} last7Days{Last 7 days} other{Any time}}'**
+  String logsPanelTimeRangeOption(String range);
+
+  /// Label of the Logs panel's field for the file on the server to tail.
+  ///
+  /// In en, this message translates to:
+  /// **'File path'**
+  String get logsPanelPath;
+
+  /// Hint in the empty file path field.
+  ///
+  /// In en, this message translates to:
+  /// **'Absolute path, such as /var/log/syslog'**
+  String get logsPanelPathHint;
+
+  /// Error under the file path field when the server would refuse the path.
+  ///
+  /// In en, this message translates to:
+  /// **'{problem, select, notAbsolute{Enter an absolute path that starts with /.} notNormalized{Remove the . and .. parts from the path.} other{The path contains a NUL character.}}'**
+  String logsPanelPathProblem(String problem);
+
+  /// Tooltip of the button beside the file path field that lists common log files, such as the syslog and web server logs.
+  ///
+  /// In en, this message translates to:
+  /// **'Common paths'**
+  String get logsPanelCommonPaths;
+
+  /// Button that reads the log again with the filters or path entered.
+  ///
+  /// In en, this message translates to:
+  /// **'Apply'**
+  String get logsPanelApply;
+
+  /// Phone button that opens the Logs panel's filters in a sheet; count is how many filters are set.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{Filters} other{Filters ({count})}}'**
+  String logsPanelFilters(int count);
+
+  /// Chip that turns following new log entries on and off, naming what the log stream is doing: following, waiting for the server or a free session, waiting for the connection, paused by the user or the app's background, ended, or not available.
+  ///
+  /// In en, this message translates to:
+  /// **'{state, select, live{Live} connecting{Connecting} disconnected{Disconnected} paused{Paused} stopped{Stopped} other{Unavailable}}'**
+  String logsPanelLiveState(String state);
+
+  /// Tooltip of the Logs panel's Live chip.
+  ///
+  /// In en, this message translates to:
+  /// **'Follow new entries as the server writes them'**
+  String get logsPanelLiveTooltip;
+
+  /// Notice above the journal when the server shows the signed-in account only its own entries. The group names are names on the server and stay as they are.
+  ///
+  /// In en, this message translates to:
+  /// **'Only your own journal entries are shown: your account on this server is not in the systemd-journal, adm or wheel group. The Access tab shows how to add it.'**
+  String get logsPanelJournalLimited;
+
+  /// Status line above the log saying what reading it is doing or why it stopped.
+  ///
+  /// In en, this message translates to:
+  /// **'{status, select, opening{Opening the log…} waitingLink{Waiting for the connection to the server.} waitingChannel{Waiting for a free session on the server.} waitingBackground{Paused while the app is in the background.} loading{Loading entries…} invalid{The engine refused this filter or path.} missing{The server has no such file or log tool.} denied{The server denied access to this log.} failed{Reading the log failed.} rejected{The engine did not open this log.} other{Choose or type the absolute path of a file to tail.}}'**
+  String logsPanelStatus(String status);
+
+  /// Button that opens the log again after it stopped or was refused.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get logsPanelRetry;
+
+  /// Shown in place of the log when reading finished without any entry.
+  ///
+  /// In en, this message translates to:
+  /// **'No entries match these filters.'**
+  String get logsPanelEmpty;
+
+  /// Hint in the empty log search field; the search covers the entries the panel holds, not the whole log on the server.
+  ///
+  /// In en, this message translates to:
+  /// **'Search loaded entries'**
+  String get logsPanelSearchHint;
+
+  /// Tooltip of the toggle that makes the log search tell upper from lower case.
+  ///
+  /// In en, this message translates to:
+  /// **'Match case'**
+  String get logsPanelSearchCase;
+
+  /// How many matches the log search found, before one is selected.
+  ///
+  /// In en, this message translates to:
+  /// **'{total, plural, =0{No matches} =1{1 match} other{{total} matches}}'**
+  String logsPanelSearchMatches(int total);
+
+  /// Which match of the log search is selected, out of how many.
+  ///
+  /// In en, this message translates to:
+  /// **'{current} of {total}'**
+  String logsPanelSearchPosition(int current, int total);
+
+  /// Tooltip of the button that moves to the previous log search match.
+  ///
+  /// In en, this message translates to:
+  /// **'Previous match'**
+  String get logsPanelSearchPrevious;
+
+  /// Tooltip of the button that moves to the next log search match.
+  ///
+  /// In en, this message translates to:
+  /// **'Next match'**
+  String get logsPanelSearchNext;
 }
 
 class _AppLocalizationsDelegate

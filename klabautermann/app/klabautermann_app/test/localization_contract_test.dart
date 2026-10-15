@@ -164,6 +164,27 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'the window spans time'",
     "'the scale needs a positive top'",
   },
+  'lib/ui/logs/log_query.dart': {
+    // The path rule's separators and dot parts (03 §8.8), and the empty
+    // defaults of the text filters.
+    "'/'",
+    "'..'",
+    "'/.'",
+    "'/./'",
+    "''",
+    // LOG-22's common paths: paths on the server, shown verbatim as
+    // server data (03 §10.10).
+    "'/var/log/syslog'",
+    "'/var/log/messages'",
+    "'/var/log/auth.log'",
+    "'/var/log/secure'",
+    "'/var/log/nginx/access.log'",
+    "'/var/log/nginx/error.log'",
+    "'/var/log/apache2/access.log'",
+    "'/var/log/apache2/error.log'",
+    "'/var/log/httpd/access_log'",
+    "'/var/log/httpd/error_log'",
+  },
   // The search's initial empty query.
   'lib/ui/logs/log_search.dart': {"''"},
   'lib/ui/logs/log_text.dart': {

@@ -6,6 +6,7 @@ import '../controllers/monitoring_controller.dart';
 import '../l10n/app_localizations.dart';
 import 'fleet_rail.dart' show linkStatusWord;
 import 'inspector_pane.dart' show PlaceholderPaneBody;
+import 'logs/logs_panel.dart';
 import 'server_surfaces.dart';
 
 /// The server workspace of 03 §10.2: a header over the panel tab strip.
@@ -123,7 +124,14 @@ class _Panels extends StatelessWidget {
                 surface: panel.name,
                 streams: panel.streams,
                 visible: tabs.index == index,
-                child: const PlaceholderPaneBody(),
+                child: switch (panel) {
+                  ServerPanel.logs => LogsPanel(
+                    monitoring: monitoring,
+                    serverId: serverId,
+                    visible: tabs.index == index,
+                  ),
+                  _ => const PlaceholderPaneBody(),
+                },
               ),
           ],
         ),

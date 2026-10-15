@@ -522,4 +522,184 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get logJournalHideFields => 'Hide fields';
+
+  @override
+  String get logsPanelSource => 'Source';
+
+  @override
+  String logsPanelSourceName(String source) {
+    String _temp0 = intl.Intl.selectLogic(source, {
+      'journal': 'Journal',
+      'kernel': 'Kernel',
+      'other': 'File',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get logsPanelUnit => 'Unit';
+
+  @override
+  String get logsPanelIdentifier => 'Identifier';
+
+  @override
+  String get logsPanelPriority => 'Priority';
+
+  @override
+  String get logsPanelPriorityAny => 'Any priority';
+
+  @override
+  String logsPanelPriorityLevel(String level) {
+    String _temp0 = intl.Intl.selectLogic(level, {
+      'emergency': 'Emergency',
+      'alert': 'Alert and above',
+      'critical': 'Critical and above',
+      'error': 'Error and above',
+      'warning': 'Warning and above',
+      'notice': 'Notice and above',
+      'info': 'Info and above',
+      'other': 'Debug and above',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get logsPanelCurrentBoot => 'Current boot only';
+
+  @override
+  String get logsPanelTimeRange => 'Time range';
+
+  @override
+  String logsPanelTimeRangeOption(String range) {
+    String _temp0 = intl.Intl.selectLogic(range, {
+      'last15Minutes': 'Last 15 minutes',
+      'lastHour': 'Last hour',
+      'last24Hours': 'Last 24 hours',
+      'last7Days': 'Last 7 days',
+      'other': 'Any time',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get logsPanelPath => 'File path';
+
+  @override
+  String get logsPanelPathHint => 'Absolute path, such as /var/log/syslog';
+
+  @override
+  String logsPanelPathProblem(String problem) {
+    String _temp0 = intl.Intl.selectLogic(problem, {
+      'notAbsolute': 'Enter an absolute path that starts with /.',
+      'notNormalized': 'Remove the . and .. parts from the path.',
+      'other': 'The path contains a NUL character.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get logsPanelCommonPaths => 'Common paths';
+
+  @override
+  String get logsPanelApply => 'Apply';
+
+  @override
+  String logsPanelFilters(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Filters ($countString)',
+      zero: 'Filters',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String logsPanelLiveState(String state) {
+    String _temp0 = intl.Intl.selectLogic(state, {
+      'live': 'Live',
+      'connecting': 'Connecting',
+      'disconnected': 'Disconnected',
+      'paused': 'Paused',
+      'stopped': 'Stopped',
+      'other': 'Unavailable',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get logsPanelLiveTooltip =>
+      'Follow new entries as the server writes them';
+
+  @override
+  String get logsPanelJournalLimited =>
+      'Only your own journal entries are shown: your account on this server is not in the systemd-journal, adm or wheel group. The Access tab shows how to add it.';
+
+  @override
+  String logsPanelStatus(String status) {
+    String _temp0 = intl.Intl.selectLogic(status, {
+      'opening': 'Opening the log…',
+      'waitingLink': 'Waiting for the connection to the server.',
+      'waitingChannel': 'Waiting for a free session on the server.',
+      'waitingBackground': 'Paused while the app is in the background.',
+      'loading': 'Loading entries…',
+      'invalid': 'The engine refused this filter or path.',
+      'missing': 'The server has no such file or log tool.',
+      'denied': 'The server denied access to this log.',
+      'failed': 'Reading the log failed.',
+      'rejected': 'The engine did not open this log.',
+      'other': 'Choose or type the absolute path of a file to tail.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get logsPanelRetry => 'Retry';
+
+  @override
+  String get logsPanelEmpty => 'No entries match these filters.';
+
+  @override
+  String get logsPanelSearchHint => 'Search loaded entries';
+
+  @override
+  String get logsPanelSearchCase => 'Match case';
+
+  @override
+  String logsPanelSearchMatches(int total) {
+    final intl.NumberFormat totalNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String totalString = totalNumberFormat.format(total);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      total,
+      locale: localeName,
+      other: '$totalString matches',
+      one: '1 match',
+      zero: 'No matches',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String logsPanelSearchPosition(int current, int total) {
+    final intl.NumberFormat currentNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String currentString = currentNumberFormat.format(current);
+    final intl.NumberFormat totalNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String totalString = totalNumberFormat.format(total);
+
+    return '$currentString of $totalString';
+  }
+
+  @override
+  String get logsPanelSearchPrevious => 'Previous match';
+
+  @override
+  String get logsPanelSearchNext => 'Next match';
 }

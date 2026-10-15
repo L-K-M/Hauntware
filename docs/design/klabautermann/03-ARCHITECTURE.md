@@ -4305,6 +4305,38 @@ row's first line until wrap is on. Only the current match is underlined,
 whatever the line's SGR underline, so it differs by more than colour.
 Matches in a line are found again when it is drawn.
 
+The Logs panel (LOG-01 to LOG-05, LOG-22, as built in M2;
+`app/klabautermann_app/lib/ui/logs/logs_panel.dart`) puts a filter bar
+over the viewer. The bar holds the source (journal, kernel or file),
+the journal's unit, identifier, priority, current-boot and time-range
+filters, a Live chip and the search. The time range offers spans back
+from when the stream opens (15 minutes to 7 days), since a follow takes
+no end; a range with both ends waits for a date and time picker. The
+file field accepts only what the engine's `ArgValidators.absolutePath`
+accepts, a rule the app mirrors (its test repeats the engine rule's
+cases) so it can say what is wrong before sending, and it offers the
+common paths: syslog and auth on Debian and Red Hat, nginx, and Apache
+as `apache2` and `httpd`. Below 600 px at 100 % text, a width that grows
+with the text, the source and filters open bottom sheets. A stream is
+open only while the panel shows (6.4). With Live on it follows,
+delivering the newest 500 records first, and a return resumes after the
+newest journal cursor held, so nothing is missed; a file or `dmesg`
+follow has no cursor and starts over. With Live off the panel reads a
+500-record window, whose newest-first records it shows oldest first
+once the window ends, and keeps it while hidden. Turning Live off keeps
+what the follow showed. The chip names the stream's state by word and
+icon, never by colour alone: Live, Connecting (opening, or waiting for
+a session channel), Disconnected (waiting for the link), Paused (Live
+off, or the app in the background), Stopped (ended, or a file without
+a valid path) or Unavailable (refused). A status line, a live region
+for screen readers, says the same in a sentence with any host error
+output, and offers Retry after a refusal or a failed read. LOG-04's
+notice shows above the journal when the access check's journal row
+says the account sees only its own entries (K04), from the probe's
+profile. Rows from `dmesg`, which has no journal fields, carry no
+level yet, and LOG-01's "load older" waits for a buffer that can add
+entries before its oldest.
+
 ### 10.9 Theme
 
 MVP: `ghost_theme` (F4b, D9) builds the light and dark themes, installs

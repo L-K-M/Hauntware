@@ -530,5 +530,169 @@
   "logJournalHideFields": "Hide fields",
   "@logJournalHideFields": {
     "description": "Screen-reader hint for activating a journal row that shows its fields: hides them again."
+  },
+  "logsPanelSource": "Source",
+  "@logsPanelSource": {
+    "description": "Label of the Logs panel's source picker, which chooses between the journal, the kernel log and a file; also the title of the phone's source sheet."
+  },
+  "logsPanelSourceName": "{source, select, journal{Journal} kernel{Kernel} other{File}}",
+  "@logsPanelSourceName": {
+    "description": "Name of a Logs panel source: the systemd journal, the kernel's messages, or one file on the server.",
+    "placeholders": {
+      "source": {
+        "type": "String"
+      }
+    }
+  },
+  "logsPanelUnit": "Unit",
+  "@logsPanelUnit": {
+    "description": "Label of the Logs panel's filter field for a systemd unit name."
+  },
+  "logsPanelIdentifier": "Identifier",
+  "@logsPanelIdentifier": {
+    "description": "Label of the Logs panel's filter field for a syslog identifier (the program's syslog tag)."
+  },
+  "logsPanelPriority": "Priority",
+  "@logsPanelPriority": {
+    "description": "Label of the Logs panel's priority filter, which shows entries at a syslog priority or more urgent."
+  },
+  "logsPanelPriorityAny": "Any priority",
+  "@logsPanelPriorityAny": {
+    "description": "Priority filter choice that shows entries of every priority."
+  },
+  "logsPanelPriorityLevel": "{level, select, emergency{Emergency} alert{Alert and above} critical{Critical and above} error{Error and above} warning{Warning and above} notice{Notice and above} info{Info and above} other{Debug and above}}",
+  "@logsPanelPriorityLevel": {
+    "description": "Priority filter choice: entries at this syslog priority or more urgent ones.",
+    "placeholders": {
+      "level": {
+        "type": "String"
+      }
+    }
+  },
+  "logsPanelCurrentBoot": "Current boot only",
+  "@logsPanelCurrentBoot": {
+    "description": "Toggle of the Logs panel's journal filters that shows only entries since the server last started."
+  },
+  "logsPanelTimeRange": "Time range",
+  "@logsPanelTimeRange": {
+    "description": "Label of the Logs panel's time range filter."
+  },
+  "logsPanelTimeRangeOption": "{range, select, last15Minutes{Last 15 minutes} lastHour{Last hour} last24Hours{Last 24 hours} last7Days{Last 7 days} other{Any time}}",
+  "@logsPanelTimeRangeOption": {
+    "description": "Time range filter choice: how far back entries are shown, counted from when the log opens.",
+    "placeholders": {
+      "range": {
+        "type": "String"
+      }
+    }
+  },
+  "logsPanelPath": "File path",
+  "@logsPanelPath": {
+    "description": "Label of the Logs panel's field for the file on the server to tail."
+  },
+  "logsPanelPathHint": "Absolute path, such as /var/log/syslog",
+  "@logsPanelPathHint": {
+    "description": "Hint in the empty file path field."
+  },
+  "logsPanelPathProblem": "{problem, select, notAbsolute{Enter an absolute path that starts with /.} notNormalized{Remove the . and .. parts from the path.} other{The path contains a NUL character.}}",
+  "@logsPanelPathProblem": {
+    "description": "Error under the file path field when the server would refuse the path.",
+    "placeholders": {
+      "problem": {
+        "type": "String"
+      }
+    }
+  },
+  "logsPanelCommonPaths": "Common paths",
+  "@logsPanelCommonPaths": {
+    "description": "Tooltip of the button beside the file path field that lists common log files, such as the syslog and web server logs."
+  },
+  "logsPanelApply": "Apply",
+  "@logsPanelApply": {
+    "description": "Button that reads the log again with the filters or path entered."
+  },
+  "logsPanelFilters": "{count, plural, =0{Filters} other{Filters ({count})}}",
+  "@logsPanelFilters": {
+    "description": "Phone button that opens the Logs panel's filters in a sheet; count is how many filters are set.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "logsPanelLiveState": "{state, select, live{Live} connecting{Connecting} disconnected{Disconnected} paused{Paused} stopped{Stopped} other{Unavailable}}",
+  "@logsPanelLiveState": {
+    "description": "Chip that turns following new log entries on and off, naming what the log stream is doing: following, waiting for the server or a free session, waiting for the connection, paused by the user or the app's background, ended, or not available.",
+    "placeholders": {
+      "state": {
+        "type": "String"
+      }
+    }
+  },
+  "logsPanelLiveTooltip": "Follow new entries as the server writes them",
+  "@logsPanelLiveTooltip": {
+    "description": "Tooltip of the Logs panel's Live chip."
+  },
+  "logsPanelJournalLimited": "Only your own journal entries are shown: your account on this server is not in the systemd-journal, adm or wheel group. The Access tab shows how to add it.",
+  "@logsPanelJournalLimited": {
+    "description": "Notice above the journal when the server shows the signed-in account only its own entries. The group names are names on the server and stay as they are."
+  },
+  "logsPanelStatus": "{status, select, opening{Opening the log…} waitingLink{Waiting for the connection to the server.} waitingChannel{Waiting for a free session on the server.} waitingBackground{Paused while the app is in the background.} loading{Loading entries…} invalid{The engine refused this filter or path.} missing{The server has no such file or log tool.} denied{The server denied access to this log.} failed{Reading the log failed.} rejected{The engine did not open this log.} other{Choose or type the absolute path of a file to tail.}}",
+  "@logsPanelStatus": {
+    "description": "Status line above the log saying what reading it is doing or why it stopped.",
+    "placeholders": {
+      "status": {
+        "type": "String"
+      }
+    }
+  },
+  "logsPanelRetry": "Retry",
+  "@logsPanelRetry": {
+    "description": "Button that opens the log again after it stopped or was refused."
+  },
+  "logsPanelEmpty": "No entries match these filters.",
+  "@logsPanelEmpty": {
+    "description": "Shown in place of the log when reading finished without any entry."
+  },
+  "logsPanelSearchHint": "Search loaded entries",
+  "@logsPanelSearchHint": {
+    "description": "Hint in the empty log search field; the search covers the entries the panel holds, not the whole log on the server."
+  },
+  "logsPanelSearchCase": "Match case",
+  "@logsPanelSearchCase": {
+    "description": "Tooltip of the toggle that makes the log search tell upper from lower case."
+  },
+  "logsPanelSearchMatches": "{total, plural, =0{No matches} =1{1 match} other{{total} matches}}",
+  "@logsPanelSearchMatches": {
+    "description": "How many matches the log search found, before one is selected.",
+    "placeholders": {
+      "total": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "logsPanelSearchPosition": "{current} of {total}",
+  "@logsPanelSearchPosition": {
+    "description": "Which match of the log search is selected, out of how many.",
+    "placeholders": {
+      "current": {
+        "type": "int",
+        "format": "decimalPattern"
+      },
+      "total": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "logsPanelSearchPrevious": "Previous match",
+  "@logsPanelSearchPrevious": {
+    "description": "Tooltip of the button that moves to the previous log search match."
+  },
+  "logsPanelSearchNext": "Next match",
+  "@logsPanelSearchNext": {
+    "description": "Tooltip of the button that moves to the next log search match."
   }
 }
