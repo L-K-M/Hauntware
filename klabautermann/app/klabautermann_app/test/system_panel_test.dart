@@ -94,9 +94,12 @@ final _container = HostProfile(
 );
 
 final class _Panel {
-  _Panel(this.engine);
+  _Panel(this.engine, {this.serverId});
 
   final FakeEngineClient engine;
+
+  /// The server a pumped panel shows; a new value switches it.
+  final ValueNotifier<String>? serverId;
   int _seq = 0;
 
   Future<void> sample(
@@ -104,10 +107,11 @@ final class _Panel {
     SampleStream stream,
     SampleResult result, {
     DateTime? at,
+    String server = _serverId,
   }) async {
     engine.emit(
       Sample(
-        serverId: _serverId,
+        serverId: server,
         stream: stream,
         seq: ++_seq,
         at: at ?? _now,
@@ -158,6 +162,9 @@ Future<_Panel> _pump(
     await engine.close();
   });
 
+  final serverId = ValueNotifier(_serverId);
+  addTearDown(serverId.dispose);
+
   final theme = _theme(brightness, platform);
   await tester.pumpWidget(
     MaterialApp(
@@ -172,7 +179,11 @@ Future<_Panel> _pump(
           body: RepaintBoundary(
             child: ColoredBox(
               color: theme.colorScheme.surface,
-              child: SystemPanel(monitoring: monitoring, serverId: _serverId),
+              child: ValueListenableBuilder(
+                valueListenable: serverId,
+                builder: (context, serverId, _) =>
+                    SystemPanel(monitoring: monitoring, serverId: serverId),
+              ),
             ),
           ),
         ),
@@ -180,7 +191,7 @@ Future<_Panel> _pump(
     ),
   );
   await tester.pumpAndSettle();
-  return _Panel(engine);
+  return _Panel(engine, serverId: serverId);
 }
 
 Finder _inSection(SystemSection section, Finder finder) =>
@@ -506,6 +517,38 @@ void main() {
     );
     expect(find.text('21 GiB of 50 GiB'), findsNothing);
     handle.dispose();
+  });
+
+  testWidgets('a server switch shows the new server\'s readings only', (
+    tester,
+  ) async {
+    final panel = await _pump(tester);
+    await panel.sample(tester, SampleStream.identity, _identity);
+    await panel.sample(tester, SampleStream.fs, FsResult(_fs));
+    expect(find.text('Debian GNU/Linux 12 (bookworm)'), findsOneWidget);
+
+    panel.serverId!.value = 'srv-2';
+    await tester.pumpAndSettle();
+    expect(find.text('Debian GNU/Linux 12 (bookworm)'), findsNothing);
+    expect(find.text('Waiting for the first reading.'), findsNWidgets(4));
+
+    // A timeout there lists none of the first server's mounts.
+    await panel.sample(
+      tester,
+      SampleStream.fs,
+      const CollectorUnavailable(CollectorUnavailableReason.timeout),
+      server: 'srv-2',
+    );
+    expect(find.textContaining('Disk usage did not finish'), findsOneWidget);
+    expect(_mountOrder(tester), isEmpty);
+
+    await panel.sample(
+      tester,
+      SampleStream.identity,
+      const IdentityResult(osPrettyName: 'Alpine Linux v3.20'),
+      server: 'srv-2',
+    );
+    expect(find.text('Alpine Linux v3.20'), findsOneWidget);
   });
 
   testWidgets('a collector without a value says why, with the host\'s '
