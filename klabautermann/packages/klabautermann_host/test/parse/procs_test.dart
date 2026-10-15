@@ -108,6 +108,27 @@ void main() {
     expect(r.warnings.where((w) => w.startsWith('procs row')), hasLength(2));
   });
 
+  test('pid order and unknown selections parse as their meta says', () {
+    ParseResult<ProcsSnapshot> parse(int total, String selection) => parseProcs(
+      [
+        '== meta ==',
+        'total=$total',
+        'selection=$selection',
+        '== rows ==',
+        _row(1, 'init'),
+      ].join('\n'),
+      _ctx,
+    );
+
+    final pid = parse(900, 'pid').value;
+    expect(pid.selection, ProcsSelection.pidOrder);
+    expect(pid.truncated, isTrue);
+    final unknown = parse(1, 'new');
+    expect(unknown.value.selection, isNull);
+    expect(unknown.value.truncated, isFalse);
+    expect(unknown.warnings, contains('procs: meta block lacks the selection'));
+  });
+
   test('a missing meta block warns and leaves the total unknown', () {
     final r = parseProcs(['== rows ==', _row(1, 'init')].join('\n'), _ctx);
     expect(r.value.totalProcesses, isNull);
@@ -169,7 +190,7 @@ void main() {
     }
   });
 
-  test('headers for pids outside the stat pass are skipped', () {
+  test('headers for pids outside the rows are skipped', () {
     final raw = [
       '== rows ==',
       _row(1, 'init'),

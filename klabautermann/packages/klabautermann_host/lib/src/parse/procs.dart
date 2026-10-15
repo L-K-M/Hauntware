@@ -126,8 +126,8 @@ final class ProcsSnapshot {
   /// Rows keyed by pid, in `/proc` glob order.
   final List<ProcEntry> processes;
 
-  /// How many processes the host's stat pass read, of which [processes]
-  /// holds the kept ones; null when the `meta` block lacked it.
+  /// How many processes the host read, of which [processes] holds the
+  /// kept ones; null when the `meta` block lacked it.
   final int? totalProcesses;
 
   /// How the host chose the rows; null when the `meta` block lacked it.
@@ -271,8 +271,9 @@ ParseResult<ProcsSnapshot> parseProcs(String raw, ParseContext ctx) {
 
 /// One row of the `rows` block (D48): eight space-separated fields, then
 /// the comm verbatim, which may hold spaces and `)`. The fields are pid,
-/// state, ppid, utime, stime and starttime (fields 3, 4, 14, 15 and 22 of
-/// `/proc/<pid>/stat`), then the uid and the RSS in kB, `-` when unknown.
+/// state, ppid, utime, stime and starttime (fields 1, 3, 4, 14, 15 and 22
+/// of `/proc/<pid>/stat`), then the uid and the RSS in kB, `-` when
+/// unknown.
 final class _Row {
   _Row(List<String> f, List<int?> n, this.comm)
     : pid = n[0]!,
@@ -347,18 +348,18 @@ final class _CmdlineResult {
   final int forged, skipped;
 }
 
-/// Splits the `head -n 1000 [0-9]*/cmdline | tr '\000' '\037'` dump into
-/// per-pid argument vectors (03 §7.2).
+/// Splits the `head -n 1000 <pid>/cmdline... | tr '\000' '\037'` dump
+/// into per-pid argument vectors (03 §7.2).
 ///
-/// Real `==> <pid>/cmdline <==` headers appear once each, in the
-/// `LC_ALL=C` glob order of `[0-9]*/cmdline`, which is byte order on the
+/// Real `==> <pid>/cmdline <==` headers appear once each, in the order of
+/// the kept rows, which is the `LC_ALL=C` glob order: byte order on the
 /// pid text. A header that repeats a pid or breaks that order is forged
 /// by an argument containing newlines: it marks the pid it names and the
 /// entry it interrupts "command line unavailable". Headers for pids
-/// missing from the stat pass are skipped.
+/// missing from the rows are skipped.
 _CmdlineResult _parseCmdline(
   List<String> lines,
-  Set<int> statPids,
+  Set<int> rowPids,
   List<String> warnings,
 ) {
   final header = RegExp(r'^==> (\d+)/cmdline <==$');
@@ -382,7 +383,7 @@ _CmdlineResult _parseCmdline(
   void flush() {
     final pid = current;
     if (pid == null) return;
-    if (!statPids.contains(pid)) {
+    if (!rowPids.contains(pid)) {
       skipped++;
       return;
     }
@@ -433,7 +434,7 @@ _CmdlineResult _parseCmdline(
     warnings.add('cmdline: $forged forged head header(s)');
   }
   if (skipped > 0) {
-    warnings.add('cmdline: $skipped header(s) for pids outside the stat pass');
+    warnings.add('cmdline: $skipped header(s) for pids outside the rows');
   }
   if (entries.isEmpty && forged == 0 && skipped == 0) {
     warnings.add('cmdline: block carried no headers');

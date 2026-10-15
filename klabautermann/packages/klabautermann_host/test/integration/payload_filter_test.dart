@@ -96,6 +96,57 @@ void _write(Directory root, String path, String text) => (File(
 void _mark(Directory root, String path) =>
     Directory('${root.path}/$path').createSync(recursive: true);
 
+/// A fresh tree for `procs`, up [uptime] seconds by its `/proc/uptime`.
+Directory _procRoot({String uptime = '2000.00'}) {
+  final root = Directory.systemTemp.createTempSync('klab-procs');
+  addTearDown(() => root.deleteSync(recursive: true));
+  _write(root, 'proc/uptime', '$uptime 7000.00\n');
+  return root;
+}
+
+/// One process in [root]: [cpu] ticks split 3:2 into utime and stime,
+/// started [start] ticks after boot, a `status` with [uid] and [rssKb]
+/// (no `VmRSS:` line when null), and a three-argument `cmdline`.
+void _proc(
+  Directory root,
+  int pid, {
+  String? comm,
+  int cpu = 0,
+  int start = 0,
+  int uid = 1000,
+  int? rssKb,
+}) {
+  final rest = List.filled(32, 0).join(' ');
+  _write(
+    root,
+    'proc/$pid/stat',
+    '$pid (${comm ?? 'worker-$pid'}) S 1 $pid $pid 0 -1 4194560 0 0 0 0 '
+        '${cpu * 3 ~/ 5} ${cpu * 2 ~/ 5} 0 0 20 0 1 0 $start $rest\n',
+  );
+  _write(
+    root,
+    'proc/$pid/status',
+    'Name:\tworker\nUmask:\t0022\nState:\tS (sleeping)\nTgid:\t$pid\n'
+        'Pid:\t$pid\nPPid:\t1\nUid:\t$uid\t0\t0\t0\n'
+        'Gid:\t100\t100\t100\t100\nVmPeak:\t  99999 kB\n'
+        '${rssKb == null ? '' : 'VmRSS:\t  $rssKb kB\n'}Threads:\t1\n',
+  );
+  _write(root, 'proc/$pid/cmdline', '/usr/bin/worker\x00--id\x00$pid\x00');
+}
+
+/// One `procs` tick over [root] under [shell], parsed, and its payload.
+Future<({ParseResult<ProcsSnapshot> parsed, int payloadBytes})> _procs(
+  String shell,
+  Directory root, {
+  String Function(String program) edit = _asIs,
+}) async {
+  final r = await _tick(shell, root, Collector.procs, edit: edit);
+  return (
+    parsed: parseProcs(utf8.decode(r.section.payload), ParseContext.standard),
+    payloadBytes: r.section.payload.length,
+  );
+}
+
 /// A one-CPU host with one disk and one interface without a device link,
 /// as inside a container; [files] adds or replaces paths.
 Directory _smallHost([Map<String, String> files = const {}]) {
@@ -512,44 +563,24 @@ void main() {
       });
 
       test('procs keeps 500 of 2,000 processes by CPU share and RSS', () async {
-        final root = Directory.systemTemp.createTempSync('klab-procs');
-        addTearDown(() => root.deleteSync(recursive: true));
         // 2,000 s up and every process started at boot, so pid i's share
-        // is 5 * i; its RSS falls with i. The kept rows are pids 1 to 250
-        // (most RSS) and 1751 to 2000 (most CPU).
-        _write(root, 'proc/uptime', '2000.00 7000.00\n');
+        // is 5 * i per mille; its RSS falls with i. The kept rows are pids
+        // 1 to 250 (most RSS) and 1751 to 2000 (most CPU).
+        final root = _procRoot();
         for (var pid = 1; pid <= 2000; pid++) {
-          final comm = pid == 1999 ? 'a) b (c' : 'worker-$pid';
-          final rest = List.filled(32, 0).join(' ');
-          _write(
+          _proc(
             root,
-            'proc/$pid/stat',
-            '$pid ($comm) S 1 $pid $pid 0 -1 4194560 0 0 0 0 '
-                '${pid * 600} ${pid * 400} 0 0 20 0 1 0 0 $rest\n',
-          );
-          _write(
-            root,
-            'proc/$pid/status',
-            'Name:\tworker\nUmask:\t0022\nState:\tS (sleeping)\nTgid:\t$pid\n'
-                'Pid:\t$pid\nPPid:\t1\nUid:\t${1000 + pid % 3}\t0\t0\t0\n'
-                'Gid:\t100\t100\t100\t100\nVmPeak:\t  99999 kB\n'
-                '${pid == 2000 ? '' : 'VmRSS:\t  ${(2001 - pid) * 10} kB\n'}'
-                'Threads:\t1\n',
-          );
-          _write(
-            root,
-            'proc/$pid/cmdline',
-            '/usr/bin/worker\x00--id\x00$pid\x00',
+            pid,
+            comm: pid == 1999 ? 'a) b (c' : null,
+            cpu: pid * 1000,
+            uid: 1000 + pid % 3,
+            rssKb: pid == 2000 ? null : (2001 - pid) * 10,
           );
         }
 
-        final r = await _tick(shell, root, Collector.procs);
-        final parsed = parseProcs(
-          utf8.decode(r.section.payload),
-          ParseContext.standard,
-        );
-        final snap = parsed.value;
-        expect(parsed.warnings, isEmpty);
+        final r = await _procs(shell, root);
+        final snap = r.parsed.value;
+        expect(r.parsed.warnings, isEmpty);
         expect(snap.totalProcesses, 2000);
         expect(snap.selection, ProcsSelection.cpuAndMemory);
         expect(snap.truncated, isTrue);
@@ -573,7 +604,89 @@ void main() {
         expect(snap.processes.firstWhere((p) => p.pid == 1).rssKb, 20000);
         // Far below the 1 MiB section cap that 2,083 untrimmed processes
         // nearly filled in spike S2.
-        expect(r.section.payload.length, lessThan(64 * 1024));
+        expect(r.payloadBytes, lessThan(64 * 1024));
+      });
+
+      test('inside lxcfs, procs ranks by age on the host clock', () async {
+        // The container's init started 1,000 s after the host's boot, and
+        // an lxcfs /proc/uptime counts from it. Pids 2 to 301 started with
+        // the container and used half a CPU since (500 per mille); pids
+        // 302 to 551 started 10 s ago and used 90 % or more, far fewer
+        // ticks. Pids 52 to 301 have the most RSS.
+        Directory container({required bool lxcfs}) {
+          final root = _procRoot(uptime: '1000.00');
+          if (lxcfs) {
+            _write(
+              root,
+              'proc/mounts',
+              'proc /proc proc rw 0 0\n'
+                  'lxcfs ${root.path}/proc/uptime fuse.lxcfs rw 0 0\n',
+            );
+          }
+          _proc(root, 1, start: 100000, rssKb: 100);
+          for (var pid = 2; pid <= 301; pid++) {
+            _proc(root, pid, cpu: 50000, start: 100000, rssKb: 10000 + pid);
+          }
+          for (var pid = 302; pid <= 551; pid++) {
+            _proc(root, pid, cpu: 598 + pid, start: 199000, rssKb: 100);
+          }
+          return root;
+        }
+
+        final young = {for (var pid = 302; pid <= 551; pid++) pid};
+        final r = await _procs(shell, container(lxcfs: true));
+        final kept = r.parsed.value.processes.map((p) => p.pid).toSet();
+        expect(r.parsed.value.totalProcesses, 551);
+        expect(kept, {...young, for (var pid = 52; pid <= 301; pid++) pid});
+        // Without the mount the tree is ranked on the container's clock:
+        // every process looks younger than it is, and the old ones win.
+        final naive = await _procs(shell, container(lxcfs: false));
+        final naiveKept = naive.parsed.value.processes.map((p) => p.pid);
+        expect(naiveKept.where(young.contains), isEmpty);
+      });
+
+      test('without sort, procs keeps the first 500 in glob order', () async {
+        final root = _procRoot();
+        for (var pid = 1; pid <= 600; pid++) {
+          _proc(root, pid, cpu: pid, rssKb: pid);
+        }
+        String noSort(String program) {
+          const probe = 'command -v sort ';
+          expect(probe.allMatches(program), hasLength(1));
+          return program.replaceAll(probe, 'command -v klab-no-sort ');
+        }
+
+        final r = await _procs(shell, root, edit: noSort);
+        final snap = r.parsed.value;
+        expect(r.parsed.warnings, isEmpty);
+        expect(snap.selection, ProcsSelection.pidOrder);
+        expect(snap.totalProcesses, 600);
+        final glob = [for (var pid = 1; pid <= 600; pid++) '$pid']..sort();
+        expect(snap.processes.map((p) => '${p.pid}'), glob.take(kProcsRowCap));
+        expect(snap.processes.every((p) => p.argv != null), isTrue);
+      });
+
+      test('procs skips a process that ends during the tick', () async {
+        // Pid 11 lost its status after its stat was read; pid 12 was gone
+        // before its stat could be read. _tick fails on any stderr.
+        final root = _procRoot();
+        _proc(root, 10, rssKb: 10);
+        _proc(root, 11, rssKb: 11);
+        File('${root.path}/proc/11/status').deleteSync();
+        Link(
+          '${root.path}/proc/12/stat',
+        ).createSync('${root.path}/proc/12/gone', recursive: true);
+        _proc(root, 13, rssKb: 13);
+
+        final snap = (await _procs(shell, root)).parsed.value;
+        expect(snap.totalProcesses, 3);
+        expect(snap.selection, ProcsSelection.all);
+        expect(snap.truncated, isFalse);
+        expect(snap.processes.map((p) => p.pid), [10, 11, 13]);
+        final gone = snap.processes[1];
+        expect(gone.uid, isNull);
+        expect(gone.rssKb, isNull);
+        expect(gone.argv, ['/usr/bin/worker', '--id', '11']);
       });
     });
   }

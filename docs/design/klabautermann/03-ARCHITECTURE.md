@@ -570,10 +570,11 @@ Proposals awaiting the owner close the section; they are not decisions.
   and the derived deadline still bounds the request. Supersedes the slow
   figure in 6.2. *Rejected:* one fixed slow deadline (too short for the
   probe, too long for one `df`).
-- **D48. Core and overview payloads are filtered on the host.** The `core`
-  and `overview` fragments keep only the rows and fields the engine uses
-  before anything crosses the link, with builtins only (6.2, fork budget);
-  each change bumps the collector-set version (`kCollectorSetVersion`).
+- **D48. Core, overview and procs payloads are trimmed on the host.** The
+  `core` and `overview` fragments keep only the rows and fields the
+  engine uses before anything crosses the link, with builtins only (6.2,
+  fork budget); each change bumps the collector-set version
+  (`kCollectorSetVersion`).
   Until version 4 both sent all of `/proc/net/dev` and `core` all of
   `/proc/diskstats`, and spike S2 measured a 4-CPU `core` reply of 2,773 B
   and an `overview` reply of 1,227 B (`klabautermann/docs/evidence/s2/`).
@@ -659,21 +660,37 @@ Proposals awaiting the owner close the section; they are not decisions.
   3,192 B at 32. Real hosts remain for S2. Version 5 bounds `procs` the
   same way. Each row carries only what PRC-01 and PRC-02 use (pid, state,
   ppid, utime, stime, starttime, uid, RSS and comm, from `stat` and the
-  `Uid:` and `VmRSS:` lines of `status`), and rows are joined in chunks
-  of 64, because appending each line to one growing variable copies it
-  every time: S2 measured the old loops at 10.3 s under dash for 2,083
+  `Uid:` and `VmRSS:` lines of `status`), and both loops join rows in
+  chunks of 64, because appending each line to one growing variable copies
+  it every time: S2 measured the old loops at 10.3 s under dash for 2,083
   processes and 67.5 s under bash for 2,091, growing with the square of
   the count. Above 500 processes `sort` keeps the union of the 250 with
   the highest CPU share since their start and the 250 with the most
   resident memory, PRC-01's first sort keys, and a `meta` block reports
   the total and how the rows were chosen, so the list can say "showing N
-  of M"; without `sort` or `head` the first 500 in pid order stay. The
-  share since start only ranks: a long-running process that just turned
-  busy can stay below the cut until its share rises, while the CPU shown
-  remains the engine's delta (PRC-01). Only the kept rows' command lines
-  are read, in the byte order of their pids, which keeps 7.2's header
-  rules. With linear loops D47 needs no process-count term: 2,000
-  synthetic processes took about 0.4 s under dash and bash [U].
+  of M" (`ProcsResult` carries both, 10.1); PRC-01's search and its other
+  sort keys then see the kept rows only. The selection forks about nine
+  processes per tick (`sort`, `head` and their subshells), which 6.2's
+  fork budget allows as execs the collector needs; up to 500 processes a
+  tick forks as often as version 4 [U]. Without `sort` or `head`, or when
+  the selection fails, the first 500 in glob order stay; mksh runs
+  `printf` as an external command, and the kernel refuses an argument
+  longer than 32 pages (128 KiB with 4 KiB pages), so there the selection
+  fails above about 2,000 processes [U]. The share since start only ranks:
+  a long-running process that just turned busy can stay below the cut
+  until its share rises, while the CPU shown remains the engine's delta
+  (PRC-01). `starttime` counts from the host's boot [V: Linux
+  `fs/proc/array.c` (`do_task_stat`)], but an lxcfs `/proc/uptime` (D50)
+  counts from the container's init [V: lxcfs `src/proc_fuse.c`
+  (`get_reaper_age`) at v7.0.0], so where `/proc/uptime` is an lxcfs mount
+  the fragment adds PID 1's start back; otherwise every process inside
+  such a container would seem younger than it is. Only the kept rows'
+  command lines are read, in the byte order of their pids, which keeps
+  7.2's header rules. With linear loops D47 needs no process-count term:
+  synthetic trees [U] took about 0.6 s under dash and bash at 2,000
+  processes and 2.8 s at 10,000, and a container with 2,080 sleeping
+  processes took 0.7 s under dash and 0.8 s under bash per tick and sent
+  30 KB, where version 4 took 9.6 s under dash and sent 900 KB [U].
   *Rejected:* filtering only in the engine (the bytes still cross the link
   on every tick, against 11.4's 1 KB/s for 10 hosts); name lists of
   virtual interfaces and partitions (never complete); leaving out every
@@ -2227,15 +2244,17 @@ unless the user enables admin mode for that panel.
 
 - **MVP.** The `procs` collector (slow sampler, only while visible) reads
   `/proc/<pid>/stat` and `status` with builtins; current CPU from utime
-  plus stime deltas, not lifetime `pcpu`. Argument vectors cannot use
-  `read`: `/proc/<pid>/cmdline` separates arguments with NUL bytes, which
-  shell variables cannot hold, and dash and bash drop them, so `sleep 30`
-  reads as `sleep30` [L] (04, Appendix A, E11). Instead one
+  plus stime deltas, not lifetime `pcpu`. Above 500 processes it sends at
+  most 500 rows, and the list says "showing N of M" (D48). Argument
+  vectors cannot use `read`: `/proc/<pid>/cmdline` separates arguments
+  with NUL bytes, which shell variables cannot hold, and dash and bash
+  drop them, so `sleep 30` reads as `sleep30` [L] (04, Appendix A, E11).
+  Instead one
   `cd /proc && head -n 1000 <pid>/cmdline... | tr '\000' '\037'` per tick
-  over the kept rows (at most 500, D48)
-  (POSIX `tr`, and GNU and BusyBox `head`: POSIX defines `head -n` only
-  for text files, which hold no NUL bytes; the line cap is [E]) turns every
-  separator into `\037` before the output reaches a shell variable. `head`
+  over the kept rows (POSIX `tr`, and GNU and BusyBox `head`: POSIX
+  defines `head -n` only for text files, which hold no NUL bytes; the line
+  cap is [E]) turns every separator into `\037` before the output reaches
+  a shell variable. `head`
   precedes each file with a `==> <pid>/cmdline <==` line, which an argument
   containing newlines can forge. Real headers appear once each and in the
   byte order in which the `LC_ALL=C` glob sorts them; a header that repeats

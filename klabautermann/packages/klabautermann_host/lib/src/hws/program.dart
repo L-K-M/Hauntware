@@ -36,9 +36,9 @@ const kSamplerStartCommand =
 const kCollectorSetVersion = '5';
 
 /// The most `procs` rows one reply carries (D48). With more processes the
-/// fragment keeps the [kProcsRowCap] / 2 with the highest CPU share since
-/// their start and the [kProcsRowCap] / 2 with the most resident memory,
-/// and its `meta` block reports the total.
+/// fragment keeps the union of the [kProcsRowCap] / 2 with the highest CPU
+/// share since their start and the [kProcsRowCap] / 2 with the most
+/// resident memory, and its `meta` block reports the total.
 const kProcsRowCap = 500;
 
 /// The `timeout` guard applied to forking collectors (03 §6.2).
@@ -759,25 +759,50 @@ psec() {
 /// PRC-02 use, read with builtins from `/proc/<pid>/stat` and the `Uid:`
 /// and `VmRSS:` lines of `status`: pid, state, ppid, utime, stime,
 /// starttime, uid, RSS in kB (`-` for an unknown uid or RSS) and comm.
-/// Rows are built in chunks of 64 so the payload grows linearly, not with
-/// the square of the process count. Above [kProcsRowCap] processes `sort`
-/// keeps the union of the top halves by CPU share since start and by RSS
-/// (`selection=cpu_rss`; without `sort` and `head`, the first rows in pid
-/// order, `selection=pid`); the `meta` block carries the total. `head`
-/// closing its pipe early makes `sort` report a broken pipe where SIGPIPE
-/// is ignored, so those two `sort` runs write no stderr. The kept
-/// rows' `/proc/<pid>/cmdline` go through one `head -n 1000` piped into
-/// `tr '\000' '\037'` (shell variables cannot hold NULs; 04 App. A, E11),
-/// in the byte order of the pids, which is the glob's (03 §7.2); without
-/// head or tr the fallbacks are `ps -eo pid,ppid,user,stat,rss,args` then
-/// BusyBox `ps w`. The `==> ` headers head prints and the forgery they
-/// enable are the parser's problem (03 §7.2).
+/// Both loops join rows in chunks of 64, so a tick's time grows about
+/// linearly with the process count instead of with its square.
+///
+/// Above [kProcsRowCap] processes `sort` keeps the union of the top halves
+/// by CPU share since start and by RSS (`selection=cpu_rss`); without
+/// `sort` or `head`, or when the selection comes back empty, the first rows
+/// in glob order stay (`selection=pid`). The `meta` block carries the
+/// total. The share is per mille of one CPU: (utime + stime) * 10 over the
+/// whole seconds since start, at USER_HZ 100 (Linux's on every architecture
+/// but Alpha). 32-bit shell arithmetic (mksh) wraps it for a process with
+/// more than about 24 days of CPU time or started more than 248 days after
+/// boot, which only misranks that process. starttime counts from the host's
+/// boot but an lxcfs `/proc/uptime` from the container's init (D50), so
+/// where `/proc/uptime` is an lxcfs mount PID 1's start goes back onto the
+/// clock; `HW_LXUP` caches that check for the sampler's life.
+///
+/// The selection writes no stderr: `head` closing its pipe early makes
+/// `sort` report a broken pipe where SIGPIPE is ignored, and mksh, whose
+/// `printf` is an external command, cannot run it once the rows pass the
+/// kernel's 128 KiB limit for one argument (above about 2,000 processes),
+/// which leaves the glob order.
+///
+/// The kept rows' `/proc/<pid>/cmdline` go through one `head -n 1000`
+/// piped into `tr '\000' '\037'` (shell variables cannot hold NULs; 04
+/// App. A, E11), in the byte order of the pids, which is the glob's (03
+/// §7.2); without head or tr the fallbacks are
+/// `ps -eo pid,ppid,user,stat,rss,args` then BusyBox `ps w`. The `==> `
+/// headers head prints and the forgery they enable are the parser's
+/// problem (03 §7.2).
 const _kProcsFragment = r"""
 c_procs() {
   st=ok
-  read -r _up _x </proc/uptime
-  _now=${_up%.*}${_up#*.}
-  _now=${_now#"${_now%%[!0]*}"}
+  if [ -z "$HW_LXUP" ]; then
+    HW_LXUP=0
+    while read -r _a _b _c _x; do
+      case $_c:$_b in fuse.lxcfs:/proc/uptime) HW_LXUP=1 ;; esac
+    done 2>/dev/null </proc/mounts
+  fi
+  _z=0
+  if [ "$HW_LXUP" = 1 ] && IFS= read -r _l 2>/dev/null </proc/1/stat; then
+    set -- ${_l##*) }; _z=$((${20:-0} / 100))
+  fi
+  _up=; read -r _up _x 2>/dev/null </proc/uptime
+  _up=${_up%%.*}; _now=$((${_up:-0} + _z))
   _r=; _k=; _i=0; _n=0
   for _f in /proc/[0-9]*/stat; do
     IFS= read -r _l 2>/dev/null <"$_f" || continue
@@ -797,8 +822,8 @@ c_procs() {
         Threads:) break ;;
       esac
     done 2>/dev/null <"/proc/$_p/status"
-    _e=$((${_now:-0} - ${20})); [ "$_e" -gt 0 ] || _e=1
-    _k="$_k$NL$(((${12} + ${13}) * 1000 / $_e)) $_p $1 $2 ${12} ${13} ${20} $_u $_m $_c"
+    _e=$((_now - ${20} / 100)); [ "$_e" -gt 0 ] || _e=1
+    _k="$_k$NL$(((${12} + ${13}) * 10 / _e)) $_p $1 $2 ${12} ${13} ${20} $_u $_m $_c"
     _n=$((_n + 1)); _i=$((_i + 1))
     if [ "$_i" -ge 64 ]; then _r="$_r$_k"; _k=; _i=0; fi
   done
@@ -807,21 +832,23 @@ c_procs() {
   if [ "$_n" -gt 500 ]; then
     _sel=pid
     if command -v sort >/dev/null 2>&1 && command -v head >/dev/null 2>&1; then
-      _sel=cpu_rss
-      _r=$({ printf '%s\n' "$_r" | sort -k1,1nr 2>/dev/null | head -n 250
-        printf '%s\n' "$_r" | sort -k9,9nr 2>/dev/null | head -n 250; } | sort -u -k2,2)
+      _s=$({ printf '%s\n' "$_r" 2>/dev/null | sort -k1,1nr 2>/dev/null | head -n 250
+        printf '%s\n' "$_r" 2>/dev/null | sort -k9,9nr 2>/dev/null | head -n 250
+      } | sort -u -k2,2 2>/dev/null)
+      if [ -n "$_s" ]; then _r=$_s; _sel=cpu_rss; fi
     fi
   fi
   o="== meta ==${NL}total=$_n${NL}selection=$_sel$NL== rows =="
-  _q=; _i=0
+  _q=; _k=; _w=; _i=0; _j=0
   set -f; _ifs=$IFS; IFS=$NL
   for _l in $_r; do
     [ "$_i" -lt 500 ] || break
     _l=${_l#* }
-    o="$o$NL$_l"
-    _q="$_q ${_l%% *}/cmdline"
-    _i=$((_i + 1))
+    _k="$_k$NL$_l"; _w="$_w ${_l%% *}/cmdline"
+    _i=$((_i + 1)); _j=$((_j + 1))
+    if [ "$_j" -ge 64 ]; then o="$o$_k"; _q="$_q$_w"; _k=; _w=; _j=0; fi
   done
+  o="$o$_k"; _q="$_q$_w"
   IFS=$_ifs; set +f
   o="$o$NL== cmdline =="
   if command -v head >/dev/null 2>&1 && command -v tr >/dev/null 2>&1; then
