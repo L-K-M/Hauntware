@@ -83,6 +83,9 @@ Future<void> _capture(Map<String, List<String>> options) async {
       Directory('$root/$platformOption').existsSync()) {
     _usage('$root/$platformOption exists; pass --replace to empty it');
   }
+  if (options['redact']?.any((v) => v.length < 2) ?? false) {
+    _usage('--redact takes values of at least 2 characters');
+  }
   final sh = options['sh']?.last;
   final login = options['login-shell']?.last;
   if (sh != null && login != null) _usage('pass --sh or --login-shell');

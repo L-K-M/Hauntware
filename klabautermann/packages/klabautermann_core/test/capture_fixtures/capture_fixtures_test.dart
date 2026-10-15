@@ -53,6 +53,8 @@ void main() {
       '--sh',
     ),
     (['capture', '--out', out, '--sh', 'klab-no-shell'], 'not on'),
+    // In root: a capture that ran despite the check is removed.
+    (['capture', '--out', root, '--redact', 'q'], '--redact'),
   ]) {
     // Stable names: the temporary paths differ between runs.
     final name = args

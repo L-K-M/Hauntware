@@ -18,6 +18,8 @@ import 'package:seance_core/seance_core.dart' show SecretRedactor;
 const kRedacted = '[redacted]';
 
 /// Host-specific values the capturing side knows, matched in any case.
+/// A one-character value is skipped: as a word or anywhere it would hit
+/// unrelated text.
 final class RedactionLiterals {
   const RedactionLiterals({
     this.hostNames = const [],
