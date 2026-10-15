@@ -40,7 +40,7 @@ class ServerWorkspace extends StatelessWidget {
   Widget _build(BuildContext context, AppLocalizations l10n) {
     final server = fleet.selectedServer;
     if (server == null) {
-      return Center(
+      final invitation = Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Column(
@@ -57,6 +57,16 @@ class ServerWorkspace extends StatelessWidget {
                 textAlign: TextAlign.center,
               ),
             ],
+          ),
+        ),
+      );
+      // Centred while it fits, and scrolls when large text outgrows a
+      // short window (A11Y-09), as under the first-run card (03 §9.5).
+      return LayoutBuilder(
+        builder: (context, box) => SingleChildScrollView(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: box.maxHeight),
+            child: invitation,
           ),
         ),
       );

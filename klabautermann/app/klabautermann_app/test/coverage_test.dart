@@ -5,6 +5,7 @@ import 'package:ghost_ui/ghost_ui.dart' show contrastRatio;
 import 'package:klabautermann_app/controllers/coverage_controller.dart';
 import 'package:klabautermann_app/ui/coverage.dart';
 import 'package:klabautermann_app/ui/fleet_rail.dart' show FleetEmptyState;
+import 'package:klabautermann_app/ui/server_workspace.dart';
 import 'package:klabautermann_app/ui/sidebar_kit.dart'
     show SidebarSectionHeader;
 import 'package:klabautermann_core/klabautermann_core.dart';
@@ -18,6 +19,8 @@ const _phone = Size(390, 800);
 const _cardTitle = 'How Klabautermann watches your servers';
 const _chipOfTwo = 'Watching 0 of 2 servers on this device, only while open';
 const _fleetEmptyBody = 'Add a server to start monitoring your fleet.';
+const _workspaceEmptyBody =
+    'Choose a server from the fleet to see its workspace.';
 
 final _chip = find.byType(FleetCoverageChip);
 final _card = find.byType(FirstRunCoverageCard);
@@ -204,6 +207,38 @@ void main() {
       final content = tester
           .getRect(find.byIcon(Icons.dns_outlined))
           .expandToInclude(tester.getRect(find.text(_fleetEmptyBody)));
+      expect(content.center.dy, moreOrLessEquals(region.center.dy));
+    });
+
+    testWidgets('at twice the text size in a short desktop window, the '
+        'workspace\'s empty state scrolls under the card, and is centred '
+        'once it fits', (tester) async {
+      tester.platformDispatcher.textScaleFactorTestValue = 2;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      await pumpApp(
+        tester,
+        size: const Size(960, 600),
+        servers: twoServers,
+        coverage: _firstLaunch([]),
+      );
+
+      expect(tester.takeException(), isNull);
+      expect(_card, findsOneWidget);
+      await tester.scrollUntilVisible(
+        find.text(_workspaceEmptyBody),
+        50,
+        scrollable: find.descendant(
+          of: find.byType(ServerWorkspace),
+          matching: find.byType(Scrollable),
+        ),
+      );
+
+      await tester.tap(find.text('Got it'));
+      await tester.pumpAndSettle();
+      final region = tester.getRect(find.byType(ServerWorkspace));
+      final content = tester
+          .getRect(find.text('Select a server'))
+          .expandToInclude(tester.getRect(find.text(_workspaceEmptyBody)));
       expect(content.center.dy, moreOrLessEquals(region.center.dy));
     });
   });
