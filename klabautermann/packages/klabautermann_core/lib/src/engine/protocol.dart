@@ -11,6 +11,7 @@ import 'package:klabautermann_host/klabautermann_host.dart'
         HostProfile,
         LoadAvg,
         NetRate,
+        ProcsSelection,
         SystemdUnit,
         TimersSnapshot,
         UnitsSnapshot;
@@ -48,6 +49,10 @@ import 'package:meta/meta.dart';
 /// and reads a [LogStreamSpec] (a sealed [LogSource] with its filters, a
 /// window, follow and a resume cursor), [LogBatch] carries sealed
 /// [LogRecord]s the engine resolved, and [LogStreamState] joins.
+///
+/// [ProcsResult] then gained the host's process count and how it chose
+/// its rows, and [ProcessRow] lost the thread count the host no longer
+/// sends (03 D48), within v3 the same way.
 const int kEngineProtocolVersion = 3;
 
 /// Every message the UI isolate sends the engine (03 §10.1, D18). Plain data
@@ -468,8 +473,9 @@ final class Gap extends EngineEvent {
   /// The streams without readings. Pass an unmodifiable set.
   final Set<SampleStream> streams;
 
-  /// The last reading before the gap, or when sampling stopped, and when
-  /// readings resumed; both by the engine's clock in UTC.
+  /// The streams' last reading before the gap and the reading that
+  /// resumed them, which follows this event; both by the engine's clock
+  /// in UTC. A stream without an earlier reading has no gap.
   final DateTime from, until;
 
   final GapCause cause;
@@ -1658,8 +1664,8 @@ sealed class SampleResult {
 
 /// The stream's collector produced no value this time (03 §6.2). The app
 /// words [reason] through its catalog (D35); [detail] is the collector's
-/// error output as the host sent it, control characters stripped, or null
-/// when there was none.
+/// error output as the host sent it, control characters stripped and
+/// at most its last 4,096 characters kept, or null when there was none.
 final class CollectorUnavailable extends SampleResult {
   const CollectorUnavailable(this.reason, {this.detail});
 
@@ -1675,7 +1681,9 @@ final class OverviewResult extends SampleResult {
     this.load,
     this.loadPerCore,
     Map<String, NetRate>? network,
-  }) : network = _unmodifiable(network);
+    Map<MetricField, MetricWithheldReason> withheld = const {},
+  }) : network = _unmodifiable(network),
+       withheld = Map.unmodifiable(withheld);
 
   /// CPU occupancy since the previous reading; null without one to compare
   /// with (the first reading, or after a reboot or a counter reset).
@@ -1694,6 +1702,13 @@ final class OverviewResult extends SampleResult {
   /// one, and empty only when the host reported no interface, so unknown
   /// never sums to zero (03 §1.2 principle 6).
   final Map<String, NetRate>? network;
+
+  /// The values the engine left null for a reason the app words (D50):
+  /// each field of this result whose `/proc` file shows a container
+  /// host's figures, whether or not this reading carried it. Empty
+  /// outside containers and while the probe cannot tell whether the
+  /// server is one.
+  final Map<MetricField, MetricWithheldReason> withheld;
 }
 
 /// The focused server's reading ([SampleStream.core], OV-01): the
@@ -1713,9 +1728,11 @@ final class CoreResult extends SampleResult {
     this.memoryPressure,
     this.uptime,
     this.bootedAt,
+    Map<MetricField, MetricWithheldReason> withheld = const {},
   }) : perCpu = _unmodifiable(perCpu),
        network = _unmodifiable(network),
-       disks = _unmodifiable(disks);
+       disks = _unmodifiable(disks),
+       withheld = Map.unmodifiable(withheld);
 
   /// As [OverviewResult.cpu].
   final CpuPercentages? cpu;
@@ -1748,6 +1765,56 @@ final class CoreResult extends SampleResult {
 
   /// When the host booted (`btime`), in UTC.
   final DateTime? bootedAt;
+
+  /// As [OverviewResult.withheld].
+  final Map<MetricField, MetricWithheldReason> withheld;
+}
+
+/// A value of [OverviewResult] or [CoreResult] that
+/// [OverviewResult.withheld] or [CoreResult.withheld] can name, after
+/// the `/proc` file it comes from (D50).
+enum MetricField {
+  /// `cpu`, from `/proc/stat`.
+  cpu,
+
+  /// [CoreResult.perCpu], from `/proc/stat`.
+  perCpu,
+
+  /// `memory`, from `/proc/meminfo`.
+  memory,
+
+  /// `load`, from `/proc/loadavg`.
+  load,
+
+  /// `loadPerCore`, from `/proc/loadavg` and the CPU count of
+  /// `/proc/stat`.
+  loadPerCore,
+
+  /// [CoreResult.disks], from `/proc/diskstats`.
+  disks,
+
+  /// [CoreResult.cpuPressure], from `/proc/pressure/cpu`.
+  cpuPressure,
+
+  /// [CoreResult.ioPressure], from `/proc/pressure/io`.
+  ioPressure,
+
+  /// [CoreResult.memoryPressure], from `/proc/pressure/memory`.
+  memoryPressure,
+
+  /// [CoreResult.uptime], from `/proc/uptime`.
+  uptime,
+
+  /// [CoreResult.bootedAt], from the `btime` line of `/proc/stat`.
+  bootedAt,
+}
+
+/// Why the engine left a [MetricField] null (D50).
+enum MetricWithheldReason {
+  /// Inside a container, the field's `/proc` file shows the container
+  /// host's figures, not this system's (SYS-04): no lxcfs mount serves
+  /// the container's own there, or lxcfs passes the host's through.
+  containerHostFigures,
 }
 
 /// Memory as MEM-01's breakdown shows it, in bytes, which the engine
@@ -1773,7 +1840,8 @@ final class MemoryUsage {
 
   /// Whether the ZFS ARC is part of [usedBytes], and MEM-01's bar says
   /// "ZFS ARC counted as used" (7.1): true where
-  /// `/proc/spl/kstat/zfs/arcstats` exists outside a container (D48).
+  /// `/proc/spl/kstat/zfs/arcstats` exists and the `meminfo` shown is the
+  /// kernel's own, outside a container or without an lxcfs mount (D48).
   /// Null while the engine does not know.
   final bool? zfsArcCountedAsUsed;
 }
@@ -1827,10 +1895,24 @@ final class IdentityResult extends SampleResult {
 
 /// The process list ([SampleStream.procs], 7.2).
 final class ProcsResult extends SampleResult {
-  ProcsResult(List<ProcessRow> processes)
+  ProcsResult(List<ProcessRow> processes, {this.totalProcesses, this.selection})
     : processes = List.unmodifiable(processes);
 
   final List<ProcessRow> processes;
+
+  /// How many processes the host counted; above 500 it sends only some of
+  /// them (D48), so PRC-01 says "showing N of M". Null when the host did
+  /// not report it.
+  ///
+  /// [processes] can hold more: with [ProcsSelection.all], a `ps` fallback
+  /// adds the processes it lists that the count missed, such as `ps`
+  /// itself and those started after the count. The host left processes
+  /// out when [selection] is not [ProcsSelection.all] or this count
+  /// exceeds the rows, never merely because the two differ.
+  final int? totalProcesses;
+
+  /// How the host chose [processes] (D48); null when it did not report it.
+  final ProcsSelection? selection;
 }
 
 /// One process as [ProcsResult] lists it (PRC-01).
@@ -1843,7 +1925,6 @@ final class ProcessRow {
     this.state,
     this.userName,
     this.uid,
-    this.threads,
     this.residentBytes,
     this.cpuPercent,
     this.startTicks,
@@ -1861,7 +1942,6 @@ final class ProcessRow {
 
   final String? userName;
   final int? uid;
-  final int? threads;
   final int? residentBytes;
 
   /// Its share of one CPU since the previous reading, in percent: above
@@ -1873,8 +1953,9 @@ final class ProcessRow {
   /// compares before signalling it.
   final int? startTicks;
 
-  /// The command line, one item per argument; null when it could not be
-  /// read (7.2's "command line unavailable"). Pass an unmodifiable list.
+  /// The command line, one item per argument (per whitespace token on a
+  /// host where only `ps` lists it, 7.2); null when it could not be read
+  /// (7.2's "command line unavailable"). Pass an unmodifiable list.
   final List<String>? arguments;
 }
 

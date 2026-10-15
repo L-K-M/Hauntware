@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **Choose the editor's font.** Settings → Appearance lists the four
+  included fonts under the editor's text size, each in its own face,
+  with a Ligatures switch. Editor windows and the compare view draw in
+  the choice.
 - **Fingerprints, keys and logs are fixed-width everywhere.** Host key
   fingerprints, private keys, login scripts, the credential prompt's
   address and the connection panel's log draw in JetBrains Mono on

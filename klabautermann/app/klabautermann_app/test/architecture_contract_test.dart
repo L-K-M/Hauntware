@@ -29,6 +29,15 @@ void main() {
     }
   });
 
+  test('the composition root spawns the engine with links off (03 '
+      '§10.1)', () {
+    final main = File('lib/main.dart').readAsStringSync();
+    final spawn = RegExp(r'IsolateEngineClient\.spawn\(([^;]*)\);');
+
+    expect(spawn.allMatches(main), hasLength(1));
+    expect(spawn.firstMatch(main)![1], contains('linksEnabled: false'));
+  });
+
   test('declares no SSH, protocol or sibling-core dependency', () {
     final declared = _dependencyEntry
         .allMatches(File('pubspec.yaml').readAsStringSync())

@@ -158,6 +158,27 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   },
   // debugPrint of a dismissal that was not saved; the toast is ARB text.
   'lib/ui/coverage.dart': {r"'$error'"},
+  'lib/ui/fleet_row_state.dart': {
+    // The root mount point whose use the pressure bar shows.
+    "'/'",
+    // The filter's term separator, and the name-and-address haystack that
+    // stands in for the engine's search text.
+    r"r'\s+'",
+    r"'${server.displayName} ${server.address ?? ''}'",
+    "''",
+  },
+  'lib/ui/fleet_rows.dart': {
+    // The filter's empty query.
+    "''",
+    // A FocusNode debug label.
+    "'Fleet filter'",
+    // The key tests find a row's age by.
+    "'fleetRowAge'",
+    // The line break between the row tooltip's facts, each ARB text.
+    r"'\n'",
+    // An assert message; programmer diagnostic, never rendered.
+    "'new controllers come with a new tree (KlabautermannApp, D44)'",
+  },
   // The search's initial empty query.
   'lib/ui/logs/log_search.dart': {"''"},
   'lib/ui/logs/log_text.dart': {

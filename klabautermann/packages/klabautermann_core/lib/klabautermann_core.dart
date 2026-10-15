@@ -46,11 +46,13 @@ export 'package:klabautermann_host/klabautermann_host.dart'
         CpuPercentages,
         CronSnapshot,
         DiskRate,
+        FsMount,
         FsSnapshot,
         HostProfile,
         JournalEntry,
         LoadAvg,
         NetRate,
+        ProcsSelection,
         SystemdUnit,
         TimersSnapshot,
         UnitsSnapshot;

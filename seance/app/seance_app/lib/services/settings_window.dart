@@ -3,6 +3,7 @@ import 'dart:ui' show AppExitResponse;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:ghost_desktop/ghost_desktop.dart';
+import 'package:planchette_editor/planchette_editor.dart' show EditorLigatures;
 
 import '../app_state.dart';
 import '../theme/app_appearance.dart';
@@ -63,6 +64,7 @@ enum SettingsLinkMethod {
   setCommandSuggestions,
   setTerminalAppearance,
   setEditorFontSize,
+  setEditorFont,
   setAppearance,
   setEditorRegistry,
   pickEditor,
@@ -172,6 +174,12 @@ class SettingsWindowHost {
         );
       case SettingsLinkMethod.setEditorFontSize:
         await _backend.setEditorFontSize(argument! as int);
+      case SettingsLinkMethod.setEditorFont:
+        final json = map();
+        await _backend.setEditorFont(
+          fontFamily: json['fontFamily'] as String,
+          ligatures: EditorLigatures.named(json['ligatures']),
+        );
       case SettingsLinkMethod.setAppearance:
         final json = map();
         await _backend.setAppearance(
@@ -362,6 +370,15 @@ class RemoteSettingsBackend extends GhostSettingsWindowClient<SettingsTab>
   @override
   Future<void> setEditorFontSize(int size) =>
       _call(SettingsLinkMethod.setEditorFontSize, size);
+
+  @override
+  Future<void> setEditorFont({
+    required String fontFamily,
+    required EditorLigatures ligatures,
+  }) => _call(SettingsLinkMethod.setEditorFont, {
+    'fontFamily': fontFamily,
+    'ligatures': ligatures.name,
+  });
 
   @override
   Future<void> setAppearance(ThemePalette palette, ThemeModePreference mode) =>

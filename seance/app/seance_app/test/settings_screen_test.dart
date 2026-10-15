@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart'
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:planchette_editor/planchette_editor.dart' show EditorLigatures;
 import 'package:seance_app/services/app_settings.dart';
 import 'package:seance_app/services/app_lock.dart';
 import 'package:seance_app/services/external_file_opener.dart';
@@ -89,6 +90,12 @@ class _FakeBackend extends ChangeNotifier implements SettingsBackend {
   @override
   Future<void> setEditorFontSize(int size) =>
       _write('setEditorFontSize($size)');
+
+  @override
+  Future<void> setEditorFont({
+    required String fontFamily,
+    required EditorLigatures ligatures,
+  }) => _write('setEditorFont($fontFamily, $ligatures)');
 
   /// Every theme written, in order.
   final List<(ThemePalette, ThemeModePreference)> appearances = [];
@@ -372,9 +379,11 @@ void main() {
   ) async {
     await pumpScreen(tester);
 
-    await tester.ensureVisible(find.text('Ligatures'));
+    // The terminal's switch; the editor's follows it.
+    final terminal = find.text('Ligatures').first;
+    await tester.ensureVisible(terminal);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Ligatures'));
+    await tester.tap(terminal);
     await tester.pumpAndSettle();
 
     expect(backend.calls, [
@@ -401,6 +410,33 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(backend.calls, ['setEditorFontSize(20)']);
+  });
+
+  testWidgets('the editor ligature switch writes the editor font', (
+    tester,
+  ) async {
+    await pumpScreen(tester);
+    final ligatures = find.byKey(const ValueKey('editor.ligatures'));
+    await tester.ensureVisible(ligatures);
+    await tester.pumpAndSettle();
+    await tester.tap(ligatures);
+    await tester.pumpAndSettle();
+
+    expect(backend.calls, ['setEditorFont(, ${EditorLigatures.off})']);
+  });
+
+  testWidgets('the editor font field writes a submitted family', (
+    tester,
+  ) async {
+    await pumpScreen(tester);
+    final field = find.byKey(const ValueKey('editor.font'));
+    await tester.ensureVisible(field);
+    await tester.pumpAndSettle();
+    await tester.enterText(field, ' Fira Code ');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+
+    expect(backend.calls, ['setEditorFont(Fira Code, ${EditorLigatures.on})']);
   });
 
   testWidgets('a failed write says so instead of failing silently', (

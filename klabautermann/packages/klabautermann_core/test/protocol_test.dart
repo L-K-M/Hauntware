@@ -261,6 +261,9 @@ void main() {
                   network: const {
                     'eth0': NetRate(rxBytesPerSecond: 10, txBytesPerSecond: 2),
                   },
+                  withheld: const {
+                    MetricField.load: MetricWithheldReason.containerHostFigures,
+                  },
                 ),
               )
               as OverviewResult;
@@ -274,6 +277,10 @@ void main() {
       expect(overview.loadPerCore, 0.375);
       expect(overview.network!['eth0']!.rxBytesPerSecond, 10);
       expect(() => overview.network!.clear(), throwsUnsupportedError);
+      expect(overview.withheld, {
+        MetricField.load: MetricWithheldReason.containerHostFigures,
+      });
+      expect(() => overview.withheld.clear(), throwsUnsupportedError);
 
       final core =
           await result(
@@ -349,23 +356,28 @@ void main() {
       final procs =
           await result(
                 SampleStream.procs,
-                ProcsResult([
-                  const ProcessRow(
-                    pid: 812,
-                    parentPid: 1,
-                    name: 'sshd',
-                    state: 'S',
-                    userName: 'root',
-                    uid: 0,
-                    threads: 1,
-                    residentBytes: 8192,
-                    cpuPercent: 0.5,
-                    startTicks: 1234,
-                    arguments: ['sshd:', 'deploy'],
-                  ),
-                ]),
+                ProcsResult(
+                  [
+                    const ProcessRow(
+                      pid: 812,
+                      parentPid: 1,
+                      name: 'sshd',
+                      state: 'S',
+                      userName: 'root',
+                      uid: 0,
+                      residentBytes: 8192,
+                      cpuPercent: 0.5,
+                      startTicks: 1234,
+                      arguments: ['sshd:', 'deploy'],
+                    ),
+                  ],
+                  totalProcesses: 2083,
+                  selection: ProcsSelection.cpuAndMemory,
+                ),
               )
               as ProcsResult;
+      expect(procs.totalProcesses, 2083);
+      expect(procs.selection, ProcsSelection.cpuAndMemory);
       final sshd = procs.processes.single;
       expect(sshd.pid, 812);
       expect(sshd.parentPid, 1);

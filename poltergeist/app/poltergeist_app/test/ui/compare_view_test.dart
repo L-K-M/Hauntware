@@ -7,9 +7,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ghost_fonts/ghost_fonts.dart' show BundledMonoFont;
 import 'package:ghost_fonts/testing.dart';
 import 'package:planchette_editor/planchette_editor.dart';
 import 'package:poltergeist_app/l10n/app_localizations.dart';
+import 'package:poltergeist_app/services/editor_font.dart';
+import 'package:poltergeist_app/services/editor_font_controller.dart';
 import 'package:poltergeist_app/services/editor_text_size_controller.dart';
 import 'package:poltergeist_app/services/settings_models.dart';
 import 'package:poltergeist_app/services/sync_compare_controller.dart';
@@ -857,6 +860,50 @@ void main() {
       );
     });
 
+    testWidgets('rows and the separate editors follow the editor font', (
+      tester,
+    ) async {
+      final font = EditorFontController();
+      addTearDown(font.dispose);
+      final controller = await _startedPair(
+        tester,
+        temporaryDirectory,
+        'top\na -> b\nend\n',
+        'top\nshort\nend\n',
+      );
+      await _pumpView(tester, controller, startDiff: _syncDiff, font: font);
+      await tester.pump();
+      TextStyle rowStyle() => tester.widget<Text>(find.text('short')).style!;
+      expect(rowStyle().fontFamily, poltergeistMonoTextStyle.fontFamily);
+
+      await font.setFont(
+        const EditorFont(family: 'Fira Code', ligatures: EditorLigatures.off),
+      );
+      await tester.pump();
+
+      expect(rowStyle().fontFamily, BundledMonoFont.firaCode.family);
+      expect(
+        rowStyle().fontFeatures,
+        contains(const FontFeature.disable('calt')),
+      );
+      expect(tester.takeException(), isNull);
+
+      await tester.tap(find.text('Separate'));
+      await tester.pump();
+      final editors = tester.widgetList<PlanchetteEditor>(
+        find.byType(PlanchetteEditor),
+      );
+      expect(editors, hasLength(2));
+      expect(
+        editors.map((editor) => editor.textStyle.fontFamily),
+        everyElement('Fira Code'),
+      );
+      expect(
+        editors.map((editor) => editor.ligatures),
+        everyElement(EditorLigatures.off),
+      );
+    });
+
     testWidgets('a text size change keeps the place inside a tall row', (
       tester,
     ) async {
@@ -1443,6 +1490,7 @@ Future<void> _pumpView(
   Brightness brightness = Brightness.dark,
   double textScale = 1,
   EditorTextSizeModel? textSize,
+  EditorFontModel? font,
 }) {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -1480,6 +1528,7 @@ Future<void> _pumpView(
           clock: clock ?? () => DateTime.utc(2026, 10, 2),
           startDiff: startDiff ?? _FakeDiffs().start,
           textSize: textSize,
+          font: font,
         ),
       ),
     ),

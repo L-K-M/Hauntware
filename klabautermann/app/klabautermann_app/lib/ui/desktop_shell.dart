@@ -64,6 +64,7 @@ class DesktopShell extends StatelessWidget {
                     color: SidebarThemeTokens.of(context).sidebarBackground,
                     child: FleetRail(
                       fleet: fleet,
+                      monitoring: monitoring,
                       onOpenSettings: onOpenSettings,
                       onAddServer: onAddServer,
                     ),

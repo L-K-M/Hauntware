@@ -106,8 +106,12 @@ Future<void> main(List<String> args) async {
   // in the engine isolate; the UI sends plain-data requests and listens.
   // The engine keeps its own files in the same support directory (03
   // §4.10) and reports what it found wrong with them in its handshake.
+  // Links stay off (03 §10.1): host-key pins would last only until the
+  // engine stops, since the catalog library's `host_keys.json` has not
+  // landed (03 §4.10), and the app cannot show the engine's prompts yet.
   final engine = await IsolateEngineClient.spawn(
     supportDirectory: supportDirectory.path,
+    linksEnabled: false,
   );
   final importStoreIssue = engine.ready.importStoreIssue;
   if (importStoreIssue != null) {

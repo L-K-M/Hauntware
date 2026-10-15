@@ -16,7 +16,7 @@ import 'package:ghost_ui/ghost_ui.dart'
         contrastRatio;
 import 'package:klabautermann_app/controllers/appearance_controller.dart';
 import 'package:klabautermann_app/theme/app_theme.dart';
-import 'package:klabautermann_app/ui/fleet_rail.dart';
+import 'package:klabautermann_app/ui/fleet_rows.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 
 import 'support/harness.dart';

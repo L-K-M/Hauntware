@@ -49,8 +49,8 @@ enum IdentityFileFailure {
   /// refuses the read stays [accessDenied].
   sandboxDenied,
 
-  /// The path is not a readable file of UTF-8 text within the size bound,
-  /// for example a directory.
+  /// The path is not a regular file of UTF-8 text within the size bound,
+  /// for example a directory, a FIFO or a device.
   unreadable,
 }
 
@@ -188,16 +188,23 @@ IdentityAuditLog identityAuditLogIn(String supportDirectory) =>
     );
 
 /// Reads at most [_maxIdentityFileBytes] of [path] as UTF-8. Throws a
-/// [FileSystemException] for an I/O failure, a pipe or socket, or a longer
-/// file, and a [FormatException] for bytes that are not UTF-8.
+/// [FileSystemException] for an I/O failure, anything but a regular file,
+/// or a longer file, and a [FormatException] for bytes that are not UTF-8.
 Future<String> _readBounded(String path) async {
-  // open() on a FIFO waits for a writer, which may never come. A stalled
-  // mount still needs a per-attempt deadline, which the link supervisor
-  // (K19a) owns. A missing path falls through to open(), which reports it.
+  // Only a regular file is read, through any symlinks: open() on a FIFO
+  // waits for a writer and a read from a character device such as a tty
+  // waits for input, either of which may never come. A stat or read
+  // stalled on a mount is bounded by the link supervisor's attempt
+  // deadline instead.
   final type = (await FileStat.stat(path)).type;
-  if (type == FileSystemEntityType.pipe ||
-      type == FileSystemEntityType.unixDomainSock) {
-    throw FileSystemException('Not a regular file', path);
+  if (type != FileSystemEntityType.file) {
+    // FileSystemEntityType has no device type: stat reports a device as
+    // notFound, where File.exists finds it. A path that is really missing,
+    // or that stat could not reach, falls through to open(), which says
+    // which.
+    final missing =
+        type == FileSystemEntityType.notFound && !await File(path).exists();
+    if (!missing) throw FileSystemException('Not a regular file', path);
   }
 
   final handle = await File(path).open();

@@ -29,6 +29,7 @@ final class SettingsWindowSources {
     this.gate = const SyncAccountGate.production(),
     this.appearance,
     this.editorTextSize,
+    this.editorFont,
     this.directoryGrouping,
     this.doubleClickAction,
     this.changes = const [],
@@ -57,6 +58,9 @@ final class SettingsWindowSources {
   /// The built-in editor's text size: the Appearance tab's editor part.
   final EditorTextSizeModel? editorTextSize;
 
+  /// The built-in editor's font: the editor part's other rows.
+  final EditorFontModel? editorFont;
+
   /// Whether lists keep folders on top: the General tab's file-list row.
   final DirectoryGroupingModel? directoryGrouping;
 
@@ -65,8 +69,8 @@ final class SettingsWindowSources {
 
   /// What else moves a value the window shows (the update-check
   /// controller behind [general]); [editors], [backup], [appearance],
-  /// [editorTextSize], [directoryGrouping] and [doubleClickAction] are
-  /// listened to already.
+  /// [editorTextSize], [editorFont], [directoryGrouping] and
+  /// [doubleClickAction] are listened to already.
   final List<Listenable> changes;
 }
 
@@ -120,6 +124,7 @@ class SettingsWindowHost {
           ?sources.backup,
           ?sources.appearance,
           ?sources.editorTextSize,
+          ?sources.editorFont,
           ?sources.directoryGrouping,
           ?sources.doubleClickAction,
           ...sources.changes,
@@ -136,8 +141,12 @@ class SettingsWindowHost {
     final gate = _sources.gate;
     final appearance = _sources.appearance;
     final editorTextSize = _sources.editorTextSize;
+    final editorFont = _sources.editorFont;
     return {
       SettingsLinkKey.editorTextSize.name: editorTextSize?.value,
+      SettingsLinkKey.editorFont.name: editorFont == null
+          ? null
+          : encodeEditorFont(editorFont.value),
       SettingsLinkKey.directoryGrouping.name:
           _sources.directoryGrouping?.value.name,
       SettingsLinkKey.doubleClickAction.name:
@@ -219,6 +228,8 @@ class SettingsWindowHost {
         ).setAppearance(appearance.palette, appearance.mode);
       case SettingsLinkMethod.setEditorTextSize:
         await _require(_sources.editorTextSize).setTextSize(argument! as int);
+      case SettingsLinkMethod.setEditorFont:
+        await _require(_sources.editorFont).setFont(decodeEditorFont(map()));
       case SettingsLinkMethod.setDirectoryGrouping:
         await _require(
           _sources.directoryGrouping,

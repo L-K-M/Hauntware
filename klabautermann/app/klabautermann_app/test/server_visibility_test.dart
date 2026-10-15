@@ -78,10 +78,10 @@ void main() {
     // The shown panel only: the others are not built or not visible.
     expect(find.byType(PlaceholderPaneBody), findsOneWidget);
 
-    // Until links land the engine rejects these; nothing shows it.
-    engine
-      ..emit(const RequestRejected('Connect', 'not implemented yet'))
-      ..emit(const RequestRejected('SetAppActivity', 'not implemented yet'));
+    // An engine with links off rejects the connect; nothing shows it.
+    engine.emit(
+      const RequestRejected('Connect', 'links are off in this engine'),
+    );
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
     expect(find.byType(SnackBar), findsNothing);
@@ -127,11 +127,17 @@ void main() {
     expect(second.serverId, 'srv-2');
     expect(second.streams, first.streams);
 
-    // Deselected (the server left the fleet): everything is let go.
+    // Deselected (the server left the fleet): everything is let go, with
+    // nothing sent, since the engine dropped the link and subscription
+    // with the entry (03 §5.1).
+    final sent = engine.sent.length;
     engine.emit(CatalogReplaced(const []));
     await tester.pumpAndSettle();
-    expect(_linkRequests(engine).last, 'disconnect srv-2');
-    expect(_unsubscribes(engine).last.serverId, 'srv-2');
+    expect(engine.sent, hasLength(sent));
+    expect(
+      harness.monitoring.isSubscribed('srv-2', second.subscriptionId),
+      isFalse,
+    );
   });
 
   testWidgets('a restarted engine\'s controllers get every surface anew '
