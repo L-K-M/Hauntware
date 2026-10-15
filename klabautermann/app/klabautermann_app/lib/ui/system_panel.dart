@@ -316,9 +316,9 @@ class _SystemPanelState extends State<SystemPanel> {
             rowKey: (mount) => mount.mountPoint,
             sort: _sort,
             onSort: (sort) => setState(() => _sort = sort),
-            onRowActivated: wide || timedOut
-                ? null
-                : (mount) => _showMountDetails(context, l10n, mount),
+            // The mount column may cut a mount point short (A11Y-09).
+            onRowActivated: (mount) =>
+                _showMountDetails(context, l10n, mount, timedOut: timedOut),
           ),
         ),
     ];
@@ -341,7 +341,7 @@ class _SystemPanelState extends State<SystemPanel> {
 enum _MountColumn { mount, type, used, use, inodes, usage }
 
 /// The mounts table's columns: the type, the bytes and a usage bar only
-/// when [wide] (a narrow row opens them in [_showMountDetails]), and after
+/// when [wide] ([_showMountDetails] shows them for a narrow row), and after
 /// a timeout one usage column saying so instead of the figures. Figures
 /// sort with their largest first; an unknown one sorts last.
 List<SortableTableColumn<FsMount>> _mountColumns(
@@ -452,13 +452,15 @@ String? _kernel(AppLocalizations l10n, IdentityResult identity) =>
       (null, null) => null,
     };
 
-/// The figures a narrow mounts table leaves out, with the rest, in a sheet
-/// (03 §10.5: details push further). It shows the reading the row had.
+/// A mount's full mount point, device and type with the figures a narrow
+/// table leaves out, in a sheet (03 §10.5: details push further). It shows
+/// the reading the row had; after a timeout its usage reads as unknown.
 void _showMountDetails(
   BuildContext context,
   AppLocalizations l10n,
-  FsMount mount,
-) {
+  FsMount mount, {
+  required bool timedOut,
+}) {
   final theme = Theme.of(context);
   unawaited(
     showModalBottomSheet<void>(
@@ -480,15 +482,19 @@ void _showMountDetails(
               ),
               _Fact(label: l10n.systemDevice, value: mount.device),
               _Fact(label: l10n.systemColumnType, value: mount.type),
-              _Fact(label: l10n.systemColumnUsed, value: _used(l10n, mount)),
-              _Fact(
-                label: l10n.systemColumnUse,
-                value: _percent(l10n, mount.capacityPercent),
-              ),
-              _Fact(
-                label: l10n.systemColumnInodes,
-                value: _percent(l10n, mount.inodeUsePercent),
-              ),
+              if (timedOut)
+                _Fact(label: l10n.systemColumnUsage, value: null)
+              else ...[
+                _Fact(label: l10n.systemColumnUsed, value: _used(l10n, mount)),
+                _Fact(
+                  label: l10n.systemColumnUse,
+                  value: _percent(l10n, mount.capacityPercent),
+                ),
+                _Fact(
+                  label: l10n.systemColumnInodes,
+                  value: _percent(l10n, mount.inodeUsePercent),
+                ),
+              ],
             ],
           ),
         ),

@@ -454,7 +454,7 @@
   },
   "systemColumnUsage": "Usage",
   "@systemColumnUsage": {
-    "description": "Disks table column shown after the disk usage command timed out: what is known of each mount's usage now."
+    "description": "Disks table column, and label in a mount's details, shown after the disk usage command timed out: what is known of the mount's usage now."
   },
   "systemUsedOf": "{used} of {size}",
   "@systemUsedOf": {

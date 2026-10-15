@@ -844,7 +844,7 @@ abstract class AppLocalizations {
   /// **'Inodes'**
   String get systemColumnInodes;
 
-  /// Disks table column shown after the disk usage command timed out: what is known of each mount's usage now.
+  /// Disks table column, and label in a mount's details, shown after the disk usage command timed out: what is known of the mount's usage now.
   ///
   /// In en, this message translates to:
   /// **'Usage'**

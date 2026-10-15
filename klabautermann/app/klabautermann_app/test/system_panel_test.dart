@@ -532,24 +532,45 @@ void main() {
     ('desktop', _wide, TargetPlatform.linux),
     ('phone', _phone, TargetPlatform.android),
   ]) {
-    testWidgets('lays out without overflow at 200 % text on the $name', (
-      tester,
-    ) async {
+    testWidgets('lays out without overflow at 200 % text on the $name, '
+        'and a row opens its mount point in full', (tester) async {
       final panel = await _pump(
         tester,
         size: size,
         platform: platform,
         textScale: 2,
       );
+
+      /// The mount column may cut a mount point short; its details do not.
+      Future<void> expectDetails(List<String> texts) async {
+        await tester.ensureVisible(_row('/mnt/backup'));
+        await tester.tap(_row('/mnt/backup'));
+        await tester.pumpAndSettle();
+        final sheet = find.byType(BottomSheet);
+        for (final text in ['/mnt/backup', 'nas:/export/backup', ...texts]) {
+          expect(
+            find.descendant(of: sheet, matching: find.text(text)),
+            findsOneWidget,
+            reason: text,
+          );
+        }
+        tester.state<NavigatorState>(find.byType(Navigator)).pop();
+        await tester.pumpAndSettle();
+      }
+
       await panel.all(tester, _container);
+      expect(tester.takeException(), isNull);
+      await expectDetails(['1.7 TiB of 2 TiB']);
+
       await panel.sample(
         tester,
         SampleStream.fs,
         const CollectorUnavailable(CollectorUnavailableReason.timeout),
       );
       expect(tester.takeException(), isNull);
-      await panel.sample(tester, SampleStream.fs, FsResult(_fs));
-      expect(tester.takeException(), isNull);
+      // The kept mount's figures are not current.
+      await expectDetails(['Unknown']);
+      expect(find.text('1.7 TiB of 2 TiB'), findsNothing);
     });
   }
 
