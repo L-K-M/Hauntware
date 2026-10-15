@@ -594,7 +594,9 @@ void main() {
       expect(find.byKey(kFleetRowAgeKey), findsNothing);
       expect(find.byIcon(Icons.warning_amber_rounded), findsOneWidget);
       expect(find.text('db-1'), findsOneWidget, reason: 'not ellipsized');
-      expect(_row(tester, 'srv-1').tooltip, contains('Updated 0 s ago'));
+      final tooltip = _row(tester, 'srv-1').tooltip;
+      expect(tooltip, contains('Updated 0 s ago'));
+      expect(tooltip, contains('CPU 85%'), reason: 'the bar\'s values too');
     });
   });
 

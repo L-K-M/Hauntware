@@ -373,11 +373,14 @@ class FleetServerRow extends StatelessWidget {
     final label = indicator.label;
 
     final subtitle = [?label, ?server.address].join(l10n.fleetRowPartSeparator);
+    // The bar's values too: where it gives way to the name, hover still
+    // shows them on desktop.
     final tooltip = [
       ?server.address,
       ?label,
       ?indicator.detail,
       ?freshness,
+      ?pressure,
       ?conflict,
     ].join('\n');
     final row = SidebarRow(
