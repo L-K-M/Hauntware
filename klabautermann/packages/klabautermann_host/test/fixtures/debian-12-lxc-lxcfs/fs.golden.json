@@ -1,0 +1,73 @@
+{
+  "result": {
+    "mounts": [
+      {
+        "device": "rpool/data/subvol-101-disk-0",
+        "type": "zfs",
+        "mountPoint": "/",
+        "sizeBytes": 8589934592,
+        "usedBytes": 1395864371,
+        "availBytes": 7194070221,
+        "capacityPercent": 17,
+        "inodesTotal": 14051056,
+        "inodesUsed": 38211,
+        "inodesFree": 14012845,
+        "inodeUsePercent": 1
+      },
+      {
+        "device": "none",
+        "type": "tmpfs",
+        "mountPoint": "/dev",
+        "sizeBytes": 524288,
+        "usedBytes": 0,
+        "availBytes": 524288,
+        "capacityPercent": 0,
+        "inodesTotal": 4116798,
+        "inodesUsed": 25,
+        "inodesFree": 4116773,
+        "inodeUsePercent": 1
+      },
+      {
+        "device": "tmpfs",
+        "type": "tmpfs",
+        "mountPoint": "/dev/shm",
+        "sizeBytes": 67467005952,
+        "usedBytes": 0,
+        "availBytes": 67467005952,
+        "capacityPercent": 0,
+        "inodesTotal": 16471437,
+        "inodesUsed": 1,
+        "inodesFree": 16471436,
+        "inodeUsePercent": 1
+      },
+      {
+        "device": "tmpfs",
+        "type": "tmpfs",
+        "mountPoint": "/run",
+        "sizeBytes": 26986803200,
+        "usedBytes": 110592,
+        "availBytes": 26986692608,
+        "capacityPercent": 1,
+        "inodesTotal": 16471437,
+        "inodesUsed": 142,
+        "inodesFree": 16471295,
+        "inodeUsePercent": 1
+      },
+      {
+        "device": "tmpfs",
+        "type": "tmpfs",
+        "mountPoint": "/run/lock",
+        "sizeBytes": 5242880,
+        "usedBytes": 0,
+        "availBytes": 5242880,
+        "capacityPercent": 0,
+        "inodesTotal": 16471437,
+        "inodesUsed": 2,
+        "inodesFree": 16471435,
+        "inodeUsePercent": 1
+      }
+    ],
+    "timeoutAbsent": false
+  },
+  "warnings": []
+}

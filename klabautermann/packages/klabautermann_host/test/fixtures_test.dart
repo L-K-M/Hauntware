@@ -1,4 +1,4 @@
-// Golden tests for the four platform fixture shapes (03 §6.5). Each
+// Golden tests for the platform fixture shapes (03 §6.5). Each
 // fixture directory holds hand-written collector payloads plus a
 // `<collector>.golden.json` per payload; `tool/regen_goldens.dart`
 // rewrites the goldens. Fixture provenance is in each SOURCE.md.
@@ -34,8 +34,50 @@ void main() {
   test('fixture platforms present', () {
     expect(
       platforms,
-      containsAll(<String>['debian-12', 'ubuntu-2404', 'rhel-8', 'alpine-322']),
+      containsAll(<String>[
+        'debian-12',
+        'ubuntu-2404',
+        'rhel-8',
+        'alpine-322',
+        'debian-12-lxc',
+        'debian-12-lxc-lxcfs',
+      ]),
     );
+  });
+
+  group('LXC (D50)', () {
+    test('without lxcfs every system-wide file shows host figures', () {
+      final p = _profile(root, 'debian-12-lxc');
+      expect(p.lxcfsMounts, isEmpty);
+      for (final f in SystemWideProcFile.values) {
+        expect(p.showsHostFigures(f), isTrue, reason: f.path);
+      }
+    });
+
+    test('with lxcfs only meminfo and uptime are its own', () {
+      final p = _profile(root, 'debian-12-lxc-lxcfs');
+      expect(
+        [
+          for (final f in SystemWideProcFile.values)
+            if (p.showsHostFigures(f)!) f,
+        ],
+        [
+          SystemWideProcFile.stat,
+          SystemWideProcFile.loadavg,
+          SystemWideProcFile.diskstats,
+          SystemWideProcFile.pressureCpu,
+          SystemWideProcFile.pressureIo,
+          SystemWideProcFile.pressureMemory,
+        ],
+      );
+    });
+
+    test('a VM fixture shows its own figures', () {
+      final p = _profile(root, 'debian-12');
+      for (final f in SystemWideProcFile.values) {
+        expect(p.showsHostFigures(f), isFalse, reason: f.path);
+      }
+    });
   });
 
   for (final platform in platforms) {
@@ -77,7 +119,15 @@ void main() {
           File('$root/$platform/probe.sections').readAsStringSync(),
         );
         final result = parseProbe(sections, _ctx).toJsonResult();
-        expect(result, equals(_golden('$root/$platform/probe.golden.json')));
+        final golden = _golden('$root/$platform/probe.golden.json');
+        expect(result, equals(golden));
+
+        // The device cache's JSON reads back into the same profile.
+        final json = (golden! as Map<String, Object?>)['result'];
+        expect(
+          HostProfile.fromJson(json! as Map<String, Object?>).toJson(),
+          json,
+        );
       });
 
       test('jobs', () {
@@ -89,6 +139,12 @@ void main() {
     });
   }
 }
+
+/// Parses the probe fixture of [platform] into a profile.
+HostProfile _profile(String root, String platform) => parseProbe(
+  _probeSections(File('$root/$platform/probe.sections').readAsStringSync()),
+  _ctx,
+).value;
 
 /// The merged jobs list (03 §7.7) of a fixture's `cron` and `timers`
 /// payloads, two runs each, evaluated at a fixed instant in the probe's

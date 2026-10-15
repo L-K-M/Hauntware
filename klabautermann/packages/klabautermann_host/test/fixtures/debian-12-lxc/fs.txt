@@ -1,0 +1,14 @@
+== blocks ==
+Filesystem                  Type     1B-blocks         Used    Available Capacity Mounted on
+/dev/mapper/debian--vg-root ext4  984373075968 412316860416 522837561754      45% /
+none                        tmpfs       524288            0       524288       0% /dev
+tmpfs                       tmpfs  33710526464            0  33710526464       0% /dev/shm
+tmpfs                       tmpfs  13484212224       139264  13484072960       1% /run
+tmpfs                       tmpfs      5242880            0      5242880       0% /run/lock
+== inodes ==
+Filesystem                    Inodes   IUsed    IFree IUse% Mounted on
+/dev/mapper/debian--vg-root 61046784 1048576 59998208    2% /
+none                         8230289      25  8230264    1% /dev
+tmpfs                        8230289       1  8230288    1% /dev/shm
+tmpfs                        8230289     160  8230129    1% /run
+tmpfs                        8230289       2  8230287    1% /run/lock

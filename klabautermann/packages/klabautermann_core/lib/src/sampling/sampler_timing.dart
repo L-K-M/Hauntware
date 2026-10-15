@@ -32,7 +32,7 @@ const kSlowRequestMargin = Duration(seconds: 5);
 /// count has one owner.
 int guardedCommandBound(Collector collector) => switch (collector) {
   Collector.overview || Collector.core => 0,
-  Collector.probe => 17,
+  Collector.probe => 16,
   Collector.fs => 2,
   Collector.identity => 2,
   Collector.procs => 3,
@@ -67,7 +67,7 @@ final class SamplerDeadlines {
   /// The deadline for one request naming [collectors] on a [kind]
   /// sampler. A slow request gets [slowMargin] plus [perGuardedCommand]
   /// for every guarded command its collectors can start, instead of
-  /// one fixed figure: the probe alone may need 17 of them (D47). Without
+  /// one fixed figure: the probe alone may need 16 of them (D47). Without
   /// `timeout` on the host the commands run unguarded, and this deadline
   /// still bounds the request.
   Duration forRequest(SamplerKind kind, Iterable<Collector> collectors) {
