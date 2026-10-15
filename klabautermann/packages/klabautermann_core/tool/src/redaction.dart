@@ -284,7 +284,8 @@ final _patterns = <(String, RegExp, String Function(Match))>[
     'IPv4 address',
     RegExp(
       r'(?<![0-9.])((25[0-5]|2[0-4]\d|1?\d?\d)\.){3}'
-      r'(25[0-5]|2[0-4]\d|1?\d?\d)(?![0-9.])',
+      // A `.` may end the sentence, not a longer dotted number.
+      r'(25[0-5]|2[0-4]\d|1?\d?\d)(?!\.?[0-9])',
     ),
     (m) {
       final ip = m[0]!;
