@@ -949,7 +949,7 @@ abstract class AppLocalizations {
   /// Notice above the journal when the server shows the signed-in account only its own entries. The group names are names on the server and stay as they are.
   ///
   /// In en, this message translates to:
-  /// **'Only your own journal entries are shown: your account on this server is not in the systemd-journal, adm or wheel group. The Access tab shows how to add it.'**
+  /// **'Only your own journal entries are shown: your account on this server is not in the systemd-journal, adm or wheel group. The server\'s Access section shows how to add it.'**
   String get logsPanelJournalLimited;
 
   /// Status line above the log saying what reading it is doing or why it stopped.
@@ -964,11 +964,17 @@ abstract class AppLocalizations {
   /// **'Retry'**
   String get logsPanelRetry;
 
-  /// Shown in place of the log when reading finished without any entry.
+  /// Shown in place of the log when reading a kernel log, a file or an unfiltered journal finished without any entry.
+  ///
+  /// In en, this message translates to:
+  /// **'This log has no entries.'**
+  String get logsPanelEmpty;
+
+  /// Shown in place of the log when reading the journal with filters set finished without any entry.
   ///
   /// In en, this message translates to:
   /// **'No entries match these filters.'**
-  String get logsPanelEmpty;
+  String get logsPanelEmptyFiltered;
 
   /// Label of the log search field, also its name for screen readers once it holds text; the search covers the entries the panel holds, not the whole log on the server.
   ///

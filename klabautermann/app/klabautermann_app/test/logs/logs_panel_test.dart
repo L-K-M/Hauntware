@@ -235,6 +235,35 @@ void main() {
     semantics.dispose();
   });
 
+  testWidgets('says why nothing shows: no entries, or none that match', (
+    tester,
+  ) async {
+    final panel = await _pump(tester);
+    Future<void> ended() => panel.emit(
+      tester,
+      LogStreamState(
+        panel.opens.last.streamId,
+        const LogStreamEnded(LogStreamEndReason.oldestReached),
+      ),
+    );
+
+    await tester.tap(find.text('Kernel'));
+    await tester.pumpAndSettle();
+    await ended();
+    expect(find.text('This log has no entries.'), findsOneWidget);
+
+    await tester.tap(find.text('Journal'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Unit'),
+      'nginx.service',
+    );
+    await tester.tap(find.text('Apply'));
+    await tester.pumpAndSettle();
+    await ended();
+    expect(find.text('No entries match these filters.'), findsOneWidget);
+  });
+
   testWidgets('applies the journal filters', (tester) async {
     final panel = await _pump(tester);
     await tester.enterText(

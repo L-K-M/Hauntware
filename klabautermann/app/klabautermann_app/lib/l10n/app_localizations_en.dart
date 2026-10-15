@@ -637,7 +637,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get logsPanelJournalLimited =>
-      'Only your own journal entries are shown: your account on this server is not in the systemd-journal, adm or wheel group. The Access tab shows how to add it.';
+      'Only your own journal entries are shown: your account on this server is not in the systemd-journal, adm or wheel group. The server\'s Access section shows how to add it.';
 
   @override
   String logsPanelStatus(String status) {
@@ -661,7 +661,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get logsPanelRetry => 'Retry';
 
   @override
-  String get logsPanelEmpty => 'No entries match these filters.';
+  String get logsPanelEmpty => 'This log has no entries.';
+
+  @override
+  String get logsPanelEmptyFiltered => 'No entries match these filters.';
 
   @override
   String get logsPanelSearchLabel => 'Search loaded entries';

@@ -634,7 +634,7 @@
   "@logsPanelLiveTooltip": {
     "description": "Tooltip of the Logs panel's Live chip."
   },
-  "logsPanelJournalLimited": "Only your own journal entries are shown: your account on this server is not in the systemd-journal, adm or wheel group. The Access tab shows how to add it.",
+  "logsPanelJournalLimited": "Only your own journal entries are shown: your account on this server is not in the systemd-journal, adm or wheel group. The server's Access section shows how to add it.",
   "@logsPanelJournalLimited": {
     "description": "Notice above the journal when the server shows the signed-in account only its own entries. The group names are names on the server and stay as they are."
   },
@@ -651,9 +651,13 @@
   "@logsPanelRetry": {
     "description": "Button that opens the log again after it stopped or was refused."
   },
-  "logsPanelEmpty": "No entries match these filters.",
+  "logsPanelEmpty": "This log has no entries.",
   "@logsPanelEmpty": {
-    "description": "Shown in place of the log when reading finished without any entry."
+    "description": "Shown in place of the log when reading a kernel log, a file or an unfiltered journal finished without any entry."
+  },
+  "logsPanelEmptyFiltered": "No entries match these filters.",
+  "@logsPanelEmptyFiltered": {
+    "description": "Shown in place of the log when reading the journal with filters set finished without any entry."
   },
   "logsPanelSearchLabel": "Search loaded entries",
   "@logsPanelSearchLabel": {

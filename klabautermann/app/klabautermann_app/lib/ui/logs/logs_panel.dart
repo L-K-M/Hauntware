@@ -324,7 +324,13 @@ class _LogsPanelState extends State<LogsPanel> {
         Center(
           child: Padding(
             padding: const EdgeInsets.all(24),
-            child: Text(l10n.logsPanelEmpty, textAlign: TextAlign.center),
+            child: Text(
+              _panel.query.source == LogSourceKind.journal &&
+                      _panel.query.filterCount > 0
+                  ? l10n.logsPanelEmptyFiltered
+                  : l10n.logsPanelEmpty,
+              textAlign: TextAlign.center,
+            ),
           ),
         ),
     ],
