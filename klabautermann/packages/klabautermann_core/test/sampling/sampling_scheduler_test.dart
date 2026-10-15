@@ -186,6 +186,23 @@ void main() {
     expect(events.whereType<HostProfileChanged>(), hasLength(1));
   });
 
+  test('each further probe without a reply doubles the wait for the next, '
+      'up to 15 minutes', () async {
+    link.stalled.add(_slow);
+    subscribe({SampleStream.core});
+    await settle();
+    final slow = sessions.singleWhere((s) => s.kind == _slow);
+    for (final (i, wait) in [15, 30, 60, 120, 240, 480, 900, 900].indexed) {
+      // Ending the process ends the probe it holds.
+      await link.running.singleWhere((p) => p.kind == _slow).close();
+      await _until(() => slow.restarts == i + 1 && slow.state is SamplerReady);
+      await clock.elapse(Duration(seconds: wait - 1));
+      expect(link.linesOf(_slow), hasLength(i + 1));
+      await clock.elapse(const Duration(seconds: 1));
+      expect(link.linesOf(_slow), hasLength(i + 2));
+    }
+  });
+
   test('a new link is probed again, and a profile known from the last one '
       'does not hold the fast sampler', () async {
     subscribe({SampleStream.overview});

@@ -54,6 +54,12 @@ Duration? samplingPeriod(SampleStream stream, CadenceProfile profile) {
 /// shares, so a lost reading costs no more than a missed `units` tick.
 const _owedReadRetry = Duration(seconds: 15);
 
+/// The longest wait before the next probe [E]. Each probe that brings no
+/// reply doubles the wait from [_owedReadRetry]: one that hangs holds the
+/// slow sampler for its whole deadline, 165 s, and its streams lose their
+/// readings meanwhile, which the cap bounds to about 15 % of the time.
+const _maxProbeRetry = Duration(minutes: 15);
+
 /// The stream whose collector also serves [stream]'s, or null: a `core`
 /// reply serves `overview` (03 §6.4), and one `units` read serves both
 /// unit streams. A covered stream rides on its coverer's ticks while the
@@ -343,7 +349,8 @@ final class SamplingScheduler {
   /// is not known yet, the fast one waits too, so the first readings
   /// already withhold what a container host's `/proc` would supply
   /// (D50). A probe that brings no reply goes out again after
-  /// [_owedReadRetry], as a read owed once does; a reply that framing
+  /// [_owedReadRetry], as a read owed once does, and each later one after
+  /// twice the last wait, up to [_maxProbeRetry]; a reply that framing
   /// loses every time therefore cannot turn into a loop.
   void _probe(_Server server, _Run run) {
     run.probing = true;
@@ -358,7 +365,9 @@ final class SamplingScheduler {
           run.probeAt = null;
           _answered(server, run);
         } else {
-          run.probeAt = _elapsed() + _owedReadRetry;
+          run.probeAt = _elapsed() + run.probeRetry;
+          final doubled = run.probeRetry * 2;
+          run.probeRetry = doubled < _maxProbeRetry ? doubled : _maxProbeRetry;
         }
         _emitAll(server.pipeline.addProbe(outcome));
         _schedule(server, run, run.slow);
@@ -691,6 +700,9 @@ final class _Run {
   /// owes one; null once one is answered.
   Duration? probeAt;
   bool probing = false;
+
+  /// How long the next probe that brings no reply delays the one after.
+  Duration probeRetry = _owedReadRetry;
 
   /// The fast sampler missed a deadline: its restart's start opens a
   /// dead-peer hint.
