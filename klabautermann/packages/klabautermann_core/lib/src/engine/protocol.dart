@@ -1704,9 +1704,10 @@ final class OverviewResult extends SampleResult {
   final Map<String, NetRate>? network;
 
   /// The values the engine left null for a reason the app words (D50):
-  /// each field whose `/proc` file shows a container host's figures,
-  /// whether or not this reading carried it. Empty outside containers
-  /// and while the probe cannot tell whether the server is one.
+  /// each field of this result whose `/proc` file shows a container
+  /// host's figures, whether or not this reading carried it. Empty
+  /// outside containers and while the probe cannot tell whether the
+  /// server is one.
   final Map<MetricField, MetricWithheldReason> withheld;
 }
 
