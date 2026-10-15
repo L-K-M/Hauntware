@@ -271,6 +271,16 @@ final class HostProfile {
       return !(served && file._lxcfsShowsOwn);
     }
 
+    return inContainer;
+  }
+
+  /// Whether this system is a container (SYS-04, D50): true with an lxcfs
+  /// mount over any `/proc` path, even when `systemd-detect-virt -c`
+  /// answered `none`; otherwise that answer; null when neither is known.
+  bool? get inContainer {
+    final mounts = lxcfsMounts;
+    if (mounts != null && mounts.isNotEmpty) return true;
+
     final c = container;
     return c == null ? null : c != 'none';
   }
