@@ -1399,7 +1399,8 @@ re-push (c1 §2.4).
   hidden by the sandbox, since a path it does not grant reads as
   missing; the remedy is a wider grant (04 §12.1), not a new path. A
   refused file stays access denied: the sandbox hides paths rather than
-  refusing them.
+  refusing them. Only a regular file, after symlinks, is read as a key:
+  a FIFO waits for a writer and a device such as a tty for input.
 - **Background rule (FL-21).** Background sampling uses only servers whose
   credentials resolve without a prompt and whose endpoint is confirmed;
   keyboard-interactive servers connect on explicit open only and get exactly
