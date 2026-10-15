@@ -188,9 +188,18 @@ IdentityAuditLog identityAuditLogIn(String supportDirectory) =>
     );
 
 /// Reads at most [_maxIdentityFileBytes] of [path] as UTF-8. Throws a
-/// [FileSystemException] for an I/O failure or a longer file, and a
-/// [FormatException] for bytes that are not UTF-8.
+/// [FileSystemException] for an I/O failure, a pipe or socket, or a longer
+/// file, and a [FormatException] for bytes that are not UTF-8.
 Future<String> _readBounded(String path) async {
+  // open() on a FIFO waits for a writer, which may never come. A stalled
+  // mount still needs a per-attempt deadline, which the link supervisor
+  // (K19a) owns. A missing path falls through to open(), which reports it.
+  final type = (await FileStat.stat(path)).type;
+  if (type == FileSystemEntityType.pipe ||
+      type == FileSystemEntityType.unixDomainSock) {
+    throw FileSystemException('Not a regular file', path);
+  }
+
   final handle = await File(path).open();
   try {
     final bytes = BytesBuilder(copy: false);

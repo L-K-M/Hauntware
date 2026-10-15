@@ -129,6 +129,29 @@ void main() {
     });
   }
 
+  test(
+    'a FIFO is unreadable without waiting for a writer',
+    () async {
+      final key = '$home/.ssh/id_test';
+      final made = await Process.run('mkfifo', [key]);
+      expect(made.exitCode, 0, reason: '${made.stderr}');
+
+      expect(
+        (await unavailable(source())).failure,
+        IdentityFileFailure.unreadable,
+      );
+    },
+    testOn: '!windows',
+    timeout: const Timeout(Duration(seconds: 5)),
+  );
+
+  test('a symlink to a key is read through the link', () async {
+    await File('$home/.ssh/id_real').writeAsString(_pem);
+    await Link('$home/.ssh/id_test').create('$home/.ssh/id_real');
+
+    expect(await source().identityFile(_config(), null), _pem);
+  }, testOn: '!windows');
+
   test('a file of exactly 1 MiB is read', () async {
     await File('$home/.ssh/id_test').writeAsBytes(List.filled(1 << 20, 0x41));
 
