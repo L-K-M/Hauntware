@@ -99,6 +99,23 @@ void main() {
     expect(model.writes.single.$1, EditorFont.standard);
   });
 
+  testWidgets('choosing the font already shown writes nothing', (tester) async {
+    model = _SlowModel(const EditorFont(family: 'Fira Code'));
+    await pump(tester);
+    await tester.tap(find.byKey(const ValueKey('editor.font')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Fira Code').last);
+    await tester.pumpAndSettle();
+    expect(model.writes, isEmpty);
+
+    // The rows still follow the model when it moves.
+    model
+      .._value = const EditorFont(family: 'Maple Mono')
+      ..notifyListeners();
+    await tester.pump();
+    expect(menu(tester).value, 'Maple Mono');
+  });
+
   testWidgets('a family stored another way stays selected', (tester) async {
     model = _SlowModel(const EditorFont(family: 'Menlo'));
     await pump(tester);

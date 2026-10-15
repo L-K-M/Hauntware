@@ -63,6 +63,10 @@ class _EditorFontSectionState extends State<EditorFontSection> {
   }
 
   Future<void> _write(EditorFont font) async {
+    // The font already shown: the model would not move, so nothing would
+    // clear [_pending].
+    if (font == (_pending ?? widget.model.value)) return;
+
     final write = ++_writes;
     setState(() => _pending = font);
     try {
@@ -88,6 +92,7 @@ class _EditorFontSectionState extends State<EditorFontSection> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            const SizedBox(height: 8),
             Row(
               children: [
                 Text(l10n.editorFontLabel),
