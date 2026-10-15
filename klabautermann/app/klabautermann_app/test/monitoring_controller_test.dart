@@ -667,24 +667,30 @@ void main() {
       final read = monitoring.openLogRead(_unitLogs('nginx.service'));
       final panel = _PanelStream();
       monitoring.logs.open(_panelLog, panel);
-      monitoring.openLogRead(_unitLogs('ssh.service'));
-      monitoring.logs.open(_panelLog, _PanelStream());
+      final second = monitoring.openLogRead(_unitLogs('ssh.service'));
+      final secondPanel = _PanelStream();
+      monitoring.logs.open(_panelLog, secondPanel);
 
       final ids = openIds();
-      expect(ids.toSet(), hasLength(4));
+      expect(ids, ['log-0', 'log-1', 'log-2', 'log-3']);
 
+      // Each event goes to the later stream of its kind, so none reaches
+      // a stream merely for being the oldest open or the oldest of its
+      // kind.
       engine
-        ..emit(LogStreamState(ids[1], const LogStreamRunning()))
+        ..emit(LogStreamState(ids[3], const LogStreamRunning()))
         ..emit(
           LogBatch(
-            streamId: ids[0],
+            streamId: ids[2],
             records: const [JournalRecord(message: 'started')],
           ),
         );
       await settle();
-      expect(read.records, hasLength(1));
+      expect(read.records, isEmpty);
       expect(read.state, isA<LogReadRequested>());
-      expect(panel.events, [const LogStreamRunning()]);
+      expect(second.records, hasLength(1));
+      expect(panel.events, isEmpty);
+      expect(secondPanel.events, [const LogStreamRunning()]);
     });
 
     test('one rejection refuses only the oldest open, a read before a '
@@ -732,6 +738,21 @@ void main() {
       await settle();
       expect(read.state, isA<LogReadRequested>());
       expect(panel.events, [const LogStreamRunning()]);
+    });
+
+    test('a disposed controller lets go of its streams', () async {
+      // A controller of its own, since tearDown disposes the shared one.
+      final ownEngine = FakeEngineClient();
+      final own = MonitoringController(ownEngine);
+      final read = own.openLogRead(_unitLogs('nginx.service'));
+      final panel = _PanelStream();
+      own.logs.open(_panelLog, panel);
+
+      own.dispose();
+      await ownEngine.close();
+      await pumpEventQueue();
+      expect(read.state, isA<LogReadRequested>());
+      expect(panel.events, isEmpty);
     });
   });
 
