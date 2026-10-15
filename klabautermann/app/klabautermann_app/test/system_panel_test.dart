@@ -671,7 +671,10 @@ void main() {
       );
 
       /// The mount column may cut a mount point short; its details do not.
-      Future<void> expectDetails(List<String> texts) async {
+      Future<void> expectDetails(
+        List<String> texts, {
+        List<String> absent = const [],
+      }) async {
         await tester.ensureVisible(_row('/mnt/backup'));
         await tester.tap(_row('/mnt/backup'));
         await tester.pumpAndSettle();
@@ -680,6 +683,13 @@ void main() {
           expect(
             find.descendant(of: sheet, matching: find.text(text)),
             findsOneWidget,
+            reason: text,
+          );
+        }
+        for (final text in absent) {
+          expect(
+            find.descendant(of: sheet, matching: find.text(text)),
+            findsNothing,
             reason: text,
           );
         }
@@ -698,7 +708,7 @@ void main() {
       );
       expect(tester.takeException(), isNull);
       // The kept mount's figures are not current.
-      await expectDetails(['Unknown']);
+      await expectDetails(['Unknown'], absent: ['1.7 TiB of 2 TiB', '84%']);
       expect(find.text('1.7 TiB of 2 TiB'), findsNothing);
     });
   }
