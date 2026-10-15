@@ -1,3 +1,4 @@
+import 'dart:async' show unawaited;
 import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
@@ -263,8 +264,9 @@ void main() {
         WidgetTester tester,
         LogWrap wrap, {
         String Function(int i)? message,
+        int? maxLines,
       }) async {
-        final (logs, search) = _logs();
+        final (logs, search) = _logs(maxLines: maxLines);
         await _pump(tester, logs, search, wrap: wrap);
         logs.addJournal([
           for (var i = 0; i < 100; i++) _entry(message?.call(i) ?? 'm $i'),
@@ -282,6 +284,28 @@ void main() {
 
       double topOf(WidgetTester tester, int i) =>
           tester.getTopLeft(_row('nginx.service[812]: m $i')).dy;
+
+      /// Opens row m 5's three fields in a buffer of 100 lines and puts
+      /// row m [top], below them, at the top edge.
+      Future<(LogViewController, ScrollPosition, double)> belowOpenFields(
+        WidgetTester tester,
+        LogWrap wrap,
+        int top,
+      ) async {
+        final (logs, _, position, line) = await paused(
+          tester,
+          wrap,
+          maxLines: 100,
+        );
+        position.jumpTo(5 * line);
+        await tester.pump();
+        await tester.tap(_row('nginx.service[812]: m 5'));
+        await tester.pump();
+        position.jumpTo((top + 3) * line);
+        await tester.pump();
+        expect(topOf(tester, top), moreOrLessEquals(0));
+        return (logs, position, line);
+      }
 
       for (final wrap in LogWrap.values) {
         testWidgets('above and at the top edge, wrap ${wrap.name}', (
@@ -368,6 +392,73 @@ void main() {
           expect(_row('_PID=812'), findsNothing);
           expect(topOf(tester, 40), moreOrLessEquals(0, epsilon: 1e-6));
           expect(topOf(tester, 41), moreOrLessEquals(line, epsilon: 1e-6));
+          expect(logs.following.value, isFalse);
+        });
+
+        testWidgets('lines that leave with their fields open take all their '
+            'rows from above, wrap ${wrap.name}', (tester) async {
+          final (logs, position, line) = await belowOpenFields(
+            tester,
+            wrap,
+            40,
+          );
+
+          // Lines m 0 to m 9 leave, and m 5's open fields with them:
+          // 13 rows.
+          logs.addJournal([for (var i = 100; i < 110; i++) _entry('m $i')]);
+          await tester.pump();
+          expect(logs.firstSeq, 10);
+          expect(position.pixels, moreOrLessEquals(30 * line));
+          expect(topOf(tester, 40), moreOrLessEquals(0));
+          expect(logs.following.value, isFalse);
+        });
+
+        testWidgets('an animation lands where it was aimed as lines leave '
+            'with their fields open, wrap ${wrap.name}', (tester) async {
+          final (logs, position, line) = await belowOpenFields(
+            tester,
+            wrap,
+            40,
+          );
+
+          // Toward row m 60 over 200 ms, with the same 13 rows leaving
+          // 60 ms in.
+          unawaited(
+            position.animateTo(
+              (60 + 3) * line,
+              duration: const Duration(milliseconds: 200),
+              curve: Curves.easeInOut,
+            ),
+          );
+          await tester.pump();
+          await tester.pump(const Duration(milliseconds: 60));
+          logs.addJournal([for (var i = 100; i < 110; i++) _entry('m $i')]);
+          await tester.pumpAndSettle();
+          expect(position.pixels, moreOrLessEquals(50 * line));
+          expect(topOf(tester, 60), moreOrLessEquals(0));
+          expect(logs.following.value, isFalse);
+        });
+
+        testWidgets('an animation lands where it was aimed as the lines in '
+            'sight leave too, wrap ${wrap.name}', (tester) async {
+          final (logs, position, line) = await belowOpenFields(tester, wrap, 7);
+
+          // Toward row m 20 over 200 ms. 20 ms in, the 13 rows leave,
+          // m 7 to m 9 in sight among them: the offset stops at the
+          // oldest line left, and the animation still moves by all 13.
+          unawaited(
+            position.animateTo(
+              (20 + 3) * line,
+              duration: const Duration(milliseconds: 200),
+              curve: Curves.linear,
+            ),
+          );
+          await tester.pump();
+          await tester.pump(const Duration(milliseconds: 20));
+          logs.addJournal([for (var i = 100; i < 110; i++) _entry('m $i')]);
+          await tester.pumpAndSettle();
+          expect(position.pixels, moreOrLessEquals(10 * line));
+          expect(topOf(tester, 20), moreOrLessEquals(0));
           expect(logs.following.value, isFalse);
         });
       }
