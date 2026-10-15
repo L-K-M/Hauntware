@@ -7,6 +7,7 @@ import '../l10n/app_localizations.dart';
 import 'fleet_rail.dart' show linkStatusWord;
 import 'inspector_pane.dart' show PlaceholderPaneBody;
 import 'server_surfaces.dart';
+import 'system_panel.dart';
 
 /// The server workspace of 03 §10.2: a header over the panel tab strip.
 /// The panels themselves land with their subsystems (F4 onward); each tab
@@ -123,7 +124,13 @@ class _Panels extends StatelessWidget {
                 surface: panel.name,
                 streams: panel.streams,
                 visible: tabs.index == index,
-                child: const PlaceholderPaneBody(),
+                child: switch (panel) {
+                  ServerPanel.system => SystemPanel(
+                    monitoring: monitoring,
+                    serverId: serverId,
+                  ),
+                  _ => const PlaceholderPaneBody(),
+                },
               ),
           ],
         ),

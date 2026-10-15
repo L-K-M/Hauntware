@@ -360,6 +360,254 @@
   "workspaceTabSystem": "System",
   "workspaceTabAccess": "Access",
   "serverTabMore": "More",
+  "systemIdentityTitle": "Identity",
+  "@systemIdentityTitle": {
+    "description": "Heading of the System tab's section about what the server is: host name, operating system, kernel, architecture and virtualization (SYS-01)."
+  },
+  "systemUptimeTitle": "Uptime",
+  "@systemUptimeTitle": {
+    "description": "Heading of the System tab's section with how long the server has been up and when it booted (BOOT-01)."
+  },
+  "systemNetworkTitle": "Network",
+  "@systemNetworkTitle": {
+    "description": "Heading of the System tab's section with the server's total network throughput (NET-01)."
+  },
+  "systemDisksTitle": "Disks",
+  "@systemDisksTitle": {
+    "description": "Heading of the System tab's section with the space and inodes each mounted filesystem uses (DSK-01, DSK-02)."
+  },
+  "systemHostname": "Host name",
+  "@systemHostname": {
+    "description": "Label of the server's static host name in the System tab."
+  },
+  "systemOperatingSystem": "Operating system",
+  "@systemOperatingSystem": {
+    "description": "Label of the server's operating system and version, as the server names it, in the System tab."
+  },
+  "systemKernel": "Kernel",
+  "@systemKernel": {
+    "description": "Label of the server's kernel name and release in the System tab."
+  },
+  "systemKernelValue": "{name} {release}",
+  "@systemKernelValue": {
+    "description": "The server's kernel as the System tab shows it: its name and its release, both as the server reports them.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Linux"
+      },
+      "release": {
+        "type": "String",
+        "example": "6.8.0-45-generic"
+      }
+    }
+  },
+  "systemArchitecture": "Architecture",
+  "@systemArchitecture": {
+    "description": "Label of the server's machine architecture, such as x86_64 or aarch64, in the System tab."
+  },
+  "systemVirtualization": "Virtualization",
+  "@systemVirtualization": {
+    "description": "Label of whether the server runs on bare metal, in a virtual machine or in a container, in the System tab."
+  },
+  "systemVirtualizationNone": "None detected",
+  "@systemVirtualizationNone": {
+    "description": "The System tab's virtualization value when the server detected neither a virtual machine nor a container."
+  },
+  "systemVirtualizationMachine": "Virtual machine ({name})",
+  "@systemVirtualizationMachine": {
+    "description": "The System tab's virtualization value for a server in a virtual machine; name is the technology as the server reports it.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "kvm"
+      }
+    }
+  },
+  "systemVirtualizationContainer": "Container ({name})",
+  "@systemVirtualizationContainer": {
+    "description": "The System tab's virtualization value for a server that is a container; name is the technology as the server reports it.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "lxc"
+      }
+    }
+  },
+  "systemVirtualizationContainerUnnamed": "Container",
+  "@systemVirtualizationContainerUnnamed": {
+    "description": "The System tab's virtualization value for a server that is a container of a technology the server did not name."
+  },
+  "systemContainerNotice": "This server is a container. Figures that would come from its host read as unknown.",
+  "@systemContainerNotice": {
+    "description": "Note in the System tab's identity section for a container: values the container would read from its host's system files are not shown as its own (SYS-04)."
+  },
+  "systemUnknown": "Unknown",
+  "@systemUnknown": {
+    "description": "A System tab value the server did not report, or that is not shown for a reason given beside it; never shown as zero."
+  },
+  "systemUnknownContainer": "Inside this container this figure would be the host's, so it is not shown.",
+  "@systemUnknownContainer": {
+    "description": "Reason beside an unknown System tab value: in a container, the system file it comes from shows the host's figures instead of the container's (SYS-04)."
+  },
+  "systemUptime": "Up for",
+  "@systemUptime": {
+    "description": "Label of how long the server has been running since it booted, in the System tab."
+  },
+  "systemUptimeDays": "{days, plural, =1{1 day} other{{days} days}}, {hours, plural, =1{1 hour} other{{hours} hours}}",
+  "@systemUptimeDays": {
+    "description": "How long a server has been up, from one day on: whole days and the hours past them.",
+    "placeholders": {
+      "days": {
+        "type": "int",
+        "format": "decimalPattern"
+      },
+      "hours": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "systemUptimeHours": "{hours, plural, =1{1 hour} other{{hours} hours}}, {minutes, plural, =1{1 minute} other{{minutes} minutes}}",
+  "@systemUptimeHours": {
+    "description": "How long a server has been up, from one hour to a day: whole hours and the minutes past them.",
+    "placeholders": {
+      "hours": {
+        "type": "int",
+        "format": "decimalPattern"
+      },
+      "minutes": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "systemUptimeMinutes": "{minutes, plural, =0{Less than a minute} =1{1 minute} other{{minutes} minutes}}",
+  "@systemUptimeMinutes": {
+    "description": "How long a server has been up, under an hour: whole minutes.",
+    "placeholders": {
+      "minutes": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "systemBooted": "Booted",
+  "@systemBooted": {
+    "description": "Label of when the server last booted, in the System tab."
+  },
+  "systemBootedValue": "{time}",
+  "@systemBootedValue": {
+    "description": "When the server last booted: a date and time in the UI locale and this device's time zone.",
+    "placeholders": {
+      "time": {
+        "type": "DateTime",
+        "format": "yMMMd+jm"
+      }
+    }
+  },
+  "systemReceive": "Receive",
+  "@systemReceive": {
+    "description": "Label of the server's total receive rate over all its network interfaces, in the System tab."
+  },
+  "systemTransmit": "Transmit",
+  "@systemTransmit": {
+    "description": "Label of the server's total transmit rate over all its network interfaces, in the System tab."
+  },
+  "systemWaiting": "Waiting for the first reading.",
+  "@systemWaiting": {
+    "description": "A System tab section before the server sent its first reading for it."
+  },
+  "systemUnavailableMissing": "The server lacks the tool this reading needs.",
+  "@systemUnavailableMissing": {
+    "description": "A System tab section whose reading failed because a command it runs is not installed on the server."
+  },
+  "systemUnavailableDenied": "The server refused this reading.",
+  "@systemUnavailableDenied": {
+    "description": "A System tab section whose reading failed because the server denied permission."
+  },
+  "systemUnavailableTimeout": "This reading did not finish in time.",
+  "@systemUnavailableTimeout": {
+    "description": "A System tab section whose reading the server stopped because it took too long."
+  },
+  "systemUnavailableError": "This reading failed.",
+  "@systemUnavailableError": {
+    "description": "A System tab section whose reading failed for another reason; the server's error output may follow."
+  },
+  "systemDisksTimedOut": "Disk usage did not finish in time. A network mount (NFS or SMB) that stopped answering is the usual cause.",
+  "@systemDisksTimedOut": {
+    "description": "The Disks section when the server stopped the disk usage command because it hung, which a stale network mount causes (DSK-01)."
+  },
+  "systemDisksLastListed": "These mounts are from the reading at {time}; their usage is unknown now.",
+  "@systemDisksLastListed": {
+    "description": "Under systemDisksTimedOut, when an earlier reading listed the mounts: the list below is that reading's, and none of its figures is current. time is when that reading was taken, as a date and time in the UI locale and this device's time zone, since a stale mount can keep failing for days.",
+    "placeholders": {
+      "time": {
+        "type": "DateTime",
+        "format": "yMMMd+jm"
+      }
+    }
+  },
+  "systemDisksNoTimeout": "This server has no timeout command, so a network mount that stops answering can stall disk readings.",
+  "@systemDisksNoTimeout": {
+    "description": "The Disks section on a server without the timeout command, which normally stops a disk usage command that hangs (DSK-01)."
+  },
+  "systemDisksShowPseudo": "Show pseudo filesystems ({count})",
+  "@systemDisksShowPseudo": {
+    "description": "Checkbox in the Disks section that also lists in-memory and image filesystems such as tmpfs, overlay and squashfs, hidden by default; count is how many there are.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "systemDisksEmpty": "No mounts to show.",
+  "@systemDisksEmpty": {
+    "description": "In place of the Disks table when the server's reading listed no filesystem, or only pseudo filesystems while they are hidden."
+  },
+  "systemDevice": "Device",
+  "@systemDevice": {
+    "description": "Label of the device or source a filesystem is mounted from, such as /dev/sda1 or nas:/export, in a mount's details."
+  },
+  "systemColumnMount": "Mount",
+  "@systemColumnMount": {
+    "description": "Disks table column: where the filesystem is mounted."
+  },
+  "systemColumnType": "Type",
+  "@systemColumnType": {
+    "description": "Disks table column: the filesystem type, such as ext4 or nfs4."
+  },
+  "systemColumnUsed": "Used",
+  "@systemColumnUsed": {
+    "description": "Disks table column: the space used out of the filesystem's size."
+  },
+  "systemColumnUse": "Use",
+  "@systemColumnUse": {
+    "description": "Disks table column: the share of the filesystem's space in use, as df reports it."
+  },
+  "systemColumnInodes": "Inodes",
+  "@systemColumnInodes": {
+    "description": "Disks table column: the share of the filesystem's inodes (file entries) in use; a full inode table stops new files like a full disk."
+  },
+  "systemColumnUsage": "Usage",
+  "@systemColumnUsage": {
+    "description": "Disks table column, and label in a mount's details, shown after the disk usage command timed out: what is known of the mount's usage now."
+  },
+  "systemUsedOf": "{used} of {size}",
+  "@systemUsedOf": {
+    "description": "A Disks table cell: the space used and the filesystem's size, both already formatted with binary units such as GiB.",
+    "placeholders": {
+      "used": {
+        "type": "String",
+        "example": "21 GiB"
+      },
+      "size": {
+        "type": "String",
+        "example": "50 GiB"
+      }
+    }
+  },
   "chartSeriesSummary": "{label}: now {current}, lowest {lowest}, highest {highest}, {trend}",
   "@chartSeriesSummary": {
     "description": "A chart's screen-reader summary of one series: what it measures, its current, lowest and highest values (already formatted with their units) and its trend, one of chartTrendRising, chartTrendFalling or chartTrendSteady.",

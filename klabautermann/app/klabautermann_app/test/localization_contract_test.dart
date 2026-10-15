@@ -246,6 +246,10 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'${widget.tableId}.rowActions.$key'",
     r"'${widget.tableId}.row.$key'",
   },
+  // What systemd-detect-virt prints for no virtualization, compared with
+  // the probe's answer; the System tab shows ARB text for it
+  // (systemVirtualizationNone).
+  'lib/ui/system_view.dart': {"'none'"},
 };
 
 const _config = L10nContractConfig(
