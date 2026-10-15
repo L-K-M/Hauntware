@@ -59,16 +59,16 @@ final class FreshnessNoData extends Freshness {
 ///
 /// [staleAfter] is the caller's limit for that stream, since cadences
 /// differ per stream (03 §6.4). [sampling] is what the engine last said
-/// sampling the server is doing; none reads as unsubscribed, the phase
-/// every server starts in, since the engine sends one at each change.
-/// [watched] says whether the server is in this device's monitor set
-/// (FL-21); a server outside it that an open view samples anyway still
-/// reads its age. In order: the background pause wins; an unwatched
-/// server nothing samples is not watched; a link lost while sampling,
-/// after readings, is disconnected since then; otherwise the latest
-/// reading gives the age. A link already down when a view or the return
-/// from the background subscribed again began its phase only then, so it
-/// reads the reading's age.
+/// sampling the server is doing. Before it says anything, a reading says
+/// something sampled the server; with none, it reads as unsubscribed, the
+/// phase every server starts in. [watched] says whether the server is in
+/// this device's monitor set (FL-21); a server outside it that an open
+/// view samples anyway still reads its age. In order: the background
+/// pause wins; an unwatched server nothing samples is not watched; a link
+/// lost while sampling, after readings, is disconnected since then;
+/// otherwise the latest reading gives the age. A link already down when a
+/// view or the return from the background subscribed again began its
+/// phase only then, so it reads the reading's age.
 Freshness freshnessOf({
   required DateTime now,
   required Duration staleAfter,
@@ -79,7 +79,13 @@ Freshness freshnessOf({
   final phase = sampling?.state.phase;
   if (phase == SamplingPhase.pausedInBackground) return const FreshnessPaused();
 
-  final sampled = phase != null && phase != SamplingPhase.unsubscribed;
+  // Readings with no phase yet, as from an engine that sends none, still
+  // say something sampled the server.
+  final sampled = switch (phase) {
+    null => lastSampleAt != null,
+    SamplingPhase.unsubscribed => false,
+    _ => true,
+  };
   if (!watched && !sampled) return const FreshnessNotWatched();
 
   final age = sampleAge(lastSampleAt, now);

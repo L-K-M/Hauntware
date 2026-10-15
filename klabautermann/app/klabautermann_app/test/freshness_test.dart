@@ -99,12 +99,30 @@ void main() {
     test('a server this device does not watch and nothing samples is not '
         'watched, whatever it last read', () {
       expect(
-        _line(sampleAge: Duration.zero, watched: false),
+        _line(
+          sampleAge: Duration.zero,
+          sampling: _phase(SamplingPhase.unsubscribed),
+          watched: false,
+        ),
         'Not watched on this device',
       );
       expect(
         _line(sampling: _phase(SamplingPhase.unsubscribed), watched: false),
         'Not watched on this device',
+      );
+      expect(_line(watched: false), 'Not watched on this device');
+    });
+
+    test('before the engine names a phase, a reading says something sampled '
+        'the server, so an unwatched one reads its age', () {
+      // As from an engine that sends no SamplingState: readings still come.
+      expect(
+        _line(sampleAge: const Duration(seconds: 1), watched: false),
+        'Updated 1 s ago',
+      );
+      expect(
+        _line(sampleAge: const Duration(minutes: 5), watched: false),
+        'Stale: updated 5 min ago',
       );
     });
 

@@ -69,11 +69,11 @@ Duration? sampleAge(DateTime? at, DateTime now) {
 
 /// What the engine last said sampling a server is doing ([state]), and
 /// the phase before it ([previous]; null for the first this engine run).
-/// The engine sends a [SamplingState] at each phase change, so the pair
-/// tells a link lost while sampling, whose loss `state.since` dates, from
-/// one already down when a view or the return from the background
-/// subscribed the server again, whose phase began only then (03 §9.5
-/// item 4).
+/// The protocol has the engine send a [SamplingState] at each phase
+/// change, so the pair tells a link lost while sampling, whose loss
+/// `state.since` dates, from one already down when a view or the return
+/// from the background subscribed the server again, whose phase began
+/// only then (03 §9.5 item 4).
 @immutable
 final class SamplingStatus {
   const SamplingStatus(this.state, {this.previous});
