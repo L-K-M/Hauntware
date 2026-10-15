@@ -282,6 +282,16 @@ void main() {
       expect(records('a'), isEmpty);
     });
 
+    test('the default cap holds a full window of large entries', () async {
+      // About 1.5 KiB each, 750 KiB in all: past SshLink.run's 256 KiB.
+      final stdout = [
+        for (var n = 500; n >= 1; n--)
+          '${jsonEncode({'__CURSOR': _cursor(n), 'F': 'f' * 1450})}\n',
+      ].join();
+      expect(await read('a', _spec(_journal), stdout: stdout), _filled);
+      expect(records('a'), hasLength(500));
+    });
+
     test('a line that is not a JSON object is dropped and counted', () async {
       final stdout =
           '${_entries(3, 3)}{"MESSAGE": "cut\n[1]\n-- No entries --\n'
@@ -394,7 +404,12 @@ void main() {
 
     test('an empty page after a cursor is the oldest record', () async {
       expect(await read('k', _spec(_kernel, after: _cursor(1))), _oldest);
-      expect(link.commands, hasLength(1));
+      expect(link.commands, [
+        _command(
+          'journalctl -o json --no-pager -k -b '
+          '--after-cursor=${_cursor(1)} -n 500 -r',
+        ),
+      ]);
     });
   });
 
@@ -489,6 +504,13 @@ void main() {
         );
       },
     );
+
+    test('the detail keeps the end of a long stderr', () async {
+      final stderr = '${'warning: skipped\n' * 400}Failed to open journal\n';
+      final end = await read('a', _spec(_journal), stderr: stderr, exit: 1);
+      expect(end.detail, endsWith('skipped\nFailed to open journal'));
+      expect(end.detail!.length, lessThanOrEqualTo(kLogReadStderrBytes));
+    });
 
     test('a signal ends the read as failed', () async {
       final p = await open('a', _spec(_journal));
