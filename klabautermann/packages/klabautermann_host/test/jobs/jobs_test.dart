@@ -264,12 +264,27 @@ void main() {
       expect(jobs[1].nextRuns.first.atUtc, DateTime.utc(2026, 6, 2, 2, 30));
     });
 
-    test('an empty CRON_TZ counts as unset', () {
+    test('an empty CRON_TZ names no zone', () {
       final job = _only(
         _merge(_cron(crontab: 'CRON_TZ=\n30 2 * * * a'), zone: _fixed(2)),
       );
       expect(job.schedule!.timeZone, isNull);
       expect(job.nextRuns.first.atUtc, DateTime.utc(2026, 6, 2, 0, 30));
+    });
+
+    test('an empty CRON_TZ line misses the server zone\'s gap', () {
+      // cronie keeps the empty value: the line reads the server's clock
+      // but, as a CRON_TZ line, is never caught up (D57). A plain line
+      // would run at the jump, 2026-03-29T01:00Z.
+      final job = _only(
+        _merge(
+          _cron(crontab: 'CRON_TZ=\n30 2 * * * a'),
+          now: DateTime.utc(2026, 3, 28, 12),
+          zone: _berlin(),
+        ),
+      );
+      expect(job.nextRuns.first.atUtc, DateTime.utc(2026, 3, 30, 0, 30));
+      expect(job.nextRuns.first.dst, CronDst.none);
     });
 
     test('CRON_TZ does not leak into the next cron.d file', () {

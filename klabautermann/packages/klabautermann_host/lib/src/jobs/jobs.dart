@@ -207,7 +207,8 @@ typedef CronZoneResolver = ServerZone? Function(String timeZone);
 /// Cron lines run in [zone], the server zone from the probe, unless a
 /// `CRON_TZ` applies: [zoneFor] resolves it first, then a name equal to
 /// the server zone's or a UTC alias, and the line follows that zone's
-/// clock under [zone]'s repeated hours ([CronClock.line]). A null [zone]
+/// clock under [zone]'s repeated hours ([CronClock.line]); an empty
+/// `CRON_TZ=` keeps [zone] but follows [CronClock.line] too. A null [zone]
 /// means the server zone is unknown, and lines without a `CRON_TZ` list
 /// no runs. Each lists up to [runCount] runs strictly after [nowUtc];
 /// with an [evaluateLimit], only that many lines in payload order get
@@ -312,7 +313,8 @@ CronJobEntry _cronEntry(
     );
   }
 
-  // An empty `CRON_TZ=` counts as unset, here and in [_cronZone].
+  // An empty `CRON_TZ=` names no zone, here and in [_cronZone], so the
+  // line runs in the server's zone; the clock below reads the raw value.
   final cronTz = (job.cronTz?.isEmpty ?? true) ? null : job.cronTz;
   final schedule = CronSchedule(
     text: job.schedule,
@@ -341,8 +343,10 @@ CronJobEntry _cronEntry(
   }
 
   // cronie converts its minutes into any CRON_TZ zone, even one named
-  // like its own, and matches the line there (D57).
-  final clock = cronTz == null ? CronClock.server : CronClock.line;
+  // like its own, and matches the line there. An empty value stays in
+  // the line's environment, so cronie skips that line during catch-up
+  // like any other CRON_TZ line (D57).
+  final clock = job.cronTz == null ? CronClock.server : CronClock.line;
   final runs = evaluate(expression, runZone, clock);
   if (runs == null) {
     return CronJobEntry._(
