@@ -190,6 +190,28 @@ void main() {
     });
   });
 
+  test('a clock reading outside DateTime\'s range counts as none', () {
+    // The server sends `epoch=`; past about 8.64e12 s no DateTime holds
+    // it, and near the int64 limit the milliseconds overflow.
+    for (final epoch in [
+      99999999999999,
+      -99999999999999,
+      9223372036854775807,
+    ]) {
+      final profile = _profile('+0100', 'Europe/Berlin', epoch);
+      expect(
+        serverCronZone(profile, DateTime.utc(2026, 1, 10)).zoneName,
+        'Europe/Berlin',
+        reason: '$epoch',
+      );
+      expect(
+        serverCronZone(profile, DateTime.utc(2026, 7, 10)).fallback,
+        CronZoneFallback.offsetMismatch,
+        reason: '$epoch',
+      );
+    }
+  });
+
   test('without a probed offset only CRON_TZ lines have runs', () {
     final result = cronResult(
       _crontab('0 3 * * * a\nCRON_TZ=US/Eastern\n0 3 * * * b'),

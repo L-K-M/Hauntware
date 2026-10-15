@@ -31,8 +31,9 @@ typedef ServerCronZone = ({
 ///
 /// The rules apply when the database knows the probe's zone name and
 /// gives the offset the server reported at the probe's clock reading
-/// (at [atUtc] when the probe read no clock). Without a probed offset
-/// no zone is known, since nothing confirms the name.
+/// (at [atUtc] when the probe read no clock, or a reading no DateTime
+/// holds). Without a probed offset no zone is known, since nothing
+/// confirms the name.
 ServerCronZone serverCronZone(HostProfile? profile, DateTime atUtc) {
   final probed = profile?.serverZone;
   if (probed == null) return (zone: null, zoneName: null, fallback: null);
@@ -48,8 +49,10 @@ ServerCronZone serverCronZone(HostProfile? profile, DateTime atUtc) {
           : CronZoneFallback.unknownZone,
     );
   }
+  // The server sends the clock reading; bounding it first keeps the
+  // milliseconds from overflowing and DateTime from throwing (6.5).
   final epoch = profile!.epochSeconds;
-  final probedAt = epoch == null
+  final probedAt = epoch == null || epoch.abs() > _maxDateTimeSeconds
       ? atUtc
       : DateTime.fromMillisecondsSinceEpoch(epoch * 1000, isUtc: true);
   if (_offsetAt(location, probedAt) != probed.offset) {
@@ -82,6 +85,9 @@ ServerZone? cronTzZone(String name, DateTime atUtc) {
     offsetAt: (utc) => _offsetAt(location, utc),
   );
 }
+
+/// The largest epoch second a DateTime holds: 100,000,000 days.
+const _maxDateTimeSeconds = 8640000000000;
 
 Duration _offsetAt(tz.Location location, DateTime utc) =>
     location.timeZone(utc.millisecondsSinceEpoch).offset;
