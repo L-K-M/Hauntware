@@ -595,20 +595,27 @@ Proposals awaiting the owner close the section; they are not decisions.
   `drivers/base/core.c` (`device_add_class_symlinks`),
   `drivers/net/hyperv/netvsc_drv.c` (`netvsc_get_stats64`),
   `drivers/net/net_failover.c`]. Without such an interface, inside a
-  container whose `eth0` is a veth peer or without sysfs, every interface
-  but `lo` stays, so a Docker bridge nested in such a container counts
-  twice. `diskstats` keeps reads, sectors read, writes and sectors written
-  (CN-04) of whole disks: a partition (a `partition` file in sysfs) or a
-  stacked device (entries under `slaves/`, which device-mapper and md
-  create) repeats its disks' I/O [V: Linux `block/partitions/core.c`,
-  `block/holder.c`, `drivers/md/dm.c`, `drivers/md/md.c`], loop devices
-  count again on their backing file's disk, `ram` and `zram` hold memory,
-  and ZFS volumes (`zd*` [V: OpenZFS `include/sys/fs/zfs.h`]) count again
-  on the pool's disks. A hidden NVMe multipath path (`nvme<S>c<C>n<N>`)
-  has neither a `partition` file nor `slaves/`, yet its head `nvme<S>n<N>`
-  counts the same I/O on kernels that account it there [V: Linux
-  `block/genhd.c` (`diskstats_show` lists hidden disks),
-  `drivers/nvme/host/core.c` (`nvme_alloc_ns`),
+  container whose `eth0` is a veth peer, the interfaces that are neither a
+  bridge (a `bridge/` directory) nor enslaved (a `master` link) stay,
+  because a nested Docker bridge and its veth ports count forwarded
+  traffic again, in the opposite direction to `eth0` [V: Linux
+  `net/bridge/br_device.c` (`br_dev_xmit`), `net/bridge/br_input.c`
+  (`br_pass_frame_up`), `drivers/net/veth.c` (`veth_get_stats64`)]. When
+  that leaves none, as when `eth0` is itself a bridge port, or without
+  sysfs, every interface but `lo` stays, and forwarded traffic then counts
+  on the uplink, the bridge and its ports; a tunnel inside a container
+  counts again on `eth0` either way. `diskstats` keeps reads, sectors
+  read, writes and sectors written (CN-04) of whole disks: a partition (a
+  `partition` file in sysfs) or a stacked device (entries under `slaves/`,
+  which device-mapper and md create) repeats its disks' I/O [V: Linux
+  `block/partitions/core.c`, `block/holder.c`, `drivers/md/dm.c`,
+  `drivers/md/md.c`], loop devices count again on their backing file's
+  disk, `ram` and `zram` hold memory, and ZFS volumes (`zd*` [V: OpenZFS
+  `include/sys/fs/zfs.h`]) count again on the pool's disks. A hidden NVMe
+  multipath path (`nvme<S>c<C>n<N>`) has neither a `partition` file nor
+  `slaves/`, yet its head `nvme<S>n<N>` counts the same I/O on kernels
+  that account it there [V: Linux `block/genhd.c` (`diskstats_show` lists
+  hidden disks), `drivers/nvme/host/core.c` (`nvme_alloc_ns`),
   `drivers/nvme/host/multipath.c` (`nvme_mpath_start_request`)], so a path
   row stays only when its head row shows no I/O, as on kernels before the
   head accounted it. A `netdev` or `diskstats` row whose counters are all

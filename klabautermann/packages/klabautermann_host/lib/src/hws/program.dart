@@ -274,24 +274,28 @@ hw_meminfo() {
 # if any, has none: bridges, bonds, VLANs, veths, tunnels and loopback
 # have no device and carry traffic a device already counts, and the
 # Hyper-V and failover masters already count their enslaved VF. Without
-# such an interface (inside a container, or without sysfs) every
-# interface but lo stays. Rows that never moved a byte are left out.
+# such an interface (inside a container, whose eth0 is a veth peer) the
+# interfaces that are neither a bridge nor enslaved stay, because a
+# nested bridge and its ports repeat what eth0 counts; when that leaves
+# none, or without sysfs, every interface but lo stays. Rows that never
+# moved a byte are left out.
 hw_netdev() {
   o="$o$NL== netdev =="
   hw_readable /proc/net/dev || return 0
-  _d=; _a=
+  _d=; _v=; _a=
   while IFS=': ' read -r _n _rb _x _x _x _x _x _x _x _tb _x; do
     case $_n:$_rb:$_tb in
       lo:* | *:0:0 | *::* | *: | *:*[!0-9]*:* | *:*:*[!0-9]*)
         continue ;;
     esac
-    if [ -e "/sys/class/net/$_n/device" ] && [ ! -e "/sys/class/net/$_n/master/device" ]; then
-      _d="$_d$NL$_n $_rb $_tb"
-    else
-      _a="$_a$NL$_n $_rb $_tb"
+    _a="$_a$NL$_n $_rb $_tb"
+    if [ -e "/sys/class/net/$_n/device" ]; then
+      [ -e "/sys/class/net/$_n/master/device" ] || _d="$_d$NL$_n $_rb $_tb"
+    elif [ ! -d "/sys/class/net/$_n/bridge" ] && [ ! -e "/sys/class/net/$_n/master" ]; then
+      _v="$_v$NL$_n $_rb $_tb"
     fi
   done </proc/net/dev || st=error
-  o="$o${_d:-$_a}"
+  o="$o${_d:-${_v:-$_a}}"
 }
 
 # DSK-03's counters as `<device> <reads> <sectors read> <writes>

@@ -369,26 +369,42 @@ void main() {
         expect(hosts * r.replyBytes / cadenceSeconds, lessThan(1000));
       });
 
-      test(
-        'without a device-backed NIC every interface but lo stays',
-        () async {
-          final root = _smallHost({
-            'proc/net/dev':
-                'h|\nh|\n    lo: 9 1 0 0 0 0 0 0 9 1 0 0 0 0 0 0\n'
-                '  eth0: 100 1 0 0 0 0 0 0 200 1 0 0 0 0 0 0\n'
-                'docker0: 30 1 0 0 0 0 0 0 40 1 0 0 0 0 0 0\n',
-          });
-          final core = (await _core(shell, root)).value;
-          expect(
-            core.netdev.map((n) => '${n.name} ${n.rxBytes} ${n.txBytes}'),
-            ['eth0 100 200', 'docker0 30 40'],
-          );
-          expect(core.diskstats.single.name, 'sda');
-          // No arcstats and no PSI: absent, never zero.
-          expect(core.zfsArc, isNull);
-          expect(core.cpuPressure, isNull);
-        },
-      );
+      test('without a device-backed NIC, bridges and their ports go', () async {
+        // Docker inside an LXC container: eth0 is a veth peer, and the
+        // nested bridge and its veth repeat eth0's traffic.
+        const dev =
+            'h|\nh|\n    lo: 9 1 0 0 0 0 0 0 9 1 0 0 0 0 0 0\n'
+            '  eth0: 100 1 0 0 0 0 0 0 200 1 0 0 0 0 0 0\n'
+            'docker0: 30 1 0 0 0 0 0 0 40 1 0 0 0 0 0 0\n'
+            'veth1a2b: 40 1 0 0 0 0 0 0 30 1 0 0 0 0 0 0\n';
+        Directory host(List<String> ports) {
+          final root = _smallHost({'proc/net/dev': dev});
+          _mark(root, 'sys/class/net/docker0/bridge');
+          for (final port in ports) {
+            Link(
+              '${root.path}/sys/class/net/$port/master',
+            ).createSync('../docker0', recursive: true);
+          }
+          return root;
+        }
+
+        final core = (await _core(shell, host(['veth1a2b']))).value;
+        expect(core.netdev.map((n) => '${n.name} ${n.rxBytes} ${n.txBytes}'), [
+          'eth0 100 200',
+        ]);
+        // With eth0 itself a bridge port nothing else is left, so every
+        // interface but lo stays, as without sysfs.
+        final bridged = (await _core(shell, host(['eth0', 'veth1a2b'])));
+        expect(bridged.value.netdev.map((n) => n.name), [
+          'eth0',
+          'docker0',
+          'veth1a2b',
+        ]);
+        expect(core.diskstats.single.name, 'sda');
+        // No arcstats and no PSI: absent, never zero.
+        expect(core.zfsArc, isNull);
+        expect(core.cpuPressure, isNull);
+      });
 
       test('NVMe path rows stay only while their head has no I/O', () async {
         // A kernel that accounts multipath I/O on the paths only.

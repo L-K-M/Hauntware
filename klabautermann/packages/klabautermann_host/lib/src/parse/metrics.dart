@@ -41,7 +41,9 @@ final class OverviewSnapshot {
   /// Load averages, when the block parsed.
   final LoadAvg? loadavg;
 
-  /// Interface counters, for the device-backed interfaces only (D48).
+  /// Interface counters: of the device-backed interfaces, else of those
+  /// that are neither a bridge nor enslaved, else of every interface but
+  /// lo (D48).
   final List<NetDevEntry> netdev;
 
   Map<String, Object?> toJson() => {

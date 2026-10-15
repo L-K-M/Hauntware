@@ -35,8 +35,7 @@ enum Collector {
   probe(SamplerKind.slow, [], guardedCommands: 16),
 
   /// Fleet-row metrics: total cpu line, the meminfo subset, loadavg and
-  /// the counters of device-backed interfaces (03 §6.4, D48, fast
-  /// sampler).
+  /// the interface counters D48 keeps (03 §6.4, fast sampler).
   overview(SamplerKind.fast, [], guardedCommands: 0),
 
   /// Focused-server metrics: overview plus per-core busy and idle jiffies,
