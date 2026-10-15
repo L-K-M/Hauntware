@@ -27,6 +27,7 @@ import 'package:klabautermann_host/klabautermann_host.dart';
 import 'package:seance_core/seance_core.dart'
     show RemoteProcess, SshLink, SshLinkClosed;
 
+import '../links/backoff.dart';
 import 'sampler_timing.dart';
 
 /// The stderr bytes a session keeps for diagnostics: the most recent
@@ -520,7 +521,7 @@ final class SamplerSession {
   static final _jitter = Random();
 
   static Duration _defaultRestartDelay(int failures) =>
-      samplerRestartDelay(failures, _jitter);
+      backoffDelay(failures, _jitter);
 }
 
 enum _RequestKind { tick, onDemand }

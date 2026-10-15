@@ -4,6 +4,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 
+import 'package:klabautermann_core/src/links/backoff.dart';
 import 'package:klabautermann_core/src/sampling/sampler_session.dart';
 import 'package:klabautermann_core/src/sampling/sampler_timing.dart';
 import 'package:klabautermann_host/klabautermann_host.dart';
@@ -468,14 +469,11 @@ void main() {
   });
 
   test('the restart delay doubles to a 30 s cap with downward jitter', () {
-    expect(samplerRestartDelay(0, _FixedRandom(0)), _seconds(1));
-    expect(samplerRestartDelay(3, _FixedRandom(0)), _seconds(8));
-    expect(samplerRestartDelay(9, _FixedRandom(0)), _seconds(30));
-    expect(samplerRestartDelay(1 << 40, _FixedRandom(0)), _seconds(30));
-    expect(
-      samplerRestartDelay(0, _FixedRandom(1)),
-      const Duration(milliseconds: 700),
-    );
+    expect(backoffDelay(0, _FixedRandom(0)), _seconds(1));
+    expect(backoffDelay(3, _FixedRandom(0)), _seconds(8));
+    expect(backoffDelay(9, _FixedRandom(0)), _seconds(30));
+    expect(backoffDelay(1 << 40, _FixedRandom(0)), _seconds(30));
+    expect(backoffDelay(0, _FixedRandom(1)), const Duration(milliseconds: 700));
   });
 }
 

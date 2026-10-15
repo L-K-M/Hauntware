@@ -1633,13 +1633,42 @@ abstract interface class RemoteProcess {
 - **Reconnect (CN-05).** Backoff with 1 s base, 30 s cap and downward jitter
   (Poltergeist's constants [R]); journal cursors and Docker `since=` resume.
   Background reconnects never prompt; a server that needs a prompt waits
-  for the user.
+  for the user. The engine's link supervisor redials only after a failure
+  to reach the server (unreachable or timed out) or a lost link,
+  reporting `closed` (with the failure kind of a failed attempt) and then
+  `backoff(until)`; the count resets once a link is up. Every other failure, one the engine
+  cannot classify included, waits for the user's next connect: a prompt,
+  a rejected or missing credential and a client limitation come back on
+  every retry, and repeated sign-in failures get the device banned by
+  fail2ban (c2 R11). A server whose last connect needed
+  keyboard-interactive answers, on itself or a jump host, is never dialed
+  unattended (4.5). A changed host key blocks the server until the
+  re-pin flow of 4.6 exists; until then nothing unblocks it but an
+  engine restart.
+- **Attempts.** `SshLink.connect` shows no state before it returns, so
+  the supervisor reports `connecting` while an attempt queues and dials,
+  `authenticating` once the server's own host key has passed (each jump
+  hop's is checked first), `needsUser` while a prompt is out, and after
+  an answer `authenticating`, or `connecting` while a jump host asked.
+  An attempt is given up as timed out after 60 s [E] of work; the clock
+  stops while a prompt waits on the user and starts over once it is
+  answered. `SshLink.connect` bounds a socket connect but gives the
+  handshake and authentication 5 minutes, and a key file on a stalled
+  mount blocks its stat and read without bound. A given-up attempt
+  (deadline, `Disconnect`, the background grace) withdraws its prompts
+  and, if its route is not resolved yet, never dials; the server's next
+  dial waits until it returns, and a link it still brings is closed, so
+  a server has one dial at a time.
 - **States** cross the isolate boundary as plain data: `idle`,
   `connecting`, `authenticating`, `ready(capabilities)`, `degraded(reason)`,
   `backoff(until)`, `needsUser(prompt)`, `closed(reason)`, plus the
   engine's own `blocked(reason)`; every reason is an enum (D46).
 - **Mobile.** On background, sampling stops at once and the link closes
   after a 30 s grace period unless a detached operation is being followed.
+  No attempt starts while the app is in the background, on any platform:
+  queued attempts and redials wait for its return. A desktop keeps its
+  links open (sampling pauses, 6.4), and a phone's closed links redial
+  unattended on return.
 - `SshSession.runCommand` is re-implemented on the same exec core, so
   Séance's RemoteGit and command flows gain classification and exit signals
   with no other behaviour change; Séance adopting dead-peer detection for
@@ -1837,7 +1866,10 @@ c2 found these defects in 3.0.2. The last column gives their state on the
 
 One long-lived connection per host per device keeps login records and
 `MaxStartups` pressure low (r5 §3.2). Fleet connects are capped at 4
-concurrent with jitter; reachability probes reuse `ProbeService`
+concurrent with jitter: every connection attempt takes one of 4 slots
+(D19), the user's ahead of the queue and dialing as soon as it has one,
+an unattended one after a random wait of up to 1 s [E] in its slot. Reachability
+probes reuse `ProbeService`
 (`SC/src/probe/probe_service.dart:64`, 45 s jittered sweeps, at most 6
 concurrent [V]) and run only for confirmed endpoints.
 
