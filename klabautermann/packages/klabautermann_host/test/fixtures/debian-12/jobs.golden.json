@@ -433,7 +433,7 @@
     "*-*-* 00:00:00": [
       "sh",
       "-c",
-      "(unset TZ; systemd-analyze calendar --iterations=2 \"$1\")",
+      "(unset TZ; systemd-analyze calendar --iterations=2 -- \"$1\")",
       "hws-cal",
       "*-*-* 00:00:00"
     ]

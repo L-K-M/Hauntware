@@ -268,17 +268,27 @@ void main() {
         expect(HostCommands.onCalendar('daily', iterations: 3), [
           'sh',
           '-c',
-          '(unset TZ; systemd-analyze calendar --iterations=3 "\$1")',
+          '(unset TZ; systemd-analyze calendar --iterations=3 -- "\$1")',
           'hws-cal',
           'daily',
         ]);
       },
     );
 
+    test('onCalendar passes a leading-dash expression after --', () {
+      // A host-sent `OnCalendar=--version` must not become an option.
+      final argv = HostCommands.onCalendar('--version', iterations: 1);
+      expect(argv.sublist(2), [
+        '(unset TZ; systemd-analyze calendar --iterations=1 -- "\$1")',
+        'hws-cal',
+        '--version',
+      ]);
+    });
+
     test('onCalendar drops --iterations below systemd 242', () {
       expect(
         HostCommands.onCalendar('daily', iterations: 3, systemdMajor: 239)[2],
-        '(unset TZ; systemd-analyze calendar "\$1")',
+        '(unset TZ; systemd-analyze calendar -- "\$1")',
       );
     });
 

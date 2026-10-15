@@ -92,19 +92,20 @@ void main() {
         }
       });
 
-      test('the calendar read unsets TZ in its own subshell', () async {
-        // onCalendar's script with printf in place of systemd-analyze.
-        final argv = HostCommands.onCalendar('daily', iterations: 1);
+      test('the calendar read unsets TZ and ends options first', () async {
+        // onCalendar's script with printf in place of systemd-analyze: a
+        // leading-dash expression arrives after `--`, as an operand.
+        final argv = HostCommands.onCalendar('--version', iterations: 1);
         final script = argv[2].replaceFirst(
           'systemd-analyze calendar --iterations=1',
-          r'printf "%s|%s" "${TZ-unset}"',
+          r'printf "%s|" "${TZ-unset}"',
         );
         final line = HostCommands.commandLine([
           ...argv.take(2),
           script,
           ...argv.skip(3),
         ], quote: quoteShellWord);
-        expect(await _run(link, line), 'unset|daily');
+        expect(await _run(link, line), 'unset|--|--version|');
       });
     });
   }

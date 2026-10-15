@@ -426,7 +426,7 @@ void main() {
         );
         expect(
           reads.values.map((argv) => argv[2]),
-          everyElement('(unset TZ; systemd-analyze calendar "\$1")'),
+          everyElement('(unset TZ; systemd-analyze calendar -- "\$1")'),
         );
       });
 

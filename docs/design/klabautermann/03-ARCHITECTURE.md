@@ -2451,9 +2451,9 @@ unless the user enables admin mode for that panel.
   the probe, with DST transitions and `RandomizedDelaySec` annotated;
   `OnCalendar` expressions, which a timer's `timer_detail` read gives
   with its `RandomizedDelaySec` (D57), use `(unset TZ; systemd-analyze
-  calendar --iterations=N '<expr>')` on the host instead of a
-  reimplementation
-  (`--iterations` from systemd 242 [R: systemd NEWS]; below that, one next
+  calendar --iterations=N -- '<expr>')` on the host instead of a
+  reimplementation (`--` keeps an expression the host sent an operand;
+  `--iterations` from systemd 242 [R: systemd NEWS]; below that, one next
   run without `--iterations`, so RHEL 8 shows one run),
   because PID 1 evaluates zone-less expressions in the system zone [R:
   systemd.time(7)] (6.2); phrases come from ARB templates, worded from

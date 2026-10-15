@@ -207,9 +207,10 @@ abstract final class HostCommands {
   /// `ss -tulpn` for the listening-ports list (03 §7.4).
   static List<String> ss() => const ['ss', '-tulpn'];
 
-  /// `(unset TZ; systemd-analyze calendar --iterations=N '<expr>')` for
-  /// the OnCalendar preview (03 §7.7): the subshell clears a session TZ
-  /// so the expression resolves in the server zone. Below systemd 242
+  /// `(unset TZ; systemd-analyze calendar --iterations=N -- '<expr>')`
+  /// for the OnCalendar preview (03 §7.7): the subshell clears a session
+  /// TZ so the expression resolves in the server zone, and `--` keeps an
+  /// expression that starts with `-` an operand. Below systemd 242
   /// `--iterations` does not exist and is left off ([systemdMajor] null
   /// keeps it: unknown versions get the modern flag).
   static List<String> onCalendar(
@@ -227,7 +228,7 @@ abstract final class HostCommands {
     return [
       'sh',
       '-c',
-      '(unset TZ; systemd-analyze calendar$it "\$1")',
+      '(unset TZ; systemd-analyze calendar$it -- "\$1")',
       'hws-cal',
       expression,
     ];
