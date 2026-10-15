@@ -184,6 +184,20 @@ void main() {
       expect(core.perCpu, isNull);
     });
 
+    test('a slow reply that started before the latest fast one keeps the '
+        'series', () {
+      // The slow sampler reads its `B` uptime when its request starts, so
+      // its reply can arrive after a fast one with an older uptime.
+      final streams = {..._fast, SampleStream.fs};
+      final p = _sampling(streams: streams)
+        ..addTick(_fast, _fastReply(0), _at(0))
+        ..addTick(_fast, _fastReply(1), _at(2))
+        ..addTick({SampleStream.fs}, reply(1, 1001.5, [ok('fs', '')]), _at(3));
+      final core = _result<CoreResult>(p.addTick(_fast, _fastReply(2), _at(4)));
+      expect(core.cpu!.busy, closeTo(40, 1e-9));
+      expect(core.network!['eth0']!.rxBytesPerSecond, 1000);
+    });
+
     test('counters that all reset read as unknown, not as none', () {
       final p = _sampling()..addTick(_fast, _fastReply(3), _at(0));
       // Lower counters at a later uptime: each one reset (CN-04).

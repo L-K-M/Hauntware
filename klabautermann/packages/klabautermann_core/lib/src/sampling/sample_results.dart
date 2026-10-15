@@ -128,13 +128,18 @@ final class MetricDeriver {
 
   /// The results of one reply that carried [overview], [core] or both,
   /// with the host's [uptime] at its start. [profile] supplies the
-  /// counter width and the container facts.
+  /// counter width and the container facts. A reply with neither, such
+  /// as a slow sampler's, leaves the series alone: that sampler is
+  /// another process, whose request may have started before the latest
+  /// fast one, so its older uptime says nothing about a reboot.
   ({OverviewResult? overview, CoreResult? core}) derive({
     OverviewSnapshot? overview,
     CoreSnapshot? core,
     required double? uptime,
     required HostProfile? profile,
   }) {
+    if (overview == null && core == null) return (overview: null, core: null);
+
     final lastUptime = _last?.uptime;
     if (uptime != null && lastUptime != null && uptime < lastUptime) {
       // A reboot that an `overview` reading saw first: the next `core`

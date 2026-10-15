@@ -2135,9 +2135,11 @@ of their own rather than per subscription, and the health card's failed
 units are a stream of their own, apart from the Services panel's `units`
 (D45, 10.1). Rates
 are computed in the engine isolate (D43) from counter deltas over the
-host's uptime between two replies, with wrap detection and reset
-detection: a changed `btime`, an uptime that went back or a decreasing
-counter starts a new series, and so do sampling that stopped for the
+host's uptime between two replies that carry them, with wrap detection
+and reset detection: a changed `btime`, an uptime that went back or a
+decreasing counter starts a new series (a slow reply's uptime is not
+compared, since its request may start before the latest fast one), and
+so do sampling that stopped for the
 background or a lost link and a stream no longer subscribed, so no rate
 averages over a pause. A lost reading keeps the series, and the next
 rate spans it. Disk throughput uses 512-byte sectors (CN-04). A reply
