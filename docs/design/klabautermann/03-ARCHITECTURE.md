@@ -2893,8 +2893,10 @@ each row's source and the user its line names:
   that carries them shows the elapses as `systemd-analyze` printed
   them, the random delay as a note and, below systemd 242, that only
   the next run is listed.
-- A row opens everything the table cuts short in a sheet. A run the
-  clock has passed since the reading drops out of both, and a timer's
+- A row opens everything the table cuts short in a sheet. A touch row
+  wraps its next run onto a second line, so the offset or zone after the
+  time is not cut at phone width; a dense desktop row holds one. A run
+  the clock has passed since the reading drops out of both, and a timer's
   passed elapse reads as unknown until the next reading; the table
   follows the clock only at such a run or when it turns stale. Times
   turn grey once the older stream's reading is past 120 s, twice the 6.4

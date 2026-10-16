@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ghost_theme/ghost_theme.dart';
 import 'package:klabautermann_app/controllers/monitoring_controller.dart';
@@ -676,6 +677,40 @@ void main() {
       expect(find.text('unknown'), findsOneWidget);
     });
   });
+
+  for (final textScale in [1.0, 2.0]) {
+    testWidgets('the phone keeps the clock a next run follows at '
+        '${(textScale * 100).round()} % text', (tester) async {
+      final panel = await _pump(tester, size: _phone, textScale: textScale);
+      await panel.all(tester);
+
+      // A touch row holds a second line, where the offset or zone that
+      // tells the time from the server's clock wraps instead of being
+      // cut.
+      final rows = find.descendant(
+        of: find.byType(SortableTable<JobEntry>),
+        matching: find.byWidgetPredicate(
+          (widget) =>
+              widget is Scrollable &&
+              widget.axisDirection == AxisDirection.down,
+        ),
+      );
+      for (final text in [
+        'Sat, Oct 24 7:41 PM UTC+02:00',
+        'Mon, Oct 26 2:12 AM UTC+02:00',
+        'Mon, Oct 26 9:00 AM in America/New_York',
+      ]) {
+        final cell = find.text(clock(text));
+        await tester.scrollUntilVisible(cell, 48, scrollable: rows);
+        expect(
+          tester.renderObject<RenderParagraph>(cell).didExceedMaxLines,
+          isFalse,
+          reason: text,
+        );
+      }
+      expect(tester.takeException(), isNull);
+    });
+  }
 
   for (final (name, size) in [('desktop', _wide), ('phone', _phone)]) {
     testWidgets('lays out without overflow at 200 % text on the $name', (

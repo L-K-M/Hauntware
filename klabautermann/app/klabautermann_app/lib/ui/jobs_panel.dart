@@ -521,6 +521,11 @@ String _scheduleCell(AppLocalizations l10n, JobEntry job) {
 /// A next run, grey while stale beside the freshness line's history icon
 /// (03 §9.5 item 4), with an icon when a DST change marks it; the column's
 /// text names the change, and the details say what it does.
+///
+/// It wraps onto a second line where the row holds one, as a touch row
+/// does at any text scale, so the offset or zone after the time, which
+/// tells it from the server's clock (CN-02), is not cut at phone width;
+/// a dense desktop row holds one line.
 class _NextCell extends StatelessWidget {
   const _NextCell(this.next, {required this.stale});
 
@@ -530,22 +535,41 @@ class _NextCell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final muted = Theme.of(context).colorScheme.onSurfaceVariant;
-    return Row(
-      spacing: 4,
-      children: [
-        Flexible(
-          child: Text(
-            next.time,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            softWrap: false,
-            style: stale ? TextStyle(color: muted) : null,
-          ),
-        ),
-        if (next.dst) Icon(Icons.info_outline, size: 14, color: muted),
-      ],
+    final style = stale ? TextStyle(color: muted) : null;
+    return LayoutBuilder(
+      builder: (context, box) {
+        final lines = box.maxHeight >= 2 * _lineHeight(context, style) ? 2 : 1;
+        return Row(
+          spacing: 4,
+          children: [
+            Flexible(
+              child: Text(
+                next.time,
+                maxLines: lines,
+                overflow: TextOverflow.ellipsis,
+                softWrap: lines > 1,
+                style: style,
+              ),
+            ),
+            if (next.dst) Icon(Icons.info_outline, size: 14, color: muted),
+          ],
+        );
+      },
     );
   }
+}
+
+/// The height of one line of [style] over the ambient text style at the
+/// ambient text scale.
+double _lineHeight(BuildContext context, TextStyle? style) {
+  final painter = TextPainter(
+    text: TextSpan(style: DefaultTextStyle.of(context).style.merge(style)),
+    textDirection: Directionality.of(context),
+    textScaler: MediaQuery.textScalerOf(context),
+  );
+  final height = painter.preferredLineHeight;
+  painter.dispose();
+  return height;
 }
 
 /// A job's details in a sheet (03 §10.5: details push further), as of the
