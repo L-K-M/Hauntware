@@ -460,6 +460,28 @@ void main() {
       ]);
     });
 
+    test('a resumed file follow whose open fails ends as its first run '
+        'would, though the stream had lines', () async {
+      const path = '/var/log/app.log';
+      final f = follower(_spec(const FileLogSource(path)));
+      f.run(link);
+      (await link.process(0)).emitText('one\n');
+      await clock.elapse(Duration.zero);
+      f.pause();
+      expect(f.run(link), LogContinuity.gap);
+
+      // GNU tail 9.4 after the file was deleted while paused.
+      const words =
+          "tail: cannot open '$path' for reading: No such file or directory";
+      final p = await link.process(1);
+      p.emitStderr(utf8.encode('$words\n'));
+      await pumpEventQueue();
+      expect(ends(), [
+        const LogStreamEnded(LogStreamEndReason.missing, detail: words),
+      ]);
+      expect(p.closeCalls, 1);
+    });
+
     test('a journal follow keeps running when stderr names a refusal, as '
         'journalctl warns of a file it cannot read', () async {
       follower(_spec(const JournalLogSource())).run(link);

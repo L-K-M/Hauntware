@@ -141,7 +141,9 @@ final class LogFollower {
         () => link.start(HostCommands.commandLine(argv, quote: _quote)),
       ),
       (line, cut) {
-        if (identical(_run, run)) _line(line, cut);
+        if (!identical(_run, run)) return;
+        run.received = true;
+        _line(line, cut);
       },
     );
     _run = run;
@@ -304,14 +306,15 @@ final class LogFollower {
   }
 
   /// Keeps [chunk] of [run]'s stderr. `tail -F` retries a file it cannot
-  /// open instead of exiting, so a file follow that has delivered no line
-  /// ends when the open names a refusal; after one, a rotation can take
-  /// the file away for a moment. Only the open counts: a rotation of a
-  /// file that is still empty prints `has become inaccessible: No such
-  /// file or directory` while tail waits for the new file.
+  /// open instead of exiting, so a file follow whose run has delivered no
+  /// line ends when the open names a refusal, a resumed run included;
+  /// after one, a rotation can take the file away for a moment. Only the
+  /// open counts: a rotation of a file that is still empty prints `has
+  /// become inaccessible: No such file or directory` while tail waits for
+  /// the new file.
   void _stderr(_Run run, List<int> chunk) {
     run.addStderr(chunk);
-    if (_spec.source is! FileLogSource || _received) return;
+    if (_spec.source is! FileLogSource || run.received) return;
 
     final stderr = run.stderr;
     final opens = stderr.split('\n').where(_openFailed.hasMatch).join('\n');
@@ -465,6 +468,9 @@ final class _Run {
   final stderrDone = Completer<void>();
   StreamSubscription<List<int>>? stdoutSub;
   StreamSubscription<List<int>>? stderrSub;
+
+  /// Whether this process delivered a line.
+  bool received = false;
 
   /// The last [kLogReadStderrBytes] of stderr.
   final _stderr = <int>[];
