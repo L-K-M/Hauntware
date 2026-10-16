@@ -7,7 +7,6 @@ import 'dart:async';
 
 import 'package:poltergeist_core/poltergeist_core.dart';
 
-import 'file_stores.dart' show VaultRekeyJournal;
 import 'secure_master_key.dart';
 import 'settings_store.dart';
 import 'uuid.dart';

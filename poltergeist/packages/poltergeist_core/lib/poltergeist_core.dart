@@ -194,10 +194,9 @@ export 'package:seance_core/catalog.dart'
         FileHostKeyStore,
         HostKeyInstallResult,
         HostKeyMutationGate,
-        InMemoryConflictAwareHostKeyStore,
-        // The app's vault store quarantines through it until F3b-2 moves
-        // that store into seance_core as well.
-        quarantineCorruptFile;
+        InMemoryConflictAwareHostKeyStore;
+export 'package:seance_core/catalog.dart'
+    show FileVaultStore, VaultRekeyJournal, VaultRekeyOutcome;
 export 'package:seance_core/catalog.dart'
     show
         EnrollmentResult,

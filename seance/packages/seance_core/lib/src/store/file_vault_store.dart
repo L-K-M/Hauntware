@@ -1,12 +1,14 @@
-// Ported from Séance app/seance_app/lib/services/file_stores.dart @ ded9228; see docs/PORTS.md.
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
-import 'package:poltergeist_core/poltergeist_core.dart';
+import 'package:seance_protocol/seance_protocol.dart';
 
-import 'atomic_file.dart';
+import '../catalog/atomic_file_writer.dart';
+import 'corrupt_file_quarantine.dart';
+import 'file_permissions.dart';
+import 'stores.dart';
 
 /// What settling a staged re-key did with the journal it found.
 enum VaultRekeyOutcome {
@@ -47,6 +49,17 @@ abstract interface class VaultRekeyJournal {
 
 /// JSON-file [VaultStore] holding only opaque, already-encrypted blobs
 /// (base64). [SecretVault] seals/opens; this just persists bytes.
+///
+/// The vault file and its `.rekey` journal are written through
+/// [AtomicFileWriter] owner-only (0600 on Linux and macOS, where a failed
+/// chmod aborts the write), and opening the vault tightens an existing file
+/// best-effort. Keep one instance per file: each instance loads once and
+/// then writes its whole cache, so two over one path would undo each
+/// other's writes.
+///
+/// Moved from Poltergeist's app `file_stores.dart`
+/// (docs/design/catalog-library.md section 8), which ported it from
+/// Séance's app store; poltergeist/docs/PORTS.md records the port.
 class FileVaultStore implements VaultStore, VaultRekeyJournal {
   final File file;
   final Map<String, String> _blobs = {}; // id -> base64
@@ -114,7 +127,7 @@ class FileVaultStore implements VaultStore, VaultRekeyJournal {
     // Same secrets as the journal beside it, kept for longer: an unrelated
     // local account should not be able to take a copy of the sealed blobs for
     // an offline attempt, or alter them.
-    await writeStringAtomically(
+    await const AtomicFileWriter().write(
       file,
       jsonEncode(_blobs),
       privacy: AtomicFilePrivacy.ownerOnly,
@@ -159,8 +172,8 @@ class FileVaultStore implements VaultStore, VaultRekeyJournal {
   /// Run [body] with the cache loaded and no other operation in flight.
   ///
   /// Every public operation takes a slot, reads included. Serializing only the
-  /// writes is not enough and [writeStringAtomically]'s own per-path queue is
-  /// not enough either: that one orders the writes, while the snapshot, the
+  /// writes is not enough, and a per-path write queue would not be enough
+  /// either: that one orders the writes, while the snapshot, the
   /// mutation and the restore sit outside it, so two overlapping mutations
   /// could let one that failed restore a snapshot taken before the other
   /// committed. A read is in here for a related reason. Merely awaiting
@@ -183,7 +196,7 @@ class FileVaultStore implements VaultStore, VaultRekeyJournal {
   /// Apply [change] to the cache and persist it, or leave both as they were.
   ///
   /// The whole map is rewritten on every mutation, so the file alone is
-  /// already all-or-nothing — [writeStringAtomically] ends in a rename. The
+  /// already all-or-nothing — [AtomicFileWriter] replaces it by rename. The
   /// cache is not: mutating it before the flush means a failed write leaves it
   /// holding a value the caller was told was never stored, which the next
   /// successful write would then commit on its behalf. Restoring the snapshot
@@ -304,7 +317,7 @@ class FileVaultStore implements VaultStore, VaultRekeyJournal {
         await VaultCrypto.sealJson(newKey, {'blobs': next}),
       ),
     };
-    await writeStringAtomically(
+    await const AtomicFileWriter().write(
       _rekeyFile,
       jsonEncode({'version': 1, 'snapshots': snapshots}),
       privacy: AtomicFilePrivacy.ownerOnly,

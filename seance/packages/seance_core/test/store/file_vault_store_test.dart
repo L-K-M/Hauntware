@@ -1,16 +1,17 @@
+// Moved from Poltergeist's app test/file_stores_test.dart with
+// FileVaultStore (docs/design/catalog-library.md section 8).
 import 'dart:io';
 
-import 'package:flutter_test/flutter_test.dart';
-
-import 'package:poltergeist_app/services/file_stores.dart';
-import 'package:poltergeist_core/poltergeist_core.dart';
+import 'package:seance_core/catalog.dart';
+import 'package:seance_core/seance_core.dart';
+import 'package:test/test.dart';
 
 void main() {
   late Directory temporaryDirectory;
 
   setUp(() async {
     temporaryDirectory = await Directory.systemTemp.createTemp(
-      'poltergeist_file_stores_test_',
+      'seance_file_vault_store_test_',
     );
   });
 
