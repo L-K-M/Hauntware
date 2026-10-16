@@ -1919,6 +1919,7 @@ abstract interface class RemoteProcess {
 - **Liveness (CN-06).** Idle ping every 15 s; a ping not answered within
   30 s marks the link lost and closes it (Poltergeist's pattern [R: c2
   §2.5]). dartssh2's own keepalive never times out, in 4.1.0 too (c2 R3).
+  A missed fast-sampler deadline hints at a dead peer sooner (6.4).
 - **Reconnect (CN-05).** Backoff with 1 s base, 30 s cap and downward jitter
   (Poltergeist's constants [R]); journal cursors and Docker `since=` resume.
   Background reconnects never prompt; a server that needs a prompt waits
@@ -2374,6 +2375,68 @@ stream, since `core` reads every counter `overview` does. A
 filtered core sample is about 1.5 to 2.5 KB and an overview sample about
 600 B [R: r5 §3.3]; the filtering happens on the host, in the collector
 fragments (D48).
+
+**Scheduling (K22).** The engine's sampling scheduler
+(`klabautermann_core/lib/src/sampling/sampling_scheduler.dart`) runs a
+server's two samplers while a stream is subscribed, its link is ready
+and the app is in the foreground, and closes both, with their timers, as
+soon as one of those ends: the background (D34) and a lost or forgotten
+link stop sampling at once, also on a desktop whose link stays open.
+Each stream is due at its period in the table, aligned to when sampling
+started, so streams whose periods divide one another share a request;
+the due streams of one sampler go out as one tick, `procs` first. While
+`core` is subscribed, `overview` rides on its ticks, and `failedUnits`
+rides on those of `units`, since one reply serves both. A stream newly
+subscribed is read at once, and a new profile takes over at each
+stream's next aligned tick (one not read yet stays due at once).
+`identity` is read once per link, and a
+stream the profile reads on demand once per `Subscribe` naming it
+(10.1); such a read that brings no reply is tried again after 15 s [E].
+Due times follow a monotonic clock, so a changed wall clock cannot stall
+sampling. A sampler ticks only while it is ready, so its restarts (6.2)
+cost no skipped ticks: a cadence reading due while its sampler
+restarts, or while the probe holds it, is lost (a gap, 10.1), and the
+sampler reads its streams as soon as it can tick again. A tick
+that would overlap its outstanding request is skipped and counted,
+never queued. A first or owed reading
+due meanwhile waits for that request to settle instead, since a skipped
+tick would lose it, and the streams of a skipped tick join the next tick
+the sampler sends, so a period that keeps landing on skipped ticks
+cannot starve its stream. The slow sampler's first request on a link is
+the probe (6.1), until one is answered on that link: a probe that brings
+no reply goes out again after 15 s [E], as an owed read does, each
+later one after twice the last wait, up to 15 min [E], and on a later
+run on the same link. A probe that hangs holds the slow sampler for its
+whole deadline, so the cap bounds the readings it loses to about 15 %
+of the time. Until it settles the slow sampler sends
+nothing else and, for a server whose profile the engine does not know
+yet, the fast sampler waits too, so the first readings already withhold
+what a container host's `/proc` would supply (D50); a slow sampler that
+fails to start releases the fast one, and probes once it is ready. That
+wait lasts at most the probe's deadline, 165 s for its 16 guarded
+commands (6.2, D47), and holds only while the engine knows no profile
+for the server. There D50, which never shows the host's figures as the
+container's, takes precedence over 6.2's rule that a hung slow collector
+cannot stall CPU graphs, until the device's profile cache (6.1) makes
+the wait rare. A missed fast deadline makes the restarted fast sampler's
+start a dead-peer hint to the link supervisor: the fast collectors read
+`/proc` with builtins only, so a reply later than 5 s means a stalled
+sampler or a silent peer, and the restart tells which. The supervisor
+closes a hinted link that shows no sign of life (a reply, a reply lost
+to framing, or a sampler's READY) within 20 s [E], the READY deadline
+from the opened channel and 5 s for the open, reports it
+`closed(pingTimeout)` (CN-06) and redials as after a lost link. A
+sampler that only stalled answers in time, and a run that stops
+withdraws its hint, which leaves liveness to the link's ping (5.1).
+*Rejected:* a hint from the missed deadline itself (the restart delay
+before the start grows with each failure without a reply, past 20 s from
+the sixth, so a live but overloaded host would be redialed about once a
+minute); closing the link on the hint (a stalled sampler would cost a
+reconnect); a liveness command over the link on the hint (one more
+channel and process on a link that may be dead, bounded only by the
+channel-open timeout); holding the fast sampler for the probe without
+the release (a slow sampler that cannot start, from a refused or
+timed-out channel or no READY, would hold the fast one until it does).
 
 ### 6.5 Parsing and fixtures
 
@@ -4247,9 +4310,9 @@ the engine in `engine_isolate.dart` beside it):
   `Sample.at`. A lost link or the background outranks a lost reading
   as the cause of a gap already open. The sample pipeline
   (`klabautermann_core/lib/src/sampling/sample_pipeline.dart`, K23)
-  builds these events from sampler outcomes; until the scheduler wires
-  it (K22), the engine records subscriptions and the profile and sends
-  none of them.
+  builds these events from sampler outcomes, and the sampling scheduler
+  (6.4, K22) runs it over each server's ready link. With links off the
+  engine records subscriptions and the profile and sends none of them.
 - **Version 3 (M2 logs).** Log streams joined version 3 the same way.
   The app picks the `streamId` of `OpenLogStream(streamId, spec)`, so it
   can close a stream before any answer arrives. Unlike a subscription
