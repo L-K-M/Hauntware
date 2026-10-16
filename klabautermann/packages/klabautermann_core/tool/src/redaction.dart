@@ -262,16 +262,18 @@ final _patterns = <(String, RegExp, String Function(Match))>[
     ),
     (m) => '${m[1]}$_userPlaceholder',
   ),
-  // logind's session scopes, described as `Session <id> of User <name>`.
+  // logind's session scopes, described as `Session <id> of User <name>`
+  // (`of user` before systemd 249).
   (
     'user name',
-    RegExp(r'(Session \S+ of User )([^\s"\\]+)'),
+    RegExp(r'(Session \S+ of User )([^\s"\\]+)', caseSensitive: false),
     (m) => m[2] == 'root' ? m[0]! : '${m[1]}$_userPlaceholder',
   ),
   (
     'URL credentials',
     RegExp(
-      r'(?<![A-Za-z0-9+.-])([A-Za-z][A-Za-z0-9+.-]*://)[^\s/@:]*:[^\s/@]*@',
+      // Not across a `"`: a URL ending one JSON string is no user name.
+      r'(?<![A-Za-z0-9+.-])([A-Za-z][A-Za-z0-9+.-]*://)[^\s/@:"]*:[^\s/@"]*@',
     ),
     (m) => '${m[1]}$kRedacted@',
   ),
@@ -465,6 +467,7 @@ final class Redactor {
     if (collector == Collector.cron.wireName) {
       text = _asUtf8(text, (t) => _redactCron(t, count));
     }
+    if (collector == Collector.units.wireName) text = _redactUnits(text, count);
     if (collector == Collector.fs.wireName) {
       text = text.replaceAllMapped(_mountSource, (m) {
         count('mount source');
@@ -813,6 +816,71 @@ String _cronCommand(String command, {required bool keepFirst}) {
     }
   }
   return out.join(' ');
+}
+
+/// One object of a `units_json` or `failed_json` array.
+final _unitObject = RegExp(r'\{(?:[^{}"]|"(?:[^"\\]|\\.)*")*\}');
+
+final _unitName = RegExp(r'"unit"\s*:\s*"((?:[^"\\]|\\.)*)"');
+
+final _unitDescription = RegExp(r'("description"\s*:\s*")((?:[^"\\]|\\.)*)"');
+
+/// A `units_text` or `failed_text` row: `UNIT LOAD ACTIVE SUB`, then the
+/// description.
+final _unitRow = RegExp(r'^(\s*(\S+)\s+\S+\s+\S+\s+\S+\s+)(\S.*)$');
+
+/// The tag systemd-run puts before the command line it describes a
+/// transient unit by since systemd 257 (`[systemd-run] `, `[run0] `).
+final _runTag = RegExp(r'^\[[A-Za-z0-9_.-]+\] ');
+
+/// Where a command line starts whose program systemd-run made absolute,
+/// quoted since systemd 255 when it holds a blank, `\"` inside JSON.
+final _absoluteProgram = RegExp(r'^(?:\\?")?/');
+
+/// Rewrites the unit descriptions of a `units` payload (03 §7.5). A
+/// transient unit that systemd-run started is described by its command
+/// line (run.c), which keeps its first word, as an argv does; before
+/// systemd 257 that line starts with the program's absolute path when
+/// started locally, so every description starting with one does too (a
+/// mount point keeps its first word). A device unit's description
+/// appends the filesystem label or partition name to the model
+/// (device.c), so it reads [kRedacted] whole.
+String _redactUnits(String text, void Function(String rule) count) {
+  String describe(String unit, String description) {
+    final String kept;
+    if (unit.endsWith('.device')) {
+      kept = description.isEmpty ? description : kRedacted;
+    } else if (_runTag.firstMatch(description) case final tag?) {
+      kept = tag[0]! + _keepFirstWord(description.substring(tag.end));
+    } else if (_absoluteProgram.hasMatch(description)) {
+      kept = _keepFirstWord(description);
+    } else {
+      return description;
+    }
+    if (kept != description) count('unit description');
+    return kept;
+  }
+
+  text = text.replaceAllMapped(_unitObject, (object) {
+    final unit = _unitName.firstMatch(object[0]!)?[1];
+    if (unit == null) return object[0]!;
+    return object[0]!.replaceFirstMapped(
+      _unitDescription,
+      (d) => '${d[1]}${describe(unit, d[2]!)}"',
+    );
+  });
+  var block = '';
+  final out = <String>[];
+  for (final line in text.split('\n')) {
+    final header = _blockHeader.firstMatch(line.trim());
+    if (header != null) block = header[1]!;
+    // units_text and failed_text.
+    final row = header == null && block.endsWith('_text')
+        ? _unitRow.firstMatch(line)
+        : null;
+    out.add(row == null ? line : '${row[1]}${describe(row[2]!, row[3]!)}');
+  }
+  return out.join('\n');
 }
 
 /// [head], the columns of a `ps` row before its command, with the word

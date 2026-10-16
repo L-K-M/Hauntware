@@ -468,13 +468,73 @@ void main() {
         _redact(
           '{"unit":"session-5.scope","description":"Session 5 of User erin"}\n'
           'session-c1.scope loaded active running Session c1 of User gdm\n'
-          '"Session 3 of User root"',
+          '"Session 3 of User root"\n'
+          // systemd 248 and older.
+          'session-6.scope loaded active running Session 6 of user carol',
           collector: 'units',
         ),
         '{"unit":"session-5.scope","description":"Session 5 of User user"}\n'
         'session-c1.scope loaded active running Session c1 of User user\n'
-        '"Session 3 of User root"',
+        '"Session 3 of User root"\n'
+        'session-6.scope loaded active running Session 6 of user user',
       );
+    });
+
+    test('command lines and labels in unit descriptions', () {
+      // systemd-run describes a transient unit by its command line,
+      // bare before systemd 257; a device unit appends the label.
+      const units =
+          '== units_json ==\n'
+          '[{"unit":"run-u5.service","load":"loaded","active":"active",'
+          '"sub":"running","description":"[systemd-run] '
+          '/usr/local/bin/offsite-sync --bucket acme-prod-db Zebra9Pos"},'
+          '{"unit":"run-u6.service","load":"loaded","active":"active",'
+          '"sub":"running","description":"\\"/usr/bin/my sqldump\\" -u backup '
+          '\\"Quokka7Arg\\""},'
+          '{"unit":"boot-efi.mount","load":"loaded","active":"active",'
+          '"sub":"mounted","description":"/boot/efi"},'
+          '{"unit":"dev-sda1.device","load":"loaded","active":"active",'
+          '"sub":"plugged","description":"Samsung_SSD_870 Erins Photos"},'
+          '{"unit":"cron.service","load":"loaded","active":"active",'
+          '"sub":"running","description":"Regular {background} daemon"}]\n'
+          '== units_text ==\n'
+          'run-u7.scope loaded active running [run0] /usr/bin/rsync '
+          'backup@192.0.2.1:/x Walrus5Arg\n'
+          'dev-sdb1.device   loaded active plugged  Kingston Erins USB\n'
+          'run-u8.service loaded active running "/opt/my app/run" Zebra8\n'
+          'cron.service loaded active running Regular background daemon\n'
+          'short.service loaded active';
+      final redacted = _redact(units, collector: 'units');
+      expect(
+        redacted,
+        '== units_json ==\n'
+        '[{"unit":"run-u5.service","load":"loaded","active":"active",'
+        '"sub":"running","description":"[systemd-run] '
+        '/usr/local/bin/offsite-sync [redacted]"},'
+        '{"unit":"run-u6.service","load":"loaded","active":"active",'
+        '"sub":"running","description":"\\"/usr/bin/my [redacted]"},'
+        '{"unit":"boot-efi.mount","load":"loaded","active":"active",'
+        '"sub":"mounted","description":"/boot/efi"},'
+        '{"unit":"dev-sda1.device","load":"loaded","active":"active",'
+        '"sub":"plugged","description":"[redacted]"},'
+        '{"unit":"cron.service","load":"loaded","active":"active",'
+        '"sub":"running","description":"Regular {background} daemon"}]\n'
+        '== units_text ==\n'
+        'run-u7.scope loaded active running [run0] /usr/bin/rsync '
+        '[redacted]\n'
+        'dev-sdb1.device   loaded active plugged  [redacted]\n'
+        'run-u8.service loaded active running "/opt/my [redacted]\n'
+        'cron.service loaded active running Regular background daemon\n'
+        'short.service loaded active',
+      );
+      expect(parseShapeChange(Collector.units, units, redacted), isNull);
+    });
+
+    test('URL credentials stay within one JSON string', () {
+      const units =
+          '[{"unit":"ping.service","description":"Ping https://hc.example"},'
+          '{"unit":"getty@tty1.service","description":"Getty on tty1"}]';
+      expect(_redact(units, collector: 'units'), units);
     });
 
     test('ps fallback rows name no account but root', () {
