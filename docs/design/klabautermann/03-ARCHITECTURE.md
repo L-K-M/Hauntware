@@ -2777,14 +2777,18 @@ answers each open with a `LogStreamState` before it returns, and
   first bytes). At 1,000 lines/s a batch holds about 50 lines.
 - When its link closes or is replaced, or the app leaves the
   foreground, a follow's process closes and the follow keeps the lines
-  it holds and waits; a replaced link needs no wait, and its run sends
-  no state. The next run resumes a journal follow after the newest valid
-  cursor received, so nothing repeats or goes missing. A file, or a
-  journal follow that received no cursor, starts again with new lines
-  only (`-n 0`), and its `LogStreamRunning` says records may be missing
-  (`LogContinuity.gap`). A process lost on a live link (no exit status)
-  runs again once, and a second loss before any line ends the follow as
-  failed.
+  it holds and waits; a replaced link needs no wait. The next run
+  resumes a journal follow after the newest valid cursor received, or
+  the spec's `afterCursor`, so nothing repeats or goes missing. Once it
+  has received a line, a file follow, or a journal follow with no valid
+  cursor, starts again with new lines only (`-n 0`), and its
+  `LogStreamRunning` says records may be missing (`LogContinuity.gap`);
+  before any line arrives, a follow reads its window again. The router
+  sends a state only when it changes, so on a replaced link a journal
+  follow that resumes after a cursor sends none, while one that starts
+  again with a gap sends `LogStreamRunning` once. A process lost on a
+  live link (no exit status) runs again once, and a second loss before
+  any line ends the follow as failed.
 - A follow runs until it is closed, so any exit ends it once the lines
   it holds are sent: as a window's exit would (missing, denied), and as
   failed otherwise, exit 0 included. `tail -F` retries a file it cannot

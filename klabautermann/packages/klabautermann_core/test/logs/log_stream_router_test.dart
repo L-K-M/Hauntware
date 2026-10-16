@@ -469,12 +469,14 @@ void main() {
       expect(ends('f'), 0);
     });
 
-    test('a replaced link moves a follow without a state, while a window '
-        'on the old link fails', () async {
+    test('a replaced link moves a journal follow without a state, and a '
+        'file once with a gap, while a window on the old link fails', () async {
       open('f', follow: true);
       open('w');
+      open('t', follow: true, source: const FileLogSource('/var/log/app.log'));
       final p = await link.process(0);
       p.emitText(_follow(1, 1));
+      (await link.process(2)).emitText('one\n');
       await clock.elapse(Duration.zero);
 
       final next = ScriptedLink();
@@ -482,10 +484,18 @@ void main() {
       router.update('srv-1');
       expect(statuses('f'), [_running]);
       expect(statuses('w'), [_running, _failed]);
+      const gap = LogStreamRunning(continuity: LogContinuity.gap);
+      expect(statuses('t'), [_running, gap]);
       // The failed window does not run again.
-      expect(next.commands.single, contains("'--after-cursor=s=1'"));
+      expect(next.commands, hasLength(2));
+      expect(next.commands.first, contains("'--after-cursor=s=1'"));
       await pumpEventQueue();
       expect(p.closeCalls, 1);
+
+      links['srv-1'] = ScriptedLink();
+      router.update('srv-1');
+      expect(statuses('f'), [_running]);
+      expect(statuses('t'), [_running, gap]);
     });
 
     test('a follow lost on a live link runs again there', () async {
