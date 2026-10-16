@@ -32,9 +32,9 @@ void main() {
 
     // Exercise every control the scaffold ships: select a server, collapse
     // the section, import ~/.ssh/config (FL-02), open the settings route
-    // and switch the theme, then run a sampler subscription the way the
-    // monitor set will drive it (03 §10.1). The traffic this produces is
-    // the traffic to judge.
+    // and switch the theme, run a sampler subscription the way the
+    // monitor set will drive it (03 §10.1), then answer the engine's
+    // prompts. The traffic this produces is the traffic to judge.
     await tester.tap(find.text('web-1'));
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Hide section'));
@@ -57,6 +57,34 @@ void main() {
     harness.monitoring.subscribe('srv-1', 'row', const {SampleStream.overview});
     harness.monitoring.unsubscribe('srv-1', 'row');
     await tester.pumpAndSettle();
+    harness.engine.emit(
+      const Prompt(
+        promptId: 'p-1',
+        serverId: 'srv-1',
+        host: 'web-1.example',
+        port: kSshDefaultPort,
+        request: HostKeyPromptRequest(
+          keyType: 'ssh-ed25519',
+          fingerprintSha256: 'SHA256:abc',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Trust and connect'));
+    await tester.pumpAndSettle();
+    harness.engine.emit(
+      const Prompt(
+        promptId: 'p-2',
+        serverId: 'srv-1',
+        host: 'web-1.example',
+        port: kSshDefaultPort,
+        request: KeyboardInteractivePromptRequest(questions: ['Code:']),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(harness.engine.sentOfType<AnswerPrompt>(), hasLength(2));
 
     // Prove the drive reached the engine, then judge every request.
     expect(harness.engine.sent, isNotEmpty);

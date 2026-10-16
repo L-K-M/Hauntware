@@ -12,6 +12,7 @@ import 'package:klabautermann_app/controllers/appearance_controller.dart';
 import 'package:klabautermann_app/controllers/coverage_controller.dart';
 import 'package:klabautermann_app/controllers/fleet_controller.dart';
 import 'package:klabautermann_app/controllers/monitoring_controller.dart';
+import 'package:klabautermann_app/controllers/prompt_controller.dart';
 import 'package:klabautermann_app/services/settings_window/remote_settings.dart';
 import 'package:klabautermann_app/services/settings_window/settings_window_host.dart';
 import 'package:klabautermann_app/services/settings_window/settings_window_link.dart';
@@ -280,10 +281,12 @@ void main() {
       final engine = FakeEngineClient();
       final fleet = FleetController(engine);
       final monitoring = MonitoringController(engine);
+      final prompts = PromptController(engine);
       final coverage = CoverageController(firstRunCardDismissed: true);
       addTearDown(() async {
         fleet.dispose();
         monitoring.dispose();
+        prompts.dispose();
         coverage.dispose();
         await engine.close();
       });
@@ -296,6 +299,7 @@ void main() {
               child: KlabautermannApp(
                 fleet: fleet,
                 monitoring: monitoring,
+                prompts: prompts,
                 appearance: main,
                 coverage: coverage,
               ),

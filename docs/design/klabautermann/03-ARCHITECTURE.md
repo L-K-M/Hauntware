@@ -4583,8 +4583,8 @@ the engine in `engine_isolate.dart` beside it):
   so `Connect` gets `RequestRejected` and nothing dials, while
   `Disconnect` and `SetAppActivity` change nothing. The composition root
   keeps them off until pins outlive the engine (the catalog library's
-  `host_keys.json`, 4.10; until then the engine pins in memory) and the
-  app can show prompts; tests turn them on.
+  `host_keys.json`, 4.10; until then the engine pins in memory), though
+  the app can show prompts (M2 prompts, below); tests turn them on.
 - **Version 3 (M2 sampling).** Sampling joined version 3 without a bump,
   as the import store's fields joined version 2, before any version 3
   build shipped. `Subscribe` names the surface's `SampleStream`s: the 6.4
@@ -4723,6 +4723,21 @@ the engine in `engine_isolate.dart` beside it):
   `PromptSecretAnswer(null)`. A keyboard-interactive prompt that expires
   or is withdrawn is no cancel, and the failure that follows is
   classified as any other.
+  On the app side, the prompt controller queues the engine's prompts in
+  arrival order, and the app shows one at a time through
+  `ghost_servers`' dialogs (D8): a first-seen host key as the first-use
+  review, answered with `PromptTrustAnswer`, and keyboard-interactive
+  questions, answered with `PromptResponsesAnswer` or, on Cancel,
+  `PromptCancelAnswer`. `PromptWithdrawn` closes its prompt's dialog
+  without an answer, or drops the prompt from the queue, and an engine
+  that stops closes them all; what a closed dialog returns is never
+  sent: the app checks after each await that the prompt is still open.
+  Each dialog is keyed, so a close removes its own route, even under
+  another. Credential and elevation prompts have
+  no producer and no dialog yet; the app dismisses one with
+  `PromptSecretAnswer(null)` rather than leave the attempt waiting out
+  the expiry. With links off, as in the app until K44, no prompt
+  arrives.
 - **`SetAppActivity(activity)`** is a request of its own and applies to
   every subscription, link and probe at once: 6.4 pauses everything while
   the app is in the background, and D34 adds the phones' grace period
