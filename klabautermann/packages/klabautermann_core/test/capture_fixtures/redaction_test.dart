@@ -510,6 +510,33 @@ void main() {
     expect(parseShapeChange(Collector.cron, cron, redacted), isNull);
   });
 
+  test('a timers_text cell wider after redaction widens its column', () {
+    // systemd 239 pads each column to its widest cell and one blank, and
+    // parseTimers cuts rows at the header's offsets.
+    const timers =
+        '== timers_text ==\n'
+        'NEXT                        LEFT    LAST PASSED UNIT                     ACTIVATES\n'
+        'Mon 2023-11-13 21:45:58 UTC 2h left n/a  n/a    backup-db1-offsite.timer backup-db1-offsite.service\n'
+        'n/a                         n/a     n/a  n/a    fstrim.timer             fstrim.service\n'
+        '2 timers listed.';
+    final redacted = _redact(
+      timers,
+      collector: 'timers',
+      literals: const RedactionLiterals(hostNames: ['db1']),
+    );
+    expect(
+      redacted,
+      '== timers_text ==\n'
+      'NEXT                        LEFT    LAST PASSED UNIT                              ACTIVATES\n'
+      'Mon 2023-11-13 21:45:58 UTC 2h left n/a  n/a    backup-fixture-host-offsite.timer backup-fixture-host-offsite.service\n'
+      'n/a                         n/a     n/a  n/a    fstrim.timer                      fstrim.service\n'
+      '2 timers listed.',
+    );
+    expect(parseShapeChange(Collector.timers, timers, redacted), isNull);
+    // A table no replacement widens keeps its layout.
+    expect(_redact(timers, collector: 'timers'), timers);
+  });
+
   // These rules hold for every payload; in `cron` the job structure
   // (the cron group) removes command arguments first.
   group('other accounts', () {

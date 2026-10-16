@@ -527,6 +527,9 @@ final class Redactor {
     void count(String rule) => counts[rule] = (counts[rule] ?? 0) + 1;
 
     var text = _decode(payload);
+    final timers = collector == Collector.timers.wireName;
+    List<int>? timerColumns;
+    if (timers) (text, timerColumns) = _tabulateTimers(text);
     if (collector == Collector.procs.wireName) text = _redactArgv(text, count);
     if (collector == Collector.cron.wireName) {
       text = _asUtf8(text, (t) => _redactCron(t, count));
@@ -574,7 +577,9 @@ final class Redactor {
       return kRedacted;
     });
 
-    return RedactedPayload(_encode(_apply(text, _patterns, count)), counts);
+    text = _apply(text, _patterns, count);
+    if (timerColumns != null) text = _alignTimers(text, timerColumns);
+    return RedactedPayload(_encode(text), counts);
   }
 
   String _apply(
@@ -900,6 +905,96 @@ String _cronCommand(String command, {required bool keepFirst}) {
     }
   }
   return out.join(' ');
+}
+
+/// The column names of `list-timers`, as `parseTimers` finds them.
+const _timerNames = ['NEXT', 'LEFT', 'LAST', 'PASSED', 'UNIT', 'ACTIVATES'];
+
+/// The legend lines `parseTimers` skips in `timers_text`.
+final _timersLegend = RegExp(r'^\d+ timers? listed\.$|^Pass --all');
+
+/// The `timers_text` table of a `timers` payload (`list-timers` before
+/// systemd 246) with each line's cells, cut at the header's offsets as
+/// `parseTimers` cuts them, joined by tabs, and those offsets; the text
+/// unchanged and null without such a table. A replacement wider than its
+/// column would shift the cells after it, so [_alignTimers] pads the
+/// cells again once the rules have run.
+(String, List<int>?) _tabulateTimers(String text) {
+  List<int>? columns;
+  var block = '';
+  var headerSeen = false;
+  final out = <String>[];
+  for (final line in text.split('\n')) {
+    final header = _blockHeader.firstMatch(line.trim());
+    if (header != null) block = header[1]!;
+    if (header != null || block != 'timers_text' || line.trim().isEmpty) {
+      out.add(line);
+      continue;
+    }
+    if (!headerSeen) {
+      headerSeen = true;
+      columns = _timerColumns(line);
+    } else if (_timersLegend.hasMatch(line.trim())) {
+      out.add(line);
+      continue;
+    }
+    out.add(columns == null ? line : _timerCells(line, columns).join('\t'));
+  }
+  return (out.join('\n'), columns);
+}
+
+/// The start of each of [_timerNames] in [header], or null.
+List<int>? _timerColumns(String header) {
+  final offsets = <int>[];
+  var at = 0;
+  for (final name in _timerNames) {
+    final i = header.indexOf(name, at);
+    if (i < 0) return null;
+    offsets.add(i);
+    at = i + name.length;
+  }
+  return offsets;
+}
+
+List<String> _timerCells(String line, List<int> columns) => [
+  for (var i = 0; i < columns.length; i++)
+    columns[i] >= line.length
+        ? ''
+        : line
+              .substring(
+                columns[i],
+                i + 1 < columns.length
+                    ? min(columns[i + 1], line.length)
+                    : line.length,
+              )
+              .trim(),
+];
+
+/// The lines [_tabulateTimers] joined by tabs, padded to [columns] again,
+/// or wider where a cell has grown.
+String _alignTimers(String text, List<int> columns) {
+  final lines = text.split('\n');
+  final rows = [
+    for (final (i, line) in lines.indexed)
+      if (line.contains('\t')) i,
+  ];
+  final widths = [
+    for (var i = 0; i + 1 < columns.length; i++)
+      columns[i + 1] - columns[i] - 1,
+  ];
+  for (final r in rows) {
+    for (final (i, cell) in lines[r].split('\t').take(widths.length).indexed) {
+      widths[i] = max(widths[i], cell.length);
+    }
+  }
+  for (final r in rows) {
+    final cells = lines[r].split('\t');
+    lines[r] = [
+      for (final (i, cell) in cells.indexed)
+        i < widths.length ? cell.padRight(widths[i]) : cell,
+    ].join(' ').trimRight();
+  }
+  return lines.join('\n');
 }
 
 /// One object of a `units_json` or `failed_json` array.
