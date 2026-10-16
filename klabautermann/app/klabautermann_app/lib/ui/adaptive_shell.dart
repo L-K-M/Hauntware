@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../controllers/coverage_controller.dart';
 import '../controllers/fleet_controller.dart';
 import '../controllers/monitoring_controller.dart';
+import '../controllers/sync_controller.dart';
 import 'desktop_shell.dart';
 import 'phone_shell.dart';
 
@@ -20,6 +21,7 @@ class AdaptiveShell extends StatelessWidget {
     required this.coverage,
     required this.onOpenSettings,
     this.onAddServer,
+    this.sync,
   });
 
   final FleetController fleet;
@@ -27,6 +29,10 @@ class AdaptiveShell extends StatelessWidget {
   final CoverageController coverage;
   final VoidCallback onOpenSettings;
   final VoidCallback? onAddServer;
+
+  /// The sync account behind the sync control; null shows the control
+  /// idle with no action.
+  final SyncController? sync;
 
   @override
   Widget build(BuildContext context) {
@@ -37,6 +43,7 @@ class AdaptiveShell extends StatelessWidget {
         coverage: coverage,
         onOpenSettings: onOpenSettings,
         onAddServer: onAddServer,
+        sync: sync,
       );
     }
     return PhoneShell(
@@ -45,6 +52,7 @@ class AdaptiveShell extends StatelessWidget {
       coverage: coverage,
       onOpenSettings: onOpenSettings,
       onAddServer: onAddServer,
+      sync: sync,
     );
   }
 }

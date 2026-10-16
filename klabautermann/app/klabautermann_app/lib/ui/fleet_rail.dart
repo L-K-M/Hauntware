@@ -3,11 +3,13 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 
 import '../controllers/fleet_controller.dart';
 import '../controllers/monitoring_controller.dart';
+import '../controllers/sync_controller.dart';
 import '../l10n/app_localizations.dart';
 import 'coverage.dart';
 import 'fleet_rows.dart';
 import 'sidebar_kit.dart';
 import 'ssh_config_import_action.dart';
+import 'sync_sign_in.dart';
 
 /// The desktop rail of 03 §10.2: a section header over the filter and the
 /// fleet rows ([FleetServerList]) and the kit's bottom bar with the add
@@ -19,6 +21,7 @@ class FleetRail extends StatefulWidget {
     required this.monitoring,
     required this.onOpenSettings,
     this.onAddServer,
+    this.sync,
   });
 
   final FleetController fleet;
@@ -31,6 +34,10 @@ class FleetRail extends StatefulWidget {
   /// The add-server entry point; null renders the menu verb disabled
   /// (enrollment lands with F3's catalog).
   final VoidCallback? onAddServer;
+
+  /// The sync account behind the bottom bar's chip (03 §4.3): its action
+  /// signs in, or runs a round once signed in. Null shows the chip idle.
+  final SyncController? sync;
 
   @override
   State<FleetRail> createState() => _FleetRailState();
@@ -48,7 +55,7 @@ class _FleetRailState extends State<FleetRail> {
       child: ColoredBox(
         color: tokens.sidebarBackground,
         child: ListenableBuilder(
-          listenable: widget.fleet,
+          listenable: Listenable.merge([widget.fleet, widget.sync]),
           builder: (context, _) {
             final servers = widget.fleet.servers;
             return Column(
@@ -89,12 +96,7 @@ class _FleetRailState extends State<FleetRail> {
                               ),
                       ),
                   ],
-                  sync: SidebarSyncChipData(
-                    label: l10n.syncFleet,
-                    // Pull-only MVP (D14): the chip shows the idle sync
-                    // state until sync enrollment exists to report it.
-                    tone: SidebarSyncTone.muted,
-                  ),
+                  sync: _syncChip(context, l10n, widget.sync),
                   onSettings: widget.onOpenSettings,
                 ),
               ],
@@ -104,6 +106,31 @@ class _FleetRailState extends State<FleetRail> {
       ),
     );
   }
+}
+
+/// The bottom bar's sync chip: muted until signed in, busy while a sign-in
+/// or round runs (pull-only, D14).
+SidebarSyncChipData _syncChip(
+  BuildContext context,
+  AppLocalizations l10n,
+  SyncController? sync,
+) {
+  if (sync == null) {
+    return SidebarSyncChipData(
+      label: l10n.syncFleet,
+      tone: SidebarSyncTone.muted,
+    );
+  }
+  return SidebarSyncChipData(
+    label: l10n.syncFleet,
+    tone: switch (sync) {
+      SyncController(busy: true) => SidebarSyncTone.busy,
+      SyncController(needsSignIn: true) => SidebarSyncTone.muted,
+      _ => SidebarSyncTone.normal,
+    },
+    tooltip: syncActionTooltip(l10n, sync),
+    onPressed: () => runSyncAction(context, sync),
+  );
 }
 
 /// The localized word for a [LinkStatus]: the text half of the dot

@@ -51,6 +51,9 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     // StartupIssueNotice tell the user in ARB text.
     "'Klabautermann is already running; this instance quits.'",
     r"'$instanceLockFileName: ${issue.error}'",
+    // Sync state file debugPrint diagnostics; StartupIssueNotice tells
+    // the user in ARB text.
+    r"'${issue.fileName}: ${issue.kind.name} ${issue.detail ?? ''}'",
   },
   // The not-saved diagnostic; the Appearance tab prints it and shows its
   // own ARB text (themeNotSaved).
@@ -76,6 +79,9 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     // The rejected request's class name, which RequestRejected carries.
     r"'$ImportSshConfig'",
   },
+  // The diagnostic of a sync answer the stopped engine never gave;
+  // surfaces show ARB text for its failure kind (syncFailed).
+  'lib/controllers/sync_controller.dart': {"'the engine stopped'"},
   'lib/controllers/log_streams.dart': {
     // A log stream id the engine keys a stream's events by (03 §10.1), and
     // the rejected request's class name, which RequestRejected carries.

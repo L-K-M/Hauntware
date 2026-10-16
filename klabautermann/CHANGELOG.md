@@ -63,3 +63,14 @@
   again while it runs only shows that it is already running, with a Quit
   button, so two copies never overwrite each other's settings and
   imported servers.
+- Sign in to your Séance sync account from the sync chip at the foot of
+  the fleet rail, or the sync button on phones, with the server address,
+  account name, password and encryption passphrase you use in Séance.
+  Before anything is sent you confirm that every device on the account
+  runs Séance 0.9.0 or later. The account's servers then lead the fleet,
+  ahead of your imports, and stay after a restart; select the control
+  again to fetch changes. Klabautermann only reads the account and
+  publishes nothing. The sign-in token and the account key are kept in
+  the system keychain. Synced servers cannot be opened yet: that waits
+  for confirming each server's address on this device. Sync is off when
+  Klabautermann cannot check whether another copy of it is running.

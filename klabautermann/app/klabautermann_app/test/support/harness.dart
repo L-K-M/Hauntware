@@ -6,10 +6,16 @@ import 'package:klabautermann_app/controllers/appearance_controller.dart';
 import 'package:klabautermann_app/controllers/coverage_controller.dart';
 import 'package:klabautermann_app/controllers/fleet_controller.dart';
 import 'package:klabautermann_app/controllers/monitoring_controller.dart';
+import 'package:klabautermann_app/controllers/sync_controller.dart';
 import 'package:klabautermann_app/services/settings_window/settings_window_link.dart';
 import 'package:klabautermann_app/services/ssh_config_source.dart';
 import 'package:klabautermann_core/klabautermann_core.dart'
-    show DeviceSettingsIssue, ImportStoreIssue, InstanceLockUnavailable;
+    show
+        DeviceSettingsIssue,
+        ImportStoreIssue,
+        InstanceLockUnavailable,
+        SyncAccountInfo,
+        SyncStoreIssue;
 
 import 'fake_engine.dart';
 
@@ -22,6 +28,7 @@ final class AppHarness {
     required this.monitoring,
     required this.appearance,
     required this.coverage,
+    required this.sync,
   });
 
   final FakeEngineClient engine;
@@ -29,12 +36,14 @@ final class AppHarness {
   final MonitoringController monitoring;
   final AppearanceController appearance;
   final CoverageController coverage;
+  final SyncController sync;
 
   void dispose() {
     fleet.dispose();
     monitoring.dispose();
     appearance.dispose();
     coverage.dispose();
+    sync.dispose();
   }
 }
 
@@ -50,7 +59,9 @@ final class AppHarness {
 /// stands in for what the engine's handshake reported about its import
 /// store, [instanceLockIssue] for an instance lock that could not be
 /// taken, and [toolbarBand] for the macOS integrated titlebar's band
-/// state. [coverage] replaces a controller whose first-run card was
+/// state. [syncAccount] is the sync account the engine started with and
+/// [syncStoreIssues] what it reported about its sync files. [coverage]
+/// replaces a controller whose first-run card was
 /// already dismissed, so the card shows only in the tests that want it.
 /// [linkGrace] defaults to zero, which disconnects a server as its last
 /// view closes: the tree unmounts at the end of every test, and the test
@@ -65,6 +76,8 @@ Future<AppHarness> pumpApp(
   DeviceSettingsIssue? settingsIssue,
   ImportStoreIssue? importStoreIssue,
   InstanceLockUnavailable? instanceLockIssue,
+  SyncAccountInfo? syncAccount,
+  List<SyncStoreIssue> syncStoreIssues = const [],
   OpenSettingsWindow? openSettingsWindow,
   ValueListenable<bool>? toolbarBand,
   Duration linkGrace = Duration.zero,
@@ -80,6 +93,7 @@ Future<AppHarness> pumpApp(
     monitoring: MonitoringController(engine, linkGrace: linkGrace),
     appearance: appearance ?? AppearanceController(),
     coverage: coverage ?? CoverageController(firstRunCardDismissed: true),
+    sync: SyncController(engine, account: syncAccount),
   );
   addTearDown(() async {
     harness.dispose();
@@ -92,8 +106,10 @@ Future<AppHarness> pumpApp(
       monitoring: harness.monitoring,
       appearance: harness.appearance,
       coverage: harness.coverage,
+      sync: harness.sync,
       settingsIssue: settingsIssue,
       importStoreIssue: importStoreIssue,
+      syncStoreIssues: syncStoreIssues,
       instanceLockIssue: instanceLockIssue,
       openSettingsWindow: openSettingsWindow,
       toolbarBand: toolbarBand,
