@@ -337,14 +337,20 @@ StallShares? _stall(Pressure? p) {
   return StallShares(some: averages(p.some), full: averages(p.full));
 }
 
+/// `/proc/<pid>/stat`'s clock ticks per second: Linux's USER_HZ, which
+/// [procCpuPercent] assumes too.
+const _ticksPerSecond = 100;
+
 /// The process list with each process's CPU share since [previous], a
 /// reading [elapsed] seconds earlier (7.2, PRC-03); shares are null
-/// without one. The host's process count and how it chose the rows pass
+/// without one. Starts count from [bootedAt], and are unknown without
+/// it. The host's process count and how it chose the rows pass
 /// through, so a truncated list can say "showing N of M" (D48).
 ProcsResult procsResult(
   ProcsSnapshot next, {
   ProcsSnapshot? previous,
   double? elapsed,
+  DateTime? bootedAt,
 }) {
   final cpu = previous != null && elapsed != null
       ? procCpuPercent(previous, next, elapsed)
@@ -365,11 +371,20 @@ ProcsResult procsResult(
           residentBytes: p.rssKb == null ? null : p.rssKb! * 1024,
           cpuPercent: cpu[p.pid],
           startTicks: p.startTicks,
+          startedAt: switch ((bootedAt, p.startTicks)) {
+            (final booted?, final ticks?) => booted.add(
+              Duration(
+                microseconds:
+                    ticks * Duration.microsecondsPerSecond ~/ _ticksPerSecond,
+              ),
+            ),
+            _ => null,
+          },
           // A `ps` fallback row joined its arguments with spaces, so their
           // boundaries are lost; it lists the whitespace tokens, so 8.9's
           // per-argument masking works on those (7.2). Masked here, so no
           // argument crosses to the app as plain text.
-          arguments: switch (p.argv ?? _tokens(p.argsJoined)) {
+          arguments: switch (p.argv ?? _tokens(p.argsJoined, p.comm)) {
             null => null,
             final argv => List.unmodifiable(
               maskCommandLine(argv, budget: masking),
@@ -383,12 +398,18 @@ ProcsResult procsResult(
 }
 
 /// The tokens of a `ps` command line, which the host parser joins with
-/// single spaces; none for an empty one.
-List<String>? _tokens(String? joined) => joined == null
-    ? null
-    : joined.isEmpty
-    ? const []
-    : joined.split(' ');
+/// single spaces; none for an empty one, or for the bracketed [comm] that
+/// GNU and BusyBox `ps` print in place of an empty `cmdline`, as for a
+/// kernel thread, and that GNU `ps` follows with `<defunct>` for a zombie.
+List<String>? _tokens(String? joined, String? comm) {
+  if (joined == null) return null;
+  if (joined.isEmpty) return const [];
+  if (comm != null && (joined == '[$comm]' || joined == '[$comm] <defunct>')) {
+    return const [];
+  }
+
+  return joined.split(' ');
+}
 
 /// The most cron lines whose next runs one `cron` reading evaluates.
 /// A line can cost about 2 ms in the engine isolate, which every server

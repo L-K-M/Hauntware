@@ -1341,6 +1341,7 @@ graph TD
   APP --> PE
   APP --> PCO
   APP --> ST
+  APP -.->|dev, tests only| HOST
   CORE --> SC
   CORE --> HOST
   CORE --> DOCK
@@ -1401,10 +1402,17 @@ The barrel's `klabautermann_host` export shows only the plain-data types
 that sampling results and `HostProfileChanged` carry (10.1),
 `JournalEntry` (the log viewer's journal rows, 10.8), and the access
 check over a `HostProfile` (`evaluateAccess` and its `AccessReport`,
-whose journal row drives the Logs panel's LOG-04 notice, 10.8). Its
-`klabautermann_docker` export shows only `MaskedValue`, the masked
-process arguments a `ProcsResult` carries (8.9). Each
-list changes only as a milestone wires a type in or retires one. No `ghost_*` package
+whose journal row drives the Logs panel's LOG-04 notice, 10.8). The
+Jobs tab (7.7) adds the jobs rows and schedule descriptions a
+`CronResult` carries, `TimerJobEntry`, which the app builds from a
+`TimersResult`'s timers, and the engine limits and names its words
+follow. The barrel's `klabautermann_docker` export shows only
+`MaskedValue`, the masked process arguments a `ProcsResult` carries
+(8.9). Each list changes only as a milestone wires a type in or retires
+one. The app's tests alone also depend on `klabautermann_host`, to
+build jobs rows with the engine's `mergeJobs`, since those rows have no
+public constructor; `depend_on_referenced_packages` keeps `lib/` from
+importing that dev dependency. No `ghost_*` package
 depends on `seance_core`; `klabautermann_core` is a product package, and
 the curated lines above are its only
 `seance_core` edge. Poltergeist's and
@@ -2649,7 +2657,15 @@ unless the user enables admin mode for that panel.
   block precedes every command line. Command lines are masked per
   argument (8.9);
   the `ps` fallback joins arguments with spaces, so masking there works on
-  whitespace tokens. Kill and signal
+  whitespace tokens, and the `[comm]` it prints for an empty command line
+  (`[comm] <defunct>` for a GNU zombie) reads as none where it matches
+  the row's `comm`. The engine dates each
+  start as the reading's time
+  less the reply's uptime plus the start ticks at USER_HZ 100, as the CPU
+  shares assume; the start is unknown until the probe reports its lxcfs
+  mounts and where lxcfs serves the container's own age as
+  `/proc/uptime` (D50), since start ticks count from the kernel's boot.
+  Kill and signal
   (PRC-02): the plan records the PID and its start
   time (field 22 of `/proc/<pid>/stat`: fields resume at 3, `state`,
   after the last `)`, because `comm` may contain spaces and `)`, so
@@ -2901,6 +2917,58 @@ are K26.
   `sh -c` as the job user, danger-linted, detached when long).
 - **v1.x.** Timer creator, output capture, dead-man pings (T1, +E), missed
   runs, fleet jobs overview.
+
+As built in M2 (`app/klabautermann_app/lib/ui/jobs_panel.dart`,
+`jobs_view.dart`), the Jobs tab lists the `cron` stream's jobs rows and
+a row per `timers` entry in the sortable table, next run first, with
+each row's source and the user its line names:
+
+- Schedules come from ARB templates: a cron schedule field by field as
+  written, where a `*/n` that does not divide its field's cycle (`*/45`
+  minutes runs at :00 and :45) and any day-of-month step name their
+  bounds, as clock times when the minute and hour fields hold single
+  values only, a stepped hour beside a repeating minute as the hours it
+  spans, its day fields joined by crontab(5)'s either or both rule; a
+  macro by name; a `CRON_TZ` zone after the schedule; an `OnCalendar=`
+  expression verbatim; a monotonic trigger as its span after its base.
+- A cron run shows on its zone's clock with that zone's offset, and its
+  gap, overlap or near-transition note beside it (the table marks it
+  with an icon). The tab names the server zone whose rules the engine
+  used, or why the runs use the probe's offset (D58); a `CRON_TZ` run
+  names its zone in the table, and a run of a periodic script whose
+  lines follow different zones names its offset. A row without runs
+  gives the engine's reason in short in its next-run cell, which the
+  phone keeps, and in full in its details.
+- A timer's next run is the `list-timers` instant at the probe's offset,
+  which its cell names, and the tab says a DST change before it does not
+  show: `TimersResult` carries no offset per elapse. Without a probed
+  offset it shows in UTC. A timer without a next elapse (systemd's
+  `n/a`) reads as unknown, as `SystemdTimer` folds it into no instant
+  like an unreadable cell.
+  The engine does not yet read a timer's triggers, `RandomizedDelaySec`
+  or calendar elapses (D57), so the row says they are not read; a row
+  that carries them shows the elapses as `systemd-analyze` printed
+  them, the random delay as a note and, below systemd 242, that only
+  the next run is listed. Without calendar elapses, a timer's details
+  note that its one run is all systemd's timer list gives.
+- A row opens everything the table cuts short in a sheet. A touch row
+  wraps its next run onto a second line, so the offset or zone after the
+  time is not cut at phone width; a dense desktop row holds one, and the
+  next-run column widens to the longest time, scrolling sideways where
+  the panel is too narrow. A run the clock has passed since the reading
+  drops out of both, and a timer's passed elapse reads as unknown until
+  the next reading; the table follows the clock only at such a run or
+  when it turns stale. Times
+  turn grey once the older stream's reading is past 120 s, twice the 6.4
+  desktop and phone period (the cellular saver's single read waits for
+  the cadence profile's wiring), beside the freshness line; a failed
+  reading's reason stands above the last rows; an unclear `crontab -l`
+  says the user's own jobs may be missing unless the probe found no
+  `crontab` command, and an empty list names only the sources read,
+  never other users' crontabs (JOB-03). Where the
+  probe finds systemd not running, the tab says the server has no timers
+  instead of a failed timers reading. The phone reaches the tab once
+  More lists it (10.5).
 
 ### 7.8 Packages and updates (PKG)
 
@@ -3623,6 +3691,14 @@ CI.
   and header values (`Authorization: Bearer`). Masking the argument after
   any `-p`, `-a` or `-u` would also hide `ssh -p 22`, `mkdir -p` and
   `sudo -u`, so the trade-off is left to a follow-up after K33.
+- Reveal (M2, the Processes tab): a tap on a masked argument in a
+  process's details shows it there for 30 s, and it is masked again
+  sooner when the details close or the app turns inactive, as it loses
+  focus or before it is hidden, so an app switcher's snapshot keeps the
+  mask. The revealed text lives in that sheet's state only: it is never
+  sent, stored or logged, and the table, its filter and its command sort
+  read display text only. A screen reader hears "(masked)" where the
+  screen shows the mask.
 - Every export, share and diagnostic bundle passes `SecretRedactor`
   (`SC/src/llm/redaction.dart`) by default, with an explicit include-secrets
   toggle.
@@ -4538,8 +4614,8 @@ the engine in `engine_isolate.dart` beside it):
   map null until a previous reading exists, so unknown never sums to
   zero, and a `withheld` map naming each value left null because a
   container host's `/proc` would supply it (D50); for `procs`,
-  per-process CPU shares with the start time PRC-02 checks, each
-  argument as a `MaskedValue` (8.9), plus the
+  per-process CPU shares with the start time PRC-02 checks and its
+  wall-clock time (7.2), each argument as a `MaskedValue` (8.9), plus the
   host's process count and how it chose the rows it sent (D48); for
   `identity`, the strings SYS-01 shows, resolved in the engine so the
   host's JSON never crosses (6.5); the parsed tables for `fs`,
@@ -4883,6 +4959,33 @@ reading, in two columns from the System tab's 600 px panel width:
   withheld, the container's own load averages show and the note says
   the core count would be the host's.
 - No radial `Gauge` exists yet; the stacked bar is the gauge.
+
+As built in M2 (`app/klabautermann_app/lib/ui/processes_panel.dart`), the
+Processes tab lists PRC-01's processes from the `procs` stream it
+subscribes while it shows:
+
+- The sortable table orders by CPU (the first sort, busiest on top),
+  memory in IEC units, user, start time and command, with the PID
+  beside them. In a panel narrower than 600 px, a width that grows with
+  the text scale, the rows become two-line entries with a sort menu
+  rather than a squeezed table. The row-action slot stays empty until
+  PRC-02 (M4). A row opens the process's details in a sheet: its figures,
+  parent PID, state and each argument (8.9's reveal), as read, under
+  that reading's freshness line and grey once it is stale.
+- A user reads as a name only where the host gives one: a `ps`
+  fallback's column, unless GNU `ps` cut it to 7 characters and a `+`,
+  or the probe's login user for that uid; otherwise "UID n". A start
+  shows its time on the day of the reading, else its date, and
+  "unknown" where the engine could not date it (7.2). A row with no
+  command line shows the kernel's name and "command line unavailable".
+- The filter needs every term in the PID, name, user or shown command
+  line. It draws and searches at most 4,096 characters of a command
+  line or argument, which can fill the 1 MiB section.
+- Through a failed reading the last good list stays, under the
+  freshness line (9.5 item 4) and the failure's reason; it turns grey
+  once older than 20 s, twice the stream's slowest cadence. A cut list
+  says "Showing N of M processes" (D48). The phone's server screen
+  reaches the tab once More lists the panels (10.5).
 
 ### 10.5 Phone (under 600 dp) and tablet
 

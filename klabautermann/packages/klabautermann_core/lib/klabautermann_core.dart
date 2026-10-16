@@ -61,6 +61,32 @@ export 'package:klabautermann_host/klabautermann_host.dart'
         TimersSnapshot,
         UnitListFormat,
         UnitsSnapshot;
+// The Jobs panel (JOB-01, JOB-02): the jobs rows a CronResult carries, the
+// timer rows the app builds from a TimersResult, their schedule
+// descriptions and their runs as plain CronRun values (D52), and the
+// engine's limits and names its words follow.
+export 'package:klabautermann_host/klabautermann_host.dart'
+    show
+        CalendarSchedule,
+        CronDayMatch,
+        CronDst,
+        CronFieldItem,
+        CronFields,
+        CronJobEntry,
+        CronMacro,
+        CronRun,
+        CronSchedule,
+        JobEntry,
+        JobRunsUnknown,
+        MonotonicSchedule,
+        PeriodicJobEntry,
+        ScheduleDescription,
+        SystemdTimer,
+        TimerJobEntry,
+        kCalendarIterationsSystemd,
+        kCronHorizonDays,
+        kOwnCrontabSource;
+export 'src/sampling/sample_results.dart' show kCronLinesEvaluated;
 // The Logs panel's LOG-04 notice: the access check's journal row (K04)
 // over the probe's HostProfile.
 export 'package:klabautermann_host/klabautermann_host.dart'
