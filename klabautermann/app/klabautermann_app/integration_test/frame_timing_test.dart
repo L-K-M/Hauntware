@@ -8,7 +8,8 @@
 // `klabautermann/scripts/bench-frame-timing.sh` runs it in profile mode
 // under `flutter drive`; the driver writes the report, which
 // klabautermann/docs/evidence/s5/README.md describes. It fails when the
-// load does not reach the app, never on a slow number.
+// load does not reach the app or stops while a surface is measured, never
+// on a slow number.
 import 'dart:async';
 import 'dart:io';
 
@@ -127,7 +128,12 @@ void main() {
     final l10n = lookupAppLocalizations(const Locale('en'));
     await tester.tap(find.widgetWithText(Tab, l10n.workspaceTabLogs));
     await _until(() => load.logRecords > 0, "the Logs panel's follow");
-    await _measure(binding, load, 'logs');
+    await _measure(
+      binding,
+      load,
+      'logs',
+      minLogRecordsPerSecond: plan.logLinesPerSecond / 2,
+    );
 
     (binding.reportData!['machine'] as Map)['loadavgEnd'] = _loadavg();
   });
@@ -147,12 +153,15 @@ Future<void> _until(bool Function() done, String what) async {
 /// Measures [surface] for [_seconds] through `watchPerformance`, which
 /// reports `FrameTimingSummarizer`'s summary under [surface]; keeps its
 /// figures without the per-frame lists, and adds the load that reached
-/// the app meanwhile.
+/// the app meanwhile. Throws, after keeping them, when no sample or fewer
+/// than [minLogRecordsPerSecond] log records arrived: a replay isolate
+/// that died or a follow that stalled, not a slow frame.
 Future<void> _measure(
   IntegrationTestWidgetsFlutterBinding binding,
   _Load load,
-  String surface,
-) async {
+  String surface, {
+  double minLogRecordsPerSecond = 0,
+}) async {
   late final ({int samples, int records, int batches}) before, after;
   final clock = Stopwatch();
   await binding.watchPerformance(() async {
@@ -173,6 +182,17 @@ Future<void> _measure(
     'logRecordsPerSecond': rate(after.records - before.records),
     'logBatchesPerSecond': rate(after.batches - before.batches),
   };
+
+  if (after.samples == before.samples) {
+    throw StateError('no sample reached the app while $surface showed');
+  }
+  final records = (after.records - before.records) / seconds;
+  if (records < minLogRecordsPerSecond) {
+    throw StateError(
+      '${records.toStringAsFixed(1)} log records a second reached the app '
+      'while $surface showed, under $minLogRecordsPerSecond',
+    );
+  }
 }
 
 /// What reached the app from the engine.
