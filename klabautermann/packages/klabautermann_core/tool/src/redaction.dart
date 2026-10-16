@@ -889,13 +889,17 @@ String _cronJobText(String t, bool system, void Function(String) count) {
   }
   final schedule = macro ? job[1]! : job[1]!.split(RegExp(r'\s+')).join(' ');
   if (CronExpression.parse(schedule) == null) {
-    return macro
-        ? '@$kRedacted $kRedacted'
-        : [
-            for (var i = 0; i < 5; i++) kRedacted,
-            if (system) _userPlaceholder,
-            kRedacted,
-          ].join(' ');
+    if (!macro) {
+      return [
+        for (var i = 0; i < 5; i++) kRedacted,
+        if (system) _userPlaceholder,
+        kRedacted,
+      ].join(' ');
+    }
+    // parseCron reads a system table's user field after a macro too, so
+    // a job with a command after that field keeps the slot.
+    final user = system && _cronUser.hasMatch(job[3]!);
+    return '@$kRedacted ${user ? '$_userPlaceholder ' : ''}$kRedacted';
   }
   final head = '${job[1]}${job[2]}';
   if (!system) return '$head${_cronCommand(job[3]!, keepFirst: true)}';

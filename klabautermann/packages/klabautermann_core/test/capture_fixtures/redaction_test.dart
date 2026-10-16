@@ -1099,6 +1099,35 @@ void main() {
       expect(parseShapeChange(Collector.cron, lines, redacted), isNull);
     });
 
+    // parseCron reads the user field after a macro in a system table, so
+    // a job whose macro it does not know keeps that field's slot.
+    test('a system job with an unknown macro keeps its user slot', () {
+      const lines =
+          '== crontab_meta ==\n'
+          'rc=1\n'
+          '== crontab ==\n'
+          'no crontab for anke\n'
+          '== etc_crontab ==\n'
+          '@every root /usr/bin/x Zebra7Macro\n'
+          '@every /usr/bin/x\n'
+          '== cron_d ==\n'
+          'backup\t@every erin /usr/bin/x Zebra8Macro';
+      final redacted = _redact(lines, collector: 'cron');
+      expect(
+        redacted,
+        '== crontab_meta ==\n'
+        'rc=1\n'
+        '== crontab ==\n'
+        'no crontab for anke\n'
+        '== etc_crontab ==\n'
+        '@[redacted] user [redacted]\n'
+        '@[redacted] [redacted]\n'
+        '== cron_d ==\n'
+        'backup\t@[redacted] user [redacted]',
+      );
+      expect(parseShapeChange(Collector.cron, lines, redacted), isNull);
+    });
+
     test(
       'jobs that run the periodic directories keep what mergeJobs reads',
       () {
