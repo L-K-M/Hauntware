@@ -348,10 +348,19 @@ final class _Repo {
     return repo;
   }
 
+  // Since git 2.47 the automatic maintenance after a commit or merge
+  // detaches by default, so it can still be writing in .git while the
+  // teardown deletes the directory. These repositories are thrown away,
+  // so they need no maintenance at all.
   Map<String, String> get _environment => {
     'PATH': Platform.environment['PATH'] ?? '/usr/bin:/bin',
     'HOME': _root.path,
     'GIT_CONFIG_NOSYSTEM': '1',
+    'GIT_CONFIG_COUNT': '2',
+    'GIT_CONFIG_KEY_0': 'maintenance.auto',
+    'GIT_CONFIG_VALUE_0': 'false',
+    'GIT_CONFIG_KEY_1': 'gc.auto',
+    'GIT_CONFIG_VALUE_1': '0',
   };
 
   /// Writes each file (null deletes it), commits, and returns the commit.
