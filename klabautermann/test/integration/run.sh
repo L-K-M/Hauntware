@@ -24,6 +24,11 @@ readonly evidence_dir="${KLABAUTERMANN_EVIDENCE_DIR:+$KLABAUTERMANN_EVIDENCE_DIR
 readonly fixture_user='klab'
 readonly services=(sshd jump)
 readonly ready_attempts=60
+# The project name and loopback ports are fixed, and a run starts by
+# removing what a killed run left, so two runs on one Docker host would
+# tear down each other's fixture. One runs at a time: the lock is on /tmp,
+# machine-wide like the Docker daemon, and ends with this shell.
+readonly lock_file='/tmp/klabautermann-fixture.lock'
 
 compose() {
   docker compose --project-name "$compose_project" --file "$compose_file" "$@"
@@ -98,13 +103,19 @@ if [[ "$#" -ne 0 ]]; then
   exit 2
 fi
 
-for tool in docker ssh-keygen ssh-keyscan ssh-agent ssh-add "$dart_binary"; do
+for tool in docker flock ssh-keygen ssh-keyscan ssh-agent ssh-add "$dart_binary"; do
   if ! command -v "$tool" >/dev/null; then
     echo "run.sh needs $tool" >&2
     exit 1
   fi
 done
 docker compose version >/dev/null
+
+exec 9>"$lock_file"
+if ! flock --nonblock 9; then
+  echo "another fixture run holds $lock_file" >&2
+  exit 1
+fi
 
 # Keys live outside the repository, so none can be committed.
 runtime_dir="$(mktemp -d "${TMPDIR:-/tmp}/klabautermann-fixture.XXXXXX")"
@@ -126,7 +137,8 @@ ssh-keygen -q -t ed25519 -N '' -C 'klabautermann fixture agent' \
   -f "$runtime_dir/agent"
 cat "$runtime_dir/identity.pub" "$runtime_dir/agent.pub" \
   >"$runtime_dir/authorized_keys"
-eval "$(ssh-agent -s)" >/dev/null
+# The agent outlives a killed run, so it must not inherit the lock.
+eval "$(ssh-agent -s 9>&-)" >/dev/null
 agent_started=1
 ssh-add -q "$runtime_dir/agent"
 rm -f -- "$runtime_dir/agent"
