@@ -5,6 +5,7 @@ import 'package:ghost_theme/ghost_theme.dart';
 import 'package:klabautermann_app/controllers/monitoring_controller.dart';
 import 'package:klabautermann_app/l10n/app_localizations.dart';
 import 'package:klabautermann_app/theme/app_theme.dart';
+import 'package:klabautermann_app/ui/logs/log_view.dart';
 import 'package:klabautermann_app/ui/services_panel.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 
@@ -133,6 +134,7 @@ Future<_Panel> _pump(
   double textScale = 1,
   Brightness brightness = Brightness.light,
   TargetPlatform platform = TargetPlatform.linux,
+  UnitLogPlacement logPlacement = UnitLogPlacement.inline,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -174,6 +176,7 @@ Future<_Panel> _pump(
                   monitoring: monitoring,
                   serverId: serverId.value,
                   visible: visible.value,
+                  logPlacement: logPlacement,
                 ),
               ),
             ),
@@ -658,6 +661,46 @@ void main() {
 
       expect(tester.takeException(), isNull);
       expect(find.text('Recent log lines'), findsOneWidget);
+    });
+  }
+
+  for (final textScale in [1.0, 2.0]) {
+    testWidgets('on a phone a unit\'s lines open in a sheet, which reads '
+        'them while open and closes its read (PLT-02), at '
+        '${textScale * 100}% text', (tester) async {
+      final panel = await _pump(
+        tester,
+        size: _phone,
+        textScale: textScale,
+        platform: TargetPlatform.android,
+        logPlacement: UnitLogPlacement.sheet,
+      );
+      await panel.sample(tester);
+      await _open(tester, 'nginx.service');
+      expect(panel.opens, isEmpty);
+      expect(find.text('Recent log lines'), findsNothing);
+
+      await tester.tap(find.text('Show recent log lines'));
+      await tester.pumpAndSettle();
+      expect(panel.opened, ['nginx.service']);
+      await panel.report(tester, const LogStreamRunning());
+      await panel.emit(
+        tester,
+        LogBatch(streamId: panel.opens.last.streamId, records: _lines),
+      );
+      expect(tester.takeException(), isNull);
+      expect(
+        find.descendant(
+          of: find.byType(BottomSheet),
+          matching: find.byType(LogView),
+        ),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.byTooltip('Close log lines'));
+      await tester.pumpAndSettle();
+      expect(find.byType(BottomSheet), findsNothing);
+      expect(panel.closes, [panel.opens.last.streamId]);
     });
   }
 

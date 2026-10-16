@@ -1823,7 +1823,15 @@
   },
   "servicesLogsTitle": "Recent log lines",
   "@servicesLogsTitle": {
-    "description": "Heading of a unit's recent journal lines on its details (SVC-04)."
+    "description": "Heading of a unit's recent journal lines on its details (SVC-04), and under the unit's name in the sheet that shows them on a phone."
+  },
+  "servicesLogsShow": "Show recent log lines",
+  "@servicesLogsShow": {
+    "description": "Button on a unit's details on a phone that opens its recent journal lines in a bottom sheet (SVC-04, PLT-02)."
+  },
+  "servicesLogsClose": "Close log lines",
+  "@servicesLogsClose": {
+    "description": "Tooltip of the button that closes the bottom sheet of a unit's recent journal lines on a phone."
   },
   "servicesLogsRequested": "Asking the server for recent log lines…",
   "@servicesLogsRequested": {

@@ -2230,11 +2230,23 @@ abstract class AppLocalizations {
   /// **'Close unit details'**
   String get servicesUnitClose;
 
-  /// Heading of a unit's recent journal lines on its details (SVC-04).
+  /// Heading of a unit's recent journal lines on its details (SVC-04), and under the unit's name in the sheet that shows them on a phone.
   ///
   /// In en, this message translates to:
   /// **'Recent log lines'**
   String get servicesLogsTitle;
+
+  /// Button on a unit's details on a phone that opens its recent journal lines in a bottom sheet (SVC-04, PLT-02).
+  ///
+  /// In en, this message translates to:
+  /// **'Show recent log lines'**
+  String get servicesLogsShow;
+
+  /// Tooltip of the button that closes the bottom sheet of a unit's recent journal lines on a phone.
+  ///
+  /// In en, this message translates to:
+  /// **'Close log lines'**
+  String get servicesLogsClose;
 
   /// A unit's log lines were requested and the app has no answer yet.
   ///

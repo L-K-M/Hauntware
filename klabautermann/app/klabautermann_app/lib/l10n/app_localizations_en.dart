@@ -1528,6 +1528,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get servicesLogsTitle => 'Recent log lines';
 
   @override
+  String get servicesLogsShow => 'Show recent log lines';
+
+  @override
+  String get servicesLogsClose => 'Close log lines';
+
+  @override
   String get servicesLogsRequested => 'Asking the server for recent log lines…';
 
   @override

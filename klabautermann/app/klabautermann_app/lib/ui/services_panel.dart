@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 import 'package:ghost_ui/ghost_ui.dart' show ghostIsDesktopPlatform;
@@ -24,8 +26,23 @@ const double _wideWidth = 600;
 /// text never pushes a table or log view out of sight.
 const double _headerShare = 0.4;
 
+/// The share of the screen SVC-04's sheet opens at, and the least it
+/// drags down to before it closes.
+const double _logSheetShare = 0.6;
+const double _logSheetMinShare = 0.25;
+
 /// The unit table's columns, whose names key them.
 enum _Column { unit, load, active, sub, description }
+
+/// Where a unit's page shows SVC-04's recent journal lines.
+enum UnitLogPlacement {
+  /// Under the unit's states.
+  inline,
+
+  /// In a bottom sheet the page opens, as a phone shows logs (03 §10.5,
+  /// PLT-02).
+  sheet,
+}
 
 /// The Services tab (03 §10.2, §7.5): SVC-01's units with their load,
 /// active and sub states, filtered by type and active state; SVC-02's
@@ -34,7 +51,8 @@ enum _Column { unit, load, active, sub, description }
 ///
 /// It reads the `units` stream its [SampledSurface] subscribes from
 /// [MonitoringController]'s box. A unit's page reads its journal lines
-/// with [MonitoringController.openLogRead] while [visible], and says what
+/// with [MonitoringController.openLogRead] while [visible], or while the
+/// sheet a phone shows them in is open ([logPlacement]), and says what
 /// the read is doing until lines arrive. States the host could not read
 /// show as unknown (CN-10). Nothing animates (A11Y-11).
 class ServicesPanel extends StatefulWidget {
@@ -43,6 +61,7 @@ class ServicesPanel extends StatefulWidget {
     required this.monitoring,
     required this.serverId,
     required this.visible,
+    this.logPlacement = UnitLogPlacement.inline,
   });
 
   final MonitoringController monitoring;
@@ -50,6 +69,9 @@ class ServicesPanel extends StatefulWidget {
 
   /// Whether the panel's tab shows; see [SampledSurface.visible].
   final bool visible;
+
+  /// Where a unit's page shows its recent journal lines.
+  final UnitLogPlacement logPlacement;
 
   @override
   State<ServicesPanel> createState() => _ServicesPanelState();
@@ -172,6 +194,7 @@ class _ServicesPanelState extends State<ServicesPanel> {
                   unit: _find(units, open.name),
                   visible: widget.visible,
                   wide: wide,
+                  logPlacement: widget.logPlacement,
                   closeFocus: _closeFocus,
                   onClose: _close,
                 ),
@@ -397,8 +420,9 @@ Widget _activeState(BuildContext context, UnitActiveState? state, String text) {
 }
 
 /// A unit's page: its name, description and states, then up to
-/// [kUnitLogWindow] recent journal lines, oldest first (SVC-04).
-class _UnitPage extends StatefulWidget {
+/// [kUnitLogWindow] recent journal lines, oldest first (SVC-04), under
+/// them or in a sheet the page opens ([UnitLogPlacement]).
+class _UnitPage extends StatelessWidget {
   const _UnitPage({
     super.key,
     required this.monitoring,
@@ -407,6 +431,7 @@ class _UnitPage extends StatefulWidget {
     required this.unit,
     required this.visible,
     required this.wide,
+    required this.logPlacement,
     required this.closeFocus,
     required this.onClose,
   });
@@ -420,14 +445,195 @@ class _UnitPage extends StatefulWidget {
 
   final bool visible;
   final bool wide;
+  final UnitLogPlacement logPlacement;
   final FocusNode closeFocus;
   final VoidCallback onClose;
 
   @override
-  State<_UnitPage> createState() => _UnitPageState();
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+    final unit = this.unit;
+    final states = unit == null ? null : unitStatesOf(unit);
+    final description = unit == null ? null : unitDescriptionOf(unit);
+    String shown(String? value) => value ?? l10n.chartUnknownValue;
+    final facts = [
+      Row(
+        children: [
+          IconButton(
+            tooltip: l10n.servicesUnitClose,
+            focusNode: closeFocus,
+            icon: Icon(wide ? Icons.close : Icons.arrow_back),
+            onPressed: onClose,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Semantics(
+              header: true,
+              child: Text(name, style: theme.textTheme.titleMedium),
+            ),
+          ),
+        ],
+      ),
+      if (description != null) Text(description),
+      Wrap(
+        spacing: 24,
+        runSpacing: 4,
+        children: [
+          for (final (label, value) in [
+            (l10n.servicesColumnLoad, states?.load),
+            (l10n.servicesColumnActive, states?.active?.name),
+            (l10n.servicesColumnSub, states?.sub),
+          ])
+            _labelled(theme, label, Text(shown(value))),
+        ],
+      ),
+    ];
+    return switch (logPlacement) {
+      UnitLogPlacement.inline => _UnitLogs(
+        monitoring: monitoring,
+        serverId: serverId,
+        name: name,
+        visible: visible,
+        builder: (context, notice, lines) => _headed(
+          header: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            spacing: 8,
+            children: [
+              ...facts,
+              Semantics(
+                header: true,
+                child: Text(
+                  l10n.servicesLogsTitle,
+                  style: theme.textTheme.titleSmall,
+                ),
+              ),
+              ?notice,
+            ],
+          ),
+          body: lines ?? const SizedBox.shrink(),
+        ),
+      ),
+      UnitLogPlacement.sheet => SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          spacing: 8,
+          children: [
+            ...facts,
+            Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: FilledButton.tonalIcon(
+                onPressed: () => _showLogs(context),
+                icon: const Icon(Icons.article_outlined),
+                label: Text(l10n.servicesLogsShow),
+              ),
+            ),
+          ],
+        ),
+      ),
+    };
+  }
+
+  /// SVC-04's lines in a bottom sheet that drags from a quarter of the
+  /// screen to its full height. The sheet reads them while it is open,
+  /// and closing it closes a read still running.
+  void _showLogs(BuildContext context) {
+    unawaited(
+      showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        useSafeArea: true,
+        showDragHandle: true,
+        builder: (context) => DraggableScrollableSheet(
+          expand: false,
+          initialChildSize: _logSheetShare,
+          minChildSize: _logSheetMinShare,
+          maxChildSize: 1,
+          builder: (context, scroll) => _UnitLogs(
+            monitoring: monitoring,
+            serverId: serverId,
+            name: name,
+            // The sheet covers the panel, so its tab cannot change.
+            visible: true,
+            builder: (context, notice, lines) =>
+                _logSheet(context, scroll, notice, lines),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _logSheet(
+    BuildContext context,
+    ScrollController scroll,
+    Widget? notice,
+    Widget? lines,
+  ) {
+    final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      child: _headed(
+        // Dragging the heading drags the sheet; the lines scroll alone.
+        headerScroll: scroll,
+        header: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          spacing: 8,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Semantics(
+                        header: true,
+                        child: Text(name, style: theme.textTheme.titleMedium),
+                      ),
+                      Text(l10n.servicesLogsTitle),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  tooltip: l10n.servicesLogsClose,
+                  icon: const Icon(Icons.close),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ],
+            ),
+            ?notice,
+          ],
+        ),
+        body: lines ?? const SizedBox.shrink(),
+      ),
+    );
+  }
 }
 
-class _UnitPageState extends State<_UnitPage> {
+/// SVC-04's read of [name]'s recent journal lines while [visible], which
+/// [builder] lays out: what the read is doing until lines arrive, and
+/// the lines, oldest first, once there are any.
+class _UnitLogs extends StatefulWidget {
+  const _UnitLogs({
+    required this.monitoring,
+    required this.serverId,
+    required this.name,
+    required this.visible,
+    required this.builder,
+  });
+
+  final MonitoringController monitoring;
+  final String serverId;
+  final String name;
+  final bool visible;
+  final Widget Function(BuildContext context, Widget? notice, Widget? lines)
+  builder;
+
+  @override
+  State<_UnitLogs> createState() => _UnitLogsState();
+}
+
+class _UnitLogsState extends State<_UnitLogs> {
   final _lines = LogViewController();
   LogRead? _read;
 
@@ -438,7 +644,7 @@ class _UnitPageState extends State<_UnitPage> {
   }
 
   @override
-  void didUpdateWidget(_UnitPage oldWidget) {
+  void didUpdateWidget(_UnitLogs oldWidget) {
     super.didUpdateWidget(oldWidget);
     _sync();
   }
@@ -499,58 +705,14 @@ class _UnitPageState extends State<_UnitPage> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final theme = Theme.of(context);
     final read = _read;
-    final unit = widget.unit;
-    final states = unit == null ? null : unitStatesOf(unit);
-    final description = unit == null ? null : unitDescriptionOf(unit);
-    String shown(String? value) => value ?? l10n.chartUnknownValue;
     final notice = read == null ? null : unitLogsNotice(l10n, read);
-    return _headed(
-      header: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        spacing: 8,
-        children: [
-          Row(
-            children: [
-              IconButton(
-                tooltip: l10n.servicesUnitClose,
-                focusNode: widget.closeFocus,
-                icon: Icon(widget.wide ? Icons.close : Icons.arrow_back),
-                onPressed: widget.onClose,
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Semantics(
-                  header: true,
-                  child: Text(widget.name, style: theme.textTheme.titleMedium),
-                ),
-              ),
-            ],
-          ),
-          if (description != null) Text(description),
-          Wrap(
-            spacing: 24,
-            runSpacing: 4,
-            children: [
-              for (final (label, value) in [
-                (l10n.servicesColumnLoad, states?.load),
-                (l10n.servicesColumnActive, states?.active?.name),
-                (l10n.servicesColumnSub, states?.sub),
-              ])
-                _labelled(theme, label, Text(shown(value))),
-            ],
-          ),
-          Semantics(
-            header: true,
-            child: Text(
-              l10n.servicesLogsTitle,
-              style: theme.textTheme.titleSmall,
-            ),
-          ),
-          if (read != null && notice != null)
-            _notice(
-              theme,
+    return widget.builder(
+      context,
+      read == null || notice == null
+          ? null
+          : _notice(
+              Theme.of(context),
               read.ended ? Icons.info_outline : Icons.hourglass_empty,
               notice,
               switch (read.state) {
@@ -559,10 +721,8 @@ class _UnitPageState extends State<_UnitPage> {
                 _ => null,
               },
             ),
-        ],
-      ),
-      body: read == null || read.records.isEmpty
-          ? const SizedBox.shrink()
+      read == null || read.records.isEmpty
+          ? null
           : LogView(controller: _lines, levelOf: LogLevel.ofJournalLine),
     );
   }
@@ -580,8 +740,12 @@ Widget _unavailable(
 }, unavailable.detail);
 
 /// [header] over [body], the header scrolling within [_headerShare] of
-/// the height when it would take more.
-Widget _headed({required Widget header, required Widget body}) => LayoutBuilder(
+/// the height when it would take more, under [headerScroll] if given.
+Widget _headed({
+  required Widget header,
+  required Widget body,
+  ScrollController? headerScroll,
+}) => LayoutBuilder(
   builder: (context, constraints) => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
@@ -589,7 +753,7 @@ Widget _headed({required Widget header, required Widget body}) => LayoutBuilder(
         constraints: BoxConstraints(
           maxHeight: constraints.maxHeight * _headerShare,
         ),
-        child: SingleChildScrollView(child: header),
+        child: SingleChildScrollView(controller: headerScroll, child: header),
       ),
       const SizedBox(height: 12),
       Expanded(child: body),
