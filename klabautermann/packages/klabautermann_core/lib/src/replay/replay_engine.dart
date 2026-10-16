@@ -65,7 +65,8 @@ final class ReplayPlan {
 ///   advanced to the read's time.
 /// - A journal or kernel follow runs at [ReplayPlan.logLinesPerSecond]
 ///   until closed, in [LogBatch]es at most 20 a second (03 §10.1); a
-///   window gets the journal rows once, newest first, and ends; a file
+///   window gets the newest journal rows it holds once, newest first,
+///   and ends filled, or at the oldest when it holds them all; a file
 ///   ends as [LogStreamEndReason.missing].
 /// - [Shutdown] stops its timer and exits; every other request gets
 ///   [RequestRejected].
@@ -308,7 +309,13 @@ final class _ReplayEngine {
       maxPending: math.max(1, spec.window),
     )..add(utf8.encode('$rows\n'));
     if (window.flush(Duration.zero) case final batch?) _send(batch);
-    state(const LogStreamEnded(LogStreamEndReason.oldestReached));
+    state(
+      LogStreamEnded(
+        spec.window < _plan.journalRows.length
+            ? LogStreamEndReason.windowFilled
+            : LogStreamEndReason.oldestReached,
+      ),
+    );
   }
 }
 

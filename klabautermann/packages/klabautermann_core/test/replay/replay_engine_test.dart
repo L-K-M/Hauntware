@@ -143,13 +143,17 @@ void main() {
   test('follows at the plan\'s rate until closed, and ends windows, files '
       'and unknown servers', () async {
     await spawn();
-    LogStreamSpec spec({bool follow = true, LogSource? source, String? id}) =>
-        LogStreamSpec(
-          serverId: id ?? 'replay-0',
-          source: source ?? const JournalLogSource(),
-          window: 2,
-          follow: follow,
-        );
+    LogStreamSpec spec({
+      bool follow = true,
+      LogSource? source,
+      String? id,
+      int window = 2,
+    }) => LogStreamSpec(
+      serverId: id ?? 'replay-0',
+      source: source ?? const JournalLogSource(),
+      window: window,
+      follow: follow,
+    );
     List<LogStreamStatus> states(String streamId) => [
       for (final e in events.whereType<LogStreamState>())
         if (e.streamId == streamId) e.status,
@@ -190,10 +194,23 @@ void main() {
           streamId: 'log-3',
           spec: spec(id: 'nowhere'),
         ),
+      )
+      ..send(
+        OpenLogStream(
+          streamId: 'log-4',
+          spec: spec(follow: false, window: journalRows.length + 1),
+        ),
       );
-    await until(() => states('log-3').isNotEmpty, 'unknown server state');
+    await until(() => states('log-4').length == 2, 'whole-journal window');
+    // A window of 2 leaves older rows; one larger than the journal reads
+    // them all (protocol.dart's LogStreamEndReason).
     expect(batches('log-1').single.records, hasLength(2));
     expect(states('log-1'), [
+      const LogStreamRunning(),
+      const LogStreamEnded(LogStreamEndReason.windowFilled),
+    ]);
+    expect(batches('log-4').single.records, hasLength(journalRows.length));
+    expect(states('log-4'), [
       const LogStreamRunning(),
       const LogStreamEnded(LogStreamEndReason.oldestReached),
     ]);
