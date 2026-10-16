@@ -510,7 +510,8 @@ void main() {
 
     test('a connect that times out fails as timedOut', () async {
       // Dart's own connect timeout carries ETIMEDOUT as Linux numbers it,
-      // or WSAETIMEDOUT on Windows (socket_patch.dart in the Dart SDK).
+      // or WSAETIMEDOUT on Windows (socket_patch.dart in the Dart SDK); one
+      // the OS raises on macOS or iOS carries Darwin's ETIMEDOUT, 60.
       final timedOut = <Object>[
         TimeoutException('connect'),
         const SocketException(
@@ -520,6 +521,10 @@ void main() {
         const SocketException(
           'Connection timed out',
           osError: OSError('Connection timed out', 10060),
+        ),
+        const SocketException(
+          'Operation timed out',
+          osError: OSError('Operation timed out', 60),
         ),
       ];
       for (final error in timedOut) {
@@ -623,8 +628,8 @@ void main() {
     });
 
     test('an encrypted key with its passphrase loads and dials', () async {
-      // The fixture's own check: the key the two tests above refuse is one
-      // its passphrase opens, so their kinds are about the passphrase.
+      // The fixture's own check: every key the helper encrypts is one its
+      // passphrase opens, so the kinds above are about the passphrase.
       final (failure, connectorCalled) = await _keyLoadFailure(
         SshCredentials.privateKey(
           _generatedKeyPem(passphrase: 'right'),

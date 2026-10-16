@@ -25,11 +25,12 @@ const _sshAuthenticationTimeout = Duration(minutes: 5);
 const _defaultSshKeepAliveInterval = Duration(seconds: 10);
 const _maxJumpHosts = 16;
 
-/// The OS error codes of a connect that timed out: ETIMEDOUT as Linux
-/// numbers it, and Windows' WSAETIMEDOUT. Dart's `Socket.connect` gives its
-/// own timeout one of these two on every platform (`socket_patch.dart` in
-/// the Dart SDK).
-const _connectTimedOutCodes = {110, 10060};
+/// The OS error codes of a connect that timed out: ETIMEDOUT as Linux (110)
+/// and macOS or iOS (60) number it, and Windows' WSAETIMEDOUT (10060).
+/// Dart's own connect timeout carries 110 or 10060 on every platform
+/// (`socket_patch.dart` in the Dart SDK); one the OS raises carries its own
+/// number. On Linux 60 is ENOSTR, which connect never returns.
+const _connectTimedOutCodes = {60, 110, 10060};
 
 Future<void> _discardCleanup(CleanupAction action) => runSequentialCleanup(
       [action],
