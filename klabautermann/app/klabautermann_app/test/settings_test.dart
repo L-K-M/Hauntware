@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ghost_theme/ghost_theme.dart' show ThemeModePreference;
 import 'package:klabautermann_app/controllers/announcement_controller.dart';
+import 'package:klabautermann_app/l10n/app_localizations.dart';
 import 'package:klabautermann_app/ui/settings_page.dart';
 
 import 'support/harness.dart';
@@ -115,6 +116,31 @@ void main() {
     await tester.pumpAndSettle();
   });
 
+  testWidgets('an announcement change that does not apply leaves the '
+      'switch and says so', (tester) async {
+    final announcements = _RefusingAnnouncements();
+    addTearDown(announcements.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(body: GeneralTab(announcements: announcements)),
+      ),
+    );
+
+    await tester.tap(find.text('Announce threshold changes'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('The setting could not be changed.'), findsOneWidget);
+    expect(find.textContaining('could not be saved'), findsNothing);
+    expect(
+      tester.widget<SwitchListTile>(find.byType(SwitchListTile)).value,
+      isTrue,
+    );
+    await tester.pump(const Duration(seconds: 10));
+    await tester.pumpAndSettle();
+  });
+
   testWidgets('back returns to the shell', (tester) async {
     await openSettings(tester);
 
@@ -130,4 +156,15 @@ void main() {
 
     expect(find.byType(SettingsPage), findsNothing);
   });
+}
+
+/// A11Y-15's switch as a lost settings link answers it: no change
+/// applies.
+final class _RefusingAnnouncements extends ValueNotifier<bool>
+    implements AnnouncementSettings {
+  _RefusingAnnouncements() : super(true);
+
+  @override
+  Future<void> setAnnounceThresholdBands(bool announce) async =>
+      throw Exception('The settings link is gone.');
 }

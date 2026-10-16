@@ -282,6 +282,17 @@ void main() {
     });
   }
 
+  testWidgets('the phone\'s health card opens Settings on the announcement '
+      'switch (D60)', (tester) async {
+    await pumpApp(tester, servers: twoServers, size: _phone);
+    await tester.tap(find.text('web-1'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Threshold announcements: on'));
+    await tester.pumpAndSettle();
+    expect(find.text('Announce threshold changes'), findsOneWidget);
+  });
+
   testWidgets('OV-01 words CPU, load, memory and swap in IEC units', (
     tester,
   ) async {
@@ -750,6 +761,25 @@ void main() {
     expect(find.textContaining('of its space used'), findsNothing);
   });
 
+  testWidgets('Disks lists eight mounts and leaves the rest to the System '
+      'tab', (tester) async {
+    final panel = await _pump(tester);
+    await panel.sample(
+      tester,
+      FsResult(
+        FsSnapshot([for (var i = 0; i < 9; i++) _mount('/m$i', use: 10)]),
+      ),
+      stream: SampleStream.fs,
+    );
+
+    expect(_inCard('Disks', find.text('/m7')), findsOneWidget);
+    expect(find.text('/m8'), findsNothing);
+    expect(
+      _inCard('Disks', find.text('1 more mount is on the System tab.')),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('another df failure shows only why, as the System tab does', (
     tester,
   ) async {
@@ -1093,6 +1123,26 @@ void main() {
       ]);
     });
 
+    testWidgets('a mount that comes back starts from where it then stands', (
+      tester,
+    ) async {
+      final announce = ValueNotifier(true);
+      addTearDown(announce.dispose);
+      final panel = await _pump(tester, announce: announce);
+      Future<void> fs(int seconds, List<FsMount> mounts) => panel.sample(
+        tester,
+        FsResult(FsSnapshot(mounts)),
+        at: _start.add(Duration(seconds: seconds)),
+        stream: SampleStream.fs,
+      );
+
+      await fs(0, [_mount('/'), _mount('/data', use: 95)]);
+      await fs(30, [_mount('/')]);
+      await fs(60, [_mount('/'), _mount('/data', use: 50)]);
+      await fs(90, [_mount('/'), _mount('/data', use: 50)]);
+      expect(heard(tester), isEmpty);
+    });
+
     testWidgets('nothing is heard while the switch is off or the Overview '
         'is hidden', (tester) async {
       final announce = ValueNotifier(false);
@@ -1124,6 +1174,16 @@ void main() {
       await cpu(32, 95);
       await cpu(44, 95);
       expect(heard(tester), ['CPU 95%: critical level']);
+
+      // Hidden while critical and back at 50 %: no band to fall from.
+      panel.visible.value = false;
+      await tester.pump();
+      await cpu(46, 50);
+      panel.visible.value = true;
+      await tester.pump();
+      await cpu(48, 50);
+      await cpu(60, 50);
+      expect(heard(tester), isEmpty);
     });
 
     testWidgets('nothing is heard while a pushed route covers the Overview', (
