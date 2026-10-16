@@ -423,8 +423,10 @@ final _patterns = <_Rule>[
   (
     'identity field',
     RegExp(r'"MachineTags"(\s*:\s*)\[((?:[^\]"]|"(?:[^"\\]|\\.)*")*)\]'),
+    // Each tag, so that the list keeps its length.
     (m, _) =>
-        m[2]!.contains('"') ? '"MachineTags"${m[1]}["$kRedacted"]' : m[0]!,
+        '"MachineTags"${m[1]}['
+        '${m[2]!.replaceAll(RegExp(r'"(?:[^"\\]|\\.)*"'), '"$kRedacted"')}]',
   ),
   // An IPv6 address ending in an IPv4 one: this rule takes the prefix,
   // unless it is the generic IPv4-mapped or NAT64 one, the IPv4 rule the

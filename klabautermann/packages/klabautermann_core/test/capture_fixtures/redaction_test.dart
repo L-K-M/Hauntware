@@ -333,7 +333,8 @@ void main() {
         ),
         '{"MachineInformationData":["PRETTY_HOSTNAME=[redacted]",'
         '"LOCATION=[redacted]","DEPLOYMENT=production",'
-        '"TAGS=[redacted]"],"MachineTags":["[redacted]"]}',
+        // As many tags as before: the identity parse keeps the list.
+        '"TAGS=[redacted]"],"MachineTags":["[redacted]","[redacted]"]}',
       );
       expect(_redact('"MachineTags":[ ]'), '"MachineTags":[ ]');
     });
