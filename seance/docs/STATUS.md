@@ -1874,6 +1874,16 @@ revocation and concurrent login/deletion lifecycle work remain separate.
   Séance's delegate: the trusted endpoint with and without a server
   message, a revealed answer, a bracketed IPv6 host, and real-font PNGs
   under `SEANCE_CAPTURE=1`.
+- `credential_dialog_test.dart`, in Planchette's `ghost_servers` package
+  since 2026-10-16 with the dialog it tests (formerly
+  `app/seance_app/test/credential_prompt_test.dart`) — CRED-05's inline
+  prompt: a typed password, or a picked or pasted key with its passphrase,
+  is the answer; no passphrase stays null; a file that is not a key says
+  so and keeps the dialog; cancelling answers nothing.
+  `app/seance_app/test/credential_prompt_capture_test.dart` pins Séance's
+  delegate: the password and private-key forms, a picked key, a file that
+  could not be opened, the answer each close maps to, the barrier tap that
+  cancels, and real-font PNGs under `SEANCE_CAPTURE=1`.
 - `app/seance_app/test/bootstrap_test.dart` — startup phases stay in one
   MaterialApp; pushed routes resolve `AppScope`.
 - `app/seance_app/test/keystore_resilience_test.dart` — a locked/missing OS
