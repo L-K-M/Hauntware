@@ -195,8 +195,9 @@ class _ProcessesPanelState extends State<ProcessesPanel> {
           context,
           row,
           columns,
+          reading: reading,
           clock: widget.monitoring.clock,
-          freshness: (now) => _freshnessAt(now, reading, sampling),
+          sampling: widget.monitoring.samplingFor(widget.serverId),
         );
         final body = wide
             ? SortableTable<ProcessRow>(
@@ -564,14 +565,16 @@ class _CommandText extends StatelessWidget {
 
 /// [row]'s details in a sheet, as read: its figures in [columns]' words,
 /// its parent and state, and each argument, a masked one revealed only on
-/// a tap there (03 §8.9). The sheet keeps that reading, so it says the
-/// reading's [freshness] by [clock] and greys its figures once stale.
+/// a tap there (03 §8.9). The sheet keeps that [reading], so it says the
+/// reading's freshness by [clock] and the server's [sampling] as it
+/// changes, and greys its figures once stale.
 void _showProcess(
   BuildContext context,
   ProcessRow row,
   List<SortableTableColumn<ProcessRow>> columns, {
+  required Sample reading,
   required ValueListenable<DateTime> clock,
-  required Freshness Function(DateTime now) freshness,
+  required ValueListenable<SamplingStatus?> sampling,
 }) {
   final l10n = AppLocalizations.of(context);
   final unknown = l10n.chartUnknownValue;
@@ -582,8 +585,9 @@ void _showProcess(
       showDragHandle: true,
       builder: (context) => _ProcessSheet(
         row: row,
+        reading: reading,
         clock: clock,
-        freshness: freshness,
+        sampling: sampling,
         facts: [
           for (final column in columns.skip(1))
             (column.label, column.text(row)),
@@ -604,14 +608,16 @@ class _ProcessSheet extends StatefulWidget {
   const _ProcessSheet({
     required this.row,
     required this.facts,
+    required this.reading,
     required this.clock,
-    required this.freshness,
+    required this.sampling,
   });
 
   final ProcessRow row;
   final List<(String, String)> facts;
+  final Sample reading;
   final ValueListenable<DateTime> clock;
-  final Freshness Function(DateTime now) freshness;
+  final ValueListenable<SamplingStatus?> sampling;
 
   @override
   State<_ProcessSheet> createState() => _ProcessSheetState();
@@ -676,9 +682,13 @@ class _ProcessSheetState extends State<_ProcessSheet> {
         ),
       ),
       ListenableBuilder(
-        listenable: widget.clock,
+        listenable: Listenable.merge([widget.clock, widget.sampling]),
         builder: (context, _) {
-          final freshness = widget.freshness(widget.clock.value);
+          final freshness = _freshnessAt(
+            widget.clock.value,
+            widget.reading,
+            widget.sampling.value,
+          );
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             spacing: 12,

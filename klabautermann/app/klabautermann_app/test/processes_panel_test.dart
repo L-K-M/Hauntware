@@ -347,6 +347,40 @@ void main() {
     );
   });
 
+  testWidgets('the details follow a sampling change made while they show', (
+    tester,
+  ) async {
+    final panel = await _pump(tester);
+    panel.engine.emit(
+      SamplingState(
+        serverId: _serverId,
+        phase: SamplingPhase.sampling,
+        since: _now,
+      ),
+    );
+    await panel.all(tester);
+    await tester.tap(_row(812));
+    await tester.pumpAndSettle();
+
+    panel.engine.emit(
+      SamplingState(
+        serverId: _serverId,
+        phase: SamplingPhase.waitingForLink,
+        since: _now,
+      ),
+    );
+    _clock = _now.add(const Duration(seconds: 3));
+    await tester.pump(const Duration(seconds: 1));
+
+    expect(
+      find.descendant(
+        of: find.byType(BottomSheet),
+        matching: find.text('Disconnected 3 s ago'),
+      ),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('a failure before any list says so instead of waiting', (
     tester,
   ) async {
