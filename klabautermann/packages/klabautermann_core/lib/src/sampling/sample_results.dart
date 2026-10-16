@@ -10,6 +10,7 @@ import 'dart:math';
 import 'package:klabautermann_host/klabautermann_host.dart';
 
 import '../engine/protocol.dart';
+import 'cron_zone.dart';
 
 /// The collector a [SampleStream] reads (03 §6.4): `units` serves both
 /// the Services panel and the health card (D45).
@@ -369,6 +370,31 @@ ProcsResult procsResult(
 List<String>? _tokens(String? joined) => joined == null
     ? null
     : List.unmodifiable(joined.isEmpty ? const <String>[] : joined.split(' '));
+
+/// The most cron lines whose next runs one `cron` reading evaluates.
+/// A line can cost about 2 ms in the engine isolate, which every server
+/// shares, and a 1 MiB section holds some 75,000 lines; later lines give
+/// `JobRunsUnknown.notEvaluated`.
+const kCronLinesEvaluated = 200;
+
+/// [cron] with its jobs rows (7.7): each line's next runs after [at] in
+/// the server zone of [profile] or the line's `CRON_TZ` (D58), for the
+/// first [kCronLinesEvaluated] lines.
+CronResult cronResult(CronSnapshot cron, HostProfile? profile, DateTime at) {
+  final server = serverCronZone(profile, at);
+  return CronResult(
+    cron,
+    jobs: mergeJobs(
+      cron: cron,
+      nowUtc: at,
+      zone: server.zone,
+      zoneFor: (name) => cronTzZone(name, at),
+      evaluateLimit: kCronLinesEvaluated,
+    ),
+    zoneName: server.zoneName,
+    zoneFallback: server.fallback,
+  );
+}
 
 /// SYS-01's identity, resolved from hostnamectl, then os-release and
 /// `uname` (03 §6.5).

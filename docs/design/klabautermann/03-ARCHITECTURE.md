@@ -244,7 +244,8 @@ engine · D44 sample sequence · D45 subscriptions · D46 link vocabulary ·
 D47 sampler deadlines · D48 host-side filtering · D49 collector locale ·
 D50 LXC values · D51 Access tab · D52 runtime placement · D53 integration
 placement · D54 runtime override in M3 · D55 no health overlay in the MVP
-· D56 log search through `planchette_core` · D57 timer triggers.
+· D56 log search through `planchette_core` · D57 timer triggers · D58
+cron zone rules.
 Proposals awaiting the owner close the section; they are not decisions.
 
 ### Shape and scope
@@ -836,6 +837,57 @@ Proposals awaiting the owner close the section; they are not decisions.
   the run count would be a program constant); reading the unit files
   (`systemctl cat` leaves drop-ins, specifiers and normalization to the
   client); `TimersCalendar` without `TimersMonotonic`.
+- **D58. Cron next runs follow `package:timezone`'s zone rules.**
+  `klabautermann_core` depends on `package:timezone` and embeds its
+  `latest_all` database (about 0.4 MB, loaded on first use). The engine
+  evaluates each `cron` reading's jobs rows at the sample's time. The
+  server zone takes the database's rules for the probe's IANA name when
+  the database knows the name and gives the offset the server reported
+  at the probe's clock reading. Otherwise the runs use the probe's fixed
+  offset, and `CronResult` says why: no name, a name the database lacks,
+  or an offset mismatch (a stale name or diverging zone data). Without a
+  probed offset the server zone is unknown, and its rows say so. A
+  reading evaluates the runs of its first 200 lines and marks the rest
+  not evaluated, because a line can cost about 2 ms in the shared
+  engine isolate and a 1 MiB section holds tens of thousands. A
+  `CRON_TZ` resolves through the same database. `ServerZone.offsetAt`
+  carries the rules inside the engine, and the rows cross with plain
+  `CronRun`s (D52). The database can disagree with the server's own zone
+  files, which cron reads, so a run within an hour of a transition is
+  marked `nearTransition` beside the gap and overlap marks. Across a
+  transition of the server's zone the runs follow cronie and Debian's
+  cron [R: `cron.c` `find_jobs`]: a fixed-time job runs a gap's minutes
+  at the jump and an overlap's minutes once, and a job whose minute or
+  hour field starts with `*` runs by the clock, never in a gap and in
+  both passes of an overlap. A `CRON_TZ` line follows cronie's rule for
+  it [R: cronie `cron.c` `find_jobs`]: cron converts each of its own
+  minutes into the line's zone, matches there and catches up no such
+  line, so a fixed-time job misses the minutes its zone's gap skips and
+  runs the minutes its zone's overlap repeats twice. An empty `CRON_TZ=`
+  stays set [R: cronie `env.c` `load_env`], so its line matches on the
+  server's clock and is not caught up either. While the server's zone
+  repeats an hour cron runs only wildcard jobs, so a fixed-time
+  `CRON_TZ` job runs once when both zones fall back by the same amount
+  at the same instant and misses any other match inside that hour. Such
+  a run within an hour of either zone's transition is marked; without a
+  known server zone, or at the probe's fixed offset, the runs ignore the
+  server's repeated hour. Debian's cron ignores `CRON_TZ` [R: Debian cron
+  3.0pl1-211 `cron.c`] and BusyBox crond runs every job by the clock,
+  which the runs do not model yet. The database's transition tables
+  end at the 32-bit time limit, early in 2038; a run after a zone's
+  last listed transition keeps the offset in force after it. The cron
+  rows' jobs goldens live in `klabautermann_core/test/fixtures/cron_jobs/`,
+  because `klabautermann_host` stays on meta and collection (3.1); timer
+  rows need no zone and keep host goldens. Why: Dart
+  ships no zone database, and a fixed offset puts every run after a DST
+  change an hour off. *Rejected:* reading the server's own zone file
+  through the probe (exact, but a program change and a TZif parser; a v1
+  candidate); the smaller `latest` database (it lacks backward links
+  such as `US/Eastern` and `Europe/Kiev`, which older servers report);
+  `latest_10y` (it ends five years out, inside the ten-year evaluation
+  horizon); the dependency in `klabautermann_host` (3.1); fixed-offset
+  goldens labelled as such (every run after the next change stays
+  wrong).
 
 ### Privilege and safety
 
@@ -1193,7 +1245,7 @@ klabautermann/
   packages/
     klabautermann_host/          pure Dart; dependencies meta, collection
     klabautermann_docker/        pure Dart; dependencies meta, collection; no dart:io in lib/
-    klabautermann_core/          pure Dart; dependencies seance_core, klabautermann_host, klabautermann_docker
+    klabautermann_core/          pure Dart; dependencies seance_core, klabautermann_host, klabautermann_docker, timezone (D58)
       lib/src/{links,sampling,logs,capabilities}/   runtime services beside lib/src/engine/ (D52)
       test/integration/          engine tests against the fixture, tagged, skipped without it (D53)
       tool/capture_fixtures.dart                    fixture capture (6.5, D53)
@@ -1867,6 +1919,7 @@ abstract interface class RemoteProcess {
 - **Liveness (CN-06).** Idle ping every 15 s; a ping not answered within
   30 s marks the link lost and closes it (Poltergeist's pattern [R: c2
   §2.5]). dartssh2's own keepalive never times out, in 4.1.0 too (c2 R3).
+  A missed fast-sampler deadline hints at a dead peer sooner (6.4).
 - **Reconnect (CN-05).** Backoff with 1 s base, 30 s cap and downward jitter
   (Poltergeist's constants [R]); journal cursors and Docker `since=` resume.
   Background reconnects never prompt; a server that needs a prompt waits
@@ -2323,6 +2376,68 @@ filtered core sample is about 1.5 to 2.5 KB and an overview sample about
 600 B [R: r5 §3.3]; the filtering happens on the host, in the collector
 fragments (D48).
 
+**Scheduling (K22).** The engine's sampling scheduler
+(`klabautermann_core/lib/src/sampling/sampling_scheduler.dart`) runs a
+server's two samplers while a stream is subscribed, its link is ready
+and the app is in the foreground, and closes both, with their timers, as
+soon as one of those ends: the background (D34) and a lost or forgotten
+link stop sampling at once, also on a desktop whose link stays open.
+Each stream is due at its period in the table, aligned to when sampling
+started, so streams whose periods divide one another share a request;
+the due streams of one sampler go out as one tick, `procs` first. While
+`core` is subscribed, `overview` rides on its ticks, and `failedUnits`
+rides on those of `units`, since one reply serves both. A stream newly
+subscribed is read at once, and a new profile takes over at each
+stream's next aligned tick (one not read yet stays due at once).
+`identity` is read once per link, and a
+stream the profile reads on demand once per `Subscribe` naming it
+(10.1); such a read that brings no reply is tried again after 15 s [E].
+Due times follow a monotonic clock, so a changed wall clock cannot stall
+sampling. A sampler ticks only while it is ready, so its restarts (6.2)
+cost no skipped ticks: a cadence reading due while its sampler
+restarts, or while the probe holds it, is lost (a gap, 10.1), and the
+sampler reads its streams as soon as it can tick again. A tick
+that would overlap its outstanding request is skipped and counted,
+never queued. A first or owed reading
+due meanwhile waits for that request to settle instead, since a skipped
+tick would lose it, and the streams of a skipped tick join the next tick
+the sampler sends, so a period that keeps landing on skipped ticks
+cannot starve its stream. The slow sampler's first request on a link is
+the probe (6.1), until one is answered on that link: a probe that brings
+no reply goes out again after 15 s [E], as an owed read does, each
+later one after twice the last wait, up to 15 min [E], and on a later
+run on the same link. A probe that hangs holds the slow sampler for its
+whole deadline, so the cap bounds the readings it loses to about 15 %
+of the time. Until it settles the slow sampler sends
+nothing else and, for a server whose profile the engine does not know
+yet, the fast sampler waits too, so the first readings already withhold
+what a container host's `/proc` would supply (D50); a slow sampler that
+fails to start releases the fast one, and probes once it is ready. That
+wait lasts at most the probe's deadline, 165 s for its 16 guarded
+commands (6.2, D47), and holds only while the engine knows no profile
+for the server. There D50, which never shows the host's figures as the
+container's, takes precedence over 6.2's rule that a hung slow collector
+cannot stall CPU graphs, until the device's profile cache (6.1) makes
+the wait rare. A missed fast deadline makes the restarted fast sampler's
+start a dead-peer hint to the link supervisor: the fast collectors read
+`/proc` with builtins only, so a reply later than 5 s means a stalled
+sampler or a silent peer, and the restart tells which. The supervisor
+closes a hinted link that shows no sign of life (a reply, a reply lost
+to framing, or a sampler's READY) within 20 s [E], the READY deadline
+from the opened channel and 5 s for the open, reports it
+`closed(pingTimeout)` (CN-06) and redials as after a lost link. A
+sampler that only stalled answers in time, and a run that stops
+withdraws its hint, which leaves liveness to the link's ping (5.1).
+*Rejected:* a hint from the missed deadline itself (the restart delay
+before the start grows with each failure without a reply, past 20 s from
+the sixth, so a live but overloaded host would be redialed about once a
+minute); closing the link on the hint (a stalled sampler would cost a
+reconnect); a liveness command over the link on the hint (one more
+channel and process on a link that may be dead, bounded only by the
+channel-open timeout); holding the fast sampler for the probe without
+the release (a slow sampler that cannot start, from a refused or
+timed-out channel or no READY, would hold the fast one until it does).
+
 ### 6.5 Parsing and fixtures
 
 - One pure parser per collector in `klabautermann_host`, tolerant of truncation,
@@ -2559,8 +2674,10 @@ no longer holds that value.
   `cron.{hourly,daily,weekly,monthly}` names, and
   `systemctl list-timers --all --output=json`. Schedules in words and next runs
   (JOB-02): a Dart cron parser in `klabautermann_host` (5 fields, ranges, steps,
-  names, macros, `CRON_TZ`) evaluated in the server's time zone and offset from
-  the probe, with DST transitions and `RandomizedDelaySec` annotated;
+  names, macros, `CRON_TZ`) evaluated in the engine in the server's time
+  zone: the zone database's rules for the probe's zone name, else the
+  probe's offset with the reason (D58), with DST transitions, runs within
+  an hour of one and `RandomizedDelaySec` annotated;
   `OnCalendar` expressions, which a timer's `timer_detail` read gives
   with its `RandomizedDelaySec` (D57), use `(unset TZ; systemd-analyze
   calendar --iterations=N -- '<expr>')` on the host instead of a
@@ -3961,19 +4078,27 @@ the engine in `engine_isolate.dart` beside it):
     `IdentityFile`, the hop's own port and user first; as a first hop,
     the final pass's route must still loop on the hop's own port and as
     its own user, else that pass's. Otherwise the host behind it is left
-    out and counted. The import makes this check for every hop, even
-    where ssh's final pass already fails before reaching it (for a host
-    that keeps its first pass, or behind a first hop that holds only by
-    looping). It is conservative there: it may leave out a host that
-    plain ssh reaches, but never keeps a route ssh does not take. With
+    out and counted. The import skips this check where ssh's final pass
+    already fails before the hop: for the hops of a host that keeps its
+    first pass, and behind a first hop that holds only by looping,
+    directly or through its own first hops. ssh reaches such a hop only
+    where no final pass is asked for, and every name then takes its
+    first pass. This assumes a system config asks for the final pass
+    for every name or for none, as `Match final all` does; one that asks
+    for it for some names only, such as a `CanonicalizeHostname` in a
+    `Host` block, falls outside what the import models, like any other
+    value that file sets. A first hop's own route is still checked as
+    where ssh dials that hop as itself, so a host behind a first hop
+    whose own route fails the check is left out and counted, although
+    ssh may reach it: that is conservative, not what ssh does. With
     `Host *.example.com` / `User ops` / `ProxyJump bastion.example.com`,
     `Host bastion` / `HostName bastion.example.com`, `Host bastion2` /
     `HostName b2.example.com` and `Host web` / `HostName 10.0.0.5` /
-    `ProxyJump bastion,bastion2`, plain ssh reaches web through bastion
-    and bastion2 and the final pass fails at bastion with a jumphost
-    loop, yet web is left out, because bastion2's final pass as a later
-    hop gives `User ops`. A host whose two passes give two routes ssh
-    would take is left out and counted. For a
+    `ProxyJump bastion,bastion2`, web imports through bastion and
+    bastion2, as plain ssh reaches it: the final pass fails at bastion
+    with a jumphost loop, so bastion2's final pass, which as a later hop
+    gives `User ops`, never applies. A host whose two passes give two
+    routes ssh would take is left out and counted. For a
     `HostName` whose final form the import cannot know (an address with
     a scope, or one the system resolver may read where Dart does not), a
     block whose pattern may match it counts as a `Match` that may apply.
@@ -4158,8 +4283,12 @@ the engine in `engine_isolate.dart` beside it):
   per-process CPU shares with the start time PRC-02 checks, plus the
   host's process count and how it chose the rows it sent (D48); for
   `identity`, the strings SYS-01 shows, resolved in the engine so the
-  host's JSON never crosses (6.5); and the parsed tables for `fs`,
-  `units`, `failedUnits`, `timers` and `cron`. A stream whose collector
+  host's JSON never crosses (6.5); the parsed tables for `fs`,
+  `units`, `failedUnits`, `timers` and `cron`; and for `cron` also the
+  jobs rows of its lines and `cron.<period>` scripts, with next runs from
+  the sample's time in the server zone, and that zone's name, why the
+  runs use the probe's fixed offset, or that no server zone is known
+  (7.7, D58). A stream whose collector
   reports a section status other than `ok` (6.2) gets
   `CollectorUnavailable` with that status as an enum and the end of the
   collector's error output (at most 4,096 characters), control
@@ -4181,9 +4310,9 @@ the engine in `engine_isolate.dart` beside it):
   `Sample.at`. A lost link or the background outranks a lost reading
   as the cause of a gap already open. The sample pipeline
   (`klabautermann_core/lib/src/sampling/sample_pipeline.dart`, K23)
-  builds these events from sampler outcomes; until the scheduler wires
-  it (K22), the engine records subscriptions and the profile and sends
-  none of them.
+  builds these events from sampler outcomes, and the sampling scheduler
+  (6.4, K22) runs it over each server's ready link. With links off the
+  engine records subscriptions and the profile and sends none of them.
 - **Version 3 (M2 logs).** Log streams joined version 3 the same way.
   The app picks the `streamId` of `OpenLogStream(streamId, spec)`, so it
   can close a stream before any answer arrives. Unlike a subscription

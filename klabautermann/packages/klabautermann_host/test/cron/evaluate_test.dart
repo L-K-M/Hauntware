@@ -1,6 +1,7 @@
 // Next-run evaluation tests (03 §7.7): fixed-offset evaluation, the
-// day jump, and DST gap/overlap annotation on a modelled Europe/Berlin
-// zone. The evaluator is pure and never throws.
+// day jump, and DST gap, overlap and near-transition annotation on a
+// modelled Europe/Berlin zone, for fixed-time and wildcard jobs. The
+// evaluator is pure and never throws.
 import 'package:klabautermann_host/klabautermann_host.dart';
 import 'package:test/test.dart';
 
@@ -22,6 +23,31 @@ ServerZone _berlinZone() => ServerZone(
   ianaName: 'Europe/Berlin',
   offsetAt: _berlin,
 );
+
+/// A zone at [std] hours outside `[spring, fall)` and an hour ahead
+/// inside it, as a rule carrier.
+ServerZone _dstZone(int std, DateTime spring, DateTime fall) => ServerZone(
+  offset: Duration(hours: std),
+  offsetAt: (utc) => Duration(
+    hours: std + (!utc.isBefore(spring) && utc.isBefore(fall) ? 1 : 0),
+  ),
+);
+
+/// The `(instant, annotation)` of the next five runs of [text] after
+/// [after] in [zone], modelled Berlin by default.
+List<(DateTime, CronDst)> _runs(
+  String text,
+  DateTime after, [
+  ServerZone? zone,
+]) => [
+  for (final r in nextCronRuns(
+    CronExpression.parse(text)!,
+    afterUtc: after,
+    zone: zone ?? _berlinZone(),
+    count: 5,
+  ))
+    (r.atUtc, r.dst),
+];
 
 void main() {
   test('a daily job at a fixed offset', () {
@@ -119,6 +145,40 @@ void main() {
     expect(runs.single.wall, DateTime.utc(2026, 3, 29, 2));
   });
 
+  test('a gap run fires when the wall day beside the gap does not match', () {
+    // cron runs each skipped minute with that minute's own date. Modelled
+    // Azores (-1, +0 from 2027-03-28T01:00Z) skips Sunday 00:00 to 00:59
+    // after a Saturday; modelled Nuuk (-2, -1 at the same instant) skips
+    // Saturday 23:00 to 23:59 before a Sunday.
+    final spring = DateTime.utc(2027, 3, 28, 1);
+    final fall = DateTime.utc(2027, 10, 31, 1);
+    final after = DateTime.utc(2027, 3, 20);
+    expect(_runs('30 0 * * 0', after, _dstZone(-1, spring, fall)).take(3), [
+      (DateTime.utc(2027, 3, 21, 1, 30), CronDst.none),
+      (spring, CronDst.gap),
+      (DateTime.utc(2027, 4, 4, 0, 30), CronDst.none),
+    ]);
+    expect(_runs('30 23 * * 6', after, _dstZone(-2, spring, fall)).take(3), [
+      (DateTime.utc(2027, 3, 21, 1, 30), CronDst.none),
+      (spring, CronDst.gap),
+      (DateTime.utc(2027, 4, 4, 0, 30), CronDst.none),
+    ]);
+  });
+
+  test('a gap right before the first instant scanned still runs', () {
+    // The scan starts at 01:00Z, the jump itself, whose minute before
+    // is wall 01:59 CET: 02:30 was skipped and runs at the jump.
+    expect(_runs('30 2 * * *', DateTime.utc(2026, 3, 29, 0, 59, 30)).first, (
+      DateTime.utc(2026, 3, 29, 1),
+      CronDst.gap,
+    ));
+    // From the jump on, that run is no longer strictly after.
+    expect(_runs('30 2 * * *', DateTime.utc(2026, 3, 29, 1)).first, (
+      DateTime.utc(2026, 3, 30, 0, 30),
+      CronDst.none,
+    ));
+  });
+
   test('a fall-back overlap run keeps the first occurrence', () {
     final runs = nextCronRuns(
       CronExpression.parse('0 2 * * *')!,
@@ -141,6 +201,159 @@ void main() {
     expect(runs.map((r) => r.dst).toList(), [CronDst.none, CronDst.none]);
     // Wall 02:00 at +02:00 is 00:00Z.
     expect(runs.first.atUtc, DateTime.utc(2026, 6, 11));
+  });
+
+  test('a fixed-time job does not run again in the repeated hour', () {
+    // Once the first 02:30 has passed, cron skips the repeated one.
+    final runs = nextCronRuns(
+      CronExpression.parse('30 2 * * *')!,
+      afterUtc: DateTime.utc(2026, 10, 25, 0, 45),
+      zone: _berlinZone(),
+      count: 1,
+    );
+    expect(runs.single.atUtc, DateTime.utc(2026, 10, 26, 1, 30));
+    expect(runs.single.dst, CronDst.none);
+  });
+
+  test('runs within an hour of a transition are marked near it', () {
+    // A fixed-time job: its hour field does not start with `*`.
+    List<(DateTime, CronDst)> runs(DateTime after, {ServerZone? zone}) =>
+        _runs('30 0-23 * * *', after, zone ?? _berlinZone());
+
+    // Spring forward at 01:00Z: wall 01:30 CET is half an hour before
+    // the jump, 02:30 does not exist, 03:30 CEST is half an hour after.
+    expect(runs(DateTime.utc(2026, 3, 28, 23)), [
+      (DateTime.utc(2026, 3, 28, 23, 30), CronDst.none),
+      (DateTime.utc(2026, 3, 29, 0, 30), CronDst.nearTransition),
+      (DateTime.utc(2026, 3, 29, 1), CronDst.gap),
+      (DateTime.utc(2026, 3, 29, 1, 30), CronDst.nearTransition),
+      (DateTime.utc(2026, 3, 29, 2, 30), CronDst.none),
+    ]);
+    // A fixed offset has no transitions.
+    expect(
+      runs(DateTime.utc(2026, 3, 28, 23), zone: _fixed(1)).map((r) => r.$2),
+      everyElement(CronDst.none),
+    );
+  });
+
+  test('a wildcard job runs by the clock at transitions', () {
+    // cronie and Debian's cron run a job whose minute or hour field
+    // starts with `*` by the clock: not for minutes a forward jump
+    // skips, and again in the hour a backward one repeats.
+    expect(_runs('30 * * * *', DateTime.utc(2026, 3, 28, 23)), [
+      (DateTime.utc(2026, 3, 28, 23, 30), CronDst.none),
+      (DateTime.utc(2026, 3, 29, 0, 30), CronDst.nearTransition),
+      (DateTime.utc(2026, 3, 29, 1, 30), CronDst.nearTransition),
+      (DateTime.utc(2026, 3, 29, 2, 30), CronDst.none),
+      (DateTime.utc(2026, 3, 29, 3, 30), CronDst.none),
+    ]);
+    expect(_runs('30 * * * *', DateTime.utc(2026, 10, 24, 23)), [
+      (DateTime.utc(2026, 10, 24, 23, 30), CronDst.none),
+      (DateTime.utc(2026, 10, 25, 0, 30), CronDst.nearTransition),
+      (DateTime.utc(2026, 10, 25, 1, 30), CronDst.nearTransition),
+      (DateTime.utc(2026, 10, 25, 2, 30), CronDst.none),
+      (DateTime.utc(2026, 10, 25, 3, 30), CronDst.none),
+    ]);
+    // `@hourly` is `0 * * * *`: wall 02:00 is skipped, 03:00 runs once.
+    expect(_runs('@hourly', DateTime.utc(2026, 3, 29, 0, 30)).take(2), [
+      (DateTime.utc(2026, 3, 29, 1), CronDst.nearTransition),
+      (DateTime.utc(2026, 3, 29, 2), CronDst.none),
+    ]);
+  });
+
+  test('a line clock follows its zone under the server\'s repeats', () {
+    // A CRON_TZ line (D58) under modelled Berlin, which repeats
+    // 01:00Z to 02:00Z on 2026-10-25. Modelled New York (-5, -4 from
+    // 2026-03-08T07:00Z to 2026-11-01T06:00Z) falls back apart from
+    // it; modelled London (+0, +1 over Berlin's window) with it.
+    final newYork = _dstZone(
+      -5,
+      DateTime.utc(2026, 3, 8, 7),
+      DateTime.utc(2026, 11, 1, 6),
+    );
+    final london = _dstZone(
+      0,
+      DateTime.utc(2026, 3, 29, 1),
+      DateTime.utc(2026, 10, 25, 1),
+    );
+    final utc = _fixed(0);
+    List<(DateTime, CronDst)> line(
+      String text,
+      DateTime after,
+      ServerZone zone, {
+      bool serverKnown = true,
+    }) => [
+      for (final r in nextCronRuns(
+        CronExpression.parse(text)!,
+        afterUtc: after,
+        zone: zone,
+        clock: CronClock.line,
+        serverZone: serverKnown ? _berlinZone() : null,
+        count: 3,
+      ))
+        (r.atUtc, r.dst),
+    ];
+
+    // The line zone's gap is missed: 02:30 next runs on 2026-03-09.
+    expect(line('30 2 * * *', DateTime.utc(2026, 3, 7, 12), newYork).first, (
+      DateTime.utc(2026, 3, 9, 6, 30),
+      CronDst.none,
+    ));
+    // Its repeated 01:30 runs twice, or once in the server's window.
+    expect(line('30 1 * * *', DateTime.utc(2026, 10, 31, 12), newYork), [
+      (DateTime.utc(2026, 11, 1, 5, 30), CronDst.nearTransition),
+      (DateTime.utc(2026, 11, 1, 6, 30), CronDst.nearTransition),
+      (DateTime.utc(2026, 11, 2, 6, 30), CronDst.none),
+    ]);
+    expect(line('30 1 * * *', DateTime.utc(2026, 10, 24, 12), london), [
+      (DateTime.utc(2026, 10, 25, 0, 30), CronDst.overlap),
+      (DateTime.utc(2026, 10, 26, 1, 30), CronDst.none),
+      (DateTime.utc(2026, 10, 27, 1, 30), CronDst.none),
+    ]);
+    // A zone falling back an hour after Berlin (0, -1 from 02:00Z)
+    // repeats 01:30 first inside the server's window: only the second
+    // pass runs.
+    final late = _dstZone(
+      -1,
+      DateTime.utc(2026, 3, 29, 2),
+      DateTime.utc(2026, 10, 25, 2),
+    );
+    expect(line('30 1 * * *', DateTime.utc(2026, 10, 24, 12), late), [
+      (DateTime.utc(2026, 10, 25, 2, 30), CronDst.nearTransition),
+      (DateTime.utc(2026, 10, 26, 2, 30), CronDst.none),
+      (DateTime.utc(2026, 10, 27, 2, 30), CronDst.none),
+    ]);
+    // A wildcard job runs in the server's window, a fixed-time one not;
+    // without a known server zone nothing marks or drops them.
+    final window = DateTime.utc(2026, 10, 25, 0, 45);
+    expect(line('30 * * * *', window, utc).first, (
+      DateTime.utc(2026, 10, 25, 1, 30),
+      CronDst.nearTransition,
+    ));
+    expect(line('30 0-23 * * *', window, utc).first, (
+      DateTime.utc(2026, 10, 25, 2, 30),
+      CronDst.none,
+    ));
+    expect(line('30 0-23 * * *', window, utc, serverKnown: false).first, (
+      DateTime.utc(2026, 10, 25, 1, 30),
+      CronDst.none,
+    ));
+    // Nor does a line zone that falls back stand in for the unknown
+    // server's: London's repeated 01:30 runs in both passes, marked for
+    // London's own transition only.
+    expect(
+      line(
+        '30 1 * * *',
+        DateTime.utc(2026, 10, 24, 12),
+        london,
+        serverKnown: false,
+      ),
+      [
+        (DateTime.utc(2026, 10, 25, 0, 30), CronDst.nearTransition),
+        (DateTime.utc(2026, 10, 25, 1, 30), CronDst.nearTransition),
+        (DateTime.utc(2026, 10, 26, 1, 30), CronDst.none),
+      ],
+    );
   });
 
   test('@reboot and nonpositive counts yield no runs', () {

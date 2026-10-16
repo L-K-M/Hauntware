@@ -842,4 +842,80 @@ void main() {
       },
     );
   });
+
+  group('a dead-peer hint (K22)', () {
+    const pingTimeout = LinkClosed(LinkClosedReason.pingTimeout);
+
+    test('closes a link that stays silent for the grace, which then backs '
+        'off and redials as after a lost link', () async {
+      final link = await linked();
+      supervisor.deadPeerHint('s1', link);
+      // A second hint while the first runs keeps its deadline.
+      await clock.elapse(const Duration(seconds: 10));
+      supervisor.deadPeerHint('s1', link);
+
+      await clock.elapse(
+        kDeadPeerGrace - const Duration(seconds: 10, milliseconds: 1),
+      );
+      expect(link.closes, 0);
+      await clock.elapse(const Duration(milliseconds: 1));
+      expect(link.closes, 1);
+      expect(supervisor.link('s1'), isNull);
+      expect(statuses().skip(2), [
+        pingTimeout,
+        LinkBackoff(clock.now.add(const Duration(seconds: 1))),
+      ]);
+
+      await clock.elapse(const Duration(seconds: 1));
+      expect(calls.map((c) => (c.serverId, c.purpose)), [
+        ('s1', _interactive),
+        ('s1', _background),
+      ]);
+    });
+
+    test('cleared in time keeps the link, and a hint about another link '
+        'changes nothing', () async {
+      final link = await linked();
+      supervisor.deadPeerHint('s1', link);
+      await clock.elapse(const Duration(seconds: 19));
+      supervisor.clearDeadPeerHint('s1', link);
+      supervisor.deadPeerHint('s1', _Link());
+      supervisor.deadPeerHint('s2', link);
+
+      await clock.elapse(const Duration(minutes: 1));
+      expect(link.closes, 0);
+      expect(statuses(), [const LinkConnecting(), const LinkReady()]);
+    });
+
+    test('ends with a link lost underneath, so the redialed link\'s hint '
+        'runs a grace of its own', () async {
+      final lost = await linked();
+      supervisor.deadPeerHint('s1', lost);
+      lost.become(const SshLinkClosed(SshLinkClosedReason.linkLost));
+      await clock.elapse(Duration.zero);
+      await clock.elapse(const Duration(seconds: 1));
+      final redial = calls.last.succeed();
+      await clock.elapse(Duration.zero);
+
+      supervisor.deadPeerHint('s1', redial);
+      await clock.elapse(kDeadPeerGrace);
+      expect(redial.closes, 1);
+      expect(statuses().where((s) => s == pingTimeout), hasLength(1));
+    });
+
+    test('ends with a link its owner closes, so the next link\'s hint runs '
+        'a grace of its own', () async {
+      final first = await linked();
+      supervisor.deadPeerHint('s1', first);
+      await clock.elapse(const Duration(seconds: 10));
+      supervisor.disconnect('s1');
+      expect(statuses().last, _ownerClosed);
+
+      final next = await linked();
+      supervisor.deadPeerHint('s1', next);
+      await clock.elapse(kDeadPeerGrace);
+      expect(next.closes, 1);
+      expect(statuses().where((s) => s == pingTimeout), hasLength(1));
+    });
+  });
 }

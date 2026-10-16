@@ -1,7 +1,7 @@
 {
-  "nowUtc": "2026-10-14T12:00:00.000Z",
-  "zoneOffsetMinutes": 120,
+  "at": "2026-10-15T12:00:03.000Z",
   "zoneName": "Europe/Berlin",
+  "zoneFallback": null,
   "jobs": [
     {
       "kind": "cron",
@@ -26,14 +26,32 @@
       },
       "nextRuns": [
         {
-          "atUtc": "2026-10-14T12:17:00.000Z",
-          "wall": "2026-10-14T14:17:00.000Z",
+          "atUtc": "2026-10-15T12:17:00.000Z",
+          "wall": "2026-10-15T14:17:00.000Z",
           "offsetMinutes": 120,
           "dst": "none"
         },
         {
-          "atUtc": "2026-10-14T13:17:00.000Z",
-          "wall": "2026-10-14T15:17:00.000Z",
+          "atUtc": "2026-10-15T13:17:00.000Z",
+          "wall": "2026-10-15T15:17:00.000Z",
+          "offsetMinutes": 120,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-15T14:17:00.000Z",
+          "wall": "2026-10-15T16:17:00.000Z",
+          "offsetMinutes": 120,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-15T15:17:00.000Z",
+          "wall": "2026-10-15T17:17:00.000Z",
+          "offsetMinutes": 120,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-15T16:17:00.000Z",
+          "wall": "2026-10-15T18:17:00.000Z",
           "offsetMinutes": 120,
           "dst": "none"
         }
@@ -63,14 +81,32 @@
       },
       "nextRuns": [
         {
-          "atUtc": "2026-10-15T04:25:00.000Z",
-          "wall": "2026-10-15T06:25:00.000Z",
+          "atUtc": "2026-10-16T04:25:00.000Z",
+          "wall": "2026-10-16T06:25:00.000Z",
           "offsetMinutes": 120,
           "dst": "none"
         },
         {
-          "atUtc": "2026-10-16T04:25:00.000Z",
-          "wall": "2026-10-16T06:25:00.000Z",
+          "atUtc": "2026-10-17T04:25:00.000Z",
+          "wall": "2026-10-17T06:25:00.000Z",
+          "offsetMinutes": 120,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-18T04:25:00.000Z",
+          "wall": "2026-10-18T06:25:00.000Z",
+          "offsetMinutes": 120,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-19T04:25:00.000Z",
+          "wall": "2026-10-19T06:25:00.000Z",
+          "offsetMinutes": 120,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-20T04:25:00.000Z",
+          "wall": "2026-10-20T06:25:00.000Z",
           "offsetMinutes": 120,
           "dst": "none"
         }
@@ -106,9 +142,27 @@
           "dst": "none"
         },
         {
-          "atUtc": "2026-10-25T04:47:00.000Z",
+          "atUtc": "2026-10-25T05:47:00.000Z",
           "wall": "2026-10-25T06:47:00.000Z",
-          "offsetMinutes": 120,
+          "offsetMinutes": 60,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-11-01T05:47:00.000Z",
+          "wall": "2026-11-01T06:47:00.000Z",
+          "offsetMinutes": 60,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-11-08T05:47:00.000Z",
+          "wall": "2026-11-08T06:47:00.000Z",
+          "offsetMinutes": 60,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-11-15T05:47:00.000Z",
+          "wall": "2026-11-15T06:47:00.000Z",
+          "offsetMinutes": 60,
           "dst": "none"
         }
       ],
@@ -137,15 +191,33 @@
       },
       "nextRuns": [
         {
-          "atUtc": "2026-11-01T04:52:00.000Z",
+          "atUtc": "2026-11-01T05:52:00.000Z",
           "wall": "2026-11-01T06:52:00.000Z",
-          "offsetMinutes": 120,
+          "offsetMinutes": 60,
           "dst": "none"
         },
         {
-          "atUtc": "2026-12-01T04:52:00.000Z",
+          "atUtc": "2026-12-01T05:52:00.000Z",
           "wall": "2026-12-01T06:52:00.000Z",
-          "offsetMinutes": 120,
+          "offsetMinutes": 60,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2027-01-01T05:52:00.000Z",
+          "wall": "2027-01-01T06:52:00.000Z",
+          "offsetMinutes": 60,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2027-02-01T05:52:00.000Z",
+          "wall": "2027-02-01T06:52:00.000Z",
+          "offsetMinutes": 60,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2027-03-01T05:52:00.000Z",
+          "wall": "2027-03-01T06:52:00.000Z",
+          "offsetMinutes": 60,
           "dst": "none"
         }
       ],
@@ -180,9 +252,27 @@
           "dst": "none"
         },
         {
-          "atUtc": "2026-10-25T01:30:00.000Z",
+          "atUtc": "2026-10-25T02:30:00.000Z",
           "wall": "2026-10-25T03:30:00.000Z",
-          "offsetMinutes": 120,
+          "offsetMinutes": 60,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-11-01T02:30:00.000Z",
+          "wall": "2026-11-01T03:30:00.000Z",
+          "offsetMinutes": 60,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-11-08T02:30:00.000Z",
+          "wall": "2026-11-08T03:30:00.000Z",
+          "offsetMinutes": 60,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-11-15T02:30:00.000Z",
+          "wall": "2026-11-15T03:30:00.000Z",
+          "offsetMinutes": 60,
           "dst": "none"
         }
       ],
@@ -215,14 +305,32 @@
       ],
       "nextRuns": [
         {
-          "atUtc": "2026-10-15T04:25:00.000Z",
-          "wall": "2026-10-15T06:25:00.000Z",
+          "atUtc": "2026-10-16T04:25:00.000Z",
+          "wall": "2026-10-16T06:25:00.000Z",
           "offsetMinutes": 120,
           "dst": "none"
         },
         {
-          "atUtc": "2026-10-16T04:25:00.000Z",
-          "wall": "2026-10-16T06:25:00.000Z",
+          "atUtc": "2026-10-17T04:25:00.000Z",
+          "wall": "2026-10-17T06:25:00.000Z",
+          "offsetMinutes": 120,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-18T04:25:00.000Z",
+          "wall": "2026-10-18T06:25:00.000Z",
+          "offsetMinutes": 120,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-19T04:25:00.000Z",
+          "wall": "2026-10-19T06:25:00.000Z",
+          "offsetMinutes": 120,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-20T04:25:00.000Z",
+          "wall": "2026-10-20T06:25:00.000Z",
           "offsetMinutes": 120,
           "dst": "none"
         }
@@ -256,51 +364,37 @@
       ],
       "nextRuns": [
         {
-          "atUtc": "2026-10-15T04:25:00.000Z",
-          "wall": "2026-10-15T06:25:00.000Z",
+          "atUtc": "2026-10-16T04:25:00.000Z",
+          "wall": "2026-10-16T06:25:00.000Z",
           "offsetMinutes": 120,
           "dst": "none"
         },
         {
-          "atUtc": "2026-10-16T04:25:00.000Z",
-          "wall": "2026-10-16T06:25:00.000Z",
+          "atUtc": "2026-10-17T04:25:00.000Z",
+          "wall": "2026-10-17T06:25:00.000Z",
+          "offsetMinutes": 120,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-18T04:25:00.000Z",
+          "wall": "2026-10-18T06:25:00.000Z",
+          "offsetMinutes": 120,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-19T04:25:00.000Z",
+          "wall": "2026-10-19T06:25:00.000Z",
+          "offsetMinutes": 120,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-20T04:25:00.000Z",
+          "wall": "2026-10-20T06:25:00.000Z",
           "offsetMinutes": 120,
           "dst": "none"
         }
       ],
       "runsUnknown": null
-    },
-    {
-      "kind": "timer",
-      "id": "timer|apt-daily.timer",
-      "timer": {
-        "unit": "apt-daily.timer",
-        "activates": "apt-daily.service",
-        "nextUs": 1750003600000000,
-        "leftUs": 3600000000,
-        "lastUs": 1749996400000000,
-        "passedUs": 3600000000,
-        "nextText": null,
-        "lastText": null
-      },
-      "triggers": null,
-      "randomizedDelayUs": null
-    },
-    {
-      "kind": "timer",
-      "id": "timer|logrotate.timer",
-      "timer": {
-        "unit": "logrotate.timer",
-        "activates": "logrotate.service",
-        "nextUs": 1750032000000000,
-        "leftUs": 32000000000,
-        "lastUs": 1749945600000000,
-        "passedUs": 54400000000,
-        "nextText": null,
-        "lastText": null
-      },
-      "triggers": null,
-      "randomizedDelayUs": null
     }
   ]
 }

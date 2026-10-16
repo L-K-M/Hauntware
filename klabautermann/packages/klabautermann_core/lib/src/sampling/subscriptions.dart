@@ -3,8 +3,8 @@ import '../engine/protocol.dart';
 /// The sampling subscriptions the engine holds (03 §6.4, D45): each keyed
 /// by its server and subscription id with its own streams, so dropping one
 /// surface's subscription never stops another's. The engine samples the
-/// union of a server's streams at [profile]'s cadence; the scheduler that
-/// does so lands with the sampling wiring.
+/// union of a server's streams at [profile]'s cadence
+/// (`SamplingScheduler`).
 final class SamplingSubscriptions {
   /// Server id to subscription id to streams; no entry holds an empty set.
   final Map<String, Map<String, Set<SampleStream>>> _byServer = {};
