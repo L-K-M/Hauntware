@@ -121,12 +121,14 @@ const double _headerMaxShare = 0.4;
 /// grows with large text instead of clipping (A11Y-09), and where it
 /// would pass [_headerMaxShare] of the height, as on a landscape phone or
 /// a narrow desktop window at 200 % text, it scrolls, so [child] keeps the
-/// rest.
+/// rest. [banner], when given, sits between them, outside the header's
+/// scroll.
 class HeaderedBody extends StatelessWidget {
   const HeaderedBody({
     super.key,
     required this.header,
     required this.headerPadding,
+    this.banner,
     required this.child,
   });
 
@@ -134,6 +136,10 @@ class HeaderedBody extends StatelessWidget {
 
   /// Around [header], inside its scroll view.
   final EdgeInsetsGeometry headerPadding;
+
+  /// Such as the return banner (03 §9.5 item 6), which bounds its own
+  /// height.
+  final Widget? banner;
 
   final Widget child;
 
@@ -153,6 +159,7 @@ class HeaderedBody extends StatelessWidget {
             child: header,
           ),
         ),
+        ?banner,
         Expanded(child: child),
       ],
     ),

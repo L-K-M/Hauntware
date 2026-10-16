@@ -1,0 +1,426 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:klabautermann_app/controllers/monitoring_controller.dart';
+import 'package:klabautermann_app/l10n/app_localizations.dart';
+import 'package:klabautermann_app/l10n/app_localizations_en.dart';
+import 'package:klabautermann_app/ui/server_coverage.dart';
+import 'package:klabautermann_core/klabautermann_core.dart';
+
+import 'support/charts.dart'
+    show
+        chartTheme,
+        goldenFontFamily,
+        goldensCompareHere,
+        loadChartDateFormats,
+        loadGoldenFonts;
+import 'support/fake_engine.dart';
+import 'support/harness.dart';
+
+const _serverId = 'srv-1';
+const _phone = Size(390, 844);
+
+/// When the card's clock says it is; local, like the engine's stamps.
+final _start = DateTime(2026, 10, 16, 12, 10);
+
+UnitsResult _units(Map<String, String> active) => UnitsResult(
+  UnitsSnapshot(
+    units: [
+      for (final MapEntry(key: unit, value: state) in active.entries)
+        SystemdUnit(unit: unit, load: 'loaded', active: state, sub: state),
+    ],
+    format: UnitListFormat.json,
+  ),
+);
+
+CoreResult _cpu(double busy) => CoreResult(cpu: CpuPercentages(const [], busy));
+
+final class _Card {
+  _Card(this.engine, this.visible);
+
+  final FakeEngineClient engine;
+  final ValueNotifier<bool> visible;
+  DateTime now = _start;
+  int _seq = 0;
+
+  void sample(SampleStream stream, SampleResult result, {DateTime? at}) =>
+      engine.emit(
+        Sample(
+          serverId: _serverId,
+          stream: stream,
+          seq: ++_seq,
+          at: at ?? now,
+          result: result,
+        ),
+      );
+
+  void phase(SamplingPhase phase, DateTime since) => engine.emit(
+    SamplingState(serverId: _serverId, phase: phase, since: since),
+  );
+
+  /// The card's `units` subscription requests, in order.
+  List<EngineRequest> get unitsReads => [
+    for (final request in engine.sent)
+      if (request case Subscribe(
+        streams: final streams,
+      ) when streams.contains(SampleStream.units))
+        request
+      else if (request is Unsubscribe)
+        request,
+  ];
+}
+
+Future<_Card> _pumpCard(
+  WidgetTester tester, {
+  Size size = _phone,
+  double textScale = 1,
+  Brightness brightness = Brightness.light,
+  bool visible = true,
+}) async {
+  tester.view.physicalSize = size;
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.reset);
+
+  final engine = FakeEngineClient();
+  final shown = ValueNotifier(visible);
+  final card = _Card(engine, shown);
+  final monitoring = MonitoringController(engine, now: () => card.now);
+  addTearDown(() async {
+    shown.dispose();
+    monitoring.dispose();
+    await engine.close();
+  });
+
+  final theme = chartTheme(brightness, fontFamily: goldenFontFamily);
+  await tester.pumpWidget(
+    MaterialApp(
+      debugShowCheckedModeBanner: false,
+      theme: theme,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: MediaQuery.withClampedTextScaling(
+        minScaleFactor: textScale,
+        maxScaleFactor: textScale,
+        child: Scaffold(
+          body: SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: ValueListenableBuilder(
+              valueListenable: shown,
+              builder: (context, visible, _) => ServerCoverageCard(
+                monitoring: monitoring,
+                serverId: _serverId,
+                visible: visible,
+              ),
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
+  return card;
+}
+
+/// 03 §9.5 items 3, 5 and 6: a server's coverage card and inspector
+/// section, the session chart's labelled gaps and the phone's return
+/// banner.
+void main() {
+  setUpAll(() async {
+    await loadChartDateFormats();
+    if (goldensCompareHere) await loadGoldenFonts();
+  });
+
+  test('the external-monitor line says what K04\'s rule found, or why it '
+      'cannot tell', () {
+    final l10n = AppLocalizationsEn();
+    Sample units(SampleResult result) => Sample(
+      serverId: _serverId,
+      stream: SampleStream.units,
+      seq: 1,
+      at: _start,
+      result: result,
+    );
+    String line(SampleResult? latest, [SampleResult? reading]) =>
+        externalMonitorLine(
+          l10n,
+          latest: latest == null ? null : units(latest),
+          reading: reading == null ? null : units(reading),
+        ).$2;
+    const failed = CollectorUnavailable(CollectorUnavailableReason.denied);
+
+    expect(
+      line(null),
+      'Looking for an external monitor among this server\'s systemd '
+      'services.',
+    );
+    const unknown =
+        'Klabautermann cannot tell whether an external monitor runs: this '
+        'server\'s systemd services could not be listed.';
+    expect(line(failed), unknown);
+    // An empty list means systemctl failed behind its header (K04).
+    expect(line(_units({}), _units({})), unknown);
+
+    final running = _units({
+      'netdata.service': 'active',
+      'telegraf.service': 'inactive',
+      'alloy.service': 'active',
+    });
+    // A failed later list keeps the last one that loaded.
+    expect(
+      line(failed, running),
+      'External monitor running: netdata.service, alloy.service. It may '
+      'cover this server while Klabautermann is closed; Klabautermann does '
+      'not read it.',
+    );
+    final stopped = _units({'telegraf.service': 'failed'});
+    expect(
+      line(stopped, stopped),
+      'No external monitor is running. Installed but stopped: '
+      'telegraf.service.',
+    );
+    final none = _units({'ssh.service': 'active'});
+    expect(
+      line(none, none),
+      'No external monitor found among this server\'s systemd services.',
+    );
+  });
+
+  testWidgets('the card shows the T0 badge and live reading, and reads the '
+      'units list once while it shows', (tester) async {
+    final card = await _pumpCard(tester);
+    expect(find.text('T0'), findsOneWidget);
+    expect(find.text('SSH while Klabautermann is open'), findsOneWidget);
+    expect(
+      find.text('Reads this server only while you have it open.'),
+      findsOneWidget,
+    );
+    // No control offers a tier that does not exist yet.
+    expect(find.byType(ButtonStyleButton), findsNothing);
+
+    final [subscribe as Subscribe] = card.unitsReads;
+    expect(subscribe.streams, {SampleStream.units});
+
+    card.sample(SampleStream.units, _units({'netdata.service': 'active'}));
+    await tester.pumpAndSettle();
+    expect(
+      find.textContaining('External monitor running: netdata.service.'),
+      findsOneWidget,
+    );
+    final [_, unsubscribe as Unsubscribe] = card.unitsReads;
+    expect(unsubscribe.subscriptionId, subscribe.subscriptionId);
+
+    card.phase(SamplingPhase.pausedInBackground, _start.toUtc());
+    await tester.pumpAndSettle();
+    expect(
+      find.text('Paused while Klabautermann is in the background.'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('a hidden card reads nothing', (tester) async {
+    final card = await _pumpCard(tester, visible: false);
+    expect(card.unitsReads, isEmpty);
+
+    card.visible.value = true;
+    await tester.pumpAndSettle();
+    expect(card.unitsReads, hasLength(1));
+  });
+
+  testWidgets('the session chart labels a gap with why it has no data', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    final card = await _pumpCard(tester);
+    final second = const Duration(seconds: 1);
+    card
+      ..phase(SamplingPhase.sampling, _start.subtract(second * 60).toUtc())
+      ..sample(SampleStream.core, _cpu(20), at: _start.subtract(second * 50))
+      ..sample(SampleStream.core, _cpu(30), at: _start.subtract(second * 48))
+      ..phase(
+        SamplingPhase.waitingForLink,
+        _start.subtract(second * 40).toUtc(),
+      );
+    await tester.pumpAndSettle();
+
+    // The legend names the reason, the band reads it to screen readers.
+    expect(find.text('disconnected'), findsOneWidget);
+    expect(
+      find.semantics.byLabel(RegExp(r'^No data since .*: disconnected$')),
+      findsOne,
+    );
+    expect(
+      find.text('Recorded by this device while connected'),
+      findsOneWidget,
+    );
+    semantics.dispose();
+  });
+
+  testWidgets('the desktop inspector shows the selected server\'s coverage', (
+    tester,
+  ) async {
+    final harness = await pumpApp(tester, servers: twoServers);
+    expect(
+      find.text(
+        'Details, alerts, operations and coverage appear here once you '
+        'select a server.',
+      ),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.text('web-1'));
+    await tester.pumpAndSettle();
+    expect(find.text('Recent gaps'), findsOneWidget);
+    expect(find.text('No recent gaps.'), findsOneWidget);
+    expect(
+      find.text('Reads this server only while you have it open.'),
+      findsNWidgets(2),
+    );
+    // The inspector gives each gap in coverage its reason.
+    expect(
+      find.text(
+        'Nothing checks your servers, so nothing can warn you about '
+        'them.',
+      ),
+      findsOneWidget,
+    );
+
+    final now = DateTime.now();
+    var seq = 0;
+    void sample(DateTime at, [SampleResult? result]) => harness.engine.emit(
+      Sample(
+        serverId: _serverId,
+        stream: SampleStream.core,
+        seq: ++seq,
+        at: at,
+        result: result ?? _cpu(10),
+      ),
+    );
+    sample(now.subtract(const Duration(seconds: 6)));
+    sample(
+      now.subtract(const Duration(seconds: 4)),
+      const CollectorUnavailable(CollectorUnavailableReason.timeout),
+    );
+    sample(now.subtract(const Duration(seconds: 2)));
+    await tester.pumpAndSettle();
+    expect(find.textContaining(RegExp(r': reading failed$')), findsOneWidget);
+    expect(find.textContaining(RegExp(r'^Updated \d+ s ago$')), findsWidgets);
+    expect(find.text('No recent gaps.'), findsNothing);
+  });
+
+  group('the return banner (03 §9.5 item 6)', () {
+    const banner =
+        r'^Paused .+ to .+ while in background\. No data for that period\.$';
+
+    /// Sends the app to the background and back; resumed after the test.
+    void awayAndBack(WidgetTester tester) {
+      addTearDown(
+        () => tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.resumed,
+        ),
+      );
+      for (final state in [
+        AppLifecycleState.inactive,
+        AppLifecycleState.hidden,
+        AppLifecycleState.paused,
+        AppLifecycleState.hidden,
+        AppLifecycleState.inactive,
+        AppLifecycleState.resumed,
+      ]) {
+        tester.binding.handleAppLifecycleStateChanged(state);
+      }
+    }
+
+    testWidgets('says a phone paused the open server until dismissed', (
+      tester,
+    ) async {
+      await pumpApp(tester, size: _phone, servers: twoServers);
+      await tester.tap(find.text('web-1'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining(RegExp(banner)), findsNothing);
+
+      awayAndBack(tester);
+      await tester.pumpAndSettle();
+      expect(find.textContaining(RegExp(banner)), findsOneWidget);
+      // It wraps rather than clips at 200 % text (A11Y-09).
+      tester.platformDispatcher.textScaleFactorTestValue = 2;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+
+      await tester.tap(find.text('Dismiss'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining(RegExp(banner)), findsNothing);
+    });
+
+    testWidgets('stays away when nothing was sampled', (tester) async {
+      await pumpApp(tester, size: _phone, servers: twoServers);
+      awayAndBack(tester);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('web-1'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining(RegExp(banner)), findsNothing);
+    });
+
+    testWidgets('never shows on a desktop, which never pauses', (tester) async {
+      // A narrow desktop window takes the phone's screens.
+      await pumpApp(tester, size: _phone, servers: twoServers);
+      await tester.tap(find.text('web-1'));
+      await tester.pumpAndSettle();
+      awayAndBack(tester);
+      await tester.pumpAndSettle();
+      expect(find.textContaining(RegExp(banner)), findsNothing);
+    }, variant: TargetPlatformVariant.desktop());
+  });
+
+  for (final (name, size) in [
+    ('phone', _phone),
+    ('desktop', const Size(1280, 800)),
+  ]) {
+    testWidgets('lays out without overflow at 200 % text on the $name', (
+      tester,
+    ) async {
+      final card = await _pumpCard(tester, size: size, textScale: 2);
+      card
+        ..sample(SampleStream.units, _units({'netdata.service': 'active'}))
+        ..sample(SampleStream.core, _cpu(25));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  testWidgets('the inspector lays out without overflow at 200 % text', (
+    tester,
+  ) async {
+    await pumpApp(tester, servers: twoServers);
+    await tester.tap(find.text('web-1'));
+    await tester.pumpAndSettle();
+    tester.platformDispatcher.textScaleFactorTestValue = 2;
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+  });
+
+  group('golden', () {
+    // 03 §11.1: a running monitor and a session with a background pause.
+    for (final brightness in Brightness.values) {
+      testWidgets('card, ${brightness.name}', (tester) async {
+        final card = await _pumpCard(tester, brightness: brightness);
+        card.sample(SampleStream.units, _units({'netdata.service': 'active'}));
+        final from = _start.subtract(const Duration(minutes: 9));
+        for (var second = 0; second < 540; second += 2) {
+          final at = from.add(Duration(seconds: second));
+          if (second == 200) {
+            card.phase(SamplingPhase.pausedInBackground, at.toUtc());
+          }
+          if (second == 320) card.phase(SamplingPhase.sampling, at.toUtc());
+          if (second >= 200 && second < 320) continue;
+          card.sample(SampleStream.core, _cpu(30 + (second % 60) / 2), at: at);
+        }
+        await tester.pumpAndSettle();
+        await expectLater(
+          find.byType(ServerCoverageCard),
+          matchesGoldenFile('goldens/server_coverage_${brightness.name}.png'),
+        );
+      }, skip: !goldensCompareHere);
+    }
+  });
+}

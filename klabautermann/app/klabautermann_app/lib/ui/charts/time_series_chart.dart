@@ -252,6 +252,7 @@ String _gapLabel(ChartGapReason reason, ChartStrings strings) =>
       ChartGapReason.appClosed => strings.gapAppClosed,
       ChartGapReason.background => strings.gapBackground,
       ChartGapReason.disconnected => strings.gapDisconnected,
+      ChartGapReason.readingFailed => strings.gapReadingFailed,
     };
 
 /// The first time axis tick at or after [from] on a grid of [step]

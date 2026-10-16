@@ -862,6 +862,114 @@ abstract class AppLocalizations {
   /// **'T0: sampled only while open'**
   String get coverageServerChip;
 
+  /// Heading of a server's coverage card on its Overview and of the coverage section in the desktop inspector (03 §9.5 item 3).
+  ///
+  /// In en, this message translates to:
+  /// **'Coverage'**
+  String get coverageServerTitle;
+
+  /// Under the T0 badge of a server's coverage while the engine samples it.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading this server now, while you have it open.'**
+  String get coverageLiveSampling;
+
+  /// Under the T0 badge of a server's coverage while its readings wait for the SSH connection.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for the connection to this server.'**
+  String get coverageLiveWaiting;
+
+  /// Under the T0 badge of a server's coverage while a phone app is in the background and reading is paused.
+  ///
+  /// In en, this message translates to:
+  /// **'Paused while Klabautermann is in the background.'**
+  String get coverageLivePaused;
+
+  /// Under the T0 badge of a server's coverage while no shown panel samples it, such as the Logs or Access tab.
+  ///
+  /// In en, this message translates to:
+  /// **'Not reading this server now: the open panel takes no readings.'**
+  String get coverageLiveIdle;
+
+  /// Under the T0 badge of a server's coverage before the engine has said what reading the server is doing.
+  ///
+  /// In en, this message translates to:
+  /// **'Reads this server only while you have it open.'**
+  String get coverageLivePolicy;
+
+  /// Heading over a server's session chart in its coverage card: the readings this device took, with hatched bands where it has none.
+  ///
+  /// In en, this message translates to:
+  /// **'{minutes, plural, =1{The last minute on this device} other{The last {minutes} minutes on this device}}'**
+  String coverageSessionTitle(int minutes);
+
+  /// Legend and screen-reader name of the session chart's line: the share of time the server's CPUs were busy.
+  ///
+  /// In en, this message translates to:
+  /// **'CPU busy'**
+  String get coverageSessionLane;
+
+  /// The session chart's source line (03 §9.5 item 5): where its readings come from.
+  ///
+  /// In en, this message translates to:
+  /// **'Recorded by this device while connected'**
+  String get coverageSessionSource;
+
+  /// A server's coverage when its systemd services include a running monitoring agent such as node_exporter or Netdata (03 §9.5 item 3). units lists the running units' names, server data shown as written.
+  ///
+  /// In en, this message translates to:
+  /// **'External monitor running: {units}. It may cover this server while Klabautermann is closed; Klabautermann does not read it.'**
+  String coverageMonitorRunning(String units);
+
+  /// A server's coverage when monitoring agents are installed as systemd services but none runs. units lists their names, server data shown as written.
+  ///
+  /// In en, this message translates to:
+  /// **'No external monitor is running. Installed but stopped: {units}.'**
+  String coverageMonitorStopped(String units);
+
+  /// A server's coverage when its full systemd service list holds no known monitoring agent. A monitor outside systemd is not seen.
+  ///
+  /// In en, this message translates to:
+  /// **'No external monitor found among this server\'s systemd services.'**
+  String get coverageMonitorNone;
+
+  /// A server's coverage while its systemd service list has not arrived yet.
+  ///
+  /// In en, this message translates to:
+  /// **'Looking for an external monitor among this server\'s systemd services.'**
+  String get coverageMonitorChecking;
+
+  /// A server's coverage when its systemd service list failed or came back incomplete.
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann cannot tell whether an external monitor runs: this server\'s systemd services could not be listed.'**
+  String get coverageMonitorUnknown;
+
+  /// Heading in the desktop inspector's coverage section over the recent periods without data, each worded with chartGapSummary or chartGapOngoing.
+  ///
+  /// In en, this message translates to:
+  /// **'Recent gaps'**
+  String get coverageDetailsGaps;
+
+  /// Under coverageDetailsGaps when the recent readings have no period without data.
+  ///
+  /// In en, this message translates to:
+  /// **'No recent gaps.'**
+  String get coverageDetailsNoGaps;
+
+  /// Banner on a phone's server screen after the app returns from the background (03 §9.5 item 6): when reading this server stopped and resumed, as times of day in the UI locale. The charts show the same period as a hatched band.
+  ///
+  /// In en, this message translates to:
+  /// **'Paused {start} to {end} while in background. No data for that period.'**
+  String coverageReturnBanner(String start, String end);
+
+  /// Button that hides the return-from-background banner.
+  ///
+  /// In en, this message translates to:
+  /// **'Dismiss'**
+  String get coverageReturnDismiss;
+
   /// No description provided for @serverTitle.
   ///
   /// In en, this message translates to:
@@ -1228,13 +1336,19 @@ abstract class AppLocalizations {
   /// **'disconnected'**
   String get chartGapDisconnected;
 
-  /// A screen reader's description of a chart's band without data: when it began and ended, and why, one of chartGapAppClosed, chartGapBackground or chartGapDisconnected.
+  /// The label on a chart's hatched band for a period without data because the server gave no reading while connected: the reading was lost or the server could not take it.
+  ///
+  /// In en, this message translates to:
+  /// **'reading failed'**
+  String get chartGapReadingFailed;
+
+  /// A screen reader's description of a chart's band without data: when it began and ended, and why, one of chartGapAppClosed, chartGapBackground, chartGapDisconnected or chartGapReadingFailed.
   ///
   /// In en, this message translates to:
   /// **'No data from {start} to {end}: {reason}'**
   String chartGapSummary(DateTime start, DateTime end, String reason);
 
-  /// A screen reader's description of a chart's band without data that has not ended: when it began and why, one of chartGapAppClosed, chartGapBackground or chartGapDisconnected.
+  /// A screen reader's description of a chart's band without data that has not ended: when it began and why, one of chartGapAppClosed, chartGapBackground, chartGapDisconnected or chartGapReadingFailed.
   ///
   /// In en, this message translates to:
   /// **'No data since {start}: {reason}'**

@@ -537,6 +537,106 @@
   "@coverageServerChip": {
     "description": "The server header's coverage chip (03 §10.2): the server's execution tier, T0 (kept as written), and that Klabautermann takes readings from this server only while a view has it open, since no monitor set watches it yet. Not about read-only access, which the header shows separately. Opens the coverage sheet."
   },
+  "coverageServerTitle": "Coverage",
+  "@coverageServerTitle": {
+    "description": "Heading of a server's coverage card on its Overview and of the coverage section in the desktop inspector (03 §9.5 item 3)."
+  },
+  "coverageLiveSampling": "Reading this server now, while you have it open.",
+  "@coverageLiveSampling": {
+    "description": "Under the T0 badge of a server's coverage while the engine samples it."
+  },
+  "coverageLiveWaiting": "Waiting for the connection to this server.",
+  "@coverageLiveWaiting": {
+    "description": "Under the T0 badge of a server's coverage while its readings wait for the SSH connection."
+  },
+  "coverageLivePaused": "Paused while Klabautermann is in the background.",
+  "@coverageLivePaused": {
+    "description": "Under the T0 badge of a server's coverage while a phone app is in the background and reading is paused."
+  },
+  "coverageLiveIdle": "Not reading this server now: the open panel takes no readings.",
+  "@coverageLiveIdle": {
+    "description": "Under the T0 badge of a server's coverage while no shown panel samples it, such as the Logs or Access tab."
+  },
+  "coverageLivePolicy": "Reads this server only while you have it open.",
+  "@coverageLivePolicy": {
+    "description": "Under the T0 badge of a server's coverage before the engine has said what reading the server is doing."
+  },
+  "coverageSessionTitle": "{minutes, plural, =1{The last minute on this device} other{The last {minutes} minutes on this device}}",
+  "@coverageSessionTitle": {
+    "description": "Heading over a server's session chart in its coverage card: the readings this device took, with hatched bands where it has none.",
+    "placeholders": {
+      "minutes": {
+        "type": "int",
+        "example": "10"
+      }
+    }
+  },
+  "coverageSessionLane": "CPU busy",
+  "@coverageSessionLane": {
+    "description": "Legend and screen-reader name of the session chart's line: the share of time the server's CPUs were busy."
+  },
+  "coverageSessionSource": "Recorded by this device while connected",
+  "@coverageSessionSource": {
+    "description": "The session chart's source line (03 §9.5 item 5): where its readings come from."
+  },
+  "coverageMonitorRunning": "External monitor running: {units}. It may cover this server while Klabautermann is closed; Klabautermann does not read it.",
+  "@coverageMonitorRunning": {
+    "description": "A server's coverage when its systemd services include a running monitoring agent such as node_exporter or Netdata (03 §9.5 item 3). units lists the running units' names, server data shown as written.",
+    "placeholders": {
+      "units": {
+        "type": "String",
+        "example": "netdata.service"
+      }
+    }
+  },
+  "coverageMonitorStopped": "No external monitor is running. Installed but stopped: {units}.",
+  "@coverageMonitorStopped": {
+    "description": "A server's coverage when monitoring agents are installed as systemd services but none runs. units lists their names, server data shown as written.",
+    "placeholders": {
+      "units": {
+        "type": "String",
+        "example": "telegraf.service"
+      }
+    }
+  },
+  "coverageMonitorNone": "No external monitor found among this server's systemd services.",
+  "@coverageMonitorNone": {
+    "description": "A server's coverage when its full systemd service list holds no known monitoring agent. A monitor outside systemd is not seen."
+  },
+  "coverageMonitorChecking": "Looking for an external monitor among this server's systemd services.",
+  "@coverageMonitorChecking": {
+    "description": "A server's coverage while its systemd service list has not arrived yet."
+  },
+  "coverageMonitorUnknown": "Klabautermann cannot tell whether an external monitor runs: this server's systemd services could not be listed.",
+  "@coverageMonitorUnknown": {
+    "description": "A server's coverage when its systemd service list failed or came back incomplete."
+  },
+  "coverageDetailsGaps": "Recent gaps",
+  "@coverageDetailsGaps": {
+    "description": "Heading in the desktop inspector's coverage section over the recent periods without data, each worded with chartGapSummary or chartGapOngoing."
+  },
+  "coverageDetailsNoGaps": "No recent gaps.",
+  "@coverageDetailsNoGaps": {
+    "description": "Under coverageDetailsGaps when the recent readings have no period without data."
+  },
+  "coverageReturnBanner": "Paused {start} to {end} while in background. No data for that period.",
+  "@coverageReturnBanner": {
+    "description": "Banner on a phone's server screen after the app returns from the background (03 §9.5 item 6): when reading this server stopped and resumed, as times of day in the UI locale. The charts show the same period as a hatched band.",
+    "placeholders": {
+      "start": {
+        "type": "String",
+        "example": "12:01 PM"
+      },
+      "end": {
+        "type": "String",
+        "example": "12:14 PM"
+      }
+    }
+  },
+  "coverageReturnDismiss": "Dismiss",
+  "@coverageReturnDismiss": {
+    "description": "Button that hides the return-from-background banner."
+  },
   "serverTitle": "{name}",
   "@serverTitle": {
     "placeholders": {
@@ -865,9 +965,13 @@
   "@chartGapDisconnected": {
     "description": "The label on a chart's hatched band for a period without data because the connection to the server was down."
   },
+  "chartGapReadingFailed": "reading failed",
+  "@chartGapReadingFailed": {
+    "description": "The label on a chart's hatched band for a period without data because the server gave no reading while connected: the reading was lost or the server could not take it."
+  },
   "chartGapSummary": "No data from {start} to {end}: {reason}",
   "@chartGapSummary": {
-    "description": "A screen reader's description of a chart's band without data: when it began and ended, and why, one of chartGapAppClosed, chartGapBackground or chartGapDisconnected.",
+    "description": "A screen reader's description of a chart's band without data: when it began and ended, and why, one of chartGapAppClosed, chartGapBackground, chartGapDisconnected or chartGapReadingFailed.",
     "placeholders": {
       "start": {
         "type": "DateTime",
@@ -885,7 +989,7 @@
   },
   "chartGapOngoing": "No data since {start}: {reason}",
   "@chartGapOngoing": {
-    "description": "A screen reader's description of a chart's band without data that has not ended: when it began and why, one of chartGapAppClosed, chartGapBackground or chartGapDisconnected.",
+    "description": "A screen reader's description of a chart's band without data that has not ended: when it began and why, one of chartGapAppClosed, chartGapBackground, chartGapDisconnected or chartGapReadingFailed.",
     "placeholders": {
       "start": {
         "type": "DateTime",

@@ -15,11 +15,22 @@ import 'support/harness.dart';
 const _desktop = Size(1280, 800);
 const _phone = Size(390, 800);
 
-List<Subscribe> _subscribes(FakeEngineClient engine) =>
-    engine.sentOfType<Subscribe>().cast<Subscribe>();
+/// The panels' subscriptions, without the Overview coverage card's one
+/// `units` read (03 §9.5 item 3), which server_coverage_test.dart covers.
+List<Subscribe> _subscribes(FakeEngineClient engine) => engine
+    .sentOfType<Subscribe>()
+    .cast<Subscribe>()
+    .where((request) => !_coverageRead(request.subscriptionId))
+    .toList();
 
-List<Unsubscribe> _unsubscribes(FakeEngineClient engine) =>
-    engine.sentOfType<Unsubscribe>().cast<Unsubscribe>();
+List<Unsubscribe> _unsubscribes(FakeEngineClient engine) => engine
+    .sentOfType<Unsubscribe>()
+    .cast<Unsubscribe>()
+    .where((request) => !_coverageRead(request.subscriptionId))
+    .toList();
+
+bool _coverageRead(String subscriptionId) =>
+    subscriptionId.startsWith('coverage-');
 
 /// The Connect and Disconnect requests sent, in order.
 List<String> _linkRequests(FakeEngineClient engine) => [

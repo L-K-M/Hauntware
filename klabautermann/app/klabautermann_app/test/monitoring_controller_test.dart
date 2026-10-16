@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:klabautermann_app/controllers/log_reads.dart';
 import 'package:klabautermann_app/controllers/log_streams.dart';
 import 'package:klabautermann_app/controllers/monitoring_controller.dart';
+import 'package:klabautermann_app/ui/charts/charts.dart' show ChartGapReason;
 import 'package:klabautermann_core/klabautermann_core.dart';
 
 import 'support/fake_engine.dart';
@@ -779,5 +780,142 @@ void main() {
 
     expect(first, startsWith('overview'));
     expect(second, isNot(first));
+  });
+  group('coverage gaps (03 §9.5 items 5 and 6)', () {
+    const core = SampleStream.core;
+    final t0 = DateTime.utc(2026, 10, 16, 12);
+    DateTime at(int seconds) => t0.add(Duration(seconds: seconds));
+    var seq = 0;
+    void sample(int seconds, [SampleResult? result]) => engine.emit(
+      _sample(
+        'srv-1',
+        core,
+        ++seq,
+        at: at(seconds),
+        result: result ?? CoreResult(cpu: CpuPercentages(const [], 10)),
+      ),
+    );
+    void phase(SamplingPhase phase, int seconds) => engine.emit(
+      SamplingState(serverId: 'srv-1', phase: phase, since: at(seconds)),
+    );
+    void gap(GapCause cause, int from, int until) => engine.emit(
+      Gap(
+        serverId: 'srv-1',
+        streams: const {core, SampleStream.fs},
+        from: at(from),
+        until: at(until),
+        cause: cause,
+      ),
+    );
+
+    setUp(() => seq = 0);
+
+    test('a Gap breaks the session ring before the reading that resumes '
+        'it', () async {
+      monitoring.subscribe('srv-1', 'overview-0', {core});
+      sample(0);
+      sample(2);
+      gap(GapCause.disconnected, 2, 30);
+      sample(30);
+      await settle();
+      expect(
+        monitoring.seriesFor('srv-1', core, MetricSeries.cpuBusy).samples,
+        [10, 10, null, 10],
+      );
+    });
+
+    test(
+      'the session history labels each gap with why it has no data',
+      () async {
+        monitoring.subscribe('srv-1', 'overview-0', {core});
+        sample(0);
+        // The background opens its gap when the phase says so, before
+        // readings resume; the Gap then confirms it.
+        phase(SamplingPhase.pausedInBackground, 5);
+        // Back with the link down: not lost while sampling, so the
+        // background gap goes on.
+        phase(SamplingPhase.waitingForLink, 60);
+        phase(SamplingPhase.sampling, 61);
+        gap(GapCause.background, 0, 62);
+        sample(62);
+        // A link lost while sampling.
+        phase(SamplingPhase.waitingForLink, 70);
+        phase(SamplingPhase.sampling, 80);
+        sample(82);
+        // A lost reading, then a collector that failed.
+        gap(GapCause.readingLost, 82, 90);
+        sample(90);
+        sample(92, const CollectorUnavailable(_timeout));
+        sample(94);
+        // A lost link outranks a failed reading as the cause from then on.
+        sample(96, const CollectorUnavailable(_timeout));
+        phase(SamplingPhase.waitingForLink, 98);
+        gap(GapCause.readingLost, 94, 110);
+        sample(110);
+        await settle();
+
+        final history = monitoring.historyFor('srv-1', MetricSeries.cpuBusy);
+        expect(
+          [
+            for (final g in history.gaps)
+              (g.start.toUtc(), g.end?.toUtc(), g.reason),
+          ],
+          [
+            (at(5), at(62), ChartGapReason.background),
+            (at(70), at(82), ChartGapReason.disconnected),
+            (at(82), at(90), ChartGapReason.readingFailed),
+            (at(92), at(94), ChartGapReason.readingFailed),
+            (at(96), at(98), ChartGapReason.readingFailed),
+            (at(98), at(110), ChartGapReason.disconnected),
+          ],
+        );
+        expect(history.length, 6);
+      },
+    );
+
+    test(
+      'a stream nobody names ends its open gap and breaks the line',
+      () async {
+        monitoring.subscribe('srv-1', 'overview-0', {core});
+        sample(0);
+        phase(SamplingPhase.pausedInBackground, 5);
+        await settle();
+        monitoring.unsubscribe('srv-1', 'overview-0');
+        await settle();
+
+        final history = monitoring.historyFor('srv-1', MetricSeries.cpuBusy);
+        expect(history.gaps.single.end, isNotNull);
+        expect(history.valueAt(0, history.length - 1), isNull);
+      },
+    );
+
+    test('a phone keeps its last background pause for the servers it '
+        'paused', () {
+      var now = t0;
+      final timed = MonitoringController(engine, now: () => now);
+      addTearDown(timed.dispose);
+
+      // Nothing sampled: a pause stops nothing anyone sees.
+      timed
+        ..setAppActivity(AppActivity.background)
+        ..setAppActivity(AppActivity.foreground);
+      expect(timed.backgroundPause.value, isNull);
+
+      timed.subscribe('srv-1', 'overview-0', {core});
+      timed.setAppActivity(AppActivity.background);
+      now = at(780);
+      timed.setAppActivity(AppActivity.foreground);
+      final pause = timed.backgroundPause.value!;
+      expect((pause.start, pause.end), (t0, at(780)));
+      expect(pause.serverIds, {'srv-1'});
+
+      // The next pause replaces it; a dismissal clears it.
+      timed.setAppActivity(AppActivity.background);
+      expect(timed.backgroundPause.value, isNull);
+      timed
+        ..setAppActivity(AppActivity.foreground)
+        ..dismissBackgroundPause();
+      expect(timed.backgroundPause.value, isNull);
+    });
   });
 }

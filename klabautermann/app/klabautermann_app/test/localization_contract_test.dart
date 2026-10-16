@@ -95,6 +95,9 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     // An assert message; programmer diagnostic, never rendered.
     "'a follow is not a bounded read'",
   },
+  // The coverage card's one `units` read: a subscription surface kind the
+  // engine keys its streams by (D45).
+  'lib/ui/server_coverage.dart': {"'coverage'"},
   'lib/ui/services_view.dart': {
     // systemd's spelling of load and sub states and the dot before a unit
     // type, matched against server data; the panel shows ARB text for

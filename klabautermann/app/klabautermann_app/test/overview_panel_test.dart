@@ -172,8 +172,10 @@ void main() {
       final harness = await pumpApp(tester, servers: twoServers, size: size);
       await tester.tap(find.text('web-1'));
       await tester.pumpAndSettle();
-      final [overview] = harness.engine.sentOfType<Subscribe>();
+      final [overview, coverage] = harness.engine.sentOfType<Subscribe>();
       expect((overview as Subscribe).streams, ServerPanel.overview.streams);
+      // The coverage card's one read of the units list (03 §9.5 item 3).
+      expect((coverage as Subscribe).streams, {SampleStream.units});
       expect(find.text('Waiting for the first reading.'), findsOneWidget);
 
       harness.engine.emit(
