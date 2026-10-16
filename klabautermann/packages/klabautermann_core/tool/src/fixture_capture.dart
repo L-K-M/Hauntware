@@ -138,7 +138,9 @@ const _nobodyUids = {65534, 4294967294};
 const _noHome = '/nonexistent';
 
 /// The literals a local capture redacts: [hostNames] with each FQDN's
-/// first label, and the names and home directories (unless `/`, `/root`
+/// first label, the domains of those FQDNs and the [searchDomains]
+/// (resolv.conf's), each with its suffixes of two labels or more, and
+/// the names and home directories (unless `/`, `/root`
 /// or [_noHome]) of personal accounts, those from [_minPersonalUid] but
 /// `nobody`: the capturing user (home [home]) and every such account in
 /// [passwd] whose home is not [_noHome]. Names a
@@ -150,6 +152,7 @@ RedactionLiterals captureLiterals(
   required List<String> hostNames,
   required String home,
   required String passwd,
+  List<String> searchDomains = const [],
   List<String> extra = const [],
 }) {
   final generic = {
@@ -164,6 +167,19 @@ RedactionLiterals captureLiterals(
 
   final hosts = <String>{
     for (final h in hostNames) ...[h, h.split('.').first],
+  }.where(keep);
+  // A one-label suffix (`lan`, a TLD) would match the word anywhere.
+  List<String> suffixes(String name, {required bool self}) {
+    final labels = name.split('.')..removeWhere((l) => l.isEmpty);
+    return [
+      for (var i = self ? 0 : 1; i <= labels.length - 2; i++)
+        labels.sublist(i).join('.'),
+    ];
+  }
+
+  final domains = <String>{
+    for (final h in hostNames) ...suffixes(h, self: false),
+    for (final d in searchDomains) ...suffixes(d, self: true),
   }.where(keep);
   // An unknown uid fails safe.
   final uid = profile.uid;
@@ -181,6 +197,7 @@ RedactionLiterals captureLiterals(
   accounts.removeWhere((user, _) => !keep(user));
   return RedactionLiterals(
     hostNames: hosts.toList(),
+    domains: domains.toList(),
     userNames: accounts.keys.toList(),
     homeDirs: accounts.values
         .where((h) => h != '/' && h != '/root' && h != _noHome)
@@ -189,6 +206,15 @@ RedactionLiterals captureLiterals(
     extra: extra,
   );
 }
+
+final _resolvDomainLine = RegExp(r'^(search|domain)\s');
+
+/// The domains of a resolv.conf(5): its search list and local domain.
+List<String> resolvDomains(String resolvConf) => [
+  for (final line in LineSplitter.split(resolvConf))
+    if (_resolvDomainLine.hasMatch(line))
+      ...line.trim().split(RegExp(r'\s+')).skip(1),
+];
 
 /// A line of a rendered file that the review blocks.
 final class Residue {

@@ -23,6 +23,7 @@ const kRedacted = '[redacted]';
 final class RedactionLiterals {
   const RedactionLiterals({
     this.hostNames = const [],
+    this.domains = const [],
     this.userNames = const [],
     this.homeDirs = const [],
     this.extra = const [],
@@ -30,6 +31,10 @@ final class RedactionLiterals {
 
   /// The host's names, as whole words.
   final List<String> hostNames;
+
+  /// The host's domains, as whole words: they also name its neighbours
+  /// (`backup.corp.example`).
+  final List<String> domains;
 
   /// Personal login names (not system accounts), as whole words.
   final List<String> userNames;
@@ -52,6 +57,7 @@ final class RedactedPayload {
 }
 
 const _hostPlaceholder = 'fixture-host';
+const _domainPlaceholder = 'example.net';
 const _homePlaceholder = '/home/user';
 const _userPlaceholder = 'user';
 const _serverPlaceholder = 'fixture-nas';
@@ -71,6 +77,7 @@ final _placeholder = RegExp(
   [
     for (final p in [
       _hostPlaceholder,
+      _domainPlaceholder,
       _homePlaceholder,
       _userPlaceholder,
       _serverPlaceholder,
@@ -107,6 +114,7 @@ const _diskLinkKinds = 'id|uuid|partuuid|label|partlabel';
 
 enum _Literal {
   host('host name', _hostPlaceholder, 'still names the host'),
+  domain('domain name', _domainPlaceholder, "still names the host's domain"),
   home('home directory', _homePlaceholder, 'still names a home directory'),
   user('user name', _userPlaceholder, 'still names a user'),
   extra('--redact value', kRedacted, 'still holds a --redact value');
@@ -347,6 +355,7 @@ final class Redactor {
     : this._(
         [
             for (final h in literals.hostNames) (_Literal.host, h),
+            for (final d in literals.domains) (_Literal.domain, d),
             for (final h in literals.homeDirs) (_Literal.home, h),
             for (final u in literals.userNames) (_Literal.user, u),
             for (final e in literals.extra) (_Literal.extra, e),
@@ -449,7 +458,7 @@ final class Redactor {
     throw StateError('no literal group matched');
   }
 
-  /// Host and user names match as whole words (a letter or digit on
+  /// Host names, domains and user names match as whole words (a letter or digit on
   /// neither side, so `home-anke.mount` matches and `anker` does not), a
   /// home directory as a whole path, a `--redact` value anywhere. A `-`
   /// also matches device-mapper's `--` and systemd's `\x2d`, so that
@@ -462,7 +471,7 @@ final class Redactor {
         .map(RegExp.escape)
         .join('(?:-{1,2}|(?:$_x2d){1,2})');
     return switch (kind) {
-      _Literal.host || _Literal.user =>
+      _Literal.host || _Literal.domain || _Literal.user =>
         '(?:(?<![A-Za-z0-9])|(?<=$_escape))$escaped(?![A-Za-z0-9])',
       _Literal.home => '$escaped(?![A-Za-z0-9._-])',
       _Literal.extra => escaped,

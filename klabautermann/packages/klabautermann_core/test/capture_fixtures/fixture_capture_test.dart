@@ -189,6 +189,37 @@ void main() {
     expect(literals.extra, ['nas07']);
   });
 
+  test('literals: the domains of the host names and the search list', () {
+    final literals = captureLiterals(
+      _profile('ID=ubuntu\nVERSION_ID="24.04"'),
+      hostNames: ['web-01.corp.acme.io', 'web-01', 'web-01.lan'],
+      home: '/',
+      passwd: '',
+      searchDomains: ['corp.acme.io', 'lan', 'eu-central-1.compute.internal.'],
+    );
+    expect(literals.hostNames, ['web-01.corp.acme.io', 'web-01', 'web-01.lan']);
+    // Two labels or more: a lone `lan` would match the word anywhere.
+    expect(literals.domains, [
+      'corp.acme.io',
+      'acme.io',
+      'eu-central-1.compute.internal',
+      'compute.internal',
+    ]);
+  });
+
+  test('the domains of a resolv.conf', () {
+    expect(
+      resolvDomains(
+        '# search commented.example\n'
+        'nameserver 10.0.0.2\n'
+        'search corp.acme.io  eu-central-1.compute.internal\n'
+        'domain corp.acme.io\n'
+        'options edns0',
+      ),
+      ['corp.acme.io', 'eu-central-1.compute.internal', 'corp.acme.io'],
+    );
+  });
+
   test('the capturing user at any uid but a system one', () {
     // sssd's idmap range, systemd-homed, a system account, nobody.
     for (final (uid, users) in [

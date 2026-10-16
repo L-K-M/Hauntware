@@ -136,6 +136,7 @@ Future<void> _capture(Map<String, List<String>> options) async {
       ],
       home: home,
       passwd: _readIfPresent('/etc/passwd') ?? '',
+      searchDomains: resolvDomains(_readIfPresent('/etc/resolv.conf') ?? ''),
       extra: options['redact'] ?? const [],
     ),
   );

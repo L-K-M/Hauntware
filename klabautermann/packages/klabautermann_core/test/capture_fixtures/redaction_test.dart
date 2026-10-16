@@ -94,6 +94,26 @@ void main() {
       ]);
     });
 
+    test("the host's domain under any first label", () {
+      const domain = RedactionLiterals(
+        hostNames: ['web-01.corp.acme.io', 'web-01'],
+        domains: ['corp.acme.io', 'acme.io'],
+      );
+      const units =
+          'openvpn-client@vpn.corp.acme.io.service to VPN.Corp.Acme.IO\n'
+          'backup.corp.acme.io:/bk/web-01/ vpn.acme.io notacme.io';
+      expect(
+        _redact(units, literals: domain, collector: 'units'),
+        'openvpn-client@vpn.example.net.service to VPN.example.net\n'
+        'backup.example.net:/bk/fixture-host/ vpn.example.net notacme.io',
+      );
+      expect(Redactor(domain).review(units), [
+        (1, "still names the host's domain"),
+        (2, "still names the host's domain"),
+        (2, 'still names the host'),
+      ]);
+    });
+
     test('a home directory goes before the user name', () {
       expect(
         _redact('/srv/anke-home/bin /srv/anke-home2', literals: literals),
