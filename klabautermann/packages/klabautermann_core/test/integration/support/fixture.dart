@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:klabautermann_core/klabautermann_core.dart';
+import 'package:klabautermann_core/src/engine/engine_isolate.dart'
+    show engineMain;
 import 'package:test/test.dart';
 
 /// Why the fixture suites skip: run.sh exports the fixture's environment.
@@ -13,6 +15,10 @@ const fixtureSkipReason =
 const directServer = 'ssh-config:direct';
 const agentServer = 'ssh-config:agent';
 const behindServer = 'ssh-config:behind';
+
+/// The fleet server of the [i]th alias of the sampled host
+/// ([FixtureEngine.startAliases]).
+String aliasServer(int i) => 'ssh-config:alias-$i';
 
 /// The Compose services of klabautermann/test/integration.
 enum FixtureService {
@@ -120,6 +126,20 @@ Host hop
   IdentityFile $identityFile
 ''';
 
+  /// [count] aliases of the sampled host, `alias-0` on, each with the key
+  /// file: separate fleet servers, each dialing a link of its own to the
+  /// one sshd, as 03 §11.4's ten hosts do in the soak.
+  String _aliasSshConfig(int count) => [
+    for (var i = 0; i < count; i++)
+      '''
+Host alias-$i
+  HostName $_host
+  Port $_port
+  User $_user
+  IdentityFile $identityFile
+''',
+  ].join('\n');
+
   /// Each endpoint a host-key prompt may name, with the fingerprints of the
   /// service that answers there.
   Future<Map<Endpoint, Set<String>>> hostKeys() async {
@@ -222,21 +242,43 @@ final class FixtureEngine {
     evidenceDirectory: fixture._evidenceDirectory,
   );
 
+  /// Starts an engine through [entryPoint], which wraps the engine's own
+  /// (`link_meter.dart`), and imports [count] aliases of the sampled host
+  /// ([aliasServer]). [name] titles the event log it leaves in
+  /// [evidenceDirectory].
+  static Future<FixtureEngine> startAliases(
+    Fixture fixture,
+    String name, {
+    required int count,
+    required String evidenceDirectory,
+    required void Function(EngineStart start) entryPoint,
+  }) => launch(
+    name: name,
+    runtimeDirectory: fixture._runtimeDirectory,
+    sshConfig: fixture._aliasSshConfig(count),
+    hosts: count,
+    evidenceDirectory: evidenceDirectory,
+    entryPoint: entryPoint,
+  );
+
   /// Starts an engine that keeps its files under [runtimeDirectory] and
   /// imports [sshConfig], which names [hosts] hosts, for a host other than
   /// the Compose fixture, such as the runner VM (`runner_vm.dart`). [name]
   /// titles the event log it leaves in [evidenceDirectory], if any.
+  /// [entryPoint] replaces the engine's.
   static Future<FixtureEngine> launch({
     required String name,
     required String runtimeDirectory,
     required String sshConfig,
     required int hosts,
     String? evidenceDirectory,
+    void Function(EngineStart start) entryPoint = engineMain,
   }) async {
     final support = await Directory(runtimeDirectory).createTemp('engine-');
     final client = await IsolateEngineClient.spawn(
       supportDirectory: support.path,
       linksEnabled: true,
+      entryPoint: entryPoint,
     );
     final engine = FixtureEngine._(
       evidenceDirectory,
@@ -285,6 +327,36 @@ final class FixtureEngine {
       if (event is Prompt && T != Prompt) {
         fail('unexpected prompt: ${_describe(event)}');
       }
+    }
+  }
+
+  /// Reads events for [duration], handing each to [onEvent], without
+  /// keeping them in [seen] or the event log: a soak's samples would grow
+  /// both. Other events than samples are logged. A prompt fails the test,
+  /// as in [until].
+  Future<void> pump(
+    Duration duration,
+    void Function(EngineEvent event) onEvent,
+  ) async {
+    final deadline = _clock.elapsed + duration;
+    while (true) {
+      final left = deadline - _clock.elapsed;
+      if (left <= Duration.zero) return;
+
+      // A read the deadline cuts short stays pending for the next caller,
+      // as in [until]; the timeout's timer goes when the read completes.
+      final pending = _pending ??= _events.moveNext();
+      final arrived = await pending
+          .then<bool?>((arrived) => arrived)
+          .timeout(left, onTimeout: () => null);
+      if (arrived == null) return;
+
+      _pending = null;
+      expect(arrived, isTrue, reason: 'the engine stopped');
+      final event = _events.current;
+      if (event is! Sample) note('< ${_describe(event)}');
+      if (event is Prompt) fail('unexpected prompt: ${_describe(event)}');
+      onEvent(event);
     }
   }
 
