@@ -3842,7 +3842,9 @@ engine run, so the Overview reads the list once rather than at the
 Services tab's cadence; a list that tab reads later replaces it. The
 desktop inspector's body shows the selected server's coverage: the
 badge, the `core` stream's freshness, the external-monitor finding, the
-recent gaps in words and what is not covered with each reason; it reads
+recent gaps in words ("No data yet" before any reading, so an empty
+record never reads as a complete one) and what is not covered with each
+reason; it reads
 what the panels sample and subscribes nothing. Beside the session rings,
 the monitoring controller keeps a time-series ring per series of `core`:
 a background pause, or a link lost while sampling, opens a labelled gap

@@ -531,7 +531,7 @@
   },
   "coverageFreshnessNoData": "No data yet",
   "@coverageFreshnessNoData": {
-    "description": "Freshness line before the first reading has arrived."
+    "description": "Freshness line before the first reading has arrived; also under coverageDetailsGaps while this server has no reading this session."
   },
   "coverageServerChip": "T0: sampled only while open",
   "@coverageServerChip": {

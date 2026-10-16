@@ -269,7 +269,9 @@ void main() {
     await tester.tap(find.text('web-1'));
     await tester.pumpAndSettle();
     expect(find.text('Recent gaps'), findsOneWidget);
-    expect(find.text('No recent gaps.'), findsOneWidget);
+    // Without a reading, no gap is not news that the record is complete.
+    expect(find.text('No data yet'), findsOneWidget);
+    expect(find.text('No recent gaps.'), findsNothing);
     expect(
       find.text('Reads this server only while you have it open.'),
       findsNWidgets(2),

@@ -850,7 +850,7 @@ abstract class AppLocalizations {
   /// **'Not watched on this device'**
   String get coverageFreshnessNotWatched;
 
-  /// Freshness line before the first reading has arrived.
+  /// Freshness line before the first reading has arrived; also under coverageDetailsGaps while this server has no reading this session.
   ///
   /// In en, this message translates to:
   /// **'No data yet'**

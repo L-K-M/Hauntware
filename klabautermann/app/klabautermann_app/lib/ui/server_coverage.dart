@@ -208,7 +208,10 @@ class ServerCoverageDetails extends StatelessWidget {
             const SizedBox(height: 16),
             heading(l10n.coverageDetailsGaps),
             const SizedBox(height: 8),
-            if (history.gaps.isEmpty)
+            // No gap in a record without readings is not news.
+            if (history.length == 0 && history.gaps.isEmpty)
+              Text(l10n.coverageFreshnessNoData)
+            else if (history.gaps.isEmpty)
               Text(l10n.coverageDetailsNoGaps)
             else
               for (final gap in history.gaps.reversed)
