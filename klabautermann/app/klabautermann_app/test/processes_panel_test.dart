@@ -383,6 +383,22 @@ void main() {
     handle.dispose();
   });
 
+  testWidgets('SAF-07: touch platforms give a masked argument a 48 dp tap '
+      'target', (tester) async {
+    final handle = tester.ensureSemantics();
+    final panel = await _pump(
+      tester,
+      size: _phone,
+      platform: TargetPlatform.android,
+    );
+    await panel.all(tester);
+
+    await tester.tap(_row(812));
+    await tester.pumpAndSettle();
+    await expectLater(tester, meetsGuideline(androidTapTargetGuideline));
+    handle.dispose();
+  });
+
   testWidgets('a phone lists two-line rows with a sort menu, not a squeezed '
       'table', (tester) async {
     final panel = await _pump(

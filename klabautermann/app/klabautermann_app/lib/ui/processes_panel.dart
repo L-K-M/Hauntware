@@ -735,18 +735,29 @@ class _ProcessSheetState extends State<_ProcessSheet> {
       onTap: () => _toggle(index),
       child: InkWell(
         onTap: () => _toggle(index),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          spacing: 8,
-          children: [
-            Icon(
-              revealed
-                  ? Icons.visibility_off_outlined
-                  : Icons.visibility_outlined,
-              size: 18,
+        child: ConstrainedBox(
+          // A touch needs a 48 dp target (A11Y-01); a pointer, the line.
+          constraints: BoxConstraints(
+            minHeight: ghostIsDesktopPlatform(Theme.of(context).platform)
+                ? 0
+                : kMinInteractiveDimension,
+          ),
+          child: Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              spacing: 8,
+              children: [
+                Icon(
+                  revealed
+                      ? Icons.visibility_off_outlined
+                      : Icons.visibility_outlined,
+                  size: 18,
+                ),
+                Expanded(child: Text(shown)),
+              ],
             ),
-            Expanded(child: Text(shown)),
-          ],
+          ),
         ),
       ),
     );
