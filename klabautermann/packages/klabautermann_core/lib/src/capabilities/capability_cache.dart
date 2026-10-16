@@ -246,7 +246,13 @@ final class CapabilityCache {
     }
     return Future.wait([
       for (final serverId in serverIds)
-        _change(serverId, (file) => file.delete()),
+        _change(serverId, (file) async {
+          try {
+            await file.delete();
+          } on PathNotFoundException {
+            // Nothing to delete is a purge done.
+          }
+        }),
     ]);
   }
 
@@ -319,7 +325,7 @@ final class CapabilityCache {
   /// Runs [change] on [serverId]'s file after every earlier change.
   Future<CacheUpdate> _change(
     String serverId,
-    Future<Object?> Function(File file) change,
+    Future<void> Function(File file) change,
   ) {
     if (_access != SupportDirectoryAccess.exclusive) {
       return Future.value(CacheUpdate.notExclusive);
@@ -330,9 +336,6 @@ final class CapabilityCache {
     final result = _tail.then((_) async {
       try {
         await change(_file(name));
-        return CacheUpdate.applied;
-      } on PathNotFoundException {
-        // Nothing to delete is a purge done.
         return CacheUpdate.applied;
       } on Object {
         // As for the import store's save: whatever the write threw, the

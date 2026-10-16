@@ -257,6 +257,18 @@ void main() {
       expect(await store.probed(_web, _profile()), CacheUpdate.failed);
     });
 
+    test(
+      'a write that finds no directory reports a failure, not a purge done',
+      () async {
+        // A dangling link where the directory goes: creating it finds no
+        // path, as when the directory vanishes during the write.
+        Link(cache.path).createSync('${support.path}/gone/here');
+        final store = await open();
+        expect(await store.probed(_web, _profile()), CacheUpdate.failed);
+      },
+      testOn: 'posix',
+    );
+
     group('corrupt or foreign files are rejected explicitly', () {
       Map<String, Object?> valid() => {
         'format': 'klabautermann.capabilities',
