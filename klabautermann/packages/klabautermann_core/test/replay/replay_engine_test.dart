@@ -300,6 +300,36 @@ void main() {
     expect(states('follow-again'), [const LogStreamRunning()]);
   });
 
+  test('Disconnect ends its server\'s streams as failed, and Shutdown '
+      'every stream before the engine exits', () async {
+    await spawn(hosts: 2, logLinesPerSecond: 1);
+    client
+      ..send(OpenLogStream(streamId: 'log-0', spec: spec()))
+      ..send(
+        OpenLogStream(
+          streamId: 'log-1',
+          spec: spec(id: 'replay-1'),
+        ),
+      )
+      ..send(const Disconnect('nowhere'))
+      ..send(const Disconnect('replay-0'));
+    await until(() => states('log-0').length == 2, 'the disconnected end');
+    expect(states('log-0'), [
+      const LogStreamRunning(),
+      const LogStreamEnded(LogStreamEndReason.failed),
+    ]);
+    expect(states('log-1'), [const LogStreamRunning()]);
+    // The engine ignores a Disconnect of a server outside the fleet.
+    expect(rejections(), isEmpty);
+
+    // Shutdown completes once its events stream closed.
+    await client.shutdown();
+    expect(states('log-1'), [
+      const LogStreamRunning(),
+      const LogStreamEnded(LogStreamEndReason.failed),
+    ]);
+  });
+
   test('a late read keeps its period\'s grid, skipping the slots it '
       'passed (03 §6.2)', () {
     const period = Duration(seconds: 2);

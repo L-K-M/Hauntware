@@ -56,8 +56,10 @@ final class ReplayPlan {
 ///
 /// - [Hello] gets [EngineReady], the fleet in a [CatalogReplaced], each
 ///   server's [LinkState] (ready) and [Reachability] (online), and its
-///   probe's [HostProfileChanged]. No link exists: [Connect] and
-///   [Disconnect] change nothing for a fleet server.
+///   probe's [HostProfileChanged]. No link exists: [Connect] changes
+///   nothing for a fleet server, and [Disconnect] only ends the server's
+///   log streams as failed, as the engine's router does before the link
+///   closes.
 /// - Each server samples the union of [ReplayPlan.monitored] and its
 ///   subscriptions, as `Sample`s and `SamplingState`s from its pipeline.
 ///   A stream read for the first time reads at once, except the
@@ -75,8 +77,10 @@ final class ReplayPlan {
 ///   invalid at once; any other window gets the newest journal rows it
 ///   holds once, newest first, and ends filled, or at the oldest when it
 ///   holds them all; a file ends as [LogStreamEndReason.missing].
-/// - [Shutdown] stops its timer and exits; every other request gets
-///   [RequestRejected].
+/// - [Shutdown] ends every log stream as failed, stops its timer and
+///   exits; every other request gets [RequestRejected], save a
+///   [Disconnect] of a server outside the fleet, which the engine ignores
+///   too.
 ///
 /// The support directory it is started with is ignored: the replay keeps
 /// no files.
@@ -138,23 +142,19 @@ final class _ReplayEngine {
       case SetAppActivity(:final activity):
         _activity = activity;
         _hosts.values.forEach(_update);
-      case Connect(:final serverId) || Disconnect(:final serverId):
+      case Connect(:final serverId):
         if (!_hosts.containsKey(serverId)) {
-          _reject('${message.runtimeType}', 'no fleet server $serverId');
+          _reject('Connect', 'no fleet server $serverId');
         }
+      case Disconnect(:final serverId):
+        if (_hosts[serverId] case final host?) _endAll(host);
       case OpenLogStream():
         if (_open(message) case final reason?) _reject('OpenLogStream', reason);
       case CloseStream(:final streamId):
-        final follow = _follows.remove(streamId);
-        if (follow == null) return;
-        follow.host.follows.remove(streamId);
-        _send(
-          LogStreamState(
-            streamId,
-            const LogStreamEnded(LogStreamEndReason.closed),
-          ),
-        );
+        _end(streamId, LogStreamEndReason.closed);
       case Shutdown():
+        // Each stream's end goes out before the isolate does.
+        _hosts.values.forEach(_endAll);
         _timer?.cancel();
         _commands.close();
         Isolate.exit();
@@ -340,6 +340,24 @@ final class _ReplayEngine {
       ),
     );
     return null;
+  }
+
+  /// Ends [streamId] for [reason]. Does nothing when it is not open.
+  void _end(String streamId, LogStreamEndReason reason) {
+    final follow = _follows.remove(streamId);
+    if (follow == null) return;
+
+    follow.host.follows.remove(streamId);
+    _send(LogStreamState(streamId, LogStreamEnded(reason)));
+  }
+
+  /// Ends every stream of [host] as failed, as `LogStreamRouter` does on
+  /// [Disconnect] and [Shutdown]: nothing would bring a link back for
+  /// them.
+  void _endAll(_Host host) {
+    for (final streamId in host.follows.keys.toList()) {
+      _end(streamId, LogStreamEndReason.failed);
+    }
   }
 }
 
