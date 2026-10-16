@@ -1,0 +1,86 @@
+{
+  "result": {
+    "mounts": [
+      {
+        "device": "overlay",
+        "type": "overlay",
+        "mountPoint": "/",
+        "sizeBytes": 270553174016,
+        "usedBytes": 41502273536,
+        "availBytes": 321585152,
+        "capacityPercent": 100,
+        "inodesTotal": 16777216,
+        "inodesUsed": 1452249,
+        "inodesFree": 15324967,
+        "inodeUsePercent": 9
+      },
+      {
+        "device": "tmpfs",
+        "type": "tmpfs",
+        "mountPoint": "/dev",
+        "sizeBytes": 67108864,
+        "usedBytes": 0,
+        "availBytes": 67108864,
+        "capacityPercent": 0,
+        "inodesTotal": 2059928,
+        "inodesUsed": 15,
+        "inodesFree": 2059913,
+        "inodeUsePercent": 1
+      },
+      {
+        "device": "tmpfs",
+        "type": "tmpfs",
+        "mountPoint": "/sys/fs/cgroup",
+        "sizeBytes": 8437465088,
+        "usedBytes": 0,
+        "availBytes": 8437465088,
+        "capacityPercent": 0,
+        "inodesTotal": 2059928,
+        "inodesUsed": 10,
+        "inodesFree": 2059918,
+        "inodeUsePercent": 1
+      },
+      {
+        "device": "shm",
+        "type": "tmpfs",
+        "mountPoint": "/dev/shm",
+        "sizeBytes": 67108864,
+        "usedBytes": 0,
+        "availBytes": 67108864,
+        "capacityPercent": 0,
+        "inodesTotal": 2059928,
+        "inodesUsed": 1,
+        "inodesFree": 2059927,
+        "inodeUsePercent": 1
+      },
+      {
+        "device": "/dev/vda",
+        "type": "ext4",
+        "mountPoint": "/etc/hosts",
+        "sizeBytes": 270553174016,
+        "usedBytes": 41502273536,
+        "availBytes": 321585152,
+        "capacityPercent": 100,
+        "inodesTotal": 16777216,
+        "inodesUsed": 1452249,
+        "inodesFree": 15324967,
+        "inodeUsePercent": 9
+      },
+      {
+        "device": "tmpfs",
+        "type": "tmpfs",
+        "mountPoint": "/proc/acpi",
+        "sizeBytes": 4096,
+        "usedBytes": 0,
+        "availBytes": 4096,
+        "capacityPercent": 0,
+        "inodesTotal": 1,
+        "inodesUsed": 1,
+        "inodesFree": 0,
+        "inodeUsePercent": 100
+      }
+    ],
+    "timeoutAbsent": false
+  },
+  "warnings": []
+}

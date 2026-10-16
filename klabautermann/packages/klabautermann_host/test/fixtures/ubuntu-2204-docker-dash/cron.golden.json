@@ -1,0 +1,163 @@
+{
+  "result": {
+    "jobs": [
+      {
+        "source": "/etc/cron.d/e2scrub_all",
+        "schedule": "30 3 * * 0",
+        "command": "test [redacted]",
+        "user": "root",
+        "cronTz": null,
+        "expression": {
+          "minutes": [
+            30
+          ],
+          "hours": [
+            3
+          ],
+          "monthDays": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23,
+            24,
+            25,
+            26,
+            27,
+            28,
+            29,
+            30,
+            31
+          ],
+          "months": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12
+          ],
+          "weekDays": [
+            0
+          ],
+          "domStar": true,
+          "dowStar": false,
+          "isReboot": false
+        },
+        "raw": "30 3 * * 0 root test [redacted]"
+      },
+      {
+        "source": "/etc/cron.d/e2scrub_all",
+        "schedule": "10 3 * * *",
+        "command": "test [redacted]",
+        "user": "root",
+        "cronTz": null,
+        "expression": {
+          "minutes": [
+            10
+          ],
+          "hours": [
+            3
+          ],
+          "monthDays": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23,
+            24,
+            25,
+            26,
+            27,
+            28,
+            29,
+            30,
+            31
+          ],
+          "months": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12
+          ],
+          "weekDays": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6
+          ],
+          "domStar": true,
+          "dowStar": true,
+          "isReboot": false
+        },
+        "raw": "10 3 * * * root test [redacted]"
+      }
+    ],
+    "dirEntries": [
+      {
+        "period": "daily",
+        "name": "apt-compat"
+      },
+      {
+        "period": "daily",
+        "name": "dpkg"
+      }
+    ],
+    "ownCrontabPresent": null,
+    "timeoutAbsent": false
+  },
+  "warnings": []
+}

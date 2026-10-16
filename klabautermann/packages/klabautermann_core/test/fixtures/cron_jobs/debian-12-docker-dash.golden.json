@@ -1,0 +1,139 @@
+{
+  "at": "2026-10-15T12:00:03.000Z",
+  "zoneName": "Etc/UTC",
+  "zoneFallback": null,
+  "jobs": [
+    {
+      "kind": "cron",
+      "id": "cron|/etc/cron.d/e2scrub_all|0",
+      "source": "/etc/cron.d/e2scrub_all",
+      "user": "root",
+      "command": "test [redacted]",
+      "raw": "30 3 * * 0 root test [redacted]",
+      "schedule": {
+        "type": "cron",
+        "text": "30 3 * * 0",
+        "macro": null,
+        "fields": {
+          "minute": "30",
+          "hour": "3",
+          "dayOfMonth": "*",
+          "month": "*",
+          "dayOfWeek": "0"
+        },
+        "dayMatch": "both",
+        "timeZone": null
+      },
+      "nextRuns": [
+        {
+          "atUtc": "2026-10-18T03:30:00.000Z",
+          "wall": "2026-10-18T03:30:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-25T03:30:00.000Z",
+          "wall": "2026-10-25T03:30:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-11-01T03:30:00.000Z",
+          "wall": "2026-11-01T03:30:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-11-08T03:30:00.000Z",
+          "wall": "2026-11-08T03:30:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-11-15T03:30:00.000Z",
+          "wall": "2026-11-15T03:30:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        }
+      ],
+      "runsUnknown": null
+    },
+    {
+      "kind": "cron",
+      "id": "cron|/etc/cron.d/e2scrub_all|1",
+      "source": "/etc/cron.d/e2scrub_all",
+      "user": "root",
+      "command": "test [redacted]",
+      "raw": "10 3 * * * root test [redacted]",
+      "schedule": {
+        "type": "cron",
+        "text": "10 3 * * *",
+        "macro": null,
+        "fields": {
+          "minute": "10",
+          "hour": "3",
+          "dayOfMonth": "*",
+          "month": "*",
+          "dayOfWeek": "*"
+        },
+        "dayMatch": "both",
+        "timeZone": null
+      },
+      "nextRuns": [
+        {
+          "atUtc": "2026-10-16T03:10:00.000Z",
+          "wall": "2026-10-16T03:10:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-17T03:10:00.000Z",
+          "wall": "2026-10-17T03:10:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-18T03:10:00.000Z",
+          "wall": "2026-10-18T03:10:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-19T03:10:00.000Z",
+          "wall": "2026-10-19T03:10:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-20T03:10:00.000Z",
+          "wall": "2026-10-20T03:10:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        }
+      ],
+      "runsUnknown": null
+    },
+    {
+      "kind": "periodic",
+      "id": "periodic|daily|apt-compat",
+      "period": "daily",
+      "name": "apt-compat",
+      "directory": "/etc/cron.daily",
+      "driverIds": [],
+      "schedules": [],
+      "nextRuns": [],
+      "runsUnknown": "noDriver"
+    },
+    {
+      "kind": "periodic",
+      "id": "periodic|daily|dpkg",
+      "period": "daily",
+      "name": "dpkg",
+      "directory": "/etc/cron.daily",
+      "driverIds": [],
+      "schedules": [],
+      "nextRuns": [],
+      "runsUnknown": "noDriver"
+    }
+  ]
+}

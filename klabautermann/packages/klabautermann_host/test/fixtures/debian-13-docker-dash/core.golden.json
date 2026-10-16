@@ -1,0 +1,154 @@
+{
+  "result": {
+    "cpu": {
+      "name": "cpu",
+      "jiffies": [
+        637796,
+        0,
+        120259,
+        432121,
+        69977,
+        0,
+        12840,
+        31460,
+        0,
+        0
+      ]
+    },
+    "perCpu": {
+      "cpu0": {
+        "name": "cpu0",
+        "busy": 201557,
+        "idle": 126112
+      },
+      "cpu1": {
+        "name": "cpu1",
+        "busy": 201268,
+        "idle": 125153
+      },
+      "cpu2": {
+        "name": "cpu2",
+        "busy": 201511,
+        "idle": 124026
+      },
+      "cpu3": {
+        "name": "cpu3",
+        "busy": 198013,
+        "idle": 126804
+      }
+    },
+    "btime": 1792170097,
+    "meminfo": {
+      "fields": {
+        "MemTotal": 16479424,
+        "MemFree": 3527932,
+        "MemAvailable": 12620608,
+        "Buffers": 965956,
+        "Cached": 6818440,
+        "SwapTotal": 0,
+        "SwapFree": 0,
+        "Shmem": 14680,
+        "SReclaimable": 1907632
+      }
+    },
+    "loadavg": {
+      "load1": 4.13,
+      "load5": 3.81,
+      "load15": 4.53,
+      "running": 9,
+      "total": 238,
+      "lastPid": 15
+    },
+    "netdev": [
+      {
+        "name": "eth0",
+        "rxBytes": 0,
+        "txBytes": 42
+      }
+    ],
+    "diskstats": [
+      {
+        "name": "vda",
+        "readsCompleted": 212241,
+        "sectorsRead": 8260290,
+        "writesCompleted": 227360,
+        "sectorsWritten": 159502832
+      },
+      {
+        "name": "vdb",
+        "readsCompleted": 9,
+        "sectorsRead": 20,
+        "writesCompleted": 0,
+        "sectorsWritten": 0
+      },
+      {
+        "name": "vdc",
+        "readsCompleted": 1925,
+        "sectorsRead": 298010,
+        "writesCompleted": 0,
+        "sectorsWritten": 0
+      },
+      {
+        "name": "vdd",
+        "readsCompleted": 436,
+        "sectorsRead": 57170,
+        "writesCompleted": 0,
+        "sectorsWritten": 0
+      },
+      {
+        "name": "vde",
+        "readsCompleted": 9,
+        "sectorsRead": 28,
+        "writesCompleted": 0,
+        "sectorsWritten": 0
+      },
+      {
+        "name": "vdf",
+        "readsCompleted": 9,
+        "sectorsRead": 26,
+        "writesCompleted": 0,
+        "sectorsWritten": 0
+      }
+    ],
+    "cpuPressure": {
+      "some": {
+        "avg10": 29.82,
+        "avg60": 18.35,
+        "avg300": 15.26
+      },
+      "full": {
+        "avg10": 0.0,
+        "avg60": 0.0,
+        "avg300": 0.0
+      }
+    },
+    "ioPressure": {
+      "some": {
+        "avg10": 3.3,
+        "avg60": 1.61,
+        "avg300": 1.75
+      },
+      "full": {
+        "avg10": 0.78,
+        "avg60": 0.64,
+        "avg300": 1.06
+      }
+    },
+    "memoryPressure": {
+      "some": {
+        "avg10": 0.0,
+        "avg60": 0.09,
+        "avg300": 0.03
+      },
+      "full": {
+        "avg10": 0.0,
+        "avg60": 0.03,
+        "avg300": 0.0
+      }
+    },
+    "uptimeSeconds": 3249.49,
+    "idleSeconds": 4321.21,
+    "zfsArc": null
+  },
+  "warnings": []
+}
