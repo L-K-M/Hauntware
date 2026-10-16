@@ -11,7 +11,6 @@ import 'dart:io';
 
 import 'package:klabautermann_core/klabautermann_core.dart';
 import 'package:klabautermann_core/src/logs/log_service.dart';
-import 'package:seance_core/seance_core.dart' show quoteShellWord;
 import 'package:test/test.dart';
 
 import '../support/local_process_link.dart';
