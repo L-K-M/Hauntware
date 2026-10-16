@@ -40,6 +40,7 @@ void main() {
   late Map<String, SshLink> links;
   late List<EngineEvent> events;
   late List<(String, String, SshLink)> hints;
+  late List<String> probes;
   late List<SamplerSession> sessions;
   late SamplerDeadlines deadlines;
   late Duration restartDelay;
@@ -53,6 +54,7 @@ void main() {
     links = {_s1: link};
     events = [];
     hints = [];
+    probes = [];
     sessions = [];
     deadlines = const SamplerDeadlines();
     restartDelay = const Duration(milliseconds: 5);
@@ -62,6 +64,7 @@ void main() {
       emit: events.add,
       deadPeerHint: (id, l) => hints.add(('hint', id, l)),
       clearDeadPeerHint: (id, l) => hints.add(('clear', id, l)),
+      probed: (id, profile) => probes.add(id),
       openSampler: (l, kind) {
         final session = SamplerSession(
           link: l,
@@ -214,6 +217,17 @@ void main() {
     expect(next.linesOf(_slow), ['hw_o probe']);
     expect(next.linesOf(_fast), ['hw_t overview']);
     expect(link.running, isEmpty);
+  });
+
+  test('every probe answer reaches the capability cache, an unchanged one '
+      'included (D59)', () async {
+    subscribe({SampleStream.overview});
+    await settle();
+    setLink(AnsweringLink());
+    await settle();
+
+    expect(probes, [_s1, _s1]);
+    expect(events.whereType<HostProfileChanged>(), hasLength(1));
   });
 
   test('ticks the union of the subscriptions at the profile\'s periods, '

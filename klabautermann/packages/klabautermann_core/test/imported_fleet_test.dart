@@ -244,6 +244,36 @@ void main() {
       );
     });
 
+    test('an endpoint changes with any address, port or login name on '
+        'the way to a host', () {
+      const host = 'ssh-config:a';
+      const config =
+          'Host a\n  HostName 192.0.2.1\n  ProxyJump j\n'
+          'Host j\n  HostName 192.0.2.9\n';
+      final endpoint = _fleet(config).endpointOf(host);
+
+      expect(endpoint, isNotNull);
+      expect(_fleet('${config}Host b\n').endpointOf(host), endpoint);
+      for (final changed in [
+        config.replaceFirst('192.0.2.1', '192.0.2.2'),
+        config.replaceFirst('192.0.2.9', '192.0.2.8'),
+        config.replaceFirst('  ProxyJump', '  Port 2222\n  ProxyJump'),
+        config.replaceFirst('192.0.2.9', '192.0.2.9\n  User jumper'),
+        'Host a\n  HostName 192.0.2.1\n',
+      ]) {
+        expect(
+          _fleet(changed).endpointOf(host),
+          isNot(endpoint),
+          reason: changed,
+        );
+      }
+      expect(
+        _fleet(config, localUser: 'you').endpointOf(host),
+        isNot(endpoint),
+      );
+      expect(_fleet(config).endpointOf('ssh-config:missing'), isNull);
+    });
+
     test(
       'serves its hops through CredentialResolver.jumpHostResolver',
       () async {

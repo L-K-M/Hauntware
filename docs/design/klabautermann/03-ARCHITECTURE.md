@@ -245,7 +245,7 @@ D47 sampler deadlines · D48 host-side filtering · D49 collector locale ·
 D50 LXC values · D51 Access tab · D52 runtime placement · D53 integration
 placement · D54 runtime override in M3 · D55 no health overlay in the MVP
 · D56 log search through `planchette_core` · D57 timer triggers · D58
-cron zone rules.
+cron zone rules · D59 capability cache.
 Proposals awaiting the owner close the section; they are not decisions.
 
 ### Shape and scope
@@ -888,6 +888,48 @@ Proposals awaiting the owner close the section; they are not decisions.
   horizon); the dependency in `klabautermann_host` (3.1); fixed-offset
   goldens labelled as such (every run after the next change stays
   wrong).
+- **D59. The capability cache's names, writes and delivery.** Each fleet
+  server's last probed `HostProfile` lives in `capabilities/<name>.json`
+  under the support directory (4.10), usable for 24 h after its probe
+  (6.1). A synced id names `<uuid>.json` once it is validated as a UUID,
+  in lowercase. An import id, `ssh-config:<alias>`, names `ssh-config-`
+  and the lowercase hex SHA-256 of the alias's UTF-8 bytes through
+  `package:crypto`, a new direct dependency of `klabautermann_core` that
+  `seance_core` already resolves. Any other id, a jump hop's included,
+  names no file. A file holds a format marker, a version, the server id,
+  the probe's UTC time and the profile without its clock and session
+  fields; a file of another format or server, a newer version or a
+  broken field is rejected as such and replaced by the next probe. The
+  engine rewrites a server's file after every probe answer and deletes
+  it, with a profile not yet sent, when the server leaves the fleet or a
+  re-import gives its id another endpoint (each hop's and the host's
+  address, port and login name; SYN-08); at start it deletes the
+  files of servers outside the fleet and the leftovers of interrupted
+  writes. It does all three only when `EngineStart.supportDirectoryAccess`
+  says the process holds the directory alone (the desktop instance lock,
+  or a phone), and reads either way. It deletes nothing while the import
+  store is left as it is (`leftAsIs`, `newerVersion`), since that run's
+  fleet is not saved and removes no server. After an import the store
+  could not save, it writes no file until an import saves, since the
+  next start reads the older fleet, where a server may keep its id
+  under its old endpoint; purges go on. The file keeps no endpoint: the
+  saved import changes only through the running engine, but synced
+  entries (F3) change while it is closed and will need one. At start it reads
+  every fleet server's fresh file and sends that profile as a
+  `HostProfileChanged` with `cachedAt` when a `Connect` or `Subscribe`
+  first names the server before a probe of the run answers: startup
+  events reach only the app's first listener (10.1), which is not the
+  monitoring controller.
+  Sampling still waits for the run's own probe, whose answer is always
+  sent. The event carries the profile, not the access check's rows: the
+  app evaluates `evaluateAccess` and the panel rules over it (D51), and
+  rows in the event would repeat that. Why: 4.10's reasons for the name
+  (no separator or `:`, safe under case folding, never a UUID); two
+  instances writing one file race (4.10's `instance.lock`). *Rejected:*
+  an escaped alias (case folding still collides); seeding the scheduler
+  with the cached profile (a stale container answer would withhold or
+  show the wrong figures, D50, until the probe); sending cached profiles
+  with the startup fleet.
 
 ### Privilege and safety
 
@@ -1245,7 +1287,7 @@ klabautermann/
   packages/
     klabautermann_host/          pure Dart; dependencies meta, collection
     klabautermann_docker/        pure Dart; dependencies meta, collection; no dart:io in lib/
-    klabautermann_core/          pure Dart; dependencies seance_core, klabautermann_host, klabautermann_docker, timezone (D58)
+    klabautermann_core/          pure Dart; dependencies seance_core, klabautermann_host, klabautermann_docker, timezone (D58), crypto (D59)
       lib/src/{links,sampling,logs,capabilities}/   runtime services beside lib/src/engine/ (D52)
       test/integration/          engine tests against the fixture, tagged, skipped without it (D53)
       tool/capture_fixtures.dart                    fixture capture (6.5, D53)
@@ -1359,7 +1401,9 @@ The barrel's `klabautermann_host` export shows only the plain-data types
 that sampling results and `HostProfileChanged` carry (10.1),
 `JournalEntry` (the log viewer's journal rows, 10.8), and the access
 check over a `HostProfile` (`evaluateAccess` and its `AccessReport`,
-whose journal row drives the Logs panel's LOG-04 notice, 10.8); each
+whose journal row drives the Logs panel's LOG-04 notice, 10.8). Its
+`klabautermann_docker` export shows only `MaskedValue`, the masked
+process arguments a `ProcsResult` carries (8.9). Each
 list changes only as a milestone wires a type in or retires one. No `ghost_*` package
 depends on `seance_core`; `klabautermann_core` is a product package, and
 the curated lines above are its only
@@ -1852,7 +1896,7 @@ platform identities in 04, section 12.3):
 | `window_state.json` | The desktop main window's last normal frame and its maximized and full-screen flags (10.2), in the shape Séance's file established (`x`, `y`, `width`, `height`, `isMaximized`, `isFullScreen`; physical pixels on Windows); never synced. Added in M1, a deviation from the plan, which listed no window file: kept out of `settings.json`, as Séance and Planchette keep theirs, so debounced drag saves never rewrite the file that holds the device id | app | MVP |
 | `instance.lock` [E] | Empty. One desktop instance per support directory (built in M2): the composition root takes an exclusive, non-blocking advisory lock on it after the settings window's branch and before `settings.json` and `window_state.json` open and the engine isolate starts, so one process mints the device id and writes these files, and holds it for the life of the process; the file is never deleted. A second instance opens no other file and only says it is already running, until the user quits it. A lock that fails for another reason (no write access, no lock support) lets the app run unguarded and says so at startup. Phones run one process per app and take none | app, through `klabautermann_core`'s `InstanceLock` | MVP |
 | `identity_reads.jsonl` [E] | Audit trail of identity-file reads (M2): one JSON line per attempt to read a server's or jump hop's `IdentityFile`, read or not (UTC time, server id and label, the expanded path, the error), through `seance_core`'s `IdentityAuditLog`, under the name Séance and Poltergeist use. Owner-only on Linux and macOS, also through rotation, which keeps the newest 500 lines once the file passes 1,000; never synced. Recording is best effort and never fails a connect. Added in M2, a deviation from the plan, which listed no such file | `klabautermann_core` | MVP |
-| `capabilities/<serverId>.json` | Cached probe results, 24 h TTL | `klabautermann_core` | MVP |
+| `capabilities/<name>.json` | Cached probe results, 24 h TTL; named, written only by a process that holds the directory alone, and purged as D59 decides | `klabautermann_core` | MVP |
 | `audit/<serverId>.jsonl` | Audit log, 90-day retention [E] | `klabautermann_core` | MVP |
 | `history/<serverId>/<tier>.ring` | Fixed-size binary rollups (`RandomAccessFile`, no rewrite per sample) | `klabautermann_core` | v1 |
 | `alerts.jsonl` | In-app alert history, 30 days [E]; from v1.x also host alerts fetched from the inbox or read from a host spool, with source tier, server item ids and status (D42) | `klabautermann_core` | v1 |
@@ -1872,9 +1916,9 @@ as a file name: `:` is invalid in Windows file names, and an alias is any
 run of non-blank characters, so it can contain path separators, or differ
 from another alias only in case and collide on a case-insensitive file
 system (the macOS and Windows defaults). The import store keeps every
-alias inside one file and needs no such name, so the encoding is decided
+alias inside one file and needs no such name, so the encoding was decided
 with the first per-server file an import gets (the capability cache,
-M2). *Proposal, not decided:* name an import's files
+M2, D59): an import's files are named
 `ssh-config-` followed by the lowercase hex SHA-256 of the alias's UTF-8
 bytes, for example `capabilities/ssh-config-<64 hex digits>.json`. The
 name uses only lowercase letters, digits and hyphens, has a fixed length
@@ -2201,7 +2245,8 @@ sweeps, at most 6 concurrent [V]) and run only for confirmed endpoints.
 
 The first request on the slow sampler after connect returns a `HostProfile`,
 cached for the session and on the device for 24 h so panels render before
-the probe returns:
+the probe returns (D59: the app gets the device copy when a request first
+names the server):
 
 | Section | Source |
 |---|---|
@@ -3556,7 +3601,28 @@ CI.
   `PASS|PASSWORD|SECRET|TOKEN|KEY|PRIVATE|CREDENTIAL|AUTH|DSN|DATABASE_URL`
   (case-insensitive), `.env` values, process arguments split at the
   boundaries 7.2 preserves (`-p<secret>`, `--password=`), URL credentials
-  (`scheme://user:pass@`), image history `CreatedBy`.
+  (`scheme://user:pass@`), image history `CreatedBy`. From M2 the engine
+  masks every process argument before its row crosses, reading
+  whitespace tokens, so also inside a shell's `-c` line: an attached
+  `-p` value, read first so that a password holding a key word and `=`
+  stays whole, the value of `name=value` whose name matches the pattern,
+  also a name that runs through an earlier `=` (`--env=DB_PASSWORD=`),
+  the token after an option whose name matches it (unless that token
+  starts with `-` or the option is a `--no-` flag) and URL credentials.
+  A value that starts an argument is masked to that argument's end,
+  spaces included, and one inside an argument (a `-c` line's word) ends
+  where the shell ends that word, so quoted and escaped spaces stay in
+  it. A `ps` fallback row has lost the boundaries, so it masks
+  a value holding spaces up to its first space only. The program is
+  never read as an option; over-masking such as `-print` is the safe
+  direction. One procs reading reads at most 65,536 tokens: a 1 MiB
+  section can hold half a million one-letter arguments, each costing up
+  to a microsecond in the shared engine isolate, so past that budget the
+  rest of the argument and every later one are masked whole. Not masked yet: a short option's separate value
+  (`docker login -p`, `sshpass -p`, `redis-cli -a`), `curl -u user:pass`
+  and header values (`Authorization: Bearer`). Masking the argument after
+  any `-p`, `-a` or `-u` would also hide `ssh -p 22`, `mkdir -p` and
+  `sudo -u`, so the trade-off is left to a follow-up after K33.
 - Every export, share and diagnostic bundle passes `SecretRedactor`
   (`SC/src/llm/redaction.dart`) by default, with an explicit include-secrets
   toggle.
@@ -4152,7 +4218,7 @@ shows there.
 | `ConfirmEndpoints(ids)`, `SetMonitorSet(ids)` | `EndpointChanged(serverId)` |
 | `Connect(serverId)`, `Disconnect(serverId)` | `LinkState(serverId, status)` (D46's states plus `blocked`; typed reasons inside the status) |
 | `Subscribe(serverId, subscriptionId, streams)`, `Unsubscribe(serverId, subscriptionId)`, `SetCadenceProfile(profile)`; app activity is a separate request too (D45) | `Sample(serverId, stream, seq, at, result)` (engine-owned `seq`, D44; rates and derived values, D43), `SamplingState(serverId, phase, since)`, `Gap(serverId, streams, from, until, cause)` |
-| none: the engine probes after connecting (6.1) | `HostProfileChanged(serverId, profile)` |
+| none: the engine probes after connecting (6.1) | `HostProfileChanged(serverId, profile, cachedAt)` (`cachedAt` only on the device cache's copy, D59) |
 | `OpenLogStream(streamId, spec)`, `CloseStream(streamId)` | `LogBatch(streamId, records, dropped)` (at most 20 per second per stream [E]), `LogStreamState(streamId, status)` |
 | `DockerQuery(serverId, query)` | `DockerResult`, `DockerEvent` |
 | `PlanAction(intent)`, `RunAction(planId, confirmation)` | `ActionPlanned(preview)`, `ActionProgress`, `ActionFinished` |
@@ -4178,7 +4244,9 @@ the engine in `engine_isolate.dart` beside it):
   with typed entries and added the import row.
 - **Start.** The app spawns the engine with
   `IsolateEngineClient.spawn(supportDirectory:)`, its support directory,
-  where the engine keeps its own files (4.10). `EngineReady` carries
+  where the engine keeps its own files (4.10), and from M2
+  `supportDirectoryAccess`, whether the process holds it alone (D59).
+  `EngineReady` carries
   `importStoreIssue`, what was wrong with `ssh_config_imports.json` at
   start, or none, and the engine follows it at once with a
   `CatalogReplaced` holding the imports an earlier run saved. The client
@@ -4448,7 +4516,8 @@ the engine in `engine_isolate.dart` beside it):
   the probe, which the engine runs itself after connecting and reports as
   `HostProfileChanged` when it first knows a server's profile in a run or
   a later probe finds a different one, ignoring the clock and session
-  fields that change with every probe. The same ids again replace a
+  fields that change with every probe; a profile the device cache kept
+  comes first, with `cachedAt` (D59). The same ids again replace a
   subscription's streams, and an empty set drops it. `SetCadenceProfile`
   picks the 6.4 column (Desktop until the app sends one); a stream the
   column reads on demand is read once per `Subscribe` naming it, a
@@ -4468,7 +4537,8 @@ the engine in `engine_isolate.dart` beside it):
   map null until a previous reading exists, so unknown never sums to
   zero, and a `withheld` map naming each value left null because a
   container host's `/proc` would supply it (D50); for `procs`,
-  per-process CPU shares with the start time PRC-02 checks, plus the
+  per-process CPU shares with the start time PRC-02 checks, each
+  argument as a `MaskedValue` (8.9), plus the
   host's process count and how it chose the rows it sent (D48); for
   `identity`, the strings SYS-01 shows, resolved in the engine so the
   host's JSON never crosses (6.5); the parsed tables for `fs`,
