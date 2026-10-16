@@ -130,9 +130,13 @@ final _secretMask = _secrets.redact('token=x').substring('token='.length);
 
 final _privateKeyHeader = RegExp(r'-----BEGIN [A-Z ]*PRIVATE KEY-----');
 
-/// A shell word: quoted parts and unquoted characters, no whitespace. A
-/// quote left open runs to the end of the line.
-const _shellValue = r'''(?!\[redacted\])(?:"[^"\n]*"?|'[^'\n]*'?|[^\s"'])+''';
+/// A shell word: quoted parts, backslash escapes and unquoted
+/// characters, no whitespace. A quote left open runs to the end of the
+/// line. A word that is just [kRedacted] is done; one that only starts
+/// with it (a `--redact` value's replacement) is not.
+const _shellValue =
+    r'''(?!\[redacted\](?![^\s"']))'''
+    r'''(?:\\[^\n]?|"[^"\n]*"?|'[^'\n]*'?|[^\s"'\\])+''';
 
 /// Whitespace within a line.
 const _blank = r'[^\S\n]';

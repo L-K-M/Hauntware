@@ -578,6 +578,28 @@ void main() {
       expect(_redact(plain, collector: 'units'), plain);
     });
 
+    test('a value a --redact literal starts, an escaped blank', () {
+      final redactor = Redactor(const RedactionLiterals(extra: ['nas07']));
+      const text =
+          'PGPASSWORD=nas07Hunter2tail x\n'
+          r'PGPASSWORD=Hunter\ 2xyz pg_dump db'
+          '\n'
+          r'gpg --batch --passphrase Hunter\ 2xyz -c f';
+      final redacted = latin1.decode(
+        redactor.redact('units', latin1.encode(text)).bytes,
+      );
+      expect(
+        redacted,
+        'PGPASSWORD=[redacted] x\n'
+        'PGPASSWORD=[redacted] pg_dump db\n'
+        'gpg --batch --passphrase [redacted] -c f',
+      );
+      expect(redactor.review('PGPASSWORD=[redacted]Hunter2tail'), [
+        (1, 'looks like a secret'),
+      ]);
+      expect(redactor.review(redacted), isEmpty);
+    });
+
     test('a private-key header without its end becomes a placeholder', () {
       expect(
         _redact('$_pemBegin\nb3Blbg', collector: 'units'),
