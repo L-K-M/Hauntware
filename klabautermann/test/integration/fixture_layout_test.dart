@@ -99,6 +99,27 @@ void main() {
     expect(copies, isEmpty);
   });
 
+  test('run.sh exports every variable the engine suites read', () {
+    // The suites skip when run.sh exported none of these, so renaming
+    // them all would pass the job with no engine test run.
+    final support = read(
+      'klabautermann/packages/klabautermann_core/test/integration/support/'
+      'fixture.dart',
+    );
+    final variables = {
+      for (final match in RegExp(r"_variable\('(\w+)'\)").allMatches(support))
+        'KLABAUTERMANN_FIXTURE_${match[1]}',
+    };
+    expect(variables, isNotEmpty);
+    final run = read('klabautermann/test/integration/run.sh');
+    final exported = {
+      for (final line in run.replaceAll('\\\n', ' ').split('\n'))
+        if (line.trim().split(RegExp(r'\s+')) case ['export', ...final names])
+          for (final name in names) name.split('=').first,
+    };
+    expect(exported, containsAll(variables));
+  });
+
   test('run.sh runs the tagged engine suites one at a time', () {
     final run = read('klabautermann/test/integration/run.sh');
     expect(run, contains('test --concurrency=1 --tags integration'));

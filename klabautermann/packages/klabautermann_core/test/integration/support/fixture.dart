@@ -34,20 +34,24 @@ final class Fixture {
 
   final Map<String, String> _environment;
 
-  /// The running fixture, or null when run.sh did not start one. A run.sh
-  /// that exports only some of the variables fails the suite instead.
-  static Fixture? fromEnvironment() {
-    final environment = Platform.environment;
-    if (!environment.containsKey('KLABAUTERMANN_FIXTURE_COMPOSE_FILE')) {
+  /// The running fixture, or null when run.sh exported none of its
+  /// variables. A run.sh that exports only some of them fails the suite
+  /// instead: keyed on one, a renamed variable would skip every test and
+  /// leave the integration job green.
+  static Fixture? fromEnvironment([Map<String, String>? environment]) {
+    environment ??= Platform.environment;
+    if (!environment.keys.any((name) => name.startsWith(_prefix))) {
       return null;
     }
     return Fixture._(environment);
   }
 
+  static const _prefix = 'KLABAUTERMANN_FIXTURE_';
+
   String _variable(String name) {
-    final value = _environment['KLABAUTERMANN_FIXTURE_$name'];
+    final value = _environment['$_prefix$name'];
     if (value == null || value.isEmpty) {
-      throw StateError('run.sh exported no KLABAUTERMANN_FIXTURE_$name');
+      throw StateError('run.sh exported no $_prefix$name');
     }
     return value;
   }
