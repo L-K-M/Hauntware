@@ -321,6 +321,30 @@ void main() {
     });
   }
 
+  for (final textScale in [1.0, 2.0]) {
+    testWidgets('every core\'s bar has one track length at '
+        '${(textScale * 100).round()} % text', (tester) async {
+      final panel = await _pump(tester, textScale: textScale);
+      await panel.sample(
+        tester,
+        _core(perCpu: const {'cpu0': 5, 'cpu1': 100, 'cpu2': 50}),
+      );
+
+      double track(String core) => tester
+          .getSize(
+            find.byWidgetPredicate(
+              (widget) => widget is StackedBar && widget.label == core,
+            ),
+          )
+          .width;
+      // A figure's digits take none of its bar's length, so the bars'
+      // lengths compare across cores.
+      expect(track('cpu1'), track('cpu0'), reason: '100% beside 5%');
+      expect(track('cpu2'), track('cpu0'), reason: '50% beside 5%');
+      expect(tester.takeException(), isNull);
+    });
+  }
+
   testWidgets('SYS-04: figures a container withholds say why', (tester) async {
     const reason = MetricWithheldReason.containerHostFigures;
     const note =

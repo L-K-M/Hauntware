@@ -18,9 +18,9 @@ const double _wideWidth = 600;
 const double _gap = 16;
 const double _sparklineHeight = 40;
 
-/// A per-core bar's width with its figure, beside the core's name, before
+/// A per-core bar's track, between the core's name and its figure, before
 /// text scaling, and the gap between a core's name, bar and figure.
-const double _coreBarWidth = 106;
+const double _coreBarWidth = 72;
 const double _coreGap = 8;
 
 /// The widest a core's name gets before text scaling; only a name no
@@ -424,27 +424,41 @@ class _CoreBars extends StatelessWidget {
     if (MediaQuery.boldTextOf(context)) {
       nameStyle = nameStyle.merge(const TextStyle(fontWeight: FontWeight.bold));
     }
-    final nameWidth = cores.fold(0.0, (widest, core) {
+    double measure(String text) {
       final painter = TextPainter(
-        text: TextSpan(text: core.$1, style: nameStyle),
+        text: TextSpan(text: text, style: nameStyle),
         textDirection: Directionality.of(context),
         textScaler: scaler,
         maxLines: 1,
       )..layout();
       final width = painter.width;
       painter.dispose();
-      return math.max(
+      return width.ceilToDouble();
+    }
+
+    final nameWidth = cores.fold(
+      0.0,
+      (widest, core) => math.max(
         widest,
-        math.min(width.ceilToDouble(), scaler.scale(_coreNameMaxWidth)),
-      );
-    });
+        math.min(measure(core.$1), scaler.scale(_coreNameMaxWidth)),
+      ),
+    );
+    // Every figure gets the widest one's room, so its digits take none of
+    // its bar's length and the bars compare across cores.
+    final figureWidth = measure(
+      formatChartValue(100, ChartUnit.percent, strings),
+    );
     return Wrap(
       spacing: _gap,
       runSpacing: 8,
       children: [
         for (final (name, value) in cores)
           SizedBox(
-            width: nameWidth + _coreGap + scaler.scale(_coreBarWidth),
+            width:
+                nameWidth +
+                scaler.scale(_coreBarWidth) +
+                figureWidth +
+                2 * _coreGap,
             child: MergeSemantics(
               child: Row(
                 spacing: _coreGap,
@@ -473,9 +487,13 @@ class _CoreBars extends StatelessWidget {
                       ),
                     ),
                   ),
-                  Text(
-                    formatChartValue(value, ChartUnit.percent, strings),
-                    style: style,
+                  SizedBox(
+                    width: figureWidth,
+                    child: Text(
+                      formatChartValue(value, ChartUnit.percent, strings),
+                      style: style,
+                      textAlign: TextAlign.end,
+                    ),
                   ),
                 ],
               ),
