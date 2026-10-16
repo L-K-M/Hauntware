@@ -15,6 +15,8 @@ import 'package:klabautermann_host/klabautermann_host.dart';
 
 import '../engine/engine_isolate.dart' show EngineStart;
 import '../engine/protocol.dart';
+import '../logs/log_service.dart' show LogService;
+import '../logs/log_stream_router.dart' show kLogStreamsPerServerMax;
 import '../sampling/sample_pipeline.dart';
 import '../sampling/sample_results.dart' show sampleStreamCollector;
 import '../sampling/sampler_session.dart' show SamplerReplied;
@@ -64,11 +66,15 @@ final class ReplayPlan {
 ///   reads at the cadence profile's period (03 §6.4), `identity` once;
 ///   the replies are the platform's fixtures with the fast counters
 ///   advanced to the read's time.
-/// - A journal or kernel follow runs at [ReplayPlan.logLinesPerSecond]
-///   until closed, in [LogBatch]es at most 20 a second (03 §10.1); a
-///   window gets the newest journal rows it holds once, newest first,
-///   and ends filled, or at the oldest when it holds them all; a file
-///   ends as [LogStreamEndReason.missing].
+/// - [OpenLogStream] is rejected as `LogStreamRouter` rejects it (03
+///   §7.6): a reused id, a server outside the fleet, or a server holding
+///   [kLogStreamsPerServerMax] streams. Unlike the router, which rejects
+///   follows until K26, it serves them: a journal or kernel follow runs
+///   at [ReplayPlan.logLinesPerSecond] until closed, in [LogBatch]es at
+///   most 20 a second (03 §10.1). A window 03 §8.8 refuses ends as
+///   invalid at once; any other window gets the newest journal rows it
+///   holds once, newest first, and ends filled, or at the oldest when it
+///   holds them all; a file ends as [LogStreamEndReason.missing].
 /// - [Shutdown] stops its timer and exits; every other request gets
 ///   [RequestRejected].
 ///
@@ -89,7 +95,12 @@ final class _ReplayEngine {
   final _clock = Stopwatch();
   final _sequence = SampleSequence();
   final Map<String, _Host> _hosts = {};
+
+  /// The open follows, by stream id.
   final Map<String, _Follow> _follows = {};
+
+  /// Every id an open named, so a reuse is rejected (03 §10.1).
+  final Set<String> _usedIds = {};
   late final _journal = JournalFeed(_plan.journalRows, _plan.logLinesPerSecond);
   Timer? _timer;
   var _profile = CadenceProfile.desktop;
@@ -131,10 +142,12 @@ final class _ReplayEngine {
         if (!_hosts.containsKey(serverId)) {
           _reject('${message.runtimeType}', 'no fleet server $serverId');
         }
-      case OpenLogStream(:final streamId, :final spec):
-        _open(streamId, spec);
+      case OpenLogStream():
+        if (_open(message) case final reason?) _reject('OpenLogStream', reason);
       case CloseStream(:final streamId):
-        if (_follows.remove(streamId) == null) return;
+        final follow = _follows.remove(streamId);
+        if (follow == null) return;
+        follow.host.follows.remove(streamId);
         _send(
           LogStreamState(
             streamId,
@@ -281,25 +294,36 @@ final class _ReplayEngine {
     );
   }
 
-  void _open(String streamId, LogStreamSpec spec) {
+  /// Opens [request]'s stream and returns null, having sent its first
+  /// [LogStreamState], or returns why the engine rejects it.
+  String? _open(OpenLogStream request) {
+    final OpenLogStream(:streamId, :spec) = request;
+    if (!_usedIds.add(streamId)) return 'stream id $streamId was used before';
+    final host = _hosts[spec.serverId];
+    if (host == null) return 'no fleet server ${spec.serverId}';
+    if (host.follows.length >= kLogStreamsPerServerMax) {
+      return '${host.id} holds $kLogStreamsPerServerMax log streams';
+    }
+
     void state(LogStreamStatus status) =>
         _send(LogStreamState(streamId, status));
-
-    if (!_hosts.containsKey(spec.serverId)) {
+    if (!spec.follow && !LogService.accepts(spec)) {
       state(const LogStreamEnded(LogStreamEndReason.invalid));
-      return;
+      return null;
     }
     if (spec.source is FileLogSource) {
       state(const LogStreamEnded(LogStreamEndReason.missing));
-      return;
+      return null;
     }
     state(const LogStreamRunning());
     if (spec.follow) {
-      _follows[streamId] = _Follow(
+      final follow = _Follow(
+        host,
         FollowReplay(streamId: streamId, maxPending: _plan.logLinesPerSecond),
         start: _clock.elapsed,
       );
-      return;
+      _follows[streamId] = host.follows[streamId] = follow;
+      return null;
     }
 
     final rows = _plan.journalRows.reversed.take(spec.window).join('\n');
@@ -315,6 +339,7 @@ final class _ReplayEngine {
             : LogStreamEndReason.oldestReached,
       ),
     );
+    return null;
   }
 }
 
@@ -345,6 +370,9 @@ final class _Host {
   final Map<String, Set<SampleStream>> subscriptions = {};
   final Map<SampleStream, Duration> due = {};
 
+  /// The server's open follows, by stream id; a window ends as it opens.
+  final Map<String, _Follow> follows = {};
+
   /// Streams read once per link (`identity`) that have read.
   final Set<SampleStream> readOnce = {};
   int seq = 0;
@@ -352,10 +380,11 @@ final class _Host {
   String get id => entry.serverId;
 }
 
-/// One open follow and how many lines it has been fed.
+/// One open follow, its server and how many lines it has been fed.
 final class _Follow {
-  _Follow(this.replay, {required this.start});
+  _Follow(this.host, this.replay, {required this.start});
 
+  final _Host host;
   final FollowReplay replay;
   final Duration start;
   int fed = 0;

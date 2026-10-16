@@ -9,6 +9,8 @@ import 'dart:isolate';
 
 import 'package:klabautermann_core/klabautermann_core.dart';
 import 'package:klabautermann_core/replay.dart';
+import 'package:klabautermann_core/src/logs/log_stream_router.dart'
+    show kLogStreamsPerServerMax;
 import 'package:klabautermann_core/src/replay/fixture_replay.dart'
     show nextGridRead;
 import 'package:test/test.dart';
@@ -31,6 +33,7 @@ void main() {
   Future<void> spawn({
     int hosts = 1,
     Set<SampleStream>? monitored,
+    int logLinesPerSecond = 1000,
     void Function(EngineStart start) Function(ReplayPlan plan) engine =
         replayEngine,
   }) async {
@@ -39,6 +42,7 @@ void main() {
       journalRows: journalRows,
       hosts: hosts,
       monitored: monitored ?? const {},
+      logLinesPerSecond: logLinesPerSecond,
     );
     client = await IsolateEngineClient.spawn(
       supportDirectory: Directory.systemTemp.path,
@@ -63,6 +67,29 @@ void main() {
 
   Iterable<Sample> samples(String serverId) =>
       events.whereType<Sample>().where((s) => s.serverId == serverId);
+
+  LogStreamSpec spec({
+    bool follow = true,
+    LogSource? source,
+    String? id,
+    int window = 2,
+  }) => LogStreamSpec(
+    serverId: id ?? 'replay-0',
+    source: source ?? const JournalLogSource(),
+    window: window,
+    follow: follow,
+  );
+  List<LogStreamStatus> states(String streamId) => [
+    for (final e in events.whereType<LogStreamState>())
+      if (e.streamId == streamId) e.status,
+  ];
+  List<LogBatch> batches(String streamId) => events
+      .whereType<LogBatch>()
+      .where((b) => b.streamId == streamId)
+      .toList();
+  List<String> rejections() => [
+    for (final e in events.whereType<RequestRejected>()) e.reason,
+  ];
 
   test('serves the fleet linked and probed, and samples each server\'s '
       'monitored streams', () async {
@@ -159,28 +186,9 @@ void main() {
     );
   });
 
-  test('follows at the plan\'s rate until closed, and ends windows, files '
-      'and unknown servers', () async {
+  test('follows at the plan\'s rate until closed, and ends windows and '
+      'files', () async {
     await spawn();
-    LogStreamSpec spec({
-      bool follow = true,
-      LogSource? source,
-      String? id,
-      int window = 2,
-    }) => LogStreamSpec(
-      serverId: id ?? 'replay-0',
-      source: source ?? const JournalLogSource(),
-      window: window,
-      follow: follow,
-    );
-    List<LogStreamStatus> states(String streamId) => [
-      for (final e in events.whereType<LogStreamState>())
-        if (e.streamId == streamId) e.status,
-    ];
-    List<LogBatch> batches(String streamId) => events
-        .whereType<LogBatch>()
-        .where((b) => b.streamId == streamId)
-        .toList();
     int records(String streamId) =>
         batches(streamId).fold(0, (n, b) => n + b.records.length);
 
@@ -223,12 +231,6 @@ void main() {
       )
       ..send(
         OpenLogStream(
-          streamId: 'log-3',
-          spec: spec(id: 'nowhere'),
-        ),
-      )
-      ..send(
-        OpenLogStream(
           streamId: 'log-4',
           spec: spec(follow: false, window: journalRows.length + 1),
         ),
@@ -255,7 +257,47 @@ void main() {
       const LogStreamEnded(LogStreamEndReason.oldestReached),
     ]);
     expect(states('log-2'), [const LogStreamEnded(LogStreamEndReason.missing)]);
-    expect(states('log-3'), [const LogStreamEnded(LogStreamEndReason.invalid)]);
+  });
+
+  test('rejects an open as the engine\'s router does, and ends a window '
+      '03 §8.8 refuses at once', () async {
+    await spawn(logLinesPerSecond: 1);
+    client
+      ..send(OpenLogStream(streamId: 'log-0', spec: spec(follow: false)))
+      ..send(OpenLogStream(streamId: 'log-0', spec: spec()))
+      ..send(
+        OpenLogStream(
+          streamId: 'log-1',
+          spec: spec(id: 'nowhere'),
+        ),
+      )
+      ..send(
+        OpenLogStream(streamId: 'log-2', spec: spec(follow: false, window: 0)),
+      );
+    for (var i = 0; i < kLogStreamsPerServerMax; i++) {
+      client.send(OpenLogStream(streamId: 'follow-$i', spec: spec()));
+    }
+    client.send(OpenLogStream(streamId: 'follow-last', spec: spec()));
+    await until(() => rejections().length == 3, 'rejections');
+
+    expect(rejections(), [
+      'stream id log-0 was used before',
+      'no fleet server nowhere',
+      'replay-0 holds $kLogStreamsPerServerMax log streams',
+    ]);
+    expect(states('log-0'), hasLength(2));
+    expect(states('log-1'), isEmpty);
+    expect(states('log-2'), [const LogStreamEnded(LogStreamEndReason.invalid)]);
+    expect(states('follow-last'), isEmpty);
+
+    // A closed stream's slot is free again, but its id is not.
+    client
+      ..send(const CloseStream('follow-0'))
+      ..send(OpenLogStream(streamId: 'follow-0', spec: spec()))
+      ..send(OpenLogStream(streamId: 'follow-again', spec: spec()));
+    await until(() => states('follow-again').isNotEmpty, 'the reopened slot');
+    expect(rejections().last, 'stream id follow-0 was used before');
+    expect(states('follow-again'), [const LogStreamRunning()]);
   });
 
   test('a late read keeps its period\'s grid, skipping the slots it '
