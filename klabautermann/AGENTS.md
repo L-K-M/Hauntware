@@ -72,6 +72,12 @@ accessibility fixtures modelled on Séance's against the runner's
 data; `--stock-engine` runs the stock controller and must fail. Rerun them
 after every Flutter upgrade: both fixes rely on private engine selectors.
 
+`scripts/bench-frame-timing.sh` builds the app in profile mode for the
+Linux desktop and runs spike S5's frame-timing test
+(`app/klabautermann_app/integration_test/frame_timing_test.dart`) under
+`xvfb-run`; it needs the GTK toolchain the Linux client builds with, and
+its software-rendered numbers are provisional (`docs/evidence/s5/`).
+
 ## Conventions
 
 - The product name is **Klabautermann**, plain ASCII everywhere a file

@@ -5039,6 +5039,20 @@ palette) and presets in the preview. v1: paste from Séance and Poltergeist
   and (under `dart run`) the live heap. Its runs are provisional
   evidence in `klabautermann/docs/evidence/s5/` and set no budget; CI
   runs only its smoke test.
+- UI side (spike S5 part 2): the app's
+  `integration_test/frame_timing_test.dart` drives the real app over a
+  replay engine (`package:klabautermann_core/replay.dart`, test support
+  the app's `lib/` never imports) that serves the host fixtures through
+  the real parsers and sample pipeline across the production client's
+  isolate hop: ten servers reading `core` every 2 s, as the monitor set
+  will, and a 1,000 lines/s journal follow while the Logs panel shows.
+  It reports `FrameTiming` build and raster times (p90, p99, maximum and
+  frames over 16 ms) for the fleet list, a server's Overview and its
+  Logs panel. `klabautermann/scripts/bench-frame-timing.sh` runs it in
+  profile mode under Xvfb (the `klabautermann_frame_timing` job, 11.6);
+  its software-rendered numbers are provisional evidence in
+  `klabautermann/docs/evidence/s5/` and gate nothing, and the device
+  figure above stays a manual sign-off.
 
 ### 11.5 Host write inventory test
 

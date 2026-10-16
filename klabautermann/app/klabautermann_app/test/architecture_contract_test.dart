@@ -66,6 +66,21 @@ void main() {
     expect(offenders, isEmpty);
   });
 
+  test('lib/ never imports the replay engine, test support for spike S5 '
+      '(03 §11.4)', () {
+    final offenders = [
+      for (final entity in Directory('lib').listSync(recursive: true))
+        if (entity is File &&
+            entity.path.endsWith('.dart') &&
+            entity.readAsStringSync().contains(
+              'package:klabautermann_core/replay.dart',
+            ))
+          entity.path,
+    ];
+
+    expect(offenders, isEmpty);
+  });
+
   test('recognizes the import forms the scan must catch', () {
     const sources = [
       "import 'package:seance_core/seance_core.dart';",
