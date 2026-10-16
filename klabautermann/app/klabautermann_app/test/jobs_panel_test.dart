@@ -457,6 +457,52 @@ void main() {
     );
   });
 
+  testWidgets('the notices name the clock without zone rules, and a pause', (
+    tester,
+  ) async {
+    final panel = await _pump(tester);
+    // Before the probe answers, timer times are in UTC.
+    await panel.sample(tester, SampleStream.timers, jobsTimers());
+    expect(
+      find.text(
+        "Timer times are in UTC, as the server's offset is not known yet.",
+      ),
+      findsOneWidget,
+    );
+
+    // A zone name this device does not know: cron runs at the offset.
+    await panel.emit(tester, HostProfileChanged(_serverId, jobsProfile));
+    final cron = jobsCron();
+    await panel.sample(
+      tester,
+      SampleStream.cron,
+      CronResult(
+        cron.cron,
+        jobs: cron.jobs,
+        zoneFallback: CronZoneFallback.unknownZone,
+      ),
+    );
+    expect(
+      find.text(
+        "Cron times are at the server's offset now, UTC+02:00, as this "
+        'device does not know its time zone, so later DST changes do not '
+        'show.',
+      ),
+      findsOneWidget,
+    );
+
+    panel.engine.emit(
+      SamplingState(
+        serverId: _serverId,
+        phase: SamplingPhase.pausedInBackground,
+        since: jobsNow,
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Paused: app in background'), findsOneWidget);
+    expect(find.text('apt-daily.timer'), findsOneWidget);
+  });
+
   group('a timer with its triggers read', () {
     final elapse = OnCalendarElapse(
       text: 'Sun 2026-10-25 06:00:00 CET',
