@@ -174,7 +174,9 @@ gates nothing.
   nothing, but the live test binding asks for a frame after each one it
   draws, so the app redraws as fast as the display allows (14 to 18
   frames a second here) and frames that changed nothing count too.
-  `load` is what reached the app per second in each window.
+  `load` is what reached the app per second in each window; the run
+  fails when no sample arrived in a window, or fewer than 500 log
+  records a second in the Logs window, never on a slow frame.
 
 ### What it shows
 
