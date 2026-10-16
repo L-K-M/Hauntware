@@ -15,6 +15,7 @@ import 'package:klabautermann_host/klabautermann_host.dart';
 
 import '../engine/engine_isolate.dart' show EngineStart;
 import '../engine/protocol.dart';
+import '../links/channel_quota.dart';
 import '../logs/log_service.dart' show LogService;
 import '../logs/log_stream_router.dart' show kLogStreamsPerServerMax;
 import '../sampling/sample_pipeline.dart';
@@ -76,7 +77,10 @@ final class ReplayPlan {
 ///   most 20 a second (03 §10.1). A window 03 §8.8 refuses ends as
 ///   invalid at once; any other window gets the newest journal rows it
 ///   holds once, newest first, and ends filled, or at the oldest when it
-///   holds them all; a file ends as [LogStreamEndReason.missing].
+///   holds them all; a file ends as [LogStreamEndReason.missing]. A
+///   server runs as many follows at once as [ChannelShare.follower]
+///   allows (03 §5.2); a further one waits for a channel until one ends,
+///   as the router queues it.
 /// - [SetAppActivity] with the background pauses every follow without an
 ///   event, reports each stream as waiting for the foreground, and a
 ///   stream opened then waits too; the foreground runs them again from
@@ -337,11 +341,16 @@ final class _ReplayEngine {
 
   /// Runs [host]'s waiting streams, oldest first, or tells each why it
   /// still waits, as `LogStreamRouter` does. The replay's links are
-  /// always ready, so only the background holds a stream back.
+  /// always ready, so the background and the follower share hold a
+  /// stream back.
   void _pump(_Host host) {
     for (final stream in host.waiting.toList()) {
       if (_activity == AppActivity.background) {
         _wait(stream, LogStreamWaitReason.background);
+        continue;
+      }
+      if (stream.holdsChannel && !host.quota.take(ChannelShare.follower)) {
+        _wait(stream, LogStreamWaitReason.channel);
         continue;
       }
       host.waiting.remove(stream);
@@ -388,6 +397,9 @@ final class _ReplayEngine {
   void _pause(_Host host) {
     final paused = [for (final follow in host.following.values) follow.stream];
     host.following.clear();
+    for (final _ in paused) {
+      host.quota.give(ChannelShare.follower);
+    }
     host.waiting.insertAll(0, paused);
   }
 
@@ -398,19 +410,25 @@ final class _ReplayEngine {
     _send(LogStreamState(stream.id, LogStreamWaiting(reason)));
   }
 
-  /// Ends [stream] for [reason], waiting or running.
+  /// Ends [stream] for [reason], waiting or running; a follow's end
+  /// frees its slot for the next.
   void _end(_Stream stream, LogStreamEndReason reason) {
     final host = stream.host;
     _streams.remove(stream.id);
     host.waiting.remove(stream);
-    host.following.remove(stream.id);
+    final freed = host.following.remove(stream.id) != null;
     _send(LogStreamState(stream.id, LogStreamEnded(reason)));
+    if (!freed) return;
+
+    host.quota.give(ChannelShare.follower);
+    _pump(host);
   }
 
   /// Ends every stream of [host] as failed, as `LogStreamRouter` does on
   /// [Disconnect] and [Shutdown]: nothing would bring a link back for
   /// them.
   void _endAll(_Host host) {
+    // The waiting ones first, so that no follow's end runs them.
     final streams = [
       ...host.waiting,
       for (final follow in host.following.values) follow.stream,
@@ -451,6 +469,9 @@ final class _Host {
   /// The server's log streams that wait, oldest first.
   final List<_Stream> waiting = [];
 
+  /// The follower slots its running follows hold.
+  final quota = ChannelQuota();
+
   /// The server's running follows by stream id, in the order they
   /// started; a window ends as it runs.
   final Map<String, _Follow> following = {};
@@ -475,6 +496,10 @@ final class _Stream {
   /// What the last [LogStreamWaiting] sent named; null while it runs or
   /// before any.
   LogStreamWaitReason? waitingFor;
+
+  /// Whether it holds a follower slot while it runs: a journal or kernel
+  /// follow does; a window or a file ends as it runs.
+  bool get holdsChannel => spec.follow && spec.source is! FileLogSource;
 }
 
 /// One running follow, from when it started, and how many lines it has

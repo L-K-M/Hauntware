@@ -9,6 +9,8 @@ import 'dart:isolate';
 
 import 'package:klabautermann_core/klabautermann_core.dart';
 import 'package:klabautermann_core/replay.dart';
+import 'package:klabautermann_core/src/links/channel_quota.dart'
+    show ChannelShare;
 import 'package:klabautermann_core/src/logs/log_stream_router.dart'
     show kLogStreamsPerServerMax;
 import 'package:klabautermann_core/src/replay/fixture_replay.dart'
@@ -290,14 +292,17 @@ void main() {
     expect(states('log-2'), [const LogStreamEnded(LogStreamEndReason.invalid)]);
     expect(states('follow-last'), isEmpty);
 
-    // A closed stream's slot is free again, but its id is not.
+    // A closed stream leaves room for another, waiting ones counted, but
+    // its id stays used.
     client
       ..send(const CloseStream('follow-0'))
       ..send(OpenLogStream(streamId: 'follow-0', spec: spec()))
       ..send(OpenLogStream(streamId: 'follow-again', spec: spec()));
-    await until(() => states('follow-again').isNotEmpty, 'the reopened slot');
+    await until(() => states('follow-again').isNotEmpty, 'the room left');
     expect(rejections().last, 'stream id follow-0 was used before');
-    expect(states('follow-again'), [const LogStreamRunning()]);
+    expect(states('follow-again'), [
+      const LogStreamWaiting(LogStreamWaitReason.channel),
+    ]);
   });
 
   test('Disconnect ends its server\'s streams as failed, and Shutdown '
@@ -362,6 +367,38 @@ void main() {
       ['log-0', 'log-0', 'log-1', 'log-2'],
     );
     expect(states('log-2').last, isA<LogStreamEnded>());
+  });
+
+  test('a server runs as many follows as its share allows; the next waits '
+      'for a channel until one ends', () async {
+    await spawn(hosts: 2, logLinesPerSecond: 1);
+    final share = ChannelShare.follower.limit;
+    for (var i = 0; i <= share; i++) {
+      client.send(OpenLogStream(streamId: 'follow-$i', spec: spec()));
+    }
+    client
+      ..send(
+        OpenLogStream(
+          streamId: 'other',
+          spec: spec(id: 'replay-1'),
+        ),
+      )
+      ..send(OpenLogStream(streamId: 'window', spec: spec(follow: false)));
+    await until(() => states('window').isNotEmpty, 'the window');
+    for (var i = 0; i < share; i++) {
+      expect(states('follow-$i'), [const LogStreamRunning()]);
+    }
+    const channel = LogStreamWaiting(LogStreamWaitReason.channel);
+    expect(states('follow-$share'), [channel]);
+    expect(states('other'), [const LogStreamRunning()]);
+    expect(states('window'), [
+      const LogStreamRunning(),
+      const LogStreamEnded(LogStreamEndReason.windowFilled),
+    ]);
+
+    client.send(const CloseStream('follow-0'));
+    await until(() => states('follow-$share').length == 2, 'the freed slot');
+    expect(states('follow-$share'), [channel, const LogStreamRunning()]);
   });
 
   test('a late read keeps its period\'s grid, skipping the slots it '
