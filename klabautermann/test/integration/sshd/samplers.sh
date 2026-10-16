@@ -1,9 +1,11 @@
 #!/bin/sh
 # Prints the PIDs of the engine's sampler shells, oldest first: each
 # `sh -s` that sshd started, not the subshells a sampler forks, which
-# show the same command line. A link starts its slow sampler, runs the
-# probe on it, then starts the fast one, so on a fresh link the fast
-# sampler is the last line.
+# show the same command line. A link opens its slow sampler and then its
+# fast one in one step (SamplingScheduler._start); the probe only holds
+# the fast one's ticks. The exec requests reach sshd in that order on
+# the one connection, so on a fresh link the fast sampler is the last
+# line.
 set -eu
 
 ps -o pid,ppid,args | awk '
