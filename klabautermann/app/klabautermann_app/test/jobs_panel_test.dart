@@ -426,6 +426,37 @@ void main() {
     );
   });
 
+  testWidgets('a server without systemd has no timers to fail', (tester) async {
+    final panel = await _pump(tester);
+    await panel.emit(
+      tester,
+      HostProfileChanged(
+        _serverId,
+        HostProfile(zoneOffset: '+0000', systemdDir: false),
+      ),
+    );
+    await panel.sample(
+      tester,
+      SampleStream.cron,
+      CronResult(CronSnapshot(ownCrontabPresent: true)),
+    );
+    await panel.sample(
+      tester,
+      SampleStream.timers,
+      const CollectorUnavailable(CollectorUnavailableReason.missing),
+    );
+
+    expect(find.textContaining('Timers could not be read'), findsNothing);
+    expect(
+      find.text('This server does not run systemd, so it has no timers.'),
+      findsOneWidget,
+    );
+    expect(
+      find.text('No jobs found in your crontab or the system cron files.'),
+      findsOneWidget,
+    );
+  });
+
   group('a timer with its triggers read', () {
     final elapse = OnCalendarElapse(
       text: 'Sun 2026-10-25 06:00:00 CET',

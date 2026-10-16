@@ -2404,11 +2404,17 @@ abstract class AppLocalizations {
   /// **'Waiting for the first reading.'**
   String get jobsWaiting;
 
-  /// The Jobs tab when every source it reads was read and none holds a job: the login user's crontab (crontab -l), /etc/crontab, /etc/cron.d and the cron.<period> directories, and systemd timers. Other users' crontabs are not read. crontab is read, or unread when crontab -l gave no clear answer, so the user's own jobs are unknown.
+  /// The Jobs tab when every source it reads was read and none holds a job: the login user's crontab (crontab -l), /etc/crontab, /etc/cron.d and the cron.<period> directories, and systemd timers. Other users' crontabs are not read. crontab is read, or unread when crontab -l gave no clear answer, so the user's own jobs are unknown; timers is read, or absent on a server that does not run systemd.
   ///
   /// In en, this message translates to:
-  /// **'{crontab, select, read{No jobs found in your crontab, the system cron files or systemd timers.} other{No jobs found in the system cron files or systemd timers.}}'**
-  String jobsEmpty(String crontab);
+  /// **'{crontab, select, read{{timers, select, read{No jobs found in your crontab, the system cron files or systemd timers.} other{No jobs found in your crontab or the system cron files.}}} other{{timers, select, read{No jobs found in the system cron files or systemd timers.} other{No jobs found in the system cron files.}}}}'**
+  String jobsEmpty(String crontab, String timers);
+
+  /// Above the jobs list in place of a failed timers reading, when the server's probe found systemd not running.
+  ///
+  /// In en, this message translates to:
+  /// **'This server does not run systemd, so it has no timers.'**
+  String get jobsNoSystemd;
 
   /// Why the Jobs tab's latest cron or timers reading has no rows; the rows of the last reading, if any, stay listed below it.
   ///

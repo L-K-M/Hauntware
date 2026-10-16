@@ -1914,14 +1914,21 @@
   "@jobsWaiting": {
     "description": "The Jobs tab before the server's cron jobs or timers have been read."
   },
-  "jobsEmpty": "{crontab, select, read{No jobs found in your crontab, the system cron files or systemd timers.} other{No jobs found in the system cron files or systemd timers.}}",
+  "jobsEmpty": "{crontab, select, read{{timers, select, read{No jobs found in your crontab, the system cron files or systemd timers.} other{No jobs found in your crontab or the system cron files.}}} other{{timers, select, read{No jobs found in the system cron files or systemd timers.} other{No jobs found in the system cron files.}}}}",
   "@jobsEmpty": {
-    "description": "The Jobs tab when every source it reads was read and none holds a job: the login user's crontab (crontab -l), /etc/crontab, /etc/cron.d and the cron.<period> directories, and systemd timers. Other users' crontabs are not read. crontab is read, or unread when crontab -l gave no clear answer, so the user's own jobs are unknown.",
+    "description": "The Jobs tab when every source it reads was read and none holds a job: the login user's crontab (crontab -l), /etc/crontab, /etc/cron.d and the cron.<period> directories, and systemd timers. Other users' crontabs are not read. crontab is read, or unread when crontab -l gave no clear answer, so the user's own jobs are unknown; timers is read, or absent on a server that does not run systemd.",
     "placeholders": {
       "crontab": {
         "type": "String"
+      },
+      "timers": {
+        "type": "String"
       }
     }
+  },
+  "jobsNoSystemd": "This server does not run systemd, so it has no timers.",
+  "@jobsNoSystemd": {
+    "description": "Above the jobs list in place of a failed timers reading, when the server's probe found systemd not running."
   },
   "jobsUnavailable": "{source, select, cron{Cron jobs} other{Timers}} could not be read: {reason, select, missing{the server lacks a file or tool this reading needs.} denied{the server refused this reading.} timeout{this reading took too long, so the server stopped it.} other{this reading failed on the server.}}",
   "@jobsUnavailable": {

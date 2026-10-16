@@ -27,9 +27,10 @@ const Duration _staleAfter = Duration(seconds: 120);
 /// The jobs table's columns, whose names key them.
 enum _Column { job, source, schedule, next }
 
-/// Whether a source's reading answered, which the empty list's ARB
-/// phrase selects.
-enum _Answer { read, unread }
+/// What a source's reading said, which the empty list's ARB phrase
+/// selects: it answered, gave no clear answer, or the server has no such
+/// source.
+enum _Answer { read, unread, absent }
 
 /// The Jobs tab (03 §10.2, §7.7): JOB-01's unified list of the cron lines,
 /// `cron.<period>` scripts and systemd timers, and JOB-02's schedules in
@@ -136,6 +137,9 @@ class _JobsPanelState extends State<JobsPanel> {
         .firstOrNull
         ?.timers;
     final serverOffset = profile?.serverZone?.offset;
+    // Without systemd running the server has no timers, and a timers read
+    // there fails for want of systemctl or its manager.
+    final noTimers = profile?.systemdDir == false && timers == null;
     final jobs = <JobEntry>[
       ...?cron?.jobs,
       for (final timer in timers?.timers ?? const <SystemdTimer>[])
@@ -146,7 +150,7 @@ class _JobsPanelState extends State<JobsPanel> {
         if (sample case Sample(
           :final stream,
           result: final CollectorUnavailable result,
-        ))
+        ) when !(noTimers && stream == SampleStream.timers))
           PanelNotice(
             icon: result.reason == CollectorUnavailableReason.timeout
                 ? Icons.timer_off_outlined
@@ -158,13 +162,14 @@ class _JobsPanelState extends State<JobsPanel> {
     // Only both readings say the server has no job; an unread or failed
     // stream's notice stands above. An unclear `crontab -l` leaves the
     // user's own crontab out of the claim.
-    final empty = cron == null || timers == null
+    final empty = cron == null || (timers == null && !noTimers)
         ? null
         : l10n.jobsEmpty(
             (cron.cron.ownCrontabPresent == null
                     ? _Answer.unread
                     : _Answer.read)
                 .name,
+            (noTimers ? _Answer.absent : _Answer.read).name,
           );
     final timed = jobs.any(
       (job) => job is TimerJobEntry && job.timer.nextUtc != null,
@@ -184,6 +189,8 @@ class _JobsPanelState extends State<JobsPanel> {
       ...unavailable,
       if (readings.isEmpty && unavailable.isEmpty)
         PanelNotice(icon: Icons.hourglass_empty, text: l10n.jobsWaiting),
+      if (noTimers)
+        PanelNotice(icon: Icons.info_outline, text: l10n.jobsNoSystemd),
       if (cron != null && cron.cron.ownCrontabPresent == null)
         PanelNotice(icon: Icons.info_outline, text: l10n.jobsOwnCrontabUnknown),
       ?_cronZone(l10n, cron, serverOffset),
