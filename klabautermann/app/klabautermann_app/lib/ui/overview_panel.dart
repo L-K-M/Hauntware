@@ -175,6 +175,14 @@ class OverviewPanel extends StatelessWidget {
       diskFreshness: freshness(_slowStaleAfter, slow.listed.value?.at),
       healthFreshness: freshness(_slowStaleAfter, slow.healthAt),
     );
+    // Without a `core` reading this run, `core` has no age to lose, so a
+    // link lost after slow readings is said from theirs.
+    final head = reading != null || coreFreshness is FreshnessPaused
+        ? coreFreshness
+        : [
+            partTwo.diskFreshness,
+            partTwo.healthFreshness,
+          ].whereType<FreshnessDisconnected>().firstOrNull;
 
     return LayoutBuilder(
       builder: (context, box) {
@@ -200,10 +208,10 @@ class OverviewPanel extends StatelessWidget {
           child: column([
             // The live stream's line heads the panel: a pause or a lost
             // link holds every card, and the slow cards add their age.
-            if (reading != null || coreFreshness is FreshnessPaused)
+            if (head != null)
               PanelNotice(
-                icon: coreFreshness.stale ? Icons.history : Icons.schedule,
-                text: freshnessText(l10n, coreFreshness),
+                icon: head.stale ? Icons.history : Icons.schedule,
+                text: freshnessText(l10n, head),
               ),
             partTwo.health(context, scope),
             if (unavailable != null)

@@ -922,6 +922,37 @@ void main() {
     expect(mountBars.every((bar) => bar.stale), isTrue);
   });
 
+  testWidgets('a link lost before any core reading is said in words', (
+    tester,
+  ) async {
+    final panel = await _pump(tester);
+    void phase(SamplingPhase phase) => panel.engine.emit(
+      SamplingState(
+        serverId: _serverId,
+        phase: phase,
+        since: panel.now.toUtc(),
+      ),
+    );
+    phase(SamplingPhase.sampling);
+    await panel.sample(tester, _failed(), stream: SampleStream.failedUnits);
+    await panel.sample(tester, FsResult(_fs), stream: SampleStream.fs);
+    await panel.sample(
+      tester,
+      const CollectorUnavailable(CollectorUnavailableReason.timeout),
+    );
+
+    panel.now = _start.add(const Duration(minutes: 1));
+    phase(SamplingPhase.waitingForLink);
+    panel.now = _start.add(const Duration(minutes: 10));
+    await tester.pump(const Duration(seconds: 1));
+    // Said once, for the greyed slow cards too.
+    expect(find.text('Disconnected 9 min ago'), findsOneWidget);
+    expect(find.textContaining('Updated'), findsNothing);
+    final mountBars = _bars(tester).where((bar) => bar.label.startsWith('/'));
+    expect(mountBars, isNotEmpty);
+    expect(mountBars.every((bar) => bar.stale), isTrue);
+  });
+
   testWidgets('SYS-04: an uptime and boot time a container withholds say '
       'why', (tester) async {
     final panel = await _pump(tester);
