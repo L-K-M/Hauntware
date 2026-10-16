@@ -279,8 +279,11 @@ void _cronLine(
 
 /// A trimmed job line [t]: an `@` macro or five fields, a system table's
 /// user field, then the command. cron reads the user field after a macro
-/// too, whatever the word looks like, and skips a line that ends before
-/// the command [R: cronie `entry.c` `load_entry`].
+/// too, without checking that the user exists, and skips a line that
+/// ends before the command [R: cronie `entry.c` `load_entry`]. Not yet
+/// modelled: cron also skips a line whose word after the schedule starts
+/// with `*`, and reads a command's leading `-` words as cron options,
+/// rejecting any but `-n`.
 void _cronJob(
   String t,
   String raw,
