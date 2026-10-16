@@ -2582,7 +2582,11 @@ unless the user enables admin mode for that panel.
   block precedes every command line. Command lines are masked per
   argument (8.9);
   the `ps` fallback joins arguments with spaces, so masking there works on
-  whitespace tokens. Kill and signal
+  whitespace tokens. The engine dates each start as the reading's time
+  less the reply's uptime plus the start ticks at USER_HZ 100, as the CPU
+  shares assume; the start is unknown where lxcfs serves the container's
+  own age as `/proc/uptime` (D50), since start ticks count from the
+  kernel's boot. Kill and signal
   (PRC-02): the plan records the PID and its start
   time (field 22 of `/proc/<pid>/stat`: fields resume at 3, `state`,
   after the last `)`, because `comm` may contain spaces and `)`, so
@@ -4349,8 +4353,8 @@ the engine in `engine_isolate.dart` beside it):
   map null until a previous reading exists, so unknown never sums to
   zero, and a `withheld` map naming each value left null because a
   container host's `/proc` would supply it (D50); for `procs`,
-  per-process CPU shares with the start time PRC-02 checks, each
-  argument as a `MaskedValue` (8.9), plus the
+  per-process CPU shares with the start time PRC-02 checks and its
+  wall-clock time (7.2), each argument as a `MaskedValue` (8.9), plus the
   host's process count and how it chose the rows it sent (D48); for
   `identity`, the strings SYS-01 shows, resolved in the engine so the
   host's JSON never crosses (6.5); the parsed tables for `fs`,

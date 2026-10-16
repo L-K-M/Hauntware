@@ -378,6 +378,7 @@ void main() {
                       residentBytes: 8192,
                       cpuPercent: 0.5,
                       startTicks: 1234,
+                      startedAt: DateTime.utc(2026, 10, 15, 9, 41),
                       arguments: [
                         MaskedValue.plain('mysql'),
                         MaskedValue.redacted('-p********', '-phunter2'),
@@ -399,6 +400,7 @@ void main() {
       expect(mysql.residentBytes, 8192);
       expect(mysql.cpuPercent, 0.5);
       expect(mysql.startTicks, 1234);
+      expect(mysql.startedAt, DateTime.utc(2026, 10, 15, 9, 41));
       // A masked argument crosses with its real text for the reveal
       // action (03 §8.9), and shows the mask.
       expect(mysql.arguments!.map((a) => a.display), ['mysql', '-p********']);
