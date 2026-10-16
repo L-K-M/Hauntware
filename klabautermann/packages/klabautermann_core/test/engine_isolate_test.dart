@@ -484,6 +484,26 @@ void main() {
         )
         ..send(const Connect('probe'));
       expect((await next(events) as RequestRejected).requestName, 'Connect');
+
+      // A rail or tab subscription often names the server first.
+      final subscriber = await spawnEngine();
+      final (events: subscriberEvents, fleet: _) = await started(subscriber);
+      subscriber
+        ..send(
+          const Subscribe(
+            serverId: web,
+            subscriptionId: 'rail',
+            streams: {SampleStream.core},
+          ),
+        )
+        ..send(const Connect('probe'));
+      final subscribed = await next(subscriberEvents) as HostProfileChanged;
+      expect(subscribed.serverId, web);
+      expect(subscribed.cachedAt, isNotNull);
+      expect(
+        (await next(subscriberEvents) as RequestRejected).requestName,
+        'Connect',
+      );
     });
 
     test('a server that leaves the fleet loses its file, unless another '
