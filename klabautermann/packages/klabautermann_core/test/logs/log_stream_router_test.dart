@@ -7,7 +7,7 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 import 'package:klabautermann_core/src/logs/log_service.dart';
 import 'package:klabautermann_core/src/logs/log_stream_router.dart';
 import 'package:seance_core/seance_core.dart'
-    show RemoteExit, SshLink, quoteShellWord;
+    show RemoteExit, SshLink, SshLinkSeen, quoteShellWord;
 import 'package:test/test.dart';
 
 import '../support/fake_clock.dart';
@@ -160,6 +160,15 @@ void main() {
       await _until(() => statuses('c').length == 2);
       expect(statuses('c'), [_forChannel, _running]);
       expect(link.commands, hasLength(3));
+    });
+
+    test('a learned session limit below 4 holds back no window, a short '
+        'action', () {
+      link.seen = const SshLinkSeen(learnedSessionLimit: 2);
+      open('a');
+      open('b');
+      expect(statuses('a'), [_running]);
+      expect(statuses('b'), [_running]);
     });
 
     test('a deadline frees its slot, as every end does', () async {
