@@ -124,7 +124,7 @@ M2, the host read MVP, is the current milestone. What is on main:
   (`/etc/crontab`, `/etc/cron.d`) `parseCron` reads the user field after
   an `@` macro too, as cronie's `load_entry` does, and skips with a
   warning a system line that ends before its command. A command keeps
-  its inner blanks as written. User crontabs are unchanged.
+  its inner blanks as written. User crontabs still have no user field.
 - Log and job commands (M2, `klabautermann_host`, K18, #211): the
   `journalctl` builder adds the kernel log (`-k -b`), an identifier
   (`-t`), the current boot, `--until`, times sent as `@<epoch>` so the
@@ -305,7 +305,8 @@ M2, the host read MVP, is the current milestone. What is on main:
   a signal, timeout or lost link always ends as failed. Stderr crosses
   through `stripControlChars`. The app does not word the `dmesg`
   fallback yet, and a malformed `dmesg` record is skipped without
-  counting as dropped.
+  counting as dropped. The engine reaches it only with links on (K25b,
+  below).
 - Log-read wiring (M2, 03 §5.2, §7.6, K25b, #229): with
   `EngineStart.linksEnabled`, a `LogStreamRouter` hands `OpenLogStream`
   windows and `CloseStream` to a `LogService` on each server's ready
@@ -457,8 +458,8 @@ M2, the host read MVP, is the current milestone. What is on main:
   not watched, a link lost while sampling, a reading's age and
   staleness, and no data yet. `MonitoringController` keeps each server's
   latest `SamplingState` and the phase before it. The Overview's
-  freshness line (K32a, above) and the coverage card and inspector
-  (K39b, below) use the formatter's words; the fleet rows word their age
+  freshness line (K32a, above) and the inspector's coverage (K39b,
+  below) use the formatter's words; the fleet rows word their age
   with their own strings. The app's engine sends no `SamplingState`
   while links are off (K44).
 - Coverage part 2 (M2, 03 §9.5 items 3, 5 and 6, K39b, #226): each
