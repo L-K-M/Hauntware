@@ -330,6 +330,40 @@ void main() {
     ]);
   });
 
+  test('the background pauses follows and holds new streams; the '
+      'foreground runs them from their start, paused ones first', () async {
+    await spawn();
+    client.send(OpenLogStream(streamId: 'log-0', spec: spec()));
+    await until(() => batches('log-0').isNotEmpty, 'follow batches');
+
+    client
+      ..send(const SetAppActivity(AppActivity.background))
+      ..send(OpenLogStream(streamId: 'log-1', spec: spec()))
+      ..send(OpenLogStream(streamId: 'log-2', spec: spec(follow: false)));
+    await until(() => states('log-2').isNotEmpty, 'the waiting window');
+    const background = LogStreamWaiting(LogStreamWaitReason.background);
+    expect(states('log-0'), [const LogStreamRunning(), background]);
+    expect(states('log-1'), [background]);
+    expect(states('log-2'), [background]);
+    final paused = batches('log-0').length;
+    await Future<void>.delayed(const Duration(milliseconds: 150));
+    expect(batches('log-0'), hasLength(paused));
+
+    client.send(const SetAppActivity(AppActivity.foreground));
+    await until(
+      () => batches('log-0').length > paused && batches('log-1').isNotEmpty,
+      'follow batches after the return',
+    );
+    expect(
+      [
+        for (final e in events.whereType<LogStreamState>())
+          if (e.status == const LogStreamRunning()) e.streamId,
+      ],
+      ['log-0', 'log-0', 'log-1', 'log-2'],
+    );
+    expect(states('log-2').last, isA<LogStreamEnded>());
+  });
+
   test('a late read keeps its period\'s grid, skipping the slots it '
       'passed (03 §6.2)', () {
     const period = Duration(seconds: 2);

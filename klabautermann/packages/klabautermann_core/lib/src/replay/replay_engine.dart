@@ -77,6 +77,10 @@ final class ReplayPlan {
 ///   invalid at once; any other window gets the newest journal rows it
 ///   holds once, newest first, and ends filled, or at the oldest when it
 ///   holds them all; a file ends as [LogStreamEndReason.missing].
+/// - [SetAppActivity] with the background pauses every follow without an
+///   event, reports each stream as waiting for the foreground, and a
+///   stream opened then waits too; the foreground runs them again from
+///   their start, the paused ones first, as the router does (03 §6.4).
 /// - [Shutdown] ends every log stream as failed, stops its timer and
 ///   exits; every other request gets [RequestRejected], save a
 ///   [Disconnect] of a server outside the fleet, which the engine ignores
@@ -100,8 +104,8 @@ final class _ReplayEngine {
   final _sequence = SampleSequence();
   final Map<String, _Host> _hosts = {};
 
-  /// The open follows, by stream id.
-  final Map<String, _Follow> _follows = {};
+  /// The open log streams, waiting or following, by id.
+  final Map<String, _Stream> _streams = {};
 
   /// Every id an open named, so a reuse is rejected (03 §10.1).
   final Set<String> _usedIds = {};
@@ -140,8 +144,13 @@ final class _ReplayEngine {
       case SetCadenceProfile(:final profile):
         _profile = profile;
       case SetAppActivity(:final activity):
+        if (activity == _activity) return;
         _activity = activity;
-        _hosts.values.forEach(_update);
+        for (final host in _hosts.values) {
+          _update(host);
+          if (activity == AppActivity.background) _pause(host);
+          _pump(host);
+        }
       case Connect(:final serverId):
         if (!_hosts.containsKey(serverId)) {
           _reject('Connect', 'no fleet server $serverId');
@@ -151,7 +160,9 @@ final class _ReplayEngine {
       case OpenLogStream():
         if (_open(message) case final reason?) _reject('OpenLogStream', reason);
       case CloseStream(:final streamId):
-        _end(streamId, LogStreamEndReason.closed);
+        if (_streams[streamId] case final stream?) {
+          _end(stream, LogStreamEndReason.closed);
+        }
       case Shutdown():
         // Each stream's end goes out before the isolate does.
         _hosts.values.forEach(_endAll);
@@ -226,17 +237,19 @@ final class _ReplayEngine {
     for (final host in _hosts.values) {
       _read(host, now, at);
     }
-    for (final follow in _follows.values) {
-      final due =
-          _plan.logLinesPerSecond *
-          (now - follow.start).inMicroseconds ~/
-          Duration.microsecondsPerSecond;
-      if (due > follow.fed) {
-        _journal.feed(follow.replay, due - follow.fed);
-        follow.fed = due;
-      }
-      if (follow.replay.flush(now - follow.start) case final batch?) {
-        _send(batch);
+    for (final host in _hosts.values) {
+      for (final follow in host.following.values) {
+        final due =
+            _plan.logLinesPerSecond *
+            (now - follow.start).inMicroseconds ~/
+            Duration.microsecondsPerSecond;
+        if (due > follow.fed) {
+          _journal.feed(follow.replay, due - follow.fed);
+          follow.fed = due;
+        }
+        if (follow.replay.flush(now - follow.start) case final batch?) {
+          _send(batch);
+        }
       }
     }
   }
@@ -301,29 +314,58 @@ final class _ReplayEngine {
     if (!_usedIds.add(streamId)) return 'stream id $streamId was used before';
     final host = _hosts[spec.serverId];
     if (host == null) return 'no fleet server ${spec.serverId}';
-    if (host.follows.length >= kLogStreamsPerServerMax) {
+    if (host.logStreams >= kLogStreamsPerServerMax) {
       return '${host.id} holds $kLogStreamsPerServerMax log streams';
     }
 
-    void state(LogStreamStatus status) =>
-        _send(LogStreamState(streamId, status));
+    // Refused before it waits for anything, as the router refuses it.
     if (!spec.follow && !LogService.accepts(spec)) {
-      state(const LogStreamEnded(LogStreamEndReason.invalid));
+      _send(
+        LogStreamState(
+          streamId,
+          const LogStreamEnded(LogStreamEndReason.invalid),
+        ),
+      );
       return null;
     }
+    final stream = _Stream(streamId, spec, host);
+    _streams[streamId] = stream;
+    host.waiting.add(stream);
+    _pump(host);
+    return null;
+  }
+
+  /// Runs [host]'s waiting streams, oldest first, or tells each why it
+  /// still waits, as `LogStreamRouter` does. The replay's links are
+  /// always ready, so only the background holds a stream back.
+  void _pump(_Host host) {
+    for (final stream in host.waiting.toList()) {
+      if (_activity == AppActivity.background) {
+        _wait(stream, LogStreamWaitReason.background);
+        continue;
+      }
+      host.waiting.remove(stream);
+      stream.waitingFor = null;
+      _run(stream);
+    }
+  }
+
+  /// Runs [stream] from its start: a follow until it ends or pauses, a
+  /// window or file at once.
+  void _run(_Stream stream) {
+    final _Stream(id: streamId, :spec, :host) = stream;
     if (spec.source is FileLogSource) {
-      state(const LogStreamEnded(LogStreamEndReason.missing));
-      return null;
+      _end(stream, LogStreamEndReason.missing);
+      return;
     }
-    state(const LogStreamRunning());
+    _send(LogStreamState(streamId, const LogStreamRunning()));
     if (spec.follow) {
-      final follow = _Follow(
-        host,
+      host.following[streamId] = _Follow(
+        stream,
         FollowReplay(streamId: streamId, maxPending: _plan.logLinesPerSecond),
         start: _clock.elapsed,
       );
-      _follows[streamId] = host.follows[streamId] = follow;
-      return null;
+      return;
     }
 
     final rows = _plan.journalRows.reversed.take(spec.window).join('\n');
@@ -332,31 +374,49 @@ final class _ReplayEngine {
       maxPending: math.max(1, spec.window),
     )..add(utf8.encode('$rows\n'));
     if (window.flush(Duration.zero) case final batch?) _send(batch);
-    state(
-      LogStreamEnded(
-        spec.window < _plan.journalRows.length
-            ? LogStreamEndReason.windowFilled
-            : LogStreamEndReason.oldestReached,
-      ),
+    _end(
+      stream,
+      spec.window < _plan.journalRows.length
+          ? LogStreamEndReason.windowFilled
+          : LogStreamEndReason.oldestReached,
     );
-    return null;
   }
 
-  /// Ends [streamId] for [reason]. Does nothing when it is not open.
-  void _end(String streamId, LogStreamEndReason reason) {
-    final follow = _follows.remove(streamId);
-    if (follow == null) return;
+  /// Stops [host]'s follows without an event and queues them ahead of
+  /// its waiting streams, in the order they started, as the router
+  /// pauses its reads; records they had not sent go with them.
+  void _pause(_Host host) {
+    final paused = [for (final follow in host.following.values) follow.stream];
+    host.following.clear();
+    host.waiting.insertAll(0, paused);
+  }
 
-    follow.host.follows.remove(streamId);
-    _send(LogStreamState(streamId, LogStreamEnded(reason)));
+  /// Sends [stream]'s [LogStreamWaiting] for [reason], once per reason.
+  void _wait(_Stream stream, LogStreamWaitReason reason) {
+    if (stream.waitingFor == reason) return;
+    stream.waitingFor = reason;
+    _send(LogStreamState(stream.id, LogStreamWaiting(reason)));
+  }
+
+  /// Ends [stream] for [reason], waiting or running.
+  void _end(_Stream stream, LogStreamEndReason reason) {
+    final host = stream.host;
+    _streams.remove(stream.id);
+    host.waiting.remove(stream);
+    host.following.remove(stream.id);
+    _send(LogStreamState(stream.id, LogStreamEnded(reason)));
   }
 
   /// Ends every stream of [host] as failed, as `LogStreamRouter` does on
   /// [Disconnect] and [Shutdown]: nothing would bring a link back for
   /// them.
   void _endAll(_Host host) {
-    for (final streamId in host.follows.keys.toList()) {
-      _end(streamId, LogStreamEndReason.failed);
+    final streams = [
+      ...host.waiting,
+      for (final follow in host.following.values) follow.stream,
+    ];
+    for (final stream in streams) {
+      _end(stream, LogStreamEndReason.failed);
     }
   }
 }
@@ -388,21 +448,41 @@ final class _Host {
   final Map<String, Set<SampleStream>> subscriptions = {};
   final Map<SampleStream, Duration> due = {};
 
-  /// The server's open follows, by stream id; a window ends as it opens.
-  final Map<String, _Follow> follows = {};
+  /// The server's log streams that wait, oldest first.
+  final List<_Stream> waiting = [];
+
+  /// The server's running follows by stream id, in the order they
+  /// started; a window ends as it runs.
+  final Map<String, _Follow> following = {};
 
   /// Streams read once per link (`identity`) that have read.
   final Set<SampleStream> readOnce = {};
   int seq = 0;
 
   String get id => entry.serverId;
+
+  int get logStreams => waiting.length + following.length;
 }
 
-/// One open follow, its server and how many lines it has been fed.
-final class _Follow {
-  _Follow(this.host, this.replay, {required this.start});
+/// One open log stream.
+final class _Stream {
+  _Stream(this.id, this.spec, this.host);
 
+  final String id;
+  final LogStreamSpec spec;
   final _Host host;
+
+  /// What the last [LogStreamWaiting] sent named; null while it runs or
+  /// before any.
+  LogStreamWaitReason? waitingFor;
+}
+
+/// One running follow, from when it started, and how many lines it has
+/// been fed.
+final class _Follow {
+  _Follow(this.stream, this.replay, {required this.start});
+
+  final _Stream stream;
   final FollowReplay replay;
   final Duration start;
   int fed = 0;
