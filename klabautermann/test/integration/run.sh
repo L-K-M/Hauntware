@@ -8,7 +8,9 @@
 # It owns the whole run: client keys and an agent made for this run only
 # (never committed, D53), the safety check of the rendered Compose config,
 # readiness, the tests one at a time, and teardown on every exit. With
-# KLABAUTERMANN_EVIDENCE_DIR set, logs and test results go there.
+# KLABAUTERMANN_EVIDENCE_DIR set, logs and test results go there. After
+# the fixture suites it runs the runner-VM leg (runner_vm.sh), which
+# skips itself anywhere but a GitHub-hosted runner.
 set -euo pipefail
 
 readonly integration_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -75,6 +77,7 @@ fingerprint() {
 runtime_dir=''
 agent_started=0
 suites_pid=''
+runner_vm_pid=''
 
 on_exit() {
   local status="$?" cleanup=0
@@ -94,6 +97,12 @@ on_exit() {
     sleep 0.5
     kill "$suites_pid" 2>/dev/null || true
     wait "$suites_pid" || true
+  fi
+  # The runner-VM leg undoes its own changes on TERM, ignoring further
+  # signals while it does; the wait lets it finish.
+  if [[ -n "$runner_vm_pid" ]]; then
+    kill "$runner_vm_pid" 2>/dev/null || true
+    wait "$runner_vm_pid" || true
   fi
   if [[ -n "$runtime_dir" ]]; then
     if [[ -n "$evidence_dir" ]]; then
@@ -194,4 +203,18 @@ suites_pid="$!"
 suites_status=0
 wait "$suites_pid" || suites_status="$?"
 suites_pid=''
-exit "$suites_status"
+
+# ---- Runner-VM leg (03 §11.3, K28a) -------------------------------------
+# systemd on the runner itself, over a loopback sshd of its own; it runs
+# whatever the suites gave, and in the background for on_exit, as they do.
+"$integration_dir/runner_vm.sh" &
+runner_vm_pid="$!"
+runner_vm_status=0
+wait "$runner_vm_pid" || runner_vm_status="$?"
+runner_vm_pid=''
+# ---- End of the runner-VM leg -------------------------------------------
+
+if ((suites_status != 0)); then
+  exit "$suites_status"
+fi
+exit "$runner_vm_status"

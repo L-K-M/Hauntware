@@ -1,5 +1,5 @@
 // How run.sh ends (03 §11.3, D53), checked without Docker: a copy of it
-// runs with stand-ins for Docker, OpenSSH and Dart.
+// runs with stand-ins for Docker, OpenSSH, Dart and the runner-VM leg.
 @TestOn('linux')
 library;
 
@@ -56,6 +56,17 @@ for ((i = 0; i < 300; i++)); do sleep 0.1; done
 ''',
 };
 
+/// The runner-VM leg's stand-in, beside the copy of run.sh: it exits at
+/// once with `$STUB_RUNNER_VM_EXIT` (default 0), or with
+/// `$STUB_RUNNER_VM_HOLD` set runs until a SIGTERM, as runner_vm.sh does
+/// until its teardown.
+const _runnerVm = r'''
+echo 'runner-vm started' >>"$STUB_LOG"
+if [[ -z "${STUB_RUNNER_VM_HOLD:-}" ]]; then exit "${STUB_RUNNER_VM_EXIT:-0}"; fi
+trap 'echo "runner-vm stopped" >>"$STUB_LOG"; exit 143' TERM
+for ((i = 0; i < 300; i++)); do sleep 0.1; done
+''';
+
 void main() {
   late Directory sandbox;
   late File suitesPid;
@@ -99,16 +110,24 @@ void main() {
     for (final MapEntry(key: name, value: body) in _stubs.entries) {
       File('${bin.path}/$name').writeAsStringSync('#!/usr/bin/env bash\n$body');
     }
+    final runnerVm = File('${integration.path}/runner_vm.sh')
+      ..writeAsStringSync('#!/usr/bin/env bash\n$_runnerVm');
     final chmod = await Process.run('chmod', [
       '+x',
       for (final name in _stubs.keys) '${bin.path}/$name',
+      runnerVm.path,
     ]);
     expect(chmod.exitCode, 0, reason: '${chmod.stderr}');
   });
 
   /// Starts the copy, and completes once the suites have started.
   Future<({Process process, Future<int> exitCode, StringBuffer output})>
-  startRun({String? suitesExit, String? downSeconds}) async {
+  startRun({
+    String? suitesExit,
+    String? downSeconds,
+    String? runnerVmExit,
+    bool holdRunnerVm = false,
+  }) async {
     final process = await Process.start(
       'bash',
       [run.path],
@@ -119,6 +138,8 @@ void main() {
         'STUB_SUITES_PID': suitesPid.path,
         'STUB_SUITES_EXIT': ?suitesExit,
         'STUB_DOWN_SECONDS': ?downSeconds,
+        'STUB_RUNNER_VM_EXIT': ?runnerVmExit,
+        if (holdRunnerVm) 'STUB_RUNNER_VM_HOLD': '1',
       },
       includeParentEnvironment: false,
     );
@@ -221,7 +242,56 @@ void main() {
       3,
       reason: '$output',
     );
-    // Its expectations check that teardown ran after the suites.
-    fixtureLifetime();
+    // Its expectations check that teardown ran after the suites, and
+    // the runner-VM leg runs whatever they gave.
+    expect(fixtureLifetime(), contains('runner-vm started'));
+  });
+
+  test('run.sh exits with the runner-VM leg\'s status once the suites '
+      'pass', () async {
+    final (process: _, :exitCode, :output) = await startRun(
+      suitesExit: '0',
+      runnerVmExit: '4',
+    );
+
+    expect(
+      await exitCode.timeout(const Duration(seconds: 20)),
+      4,
+      reason: '$output',
+    );
+    expect(
+      fixtureLifetime(),
+      containsAllInOrder(['suites started', 'runner-vm started']),
+    );
+  });
+
+  test('a signal during the runner-VM leg stops it before the fixture '
+      'goes', () async {
+    final (:process, :exitCode, :output) = await startRun(
+      suitesExit: '0',
+      holdRunnerVm: true,
+    );
+    final deadline = DateTime.now().add(const Duration(seconds: 20));
+    while (!log.readAsLinesSync().contains('runner-vm started')) {
+      if (DateTime.now().isAfter(deadline)) {
+        fail('The runner-VM leg never started:\n$output');
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    }
+
+    process.kill();
+    final status = await exitCode.timeout(
+      const Duration(seconds: 15),
+      onTimeout: () {
+        process.kill(ProcessSignal.sigkill);
+        fail('run.sh did not exit:\n$output');
+      },
+    );
+    expect(status, isNot(0), reason: '$output');
+    expect(
+      fixtureLifetime(),
+      contains('runner-vm stopped'),
+      reason: 'run.sh did not stop the runner-VM leg before compose down',
+    );
   });
 }
