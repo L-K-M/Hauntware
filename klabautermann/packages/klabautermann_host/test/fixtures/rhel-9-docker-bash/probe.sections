@@ -1,0 +1,94 @@
+### kernel ok
+Linux 6.18.44-fc-v139 x86_64
+### distro ok
+NAME="Red Hat Enterprise Linux"
+VERSION="9.8 (Plow)"
+ID="rhel"
+ID_LIKE="fedora"
+VERSION_ID="9.8"
+PLATFORM_ID="platform:el9"
+PRETTY_NAME="Red Hat Enterprise Linux 9.8 (Plow)"
+ANSI_COLOR="0;31"
+LOGO="fedora-logo-icon"
+CPE_NAME="cpe:/o:redhat:enterprise_linux:9::baseos"
+HOME_URL="https://www.redhat.com/"
+DOCUMENTATION_URL="https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/9"
+BUG_REPORT_URL="https://issues.redhat.com/"
+
+REDHAT_BUGZILLA_PRODUCT="Red Hat Enterprise Linux 9"
+REDHAT_BUGZILLA_PRODUCT_VERSION=9.8
+REDHAT_SUPPORT_PRODUCT="Red Hat Enterprise Linux"
+REDHAT_SUPPORT_PRODUCT_VERSION="9.8"
+### init ok
+pid1_comm=sleep
+systemd_dir=no
+systemctl_rc=0
+systemctl_version=systemd 252 (252-67.el9_8.6)
+### virt ok
+virt_rc=0
+virt=container-other
+container_rc=0
+container=container-other
+### lxcfs ok
+mounts=
+### identity ok
+uid=0
+user=root
+groups=root
+### elev ok
+sudo_version=
+sudo_noninteractive=
+doas=absent
+doas_noninteractive=
+run0=absent
+printf=builtin
+### tools ok
+journalctl=/usr/bin/journalctl
+crontab=
+ss=/usr/sbin/ss
+ip=/usr/sbin/ip
+lsblk=/usr/bin/lsblk
+findmnt=/usr/bin/findmnt
+smartctl=
+sensors=
+docker=
+podman=
+socat=
+timeout=/usr/bin/timeout
+setsid=/usr/bin/setsid
+ncdu=
+gdu=
+sadf=
+logger=/usr/bin/logger
+systemd-run=/usr/bin/systemd-run
+systemd-analyze=/usr/bin/systemd-analyze
+apt-get=
+dnf=/usr/bin/dnf
+dnf5=
+apk=
+pacman=
+zypper=
+nvidia-smi=
+dmesg=/usr/bin/dmesg
+tail=/usr/bin/tail
+### kfeat ok
+psi=yes
+cgroup_v2=no
+### locale ok
+c_utf8=yes
+### sockets ok
+/var/run/docker.sock no no
+/run/podman/podman.sock no no
+/run/user/0/docker.sock no no
+/run/user/0/podman/podman.sock no no
+### session ok
+ssh_connection=
+ppid=6
+ppid_comm=dart:capture_fi
+### clock ok
+epoch=1792173369
+offset=+0000
+timedatectl_error=yes
+### linger ok
+xdg_runtime_dir=
+linger_error=yes

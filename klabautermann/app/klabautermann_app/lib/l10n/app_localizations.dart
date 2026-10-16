@@ -3129,6 +3129,138 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'systemd before version 242 lists only the next run, so later runs are not shown.'**
   String get jobsCalendarOneRun;
+
+  /// Heading of the accessibility settings on the General settings tab.
+  ///
+  /// In en, this message translates to:
+  /// **'Accessibility'**
+  String get settingsAccessibilityTitle;
+
+  /// Switch on the General settings tab (A11Y-15): whether screen readers hear a server's values cross a warning or critical level.
+  ///
+  /// In en, this message translates to:
+  /// **'Announce threshold changes'**
+  String get settingsAnnounceBands;
+
+  /// Explanation under the threshold announcement switch on the General settings tab (A11Y-15).
+  ///
+  /// In en, this message translates to:
+  /// **'While a server\'s Overview shows, your screen reader hears when CPU, memory or a disk crosses into or out of its warning or critical level. Values that refresh every few seconds are never read out.'**
+  String get settingsAnnounceBandsDetail;
+
+  /// Toast when the threshold announcement switch applied but settings.json could not be written.
+  ///
+  /// In en, this message translates to:
+  /// **'The setting changed, but it could not be saved, so it will not be kept after a restart.'**
+  String get settingsAnnounceNotSaved;
+
+  /// Toast when the app did not take a change of the threshold announcement switch.
+  ///
+  /// In en, this message translates to:
+  /// **'The setting could not be changed.'**
+  String get settingsAnnounceNotChanged;
+
+  /// Screen-reader announcement (A11Y-15) when a value on a server's Overview has crossed into the warning or critical band, or back below the warning level; metric names the value (CPU, Memory, Disk /var), value is its percentage.
+  ///
+  /// In en, this message translates to:
+  /// **'{metric} {value}: {band, select, warning{warning level} critical{critical level} other{back to normal}}'**
+  String overviewBandAnnouncement(String metric, String value, String band);
+
+  /// A mount's space use as a threshold announcement names it; mount is the mount point, server data such as /var.
+  ///
+  /// In en, this message translates to:
+  /// **'Disk {mount}'**
+  String overviewBandDisk(String mount);
+
+  /// A mount's inode use as a threshold announcement names it; mount is the mount point, server data such as /var.
+  ///
+  /// In en, this message translates to:
+  /// **'Inodes on {mount}'**
+  String overviewBandInodes(String mount);
+
+  /// Heading of the Overview's health card (OV-02): failed units and full disks.
+  ///
+  /// In en, this message translates to:
+  /// **'Health'**
+  String get overviewHealthTitle;
+
+  /// The health card before the server sent its list of failed systemd units.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for the first check of failed units.'**
+  String get overviewHealthUnitsWaiting;
+
+  /// The health card when the server could not list its failed systemd units this time; the list from the check before, if any, stays shown below it. systemctl is a command name, kept as written.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, missing{The last check of failed units could not run: this server lacks systemctl.} denied{The server refused the last check of failed units.} timeout{The last check of failed units took too long.} other{The last check of failed units failed.}}'**
+  String overviewHealthUnitsCheckFailed(String reason);
+
+  /// The Overview's health and Disks cards before the server sent its first disk usage reading.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for the first disk reading.'**
+  String get overviewDisksWaiting;
+
+  /// The health card when the latest disk usage reading failed; df is a command name, kept as written.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, missing{Disk use is unknown: this server lacks df.} denied{Disk use is unknown: the server refused the reading.} timeout{Disk use is unknown: the reading did not finish in time.} other{Disk use is unknown: the reading failed.}}'**
+  String overviewHealthDisksUnknown(String reason);
+
+  /// The health card when every listed mount is below the warning level; level is that level as a percentage, such as 80%.
+  ///
+  /// In en, this message translates to:
+  /// **'No disk has {level} or more of its space or inodes used.'**
+  String overviewHealthDisksOk(String level);
+
+  /// A health card line for a mount whose space use reached a level; mount is the mount point (server data), percent its use, and band the level it reached.
+  ///
+  /// In en, this message translates to:
+  /// **'{mount}: {percent} of its space used, {band, select, critical{critical} other{warning}}'**
+  String overviewHealthDiskSpace(String mount, String percent, String band);
+
+  /// A health card line for a mount whose inode use reached a level; mount is the mount point (server data), percent its inode use, and band the level it reached.
+  ///
+  /// In en, this message translates to:
+  /// **'{mount}: {percent} of its inodes used, {band, select, critical{critical} other{warning}}'**
+  String overviewHealthDiskInodes(String mount, String percent, String band);
+
+  /// The health card's link to the threshold announcement switch in Settings (A11Y-15), with the switch's state.
+  ///
+  /// In en, this message translates to:
+  /// **'{state, select, on{Threshold announcements: on} other{Threshold announcements: off}}'**
+  String overviewHealthAnnouncements(String state);
+
+  /// Screen reader hint on the health card's threshold announcement link: activating it opens Settings, where the switch is, rather than switching announcements on the spot.
+  ///
+  /// In en, this message translates to:
+  /// **'Opens Settings'**
+  String get overviewHealthAnnouncementsHint;
+
+  /// A mount's size in the Overview's Disks card.
+  ///
+  /// In en, this message translates to:
+  /// **'Size'**
+  String get overviewDiskSize;
+
+  /// Under the Overview's Disks card when it lists only the first mounts; the System tab lists them all.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 more mount is on the System tab.} other{{count} more mounts are on the System tab.}}'**
+  String overviewDisksMore(int count);
+
+  /// Heading of the Overview's card with the server's operating system, kernel, uptime and boot time.
+  ///
+  /// In en, this message translates to:
+  /// **'Host'**
+  String get overviewHostTitle;
+
+  /// The Overview's Host card before the server sent its operating system and kernel.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for the operating system and kernel.'**
+  String get overviewHostWaiting;
 }
 
 class _AppLocalizationsDelegate

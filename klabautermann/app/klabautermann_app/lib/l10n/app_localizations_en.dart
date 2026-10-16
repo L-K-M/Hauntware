@@ -2348,4 +2348,130 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get jobsCalendarOneRun =>
       'systemd before version 242 lists only the next run, so later runs are not shown.';
+
+  @override
+  String get settingsAccessibilityTitle => 'Accessibility';
+
+  @override
+  String get settingsAnnounceBands => 'Announce threshold changes';
+
+  @override
+  String get settingsAnnounceBandsDetail =>
+      'While a server\'s Overview shows, your screen reader hears when CPU, memory or a disk crosses into or out of its warning or critical level. Values that refresh every few seconds are never read out.';
+
+  @override
+  String get settingsAnnounceNotSaved =>
+      'The setting changed, but it could not be saved, so it will not be kept after a restart.';
+
+  @override
+  String get settingsAnnounceNotChanged => 'The setting could not be changed.';
+
+  @override
+  String overviewBandAnnouncement(String metric, String value, String band) {
+    String _temp0 = intl.Intl.selectLogic(band, {
+      'warning': 'warning level',
+      'critical': 'critical level',
+      'other': 'back to normal',
+    });
+    return '$metric $value: $_temp0';
+  }
+
+  @override
+  String overviewBandDisk(String mount) {
+    return 'Disk $mount';
+  }
+
+  @override
+  String overviewBandInodes(String mount) {
+    return 'Inodes on $mount';
+  }
+
+  @override
+  String get overviewHealthTitle => 'Health';
+
+  @override
+  String get overviewHealthUnitsWaiting =>
+      'Waiting for the first check of failed units.';
+
+  @override
+  String overviewHealthUnitsCheckFailed(String reason) {
+    String _temp0 = intl.Intl.selectLogic(reason, {
+      'missing':
+          'The last check of failed units could not run: this server lacks systemctl.',
+      'denied': 'The server refused the last check of failed units.',
+      'timeout': 'The last check of failed units took too long.',
+      'other': 'The last check of failed units failed.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get overviewDisksWaiting => 'Waiting for the first disk reading.';
+
+  @override
+  String overviewHealthDisksUnknown(String reason) {
+    String _temp0 = intl.Intl.selectLogic(reason, {
+      'missing': 'Disk use is unknown: this server lacks df.',
+      'denied': 'Disk use is unknown: the server refused the reading.',
+      'timeout': 'Disk use is unknown: the reading did not finish in time.',
+      'other': 'Disk use is unknown: the reading failed.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String overviewHealthDisksOk(String level) {
+    return 'No disk has $level or more of its space or inodes used.';
+  }
+
+  @override
+  String overviewHealthDiskSpace(String mount, String percent, String band) {
+    String _temp0 = intl.Intl.selectLogic(band, {
+      'critical': 'critical',
+      'other': 'warning',
+    });
+    return '$mount: $percent of its space used, $_temp0';
+  }
+
+  @override
+  String overviewHealthDiskInodes(String mount, String percent, String band) {
+    String _temp0 = intl.Intl.selectLogic(band, {
+      'critical': 'critical',
+      'other': 'warning',
+    });
+    return '$mount: $percent of its inodes used, $_temp0';
+  }
+
+  @override
+  String overviewHealthAnnouncements(String state) {
+    String _temp0 = intl.Intl.selectLogic(state, {
+      'on': 'Threshold announcements: on',
+      'other': 'Threshold announcements: off',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get overviewHealthAnnouncementsHint => 'Opens Settings';
+
+  @override
+  String get overviewDiskSize => 'Size';
+
+  @override
+  String overviewDisksMore(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count more mounts are on the System tab.',
+      one: '1 more mount is on the System tab.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get overviewHostTitle => 'Host';
+
+  @override
+  String get overviewHostWaiting =>
+      'Waiting for the operating system and kernel.';
 }

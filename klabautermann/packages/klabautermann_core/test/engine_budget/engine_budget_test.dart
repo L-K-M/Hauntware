@@ -4,6 +4,7 @@
 // and the report holds each figure. It checks no budget; the figures of
 // a one-second run on a shared machine mean nothing.
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:klabautermann_core/src/replay/fixture_replay.dart';
 import 'package:klabautermann_core/src/replay/host_fixtures.dart';
@@ -141,5 +142,17 @@ void main() {
       ..add(utf8.encode('${rows.join('\n')}\n'));
     expect(follow.malformed, 0);
     expect(follow.linesParsed, rows.length);
+  });
+
+  test('replays the platform fixtures, not the container captures', () {
+    final root = findHostFixtures()!;
+    final captures = [
+      for (final dir in Directory(root).listSync().whereType<Directory>())
+        if (dir.path.contains('-docker-')) dir.path,
+    ];
+    expect(captures, isNotEmpty, reason: 'capture.sh commits them');
+    expect([
+      for (final fixture in loadHostFixtures(root)) fixture.platform,
+    ], allOf(isNotEmpty, everyElement(isNot(contains('-docker-')))));
   });
 }

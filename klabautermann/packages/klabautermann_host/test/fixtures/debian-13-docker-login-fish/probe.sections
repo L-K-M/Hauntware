@@ -1,0 +1,81 @@
+### kernel ok
+Linux 6.18.44-fc-v139 x86_64
+### distro ok
+PRETTY_NAME="Debian GNU/Linux 13 (trixie)"
+NAME="Debian GNU/Linux"
+VERSION_ID="13"
+VERSION="13 (trixie)"
+VERSION_CODENAME=trixie
+DEBIAN_VERSION_FULL=13.7
+ID=debian
+HOME_URL="https://www.debian.org/"
+SUPPORT_URL="https://www.debian.org/support"
+BUG_REPORT_URL="https://bugs.debian.org/"
+### init ok
+pid1_comm=sleep
+systemd_dir=no
+systemctl_version=
+### virt missing
+
+### lxcfs ok
+mounts=
+### identity ok
+uid=0
+user=root
+groups=root
+### elev ok
+sudo_version=
+sudo_noninteractive=
+doas=absent
+doas_noninteractive=
+run0=absent
+printf=builtin
+### tools ok
+journalctl=
+crontab=
+ss=
+ip=
+lsblk=/usr/bin/lsblk
+findmnt=/usr/bin/findmnt
+smartctl=
+sensors=
+docker=
+podman=
+socat=
+timeout=/usr/bin/timeout
+setsid=/usr/bin/setsid
+ncdu=
+gdu=
+sadf=
+logger=/usr/bin/logger
+systemd-run=
+systemd-analyze=
+apt-get=/usr/bin/apt-get
+dnf=
+dnf5=
+apk=
+pacman=
+zypper=
+nvidia-smi=
+dmesg=/usr/bin/dmesg
+tail=/usr/bin/tail
+### kfeat ok
+psi=yes
+cgroup_v2=no
+### locale ok
+c_utf8=yes
+### sockets ok
+/var/run/docker.sock no no
+/run/podman/podman.sock no no
+/run/user/0/docker.sock no no
+/run/user/0/podman/podman.sock no no
+### session ok
+ssh_connection=192.0.2.1 50000 192.0.2.1 22
+ppid=58
+ppid_comm=dart:capture_fi
+### clock ok
+epoch=1792173362
+offset=+0000
+localtime=/usr/share/zoneinfo/Etc/UTC
+### linger ok
+xdg_runtime_dir=
