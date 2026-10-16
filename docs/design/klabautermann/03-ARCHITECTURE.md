@@ -3485,6 +3485,12 @@ CI.
   and header values (`Authorization: Bearer`). Masking the argument after
   any `-p`, `-a` or `-u` would also hide `ssh -p 22`, `mkdir -p` and
   `sudo -u`, so the trade-off is left to a follow-up after K33.
+- Reveal (M2, the Processes tab): a tap on a masked argument in a
+  process's details shows it there for 30 s, and it is masked again
+  sooner when the app is hidden or the details close. The revealed text
+  lives in that sheet's state only: it is never sent, stored or logged,
+  and the table, its filter and its command sort read display text
+  only. A screen reader hears "(masked)" where the screen shows the mask.
 - Every export, share and diagnostic bundle passes `SecretRedactor`
   (`SC/src/llm/redaction.dart`) by default, with an explicit include-secrets
   toggle.
@@ -4645,6 +4651,32 @@ and DSK-01's and DSK-02's mounts in the sortable table, in IEC units:
   server, still counts; it leaves with the server (SYN-08). A host
   without `timeout` is told that a stale mount can stall disk readings.
 - The usage bars carry no thresholds until OV-11 (v1) sets them.
+
+As built in M2 (`app/klabautermann_app/lib/ui/processes_panel.dart`), the
+Processes tab lists PRC-01's processes from the `procs` stream it
+subscribes while it shows:
+
+- The sortable table orders by CPU (the first sort, busiest on top),
+  memory in IEC units, user, start time and command, with the PID
+  beside them. In a panel narrower than 600 px, a width that grows with
+  the text scale, the rows become two-line entries with a sort menu
+  rather than a squeezed table. The row-action slot stays empty until
+  PRC-02 (M4). A row opens the process's details in a sheet: its figures,
+  parent PID, state and each argument (8.9's reveal).
+- A user reads as a name only where the host gives one: a `ps`
+  fallback's column, or the probe's login user for that uid; otherwise
+  "UID n". A start shows its time on the day of the reading, else its
+  date, and "unknown" where the engine could not date it (7.2). A row
+  with no command line shows the kernel's name and "command line
+  unavailable".
+- The filter needs every term in the PID, name, user or shown command
+  line. It draws and searches at most 4,096 characters of a command
+  line or argument, which can fill the 1 MiB section.
+- Through a failed reading the last good list stays, under the
+  freshness line (9.5 item 4) and the failure's reason; it turns grey
+  once older than 20 s, twice the stream's slowest cadence. A cut list
+  says "Showing N of M processes" (D48). The phone's server screen
+  reaches the tab once More lists the panels (10.5).
 
 ### 10.5 Phone (under 600 dp) and tablet
 

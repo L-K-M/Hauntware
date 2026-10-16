@@ -226,10 +226,11 @@ class SortableTable<R> extends StatefulWidget {
   /// A click or tap on a row, or Enter or Space on the active row.
   final ValueChanged<R>? onRowActivated;
 
-  /// A row's verbs for the row-action slot; null draws no slot. Shift+F10
-  /// opens them only when one top-level verb is enabled, so give each row
-  /// one: the keyboard cannot reach verbs kept only in a submenu until
-  /// `ghost_ui`'s `sidebarMenuWidgets` can focus a submenu.
+  /// A row's verbs for the row-action slot; null draws no slot, and no
+  /// verbs leave the row's slot empty. Shift+F10 opens them only when one
+  /// top-level verb is enabled, so give each row one: the keyboard cannot
+  /// reach verbs kept only in a submenu until `ghost_ui`'s
+  /// `sidebarMenuWidgets` can focus a submenu.
   final List<SidebarMenuEntry> Function(R row)? rowActions;
 
   /// Shown under the header when [rows] is empty.
@@ -759,7 +760,12 @@ class _SortableTableState<R> extends State<SortableTable<R>> {
     final row = _sorted[index];
     final key = widget.rowKey(row);
     final active = index == _activeIndex;
-    final entries = widget.rowActions?.call(row);
+    // A row without verbs keeps its slot, empty, so verbs added later move
+    // no column: the Processes tab's slot waits for PRC-02 (M4).
+    final entries = switch (widget.rowActions?.call(row)) {
+      final verbs? when verbs.isNotEmpty => verbs,
+      _ => null,
+    };
 
     final slot = entries == null
         ? null

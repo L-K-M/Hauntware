@@ -9,6 +9,7 @@ import 'access/panel_gate.dart';
 import 'fleet_rail.dart' show linkStatusWord;
 import 'inspector_pane.dart' show PlaceholderPaneBody;
 import 'logs/logs_panel.dart';
+import 'processes_panel.dart';
 import 'server_surfaces.dart';
 import 'services_panel.dart';
 import 'system_panel.dart';
@@ -170,6 +171,11 @@ class _PanelsState extends State<_Panels> {
                   streams: panel.streams,
                   visible: tabs.index == index,
                   child: switch (panel) {
+                    ServerPanel.processes => ProcessesPanel(
+                      monitoring: monitoring,
+                      serverId: serverId,
+                      visible: tabs.index == index,
+                    ),
                     ServerPanel.services => ServicesPanel(
                       monitoring: monitoring,
                       serverId: serverId,
