@@ -35,7 +35,7 @@ M2, the host read MVP, is the current milestone. What is on main:
   output before READY, fast-tick bytes and CPU, `procs` beyond 1,000
   processes and slow-tick times. The unguarded `procs` loops reach the
   10 s guarded budget near 2,000 processes under dash, where passing
-  the D47 deadline depends on its margin, not yet fixed, and pass it by
+  the D47 deadline depends on its margin (5 s, an estimate), and pass it by
   1,079 under bash; K15b's `procs` bound (below) resolves that. Fixture
   capture with its redaction review, SSH mode, the other shells (CI
   images, else the manual list) and systemd collectors (runner VM)
@@ -103,7 +103,8 @@ M2, the host read MVP, is the current milestone. What is on main:
   --decode`, and `parseDmesgJson` reads it record by record, mapping
   util-linux's facility and level names, so a cut document keeps its
   complete records. util-linux before 2.38 (RHEL 8 and 9, Ubuntu 22.04)
-  has no `dmesg --json`, so LOG-03's fallback has nothing to parse there.
+  has no `dmesg --json`, so there the kernel log comes from `journalctl -k`
+  alone.
   `tail -n N [-F] -- <path>` takes only an absolute, normalized path.
   `HostCommands.commandLine` is the 03 §8.8 `sh -c` wrapper: it exports
   the sampler's environment with `LC_ALL=C`, or `C.UTF-8` on request, and
@@ -116,9 +117,10 @@ M2, the host read MVP, is the current milestone. What is on main:
   `TimerJobEntry.withDetail` merges them, leaving the triggers unknown
   when a read lists none. `parseOnCalendar` now reads systemd 242 to 252's
   `Iter. #N:` rows, and elapses in zero-offset zones, where no `(in UTC)`
-  line follows. Nothing wires these into the engine yet: the log service
-  (K25a, K26) is to run the log commands, and the jobs panel (K36) is the
-  first view that needs `timer_detail`. The fixtures are hand-written.
+  line follows. The engine runs none of these yet: K25a's `LogService`
+  runs the window reads but receives no request until K25b, follows are
+  K26, and the jobs panel (K36) is the first view that needs
+  `timer_detail`. The fixtures are hand-written.
 - Access rules (M2, `klabautermann_host` `access/`): the CN-24 rows from
   a `HostProfile` (passwordless sudo, journal group with the LOG-04
   notice, Docker socket rights with the SAF-08 flag, systemd version,
@@ -279,7 +281,8 @@ M2, the host read MVP, is the current milestone. What is on main:
   runs with links off, so it rejects `Connect` and ignores `Disconnect`
   and `SetAppActivity`, and the app shows nothing for the rejection. No
   surface shows the rings yet, and the time-series chart below draws a
-  `TimeSeriesRing`, not these rings; the fleet rows show a reading's age.
+  `TimeSeriesRing`, not these rings; the fleet rows use the clock for a
+  reading's age (below).
 - Fleet rows (M2, 03 §10.3, FL-04, FL-05, FL-07, K31, #208): the rail
   and the phone list share one row, resolved through `ghost_servers`'
   indicator from the link status and the probe's answer. Each known state
@@ -343,7 +346,7 @@ M2, the host read MVP, is the current milestone. What is on main:
   through `MonitoringController.logs` (`LogStreams`, shared with the Logs
   panel, below), and says what the read is doing. The app's engine
   samples nothing while links are off (K44) and refuses every log read
-  until its log service lands (K25a, K25b), so the list waits for its
+  until its log service is wired (K25b), so the list waits for its
   first reading and the page says unit logs are not available in this
   version; phones reach the tab with K40.
 - Access tab and panel gating (M2, 03 §10.4, CN-24, CN-09, SAF-08, D51,
@@ -357,12 +360,12 @@ M2, the host read MVP, is the current milestone. What is on main:
   clipboard; the row says whether the copy worked, and a copy from another
   row clears that line. The tab says the app never runs a fix, and shows
   the detected runtime read-only (CN-09). A tab whose host panels all lack
-  a capability the probe answered is not built: it names what is missing
-  and links to Access, which the desktop selects with focus moved in and a
-  phone pushes. The Docker tab reads "Arrives with Docker support" until
-  M3 (D54). The app's engine sends no `HostProfileChanged` while links are
-  off (K44), so in a real run every row reads unknown and no panel
-  hides.
+  a capability the probe answered does not build its panel: a notice in
+  its place names what is missing and links to Access, which the desktop
+  selects with focus moved in and a phone pushes. The Docker tab reads
+  "Arrives with Docker support" until M3 (D54). The app's engine sends no
+  `HostProfileChanged` while links are off (K44), so in a real run every
+  row reads unknown and no panel hides.
 - Localization contract (D35, A11Y-05):
   `app/klabautermann_app/test/localization_contract_test.dart` runs the
   suite's shared scanner (`tool/l10n_contract`, 03 §3.5 F1b) over `lib/`
@@ -425,9 +428,10 @@ M2, the host read MVP, is the current milestone. What is on main:
   the catalog library's enrollment expects), minted and saved on the
   first launch and never regenerated while the file can be read; a
   damaged file whose text shows no id gets a new one (the old bytes stay
-  in the corrupt copy). Nothing reads it yet. A second desktop instance
-  stops at the instance lock (below) before the store opens, so two
-  launches no longer race to mint it unless the lock cannot be taken.
+  in the corrupt copy). Nothing reads the device id yet. A second
+  desktop instance stops at the instance lock (below) before the store
+  opens, so two launches no longer race to mint it unless the lock
+  cannot be taken.
   The theme is restored at startup and saved on every change; the
   desktop settings window (D32) reaches the same `AppearanceController`
   over the settings link, so its changes are saved by the app, not by
@@ -640,8 +644,8 @@ M2, the host read MVP, is the current milestone. What is on main:
   back from when the stream opens; the kernel log; or one file, whose
   path the app checks with the engine's rule (absolute, no NUL, no `.`
   or `..` part), with common syslog, auth, nginx and Apache paths
-  offered. The Live chip (LOG-02) follows, resuming after the newest
-  journal cursor held, or reads a 500-record window, and names the
+  offered. The Live chip (LOG-02) follows, resuming after the panel's
+  newest journal record, or reads a 500-record window, and names the
   stream's state by word and icon. A status line in a live region gives
   the reason, the host's error output and Retry where reading again may
   help. The search field waits 200 ms after typing. LOG-04's notice shows
@@ -656,7 +660,7 @@ M2, the host read MVP, is the current milestone. What is on main:
   journal access, dropped with the server (SYN-08). That rule holds
   because the log service must answer each open it accepts before the
   next request (03 §10.1). The engine refuses every open until its log
-  service lands (K25a, K25b, and K26 for follows), and the app's engine
+  service is wired (K25b, and K26 for follows), and the app's engine
   sends no host profile while links are off (K44), so the panel shows the
   refusal with Retry and no notice.
 
