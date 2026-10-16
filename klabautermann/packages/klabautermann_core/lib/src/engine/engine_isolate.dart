@@ -3,14 +3,14 @@ import 'dart:io';
 import 'dart:isolate';
 
 import 'package:meta/meta.dart';
-import 'package:seance_core/seance_core.dart'
-    show ImportedHost, InMemoryHostKeyStore, SshLink;
+import 'package:seance_core/seance_core.dart' show ImportedHost, SshLink;
 
 import '../capabilities/capability_cache.dart';
 import '../fleet/imported_fleet.dart';
 import '../fleet/ssh_config_entries.dart';
 import '../fleet/ssh_config_import_store.dart';
 import '../links/credential_source.dart';
+import '../links/host_key_pins.dart';
 import '../links/link_connector.dart';
 import '../links/link_supervisor.dart';
 import '../links/prompt_broker.dart';
@@ -50,7 +50,8 @@ final class EngineStart {
   final bool linksEnabled;
 
   /// Whether this process alone uses [supportDirectory]: the engine writes
-  /// and purges its capability cache there only then (03 §4.10, D59).
+  /// and purges its capability cache and writes its host-key pins there
+  /// only then (03 §4.10, D59, D60).
   final SupportDirectoryAccess supportDirectoryAccess;
 }
 
@@ -127,10 +128,18 @@ void engineMain(
   // (03 §10.1).
   final prompts = PromptBroker(emit: uiPort.send);
 
+  // The host-key pins (03 §4.6, D60): `host_keys.json` while the process
+  // holds the support directory alone, otherwise that file's pins read
+  // once and kept in memory. One store for the engine's lifetime (P14),
+  // which catalog sync shares once it lands (K49). Opening it reads
+  // nothing; the first connect loads the file.
+  final hostKeys = openHostKeyPins(
+    start.supportDirectory,
+    access: start.supportDirectoryAccess,
+  );
+
   // One link per server (03 §5.1, §5.12), dialed through the connector.
-  // None while links are off, so nothing in the engine can dial. Host-key
-  // pins live in memory until the catalog library's `host_keys.json`
-  // lands (03 §4.10), so they last for this engine's lifetime only.
+  // None while links are off, so nothing in the engine can dial.
   // Phones close their links in the background (D34); desktops keep them.
   final links = start.linksEnabled
       ? LinkSupervisor(
@@ -138,7 +147,7 @@ void engineMain(
             credentials: EngineCredentialSource(
               identityAuditLogIn(start.supportDirectory),
             ),
-            hostKeys: InMemoryHostKeyStore(),
+            hostKeys: hostKeys,
             prompts: prompts,
             hopConfig: (id) => fleet.serverConfig(id),
             dial: dial,
@@ -230,7 +239,8 @@ void engineMain(
       case Connect(:final serverId):
         sendCachedProfile(serverId);
         // The app sends it when the user opens the server (03 §10.1), so
-        // the connect may prompt.
+        // the connect may prompt, and to a server a changed host key
+        // blocked it reviews the key (D60).
         if (links == null) {
           reject(message, 'links are off in this engine');
         } else if (!links.connect(

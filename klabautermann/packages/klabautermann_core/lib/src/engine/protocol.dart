@@ -76,6 +76,10 @@ import 'package:meta/meta.dart';
 /// signs in as, [PromptCancelAnswer] joined to decline its questions, and
 /// [LinkFailureKind] gained `keyboardInteractiveCancelled` for the attempt
 /// a cancel ends (03 §10.1), within v3 the same way.
+///
+/// [HostKeyPromptRequest] then gained `pinnedFingerprintSha256` and
+/// `pinnedKeyType` for the re-pin review of a changed key (03 §4.6,
+/// §10.1, D60), within v3 the same way.
 const int kEngineProtocolVersion = 3;
 
 /// Every message the UI isolate sends the engine (03 §10.1, D18). Plain data
@@ -147,7 +151,10 @@ final class SetMonitorSet extends EngineRequest {
   final List<String> serverIds;
 }
 
-/// Opens the SSH link to one server (03 §10.1).
+/// Opens the SSH link to one server (03 §10.1). The app sends it when the
+/// user opens the server, so the connect may prompt; to a server blocked
+/// by [LinkBlockedReason.hostKeyChanged] it reviews the changed key
+/// (D60).
 final class Connect extends EngineRequest {
   const Connect(this.serverId);
 
@@ -1306,20 +1313,33 @@ sealed class PromptRequest {
   PromptKind get kind;
 }
 
-/// Trust a host key the pin store has never seen (03 §4.6). A key that
-/// differs from the pinned one does not prompt: it blocks the link with
-/// [LinkBlockedReason.hostKeyChanged].
+/// Trust a host key the pin store has never seen, or re-pin a changed one
+/// (03 §4.6). A key that differs from the pinned one blocks the link with
+/// [LinkBlockedReason.hostKeyChanged]; only the user's next [Connect] to
+/// the blocked server asks about it, with the pinned key in
+/// [pinnedFingerprintSha256] and [pinnedKeyType] (D60). Trusting it
+/// replaces the pin. An unattended connect never asks.
 final class HostKeyPromptRequest extends PromptRequest {
   const HostKeyPromptRequest({
     required this.keyType,
     required this.fingerprintSha256,
+    this.pinnedFingerprintSha256,
+    this.pinnedKeyType,
   });
 
-  /// The key algorithm, such as `ssh-ed25519`.
+  /// The presented key's algorithm, such as `ssh-ed25519`.
   final String keyType;
 
-  /// The fingerprint in OpenSSH's `SHA256:` form.
+  /// The presented key's fingerprint in OpenSSH's `SHA256:` form.
   final String fingerprintSha256;
+
+  /// The pinned key's fingerprint in the same form when the presented key
+  /// differs from it, or null for a first-seen key.
+  final String? pinnedFingerprintSha256;
+
+  /// The pinned key's algorithm beside [pinnedFingerprintSha256]; it can
+  /// differ from [keyType] when the server changed key algorithm.
+  final String? pinnedKeyType;
 
   @override
   PromptKind get kind => PromptKind.hostKey;

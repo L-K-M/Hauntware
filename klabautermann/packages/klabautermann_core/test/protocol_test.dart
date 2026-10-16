@@ -1086,6 +1086,29 @@ void main() {
       expect(hostKey.kind, PromptKind.hostKey);
       expect(hostKey.keyType, 'ssh-ed25519');
       expect(hostKey.fingerprintSha256, 'SHA256:abc');
+      expect(
+        (hostKey.pinnedFingerprintSha256, hostKey.pinnedKeyType),
+        (null, null),
+      );
+      final changed =
+          await request(
+                const HostKeyPromptRequest(
+                  keyType: 'ecdsa-sha2-nistp256',
+                  fingerprintSha256: 'SHA256:new',
+                  pinnedFingerprintSha256: 'SHA256:abc',
+                  pinnedKeyType: 'ssh-ed25519',
+                ),
+              )
+              as HostKeyPromptRequest;
+      expect(
+        (
+          changed.keyType,
+          changed.fingerprintSha256,
+          changed.pinnedFingerprintSha256,
+          changed.pinnedKeyType,
+        ),
+        ('ecdsa-sha2-nistp256', 'SHA256:new', 'SHA256:abc', 'ssh-ed25519'),
+      );
 
       final challenge =
           await request(
