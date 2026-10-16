@@ -203,6 +203,15 @@ void main() {
       expect(await later.forget({_web}), [CacheUpdate.applied]);
     });
 
+    test('file operations run in call order, so a purge cannot overtake '
+        'a write', () async {
+      final store = await open();
+      final write = store.probed(_web, _profile());
+      final purge = store.forget({_web});
+      await Future.wait([write, purge]);
+      expect(file(_web).existsSync(), isFalse);
+    });
+
     test('a fleet that is not saved this run purges nothing, and the cache '
         'still writes', () async {
       await probed(_web);
