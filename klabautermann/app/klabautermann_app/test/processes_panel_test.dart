@@ -462,6 +462,7 @@ void main() {
 
   testWidgets('a phone lists two-line rows with a sort menu, not a squeezed '
       'table', (tester) async {
+    final handle = tester.ensureSemantics();
     final panel = await _pump(
       tester,
       size: _phone,
@@ -472,6 +473,17 @@ void main() {
     expect(find.byType(SortableTable<ProcessRow>), findsNothing);
     expect(_order(tester), [2041, 812, 1, 2, 3100]);
     expect(find.text('Memory: 512 MiB'), findsOneWidget);
+    // A row reads as the table's does, the mask as "(masked)" (SAF-07).
+    expect(
+      tester.getSemantics(_row(812)),
+      isSemantics(
+        label:
+            'Command: /usr/sbin/mysqld --password=(masked) --port=3306\n'
+            'PID: 812\nUser: UID 27\nCPU: 12.5%\nMemory: 512 MiB\n'
+            'Started: ${DateFormat.jm('en').format(DateTime(2026, 10, 15, 9, 41))}',
+        isButton: true,
+      ),
+    );
 
     await tester.tap(find.byType(DropdownButton<ProcessColumn>));
     await tester.pumpAndSettle();
@@ -482,6 +494,7 @@ void main() {
     await tester.tap(find.byTooltip('Sorted ascending'));
     await tester.pumpAndSettle();
     expect(_order(tester), [2041, 812, 1, 2, 3100]);
+    handle.dispose();
   });
 
   for (final (name, size) in [('phone', _phone), ('desktop', _wide)]) {
