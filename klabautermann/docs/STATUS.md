@@ -7,8 +7,7 @@ normative plan (`03-ARCHITECTURE.md` §2 is the decision log).
 
 ## Where things stand
 
-M1a, the app scaffold and its registration, is the current milestone
-slice:
+M2, the host read MVP, is the current milestone. What is on main:
 
 - `klabautermann_host`: HWS/1 program, frame protocol, capability probe,
   parsers and snapshot/rate models with per-platform fixture goldens.
@@ -26,8 +25,9 @@ slice:
   `RemoteProcess.close()` and a restart after a backoff of 1 s doubling
   to a 30 s cap, less up to 30 % of downward jitter (so the first
   restart comes after 0.7 s to 1 s). Tested against a scripted process
-  and local dash and bash (a SIGSTOP stall included); nothing starts it
-  yet, and no SSH fixture test covers it.
+  and local dash and bash (a SIGSTOP stall included). Only the sampling
+  scheduler (K22) starts it, behind links the app leaves off (below), and
+  no SSH fixture test covers it.
 - Spike S2 part 1: `klabautermann_core/tool/capture_fixtures.dart
   measure` runs the real program locally under dash and bash (as
   `sh -s`, and as `<login shell> -c '<start command>'` the way sshd
@@ -83,17 +83,17 @@ slice:
   `uname -m`; a `systemd-detect-virt` error no longer reads as a container
   name. Hand-made Debian 12 LXC fixtures with and without lxcfs, marked
   [U], cover it. The sample pipeline reads `showsHostFigures` and
-  `counterWidth`, and the System tab `showsHostFigures` (below); nothing
-  reads `fromJson` or `serverZone` yet.
+  `counterWidth`, the System tab `showsHostFigures` (below), and the cron
+  next runs `serverZone` (K23b, D58); nothing reads `fromJson` yet.
 - Jobs model (JOB-01, JOB-02 data): `klabautermann_host`'s `mergeJobs`
   turns a `cron` and a `timers` tick into one list of cron lines,
   periodic scripts and timers, each with an English-free
   `ScheduleDescription` and, for cron, next runs with DST annotations
   in the server zone or the line's `CRON_TZ`. Timer triggers and
   `RandomizedDelaySec` have a source (`timer_detail`, below) that
-  nothing wires yet, `CRON_TZ` zones other than the server's and UTC
-  need a resolver, and nothing in the engine or app consumes the list
-  yet.
+  nothing wires yet. The sample pipeline's `cron` results carry the cron
+  lines' rows, with `CRON_TZ` zones from the zone database (K23b, D58);
+  no surface shows them yet (K36).
 - Log and job commands (M2, `klabautermann_host`, K18, #211): the
   `journalctl` builder adds the kernel log (`-k -b`), an identifier
   (`-t`), the current boot, `--until`, times sent as `@<epoch>` so the
@@ -102,20 +102,23 @@ slice:
   starts and a follow with `--until`. `dmesgJson` builds `dmesg --json
   --decode`, and `parseDmesgJson` reads it record by record, mapping
   util-linux's facility and level names, so a cut document keeps its
-  complete records. `tail -n N [-F] -- <path>` takes only an absolute,
-  normalized path. `HostCommands.commandLine` is the 03 §8.8 `sh -c`
-  wrapper: it exports the sampler's environment with `LC_ALL=C`, or
-  `C.UTF-8` on request, and `exec`s the argv; tests run it through dash
-  and bash with hostile words. The slow sampler gains the on-demand
-  `timer_detail` collector (collector-set version 6, D57): one timer's
-  triggers and randomized delay from `systemctl show`, requested through
-  `hw_o` only. `timerCalendarCommands` builds the `systemd-analyze
-  calendar -- <expr>` reads for its calendar triggers (one run below
-  systemd 242), and `TimerJobEntry.withDetail` merges them, leaving the
-  triggers unknown when a read lists none. `parseOnCalendar` now reads
-  systemd 242 to 252's `Iter. #N:` rows, and elapses in zero-offset
-  zones, where no `(in UTC)` line follows. Nothing wires these into the
-  engine yet, and the fixtures are hand-written.
+  complete records. util-linux before 2.38 (RHEL 8 and 9, Ubuntu 22.04)
+  has no `dmesg --json`, so LOG-03's fallback has nothing to parse there.
+  `tail -n N [-F] -- <path>` takes only an absolute, normalized path.
+  `HostCommands.commandLine` is the 03 §8.8 `sh -c` wrapper: it exports
+  the sampler's environment with `LC_ALL=C`, or `C.UTF-8` on request, and
+  `exec`s the argv; tests run it through dash and bash with hostile words.
+  The slow sampler gains the on-demand `timer_detail` collector
+  (collector-set version 6, D57): one timer's triggers and randomized
+  delay from `systemctl show`, requested through `hw_o` only.
+  `timerCalendarCommands` builds the `systemd-analyze calendar -- <expr>`
+  reads for its calendar triggers (one run below systemd 242), and
+  `TimerJobEntry.withDetail` merges them, leaving the triggers unknown
+  when a read lists none. `parseOnCalendar` now reads systemd 242 to 252's
+  `Iter. #N:` rows, and elapses in zero-offset zones, where no `(in UTC)`
+  line follows. Nothing wires these into the engine yet: the log service
+  (K25a, K26) is to run the log commands, and the jobs panel (K36) is the
+  first view that needs `timer_detail`. The fixtures are hand-written.
 - Access rules (M2, `klabautermann_host` `access/`): the CN-24 rows from
   a `HostProfile` (passwordless sudo, journal group with the LOG-04
   notice, Docker socket rights with the SAF-08 flag, systemd version,
@@ -133,8 +136,8 @@ slice:
   and grouping.
 - `klabautermann_core`: the D18 engine isolate skeleton: the plain-data
   request/event protocol of 03 §10.1 as sealed classes, `engineMain`
-  answering `Hello`/`Subscribe`/`Unsubscribe` and rejecting the rows
-  whose milestones have not landed, and `IsolateEngineClient` for the UI
+  answering the requests whose milestones have landed (below) and
+  rejecting the rest, and `IsolateEngineClient` for the UI
   side. Protocol v2 types `CatalogReplaced` as a list of plain
   `FleetEntry` values and adds `ImportSshConfig`/`SshConfigImported`:
   the engine reads ssh_config text off the UI isolate (CN-19), splitting
@@ -162,27 +165,28 @@ slice:
   and a sealed result of derived values (D43) or `CollectorUnavailable`;
   `SamplingState`, `Gap` and `HostProfileChanged` join. Sampling joined v3
   without a bump. The engine keys subscriptions by server and subscription
-  id and keeps the cadence profile, but runs no sampler and sends none of
-  these events yet.
+  id and keeps the cadence profile. Only an engine with links on samples
+  and sends these events (K22), and the app leaves links off (below).
 - Sample pipeline (M2, 03 §6.4, §10.1, K23, #207): `klabautermann_core`'s
   `ServerSamplePipeline` turns one server's sampler outcomes into
   `Sample`, `Gap`, `SamplingState` and `HostProfileChanged` events; the
   phase follows from the subscribed streams, the app's activity and the
-  link. The engine derives rates over the host's uptime (D43), also
+  link. The pipeline derives rates over the host's uptime (D43), also
   across a lost reading or a sampler restart. A reboot, leaving the
   sampling phase or unsubscribing starts a new series; a slow sampler's
   reply never does. `SampleSequence` keeps one `seq` per server for the
-  engine's lifetime (D44). Inside a container, the values whose `/proc`
-  file shows the host's figures are null and named in `withheld` with a
-  typed reason (D50). A gap opens from a stream's last reading for the
-  background, a lost link or a lost reading, and the next reading closes
-  it. Per-process CPU shares need `procs` to lead its request, and the
-  host's process count and row selection pass through for "showing N of
-  M" (D48). A collector error crosses as at most its last 4,096
-  characters. `HostProfileChanged` goes out for the first profile and
-  when a later one differs beyond its clock and session fields. Fixture
-  tests run every platform through the pipeline. Nothing builds a
-  pipeline yet: the scheduler (K22) wires it to the links.
+  engine's lifetime (D44). Once the probe has answered, inside a
+  container the values whose `/proc` file shows the host's figures are
+  null and named in `withheld` with a typed reason (D50). A gap opens
+  from a stream's last reading for the background, a lost link or a lost
+  reading, and the next reading closes it. Per-process CPU shares need
+  `procs` to lead its request, and the host's process count and row
+  selection pass through for "showing N of M" (D48). A collector error
+  crosses as at most its last 4,096 characters. `HostProfileChanged` goes
+  out for the first profile and when a later one differs beyond its clock
+  and session fields. Fixture tests run every platform through the
+  pipeline. The sampling scheduler (K22) runs it, only with links on,
+  which the app leaves off (below).
 - Protocol v3 logs (M2, K16b, #198; 03 §10.1, LOG-01 to LOG-03, LOG-22,
   SVC-04): `OpenLogStream` carries an app-chosen `streamId` and a
   `LogStreamSpec` with a sealed source (the journal with unit, identifier,
@@ -225,9 +229,11 @@ slice:
   withdraws its prompts. The connector now reports the connecting,
   authenticating and needs-user phases itself. No attempt starts in the
   background; phones close their links after 30 s there and redial on
-  return. Identity files must be regular files, so a FIFO or a device
-  such as a tty fails as unreadable. Tested with a fake clock and fake
-  links.
+  return. An interactive attempt that the phone's background close ends
+  comes back unattended on return, so a host-key prompt it needed fails
+  instead of asking again. Identity files must be regular files, so a
+  FIFO or a device such as a tty fails as unreadable. Tested with a fake
+  clock and fake links.
 - Links in the engine (M2, 03 §5.1, K19b, #212): the engine hands
   `Connect`, `Disconnect` and `SetAppActivity` to the link supervisor and
   `AnswerPrompt` to the prompt broker, and dials through the link
@@ -236,15 +242,16 @@ slice:
   `RequestRejected`. Phones close links in the background (D34);
   desktops keep them. `EngineStart.linksEnabled` gates the whole stack
   and is false in `main.dart` (a contract test holds it) until
-  `host_keys.json` and the app's prompts land. With links off, `Connect`
-  is rejected, `Disconnect` and `SetAppActivity` change nothing, and
-  nothing dials. A server that leaves the fleet is forgotten: its link
+  `host_keys.json` and the app's prompts land (K44). With links off,
+  `Connect` is rejected, `Disconnect` and `SetAppActivity` change nothing,
+  and nothing dials. A server that leaves the fleet is forgotten: its link
   and attempts end without a `LinkState`, its subscriptions go, and a
   `Subscribe` for it is ignored. `MonitoringController` sends it nothing
   while it is gone and, when it returns, sends `Connect` and `Subscribe`
   again for the views still holding it. An entry that keeps its id under
-  a new endpoint keeps its link. Engine tests use a fake dialer; no link
-  has run against a real server yet.
+  a new endpoint keeps its old link until that closes, as 03 §5.1
+  records. Engine tests use a fake dialer; no link has run against a real
+  server yet.
 - `klabautermann_app`: `flutter create`d for the five platforms with the
   04 §12.3 identities, generated launcher icons, the desktop three-pane
   shell (fleet rail, workspace, inspector) at 960 px and up, the phone
@@ -275,23 +282,23 @@ slice:
   `TimeSeriesRing`, not these rings; the fleet rows show a reading's age.
 - Fleet rows (M2, 03 §10.3, FL-04, FL-05, FL-07, K31, #208): the rail
   and the phone list share one row, resolved through `ghost_servers`'
-  indicator from the link status and the probe's answer. Each state
+  indicator from the link status and the probe's answer. Each known state
   shows a word and an icon, a connected mark is framed, and each row is
   one screen-reader node. The shared filter field matches the engine's
   `searchText` (else the name and address), every term required; Enter
   opens the first match and Esc clears it. A server with an `overview`
   or `core` reading this engine run shows a CPU, memory and root-disk
   `PressureBar` (80 and 90 % until OV-11) and the reading's age. Both
-  turn stale, with a history icon and "Stale", once the link is
-  connecting, failed, blocked or closed, or the reading reaches twice
-  its stream's slowest cadence; they give way where the name and state
-  word would not fit. K14's locator flag shows as a warning whose words a
-  tap shows. Link changes are announced, through a live region where the
-  platform takes no announcements; samples and probe answers are not.
-  Rows subscribe nothing until the monitor set (K30), and the app's
-  engine sends no link states (links are off), probe answers or samples,
-  so in a real run rows show the name, address, filter and locator
-  warning only.
+  turn stale, with a history icon and, unless the state word already
+  says the link is down, "Stale", once the link is connecting, failed,
+  blocked or closed, or the reading reaches twice its stream's slowest
+  cadence; they give way where the name and state word would not fit.
+  K14's locator flag shows as a warning whose words a tap shows. Link
+  changes are announced, through a live region where the platform takes no
+  announcements; samples and probe answers are not. Rows subscribe nothing
+  until the monitor set (K30), and the app's engine sends no link states
+  or samples (links are off until K44) and no probe answers (K20), so in a
+  real run rows show the name, address, filter and locator warning only.
 - Coverage part 1 (M2, 03 §9.5 items 1, 2 and 4, K39a, #210): a
   first-run card heads the desktop workspace and the phone's fleet list
   until "Got it", which `settings.json` keeps (below). A coverage chip at
@@ -303,7 +310,8 @@ slice:
   staleness, and no data yet. `MonitoringController` keeps each server's
   latest `SamplingState` and the phase before it. Nothing shows the
   formatter's words yet: the fleet rows word their age with their own
-  strings, and the engine sends no `SamplingState`. K39b follows.
+  strings, and the app's engine sends no `SamplingState` (links are
+  off). K39b follows.
 - System tab (M2, 03 §10.4, K37, #209): the desktop workspace's System
   tab shows identity with virtualization (SYS-01), uptime and boot time
   (BOOT-01), total receive and transmit rates (NET-01), and usage and
@@ -317,8 +325,9 @@ slice:
   three-column table takes over below a width that grows with the text
   scale. `MonitoringController` keeps each server's latest host profile
   and latest reading per stream, and drops them with the server (SYN-08).
-  The engine samples nothing and sends no profile yet, so the tab waits
-  for its first reading; phones reach it with K40.
+  The app's engine samples nothing and sends no profile while links are
+  off (K44), so the tab waits for its first reading; phones reach it with
+  K40.
 - Services tab (M2, 03 §7.5, SVC-01, SVC-02, SVC-04, K34, #216): the
   desktop workspace's Services tab lists the `units` stream's units in
   the sortable table with their load, active and sub states, filtered by
@@ -331,27 +340,29 @@ slice:
   page, under the table or in its place on a narrow panel, where Back
   returns and focus follows. The page reads SVC-04's 50-record journal
   window through `MonitoringController.openLogRead`, which opens it
-  through the Logs panel's `LogStreams` (below), and says what the read
-  is doing. The engine samples nothing and refuses every log read until
-  its log service lands, so the list waits for its first reading and the
-  page says unit logs are not available in this version; phones reach
-  the tab with K40.
+  through `MonitoringController.logs` (`LogStreams`, shared with the Logs
+  panel, below), and says what the read is doing. The app's engine
+  samples nothing while links are off (K44) and refuses every log read
+  until its log service lands (K25a, K25b), so the list waits for its
+  first reading and the page says unit logs are not available in this
+  version; phones reach the tab with K40.
 - Access tab and panel gating (M2, 03 §10.4, CN-24, CN-09, SAF-08, D51,
   K38, #218): the desktop workspace's Access tab runs K04's access check
   over the probe's latest `HostProfile`
-  (`MonitoringController.profileFor`) and lists its seven CN-24 rows
-  under SAF-08's notice. Each row shows its state as an icon and a word,
-  its reason, and SAF-08's badge on a root-equivalent right. Each fix is
-  one line, quoted only where a shell would split or expand a word,
-  behind a Copy button that only writes the clipboard; the row says
-  whether the copy worked, and a copy from another row clears that line.
-  The tab says the app never runs a fix, and shows the detected runtime
-  read-only (CN-09). A tab whose host panels all lack a capability the
-  probe answered is not built: it names what is missing and links to
-  Access, which the desktop selects with focus moved in and a phone
-  pushes. The Docker tab reads "Arrives with Docker support" until M3
-  (D54). The engine sends no `HostProfileChanged` yet, so in a real run
-  every row reads unknown and no panel hides.
+  (`MonitoringController.profileFor`) and lists its seven rows (CN-24's
+  six and CN-09's runtime) under SAF-08's notice. Each row shows its
+  state as an icon and a word, its reason, and SAF-08's badge on a
+  root-equivalent right. Each fix is one line, quoted only where a shell
+  would split or expand a word, behind a Copy button that only writes the
+  clipboard; the row says whether the copy worked, and a copy from another
+  row clears that line. The tab says the app never runs a fix, and shows
+  the detected runtime read-only (CN-09). A tab whose host panels all lack
+  a capability the probe answered is not built: it names what is missing
+  and links to Access, which the desktop selects with focus moved in and a
+  phone pushes. The Docker tab reads "Arrives with Docker support" until
+  M3 (D54). The app's engine sends no `HostProfileChanged` while links are
+  off (K44), so in a real run every row reads unknown and no panel
+  hides.
 - Localization contract (D35, A11Y-05):
   `app/klabautermann_app/test/localization_contract_test.dart` runs the
   suite's shared scanner (`tool/l10n_contract`, 03 §3.5 F1b) over `lib/`
@@ -474,15 +485,17 @@ slice:
   would refuse. Where that second reading would route a host through
   itself or into a jumphost loop, ssh cannot be taking it, so the host
   keeps the first reading's values (as a bastion under `Host * !bastion`
-  does). Nothing dials them yet.
+  does). Only an engine with links on dials them, and the app leaves
+  links off (above).
 - Packaging: `scripts/build.sh`, `scripts/package-linux.sh` (.deb and
   AppImage through the shared `scripts/package-linux-common.sh`) and
   `scripts/build-flatpak.sh` with `flatpak/ch.lkmc.klabautermann.yml`.
   The flatpak grants read-only `~/.ssh/config` for the FL-02 import and
-  nothing else under `~/.ssh` (04 §12.1); widening it waits for M2's
-  identity-file reads and the owner's sign-off. Locally the scripts have
-  only run on stub bundles; CI's Linux client leg runs them on the real
-  release bundle, with appimagetool and flatpak-builder.
+  nothing else under `~/.ssh` (04 §12.1); widening it waits for links in
+  the app (K44), whose identity-file reads (K17, above) need it, and the
+  owner's sign-off. Locally the scripts have only run on stub bundles;
+  CI's Linux client leg runs them on the real release bundle, with
+  appimagetool and flatpak-builder.
 - Client CI legs: `klabautermann_client` in the root `ci.yml` builds
   Android, Linux, macOS, iOS and Windows on every PR, launches the three
   desktop release builds, checks the APK's version code and the macOS
@@ -633,8 +646,9 @@ slice:
   the reason, the host's error output and Retry where reading again may
   help. The search field waits 200 ms after typing. LOG-04's notice shows
   above the journal and the kernel log when the access check says the
-  account sees only its own entries. Phones open the source and filters
-  in bottom sheets. A stream is open only while the panel shows.
+  account sees only its own entries. Narrow panels, phones included, open
+  the source and filters in bottom sheets. A stream is open only while
+  the panel shows.
   `MonitoringController.logs` (`LogStreams`) owns the engine run's log
   streams, the unit page's reads included: it mints `log-N` ids, sends
   `OpenLogStream` and `CloseStream`, routes events by id, gives a
@@ -642,7 +656,8 @@ slice:
   journal access, dropped with the server (SYN-08). That rule holds
   because the log service must answer each open it accepts before the
   next request (03 §10.1). The engine refuses every open until its log
-  service lands and sends no host profile yet, so the panel shows the
+  service lands (K25a, K25b, and K26 for follows), and the app's engine
+  sends no host profile while links are off (K44), so the panel shows the
   refusal with Retry and no notice.
 
 Pull-only from the start (D14): no surface sends a request that could
