@@ -1299,6 +1299,7 @@ graph TD
   APP --> PE
   APP --> PCO
   APP --> ST
+  APP -.->|dev, tests only| HOST
   CORE --> SC
   CORE --> HOST
   CORE --> DOCK
@@ -2726,9 +2727,9 @@ each row's source and the user its line names:
 - Schedules come from ARB templates: a cron schedule field by field as
   written, as clock times when the minute and hour fields hold single
   values only, a stepped hour beside a repeating minute as the hours it
-  spans, its day fields joined by crontab(5)'s either or both rule; a macro by name; a `CRON_TZ` zone after the schedule; an
-  `OnCalendar=` expression verbatim; a monotonic trigger as its span
-  after its base.
+  spans, its day fields joined by crontab(5)'s either or both rule; a
+  macro by name; a `CRON_TZ` zone after the schedule; an `OnCalendar=`
+  expression verbatim; a monotonic trigger as its span after its base.
 - A cron run shows on its zone's clock with that zone's offset, and its
   gap, overlap or near-transition note beside it (the table marks it
   with an icon). The tab names the server zone whose rules the engine
