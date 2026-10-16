@@ -114,6 +114,19 @@ void main() {
       ]);
     });
 
+    test('a non-ASCII name in its systemd-escaped forms', () {
+      const literals = RedactionLiterals(userNames: ['jürgen']);
+      // The payload's UTF-8 bytes, as Latin-1 text.
+      const units =
+          r'backup-j\xc3\xbcrgen.service "sync@j\\xC3\\xBCrgen.timer" '
+          'j\xc3\xbcrgen-x.timer';
+      expect(
+        _redact(units, literals: literals, collector: 'units'),
+        'backup-user.service "sync@user.timer" user-x.timer',
+      );
+      expect(Redactor(literals).review(units), [(1, 'still names a user')]);
+    });
+
     test('a home directory goes before the user name', () {
       expect(
         _redact('/srv/anke-home/bin /srv/anke-home2', literals: literals),

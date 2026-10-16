@@ -512,12 +512,17 @@ final class Redactor {
   /// home directory as a whole path, a `--redact` value anywhere. A `-`
   /// also matches device-mapper's `--` and systemd's `\x2d`, so that
   /// `web-01` matches in `/dev/mapper/web--01--vg-root`; a name may
-  /// follow any systemd escape (`\x2d`, a space's `\x20`).
+  /// follow any systemd escape (`\x2d`, a space's `\x20`), and a
+  /// non-ASCII byte also matches its own (`j\xc3\xbcrgen`).
   static String _literalPattern(_Literal kind, String value) {
+    String byte(String c) => c.codeUnitAt(0) < 0x80
+        ? RegExp.escape(c)
+        : '(?:${RegExp.escape(c)}|\\\\{1,2}x'
+              '${c.codeUnitAt(0).toRadixString(16)})';
     final escaped = latin1
         .decode(utf8.encode(value))
         .split('-')
-        .map(RegExp.escape)
+        .map((part) => part.split('').map(byte).join())
         .join('(?:-{1,2}|(?:$_x2d){1,2})');
     return switch (kind) {
       _Literal.host || _Literal.domain || _Literal.user =>
