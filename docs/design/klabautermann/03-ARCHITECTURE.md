@@ -2582,7 +2582,9 @@ unless the user enables admin mode for that panel.
   block precedes every command line. Command lines are masked per
   argument (8.9);
   the `ps` fallback joins arguments with spaces, so masking there works on
-  whitespace tokens. The engine dates each start as the reading's time
+  whitespace tokens, and the `[comm]` it prints for an empty command line
+  reads as none where it matches the row's `comm`. The engine dates each
+  start as the reading's time
   less the reply's uptime plus the start ticks at USER_HZ 100, as the CPU
   shares assume; the start is unknown where lxcfs serves the container's
   own age as `/proc/uptime` (D50), since start ticks count from the

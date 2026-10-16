@@ -635,6 +635,29 @@ void main() {
     expect(rows.first.residentBytes, 2048);
   });
 
+  test('ps\'s bracketed name for an empty command line is no command '
+      'line, as the kernel thread\'s empty cmdline is (7.2)', () {
+    final rows = procsResult(
+      ProcsSnapshot(
+        processes: [
+          ProcEntry(pid: 2, comm: 'kthreadd', argsJoined: '[kthreadd]'),
+          ProcEntry(pid: 3, comm: 'kthreadd', argsJoined: '[kthreadd] x'),
+          ProcEntry(pid: 4, argsJoined: '[kthreadd]'),
+          ProcEntry(pid: 5, comm: 'app', argv: const ['[app]']),
+        ],
+      ),
+    ).processes;
+
+    expect(rows.map((r) => r.arguments?.map((a) => a.display)), [
+      isEmpty,
+      ['[kthreadd]', 'x'],
+      // Without /proc's name nothing says the brackets are ps's.
+      ['[kthreadd]'],
+      // A real argument vector is what the process set.
+      ['[app]'],
+    ]);
+  });
+
   test('a start is the boot time plus its ticks at 100 a second, and '
       'unknown without either (7.2)', () {
     final booted = DateTime.utc(2026, 10, 3, 11, 23);

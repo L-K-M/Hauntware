@@ -377,7 +377,7 @@ ProcsResult procsResult(
           // boundaries are lost; it lists the whitespace tokens, so 8.9's
           // per-argument masking works on those (7.2). Masked here, so no
           // argument crosses to the app as plain text.
-          arguments: switch (p.argv ?? _tokens(p.argsJoined)) {
+          arguments: switch (p.argv ?? _tokens(p.argsJoined, p.comm)) {
             null => null,
             final argv => List.unmodifiable(
               maskCommandLine(argv, budget: masking),
@@ -391,12 +391,15 @@ ProcsResult procsResult(
 }
 
 /// The tokens of a `ps` command line, which the host parser joins with
-/// single spaces; none for an empty one.
-List<String>? _tokens(String? joined) => joined == null
-    ? null
-    : joined.isEmpty
-    ? const []
-    : joined.split(' ');
+/// single spaces; none for an empty one, or for the bracketed [comm] that
+/// GNU and BusyBox `ps` print in place of an empty `cmdline`, as for a
+/// kernel thread.
+List<String>? _tokens(String? joined, String? comm) {
+  if (joined == null) return null;
+  if (joined.isEmpty || (comm != null && joined == '[$comm]')) return const [];
+
+  return joined.split(' ');
+}
 
 /// The most cron lines whose next runs one `cron` reading evaluates.
 /// A line can cost about 2 ms in the engine isolate, which every server

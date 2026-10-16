@@ -65,6 +65,9 @@ import 'package:meta/meta.dart';
 /// [ProcessRow.arguments] then became masked values (03 §8.9), and
 /// [HostProfileChanged] gained `cachedAt` for a profile the device cache
 /// kept (D59), within v3 the same way.
+///
+/// [ProcessRow] then gained `startedAt`, its start by the engine's clock
+/// (03 §7.2), within v3 the same way.
 const int kEngineProtocolVersion = 3;
 
 /// Every message the UI isolate sends the engine (03 §10.1, D18). Plain data
