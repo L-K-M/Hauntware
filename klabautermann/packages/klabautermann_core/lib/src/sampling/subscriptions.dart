@@ -55,6 +55,11 @@ final class SamplingSubscriptions {
       ...streams,
   };
 
+  /// The streams [serverId]'s subscription [subscriptionId] names, or null
+  /// when the engine holds no such subscription.
+  Set<SampleStream>? streamsOf(String serverId, String subscriptionId) =>
+      _byServer[serverId]?[subscriptionId];
+
   /// The servers at least one subscription names.
   Set<String> get servers => Set.unmodifiable(_byServer.keys);
 

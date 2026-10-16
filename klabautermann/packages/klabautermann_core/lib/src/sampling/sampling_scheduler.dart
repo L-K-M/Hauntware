@@ -92,7 +92,8 @@ Duration Function() _monotonicClock() {
 /// rules. The engine isolate owns it, records requests in the
 /// [SamplingSubscriptions] it shares, and tells it what changed:
 /// [subscribed] and [update] after a subscription or a link changed,
-/// [profileChanged], [activity], and [retain] for the fleet. A tick that
+/// [refresh] for a subscription read at once, [profileChanged],
+/// [activity], and [retain] for the fleet. A tick that
 /// would overlap its sampler's outstanding request is skipped and
 /// counted by the session ([SamplerSession.skippedTicks]), never queued;
 /// one due while its sampler restarts or waits for the probe is a
@@ -149,6 +150,33 @@ final class SamplingScheduler {
       if (owed.isNotEmpty) _server(serverId).owed.addAll(owed);
     }
     update(serverId);
+  }
+
+  /// Follows a [RefreshSubscription] of [streams], the refreshed
+  /// subscription's: each is read once more, at once while the server
+  /// samples, and as its sampling resumes otherwise. Such a reading is
+  /// held, as a first reading is, while its sampler is busy, restarts or
+  /// waits for the probe, rather than lost, and a stream that rides on
+  /// its coverer's ticks is read with its coverer.
+  void refresh(String serverId, Set<SampleStream> streams) {
+    final server = _servers[serverId];
+    if (server == null) return;
+
+    // A new run reads every periodic stream at once, but not these.
+    if (streams.contains(SampleStream.identity)) server.identityReadOn = null;
+    server.owed.addAll(streams.where(_onDemand));
+    final run = server.run;
+    if (run == null) return;
+
+    final now = _elapsed();
+    for (final stream in streams.where(run.streams.contains)) {
+      for (final read in [stream, if (_rides(run, stream)) _coverer(stream)!]) {
+        run.due[read] = now;
+        run.unread.add(read);
+      }
+    }
+    _schedule(server, run, run.fast);
+    _schedule(server, run, run.slow);
   }
 
   /// Re-reads [serverId]'s subscriptions and link, starting or stopping

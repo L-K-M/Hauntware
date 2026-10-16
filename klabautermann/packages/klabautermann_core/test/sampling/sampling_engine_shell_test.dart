@@ -139,6 +139,16 @@ void main() {
         containsAll([SampleStream.fs, SampleStream.core]),
       );
 
+      // A refresh reads the subscription's streams at once, identity, read
+      // once per link otherwise, included (PLT-02).
+      engine.send(
+        const RefreshSubscription(serverId: _web, subscriptionId: 'overview'),
+      );
+      final refreshed = await engine.until<Sample>(
+        (s) => s.stream == SampleStream.identity,
+      );
+      expect(refreshed.seq, greaterThan(identity.seq));
+
       // A stopped fast sampler misses its 5 s deadline and restarts; the
       // link stays, since the restarted sampler answers.
       final fast = link.processes.singleWhere(

@@ -4311,7 +4311,7 @@ shows there.
 | `ImportSshConfig(text)` (FL-02, desktop) | `CatalogReplaced(entries)` with the imports, then `SshConfigImported(importedCount, skippedCount, saved)` |
 | `ConfirmEndpoints(ids)`, `SetMonitorSet(ids)` | `EndpointChanged(serverId)` |
 | `Connect(serverId)`, `Disconnect(serverId)` | `LinkState(serverId, status)` (D46's states plus `blocked`; typed reasons inside the status) |
-| `Subscribe(serverId, subscriptionId, streams)`, `Unsubscribe(serverId, subscriptionId)`, `SetCadenceProfile(profile)`; app activity is a separate request too (D45) | `Sample(serverId, stream, seq, at, result)` (engine-owned `seq`, D44; rates and derived values, D43), `SamplingState(serverId, phase, since)`, `Gap(serverId, streams, from, until, cause)` |
+| `Subscribe(serverId, subscriptionId, streams)`, `Unsubscribe(serverId, subscriptionId)`, `RefreshSubscription(serverId, subscriptionId)` (a phone's pull to refresh, PLT-02), `SetCadenceProfile(profile)`; app activity is a separate request too (D45) | `Sample(serverId, stream, seq, at, result)` (engine-owned `seq`, D44; rates and derived values, D43), `SamplingState(serverId, phase, since)`, `Gap(serverId, streams, from, until, cause)` |
 | none: the engine probes after connecting (6.1) | `HostProfileChanged(serverId, profile, cachedAt)` (`cachedAt` only on the device cache's copy, D59) |
 | `OpenLogStream(streamId, spec)`, `CloseStream(streamId)` | `LogBatch(streamId, records, dropped)` (at most 20 per second per stream [E]), `LogStreamState(streamId, status)` |
 | `DockerQuery(serverId, query)` | `DockerResult`, `DockerEvent` |
@@ -4619,7 +4619,17 @@ the engine in `engine_isolate.dart` beside it):
   repeat included, so a surface refreshes it by resending. While the
   server is `waitingForLink` or `pausedInBackground`, that reading waits
   until the link is ready and the app is in the foreground, and resends
-  in the meantime add no further reading. The engine
+  in the meantime add no further reading. `RefreshSubscription` (K40)
+  reads one subscription's streams at once in any column, for a phone's
+  pull to refresh (PLT-02): each is read once more as soon as its
+  sampler is free, a busy, restarting or probing sampler holding the
+  reading as it holds a first one rather than losing it, a stream that
+  rides on another's collector through that collector, and `identity`,
+  otherwise read once per link, too. While the server waits for its
+  link or the foreground nothing is read, and sampling resumes with
+  every stream the subscription names. No event answers it but the
+  readings; with links off, or for a subscription the engine does not
+  hold, it reads nothing. The engine
   sends one `Sample` per subscribed stream and reading: `seq` counts per
   server across its streams (D44), `at` is the engine's own clock in UTC,
   since a host's clock may be off, and `result` is a sealed value per

@@ -43,7 +43,7 @@ final class EngineStart {
   /// Whether the engine opens SSH links (03 §5.1, §10.1). Without them it
   /// has no link supervisor, sampling scheduler or log streams: [Connect]
   /// and [OpenLogStream] get [RequestRejected] and nothing dials, samples
-  /// or reads, [CloseStream], [Disconnect] and
+  /// or reads, [CloseStream], [Disconnect], [RefreshSubscription] and
   /// [SetAppActivity] change nothing, subscriptions are only recorded,
   /// and no [Prompt] is ever open. The app's composition root leaves
   /// them off; tests turn them on.
@@ -65,7 +65,8 @@ final class EngineStart {
 /// [Unsubscribe] and [SetCadenceProfile] update the sampling subscriptions,
 /// which the sampling scheduler runs over each server's ready link as
 /// [Sample], [Gap], [SamplingState] and [HostProfileChanged] events
-/// (03 §6.4; links off, nothing samples), a server's cached profile goes
+/// (03 §6.4; links off, nothing samples), [RefreshSubscription] has it
+/// read one subscription's streams at once, a server's cached profile goes
 /// out as a [HostProfileChanged] when a [Connect] or [Subscribe] first
 /// names it (03 §6.1, D59), [ImportSshConfig] gets
 /// [CatalogReplaced] and [SshConfigImported], [Connect], [Disconnect] and
@@ -264,6 +265,10 @@ void engineMain(
       case Unsubscribe(:final serverId):
         sampling.unsubscribe(message);
         scheduler?.update(serverId);
+      case RefreshSubscription(:final serverId, :final subscriptionId):
+        if (sampling.streamsOf(serverId, subscriptionId) case final streams?) {
+          scheduler?.refresh(serverId, streams);
+        }
       case SetCadenceProfile(:final profile):
         sampling.profile = profile;
         scheduler?.profileChanged();
