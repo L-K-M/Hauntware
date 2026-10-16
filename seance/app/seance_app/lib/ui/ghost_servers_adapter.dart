@@ -45,6 +45,20 @@ GhostProbeState ghostProbeOf(ProbeStatus probe) => switch (probe) {
   ProbeStatus.unknown => GhostProbeState.unknown,
 };
 
+/// A host-key decision as the shared prompt shows it: the presented key,
+/// and the pinned key's fingerprint and type. The pin marks the changed-key
+/// review; a trusted decision, the one other verdict that carries a pin,
+/// never reaches the prompt (`seance_core` connects without asking).
+GhostHostKeyPrompt ghostHostKeyPromptOf(HostKeyDecision decision) =>
+    GhostHostKeyPrompt(
+      host: decision.presented.host,
+      port: decision.presented.port,
+      keyType: decision.presented.type,
+      fingerprintSha256: decision.presented.fingerprintSha256,
+      pinnedFingerprintSha256: decision.pinned?.fingerprintSha256,
+      pinnedKeyType: decision.pinned?.type,
+    );
+
 /// The theme's status colours ([StatusColors]) as the package takes them.
 GhostStatusColors seanceStatusColors(BuildContext context) => GhostStatusColors(
   online: StatusColors.online(context),
