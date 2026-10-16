@@ -460,6 +460,37 @@ void main() {
       ]);
     });
 
+    test('a journal follow keeps running when stderr names a refusal, as '
+        'journalctl warns of a file it cannot read', () async {
+      follower(_spec(const JournalLogSource())).run(link);
+      final p = await link.process(0);
+      p.emitStderr(
+        utf8.encode(
+          'Error was encountered while opening journal file or directory '
+          '/var/log/journal/m/user-1000.journal, ignoring file: '
+          'Permission denied\n',
+        ),
+      );
+      await pumpEventQueue();
+      p.emitText(_entries(1, 1));
+      await clock.elapse(Duration.zero);
+      expect(ends(), isEmpty);
+      expect(p.closeCalls, 0);
+      expect(messages(), ['entry 1']);
+    });
+
+    test('a file line loses its CR, and a last line without a line break '
+        'goes out before the end', () async {
+      follower(_spec(const FileLogSource('/var/log/app.log'))).run(link);
+      (await link.process(0))
+        ..emitText('one\r\nlast')
+        ..end(const RemoteExit(exitCode: 1));
+      await clock.elapse(Duration.zero);
+      final records = batches().single.records.cast<FileRecord>();
+      expect(records.map((r) => r.text), ['one', 'last']);
+      expect(ends(), [const LogStreamEnded(LogStreamEndReason.failed)]);
+    });
+
     test('end discards held lines, closes the process and ends once', () async {
       final f = follower(_spec(const JournalLogSource()));
       f.run(link);
