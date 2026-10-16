@@ -84,7 +84,8 @@ class ServerCoverageCard extends StatelessWidget {
   /// Whether the Overview shows; the clock and the `units` read follow it.
   final bool visible;
 
-  /// What the chart listens to instead of the clock while hidden.
+  /// What the chart listens to instead of the clock while nothing in it
+  /// ages or it hides.
   static final Listenable _silent = Listenable.merge(const []);
 
   @override
@@ -94,6 +95,7 @@ class ServerCoverageCard extends StatelessWidget {
     final latest = monitoring.sampleFor(serverId, SampleStream.units);
     final reading = monitoring.lastReadingFor(serverId, SampleStream.units);
     final sampling = monitoring.samplingFor(serverId);
+    final history = monitoring.historyFor(serverId, MetricSeries.cpuBusy);
     return ListenableBuilder(
       listenable: Listenable.merge([latest, reading, sampling]),
       builder: (context, _) {
@@ -113,14 +115,19 @@ class ServerCoverageCard extends StatelessWidget {
             title: l10n.coverageServerTitle,
             children: [
               _TierLine(sampling: sampling.value),
+              // The ring's first reading or gap starts the clock: before
+              // it, nothing in the chart moves with time.
               ListenableBuilder(
-                listenable: visible ? monitoring.clock : _silent,
-                builder: (context, _) => _SessionChart(
-                  history: monitoring.historyFor(
-                    serverId,
-                    MetricSeries.cpuBusy,
+                listenable: history,
+                builder: (context, _) => ListenableBuilder(
+                  listenable:
+                      visible && (history.length > 0 || history.gaps.isNotEmpty)
+                      ? monitoring.clock
+                      : _silent,
+                  builder: (context, _) => _SessionChart(
+                    history: history,
+                    end: monitoring.clock.value,
                   ),
-                  end: monitoring.clock.value,
                 ),
               ),
               PanelNotice(icon: icon, text: monitor),
@@ -156,26 +163,11 @@ class ServerCoverageDetails extends StatelessWidget {
     final sampling = monitoring.samplingFor(serverId);
     final history = monitoring.historyFor(serverId, MetricSeries.cpuBusy);
     return ListenableBuilder(
-      listenable: Listenable.merge([
-        core,
-        latest,
-        reading,
-        sampling,
-        history,
-        monitoring.clock,
-      ]),
+      listenable: Listenable.merge([core, latest, reading, sampling, history]),
       builder: (context, _) {
         final l10n = AppLocalizations.of(context);
         final theme = Theme.of(context);
         final strings = klabautermannChartStrings(l10n);
-        final freshness = freshnessOf(
-          now: monitoring.clock.value,
-          staleAfter: kFleetRowStaleAfter[SampleStream.core]!,
-          lastSampleAt: core.value?.at,
-          // No monitor set watches a server yet (FL-21).
-          watched: false,
-          sampling: sampling.value,
-        );
         final (icon, monitor) = externalMonitorLine(
           l10n,
           latest: latest.value,
@@ -192,10 +184,13 @@ class ServerCoverageDetails extends StatelessWidget {
             _TierLine(sampling: sampling.value),
             const SizedBox(height: 8),
             // As on the Overview: before a reading only a pause has news.
-            if (core.value != null || freshness is FreshnessPaused) ...[
-              PanelNotice(
-                icon: freshness.stale ? Icons.history : Icons.schedule,
-                text: freshnessText(l10n, freshness),
+            if (core.value != null ||
+                sampling.value?.state.phase ==
+                    SamplingPhase.pausedInBackground) ...[
+              _FreshnessLine(
+                monitoring: monitoring,
+                reading: core.value,
+                sampling: sampling.value,
               ),
               const SizedBox(height: 8),
             ],
@@ -311,6 +306,40 @@ class BackgroundReturnBanner extends StatelessWidget {
       },
     );
   }
+}
+
+/// The `core` stream's freshness (03 §9.5 item 4). Only a reading's age
+/// moves with time, so it follows the clock only once there is one; a
+/// pause has no age.
+class _FreshnessLine extends StatelessWidget {
+  const _FreshnessLine({
+    required this.monitoring,
+    required this.reading,
+    required this.sampling,
+  });
+
+  final MonitoringController monitoring;
+  final Sample? reading;
+  final SamplingStatus? sampling;
+
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: reading == null ? ServerCoverageCard._silent : monitoring.clock,
+    builder: (context, _) {
+      final freshness = freshnessOf(
+        now: monitoring.clock.value,
+        staleAfter: kFleetRowStaleAfter[SampleStream.core]!,
+        lastSampleAt: reading?.at,
+        // No monitor set watches a server yet (FL-21).
+        watched: false,
+        sampling: sampling,
+      );
+      return PanelNotice(
+        icon: freshness.stale ? Icons.history : Icons.schedule,
+        text: freshnessText(AppLocalizations.of(context), freshness),
+      );
+    },
+  );
 }
 
 /// The T0 badge beside what the tier means and what live reading is doing

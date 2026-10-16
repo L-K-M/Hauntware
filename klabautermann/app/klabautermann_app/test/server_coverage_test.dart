@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:klabautermann_app/controllers/monitoring_controller.dart';
 import 'package:klabautermann_app/l10n/app_localizations.dart';
 import 'package:klabautermann_app/l10n/app_localizations_en.dart';
+import 'package:klabautermann_app/ui/charts/charts.dart' show TimeSeriesChart;
 import 'package:klabautermann_app/ui/server_coverage.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 
@@ -214,6 +215,25 @@ void main() {
       find.text('Paused while Klabautermann is in the background.'),
       findsOneWidget,
     );
+  });
+
+  testWidgets('the chart follows the clock only once it has data', (
+    tester,
+  ) async {
+    final card = await _pumpCard(tester);
+    DateTime end() =>
+        tester.widget<TimeSeriesChart>(find.byType(TimeSeriesChart)).end;
+
+    // Nothing to age, so nothing ticks (the clock's contract, K39a).
+    card.now = _start.add(const Duration(seconds: 5));
+    await tester.pump(const Duration(seconds: 1));
+    expect(end(), _start);
+
+    card.sample(SampleStream.core, _cpu(20));
+    await tester.pump();
+    card.now = _start.add(const Duration(seconds: 9));
+    await tester.pump(const Duration(seconds: 1));
+    expect(end(), card.now);
   });
 
   testWidgets('a failed units read is not retried this engine run', (
