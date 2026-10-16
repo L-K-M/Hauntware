@@ -646,6 +646,216 @@ abstract class AppLocalizations {
   /// **'Available in a later milestone.'**
   String get placeholderMilestone;
 
+  /// Heading of the first-run coverage card (03 §9.5 item 1), shown above the fleet on phones and above the workspace on desktops until the user dismisses it.
+  ///
+  /// In en, this message translates to:
+  /// **'How Klabautermann watches your servers'**
+  String get coverageFirstRunTitle;
+
+  /// Body of the first-run coverage card: what the app does and does not cover. It names no alerts, since this version has none.
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann connects over SSH only while it is open. It installs nothing on your servers unless you ask it to. Charts cover only the time this device was connected.'**
+  String get coverageFirstRunBody;
+
+  /// Button that dismisses the first-run coverage card for good on this device.
+  ///
+  /// In en, this message translates to:
+  /// **'Got it'**
+  String get coverageFirstRunDismiss;
+
+  /// Button on the first-run coverage card that opens the coverage sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'Coverage details'**
+  String get coverageFirstRunDetails;
+
+  /// Top toast when dismissing the first-run coverage card could not be written to the device's settings file; the card stays hidden for this session.
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann could not save that you dismissed the coverage note, so it shows again after a restart.'**
+  String get coverageFirstRunNotSaved;
+
+  /// The fleet header's coverage chip (03 §9.5 item 2): how many fleet servers this device watches continuously (its monitor set) out of all of them; watching happens only while the app is open. Opens the coverage sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'{total, plural, =1{Watching {watched} of 1 server on this device, only while open} other{Watching {watched} of {total} servers on this device, only while open}}'**
+  String coverageChip(int watched, int total);
+
+  /// Screen-reader hint for activating the fleet header's coverage chip.
+  ///
+  /// In en, this message translates to:
+  /// **'Show coverage details'**
+  String get coverageChipHint;
+
+  /// Heading of the coverage sheet the fleet header's chip opens.
+  ///
+  /// In en, this message translates to:
+  /// **'Coverage on this device'**
+  String get coverageSheetTitle;
+
+  /// Badge naming the execution tier the fleet runs at: T0, SSH only while the app is open (03 §9). Kept as written.
+  ///
+  /// In en, this message translates to:
+  /// **'T0'**
+  String get coverageTierBadge;
+
+  /// What the T0 badge means, beside it in the coverage sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'SSH while Klabautermann is open'**
+  String get coverageTierTitle;
+
+  /// Explanation under the tier title in the coverage sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann reads your servers over SSH only while it is open. It installs nothing on them unless you ask it to.'**
+  String get coverageTierBody;
+
+  /// Heading of the coverage sheet's list of what this device covers.
+  ///
+  /// In en, this message translates to:
+  /// **'Covered'**
+  String get coverageCoveredHeading;
+
+  /// Coverage sheet item: the servers the user has open are read live.
+  ///
+  /// In en, this message translates to:
+  /// **'Live readings while open'**
+  String get coverageLiveTitle;
+
+  /// Body of the coverage sheet's live-readings item.
+  ///
+  /// In en, this message translates to:
+  /// **'Metrics, processes, services, logs and jobs of the servers you have open.'**
+  String get coverageLiveBody;
+
+  /// Coverage sheet item about the servers this device watches continuously (its monitor set, FL-21): listed as covered once one is watched, and as not covered while none is.
+  ///
+  /// In en, this message translates to:
+  /// **'Continuous watching'**
+  String get coverageWatchedTitle;
+
+  /// Body of the coverage sheet's watched-servers item; watched is the size of this device's monitor set within the fleet.
+  ///
+  /// In en, this message translates to:
+  /// **'{watched, plural, =0{No server is watched on this device, so each is read only while you have it open.} =1{1 server is read continuously while Klabautermann is open. Any others are read only while you have them open.} other{{watched} servers are read continuously while Klabautermann is open. Any others are read only while you have them open.}}'**
+  String coverageWatchedBody(int watched);
+
+  /// Heading of the coverage sheet's list of what this device does not cover.
+  ///
+  /// In en, this message translates to:
+  /// **'Not covered'**
+  String get coverageNotCoveredHeading;
+
+  /// Coverage sheet item: nothing is covered while the app is closed.
+  ///
+  /// In en, this message translates to:
+  /// **'While Klabautermann is closed'**
+  String get coverageClosedTitle;
+
+  /// Body of the coverage sheet's while-closed item.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing checks your servers, so nothing can warn you about them.'**
+  String get coverageClosedBody;
+
+  /// Coverage sheet item: a server that goes down while the app is closed goes unnoticed.
+  ///
+  /// In en, this message translates to:
+  /// **'A server going down'**
+  String get coverageHostDownTitle;
+
+  /// Body of the coverage sheet's server-down item.
+  ///
+  /// In en, this message translates to:
+  /// **'If a server stops while Klabautermann is closed, you find out the next time you open it.'**
+  String get coverageHostDownBody;
+
+  /// Coverage sheet item: charts hold no history from before this device connected.
+  ///
+  /// In en, this message translates to:
+  /// **'History before you connected'**
+  String get coverageHistoryTitle;
+
+  /// Body of the coverage sheet's history item.
+  ///
+  /// In en, this message translates to:
+  /// **'Charts cover only the time this device was connected. Gaps are marked, never filled in.'**
+  String get coverageHistoryBody;
+
+  /// Coverage sheet item shown on iOS and Android only: reading stops in the background (PLT-04).
+  ///
+  /// In en, this message translates to:
+  /// **'While in the background'**
+  String get coverageBackgroundTitle;
+
+  /// Body of the coverage sheet's background item, on iOS and Android only.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading stops while Klabautermann is in the background and resumes when you return.'**
+  String get coverageBackgroundBody;
+
+  /// An age under a minute in a freshness line (03 §9.5 item 4), as in "Updated 4 s ago".
+  ///
+  /// In en, this message translates to:
+  /// **'{seconds} s'**
+  String coverageFreshnessSeconds(int seconds);
+
+  /// An age under an hour, in whole minutes, in a freshness line.
+  ///
+  /// In en, this message translates to:
+  /// **'{minutes} min'**
+  String coverageFreshnessMinutes(int minutes);
+
+  /// An age under a day, in whole hours, in a freshness line.
+  ///
+  /// In en, this message translates to:
+  /// **'{hours} h'**
+  String coverageFreshnessHours(int hours);
+
+  /// An age of a day or more, in whole days, in a freshness line.
+  ///
+  /// In en, this message translates to:
+  /// **'{days} d'**
+  String coverageFreshnessDays(int days);
+
+  /// Freshness line of a server's or panel's values while they are current; age is one of the coverageFreshness age strings.
+  ///
+  /// In en, this message translates to:
+  /// **'Updated {age} ago'**
+  String coverageFreshnessUpdated(String age);
+
+  /// Freshness line of values older than their stream's limit, which are drawn grey beside it.
+  ///
+  /// In en, this message translates to:
+  /// **'Stale: updated {age} ago'**
+  String coverageFreshnessStale(String age);
+
+  /// Freshness line while the server's connection is down after readings arrived; age is how long it has been down.
+  ///
+  /// In en, this message translates to:
+  /// **'Disconnected {age} ago'**
+  String coverageFreshnessDisconnected(String age);
+
+  /// Freshness line while a phone app is in the background and reading is paused.
+  ///
+  /// In en, this message translates to:
+  /// **'Paused: app in background'**
+  String get coverageFreshnessPaused;
+
+  /// Freshness line of a server outside this device's monitor set that nothing reads.
+  ///
+  /// In en, this message translates to:
+  /// **'Not watched on this device'**
+  String get coverageFreshnessNotWatched;
+
+  /// Freshness line before the first reading has arrived.
+  ///
+  /// In en, this message translates to:
+  /// **'No data yet'**
+  String get coverageFreshnessNoData;
+
   /// No description provided for @serverTitle.
   ///
   /// In en, this message translates to:
@@ -1102,6 +1312,402 @@ abstract class AppLocalizations {
   /// **'{summary}, stale'**
   String chartStale(String summary);
 
+  /// Access tab: the note above the access rows saying the app only shows and copies fix commands and never runs them (CN-24).
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann never runs these fix commands. Copy one and run it yourself on the server.'**
+  String get accessNeverRuns;
+
+  /// Access tab: title of the notice explaining which rights equal root on the server (SAF-08).
+  ///
+  /// In en, this message translates to:
+  /// **'Root-equivalent access'**
+  String get accessRootEquivalenceTitle;
+
+  /// Access tab: body of the root-equivalence notice (SAF-08).
+  ///
+  /// In en, this message translates to:
+  /// **'Using a rootful Docker or Podman socket, or a broad passwordless sudo rule, gives the same power as root on this server. A rootless engine gives only the power of the user that runs it.'**
+  String get accessRootEquivalenceBody;
+
+  /// Access tab and Docker tab: shown in place of an access answer before the server's capability probe has reported.
+  ///
+  /// In en, this message translates to:
+  /// **'Not checked yet. Klabautermann checks access after it connects to this server.'**
+  String get accessNotChecked;
+
+  /// Access tab: the reason under each row before the server's capability probe has reported; accessNotChecked explains it once above the rows.
+  ///
+  /// In en, this message translates to:
+  /// **'Not checked yet.'**
+  String get accessRowNotChecked;
+
+  /// Access tab: the state word of a row whose right the account has.
+  ///
+  /// In en, this message translates to:
+  /// **'OK'**
+  String get accessStatusOk;
+
+  /// Access tab: the state word of a row whose right the account lacks, as far as the probe could tell.
+  ///
+  /// In en, this message translates to:
+  /// **'Missing'**
+  String get accessStatusMissing;
+
+  /// Access tab: the state word of a row the probe could not answer yet.
+  ///
+  /// In en, this message translates to:
+  /// **'Unknown'**
+  String get accessStatusUnknown;
+
+  /// Access tab row title: whether sudo (or doas) runs without a password for the login account.
+  ///
+  /// In en, this message translates to:
+  /// **'Passwordless sudo'**
+  String get accessItemSudo;
+
+  /// Access tab row title: whether the account may read the whole system journal (membership in systemd-journal or a similar group).
+  ///
+  /// In en, this message translates to:
+  /// **'Journal group'**
+  String get accessItemJournal;
+
+  /// Access tab row title: whether the account can use a Docker or Podman engine socket.
+  ///
+  /// In en, this message translates to:
+  /// **'Docker socket'**
+  String get accessItemDockerSocket;
+
+  /// Access tab row title: whether the SSH server allows forwarding to a Unix socket, which Docker support uses. 'Streamlocal' is OpenSSH's term; keep it.
+  ///
+  /// In en, this message translates to:
+  /// **'Streamlocal forwarding'**
+  String get accessItemStreamlocal;
+
+  /// Access tab row title: whether the docker compose plugin is installed.
+  ///
+  /// In en, this message translates to:
+  /// **'Compose plugin'**
+  String get accessItemCompose;
+
+  /// Access tab row title: whether the server runs systemd, and which version. 'systemd' is a product name, always lower case.
+  ///
+  /// In en, this message translates to:
+  /// **'systemd version'**
+  String get accessItemSystemd;
+
+  /// Access tab row title: which container engines (Docker or Podman, rootful or rootless) the server has.
+  ///
+  /// In en, this message translates to:
+  /// **'Container runtime'**
+  String get accessItemRuntime;
+
+  /// Access tab row reason: the part of the capability probe that answers this row failed.
+  ///
+  /// In en, this message translates to:
+  /// **'The server\'s probe could not answer this.'**
+  String get accessReasonProbeUnavailable;
+
+  /// Access tab row reason: the login account is root.
+  ///
+  /// In en, this message translates to:
+  /// **'You log in as root, so no elevation or group is needed.'**
+  String get accessReasonRootLogin;
+
+  /// Access tab row reason: sudo -n succeeded.
+  ///
+  /// In en, this message translates to:
+  /// **'sudo runs without asking for a password.'**
+  String get accessReasonSudoNoPassword;
+
+  /// Access tab row reason: there is no sudo, and doas -n succeeded.
+  ///
+  /// In en, this message translates to:
+  /// **'doas runs without asking for a password. sudo is not installed.'**
+  String get accessReasonDoasNoPassword;
+
+  /// Access tab row reason: sudo -n failed; the app deliberately offers no command that would make sudo passwordless.
+  ///
+  /// In en, this message translates to:
+  /// **'sudo asks for a password, or your account may not use it. No fix is offered: a broad passwordless rule equals root.'**
+  String get accessReasonSudoNotPasswordless;
+
+  /// Access tab row reason: there is no sudo, and doas wants a password.
+  ///
+  /// In en, this message translates to:
+  /// **'doas asks for a password, which Klabautermann cannot enter. sudo is not installed.'**
+  String get accessReasonDoasNotPasswordless;
+
+  /// Access tab row reason: the server has no elevation tool.
+  ///
+  /// In en, this message translates to:
+  /// **'Neither sudo nor doas is installed.'**
+  String get accessReasonNoElevationTool;
+
+  /// Access tab row reason: the account is in systemd-journal, adm or wheel.
+  ///
+  /// In en, this message translates to:
+  /// **'You are in a group that can read the whole system journal.'**
+  String get accessReasonJournalGroup;
+
+  /// Access tab row reason: journalctl silently limits the account to its own entries.
+  ///
+  /// In en, this message translates to:
+  /// **'The journal shows only your own entries. Members of systemd-journal can read all of them.'**
+  String get accessReasonNotInJournalGroup;
+
+  /// Access tab row reason, and why a panel that needs journalctl is hidden: the probe found no journalctl command.
+  ///
+  /// In en, this message translates to:
+  /// **'This server has no journalctl.'**
+  String get accessReasonNoJournal;
+
+  /// Access tab row reason: the account can write to a Docker or Podman socket of an engine that runs as root.
+  ///
+  /// In en, this message translates to:
+  /// **'You can use a rootful engine socket.'**
+  String get accessReasonRootfulSocket;
+
+  /// Access tab row reason: the only engine sockets the account can write to belong to engines running as a normal user.
+  ///
+  /// In en, this message translates to:
+  /// **'You can use rootless engine sockets only.'**
+  String get accessReasonRootlessSocket;
+
+  /// Access tab row reason: engine sockets exist, none writable for the account.
+  ///
+  /// In en, this message translates to:
+  /// **'Engine sockets exist, but your account cannot use any of them.'**
+  String get accessReasonSocketNotWritable;
+
+  /// Access tab row reason: none of the known engine socket paths exists.
+  ///
+  /// In en, this message translates to:
+  /// **'No Docker or Podman socket was found.'**
+  String get accessReasonNoEngineSocket;
+
+  /// Access tab row reason for streamlocal forwarding and the compose plugin, which the app checks only from the release with Docker support.
+  ///
+  /// In en, this message translates to:
+  /// **'Checked once Docker support arrives.'**
+  String get accessReasonPendingDocker;
+
+  /// Access tab row reason: systemd 246 or later.
+  ///
+  /// In en, this message translates to:
+  /// **'Version {version}: unit and timer lists are read in full.'**
+  String accessReasonSystemdJson(int version);
+
+  /// Access tab row reason: systemd 239 to 245, which lacks JSON output.
+  ///
+  /// In en, this message translates to:
+  /// **'Version {version}: older than 246, so unit and timer lists are read from text output.'**
+  String accessReasonSystemdTextFallback(int version);
+
+  /// Access tab row reason: systemd older than the oldest supported release.
+  ///
+  /// In en, this message translates to:
+  /// **'Version {version} is older than any tested version (239).'**
+  String accessReasonSystemdOlderThanTested(int version);
+
+  /// Access tab row reason: systemd is PID 1, but its version line did not parse.
+  ///
+  /// In en, this message translates to:
+  /// **'systemd runs, but its version could not be read.'**
+  String get accessReasonSystemdVersionUnparsed;
+
+  /// Access tab row reason, and why a panel that needs systemd is hidden: PID 1 is not systemd.
+  ///
+  /// In en, this message translates to:
+  /// **'This server does not run systemd.'**
+  String get accessReasonNotSystemd;
+
+  /// Access tab and Docker tab: introduces the list of engine sockets found.
+  ///
+  /// In en, this message translates to:
+  /// **'Found on this server:'**
+  String get accessReasonEnginesDetected;
+
+  /// Access tab and Docker tab: an engine command line tool exists, but no socket.
+  ///
+  /// In en, this message translates to:
+  /// **'A docker or podman command exists, but no engine socket was found.'**
+  String get accessReasonEngineCliWithoutSocket;
+
+  /// Access tab and Docker tab: no engine socket and no engine command.
+  ///
+  /// In en, this message translates to:
+  /// **'No Docker or Podman engine was found.'**
+  String get accessReasonNoEngine;
+
+  /// Access tab: badge beside a row whose right equals root on the server (SAF-08).
+  ///
+  /// In en, this message translates to:
+  /// **'Root-equivalent'**
+  String get accessRootEquivalentBadge;
+
+  /// Access tab: warning shown beside the command that adds the account to the docker group (SAF-08).
+  ///
+  /// In en, this message translates to:
+  /// **'Members of the docker group are root-equivalent. A rootless engine, which equals your user, is the safer choice.'**
+  String get accessDockerGroupWarning;
+
+  /// Access tab: note under a fix command on a server without any elevation tool.
+  ///
+  /// In en, this message translates to:
+  /// **'Run this as root: the server has neither sudo nor doas.'**
+  String get accessFixRootShell;
+
+  /// Access tab: note under a fix command shown without a sudo or doas prefix because the server's probe did not report which elevation tool, if any, is installed.
+  ///
+  /// In en, this message translates to:
+  /// **'Run this as root. The probe could not tell whether the server has sudo or doas.'**
+  String get accessFixElevationUnknown;
+
+  /// Access tab: note under a fix command that adds the account to a group.
+  ///
+  /// In en, this message translates to:
+  /// **'Group changes take effect at your next login.'**
+  String get accessFixNextLogin;
+
+  /// Access tab: button that copies a fix command to the clipboard. The app never runs it.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy command'**
+  String get accessFixCopy;
+
+  /// Access tab: screen-reader name of the Copy command button; item is the title of the row whose fix it copies. Starts with the button's visible text (accessFixCopy) so voice control finds it by that text.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy command for {item}'**
+  String accessFixCopyLabel(String item);
+
+  /// Access tab: confirmation after copying a fix command, reminding that the app has not run it.
+  ///
+  /// In en, this message translates to:
+  /// **'Copied. Run it yourself on the server.'**
+  String get accessFixCopied;
+
+  /// Access tab: shown instead of the confirmation when the system refused to put a fix command on the clipboard (on Windows, while another app holds it), so pasting now would paste older text.
+  ///
+  /// In en, this message translates to:
+  /// **'Not copied. The clipboard still holds its earlier text; try again before you paste.'**
+  String get accessFixCopyFailed;
+
+  /// Access tab and Docker tab: an engine socket of Docker running as root.
+  ///
+  /// In en, this message translates to:
+  /// **'Docker, rootful'**
+  String get accessEngineDockerRootful;
+
+  /// Access tab and Docker tab: an engine socket of Docker running as a normal user.
+  ///
+  /// In en, this message translates to:
+  /// **'Docker, rootless'**
+  String get accessEngineDockerRootless;
+
+  /// Access tab and Docker tab: an engine socket of Podman running as root.
+  ///
+  /// In en, this message translates to:
+  /// **'Podman, rootful'**
+  String get accessEnginePodmanRootful;
+
+  /// Access tab and Docker tab: an engine socket of Podman running as a normal user.
+  ///
+  /// In en, this message translates to:
+  /// **'Podman, rootless'**
+  String get accessEnginePodmanRootless;
+
+  /// Access tab and Docker tab: one engine socket the probe found; engine is one of the accessEngine names, path is the socket's path on the server.
+  ///
+  /// In en, this message translates to:
+  /// **'{engine} at {path}'**
+  String accessEngineAt(String engine, String path);
+
+  /// Access tab and Docker tab: the account can write to this rootful engine socket (SAF-08).
+  ///
+  /// In en, this message translates to:
+  /// **'Your account can use it, which is root-equivalent.'**
+  String get accessEngineUsableRootful;
+
+  /// Access tab and Docker tab: the account can write to this rootless engine socket (SAF-08).
+  ///
+  /// In en, this message translates to:
+  /// **'Your account can use it, which equals the user that runs it.'**
+  String get accessEngineUsableRootless;
+
+  /// Access tab and Docker tab: the account cannot write to this engine socket.
+  ///
+  /// In en, this message translates to:
+  /// **'Your account cannot use it.'**
+  String get accessEngineNotUsable;
+
+  /// Access tab and Docker tab: note under a socket at Docker's path, which a podman-docker install may serve.
+  ///
+  /// In en, this message translates to:
+  /// **'Podman can also answer on Docker\'s socket path. Docker support will tell them apart.'**
+  String get accessRuntimeAlias;
+
+  /// Docker tab: title shown instead of the Docker panels until the release with Docker support.
+  ///
+  /// In en, this message translates to:
+  /// **'Arrives with Docker support'**
+  String get accessDockerPendingTitle;
+
+  /// Docker tab: body under accessDockerPendingTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Containers, images and stacks arrive with Docker support. Until then, this tab shows the runtime Klabautermann detected, read-only.'**
+  String get accessDockerPendingBody;
+
+  /// Docker tab: heading over the container engines the probe found.
+  ///
+  /// In en, this message translates to:
+  /// **'Detected runtime'**
+  String get accessDetectedRuntime;
+
+  /// Shown instead of a server panel that cannot work with this server or account; panel is the panel's tab name.
+  ///
+  /// In en, this message translates to:
+  /// **'{panel} is not available on this server'**
+  String accessPanelHiddenTitle(String panel);
+
+  /// Why a panel is hidden: it needs read access to the whole system journal.
+  ///
+  /// In en, this message translates to:
+  /// **'Your account cannot read the whole journal.'**
+  String get accessNeedJournalAccess;
+
+  /// Why a panel is hidden: it needs the dmesg command.
+  ///
+  /// In en, this message translates to:
+  /// **'dmesg is not available.'**
+  String get accessNeedDmesg;
+
+  /// Why a panel is hidden: it needs the tail command.
+  ///
+  /// In en, this message translates to:
+  /// **'This server has no tail command.'**
+  String get accessNeedTail;
+
+  /// Why a panel is hidden: it needs the crontab command.
+  ///
+  /// In en, this message translates to:
+  /// **'This server has no crontab command.'**
+  String get accessNeedCrontab;
+
+  /// Button under a hidden panel's reasons and on the Docker tab: shows the Access tab, which lists the account's rights on the server and how to fix them.
+  ///
+  /// In en, this message translates to:
+  /// **'Open Access'**
+  String get accessOpen;
+
+  /// Title of the Access screen pushed on phones; name is the server's display name.
+  ///
+  /// In en, this message translates to:
+  /// **'Access on {name}'**
+  String accessPageTitle(String name);
+
   /// A table cell as a screen reader hears it within its row: the column's header label, then the cell's value (A11Y-03).
   ///
   /// In en, this message translates to:
@@ -1180,6 +1786,12 @@ abstract class AppLocalizations {
   /// **'[not sent: over 4,096 bytes]'**
   String get logJournalNotSent;
 
+  /// Row of a journal entry's expanded fields for a field whose value the server did not send because it is larger than 4,096 bytes; name is the journal field's name as the server sent it, such as CODE_LINE.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} [not sent: over 4,096 bytes]'**
+  String logJournalFieldNotSent(String name);
+
   /// Last row of a journal entry's expanded fields when the log view kept only some of them; count is how many it left out.
   ///
   /// In en, this message translates to:
@@ -1197,6 +1809,390 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Hide fields'**
   String get logJournalHideFields;
+
+  /// Services panel: shown until the server's first list of systemd units arrives.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for the first list of units…'**
+  String get servicesWaiting;
+
+  /// Services panel: the server lacks the systemctl tool, as on a system without systemd.
+  ///
+  /// In en, this message translates to:
+  /// **'This server has no systemctl, so there are no units to list.'**
+  String get servicesUnavailableMissing;
+
+  /// Services panel: listing systemd units failed with a permission error.
+  ///
+  /// In en, this message translates to:
+  /// **'The server refused to list its units.'**
+  String get servicesUnavailableDenied;
+
+  /// Services panel: the unit listing ran past its time limit on the server.
+  ///
+  /// In en, this message translates to:
+  /// **'Listing units took too long and was stopped.'**
+  String get servicesUnavailableTimeout;
+
+  /// Services panel: listing systemd units failed for another reason; the server's error output may follow.
+  ///
+  /// In en, this message translates to:
+  /// **'Listing units failed.'**
+  String get servicesUnavailableError;
+
+  /// Services panel notice for old systemd, whose unit list has no JSON output (CN-10).
+  ///
+  /// In en, this message translates to:
+  /// **'This server\'s systemd is older than version 246, so units are read from text. States that could not be read show as unknown.'**
+  String get servicesTextFallback;
+
+  /// Label of the Services panel's filter by unit type, such as service or socket.
+  ///
+  /// In en, this message translates to:
+  /// **'Type'**
+  String get servicesFilterType;
+
+  /// The unit type filter's choice that shows units of every type.
+  ///
+  /// In en, this message translates to:
+  /// **'All types'**
+  String get servicesFilterTypeAll;
+
+  /// Label of the Services panel's filter by a unit's active state, such as active or failed.
+  ///
+  /// In en, this message translates to:
+  /// **'State'**
+  String get servicesFilterState;
+
+  /// The unit state filter's choice that shows units in every state.
+  ///
+  /// In en, this message translates to:
+  /// **'All states'**
+  String get servicesFilterStateAll;
+
+  /// Services panel: the unit list is empty under the chosen type and state filters.
+  ///
+  /// In en, this message translates to:
+  /// **'No units match these filters.'**
+  String get servicesEmpty;
+
+  /// Column header of the unit list: the systemd unit's name.
+  ///
+  /// In en, this message translates to:
+  /// **'Unit'**
+  String get servicesColumnUnit;
+
+  /// Column header and label: whether systemd loaded the unit's configuration (its load state).
+  ///
+  /// In en, this message translates to:
+  /// **'Load'**
+  String get servicesColumnLoad;
+
+  /// Column header and label: the unit's high-level state, such as active, inactive or failed (its active state).
+  ///
+  /// In en, this message translates to:
+  /// **'Active'**
+  String get servicesColumnActive;
+
+  /// Column header and label: the unit's detailed state, such as running or exited (its sub state).
+  ///
+  /// In en, this message translates to:
+  /// **'Sub'**
+  String get servicesColumnSub;
+
+  /// Column header of the unit list: the unit's description from its configuration.
+  ///
+  /// In en, this message translates to:
+  /// **'Description'**
+  String get servicesColumnDescription;
+
+  /// Heading of the failed units summary (SVC-02); count is how many systemd units failed.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{No failed units} =1{1 failed unit} other{{count} failed units}}'**
+  String servicesFailedCount(int count);
+
+  /// One failed unit in the failed units summary: its name, then its detailed (sub) state as the server reports it, or the word for unknown.
+  ///
+  /// In en, this message translates to:
+  /// **'{unit}: {state}'**
+  String servicesFailedUnit(String unit, String state);
+
+  /// Last line of the failed units summary when it lists only some of them; count is how many it leaves out.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{and 1 more} other{and {count} more}}'**
+  String servicesFailedMore(int count);
+
+  /// Tooltip of the button that closes a unit's details and returns to the unit list.
+  ///
+  /// In en, this message translates to:
+  /// **'Close unit details'**
+  String get servicesUnitClose;
+
+  /// Heading of a unit's recent journal lines on its details (SVC-04).
+  ///
+  /// In en, this message translates to:
+  /// **'Recent log lines'**
+  String get servicesLogsTitle;
+
+  /// A unit's log lines were requested and the app has no answer yet.
+  ///
+  /// In en, this message translates to:
+  /// **'Asking the server for recent log lines…'**
+  String get servicesLogsRequested;
+
+  /// A unit's log read waits until the connection to the server is ready.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for the connection to the server…'**
+  String get servicesLogsWaitingLink;
+
+  /// A unit's log read waits until the connection has a free session for it.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for a free session on the server…'**
+  String get servicesLogsWaitingChannel;
+
+  /// A unit's log read waits until the app returns to the foreground.
+  ///
+  /// In en, this message translates to:
+  /// **'Paused while the app is in the background.'**
+  String get servicesLogsWaitingBackground;
+
+  /// A unit's log read is running on the server.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading recent log lines…'**
+  String get servicesLogsReading;
+
+  /// A unit's log read finished without any journal line.
+  ///
+  /// In en, this message translates to:
+  /// **'The journal holds no lines for this unit.'**
+  String get servicesLogsEmpty;
+
+  /// The app's engine cannot read logs yet and refused the request; no log lines are shown.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading unit logs is not available in this version yet.'**
+  String get servicesLogsRefused;
+
+  /// The app's engine, which starts once per launch, stopped before answering the unit-log read; no log lines are shown until the app restarts.
+  ///
+  /// In en, this message translates to:
+  /// **'The app\'s engine stopped. Restart the app to read unit logs.'**
+  String get servicesLogsEngineStopped;
+
+  /// The app refused to read logs for a unit name that fails its validation.
+  ///
+  /// In en, this message translates to:
+  /// **'This unit\'s name cannot be used to read its logs.'**
+  String get servicesLogsInvalid;
+
+  /// A unit's log read failed because the server lacks journalctl.
+  ///
+  /// In en, this message translates to:
+  /// **'This server has no journalctl, so unit logs cannot be read.'**
+  String get servicesLogsMissing;
+
+  /// A unit's log read failed with a permission error.
+  ///
+  /// In en, this message translates to:
+  /// **'The server refused to read this unit\'s journal.'**
+  String get servicesLogsDenied;
+
+  /// A unit's log read failed for another reason; the server's error output may follow.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading this unit\'s journal failed.'**
+  String get servicesLogsFailed;
+
+  /// Label of the Logs panel's source picker, which chooses between the journal, the kernel log and a file; also the title of the phone's source sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'Source'**
+  String get logsPanelSource;
+
+  /// Name of a Logs panel source: the systemd journal, the kernel's messages, or one file on the server.
+  ///
+  /// In en, this message translates to:
+  /// **'{source, select, journal{Journal} kernel{Kernel} other{File}}'**
+  String logsPanelSourceName(String source);
+
+  /// Label of the Logs panel's filter field for a systemd unit name.
+  ///
+  /// In en, this message translates to:
+  /// **'Unit'**
+  String get logsPanelUnit;
+
+  /// Label of the Logs panel's filter field for a syslog identifier (the program's syslog tag).
+  ///
+  /// In en, this message translates to:
+  /// **'Identifier'**
+  String get logsPanelIdentifier;
+
+  /// Label of the Logs panel's priority filter, which shows entries at a syslog priority or more urgent.
+  ///
+  /// In en, this message translates to:
+  /// **'Priority'**
+  String get logsPanelPriority;
+
+  /// Priority filter choice that shows entries of every priority.
+  ///
+  /// In en, this message translates to:
+  /// **'Any priority'**
+  String get logsPanelPriorityAny;
+
+  /// Priority filter choice: entries at this syslog priority or more urgent ones.
+  ///
+  /// In en, this message translates to:
+  /// **'{level, select, emergency{Emergency} alert{Alert and above} critical{Critical and above} error{Error and above} warning{Warning and above} notice{Notice and above} info{Info and above} other{Debug and above}}'**
+  String logsPanelPriorityLevel(String level);
+
+  /// Toggle of the Logs panel's journal filters that shows only entries since the server last started.
+  ///
+  /// In en, this message translates to:
+  /// **'Current boot only'**
+  String get logsPanelCurrentBoot;
+
+  /// Label of the Logs panel's time range filter.
+  ///
+  /// In en, this message translates to:
+  /// **'Time range'**
+  String get logsPanelTimeRange;
+
+  /// Time range filter choice: how far back entries are shown, counted from when the log opens.
+  ///
+  /// In en, this message translates to:
+  /// **'{range, select, last15Minutes{Last 15 minutes} lastHour{Last hour} last24Hours{Last 24 hours} last7Days{Last 7 days} other{Any time}}'**
+  String logsPanelTimeRangeOption(String range);
+
+  /// Label of the Logs panel's field for the file on the server to tail.
+  ///
+  /// In en, this message translates to:
+  /// **'File path'**
+  String get logsPanelPath;
+
+  /// Hint in the empty file path field.
+  ///
+  /// In en, this message translates to:
+  /// **'Absolute path, such as /var/log/syslog'**
+  String get logsPanelPathHint;
+
+  /// Error under the file path field when the server would refuse the path.
+  ///
+  /// In en, this message translates to:
+  /// **'{problem, select, notAbsolute{Enter an absolute path that starts with /.} notNormalized{Remove the . and .. parts from the path.} other{The path contains a NUL character.}}'**
+  String logsPanelPathProblem(String problem);
+
+  /// Tooltip of the button beside the file path field that lists common log files, such as the syslog and web server logs.
+  ///
+  /// In en, this message translates to:
+  /// **'Common paths'**
+  String get logsPanelCommonPaths;
+
+  /// Button that reads the log again with the filters or path entered.
+  ///
+  /// In en, this message translates to:
+  /// **'Apply'**
+  String get logsPanelApply;
+
+  /// Phone button that opens the Logs panel's filters in a sheet; count is how many filters are set.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{Filters} other{Filters ({count})}}'**
+  String logsPanelFilters(int count);
+
+  /// Chip that turns following new log entries on and off, naming what the log stream is doing: following, waiting for the server or a free session, waiting for the connection, paused by the user or the app's background, ended, or not available.
+  ///
+  /// In en, this message translates to:
+  /// **'{state, select, live{Live} connecting{Connecting} disconnected{Disconnected} paused{Paused} stopped{Stopped} other{Unavailable}}'**
+  String logsPanelLiveState(String state);
+
+  /// Tooltip of the Logs panel's Live chip.
+  ///
+  /// In en, this message translates to:
+  /// **'Follow new entries as the server writes them'**
+  String get logsPanelLiveTooltip;
+
+  /// Notice above the journal when the server shows the signed-in account only its own entries. The group names are names on the server and stay as they are.
+  ///
+  /// In en, this message translates to:
+  /// **'Only your own journal entries are shown: your account on this server is not in the systemd-journal, adm or wheel group. The server\'s Access section shows how to add it.'**
+  String get logsPanelJournalLimited;
+
+  /// Notice above the kernel log when the server's journal shows the signed-in account only its own entries, which never include kernel messages. The group names are names on the server and stay as they are.
+  ///
+  /// In en, this message translates to:
+  /// **'Kernel messages may be missing: your account on this server is not in the systemd-journal, adm or wheel group, so the journal shows it none. The server\'s Access section shows how to add it.'**
+  String get logsPanelKernelLimited;
+
+  /// Status line above the log saying what reading it is doing or why it stopped.
+  ///
+  /// In en, this message translates to:
+  /// **'{status, select, opening{Opening the log…} waitingLink{Waiting for the connection to the server.} waitingChannel{Waiting for a free session on the server.} waitingBackground{Paused while the app is in the background.} loading{Loading entries…} invalid{The engine refused this filter or path.} missing{The server has no such file or log tool.} denied{The server denied access to this log.} failed{Reading the log failed.} rejected{The engine did not open this log.} other{Choose or type the absolute path of a file to tail.}}'**
+  String logsPanelStatus(String status);
+
+  /// Button that opens the log again after it stopped or was refused.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get logsPanelRetry;
+
+  /// Shown in place of the log when reading a kernel log, a file or an unfiltered journal finished without any entry, unless the kernel log or journal is limited to the account's own entries.
+  ///
+  /// In en, this message translates to:
+  /// **'This log has no entries.'**
+  String get logsPanelEmpty;
+
+  /// Shown in place of the log when reading the journal with filters set finished without any entry.
+  ///
+  /// In en, this message translates to:
+  /// **'No entries match these filters.'**
+  String get logsPanelEmptyFiltered;
+
+  /// Shown in place of the log when reading an unfiltered journal or the kernel log finished without any entry while the server shows the signed-in account only its own journal entries.
+  ///
+  /// In en, this message translates to:
+  /// **'No entries are visible to your account.'**
+  String get logsPanelEmptyLimited;
+
+  /// Label of the log search field, also its name for screen readers once it holds text; the search covers the entries the panel holds, not the whole log on the server.
+  ///
+  /// In en, this message translates to:
+  /// **'Search loaded entries'**
+  String get logsPanelSearchLabel;
+
+  /// Tooltip of the toggle that makes the log search tell upper from lower case.
+  ///
+  /// In en, this message translates to:
+  /// **'Match case'**
+  String get logsPanelSearchCase;
+
+  /// How many matches the log search found, before one is selected.
+  ///
+  /// In en, this message translates to:
+  /// **'{total, plural, =0{No matches} =1{1 match} other{{total} matches}}'**
+  String logsPanelSearchMatches(int total);
+
+  /// Which match of the log search is selected, out of how many.
+  ///
+  /// In en, this message translates to:
+  /// **'{current} of {total}'**
+  String logsPanelSearchPosition(int current, int total);
+
+  /// Tooltip of the button that moves to the previous log search match.
+  ///
+  /// In en, this message translates to:
+  /// **'Previous match'**
+  String get logsPanelSearchPrevious;
+
+  /// Tooltip of the button that moves to the next log search match.
+  ///
+  /// In en, this message translates to:
+  /// **'Next match'**
+  String get logsPanelSearchNext;
 }
 
 class _AppLocalizationsDelegate

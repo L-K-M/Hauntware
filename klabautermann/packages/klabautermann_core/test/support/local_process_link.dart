@@ -1,6 +1,7 @@
 // An SshLink double that runs each command through a local login shell,
 // as sshd hands an exec request to the account's shell (`<shell> -c`).
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:seance_core/seance_core.dart';
@@ -102,7 +103,14 @@ final class LocalRemoteProcess implements RemoteProcess {
   Stream<List<int>> get stderr => _process.stderr;
 
   @override
-  StreamSink<List<int>> get stdin => _process.stdin;
+  late final StreamSink<List<int>> stdin = _RecordingSink(
+    _process.stdin,
+    _written,
+  );
+  final List<int> _written = [];
+
+  /// Everything written to stdin, such as a sampler's program.
+  String get written => utf8.decode(_written, allowMalformed: true);
 
   @override
   void signal(RemoteSignal signal) => _process.kill(switch (signal) {
@@ -122,4 +130,31 @@ final class LocalRemoteProcess implements RemoteProcess {
       await exit;
     }
   }
+}
+
+/// Passes writes on to [_sink] and keeps a copy in [_written].
+final class _RecordingSink implements StreamSink<List<int>> {
+  _RecordingSink(this._sink, this._written);
+
+  final StreamSink<List<int>> _sink;
+  final List<int> _written;
+
+  @override
+  void add(List<int> data) {
+    _written.addAll(data);
+    _sink.add(data);
+  }
+
+  @override
+  void addError(Object error, [StackTrace? stackTrace]) =>
+      _sink.addError(error, stackTrace);
+
+  @override
+  Future<void> addStream(Stream<List<int>> stream) => stream.forEach(add);
+
+  @override
+  Future<void> close() => _sink.close();
+
+  @override
+  Future<void> get done => _sink.done;
 }

@@ -362,6 +362,154 @@ class AppLocalizationsEn extends AppLocalizations {
   String get placeholderMilestone => 'Available in a later milestone.';
 
   @override
+  String get coverageFirstRunTitle => 'How Klabautermann watches your servers';
+
+  @override
+  String get coverageFirstRunBody =>
+      'Klabautermann connects over SSH only while it is open. It installs nothing on your servers unless you ask it to. Charts cover only the time this device was connected.';
+
+  @override
+  String get coverageFirstRunDismiss => 'Got it';
+
+  @override
+  String get coverageFirstRunDetails => 'Coverage details';
+
+  @override
+  String get coverageFirstRunNotSaved =>
+      'Klabautermann could not save that you dismissed the coverage note, so it shows again after a restart.';
+
+  @override
+  String coverageChip(int watched, int total) {
+    String _temp0 = intl.Intl.pluralLogic(
+      total,
+      locale: localeName,
+      other:
+          'Watching $watched of $total servers on this device, only while open',
+      one: 'Watching $watched of 1 server on this device, only while open',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get coverageChipHint => 'Show coverage details';
+
+  @override
+  String get coverageSheetTitle => 'Coverage on this device';
+
+  @override
+  String get coverageTierBadge => 'T0';
+
+  @override
+  String get coverageTierTitle => 'SSH while Klabautermann is open';
+
+  @override
+  String get coverageTierBody =>
+      'Klabautermann reads your servers over SSH only while it is open. It installs nothing on them unless you ask it to.';
+
+  @override
+  String get coverageCoveredHeading => 'Covered';
+
+  @override
+  String get coverageLiveTitle => 'Live readings while open';
+
+  @override
+  String get coverageLiveBody =>
+      'Metrics, processes, services, logs and jobs of the servers you have open.';
+
+  @override
+  String get coverageWatchedTitle => 'Continuous watching';
+
+  @override
+  String coverageWatchedBody(int watched) {
+    String _temp0 = intl.Intl.pluralLogic(
+      watched,
+      locale: localeName,
+      other:
+          '$watched servers are read continuously while Klabautermann is open. Any others are read only while you have them open.',
+      one:
+          '1 server is read continuously while Klabautermann is open. Any others are read only while you have them open.',
+      zero:
+          'No server is watched on this device, so each is read only while you have it open.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get coverageNotCoveredHeading => 'Not covered';
+
+  @override
+  String get coverageClosedTitle => 'While Klabautermann is closed';
+
+  @override
+  String get coverageClosedBody =>
+      'Nothing checks your servers, so nothing can warn you about them.';
+
+  @override
+  String get coverageHostDownTitle => 'A server going down';
+
+  @override
+  String get coverageHostDownBody =>
+      'If a server stops while Klabautermann is closed, you find out the next time you open it.';
+
+  @override
+  String get coverageHistoryTitle => 'History before you connected';
+
+  @override
+  String get coverageHistoryBody =>
+      'Charts cover only the time this device was connected. Gaps are marked, never filled in.';
+
+  @override
+  String get coverageBackgroundTitle => 'While in the background';
+
+  @override
+  String get coverageBackgroundBody =>
+      'Reading stops while Klabautermann is in the background and resumes when you return.';
+
+  @override
+  String coverageFreshnessSeconds(int seconds) {
+    return '$seconds s';
+  }
+
+  @override
+  String coverageFreshnessMinutes(int minutes) {
+    return '$minutes min';
+  }
+
+  @override
+  String coverageFreshnessHours(int hours) {
+    return '$hours h';
+  }
+
+  @override
+  String coverageFreshnessDays(int days) {
+    return '$days d';
+  }
+
+  @override
+  String coverageFreshnessUpdated(String age) {
+    return 'Updated $age ago';
+  }
+
+  @override
+  String coverageFreshnessStale(String age) {
+    return 'Stale: updated $age ago';
+  }
+
+  @override
+  String coverageFreshnessDisconnected(String age) {
+    return 'Disconnected $age ago';
+  }
+
+  @override
+  String get coverageFreshnessPaused => 'Paused: app in background';
+
+  @override
+  String get coverageFreshnessNotWatched => 'Not watched on this device';
+
+  @override
+  String get coverageFreshnessNoData => 'No data yet';
+
+  @override
   String serverTitle(String name) {
     return '$name';
   }
@@ -729,6 +877,247 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get accessNeverRuns =>
+      'Klabautermann never runs these fix commands. Copy one and run it yourself on the server.';
+
+  @override
+  String get accessRootEquivalenceTitle => 'Root-equivalent access';
+
+  @override
+  String get accessRootEquivalenceBody =>
+      'Using a rootful Docker or Podman socket, or a broad passwordless sudo rule, gives the same power as root on this server. A rootless engine gives only the power of the user that runs it.';
+
+  @override
+  String get accessNotChecked =>
+      'Not checked yet. Klabautermann checks access after it connects to this server.';
+
+  @override
+  String get accessRowNotChecked => 'Not checked yet.';
+
+  @override
+  String get accessStatusOk => 'OK';
+
+  @override
+  String get accessStatusMissing => 'Missing';
+
+  @override
+  String get accessStatusUnknown => 'Unknown';
+
+  @override
+  String get accessItemSudo => 'Passwordless sudo';
+
+  @override
+  String get accessItemJournal => 'Journal group';
+
+  @override
+  String get accessItemDockerSocket => 'Docker socket';
+
+  @override
+  String get accessItemStreamlocal => 'Streamlocal forwarding';
+
+  @override
+  String get accessItemCompose => 'Compose plugin';
+
+  @override
+  String get accessItemSystemd => 'systemd version';
+
+  @override
+  String get accessItemRuntime => 'Container runtime';
+
+  @override
+  String get accessReasonProbeUnavailable =>
+      'The server\'s probe could not answer this.';
+
+  @override
+  String get accessReasonRootLogin =>
+      'You log in as root, so no elevation or group is needed.';
+
+  @override
+  String get accessReasonSudoNoPassword =>
+      'sudo runs without asking for a password.';
+
+  @override
+  String get accessReasonDoasNoPassword =>
+      'doas runs without asking for a password. sudo is not installed.';
+
+  @override
+  String get accessReasonSudoNotPasswordless =>
+      'sudo asks for a password, or your account may not use it. No fix is offered: a broad passwordless rule equals root.';
+
+  @override
+  String get accessReasonDoasNotPasswordless =>
+      'doas asks for a password, which Klabautermann cannot enter. sudo is not installed.';
+
+  @override
+  String get accessReasonNoElevationTool =>
+      'Neither sudo nor doas is installed.';
+
+  @override
+  String get accessReasonJournalGroup =>
+      'You are in a group that can read the whole system journal.';
+
+  @override
+  String get accessReasonNotInJournalGroup =>
+      'The journal shows only your own entries. Members of systemd-journal can read all of them.';
+
+  @override
+  String get accessReasonNoJournal => 'This server has no journalctl.';
+
+  @override
+  String get accessReasonRootfulSocket =>
+      'You can use a rootful engine socket.';
+
+  @override
+  String get accessReasonRootlessSocket =>
+      'You can use rootless engine sockets only.';
+
+  @override
+  String get accessReasonSocketNotWritable =>
+      'Engine sockets exist, but your account cannot use any of them.';
+
+  @override
+  String get accessReasonNoEngineSocket =>
+      'No Docker or Podman socket was found.';
+
+  @override
+  String get accessReasonPendingDocker =>
+      'Checked once Docker support arrives.';
+
+  @override
+  String accessReasonSystemdJson(int version) {
+    return 'Version $version: unit and timer lists are read in full.';
+  }
+
+  @override
+  String accessReasonSystemdTextFallback(int version) {
+    return 'Version $version: older than 246, so unit and timer lists are read from text output.';
+  }
+
+  @override
+  String accessReasonSystemdOlderThanTested(int version) {
+    return 'Version $version is older than any tested version (239).';
+  }
+
+  @override
+  String get accessReasonSystemdVersionUnparsed =>
+      'systemd runs, but its version could not be read.';
+
+  @override
+  String get accessReasonNotSystemd => 'This server does not run systemd.';
+
+  @override
+  String get accessReasonEnginesDetected => 'Found on this server:';
+
+  @override
+  String get accessReasonEngineCliWithoutSocket =>
+      'A docker or podman command exists, but no engine socket was found.';
+
+  @override
+  String get accessReasonNoEngine => 'No Docker or Podman engine was found.';
+
+  @override
+  String get accessRootEquivalentBadge => 'Root-equivalent';
+
+  @override
+  String get accessDockerGroupWarning =>
+      'Members of the docker group are root-equivalent. A rootless engine, which equals your user, is the safer choice.';
+
+  @override
+  String get accessFixRootShell =>
+      'Run this as root: the server has neither sudo nor doas.';
+
+  @override
+  String get accessFixElevationUnknown =>
+      'Run this as root. The probe could not tell whether the server has sudo or doas.';
+
+  @override
+  String get accessFixNextLogin =>
+      'Group changes take effect at your next login.';
+
+  @override
+  String get accessFixCopy => 'Copy command';
+
+  @override
+  String accessFixCopyLabel(String item) {
+    return 'Copy command for $item';
+  }
+
+  @override
+  String get accessFixCopied => 'Copied. Run it yourself on the server.';
+
+  @override
+  String get accessFixCopyFailed =>
+      'Not copied. The clipboard still holds its earlier text; try again before you paste.';
+
+  @override
+  String get accessEngineDockerRootful => 'Docker, rootful';
+
+  @override
+  String get accessEngineDockerRootless => 'Docker, rootless';
+
+  @override
+  String get accessEnginePodmanRootful => 'Podman, rootful';
+
+  @override
+  String get accessEnginePodmanRootless => 'Podman, rootless';
+
+  @override
+  String accessEngineAt(String engine, String path) {
+    return '$engine at $path';
+  }
+
+  @override
+  String get accessEngineUsableRootful =>
+      'Your account can use it, which is root-equivalent.';
+
+  @override
+  String get accessEngineUsableRootless =>
+      'Your account can use it, which equals the user that runs it.';
+
+  @override
+  String get accessEngineNotUsable => 'Your account cannot use it.';
+
+  @override
+  String get accessRuntimeAlias =>
+      'Podman can also answer on Docker\'s socket path. Docker support will tell them apart.';
+
+  @override
+  String get accessDockerPendingTitle => 'Arrives with Docker support';
+
+  @override
+  String get accessDockerPendingBody =>
+      'Containers, images and stacks arrive with Docker support. Until then, this tab shows the runtime Klabautermann detected, read-only.';
+
+  @override
+  String get accessDetectedRuntime => 'Detected runtime';
+
+  @override
+  String accessPanelHiddenTitle(String panel) {
+    return '$panel is not available on this server';
+  }
+
+  @override
+  String get accessNeedJournalAccess =>
+      'Your account cannot read the whole journal.';
+
+  @override
+  String get accessNeedDmesg => 'dmesg is not available.';
+
+  @override
+  String get accessNeedTail => 'This server has no tail command.';
+
+  @override
+  String get accessNeedCrontab => 'This server has no crontab command.';
+
+  @override
+  String get accessOpen => 'Open Access';
+
+  @override
+  String accessPageTitle(String name) {
+    return 'Access on $name';
+  }
+
+  @override
   String tableCellSemantics(String column, String value) {
     return '$column: $value';
   }
@@ -788,6 +1177,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get logJournalNotSent => '[not sent: over 4,096 bytes]';
 
   @override
+  String logJournalFieldNotSent(String name) {
+    return '$name [not sent: over 4,096 bytes]';
+  }
+
+  @override
   String logJournalFieldsLeftOut(int count) {
     final intl.NumberFormat countNumberFormat =
         intl.NumberFormat.decimalPattern(localeName);
@@ -807,4 +1201,332 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get logJournalHideFields => 'Hide fields';
+
+  @override
+  String get servicesWaiting => 'Waiting for the first list of units…';
+
+  @override
+  String get servicesUnavailableMissing =>
+      'This server has no systemctl, so there are no units to list.';
+
+  @override
+  String get servicesUnavailableDenied =>
+      'The server refused to list its units.';
+
+  @override
+  String get servicesUnavailableTimeout =>
+      'Listing units took too long and was stopped.';
+
+  @override
+  String get servicesUnavailableError => 'Listing units failed.';
+
+  @override
+  String get servicesTextFallback =>
+      'This server\'s systemd is older than version 246, so units are read from text. States that could not be read show as unknown.';
+
+  @override
+  String get servicesFilterType => 'Type';
+
+  @override
+  String get servicesFilterTypeAll => 'All types';
+
+  @override
+  String get servicesFilterState => 'State';
+
+  @override
+  String get servicesFilterStateAll => 'All states';
+
+  @override
+  String get servicesEmpty => 'No units match these filters.';
+
+  @override
+  String get servicesColumnUnit => 'Unit';
+
+  @override
+  String get servicesColumnLoad => 'Load';
+
+  @override
+  String get servicesColumnActive => 'Active';
+
+  @override
+  String get servicesColumnSub => 'Sub';
+
+  @override
+  String get servicesColumnDescription => 'Description';
+
+  @override
+  String servicesFailedCount(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$countString failed units',
+      one: '1 failed unit',
+      zero: 'No failed units',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String servicesFailedUnit(String unit, String state) {
+    return '$unit: $state';
+  }
+
+  @override
+  String servicesFailedMore(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'and $countString more',
+      one: 'and 1 more',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get servicesUnitClose => 'Close unit details';
+
+  @override
+  String get servicesLogsTitle => 'Recent log lines';
+
+  @override
+  String get servicesLogsRequested => 'Asking the server for recent log lines…';
+
+  @override
+  String get servicesLogsWaitingLink =>
+      'Waiting for the connection to the server…';
+
+  @override
+  String get servicesLogsWaitingChannel =>
+      'Waiting for a free session on the server…';
+
+  @override
+  String get servicesLogsWaitingBackground =>
+      'Paused while the app is in the background.';
+
+  @override
+  String get servicesLogsReading => 'Reading recent log lines…';
+
+  @override
+  String get servicesLogsEmpty => 'The journal holds no lines for this unit.';
+
+  @override
+  String get servicesLogsRefused =>
+      'Reading unit logs is not available in this version yet.';
+
+  @override
+  String get servicesLogsEngineStopped =>
+      'The app\'s engine stopped. Restart the app to read unit logs.';
+
+  @override
+  String get servicesLogsInvalid =>
+      'This unit\'s name cannot be used to read its logs.';
+
+  @override
+  String get servicesLogsMissing =>
+      'This server has no journalctl, so unit logs cannot be read.';
+
+  @override
+  String get servicesLogsDenied =>
+      'The server refused to read this unit\'s journal.';
+
+  @override
+  String get servicesLogsFailed => 'Reading this unit\'s journal failed.';
+
+  @override
+  String get logsPanelSource => 'Source';
+
+  @override
+  String logsPanelSourceName(String source) {
+    String _temp0 = intl.Intl.selectLogic(source, {
+      'journal': 'Journal',
+      'kernel': 'Kernel',
+      'other': 'File',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get logsPanelUnit => 'Unit';
+
+  @override
+  String get logsPanelIdentifier => 'Identifier';
+
+  @override
+  String get logsPanelPriority => 'Priority';
+
+  @override
+  String get logsPanelPriorityAny => 'Any priority';
+
+  @override
+  String logsPanelPriorityLevel(String level) {
+    String _temp0 = intl.Intl.selectLogic(level, {
+      'emergency': 'Emergency',
+      'alert': 'Alert and above',
+      'critical': 'Critical and above',
+      'error': 'Error and above',
+      'warning': 'Warning and above',
+      'notice': 'Notice and above',
+      'info': 'Info and above',
+      'other': 'Debug and above',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get logsPanelCurrentBoot => 'Current boot only';
+
+  @override
+  String get logsPanelTimeRange => 'Time range';
+
+  @override
+  String logsPanelTimeRangeOption(String range) {
+    String _temp0 = intl.Intl.selectLogic(range, {
+      'last15Minutes': 'Last 15 minutes',
+      'lastHour': 'Last hour',
+      'last24Hours': 'Last 24 hours',
+      'last7Days': 'Last 7 days',
+      'other': 'Any time',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get logsPanelPath => 'File path';
+
+  @override
+  String get logsPanelPathHint => 'Absolute path, such as /var/log/syslog';
+
+  @override
+  String logsPanelPathProblem(String problem) {
+    String _temp0 = intl.Intl.selectLogic(problem, {
+      'notAbsolute': 'Enter an absolute path that starts with /.',
+      'notNormalized': 'Remove the . and .. parts from the path.',
+      'other': 'The path contains a NUL character.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get logsPanelCommonPaths => 'Common paths';
+
+  @override
+  String get logsPanelApply => 'Apply';
+
+  @override
+  String logsPanelFilters(int count) {
+    final intl.NumberFormat countNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String countString = countNumberFormat.format(count);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Filters ($countString)',
+      zero: 'Filters',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String logsPanelLiveState(String state) {
+    String _temp0 = intl.Intl.selectLogic(state, {
+      'live': 'Live',
+      'connecting': 'Connecting',
+      'disconnected': 'Disconnected',
+      'paused': 'Paused',
+      'stopped': 'Stopped',
+      'other': 'Unavailable',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get logsPanelLiveTooltip =>
+      'Follow new entries as the server writes them';
+
+  @override
+  String get logsPanelJournalLimited =>
+      'Only your own journal entries are shown: your account on this server is not in the systemd-journal, adm or wheel group. The server\'s Access section shows how to add it.';
+
+  @override
+  String get logsPanelKernelLimited =>
+      'Kernel messages may be missing: your account on this server is not in the systemd-journal, adm or wheel group, so the journal shows it none. The server\'s Access section shows how to add it.';
+
+  @override
+  String logsPanelStatus(String status) {
+    String _temp0 = intl.Intl.selectLogic(status, {
+      'opening': 'Opening the log…',
+      'waitingLink': 'Waiting for the connection to the server.',
+      'waitingChannel': 'Waiting for a free session on the server.',
+      'waitingBackground': 'Paused while the app is in the background.',
+      'loading': 'Loading entries…',
+      'invalid': 'The engine refused this filter or path.',
+      'missing': 'The server has no such file or log tool.',
+      'denied': 'The server denied access to this log.',
+      'failed': 'Reading the log failed.',
+      'rejected': 'The engine did not open this log.',
+      'other': 'Choose or type the absolute path of a file to tail.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get logsPanelRetry => 'Retry';
+
+  @override
+  String get logsPanelEmpty => 'This log has no entries.';
+
+  @override
+  String get logsPanelEmptyFiltered => 'No entries match these filters.';
+
+  @override
+  String get logsPanelEmptyLimited => 'No entries are visible to your account.';
+
+  @override
+  String get logsPanelSearchLabel => 'Search loaded entries';
+
+  @override
+  String get logsPanelSearchCase => 'Match case';
+
+  @override
+  String logsPanelSearchMatches(int total) {
+    final intl.NumberFormat totalNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String totalString = totalNumberFormat.format(total);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      total,
+      locale: localeName,
+      other: '$totalString matches',
+      one: '1 match',
+      zero: 'No matches',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String logsPanelSearchPosition(int current, int total) {
+    final intl.NumberFormat currentNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String currentString = currentNumberFormat.format(current);
+    final intl.NumberFormat totalNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String totalString = totalNumberFormat.format(total);
+
+    return '$currentString of $totalString';
+  }
+
+  @override
+  String get logsPanelSearchPrevious => 'Previous match';
+
+  @override
+  String get logsPanelSearchNext => 'Next match';
 }

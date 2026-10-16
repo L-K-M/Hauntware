@@ -52,7 +52,7 @@ void main() {
         _optionalJson(read, file.readAsStringSync()),
       );
     }
-    _write('${dir.path}/jobs.golden.json', _jobsJson(dir.path));
+    _write('${dir.path}/timer_jobs.golden.json', _timerJobsJson(dir.path));
     stdout.writeln('$platform: goldens rewritten');
   }
 }
@@ -69,29 +69,16 @@ Map<String, Object?> _optionalJson(String read, String payload) =>
       _ => throw StateError(read),
     };
 
-/// Mirrors `_jobsJson` in `test/fixtures_test.dart`.
-Map<String, Object?> _jobsJson(String dir) {
-  final now = DateTime.utc(2026, 10, 14, 12);
+/// Mirrors `_timerJobsJson` in `test/fixtures_test.dart`.
+Map<String, Object?> _timerJobsJson(String dir) {
   final profile = parseProbe(
     _probeSections(File('$dir/probe.sections').readAsStringSync()),
     _ctx,
   ).value;
-  final offset = RegExp(
-    r'^([+-])(\d\d)(\d\d)$',
-  ).firstMatch(profile.zoneOffset ?? '');
-  final minutes = offset == null
-      ? 0
-      : (int.parse(offset[2]!) * 60 + int.parse(offset[3]!)) *
-            (offset[1] == '-' ? -1 : 1);
   final jobs = mergeJobs(
-    cron: parseCron(File('$dir/cron.txt').readAsStringSync(), _ctx).value,
     timers: parseTimers(File('$dir/timers.txt').readAsStringSync(), _ctx).value,
-    nowUtc: now,
-    zone: ServerZone(
-      offset: Duration(minutes: minutes),
-      ianaName: profile.timezone,
-    ),
-    runCount: 2,
+    nowUtc: DateTime.utc(2026, 10, 14, 12),
+    zone: null,
   );
   final detailFile = File('$dir/timer_detail.txt');
   final detail = detailFile.existsSync()
@@ -111,9 +98,6 @@ Map<String, Object?> _jobsJson(String dir) {
     );
   }
   return {
-    'nowUtc': now.toIso8601String(),
-    'zoneOffsetMinutes': minutes,
-    'zoneName': profile.timezone,
     'jobs': jobs.map((j) => j.toJson()).toList(),
     if (detail != null)
       'timerCalendarReads': timerCalendarCommands(

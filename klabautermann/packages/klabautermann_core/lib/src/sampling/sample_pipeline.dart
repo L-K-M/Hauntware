@@ -292,7 +292,11 @@ final class ServerSamplePipeline {
             SampleStream.timers => TimersResult(
               parseTimers(text(s), ctx).value,
             ),
-            SampleStream.cron => CronResult(parseCron(text(s), ctx).value),
+            SampleStream.cron => cronResult(
+              parseCron(text(s), ctx).value,
+              _profile,
+              at,
+            ),
           };
     }
 

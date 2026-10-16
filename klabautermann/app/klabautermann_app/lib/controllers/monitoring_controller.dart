@@ -4,6 +4,8 @@ import 'package:flutter/foundation.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 
 import '../ui/charts/series_ring.dart';
+import 'log_reads.dart';
+import 'log_streams.dart';
 
 /// How long a server's link outlives the last view that opened it, as long
 /// as the grace 03 §5.1 and D34 give a backgrounded phone's link: stepping
@@ -67,6 +69,21 @@ Duration? sampleAge(DateTime? at, DateTime now) {
   return age.isNegative ? Duration.zero : age;
 }
 
+/// What the engine last said sampling a server is doing ([state]), and
+/// the phase before it ([previous]; null for the first this engine run).
+/// The protocol has the engine send a [SamplingState] at each phase
+/// change, so the pair tells a link lost while sampling, whose loss
+/// `state.since` dates, from one already down when a view or the return
+/// from the background subscribed the server again, whose phase began
+/// only then (03 §9.5 item 4).
+@immutable
+final class SamplingStatus {
+  const SamplingStatus(this.state, {this.previous});
+
+  final SamplingState state;
+  final SamplingPhase? previous;
+}
+
 /// The monitoring concern (03 §10.1): what the engine should keep linked
 /// and sample for what the user can see, and what comes back.
 ///
@@ -95,7 +112,15 @@ final class MonitoringController extends ChangeNotifier {
     DateTime Function() now = DateTime.now,
   }) : _clock = _FreshnessClock(now) {
     _events = _engine.events.listen(_onEngineEvent, onDone: _onEngineDone);
+    logs = LogStreams(_engine);
   }
+
+  /// The log streams panels open, and each server's journal access for
+  /// LOG-04's notice (03 §10.1, §10.8): a concern of its own that lasts
+  /// this engine run, listening to the engine beside this controller. It
+  /// sends every [OpenLogStream] the app sends, [openLogRead]'s included,
+  /// since a rejection names no stream.
+  late final LogStreams logs;
 
   final EngineClient _engine;
   final Duration _linkGrace;
@@ -165,6 +190,14 @@ final class MonitoringController extends ChangeNotifier {
   /// reading's age ([sampleAge], 03 §9.5 item 4). Freshness is per stream:
   /// a slow stream's newer reading says nothing about a stalled fast one.
   ValueListenable<DateTime> get clock => _clock;
+
+  /// What the engine last said sampling [serverId] is doing, or null
+  /// before it said anything this engine run. With [sampleFor] and [clock]
+  /// it gives a stream's freshness line (`ui/freshness.dart`, 03 §9.5 item
+  /// 4): paused in the background, or disconnected since the link was lost
+  /// while sampling.
+  ValueListenable<SamplingStatus?> samplingFor(String serverId) =>
+      _server(serverId).sampling;
 
   bool isSubscribed(String serverId, String subscriptionId) =>
       _subscribed.containsKey((serverId, subscriptionId));
@@ -240,6 +273,12 @@ final class MonitoringController extends ChangeNotifier {
       }
     });
   }
+
+  /// Opens a bounded read of [spec], a window ([LogStreamSpec.follow]
+  /// false) such as SVC-04's unit logs (03 §7.5), through [logs]. The
+  /// returned [LogRead] reports its records and state; the caller closes
+  /// it once it no longer shows it.
+  LogRead openLogRead(LogStreamSpec spec) => LogRead(logs, spec);
 
   /// A view of [serverId] opened (the desktop workspace, the phone's pushed
   /// screen). The first sends [Connect]; within the grace after the last
@@ -320,6 +359,11 @@ final class MonitoringController extends ChangeNotifier {
         _server(serverId).profile.value = profile;
       case CatalogReplaced(:final entries):
         _replaceFleet({for (final entry in entries) entry.serverId});
+      case SamplingState(:final serverId):
+        // As for a sample: a server that left the fleet stays purged.
+        if (_fleetIds case final ids? when !ids.contains(serverId)) return;
+        final box = _server(serverId).sampling;
+        box.value = SamplingStatus(event, previous: box.value?.state.phase);
       case EngineEvent():
         break;
     }
@@ -378,6 +422,7 @@ final class MonitoringController extends ChangeNotifier {
   @override
   void dispose() {
     unawaited(_events.cancel());
+    logs.dispose();
     _onEngineDone();
     for (final readings in _readings.values) {
       readings.dispose();
@@ -443,6 +488,10 @@ final class _ServerReadings {
   final Set<SampleStream> _unnamed = {};
   final Set<SampleStream> _afterHole = {};
 
+  /// The engine's latest [SamplingState] for the server, with the phase
+  /// before it.
+  final ValueNotifier<SamplingStatus?> sampling = ValueNotifier(null);
+
   void unnamed(SampleStream stream) => _unnamed.add(stream);
 
   void named(SampleStream stream) {
@@ -491,6 +540,7 @@ final class _ServerReadings {
   }
 
   void dispose() {
+    sampling.dispose();
     for (final box in [..._boxes.values, ..._lastReadings.values]) {
       box.dispose();
     }

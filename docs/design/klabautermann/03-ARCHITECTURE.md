@@ -244,7 +244,8 @@ engine · D44 sample sequence · D45 subscriptions · D46 link vocabulary ·
 D47 sampler deadlines · D48 host-side filtering · D49 collector locale ·
 D50 LXC values · D51 Access tab · D52 runtime placement · D53 integration
 placement · D54 runtime override in M3 · D55 no health overlay in the MVP
-· D56 log search through `planchette_core` · D57 timer triggers.
+· D56 log search through `planchette_core` · D57 timer triggers · D58
+cron zone rules.
 Proposals awaiting the owner close the section; they are not decisions.
 
 ### Shape and scope
@@ -836,6 +837,57 @@ Proposals awaiting the owner close the section; they are not decisions.
   the run count would be a program constant); reading the unit files
   (`systemctl cat` leaves drop-ins, specifiers and normalization to the
   client); `TimersCalendar` without `TimersMonotonic`.
+- **D58. Cron next runs follow `package:timezone`'s zone rules.**
+  `klabautermann_core` depends on `package:timezone` and embeds its
+  `latest_all` database (about 0.4 MB, loaded on first use). The engine
+  evaluates each `cron` reading's jobs rows at the sample's time. The
+  server zone takes the database's rules for the probe's IANA name when
+  the database knows the name and gives the offset the server reported
+  at the probe's clock reading. Otherwise the runs use the probe's fixed
+  offset, and `CronResult` says why: no name, a name the database lacks,
+  or an offset mismatch (a stale name or diverging zone data). Without a
+  probed offset the server zone is unknown, and its rows say so. A
+  reading evaluates the runs of its first 200 lines and marks the rest
+  not evaluated, because a line can cost about 2 ms in the shared
+  engine isolate and a 1 MiB section holds tens of thousands. A
+  `CRON_TZ` resolves through the same database. `ServerZone.offsetAt`
+  carries the rules inside the engine, and the rows cross with plain
+  `CronRun`s (D52). The database can disagree with the server's own zone
+  files, which cron reads, so a run within an hour of a transition is
+  marked `nearTransition` beside the gap and overlap marks. Across a
+  transition of the server's zone the runs follow cronie and Debian's
+  cron [R: `cron.c` `find_jobs`]: a fixed-time job runs a gap's minutes
+  at the jump and an overlap's minutes once, and a job whose minute or
+  hour field starts with `*` runs by the clock, never in a gap and in
+  both passes of an overlap. A `CRON_TZ` line follows cronie's rule for
+  it [R: cronie `cron.c` `find_jobs`]: cron converts each of its own
+  minutes into the line's zone, matches there and catches up no such
+  line, so a fixed-time job misses the minutes its zone's gap skips and
+  runs the minutes its zone's overlap repeats twice. An empty `CRON_TZ=`
+  stays set [R: cronie `env.c` `load_env`], so its line matches on the
+  server's clock and is not caught up either. While the server's zone
+  repeats an hour cron runs only wildcard jobs, so a fixed-time
+  `CRON_TZ` job runs once when both zones fall back by the same amount
+  at the same instant and misses any other match inside that hour. Such
+  a run within an hour of either zone's transition is marked; without a
+  known server zone, or at the probe's fixed offset, the runs ignore the
+  server's repeated hour. Debian's cron ignores `CRON_TZ` [R: Debian cron
+  3.0pl1-211 `cron.c`] and BusyBox crond runs every job by the clock,
+  which the runs do not model yet. The database's transition tables
+  end at the 32-bit time limit, early in 2038; a run after a zone's
+  last listed transition keeps the offset in force after it. The cron
+  rows' jobs goldens live in `klabautermann_core/test/fixtures/cron_jobs/`,
+  because `klabautermann_host` stays on meta and collection (3.1); timer
+  rows need no zone and keep host goldens. Why: Dart
+  ships no zone database, and a fixed offset puts every run after a DST
+  change an hour off. *Rejected:* reading the server's own zone file
+  through the probe (exact, but a program change and a TZif parser; a v1
+  candidate); the smaller `latest` database (it lacks backward links
+  such as `US/Eastern` and `Europe/Kiev`, which older servers report);
+  `latest_10y` (it ends five years out, inside the ten-year evaluation
+  horizon); the dependency in `klabautermann_host` (3.1); fixed-offset
+  goldens labelled as such (every run after the next change stays
+  wrong).
 
 ### Privilege and safety
 
@@ -1193,7 +1245,7 @@ klabautermann/
   packages/
     klabautermann_host/          pure Dart; dependencies meta, collection
     klabautermann_docker/        pure Dart; dependencies meta, collection; no dart:io in lib/
-    klabautermann_core/          pure Dart; dependencies seance_core, klabautermann_host, klabautermann_docker
+    klabautermann_core/          pure Dart; dependencies seance_core, klabautermann_host, klabautermann_docker, timezone (D58)
       lib/src/{links,sampling,logs,capabilities}/   runtime services beside lib/src/engine/ (D52)
       test/integration/          engine tests against the fixture, tagged, skipped without it (D53)
       tool/capture_fixtures.dart                    fixture capture (6.5, D53)
@@ -1304,9 +1356,11 @@ import 'package:seance_core/seance_core.dart' show uuidV4;
 ```
 
 The barrel's `klabautermann_host` export shows only the plain-data types
-that sampling results and `HostProfileChanged` carry (10.1), and
-`JournalEntry` (the log viewer's journal rows, 10.8); each list changes
-only as a milestone wires a type in or retires one. No `ghost_*` package
+that sampling results and `HostProfileChanged` carry (10.1),
+`JournalEntry` (the log viewer's journal rows, 10.8), and the access
+check over a `HostProfile` (`evaluateAccess` and its `AccessReport`,
+whose journal row drives the Logs panel's LOG-04 notice, 10.8); each
+list changes only as a milestone wires a type in or retires one. No `ghost_*` package
 depends on `seance_core`; `klabautermann_core` is a product package, and
 the curated lines above are its only
 `seance_core` edge. Poltergeist's and
@@ -1794,7 +1848,7 @@ platform identities in 04, section 12.3):
 | `host_keys.json`, verdict and tripwire files | Pins and quarantine state | catalog library | MVP |
 | `endpoint_pins.json` | Confirmed endpoints | catalog library | MVP |
 | `ssh_config_imports.json` [E] | D13's device-local store for FL-02 imports from `~/.ssh/config`, replaced whole by each import; never pushed (D14). Schema 3 (M2) holds each host's alias, host, port, user, `IdentityFile` and `ProxyJump` with the values ssh would use (10.1): the effective host (`%h` expanded, lowercased unless an address) and port, the first `IdentityFile` that is not `none`, and the `ProxyJump` as written; under `hops` it holds the same for each other name a stored route gives. An older file holds addresses only: schema 1 (M1) kept no `IdentityFile` or `ProxyJump` and kept `HostName` as written, `%h` included, and schema 2 read each host's values from its first block alone. Its hosts are listed as stored, with no `jumpRoute`, `authKind` or `locatorConflict`, and get no connect config until the next import rewrites the file. Built in M1: the engine isolate loads it at start and saves each import atomically before it answers (10.1). A damaged file is renamed to `ssh_config_imports.json.corrupt-<UTC time>`; a file it cannot read or rename, or one from a newer schema, is left as it is and no import is saved that run | `klabautermann_core` [E] | MVP |
-| `settings.json` | Device settings, `klabautermann.sync.deviceId` (minted once, never regenerated), monitor set, per-server device preferences | app | MVP |
+| `settings.json` | Device settings, `klabautermann.sync.deviceId` (minted once, never regenerated), whether the first-run coverage card was dismissed (`klabautermann.coverage.firstRunCardDismissed`, M2, 9.5; anything but `true` shows the card again), monitor set, per-server device preferences | app | MVP |
 | `window_state.json` | The desktop main window's last normal frame and its maximized and full-screen flags (10.2), in the shape Séance's file established (`x`, `y`, `width`, `height`, `isMaximized`, `isFullScreen`; physical pixels on Windows); never synced. Added in M1, a deviation from the plan, which listed no window file: kept out of `settings.json`, as Séance and Planchette keep theirs, so debounced drag saves never rewrite the file that holds the device id | app | MVP |
 | `instance.lock` [E] | Empty. One desktop instance per support directory (built in M2): the composition root takes an exclusive, non-blocking advisory lock on it after the settings window's branch and before `settings.json` and `window_state.json` open and the engine isolate starts, so one process mints the device id and writes these files, and holds it for the life of the process; the file is never deleted. A second instance opens no other file and only says it is already running, until the user quits it. A lock that fails for another reason (no write access, no lock support) lets the app run unguarded and says so at startup. Phones run one process per app and take none | app, through `klabautermann_core`'s `InstanceLock` | MVP |
 | `identity_reads.jsonl` [E] | Audit trail of identity-file reads (M2): one JSON line per attempt to read a server's or jump hop's `IdentityFile`, read or not (UTC time, server id and label, the expanded path, the error), through `seance_core`'s `IdentityAuditLog`, under the name Séance and Poltergeist use. Owner-only on Linux and macOS, also through rotation, which keeps the newest 500 lines once the file passes 1,000; never synced. Recording is best effort and never fails a connect. Added in M2, a deviation from the plan, which listed no such file | `klabautermann_core` | MVP |
@@ -1865,6 +1919,7 @@ abstract interface class RemoteProcess {
 - **Liveness (CN-06).** Idle ping every 15 s; a ping not answered within
   30 s marks the link lost and closes it (Poltergeist's pattern [R: c2
   §2.5]). dartssh2's own keepalive never times out, in 4.1.0 too (c2 R3).
+  A missed fast-sampler deadline hints at a dead peer sooner (6.4).
 - **Reconnect (CN-05).** Backoff with 1 s base, 30 s cap and downward jitter
   (Poltergeist's constants [R]); journal cursors and Docker `since=` resume.
   Background reconnects never prompt; a server that needs a prompt waits
@@ -2321,6 +2376,68 @@ filtered core sample is about 1.5 to 2.5 KB and an overview sample about
 600 B [R: r5 §3.3]; the filtering happens on the host, in the collector
 fragments (D48).
 
+**Scheduling (K22).** The engine's sampling scheduler
+(`klabautermann_core/lib/src/sampling/sampling_scheduler.dart`) runs a
+server's two samplers while a stream is subscribed, its link is ready
+and the app is in the foreground, and closes both, with their timers, as
+soon as one of those ends: the background (D34) and a lost or forgotten
+link stop sampling at once, also on a desktop whose link stays open.
+Each stream is due at its period in the table, aligned to when sampling
+started, so streams whose periods divide one another share a request;
+the due streams of one sampler go out as one tick, `procs` first. While
+`core` is subscribed, `overview` rides on its ticks, and `failedUnits`
+rides on those of `units`, since one reply serves both. A stream newly
+subscribed is read at once, and a new profile takes over at each
+stream's next aligned tick (one not read yet stays due at once).
+`identity` is read once per link, and a
+stream the profile reads on demand once per `Subscribe` naming it
+(10.1); such a read that brings no reply is tried again after 15 s [E].
+Due times follow a monotonic clock, so a changed wall clock cannot stall
+sampling. A sampler ticks only while it is ready, so its restarts (6.2)
+cost no skipped ticks: a cadence reading due while its sampler
+restarts, or while the probe holds it, is lost (a gap, 10.1), and the
+sampler reads its streams as soon as it can tick again. A tick
+that would overlap its outstanding request is skipped and counted,
+never queued. A first or owed reading
+due meanwhile waits for that request to settle instead, since a skipped
+tick would lose it, and the streams of a skipped tick join the next tick
+the sampler sends, so a period that keeps landing on skipped ticks
+cannot starve its stream. The slow sampler's first request on a link is
+the probe (6.1), until one is answered on that link: a probe that brings
+no reply goes out again after 15 s [E], as an owed read does, each
+later one after twice the last wait, up to 15 min [E], and on a later
+run on the same link. A probe that hangs holds the slow sampler for its
+whole deadline, so the cap bounds the readings it loses to about 15 %
+of the time. Until it settles the slow sampler sends
+nothing else and, for a server whose profile the engine does not know
+yet, the fast sampler waits too, so the first readings already withhold
+what a container host's `/proc` would supply (D50); a slow sampler that
+fails to start releases the fast one, and probes once it is ready. That
+wait lasts at most the probe's deadline, 165 s for its 16 guarded
+commands (6.2, D47), and holds only while the engine knows no profile
+for the server. There D50, which never shows the host's figures as the
+container's, takes precedence over 6.2's rule that a hung slow collector
+cannot stall CPU graphs, until the device's profile cache (6.1) makes
+the wait rare. A missed fast deadline makes the restarted fast sampler's
+start a dead-peer hint to the link supervisor: the fast collectors read
+`/proc` with builtins only, so a reply later than 5 s means a stalled
+sampler or a silent peer, and the restart tells which. The supervisor
+closes a hinted link that shows no sign of life (a reply, a reply lost
+to framing, or a sampler's READY) within 20 s [E], the READY deadline
+from the opened channel and 5 s for the open, reports it
+`closed(pingTimeout)` (CN-06) and redials as after a lost link. A
+sampler that only stalled answers in time, and a run that stops
+withdraws its hint, which leaves liveness to the link's ping (5.1).
+*Rejected:* a hint from the missed deadline itself (the restart delay
+before the start grows with each failure without a reply, past 20 s from
+the sixth, so a live but overloaded host would be redialed about once a
+minute); closing the link on the hint (a stalled sampler would cost a
+reconnect); a liveness command over the link on the hint (one more
+channel and process on a link that may be dead, bounded only by the
+channel-open timeout); holding the fast sampler for the probe without
+the release (a slow sampler that cannot start, from a refused or
+timed-out channel or no READY, would hold the fast one until it does).
+
 ### 6.5 Parsing and fixtures
 
 - One pure parser per collector in `klabautermann_host`, tolerant of truncation,
@@ -2489,6 +2606,39 @@ unless the user enables admin mode for that panel.
   `daemon-reload`), "make resilient" (`Restart=on-failure` drop-in),
   dependencies, OpenRC and procd adapters.
 
+As built in M2 (`app/klabautermann_app/lib/ui/services_panel.dart`), the
+Services tab lists the `units` stream's units in the sortable table with
+their load, active and sub states, filtered by unit type (services by
+default) and by active state; a filter keeps its choice when a refresh
+no longer holds that value.
+
+- A state shows as systemd's own word, never translated (10.10), only
+  when systemd uses it in that column: a load or active state from
+  systemd's tables, or a sub state spelled as systemd spells them.
+  Anything else reads "unknown", and so do every state and the
+  description of a row whose name ends in no unit type, as a text row
+  the host read by position after a status bullet would (CN-10). Such
+  a row opens no page, since its name is not a unit's. A notice names
+  the text fallback.
+- SVC-02's summary (`failed_units_summary.dart`, which the health card
+  is to share over `failedUnits`) counts `UnitsSnapshot.failed` and
+  names up to five, each with its sub state: systemd's `Result` property
+  needs `systemctl show` (SVC-08, v1).
+- A unit's page opens under the table, or in its place below a 600 px
+  panel width that grows with the text scale (Back returns), where it
+  takes the focus the hidden list held to its close button and gives it
+  back on closing (10.10). It reads SVC-04's lines as one 50-record
+  journal window through the monitoring controller and says what the
+  read does until lines arrive: waiting for an answer, the link, a
+  channel or the foreground, reading, no lines, or the end's reason with
+  the host's error text. A read still running when its tab hides stops
+  and starts over once shown. The read opens through the controller's
+  one owner of log streams, which the Logs panel shares and which gives
+  each rejection of `OpenLogStream` to the oldest open without an answer
+  (10.1). Until the service is wired, the page says unit logs are not
+  available in this version; a read the engine can no longer answer,
+  because it stopped, says so and asks for a restart of the app.
+
 ### 7.6 Logs (LOG)
 
 - **MVP.** Journal viewer (LOG-01): `journalctl -o json --no-pager` with
@@ -2579,8 +2729,10 @@ time through `HostCommands.commandLine`, and answers each open with a
   `cron.{hourly,daily,weekly,monthly}` names, and
   `systemctl list-timers --all --output=json`. Schedules in words and next runs
   (JOB-02): a Dart cron parser in `klabautermann_host` (5 fields, ranges, steps,
-  names, macros, `CRON_TZ`) evaluated in the server's time zone and offset from
-  the probe, with DST transitions and `RandomizedDelaySec` annotated;
+  names, macros, `CRON_TZ`) evaluated in the engine in the server's time
+  zone: the zone database's rules for the probe's zone name, else the
+  probe's offset with the reason (D58), with DST transitions, runs within
+  an hour of one and `RandomizedDelaySec` annotated;
   `OnCalendar` expressions, which a timer's `timer_detail` read gives
   with its `RandomizedDelaySec` (D57), use `(unset TZ; systemd-analyze
   calendar --iterations=N -- '<expr>')` on the host instead of a
@@ -3814,6 +3966,37 @@ series: the colour-blind check (10.7) and the per-series summaries are
 no second visual cue, and a dash pattern would read as missed samples,
 so that cue is still open.
 
+As built in M2 for items 1, 2 and 4 (`app/klabautermann_app/lib/ui/`
+`coverage.dart` and `freshness.dart`), the card and the chip leave out
+alerts, which arrive with ALR-01 (v1): the card's last sentence is
+"Charts cover only the time this device was connected", and the chip
+reads "Watching 4 of 12 servers on this device, only while open". The
+card heads the desktop workspace and the phone's fleet list, taking at
+most half of that column, its words scrolling above buttons that stay in
+view, until "Got it", which `settings.json` keeps (4.10); a dismissal
+that cannot be saved hides it for the session and says it returns. The
+chip heads the rail, above its section header, and the phone's list,
+under the card; it shows nothing for an empty fleet and counts the
+fleet's servers in FL-21's monitor set, none until the app stores one.
+It opens the coverage sheet, a bottom sheet under 600 dp and a dialog
+above: the T0 badge with its meaning, what is covered (the open servers'
+live readings) and what is not (continuous watching while no server is
+watched, anything while the app is closed, a server going down, history
+from before this device connected, and on iOS and Android the
+background pause), with no control. One formatter words freshness for
+the rows and cards, which adopt it as they land: the background pause
+first; "not watched on this device" for a server outside the monitor set
+that nothing samples, where a reading before any `SamplingState` counts
+as sampled (the engine sends none yet); "disconnected 3 min ago" from
+the start of a `waitingForLink` phase entered from `sampling`, once
+readings have arrived; otherwise the latest reading's age in its largest
+whole unit (s, min, h, d), "stale" once it reaches the caller's limit
+for that stream; "no data yet" before the first reading. A link already
+down when a view or the return from the background subscribes again
+reads the reading's age, since its phase began only then. The monitoring
+controller keeps each server's latest `SamplingState` and the phase
+before it.
+
 ---
 
 ## 10. UI shell
@@ -3950,19 +4133,27 @@ the engine in `engine_isolate.dart` beside it):
     `IdentityFile`, the hop's own port and user first; as a first hop,
     the final pass's route must still loop on the hop's own port and as
     its own user, else that pass's. Otherwise the host behind it is left
-    out and counted. The import makes this check for every hop, even
-    where ssh's final pass already fails before reaching it (for a host
-    that keeps its first pass, or behind a first hop that holds only by
-    looping). It is conservative there: it may leave out a host that
-    plain ssh reaches, but never keeps a route ssh does not take. With
+    out and counted. The import skips this check where ssh's final pass
+    already fails before the hop: for the hops of a host that keeps its
+    first pass, and behind a first hop that holds only by looping,
+    directly or through its own first hops. ssh reaches such a hop only
+    where no final pass is asked for, and every name then takes its
+    first pass. This assumes a system config asks for the final pass
+    for every name or for none, as `Match final all` does; one that asks
+    for it for some names only, such as a `CanonicalizeHostname` in a
+    `Host` block, falls outside what the import models, like any other
+    value that file sets. A first hop's own route is still checked as
+    where ssh dials that hop as itself, so a host behind a first hop
+    whose own route fails the check is left out and counted, although
+    ssh may reach it: that is conservative, not what ssh does. With
     `Host *.example.com` / `User ops` / `ProxyJump bastion.example.com`,
     `Host bastion` / `HostName bastion.example.com`, `Host bastion2` /
     `HostName b2.example.com` and `Host web` / `HostName 10.0.0.5` /
-    `ProxyJump bastion,bastion2`, plain ssh reaches web through bastion
-    and bastion2 and the final pass fails at bastion with a jumphost
-    loop, yet web is left out, because bastion2's final pass as a later
-    hop gives `User ops`. A host whose two passes give two routes ssh
-    would take is left out and counted. For a
+    `ProxyJump bastion,bastion2`, web imports through bastion and
+    bastion2, as plain ssh reaches it: the final pass fails at bastion
+    with a jumphost loop, so bastion2's final pass, which as a later hop
+    gives `User ops`, never applies. A host whose two passes give two
+    routes ssh would take is left out and counted. For a
     `HostName` whose final form the import cannot know (an address with
     a scope, or one the system resolver may read where Dart does not), a
     block whose pattern may match it counts as a `Match` that may apply.
@@ -4147,8 +4338,12 @@ the engine in `engine_isolate.dart` beside it):
   per-process CPU shares with the start time PRC-02 checks, plus the
   host's process count and how it chose the rows it sent (D48); for
   `identity`, the strings SYS-01 shows, resolved in the engine so the
-  host's JSON never crosses (6.5); and the parsed tables for `fs`,
-  `units`, `failedUnits`, `timers` and `cron`. A stream whose collector
+  host's JSON never crosses (6.5); the parsed tables for `fs`,
+  `units`, `failedUnits`, `timers` and `cron`; and for `cron` also the
+  jobs rows of its lines and `cron.<period>` scripts, with next runs from
+  the sample's time in the server zone, and that zone's name, why the
+  runs use the probe's fixed offset, or that no server zone is known
+  (7.7, D58). A stream whose collector
   reports a section status other than `ok` (6.2) gets
   `CollectorUnavailable` with that status as an enum and the end of the
   collector's error output (at most 4,096 characters), control
@@ -4170,9 +4365,9 @@ the engine in `engine_isolate.dart` beside it):
   `Sample.at`. A lost link or the background outranks a lost reading
   as the cause of a gap already open. The sample pipeline
   (`klabautermann_core/lib/src/sampling/sample_pipeline.dart`, K23)
-  builds these events from sampler outcomes; until the scheduler wires
-  it (K22), the engine records subscriptions and the profile and sends
-  none of them.
+  builds these events from sampler outcomes, and the sampling scheduler
+  (6.4, K22) runs it over each server's ready link. With links off the
+  engine records subscriptions and the profile and sends none of them.
 - **Version 3 (M2 logs).** Log streams joined version 3 the same way.
   The app picks the `streamId` of `OpenLogStream(streamId, spec)`, so it
   can close a stream before any answer arrives. Unlike a subscription
@@ -4217,6 +4412,19 @@ the engine in `engine_isolate.dart` beside it):
   read denied, or failed) and the host's error output. Until the log
   service is wired, the engine rejects `OpenLogStream` and ignores
   `CloseStream`, since no stream is open.
+  On the app side (M2), `MonitoringController.logs` owns every stream
+  of the run, the Logs panel's and the bounded reads `openLogRead`
+  opens through it (SVC-04's unit logs, 7.5): it mints `log-N` ids,
+  routes each stream's events to the surface that opened it, and stops
+  routing once that surface closes the stream. It gives a rejection of
+  `OpenLogStream` to the oldest open with no event yet, a closed one
+  included, so a late rejection cannot land on a later open, and takes
+  any stream's first event as answering every open sent before it.
+  That is only sound if the log service answers each open it accepts
+  with a `LogStreamState` before it handles the next request, which it
+  must therefore do, and if nothing else in the app sends
+  `OpenLogStream`: a second sender with its own queue would take each
+  rejection as its own as well.
 - **`SetAppActivity(activity)`** is a request of its own and applies to
   every subscription, link and probe at once: 6.4 pauses everything while
   the app is in the background, and D34 adds the phones' grace period
@@ -4365,7 +4573,30 @@ with the reason and a link to the access check (CN-24), the MVP's Access
 tab (10.2, D51), which lists sudo NOPASSWD, journal group, Docker socket
 rights, streamlocal, compose plugin and systemd version, each with a
 copyable fix command that is never run implicitly. Unknown values show
-"unknown", never zero.
+"unknown", never zero. As built in M2
+(`app/klabautermann_app/lib/ui/access/`), the app evaluates K04's access
+check and panel declarations over the probe's latest `HostProfile`
+(`MonitoringController.profileFor`); the engine runs no command for the
+tab:
+- A tab hides only when every host panel behind it lacks a capability
+  the probe answered; Logs stands for the journal, the kernel log and
+  the file tail and stays while any one works. Before the probe
+  answers, or when it did not report a capability, the tab shows and
+  its values read "unknown". A hidden tab is not built, so it samples
+  nothing; it names what is missing and links to the Access tab, which
+  the desktop strip selects, moving keyboard focus into it, and a phone
+  pushes. The phone's More destination does not list Access yet, so
+  there the link is the way in.
+- Each row shows its state as an icon and a word, its reason, SAF-08's
+  badge on a root-equivalent right, and its fix as one line: the
+  elevation prefix, then each word, quoted (8.8) only where a shell
+  would split or expand it. Copying writes the clipboard and sends the
+  engine nothing, and the tab says the app never runs a fix. SAF-08's
+  notice heads the tab whatever the rows say; docker-group advice adds
+  its own warning naming the rootless alternative, and 8.4's admin-mode
+  alternative joins it once admin mode exists.
+- The Docker tab reads "arrives with Docker support" over the detected
+  runtime (D54), read-only, on every host until M3.
 
 As built in M2 (`app/klabautermann_app/lib/ui/system_panel.dart`), the
 System tab shows SYS-01's identity, BOOT-01's uptime and boot time,
@@ -4557,6 +4788,40 @@ stays hidden until sideways scrolling lands, and one after a journal
 row's first line until wrap is on. Only the current match is underlined,
 whatever the line's SGR underline, so it differs by more than colour.
 Matches in a line are found again when it is drawn.
+
+The Logs panel (LOG-01 to LOG-05, LOG-22, as built in M2;
+`app/klabautermann_app/lib/ui/logs/logs_panel.dart`) puts a filter bar
+over the viewer. The bar holds the source (journal, kernel or file),
+the journal's unit, identifier, priority, current-boot and time-range
+filters, a Live chip and the search. The time range offers spans back
+from when the stream opens (15 minutes to 7 days), since a follow takes
+no end; a range with both ends waits for a date and time picker. The
+file field accepts only what the engine's `ArgValidators.absolutePath`
+accepts, a rule the app mirrors (its test repeats the engine rule's
+cases) so it can say what is wrong before sending, and it offers the
+common paths: syslog and auth on Debian and Red Hat, nginx, and Apache
+as `apache2` and `httpd`. Below 600 px at 100 % text, a width that grows
+with the text, the source and filters open bottom sheets. A stream is
+open only while the panel shows (6.4). With Live on it follows,
+delivering the newest 500 records first, and a return resumes after the
+newest journal cursor held, so nothing is missed; a file or `dmesg`
+follow has no cursor and starts over. With Live off the panel reads a
+500-record window, whose newest-first records it shows oldest first
+once the window ends, and keeps it while hidden. Turning Live off keeps
+what the follow showed. The chip names the stream's state by word and
+icon, never by colour alone: Live, Connecting (opening, or waiting for
+a session channel), Disconnected (waiting for the link), Paused (Live
+off, or the app in the background), Stopped (ended, or a file without
+a valid path) or Unavailable (refused). A status line, a live region
+for screen readers, says the same in a sentence with any host error
+output, and offers Retry after a refusal or a failed read. LOG-04's
+notice shows above the journal when the access check's journal row
+says the account sees only its own entries (K04), from the probe's
+profile, and above the kernel log, of which the journal then shows it
+nothing; an empty read says no entries are visible to the account.
+Rows from `dmesg`, which has no journal fields, carry no
+level yet, and LOG-01's "load older" waits for a buffer that can add
+entries before its oldest.
 
 ### 10.9 Theme
 

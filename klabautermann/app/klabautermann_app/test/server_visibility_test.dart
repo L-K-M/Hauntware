@@ -172,6 +172,7 @@ void main() {
         fleet: harness.fleet,
         monitoring: monitoring,
         appearance: harness.appearance,
+        coverage: harness.coverage,
       ),
     );
     await tester.pumpAndSettle();

@@ -342,6 +342,197 @@
   "inspectorTitle": "Inspector",
   "inspectorEmptyBody": "Details, alerts, operations and coverage appear here once you select a server.",
   "placeholderMilestone": "Available in a later milestone.",
+  "coverageFirstRunTitle": "How Klabautermann watches your servers",
+  "@coverageFirstRunTitle": {
+    "description": "Heading of the first-run coverage card (03 §9.5 item 1), shown above the fleet on phones and above the workspace on desktops until the user dismisses it."
+  },
+  "coverageFirstRunBody": "Klabautermann connects over SSH only while it is open. It installs nothing on your servers unless you ask it to. Charts cover only the time this device was connected.",
+  "@coverageFirstRunBody": {
+    "description": "Body of the first-run coverage card: what the app does and does not cover. It names no alerts, since this version has none."
+  },
+  "coverageFirstRunDismiss": "Got it",
+  "@coverageFirstRunDismiss": {
+    "description": "Button that dismisses the first-run coverage card for good on this device."
+  },
+  "coverageFirstRunDetails": "Coverage details",
+  "@coverageFirstRunDetails": {
+    "description": "Button on the first-run coverage card that opens the coverage sheet."
+  },
+  "coverageFirstRunNotSaved": "Klabautermann could not save that you dismissed the coverage note, so it shows again after a restart.",
+  "@coverageFirstRunNotSaved": {
+    "description": "Top toast when dismissing the first-run coverage card could not be written to the device's settings file; the card stays hidden for this session."
+  },
+  "coverageChip": "{total, plural, =1{Watching {watched} of 1 server on this device, only while open} other{Watching {watched} of {total} servers on this device, only while open}}",
+  "@coverageChip": {
+    "description": "The fleet header's coverage chip (03 §9.5 item 2): how many fleet servers this device watches continuously (its monitor set) out of all of them; watching happens only while the app is open. Opens the coverage sheet.",
+    "placeholders": {
+      "watched": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "coverageChipHint": "Show coverage details",
+  "@coverageChipHint": {
+    "description": "Screen-reader hint for activating the fleet header's coverage chip."
+  },
+  "coverageSheetTitle": "Coverage on this device",
+  "@coverageSheetTitle": {
+    "description": "Heading of the coverage sheet the fleet header's chip opens."
+  },
+  "coverageTierBadge": "T0",
+  "@coverageTierBadge": {
+    "description": "Badge naming the execution tier the fleet runs at: T0, SSH only while the app is open (03 §9). Kept as written."
+  },
+  "coverageTierTitle": "SSH while Klabautermann is open",
+  "@coverageTierTitle": {
+    "description": "What the T0 badge means, beside it in the coverage sheet."
+  },
+  "coverageTierBody": "Klabautermann reads your servers over SSH only while it is open. It installs nothing on them unless you ask it to.",
+  "@coverageTierBody": {
+    "description": "Explanation under the tier title in the coverage sheet."
+  },
+  "coverageCoveredHeading": "Covered",
+  "@coverageCoveredHeading": {
+    "description": "Heading of the coverage sheet's list of what this device covers."
+  },
+  "coverageLiveTitle": "Live readings while open",
+  "@coverageLiveTitle": {
+    "description": "Coverage sheet item: the servers the user has open are read live."
+  },
+  "coverageLiveBody": "Metrics, processes, services, logs and jobs of the servers you have open.",
+  "@coverageLiveBody": {
+    "description": "Body of the coverage sheet's live-readings item."
+  },
+  "coverageWatchedTitle": "Continuous watching",
+  "@coverageWatchedTitle": {
+    "description": "Coverage sheet item about the servers this device watches continuously (its monitor set, FL-21): listed as covered once one is watched, and as not covered while none is."
+  },
+  "coverageWatchedBody": "{watched, plural, =0{No server is watched on this device, so each is read only while you have it open.} =1{1 server is read continuously while Klabautermann is open. Any others are read only while you have them open.} other{{watched} servers are read continuously while Klabautermann is open. Any others are read only while you have them open.}}",
+  "@coverageWatchedBody": {
+    "description": "Body of the coverage sheet's watched-servers item; watched is the size of this device's monitor set within the fleet.",
+    "placeholders": {
+      "watched": {
+        "type": "int"
+      }
+    }
+  },
+  "coverageNotCoveredHeading": "Not covered",
+  "@coverageNotCoveredHeading": {
+    "description": "Heading of the coverage sheet's list of what this device does not cover."
+  },
+  "coverageClosedTitle": "While Klabautermann is closed",
+  "@coverageClosedTitle": {
+    "description": "Coverage sheet item: nothing is covered while the app is closed."
+  },
+  "coverageClosedBody": "Nothing checks your servers, so nothing can warn you about them.",
+  "@coverageClosedBody": {
+    "description": "Body of the coverage sheet's while-closed item."
+  },
+  "coverageHostDownTitle": "A server going down",
+  "@coverageHostDownTitle": {
+    "description": "Coverage sheet item: a server that goes down while the app is closed goes unnoticed."
+  },
+  "coverageHostDownBody": "If a server stops while Klabautermann is closed, you find out the next time you open it.",
+  "@coverageHostDownBody": {
+    "description": "Body of the coverage sheet's server-down item."
+  },
+  "coverageHistoryTitle": "History before you connected",
+  "@coverageHistoryTitle": {
+    "description": "Coverage sheet item: charts hold no history from before this device connected."
+  },
+  "coverageHistoryBody": "Charts cover only the time this device was connected. Gaps are marked, never filled in.",
+  "@coverageHistoryBody": {
+    "description": "Body of the coverage sheet's history item."
+  },
+  "coverageBackgroundTitle": "While in the background",
+  "@coverageBackgroundTitle": {
+    "description": "Coverage sheet item shown on iOS and Android only: reading stops in the background (PLT-04)."
+  },
+  "coverageBackgroundBody": "Reading stops while Klabautermann is in the background and resumes when you return.",
+  "@coverageBackgroundBody": {
+    "description": "Body of the coverage sheet's background item, on iOS and Android only."
+  },
+  "coverageFreshnessSeconds": "{seconds} s",
+  "@coverageFreshnessSeconds": {
+    "description": "An age under a minute in a freshness line (03 §9.5 item 4), as in \"Updated 4 s ago\".",
+    "placeholders": {
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "coverageFreshnessMinutes": "{minutes} min",
+  "@coverageFreshnessMinutes": {
+    "description": "An age under an hour, in whole minutes, in a freshness line.",
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "coverageFreshnessHours": "{hours} h",
+  "@coverageFreshnessHours": {
+    "description": "An age under a day, in whole hours, in a freshness line.",
+    "placeholders": {
+      "hours": {
+        "type": "int"
+      }
+    }
+  },
+  "coverageFreshnessDays": "{days} d",
+  "@coverageFreshnessDays": {
+    "description": "An age of a day or more, in whole days, in a freshness line.",
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "coverageFreshnessUpdated": "Updated {age} ago",
+  "@coverageFreshnessUpdated": {
+    "description": "Freshness line of a server's or panel's values while they are current; age is one of the coverageFreshness age strings.",
+    "placeholders": {
+      "age": {
+        "type": "String",
+        "example": "4 s"
+      }
+    }
+  },
+  "coverageFreshnessStale": "Stale: updated {age} ago",
+  "@coverageFreshnessStale": {
+    "description": "Freshness line of values older than their stream's limit, which are drawn grey beside it.",
+    "placeholders": {
+      "age": {
+        "type": "String",
+        "example": "3 min"
+      }
+    }
+  },
+  "coverageFreshnessDisconnected": "Disconnected {age} ago",
+  "@coverageFreshnessDisconnected": {
+    "description": "Freshness line while the server's connection is down after readings arrived; age is how long it has been down.",
+    "placeholders": {
+      "age": {
+        "type": "String",
+        "example": "3 min"
+      }
+    }
+  },
+  "coverageFreshnessPaused": "Paused: app in background",
+  "@coverageFreshnessPaused": {
+    "description": "Freshness line while a phone app is in the background and reading is paused."
+  },
+  "coverageFreshnessNotWatched": "Not watched on this device",
+  "@coverageFreshnessNotWatched": {
+    "description": "Freshness line of a server outside this device's monitor set that nothing reads."
+  },
+  "coverageFreshnessNoData": "No data yet",
+  "@coverageFreshnessNoData": {
+    "description": "Freshness line before the first reading has arrived."
+  },
   "serverTitle": "{name}",
   "@serverTitle": {
     "placeholders": {
@@ -815,6 +1006,316 @@
       }
     }
   },
+  "accessNeverRuns": "Klabautermann never runs these fix commands. Copy one and run it yourself on the server.",
+  "@accessNeverRuns": {
+    "description": "Access tab: the note above the access rows saying the app only shows and copies fix commands and never runs them (CN-24)."
+  },
+  "accessRootEquivalenceTitle": "Root-equivalent access",
+  "@accessRootEquivalenceTitle": {
+    "description": "Access tab: title of the notice explaining which rights equal root on the server (SAF-08)."
+  },
+  "accessRootEquivalenceBody": "Using a rootful Docker or Podman socket, or a broad passwordless sudo rule, gives the same power as root on this server. A rootless engine gives only the power of the user that runs it.",
+  "@accessRootEquivalenceBody": {
+    "description": "Access tab: body of the root-equivalence notice (SAF-08)."
+  },
+  "accessNotChecked": "Not checked yet. Klabautermann checks access after it connects to this server.",
+  "@accessNotChecked": {
+    "description": "Access tab and Docker tab: shown in place of an access answer before the server's capability probe has reported."
+  },
+  "accessRowNotChecked": "Not checked yet.",
+  "@accessRowNotChecked": {
+    "description": "Access tab: the reason under each row before the server's capability probe has reported; accessNotChecked explains it once above the rows."
+  },
+  "accessStatusOk": "OK",
+  "@accessStatusOk": {
+    "description": "Access tab: the state word of a row whose right the account has."
+  },
+  "accessStatusMissing": "Missing",
+  "@accessStatusMissing": {
+    "description": "Access tab: the state word of a row whose right the account lacks, as far as the probe could tell."
+  },
+  "accessStatusUnknown": "Unknown",
+  "@accessStatusUnknown": {
+    "description": "Access tab: the state word of a row the probe could not answer yet."
+  },
+  "accessItemSudo": "Passwordless sudo",
+  "@accessItemSudo": {
+    "description": "Access tab row title: whether sudo (or doas) runs without a password for the login account."
+  },
+  "accessItemJournal": "Journal group",
+  "@accessItemJournal": {
+    "description": "Access tab row title: whether the account may read the whole system journal (membership in systemd-journal or a similar group)."
+  },
+  "accessItemDockerSocket": "Docker socket",
+  "@accessItemDockerSocket": {
+    "description": "Access tab row title: whether the account can use a Docker or Podman engine socket."
+  },
+  "accessItemStreamlocal": "Streamlocal forwarding",
+  "@accessItemStreamlocal": {
+    "description": "Access tab row title: whether the SSH server allows forwarding to a Unix socket, which Docker support uses. 'Streamlocal' is OpenSSH's term; keep it."
+  },
+  "accessItemCompose": "Compose plugin",
+  "@accessItemCompose": {
+    "description": "Access tab row title: whether the docker compose plugin is installed."
+  },
+  "accessItemSystemd": "systemd version",
+  "@accessItemSystemd": {
+    "description": "Access tab row title: whether the server runs systemd, and which version. 'systemd' is a product name, always lower case."
+  },
+  "accessItemRuntime": "Container runtime",
+  "@accessItemRuntime": {
+    "description": "Access tab row title: which container engines (Docker or Podman, rootful or rootless) the server has."
+  },
+  "accessReasonProbeUnavailable": "The server's probe could not answer this.",
+  "@accessReasonProbeUnavailable": {
+    "description": "Access tab row reason: the part of the capability probe that answers this row failed."
+  },
+  "accessReasonRootLogin": "You log in as root, so no elevation or group is needed.",
+  "@accessReasonRootLogin": {
+    "description": "Access tab row reason: the login account is root."
+  },
+  "accessReasonSudoNoPassword": "sudo runs without asking for a password.",
+  "@accessReasonSudoNoPassword": {
+    "description": "Access tab row reason: sudo -n succeeded."
+  },
+  "accessReasonDoasNoPassword": "doas runs without asking for a password. sudo is not installed.",
+  "@accessReasonDoasNoPassword": {
+    "description": "Access tab row reason: there is no sudo, and doas -n succeeded."
+  },
+  "accessReasonSudoNotPasswordless": "sudo asks for a password, or your account may not use it. No fix is offered: a broad passwordless rule equals root.",
+  "@accessReasonSudoNotPasswordless": {
+    "description": "Access tab row reason: sudo -n failed; the app deliberately offers no command that would make sudo passwordless."
+  },
+  "accessReasonDoasNotPasswordless": "doas asks for a password, which Klabautermann cannot enter. sudo is not installed.",
+  "@accessReasonDoasNotPasswordless": {
+    "description": "Access tab row reason: there is no sudo, and doas wants a password."
+  },
+  "accessReasonNoElevationTool": "Neither sudo nor doas is installed.",
+  "@accessReasonNoElevationTool": {
+    "description": "Access tab row reason: the server has no elevation tool."
+  },
+  "accessReasonJournalGroup": "You are in a group that can read the whole system journal.",
+  "@accessReasonJournalGroup": {
+    "description": "Access tab row reason: the account is in systemd-journal, adm or wheel."
+  },
+  "accessReasonNotInJournalGroup": "The journal shows only your own entries. Members of systemd-journal can read all of them.",
+  "@accessReasonNotInJournalGroup": {
+    "description": "Access tab row reason: journalctl silently limits the account to its own entries."
+  },
+  "accessReasonNoJournal": "This server has no journalctl.",
+  "@accessReasonNoJournal": {
+    "description": "Access tab row reason, and why a panel that needs journalctl is hidden: the probe found no journalctl command."
+  },
+  "accessReasonRootfulSocket": "You can use a rootful engine socket.",
+  "@accessReasonRootfulSocket": {
+    "description": "Access tab row reason: the account can write to a Docker or Podman socket of an engine that runs as root."
+  },
+  "accessReasonRootlessSocket": "You can use rootless engine sockets only.",
+  "@accessReasonRootlessSocket": {
+    "description": "Access tab row reason: the only engine sockets the account can write to belong to engines running as a normal user."
+  },
+  "accessReasonSocketNotWritable": "Engine sockets exist, but your account cannot use any of them.",
+  "@accessReasonSocketNotWritable": {
+    "description": "Access tab row reason: engine sockets exist, none writable for the account."
+  },
+  "accessReasonNoEngineSocket": "No Docker or Podman socket was found.",
+  "@accessReasonNoEngineSocket": {
+    "description": "Access tab row reason: none of the known engine socket paths exists."
+  },
+  "accessReasonPendingDocker": "Checked once Docker support arrives.",
+  "@accessReasonPendingDocker": {
+    "description": "Access tab row reason for streamlocal forwarding and the compose plugin, which the app checks only from the release with Docker support."
+  },
+  "accessReasonSystemdJson": "Version {version}: unit and timer lists are read in full.",
+  "@accessReasonSystemdJson": {
+    "description": "Access tab row reason: systemd 246 or later.",
+    "placeholders": {
+      "version": {
+        "type": "int",
+        "example": "255"
+      }
+    }
+  },
+  "accessReasonSystemdTextFallback": "Version {version}: older than 246, so unit and timer lists are read from text output.",
+  "@accessReasonSystemdTextFallback": {
+    "description": "Access tab row reason: systemd 239 to 245, which lacks JSON output.",
+    "placeholders": {
+      "version": {
+        "type": "int",
+        "example": "239"
+      }
+    }
+  },
+  "accessReasonSystemdOlderThanTested": "Version {version} is older than any tested version (239).",
+  "@accessReasonSystemdOlderThanTested": {
+    "description": "Access tab row reason: systemd older than the oldest supported release.",
+    "placeholders": {
+      "version": {
+        "type": "int",
+        "example": "219"
+      }
+    }
+  },
+  "accessReasonSystemdVersionUnparsed": "systemd runs, but its version could not be read.",
+  "@accessReasonSystemdVersionUnparsed": {
+    "description": "Access tab row reason: systemd is PID 1, but its version line did not parse."
+  },
+  "accessReasonNotSystemd": "This server does not run systemd.",
+  "@accessReasonNotSystemd": {
+    "description": "Access tab row reason, and why a panel that needs systemd is hidden: PID 1 is not systemd."
+  },
+  "accessReasonEnginesDetected": "Found on this server:",
+  "@accessReasonEnginesDetected": {
+    "description": "Access tab and Docker tab: introduces the list of engine sockets found."
+  },
+  "accessReasonEngineCliWithoutSocket": "A docker or podman command exists, but no engine socket was found.",
+  "@accessReasonEngineCliWithoutSocket": {
+    "description": "Access tab and Docker tab: an engine command line tool exists, but no socket."
+  },
+  "accessReasonNoEngine": "No Docker or Podman engine was found.",
+  "@accessReasonNoEngine": {
+    "description": "Access tab and Docker tab: no engine socket and no engine command."
+  },
+  "accessRootEquivalentBadge": "Root-equivalent",
+  "@accessRootEquivalentBadge": {
+    "description": "Access tab: badge beside a row whose right equals root on the server (SAF-08)."
+  },
+  "accessDockerGroupWarning": "Members of the docker group are root-equivalent. A rootless engine, which equals your user, is the safer choice.",
+  "@accessDockerGroupWarning": {
+    "description": "Access tab: warning shown beside the command that adds the account to the docker group (SAF-08)."
+  },
+  "accessFixRootShell": "Run this as root: the server has neither sudo nor doas.",
+  "@accessFixRootShell": {
+    "description": "Access tab: note under a fix command on a server without any elevation tool."
+  },
+  "accessFixElevationUnknown": "Run this as root. The probe could not tell whether the server has sudo or doas.",
+  "@accessFixElevationUnknown": {
+    "description": "Access tab: note under a fix command shown without a sudo or doas prefix because the server's probe did not report which elevation tool, if any, is installed."
+  },
+  "accessFixNextLogin": "Group changes take effect at your next login.",
+  "@accessFixNextLogin": {
+    "description": "Access tab: note under a fix command that adds the account to a group."
+  },
+  "accessFixCopy": "Copy command",
+  "@accessFixCopy": {
+    "description": "Access tab: button that copies a fix command to the clipboard. The app never runs it."
+  },
+  "accessFixCopyLabel": "Copy command for {item}",
+  "@accessFixCopyLabel": {
+    "description": "Access tab: screen-reader name of the Copy command button; item is the title of the row whose fix it copies. Starts with the button's visible text (accessFixCopy) so voice control finds it by that text.",
+    "placeholders": {
+      "item": {
+        "type": "String",
+        "example": "Journal group"
+      }
+    }
+  },
+  "accessFixCopied": "Copied. Run it yourself on the server.",
+  "@accessFixCopied": {
+    "description": "Access tab: confirmation after copying a fix command, reminding that the app has not run it."
+  },
+  "accessFixCopyFailed": "Not copied. The clipboard still holds its earlier text; try again before you paste.",
+  "@accessFixCopyFailed": {
+    "description": "Access tab: shown instead of the confirmation when the system refused to put a fix command on the clipboard (on Windows, while another app holds it), so pasting now would paste older text."
+  },
+  "accessEngineDockerRootful": "Docker, rootful",
+  "@accessEngineDockerRootful": {
+    "description": "Access tab and Docker tab: an engine socket of Docker running as root."
+  },
+  "accessEngineDockerRootless": "Docker, rootless",
+  "@accessEngineDockerRootless": {
+    "description": "Access tab and Docker tab: an engine socket of Docker running as a normal user."
+  },
+  "accessEnginePodmanRootful": "Podman, rootful",
+  "@accessEnginePodmanRootful": {
+    "description": "Access tab and Docker tab: an engine socket of Podman running as root."
+  },
+  "accessEnginePodmanRootless": "Podman, rootless",
+  "@accessEnginePodmanRootless": {
+    "description": "Access tab and Docker tab: an engine socket of Podman running as a normal user."
+  },
+  "accessEngineAt": "{engine} at {path}",
+  "@accessEngineAt": {
+    "description": "Access tab and Docker tab: one engine socket the probe found; engine is one of the accessEngine names, path is the socket's path on the server.",
+    "placeholders": {
+      "engine": {
+        "type": "String",
+        "example": "Docker, rootful"
+      },
+      "path": {
+        "type": "String",
+        "example": "/var/run/docker.sock"
+      }
+    }
+  },
+  "accessEngineUsableRootful": "Your account can use it, which is root-equivalent.",
+  "@accessEngineUsableRootful": {
+    "description": "Access tab and Docker tab: the account can write to this rootful engine socket (SAF-08)."
+  },
+  "accessEngineUsableRootless": "Your account can use it, which equals the user that runs it.",
+  "@accessEngineUsableRootless": {
+    "description": "Access tab and Docker tab: the account can write to this rootless engine socket (SAF-08)."
+  },
+  "accessEngineNotUsable": "Your account cannot use it.",
+  "@accessEngineNotUsable": {
+    "description": "Access tab and Docker tab: the account cannot write to this engine socket."
+  },
+  "accessRuntimeAlias": "Podman can also answer on Docker's socket path. Docker support will tell them apart.",
+  "@accessRuntimeAlias": {
+    "description": "Access tab and Docker tab: note under a socket at Docker's path, which a podman-docker install may serve."
+  },
+  "accessDockerPendingTitle": "Arrives with Docker support",
+  "@accessDockerPendingTitle": {
+    "description": "Docker tab: title shown instead of the Docker panels until the release with Docker support."
+  },
+  "accessDockerPendingBody": "Containers, images and stacks arrive with Docker support. Until then, this tab shows the runtime Klabautermann detected, read-only.",
+  "@accessDockerPendingBody": {
+    "description": "Docker tab: body under accessDockerPendingTitle."
+  },
+  "accessDetectedRuntime": "Detected runtime",
+  "@accessDetectedRuntime": {
+    "description": "Docker tab: heading over the container engines the probe found."
+  },
+  "accessPanelHiddenTitle": "{panel} is not available on this server",
+  "@accessPanelHiddenTitle": {
+    "description": "Shown instead of a server panel that cannot work with this server or account; panel is the panel's tab name.",
+    "placeholders": {
+      "panel": {
+        "type": "String",
+        "example": "Services"
+      }
+    }
+  },
+  "accessNeedJournalAccess": "Your account cannot read the whole journal.",
+  "@accessNeedJournalAccess": {
+    "description": "Why a panel is hidden: it needs read access to the whole system journal."
+  },
+  "accessNeedDmesg": "dmesg is not available.",
+  "@accessNeedDmesg": {
+    "description": "Why a panel is hidden: it needs the dmesg command."
+  },
+  "accessNeedTail": "This server has no tail command.",
+  "@accessNeedTail": {
+    "description": "Why a panel is hidden: it needs the tail command."
+  },
+  "accessNeedCrontab": "This server has no crontab command.",
+  "@accessNeedCrontab": {
+    "description": "Why a panel is hidden: it needs the crontab command."
+  },
+  "accessOpen": "Open Access",
+  "@accessOpen": {
+    "description": "Button under a hidden panel's reasons and on the Docker tab: shows the Access tab, which lists the account's rights on the server and how to fix them."
+  },
+  "accessPageTitle": "Access on {name}",
+  "@accessPageTitle": {
+    "description": "Title of the Access screen pushed on phones; name is the server's display name.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "web-1"
+      }
+    }
+  },
   "tableCellSemantics": "{column}: {value}",
   "@tableCellSemantics": {
     "description": "A table cell as a screen reader hears it within its row: the column's header label, then the cell's value (A11Y-03).",
@@ -889,6 +1390,16 @@
   "@logJournalNotSent": {
     "description": "Stands in for a journal message or field value the server did not send because it is larger than 4,096 bytes."
   },
+  "logJournalFieldNotSent": "{name} [not sent: over 4,096 bytes]",
+  "@logJournalFieldNotSent": {
+    "description": "Row of a journal entry's expanded fields for a field whose value the server did not send because it is larger than 4,096 bytes; name is the journal field's name as the server sent it, such as CODE_LINE.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "CODE_LINE"
+      }
+    }
+  },
   "logJournalFieldsLeftOut": "{count, plural, =1{1 more field not kept} other{{count} more fields not kept}}",
   "@logJournalFieldsLeftOut": {
     "description": "Last row of a journal entry's expanded fields when the log view kept only some of them; count is how many it left out.",
@@ -906,5 +1417,335 @@
   "logJournalHideFields": "Hide fields",
   "@logJournalHideFields": {
     "description": "Screen-reader hint for activating a journal row that shows its fields: hides them again."
+  },
+  "servicesWaiting": "Waiting for the first list of units…",
+  "@servicesWaiting": {
+    "description": "Services panel: shown until the server's first list of systemd units arrives."
+  },
+  "servicesUnavailableMissing": "This server has no systemctl, so there are no units to list.",
+  "@servicesUnavailableMissing": {
+    "description": "Services panel: the server lacks the systemctl tool, as on a system without systemd."
+  },
+  "servicesUnavailableDenied": "The server refused to list its units.",
+  "@servicesUnavailableDenied": {
+    "description": "Services panel: listing systemd units failed with a permission error."
+  },
+  "servicesUnavailableTimeout": "Listing units took too long and was stopped.",
+  "@servicesUnavailableTimeout": {
+    "description": "Services panel: the unit listing ran past its time limit on the server."
+  },
+  "servicesUnavailableError": "Listing units failed.",
+  "@servicesUnavailableError": {
+    "description": "Services panel: listing systemd units failed for another reason; the server's error output may follow."
+  },
+  "servicesTextFallback": "This server's systemd is older than version 246, so units are read from text. States that could not be read show as unknown.",
+  "@servicesTextFallback": {
+    "description": "Services panel notice for old systemd, whose unit list has no JSON output (CN-10)."
+  },
+  "servicesFilterType": "Type",
+  "@servicesFilterType": {
+    "description": "Label of the Services panel's filter by unit type, such as service or socket."
+  },
+  "servicesFilterTypeAll": "All types",
+  "@servicesFilterTypeAll": {
+    "description": "The unit type filter's choice that shows units of every type."
+  },
+  "servicesFilterState": "State",
+  "@servicesFilterState": {
+    "description": "Label of the Services panel's filter by a unit's active state, such as active or failed."
+  },
+  "servicesFilterStateAll": "All states",
+  "@servicesFilterStateAll": {
+    "description": "The unit state filter's choice that shows units in every state."
+  },
+  "servicesEmpty": "No units match these filters.",
+  "@servicesEmpty": {
+    "description": "Services panel: the unit list is empty under the chosen type and state filters."
+  },
+  "servicesColumnUnit": "Unit",
+  "@servicesColumnUnit": {
+    "description": "Column header of the unit list: the systemd unit's name."
+  },
+  "servicesColumnLoad": "Load",
+  "@servicesColumnLoad": {
+    "description": "Column header and label: whether systemd loaded the unit's configuration (its load state)."
+  },
+  "servicesColumnActive": "Active",
+  "@servicesColumnActive": {
+    "description": "Column header and label: the unit's high-level state, such as active, inactive or failed (its active state)."
+  },
+  "servicesColumnSub": "Sub",
+  "@servicesColumnSub": {
+    "description": "Column header and label: the unit's detailed state, such as running or exited (its sub state)."
+  },
+  "servicesColumnDescription": "Description",
+  "@servicesColumnDescription": {
+    "description": "Column header of the unit list: the unit's description from its configuration."
+  },
+  "servicesFailedCount": "{count, plural, =0{No failed units} =1{1 failed unit} other{{count} failed units}}",
+  "@servicesFailedCount": {
+    "description": "Heading of the failed units summary (SVC-02); count is how many systemd units failed.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "servicesFailedUnit": "{unit}: {state}",
+  "@servicesFailedUnit": {
+    "description": "One failed unit in the failed units summary: its name, then its detailed (sub) state as the server reports it, or the word for unknown.",
+    "placeholders": {
+      "unit": {
+        "type": "String",
+        "example": "nginx.service"
+      },
+      "state": {
+        "type": "String",
+        "example": "failed"
+      }
+    }
+  },
+  "servicesFailedMore": "{count, plural, =1{and 1 more} other{and {count} more}}",
+  "@servicesFailedMore": {
+    "description": "Last line of the failed units summary when it lists only some of them; count is how many it leaves out.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "servicesUnitClose": "Close unit details",
+  "@servicesUnitClose": {
+    "description": "Tooltip of the button that closes a unit's details and returns to the unit list."
+  },
+  "servicesLogsTitle": "Recent log lines",
+  "@servicesLogsTitle": {
+    "description": "Heading of a unit's recent journal lines on its details (SVC-04)."
+  },
+  "servicesLogsRequested": "Asking the server for recent log lines…",
+  "@servicesLogsRequested": {
+    "description": "A unit's log lines were requested and the app has no answer yet."
+  },
+  "servicesLogsWaitingLink": "Waiting for the connection to the server…",
+  "@servicesLogsWaitingLink": {
+    "description": "A unit's log read waits until the connection to the server is ready."
+  },
+  "servicesLogsWaitingChannel": "Waiting for a free session on the server…",
+  "@servicesLogsWaitingChannel": {
+    "description": "A unit's log read waits until the connection has a free session for it."
+  },
+  "servicesLogsWaitingBackground": "Paused while the app is in the background.",
+  "@servicesLogsWaitingBackground": {
+    "description": "A unit's log read waits until the app returns to the foreground."
+  },
+  "servicesLogsReading": "Reading recent log lines…",
+  "@servicesLogsReading": {
+    "description": "A unit's log read is running on the server."
+  },
+  "servicesLogsEmpty": "The journal holds no lines for this unit.",
+  "@servicesLogsEmpty": {
+    "description": "A unit's log read finished without any journal line."
+  },
+  "servicesLogsRefused": "Reading unit logs is not available in this version yet.",
+  "@servicesLogsRefused": {
+    "description": "The app's engine cannot read logs yet and refused the request; no log lines are shown."
+  },
+  "servicesLogsEngineStopped": "The app's engine stopped. Restart the app to read unit logs.",
+  "@servicesLogsEngineStopped": {
+    "description": "The app's engine, which starts once per launch, stopped before answering the unit-log read; no log lines are shown until the app restarts."
+  },
+  "servicesLogsInvalid": "This unit's name cannot be used to read its logs.",
+  "@servicesLogsInvalid": {
+    "description": "The app refused to read logs for a unit name that fails its validation."
+  },
+  "servicesLogsMissing": "This server has no journalctl, so unit logs cannot be read.",
+  "@servicesLogsMissing": {
+    "description": "A unit's log read failed because the server lacks journalctl."
+  },
+  "servicesLogsDenied": "The server refused to read this unit's journal.",
+  "@servicesLogsDenied": {
+    "description": "A unit's log read failed with a permission error."
+  },
+  "servicesLogsFailed": "Reading this unit's journal failed.",
+  "@servicesLogsFailed": {
+    "description": "A unit's log read failed for another reason; the server's error output may follow."
+  },
+  "logsPanelSource": "Source",
+  "@logsPanelSource": {
+    "description": "Label of the Logs panel's source picker, which chooses between the journal, the kernel log and a file; also the title of the phone's source sheet."
+  },
+  "logsPanelSourceName": "{source, select, journal{Journal} kernel{Kernel} other{File}}",
+  "@logsPanelSourceName": {
+    "description": "Name of a Logs panel source: the systemd journal, the kernel's messages, or one file on the server.",
+    "placeholders": {
+      "source": {
+        "type": "String"
+      }
+    }
+  },
+  "logsPanelUnit": "Unit",
+  "@logsPanelUnit": {
+    "description": "Label of the Logs panel's filter field for a systemd unit name."
+  },
+  "logsPanelIdentifier": "Identifier",
+  "@logsPanelIdentifier": {
+    "description": "Label of the Logs panel's filter field for a syslog identifier (the program's syslog tag)."
+  },
+  "logsPanelPriority": "Priority",
+  "@logsPanelPriority": {
+    "description": "Label of the Logs panel's priority filter, which shows entries at a syslog priority or more urgent."
+  },
+  "logsPanelPriorityAny": "Any priority",
+  "@logsPanelPriorityAny": {
+    "description": "Priority filter choice that shows entries of every priority."
+  },
+  "logsPanelPriorityLevel": "{level, select, emergency{Emergency} alert{Alert and above} critical{Critical and above} error{Error and above} warning{Warning and above} notice{Notice and above} info{Info and above} other{Debug and above}}",
+  "@logsPanelPriorityLevel": {
+    "description": "Priority filter choice: entries at this syslog priority or more urgent ones.",
+    "placeholders": {
+      "level": {
+        "type": "String"
+      }
+    }
+  },
+  "logsPanelCurrentBoot": "Current boot only",
+  "@logsPanelCurrentBoot": {
+    "description": "Toggle of the Logs panel's journal filters that shows only entries since the server last started."
+  },
+  "logsPanelTimeRange": "Time range",
+  "@logsPanelTimeRange": {
+    "description": "Label of the Logs panel's time range filter."
+  },
+  "logsPanelTimeRangeOption": "{range, select, last15Minutes{Last 15 minutes} lastHour{Last hour} last24Hours{Last 24 hours} last7Days{Last 7 days} other{Any time}}",
+  "@logsPanelTimeRangeOption": {
+    "description": "Time range filter choice: how far back entries are shown, counted from when the log opens.",
+    "placeholders": {
+      "range": {
+        "type": "String"
+      }
+    }
+  },
+  "logsPanelPath": "File path",
+  "@logsPanelPath": {
+    "description": "Label of the Logs panel's field for the file on the server to tail."
+  },
+  "logsPanelPathHint": "Absolute path, such as /var/log/syslog",
+  "@logsPanelPathHint": {
+    "description": "Hint in the empty file path field."
+  },
+  "logsPanelPathProblem": "{problem, select, notAbsolute{Enter an absolute path that starts with /.} notNormalized{Remove the . and .. parts from the path.} other{The path contains a NUL character.}}",
+  "@logsPanelPathProblem": {
+    "description": "Error under the file path field when the server would refuse the path.",
+    "placeholders": {
+      "problem": {
+        "type": "String"
+      }
+    }
+  },
+  "logsPanelCommonPaths": "Common paths",
+  "@logsPanelCommonPaths": {
+    "description": "Tooltip of the button beside the file path field that lists common log files, such as the syslog and web server logs."
+  },
+  "logsPanelApply": "Apply",
+  "@logsPanelApply": {
+    "description": "Button that reads the log again with the filters or path entered."
+  },
+  "logsPanelFilters": "{count, plural, =0{Filters} other{Filters ({count})}}",
+  "@logsPanelFilters": {
+    "description": "Phone button that opens the Logs panel's filters in a sheet; count is how many filters are set.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "logsPanelLiveState": "{state, select, live{Live} connecting{Connecting} disconnected{Disconnected} paused{Paused} stopped{Stopped} other{Unavailable}}",
+  "@logsPanelLiveState": {
+    "description": "Chip that turns following new log entries on and off, naming what the log stream is doing: following, waiting for the server or a free session, waiting for the connection, paused by the user or the app's background, ended, or not available.",
+    "placeholders": {
+      "state": {
+        "type": "String"
+      }
+    }
+  },
+  "logsPanelLiveTooltip": "Follow new entries as the server writes them",
+  "@logsPanelLiveTooltip": {
+    "description": "Tooltip of the Logs panel's Live chip."
+  },
+  "logsPanelJournalLimited": "Only your own journal entries are shown: your account on this server is not in the systemd-journal, adm or wheel group. The server's Access section shows how to add it.",
+  "@logsPanelJournalLimited": {
+    "description": "Notice above the journal when the server shows the signed-in account only its own entries. The group names are names on the server and stay as they are."
+  },
+  "logsPanelKernelLimited": "Kernel messages may be missing: your account on this server is not in the systemd-journal, adm or wheel group, so the journal shows it none. The server's Access section shows how to add it.",
+  "@logsPanelKernelLimited": {
+    "description": "Notice above the kernel log when the server's journal shows the signed-in account only its own entries, which never include kernel messages. The group names are names on the server and stay as they are."
+  },
+  "logsPanelStatus": "{status, select, opening{Opening the log…} waitingLink{Waiting for the connection to the server.} waitingChannel{Waiting for a free session on the server.} waitingBackground{Paused while the app is in the background.} loading{Loading entries…} invalid{The engine refused this filter or path.} missing{The server has no such file or log tool.} denied{The server denied access to this log.} failed{Reading the log failed.} rejected{The engine did not open this log.} other{Choose or type the absolute path of a file to tail.}}",
+  "@logsPanelStatus": {
+    "description": "Status line above the log saying what reading it is doing or why it stopped.",
+    "placeholders": {
+      "status": {
+        "type": "String"
+      }
+    }
+  },
+  "logsPanelRetry": "Retry",
+  "@logsPanelRetry": {
+    "description": "Button that opens the log again after it stopped or was refused."
+  },
+  "logsPanelEmpty": "This log has no entries.",
+  "@logsPanelEmpty": {
+    "description": "Shown in place of the log when reading a kernel log, a file or an unfiltered journal finished without any entry, unless the kernel log or journal is limited to the account's own entries."
+  },
+  "logsPanelEmptyFiltered": "No entries match these filters.",
+  "@logsPanelEmptyFiltered": {
+    "description": "Shown in place of the log when reading the journal with filters set finished without any entry."
+  },
+  "logsPanelEmptyLimited": "No entries are visible to your account.",
+  "@logsPanelEmptyLimited": {
+    "description": "Shown in place of the log when reading an unfiltered journal or the kernel log finished without any entry while the server shows the signed-in account only its own journal entries."
+  },
+  "logsPanelSearchLabel": "Search loaded entries",
+  "@logsPanelSearchLabel": {
+    "description": "Label of the log search field, also its name for screen readers once it holds text; the search covers the entries the panel holds, not the whole log on the server."
+  },
+  "logsPanelSearchCase": "Match case",
+  "@logsPanelSearchCase": {
+    "description": "Tooltip of the toggle that makes the log search tell upper from lower case."
+  },
+  "logsPanelSearchMatches": "{total, plural, =0{No matches} =1{1 match} other{{total} matches}}",
+  "@logsPanelSearchMatches": {
+    "description": "How many matches the log search found, before one is selected.",
+    "placeholders": {
+      "total": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "logsPanelSearchPosition": "{current} of {total}",
+  "@logsPanelSearchPosition": {
+    "description": "Which match of the log search is selected, out of how many.",
+    "placeholders": {
+      "current": {
+        "type": "int",
+        "format": "decimalPattern"
+      },
+      "total": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "logsPanelSearchPrevious": "Previous match",
+  "@logsPanelSearchPrevious": {
+    "description": "Tooltip of the button that moves to the previous log search match."
+  },
+  "logsPanelSearchNext": "Next match",
+  "@logsPanelSearchNext": {
+    "description": "Tooltip of the button that moves to the next log search match."
   }
 }

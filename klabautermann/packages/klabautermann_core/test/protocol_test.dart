@@ -5,7 +5,17 @@ import 'dart:typed_data';
 
 import 'package:klabautermann_core/klabautermann_core.dart';
 import 'package:klabautermann_host/klabautermann_host.dart'
-    show CoreCpuTimes, CronJob, FsMount, SystemdTimer, perCpuBusyPercent;
+    show
+        CoreCpuTimes,
+        CronDst,
+        CronExpression,
+        CronJob,
+        CronJobEntry,
+        FsMount,
+        ServerZone,
+        SystemdTimer,
+        mergeJobs,
+        perCpuBusyPercent;
 import 'package:test/test.dart';
 
 /// Echoes every message back; protocol values cross a real isolate boundary
@@ -423,24 +433,39 @@ void main() {
               as TimersResult;
       expect(timers.timers.timers.single.unit, 'apt-daily.timer');
 
+      final crontab = CronSnapshot(
+        jobs: [
+          CronJob(
+            source: '/etc/crontab',
+            schedule: '@daily',
+            command: 'backup',
+            raw: '@daily root backup',
+            expression: CronExpression.parse('@daily'),
+          ),
+        ],
+      );
       final cron =
           await result(
                 SampleStream.cron,
                 CronResult(
-                  CronSnapshot(
-                    jobs: const [
-                      CronJob(
-                        source: '/etc/crontab',
-                        schedule: '@daily',
-                        command: 'backup',
-                        raw: '@daily root backup',
-                      ),
-                    ],
+                  crontab,
+                  // The zone, which holds a function, stays behind (D52).
+                  jobs: mergeJobs(
+                    cron: crontab,
+                    nowUtc: DateTime.utc(2026, 10, 14, 12),
+                    zone: const ServerZone(offset: Duration(hours: 2)),
                   ),
+                  zoneFallback: CronZoneFallback.noZoneName,
                 ),
               )
               as CronResult;
       expect(cron.cron.jobs.single.command, 'backup');
+      final run = (cron.jobs.single as CronJobEntry).nextRuns.first;
+      expect(run.atUtc, DateTime.utc(2026, 10, 14, 22));
+      expect(run.offset, const Duration(hours: 2));
+      expect(run.dst, CronDst.none);
+      expect(cron.zoneName, isNull);
+      expect(cron.zoneFallback, CronZoneFallback.noZoneName);
 
       final unavailable =
           await result(
