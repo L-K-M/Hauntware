@@ -1865,10 +1865,15 @@ revocation and concurrent login/deletion lifecycle work remain separate.
   `app/seance_app/test/host_key_dialog_capture_test.dart` pins Séance's
   delegate: both variants, the pinned key's own type in the changed
   review, and real-font PNGs under `SEANCE_CAPTURE=1`.
-- `app/seance_app/test/keyboard_interactive_dialog_test.dart` — keyboard-
+- `keyboard_interactive_dialog_test.dart`, in Planchette's `ghost_servers`
+  package since 2026-10-16 with the dialog it tests — keyboard-
   interactive prompts are obscured, reveal per field, fit above a phone
   keyboard, dispose controllers after the exit animation, and cannot pop any
   route but the dialog's own (double activation or obscured callback).
+  `app/seance_app/test/keyboard_interactive_dialog_capture_test.dart` pins
+  Séance's delegate: the trusted endpoint with and without a server
+  message, a revealed answer, a bracketed IPv6 host, and real-font PNGs
+  under `SEANCE_CAPTURE=1`.
 - `app/seance_app/test/bootstrap_test.dart` — startup phases stay in one
   MaterialApp; pushed routes resolve `AppScope`.
 - `app/seance_app/test/keystore_resilience_test.dart` — a locked/missing OS

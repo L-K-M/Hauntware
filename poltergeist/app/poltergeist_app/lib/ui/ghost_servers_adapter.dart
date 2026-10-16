@@ -84,6 +84,36 @@ GhostHostKeyStrings poltergeistHostKeyStrings(AppLocalizations l10n) =>
       trustNewKey: l10n.hostKeyTrustNewKey,
     );
 
+/// The engine's keyboard-interactive prompt as the shared dialog shows it,
+/// field for field.
+GhostKeyboardPrompt ghostKeyboardPromptOf(KeyboardInteractivePromptData data) =>
+    GhostKeyboardPrompt(
+      username: data.username,
+      host: data.host,
+      port: data.port,
+      name: data.name,
+      instruction: data.instruction,
+      prompts: data.prompts,
+    );
+
+/// The keyboard-interactive prompt's words in ARB. The engine payload
+/// always names the user; without one the endpoint reads as the host-key
+/// prompt's host and port.
+GhostKeyboardInteractiveStrings poltergeistKeyboardInteractiveStrings(
+  AppLocalizations l10n,
+) => GhostKeyboardInteractiveStrings(
+  title: l10n.keyboardAuthTitle,
+  requestFrom: l10n.keyboardRequestFrom,
+  serverMessage: l10n.keyboardServerMessage,
+  endpoint: (username, host, port) => username == null
+      ? l10n.hostKeyEndpoint(host, port)
+      : l10n.credentialEndpoint(username, host, port),
+  showAnswer: l10n.keyboardShowAnswer,
+  hideAnswer: l10n.keyboardHideAnswer,
+  cancel: l10n.keyboardCancel,
+  submit: l10n.keyboardSubmit,
+);
+
 /// The chrome's status colours as the package takes them.
 GhostStatusColors poltergeistStatusColors(PoltergeistChrome chrome) =>
     GhostStatusColors(

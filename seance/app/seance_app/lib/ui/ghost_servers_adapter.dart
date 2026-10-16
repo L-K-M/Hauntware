@@ -59,6 +59,20 @@ GhostHostKeyPrompt ghostHostKeyPromptOf(HostKeyDecision decision) =>
       pinnedKeyType: decision.pinned?.type,
     );
 
+/// A keyboard-interactive challenge as the shared prompt shows it: the
+/// trusted endpoint from the server's configuration, and the server's own
+/// name, instruction and questions.
+GhostKeyboardPrompt ghostKeyboardPromptOf(
+  KeyboardInteractiveChallenge challenge,
+) => GhostKeyboardPrompt(
+  username: challenge.server.username,
+  host: challenge.server.host,
+  port: challenge.server.port,
+  name: challenge.name,
+  instruction: challenge.instruction,
+  prompts: challenge.prompts,
+);
+
 /// The theme's status colours ([StatusColors]) as the package takes them.
 GhostStatusColors seanceStatusColors(BuildContext context) => GhostStatusColors(
   online: StatusColors.online(context),
