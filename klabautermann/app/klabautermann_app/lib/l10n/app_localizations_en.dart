@@ -1864,4 +1864,8 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get overviewHostTitle => 'Host';
+
+  @override
+  String get overviewHostWaiting =>
+      'Waiting for the operating system and kernel.';
 }

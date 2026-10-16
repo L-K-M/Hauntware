@@ -2170,5 +2170,9 @@
   "overviewHostTitle": "Host",
   "@overviewHostTitle": {
     "description": "Heading of the Overview's card with the server's operating system, kernel, uptime and boot time."
+  },
+  "overviewHostWaiting": "Waiting for the operating system and kernel.",
+  "@overviewHostWaiting": {
+    "description": "The Overview's Host card before the server sent its operating system and kernel."
   }
 }

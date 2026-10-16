@@ -371,8 +371,9 @@ void main() {
     );
 
     // 3 CPU + 1 per core + 4 load + 4 memory (total is known) + 1 swap,
-    // 2 network, and OS, kernel, uptime and boot time.
-    expect(find.text('Unknown'), findsNWidgets(19));
+    // 2 network, and uptime and boot time; the OS and kernel wait for
+    // their own reading.
+    expect(find.text('Unknown'), findsNWidgets(17));
     expect(find.text('0%'), findsNothing);
     expect(find.text('0.00'), findsNothing);
     expect(find.textContaining('0 B'), findsNothing);
@@ -919,6 +920,52 @@ void main() {
       ),
       findsOneWidget,
     );
+  });
+
+  testWidgets('the Host card waits for its readings and says why one '
+      'failed', (tester) async {
+    final panel = await _pump(tester);
+    Finder host(Finder matching) => _inCard('Host', matching);
+    const waiting = 'Waiting for the operating system and kernel.';
+    expect(host(find.text(waiting)), findsOneWidget);
+    expect(host(find.text('Unknown')), findsNothing);
+    expect(host(find.text('Up for')), findsNothing);
+
+    const refused = 'The server refused this reading.';
+    await panel.sample(
+      tester,
+      const CollectorUnavailable(
+        CollectorUnavailableReason.denied,
+        detail: 'cat: /etc/os-release: Permission denied',
+      ),
+      stream: SampleStream.identity,
+    );
+    expect(host(find.text(refused)), findsOneWidget);
+    expect(
+      host(find.text('cat: /etc/os-release: Permission denied')),
+      findsOneWidget,
+    );
+    expect(host(find.text(waiting)), findsNothing);
+    expect(host(find.text('Unknown')), findsNothing);
+
+    // Before a `core` reading the OS and kernel are current, not grey.
+    await panel.sample(tester, _identity, stream: SampleStream.identity);
+    expect(host(find.text(refused)), findsNothing);
+    final muted = Theme.of(
+      tester.element(find.byType(OverviewPanel)),
+    ).colorScheme.onSurfaceVariant;
+    Color? colour(String text) =>
+        tester.widget<Text>(host(find.text(text))).style?.color;
+    expect(colour('Ubuntu 24.04.1 LTS'), isNot(muted));
+
+    await panel.sample(tester, _core());
+    expect(host(find.text('12 days, 3 hours')), findsOneWidget);
+
+    // Read once per session, they grey with the panel's line.
+    panel.now = _start.add(const Duration(minutes: 5));
+    await tester.pump(const Duration(seconds: 1));
+    expect(colour('Ubuntu 24.04.1 LTS'), muted);
+    expect(colour('Linux 6.8.0-45-generic'), muted);
   });
 
   testWidgets('the health card links to the announcement switch (D60)', (

@@ -2637,6 +2637,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Host'**
   String get overviewHostTitle;
+
+  /// The Overview's Host card before the server sent its operating system and kernel.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for the operating system and kernel.'**
+  String get overviewHostWaiting;
 }
 
 class _AppLocalizationsDelegate

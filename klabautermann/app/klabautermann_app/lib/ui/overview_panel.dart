@@ -297,10 +297,12 @@ final class _Slow {
         serverId,
         SampleStream.failedUnits,
       ),
+      identityLatest = monitoring.sampleFor(serverId, SampleStream.identity),
       identity = monitoring.lastReadingFor(serverId, SampleStream.identity),
       profile = monitoring.profileFor(serverId);
 
-  final ValueListenable<Sample?> fs, listed, failed, failedReading, identity;
+  final ValueListenable<Sample?> fs, listed, failed, failedReading;
+  final ValueListenable<Sample?> identityLatest, identity;
   final ValueListenable<HostProfile?> profile;
 
   List<Listenable> get all => [
@@ -308,6 +310,7 @@ final class _Slow {
     listed,
     failed,
     failedReading,
+    identityLatest,
     identity,
     profile,
   ];
@@ -594,9 +597,15 @@ final class _PartTwo {
 
   /// SYS-01's OS and kernel from `identity`, and BOOT-01's uptime and boot
   /// time from `core`, unknown with D50's reason where the container's
-  /// `/proc` file would give the host's.
+  /// `/proc` file would give the host's. Before a reading the card waits,
+  /// and a failed one says why above the last values, as the System tab
+  /// and part one's cards do; the panel's first notices speak for `core`.
   Widget host(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final identityFailed = switch (slow.identityLatest.value?.result) {
+      final CollectorUnavailable unavailable => unavailable,
+      _ => null,
+    };
     final identity = switch (slow.identity.value?.result) {
       final IdentityResult identity => identity,
       _ => null,
@@ -607,41 +616,58 @@ final class _PartTwo {
       SystemWideProcFile.uptime,
     );
     final bootWithheld = withholdsHostFigure(profile, SystemWideProcFile.stat);
+    final core = this.core;
     final uptime = uptimeWithheld ? null : core?.uptime;
     final booted = bootWithheld ? null : core?.bootedAt;
     return PanelSection(
       title: l10n.overviewHostTitle,
       children: [
-        _Facts(
-          stale: false,
-          facts: [
-            (l10n.systemOperatingSystem, identity?.osPrettyName),
-            (
-              l10n.systemKernel,
-              identity == null ? null : kernelText(l10n, identity),
-            ),
-          ],
-        ),
-        _Facts(
-          stale: coreStale,
-          facts: [
-            (
-              l10n.systemUptime,
-              uptime == null ? null : uptimeText(l10n, uptime),
-            ),
-            (
-              l10n.systemBooted,
-              booted == null ? null : l10n.systemBootedValue(booted.toLocal()),
-            ),
-          ],
-        ),
-        if (uptimeWithheld || bootWithheld)
+        if (identityFailed != null)
           PanelNotice(
-            icon: Icons.info_outline,
-            text: uptimeWithheld && bootWithheld
-                ? l10n.overviewUnknownContainer
-                : l10n.systemUnknownContainer,
+            icon: _reasonIcon(identityFailed),
+            text: l10n.overviewUnavailable(identityFailed.reason.name),
+            detail: identityFailed.detail,
           ),
+        if (identity != null)
+          // Read once per session (03 §6.4), so with no age of its own:
+          // it greys with the `core` cards once the panel's line says
+          // stale.
+          _Facts(
+            stale: core != null && coreStale,
+            facts: [
+              (l10n.systemOperatingSystem, identity.osPrettyName),
+              (l10n.systemKernel, kernelText(l10n, identity)),
+            ],
+          )
+        else if (identityFailed == null)
+          PanelNotice(
+            icon: Icons.hourglass_empty,
+            text: l10n.overviewHostWaiting,
+          ),
+        if (core != null) ...[
+          _Facts(
+            stale: coreStale,
+            facts: [
+              (
+                l10n.systemUptime,
+                uptime == null ? null : uptimeText(l10n, uptime),
+              ),
+              (
+                l10n.systemBooted,
+                booted == null
+                    ? null
+                    : l10n.systemBootedValue(booted.toLocal()),
+              ),
+            ],
+          ),
+          if (uptimeWithheld || bootWithheld)
+            PanelNotice(
+              icon: Icons.info_outline,
+              text: uptimeWithheld && bootWithheld
+                  ? l10n.overviewUnknownContainer
+                  : l10n.systemUnknownContainer,
+            ),
+        ],
       ],
     );
   }
