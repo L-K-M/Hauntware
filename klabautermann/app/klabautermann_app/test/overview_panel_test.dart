@@ -17,6 +17,13 @@ import 'support/fake_engine.dart';
 import 'support/harness.dart';
 
 const _serverId = 'srv-1';
+const _entry = FleetEntry(
+  serverId: _serverId,
+  label: 'web-1',
+  host: 'web-1.example',
+  port: 22,
+  origin: FleetEntryOrigin.sshConfig,
+);
 const _kib = 1024;
 const _mib = 1024 * _kib;
 const _gib = 1024 * _mib;
@@ -966,6 +973,36 @@ void main() {
       expect(heard(tester), isEmpty);
       await cpu(32, 95);
       await cpu(44, 95);
+      expect(heard(tester), ['CPU 95%: critical level']);
+    });
+
+    testWidgets('a server that left the fleet and came back is still heard '
+        '(SYN-08)', (tester) async {
+      final announce = ValueNotifier(true);
+      addTearDown(announce.dispose);
+      final panel = await _pump(tester, announce: announce);
+      Future<void> cpu(int seconds, double percent) => panel.sample(
+        tester,
+        busy(percent),
+        at: _start.add(Duration(seconds: seconds)),
+      );
+      await cpu(0, 50);
+      await cpu(2, 50);
+
+      // The controller drops the server's boxes and makes new ones, and
+      // the screen around the panel rebuilds, as the phone's server
+      // screen does on every fleet change.
+      panel.engine
+        ..emit(CatalogReplaced(const []))
+        ..emit(CatalogReplaced(const [_entry]));
+      await tester.pump();
+      tester.element(find.byType(OverviewPanel)).markNeedsBuild();
+      await tester.pump();
+
+      await cpu(10, 50);
+      await cpu(12, 95);
+      await cpu(24, 95);
+      expect(find.textContaining('95%'), findsWidgets);
       expect(heard(tester), ['CPU 95%: critical level']);
     });
 

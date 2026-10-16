@@ -107,8 +107,8 @@ class OverviewPanel extends StatelessWidget {
     final slow = _Slow(monitoring, serverId);
     final scope = AnnouncementScope.maybeOf(context);
     return ThresholdAnnouncer(
-      monitoring: monitoring,
-      serverId: serverId,
+      core: latest,
+      fs: slow.fs,
       active: visible && (scope?.notifier?.value ?? false),
       child: ListenableBuilder(
         listenable: Listenable.merge([latest, reading, sampling, ...slow.all]),

@@ -7,7 +7,6 @@ import 'package:flutter/semantics.dart'
     show AccessibilityFocusBlockType, SemanticsService;
 import 'package:klabautermann_core/klabautermann_core.dart';
 
-import '../controllers/monitoring_controller.dart';
 import '../l10n/app_localizations.dart';
 import 'charts/charts.dart' show ChartSeverity, ChartThresholds;
 import 'fleet_row_state.dart' show kFleetRowThresholds;
@@ -125,8 +124,8 @@ class AnnouncementScope extends InheritedNotifier<ValueListenable<bool>> {
 
 typedef _WatchKey = (BandMetric metric, String? mountPoint);
 
-/// Tells the screen reader when one of [BandMetric]'s values on
-/// [serverId] crosses into or out of a warning or critical band (A11Y-15),
+/// Tells the screen reader when one of [BandMetric]'s values in [core]
+/// and [fs] crosses into or out of a warning or critical band (A11Y-15),
 /// while [active]: the Overview shows and the switch is on. Values that
 /// refresh every few seconds are never live regions; only band changes
 /// are heard, once each [BandWatch] lets them through. Going inactive
@@ -138,14 +137,16 @@ typedef _WatchKey = (BandMetric metric, String? mountPoint);
 class ThresholdAnnouncer extends StatefulWidget {
   const ThresholdAnnouncer({
     super.key,
-    required this.monitoring,
-    required this.serverId,
+    required this.core,
+    required this.fs,
     required this.active,
     required this.child,
   });
 
-  final MonitoringController monitoring;
-  final String serverId;
+  /// The server's latest `core` and `fs` samples, as the panel reads them
+  /// on every build: a server that left the fleet and came back has new
+  /// ones (SYN-08), and new ones start every watch over.
+  final ValueListenable<Sample?> core, fs;
   final bool active;
   final Widget child;
 
@@ -167,12 +168,6 @@ class _ThresholdAnnouncerState extends State<ThresholdAnnouncer> {
   String? _liveText;
 
   @override
-  void initState() {
-    super.initState();
-    _attach();
-  }
-
-  @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     // Read here, since samples arrive outside a build.
@@ -180,19 +175,13 @@ class _ThresholdAnnouncerState extends State<ThresholdAnnouncer> {
     _view = View.of(context);
     _direction = Directionality.of(context);
     _announces = MediaQuery.maybeSupportsAnnounceOf(context) ?? false;
+    _sync();
   }
 
   @override
   void didUpdateWidget(ThresholdAnnouncer oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.active == oldWidget.active &&
-        widget.serverId == oldWidget.serverId &&
-        widget.monitoring == oldWidget.monitoring) {
-      return;
-    }
-
-    _detach();
-    _attach();
+    _sync();
   }
 
   @override
@@ -201,14 +190,18 @@ class _ThresholdAnnouncerState extends State<ThresholdAnnouncer> {
     super.dispose();
   }
 
-  void _attach() {
-    if (!widget.active) return;
+  /// Listens to the widget's samples while it is active, and starts over
+  /// whenever that or the samples change.
+  void _sync() {
+    final active = widget.active;
+    final core = active ? widget.core : null;
+    final fs = active ? widget.fs : null;
+    if (core == _core && fs == _fs) return;
 
-    final monitoring = widget.monitoring;
-    _core = monitoring.sampleFor(widget.serverId, SampleStream.core)
-      ..addListener(_onCore);
-    _fs = monitoring.sampleFor(widget.serverId, SampleStream.fs)
-      ..addListener(_onFs);
+    _detach();
+    if (core == null || fs == null) return;
+    _core = core..addListener(_onCore);
+    _fs = fs..addListener(_onFs);
     // What shows now only sets where each value starts.
     _observeCore();
     _observeFs();
