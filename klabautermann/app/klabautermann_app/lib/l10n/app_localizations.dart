@@ -2578,11 +2578,11 @@ abstract class AppLocalizations {
   /// **'Waiting for the first check of failed units.'**
   String get overviewHealthUnitsWaiting;
 
-  /// The health card when the server could not list its failed systemd units; systemctl is a command name, kept as written.
+  /// The health card when the server could not list its failed systemd units this time; the list from the check before, if any, stays shown below it. systemctl is a command name, kept as written.
   ///
   /// In en, this message translates to:
-  /// **'{reason, select, missing{Failed units are unknown: this server lacks systemctl.} denied{Failed units are unknown: the server refused the check.} timeout{Failed units are unknown: the check took too long.} other{Failed units are unknown: the check failed.}}'**
-  String overviewHealthUnitsUnknown(String reason);
+  /// **'{reason, select, missing{The last check of failed units could not run: this server lacks systemctl.} denied{The server refused the last check of failed units.} timeout{The last check of failed units took too long.} other{The last check of failed units failed.}}'**
+  String overviewHealthUnitsCheckFailed(String reason);
 
   /// The Overview's health and Disks cards before the server sent its first disk usage reading.
   ///

@@ -857,16 +857,21 @@ void main() {
       findsOneWidget,
     );
 
-    // A failed check says why above the last list.
+    // A failed check says so above the last list, which it never calls
+    // unknown, as part one's cards keep their last values.
     await panel.sample(
       tester,
       const CollectorUnavailable(CollectorUnavailableReason.missing),
       stream: SampleStream.failedUnits,
     );
     expect(
-      find.text('Failed units are unknown: this server lacks systemctl.'),
+      find.text(
+        'The last check of failed units could not run: this server lacks '
+        'systemctl.',
+      ),
       findsOneWidget,
     );
+    expect(find.textContaining('unknown'), findsNothing);
     expect(find.text('No failed units'), findsOneWidget);
   });
 

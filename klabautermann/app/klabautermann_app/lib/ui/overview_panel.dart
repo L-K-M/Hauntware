@@ -384,7 +384,7 @@ final class _PartTwo {
         if (unitsFailed != null)
           PanelNotice(
             icon: _reasonIcon(unitsFailed),
-            text: l10n.overviewHealthUnitsUnknown(unitsFailed.reason.name),
+            text: l10n.overviewHealthUnitsCheckFailed(unitsFailed.reason.name),
             detail: unitsFailed.detail,
           ),
         if (slow.failedReading.value?.result case FailedUnitsResult(

@@ -2084,9 +2084,9 @@
   "@overviewHealthUnitsWaiting": {
     "description": "The health card before the server sent its list of failed systemd units."
   },
-  "overviewHealthUnitsUnknown": "{reason, select, missing{Failed units are unknown: this server lacks systemctl.} denied{Failed units are unknown: the server refused the check.} timeout{Failed units are unknown: the check took too long.} other{Failed units are unknown: the check failed.}}",
-  "@overviewHealthUnitsUnknown": {
-    "description": "The health card when the server could not list its failed systemd units; systemctl is a command name, kept as written.",
+  "overviewHealthUnitsCheckFailed": "{reason, select, missing{The last check of failed units could not run: this server lacks systemctl.} denied{The server refused the last check of failed units.} timeout{The last check of failed units took too long.} other{The last check of failed units failed.}}",
+  "@overviewHealthUnitsCheckFailed": {
+    "description": "The health card when the server could not list its failed systemd units this time; the list from the check before, if any, stays shown below it. systemctl is a command name, kept as written.",
     "placeholders": {
       "reason": {
         "type": "String"

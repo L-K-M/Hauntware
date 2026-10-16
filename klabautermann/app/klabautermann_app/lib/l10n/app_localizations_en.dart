@@ -1791,12 +1791,13 @@ class AppLocalizationsEn extends AppLocalizations {
       'Waiting for the first check of failed units.';
 
   @override
-  String overviewHealthUnitsUnknown(String reason) {
+  String overviewHealthUnitsCheckFailed(String reason) {
     String _temp0 = intl.Intl.selectLogic(reason, {
-      'missing': 'Failed units are unknown: this server lacks systemctl.',
-      'denied': 'Failed units are unknown: the server refused the check.',
-      'timeout': 'Failed units are unknown: the check took too long.',
-      'other': 'Failed units are unknown: the check failed.',
+      'missing':
+          'The last check of failed units could not run: this server lacks systemctl.',
+      'denied': 'The server refused the last check of failed units.',
+      'timeout': 'The last check of failed units took too long.',
+      'other': 'The last check of failed units failed.',
     });
     return '$_temp0';
   }
