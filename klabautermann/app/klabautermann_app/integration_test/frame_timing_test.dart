@@ -22,6 +22,7 @@ import 'package:klabautermann_app/controllers/appearance_controller.dart';
 import 'package:klabautermann_app/controllers/coverage_controller.dart';
 import 'package:klabautermann_app/controllers/fleet_controller.dart';
 import 'package:klabautermann_app/controllers/monitoring_controller.dart';
+import 'package:klabautermann_app/controllers/prompt_controller.dart';
 import 'package:klabautermann_app/l10n/app_localizations.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 import 'package:klabautermann_core/replay.dart';
@@ -68,6 +69,8 @@ void main() {
     // fleet for its first listener (main.dart).
     final fleet = FleetController(engine);
     final monitoring = MonitoringController(engine);
+    // The replay engine opens no prompt; the app shows them all the same.
+    final prompts = PromptController(engine);
     final appearance = AppearanceController();
     final coverage = CoverageController(firstRunCardDismissed: true);
     final load = _Load(engine.events);
@@ -75,6 +78,7 @@ void main() {
       await load.cancel();
       fleet.dispose();
       monitoring.dispose();
+      prompts.dispose();
       appearance.dispose();
       coverage.dispose();
       await engine.shutdown();
@@ -108,6 +112,7 @@ void main() {
       KlabautermannApp(
         fleet: fleet,
         monitoring: monitoring,
+        prompts: prompts,
         appearance: appearance,
         coverage: coverage,
       ),
