@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:isolate';
 
@@ -12,6 +13,7 @@ import '../links/credential_source.dart';
 import '../links/link_connector.dart';
 import '../links/link_supervisor.dart';
 import '../links/prompt_broker.dart';
+import '../logs/log_stream_router.dart';
 import '../sampling/sampling_scheduler.dart';
 import '../sampling/subscriptions.dart';
 import 'protocol.dart';
@@ -36,8 +38,9 @@ final class EngineStart {
   final String supportDirectory;
 
   /// Whether the engine opens SSH links (03 §5.1, §10.1). Without them it
-  /// has no link supervisor and no sampling scheduler: [Connect] gets
-  /// [RequestRejected] and nothing dials or samples, [Disconnect] and
+  /// has no link supervisor, sampling scheduler or log streams: [Connect]
+  /// and [OpenLogStream] get [RequestRejected] and nothing dials, samples
+  /// or reads, [CloseStream], [Disconnect] and
   /// [SetAppActivity] change nothing, subscriptions are only recorded,
   /// and no [Prompt] is ever open. The app's composition root leaves
   /// them off; tests turn them on.
@@ -58,9 +61,10 @@ final class EngineStart {
 /// (03 §6.4; links off, nothing samples), [ImportSshConfig] gets
 /// [CatalogReplaced] and [SshConfigImported], [Connect], [Disconnect] and
 /// [SetAppActivity] go to the link supervisor and [AnswerPrompt] to the
-/// prompt broker (03 §5.1), [CloseStream] does nothing (no log stream is
-/// open), [Shutdown] exits, and every other 03 §10.1 row, [OpenLogStream]
-/// included, gets [RequestRejected] until its milestone lands.
+/// prompt broker (03 §5.1), [OpenLogStream] and [CloseStream] go to the
+/// log streams, which read each window over its server's link (03 §5.2,
+/// §7.6), [Shutdown] ends every log stream and exits, and every other
+/// 03 §10.1 row gets [RequestRejected] until its milestone lands.
 ///
 /// [dial] replaces `SshLink.connect`, so tests can run the engine's links
 /// without a network. [subscriptions], when given, holds the sampling
@@ -85,6 +89,10 @@ void engineMain(
   // while links are off, since no link would ever be ready. It follows
   // every LinkState the supervisor reports.
   SamplingScheduler? scheduler;
+
+  // The log streams over each server's ready link (03 §7.6); none while
+  // links are off. They follow every LinkState as the scheduler does.
+  LogStreamRouter? logs;
 
   // FL-02's imported hosts, in D13's device-local store (03 §4.10),
   // opened before the first request is handled. Each import replaces the
@@ -127,7 +135,10 @@ void engineMain(
               fleetIds.contains(id) ? fleet.serverConfig(id) : null,
           emit: (event) {
             uiPort.send(event);
-            if (event is LinkState) scheduler?.update(event.serverId);
+            if (event is LinkState) {
+              scheduler?.update(event.serverId);
+              logs?.update(event.serverId);
+            }
           },
           policy: Platform.isAndroid || Platform.isIOS
               ? BackgroundLinkPolicy.closeAfterGrace
@@ -142,6 +153,7 @@ void engineMain(
       deadPeerHint: links.deadPeerHint,
       clearDeadPeerHint: links.clearDeadPeerHint,
     );
+    logs = LogStreamRouter(linkFor: links.link, emit: uiPort.send);
   }
 
   // Rebuilds the fleet from the store. A server that left it is forgotten
@@ -158,6 +170,7 @@ void engineMain(
     fleetIds = {for (final entry in fleet.entries) entry.serverId};
     sampling.fleet = fleetIds;
     scheduler?.retain(fleetIds);
+    logs?.retain(fleetIds);
     links?.forget(before.difference(fleetIds));
   }
 
@@ -193,10 +206,14 @@ void engineMain(
           reject(message, 'no fleet server $serverId the engine can dial');
         }
       case Disconnect(:final serverId):
+        // Its streams end before its link closes, so none reports
+        // waiting for that link first.
+        logs?.disconnect(serverId);
         links?.disconnect(serverId);
       case SetAppActivity(:final activity):
         links?.setActivity(activity);
         scheduler?.activity = activity;
+        logs?.activity = activity;
       case AnswerPrompt(:final promptId, :final answer):
         switch (prompts.answer(promptId, answer)) {
           case PromptAnswerResult.answered:
@@ -215,11 +232,14 @@ void engineMain(
       case SetCadenceProfile(:final profile):
         sampling.profile = profile;
         scheduler?.profileChanged();
-      case CloseStream():
-        // Closing a stream that is not open does nothing (03 §10.1), and
-        // none is: until the log service lands, OpenLogStream gets
-        // RequestRejected, since no answer would leave its view waiting.
-        break;
+      case OpenLogStream():
+        final reason = switch (logs) {
+          null => 'links are off in this engine',
+          final logs => logs.open(message),
+        };
+        if (reason != null) reject(message, reason);
+      case CloseStream(:final streamId):
+        logs?.closeStream(streamId);
       case ImportSshConfig(:final text):
         final ({
           List<ImportedHost> hosts,
@@ -251,6 +271,9 @@ void engineMain(
           ),
         );
       case Shutdown():
+        // Each stream's end goes out before the isolate does, and its
+        // process goes with the isolate.
+        unawaited(logs?.close());
         commands.close();
         Isolate.exit();
       case EngineRequest():

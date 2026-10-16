@@ -64,6 +64,7 @@ class OverviewPanel extends StatelessWidget {
     required this.monitoring,
     required this.serverId,
     required this.visible,
+    this.coverage,
   });
 
   final MonitoringController monitoring;
@@ -71,6 +72,10 @@ class OverviewPanel extends StatelessWidget {
 
   /// Whether the panel's tab shows; see [SampledSurface.visible].
   final bool visible;
+
+  /// The server's coverage card (03 §9.5 item 3), under the cards at the
+  /// full width; the workspace and the phone's screen compose it.
+  final Widget? coverage;
 
   /// What the panel listens to instead of the clock while nothing ages.
   static final Listenable _silent = Listenable.merge(const []);
@@ -173,6 +178,7 @@ class OverviewPanel extends StatelessWidget {
               cards.memory(context),
               cards.swap(context),
             ],
+            ?coverage,
           ]),
         );
       },

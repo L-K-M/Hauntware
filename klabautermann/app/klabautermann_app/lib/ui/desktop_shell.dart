@@ -91,7 +91,7 @@ class DesktopShell extends StatelessWidget {
                   child: _BelowTopInset(
                     inset: top,
                     color: colors.surfaceContainerLow,
-                    child: InspectorPane(fleet: fleet),
+                    child: InspectorPane(fleet: fleet, monitoring: monitoring),
                   ),
                 ),
               ],

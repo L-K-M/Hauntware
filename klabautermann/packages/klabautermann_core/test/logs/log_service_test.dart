@@ -353,6 +353,21 @@ void main() {
       expect(texts('k'), ['ring 9', 'ring 8', 'ring 7']);
     });
 
+    test('a cut that keeps no whole record counts the newest as '
+        'dropped', () async {
+      start(maxOutputBytes: 16);
+      final dmesg = await fallBackProcess('k');
+      dmesg
+        ..emitText(
+          '{\n   "dmesg": [\n      {\n         "pri": "info",\n'
+          '         "msg": "${'x' * 40}"\n      }\n   ]\n}\n',
+        )
+        ..end();
+      expect(await ended('k'), _filled);
+      expect(records('k'), isEmpty);
+      expect(events.whereType<LogBatch>().single.dropped, 1);
+    });
+
     test("a missing journalctl falls back; dmesg's refusal ends it", () async {
       (await open('k', _spec(_kernel)))
         ..emitStderr(utf8.encode('sh: 1: exec: journalctl: not found\n'))
@@ -449,6 +464,18 @@ void main() {
       expect(texts('f'), ['line-9', 'line-8']);
     });
 
+    test('a cut that keeps no whole line counts the newest as '
+        'dropped', () async {
+      start(maxOutputBytes: 16);
+      final p = await open('f', _spec(syslog, window: 9));
+      p
+        ..emitText('x' * 40)
+        ..end();
+      expect(await ended('f'), _filled);
+      expect(records('f'), isEmpty);
+      expect(events.whereType<LogBatch>().single.dropped, 1);
+    });
+
     test('a missing file reads as missing, an unreadable one denied', () async {
       const tail = "tail: cannot open '/var/log/syslog' for reading";
       for (final (error, reason) in [
@@ -471,6 +498,8 @@ void main() {
         'empty': _spec(_journal, window: 0),
         'huge': _spec(_journal, window: kLogWindowMax + 1),
       };
+      expect(specs.values.where(LogService.accepts), isEmpty);
+      expect(LogService.accepts(_spec(_journal)), isTrue);
       specs.forEach(service.open);
       for (final id in specs.keys) {
         expect(statuses(id), [
@@ -514,6 +543,23 @@ void main() {
         );
       },
     );
+
+    test('pause closes the process without an event, and the id opens '
+        'again', () async {
+      final p = await open('a', _spec(_journal));
+      service
+        ..pause('a')
+        ..pause('a');
+      await _until(() => p.closeCalls == 1);
+      expect(statuses('a'), [const LogStreamRunning()]);
+
+      expect(await read('a', _spec(_journal), stdout: _entries(2, 1)), _oldest);
+      expect(statuses('a'), [
+        const LogStreamRunning(),
+        const LogStreamRunning(),
+        _oldest,
+      ]);
+    });
 
     test('the detail keeps the end of a long stderr', () async {
       final stderr = '${'warning: skipped\n' * 400}Failed to open journal\n';

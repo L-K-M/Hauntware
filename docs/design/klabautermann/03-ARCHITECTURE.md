@@ -2022,6 +2022,18 @@ per connection, not forwarding channels [R: sshd_config(5)].
   transport. A second connection is opened only for non-interactive auth
   and only when long-lived work exhausts the budget.
 
+As built in M2 (`klabautermann_core/lib/src/links/channel_quota.dart`,
+K25b), the engine keeps a `ChannelQuota` per server below the link's own
+semaphore: 2 short actions and 2 followers at once. A bounded log read
+takes a short-action slot, and one that finds the share full waits in
+the engine as `LogStreamWaiting(channel)`, where the app can show it,
+rather than on the link. A follower (K26) gets no slot while the link
+has learned a session limit below 4 (the two samplers, one follower and
+one short action), so it reports waiting for a channel instead of
+holding the last free one and leaving short actions none; the rest of
+low-session mode is M3. The link still opens every session channel at
+one priority, since `seance_core`'s `start` and `run` take none yet.
+
 ### 5.3 Failure classification
 
 | Symptom | Classification | UI |
@@ -2465,6 +2477,61 @@ timed-out channel or no READY, would hold the fast one until it does).
   wrapped `df` lines; Swarm task names (ServerBox #1226 [R]).
 - The diagnostic bundle (CN-18, v1) exports the same raw format, redacted
   by `SecretRedactor`, so a user report becomes a fixture.
+- Capture redaction: the host's names (kernel, `/etc/hostname`,
+  hostnamectl) that are no address and each FQDN's first label, the
+  domains of those names and of resolv.conf's search list (each suffix
+  of two labels or more), the names and home directories of personal
+  accounts (any uid from login.defs' UID_MIN, 1000 without one, but
+  `nobody`'s, as directory-service and systemd-homed accounts lie
+  above UID_MAX; no passwd account whose home is `/nonexistent`) and
+  `--redact` values become fixed placeholders, names as whole words in
+  any case, a `-` in them also as device-mapper's `--` and systemd's
+  `\x2d`, a non-ASCII byte also as its `\xNN`; `localhost`, the
+  os-release `ID` and `ID_LIKE` words and the words the probe and
+  hostnamectl print from fixed sets (probe keys, kernel name and
+  machine, PID 1, virtualization, tools, time zone words, chassis)
+  stay, as fixtures need them. Every `/home/<name>` path and home mount
+  unit, udisks2's `/media/<name>/` and `/run/media/<name>/` and their
+  mount units, logind's `Session <id> of User <name>` and the `ps`
+  fallback's USER column name no account but root. IPv4 and IPv6
+  addresses other than loopback and `0.0.0.0` (also between host name
+  labels and in EC2's `ip-`/`ec2-` and Kubernetes pods' hyphenated
+  names), MAC addresses (also hyphenated, dotted and in
+  `enx`/`wlx`/`wwx` names), UUIDs, hex ids of 32 or more digits
+  (machine and boot ids), the names in `/dev/<subsystem>/by-*/` links
+  (disk serials, WWNs, SAS addresses, labels, USB serial numbers) and
+  in their device units, UUIDs too in systemd's `\x2d` escaping,
+  network mount servers and logins in `fs` (NFS, sshfs, Ceph, CIFS and
+  URL sources), hostnamectl's serial, asset-tag, pretty-name and
+  location fields (also as machine-info's `PRETTY_HOSTNAME`, `LOCATION`
+  and `TAGS`), email addresses, URL credentials, private-key headers,
+  what `SecretRedactor` masks and the credentials it misses (values of
+  assignments and options whose names hold PASS, PWD, SECRET, TOKEN,
+  KEY, AUTH or CRED, HTTP basic auth, `-u`/`-U user:password`, Samba's
+  `-U user%password`, the password options of the MySQL, MongoDB and
+  OpenLDAP clients, sshpass, redis-cli, zip and 7-Zip) become
+  placeholders too (documentation addresses where an address is
+  expected). Distinct ids, UUIDs and accounts keep distinct numbered
+  placeholders (`user2`), as parsers join tables on mount points. In
+  `procs` every command line keeps argv[0] up to its first space and
+  the rest reads `[redacted]`: arguments carry secrets, process titles
+  user names. In `cron`, for the same reason, each job keeps a schedule
+  that parses, a `root` user field (others read `user`, as a missing
+  user field shifts the program into it), the first word of a command
+  run as root or from a user crontab, and the words `mergeJobs` reads
+  (`run-parts`, the periodic directories, anacron); the rest,
+  comments, environment values but `CRON_TZ` and lines `parseCron`
+  reads as no job read `[redacted]`. A unit description that is a
+  systemd-run command line (its tag, an absolute program, a `run-u<n>`
+  name) keeps its first word, and a device unit's reads `[redacted]`,
+  as it holds the filesystem label; a `timers_text` table is padded
+  again where a placeholder widens a cell. A review then reads every
+  file; a line that still holds a literal outside a placeholder, a
+  secret, a private-key mention or 40 or more mixed base64 characters
+  stops the tool before it writes anything, and so does a payload, the
+  probe or the job list that parses differently from the capture in
+  anything but text. A `.txt` fixture holds the payload only, so
+  `SOURCE.md` records each section's status.
 
 ### 6.6 Portability matrix (CN-11 to CN-14)
 
@@ -2643,9 +2710,10 @@ no longer holds that value.
   and starts over once shown. The read opens through the controller's
   one owner of log streams, which the Logs panel shares and which gives
   each rejection of `OpenLogStream` to the oldest open without an answer
-  (10.1). Until the service is wired, the page says unit logs are not
-  available in this version; a read the engine can no longer answer,
-  because it stopped, says so and asks for a restart of the app.
+  (10.1). While links are off, as the composition root leaves them
+  until K44, the engine rejects every open and the page says unit logs
+  are not available in this version; a read the engine can no longer
+  answer, because it stopped, says so and asks for a restart of the app.
 
 ### 7.6 Logs (LOG)
 
@@ -2676,10 +2744,11 @@ no longer holds that value.
   size and vacuum, log rate view, syslog-only hosts, split panes.
 
 As built in M2 (`klabautermann_core/lib/src/logs/log_service.dart`,
-K25a; K25b routes `OpenLogStream` to it), `LogService` serves the
-windows (`follow: false`) of one server's link, one host command at a
-time through `HostCommands.commandLine`, and answers each open with a
-`LogStreamState` before it returns. Followers are K26.
+K25a; `log_stream_router.dart`, K25b, routes `OpenLogStream` to it),
+`LogService` serves the windows (`follow: false`) of one server's link,
+one host command at a time through `HostCommands.commandLine`, and
+answers each open with a `LogStreamState` before it returns. Followers
+are K26.
 
 - A window holds 1 to 500 records, LOG-01's page. Any other size, a
   file with a cursor and what 8.8's validators refuse end as an invalid
@@ -2698,7 +2767,9 @@ time through `HostCommands.commandLine`, and answers each open with a
   reading at the cap and keeps its complete entries, so its last cursor
   reads on; `tail` and `dmesg`, which print oldest first, keep their
   last complete lines or records. Journal lines that are not JSON
-  objects count as dropped, as does an entry longer than the cap. A
+  objects count as dropped, as does an entry longer than the cap, and a
+  cut `tail` or `dmesg` output that keeps no whole line or record counts
+  its newest as dropped instead of ending with nothing to show. A
   full journal window left without a record ends as failed: it has no
   cursor to read on from, and journalctl prints an entry's keys in hash
   order, so a cut entry's cursor may lie past the cap.
@@ -2729,6 +2800,24 @@ time through `HostCommands.commandLine`, and answers each open with a
   closed, or its server left the fleet) ends the others as failed. Both
   close the process (TERM, then the channel), one whose channel opens
   late included.
+- `LogStreamRouter` (K25b) owns the engine's streams while links are on;
+  with links off the engine rejects every `OpenLogStream`. It rejects an
+  id an earlier open named (it keeps each id for the engine's lifetime),
+  a follow until K26, a server outside the fleet and a server's 17th
+  open stream [E], and ends a spec 8.8 refuses as invalid at once.
+  Otherwise it answers the open with the read's `LogStreamRunning`, or
+  with `LogStreamWaiting` naming the link (none ready), the foreground
+  (the app is in the background) or a channel (5.2's share is full),
+  and starts the read on its own, oldest first, once that clears.
+- Every stream ends exactly once. A read running on a link that closes
+  or is replaced ends as failed; waiting reads wait for the next link.
+  `Disconnect`, the server leaving the fleet and `Shutdown` end every
+  stream of the server as failed, waiting ones included, since nothing
+  would bring a link back for them. The background closes the running
+  reads' processes without ending them, reports every read as waiting
+  for the foreground and queues the paused ones ahead of the others,
+  and the foreground runs them again from the start; a window sends its
+  records as it ends, so a paused one has sent none.
 
 ### 7.7 Scheduled jobs (JOB)
 
@@ -4048,6 +4137,48 @@ reads the reading's age, since its phase began only then. The monitoring
 controller keeps each server's latest `SamplingState` and the phase
 before it.
 
+As built in M2 for items 3, 5 and 6
+(`app/klabautermann_app/lib/ui/server_coverage.dart`), the coverage card
+follows the Overview's cards on desktops and phones: the T0 badge with
+the tier's meaning and what live reading is doing (from `SamplingState`,
+or the tier's rule before the engine says anything), a chart of the last
+10 minutes of CPU busy from the `core` stream, the external-monitor
+finding, and what is not covered in the coverage sheet's words, with no
+control for T1 or T2. K04's rule recognises node_exporter, Netdata, the
+Zabbix agent, Telegraf, collectd, Prometheus and Grafana's agents
+(Agent, Agent Flow, Alloy) by their packaged systemd units in a complete
+`units` list; a monitor outside systemd is not seen, and the card names
+the units as the server lists them. The card subscribes `units` under an
+id of its own while it shows, until the first `units` sample of the
+engine run, so the Overview reads the list once rather than at the
+Services tab's cadence; a list that tab reads later replaces it. The
+desktop inspector's body shows the selected server's coverage: the
+badge, the `core` stream's freshness, the external-monitor finding, the
+recent gaps with a known cause in words ("No data yet" before any
+reading, so an empty record never reads as a complete one; a break while
+no view read `core` has none), the newest five with a count of the rest,
+and what is not covered with each reason; it reads what the panels
+sample and subscribes nothing. Beside the session rings, the monitoring
+controller keeps a time-series ring per series of `core`: a background
+pause, a link lost while sampling, or a return from the background to a
+link still down opens a labelled gap when `SamplingState` says so,
+ending an open "reading failed" one, which it outranks; a `Gap`, or a
+`CollectorUnavailable` reading, opens one only if none is open, labelled
+"reading failed" for a lost or failed reading; the next reading closes
+it. A `Gap` also breaks the sparklines' session rings, so no line joins
+across it, and a stream no subscription names ends its open gap with an
+unknown reading, which breaks the line without a label. On a phone's
+server screen, and in the workspace of an iOS or Android tablet wide
+enough for the desktop layout, the return banner sits under the header,
+scrolling past a fifth of the screen's height, after a return from the
+background that paused that server: the engine had it in `sampling` as
+the app left, or said it paused it while away; a subscription alone, as
+while links are off, reads nothing to pause. It gives this device's
+times of leaving and returning (to the second when both fall in one
+minute) until dismissed, until that screen is left or until the next
+pause; a desktop platform never reports the background, so it never
+shows there.
+
 ---
 
 ## 10. UI shell
@@ -4409,8 +4540,8 @@ the engine in `engine_isolate.dart` beside it):
   streams' last reading (a stream without one has no gap) to the
   resuming one, with its cause (background, disconnected, or a reading
   lost to a deadline, a framing error or a sampler restart, 6.2), so a
-  chart labels the band (9.5 item 5, whose labels do not yet word a lost
-  reading). While a gap is open,
+  chart labels the band (9.5 item 5; a lost reading reads "reading
+  failed"). While a gap is open,
   a background or disconnected one shows in `SamplingState`; a lost
   reading leaves the phase at sampling and shows only as an ageing
   `Sample.at`. A lost link or the background outranks a lost reading
@@ -4460,9 +4591,10 @@ the engine in `engine_isolate.dart` beside it):
   budget, or the foreground), running (with the source's own reader or
   the kernel log's `dmesg` fallback, 7.6), or ended with a reason (window
   filled, oldest record reached, closed, spec refused, source missing,
-  read denied, or failed) and the host's error output. Until the log
-  service is wired, the engine rejects `OpenLogStream` and ignores
-  `CloseStream`, since no stream is open.
+  read denied, or failed) and the host's error output. With links off,
+  as in the app until K44, the engine rejects `OpenLogStream` and
+  ignores `CloseStream`, since no stream is open; with links on, the
+  log stream router serves both (7.6).
   On the app side (M2), `MonitoringController.logs` owns every stream
   of the run, the Logs panel's and the bounded reads `openLogRead`
   opens through it (SVC-04's unit logs, 7.5): it mints `log-N` ids,
@@ -4496,7 +4628,8 @@ the engine in `engine_isolate.dart` beside it):
   while its tab or destination is selected: Overview `core`, `fs`,
   `identity` and `failedUnits`; Processes `procs`; Services `units`; Jobs
   `timers` and `cron`; System `identity`, `fs` and `core`; Logs, Docker
-  and Access none. Hidden pages stay built, so visibility comes from the
+  and Access none. The Overview's coverage card also reads `units`
+  once (9.5). Hidden pages stay built, so visibility comes from the
   tab controller's index. The app sends `SetAppActivity` only on a change,
   and the engine starts with the app in the foreground. Phones report the
   background while hidden, paused or detached. A desktop app stays in the

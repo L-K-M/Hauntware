@@ -513,6 +513,94 @@ class AppLocalizationsEn extends AppLocalizations {
   String get coverageServerChip => 'T0: sampled only while open';
 
   @override
+  String get coverageServerTitle => 'Coverage';
+
+  @override
+  String get coverageLiveSampling =>
+      'Reading this server now, while you have it open.';
+
+  @override
+  String get coverageLiveWaiting =>
+      'Waiting for the connection to this server.';
+
+  @override
+  String get coverageLivePaused =>
+      'Paused while Klabautermann is in the background.';
+
+  @override
+  String get coverageLiveIdle =>
+      'Not reading this server now: the open panel takes no readings.';
+
+  @override
+  String get coverageLivePolicy =>
+      'Reads this server only while you have it open.';
+
+  @override
+  String coverageSessionTitle(int minutes) {
+    String _temp0 = intl.Intl.pluralLogic(
+      minutes,
+      locale: localeName,
+      other: 'The last $minutes minutes on this device',
+      one: 'The last minute on this device',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get coverageSessionLane => 'CPU busy';
+
+  @override
+  String get coverageSessionSource => 'Recorded by this device while connected';
+
+  @override
+  String coverageMonitorRunning(String units) {
+    return 'External monitor running: $units. It may cover this server while Klabautermann is closed; Klabautermann does not read it.';
+  }
+
+  @override
+  String coverageMonitorStopped(String units) {
+    return 'No external monitor is running. Installed but stopped: $units.';
+  }
+
+  @override
+  String get coverageMonitorNone =>
+      'No external monitor found among this server\'s systemd services.';
+
+  @override
+  String get coverageMonitorChecking =>
+      'Looking for an external monitor among this server\'s systemd services.';
+
+  @override
+  String get coverageMonitorUnknown =>
+      'Klabautermann cannot tell whether an external monitor runs: this server\'s systemd services could not be listed.';
+
+  @override
+  String get coverageDetailsGaps => 'Recent gaps';
+
+  @override
+  String get coverageDetailsNoGaps =>
+      'No pauses, lost links or failed readings.';
+
+  @override
+  String coverageDetailsEarlierGaps(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count earlier gaps not shown.',
+      one: '1 earlier gap not shown.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String coverageReturnBanner(String start, String end) {
+    return 'Paused $start to $end while in background. No data for that period.';
+  }
+
+  @override
+  String get coverageReturnDismiss => 'Dismiss';
+
+  @override
   String serverTitle(String name) {
     return '$name';
   }
@@ -794,6 +882,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get chartGapDisconnected => 'disconnected';
+
+  @override
+  String get chartGapReadingFailed => 'reading failed';
 
   @override
   String chartGapSummary(DateTime start, DateTime end, String reason) {
