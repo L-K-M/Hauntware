@@ -1,0 +1,141 @@
+{
+  "schemaVersion": 1,
+  "tool": "klabautermann_core/tool/engine_budget.dart",
+  "measuredAt": "2026-10-15T19:15:07.827540Z",
+  "runtime": {
+    "dart": "3.13.2 (stable) (Tue Aug 25 01:01:12 2026 -0700) on \"linux_x64\"",
+    "mode": "aot"
+  },
+  "machine": {
+    "os": "Linux 6.18.44-fc-v114 #1 SMP PREEMPT_DYNAMIC @0",
+    "cpus": 4,
+    "cpuModel": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "loadavg": {
+      "start": "1.33 1.87 1.71 1/132 22851",
+      "end": "1.85 1.83 1.70 5/140 23607"
+    }
+  },
+  "plan": {
+    "name": "phone",
+    "hosts": [
+      "alpine-322",
+      "debian-12",
+      "debian-12-lxc",
+      "debian-12-lxc-lxcfs",
+      "rhel-8",
+      "ubuntu-2404",
+      "alpine-322",
+      "debian-12",
+      "debian-12-lxc",
+      "debian-12-lxc-lxcfs"
+    ],
+    "overviewEveryMs": 10000,
+    "openHosts": 1,
+    "coreEveryMs": 3000,
+    "logLinesPerSecond": 10000,
+    "journalRows": 4,
+    "journalRowBytesMean": 459.5,
+    "warmupSeconds": 10.0,
+    "measureSeconds": 60.0,
+    "heap": "off"
+  },
+  "windowSeconds": 60.0,
+  "ticks": {
+    "count": 74,
+    "perSecond": 1.233,
+    "skipped": 0,
+    "engineMs": {
+      "p50": 0.24,
+      "p99": 0.717,
+      "max": 0.717,
+      "mean": 0.262
+    },
+    "frameMs": {
+      "p50": 0.047,
+      "p99": 0.202,
+      "max": 0.202,
+      "mean": 0.052
+    },
+    "pipelineMs": {
+      "p50": 0.164,
+      "p99": 0.342,
+      "max": 0.342,
+      "mean": 0.177
+    },
+    "sendMs": {
+      "p50": 0.023,
+      "p99": 0.298,
+      "max": 0.298,
+      "mean": 0.034
+    },
+    "eventsPerTick": 1.27,
+    "replyBytes": {
+      "overview": {
+        "min": 433,
+        "median": 447,
+        "max": 467
+      },
+      "core": {
+        "min": 816,
+        "median": 818,
+        "max": 818
+      }
+    },
+    "replyBytesPerSecond": 678.15
+  },
+  "log": {
+    "linesFed": 599999,
+    "linesPerSecond": 9998.319,
+    "inputBytesPerSecond": 4604992.105,
+    "batches": 1200,
+    "batchesPerSecond": 20.0,
+    "recordsPerBatch": {
+      "min": 335,
+      "median": 500,
+      "max": 666
+    },
+    "parseMsPerSecond": 80.209,
+    "batchSendMs": {
+      "p50": 0.102,
+      "p99": 3.078,
+      "max": 7.084,
+      "mean": 0.19
+    },
+    "dropped": 0,
+    "malformed": 0,
+    "maxPending": 666,
+    "runLinesParsed": 699909,
+    "pendingAtEnd": 300
+  },
+  "engine": {
+    "busyMsPerSecond": 84.33,
+    "busyPercentOfOneCore": 8.433
+  },
+  "process": {
+    "cpuMsPerSecond": 90.667,
+    "rssBytes": {
+      "max": 54992896,
+      "series": [
+        54259712,
+        54804480,
+        54820864,
+        54849536,
+        54865920,
+        54894592,
+        54910976,
+        54923264,
+        54411264,
+        54464512,
+        54566912
+      ]
+    },
+    "replayReplyBytes": 48007
+  },
+  "heapAfterFullCollectionBytes": null,
+  "ui": {
+    "messages": 1531,
+    "samples": 111,
+    "logRecords": 699609,
+    "logDropped": 0
+  }
+}
