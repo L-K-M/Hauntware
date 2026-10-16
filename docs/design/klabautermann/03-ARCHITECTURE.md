@@ -3961,19 +3961,27 @@ the engine in `engine_isolate.dart` beside it):
     `IdentityFile`, the hop's own port and user first; as a first hop,
     the final pass's route must still loop on the hop's own port and as
     its own user, else that pass's. Otherwise the host behind it is left
-    out and counted. The import makes this check for every hop, even
-    where ssh's final pass already fails before reaching it (for a host
-    that keeps its first pass, or behind a first hop that holds only by
-    looping). It is conservative there: it may leave out a host that
-    plain ssh reaches, but never keeps a route ssh does not take. With
+    out and counted. The import skips this check where ssh's final pass
+    already fails before the hop: for the hops of a host that keeps its
+    first pass, and behind a first hop that holds only by looping,
+    directly or through its own first hops. ssh reaches such a hop only
+    where no final pass is asked for, and every name then takes its
+    first pass. This assumes a system config asks for the final pass
+    for every name or for none, as `Match final all` does; one that asks
+    for it for some names only, such as a `CanonicalizeHostname` in a
+    `Host` block, falls outside what the import models, like any other
+    value that file sets. A first hop's own route is still checked as
+    where ssh dials that hop as itself, so a host behind a first hop
+    whose own route fails the check is left out and counted, although
+    ssh may reach it: that is conservative, not what ssh does. With
     `Host *.example.com` / `User ops` / `ProxyJump bastion.example.com`,
     `Host bastion` / `HostName bastion.example.com`, `Host bastion2` /
     `HostName b2.example.com` and `Host web` / `HostName 10.0.0.5` /
-    `ProxyJump bastion,bastion2`, plain ssh reaches web through bastion
-    and bastion2 and the final pass fails at bastion with a jumphost
-    loop, yet web is left out, because bastion2's final pass as a later
-    hop gives `User ops`. A host whose two passes give two routes ssh
-    would take is left out and counted. For a
+    `ProxyJump bastion,bastion2`, web imports through bastion and
+    bastion2, as plain ssh reaches it: the final pass fails at bastion
+    with a jumphost loop, so bastion2's final pass, which as a later hop
+    gives `User ops`, never applies. A host whose two passes give two
+    routes ssh would take is left out and counted. For a
     `HostName` whose final form the import cannot know (an address with
     a scope, or one the system resolver may read where Dart does not), a
     block whose pattern may match it counts as a `Match` that may apply.
