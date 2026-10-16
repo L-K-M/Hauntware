@@ -3460,7 +3460,11 @@ CI.
   it. A `ps` fallback row has lost the boundaries, so it masks
   a value holding spaces up to its first space only. The program is
   never read as an option; over-masking such as `-print` is the safe
-  direction.
+  direction. Not masked yet: a short option's separate value
+  (`docker login -p`, `sshpass -p`, `redis-cli -a`), `curl -u user:pass`
+  and header values (`Authorization: Bearer`). Masking the argument after
+  any `-p`, `-a` or `-u` would also hide `ssh -p 22`, `mkdir -p` and
+  `sudo -u`, so the trade-off is left to a follow-up after K33.
 - Every export, share and diagnostic bundle passes `SecretRedactor`
   (`SC/src/llm/redaction.dart`) by default, with an explicit include-secrets
   toggle.
