@@ -57,10 +57,10 @@ final class ReplayPlan {
 ///
 /// - [Hello] gets [EngineReady], the fleet in a [CatalogReplaced], each
 ///   server's [LinkState] (ready) and [Reachability] (online), and its
-///   probe's [HostProfileChanged]. No link exists: [Connect] changes
-///   nothing for a fleet server, and [Disconnect] only ends the server's
-///   log streams as failed, as the engine's router does before the link
-///   closes.
+///   probe's [HostProfileChanged], never a cached one (D59): its
+///   `cachedAt` is null. No link exists: [Connect] changes nothing for a
+///   fleet server, and [Disconnect] only ends the server's log streams
+///   as failed, as the engine's router does before the link closes.
 /// - Each server samples the union of [ReplayPlan.monitored] and its
 ///   subscriptions, as `Sample`s and `SamplingState`s from its pipeline.
 ///   A stream read for the first time reads at once, except the
@@ -90,8 +90,8 @@ final class ReplayPlan {
 ///   [Disconnect] of a server outside the fleet, which the engine ignores
 ///   too.
 ///
-/// The support directory it is started with is ignored: the replay keeps
-/// no files.
+/// The support directory it is started with, and the access to it, are
+/// ignored: the replay keeps no files, a capability cache included.
 void Function(EngineStart start) replayEngine(ReplayPlan plan) =>
     (start) => _ReplayEngine(start.uiPort, plan).listen();
 

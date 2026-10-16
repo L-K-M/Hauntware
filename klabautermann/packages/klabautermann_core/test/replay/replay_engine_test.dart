@@ -118,7 +118,9 @@ void main() {
               .having((e) => e.serverId, 'serverId', id)
               .having((e) => e.status, 'status', const LinkReady()),
           isA<Reachability>().having((e) => e.serverId, 'serverId', id),
-          isA<HostProfileChanged>().having((e) => e.serverId, 'serverId', id),
+          isA<HostProfileChanged>()
+              .having((e) => e.serverId, 'serverId', id)
+              .having((e) => e.cachedAt, 'cachedAt', isNull),
           isA<SamplingState>()
               .having((e) => e.serverId, 'serverId', id)
               .having((e) => e.phase, 'phase', SamplingPhase.sampling),
