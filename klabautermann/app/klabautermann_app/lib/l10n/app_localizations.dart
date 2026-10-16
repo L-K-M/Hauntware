@@ -2518,6 +2518,54 @@ abstract class AppLocalizations {
   /// **'No swap is set up.'**
   String get overviewSwapNone;
 
+  /// Heading of the accessibility settings on the General settings tab.
+  ///
+  /// In en, this message translates to:
+  /// **'Accessibility'**
+  String get settingsAccessibilityTitle;
+
+  /// Switch on the General settings tab (A11Y-15): whether screen readers hear a server's values cross a warning or critical level.
+  ///
+  /// In en, this message translates to:
+  /// **'Announce threshold changes'**
+  String get settingsAnnounceBands;
+
+  /// Explanation under the threshold announcement switch on the General settings tab (A11Y-15).
+  ///
+  /// In en, this message translates to:
+  /// **'While a server\'s Overview shows, your screen reader hears when CPU, memory or a disk crosses into or out of its warning or critical level. Values that refresh every few seconds are never read out.'**
+  String get settingsAnnounceBandsDetail;
+
+  /// Toast when the threshold announcement switch applied but settings.json could not be written.
+  ///
+  /// In en, this message translates to:
+  /// **'The setting changed, but it could not be saved, so it will not be kept after a restart.'**
+  String get settingsAnnounceNotSaved;
+
+  /// Toast when the app did not take a change of the threshold announcement switch.
+  ///
+  /// In en, this message translates to:
+  /// **'The setting could not be changed.'**
+  String get settingsAnnounceNotChanged;
+
+  /// Screen-reader announcement (A11Y-15) when a value on a server's Overview has crossed into the warning or critical band, or back below the warning level; metric names the value (CPU, Memory, Disk /var), value is its percentage.
+  ///
+  /// In en, this message translates to:
+  /// **'{metric} {value}: {band, select, warning{warning level} critical{critical level} other{back to normal}}'**
+  String overviewBandAnnouncement(String metric, String value, String band);
+
+  /// A mount's space use as a threshold announcement names it; mount is the mount point, server data such as /var.
+  ///
+  /// In en, this message translates to:
+  /// **'Disk {mount}'**
+  String overviewBandDisk(String mount);
+
+  /// A mount's inode use as a threshold announcement names it; mount is the mount point, server data such as /var.
+  ///
+  /// In en, this message translates to:
+  /// **'Inodes on {mount}'**
+  String overviewBandInodes(String mount);
+
   /// Heading of the Overview's health card (OV-02): failed units and full disks.
   ///
   /// In en, this message translates to:
@@ -2565,6 +2613,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{mount}: {percent} of its inodes used, {band, select, critical{critical} other{warning}}'**
   String overviewHealthDiskInodes(String mount, String percent, String band);
+
+  /// The health card's link to the threshold announcement switch in Settings (A11Y-15), with the switch's state.
+  ///
+  /// In en, this message translates to:
+  /// **'{state, select, on{Threshold announcements: on} other{Threshold announcements: off}}'**
+  String overviewHealthAnnouncements(String state);
 
   /// A mount's size in the Overview's Disks card.
   ///

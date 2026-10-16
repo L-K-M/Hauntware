@@ -2023,6 +2023,59 @@
   "@overviewSwapNone": {
     "description": "The swap card of a server with no swap space."
   },
+  "settingsAccessibilityTitle": "Accessibility",
+  "@settingsAccessibilityTitle": {
+    "description": "Heading of the accessibility settings on the General settings tab."
+  },
+  "settingsAnnounceBands": "Announce threshold changes",
+  "@settingsAnnounceBands": {
+    "description": "Switch on the General settings tab (A11Y-15): whether screen readers hear a server's values cross a warning or critical level."
+  },
+  "settingsAnnounceBandsDetail": "While a server's Overview shows, your screen reader hears when CPU, memory or a disk crosses into or out of its warning or critical level. Values that refresh every few seconds are never read out.",
+  "@settingsAnnounceBandsDetail": {
+    "description": "Explanation under the threshold announcement switch on the General settings tab (A11Y-15)."
+  },
+  "settingsAnnounceNotSaved": "The setting changed, but it could not be saved, so it will not be kept after a restart.",
+  "@settingsAnnounceNotSaved": {
+    "description": "Toast when the threshold announcement switch applied but settings.json could not be written."
+  },
+  "settingsAnnounceNotChanged": "The setting could not be changed.",
+  "@settingsAnnounceNotChanged": {
+    "description": "Toast when the app did not take a change of the threshold announcement switch."
+  },
+  "overviewBandAnnouncement": "{metric} {value}: {band, select, warning{warning level} critical{critical level} other{back to normal}}",
+  "@overviewBandAnnouncement": {
+    "description": "Screen-reader announcement (A11Y-15) when a value on a server's Overview has crossed into the warning or critical band, or back below the warning level; metric names the value (CPU, Memory, Disk /var), value is its percentage.",
+    "placeholders": {
+      "metric": {
+        "type": "String"
+      },
+      "value": {
+        "type": "String"
+      },
+      "band": {
+        "type": "String"
+      }
+    }
+  },
+  "overviewBandDisk": "Disk {mount}",
+  "@overviewBandDisk": {
+    "description": "A mount's space use as a threshold announcement names it; mount is the mount point, server data such as /var.",
+    "placeholders": {
+      "mount": {
+        "type": "String"
+      }
+    }
+  },
+  "overviewBandInodes": "Inodes on {mount}",
+  "@overviewBandInodes": {
+    "description": "A mount's inode use as a threshold announcement names it; mount is the mount point, server data such as /var.",
+    "placeholders": {
+      "mount": {
+        "type": "String"
+      }
+    }
+  },
   "overviewHealthTitle": "Health",
   "@overviewHealthTitle": {
     "description": "Heading of the Overview's health card (OV-02): failed units and full disks."
@@ -2088,6 +2141,15 @@
         "type": "String"
       },
       "band": {
+        "type": "String"
+      }
+    }
+  },
+  "overviewHealthAnnouncements": "{state, select, on{Threshold announcements: on} other{Threshold announcements: off}}",
+  "@overviewHealthAnnouncements": {
+    "description": "The health card's link to the threshold announcement switch in Settings (A11Y-15), with the switch's state.",
+    "placeholders": {
+      "state": {
         "type": "String"
       }
     }

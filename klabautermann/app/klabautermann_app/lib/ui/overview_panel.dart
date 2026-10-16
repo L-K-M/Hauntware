@@ -13,6 +13,7 @@ import 'fleet_row_state.dart' show kFleetRowStaleAfter, kFleetRowThresholds;
 import 'freshness.dart';
 import 'system_panel.dart' show PanelNotice, PanelSection;
 import 'system_view.dart';
+import 'threshold_announcer.dart';
 
 /// The panel width from which the cards sit in two columns, growing with
 /// the text scale as the System tab's does.
@@ -72,7 +73,8 @@ List<(String, double)> orderedCores(Map<String, double> perCpu) {
 /// Figures go through the chart formatters' IEC units (A11Y-06); what the
 /// host did not report reads "Unknown" or is hatched, and a figure a
 /// container withholds (D50) says so. The clock ticks only while
-/// [visible].
+/// [visible], and threshold-band changes are announced only then
+/// (A11Y-15, [ThresholdAnnouncer]).
 class OverviewPanel extends StatelessWidget {
   const OverviewPanel({
     super.key,
@@ -103,14 +105,26 @@ class OverviewPanel extends StatelessWidget {
     final reading = monitoring.lastReadingFor(serverId, SampleStream.core);
     final sampling = monitoring.samplingFor(serverId);
     final slow = _Slow(monitoring, serverId);
-    return ListenableBuilder(
-      listenable: Listenable.merge([latest, reading, sampling, ...slow.all]),
-      builder: (context, _) => ListenableBuilder(
-        listenable: visible && (reading.value != null || slow.aging)
-            ? monitoring.clock
-            : _silent,
-        builder: (context, _) =>
-            _build(context, latest.value, reading.value, sampling.value, slow),
+    final scope = AnnouncementScope.maybeOf(context);
+    return ThresholdAnnouncer(
+      monitoring: monitoring,
+      serverId: serverId,
+      active: visible && (scope?.notifier?.value ?? false),
+      child: ListenableBuilder(
+        listenable: Listenable.merge([latest, reading, sampling, ...slow.all]),
+        builder: (context, _) => ListenableBuilder(
+          listenable: visible && (reading.value != null || slow.aging)
+              ? monitoring.clock
+              : _silent,
+          builder: (context, _) => _build(
+            context,
+            latest.value,
+            reading.value,
+            sampling.value,
+            slow,
+            scope,
+          ),
+        ),
       ),
     );
   }
@@ -121,6 +135,7 @@ class OverviewPanel extends StatelessWidget {
     Sample? reading,
     SamplingStatus? sampling,
     _Slow slow,
+    AnnouncementScope? scope,
   ) {
     final l10n = AppLocalizations.of(context);
     Freshness freshness(Duration staleAfter, DateTime? lastSampleAt) =>
@@ -193,7 +208,7 @@ class OverviewPanel extends StatelessWidget {
                 icon: coreFreshness.stale ? Icons.history : Icons.schedule,
                 text: freshnessText(l10n, coreFreshness),
               ),
-            partTwo.health(context),
+            partTwo.health(context, scope),
             if (unavailable != null)
               PanelNotice(
                 icon: unavailable.reason == CollectorUnavailableReason.timeout
@@ -304,6 +319,9 @@ final class _Slow {
   bool get aging => listed.value != null || failedReading.value != null;
 }
 
+/// How the health card's link words the A11Y-15 switch.
+enum _SwitchState { on, off }
+
 /// The health, Disks and Host cards over [slow]'s readings and the `core`
 /// reading's uptime and boot time.
 final class _PartTwo {
@@ -336,14 +354,15 @@ final class _PartTwo {
       : Icons.error_outline;
 
   /// OV-02: failed units through K34's summary, then the mounts past a
-  /// level.
-  Widget health(BuildContext context) {
+  /// level, and the link to A11Y-15's switch in Settings (D60).
+  Widget health(BuildContext context, AnnouncementScope? scope) {
     final l10n = AppLocalizations.of(context);
     final stale = healthFreshness.stale;
     final unitsFailed = switch (slow.failed.value?.result) {
       final CollectorUnavailable unavailable => unavailable,
       _ => null,
     };
+    final announce = scope?.notifier?.value ?? false;
     return PanelSection(
       title: l10n.overviewHealthTitle,
       children: [
@@ -364,6 +383,23 @@ final class _PartTwo {
             text: l10n.overviewHealthUnitsWaiting,
           ),
         ..._diskHealth(context, l10n, stale),
+        if (scope != null)
+          Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: TextButton.icon(
+              onPressed: () => scope.openSettings(context),
+              icon: Icon(
+                announce
+                    ? Icons.record_voice_over_outlined
+                    : Icons.voice_over_off_outlined,
+              ),
+              label: Text(
+                l10n.overviewHealthAnnouncements(
+                  (announce ? _SwitchState.on : _SwitchState.off).name,
+                ),
+              ),
+            ),
+          ),
       ],
     );
   }

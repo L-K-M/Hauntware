@@ -57,6 +57,11 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   'lib/controllers/appearance_controller.dart': {
     r"'The theme was not saved: $error'",
   },
+  // The not-saved diagnostic; the General tab prints it and shows its own
+  // ARB text (settingsAnnounceNotSaved).
+  'lib/controllers/announcement_controller.dart': {
+    r"'The announcement setting was not saved: $error'",
+  },
   'lib/controllers/fleet_controller.dart': {
     // The row subtitle's address: host or user@host, with :port when the
     // port is not 22 and an IPv6 host then bracketed before it. Machine

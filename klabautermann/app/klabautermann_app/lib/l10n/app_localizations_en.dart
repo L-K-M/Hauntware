@@ -1747,6 +1747,43 @@ class AppLocalizationsEn extends AppLocalizations {
   String get overviewSwapNone => 'No swap is set up.';
 
   @override
+  String get settingsAccessibilityTitle => 'Accessibility';
+
+  @override
+  String get settingsAnnounceBands => 'Announce threshold changes';
+
+  @override
+  String get settingsAnnounceBandsDetail =>
+      'While a server\'s Overview shows, your screen reader hears when CPU, memory or a disk crosses into or out of its warning or critical level. Values that refresh every few seconds are never read out.';
+
+  @override
+  String get settingsAnnounceNotSaved =>
+      'The setting changed, but it could not be saved, so it will not be kept after a restart.';
+
+  @override
+  String get settingsAnnounceNotChanged => 'The setting could not be changed.';
+
+  @override
+  String overviewBandAnnouncement(String metric, String value, String band) {
+    String _temp0 = intl.Intl.selectLogic(band, {
+      'warning': 'warning level',
+      'critical': 'critical level',
+      'other': 'back to normal',
+    });
+    return '$metric $value: $_temp0';
+  }
+
+  @override
+  String overviewBandDisk(String mount) {
+    return 'Disk $mount';
+  }
+
+  @override
+  String overviewBandInodes(String mount) {
+    return 'Inodes on $mount';
+  }
+
+  @override
   String get overviewHealthTitle => 'Health';
 
   @override
@@ -1799,6 +1836,15 @@ class AppLocalizationsEn extends AppLocalizations {
       'other': 'warning',
     });
     return '$mount: $percent of its inodes used, $_temp0';
+  }
+
+  @override
+  String overviewHealthAnnouncements(String state) {
+    String _temp0 = intl.Intl.selectLogic(state, {
+      'on': 'Threshold announcements: on',
+      'other': 'Threshold announcements: off',
+    });
+    return '$_temp0';
   }
 
   @override

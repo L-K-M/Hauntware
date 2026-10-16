@@ -8,6 +8,7 @@ import 'package:klabautermann_app/ui/charts/charts.dart'
 import 'package:klabautermann_app/ui/overview_panel.dart';
 import 'package:klabautermann_app/ui/server_surfaces.dart';
 import 'package:klabautermann_app/ui/system_panel.dart' show PanelSection;
+import 'package:klabautermann_app/ui/threshold_announcer.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 
 import 'support/charts.dart'
@@ -121,6 +122,9 @@ final class _Panel {
   DateTime now = _start;
   int _seq = 0;
 
+  /// How often the health card's link opened Settings.
+  int settingsOpened = 0;
+
   Future<void> sample(
     WidgetTester tester,
     SampleResult result, {
@@ -146,6 +150,7 @@ Future<_Panel> _pump(
   double textScale = 1,
   Brightness brightness = Brightness.light,
   bool visible = true,
+  ValueNotifier<bool>? announce,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -177,11 +182,19 @@ Future<_Panel> _pump(
               color: theme.colorScheme.surface,
               child: ValueListenableBuilder(
                 valueListenable: shown,
-                builder: (context, visible, _) => OverviewPanel(
-                  monitoring: monitoring,
-                  serverId: _serverId,
-                  visible: visible,
-                ),
+                builder: (context, visible, _) {
+                  final overview = OverviewPanel(
+                    monitoring: monitoring,
+                    serverId: _serverId,
+                    visible: visible,
+                  );
+                  if (announce == null) return overview;
+                  return AnnouncementScope(
+                    announce: announce,
+                    openSettings: (_) => panel.settingsOpened++,
+                    child: overview,
+                  );
+                },
               ),
             ),
           ),
@@ -607,7 +620,14 @@ void main() {
     testWidgets('lays out without overflow at 200 % text on the $name', (
       tester,
     ) async {
-      final panel = await _pump(tester, size: size, textScale: 2);
+      final announce = ValueNotifier(true);
+      addTearDown(announce.dispose);
+      final panel = await _pump(
+        tester,
+        size: size,
+        textScale: 2,
+        announce: announce,
+      );
       await panel.sample(tester, _core());
       await panel.sample(tester, FsResult(_fs), stream: SampleStream.fs);
       await panel.sample(tester, _identity, stream: SampleStream.identity);
@@ -824,6 +844,162 @@ void main() {
     );
   });
 
+  testWidgets('the health card links to the announcement switch (D60)', (
+    tester,
+  ) async {
+    final announce = ValueNotifier(true);
+    addTearDown(announce.dispose);
+    final panel = await _pump(tester, announce: announce);
+
+    await tester.tap(find.text('Threshold announcements: on'));
+    expect(panel.settingsOpened, 1);
+
+    announce.value = false;
+    await tester.pump();
+    expect(find.text('Threshold announcements: off'), findsOneWidget);
+  });
+
+  testWidgets('without the app\'s settings the health card has no link', (
+    tester,
+  ) async {
+    await _pump(tester);
+    expect(find.textContaining('Threshold announcements'), findsNothing);
+  });
+
+  group('A11Y-15', () {
+    List<String> heard(WidgetTester tester) => [
+      for (final announcement in tester.takeAnnouncements())
+        announcement.message,
+    ];
+
+    CoreResult busy(double percent) => CoreResult(
+      cpu: CpuPercentages([percent, 0, 0, 100 - percent], percent),
+      memory: _memory,
+    );
+
+    testWidgets('a band change is heard once it holds, not while the value '
+        'flaps', (tester) async {
+      final announce = ValueNotifier(true);
+      addTearDown(announce.dispose);
+      final panel = await _pump(tester, announce: announce);
+      Future<void> cpu(int seconds, double percent) => panel.sample(
+        tester,
+        busy(percent),
+        at: _start.add(Duration(seconds: seconds)),
+      );
+
+      // Where a value starts is no news.
+      await cpu(0, 85);
+      await cpu(2, 85);
+      expect(heard(tester), isEmpty);
+
+      await cpu(4, 50);
+      await cpu(10, 50);
+      expect(heard(tester), isEmpty, reason: 'held 6 s of 10');
+      await cpu(14, 50);
+      expect(heard(tester), ['CPU 50%: back to normal']);
+
+      // Around the warning level: one change, then the flaps hold it.
+      await cpu(16, 82);
+      await cpu(26, 82);
+      expect(heard(tester), ['CPU 82%: warning level']);
+      await cpu(28, 78);
+      await cpu(30, 81);
+      await cpu(34, 79);
+      await cpu(36, 80);
+      expect(heard(tester), isEmpty);
+
+      // Straight past both levels: the higher one, once.
+      await cpu(38, 96);
+      await cpu(48, 96);
+      expect(heard(tester), ['CPU 96%: critical level']);
+    });
+
+    testWidgets('each listed mount is heard by its own band', (tester) async {
+      final announce = ValueNotifier(true);
+      addTearDown(announce.dispose);
+      final panel = await _pump(tester, announce: announce);
+      Future<void> fs(int seconds, List<FsMount> mounts) => panel.sample(
+        tester,
+        FsResult(FsSnapshot(mounts)),
+        at: _start.add(Duration(seconds: seconds)),
+        stream: SampleStream.fs,
+      );
+
+      await fs(0, [_mount('/', use: 70), _mount('/var', use: 10, inodes: 10)]);
+      await fs(30, [_mount('/', use: 95), _mount('/var', use: 10, inodes: 85)]);
+      expect(heard(tester), isEmpty);
+      await fs(60, [_mount('/', use: 95), _mount('/var', use: 10, inodes: 85)]);
+      expect(heard(tester), [
+        'Disk / 95%: critical level',
+        'Inodes on /var 85%: warning level',
+      ]);
+    });
+
+    testWidgets('nothing is heard while the switch is off or the Overview '
+        'is hidden', (tester) async {
+      final announce = ValueNotifier(false);
+      addTearDown(announce.dispose);
+      final panel = await _pump(tester, announce: announce);
+      Future<void> cpu(int seconds, double percent) => panel.sample(
+        tester,
+        busy(percent),
+        at: _start.add(Duration(seconds: seconds)),
+      );
+
+      await cpu(0, 50);
+      await cpu(2, 95);
+      await cpu(14, 95);
+      expect(heard(tester), isEmpty);
+
+      announce.value = true;
+      panel.visible.value = false;
+      await tester.pump();
+      await cpu(16, 50);
+      await cpu(28, 50);
+      expect(heard(tester), isEmpty);
+
+      // Shown again: where the value stands now is the start.
+      panel.visible.value = true;
+      await tester.pump();
+      await cpu(30, 50);
+      expect(heard(tester), isEmpty);
+      await cpu(32, 95);
+      await cpu(44, 95);
+      expect(heard(tester), ['CPU 95%: critical level']);
+    });
+
+    testWidgets('without announcements, band changes go to a live region', (
+      tester,
+    ) async {
+      tester.platformDispatcher.accessibilityFeaturesTestValue =
+          const FakeAccessibilityFeatures();
+      addTearDown(
+        tester.platformDispatcher.clearAccessibilityFeaturesTestValue,
+      );
+      final announce = ValueNotifier(true);
+      addTearDown(announce.dispose);
+      final panel = await _pump(tester, announce: announce);
+
+      await panel.sample(tester, busy(50));
+      await panel.sample(
+        tester,
+        busy(85),
+        at: _start.add(const Duration(seconds: 2)),
+      );
+      await panel.sample(
+        tester,
+        busy(85),
+        at: _start.add(const Duration(seconds: 12)),
+      );
+      expect(tester.takeAnnouncements(), isEmpty);
+      expect(
+        tester.getSemantics(find.bySemanticsLabel('CPU 85%: warning level')),
+        isSemantics(label: 'CPU 85%: warning level', isLiveRegion: true),
+      );
+    });
+  });
+
   group('golden', () {
     // 03 §11.1: a server with ZFS, a failed unit and a full mount on a
     // wide panel, and the same readings gone stale on a phone; every card
@@ -833,7 +1009,14 @@ void main() {
       Size size,
       Brightness brightness,
     ) async {
-      final panel = await _pump(tester, size: size, brightness: brightness);
+      final announce = ValueNotifier(true);
+      addTearDown(announce.dispose);
+      final panel = await _pump(
+        tester,
+        size: size,
+        brightness: brightness,
+        announce: announce,
+      );
       await panel.sample(tester, _core());
       await panel.sample(tester, FsResult(_fs), stream: SampleStream.fs);
       await panel.sample(tester, _identity, stream: SampleStream.identity);
