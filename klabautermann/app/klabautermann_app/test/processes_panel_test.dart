@@ -6,7 +6,8 @@ import 'package:klabautermann_app/controllers/monitoring_controller.dart';
 import 'package:klabautermann_app/l10n/app_localizations.dart';
 import 'package:klabautermann_app/theme/app_theme.dart';
 import 'package:klabautermann_app/ui/processes_panel.dart';
-import 'package:klabautermann_app/ui/processes_view.dart' show ProcessColumn;
+import 'package:klabautermann_app/ui/processes_view.dart'
+    show ProcessColumn, kProcessTextLimit;
 import 'package:klabautermann_app/ui/sortable_table.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 
@@ -381,6 +382,36 @@ void main() {
     expect(find.text('--password=hunter2'), findsNothing);
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
     handle.dispose();
+  });
+
+  testWidgets('a long masked argument reads cut, as it draws', (tester) async {
+    final panel = await _pump(tester);
+    final script = '${'x' * 5000} TOKEN=';
+    await panel.all(
+      tester,
+      ProcsResult([
+        ProcessRow(
+          pid: 900,
+          name: 'sh',
+          arguments: [
+            MaskedValue.plain('sh'),
+            MaskedValue.plain('-c'),
+            MaskedValue.redacted('$script********', '${script}hunter2'),
+          ],
+        ),
+      ]),
+    );
+
+    await tester.tap(_row(900));
+    await tester.pumpAndSettle();
+    final masked = tester.widget<Semantics>(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is Semantics &&
+            widget.properties.hint == 'Show the masked value',
+      ),
+    );
+    expect(masked.properties.label, '${'x' * kProcessTextLimit}…');
   });
 
   testWidgets('SAF-07: touch platforms give a masked argument a 48 dp tap '

@@ -729,7 +729,9 @@ class _ProcessSheetState extends State<_ProcessSheet> {
       // A masked value is read as masked, never as eight asterisks.
       label: revealed
           ? shown
-          : argumentText(argument, maskWord: l10n.processesMasked),
+          : clipProcessText(
+              argumentText(argument, maskWord: l10n.processesMasked),
+            ),
       hint: revealed ? l10n.processesHideHint : l10n.processesRevealHint,
       excludeSemantics: true,
       onTap: () => _toggle(index),
