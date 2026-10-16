@@ -53,7 +53,7 @@ String? localUserName(Map<String, String> environment) {
 /// `CredentialResolver.jumpHostResolver`. Built from what the import store
 /// holds; nothing here crosses the isolate boundary but [entries].
 final class ImportedFleet {
-  ImportedFleet._(this.entries, this._configs, this._endpoints);
+  ImportedFleet._(this.entries, this._configs, this._endpoints, this._detail);
 
   /// Maps [hosts], in order, through the hop records [hops], logging in
   /// as [localUser] wherever a host or hop names no user. A host whose
@@ -151,6 +151,7 @@ final class ImportedFleet {
             [config.host, config.port, host.user ?? localUser],
           ]),
       },
+      detail,
     );
   }
 
@@ -160,6 +161,8 @@ final class ImportedFleet {
   final Map<String, ServerConfig> _configs;
 
   final Map<String, String> _endpoints;
+
+  final ImportedHostDetail _detail;
 
   /// The config of an imported host (`ssh-config:<alias>`) or a jump hop
   /// (`ssh-config-hop:...`); null for any other id, for a host or hop with
@@ -172,6 +175,18 @@ final class ImportedFleet {
   /// the host (03 §4.7's endpoint, with each hop by its address). Null for
   /// an id the fleet does not list.
   String? endpointOf(String id) => _endpoints[id];
+
+  /// Why the imported host [id] has no [serverConfig], so a connect to it
+  /// cannot start: an address-only store, or no login name for the host
+  /// or a hop on its route, the only other reason a listed host lacks
+  /// one. Null when it has a config or the fleet does not list it.
+  ConnectRejectedReason? missingConfigReason(String id) {
+    if (_configs.containsKey(id) || !_endpoints.containsKey(id)) return null;
+    return switch (_detail) {
+      ImportedHostDetail.addressOnly => ConnectRejectedReason.addressOnlyImport,
+      ImportedHostDetail.full => ConnectRejectedReason.noLoginName,
+    };
+  }
 
   /// For each of [mapped], the ids of the others that pin a host key at
   /// one of its pin locators (`host:port`, 03 §4.6) behind another route,

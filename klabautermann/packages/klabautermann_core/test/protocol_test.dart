@@ -131,6 +131,7 @@ void main() {
       final events = <EngineEvent>[
         const EngineReady(kEngineProtocolVersion),
         const RequestRejected('Connect', 'nope'),
+        const ConnectRejected('srv-1', ConnectRejectedReason.noLoginName),
         CatalogReplaced(const [_webEntry]),
         const SshConfigImported(importedCount: 1, skippedCount: 0, saved: true),
         const SyncStatus(SyncPhase.running),
@@ -1051,6 +1052,18 @@ void main() {
             reason: '${distinct[i]} vs ${distinct[j]}',
           );
         }
+      }
+    });
+
+    test('a Connect rejection keeps its server and every reason', () async {
+      for (final reason in ConnectRejectedReason.values) {
+        final received =
+            await roundTrip(ConnectRejected('ssh-config:web', reason))
+                as ConnectRejected;
+        expect(
+          (received.serverId, received.reason),
+          ('ssh-config:web', reason),
+        );
       }
     });
 

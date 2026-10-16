@@ -78,8 +78,9 @@ import 'package:meta/meta.dart';
 /// a cancel ends (03 §10.1), within v3 the same way.
 ///
 /// [HostKeyPromptRequest] then gained `pinnedFingerprintSha256` and
-/// `pinnedKeyType` for the re-pin review of a changed key (03 §4.6,
-/// §10.1, D60), within v3 the same way.
+/// `pinnedKeyType` for the re-pin review of a changed key, and
+/// [ConnectRejected] joined to say why a [Connect] to a fleet server
+/// cannot start (03 §4.6, §10.1, D60), within v3 the same way.
 const int kEngineProtocolVersion = 3;
 
 /// Every message the UI isolate sends the engine (03 §10.1, D18). Plain data
@@ -154,7 +155,7 @@ final class SetMonitorSet extends EngineRequest {
 /// Opens the SSH link to one server (03 §10.1). The app sends it when the
 /// user opens the server, so the connect may prompt; to a server blocked
 /// by [LinkBlockedReason.hostKeyChanged] it reviews the changed key
-/// (D60).
+/// (D60). A fleet server the engine cannot dial gets [ConnectRejected].
 final class Connect extends EngineRequest {
   const Connect(this.serverId);
 
@@ -412,6 +413,31 @@ final class LinkState extends EngineEvent {
 
   final String serverId;
   final LinkStatus status;
+}
+
+/// A [Connect] to the fleet server [serverId] could not start, because the
+/// engine has no config to dial it with (03 §10.1, D60). Nothing about
+/// the server's link changes; a later [CatalogReplaced] may give it one.
+/// A [Connect] for an id outside the fleet still gets [RequestRejected].
+final class ConnectRejected extends EngineEvent {
+  const ConnectRejected(this.serverId, this.reason);
+
+  final String serverId;
+  final ConnectRejectedReason reason;
+}
+
+/// Why the engine has no config for a fleet server.
+enum ConnectRejectedReason {
+  /// No login name is known for the server or a jump host on its route:
+  /// the import names no `User`, and neither `USER` nor `USERNAME` is
+  /// set in the engine's environment.
+  noLoginName,
+
+  /// The import store is of an older schema (1 or 2), which kept each
+  /// host's address only (`ImportedHostDetail.addressOnly`), so how the
+  /// server signs in and which jump hosts it needs are unknown until the
+  /// next import.
+  addressOnlyImport,
 }
 
 /// The last reachability probe of [serverId] (FL-04, 03 §5.12). A probe

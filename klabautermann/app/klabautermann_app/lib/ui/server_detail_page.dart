@@ -9,6 +9,7 @@ import 'access/panel_gate.dart';
 import 'inspector_pane.dart' show PlaceholderPaneBody;
 import 'logs/logs_panel.dart';
 import 'overview_panel.dart';
+import 'connect_rejected_banner.dart';
 import 'server_coverage.dart';
 import 'server_header.dart';
 import 'server_surfaces.dart';
@@ -103,9 +104,19 @@ class _ServerDetailPageState extends State<ServerDetailPage>
             monitoring: widget.monitoring,
             showTitle: false,
           ),
-          banner: BackgroundReturnBanner(
-            monitoring: widget.monitoring,
-            serverId: widget.server.id,
+          banner: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              ConnectRejectedBanner(
+                monitoring: widget.monitoring,
+                serverId: widget.server.id,
+              ),
+              BackgroundReturnBanner(
+                monitoring: widget.monitoring,
+                serverId: widget.server.id,
+              ),
+            ],
           ),
           child: SelectedTabView(
             controller: _destinations,

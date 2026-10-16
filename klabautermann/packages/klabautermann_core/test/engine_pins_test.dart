@@ -5,6 +5,8 @@ import 'dart:isolate';
 
 import 'package:klabautermann_core/klabautermann_core.dart';
 import 'package:klabautermann_core/src/engine/engine_isolate.dart';
+import 'package:klabautermann_core/src/fleet/ssh_config_import_store.dart'
+    show sshConfigImportsFileName;
 import 'package:klabautermann_core/src/links/host_key_pins.dart';
 import 'package:seance_core/seance_core.dart'
     show
@@ -362,5 +364,33 @@ void main() {
 
       expect(_files(support), before, reason: 'not quarantined');
     });
+  });
+
+  test('a Connect to a fleet server without a config says why (D60)', () async {
+    // A schema 1 store kept addresses only, so the engine maps no config
+    // until the next import.
+    File(
+      '${support.path}${Platform.pathSeparator}$sshConfigImportsFileName',
+    ).writeAsStringSync(
+      jsonEncode({
+        'version': 1,
+        'entries': [
+          {'alias': 'web', 'host': '192.0.2.10', 'port': 22, 'user': 'me'},
+        ],
+      }),
+    );
+    final engine = await start(SupportDirectoryAccess.exclusive);
+
+    engine.send(const Connect(_web));
+    final rejected = await engine.next() as ConnectRejected;
+    expect(
+      (rejected.serverId, rejected.reason),
+      (_web, ConnectRejectedReason.addressOnlyImport),
+    );
+    expect(server.links, isEmpty);
+
+    // An id outside the fleet is no server the app lists.
+    engine.send(const Connect('ssh-config:gone'));
+    expect((await engine.next() as RequestRejected).requestName, 'Connect');
   });
 }

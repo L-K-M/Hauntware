@@ -71,10 +71,12 @@ final class EngineStart {
 /// names it (03 §6.1, D59), [ImportSshConfig] gets
 /// [CatalogReplaced] and [SshConfigImported], [Connect], [Disconnect] and
 /// [SetAppActivity] go to the link supervisor and [AnswerPrompt] to the
-/// prompt broker (03 §5.1), [OpenLogStream] and [CloseStream] go to the
-/// log streams, which read each window over its server's link (03 §5.2,
-/// §7.6), [Shutdown] ends every log stream and exits, and every other
-/// 03 §10.1 row gets [RequestRejected] until its milestone lands.
+/// prompt broker (03 §5.1), a [Connect] to a fleet server without a
+/// config gets [ConnectRejected] (D60), [OpenLogStream] and
+/// [CloseStream] go to the log streams, which read each window over its
+/// server's link (03 §5.2, §7.6), [Shutdown] ends every log stream and
+/// exits, and every other 03 §10.1 row gets [RequestRejected] until its
+/// milestone lands.
 ///
 /// [dial] replaces `SshLink.connect`, so tests can run the engine's links
 /// without a network. [subscriptions], when given, holds the sampling
@@ -247,7 +249,16 @@ void engineMain(
           serverId,
           purpose: ConnectPurpose.interactive,
         )) {
-          reject(message, 'no fleet server $serverId the engine can dial');
+          // A fleet server without a config is the user's to fix, so the
+          // app is told why; any other id is not a server it lists.
+          switch (fleetIds.contains(serverId)
+              ? fleet.missingConfigReason(serverId)
+              : null) {
+            case final reason?:
+              uiPort.send(ConnectRejected(serverId, reason));
+            case null:
+              reject(message, 'no fleet server $serverId the engine can dial');
+          }
         }
       case Disconnect(:final serverId):
         // Its streams end before its link closes, so none reports

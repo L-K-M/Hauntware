@@ -950,7 +950,10 @@ Proposals awaiting the owner close the section; they are not decisions.
   trusting it replaces the pin through `TofuVerifier.pin` and connects.
   Declining it, letting it expire or leaving the server before deciding
   blocks the server again. The first `Connect` after a restart blocks
-  too, so the user sees the block before any review. A lane decision
+  too, so the user sees the block before any review. A `Connect` to a
+  fleet server without a config (no login name, or an address-only
+  import; 10.1) gets `ConnectRejected` with the reason, which the app
+  shows on the server's view instead of ignoring it. A lane decision
   within the M2 plan's approved scope (its section 2), which owner
   question O8 reopens only if the owner treats host-key policy as
   theirs. Why: `TofuVerifier` "requires the user to explicitly re-pin"
@@ -4378,7 +4381,7 @@ shows there.
 | `EnrollSync`, `RunSyncRound` | `CatalogReplaced(entries)`, `SyncStatus` |
 | `ImportSshConfig(text)` (FL-02, desktop) | `CatalogReplaced(entries)` with the imports, then `SshConfigImported(importedCount, skippedCount, saved)` |
 | `ConfirmEndpoints(ids)`, `SetMonitorSet(ids)` | `EndpointChanged(serverId)` |
-| `Connect(serverId)`, `Disconnect(serverId)` | `LinkState(serverId, status)` (D46's states plus `blocked`; typed reasons inside the status) |
+| `Connect(serverId)`, `Disconnect(serverId)` | `LinkState(serverId, status)` (D46's states plus `blocked`; typed reasons inside the status), `ConnectRejected(serverId, reason)` (no config to dial with, D60) |
 | `Subscribe(serverId, subscriptionId, streams)`, `Unsubscribe(serverId, subscriptionId)`, `SetCadenceProfile(profile)`; app activity is a separate request too (D45) | `Sample(serverId, stream, seq, at, result)` (engine-owned `seq`, D44; rates and derived values, D43), `SamplingState(serverId, phase, since)`, `Gap(serverId, streams, from, until, cause)` |
 | none: the engine probes after connecting (6.1) | `HostProfileChanged(serverId, profile, cachedAt)` (`cachedAt` only on the device cache's copy, D59) |
 | `OpenLogStream(streamId, spec)`, `CloseStream(streamId)` | `LogBatch(streamId, records, dropped)` (at most 20 per second per stream [E]), `LogStreamState(streamId, status)` |
@@ -4662,10 +4665,10 @@ the engine in `engine_isolate.dart` beside it):
   `Disconnect` and `SetAppActivity` to its link supervisor (5.1, 5.12)
   and `AnswerPrompt` to its prompt broker. `Connect` is the user's
   connect, since the app sends it when a view opens, so it may prompt.
-  `RequestRejected` answers a `Connect` for a server the engine cannot
-  dial (outside the fleet, a jump hop's id included, or without a
-  config) and an `AnswerPrompt` for a prompt that is not open or with
-  an answer that does not fit it.
+  `RequestRejected` answers a `Connect` for an id outside the fleet, a
+  jump hop's id included, and an `AnswerPrompt` for a prompt that is not
+  open or with an answer that does not fit it; a fleet server without a
+  config gets `ConnectRejected` (M2 pins, below).
   `IsolateEngineClient.spawn(linksEnabled:)` (`EngineStart.linksEnabled`,
   off unless given) turns links on. Off, the engine has no supervisor,
   so `Connect` gets `RequestRejected` and nothing dials, while
@@ -4828,13 +4831,24 @@ the engine in `engine_isolate.dart` beside it):
   `PromptSecretAnswer(null)` rather than leave the attempt waiting out
   the expiry. With links off, as in the app until K44, no prompt
   arrives.
-- **Version 3 (M2 pins).** The re-pin joined version 3 the same way
-  (D60). `HostKeyPromptRequest` gained
+- **Version 3 (M2 pins).** Persistent pins and the re-pin joined version
+  3 the same way (D60). `HostKeyPromptRequest` gained
   `pinnedFingerprintSha256` and `pinnedKeyType`, set only when the
   presented key differs from the pinned one, which only the user's
   `Connect` to a server blocked by `hostKeyChanged` asks about. The app
   maps them onto `GhostHostKeyPrompt`'s pinned fields, so `ghost_servers`
   shows its changed-key review, and answers with `PromptTrustAnswer`.
+  `ConnectRejected(serverId, reason)` answers a `Connect` to a fleet
+  server the engine has no config for: `noLoginName` when neither the
+  import nor `USER` or `USERNAME` names a login name for the server or a
+  jump host on its route, and `addressOnlyImport` for a schema 1 or 2
+  import store (4.10). Nothing about the link changes. The monitoring
+  controller keeps the reason while a view holds the server, and the
+  server's workspace and phone screen show it as a banner until the
+  server's next `Connect`. A new fleet sends that `Connect` for each
+  rejected server it still lists, so an import that fixes the config
+  connects the open view. With links off, the engine answers `Connect`
+  with `RequestRejected` before it looks for a config.
 - **`SetAppActivity(activity)`** is a request of its own and applies to
   every subscription, link and probe at once: 6.4 pauses everything while
   the app is in the background, and D34 adds the phones' grace period
@@ -4881,7 +4895,8 @@ the engine in `engine_isolate.dart` beside it):
   monitoring controller has no endpoint to compare on the first import
   after launch; that purge needs the engine to report the change
   (`EndpointChanged`) or the startup entries. With links off, the
-  engine's rejection of `Connect` shows nothing. A server that leaves
+  engine's `RequestRejected` of `Connect` shows nothing; a
+  `ConnectRejected` shows on the server's views (M2 pins, above). A server that leaves
   the fleet is sent nothing until it comes back, when the views and
   surfaces still holding it connect and subscribe again (5.1).
 - **`Reachability(serverId, status)`** reports one server's latest probe
