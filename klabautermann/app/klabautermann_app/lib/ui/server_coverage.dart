@@ -18,6 +18,9 @@ const Duration _sessionSpan = Duration(minutes: 10);
 /// The session chart's height before text scaling.
 const double _sessionChartHeight = 160;
 
+/// The most of the screen's height the return banner takes.
+const double _bannerMaxShare = 0.2;
+
 /// The subscription surface of the card's one `units` read (D45).
 const String _unitsSurface = 'coverage';
 
@@ -269,32 +272,40 @@ class BackgroundReturnBanner extends StatelessWidget {
         }
         return Material(
           color: colors.secondaryContainer,
-          child: Padding(
-            padding: const EdgeInsetsDirectional.fromSTEB(16, 8, 8, 8),
-            child: Row(
-              spacing: 12,
-              children: [
-                Icon(
-                  Icons.pause_circle_outline,
-                  color: colors.onSecondaryContainer,
-                ),
-                Expanded(
-                  // A state change, which screen readers hear (A11Y-15).
-                  child: Semantics(
-                    liveRegion: true,
-                    child: Text(
-                      l10n.coverageReturnBanner(start, end),
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: colors.onSecondaryContainer,
+          // Past its share of the screen it scrolls, so at large text the
+          // panel under it keeps its room on a short screen (A11Y-09).
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.sizeOf(context).height * _bannerMaxShare,
+            ),
+            child: SingleChildScrollView(
+              primary: false,
+              padding: const EdgeInsetsDirectional.fromSTEB(16, 8, 8, 8),
+              child: Row(
+                spacing: 12,
+                children: [
+                  Icon(
+                    Icons.pause_circle_outline,
+                    color: colors.onSecondaryContainer,
+                  ),
+                  Expanded(
+                    // A state change, which screen readers hear (A11Y-15).
+                    child: Semantics(
+                      liveRegion: true,
+                      child: Text(
+                        l10n.coverageReturnBanner(start, end),
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: colors.onSecondaryContainer,
+                        ),
                       ),
                     ),
                   ),
-                ),
-                TextButton(
-                  onPressed: monitoring.dismissBackgroundPause,
-                  child: Text(l10n.coverageReturnDismiss),
-                ),
-              ],
+                  TextButton(
+                    onPressed: monitoring.dismissBackgroundPause,
+                    child: Text(l10n.coverageReturnDismiss),
+                  ),
+                ],
+              ),
             ),
           ),
         );

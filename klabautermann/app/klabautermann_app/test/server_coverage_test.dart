@@ -351,6 +351,23 @@ void main() {
       expect(find.textContaining(RegExp(banner)), findsNothing);
     });
 
+    // A11Y-09: past its share of the screen the banner scrolls, so the
+    // panel under it keeps its room on a small or landscape phone.
+    for (final size in [const Size(360, 640), const Size(568, 320)]) {
+      testWidgets('fits at 200 % text on a ${size.width.round()} x '
+          '${size.height.round()} phone', (tester) async {
+        await pumpApp(tester, size: size, servers: twoServers);
+        await tester.tap(find.text('web-1'));
+        await tester.pumpAndSettle();
+        awayAndBack(tester);
+        tester.platformDispatcher.textScaleFactorTestValue = 2;
+        addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+        await tester.pumpAndSettle();
+        expect(find.textContaining(RegExp(banner)), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      });
+    }
+
     testWidgets('stays away when nothing was sampled', (tester) async {
       await pumpApp(tester, size: _phone, servers: twoServers);
       awayAndBack(tester);
