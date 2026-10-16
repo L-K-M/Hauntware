@@ -585,6 +585,31 @@ void main() {
       );
     });
 
+    test('udisks2 mount points and their units name no account', () {
+      // udisks2 mounts removable media at /media/<user>/<label> (Debian,
+      // Ubuntu) or /run/media/<user>/<label>; a bare /media/<name> is
+      // a mount point of its own.
+      const fs =
+          '/dev/sdb1 ext4 100 1 99 1% /media/jdoe/JDOE_BACKUP\n'
+          '/dev/sdc1 vfat 100 1 99 1% /run/media/jdoe/KINGSTON\n'
+          '/dev/sr0 iso9660 100 100 0 100% /media/cdrom0';
+      expect(
+        _redact(fs, collector: 'fs'),
+        '/dev/sdb1 ext4 100 1 99 1% /media/user/JDOE_BACKUP\n'
+        '/dev/sdc1 vfat 100 1 99 1% /run/media/user/KINGSTON\n'
+        '/dev/sr0 iso9660 100 100 0 100% /media/cdrom0',
+      );
+      expect(
+        _redact(
+          'media-jdoe-JDOE_BACKUP.mount "run-media-jdoe-KINGSTON.mount" '
+          r'run-media-j\xc3\xbcrgen-X.mount media-cdrom0.mount',
+          collector: 'units',
+        ),
+        'media-user-JDOE_BACKUP.mount "run-media-user-KINGSTON.mount" '
+        'run-media-user2-X.mount media-cdrom0.mount',
+      );
+    });
+
     test('session scopes name no account but root', () {
       expect(
         _redact(

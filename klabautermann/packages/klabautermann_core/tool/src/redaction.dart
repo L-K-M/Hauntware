@@ -318,6 +318,22 @@ final _accountPatterns = <_Rule>[
     ),
     (m, ids) => '${m[1]}${ids.user(m[0]!.substring(m[1]!.length))}',
   ),
+  // udisks2 mounts removable media at /media/<user>/<label> (Debian,
+  // Ubuntu) or /run/media/<user>/<label>, also as mount unit names; a
+  // bare /media/<name> is a mount point of its own.
+  (
+    'user name',
+    RegExp(r'''((?:/run)?/media/)([^/\s"'\\:;,)\]}\x00-\x1f]+)(?=/)'''),
+    (m, ids) => '${m[1]}${ids.user(m[2]!)}',
+  ),
+  (
+    'user name',
+    RegExp(
+      '(?<![^\\s"\'\\[,])((?:run-)?media-)(?:$_escape|[^\\s"\'@/\\\\-])+'
+      r'''(?=-[^\s"']*\.(auto)?mount(?![A-Za-z0-9]))''',
+    ),
+    (m, ids) => '${m[1]}${ids.user(m[0]!.substring(m[1]!.length))}',
+  ),
   // logind's session scopes, described as `Session <id> of User <name>`
   // (`of user` before systemd 249).
   (
