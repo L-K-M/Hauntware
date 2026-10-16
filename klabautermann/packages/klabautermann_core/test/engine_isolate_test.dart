@@ -568,29 +568,38 @@ void main() {
       }
     });
 
-    test('a store the engine leaves as it is purges no file: its empty '
-        'fleet removed no server', () async {
-      await cacheWeb();
-      importsFile.writeAsStringSync(
-        jsonEncode({
-          'version': sshConfigImportsSchemaVersion + 1,
-          'entries': <Object?>[],
-        }),
-      );
-
-      final client = await spawnEngine(
-        access: SupportDirectoryAccess.exclusive,
-      );
-      expect(
-        client.ready.importStoreIssue?.kind,
+    for (final (kind, leave) in [
+      (
         ImportStoreIssueKind.newerVersion,
-      );
-      final (:events, fleet: _) = await started(client);
-      // Requests wait for the cache to open, so an answer comes after any
-      // start sweep.
-      await import(client, events, otherConfig);
-      expect(cacheFile().existsSync(), isTrue);
-    });
+        () => importsFile.writeAsStringSync(
+          jsonEncode({
+            'version': sshConfigImportsSchemaVersion + 1,
+            'entries': <Object?>[],
+          }),
+        ),
+      ),
+      // A directory cannot be read as the file, also by root.
+      (
+        ImportStoreIssueKind.leftAsIs,
+        () => Directory(importsFile.path).createSync(),
+      ),
+    ]) {
+      test('a store the engine leaves as it is (${kind.name}) purges no '
+          'file: its empty fleet removed no server', () async {
+        await cacheWeb();
+        leave();
+
+        final client = await spawnEngine(
+          access: SupportDirectoryAccess.exclusive,
+        );
+        expect(client.ready.importStoreIssue?.kind, kind);
+        final (:events, fleet: _) = await started(client);
+        // Requests wait for the cache to open, so an answer comes after
+        // any start sweep.
+        await import(client, events, otherConfig);
+        expect(cacheFile().existsSync(), isTrue);
+      });
+    }
   });
 
   group('engineMain raw messages', () {
