@@ -165,9 +165,12 @@ final class MonitoringController extends ChangeNotifier {
     SampleStream stream,
   ) => _server(serverId).lastReading(stream);
 
-  /// What the probe last found on [serverId] ([HostProfileChanged]), or
-  /// null before its first answer this engine run: SYS-01's
-  /// virtualization and the container facts behind D50's unknowns.
+  /// What the probe last found on [serverId] ([HostProfileChanged]):
+  /// SYS-01's virtualization and the container facts behind D50's
+  /// unknowns. Until this engine run's probe answers, it may be the device
+  /// cache's copy from an earlier run, up to 24 hours old (D59; the
+  /// event's `cachedAt` is not kept here yet), and it is null before
+  /// either.
   ValueListenable<HostProfile?> profileFor(String serverId) =>
       _server(serverId).profile;
 
