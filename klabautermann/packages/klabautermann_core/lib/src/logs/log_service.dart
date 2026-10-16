@@ -1,6 +1,7 @@
 /// The engine's bounded log reads (03 §7.6, §10.1): an [OpenLogStream]
 /// with `follow: false` reads one window of a server's logs over its link
-/// and ends. Followers arrive with K26.
+/// and ends. `LogStreamRouter` decides when each read opens here.
+/// Followers arrive with K26.
 ///
 /// A read runs one host command at a time through
 /// [HostCommands.commandLine]: `journalctl -o json -r -n <window>` for the
@@ -15,6 +16,7 @@
 ///    │         └─ kernel log, no journal record ─▶ running (fallback)
 ///    └─ spec refused ─▶ ended (invalid)
 ///   closeStream ─▶ ended (closed)        close() ─▶ ended (failed)
+///   pause ─▶ no event: the router opens the stream again later
 /// ```
 library;
 
@@ -60,6 +62,7 @@ final class LogService {
     required this._emit,
     this._maxOutputBytes = kLogReadMaxOutputBytes,
     this._deadline = kLogReadDeadline,
+    this._startTimer = Timer.new,
   });
 
   final SshLink _link;
@@ -73,9 +76,23 @@ final class LogService {
   final int _maxOutputBytes;
   final Duration _deadline;
 
+  /// Starts each command's deadline; a test seam.
+  final Timer Function(Duration duration, void Function() callback) _startTimer;
+
   final _reads = <String, _Read>{};
   final _closing = <Future<void>>{};
   Future<void>? _closeDone;
+
+  /// Whether [open] runs [spec], a window, rather than ending it as
+  /// invalid at once (03 §8.8).
+  static bool accepts(LogStreamSpec spec) {
+    try {
+      _primaryCommand(spec);
+      return true;
+    } on HostCommandError {
+      return false;
+    }
+  }
 
   /// Opens [streamId] on [spec], a window. Before it returns it sends
   /// [LogStreamRunning], or [LogStreamEnded] with
@@ -118,6 +135,16 @@ final class LogService {
     final read = _reads[streamId];
     if (read == null) return;
     _end(read, const LogStreamEnded(LogStreamEndReason.closed));
+  }
+
+  /// Stops [streamId]'s read and closes its process without an event, for
+  /// a read the engine opens again later (03 §6.4's background pause). It
+  /// has sent no batch, since a window sends its one batch as it ends.
+  /// Does nothing when the stream is not open.
+  void pause(String streamId) {
+    final read = _reads[streamId];
+    if (read == null) return;
+    _end(read, null);
   }
 
   /// Stops the service, for a link that closed or a server the engine
@@ -260,14 +287,15 @@ final class LogService {
     _end(read, _failure(out) ?? LogStreamEnded(window.end));
   }
 
-  /// Ends [read] with [status], its last event, and stops its command.
-  void _end(_Read read, LogStreamEnded status) {
+  /// Ends [read] with [status], its last event, or with none when null
+  /// ([pause]), and stops its command.
+  void _end(_Read read, LogStreamEnded? status) {
     if (read.ended) return;
     read.ended = true;
     _reads.remove(read.streamId);
     final run = read.run;
     if (run != null) _settle(run, const _Unfinished());
-    _emit(LogStreamState(read.streamId, status));
+    if (status != null) _emit(LogStreamState(read.streamId, status));
   }
 
   // -- host commands --------------------------------------------------
@@ -294,7 +322,7 @@ final class LogService {
     // Ended while the channel opened: _settle closes the late process.
     if (run.settled) return run.result.future;
 
-    run.deadline = Timer(
+    run.deadline = _startTimer(
       _deadline,
       () => _settle(run, _Unfinished(run.stderr.text)),
     );

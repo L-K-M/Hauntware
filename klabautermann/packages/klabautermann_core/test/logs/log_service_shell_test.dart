@@ -11,6 +11,7 @@ import 'dart:io';
 
 import 'package:klabautermann_core/klabautermann_core.dart';
 import 'package:klabautermann_core/src/logs/log_service.dart';
+import 'package:klabautermann_core/src/logs/log_stream_router.dart';
 import 'package:test/test.dart';
 
 import '../support/local_process_link.dart';
@@ -161,6 +162,51 @@ void main() {
           const LogStreamEnded(LogStreamEndReason.closed),
         );
         await link.processes.single.exit.timeout(const Duration(seconds: 10));
+      });
+
+      test('through the router, a third window waits for a channel and '
+          'runs once one frees; each ends once', () async {
+        final router = LogStreamRouter(linkFor: (_) => link, emit: events.add)
+          ..retain({'srv-1'});
+        final file = File('${dir.path}/app.log');
+        await file.writeAsString('one\ntwo\n');
+        for (final (id, source) in [
+          ('w1', waiting),
+          ('w2', waiting),
+          ('f', FileLogSource(file.path)),
+        ]) {
+          final spec = LogStreamSpec(
+            serverId: 'srv-1',
+            source: source,
+            window: 10,
+            follow: false,
+          );
+          expect(router.open(OpenLogStream(streamId: id, spec: spec)), isNull);
+        }
+        expect(statuses('f'), [
+          const LogStreamWaiting(LogStreamWaitReason.channel),
+        ]);
+        await _until(() => link.processes.length == 2);
+
+        router.closeStream('w1');
+        await _until(() => statuses('f').lastOrNull is LogStreamEnded);
+        expect(
+          statuses('f').last,
+          const LogStreamEnded(LogStreamEndReason.oldestReached),
+        );
+        expect(texts(), ['two', 'one']);
+
+        await router.close();
+        expect(
+          statuses('w2').last,
+          const LogStreamEnded(LogStreamEndReason.failed),
+        );
+        for (final id in ['w1', 'w2', 'f']) {
+          expect(statuses(id).whereType<LogStreamEnded>(), hasLength(1));
+        }
+        for (final p in link.processes) {
+          await p.exit.timeout(const Duration(seconds: 10));
+        }
       });
     });
   }

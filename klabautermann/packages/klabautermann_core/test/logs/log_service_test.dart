@@ -498,6 +498,8 @@ void main() {
         'empty': _spec(_journal, window: 0),
         'huge': _spec(_journal, window: kLogWindowMax + 1),
       };
+      expect(specs.values.where(LogService.accepts), isEmpty);
+      expect(LogService.accepts(_spec(_journal)), isTrue);
       specs.forEach(service.open);
       for (final id in specs.keys) {
         expect(statuses(id), [
@@ -541,6 +543,23 @@ void main() {
         );
       },
     );
+
+    test('pause closes the process without an event, and the id opens '
+        'again', () async {
+      final p = await open('a', _spec(_journal));
+      service
+        ..pause('a')
+        ..pause('a');
+      await _until(() => p.closeCalls == 1);
+      expect(statuses('a'), [const LogStreamRunning()]);
+
+      expect(await read('a', _spec(_journal), stdout: _entries(2, 1)), _oldest);
+      expect(statuses('a'), [
+        const LogStreamRunning(),
+        const LogStreamRunning(),
+        _oldest,
+      ]);
+    });
 
     test('the detail keeps the end of a long stderr', () async {
       final stderr = '${'warning: skipped\n' * 400}Failed to open journal\n';
