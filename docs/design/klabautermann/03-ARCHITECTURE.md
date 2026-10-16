@@ -4666,11 +4666,11 @@ subscribes while it shows:
   PRC-02 (M4). A row opens the process's details in a sheet: its figures,
   parent PID, state and each argument (8.9's reveal).
 - A user reads as a name only where the host gives one: a `ps`
-  fallback's column, or the probe's login user for that uid; otherwise
-  "UID n". A start shows its time on the day of the reading, else its
-  date, and "unknown" where the engine could not date it (7.2). A row
-  with no command line shows the kernel's name and "command line
-  unavailable".
+  fallback's column, unless GNU `ps` cut it to 7 characters and a `+`,
+  or the probe's login user for that uid; otherwise "UID n". A start
+  shows its time on the day of the reading, else its date, and
+  "unknown" where the engine could not date it (7.2). A row with no
+  command line shows the kernel's name and "command line unavailable".
 - The filter needs every term in the PID, name, user or shown command
   line. It draws and searches at most 4,096 characters of a command
   line or argument, which can fill the 1 MiB section.

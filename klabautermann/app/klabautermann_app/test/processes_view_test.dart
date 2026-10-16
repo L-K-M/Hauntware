@@ -68,6 +68,12 @@ void main() {
       processUserName(_row(1, userName: 'www-data', uid: 33), profile),
       'www-data',
     );
+    // GNU ps cuts a name wider than its column to seven characters and a
+    // plus sign: not the name.
+    expect(
+      processUserName(_row(1, userName: 'systemd+', uid: 101), profile),
+      isNull,
+    );
     expect(processUserName(_row(1, uid: 1000), profile), 'deploy');
     expect(processUserName(_row(1, uid: 0), profile), isNull);
     expect(processUserName(_row(1, uid: 1000), null), isNull);

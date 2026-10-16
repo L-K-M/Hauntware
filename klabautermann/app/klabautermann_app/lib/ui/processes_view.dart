@@ -48,9 +48,14 @@ String? commandLineText(ProcessRow row, {String? maskWord}) {
 
 /// Who runs [row] by name: the name a `ps` fallback gave, or the probe's
 /// login user (`id -un`) for that user's uid. Null otherwise, leaving the
-/// uid: the host sends no user table, and a name is never guessed.
+/// uid: the host sends no user table, and a name is never guessed. GNU
+/// `ps` cuts a name wider than its 8-column field to 7 characters and a
+/// `+`, which is not the name.
 String? processUserName(ProcessRow row, HostProfile? profile) {
-  if (row.userName case final name?) return name;
+  if (row.userName case final name?
+      when !(name.length == 8 && name.endsWith('+'))) {
+    return name;
+  }
 
   final uid = row.uid;
   if (uid == null || uid != profile?.uid) return null;

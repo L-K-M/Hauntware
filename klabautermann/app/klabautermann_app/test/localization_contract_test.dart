@@ -283,11 +283,13 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   'lib/ui/processes_view.dart': {
     // The ellipsis ending a cut command line, the space between its
     // arguments, and the filter's term separator and the line break
-    // between the fields it searches.
+    // between the fields it searches. The plus sign GNU ps ends a cut
+    // user name with, which is matched, never shown.
     r"'${text.substring(0, end)}…'",
     "' '",
     r"r'\s+'",
     r"'\n'",
+    "'+'",
   },
   // An assert message; programmer diagnostic, never rendered.
   'lib/ui/server_surfaces.dart': {
