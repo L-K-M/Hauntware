@@ -21,9 +21,12 @@ const _wide = Size(718, 640);
 const _phone = Size(390, 844);
 
 final class _Panel {
-  _Panel(this.engine);
+  _Panel(this.engine, this.visible);
 
   final FakeEngineClient engine;
+
+  /// Whether the panel's tab shows.
+  final ValueNotifier<bool> visible;
 
   /// What the monitoring clock reads.
   DateTime now = jobsNow;
@@ -107,17 +110,27 @@ Future<_Panel> _pump(
   Size size = _wide,
   double textScale = 1,
   Brightness brightness = Brightness.light,
+  bool visible = true,
 }) async {
   final engine = FakeEngineClient();
-  final panel = _Panel(engine);
+  final shown = ValueNotifier(visible);
+  final panel = _Panel(engine, shown);
   final monitoring = MonitoringController(engine, now: () => panel.now);
   addTearDown(() async {
+    shown.dispose();
     monitoring.dispose();
     await engine.close();
   });
   await _frame(
     tester,
-    JobsPanel(monitoring: monitoring, serverId: _serverId, visible: true),
+    ValueListenableBuilder(
+      valueListenable: shown,
+      builder: (context, visible, _) => JobsPanel(
+        monitoring: monitoring,
+        serverId: _serverId,
+        visible: visible,
+      ),
+    ),
     size: size,
     textScale: textScale,
     brightness: brightness,
@@ -354,6 +367,25 @@ void main() {
       next(),
       Theme.of(tester.element(table)).colorScheme.onSurfaceVariant,
     );
+  });
+
+  testWidgets('the clock runs only while the tab shows', (tester) async {
+    final panel = await _pump(tester, visible: false);
+    await panel.all(tester);
+    expect(find.text('Updated 0 s ago'), findsOneWidget);
+
+    // Hidden: nothing ages.
+    panel.now = jobsNow.add(const Duration(seconds: 19));
+    await tester.pump(const Duration(seconds: 2));
+    expect(find.text('Updated 0 s ago'), findsOneWidget);
+
+    panel.visible.value = true;
+    await tester.pump();
+    expect(find.text('Updated 19 s ago'), findsOneWidget);
+
+    panel.now = jobsNow.add(const Duration(seconds: 25));
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.text('Updated 25 s ago'), findsOneWidget);
   });
 
   testWidgets('a run the clock has passed no longer reads as next', (
