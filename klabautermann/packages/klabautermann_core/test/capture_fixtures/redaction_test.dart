@@ -649,6 +649,9 @@ void main() {
           'backup@192.0.2.1:/x Walrus5Arg\n'
           'dev-sdb1.device   loaded active plugged  Kingston Erins USB\n'
           'run-u8.service loaded active running "/opt/my app/run" Zebra8\n'
+          // Started remotely (-H), the program stays relative.
+          'run-u9.service loaded active running offsite-sync Zebra9\n'
+          'run-p42-i7.scope loaded active running mysqldump -pQuokka db\n'
           'cron.service loaded active running Regular background daemon\n'
           'short.service loaded active';
       final redacted = _redact(units, collector: 'units');
@@ -671,6 +674,8 @@ void main() {
         '[redacted]\n'
         'dev-sdb1.device   loaded active plugged  [redacted]\n'
         'run-u8.service loaded active running "/opt/my [redacted]\n'
+        'run-u9.service loaded active running offsite-sync [redacted]\n'
+        'run-p42-i7.scope loaded active running mysqldump [redacted]\n'
         'cron.service loaded active running Regular background daemon\n'
         'short.service loaded active',
       );

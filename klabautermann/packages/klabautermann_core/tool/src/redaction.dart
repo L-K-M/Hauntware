@@ -1048,12 +1048,20 @@ final _runTag = RegExp(r'^\[[A-Za-z0-9_.-]+\] ');
 /// quoted since systemd 255 when it holds a blank, `\"` inside JSON.
 final _absoluteProgram = RegExp(r'^(?:\\?")?/');
 
+/// The names systemd-run gives a transient unit without `--unit`
+/// (run.c): `run-u<n>` after the bus connection, `run-r<hex>` on a
+/// private one, `run-p<pid>-i<n>` since systemd 256.
+final _transientUnit = RegExp(
+  r'^run-(?:u\d+|r[0-9a-f]+|p\d+-i\d+)\.(?:service|scope|timer)$',
+);
+
 /// Rewrites the unit descriptions of a `units` payload (03 §7.5). A
 /// transient unit that systemd-run started is described by its command
 /// line (run.c), which keeps its first word, as an argv does; before
 /// systemd 257 that line starts with the program's absolute path when
 /// started locally, so every description starting with one does too (a
-/// mount point keeps its first word). A device unit's description
+/// mount point keeps its first word), and so does that of a unit with a
+/// [_transientUnit] name. A device unit's description
 /// appends the filesystem label or partition name to the model
 /// (device.c), so it reads [kRedacted] whole.
 String _redactUnits(String text, void Function(String rule) count) {
@@ -1063,7 +1071,8 @@ String _redactUnits(String text, void Function(String rule) count) {
       kept = description.isEmpty ? description : kRedacted;
     } else if (_runTag.firstMatch(description) case final tag?) {
       kept = tag[0]! + _keepFirstWord(description.substring(tag.end));
-    } else if (_absoluteProgram.hasMatch(description)) {
+    } else if (_absoluteProgram.hasMatch(description) ||
+        _transientUnit.hasMatch(unit)) {
       kept = _keepFirstWord(description);
     } else {
       return description;
