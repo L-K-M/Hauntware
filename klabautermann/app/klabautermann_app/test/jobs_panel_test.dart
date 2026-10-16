@@ -5,6 +5,7 @@ import 'package:klabautermann_app/controllers/monitoring_controller.dart';
 import 'package:klabautermann_app/l10n/app_localizations.dart';
 import 'package:klabautermann_app/theme/app_theme.dart';
 import 'package:klabautermann_app/ui/jobs_panel.dart';
+import 'package:klabautermann_app/ui/sortable_table.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 import 'package:klabautermann_host/klabautermann_host.dart'
     show CronDirEntry, CronPeriod, OnCalendarElapse;
@@ -309,6 +310,35 @@ void main() {
     );
     expect(find.text('systemctl: timed out'), findsOneWidget);
     expect(find.text('apt-daily.timer'), findsOneWidget);
+  });
+
+  testWidgets('a clock tick ages the freshness line, not the table', (
+    tester,
+  ) async {
+    final panel = await _pump(tester);
+    await panel.all(tester);
+    final table = find.byType(SortableTable<JobEntry>);
+    final before = tester.widget(table);
+    Color? next() => tester
+        .widget<Text>(find.text(clock('Sat, Oct 24 7:41 PM')))
+        .style
+        ?.color;
+    expect(next(), isNull);
+
+    // A long list is not sorted again every second.
+    panel.now = jobsNow.add(const Duration(seconds: 5));
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.text('Updated 5 s ago'), findsOneWidget);
+    expect(tester.widget(table), same(before));
+
+    // It follows the clock once its times turn stale.
+    panel.now = jobsNow.add(const Duration(minutes: 2));
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.text('Stale: updated 2 min ago'), findsOneWidget);
+    expect(
+      next(),
+      Theme.of(tester.element(table)).colorScheme.onSurfaceVariant,
+    );
   });
 
   testWidgets('only both readings say the server has no job', (tester) async {

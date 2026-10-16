@@ -1,5 +1,6 @@
 import 'dart:async' show unawaited;
 
+import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 
@@ -37,7 +38,8 @@ enum _Column { job, source, schedule, next }
 /// of each stream stay under one freshness line in 9.5 item 4's words, and
 /// a failed reading says why above them. A row opens its details: every
 /// schedule, each run with its offset and DST note. Nothing animates
-/// (A11Y-11); the clock ticks only while [visible].
+/// (A11Y-11); the clock ticks only while [visible], and the table follows
+/// it only when its rows would change.
 class JobsPanel extends StatefulWidget {
   const JobsPanel({
     super.key,
@@ -88,19 +90,12 @@ class _JobsPanelState extends State<JobsPanel> {
         profile,
         sampling,
       ]),
-      builder: (context, _) => ListenableBuilder(
-        listenable:
-            widget.visible &&
-                (cronReading.value != null || timersReading.value != null)
-            ? monitoring.clock
-            : _silent,
-        builder: (context, _) => _build(
-          context,
-          latest: [cron.value, timers.value],
-          readings: [?cronReading.value, ?timersReading.value],
-          profile: profile.value,
-          sampling: sampling.value,
-        ),
+      builder: (context, _) => _build(
+        context,
+        latest: [cron.value, timers.value],
+        readings: [?cronReading.value, ?timersReading.value],
+        profile: profile.value,
+        sampling: sampling.value,
       ),
     );
   }
@@ -113,12 +108,14 @@ class _JobsPanelState extends State<JobsPanel> {
     required SamplingStatus? sampling,
   }) {
     final l10n = AppLocalizations.of(context);
+    final clock = widget.monitoring.clock;
     // The list is as fresh as its older stream.
     final oldest = readings.isEmpty
         ? null
         : readings.map((s) => s.at).reduce((a, b) => a.isBefore(b) ? a : b);
-    final freshness = freshnessOf(
-      now: widget.monitoring.clock.value,
+    final ticking = widget.visible && oldest != null;
+    Freshness freshnessAt(DateTime now) => freshnessOf(
+      now: now,
       staleAfter: _staleAfter,
       lastSampleAt: oldest,
       // No monitor set watches a server yet (FL-21): this panel samples it
@@ -160,10 +157,16 @@ class _JobsPanelState extends State<JobsPanel> {
       (job) => job is TimerJobEntry && job.timer.nextUtc != null,
     );
     final notices = [
-      if (oldest != null || freshness is FreshnessPaused)
-        PanelNotice(
-          icon: freshness.stale ? Icons.history : Icons.schedule,
-          text: freshnessText(l10n, freshness),
+      if (oldest != null || freshnessAt(clock.value) is FreshnessPaused)
+        ListenableBuilder(
+          listenable: ticking ? clock : _silent,
+          builder: (context, _) {
+            final freshness = freshnessAt(clock.value);
+            return PanelNotice(
+              icon: freshness.stale ? Icons.history : Icons.schedule,
+              text: freshnessText(l10n, freshness),
+            );
+          },
         ),
       ...unavailable,
       if (readings.isEmpty && unavailable.isEmpty)
@@ -204,30 +207,37 @@ class _JobsPanelState extends State<JobsPanel> {
               const SizedBox(height: 12),
               if (readings.isNotEmpty)
                 Expanded(
-                  child: SortableTable<JobEntry>(
-                    tableId: ServerPanel.jobs.name,
-                    columns: _columns(
-                      l10n,
-                      wide: wide,
-                      stale: freshness.stale,
-                      serverOffset: serverOffset,
+                  child: _ClockGate(
+                    clock: clock,
+                    ticking: ticking,
+                    dueAfter: (now) => freshnessAt(now).stale
+                        ? null
+                        : oldest?.add(_staleAfter),
+                    builder: (context, now) => SortableTable<JobEntry>(
+                      tableId: ServerPanel.jobs.name,
+                      columns: _columns(
+                        l10n,
+                        wide: wide,
+                        stale: freshnessAt(now).stale,
+                        serverOffset: serverOffset,
+                      ),
+                      rows: jobs,
+                      rowKey: (job) => job.id,
+                      sort: _sort,
+                      onSort: (sort) => setState(() => _sort = sort),
+                      // The table cuts commands and schedules short
+                      // (A11Y-09); the details do not.
+                      onRowActivated: (job) =>
+                          _showDetails(context, job, profile),
+                      // Only both readings say the server has no job; an
+                      // unread or failed stream's notice stands above.
+                      empty: readings.length == 2
+                          ? Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Text(l10n.jobsEmpty),
+                            )
+                          : null,
                     ),
-                    rows: jobs,
-                    rowKey: (job) => job.id,
-                    sort: _sort,
-                    onSort: (sort) => setState(() => _sort = sort),
-                    // The table cuts commands and schedules short
-                    // (A11Y-09); the details do not.
-                    onRowActivated: (job) =>
-                        _showDetails(context, job, profile),
-                    // Only both readings say the server has no job; an
-                    // unread or failed stream's notice stands above.
-                    empty: readings.length == 2
-                        ? Padding(
-                            padding: const EdgeInsets.all(16),
-                            child: Text(l10n.jobsEmpty),
-                          )
-                        : null,
                   ),
                 ),
             ],
@@ -236,6 +246,84 @@ class _JobsPanelState extends State<JobsPanel> {
       },
     );
   }
+}
+
+/// Builds its child as of the clock's time, and again only once the clock
+/// reaches the instant [dueAfter] gives for that time, rather than on
+/// every tick: the cron stream bounds the lines it evaluates, not those it
+/// lists, so a long table is not sorted again every second.
+class _ClockGate extends StatefulWidget {
+  const _ClockGate({
+    required this.clock,
+    required this.ticking,
+    required this.dueAfter,
+    required this.builder,
+  });
+
+  final ValueListenable<DateTime> clock;
+
+  /// Whether the clock may tick for it: the tab shows an age.
+  final bool ticking;
+
+  /// When the child built for a time changes next; null when it does not.
+  final DateTime? Function(DateTime now) dueAfter;
+
+  final Widget Function(BuildContext context, DateTime now) builder;
+
+  @override
+  State<_ClockGate> createState() => _ClockGateState();
+}
+
+class _ClockGateState extends State<_ClockGate> {
+  late DateTime _now;
+  DateTime? _due;
+  bool _listening = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _judge();
+  }
+
+  @override
+  void didUpdateWidget(_ClockGate oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_listening && oldWidget.clock != widget.clock) {
+      oldWidget.clock.removeListener(_tick);
+      _listening = false;
+    }
+    _judge();
+  }
+
+  @override
+  void dispose() {
+    if (_listening) widget.clock.removeListener(_tick);
+    super.dispose();
+  }
+
+  /// Takes the clock's time, and listens to it only until a change is due.
+  void _judge() {
+    _now = widget.clock.value;
+    _due = widget.dueAfter(_now);
+    final listen = widget.ticking && _due != null;
+    if (listen == _listening) return;
+
+    if (listen) {
+      widget.clock.addListener(_tick);
+    } else {
+      widget.clock.removeListener(_tick);
+    }
+    _listening = listen;
+  }
+
+  void _tick() {
+    final due = _due;
+    if (due == null || widget.clock.value.isBefore(due)) return;
+    setState(_judge);
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.builder(context, _now);
 }
 
 /// Which clock the cron rows' times follow (CN-02, D58): the server zone's
