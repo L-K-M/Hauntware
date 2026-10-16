@@ -399,10 +399,11 @@ final class MonitoringController extends ChangeNotifier {
     switch (activity) {
       case AppActivity.background:
         _backgroundSince = now;
+        // A server the fleet no longer lists has no phase: its readings
+        // were purged, and its SamplingStates are dropped.
         _pausedServers = {
           for (final MapEntry(key: id, value: readings) in _readings.entries)
-            if (_listed(id) &&
-                readings.sampling.value?.state.phase == SamplingPhase.sampling)
+            if (readings.sampling.value?.state.phase == SamplingPhase.sampling)
               id,
         };
         _backgroundPause.value = null;

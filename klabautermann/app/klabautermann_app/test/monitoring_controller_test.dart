@@ -874,6 +874,18 @@ void main() {
       },
     );
 
+    test('a pause before any reading opens no gap', () async {
+      // Shown already, as the coverage card asks for it as it builds.
+      final history = monitoring.historyFor('srv-1', MetricSeries.cpuBusy);
+      monitoring.subscribe('srv-1', 'overview-0', {core});
+      phase(SamplingPhase.pausedInBackground, 5);
+      gap(GapCause.readingLost, 5, 9);
+      sample(9);
+      await settle();
+      expect(history.gaps, isEmpty);
+      expect(history.length, 1);
+    });
+
     test(
       'a stream nobody names ends its open gap and breaks the line',
       () async {

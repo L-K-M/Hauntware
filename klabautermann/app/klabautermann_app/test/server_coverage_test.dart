@@ -216,6 +216,19 @@ void main() {
     );
   });
 
+  testWidgets('a failed units read is not retried this engine run', (
+    tester,
+  ) async {
+    final card = await _pumpCard(tester);
+    card.sample(
+      SampleStream.units,
+      const CollectorUnavailable(CollectorUnavailableReason.denied),
+    );
+    await tester.pumpAndSettle();
+    expect(card.unitsReads, [isA<Subscribe>(), isA<Unsubscribe>()]);
+    expect(find.textContaining('cannot tell'), findsOneWidget);
+  });
+
   testWidgets('a hidden card reads nothing', (tester) async {
     final card = await _pumpCard(tester, visible: false);
     expect(card.unitsReads, isEmpty);
@@ -423,9 +436,15 @@ void main() {
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           home: Scaffold(
-            body: BackgroundReturnBanner(
-              monitoring: monitoring,
-              serverId: _serverId,
+            body: Column(
+              children: [
+                // Only the paused server's screen says so.
+                for (final serverId in [_serverId, 'srv-2'])
+                  BackgroundReturnBanner(
+                    monitoring: monitoring,
+                    serverId: serverId,
+                  ),
+              ],
             ),
           ),
         ),
