@@ -2396,8 +2396,11 @@ printf '\036%s READY HWS/1\n' "$N"
 
 The production program adds `timeout` absence handling (BusyBox and
 Alpine), `denied` detection, the collectors in 6.4 and a protocol version
-check. The program text is versioned (`HWS/1` plus a collector-set version)
-and is the single source for every runner, including the T1 scripts (9.3).
+check. Where `timeout` exists, a guarded command it stopped is `timeout`
+whether the guard exited 124 (GNU) or with the command's own 143 after
+its SIGTERM (BusyBox 1.38 on the Alpine fixture, 11.3 [L]). The program
+text is versioned (`HWS/1` plus a collector-set version) and is the single
+source for every runner, including the T1 scripts (9.3).
 
 ### 6.4 Collectors and cadence
 
