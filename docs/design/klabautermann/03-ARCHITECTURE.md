@@ -2736,8 +2736,11 @@ each row's source and the user its line names:
   that carries them shows the elapses as `systemd-analyze` printed
   them, the random delay as a note and, below systemd 242, that only
   the next run is listed.
-- A row opens everything the table cuts short in a sheet. Times turn
-  grey once the older stream's reading is past 120 s, twice the 6.4
+- A row opens everything the table cuts short in a sheet. A run the
+  clock has passed since the reading drops out of both, and a timer's
+  passed elapse reads as unknown until the next reading; the table
+  follows the clock only at such a run or when it turns stale. Times
+  turn grey once the older stream's reading is past 120 s, twice the 6.4
   period, beside the freshness line; a failed reading's reason stands
   above the last rows; an unclear `crontab -l` says the user's own jobs
   may be missing. The phone reaches the tab once More lists it (10.5).

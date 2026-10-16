@@ -341,6 +341,63 @@ void main() {
     );
   });
 
+  testWidgets('a run the clock has passed no longer reads as next', (
+    tester,
+  ) async {
+    final panel = await _pump(tester);
+    await panel.emit(tester, HostProfileChanged(_serverId, jobsProfile));
+    await panel.sample(
+      tester,
+      SampleStream.cron,
+      cronResultOf(
+        CronSnapshot(
+          jobs: [cronLine('crontab', '* * * * *', '/usr/local/bin/tick')],
+          ownCrontabPresent: true,
+        ),
+      ),
+    );
+    await panel.sample(
+      tester,
+      SampleStream.timers,
+      TimersResult(
+        TimersSnapshot(
+          timers: [
+            SystemdTimer(
+              unit: 'tick.timer',
+              nextUs: jobsNow
+                  .add(const Duration(seconds: 45))
+                  .microsecondsSinceEpoch,
+            ),
+          ],
+        ),
+      ),
+    );
+    Finder next(String row, String text) =>
+        find.descendant(of: _row(row), matching: find.text(clock(text)));
+    expect(next('cron|crontab|0', 'Sat, Oct 24 2:01 PM'), findsOneWidget);
+    expect(next('timer|tick.timer', 'Sat, Oct 24 2:00 PM'), findsOneWidget);
+
+    // Still fresh, the reading's first run and the timer's one elapse
+    // have passed: the next listed run leads, and the timer waits for
+    // the next reading.
+    panel.now = jobsNow.add(const Duration(seconds: 90));
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.text('Updated 1 min ago'), findsOneWidget);
+    expect(next('cron|crontab|0', 'Sat, Oct 24 2:02 PM'), findsOneWidget);
+    expect(next('timer|tick.timer', 'unknown'), findsOneWidget);
+
+    await tester.tap(_row('cron|crontab|0'));
+    await tester.pumpAndSettle();
+    expect(
+      _inSheet(clock('Sat, Oct 24, 2026 2:01 PM UTC+02:00')),
+      findsNothing,
+    );
+    expect(
+      _inSheet(clock('Sat, Oct 24, 2026 2:02 PM UTC+02:00')),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('only both readings say the server has no job', (tester) async {
     final panel = await _pump(tester);
     const empty = 'No cron jobs or timers on this server.';
@@ -383,6 +440,7 @@ void main() {
           SingleChildScrollView(
             child: JobDetails(
               job: timer(),
+              now: jobsNow,
               profile: HostProfile(
                 zoneOffset: '+0200',
                 systemdVersion: version,

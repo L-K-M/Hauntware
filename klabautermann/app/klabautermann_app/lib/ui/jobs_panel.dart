@@ -110,9 +110,7 @@ class _JobsPanelState extends State<JobsPanel> {
     final l10n = AppLocalizations.of(context);
     final clock = widget.monitoring.clock;
     // The list is as fresh as its older stream.
-    final oldest = readings.isEmpty
-        ? null
-        : readings.map((s) => s.at).reduce((a, b) => a.isBefore(b) ? a : b);
+    final oldest = _earliest(readings.map((s) => s.at));
     final ticking = widget.visible && oldest != null;
     Freshness freshnessAt(DateTime now) => freshnessOf(
       now: now,
@@ -210,9 +208,11 @@ class _JobsPanelState extends State<JobsPanel> {
                   child: _ClockGate(
                     clock: clock,
                     ticking: ticking,
-                    dueAfter: (now) => freshnessAt(now).stale
-                        ? null
-                        : oldest?.add(_staleAfter),
+                    // The times turn stale, or a run they show passes.
+                    dueAfter: (now) => _earliest([
+                      if (!freshnessAt(now).stale) ?oldest?.add(_staleAfter),
+                      for (final job in jobs) ?_nextAfter(job, now),
+                    ]),
                     builder: (context, now) => SortableTable<JobEntry>(
                       tableId: ServerPanel.jobs.name,
                       columns: _columns(
@@ -220,6 +220,7 @@ class _JobsPanelState extends State<JobsPanel> {
                         wide: wide,
                         stale: freshnessAt(now).stale,
                         serverOffset: serverOffset,
+                        now: now,
                       ),
                       rows: jobs,
                       rowKey: (job) => job.id,
@@ -228,7 +229,7 @@ class _JobsPanelState extends State<JobsPanel> {
                       // The table cuts commands and schedules short
                       // (A11Y-09); the details do not.
                       onRowActivated: (job) =>
-                          _showDetails(context, job, profile),
+                          _showDetails(context, job, profile, clock.value),
                       // Only both readings say the server has no job; an
                       // unread or failed stream's notice stands above.
                       empty: readings.length == 2
@@ -348,14 +349,35 @@ PanelNotice? _cronZone(
   );
 }
 
+/// The earliest of [instants], or null without one.
+DateTime? _earliest(Iterable<DateTime> instants) =>
+    instants.isEmpty ? null : instants.reduce((a, b) => a.isBefore(b) ? a : b);
+
+/// The first of [job]'s cron runs after [now], so a run the clock has
+/// passed since the reading never reads as next; null for a timer, and
+/// once every listed run has passed.
+CronRun? _cronRunAfter(JobEntry job, DateTime now) =>
+    cronRuns(job).$1.where((run) => run.atUtc.isAfter(now)).firstOrNull;
+
+/// When [job] runs next after [now]. systemd lists one elapse per timer,
+/// so once the clock passes it the next one waits for the next reading.
+DateTime? _nextAfter(JobEntry job, DateTime now) => switch (job) {
+  TimerJobEntry(timer: SystemdTimer(:final nextUtc?))
+      when nextUtc.isAfter(now) =>
+    nextUtc,
+  TimerJobEntry() => null,
+  _ => _cronRunAfter(job, now)?.atUtc,
+};
+
 List<SortableTableColumn<JobEntry>> _columns(
   AppLocalizations l10n, {
   required bool wide,
   required bool stale,
   required Duration? serverOffset,
+  required DateTime now,
 }) {
   ({String time, bool dst}) next(JobEntry job) =>
-      _next(l10n, job, serverOffset);
+      _next(l10n, job, serverOffset, now);
   return [
     SortableTableColumn(
       id: _Column.job.name,
@@ -386,7 +408,7 @@ List<SortableTableColumn<JobEntry>> _columns(
         (:final time, dst: true) => l10n.jobsNextRunDst(time),
         (:final time, dst: false) => time,
       },
-      sortKey: (job) => job.nextRunUtc,
+      sortKey: (job) => _nextAfter(job, now),
       extent: FixedColumnExtent(wide ? 200 : 176),
       cell: (context, job) => _NextCell(next(job), stale: stale),
     ),
@@ -408,26 +430,30 @@ String _scheduleCell(AppLocalizations l10n, JobEntry job) {
       : runsUnknownText(l10n, unknown);
 }
 
-/// A row's next run on its zone's clock, and whether a DST change marks
-/// it: a timer's at the server's offset now (systemd gives an instant), or
-/// the text systemd printed when it gave no instant; a cron run with the
+/// A row's next run after [now] on its zone's clock, and whether a DST
+/// change marks it: a timer's at the server's offset now (systemd gives an
+/// instant), or the text systemd printed when it gave no instant; a cron
+/// run with the
 /// `CRON_TZ` zone it follows, or with its offset when the row's lines
 /// follow different zones, as a periodic script's may.
 ({String time, bool dst}) _next(
   AppLocalizations l10n,
   JobEntry job,
   Duration? serverOffset,
+  DateTime now,
 ) {
   if (job case TimerJobEntry(:final timer)) {
-    final next = timer.nextUtc;
-    final time = next == null
-        ? timer.nextText ?? l10n.chartUnknownValue
-        : l10n.jobsNextRun(wallAt(next, serverOffset ?? Duration.zero));
+    final time = switch ((_nextAfter(job, now), timer.nextUtc)) {
+      (final next?, _) => l10n.jobsNextRun(
+        wallAt(next, serverOffset ?? Duration.zero),
+      ),
+      (null, null) => timer.nextText ?? l10n.chartUnknownValue,
+      (null, _) => l10n.chartUnknownValue,
+    };
     return (time: time, dst: false);
   }
 
-  final (runs, _) = cronRuns(job);
-  final run = runs.firstOrNull;
+  final run = _cronRunAfter(job, now);
   if (run == null) return (time: l10n.chartUnknownValue, dst: false);
 
   final zones = {
@@ -482,8 +508,13 @@ class _NextCell extends StatelessWidget {
 }
 
 /// A job's details in a sheet (03 §10.5: details push further), as of the
-/// reading the row came from.
-void _showDetails(BuildContext context, JobEntry job, HostProfile? profile) {
+/// reading the row came from and the clock's time [now].
+void _showDetails(
+  BuildContext context,
+  JobEntry job,
+  HostProfile? profile,
+  DateTime now,
+) {
   unawaited(
     showModalBottomSheet<void>(
       context: context,
@@ -492,7 +523,7 @@ void _showDetails(BuildContext context, JobEntry job, HostProfile? profile) {
       builder: (context) => SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-          child: JobDetails(job: job, profile: profile),
+          child: JobDetails(job: job, profile: profile, now: now),
         ),
       ),
     ),
@@ -500,14 +531,22 @@ void _showDetails(BuildContext context, JobEntry job, HostProfile? profile) {
 }
 
 /// One job in full (JOB-02): its source, a cron line's fields as written
-/// or the unit a timer starts, every schedule in words, and its next runs,
-/// each on its zone's clock with that zone's offset and any DST note; for
-/// a timer, its random delay and, below systemd 242, that only the next
-/// calendar run is listed.
+/// or the unit a timer starts, every schedule in words, and its runs after
+/// [now], each on its zone's clock with that zone's offset and any DST
+/// note; for a timer, its random delay and, below systemd 242, that only
+/// the next calendar run is listed.
 class JobDetails extends StatelessWidget {
-  const JobDetails({super.key, required this.job, this.profile});
+  const JobDetails({
+    super.key,
+    required this.job,
+    this.profile,
+    required this.now,
+  });
 
   final JobEntry job;
+
+  /// The monitoring clock's time when the details opened.
+  final DateTime now;
 
   /// The probe's latest answer: the server's offset now and its systemd
   /// version.
@@ -561,7 +600,8 @@ class JobDetails extends StatelessWidget {
   }
 
   List<Widget> _cronRuns(AppLocalizations l10n, JobEntry job) {
-    final (runs, unknown) = cronRuns(job);
+    final (listed, unknown) = cronRuns(job);
+    final runs = listed.where((run) => run.atUtc.isAfter(now)).toList();
     if (runs.isEmpty) {
       return [
         _Run(
@@ -582,18 +622,17 @@ class JobDetails extends StatelessWidget {
   /// server's clock.
   List<Widget> _timerRuns(AppLocalizations l10n, TimerJobEntry job) {
     final timer = job.timer;
-    final next = timer.nextUtc;
     final offset = profile?.serverZone?.offset ?? Duration.zero;
     final delay = job.randomizedDelay;
     return [
-      _Run(
-        next == null
-            ? timer.nextText ?? l10n.chartUnknownValue
-            : l10n.jobsRunTime(
-                wallAt(next, offset),
-                utcOffsetText(l10n, offset),
-              ),
-      ),
+      _Run(switch ((_nextAfter(job, now), timer.nextUtc)) {
+        (final next?, _) => l10n.jobsRunTime(
+          wallAt(next, offset),
+          utcOffsetText(l10n, offset),
+        ),
+        (null, null) => timer.nextText ?? l10n.chartUnknownValue,
+        (null, _) => l10n.chartUnknownValue,
+      }),
       for (final trigger in job.triggers ?? const <ScheduleDescription>[])
         if (trigger case CalendarSchedule(:final elapses?))
           _Labelled(scheduleText(l10n, trigger), [
