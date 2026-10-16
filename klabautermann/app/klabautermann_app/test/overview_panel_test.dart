@@ -1162,7 +1162,8 @@ void main() {
       expect(await hold(79.4), ['CPU 79%: back to normal']);
     });
 
-    testWidgets('each listed mount is heard by its own band', (tester) async {
+    testWidgets('each listed mount is heard by its own band, a reading\'s '
+        'changes in one announcement', (tester) async {
       final announce = ValueNotifier(true);
       addTearDown(announce.dispose);
       final panel = await _pump(tester, announce: announce);
@@ -1177,9 +1178,10 @@ void main() {
       await fs(30, [_mount('/', use: 95), _mount('/var', use: 10, inodes: 85)]);
       expect(heard(tester), isEmpty);
       await fs(60, [_mount('/', use: 95), _mount('/var', use: 10, inodes: 85)]);
+      // One utterance: a second announcement sent at once would cut the
+      // first off on iOS and replace it on Windows.
       expect(heard(tester), [
-        'Disk / 95%: critical level',
-        'Inodes on /var 85%: warning level',
+        'Disk / 95%: critical level, Inodes on /var 85%: warning level',
       ]);
     });
 

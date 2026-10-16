@@ -132,7 +132,8 @@ typedef _WatchKey = (BandMetric metric, String? mountPoint);
 /// while [active]: the Overview shows and the switch is on. Values that
 /// refresh every few seconds are never live regions; only band changes
 /// are heard, once each [BandWatch] lets them through. Going inactive
-/// drops every watch, so a return starts from what then shows.
+/// drops every watch, so a return starts from what then shows. The
+/// changes one reading brings are one announcement.
 ///
 /// Where the platform takes no announcements (Android), the latest
 /// changes are the label of a live region, as the fleet list's link
@@ -287,16 +288,19 @@ class _ThresholdAnnouncerState extends State<ThresholdAnnouncer> {
     );
   }
 
+  /// One reading's changes, as one utterance either way: iOS speaks a
+  /// Flutter announcement at once, cutting off the one before it, and
+  /// Windows keeps one alert text that the next announcement replaces, so
+  /// changes sent one by one could leave only the last heard.
   void _announce(List<String> changes) {
     if (changes.isEmpty) return;
 
+    final text = changes.join(_l10n.chartListSeparator);
     if (!_announces) {
-      setState(() => _liveText = changes.join(_l10n.chartListSeparator));
+      setState(() => _liveText = text);
       return;
     }
-    for (final change in changes) {
-      unawaited(SemanticsService.sendAnnouncement(_view, change, _direction));
-    }
+    unawaited(SemanticsService.sendAnnouncement(_view, text, _direction));
   }
 
   @override
