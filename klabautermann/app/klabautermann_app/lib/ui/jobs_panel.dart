@@ -686,10 +686,14 @@ class JobDetails extends StatelessWidget {
 
   /// The next elapse systemd listed, then each calendar trigger's elapses
   /// after [now] as the host's `systemd-analyze calendar` printed them, on
-  /// the server's clock.
+  /// the server's clock. Without those elapses the one run is all the app
+  /// has, which a note says, so it never reads as the whole schedule.
   List<Widget> _timerRuns(AppLocalizations l10n, TimerJobEntry job) {
     final offset = profile?.serverZone?.offset ?? Duration.zero;
     final delay = job.randomizedDelay;
+    final elapsesRead = (job.triggers ?? const []).any(
+      (trigger) => trigger is CalendarSchedule && trigger.elapses != null,
+    );
     return [
       _Run(switch (_nextAfter(job, now)) {
         final next? => l10n.jobsRunTime(
@@ -697,7 +701,7 @@ class JobDetails extends StatelessWidget {
           utcOffsetText(l10n, offset),
         ),
         null => l10n.chartUnknownValue,
-      }),
+      }, note: elapsesRead ? null : l10n.jobsTimerOneRun),
       for (final trigger in job.triggers ?? const <ScheduleDescription>[])
         if (trigger case CalendarSchedule(:final elapses?))
           _Labelled(scheduleText(l10n, trigger), [

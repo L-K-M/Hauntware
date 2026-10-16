@@ -2163,6 +2163,10 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get jobsTimerOneRun =>
+      'systemd\'s timer list gives only the next run, so later runs are not shown.';
+
+  @override
   String get jobsCalendarOneRun =>
       'systemd before version 242 lists only the next run, so later runs are not shown.';
 }

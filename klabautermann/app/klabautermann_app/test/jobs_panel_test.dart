@@ -9,7 +9,7 @@ import 'package:klabautermann_app/ui/jobs_panel.dart';
 import 'package:klabautermann_app/ui/sortable_table.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 import 'package:klabautermann_host/klabautermann_host.dart'
-    show CronDirEntry, CronPeriod, OnCalendarElapse;
+    show CronDirEntry, CronPeriod, MonotonicBase, OnCalendarElapse;
 
 import 'support/charts.dart'
     show goldenFontFamily, goldensCompareHere, loadGoldenFonts;
@@ -140,6 +140,10 @@ Future<_Panel> _pump(
   );
   return panel;
 }
+
+const _timerOneRun =
+    "systemd's timer list gives only the next run, so later runs are not "
+    'shown.';
 
 Finder _row(String id) => find.byKey(ValueKey('jobs.row.$id'));
 
@@ -690,8 +694,43 @@ void main() {
           ),
           cut ? findsOneWidget : findsNothing,
         );
+        expect(find.text(_timerOneRun), findsNothing);
       });
     }
+
+    testWidgets('says only the next run is known without its elapses', (
+      tester,
+    ) async {
+      for (final job in [
+        TimerJobEntry(timer: timer().timer),
+        TimerJobEntry(
+          timer: timer().timer,
+          triggers: [
+            MonotonicSchedule(
+              base: MonotonicBase.unitActive,
+              span: const Duration(hours: 1),
+            ),
+          ],
+        ),
+      ]) {
+        await _frame(
+          tester,
+          SingleChildScrollView(
+            child: JobDetails(
+              job: job,
+              now: jobsNow,
+              profile: HostProfile(zoneOffset: '+0200', systemdVersion: 252),
+            ),
+          ),
+          size: _phone,
+        );
+        expect(
+          find.text(clock('Sun, Oct 25, 2026 7:12 AM UTC+02:00')),
+          findsOneWidget,
+        );
+        expect(find.text(_timerOneRun), findsOneWidget);
+      }
+    });
 
     testWidgets('drops a calendar run the clock has passed', (tester) async {
       await _frame(

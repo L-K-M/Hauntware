@@ -2884,6 +2884,12 @@ abstract class AppLocalizations {
   /// **'Each run starts up to {span} late, at random (RandomizedDelaySec).'**
   String jobsTimerRandomDelay(String span);
 
+  /// Under a systemd timer's one run in its details when no calendar trigger's runs were read: the next run comes from systemd's timer list, which gives one per timer, so the list is not complete.
+  ///
+  /// In en, this message translates to:
+  /// **'systemd\'s timer list gives only the next run, so later runs are not shown.'**
+  String get jobsTimerOneRun;
+
   /// Under an OnCalendar trigger's run on a server whose systemd predates 242, which cannot list more than one.
   ///
   /// In en, this message translates to:

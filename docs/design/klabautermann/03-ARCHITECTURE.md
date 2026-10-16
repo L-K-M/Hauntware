@@ -2894,7 +2894,8 @@ each row's source and the user its line names:
   or calendar elapses (D57), so the row says they are not read; a row
   that carries them shows the elapses as `systemd-analyze` printed
   them, the random delay as a note and, below systemd 242, that only
-  the next run is listed.
+  the next run is listed. Without calendar elapses, a timer's details
+  note that its one run is all systemd's timer list gives.
 - A row opens everything the table cuts short in a sheet. A touch row
   wraps its next run onto a second line, so the offset or zone after the
   time is not cut at phone width; a dense desktop row holds one. A run
