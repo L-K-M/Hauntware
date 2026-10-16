@@ -1,0 +1,589 @@
+import 'dart:async' show unawaited;
+
+import 'package:flutter/material.dart';
+import 'package:klabautermann_core/klabautermann_core.dart';
+
+import '../controllers/monitoring_controller.dart';
+import '../l10n/app_localizations.dart';
+import 'freshness.dart';
+import 'jobs_view.dart';
+import 'server_surfaces.dart' show ServerPanel;
+import 'sortable_table.dart';
+import 'system_panel.dart' show PanelNotice;
+
+/// The panel width from which the jobs table adds its source and schedule
+/// columns, growing with the text scale as the other panels' does.
+const double _wideWidth = 600;
+
+/// The share of its height the notices take before they scroll, so large
+/// text never pushes the table out of sight.
+const double _headerShare = 0.4;
+
+/// When the list turns stale: twice the 60 s period of `timers` and
+/// `cron` (03 §6.4), 10.3's rule.
+const Duration _staleAfter = Duration(seconds: 120);
+
+/// The jobs table's columns, whose names key them.
+enum _Column { job, source, schedule, next }
+
+/// The Jobs tab (03 §10.2, §7.7): JOB-01's unified list of the cron lines,
+/// `cron.<period>` scripts and systemd timers, and JOB-02's schedules in
+/// words with next runs on the server's clock.
+///
+/// It reads the `cron` and `timers` streams its [SampledSurface]
+/// subscribes. Cron rows and their runs come from the engine, evaluated in
+/// the server's zone (D58); a timer's row is its `systemctl list-timers`
+/// entry, whose next elapse systemd computed. The rows of the last reading
+/// of each stream stay under one freshness line in 9.5 item 4's words, and
+/// a failed reading says why above them. A row opens its details: every
+/// schedule, each run with its offset and DST note. Nothing animates
+/// (A11Y-11); the clock ticks only while [visible].
+class JobsPanel extends StatefulWidget {
+  const JobsPanel({
+    super.key,
+    required this.monitoring,
+    required this.serverId,
+    required this.visible,
+  });
+
+  final MonitoringController monitoring;
+  final String serverId;
+
+  /// Whether the panel's tab shows; see [SampledSurface.visible].
+  final bool visible;
+
+  @override
+  State<JobsPanel> createState() => _JobsPanelState();
+}
+
+class _JobsPanelState extends State<JobsPanel> {
+  /// What the panel listens to instead of the clock while nothing ages.
+  static final Listenable _silent = Listenable.merge(const []);
+
+  /// The table's order, which outlives tab switches: the workspace keeps a
+  /// panel built once opened. The next job to run leads.
+  TableSort? _sort = TableSort(_Column.next.name, TableSortDirection.ascending);
+
+  @override
+  Widget build(BuildContext context) {
+    final monitoring = widget.monitoring;
+    final serverId = widget.serverId;
+    // Read on every build: a server that left the fleet and came back has
+    // new listenables (SYN-08).
+    final cron = monitoring.sampleFor(serverId, SampleStream.cron);
+    final timers = monitoring.sampleFor(serverId, SampleStream.timers);
+    final cronReading = monitoring.lastReadingFor(serverId, SampleStream.cron);
+    final timersReading = monitoring.lastReadingFor(
+      serverId,
+      SampleStream.timers,
+    );
+    final profile = monitoring.profileFor(serverId);
+    final sampling = monitoring.samplingFor(serverId);
+    return ListenableBuilder(
+      listenable: Listenable.merge([
+        cron,
+        timers,
+        cronReading,
+        timersReading,
+        profile,
+        sampling,
+      ]),
+      builder: (context, _) => ListenableBuilder(
+        listenable:
+            widget.visible &&
+                (cronReading.value != null || timersReading.value != null)
+            ? monitoring.clock
+            : _silent,
+        builder: (context, _) => _build(
+          context,
+          latest: [cron.value, timers.value],
+          readings: [?cronReading.value, ?timersReading.value],
+          profile: profile.value,
+          sampling: sampling.value,
+        ),
+      ),
+    );
+  }
+
+  Widget _build(
+    BuildContext context, {
+    required List<Sample?> latest,
+    required List<Sample> readings,
+    required HostProfile? profile,
+    required SamplingStatus? sampling,
+  }) {
+    final l10n = AppLocalizations.of(context);
+    // The list is as fresh as its older stream.
+    final oldest = readings.isEmpty
+        ? null
+        : readings.map((s) => s.at).reduce((a, b) => a.isBefore(b) ? a : b);
+    final freshness = freshnessOf(
+      now: widget.monitoring.clock.value,
+      staleAfter: _staleAfter,
+      lastSampleAt: oldest,
+      // No monitor set watches a server yet (FL-21): this panel samples it
+      // while it shows.
+      watched: false,
+      sampling: sampling,
+    );
+    // lastReadingFor keeps only readings, each of its stream's variant.
+    final cron = readings
+        .map((s) => s.result)
+        .whereType<CronResult>()
+        .firstOrNull;
+    final timers = readings
+        .map((s) => s.result)
+        .whereType<TimersResult>()
+        .firstOrNull
+        ?.timers;
+    final serverOffset = profile?.serverZone?.offset;
+    final jobs = <JobEntry>[
+      ...?cron?.jobs,
+      for (final timer in timers?.timers ?? const <SystemdTimer>[])
+        TimerJobEntry(timer: timer),
+    ];
+    final unavailable = [
+      for (final sample in latest)
+        if (sample case Sample(
+          :final stream,
+          result: final CollectorUnavailable result,
+        ))
+          PanelNotice(
+            icon: result.reason == CollectorUnavailableReason.timeout
+                ? Icons.timer_off_outlined
+                : Icons.error_outline,
+            text: l10n.jobsUnavailable(stream.name, result.reason.name),
+            detail: result.detail,
+          ),
+    ];
+    final timed = jobs.any(
+      (job) => job is TimerJobEntry && job.timer.nextUtc != null,
+    );
+    final notices = [
+      if (oldest != null || freshness is FreshnessPaused)
+        PanelNotice(
+          icon: freshness.stale ? Icons.history : Icons.schedule,
+          text: freshnessText(l10n, freshness),
+        ),
+      ...unavailable,
+      if (readings.isEmpty && unavailable.isEmpty)
+        PanelNotice(icon: Icons.hourglass_empty, text: l10n.jobsWaiting),
+      if (cron != null && cron.cron.ownCrontabPresent == null)
+        PanelNotice(icon: Icons.info_outline, text: l10n.jobsOwnCrontabUnknown),
+      ?_cronZone(l10n, cron, serverOffset),
+      if (timed)
+        PanelNotice(
+          icon: Icons.public,
+          text: serverOffset == null
+              ? l10n.jobsTimerZoneUtc
+              : l10n.jobsTimerZone(utcOffsetText(l10n, serverOffset)),
+        ),
+    ];
+
+    return LayoutBuilder(
+      builder: (context, box) {
+        final wide =
+            box.maxWidth >= MediaQuery.textScalerOf(context).scale(_wideWidth);
+        return Padding(
+          padding: EdgeInsets.all(wide ? 20 : 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight: box.maxHeight * _headerShare,
+                ),
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    spacing: 8,
+                    children: notices,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              if (readings.isNotEmpty)
+                Expanded(
+                  child: SortableTable<JobEntry>(
+                    tableId: ServerPanel.jobs.name,
+                    columns: _columns(
+                      l10n,
+                      wide: wide,
+                      stale: freshness.stale,
+                      serverOffset: serverOffset,
+                    ),
+                    rows: jobs,
+                    rowKey: (job) => job.id,
+                    sort: _sort,
+                    onSort: (sort) => setState(() => _sort = sort),
+                    // The table cuts commands and schedules short
+                    // (A11Y-09); the details do not.
+                    onRowActivated: (job) =>
+                        _showDetails(context, job, profile),
+                    // Only both readings say the server has no job; an
+                    // unread or failed stream's notice stands above.
+                    empty: readings.length == 2
+                        ? Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Text(l10n.jobsEmpty),
+                          )
+                        : null,
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// Which clock the cron rows' times follow (CN-02, D58): the server zone's
+/// rules, or its offset now and why; nothing before the zone is known,
+/// when each row says so.
+PanelNotice? _cronZone(
+  AppLocalizations l10n,
+  CronResult? cron,
+  Duration? serverOffset,
+) {
+  if (cron == null || cron.jobs.isEmpty) return null;
+
+  final name = cron.zoneName;
+  if (name != null) {
+    return PanelNotice(icon: Icons.public, text: l10n.jobsZoneRules(name));
+  }
+  final fallback = cron.zoneFallback;
+  if (fallback == null || serverOffset == null) return null;
+  return PanelNotice(
+    icon: Icons.public,
+    text: l10n.jobsZoneFixed(utcOffsetText(l10n, serverOffset), fallback.name),
+  );
+}
+
+List<SortableTableColumn<JobEntry>> _columns(
+  AppLocalizations l10n, {
+  required bool wide,
+  required bool stale,
+  required Duration? serverOffset,
+}) {
+  ({String time, bool dst}) next(JobEntry job) =>
+      _next(l10n, job, serverOffset);
+  return [
+    SortableTableColumn(
+      id: _Column.job.name,
+      label: l10n.jobsColumnJob,
+      text: jobTitle,
+      sortKey: jobTitle,
+      extent: const FlexColumnExtent(3),
+    ),
+    if (wide)
+      SortableTableColumn(
+        id: _Column.source.name,
+        label: l10n.jobsColumnSource,
+        text: (job) => sourceText(l10n, job),
+        sortKey: (job) => sourceText(l10n, job),
+        extent: const FlexColumnExtent(2),
+      ),
+    if (wide)
+      SortableTableColumn(
+        id: _Column.schedule.name,
+        label: l10n.jobsColumnSchedule,
+        text: (job) => _scheduleCell(l10n, job),
+        extent: const FlexColumnExtent(3),
+      ),
+    SortableTableColumn(
+      id: _Column.next.name,
+      label: l10n.jobsColumnNext,
+      text: (job) => switch (next(job)) {
+        (:final time, dst: true) => l10n.jobsNextRunDst(time),
+        (:final time, dst: false) => time,
+      },
+      sortKey: (job) => job.nextRunUtc,
+      extent: FixedColumnExtent(wide ? 200 : 176),
+      cell: (context, job) => _NextCell(next(job), stale: stale),
+    ),
+  ];
+}
+
+/// A row's first schedule in words, why a cron row has none, or that a
+/// timer's triggers are not read.
+String _scheduleCell(AppLocalizations l10n, JobEntry job) {
+  if (job case TimerJobEntry(triggers: null)) {
+    return l10n.jobsTimerTriggersUnread;
+  }
+  if (job.schedules.firstOrNull case final schedule?) {
+    return scheduleText(l10n, schedule);
+  }
+  final (_, unknown) = cronRuns(job);
+  return unknown == null
+      ? l10n.chartUnknownValue
+      : runsUnknownText(l10n, unknown);
+}
+
+/// A row's next run on its zone's clock, and whether a DST change marks
+/// it: a timer's at the server's offset now (systemd gives an instant), or
+/// the text systemd printed when it gave no instant; a cron run with the
+/// `CRON_TZ` zone it follows.
+({String time, bool dst}) _next(
+  AppLocalizations l10n,
+  JobEntry job,
+  Duration? serverOffset,
+) {
+  if (job case TimerJobEntry(:final timer)) {
+    final next = timer.nextUtc;
+    final time = next == null
+        ? timer.nextText ?? l10n.chartUnknownValue
+        : l10n.jobsNextRun(wallAt(next, serverOffset ?? Duration.zero));
+    return (time: time, dst: false);
+  }
+
+  final (runs, _) = cronRuns(job);
+  final run = runs.firstOrNull;
+  if (run == null) return (time: l10n.chartUnknownValue, dst: false);
+
+  final zones = {
+    for (final s in job.schedules)
+      if (s is CronSchedule) s.timeZone,
+  };
+  final zone = zones.length == 1 ? zones.single : null;
+  final time = l10n.jobsNextRun(wallAt(run.atUtc, run.offset));
+  return (
+    time: zone == null ? time : l10n.jobsRunInZone(time, zone),
+    dst: run.dst != CronDst.none,
+  );
+}
+
+/// A next run, grey while stale beside the freshness line's history icon
+/// (03 §9.5 item 4), with an icon when a DST change marks it; the column's
+/// text names the change, and the details say what it does.
+class _NextCell extends StatelessWidget {
+  const _NextCell(this.next, {required this.stale});
+
+  final ({String time, bool dst}) next;
+  final bool stale;
+
+  @override
+  Widget build(BuildContext context) {
+    final muted = Theme.of(context).colorScheme.onSurfaceVariant;
+    return Row(
+      spacing: 4,
+      children: [
+        Flexible(
+          child: Text(
+            next.time,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            softWrap: false,
+            style: stale ? TextStyle(color: muted) : null,
+          ),
+        ),
+        if (next.dst) Icon(Icons.info_outline, size: 14, color: muted),
+      ],
+    );
+  }
+}
+
+/// A job's details in a sheet (03 §10.5: details push further), as of the
+/// reading the row came from.
+void _showDetails(BuildContext context, JobEntry job, HostProfile? profile) {
+  unawaited(
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (context) => SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+          child: JobDetails(job: job, profile: profile),
+        ),
+      ),
+    ),
+  );
+}
+
+/// One job in full (JOB-02): its source, a cron line's fields as written
+/// or the unit a timer starts, every schedule in words, and its next runs,
+/// each on its zone's clock with that zone's offset and any DST note; for
+/// a timer, its random delay and, below systemd 242, that only the next
+/// calendar run is listed.
+class JobDetails extends StatelessWidget {
+  const JobDetails({super.key, required this.job, this.profile});
+
+  final JobEntry job;
+
+  /// The probe's latest answer: the server's offset now and its systemd
+  /// version.
+  final HostProfile? profile;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+    final job = this.job;
+    final schedules = switch (job) {
+      TimerJobEntry(triggers: null) => [l10n.jobsTimerTriggersUnread],
+      _ => [for (final s in job.schedules) scheduleText(l10n, s)],
+    };
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      spacing: 12,
+      children: [
+        Semantics(
+          header: true,
+          child: Text(jobTitle(job), style: theme.textTheme.titleMedium),
+        ),
+        _Labelled(l10n.jobsColumnSource, [Text(sourceText(l10n, job))]),
+        ...switch (job) {
+          // The title is the line's command.
+          CronJobEntry(:final job) => [
+            _Labelled(l10n.jobsDetailsWritten, [Text(job.schedule)]),
+          ],
+          TimerJobEntry(timer: SystemdTimer(:final activates?)) => [
+            _Labelled(l10n.jobsDetailsStarts, [Text(activates)]),
+          ],
+          _ => const <Widget>[],
+        },
+        if (schedules.isNotEmpty)
+          _Labelled(l10n.jobsColumnSchedule, [
+            for (final schedule in schedules) Text(schedule),
+          ]),
+        Semantics(
+          header: true,
+          child: Text(
+            l10n.jobsDetailsNextRuns,
+            style: theme.textTheme.titleSmall,
+          ),
+        ),
+        ...switch (job) {
+          TimerJobEntry() => _timerRuns(l10n, job),
+          _ => _cronRuns(l10n, job),
+        },
+      ],
+    );
+  }
+
+  List<Widget> _cronRuns(AppLocalizations l10n, JobEntry job) {
+    final (runs, unknown) = cronRuns(job);
+    if (runs.isEmpty) {
+      return [
+        _Run(
+          unknown == null
+              ? l10n.chartUnknownValue
+              : runsUnknownText(l10n, unknown),
+        ),
+      ];
+    }
+    return [
+      for (final run in runs)
+        _Run(runTimeText(l10n, run), note: runNote(l10n, run)),
+    ];
+  }
+
+  /// The next elapse systemd listed, then each calendar trigger's elapses
+  /// as the host's `systemd-analyze calendar` printed them, on the
+  /// server's clock.
+  List<Widget> _timerRuns(AppLocalizations l10n, TimerJobEntry job) {
+    final timer = job.timer;
+    final next = timer.nextUtc;
+    final offset = profile?.serverZone?.offset ?? Duration.zero;
+    final delay = job.randomizedDelay;
+    return [
+      _Run(
+        next == null
+            ? timer.nextText ?? l10n.chartUnknownValue
+            : l10n.jobsRunTime(
+                wallAt(next, offset),
+                utcOffsetText(l10n, offset),
+              ),
+      ),
+      for (final trigger in job.triggers ?? const <ScheduleDescription>[])
+        if (trigger case CalendarSchedule(:final elapses?))
+          _Labelled(scheduleText(l10n, trigger), [
+            for (final elapse in elapses)
+              _Run(
+                elapse.text ??
+                    switch (elapse.atUtc) {
+                      final at? => l10n.jobsRunTime(
+                        at,
+                        utcOffsetText(l10n, Duration.zero),
+                      ),
+                      null => l10n.chartUnknownValue,
+                    },
+              ),
+            if (listsOneElapse(profile)) _Run.note(l10n.jobsCalendarOneRun),
+          ]),
+      if (delay != null && delay > Duration.zero)
+        _Run.note(l10n.jobsTimerRandomDelay(spanText(l10n, delay))),
+    ];
+  }
+}
+
+/// A label over its lines, read as one node; text wraps at any scale.
+class _Labelled extends StatelessWidget {
+  const _Labelled(this.label, this.children);
+
+  final String label;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return MergeSemantics(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        spacing: 4,
+        children: [
+          Text(
+            label,
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          ...children,
+        ],
+      ),
+    );
+  }
+}
+
+/// One run, or a note alone, with its note after an icon, so a DST change
+/// or a random delay is never told by colour (A11Y-01); read as one node.
+class _Run extends StatelessWidget {
+  const _Run(String this.time, {this.note});
+
+  const _Run.note(String this.note) : time = null;
+
+  final String? time;
+  final String? note;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final muted = theme.colorScheme.onSurfaceVariant;
+    final time = this.time;
+    final note = this.note;
+    return MergeSemantics(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        spacing: 2,
+        children: [
+          if (time != null) Text(time, style: theme.textTheme.bodyMedium),
+          if (note != null)
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              spacing: 4,
+              children: [
+                Icon(Icons.info_outline, size: 16, color: muted),
+                Expanded(
+                  child: Text(
+                    note,
+                    style: theme.textTheme.bodySmall?.copyWith(color: muted),
+                  ),
+                ),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+}

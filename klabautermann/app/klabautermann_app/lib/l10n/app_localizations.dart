@@ -2397,6 +2397,354 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'No swap is set up.'**
   String get overviewSwapNone;
+
+  /// The Jobs tab before the server's cron jobs or timers have been read.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for the first reading.'**
+  String get jobsWaiting;
+
+  /// The Jobs tab when every source was read and none holds a job.
+  ///
+  /// In en, this message translates to:
+  /// **'No cron jobs or timers on this server.'**
+  String get jobsEmpty;
+
+  /// Why the Jobs tab's latest cron or timers reading has no rows; the rows of the last reading, if any, stay listed below it.
+  ///
+  /// In en, this message translates to:
+  /// **'{source, select, cron{Cron jobs} other{Timers}} could not be read: {reason, select, missing{the server lacks a file or tool this reading needs.} denied{the server refused this reading.} timeout{this reading took too long, so the server stopped it.} other{this reading failed on the server.}}'**
+  String jobsUnavailable(String source, String reason);
+
+  /// The Jobs tab when the server's answer to crontab -l for the login user was unclear or crontab is not installed.
+  ///
+  /// In en, this message translates to:
+  /// **'Your own crontab could not be read, so its jobs may be missing.'**
+  String get jobsOwnCrontabUnknown;
+
+  /// Above the jobs list: cron run times follow the rules of the server's time zone, named by its IANA name (server data, as written).
+  ///
+  /// In en, this message translates to:
+  /// **'Cron times are in {zone}, the server\'s time zone.'**
+  String jobsZoneRules(String zone);
+
+  /// Above the jobs list: cron run times use the UTC offset the server reported, without its zone's DST rules, and why. offset is jobsUtcOffset.
+  ///
+  /// In en, this message translates to:
+  /// **'Cron times are at the server\'s offset now, {offset}, {reason, select, noZoneName{as it reported no time zone name} unknownZone{as this device does not know its time zone} other{as its time zone name and offset disagree}}, so later DST changes do not show.'**
+  String jobsZoneFixed(String offset, String reason);
+
+  /// Above the jobs list: a systemd timer's next run is shown at the UTC offset the server reported, since this version receives no offset per run. offset is jobsUtcOffset.
+  ///
+  /// In en, this message translates to:
+  /// **'Timer times are at the server\'s offset now, {offset}; a DST change before a run does not show.'**
+  String jobsTimerZone(String offset);
+
+  /// Above the jobs list: before the server has reported its UTC offset, timers' next runs are shown in UTC.
+  ///
+  /// In en, this message translates to:
+  /// **'Timer times are in UTC, as the server\'s offset is not known yet.'**
+  String get jobsTimerZoneUtc;
+
+  /// Jobs table column: a cron line's command, a periodic script's name or a timer's unit name, all as the server wrote them.
+  ///
+  /// In en, this message translates to:
+  /// **'Job'**
+  String get jobsColumnJob;
+
+  /// Jobs table column and detail label: the crontab, cron directory or systemd timer a job comes from, and the user it runs as where known.
+  ///
+  /// In en, this message translates to:
+  /// **'Source'**
+  String get jobsColumnSource;
+
+  /// Jobs table column and detail label: when a job runs, in words.
+  ///
+  /// In en, this message translates to:
+  /// **'Schedule'**
+  String get jobsColumnSchedule;
+
+  /// Jobs table column: a job's next run in the server's time.
+  ///
+  /// In en, this message translates to:
+  /// **'Next run'**
+  String get jobsColumnNext;
+
+  /// A job's next run in the jobs table: a date and time on the clock of the server's time zone (or the line's CRON_TZ zone).
+  ///
+  /// In en, this message translates to:
+  /// **'{time}'**
+  String jobsNextRun(DateTime time);
+
+  /// A cron line's next run in the jobs table when its CRON_TZ names its own zone: time is jobsNextRun, zone the IANA name as written.
+  ///
+  /// In en, this message translates to:
+  /// **'{time} in {zone}'**
+  String jobsRunInZone(String time, String zone);
+
+  /// A job's next run in the jobs table when a DST change skips, repeats or nears its time; time is jobsNextRun or jobsRunInZone, and the job's details say what the change does.
+  ///
+  /// In en, this message translates to:
+  /// **'{time} (DST)'**
+  String jobsNextRunDst(String time);
+
+  /// One run in a job's details: the date and time on the zone's clock, then that zone's UTC offset at the run (jobsUtcOffset).
+  ///
+  /// In en, this message translates to:
+  /// **'{time} {offset}'**
+  String jobsRunTime(DateTime time, String offset);
+
+  /// A UTC offset: sign is zero, minus or plus, and time the size of the offset in hours and minutes.
+  ///
+  /// In en, this message translates to:
+  /// **'{sign, select, zero{UTC} minus{UTC−{time}} other{UTC+{time}}}'**
+  String jobsUtcOffset(String sign, DateTime time);
+
+  /// Source of a job in the login user's own crontab (crontab -l).
+  ///
+  /// In en, this message translates to:
+  /// **'Your crontab'**
+  String get jobsSourceOwnCrontab;
+
+  /// Source of a job in a system crontab: the file path, then the user its line names; both are server data.
+  ///
+  /// In en, this message translates to:
+  /// **'{source}, as {user}'**
+  String jobsSourceAsUser(String source, String user);
+
+  /// Source of a job that is a systemd timer unit.
+  ///
+  /// In en, this message translates to:
+  /// **'systemd timer'**
+  String get jobsSourceTimer;
+
+  /// Schedule of a systemd timer: this version reads no timer's OnCalendar or monotonic triggers or its RandomizedDelaySec, so they are unknown; its next run comes from systemd's own timer list.
+  ///
+  /// In en, this message translates to:
+  /// **'Triggers are not read in this version.'**
+  String get jobsTimerTriggersUnread;
+
+  /// Label of a cron line's schedule fields exactly as the crontab writes them, in a job's details.
+  ///
+  /// In en, this message translates to:
+  /// **'As written'**
+  String get jobsDetailsWritten;
+
+  /// Label of the unit a systemd timer starts, in its details.
+  ///
+  /// In en, this message translates to:
+  /// **'Starts'**
+  String get jobsDetailsStarts;
+
+  /// Heading of a job's upcoming runs in its details.
+  ///
+  /// In en, this message translates to:
+  /// **'Next runs'**
+  String get jobsDetailsNextRuns;
+
+  /// A cron schedule in words; schedule joins its field phrases (jobsCronMinute and the others) with jobsPhrasePair.
+  ///
+  /// In en, this message translates to:
+  /// **'Runs {schedule}'**
+  String jobsScheduleCron(String schedule);
+
+  /// A cron schedule written as an @ macro (crontab(5)); macro is its name without the @, and other is @hourly.
+  ///
+  /// In en, this message translates to:
+  /// **'{macro, select, reboot{Runs when cron starts} yearly{Runs once a year, at midnight on 1 January} annually{Runs once a year, at midnight on 1 January} monthly{Runs once a month, at midnight on the 1st} weekly{Runs once a week, at midnight on Sunday} daily{Runs every day at midnight} midnight{Runs every day at midnight} other{Runs every hour, on the hour}}'**
+  String jobsScheduleCronMacro(String macro);
+
+  /// A cron schedule whose line sets CRON_TZ: the schedule in words, then the zone's IANA name as written.
+  ///
+  /// In en, this message translates to:
+  /// **'{schedule} ({zone} time)'**
+  String jobsScheduleInZone(String schedule, String zone);
+
+  /// A systemd timer's OnCalendar trigger: expression is systemd's normalized calendar expression, shown verbatim.
+  ///
+  /// In en, this message translates to:
+  /// **'On calendar {expression}'**
+  String jobsScheduleCalendar(String expression);
+
+  /// A systemd timer's monotonic trigger: base names its setting (OnActiveSec, OnBootSec, OnStartupSec, OnUnitActiveSec, and other for OnUnitInactiveSec); span is jobsSpan text.
+  ///
+  /// In en, this message translates to:
+  /// **'{base, select, active{{span} after the timer starts} boot{{span} after boot} startup{{span} after systemd starts} unitActive{{span} after the job last started} other{{span} after the job last finished}}'**
+  String jobsScheduleMonotonic(String base, String span);
+
+  /// A cron schedule's minute field in words. shape picks how the field is written: all is *, step is */n, rangeStep is a-b/n, value is one value, other is a list (items) of values, ranges (jobsCronRange) and steps (jobsCronItemStep). step is n; first and last are the range ends.
+  ///
+  /// In en, this message translates to:
+  /// **'{shape, select, all{every minute} step{every {step} minutes} rangeStep{every {step} minutes from minute {first} to {last}} value{at minute {items}} other{at minutes {items}}}'**
+  String jobsCronMinute(
+    String shape,
+    String items,
+    int step,
+    String first,
+    String last,
+  );
+
+  /// A cron schedule's hour field in words, hours counted 0 to 23. shape picks how the field is written: all is *, step is */n, rangeStep is a-b/n, value is one value, other is a list (items) of values, ranges (jobsCronRange) and steps (jobsCronItemStep). step is n; first and last are the range ends.
+  ///
+  /// In en, this message translates to:
+  /// **'{shape, select, all{every hour} step{every {step} hours} rangeStep{every {step} hours from hour {first} to {last}} value{during hour {items}} other{during hours {items}}}'**
+  String jobsCronHour(
+    String shape,
+    String items,
+    int step,
+    String first,
+    String last,
+  );
+
+  /// A cron schedule's day-of-month field in words; never all, which says nothing. shape picks how the field is written: all is *, step is */n, rangeStep is a-b/n, value is one value, other is a list (items) of values, ranges (jobsCronRange) and steps (jobsCronItemStep). step is n; first and last are the range ends.
+  ///
+  /// In en, this message translates to:
+  /// **'{shape, select, step{every {step} days of the month} rangeStep{every {step} days of the month from day {first} to {last}} value{on day {items} of the month} other{on days {items} of the month}}'**
+  String jobsCronDayOfMonth(
+    String shape,
+    String items,
+    int step,
+    String first,
+    String last,
+  );
+
+  /// A cron schedule's month field in words, months by name; never all. shape picks how the field is written: all is *, step is */n, rangeStep is a-b/n, value is one value, other is a list (items) of values, ranges (jobsCronRange) and steps (jobsCronItemStep). step is n; first and last are the range ends.
+  ///
+  /// In en, this message translates to:
+  /// **'{shape, select, step{every {step} months} rangeStep{every {step} months from {first} to {last}} other{in {items}}}'**
+  String jobsCronMonth(
+    String shape,
+    String items,
+    int step,
+    String first,
+    String last,
+  );
+
+  /// A cron schedule's day-of-week field in words, days by name; never all. shape picks how the field is written: all is *, step is */n, rangeStep is a-b/n, value is one value, other is a list (items) of values, ranges (jobsCronRange) and steps (jobsCronItemStep). step is n; first and last are the range ends.
+  ///
+  /// In en, this message translates to:
+  /// **'{shape, select, step{every {step} days of the week} rangeStep{every {step} days of the week from {first} to {last}} other{on {items}}}'**
+  String jobsCronDayOfWeek(
+    String shape,
+    String items,
+    int step,
+    String first,
+    String last,
+  );
+
+  /// A cron schedule's minute and hour fields as clock times when both hold single values only; times is a list (jobsListPair, jobsListMore).
+  ///
+  /// In en, this message translates to:
+  /// **'at {times}'**
+  String jobsCronTimes(String times);
+
+  /// A range item in a cron field list, as in minutes 0 to 30 or Monday to Friday.
+  ///
+  /// In en, this message translates to:
+  /// **'{first} to {last}'**
+  String jobsCronRange(String first, String last);
+
+  /// A step item in a cron field list, as in at minutes 5 and every 10 from 20 to 59.
+  ///
+  /// In en, this message translates to:
+  /// **'every {step} from {first} to {last}'**
+  String jobsCronItemStep(int step, String first, String last);
+
+  /// Both day fields of a cron schedule are restricted, so a day matching either runs the job (crontab(5)); dom is jobsCronDayOfMonth, dow jobsCronDayOfWeek.
+  ///
+  /// In en, this message translates to:
+  /// **'{dom} or {dow}'**
+  String jobsCronDaysEither(String dom, String dow);
+
+  /// One day field of a cron schedule starts with * but steps, so a day must match both (crontab(5)); dom is jobsCronDayOfMonth, dow jobsCronDayOfWeek.
+  ///
+  /// In en, this message translates to:
+  /// **'{dom}, but only {dow}'**
+  String jobsCronDaysBoth(String dom, String dow);
+
+  /// Joins two phrases of one schedule in words, such as its times and its days.
+  ///
+  /// In en, this message translates to:
+  /// **'{first}, {second}'**
+  String jobsPhrasePair(String first, String second);
+
+  /// The last two items of a list in a schedule in words.
+  ///
+  /// In en, this message translates to:
+  /// **'{first} and {second}'**
+  String jobsListPair(String first, String second);
+
+  /// An item of a list in a schedule in words before the rest of the list.
+  ///
+  /// In en, this message translates to:
+  /// **'{first}, {rest}'**
+  String jobsListMore(String first, String rest);
+
+  /// Whole days in a systemd time span, such as a timer trigger or its random delay.
+  ///
+  /// In en, this message translates to:
+  /// **'{days} d'**
+  String jobsSpanDays(int days);
+
+  /// Hours in a systemd time span.
+  ///
+  /// In en, this message translates to:
+  /// **'{hours} h'**
+  String jobsSpanHours(int hours);
+
+  /// Minutes in a systemd time span.
+  ///
+  /// In en, this message translates to:
+  /// **'{minutes} min'**
+  String jobsSpanMinutes(int minutes);
+
+  /// Seconds, with any fraction, in a systemd time span.
+  ///
+  /// In en, this message translates to:
+  /// **'{seconds} s'**
+  String jobsSpanSeconds(num seconds);
+
+  /// Joins the units of a systemd time span, largest first, as in 1 h 30 min.
+  ///
+  /// In en, this message translates to:
+  /// **'{first} {second}'**
+  String jobsSpanPair(String first, String second);
+
+  /// Why a job lists no next runs (03 §7.7); reason is the engine's JobRunsUnknown name, and other is noDriver.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, reboot{Runs when cron starts, not at a time.} unparsed{The schedule does not parse, so its runs are unknown.} timeZoneUnresolved{This device does not know the CRON_TZ zone, so its runs are unknown.} serverZoneUnknown{The server\'s time zone is not known yet, so its runs are unknown.} noRunInHorizon{No run falls in the next ten years.} notEvaluated{Runs are worked out for the first 200 cron lines only.} anacron{anacron runs this directory; its timing is not shown in this version.} other{No cron line runs this directory.}}'**
+  String jobsRunsUnknown(String reason);
+
+  /// Beside a cron run that a DST change skips: time is the clock time the line was written for; the run time shown is the change.
+  ///
+  /// In en, this message translates to:
+  /// **'{time} does not occur that day because of the DST change, so the job runs at the change.'**
+  String jobsRunGap(DateTime time);
+
+  /// Beside a cron run whose clock time a DST change repeats; time is that clock time.
+  ///
+  /// In en, this message translates to:
+  /// **'{time} occurs twice at this DST change; the job runs at the first only.'**
+  String jobsRunOverlap(DateTime time);
+
+  /// Beside a cron run near a DST change: this device's zone rules may place the change elsewhere than the server's, which cron follows.
+  ///
+  /// In en, this message translates to:
+  /// **'Within an hour of a DST change: the server\'s own zone data may move this run by an hour.'**
+  String get jobsRunNearTransition;
+
+  /// Beside a systemd timer's run times when its RandomizedDelaySec is set; span is jobsSpan text.
+  ///
+  /// In en, this message translates to:
+  /// **'Each run starts up to {span} late, at random (RandomizedDelaySec).'**
+  String jobsTimerRandomDelay(String span);
+
+  /// Under an OnCalendar trigger's run on a server whose systemd predates 242, which cannot list more than one.
+  ///
+  /// In en, this message translates to:
+  /// **'systemd before version 242 lists only the next run, so later runs are not shown.'**
+  String get jobsCalendarOneRun;
 }
 
 class _AppLocalizationsDelegate

@@ -277,6 +277,9 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   'lib/ui/server_surfaces.dart': {
     "'new controllers come with a new tree (KlabautermannApp, D44)'",
   },
+  // The cron collector's source name for the login user's own crontab
+  // (CronJob.source), matched to show ARB text (jobsSourceOwnCrontab).
+  'lib/ui/jobs_view.dart': {"'crontab'"},
   // The trailing core number of a /proc/stat name such as cpu12, which
   // orders the per-core figures; the names themselves are server data.
   'lib/ui/overview_panel.dart': {r"r'\d+$'"},
