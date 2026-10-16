@@ -4298,7 +4298,7 @@ shows there.
 | `OpenLogStream(streamId, spec)`, `CloseStream(streamId)` | `LogBatch(streamId, records, dropped)` (at most 20 per second per stream [E]), `LogStreamState(streamId, status)` |
 | `DockerQuery(serverId, query)` | `DockerResult`, `DockerEvent` |
 | `PlanAction(intent)`, `RunAction(planId, confirmation)` | `ActionPlanned(preview)`, `ActionProgress`, `ActionFinished` |
-| `AnswerPrompt(promptId, answer)` | `Prompt(promptId, serverId, host, port, request)` (host key, keyboard-interactive, credential, elevation), `PromptWithdrawn(promptId, reason)` |
+| `AnswerPrompt(promptId, answer)` (trust, responses or cancel, secret) | `Prompt(promptId, serverId, host, port, request)` (host key, keyboard-interactive, credential, elevation), `PromptWithdrawn(promptId, reason)` |
 | `SetAppActivity(activity)` (foreground or background; D34, D45) | no event: it changes what runs |
 | none: the engine's probe sweeps (5.12) | `Reachability(serverId, status)` (FL-04) |
 | `HandleAlert(alertRef, acknowledge or dismiss)` (v1.x; inbox fetch runs inside `RunSyncRound`) | `AlertsArrived(serverId, alerts)`, `AlertStatusChanged` (D42) |
@@ -4706,6 +4706,23 @@ the engine in `engine_isolate.dart` beside it):
   must therefore do, and if nothing else in the app sends
   `OpenLogStream`: a second sender with its own queue would take each
   rejection as its own as well.
+- **Version 3 (M2 prompts).** The app's prompts joined version 3 the same
+  way. `KeyboardInteractivePromptRequest` gained `user`, the account the
+  asking machine signs in as (the challenge's `server.username`), so the
+  dialog names the account as the siblings' do. `PromptCancelAnswer`
+  declines a keyboard-interactive prompt's questions: a
+  `PromptResponsesAnswer` must hold one response per question, so an
+  empty one cannot decline, and a declined prompt would otherwise wait
+  out its expiry. The broker closes the prompt at once, the engine sends
+  the server no responses, which dartssh2 refuses by closing the
+  connection, and the attempt fails with its own failure kind,
+  keyboard-interactive cancelled, as a declined host key fails with
+  host key declined, then waits for the user's next connect (5.1). Only
+  that kind takes a cancel: a host key is declined with
+  `PromptTrustAnswer(false)` and a password prompt dismissed with
+  `PromptSecretAnswer(null)`. A keyboard-interactive prompt that expires
+  or is withdrawn is no cancel, and the failure that follows is
+  classified as any other.
 - **`SetAppActivity(activity)`** is a request of its own and applies to
   every subscription, link and probe at once: 6.4 pauses everything while
   the app is in the background, and D34 adds the phones' grace period

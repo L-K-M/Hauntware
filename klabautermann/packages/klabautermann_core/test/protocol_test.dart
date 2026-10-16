@@ -107,6 +107,7 @@ void main() {
           ),
         ),
         const AnswerPrompt('prompt-1', PromptTrustAnswer(true)),
+        const AnswerPrompt('prompt-2', PromptCancelAnswer()),
         const HandleAlert('alert-1', AlertAction.acknowledge),
         const OpenTerminal(
           serverId: 'srv-1',
@@ -993,6 +994,10 @@ void main() {
           LinkClosedReason.connectFailed,
           failure: LinkFailureKind.authenticationRejected,
         ),
+        const LinkClosed(
+          LinkClosedReason.connectFailed,
+          failure: LinkFailureKind.keyboardInteractiveCancelled,
+        ),
       ];
 
       for (final status in statuses) {
@@ -1084,6 +1089,7 @@ void main() {
       final challenge =
           await request(
                 const KeyboardInteractivePromptRequest(
+                  user: 'jump',
                   name: 'Duo',
                   instruction: 'Second factor',
                   questions: ['Passcode: ', 'Push? '],
@@ -1091,9 +1097,14 @@ void main() {
               )
               as KeyboardInteractivePromptRequest;
       expect(challenge.kind, PromptKind.keyboardInteractive);
+      expect(challenge.user, 'jump');
       expect(challenge.name, 'Duo');
       expect(challenge.instruction, 'Second factor');
       expect(challenge.questions, ['Passcode: ', 'Push? ']);
+      final unnamed =
+          await request(const KeyboardInteractivePromptRequest())
+              as KeyboardInteractivePromptRequest;
+      expect(unnamed.user, isNull);
 
       final credential =
           await request(
@@ -1142,6 +1153,10 @@ void main() {
           await roundTrip(const AnswerPrompt('p', PromptTrustAnswer(false)))
               as AnswerPrompt;
       expect((trust.answer as PromptTrustAnswer).accepted, isFalse);
+      final cancel =
+          await roundTrip(const AnswerPrompt('p', PromptCancelAnswer()))
+              as AnswerPrompt;
+      expect(cancel.answer, isA<PromptCancelAnswer>());
 
       final bytes =
           await roundTrip(TerminalBytes('t', Uint8List.fromList(const [9, 8])))
