@@ -20,8 +20,10 @@ const double _wideWidth = 600;
 /// text never pushes the table out of sight.
 const double _headerShare = 0.4;
 
-/// When the list turns stale: twice the 60 s period of `timers` and
-/// `cron` (03 §6.4), 10.3's rule.
+/// When the list turns stale: twice the 60 s desktop and phone period of
+/// `timers` and `cron` (03 §6.4). Cellular saver reads them once per
+/// subscription, so this limit needs another look once the app sends
+/// `SetCadenceProfile`.
 const Duration _staleAfter = Duration(seconds: 120);
 
 /// The jobs table's columns, whose names key them.
