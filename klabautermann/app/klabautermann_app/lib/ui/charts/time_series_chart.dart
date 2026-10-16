@@ -255,6 +255,17 @@ String _gapLabel(ChartGapReason reason, ChartStrings strings) =>
       ChartGapReason.readingFailed => strings.gapReadingFailed,
     };
 
+/// A band without data in words, as a screen reader hears it and the
+/// coverage inspector lists it: when it began and ended, and why.
+String chartGapText(ChartGap gap, ChartStrings strings) => switch (gap.end) {
+  final end? => strings.gapSummary(
+    gap.start,
+    end,
+    _gapLabel(gap.reason, strings),
+  ),
+  null => strings.gapOngoing(gap.start, _gapLabel(gap.reason, strings)),
+};
+
 /// The first time axis tick at or after [from] on a grid of [step]
 /// microseconds that falls on round local times in a zone [offset]
 /// microseconds off UTC, so a zone half an hour off UTC still reads 12:00
@@ -627,16 +638,7 @@ final class TimeSeriesPainter extends CustomPainter {
     return [
       for (final summary in summaries) node(plot, summary),
       for (final gap in gaps)
-        node(
-          _bandOf(plot, gap).intersect(plot),
-          gap.end == null
-              ? strings.gapOngoing(gap.start, _gapLabel(gap.reason, strings))
-              : strings.gapSummary(
-                  gap.start,
-                  gap.end!,
-                  _gapLabel(gap.reason, strings),
-                ),
-        ),
+        node(_bandOf(plot, gap).intersect(plot), chartGapText(gap, strings)),
     ];
   };
 

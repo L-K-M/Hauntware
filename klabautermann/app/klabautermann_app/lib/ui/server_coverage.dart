@@ -207,7 +207,7 @@ class ServerCoverageDetails extends StatelessWidget {
               for (final gap in history.gaps.reversed)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 4),
-                  child: Text(_gapText(strings, gap)),
+                  child: Text(chartGapText(gap, strings)),
                 ),
             const SizedBox(height: 16),
             _NotCovered(detailed: true),
@@ -215,19 +215,6 @@ class ServerCoverageDetails extends StatelessWidget {
         );
       },
     );
-  }
-
-  static String _gapText(ChartStrings strings, ChartGap gap) {
-    final reason = switch (gap.reason) {
-      ChartGapReason.appClosed => strings.gapAppClosed,
-      ChartGapReason.background => strings.gapBackground,
-      ChartGapReason.disconnected => strings.gapDisconnected,
-      ChartGapReason.readingFailed => strings.gapReadingFailed,
-    };
-    return switch (gap.end) {
-      final end? => strings.gapSummary(gap.start, end, reason),
-      null => strings.gapOngoing(gap.start, reason),
-    };
   }
 }
 
