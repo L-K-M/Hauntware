@@ -4887,7 +4887,9 @@ a session channel), Disconnected (waiting for the link), Paused (Live
 off, or the app in the background), Stopped (ended, or a file without
 a valid path) or Unavailable (refused). A status line, a live region
 for screen readers, says the same in a sentence with any host error
-output, and offers Retry after a refusal or a failed read. LOG-04's
+output, says that lines may be missing while a follow without a cursor
+runs again after it waited (K26), and offers Retry after a refusal or a
+failed read. LOG-04's
 notice shows above the journal when the access check's journal row
 says the account sees only its own entries (K04), from the probe's
 profile, and above the kernel log, of which the journal then shows it

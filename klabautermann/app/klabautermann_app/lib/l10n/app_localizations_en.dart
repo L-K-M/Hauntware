@@ -1467,6 +1467,8 @@ class AppLocalizationsEn extends AppLocalizations {
       'waitingLink': 'Waiting for the connection to the server.',
       'waitingChannel': 'Waiting for a free session on the server.',
       'waitingBackground': 'Paused while the app is in the background.',
+      'gap':
+          'Following again. Lines written while it was paused or disconnected may be missing.',
       'loading': 'Loading entries…',
       'invalid': 'The engine refused this filter or path.',
       'missing': 'The server has no such file or log tool.',
