@@ -26,6 +26,9 @@ const double _headerShare = 0.4;
 /// `SetCadenceProfile`.
 const Duration _staleAfter = Duration(seconds: 120);
 
+/// The probe's name for the `crontab` command (`kProbeTools`).
+const String _crontabTool = 'crontab';
+
 /// The jobs table's columns, whose names key them.
 enum _Column { job, source, schedule, next }
 
@@ -142,6 +145,14 @@ class _JobsPanelState extends State<JobsPanel> {
     // Without systemd running the server has no timers, and a timers read
     // there fails for want of systemctl or its manager.
     final noTimers = profile?.systemdDir == false && timers == null;
+    // The parser cannot tell an unclear `crontab -l` from a missing
+    // command; the probe can, and without the command the login user has
+    // no crontab to miss.
+    final ownCrontab = switch (cron?.cron.ownCrontabPresent) {
+      null when profile?.toolPresent(_crontabTool) == false => _Answer.absent,
+      null => _Answer.unread,
+      _ => _Answer.read,
+    };
     final jobs = <JobEntry>[
       ...?cron?.jobs,
       for (final timer in timers?.timers ?? const <SystemdTimer>[])
@@ -167,10 +178,7 @@ class _JobsPanelState extends State<JobsPanel> {
     final empty = cron == null || (timers == null && !noTimers)
         ? null
         : l10n.jobsEmpty(
-            (cron.cron.ownCrontabPresent == null
-                    ? _Answer.unread
-                    : _Answer.read)
-                .name,
+            ownCrontab.name,
             (noTimers ? _Answer.absent : _Answer.read).name,
           );
     final timed = jobs.any(
@@ -193,7 +201,7 @@ class _JobsPanelState extends State<JobsPanel> {
         PanelNotice(icon: Icons.hourglass_empty, text: l10n.jobsWaiting),
       if (noTimers)
         PanelNotice(icon: Icons.info_outline, text: l10n.jobsNoSystemd),
-      if (cron != null && cron.cron.ownCrontabPresent == null)
+      if (cron != null && ownCrontab == _Answer.unread)
         PanelNotice(icon: Icons.info_outline, text: l10n.jobsOwnCrontabUnknown),
       ?_cronZone(l10n, cron, serverOffset),
       if (timed)

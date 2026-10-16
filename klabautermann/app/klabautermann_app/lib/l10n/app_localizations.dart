@@ -2404,7 +2404,7 @@ abstract class AppLocalizations {
   /// **'Waiting for the first reading.'**
   String get jobsWaiting;
 
-  /// The Jobs tab when every source it reads was read and none holds a job: the login user's crontab (crontab -l), /etc/crontab, /etc/cron.d and the cron.<period> directories, and systemd timers. Other users' crontabs are not read. crontab is read, or unread when crontab -l gave no clear answer, so the user's own jobs are unknown; timers is read, or absent on a server that does not run systemd.
+  /// The Jobs tab when every source it reads was read and none holds a job: the login user's crontab (crontab -l), /etc/crontab, /etc/cron.d and the cron.<period> directories, and systemd timers. Other users' crontabs are not read. crontab is read; unread when crontab -l gave no clear answer, so the user's own jobs are unknown; or absent on a server without the crontab command. timers is read, or absent on a server that does not run systemd.
   ///
   /// In en, this message translates to:
   /// **'{crontab, select, read{{timers, select, read{No jobs found in your crontab, the system cron files or systemd timers.} other{No jobs found in your crontab or the system cron files.}}} other{{timers, select, read{No jobs found in the system cron files or systemd timers.} other{No jobs found in the system cron files.}}}}'**
@@ -2422,7 +2422,7 @@ abstract class AppLocalizations {
   /// **'{source, select, cron{Cron jobs} other{Timers}} could not be read: {reason, select, missing{the server lacks a file or tool this reading needs.} denied{the server refused this reading.} timeout{this reading took too long, so the server stopped it.} other{this reading failed on the server.}}'**
   String jobsUnavailable(String source, String reason);
 
-  /// The Jobs tab when the server's answer to crontab -l for the login user was unclear or crontab is not installed.
+  /// The Jobs tab when the server's answer to crontab -l for the login user was unclear, unless the server's probe found no crontab command.
   ///
   /// In en, this message translates to:
   /// **'Your own crontab could not be read, so its jobs may be missing.'**

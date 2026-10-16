@@ -2752,8 +2752,9 @@ each row's source and the user its line names:
   desktop and phone period (the cellular saver's single read waits for
   the cadence profile's wiring), beside the freshness line; a failed
   reading's reason stands above the last rows; an unclear `crontab -l`
-  says the user's own jobs may be missing, and an empty list names only
-  the sources read, never other users' crontabs (JOB-03). Where the
+  says the user's own jobs may be missing unless the probe found no
+  `crontab` command, and an empty list names only the sources read,
+  never other users' crontabs (JOB-03). Where the
   probe finds systemd not running, the tab says the server has no timers
   instead of a failed timers reading. The phone reaches the tab once
   More lists it (10.5).

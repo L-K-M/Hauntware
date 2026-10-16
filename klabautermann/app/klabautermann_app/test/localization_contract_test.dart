@@ -204,6 +204,9 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     // An assert message; programmer diagnostic, never rendered.
     "'new controllers come with a new tree (KlabautermannApp, D44)'",
   },
+  // The probe's tool name for crontab, looked up in its answer; never
+  // rendered.
+  'lib/ui/jobs_panel.dart': {"'crontab'"},
   'lib/ui/logs/log_query.dart': {
     // The path rule's separators and dot parts (03 §8.8), and the empty
     // defaults of the text filters.

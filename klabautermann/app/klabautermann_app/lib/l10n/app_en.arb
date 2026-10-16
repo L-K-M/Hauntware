@@ -1916,7 +1916,7 @@
   },
   "jobsEmpty": "{crontab, select, read{{timers, select, read{No jobs found in your crontab, the system cron files or systemd timers.} other{No jobs found in your crontab or the system cron files.}}} other{{timers, select, read{No jobs found in the system cron files or systemd timers.} other{No jobs found in the system cron files.}}}}",
   "@jobsEmpty": {
-    "description": "The Jobs tab when every source it reads was read and none holds a job: the login user's crontab (crontab -l), /etc/crontab, /etc/cron.d and the cron.<period> directories, and systemd timers. Other users' crontabs are not read. crontab is read, or unread when crontab -l gave no clear answer, so the user's own jobs are unknown; timers is read, or absent on a server that does not run systemd.",
+    "description": "The Jobs tab when every source it reads was read and none holds a job: the login user's crontab (crontab -l), /etc/crontab, /etc/cron.d and the cron.<period> directories, and systemd timers. Other users' crontabs are not read. crontab is read; unread when crontab -l gave no clear answer, so the user's own jobs are unknown; or absent on a server without the crontab command. timers is read, or absent on a server that does not run systemd.",
     "placeholders": {
       "crontab": {
         "type": "String"
@@ -1944,7 +1944,7 @@
   },
   "jobsOwnCrontabUnknown": "Your own crontab could not be read, so its jobs may be missing.",
   "@jobsOwnCrontabUnknown": {
-    "description": "The Jobs tab when the server's answer to crontab -l for the login user was unclear or crontab is not installed."
+    "description": "The Jobs tab when the server's answer to crontab -l for the login user was unclear, unless the server's probe found no crontab command."
   },
   "jobsZoneRules": "Cron times are in {zone}, the server's time zone.",
   "@jobsZoneRules": {

@@ -431,6 +431,32 @@ void main() {
     );
   });
 
+  testWidgets('a server without crontab has no own crontab to miss', (
+    tester,
+  ) async {
+    final panel = await _pump(tester);
+    await panel.emit(
+      tester,
+      HostProfileChanged(
+        _serverId,
+        HostProfile(zoneOffset: '+0000', tools: const {'crontab': null}),
+      ),
+    );
+    // Without the command the parser cannot tell the user's crontab.
+    await panel.sample(tester, SampleStream.cron, CronResult(CronSnapshot()));
+    await panel.sample(
+      tester,
+      SampleStream.timers,
+      TimersResult(TimersSnapshot()),
+    );
+
+    expect(find.textContaining('Your own crontab'), findsNothing);
+    expect(
+      find.text('No jobs found in the system cron files or systemd timers.'),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('a server without systemd has no timers to fail', (tester) async {
     final panel = await _pump(tester);
     await panel.emit(
