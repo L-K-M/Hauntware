@@ -463,25 +463,27 @@ String _scheduleCell(AppLocalizations l10n, JobEntry job) {
 /// A row's next run after [now] on its zone's clock, and whether a DST
 /// change marks it: a timer's at the server's offset now, which it names
 /// (systemd gives an instant, and no zone rules for it reach the app, so
-/// after a DST change it differs from the server's clock), or the text
-/// systemd printed when it gave no instant; a cron run with the
-/// `CRON_TZ` zone it follows, or with its offset when the row's lines
-/// follow different zones, as a periodic script's may.
+/// after a DST change it differs from the server's clock); a cron run
+/// with the `CRON_TZ` zone it follows, or with its offset when the row's
+/// lines follow different zones, as a periodic script's may.
 ({String time, bool dst}) _next(
   AppLocalizations l10n,
   JobEntry job,
   Duration? serverOffset,
   DateTime now,
 ) {
-  if (job case TimerJobEntry(:final timer)) {
+  if (job is TimerJobEntry) {
     final offset = serverOffset ?? Duration.zero;
-    final time = switch ((_nextAfter(job, now), timer.nextUtc)) {
-      (final next?, _) => l10n.jobsNextRunAtOffset(
+    final time = switch (_nextAfter(job, now)) {
+      final next? => l10n.jobsNextRunAtOffset(
         wallAt(next, offset),
         utcOffsetText(l10n, offset),
       ),
-      (null, null) => timer.nextText ?? l10n.chartUnknownValue,
-      (null, _) => l10n.chartUnknownValue,
+      // The sampler runs list-timers under TZ=UTC, so every time it
+      // prints converts. What gives no instant, systemd's n/a or a
+      // malformed cell, reads as unknown on both paths, as does an
+      // elapse the clock has passed since the reading.
+      null => l10n.chartUnknownValue,
     };
     return (time: time, dst: false);
   }
@@ -686,17 +688,15 @@ class JobDetails extends StatelessWidget {
   /// after [now] as the host's `systemd-analyze calendar` printed them, on
   /// the server's clock.
   List<Widget> _timerRuns(AppLocalizations l10n, TimerJobEntry job) {
-    final timer = job.timer;
     final offset = profile?.serverZone?.offset ?? Duration.zero;
     final delay = job.randomizedDelay;
     return [
-      _Run(switch ((_nextAfter(job, now), timer.nextUtc)) {
-        (final next?, _) => l10n.jobsRunTime(
+      _Run(switch (_nextAfter(job, now)) {
+        final next? => l10n.jobsRunTime(
           wallAt(next, offset),
           utcOffsetText(l10n, offset),
         ),
-        (null, null) => timer.nextText ?? l10n.chartUnknownValue,
-        (null, _) => l10n.chartUnknownValue,
+        null => l10n.chartUnknownValue,
       }),
       for (final trigger in job.triggers ?? const <ScheduleDescription>[])
         if (trigger case CalendarSchedule(:final elapses?))

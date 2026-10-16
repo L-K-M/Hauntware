@@ -2887,7 +2887,9 @@ each row's source and the user its line names:
 - A timer's next run is the `list-timers` instant at the probe's offset,
   which its cell names, and the tab says a DST change before it does not
   show: `TimersResult` carries no offset per elapse. Without a probed
-  offset it shows in UTC.
+  offset it shows in UTC. A timer without a next elapse (systemd's
+  `n/a`) reads as unknown, as `SystemdTimer` folds it into no instant
+  like an unreadable cell.
   The engine does not yet read a timer's triggers, `RandomizedDelaySec`
   or calendar elapses (D57), so the row says they are not read; a row
   that carries them shows the elapses as `systemd-analyze` printed

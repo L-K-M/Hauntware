@@ -472,6 +472,44 @@ void main() {
     );
   });
 
+  testWidgets('a timer without a next instant reads unknown on both paths', (
+    tester,
+  ) async {
+    final panel = await _pump(tester);
+    await panel.emit(tester, HostProfileChanged(_serverId, jobsProfile));
+    await panel.sample(
+      tester,
+      SampleStream.cron,
+      CronResult(CronSnapshot(ownCrontabPresent: true)),
+    );
+    await panel.sample(
+      tester,
+      SampleStream.timers,
+      TimersResult(
+        TimersSnapshot(
+          timers: const [
+            // systemd's text table prints n/a where its JSON gives null.
+            SystemdTimer(unit: 'na.timer', nextText: 'n/a'),
+            SystemdTimer(unit: 'none.timer'),
+          ],
+        ),
+      ),
+    );
+    for (final row in ['timer|na.timer', 'timer|none.timer']) {
+      expect(
+        find.descendant(of: _row(row), matching: find.text('unknown')),
+        findsOneWidget,
+        reason: row,
+      );
+    }
+    expect(find.text('n/a'), findsNothing);
+
+    await tester.tap(_row('timer|na.timer'));
+    await tester.pumpAndSettle();
+    expect(_inSheet('n/a'), findsNothing);
+    expect(_inSheet('unknown'), findsOneWidget);
+  });
+
   testWidgets('an empty list names only the sources read', (tester) async {
     final panel = await _pump(tester);
     const all =
