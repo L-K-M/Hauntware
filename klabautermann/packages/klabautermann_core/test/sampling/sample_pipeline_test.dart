@@ -644,6 +644,8 @@ void main() {
           ProcEntry(pid: 3, comm: 'kthreadd', argsJoined: '[kthreadd] x'),
           ProcEntry(pid: 4, argsJoined: '[kthreadd]'),
           ProcEntry(pid: 5, comm: 'app', argv: const ['[app]']),
+          // GNU ps's zombie, whose cmdline is empty too.
+          ProcEntry(pid: 6, comm: 'bash', argsJoined: '[bash] <defunct>'),
         ],
       ),
     ).processes;
@@ -655,6 +657,7 @@ void main() {
       ['[kthreadd]'],
       // A real argument vector is what the process set.
       ['[app]'],
+      isEmpty,
     ]);
   });
 

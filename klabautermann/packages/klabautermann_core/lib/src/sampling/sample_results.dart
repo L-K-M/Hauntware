@@ -393,10 +393,13 @@ ProcsResult procsResult(
 /// The tokens of a `ps` command line, which the host parser joins with
 /// single spaces; none for an empty one, or for the bracketed [comm] that
 /// GNU and BusyBox `ps` print in place of an empty `cmdline`, as for a
-/// kernel thread.
+/// kernel thread, and that GNU `ps` follows with `<defunct>` for a zombie.
 List<String>? _tokens(String? joined, String? comm) {
   if (joined == null) return null;
-  if (joined.isEmpty || (comm != null && joined == '[$comm]')) return const [];
+  if (joined.isEmpty) return const [];
+  if (comm != null && (joined == '[$comm]' || joined == '[$comm] <defunct>')) {
+    return const [];
+  }
 
   return joined.split(' ');
 }
