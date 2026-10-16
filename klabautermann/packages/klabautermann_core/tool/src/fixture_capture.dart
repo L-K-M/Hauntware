@@ -43,19 +43,59 @@ final class Capture {
     ParseContext.standard,
   ).value;
 
+  /// hostnamectl's JSON in `identity`, empty without it.
+  Map<String, Object?> get _hostnamectl =>
+      switch (sections[Collector.identity]) {
+        final s? => parseIdentity(
+          utf8.decode(s.payload, allowMalformed: true),
+          ParseContext.standard,
+        ).value.hostnamectl,
+        null => const {},
+      };
+
   /// The host's names as hostnamectl reports them in `identity`: the
   /// static name can differ from the kernel's transient one.
-  List<String> get hostNames {
-    final identity = parseIdentity(
-      utf8.decode(sections[Collector.identity]!.payload, allowMalformed: true),
-      ParseContext.standard,
-    ).value.hostnamectl;
-    return [
-      for (final key in const ['Hostname', 'StaticHostname'])
-        if (identity[key] case final String name when name.isNotEmpty) name,
-    ];
+  List<String> get hostNames => [
+    for (final key in const ['Hostname', 'StaticHostname'])
+      if (_hostnamectl[key] case final String name when name.isNotEmpty) name,
+  ];
+
+  /// Words a fixture must keep, which a host or user literal would
+  /// otherwise rewrite (a host named `docker`, `kvm` or `berlin` in
+  /// `docker=`, `virt=kvm` or `Europe/Berlin`): the probe's keys and
+  /// their `_`-separated words, the kernel name and machine, PID 1's
+  /// name, the virtualization and container names, the probed tools,
+  /// the words of the time zone names and hostnamectl's chassis. Free
+  /// text such as the kernel release or the distribution's name is left
+  /// out, as it can hold the host's name.
+  List<String> get formatWords {
+    final p = profile;
+    final words = <String>{
+      for (final event in probe)
+        if (ProbeSection.fromEvent(event) case final section?)
+          for (final line in LineSplitter.split(section.payload))
+            if (_probeKey.firstMatch(line) case final key?) ...[
+              key[1]!,
+              ...key[1]!.split('_'),
+            ],
+      ...[
+        p.kernelSys,
+        p.kernelArch,
+        p.pid1Comm,
+        p.virtualization,
+        p.container,
+        ...p.tools.keys,
+        if (_hostnamectl['Chassis'] case final String chassis) chassis,
+      ].nonNulls,
+      for (final zone in [p.timezone, p.etcTimezone, p.localtimeTarget])
+        ...?zone?.split(RegExp('[^A-Za-z0-9]+')),
+    };
+    return words.where((w) => w.length > 1).toList();
   }
 }
+
+/// A `key=value` line of a probe area.
+final _probeKey = RegExp(r'^([A-Za-z_][A-Za-z0-9_]*)=');
 
 /// Bounds READY and each reply; the program's own guards end a slow
 /// collector after 10 s per command where `timeout` exists.
@@ -124,10 +164,19 @@ String? platformIdFor(HostProfile profile) {
 }
 
 /// useradd's UID_MIN default (login.defs(5)) on Debian, Ubuntu, Fedora,
-/// RHEL and Arch: accounts from here up are people's, also the
-/// directory-service (sssd, FreeIPA) and systemd-homed ones above
-/// UID_MAX.
-const _minPersonalUid = 1000;
+/// RHEL and Arch, for a host whose login.defs sets none: accounts from
+/// UID_MIN up are people's, also the directory-service (sssd, FreeIPA)
+/// and systemd-homed ones above UID_MAX.
+const _defaultUidMin = 1000;
+
+/// A UID_MIN below the system range every distribution reserves (LSB:
+/// 0 to 99) would make root and daemons personal; it is ignored.
+const _lowestUidMin = 100;
+
+final _uidMinLine = RegExp(
+  r'^[^\S\n]*UID_MIN[^\S\n]+(\d+)[^\S\n]*$',
+  multiLine: true,
+);
 
 /// The kernel's overflow uid, `nobody`'s, and the -2 of older systems'
 /// `nfsnobody`.
@@ -137,16 +186,19 @@ const _nobodyUids = {65534, 4294967294};
 /// person's account has it.
 const _noHome = '/nonexistent';
 
-/// The literals a local capture redacts: [hostNames] with each FQDN's
-/// first label, the domains of those FQDNs and the [searchDomains]
-/// (resolv.conf's), each with its suffixes of two labels or more, and
-/// the names and home directories (unless `/`, `/root`
-/// or [_noHome]) of personal accounts, those from [_minPersonalUid] but
-/// `nobody`: the capturing user (home [home]) and every such account in
-/// [passwd] whose home is not [_noHome]. Names a
-/// fixture keeps are left out: `localhost` and the os-release ID and
-/// ID_LIKE words, which cloud images use as host and default user names
-/// and which the `identity` and probe payloads must keep.
+/// The literals a local capture redacts: [hostNames] that are no
+/// address, with each FQDN's first label, the domains of those FQDNs
+/// and the [searchDomains] (resolv.conf's), each with its suffixes of
+/// two labels or more, and the names and home directories (unless `/`,
+/// `/root` or [_noHome]) of personal accounts, those from [loginDefs]'
+/// UID_MIN (else [_defaultUidMin]) but `nobody`: the capturing user
+/// (home [home]) and every such account in [passwd] whose home is not
+/// [_noHome]. Names a fixture keeps are left out: `localhost`, the
+/// os-release ID and ID_LIKE words, which cloud images use as host and
+/// default user names and which the `identity` and probe payloads must
+/// keep, and the [keep] words ([Capture.formatWords]). A host name that
+/// is an address is left to the address rules: its labels would match
+/// numbers anywhere (`10` in `*/10`).
 RedactionLiterals captureLiterals(
   HostProfile profile, {
   required List<String> hostNames,
@@ -154,20 +206,30 @@ RedactionLiterals captureLiterals(
   required String passwd,
   List<String> searchDomains = const [],
   List<String> extra = const [],
+  List<String> keep = const [],
+  String loginDefs = '',
 }) {
   final generic = {
     'localhost',
     ?profile.distroId?.toLowerCase(),
     ...?profile.distroIdLike?.toLowerCase().split(' '),
+    for (final word in keep) word.toLowerCase(),
   };
-  bool keep(String name) =>
+  bool kept(String name) =>
       name.isNotEmpty && !generic.contains(name.toLowerCase());
-  bool personal(int uid) =>
-      uid >= _minPersonalUid && !_nobodyUids.contains(uid);
+  final uidMin = switch (_uidMinLine.allMatches(loginDefs).lastOrNull) {
+    final m? when int.parse(m[1]!) >= _lowestUidMin => int.parse(m[1]!),
+    _ => _defaultUidMin,
+  };
+  bool personal(int uid) => uid >= uidMin && !_nobodyUids.contains(uid);
 
+  final names = [
+    for (final h in hostNames)
+      if (InternetAddress.tryParse(h) == null) h,
+  ];
   final hosts = <String>{
-    for (final h in hostNames) ...[h, h.split('.').first],
-  }.where(keep);
+    for (final h in names) ...[h, h.split('.').first],
+  }.where(kept);
   // A one-label suffix (`lan`, a TLD) would match the word anywhere.
   List<String> suffixes(String name, {required bool self}) {
     final labels = name.split('.')..removeWhere((l) => l.isEmpty);
@@ -178,9 +240,9 @@ RedactionLiterals captureLiterals(
   }
 
   final domains = <String>{
-    for (final h in hostNames) ...suffixes(h, self: false),
+    for (final h in names) ...suffixes(h, self: false),
     for (final d in searchDomains) ...suffixes(d, self: true),
-  }.where(keep);
+  }.where(kept);
   // An unknown uid fails safe.
   final uid = profile.uid;
   final capturer = uid == null || personal(uid);
@@ -194,7 +256,7 @@ RedactionLiterals captureLiterals(
     if (uid == null || !personal(uid) || fields[5] == _noHome) continue;
     accounts.putIfAbsent(fields[0], () => fields[5]);
   }
-  accounts.removeWhere((user, _) => !keep(user));
+  accounts.removeWhere((user, _) => !kept(user));
   return RedactionLiterals(
     hostNames: hosts.toList(),
     domains: domains.toList(),

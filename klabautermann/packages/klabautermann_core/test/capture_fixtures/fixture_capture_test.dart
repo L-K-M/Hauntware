@@ -195,6 +195,7 @@ void main() {
             hostNames: capture.hostNames,
             home: '/home/${profile.user}',
             passwd: '',
+            keep: capture.formatWords,
           ),
         ),
         capturedAt: at,
@@ -257,6 +258,80 @@ void main() {
     expect(literals.userNames, ['anke', 'bob', 'carol']);
     expect(literals.homeDirs, ['/home/anke', '/srv/bob', '/home/carol']);
     expect(literals.extra, ['nas07']);
+  });
+
+  test('literals: no word the probe or hostnamectl prints', () {
+    // A host or user named like a probe key, its kernel, virtualization,
+    // a probed tool, its time zone or chassis would rewrite those fields
+    // (the third verification's docker, kvm, linux, berlin, vm and rc).
+    final capture = Capture(
+      SamplerLaunch.stdinShell('dash'),
+      {
+        Collector.identity: _section(
+          'identity',
+          '== hostnamectl ==\n{"Chassis":"vm"}',
+        ),
+      },
+      [
+        _section('probe_kernel', 'Linux 6.1.0-25-web1 x86_64'),
+        _section('probe_distro', 'ID=debian\nVERSION_ID=12'),
+        _section('probe_init', 'pid1_comm=systemd'),
+        _section(
+          'probe_virt',
+          'virt_rc=0\nvirt=kvm\ncontainer_rc=0\ncontainer=lxc',
+        ),
+        _section('probe_tools', 'docker=/usr/bin/docker\npodman='),
+        _section('probe_clock', 'Timezone=America/New_York'),
+      ],
+    );
+    final literals = captureLiterals(
+      capture.profile,
+      hostNames: [
+        'docker',
+        'kvm',
+        'lxc',
+        'linux',
+        'x86_64',
+        'podman',
+        'york',
+        'systemd',
+        'vm',
+        'container',
+        'web1',
+      ],
+      home: '/',
+      passwd: 'rc:x:1000:1000::/home/rc:/bin/sh\n',
+      keep: capture.formatWords,
+    );
+    // The kernel release is free text, which can hold the host's name.
+    expect(literals.hostNames, ['web1']);
+    expect(literals.userNames, isEmpty);
+  });
+
+  test('literals: no host name that is an address', () {
+    // Its labels would match numbers anywhere (`*/10` for 10.0.0.5);
+    // the address rules replace the address itself.
+    final literals = captureLiterals(
+      _profile('ID=ubuntu\nVERSION_ID="24.04"'),
+      hostNames: ['10.0.0.5', 'fd00::5', 'web1.lan'],
+      home: '/',
+      passwd: '',
+    );
+    expect(literals.hostNames, ['web1.lan', 'web1']);
+    expect(literals.domains, isEmpty);
+  });
+
+  test('literals: personal accounts from login.defs UID_MIN', () {
+    final literals = captureLiterals(
+      _capture(uid: '500').profile,
+      hostNames: const [],
+      home: '/home/anke',
+      passwd:
+          'jsmith:x:600:600::/home/jsmith:/bin/bash\n'
+          'sys:x:499:499::/var/sys:/bin/false\n',
+      loginDefs: '# UID_MIN 2000\nUID_MIN\t\t\t  500\nUID_MAX 60000\n',
+    );
+    expect(literals.userNames, ['anke', 'jsmith']);
   });
 
   test('literals: the domains of the host names and the search list', () {

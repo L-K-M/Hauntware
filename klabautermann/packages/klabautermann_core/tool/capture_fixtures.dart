@@ -136,8 +136,10 @@ Future<void> _capture(Map<String, List<String>> options) async {
       ],
       home: home,
       passwd: _readIfPresent('/etc/passwd') ?? '',
+      loginDefs: _readIfPresent('/etc/login.defs') ?? '',
       searchDomains: resolvDomains(_readIfPresent('/etc/resolv.conf') ?? ''),
       extra: options['redact'] ?? const [],
+      keep: capture.formatWords,
     ),
   );
   final FixtureFiles rendered;
