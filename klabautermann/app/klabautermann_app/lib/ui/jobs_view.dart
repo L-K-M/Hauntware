@@ -147,7 +147,7 @@ String _fieldText(
   final item = items.first;
   final step = _step(item) ?? 1;
   final first = _value(l10n, field, item.start ?? _bounds(field).$1);
-  final last = _value(l10n, field, item.end ?? _bounds(field).$2);
+  final last = _value(l10n, field, _end(field, item) ?? _bounds(field).$2);
   final listed = _list(l10n, [
     for (final i in items) _itemText(l10n, field, i),
   ]);
@@ -177,7 +177,7 @@ String _itemText(AppLocalizations l10n, _Field field, CronFieldItem item) {
   final (min, max) = _bounds(field);
   final step = _step(item);
   final first = _value(l10n, field, item.start ?? min);
-  final end = item.end;
+  final end = _end(field, item);
   if (step != null) {
     return l10n.jobsCronItemStep(step, first, _value(l10n, field, end ?? max));
   }
@@ -188,6 +188,13 @@ String _itemText(AppLocalizations l10n, _Field field, CronFieldItem item) {
       ? first
       : l10n.jobsCronRange(first, _value(l10n, field, end));
 }
+
+/// [item]'s last value as worded: a day-of-week range from 0 to 7 runs
+/// from Sunday to Sunday again, the whole week, which ends on Saturday.
+int? _end(_Field field, CronFieldItem item) =>
+    field == _Field.dayOfWeek && item.start == 0 && item.end == 7
+    ? 6
+    : item.end;
 
 /// [field]'s first and last value (crontab(5)), which a `*` spans; a
 /// written day of week 7 is Sunday too, so a week ends on Saturday here.

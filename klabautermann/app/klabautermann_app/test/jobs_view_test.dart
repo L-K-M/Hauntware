@@ -33,6 +33,12 @@ void main() {
       '0 0 * jan-mar sat,7':
           'Runs at 12:00 AM, on Saturday and Sunday, '
           'in January to March',
+      // A written 7 is Sunday too, so 0-7 spans the week.
+      '0 0 * * 0-7': 'Runs at 12:00 AM, on Sunday to Saturday',
+      '0 0 * * 0-7/2':
+          'Runs at 12:00 AM, every 2 days of the week from Sunday to '
+          'Saturday',
+      '0 0 * * 5-7': 'Runs at 12:00 AM, on Friday to Sunday',
       '0 4 1 * mon': 'Runs at 4:00 AM, on day 1 of the month or on Monday',
       '0 4 */2 * 1':
           'Runs at 4:00 AM, every 2 days of the month, but only on Monday',
