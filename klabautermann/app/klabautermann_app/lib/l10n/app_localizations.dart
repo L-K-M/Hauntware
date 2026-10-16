@@ -2488,7 +2488,7 @@ abstract class AppLocalizations {
   /// **'{time} in {zone}'**
   String jobsRunInZone(String time, String zone);
 
-  /// A job's next run in the jobs table when the row's cron lines follow different time zones: the date and time on the clock of the zone this run follows, then that zone's UTC offset at the run (jobsUtcOffset).
+  /// A job's next run in the jobs table with the UTC offset it is shown at (jobsUtcOffset): a systemd timer's at the server's offset now, or UTC before it is known; or, when the row's cron lines follow different time zones, the date and time on the clock of the zone this run follows, then that zone's offset at the run.
   ///
   /// In en, this message translates to:
   /// **'{time} {offset}'**

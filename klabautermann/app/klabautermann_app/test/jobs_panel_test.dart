@@ -188,9 +188,11 @@ void main() {
       'Runs at 9:00 AM, on Monday to Friday (America/New_York time)',
       'anacron runs this directory; its timing is not shown in this version.',
       'Triggers are not read in this version.',
-      // Cron's run on Berlin's clock, the timer's at the probed offset.
+      // Cron's run on Berlin's clock, a timer's at the probed offset,
+      // which it names: after the DST change, Berlin's clock reads 1:12.
       'Sun, Oct 25 2:30 AM',
-      'Sat, Oct 24 7:41 PM',
+      'Sat, Oct 24 7:41 PM UTC+02:00',
+      'Mon, Oct 26 2:12 AM UTC+02:00',
       'Mon, Oct 26 9:00 AM in America/New_York',
     ]) {
       expect(find.text(clock(text)), findsWidgets, reason: text);
@@ -320,7 +322,7 @@ void main() {
     final table = find.byType(SortableTable<JobEntry>);
     final before = tester.widget(table);
     Color? next() => tester
-        .widget<Text>(find.text(clock('Sat, Oct 24 7:41 PM')))
+        .widget<Text>(find.text(clock('Sat, Oct 24 7:41 PM UTC+02:00')))
         .style
         ?.color;
     expect(next(), isNull);
@@ -375,7 +377,10 @@ void main() {
     Finder next(String row, String text) =>
         find.descendant(of: _row(row), matching: find.text(clock(text)));
     expect(next('cron|crontab|0', 'Sat, Oct 24 2:01 PM'), findsOneWidget);
-    expect(next('timer|tick.timer', 'Sat, Oct 24 2:00 PM'), findsOneWidget);
+    expect(
+      next('timer|tick.timer', 'Sat, Oct 24 2:00 PM UTC+02:00'),
+      findsOneWidget,
+    );
 
     // Still fresh, the reading's first run and the timer's one elapse
     // have passed: the next listed run leads, and the timer waits for
@@ -469,6 +474,7 @@ void main() {
       ),
       findsOneWidget,
     );
+    expect(find.text(clock('Sat, Oct 24 5:41 PM UTC')), findsOneWidget);
 
     // A zone name this device does not know: cron runs at the offset.
     await panel.emit(tester, HostProfileChanged(_serverId, jobsProfile));

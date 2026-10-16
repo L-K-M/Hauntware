@@ -2736,8 +2736,9 @@ each row's source and the user its line names:
   names its zone in the table, and a run of a periodic script whose
   lines follow different zones names its offset.
 - A timer's next run is the `list-timers` instant at the probe's offset,
-  and the tab says a DST change before it does not show: `TimersResult`
-  carries no offset per elapse. Without a probed offset it shows in UTC.
+  which its cell names, and the tab says a DST change before it does not
+  show: `TimersResult` carries no offset per elapse. Without a probed
+  offset it shows in UTC.
   The engine does not yet read a timer's triggers, `RandomizedDelaySec`
   or calendar elapses (D57), so the row says they are not read; a row
   that carries them shows the elapses as `systemd-analyze` printed

@@ -431,7 +431,7 @@ List<SortableTableColumn<JobEntry>> _columns(
         (:final time, dst: false) => time,
       },
       sortKey: (job) => _nextAfter(job, now),
-      extent: FixedColumnExtent(wide ? 200 : 176),
+      extent: FixedColumnExtent(wide ? 224 : 176),
       cell: (context, job) => _NextCell(next(job), stale: stale),
     ),
   ];
@@ -453,9 +453,10 @@ String _scheduleCell(AppLocalizations l10n, JobEntry job) {
 }
 
 /// A row's next run after [now] on its zone's clock, and whether a DST
-/// change marks it: a timer's at the server's offset now (systemd gives an
-/// instant), or the text systemd printed when it gave no instant; a cron
-/// run with the
+/// change marks it: a timer's at the server's offset now, which it names
+/// (systemd gives an instant, and no zone rules for it reach the app, so
+/// after a DST change it differs from the server's clock), or the text
+/// systemd printed when it gave no instant; a cron run with the
 /// `CRON_TZ` zone it follows, or with its offset when the row's lines
 /// follow different zones, as a periodic script's may.
 ({String time, bool dst}) _next(
@@ -465,9 +466,11 @@ String _scheduleCell(AppLocalizations l10n, JobEntry job) {
   DateTime now,
 ) {
   if (job case TimerJobEntry(:final timer)) {
+    final offset = serverOffset ?? Duration.zero;
     final time = switch ((_nextAfter(job, now), timer.nextUtc)) {
-      (final next?, _) => l10n.jobsNextRun(
-        wallAt(next, serverOffset ?? Duration.zero),
+      (final next?, _) => l10n.jobsNextRunAtOffset(
+        wallAt(next, offset),
+        utcOffsetText(l10n, offset),
       ),
       (null, null) => timer.nextText ?? l10n.chartUnknownValue,
       (null, _) => l10n.chartUnknownValue,
