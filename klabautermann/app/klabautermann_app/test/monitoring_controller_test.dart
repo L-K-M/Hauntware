@@ -832,8 +832,8 @@ void main() {
         // The background opens its gap when the phase says so, before
         // readings resume; the Gap then confirms it.
         phase(SamplingPhase.pausedInBackground, 5);
-        // Back with the link down: not lost while sampling, so the
-        // background gap goes on.
+        // Back with the link down: in the foreground from the return, the
+        // gap is the link's.
         phase(SamplingPhase.waitingForLink, 60);
         phase(SamplingPhase.sampling, 61);
         gap(GapCause.background, 0, 62);
@@ -861,7 +861,8 @@ void main() {
               (g.start.toUtc(), g.end?.toUtc(), g.reason),
           ],
           [
-            (at(5), at(62), ChartGapReason.background),
+            (at(5), at(60), ChartGapReason.background),
+            (at(60), at(62), ChartGapReason.disconnected),
             (at(70), at(82), ChartGapReason.disconnected),
             (at(82), at(90), ChartGapReason.readingFailed),
             (at(92), at(94), ChartGapReason.readingFailed),

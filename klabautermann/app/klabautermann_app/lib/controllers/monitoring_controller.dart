@@ -218,11 +218,12 @@ final class MonitoringController extends ChangeNotifier {
   /// The session history of [serverId]'s [series] from the `core` stream
   /// on a time axis (OV-03, 03 §10.7): a reading per sample at its
   /// [Sample.at], with a gap labelled with its reason wherever readings
-  /// stopped (03 §9.5 item 5). A background pause or a link lost while
-  /// sampling opens one when [SamplingState] says so, and a [Gap] or a
-  /// failed reading opens one if none is open; the next reading closes
-  /// it. A stream no subscription names ends its gap with an unknown
-  /// reading, which breaks the line without a label.
+  /// stopped (03 §9.5 item 5). A background pause, a link lost while
+  /// sampling or a return to a link still down opens one when
+  /// [SamplingState] says so, and a [Gap] or a failed reading opens one
+  /// if none is open; the next reading closes it. A stream no
+  /// subscription names ends its gap with an unknown reading, which
+  /// breaks the line without a label.
   TimeSeriesRing historyFor(String serverId, MetricSeries series) =>
       _server(serverId).history[series]!;
 
@@ -635,12 +636,14 @@ final class _ServerReadings {
   }
 
   /// The background pause, and a link lost while sampling, stop readings
-  /// as the phase changes.
+  /// as the phase changes; a return with the link down ends the
+  /// background's gap, as the app is in the foreground from then on.
   void phaseChanged(SamplingStatus status) {
     final reason = switch (status.state.phase) {
       SamplingPhase.pausedInBackground => ChartGapReason.background,
       SamplingPhase.waitingForLink
-          when status.previous == SamplingPhase.sampling =>
+          when status.previous == SamplingPhase.sampling ||
+              status.previous == SamplingPhase.pausedInBackground =>
         ChartGapReason.disconnected,
       _ => null,
     };

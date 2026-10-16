@@ -3847,8 +3847,9 @@ record never reads as a complete one) and what is not covered with each
 reason; it reads
 what the panels sample and subscribes nothing. Beside the session rings,
 the monitoring controller keeps a time-series ring per series of `core`:
-a background pause, or a link lost while sampling, opens a labelled gap
-when `SamplingState` says so, ending an open "reading failed" one, which
+a background pause, a link lost while sampling, or a return from the
+background to a link still down opens a labelled gap when
+`SamplingState` says so, ending an open "reading failed" one, which
 it outranks; a `Gap`, or a `CollectorUnavailable` reading, opens one
 only if none is open, labelled "reading failed" for a lost or failed
 reading; the next reading closes it. A `Gap` also breaks the sparklines'
