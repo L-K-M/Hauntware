@@ -137,9 +137,14 @@ numbers), and nothing here sets a budget.
 
 `local-frame-timing-xvfb.json` is the report of
 `klabautermann/scripts/bench-frame-timing.sh`, run from `klabautermann/`
-with `LIBGL_ALWAYS_SOFTWARE=1` and `KLABAUTERMANN_EVIDENCE_DIR` set, on
-2026-10-16 with Flutter 3.47.2, in the same kind of shared 4-CPU
-container, whose load average stayed about 9 from other jobs.
+with `LIBGL_ALWAYS_SOFTWARE=1` and `KLABAUTERMANN_EVIDENCE_DIR` set. It
+was built from `54fc3d46`, with a clean working tree: the harness after
+its review fixes, merged with `main` at `3fff564e`, and with the replay
+engine answering log streams as K25b's router does. Later commits change
+only this README and the report. The test started at 14:03 UTC on
+2026-10-16, with Flutter 3.47.2, in the same kind of shared 4-CPU
+container. Other jobs kept the 1-minute load average at 9.6 when the
+test started and 9.3 when it ended, and at 12 while the app built.
 
 **These are not device numbers.** Xvfb has no GPU: Mesa's llvmpipe
 rasterizes in software on the CPUs that the app, the replay engine and
@@ -172,8 +177,9 @@ gates nothing.
   budget (`missed_frame_*_budget_count`) and the collections, without
   the per-frame lists. Under `benchmarkLive` the test's pumps draw
   nothing, but the live test binding asks for a frame after each one it
-  draws, so the app redraws as fast as the display allows (14 to 18
-  frames a second here) and frames that changed nothing count too.
+  draws, so the app redraws as fast as the display allows (10 to 16
+  frames a second in this run) and frames that changed nothing count
+  too.
   `load` is what reached the app per second in each window; the run
   fails when no sample arrived in a window, or fewer than 500 log
   records a second in the Logs window, never on a slow frame.
@@ -181,17 +187,17 @@ gates nothing.
 ### What it shows
 
 - **The load reached the app as planned:** 5.0 samples a second on every
-  surface, and 997.8 log records in 19.4 batches a second while the Logs
-  panel showed.
+  surface, and 1,004.1 log records in 19.6 batches a second while the
+  Logs panel showed.
 - **Build**, the Dart side a device's CPU also runs: the fleet list took
-  1.09 ms on average and 10.96 ms at p99, with 3 of 314 frames over
-  16 ms; the Overview 1.88 ms and 22.0 ms, with 10 of 288 over; the Logs
-  panel with the follow 15.1 ms and 63.2 ms, with 119 of 351 over, and
-  328 young-generation collections in 20 s against 10 to 12 on the other
-  surfaces. On this loaded machine the follow is the cost to watch;
+  0.94 ms on average and 9.67 ms at p99, with 2 of 327 frames over
+  16 ms; the Overview 3.15 ms and 43.6 ms, with 18 of 249 over; the Logs
+  panel with the follow 27.0 ms and 88.2 ms, with 131 of 199 over, and
+  232 young-generation collections in 20 s against 16 and 10 on the
+  other surfaces. On this loaded machine the follow is the cost to watch;
   whether the Logs panel's build holds 16 ms at 1,000 lines a second is
   for the device sign-off (06) to show.
-- **Raster:** 47 to 68 ms on average and 152 to 168 ms at p99 on every
+- **Raster:** 56 to 79 ms on average and 103 to 146 ms at p99 on every
   surface, every frame over 16 ms. That is llvmpipe on a shared CPU and
   says nothing about a phone's GPU.
 
@@ -205,7 +211,9 @@ gates nothing.
 - **The phone layout.** The window is a desktop one; the phone shell (03
   §10.5) is not measured.
 - **The real engine.** The replay engine stands in for it: no links, no
-  K22 scheduler (it keeps its own cadences and spread), no log service,
-  and its CPU time competes with the app's on the same machine.
+  K22 scheduler (it keeps its own cadences and spread), no log service
+  (it answers log streams as K25b's router does and follows them itself
+  until K26), and its CPU time competes with the app's on the same
+  machine.
 - **Other panels and input.** Only these three surfaces, and the test
   scrolls nothing.
