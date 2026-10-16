@@ -27,8 +27,9 @@ packages/
 app/
   klabautermann_app/      Flutter client — NOT a workspace member (it needs
                           the Flutter SDK; members must not)
-test/integration/         integration fixture tools and the contract tests of
-                          the CI jobs that run them (03 §11.3, D53)
+test/integration/         the sshd fixture (Compose files, run.sh) and the
+                          contract tests of it and of the CI jobs that run
+                          it (03 §11.3, D53)
 docs/STATUS.md            what's done / tested / still open
 media-sources/            the owner-supplied master icon
 ```
@@ -51,6 +52,10 @@ dart pub get
 dart analyze packages/klabautermann_core
 dart test    packages/klabautermann_core
 dart test    test/integration
+# The sshd fixture and the engine's tests against it (Docker with Compose,
+# OpenSSH's client tools, util-linux flock); it tears everything down
+# when it exits
+test/integration/run.sh
 
 # Flutter app
 cd app/klabautermann_app
@@ -71,6 +76,12 @@ accessibility fixtures modelled on Séance's against the runner's
 [docs/SHARED.md](docs/SHARED.md). Neither launches the app or touches user
 data; `--stock-engine` runs the stock controller and must fail. Rerun them
 after every Flutter upgrade: both fixes rely on private engine selectors.
+
+`scripts/bench-frame-timing.sh` builds the app in profile mode for the
+Linux desktop and runs spike S5's frame-timing test
+(`app/klabautermann_app/integration_test/frame_timing_test.dart`) under
+`xvfb-run`; it needs the GTK toolchain the Linux client builds with, and
+its software-rendered numbers are provisional (`docs/evidence/s5/`).
 
 ## Conventions
 
