@@ -155,6 +155,54 @@ void main() {
     );
   });
 
+  test('a system @macro line runs as the user after its macro', () {
+    // cron reads a system table's user field after a macro as after five
+    // fields, so the row names that user and its title leaves it out.
+    final parsed = parseCron(
+      '== crontab_meta ==\nrc=0\n'
+      '== crontab ==\n'
+      '== etc_crontab ==\n@daily root /usr/local/bin/rotate\n'
+      '== cron_d ==\ntunnel\t@reboot deploy /usr/local/bin/start-tunnel\n'
+      '== cron_dirs ==\n',
+      ParseContext.standard,
+    );
+    expect(parsed.warnings, isEmpty);
+    final rows = cronResultOf(parsed.value).jobs.cast<CronJobEntry>();
+
+    expect(
+      [
+        for (final row in rows)
+          (
+            jobTitle(row),
+            sourceText(_l10n, row),
+            scheduleText(_l10n, row.schedule!),
+          ),
+      ],
+      [
+        (
+          '/usr/local/bin/rotate',
+          '/etc/crontab, as root',
+          'Runs every day at midnight',
+        ),
+        (
+          '/usr/local/bin/start-tunnel',
+          '/etc/cron.d/tunnel, as deploy',
+          'Runs when cron starts',
+        ),
+      ],
+    );
+
+    final (daily, dailyUnknown) = cronRuns(rows.first);
+    expect(dailyUnknown, isNull);
+    expect(
+      runTimeText(_l10n, daily.first),
+      clock('Sun, Oct 25, 2026 12:00 AM UTC+02:00'),
+    );
+    final (reboot, rebootUnknown) = cronRuns(rows.last);
+    expect(reboot, isEmpty);
+    expect(rebootUnknown, JobRunsUnknown.reboot);
+  });
+
   test('why runs are unknown, and where systemd lists one run only', () {
     expect(
       runsUnknownText(_l10n, JobRunsUnknown.anacron),

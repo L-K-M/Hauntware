@@ -66,9 +66,9 @@ CronJob cronLine(
 
 /// A Debian host's cron table: the login user's crontab with an @reboot
 /// line, /etc/crontab with anacron installed, a cron.d file and a CRON_TZ
-/// line, evaluated by the engine's own merge at [jobsNow] in Berlin. The
-/// parser keeps a system crontab's @macro line's user in its command, so
-/// the @reboot line is the user's own.
+/// line, evaluated by the engine's own merge at [jobsNow] in Berlin. A
+/// system table's @macro line names its user as a five-field line does;
+/// jobs_view_test reads one through the engine's parser.
 CronResult jobsCron({bool ownCrontabKnown = true}) {
   final cron = CronSnapshot(
     jobs: [
