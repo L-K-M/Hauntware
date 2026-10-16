@@ -9,7 +9,7 @@ import 'package:test/test.dart';
 const fixtureSkipReason =
     'needs the sshd fixture: run klabautermann/test/integration/run.sh';
 
-/// The fleet aliases [Fixture.sshConfig] defines.
+/// The fleet aliases of the client config each engine imports.
 const directServer = 'ssh-config:direct';
 const agentServer = 'ssh-config:agent';
 const behindServer = 'ssh-config:behind';
@@ -79,7 +79,7 @@ final class Fixture {
 
   /// Where run.sh collects evidence (`$KLABAUTERMANN_EVIDENCE_DIR`), or
   /// null.
-  String? get evidenceDirectory =>
+  String? get _evidenceDirectory =>
       switch (_environment['KLABAUTERMANN_EVIDENCE_DIR']) {
         final path? when path.isNotEmpty => '$path/fixture',
         _ => null,
@@ -88,7 +88,7 @@ final class Fixture {
   /// The client config the engine imports: [directServer] with the key
   /// file, [agentServer] with the agent, and [behindServer] through the
   /// jump host, which reaches the sampled host by its service name.
-  String get sshConfig =>
+  String get _sshConfig =>
       '''
 Host direct
   HostName $_host
@@ -202,7 +202,7 @@ final class FixtureEngine {
   /// Every event read so far, in order.
   final seen = <EngineEvent>[];
 
-  /// Starts an engine and imports [Fixture.sshConfig]. [name] titles the
+  /// Starts an engine and imports [Fixture._sshConfig]. [name] titles the
   /// event log it leaves in the evidence directory.
   static Future<FixtureEngine> start(Fixture fixture, String name) async {
     final support = await Directory.systemTemp.createTemp('klab-fixture-');
@@ -219,7 +219,7 @@ final class FixtureEngine {
     addTearDown(() => engine._stop(name));
 
     await engine.until<CatalogReplaced>();
-    engine.send(ImportSshConfig(fixture.sshConfig));
+    engine.send(ImportSshConfig(fixture._sshConfig));
     await engine.until<SshConfigImported>(
       (event) => event.importedCount == 4 && event.skippedCount == 0,
     );
@@ -252,10 +252,10 @@ final class FixtureEngine {
       expect(arrived, isTrue, reason: 'the engine stopped');
       final event = _events.current;
       seen.add(event);
-      note('< ${describe(event)}');
+      note('< ${_describe(event)}');
       if (event is T && (test?.call(event) ?? true)) return event;
       if (event is Prompt && T != Prompt) {
-        fail('unexpected prompt: ${describe(event)}');
+        fail('unexpected prompt: ${_describe(event)}');
       }
     }
   }
@@ -290,7 +290,7 @@ final class FixtureEngine {
         case LinkState(status: LinkReady()):
           return prompted;
         case LinkState(status: LinkClosed() || LinkBlocked()):
-          fail('connect failed: ${describe(event)}');
+          fail('connect failed: ${_describe(event)}');
         default:
           break;
       }
@@ -367,7 +367,7 @@ final class FixtureEngine {
       await _events.cancel();
       await _client.shutdown();
       await _support.delete(recursive: true);
-      if (_fixture.evidenceDirectory case final directory?) {
+      if (_fixture._evidenceDirectory case final directory?) {
         final file = File('$directory/${name.replaceAll(' ', '-')}.events');
         await file.create(recursive: true);
         await file.writeAsString('$_log');
@@ -387,7 +387,7 @@ final class FixtureEngine {
 }
 
 /// One line about [event] for the evidence log and failure messages.
-String describe(EngineEvent event) => switch (event) {
+String _describe(EngineEvent event) => switch (event) {
   LinkState(:final serverId, :final status) =>
     'LinkState $serverId ${_status(status)}',
   Sample(:final serverId, :final stream, :final seq, :final result) =>
