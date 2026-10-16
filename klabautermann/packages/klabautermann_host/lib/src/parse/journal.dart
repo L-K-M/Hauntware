@@ -110,16 +110,19 @@ JournalEntry? _decodeLine(String line) {
 }
 
 /// One field value: a string stays a string, a byte array decodes
-/// leniently, and any other JSON scalar stringifies (journald's cursor
-/// and timestamps arrive as decimal strings either way).
+/// leniently, and a number or boolean stringifies (journald's cursor
+/// and timestamps arrive as decimal strings either way). An object,
+/// which journalctl never prints, reads as null: stringifying one
+/// recurses once per nesting level, so a hostile line would overflow the
+/// stack.
 String? _fieldValue(Object? v) {
-  if (v == null) return null;
   if (v is String) return v;
+  if (v is num || v is bool) return '$v';
   if (v is List) {
     return utf8.decode(
       v.map((b) => b is int ? b & 0xff : 0).toList(),
       allowMalformed: true,
     );
   }
-  return '$v';
+  return null;
 }

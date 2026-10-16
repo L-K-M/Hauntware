@@ -6,13 +6,15 @@ import '../controllers/monitoring_controller.dart';
 import '../l10n/app_localizations.dart';
 import 'access/access_panel.dart' show AccessPage;
 import 'access/panel_gate.dart';
-import 'fleet_rail.dart' show linkStatusWord;
 import 'inspector_pane.dart' show PlaceholderPaneBody;
 import 'logs/logs_panel.dart';
+import 'overview_panel.dart';
+import 'server_coverage.dart';
+import 'server_header.dart';
 import 'server_surfaces.dart';
 
-/// The pushed server screen of 03 §10.5: the server's title, its link
-/// state, and the bottom bar (Overview, Docker, Logs, More). The
+/// The pushed server screen of 03 §10.5: the server's title, the server
+/// header, and the bottom bar (Overview, Docker, Logs, More). The
 /// destinations' bodies land with their panels.
 ///
 /// The server stays open while the screen is pushed, and only the
@@ -88,47 +90,62 @@ class _ServerDetailPageState extends State<ServerDetailPage>
   }
 
   Widget _build(BuildContext context, AppLocalizations l10n) {
-    final status = widget.fleet.linkStatusFor(widget.server.id);
     return Scaffold(
-      appBar: AppBar(
-        title: Text(l10n.serverTitle(widget.server.displayName)),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(20),
-          child: Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: Text(linkStatusWord(l10n, status)),
-          ),
-        ),
-      ),
+      appBar: AppBar(title: Text(l10n.serverTitle(widget.server.displayName))),
+      // The header heads the body rather than the app bar's fixed-height
+      // bottom, so it grows with large text instead of clipping (A11Y-09).
       body: SafeArea(
-        child: SelectedTabView(
-          controller: _destinations,
-          children: [
-            for (final (index, panel) in ServerDetailPage._panels.indexed)
-              GatedPanel(
-                monitoring: widget.monitoring,
-                serverId: widget.server.id,
-                panel: panel,
-                onOpenAccess: _openAccess,
-                child: SampledSurface(
+        child: HeaderedBody(
+          headerPadding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          header: ServerHeader(
+            server: widget.server,
+            fleet: widget.fleet,
+            monitoring: widget.monitoring,
+            showTitle: false,
+          ),
+          banner: BackgroundReturnBanner(
+            monitoring: widget.monitoring,
+            serverId: widget.server.id,
+          ),
+          child: SelectedTabView(
+            controller: _destinations,
+            children: [
+              for (final (index, panel) in ServerDetailPage._panels.indexed)
+                GatedPanel(
                   monitoring: widget.monitoring,
                   serverId: widget.server.id,
-                  surface: panel.name,
-                  streams: panel.streams,
-                  visible: _destinations.index == index,
-                  child: switch (panel) {
-                    ServerPanel.logs => LogsPanel(
-                      monitoring: widget.monitoring,
-                      serverId: widget.server.id,
-                      visible: _destinations.index == index,
-                    ),
-                    _ => const PlaceholderPaneBody(),
-                  },
+                  panel: panel,
+                  onOpenAccess: _openAccess,
+                  child: SampledSurface(
+                    monitoring: widget.monitoring,
+                    serverId: widget.server.id,
+                    surface: panel.name,
+                    streams: panel.streams,
+                    visible: _destinations.index == index,
+                    child: switch (panel) {
+                      ServerPanel.overview => OverviewPanel(
+                        monitoring: widget.monitoring,
+                        serverId: widget.server.id,
+                        visible: _destinations.index == index,
+                        coverage: ServerCoverageCard(
+                          monitoring: widget.monitoring,
+                          serverId: widget.server.id,
+                          visible: _destinations.index == index,
+                        ),
+                      ),
+                      ServerPanel.logs => LogsPanel(
+                        monitoring: widget.monitoring,
+                        serverId: widget.server.id,
+                        visible: _destinations.index == index,
+                      ),
+                      _ => const PlaceholderPaneBody(),
+                    },
+                  ),
                 ),
-              ),
-            // More: the other panels, pushed further (03 §10.5).
-            const PlaceholderPaneBody(),
-          ],
+              // More: the other panels, pushed further (03 §10.5).
+              const PlaceholderPaneBody(),
+            ],
+          ),
         ),
       ),
       bottomNavigationBar: NavigationBar(

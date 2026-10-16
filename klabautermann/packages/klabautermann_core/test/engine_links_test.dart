@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:isolate';
 
@@ -26,6 +27,7 @@ import 'package:seance_core/seance_core.dart'
 import 'package:test/test.dart';
 
 import 'support/answering_link.dart';
+import 'support/scripted_link.dart';
 
 const _web = 'ssh-config:web';
 const _webConfig = 'Host web\n  HostName 192.0.2.10\n  User me\n';
@@ -489,6 +491,149 @@ void main() {
       expect(link.running, isEmpty);
       engine.send(const Connect('ssh-config:gone'));
       expect(await engine.rejected(), 'Connect');
+    });
+  });
+
+  group('log streams (K25b, 03 §5.2, §7.6)', () {
+    late ScriptedLink link;
+
+    Future<_Engine> startEngine() async {
+      link = ScriptedLink();
+      final engine = await _Engine.start(
+        support.path,
+        linksEnabled: true,
+        dial:
+            ({
+              required config,
+              required credentials,
+              required tofu,
+              required onHostKey,
+              onKeyboardInteractive,
+              resolveJumpHost,
+            }) async => link,
+      );
+      await engine.import(_webConfig);
+      return engine;
+    }
+
+    OpenLogStream window(
+      String streamId, {
+      String serverId = _web,
+      bool follow = false,
+    }) => OpenLogStream(
+      streamId: streamId,
+      spec: LogStreamSpec(
+        serverId: serverId,
+        source: const JournalLogSource(unit: 'nginx.service'),
+        window: 50,
+        follow: follow,
+      ),
+    );
+
+    Matcher stream(String streamId, LogStreamStatus status) =>
+        isA<LogStreamState>()
+            .having((event) => event.streamId, 'streamId', streamId)
+            .having((event) => event.status, 'status', status);
+
+    /// Connects web and opens a window on it, which runs.
+    Future<_Engine> runningWindow() async {
+      final engine = await startEngine();
+      engine.send(const Connect(_web));
+      expect(await engine.next(), _connecting);
+      expect(await engine.next(), _ready);
+      engine.send(window('log-0'));
+      expect(await engine.next(), stream('log-0', const LogStreamRunning()));
+      return engine;
+    }
+
+    test('a window waits for its server\'s link, then reads over it', () async {
+      final engine = await startEngine();
+      engine.send(window('log-0'));
+      expect(
+        await engine.next(),
+        stream('log-0', const LogStreamWaiting(LogStreamWaitReason.link)),
+      );
+
+      // The dial asks no host key, so the link is ready from connecting.
+      engine.send(const Connect(_web));
+      expect(await engine.next(), _connecting);
+      expect(await engine.next(), _ready);
+      expect(await engine.next(), stream('log-0', const LogStreamRunning()));
+      expect(link.commands.single, contains('journalctl'));
+
+      (await link.process(0))
+        ..emitText('${jsonEncode({'__CURSOR': 'c1', 'MESSAGE': 'up'})}\n')
+        ..end();
+      final batch = await engine.next() as LogBatch;
+      expect((batch.records.single as JournalRecord).message, 'up');
+      expect(
+        await engine.next(),
+        stream('log-0', const LogStreamEnded(LogStreamEndReason.oldestReached)),
+      );
+    });
+
+    test('a reused id, a follow and a server outside the fleet are '
+        'rejected', () async {
+      final engine = await startEngine();
+      engine
+        ..send(window('log-0'))
+        ..send(window('log-0'))
+        ..send(window('log-1', follow: true))
+        ..send(window('log-2', serverId: 'ssh-config:gone'));
+      expect(await engine.next(), isA<LogStreamState>());
+      expect(await engine.rejected(), 'OpenLogStream');
+      expect(await engine.rejected(), 'OpenLogStream');
+      expect(await engine.rejected(), 'OpenLogStream');
+    });
+
+    test('CloseStream ends a running window as closed', () async {
+      final engine = await runningWindow();
+      engine.send(const CloseStream('log-0'));
+      expect(
+        await engine.next(),
+        stream('log-0', const LogStreamEnded(LogStreamEndReason.closed)),
+      );
+      final process = await link.process(0);
+      await pumpEventQueue();
+      expect(process.closeCalls, 1);
+    });
+
+    test('the background pauses a running window, and the foreground '
+        'runs it again', () async {
+      final engine = await runningWindow();
+      engine.send(const SetAppActivity(AppActivity.background));
+      expect(
+        await engine.next(),
+        stream('log-0', const LogStreamWaiting(LogStreamWaitReason.background)),
+      );
+      engine.send(const SetAppActivity(AppActivity.foreground));
+      expect(await engine.next(), stream('log-0', const LogStreamRunning()));
+      expect(link.commands, hasLength(2));
+    });
+
+    test('Disconnect ends a running window as failed before the link '
+        'closes', () async {
+      final engine = await runningWindow();
+      engine.send(const Disconnect(_web));
+      expect(
+        await engine.next(),
+        stream('log-0', const LogStreamEnded(LogStreamEndReason.failed)),
+      );
+      expect(
+        await engine.next(),
+        _state(const LinkClosed(LinkClosedReason.closedByOwner)),
+      );
+    });
+
+    test('a server leaving the fleet ends its window as failed', () async {
+      final engine = await runningWindow();
+      engine.send(const ImportSshConfig(_otherConfig));
+      expect(
+        await engine.next(),
+        stream('log-0', const LogStreamEnded(LogStreamEndReason.failed)),
+      );
+      expect(await engine.next(), isA<CatalogReplaced>());
+      expect(await engine.next(), isA<SshConfigImported>());
     });
   });
 }

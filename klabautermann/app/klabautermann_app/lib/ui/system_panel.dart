@@ -166,7 +166,7 @@ class _SystemPanelState extends State<SystemPanel> {
   }
 
   Widget _identitySection(AppLocalizations l10n, HostProfile? profile) {
-    return _Section(
+    return PanelSection(
       key: const ValueKey(SystemSection.identity),
       title: l10n.systemIdentityTitle,
       children: [
@@ -190,13 +190,16 @@ class _SystemPanelState extends State<SystemPanel> {
             value: virtualizationText(l10n, profile),
           ),
         if (inContainer(profile))
-          _Notice(icon: Icons.info_outline, text: l10n.systemContainerNotice),
+          PanelNotice(
+            icon: Icons.info_outline,
+            text: l10n.systemContainerNotice,
+          ),
       ],
     );
   }
 
   Widget _uptimeSection(AppLocalizations l10n, HostProfile? profile) {
-    return _Section(
+    return PanelSection(
       key: const ValueKey(SystemSection.uptime),
       title: l10n.systemUptimeTitle,
       children: _readingOr<CoreResult>(l10n, _core.value, (core) {
@@ -224,7 +227,7 @@ class _SystemPanelState extends State<SystemPanel> {
   /// `/proc/net/dev` is the network namespace's own, so a container's
   /// rates stay as measured (D50).
   Widget _networkSection(AppLocalizations l10n) {
-    return _Section(
+    return PanelSection(
       key: const ValueKey(SystemSection.network),
       title: l10n.systemNetworkTitle,
       children: _readingOr<CoreResult>(l10n, _core.value, (core) {
@@ -253,7 +256,10 @@ class _SystemPanelState extends State<SystemPanel> {
     final children = switch (_fs.value?.result) {
       null => [_waiting(l10n)],
       CollectorUnavailable(reason: CollectorUnavailableReason.timeout) => [
-        _Notice(icon: Icons.timer_off_outlined, text: l10n.systemDisksTimedOut),
+        PanelNotice(
+          icon: Icons.timer_off_outlined,
+          text: l10n.systemDisksTimedOut,
+        ),
         if (_listed.value case Sample(
           :final at,
           result: FsResult(:final fs),
@@ -267,13 +273,16 @@ class _SystemPanelState extends State<SystemPanel> {
       ],
       FsResult(:final fs) => [
         if (fs.timeoutAbsent)
-          _Notice(icon: Icons.info_outline, text: l10n.systemDisksNoTimeout),
+          PanelNotice(
+            icon: Icons.info_outline,
+            text: l10n.systemDisksNoTimeout,
+          ),
         ..._mounts(context, l10n, fs, wide: wide, timedOut: false),
       ],
       // Sample's assert admits nothing else on the `fs` stream.
       _ => const <Widget>[],
     };
-    return _Section(
+    return PanelSection(
       key: const ValueKey(SystemSection.disks),
       title: l10n.systemDisksTitle,
       children: children,
@@ -520,14 +529,17 @@ _Fact _hostFact(
     ? _Fact(label: label, value: null, note: l10n.systemUnknownContainer)
     : _Fact(label: label, value: value);
 
-_Notice _waiting(AppLocalizations l10n) =>
-    _Notice(icon: Icons.hourglass_empty, text: l10n.systemWaiting);
+PanelNotice _waiting(AppLocalizations l10n) =>
+    PanelNotice(icon: Icons.hourglass_empty, text: l10n.systemWaiting);
 
 /// Why a stream has no reading, with the host's error output, which is
 /// server data and never translated.
-_Notice _unavailable(AppLocalizations l10n, CollectorUnavailable unavailable) {
+PanelNotice _unavailable(
+  AppLocalizations l10n,
+  CollectorUnavailable unavailable,
+) {
   final reason = unavailable.reason;
-  return _Notice(
+  return PanelNotice(
     icon: reason == CollectorUnavailableReason.timeout
         ? Icons.timer_off_outlined
         : Icons.error_outline,
@@ -541,10 +553,11 @@ _Notice _unavailable(AppLocalizations l10n, CollectorUnavailable unavailable) {
   );
 }
 
-/// A titled group of facts on its own surface. Its title is a heading for
-/// screen readers, and its children may hold ink (the pseudo filter).
-class _Section extends StatelessWidget {
-  const _Section({super.key, required this.title, required this.children});
+/// A titled group of facts on its own surface, here and in the Overview
+/// tab. Its title is a heading for screen readers, and its children may
+/// hold ink (the pseudo filter).
+class PanelSection extends StatelessWidget {
+  const PanelSection({super.key, required this.title, required this.children});
 
   final String title;
   final List<Widget> children;
@@ -625,10 +638,16 @@ class _Fact extends StatelessWidget {
   }
 }
 
-/// A section's state in words beside an icon, read as one node; the icon
-/// adds a shape, the text carries the meaning (A11Y-01).
-class _Notice extends StatelessWidget {
-  const _Notice({required this.icon, required this.text, this.detail});
+/// A section's state in words beside an icon, read as one node, here and
+/// in the Overview tab; the icon adds a shape, the text carries the
+/// meaning (A11Y-01).
+class PanelNotice extends StatelessWidget {
+  const PanelNotice({
+    super.key,
+    required this.icon,
+    required this.text,
+    this.detail,
+  });
 
   final IconData icon;
   final String text;

@@ -77,6 +77,6 @@ in 10 ms clock ticks; fast-tick CPU is averaged over 500 ticks.
   provide them, otherwise on the manual checklist (06).
 - `units`, `timers` and journal paging flags on a running systemd: the
   runner VM leg.
-- Fixture capture and captures over SSH. No fixture should come from
-  this machine: its process list and mounts describe the build sandbox,
-  not a server.
+- Captures over SSH. The `capture` command exists, but no fixture comes
+  from this machine: its process list and mounts describe the build
+  sandbox, not a server.

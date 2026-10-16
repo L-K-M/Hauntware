@@ -95,6 +95,9 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     // An assert message; programmer diagnostic, never rendered.
     "'a follow is not a bounded read'",
   },
+  // The coverage card's one `units` read: a subscription surface kind the
+  // engine keys its streams by (D45).
+  'lib/ui/server_coverage.dart': {"'coverage'"},
   'lib/ui/services_view.dart': {
     // systemd's spelling of load and sub states and the dot before a unit
     // type, matched against server data; the panel shows ARB text for
@@ -295,6 +298,9 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   'lib/ui/server_surfaces.dart': {
     "'new controllers come with a new tree (KlabautermannApp, D44)'",
   },
+  // The trailing core number of a /proc/stat name such as cpu12, which
+  // orders the per-core figures; the names themselves are server data.
+  'lib/ui/overview_panel.dart': {r"r'\d+$'"},
   // debugPrint of a failed theme change; the toast is ARB text.
   'lib/ui/settings_page.dart': {r"'$error'"},
   'lib/ui/sortable_table.dart': {

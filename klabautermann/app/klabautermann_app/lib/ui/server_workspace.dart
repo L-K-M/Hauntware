@@ -6,10 +6,12 @@ import '../controllers/monitoring_controller.dart';
 import '../l10n/app_localizations.dart';
 import 'access/access_panel.dart';
 import 'access/panel_gate.dart';
-import 'fleet_rail.dart' show linkStatusWord;
 import 'inspector_pane.dart' show PlaceholderPaneBody;
 import 'logs/logs_panel.dart';
+import 'overview_panel.dart';
 import 'processes_panel.dart';
+import 'server_coverage.dart';
+import 'server_header.dart';
 import 'server_surfaces.dart';
 import 'services_panel.dart';
 import 'system_panel.dart';
@@ -80,34 +82,31 @@ class ServerWorkspace extends StatelessWidget {
 
     return DefaultTabController(
       length: _panels.length,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    l10n.serverTitle(server.displayName),
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                ),
-                Text(
-                  linkStatusWord(l10n, fleet.linkStatusFor(server.id)),
-                  style: Theme.of(context).textTheme.labelMedium,
-                ),
-              ],
+      child: HeaderedBody(
+        headerPadding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+        header: ServerHeader(
+          server: server,
+          fleet: fleet,
+          monitoring: monitoring,
+        ),
+        // An iOS or Android tablet takes this layout and pauses in the
+        // background too (03 §9.5 item 6).
+        banner: BackgroundReturnBanner(
+          monitoring: monitoring,
+          serverId: server.id,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            TabBar(
+              isScrollable: true,
+              tabs: [for (final panel in _panels) Tab(text: panel.label(l10n))],
             ),
-          ),
-          TabBar(
-            isScrollable: true,
-            tabs: [for (final panel in _panels) Tab(text: panel.label(l10n))],
-          ),
-          Expanded(
-            child: _Panels(monitoring: monitoring, serverId: server.id),
-          ),
-        ],
+            Expanded(
+              child: _Panels(monitoring: monitoring, serverId: server.id),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -171,6 +170,16 @@ class _PanelsState extends State<_Panels> {
                   streams: panel.streams,
                   visible: tabs.index == index,
                   child: switch (panel) {
+                    ServerPanel.overview => OverviewPanel(
+                      monitoring: monitoring,
+                      serverId: serverId,
+                      visible: tabs.index == index,
+                      coverage: ServerCoverageCard(
+                        monitoring: monitoring,
+                        serverId: serverId,
+                        visible: tabs.index == index,
+                      ),
+                    ),
                     ServerPanel.processes => ProcessesPanel(
                       monitoring: monitoring,
                       serverId: serverId,

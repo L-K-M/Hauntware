@@ -358,10 +358,10 @@ void main() {
       findsOneWidget,
     );
 
-    // Until its log service is wired, the engine refuses every open.
+    // With links off, the engine refuses every open.
     await panel.emit(
       tester,
-      const RequestRejected('OpenLogStream', 'not implemented yet'),
+      const RequestRejected('OpenLogStream', 'links are off in this engine'),
     );
     expect(
       find.text('Reading unit logs is not available in this version yet.'),

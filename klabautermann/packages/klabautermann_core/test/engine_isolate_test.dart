@@ -151,7 +151,8 @@ void main() {
       expect((event as RequestRejected).requestName, 'Connect');
     });
 
-    test('a log stream is rejected and closing one is a no-op', () async {
+    test('with links off, a log stream is rejected and closing one is a '
+        'no-op', () async {
       final client = await spawnEngine();
       final (:events, fleet: _) = await started(client);
 
@@ -175,6 +176,45 @@ void main() {
       expect(rejected.requestName, 'OpenLogStream');
       final event = await next(events);
       expect((event as RequestRejected).requestName, 'Connect');
+    });
+
+    test('with links on, Shutdown ends each open log stream before the '
+        'engine stops', () async {
+      final client = await IsolateEngineClient.spawn(
+        supportDirectory: support.path,
+        linksEnabled: true,
+      );
+      addTearDown(client.shutdown);
+      final states = <LogStreamStatus>[];
+      final waiting = Completer<void>();
+      final stopped = Completer<void>();
+      client.events.listen((event) {
+        if (event case LogStreamState(:final status)) {
+          states.add(status);
+          if (!waiting.isCompleted) waiting.complete();
+        }
+      }, onDone: stopped.complete);
+
+      client
+        ..send(const ImportSshConfig('Host web\n  HostName 192.0.2.10\n'))
+        ..send(
+          OpenLogStream(
+            streamId: 'log-0',
+            spec: LogStreamSpec(
+              serverId: 'ssh-config:web',
+              source: const KernelLogSource(),
+              window: 10,
+              follow: false,
+            ),
+          ),
+        );
+      await waiting.future.timeout(const Duration(seconds: 5));
+      await client.shutdown();
+      await stopped.future;
+      expect(states, [
+        const LogStreamWaiting(LogStreamWaitReason.link),
+        const LogStreamEnded(LogStreamEndReason.failed),
+      ]);
     });
 
     test('ImportSshConfig answers the fleet, then the counts', () async {

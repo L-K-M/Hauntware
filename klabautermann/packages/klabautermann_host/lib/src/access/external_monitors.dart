@@ -19,7 +19,20 @@ enum ExternalMonitor {
   ]),
   netdata(['netdata.service']),
   zabbixAgent(['zabbix-agent.service', 'zabbix-agent2.service']),
-  telegraf(['telegraf.service']);
+  telegraf(['telegraf.service']),
+  collectd(['collectd.service']),
+
+  /// A Prometheus server, or one in agent mode, which can scrape the
+  /// host and alert or forward without the app.
+  prometheus(['prometheus.service']),
+
+  /// Grafana's collectors: the Grafana Agent in static or Flow mode, and
+  /// Alloy, its successor.
+  grafanaAgent([
+    'grafana-agent.service',
+    'grafana-agent-flow.service',
+    'alloy.service',
+  ]);
 
   const ExternalMonitor(this.units);
 

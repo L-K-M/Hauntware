@@ -850,11 +850,131 @@ abstract class AppLocalizations {
   /// **'Not watched on this device'**
   String get coverageFreshnessNotWatched;
 
-  /// Freshness line before the first reading has arrived.
+  /// Freshness line before the first reading has arrived; also under coverageDetailsGaps while this server has no reading this session.
   ///
   /// In en, this message translates to:
   /// **'No data yet'**
   String get coverageFreshnessNoData;
+
+  /// The server header's coverage chip (03 §10.2): the server's execution tier, T0 (kept as written), and that Klabautermann takes readings from this server only while a view has it open, since no monitor set watches it yet. Not about read-only access, which the header shows separately. Opens the coverage sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'T0: sampled only while open'**
+  String get coverageServerChip;
+
+  /// Heading of a server's coverage card on its Overview and of the coverage section in the desktop inspector (03 §9.5 item 3).
+  ///
+  /// In en, this message translates to:
+  /// **'Coverage'**
+  String get coverageServerTitle;
+
+  /// Under the T0 badge of a server's coverage while the engine samples it.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading this server now, while you have it open.'**
+  String get coverageLiveSampling;
+
+  /// Under the T0 badge of a server's coverage while its readings wait for the SSH connection.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for the connection to this server.'**
+  String get coverageLiveWaiting;
+
+  /// Under the T0 badge of a server's coverage while a phone app is in the background and reading is paused.
+  ///
+  /// In en, this message translates to:
+  /// **'Paused while Klabautermann is in the background.'**
+  String get coverageLivePaused;
+
+  /// Under the T0 badge of a server's coverage while no shown panel samples it, such as the Logs or Access tab.
+  ///
+  /// In en, this message translates to:
+  /// **'Not reading this server now: the open panel takes no readings.'**
+  String get coverageLiveIdle;
+
+  /// Under the T0 badge of a server's coverage before the engine has said what reading the server is doing.
+  ///
+  /// In en, this message translates to:
+  /// **'Reads this server only while you have it open.'**
+  String get coverageLivePolicy;
+
+  /// Heading over a server's session chart in its coverage card: the readings this device took, with hatched bands where it has none.
+  ///
+  /// In en, this message translates to:
+  /// **'{minutes, plural, =1{The last minute on this device} other{The last {minutes} minutes on this device}}'**
+  String coverageSessionTitle(int minutes);
+
+  /// Legend and screen-reader name of the session chart's line: the share of time the server's CPUs were busy.
+  ///
+  /// In en, this message translates to:
+  /// **'CPU busy'**
+  String get coverageSessionLane;
+
+  /// The session chart's source line (03 §9.5 item 5): where its readings come from.
+  ///
+  /// In en, this message translates to:
+  /// **'Recorded by this device while connected'**
+  String get coverageSessionSource;
+
+  /// A server's coverage when its systemd services include a running monitoring agent such as node_exporter or Netdata (03 §9.5 item 3). units lists the running units' names, server data shown as written.
+  ///
+  /// In en, this message translates to:
+  /// **'External monitor running: {units}. It may cover this server while Klabautermann is closed; Klabautermann does not read it.'**
+  String coverageMonitorRunning(String units);
+
+  /// A server's coverage when monitoring agents are installed as systemd services but none runs. units lists their names, server data shown as written.
+  ///
+  /// In en, this message translates to:
+  /// **'No external monitor is running. Installed but stopped: {units}.'**
+  String coverageMonitorStopped(String units);
+
+  /// A server's coverage when its full systemd service list holds no known monitoring agent. A monitor outside systemd is not seen.
+  ///
+  /// In en, this message translates to:
+  /// **'No external monitor found among this server\'s systemd services.'**
+  String get coverageMonitorNone;
+
+  /// A server's coverage while its systemd service list has not arrived yet.
+  ///
+  /// In en, this message translates to:
+  /// **'Looking for an external monitor among this server\'s systemd services.'**
+  String get coverageMonitorChecking;
+
+  /// A server's coverage when its systemd service list failed or came back incomplete.
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann cannot tell whether an external monitor runs: this server\'s systemd services could not be listed.'**
+  String get coverageMonitorUnknown;
+
+  /// Heading in the desktop inspector's coverage section over the recent periods without data, each worded with chartGapSummary or chartGapOngoing.
+  ///
+  /// In en, this message translates to:
+  /// **'Recent gaps'**
+  String get coverageDetailsGaps;
+
+  /// Under coverageDetailsGaps when the recent readings have no gap with a known cause: no background pause, lost link or failed reading. The chart's line may still break where no view read the server, which this list does not name.
+  ///
+  /// In en, this message translates to:
+  /// **'No pauses, lost links or failed readings.'**
+  String get coverageDetailsNoGaps;
+
+  /// Under the newest gaps listed below coverageDetailsGaps, when the recent readings have more gaps than the inspector lists: how many older ones it leaves out.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 earlier gap not shown.} other{{count} earlier gaps not shown.}}'**
+  String coverageDetailsEarlierGaps(int count);
+
+  /// Banner on a phone's server screen after the app returns from the background (03 §9.5 item 6): when the app left for the background and returned, as times of day in the UI locale. It shows only for a server the engine was reading or said it paused; once the server has readings, its charts show the same period as a hatched band.
+  ///
+  /// In en, this message translates to:
+  /// **'Paused {start} to {end} while in background. No data for that period.'**
+  String coverageReturnBanner(String start, String end);
+
+  /// Button that hides the return-from-background banner.
+  ///
+  /// In en, this message translates to:
+  /// **'Dismiss'**
+  String get coverageReturnDismiss;
 
   /// No description provided for @serverTitle.
   ///
@@ -1396,13 +1516,19 @@ abstract class AppLocalizations {
   /// **'disconnected'**
   String get chartGapDisconnected;
 
-  /// A screen reader's description of a chart's band without data: when it began and ended, and why, one of chartGapAppClosed, chartGapBackground or chartGapDisconnected.
+  /// The label on a chart's hatched band for a period without data because the server gave no reading while connected: the reading was lost or the server could not take it.
+  ///
+  /// In en, this message translates to:
+  /// **'reading failed'**
+  String get chartGapReadingFailed;
+
+  /// A screen reader's description of a chart's band without data: when it began and ended, and why, one of chartGapAppClosed, chartGapBackground, chartGapDisconnected or chartGapReadingFailed.
   ///
   /// In en, this message translates to:
   /// **'No data from {start} to {end}: {reason}'**
   String chartGapSummary(DateTime start, DateTime end, String reason);
 
-  /// A screen reader's description of a chart's band without data that has not ended: when it began and why, one of chartGapAppClosed, chartGapBackground or chartGapDisconnected.
+  /// A screen reader's description of a chart's band without data that has not ended: when it began and why, one of chartGapAppClosed, chartGapBackground, chartGapDisconnected or chartGapReadingFailed.
   ///
   /// In en, this message translates to:
   /// **'No data since {start}: {reason}'**
@@ -2367,6 +2493,204 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Next match'**
   String get logsPanelSearchNext;
+
+  /// The server header's detected container runtime (CN-09), read-only: the engines the probe found, such as "Docker, rootful", joined by overviewHeaderRuntimeSeparator.
+  ///
+  /// In en, this message translates to:
+  /// **'Runtime: {engines}'**
+  String overviewHeaderRuntime(String engines);
+
+  /// overviewHeaderRuntime when an engine was found at Docker's socket path: the engine is named from the path alone, and a podman-docker install may serve that path, as the Access tab notes (accessRuntimeAlias).
+  ///
+  /// In en, this message translates to:
+  /// **'Runtime: {engines} (Podman can also answer on Docker\'s socket path)'**
+  String overviewHeaderRuntimeDockerPath(String engines);
+
+  /// Between two engines in overviewHeaderRuntime; each engine's own words already hold a comma.
+  ///
+  /// In en, this message translates to:
+  /// **'; '**
+  String get overviewHeaderRuntimeSeparator;
+
+  /// The server header's detected container runtime when the probe found no Docker or Podman engine socket.
+  ///
+  /// In en, this message translates to:
+  /// **'Runtime: none found'**
+  String get overviewHeaderRuntimeNone;
+
+  /// The server header's detected container runtime when the probe could not tell.
+  ///
+  /// In en, this message translates to:
+  /// **'Runtime: unknown'**
+  String get overviewHeaderRuntimeUnknown;
+
+  /// The server header's detected container runtime before the server's capability probe has reported.
+  ///
+  /// In en, this message translates to:
+  /// **'Runtime: not checked yet'**
+  String get overviewHeaderRuntimeNotChecked;
+
+  /// The Overview tab before the server sent its first reading.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for the first reading.'**
+  String get overviewWaiting;
+
+  /// Why the Overview tab's latest reading has no values; the values of the last reading, if any, stay shown below it.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, missing{The server lacks a file or tool this reading needs.} denied{The server refused this reading.} timeout{This reading took too long, so the server stopped it.} other{This reading failed on the server.}}'**
+  String overviewUnavailable(String reason);
+
+  /// An Overview value the server did not report, or that is not shown for a reason given beside it; never shown as zero.
+  ///
+  /// In en, this message translates to:
+  /// **'Unknown'**
+  String get overviewUnknown;
+
+  /// Reason in an Overview card whose figures are unknown: in a container, the system file they come from shows the host's figures instead of the container's (SYS-04).
+  ///
+  /// In en, this message translates to:
+  /// **'Inside this container these figures would be the host\'s, so they are not shown.'**
+  String get overviewUnknownContainer;
+
+  /// Reason in the Overview's Load card when only the load per core is unknown: in a container, the CPU count would be the host's while the load averages are the container's own (SYS-04).
+  ///
+  /// In en, this message translates to:
+  /// **'Inside this container the core count would be the host\'s, so the load per core is not shown.'**
+  String get overviewUnknownContainerLoadPerCore;
+
+  /// Heading of the Overview's CPU card (OV-01), also the name its chart summaries give.
+  ///
+  /// In en, this message translates to:
+  /// **'CPU'**
+  String get overviewCpuTitle;
+
+  /// The CPU gauge's part: the share of time the CPUs were busy (not idle or waiting on I/O).
+  ///
+  /// In en, this message translates to:
+  /// **'Busy'**
+  String get overviewCpuBusy;
+
+  /// CPU-01: the share of CPU time spent in user programs.
+  ///
+  /// In en, this message translates to:
+  /// **'User'**
+  String get overviewCpuUser;
+
+  /// CPU-01: the share of CPU time spent in the kernel.
+  ///
+  /// In en, this message translates to:
+  /// **'System'**
+  String get overviewCpuSystem;
+
+  /// CPU-01: the share of CPU time spent idle.
+  ///
+  /// In en, this message translates to:
+  /// **'Idle'**
+  String get overviewCpuIdle;
+
+  /// CPU-02: heading over each core's busy share.
+  ///
+  /// In en, this message translates to:
+  /// **'Per core'**
+  String get overviewPerCoreTitle;
+
+  /// Heading of the Overview's load card (CPU-03): the load averages.
+  ///
+  /// In en, this message translates to:
+  /// **'Load'**
+  String get overviewLoadTitle;
+
+  /// The one-minute load average's label.
+  ///
+  /// In en, this message translates to:
+  /// **'1 min'**
+  String get overviewLoad1;
+
+  /// The five-minute load average's label.
+  ///
+  /// In en, this message translates to:
+  /// **'5 min'**
+  String get overviewLoad5;
+
+  /// The fifteen-minute load average's label.
+  ///
+  /// In en, this message translates to:
+  /// **'15 min'**
+  String get overviewLoad15;
+
+  /// The one-minute load divided by the number of CPUs (CPU-03's core context).
+  ///
+  /// In en, this message translates to:
+  /// **'Per core'**
+  String get overviewLoadPerCore;
+
+  /// A load average in the UI locale's number format, with two decimals.
+  ///
+  /// In en, this message translates to:
+  /// **'{load}'**
+  String overviewLoadValue(double load);
+
+  /// Heading of the Overview's memory card (MEM-01), also the name its chart summaries give.
+  ///
+  /// In en, this message translates to:
+  /// **'Memory'**
+  String get overviewMemoryTitle;
+
+  /// Used memory or swap: for memory, the installed memory less what is available.
+  ///
+  /// In en, this message translates to:
+  /// **'Used'**
+  String get overviewMemoryUsed;
+
+  /// MEM-01: memory the kernel uses as block-device buffers.
+  ///
+  /// In en, this message translates to:
+  /// **'Buffers'**
+  String get overviewMemoryBuffers;
+
+  /// MEM-01: memory holding the page cache and reclaimable kernel caches.
+  ///
+  /// In en, this message translates to:
+  /// **'Cache'**
+  String get overviewMemoryCache;
+
+  /// MEM-01 and MEM-02: the server's installed memory, or the swap space it has set up.
+  ///
+  /// In en, this message translates to:
+  /// **'Total'**
+  String get overviewMemoryTotal;
+
+  /// MEM-01: memory available to new programs without swapping.
+  ///
+  /// In en, this message translates to:
+  /// **'Available'**
+  String get overviewMemoryAvailable;
+
+  /// MEM-01: shared memory, mostly tmpfs, which is part of the cache.
+  ///
+  /// In en, this message translates to:
+  /// **'Shared'**
+  String get overviewMemoryShared;
+
+  /// MEM-01: on a server with ZFS, its cache (the ARC) is counted in used memory, so used reads higher than the memory programs hold. ZFS and ARC are kept as written.
+  ///
+  /// In en, this message translates to:
+  /// **'ZFS ARC counted as used'**
+  String get overviewMemoryArc;
+
+  /// Heading of the Overview's swap card (MEM-02), also the name its chart summaries give.
+  ///
+  /// In en, this message translates to:
+  /// **'Swap'**
+  String get overviewSwapTitle;
+
+  /// The swap card of a server with no swap space.
+  ///
+  /// In en, this message translates to:
+  /// **'No swap is set up.'**
+  String get overviewSwapNone;
 }
 
 class _AppLocalizationsDelegate

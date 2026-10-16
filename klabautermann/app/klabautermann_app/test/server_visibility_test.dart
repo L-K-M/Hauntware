@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:klabautermann_app/app.dart';
 import 'package:klabautermann_app/controllers/monitoring_controller.dart';
 import 'package:klabautermann_app/ui/inspector_pane.dart';
+import 'package:klabautermann_app/ui/overview_panel.dart';
 import 'package:klabautermann_app/ui/server_surfaces.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 
@@ -14,11 +15,35 @@ import 'support/harness.dart';
 const _desktop = Size(1280, 800);
 const _phone = Size(390, 800);
 
-List<Subscribe> _subscribes(FakeEngineClient engine) =>
-    engine.sentOfType<Subscribe>().cast<Subscribe>();
+/// The panels' subscriptions, without the Overview coverage card's one
+/// `units` read (03 §9.5 item 3), which server_coverage_test.dart covers.
+List<Subscribe> _subscribes(FakeEngineClient engine) => engine
+    .sentOfType<Subscribe>()
+    .cast<Subscribe>()
+    .where((request) => !_coverageRead(request.subscriptionId))
+    .toList();
 
-List<Unsubscribe> _unsubscribes(FakeEngineClient engine) =>
-    engine.sentOfType<Unsubscribe>().cast<Unsubscribe>();
+List<Unsubscribe> _unsubscribes(FakeEngineClient engine) => engine
+    .sentOfType<Unsubscribe>()
+    .cast<Unsubscribe>()
+    .where((request) => !_coverageRead(request.subscriptionId))
+    .toList();
+
+bool _coverageRead(String subscriptionId) =>
+    subscriptionId.startsWith('coverage-');
+
+/// The coverage card's `units` reads, in order, as "subscribe" or
+/// "unsubscribe".
+List<String> _coverageReads(FakeEngineClient engine) => [
+  for (final request in engine.sent)
+    ?switch (request) {
+      Subscribe(:final subscriptionId) when _coverageRead(subscriptionId) =>
+        'subscribe',
+      Unsubscribe(:final subscriptionId) when _coverageRead(subscriptionId) =>
+        'unsubscribe',
+      _ => null,
+    },
+];
 
 /// The Connect and Disconnect requests sent, in order.
 List<String> _linkRequests(FakeEngineClient engine) => [
@@ -76,7 +101,8 @@ void main() {
     expect(overview.serverId, 'srv-1');
     expect(overview.streams, ServerPanel.overview.streams);
     // The shown panel only: the others are not built or not visible.
-    expect(find.byType(PlaceholderPaneBody), findsOneWidget);
+    expect(find.byType(OverviewPanel), findsOneWidget);
+    expect(find.byType(PlaceholderPaneBody), findsNothing);
 
     // An engine with links off rejects the connect; nothing shows it.
     engine.emit(
@@ -109,6 +135,26 @@ void main() {
     );
     expect(_linkRequests(engine), ['connect srv-1']);
   });
+
+  // D45: the Overview's coverage card reads `units` only while it shows.
+  for (final (layout, size, away) in [
+    ('desktop workspace', _desktop, 'Processes'),
+    ('phone screen', _phone, 'Docker'),
+  ]) {
+    testWidgets('the $layout\'s coverage card stops reading as its tab '
+        'hides', (tester) async {
+      final engine = (await _openWeb1(tester, size)).engine;
+      expect(_coverageReads(engine), ['subscribe']);
+
+      if (size == _desktop) {
+        await _openTab(tester, away);
+        await _openTab(tester, 'Logs');
+      } else {
+        await _tapAndSettle(tester, find.text(away));
+      }
+      expect(_coverageReads(engine), ['subscribe', 'unsubscribe']);
+    });
+  }
 
   testWidgets('selecting another server moves the link and the '
       'subscription', (tester) async {

@@ -394,6 +394,33 @@ P7 2278.627 entries/s; all pass the unchanged budgets. Only the shared
 runner-image calibration moves. Budget thresholds, landed flags, enforcement,
 and per-scenario configs are unchanged.
 
+## Baseline refresh: runner image rotation (2026-10-16)
+
+Main run 38642392417 exposed the controlled `ubuntu-latest` rotation from
+`20261004.327.1` to `20261012.334.1`. The refresh pools raw rows from main
+runs 38668350527, 38718111021, 38790068258, 38841624155, and 38865653985,
+every main run through 38865653985 whose collectors completed on the new
+image with the complete recorded fingerprint, including `AMD EPYC 7763
+64-Core Processor`. The scenario configs are unchanged. Pooled medians: P1
+1119.692 ms (n=15), P2 11119.811 ms (n=15), and P4 49.156 ms (n=25). P6
+still has no entry: all fifteen rows errored at 761–924 captured frames
+against the required minimum of 1800.
+
+The new image rolled out over about 14 hours. Main runs 38666146313,
+38703018778, and 38731620543 still carried the old image; 38642392417 and
+38843616853 carried the new image on `Intel(R) Xeon(R) 6973P-C` and
+`Intel(R) Xeon(R) Platinum 8370C`, 38652856582, 38813589271, and
+38864865807 on `AMD EPYC 9V45`, and 38690105853, 38748394472, 38779467171,
+38800520929, 38837468044, and 38846113304 on `AMD EPYC 9V74`. All were
+excluded; cancelled main runs never started the bench job. The pooled
+tier-A medians are P3 596.387 ms, P5 608.782 ms, and P7 16496.660
+entries/s; all pass the unchanged budgets. They sit far from the previous
+refresh's tier-A medians because old-image runs already moved to this
+level from main run 38073703656 (the dartssh2 4.1.0 merge) on, before the
+rotation. Only the shared runner-image calibration moves. Budget
+thresholds, landed flags, enforcement, and per-scenario configs are
+unchanged.
+
 ## First fixture-backed observations (2026-09-14)
 
 The job's first real runs produced stable medians (within-run spread

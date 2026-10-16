@@ -135,7 +135,7 @@ ParseResult<CronSnapshot> parseCron(String raw, ParseContext ctx) {
     _parseCrontab(
       blocks['crontab'] ?? const [],
       source: 'crontab',
-      system: false,
+      table: _CronTable.user,
       jobs: jobs,
       warnings: warnings,
     );
@@ -143,7 +143,7 @@ ParseResult<CronSnapshot> parseCron(String raw, ParseContext ctx) {
   _parseCrontab(
     blocks['etc_crontab'] ?? const [],
     source: '/etc/crontab',
-    system: true,
+    table: _CronTable.system,
     jobs: jobs,
     warnings: warnings,
   );
@@ -197,18 +197,22 @@ bool? _crontabMeta(
 /// spaces around `=` are optional).
 final _envLine = RegExp(r'^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$');
 
-/// Parses crontab-formatted lines into [jobs]. [system] selects the
-/// extra user column of `/etc/crontab` and `/etc/cron.d` (03 §7.7).
+/// A crontab's format: a system table (`/etc/crontab`, `/etc/cron.d`)
+/// has a user field between the schedule and the command; the invoking
+/// user's `crontab -l` has none (03 §7.7).
+enum _CronTable { user, system }
+
+/// Parses crontab-formatted lines of a [table] into [jobs].
 void _parseCrontab(
   List<String> lines, {
   required String source,
-  required bool system,
+  required _CronTable table,
   required List<CronJob> jobs,
   required List<String> warnings,
 }) {
   final env = <String, String>{};
   for (final line in lines) {
-    _cronLine(line, source, system, env, jobs, warnings);
+    _cronLine(line, source, table, env, jobs, warnings);
   }
 }
 
@@ -238,7 +242,7 @@ void _parseCronD(
     _cronLine(
       line.substring(tab + 1),
       '/etc/cron.d/$name',
-      true,
+      _CronTable.system,
       env,
       jobs,
       warnings,
@@ -251,7 +255,7 @@ void _parseCronD(
 void _cronLine(
   String line,
   String source,
-  bool system,
+  _CronTable table,
   Map<String, String> env,
   List<CronJob> jobs,
   List<String> warnings,
@@ -270,46 +274,35 @@ void _cronLine(
     env[envMatch[1]!] = value;
     return;
   }
-  _cronJob(t, line, source, system, env['CRON_TZ'], jobs, warnings);
+  _cronJob(t, line, source, table, env['CRON_TZ'], jobs, warnings);
 }
 
-/// A job line: `@macro command`, or five fields plus (system: user plus)
-/// the command.
+/// A trimmed job line [t]: an `@` macro or five fields, a system table's
+/// user field, then the command. cron reads the user field after a macro
+/// too, without checking that the user exists, and skips a line that
+/// ends before the command [R: cronie `entry.c` `load_entry`]. Not yet
+/// modelled: cron also skips a line whose word after the schedule starts
+/// with `*`, and reads a command's leading `-` words as cron options,
+/// rejecting any but `-n`.
 void _cronJob(
   String t,
   String raw,
   String source,
-  bool system,
+  _CronTable table,
   String? cronTz,
   List<CronJob> jobs,
   List<String> warnings,
 ) {
-  String schedule;
-  String? user;
-  String command;
-  if (t.startsWith('@')) {
-    final sp = t.indexOf(RegExp(r'\s'));
-    if (sp < 0) {
-      warnings.add('cron $source: macro without command "$t"');
-      return;
-    }
-    schedule = t.substring(0, sp);
-    command = t.substring(sp).trim();
-  } else {
-    final parts = t.split(RegExp(r'\s+'));
-    final need = system ? 7 : 6;
-    if (parts.length < need) {
-      warnings.add('cron $source: short line "$t"');
-      return;
-    }
-    schedule = parts.sublist(0, 5).join(' ');
-    if (system) {
-      user = parts[5];
-      command = parts.sublist(6).join(' ');
-    } else {
-      command = parts.sublist(5).join(' ');
-    }
+  final macro = t.startsWith('@');
+  final system = table == _CronTable.system;
+  final split = _leadingFields(t, (macro ? 1 : 5) + (system ? 1 : 0));
+  if (split == null) {
+    warnings.add('cron $source: short line "$t"');
+    return;
   }
+  final (fields, command) = split;
+  final schedule = macro ? fields.first : fields.take(5).join(' ');
+  final user = system ? fields.last : null;
   final expression = CronExpression.parse(schedule);
   if (expression == null) {
     warnings.add('cron $source: unparseable schedule "$schedule"');
@@ -325,6 +318,24 @@ void _cronJob(
       cronTz: cronTz,
     ),
   );
+}
+
+/// One field and the blanks that end it.
+final _field = RegExp(r'(\S+)\s+');
+
+/// The first [count] fields of [t] and the rest after the blanks that
+/// end them, verbatim (cron hands it to the shell as written); null when
+/// nothing follows the fields.
+(List<String>, String)? _leadingFields(String t, int count) {
+  final fields = <String>[];
+  var at = 0;
+  for (var i = 0; i < count; i++) {
+    final match = _field.matchAsPrefix(t, at);
+    if (match == null) return null;
+    fields.add(match[1]!);
+    at = match.end;
+  }
+  return at < t.length ? (fields, t.substring(at)) : null;
 }
 
 /// The `cron_dirs` block: one `<period> <name>` line per entry, where

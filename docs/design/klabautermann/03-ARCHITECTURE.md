@@ -2058,6 +2058,18 @@ per connection, not forwarding channels [R: sshd_config(5)].
   transport. A second connection is opened only for non-interactive auth
   and only when long-lived work exhausts the budget.
 
+As built in M2 (`klabautermann_core/lib/src/links/channel_quota.dart`,
+K25b), the engine keeps a `ChannelQuota` per server below the link's own
+semaphore: 2 short actions and 2 followers at once. A bounded log read
+takes a short-action slot, and one that finds the share full waits in
+the engine as `LogStreamWaiting(channel)`, where the app can show it,
+rather than on the link. A follower (K26) gets no slot while the link
+has learned a session limit below 4 (the two samplers, one follower and
+one short action), so it reports waiting for a channel instead of
+holding the last free one and leaving short actions none; the rest of
+low-session mode is M3. The link still opens every session channel at
+one priority, since `seance_core`'s `start` and `run` take none yet.
+
 ### 5.3 Failure classification
 
 | Symptom | Classification | UI |
@@ -2502,6 +2514,61 @@ timed-out channel or no READY, would hold the fast one until it does).
   wrapped `df` lines; Swarm task names (ServerBox #1226 [R]).
 - The diagnostic bundle (CN-18, v1) exports the same raw format, redacted
   by `SecretRedactor`, so a user report becomes a fixture.
+- Capture redaction: the host's names (kernel, `/etc/hostname`,
+  hostnamectl) that are no address and each FQDN's first label, the
+  domains of those names and of resolv.conf's search list (each suffix
+  of two labels or more), the names and home directories of personal
+  accounts (any uid from login.defs' UID_MIN, 1000 without one, but
+  `nobody`'s, as directory-service and systemd-homed accounts lie
+  above UID_MAX; no passwd account whose home is `/nonexistent`) and
+  `--redact` values become fixed placeholders, names as whole words in
+  any case, a `-` in them also as device-mapper's `--` and systemd's
+  `\x2d`, a non-ASCII byte also as its `\xNN`; `localhost`, the
+  os-release `ID` and `ID_LIKE` words and the words the probe and
+  hostnamectl print from fixed sets (probe keys, kernel name and
+  machine, PID 1, virtualization, tools, time zone words, chassis)
+  stay, as fixtures need them. Every `/home/<name>` path and home mount
+  unit, udisks2's `/media/<name>/` and `/run/media/<name>/` and their
+  mount units, logind's `Session <id> of User <name>` and the `ps`
+  fallback's USER column name no account but root. IPv4 and IPv6
+  addresses other than loopback and `0.0.0.0` (also between host name
+  labels and in EC2's `ip-`/`ec2-` and Kubernetes pods' hyphenated
+  names), MAC addresses (also hyphenated, dotted and in
+  `enx`/`wlx`/`wwx` names), UUIDs, hex ids of 32 or more digits
+  (machine and boot ids), the names in `/dev/<subsystem>/by-*/` links
+  (disk serials, WWNs, SAS addresses, labels, USB serial numbers) and
+  in their device units, UUIDs too in systemd's `\x2d` escaping,
+  network mount servers and logins in `fs` (NFS, sshfs, Ceph, CIFS and
+  URL sources), hostnamectl's serial, asset-tag, pretty-name and
+  location fields (also as machine-info's `PRETTY_HOSTNAME`, `LOCATION`
+  and `TAGS`), email addresses, URL credentials, private-key headers,
+  what `SecretRedactor` masks and the credentials it misses (values of
+  assignments and options whose names hold PASS, PWD, SECRET, TOKEN,
+  KEY, AUTH or CRED, HTTP basic auth, `-u`/`-U user:password`, Samba's
+  `-U user%password`, the password options of the MySQL, MongoDB and
+  OpenLDAP clients, sshpass, redis-cli, zip and 7-Zip) become
+  placeholders too (documentation addresses where an address is
+  expected). Distinct ids, UUIDs and accounts keep distinct numbered
+  placeholders (`user2`), as parsers join tables on mount points. In
+  `procs` every command line keeps argv[0] up to its first space and
+  the rest reads `[redacted]`: arguments carry secrets, process titles
+  user names. In `cron`, for the same reason, each job keeps a schedule
+  that parses, a `root` user field (others read `user`, as a missing
+  user field shifts the program into it), the first word of a command
+  run as root or from a user crontab, and the words `mergeJobs` reads
+  (`run-parts`, the periodic directories, anacron); the rest,
+  comments, environment values but `CRON_TZ` and lines `parseCron`
+  reads as no job read `[redacted]`. A unit description that is a
+  systemd-run command line (its tag, an absolute program, a `run-u<n>`
+  name) keeps its first word, and a device unit's reads `[redacted]`,
+  as it holds the filesystem label; a `timers_text` table is padded
+  again where a placeholder widens a cell. A review then reads every
+  file; a line that still holds a literal outside a placeholder, a
+  secret, a private-key mention or 40 or more mixed base64 characters
+  stops the tool before it writes anything, and so does a payload, the
+  probe or the job list that parses differently from the capture in
+  anything but text. A `.txt` fixture holds the payload only, so
+  `SOURCE.md` records each section's status.
 
 ### 6.6 Portability matrix (CN-11 to CN-14)
 
@@ -2688,9 +2755,10 @@ no longer holds that value.
   and starts over once shown. The read opens through the controller's
   one owner of log streams, which the Logs panel shares and which gives
   each rejection of `OpenLogStream` to the oldest open without an answer
-  (10.1). Until the service is wired, the page says unit logs are not
-  available in this version; a read the engine can no longer answer,
-  because it stopped, says so and asks for a restart of the app.
+  (10.1). While links are off, as the composition root leaves them
+  until K44, the engine rejects every open and the page says unit logs
+  are not available in this version; a read the engine can no longer
+  answer, because it stopped, says so and asks for a restart of the app.
 
 ### 7.6 Logs (LOG)
 
@@ -2720,10 +2788,88 @@ no longer holds that value.
   timestamp, structured fields, saved queries (`query` records), journal
   size and vacuum, log rate view, syslog-only hosts, split panes.
 
+As built in M2 (`klabautermann_core/lib/src/logs/log_service.dart`,
+K25a; `log_stream_router.dart`, K25b, routes `OpenLogStream` to it),
+`LogService` serves the windows (`follow: false`) of one server's link,
+one host command at a time through `HostCommands.commandLine`, and
+answers each open with a `LogStreamState` before it returns. Followers
+are K26.
+
+- A window holds 1 to 500 records, LOG-01's page. Any other size, a
+  file with a cursor and what 8.8's validators refuse end as an invalid
+  spec before anything runs. The journal reads
+  `journalctl -o json --no-pager -r -n <window>` with the source's
+  filters and `--after-cursor`. SVC-04's unit logs are that read with
+  `-u` and 50 records, newest first like every window; the unit page
+  lists them oldest first itself. A file reads `tail -n <window> --`.
+- Each command keeps at most 4 MiB of stdout and runs for at most 30 s
+  once its channel is open, `SshLink.run`'s one-shot deadline (the link
+  bounds the open). The 256 KiB default cap would cut a 500-entry window
+  of 1 to 2 KiB `-o json` entries short; 4 MiB is 8 KiB per entry, the
+  `dmesg --json` of a ring up to about 1.5 MiB, and an eighth of the
+  viewer's 32 MiB cap (10.8, 11.4). A cut keeps the newest bytes and
+  ends as window filled with fewer records: a journal window stops
+  reading at the cap and keeps its complete entries, so its last cursor
+  reads on; `tail` and `dmesg`, which print oldest first, keep their
+  last complete lines or records. Journal lines that are not JSON
+  objects count as dropped, as does an entry longer than the cap, and a
+  cut `tail` or `dmesg` output that keeps no whole line or record counts
+  its newest as dropped instead of ending with nothing to show. A
+  full journal window left without a record ends as failed: it has no
+  cursor to read on from, and journalctl prints an entry's keys in hash
+  order, so a cut entry's cursor may lie past the cap.
+- The kernel log reads `journalctl -k -b` and falls back to
+  `dmesg --json --decode` when that exited without a kernel record,
+  whatever its exit code. That is what an account outside
+  `systemd-journal`, `adm` and `wheel` sees, since kernel entries are
+  never its own (K04's `kPanelNeeds`), and what a host without
+  journalctl or without kernel entries in its journal gives, so the
+  fallback needs neither the profile nor another probe. It never
+  follows a cursor (an empty older page is the oldest record), a cut, a
+  signal, a timeout or a lost link, which end the read as failed.
+  `LogStreamRunning` names the reader (`LogReader.fallback`), so the view
+  can say where even an empty read came from; a failed fallback ends
+  with `dmesg`'s reason and output.
+- Exit 0 ends as window filled when the window is full, otherwise as
+  oldest record reached, which a window after a cursor also reaches at
+  its first entry older than `since` (10.1). Exit 127 (the shell's
+  `exec` found no command), `No such file or directory` and an unknown
+  option (`dmesg --json` needs util-linux 2.38; BusyBox has none) are
+  source missing. Exit 126, `Permission denied`, `Operation not
+  permitted` and journalctl's "insufficient permissions" are read
+  denied. Any other status, a signal, a timeout, a refused channel or a
+  lost link is failed. Commands run in the C locale, so the texts
+  match; the detail is the last 4 KiB of stderr through
+  `stripControlChars`.
+- `CloseStream` ends a read as closed, and closing the service (its link
+  closed, or its server left the fleet) ends the others as failed. Both
+  close the process (TERM, then the channel), one whose channel opens
+  late included.
+- `LogStreamRouter` (K25b) owns the engine's streams while links are on;
+  with links off the engine rejects every `OpenLogStream`. It rejects an
+  id an earlier open named (it keeps each id for the engine's lifetime),
+  a follow until K26, a server outside the fleet and a server's 17th
+  open stream [E], and ends a spec 8.8 refuses as invalid at once.
+  Otherwise it answers the open with the read's `LogStreamRunning`, or
+  with `LogStreamWaiting` naming the link (none ready), the foreground
+  (the app is in the background) or a channel (5.2's share is full),
+  and starts the read on its own, oldest first, once that clears.
+- Every stream ends exactly once. A read running on a link that closes
+  or is replaced ends as failed; waiting reads wait for the next link.
+  `Disconnect`, the server leaving the fleet and `Shutdown` end every
+  stream of the server as failed, waiting ones included, since nothing
+  would bring a link back for them. The background closes the running
+  reads' processes without ending them, reports every read as waiting
+  for the foreground and queues the paused ones ahead of the others,
+  and the foreground runs them again from the start; a window sends its
+  records as it ends, so a paused one has sent none.
+
 ### 7.7 Scheduled jobs (JOB)
 
 - **MVP.** Unified list (JOB-01): own `crontab -l` (exit 1 with "no crontab"
-  means empty), `/etc/crontab` and `/etc/cron.d/*` (with the user field),
+  means empty), `/etc/crontab` and `/etc/cron.d/*` (with the user field,
+  which follows an `@` macro too; a line that ends before its command is
+  no job [R: cronie `entry.c` `load_entry`]),
   `cron.{hourly,daily,weekly,monthly}` names, and
   `systemctl list-timers --all --output=json`. Schedules in words and next runs
   (JOB-02): a Dart cron parser in `klabautermann_host` (5 fields, ranges, steps,
@@ -4024,6 +4170,48 @@ reads the reading's age, since its phase began only then. The monitoring
 controller keeps each server's latest `SamplingState` and the phase
 before it.
 
+As built in M2 for items 3, 5 and 6
+(`app/klabautermann_app/lib/ui/server_coverage.dart`), the coverage card
+follows the Overview's cards on desktops and phones: the T0 badge with
+the tier's meaning and what live reading is doing (from `SamplingState`,
+or the tier's rule before the engine says anything), a chart of the last
+10 minutes of CPU busy from the `core` stream, the external-monitor
+finding, and what is not covered in the coverage sheet's words, with no
+control for T1 or T2. K04's rule recognises node_exporter, Netdata, the
+Zabbix agent, Telegraf, collectd, Prometheus and Grafana's agents
+(Agent, Agent Flow, Alloy) by their packaged systemd units in a complete
+`units` list; a monitor outside systemd is not seen, and the card names
+the units as the server lists them. The card subscribes `units` under an
+id of its own while it shows, until the first `units` sample of the
+engine run, so the Overview reads the list once rather than at the
+Services tab's cadence; a list that tab reads later replaces it. The
+desktop inspector's body shows the selected server's coverage: the
+badge, the `core` stream's freshness, the external-monitor finding, the
+recent gaps with a known cause in words ("No data yet" before any
+reading, so an empty record never reads as a complete one; a break while
+no view read `core` has none), the newest five with a count of the rest,
+and what is not covered with each reason; it reads what the panels
+sample and subscribes nothing. Beside the session rings, the monitoring
+controller keeps a time-series ring per series of `core`: a background
+pause, a link lost while sampling, or a return from the background to a
+link still down opens a labelled gap when `SamplingState` says so,
+ending an open "reading failed" one, which it outranks; a `Gap`, or a
+`CollectorUnavailable` reading, opens one only if none is open, labelled
+"reading failed" for a lost or failed reading; the next reading closes
+it. A `Gap` also breaks the sparklines' session rings, so no line joins
+across it, and a stream no subscription names ends its open gap with an
+unknown reading, which breaks the line without a label. On a phone's
+server screen, and in the workspace of an iOS or Android tablet wide
+enough for the desktop layout, the return banner sits under the header,
+scrolling past a fifth of the screen's height, after a return from the
+background that paused that server: the engine had it in `sampling` as
+the app left, or said it paused it while away; a subscription alone, as
+while links are off, reads nothing to pause. It gives this device's
+times of leaving and returning (to the second when both fall in one
+minute) until dismissed, until that screen is left or until the next
+pause; a desktop platform never reports the background, so it never
+shows there.
+
 ---
 
 ## 10. UI shell
@@ -4389,8 +4577,8 @@ the engine in `engine_isolate.dart` beside it):
   streams' last reading (a stream without one has no gap) to the
   resuming one, with its cause (background, disconnected, or a reading
   lost to a deadline, a framing error or a sampler restart, 6.2), so a
-  chart labels the band (9.5 item 5, whose labels do not yet word a lost
-  reading). While a gap is open,
+  chart labels the band (9.5 item 5; a lost reading reads "reading
+  failed"). While a gap is open,
   a background or disconnected one shows in `SamplingState`; a lost
   reading leaves the phase at sampling and shows only as an ageing
   `Sample.at`. A lost link or the background outranks a lost reading
@@ -4437,11 +4625,13 @@ the engine in `engine_isolate.dart` beside it):
   records discarded since the stream's previous batch.
   `LogStreamState(streamId, status)` carries a sealed status that
   compares by value: waiting (for the link, a free channel under 5.2's
-  budget, or the foreground), running, or ended with a reason (window
+  budget, or the foreground), running (with the source's own reader or
+  the kernel log's `dmesg` fallback, 7.6), or ended with a reason (window
   filled, oldest record reached, closed, spec refused, source missing,
-  read denied, or failed) and the host's error output. Until the log
-  service is wired, the engine rejects `OpenLogStream` and ignores
-  `CloseStream`, since no stream is open.
+  read denied, or failed) and the host's error output. With links off,
+  as in the app until K44, the engine rejects `OpenLogStream` and
+  ignores `CloseStream`, since no stream is open; with links on, the
+  log stream router serves both (7.6).
   On the app side (M2), `MonitoringController.logs` owns every stream
   of the run, the Logs panel's and the bounded reads `openLogRead`
   opens through it (SVC-04's unit logs, 7.5): it mints `log-N` ids,
@@ -4475,7 +4665,8 @@ the engine in `engine_isolate.dart` beside it):
   while its tab or destination is selected: Overview `core`, `fs`,
   `identity` and `failedUnits`; Processes `procs`; Services `units`; Jobs
   `timers` and `cron`; System `identity`, `fs` and `core`; Logs, Docker
-  and Access none. Hidden pages stay built, so visibility comes from the
+  and Access none. The Overview's coverage card also reads `units`
+  once (9.5). Hidden pages stay built, so visibility comes from the
   tab controller's index. The app sends `SetAppActivity` only on a change,
   and the engine starts with the app in the foreground. Phones report the
   background while hidden, paused or detached. A desktop app stays in the
@@ -4653,6 +4844,60 @@ and DSK-01's and DSK-02's mounts in the sortable table, in IEC units:
   server, still counts; it leaves with the server (SYN-08). A host
   without `timeout` is told that a stale mount can stall disk readings.
 - The usage bars carry no thresholds until OV-11 (v1) sets them.
+
+As built in M2 (`app/klabautermann_app/lib/ui/server_header.dart`), the
+server header shows the name (the phone's app bar carries it instead),
+the link state, the coverage chip, the detected runtime and a slot for
+client-limitation messages, which stays empty until 5.3's rows are
+worded (K45); the transport label, privilege badges, admin mode and
+the read-only and low-session indicators come with their subsystems.
+The state resolves through `ghost_servers`' indicator under the rail
+rule, as the server's row does, as a dot, an icon and a word, with
+the link's own word where the indicator shows none; the kit keeps its
+dot painter private, so the header draws the indicator's dot itself.
+The chip reads "T0: sampled only while open" until FL-21's monitor set
+exists, and opens the coverage sheet; it avoids "read only", which the
+header's read-only indicator means. The runtime is the access
+check's engines over the probe's profile, as the Access tab lists
+them, with its caveat that Podman can also answer on Docker's socket
+path whenever a Docker engine is named. On phones the header heads the
+body under the app bar, whose fixed-height bottom would clip it at
+large text. On both surfaces it scrolls past 40 % of the height it
+heads, as on a landscape phone or a narrow desktop window at 200 %
+text, so the panel, with the desktop's tab strip, keeps the rest.
+
+As built in M2 for OV-01, OV-03 and OV-04
+(`app/klabautermann_app/lib/ui/overview_panel.dart`), the Overview tab
+shows CPU, load, memory and swap cards from the `core` stream's last
+reading, in two columns from the System tab's 600 px panel width:
+- One freshness line heads the cards in 9.5 item 4's words, stale at
+  the fleet rows' 20 s `core` limit (10.3). Stale values, bars and
+  sparkline lines turn grey beside its history icon. A failed reading
+  says why above the last values rather than clearing them.
+- CPU: a busy gauge and session sparkline, then user, system and idle,
+  then a bar per core in the host's numeric order, wrapping into as
+  many columns as fit, until `CoreHeatmap` (10.7) exists to compact
+  many cores on phones. Load: the 1, 5 and 15 minute averages and the
+  load per core, to two decimals, without a sparkline, since the charts
+  have no unitless scale yet. Memory: used on a bar out of the total,
+  the total, available, buffers, cache and shared beside it, and
+  MEM-01's "ZFS ARC counted as used" note. MEM-01 asks for a stacked
+  bar, but used is the total less `MemAvailable` (7.1), which never
+  counts shared memory and keeps part of the cache back, while the
+  cache counts `Cached` with its shared memory: stacked, the parts
+  overlap and would fill the bar while memory is still available, so
+  only used is drawn. Swap: used on a bar out of the total, the total
+  beside it, or "No swap is set up."
+- The CPU and memory gauges and the CPU sparkline warn at the fleet
+  rows' 80 % and 90 % until OV-11, so a server's row and Overview
+  agree; swap, load and the per-core figures carry no thresholds.
+- Every figure goes through the chart formatters' IEC units, and a
+  test keeps the decimal `ghostFormatFileSize` and `ghostFormatByteRate`
+  out of `lib/`. A figure the container withholds (D50) reads unknown
+  with SYS-04's reason, once per card. With only the load per core
+  withheld, the container's own load averages show and the note says
+  the core count would be the host's.
+- No radial `Gauge` exists yet; the stacked bar is the gauge.
 
 As built in M2 (`app/klabautermann_app/lib/ui/processes_panel.dart`), the
 Processes tab lists PRC-01's processes from the `procs` stream it
@@ -5034,6 +5279,14 @@ palette) and presets in the preview. v1: paste from Séance and Poltergeist
   10-minute run in the `klabautermann_integration` job (every job needs a
   `timeout-minutes`, `scripts/check-workflows.sh` [V]) and a 24 h run
   before M4 and M7 (manual sign-off).
+- Engine side (spike S5 part 1): `klabautermann_core/tool/engine_budget.dart`
+  replays the host fixtures for ten hosts at the Phone cadence and a
+  1,000 lines/s journal follow through the frame reader, the sample
+  pipeline, the journal parser and an isolate send, and reports time per
+  tick and per second, reply bytes, lines per second, the resident set
+  and (under `dart run`) the live heap. Its runs are provisional
+  evidence in `klabautermann/docs/evidence/s5/` and set no budget; CI
+  runs only its smoke test.
 
 ### 11.5 Host write inventory test
 
