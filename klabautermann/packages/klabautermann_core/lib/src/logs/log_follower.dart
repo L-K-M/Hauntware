@@ -265,9 +265,11 @@ final class LogFollower {
     await Future.wait([run.stdoutDone.future, run.stderrDone.future]);
     if (!identical(_run, run)) return;
 
-    run.lines.close();
-    // A lost link or channel ends the process without a status.
+    // A lost link or channel ends the process without a status. Its cut
+    // last line goes uncounted: the next run sends it again, or says
+    // lines may be missing.
     if (exit.exitCode == null && exit.exitSignal == null) return _lost(run);
+    run.lines.close();
     // A follow runs until it is closed, so even exit 0 is a failure.
     final stderr = run.stderr;
     _endAfterRing(

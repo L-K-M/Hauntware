@@ -560,5 +560,29 @@ void main() {
       expect(messages(), ['entry 1']);
       expect(ends(), [const LogStreamEnded(LogStreamEndReason.failed)]);
     });
+
+    test('drops its partial last line, which the resume sends whole, so '
+        'no entry both arrives and counts as dropped', () async {
+      final f = follower(_spec(const JournalLogSource()));
+      f.run(link);
+      final p = await link.process(0);
+      p.emitText(_entry(1));
+      await clock.elapse(Duration.zero);
+      p
+        ..emitText(_entry(2).substring(0, 20))
+        ..end(const RemoteExit());
+      await clock.elapse(const Duration(milliseconds: 50));
+      expect(lost, 1);
+
+      f.run(link);
+      expect(
+        link.commands[1],
+        _cmd([..._journal, '--after-cursor=s=1', '--no-tail', '-f']),
+      );
+      (await link.process(1)).emitText(_entry(2));
+      await clock.elapse(const Duration(milliseconds: 50));
+      expect(messages(), ['entry 1', 'entry 2']);
+      expect(batches().map((batch) => batch.dropped), [0, 0]);
+    });
   });
 }
