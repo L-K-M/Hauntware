@@ -2033,6 +2033,21 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String jobsNextRunUnknown(String reason, int years) {
+    String _temp0 = intl.Intl.selectLogic(reason, {
+      'reboot': 'At cron start',
+      'unparsed': 'Unreadable schedule',
+      'timeZoneUnresolved': 'Zone not known',
+      'serverZoneUnknown': 'Zone not known yet',
+      'noRunInHorizon': 'None in $years years',
+      'notEvaluated': 'Not worked out',
+      'anacron': 'Timed by anacron',
+      'other': 'Not run',
+    });
+    return '$_temp0';
+  }
+
+  @override
   String jobsRunGap(DateTime time) {
     final intl.DateFormat timeDateFormat = intl.DateFormat.jm(localeName);
     final String timeString = timeDateFormat.format(time);

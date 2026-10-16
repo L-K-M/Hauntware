@@ -2734,7 +2734,9 @@ each row's source and the user its line names:
   with an icon). The tab names the server zone whose rules the engine
   used, or why the runs use the probe's offset (D58); a `CRON_TZ` run
   names its zone in the table, and a run of a periodic script whose
-  lines follow different zones names its offset.
+  lines follow different zones names its offset. A row without runs
+  gives the engine's reason in short in its next-run cell, which the
+  phone keeps, and in full in its details.
 - A timer's next run is the `list-timers` instant at the probe's offset,
   which its cell names, and the tab says a DST change before it does not
   show: `TimersResult` carries no offset per elapse. Without a probed

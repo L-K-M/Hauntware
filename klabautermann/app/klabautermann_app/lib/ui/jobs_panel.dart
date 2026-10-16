@@ -487,7 +487,15 @@ String _scheduleCell(AppLocalizations l10n, JobEntry job) {
   }
 
   final run = _cronRunAfter(job, now);
-  if (run == null) return (time: l10n.chartUnknownValue, dst: false);
+  if (run == null) {
+    // The engine's reason in short, which the phone keeps when it drops
+    // the schedule column; unknown once every listed run has passed.
+    final (_, unknown) = cronRuns(job);
+    final time = unknown == null
+        ? l10n.chartUnknownValue
+        : l10n.jobsNextRunUnknown(unknown.name, kCronHorizonDays ~/ 365);
+    return (time: time, dst: false);
+  }
 
   final zones = {
     for (final s in job.schedules)

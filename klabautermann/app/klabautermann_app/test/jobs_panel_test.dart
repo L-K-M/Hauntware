@@ -198,6 +198,19 @@ void main() {
       expect(find.text(clock(text)), findsWidgets, reason: text);
     }
 
+    // A row without runs says why in its next-run cell, which the phone
+    // keeps when it drops the schedule.
+    for (final (row, text) in [
+      ('cron|crontab|1', 'At cron start'),
+      ('periodic|daily|logrotate', 'Timed by anacron'),
+    ]) {
+      expect(
+        find.descendant(of: _row(row), matching: find.text(text)),
+        findsOneWidget,
+        reason: text,
+      );
+    }
+
     // A DST change marks a run with an icon, and in words for screen
     // readers.
     expect(find.bySemanticsLabel(RegExp(r'2:30\sAM \(DST\)')), findsOneWidget);

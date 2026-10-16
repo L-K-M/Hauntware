@@ -2445,6 +2445,18 @@
       }
     }
   },
+  "jobsNextRunUnknown": "{reason, select, reboot{At cron start} unparsed{Unreadable schedule} timeZoneUnresolved{Zone not known} serverZoneUnknown{Zone not known yet} noRunInHorizon{None in {years} years} notEvaluated{Not worked out} anacron{Timed by anacron} other{Not run}}",
+  "@jobsNextRunUnknown": {
+    "description": "A job's next-run cell in the jobs table when it lists no runs: jobsRunsUnknown cut short to fit the column, which stays at phone width. reason is the engine's JobRunsUnknown name, and other is noDriver; years is how far ahead the engine looks. The job's details give the full reason.",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      },
+      "years": {
+        "type": "int"
+      }
+    }
+  },
   "jobsRunGap": "{time} does not occur that day because of the DST change, so the job runs at the change.",
   "@jobsRunGap": {
     "description": "Beside a cron run that a DST change skips: time is the clock time the line was written for; the run time shown is the change.",
