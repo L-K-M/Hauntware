@@ -1,7 +1,9 @@
 import 'dart:async' show unawaited;
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
+import 'package:ghost_ui/ghost_ui.dart' show scaledGhostFileRowExtent;
 import 'package:klabautermann_core/klabautermann_core.dart';
 
 import '../controllers/monitoring_controller.dart';
@@ -15,6 +17,13 @@ import 'system_panel.dart' show PanelNotice;
 /// The panel width from which the jobs table adds its source and schedule
 /// columns, growing with the text scale as the other panels' does.
 const double _wideWidth = 600;
+
+/// The DST icon after a next run and the gap before it.
+const double _dstIconSize = 14;
+const double _dstIconGap = 4;
+
+/// A table cell's horizontal padding, both sides: [SortableTable]'s.
+const double _cellPadding = 16;
 
 /// The share of its height the notices take before they scroll, so large
 /// text never pushes the table out of sight.
@@ -248,7 +257,8 @@ class _JobsPanelState extends State<JobsPanel> {
                     builder: (context, now) => SortableTable<JobEntry>(
                       tableId: ServerPanel.jobs.name,
                       columns: _columns(
-                        l10n,
+                        context,
+                        jobs,
                         wide: wide,
                         stale: freshnessAt(now).stale,
                         serverOffset: serverOffset,
@@ -400,12 +410,14 @@ DateTime? _nextAfter(JobEntry job, DateTime now) => switch (job) {
 };
 
 List<SortableTableColumn<JobEntry>> _columns(
-  AppLocalizations l10n, {
+  BuildContext context,
+  List<JobEntry> jobs, {
   required bool wide,
   required bool stale,
   required Duration? serverOffset,
   required DateTime now,
 }) {
+  final l10n = AppLocalizations.of(context);
   ({String time, bool dst}) next(JobEntry job) =>
       _next(l10n, job, serverOffset, now);
   return [
@@ -439,10 +451,53 @@ List<SortableTableColumn<JobEntry>> _columns(
         (:final time, dst: false) => time,
       },
       sortKey: (job) => _nextAfter(job, now),
-      extent: FixedColumnExtent(wide ? 224 : 176),
+      extent: FixedColumnExtent(
+        _nextWidth(context, jobs.map(next), base: wide ? 224 : 176),
+      ),
       cell: (context, job) => _NextCell(next(job), stale: stale),
     ),
   ];
+}
+
+/// The next-run column's width at a text scale of 1: [base], or as wide
+/// as the longest of [nexts] where a row holds one line, as a dense
+/// desktop row does at any width, so no time loses the offset or zone
+/// after it that tells it from the server's clock (CN-02). A touch row
+/// wraps it instead ([_NextCell]), and a panel too narrow for the widened
+/// table scrolls it sideways, as it does for large text.
+double _nextWidth(
+  BuildContext context,
+  Iterable<({String time, bool dst})> nexts, {
+  required double base,
+}) {
+  // The table's Material gives its cells the theme's body text.
+  final style = Theme.of(context).textTheme.bodyMedium;
+  if (_nextLines(context, scaledGhostFileRowExtent(context), style) > 1) {
+    return base;
+  }
+
+  final scaler = MediaQuery.textScalerOf(context);
+  final painter = TextPainter(
+    textDirection: Directionality.of(context),
+    textScaler: scaler,
+    maxLines: 1,
+  );
+  // The table scales a fixed width with the text, so the text's goes
+  // back to a scale of 1; the icon and the cell's padding do not scale.
+  final unscale = 1 / scaler.scale(1);
+  var width = 0.0;
+  for (final next in nexts) {
+    painter
+      ..text = TextSpan(text: next.time, style: style)
+      ..layout();
+    final icon = next.dst ? _dstIconGap + _dstIconSize : 0;
+    width = math.max(width, painter.width * unscale + icon);
+  }
+  painter.dispose();
+
+  // A step of 8 keeps the column steady while the times' digits change.
+  final fit = ((width + _cellPadding) / 8).ceil() * 8.0;
+  return math.max(base, fit);
 }
 
 /// A row's first schedule in words, why a cron row has none, or that a
@@ -527,7 +582,8 @@ String _scheduleCell(AppLocalizations l10n, JobEntry job) {
 /// It wraps onto a second line where the row holds one, as a touch row
 /// does at any text scale, so the offset or zone after the time, which
 /// tells it from the server's clock (CN-02), is not cut at phone width;
-/// a dense desktop row holds one line.
+/// a dense desktop row holds one line, and its column widens to fit it
+/// ([_nextWidth]).
 class _NextCell extends StatelessWidget {
   const _NextCell(this.next, {required this.stale});
 
@@ -540,9 +596,13 @@ class _NextCell extends StatelessWidget {
     final style = stale ? TextStyle(color: muted) : null;
     return LayoutBuilder(
       builder: (context, box) {
-        final lines = box.maxHeight >= 2 * _lineHeight(context, style) ? 2 : 1;
+        final lines = _nextLines(
+          context,
+          box.maxHeight,
+          DefaultTextStyle.of(context).style.merge(style),
+        );
         return Row(
-          spacing: 4,
+          spacing: _dstIconGap,
           children: [
             Flexible(
               child: Text(
@@ -553,7 +613,8 @@ class _NextCell extends StatelessWidget {
                 style: style,
               ),
             ),
-            if (next.dst) Icon(Icons.info_outline, size: 14, color: muted),
+            if (next.dst)
+              Icon(Icons.info_outline, size: _dstIconSize, color: muted),
           ],
         );
       },
@@ -561,17 +622,17 @@ class _NextCell extends StatelessWidget {
   }
 }
 
-/// The height of one line of [style] over the ambient text style at the
-/// ambient text scale.
-double _lineHeight(BuildContext context, TextStyle? style) {
+/// How many lines of a next run in [style] at the ambient text scale a
+/// row [extent] high holds: two on a touch row, one on a dense one.
+int _nextLines(BuildContext context, double extent, TextStyle? style) {
   final painter = TextPainter(
-    text: TextSpan(style: DefaultTextStyle.of(context).style.merge(style)),
+    text: TextSpan(style: style),
     textDirection: Directionality.of(context),
     textScaler: MediaQuery.textScalerOf(context),
   );
   final height = painter.preferredLineHeight;
   painter.dispose();
-  return height;
+  return extent >= 2 * height ? 2 : 1;
 }
 
 /// A job's details in a sheet (03 §10.5: details push further), as of the

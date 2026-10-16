@@ -2898,10 +2898,12 @@ each row's source and the user its line names:
   note that its one run is all systemd's timer list gives.
 - A row opens everything the table cuts short in a sheet. A touch row
   wraps its next run onto a second line, so the offset or zone after the
-  time is not cut at phone width; a dense desktop row holds one. A run
-  the clock has passed since the reading drops out of both, and a timer's
-  passed elapse reads as unknown until the next reading; the table
-  follows the clock only at such a run or when it turns stale. Times
+  time is not cut at phone width; a dense desktop row holds one, and the
+  next-run column widens to the longest time, scrolling sideways where
+  the panel is too narrow. A run the clock has passed since the reading
+  drops out of both, and a timer's passed elapse reads as unknown until
+  the next reading; the table follows the clock only at such a run or
+  when it turns stale. Times
   turn grey once the older stream's reading is past 120 s, twice the 6.4
   desktop and phone period (the cellular saver's single read waits for
   the cadence profile's wiring), beside the freshness line; a failed

@@ -814,6 +814,50 @@ void main() {
     });
   }
 
+  for (final (width, textScale) in [
+    (718.0, 1.0),
+    (1400.0, 1.0),
+    (1000.0, 2.0),
+  ]) {
+    testWidgets('the desktop keeps the clock a next run follows at '
+        '${width.round()} px and ${(textScale * 100).round()} % text', (
+      tester,
+    ) async {
+      final panel = await _pump(
+        tester,
+        size: Size(width, 640),
+        textScale: textScale,
+      );
+      await panel.all(tester);
+
+      // A dense row holds one line, so the column is as wide as its
+      // longest time: the offset or zone after it is never cut, in the
+      // wide layout or in the narrow one large text brings.
+      final rows = find.descendant(
+        of: find.byType(SortableTable<JobEntry>),
+        matching: find.byWidgetPredicate(
+          (widget) =>
+              widget is Scrollable &&
+              widget.axisDirection == AxisDirection.down,
+        ),
+      );
+      for (final text in [
+        'Sat, Oct 24 7:41 PM UTC+02:00',
+        'Mon, Oct 26 2:12 AM UTC+02:00',
+        'Mon, Oct 26 9:00 AM in America/New_York',
+      ]) {
+        final cell = find.text(clock(text));
+        await tester.scrollUntilVisible(cell, 22, scrollable: rows);
+        expect(
+          tester.renderObject<RenderParagraph>(cell).didExceedMaxLines,
+          isFalse,
+          reason: text,
+        );
+      }
+      expect(tester.takeException(), isNull);
+    });
+  }
+
   for (final (name, size) in [('desktop', _wide), ('phone', _phone)]) {
     testWidgets('lays out without overflow at 200 % text on the $name', (
       tester,
