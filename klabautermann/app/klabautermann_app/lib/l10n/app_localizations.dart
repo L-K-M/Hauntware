@@ -2644,6 +2644,12 @@ abstract class AppLocalizations {
     String last,
   );
 
+  /// A cron schedule's stepped hour field (*/n or a-b/n) beside a minute field that itself repeats, such as every 15 minutes: the hours it runs in, counted 0 to 23, so it does not read as a second schedule. first and last are the range ends, step is n.
+  ///
+  /// In en, this message translates to:
+  /// **'during hours {first} to {last} in steps of {step}'**
+  String jobsCronHoursStepped(String first, String last, int step);
+
   /// A cron schedule's minute and hour fields as clock times when both hold single values only; times is a list (jobsListPair, jobsListMore).
   ///
   /// In en, this message translates to:

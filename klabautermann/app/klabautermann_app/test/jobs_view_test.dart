@@ -29,6 +29,11 @@ void main() {
       '0 6,18 * * 1-5': 'Runs at 6:00 AM and 6:00 PM, on Monday to Friday',
       '*/5 9-17 * * *': 'Runs every 5 minutes, during hours 9 to 17',
       '5 */2 * * *': 'Runs at minute 5, every 2 hours',
+      // A stepped hour beside a minute that steps is a span, not a
+      // second schedule.
+      '*/15 */2 * * *':
+          'Runs every 15 minutes, during hours 0 to 23 in steps of 2',
+      '* 8-18/2 * * *': 'Runs every minute, during hours 8 to 18 in steps of 2',
       '0 0 1,15 * *': 'Runs at 12:00 AM, on days 1 and 15 of the month',
       '0 0 * jan-mar sat,7':
           'Runs at 12:00 AM, on Saturday and Sunday, '

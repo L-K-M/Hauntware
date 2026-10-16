@@ -1940,6 +1940,11 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String jobsCronHoursStepped(String first, String last, int step) {
+    return 'during hours $first to $last in steps of $step';
+  }
+
+  @override
   String jobsCronTimes(String times) {
     return 'at $times';
   }

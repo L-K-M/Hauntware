@@ -10,6 +10,9 @@ const int _maxListedTimes = 6;
 /// The source name the cron collector gives the login user's own crontab.
 const String _ownCrontab = 'crontab';
 
+/// The shapes whose phrase repeats ("every 15 minutes").
+const _repeating = {_Shape.all, _Shape.step, _Shape.rangeStep};
+
 /// A cron field's kind, which picks its ARB phrase and how its values read.
 enum _Field { minute, hour, dayOfMonth, month, dayOfWeek }
 
@@ -85,7 +88,9 @@ String _fieldsText(
 
 /// The minute and hour fields: clock times when both hold single values
 /// only; otherwise each field's phrase. A minute step needs no "every
-/// hour", which a list of minutes does.
+/// hour", which a list of minutes does, and beside a repeating minute a
+/// stepped hour reads as the hours it spans, not as a second "every 2
+/// hours".
 String _timeText(
   AppLocalizations l10n,
   List<CronFieldItem> minute,
@@ -106,9 +111,23 @@ String _timeText(
 
   final minuteText = _fieldText(l10n, _Field.minute, minute);
   final minuteShape = _shapeOf(minute);
-  if (_shapeOf(hour) == _Shape.all &&
+  final hourShape = _shapeOf(hour);
+  if (hourShape == _Shape.all &&
       (minuteShape == _Shape.all || minuteShape == _Shape.step)) {
     return minuteText;
+  }
+  if (_repeating.contains(minuteShape) &&
+      (hourShape == _Shape.step || hourShape == _Shape.rangeStep)) {
+    final item = hour.single;
+    final (min, max) = _bounds(_Field.hour);
+    return l10n.jobsPhrasePair(
+      minuteText,
+      l10n.jobsCronHoursStepped(
+        _value(l10n, _Field.hour, item.start ?? min),
+        _value(l10n, _Field.hour, item.end ?? max),
+        _step(item)!,
+      ),
+    );
   }
   return l10n.jobsPhrasePair(minuteText, _fieldText(l10n, _Field.hour, hour));
 }
