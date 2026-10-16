@@ -3446,12 +3446,16 @@ CI.
   (case-insensitive), `.env` values, process arguments split at the
   boundaries 7.2 preserves (`-p<secret>`, `--password=`), URL credentials
   (`scheme://user:pass@`), image history `CreatedBy`. From M2 the engine
-  masks every process argument before its row crosses, per whitespace
-  token, so also inside a shell's `-c` line: the value of `name=value`
-  whose name matches the pattern, an attached `-p` value, the token
-  after an option whose name matches it (unless that token starts with
-  `-` or the option is a `--no-` flag) and URL credentials. The program
-  is never read as an option; over-masking such as `-print` is the safe
+  masks every process argument before its row crosses, reading
+  whitespace tokens, so also inside a shell's `-c` line: the value of
+  `name=value` whose name matches the pattern, an attached `-p` value,
+  the token after an option whose name matches it (unless that token
+  starts with `-` or the option is a `--no-` flag) and URL credentials.
+  A value that starts an argument is masked to that argument's end,
+  spaces included, and one inside an argument (a `-c` line's word) ends
+  at whitespace. A `ps` fallback row has lost the boundaries, so it masks
+  a value holding spaces up to its first space only. The program is
+  never read as an option; over-masking such as `-print` is the safe
   direction.
 - Every export, share and diagnostic bundle passes `SecretRedactor`
   (`SC/src/llm/redaction.dart`) by default, with an explicit include-secrets

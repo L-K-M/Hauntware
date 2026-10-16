@@ -126,6 +126,32 @@ void main() {
       ]);
     });
 
+    test('a value that starts an argument runs to its end, spaces and '
+        'all, where the boundaries are real', () {
+      final masked = maskCommandLine([
+        'app',
+        '--password=correct horse battery',
+        '--password',
+        'correct horse battery',
+        'PGPASSWORD=two words',
+        '-pa b',
+      ]);
+
+      expect(
+        [for (final m in masked) m.display],
+        [
+          'app',
+          '--password=$_mask',
+          '--password',
+          _mask,
+          'PGPASSWORD=$_mask',
+          '-p$_mask',
+        ],
+      );
+      expect(masked[3], MaskedValue.secret('correct horse battery'));
+      expect(masked[1].reveal(), '--password=correct horse battery');
+    });
+
     test('over-masks rather than leaks: an attached -p is masked whatever '
         'it means, and KEY matches inside other words', () {
       final masked = maskCommandLine(['find', '/', '-print', 'MONKEY=1']);
@@ -135,6 +161,15 @@ void main() {
         ['find', '/', '-p$_mask', 'MONKEY=$_mask'],
       );
       expect(masked[2].reveal(), '-print');
+    });
+
+    test('over-masks rather than leaks: a -c line that starts with a secret '
+        'assignment is masked to its end', () {
+      expect(_shown(['sh', '-c', 'PGPASSWORD=x psql -h db']), [
+        'sh',
+        '-c',
+        'PGPASSWORD=$_mask',
+      ]);
     });
   });
 
