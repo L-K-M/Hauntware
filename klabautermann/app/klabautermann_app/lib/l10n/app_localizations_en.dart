@@ -578,7 +578,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get coverageDetailsGaps => 'Recent gaps';
 
   @override
-  String get coverageDetailsNoGaps => 'No recent gaps.';
+  String get coverageDetailsNoGaps =>
+      'No pauses, lost links or failed readings.';
 
   @override
   String coverageReturnBanner(String start, String end) {

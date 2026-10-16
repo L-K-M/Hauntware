@@ -284,7 +284,10 @@ void main() {
     expect(find.text('Recent gaps'), findsOneWidget);
     // Without a reading, no gap is not news that the record is complete.
     expect(find.text('No data yet'), findsOneWidget);
-    expect(find.text('No recent gaps.'), findsNothing);
+    expect(
+      find.text('No pauses, lost links or failed readings.'),
+      findsNothing,
+    );
     expect(
       find.text('Reads this server only while you have it open.'),
       findsNWidgets(2),
@@ -318,7 +321,49 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.textContaining(RegExp(r': reading failed$')), findsOneWidget);
     expect(find.textContaining(RegExp(r'^Updated \d+ s ago$')), findsWidgets);
-    expect(find.text('No recent gaps.'), findsNothing);
+    expect(
+      find.text('No pauses, lost links or failed readings.'),
+      findsNothing,
+    );
+  });
+
+  testWidgets('the inspector lists only the gaps with a known cause', (
+    tester,
+  ) async {
+    final harness = await pumpApp(tester, servers: twoServers);
+    await tester.tap(find.text('web-1'));
+    await tester.pumpAndSettle();
+    var seq = 0;
+    Future<void> sample() async {
+      harness.engine.emit(
+        Sample(
+          serverId: _serverId,
+          stream: SampleStream.core,
+          seq: ++seq,
+          at: DateTime.now(),
+          result: _cpu(10),
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    Finder tab(String label) =>
+        find.descendant(of: find.byType(TabBar), matching: find.text(label));
+
+    // While hidden, the Overview reads nothing: its line breaks there
+    // with no cause to name.
+    await sample();
+    await tester.tap(tab('Logs'));
+    await tester.pumpAndSettle();
+    await tester.tap(tab('Overview'));
+    await tester.pumpAndSettle();
+    await sample();
+    final history = harness.monitoring.historyFor(
+      _serverId,
+      MetricSeries.cpuBusy,
+    );
+    expect(history.valueAt(0, 1), isNull);
+    expect(find.text('No pauses, lost links or failed readings.'), findsOne);
   });
 
   group('the return banner (03 §9.5 item 6)', () {

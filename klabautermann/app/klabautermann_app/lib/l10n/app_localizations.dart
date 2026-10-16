@@ -952,10 +952,10 @@ abstract class AppLocalizations {
   /// **'Recent gaps'**
   String get coverageDetailsGaps;
 
-  /// Under coverageDetailsGaps when the recent readings have no period without data.
+  /// Under coverageDetailsGaps when the recent readings have no gap with a known cause: no background pause, lost link or failed reading. The chart's line may still break where no view read the server, which this list does not name.
   ///
   /// In en, this message translates to:
-  /// **'No recent gaps.'**
+  /// **'No pauses, lost links or failed readings.'**
   String get coverageDetailsNoGaps;
 
   /// Banner on a phone's server screen after the app returns from the background (03 §9.5 item 6): when the app left for the background and returned, as times of day in the UI locale. It shows only for a server the engine was reading or said it paused; once the server has readings, its charts show the same period as a hatched band.
