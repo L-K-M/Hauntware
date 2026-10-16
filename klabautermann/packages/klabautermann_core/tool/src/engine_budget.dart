@@ -113,22 +113,32 @@ typedef HostFixture = ({
   String core,
 });
 
+/// Marks the container captures of `test/integration/capture.sh`
+/// (`<platform>-docker-<shell>`).
+const _containerCapture = '-docker-';
+
 /// Every platform under [root] with a probe, `overview` and `core`
-/// fixture, by name.
+/// fixture, by name. The container captures are left out: they are shell
+/// and userland variants of a few platforms, which would crowd the others
+/// out of a ten-host fleet taken in name order, and spike S5 part 1
+/// replayed the platform fixtures alone (docs/evidence/s5).
 List<HostFixture> loadHostFixtures(String root) {
   final dirs = Directory(root).listSync().whereType<Directory>().toList()
     ..sort((a, b) => a.path.compareTo(b.path));
   String read(Directory dir, String name) =>
       File('${dir.path}/$name').readAsStringSync();
+  String platform(Directory dir) =>
+      dir.uri.pathSegments.lastWhere((s) => s.isNotEmpty);
   final fixtures = [
     for (final dir in dirs)
-      if (const [
-        'probe.sections',
-        'overview.txt',
-        'core.txt',
-      ].every((name) => File('${dir.path}/$name').existsSync()))
+      if (!platform(dir).contains(_containerCapture) &&
+          const [
+            'probe.sections',
+            'overview.txt',
+            'core.txt',
+          ].every((name) => File('${dir.path}/$name').existsSync()))
         (
-          platform: dir.uri.pathSegments.lastWhere((s) => s.isNotEmpty),
+          platform: platform(dir),
           probe: parseProbeSections(read(dir, 'probe.sections')),
           overview: read(dir, 'overview.txt'),
           core: read(dir, 'core.txt'),
