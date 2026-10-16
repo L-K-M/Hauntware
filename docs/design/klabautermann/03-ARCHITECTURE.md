@@ -4690,6 +4690,24 @@ the engine in `engine_isolate.dart` beside it):
   must therefore do, and if nothing else in the app sends
   `OpenLogStream`: a second sender with its own queue would take each
   rejection as its own as well.
+- **Version 3 (M2 failure kinds).** Two failure kinds joined version 3
+  the same way. `keyPassphraseRequired` names an encrypted private key,
+  the server's or a jump host's, that no passphrase the engine holds
+  opens, whether none was given or a wrong one; nothing reached the
+  server. `keyFileHiddenBySandbox` names a key file that reads as
+  missing inside the Flatpak sandbox (4.5). The connector reads
+  `seance_core`'s typed `SshConnectException.kind`, never its English
+  summary: unreachable and timed out keep their names, a missing or
+  wrong passphrase is `keyPassphraseRequired` (one remedy, so one kind),
+  a key the client cannot read and an agent with no keys are credentials
+  unavailable, and a refused sign-in is credentials rejected. A route
+  the engine cannot follow and a host-key refusal without a declined
+  prompt (a key-exchange signature that did not verify) stay
+  unclassified; `other` falls back to the error behind it, so a jump
+  hop's key file keeps its kind. 5.3's three client limitations wait
+  for `seance_core` to type them. No prompt asks for a passphrase until
+  the owner decides (2, "Encrypted keys and agent order"), so the
+  supervisor does not hand such a failure to the user's request.
 - **`SetAppActivity(activity)`** is a request of its own and applies to
   every subscription, link and probe at once: 6.4 pauses everything while
   the app is in the background, and D34 adds the phones' grace period

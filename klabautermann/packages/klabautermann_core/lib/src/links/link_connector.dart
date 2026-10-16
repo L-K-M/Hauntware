@@ -14,6 +14,7 @@ import 'package:seance_core/seance_core.dart'
         KeyboardInteractiveResponder,
         ServerConfig,
         SshConnectException,
+        SshConnectFailureKind,
         SshCredentials,
         SshJumpHostResolver,
         SshLink,
@@ -264,9 +265,25 @@ final class LinkConnector {
         break;
     }
 
-    // Jump-hop credential failures arrive wrapped, from the hop resolver.
+    // seance_core says which step failed; its English summary is never
+    // read.
+    if (error is SshConnectException &&
+        error.kind != SshConnectFailureKind.other) {
+      return LinkConnectFailed(error, failure: _failureOf(error.kind));
+    }
+
+    // Untyped: a failure before the dial, such as the server's own key
+    // file, or seance_core's `other`, whose cause is the error of a jump
+    // hop's credential (the hop resolver's) or of a handshake that broke
+    // off.
     final cause = error is SshConnectException ? error.cause : error;
     return switch (cause) {
+      IdentityFileUnavailable(failure: IdentityFileFailure.sandboxDenied) =>
+        LinkConnectFailed(
+          error,
+          failure: LinkFailureKind.keyFileHiddenBySandbox,
+          identityFile: IdentityFileFailure.sandboxDenied,
+        ),
       IdentityFileUnavailable(:final failure) => LinkConnectFailed(
         error,
         failure: LinkFailureKind.credentialUnavailable,
@@ -283,16 +300,45 @@ final class LinkConnector {
         error,
         failure: LinkFailureKind.unreachable,
       ),
-      // The handshake's and a jump hop forward's deadlines.
       TimeoutException() => LinkConnectFailed(
         error,
         failure: LinkFailureKind.timedOut,
       ),
-      // What only seance_core can classify: a rejected credential, an
-      // empty agent, the client limitations of 03 §5.3.
+      // Not classified, among them an ssh-agent that could not be reached.
+      // The client limitations of 03 §5.3 wait for seance_core to type
+      // them.
       _ => LinkConnectFailed(error),
     };
   }
+
+  /// The failure behind a typed kind other than `other`, or null where
+  /// none of [LinkFailureKind] names it.
+  static LinkFailureKind? _failureOf(SshConnectFailureKind kind) =>
+      switch (kind) {
+        SshConnectFailureKind.unreachable => LinkFailureKind.unreachable,
+        SshConnectFailureKind.timedOut => LinkFailureKind.timedOut,
+        // A route the fleet's own configs cannot follow, or one given up
+        // before it was resolved; nothing was dialed and nothing the user
+        // can fix on the server.
+        SshConnectFailureKind.routeInvalid => null,
+        // One remedy for both, a passphrase that opens the key. Until the
+        // passphrase prompt (K45b) the app words it as loading the key
+        // into an agent; the prompt can then say a retry, as the password
+        // prompt does.
+        SshConnectFailureKind.keyPassphraseRequired ||
+        SshConnectFailureKind.keyPassphraseWrong =>
+          LinkFailureKind.keyPassphraseRequired,
+        SshConnectFailureKind.keyUnreadable ||
+        SshConnectFailureKind.agentEmpty =>
+          LinkFailureKind.credentialUnavailable,
+        SshConnectFailureKind.authenticationRejected =>
+          LinkFailureKind.authenticationRejected,
+        // A host key the attempt declined has a verdict, which [_classify]
+        // reads first; without one, a key-exchange signature did not
+        // verify, which no failure kind names.
+        SshConnectFailureKind.hostKeyRefused => null,
+        SshConnectFailureKind.other => null,
+      };
 }
 
 /// What an attempt given up before it dialed fails with; nobody reads it.
