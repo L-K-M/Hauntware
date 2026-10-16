@@ -168,18 +168,12 @@ class OverviewPanel extends StatelessWidget {
       ),
       _ => null,
     };
-    // The health verdict is as old as the older of its two readings.
-    final listedAt = slow.listed.value?.at;
-    final unitsAt = slow.failedReading.value?.at;
-    final healthAt = listedAt != null && unitsAt != null
-        ? (listedAt.isBefore(unitsAt) ? listedAt : unitsAt)
-        : listedAt ?? unitsAt;
     final partTwo = _PartTwo(
       slow: slow,
       core: cards?.core,
       coreStale: coreFreshness.stale,
-      diskFreshness: freshness(_slowStaleAfter, listedAt),
-      healthFreshness: freshness(_slowStaleAfter, healthAt),
+      diskFreshness: freshness(_slowStaleAfter, slow.listed.value?.at),
+      healthFreshness: freshness(_slowStaleAfter, slow.healthAt),
     );
 
     return LayoutBuilder(
@@ -320,6 +314,23 @@ final class _Slow {
 
   /// Whether a reading ages on a freshness line.
   bool get aging => listed.value != null || failedReading.value != null;
+
+  /// The latest `df`'s failure, or null.
+  CollectorUnavailable? get fsFailure => switch (fs.value?.result) {
+    final CollectorUnavailable unavailable => unavailable,
+    _ => null,
+  };
+
+  /// When the oldest reading the health card shows arrived: the last unit
+  /// list, and the last listing unless the latest `df` failed, since the
+  /// card then names no mount from it.
+  DateTime? get healthAt {
+    final times = [
+      ?failedReading.value?.at,
+      if (fsFailure == null) ?listed.value?.at,
+    ];
+    return times.isEmpty ? null : times.reduce((a, b) => a.isBefore(b) ? a : b);
+  }
 }
 
 /// How the health card's link words the A11Y-15 switch.
@@ -414,7 +425,7 @@ final class _PartTwo {
     AppLocalizations l10n,
     bool stale,
   ) {
-    if (slow.fs.value?.result case final CollectorUnavailable unavailable) {
+    if (slow.fsFailure case final unavailable?) {
       return [
         PanelNotice(
           icon: _reasonIcon(unavailable),
@@ -472,23 +483,22 @@ final class _PartTwo {
   }
 
   /// DSK-01 and DSK-02 as K37's System tab reads them: the listed mounts,
-  /// and after a `df` timeout the last reading's mounts with their use
-  /// unknown, since which mount hung is not known.
+  /// after a `df` timeout the last reading's mounts with their use
+  /// unknown, since which mount hung is not known, and after another
+  /// failure only why.
   Widget disks(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final listed = switch (slow.listed.value) {
       Sample(:final at, result: FsResult(:final fs)) => (at: at, fs: fs),
       _ => null,
     };
-    final unavailable = switch (slow.fs.value?.result) {
-      final CollectorUnavailable unavailable => unavailable,
-      _ => null,
-    };
+    final unavailable = slow.fsFailure;
     final timedOut = unavailable?.reason == CollectorUnavailableReason.timeout;
+    final shown = unavailable == null || timedOut ? listed : null;
     return PanelSection(
       title: l10n.systemDisksTitle,
       children: [
-        ?_ageLine(l10n, diskFreshness),
+        if (shown != null) ?_ageLine(l10n, diskFreshness),
         if (timedOut) ...[
           PanelNotice(
             icon: Icons.timer_off_outlined,
@@ -512,8 +522,8 @@ final class _PartTwo {
             icon: Icons.info_outline,
             text: l10n.systemDisksNoTimeout,
           ),
-        if (listed != null)
-          ..._mounts(context, l10n, listed.fs, timedOut: timedOut),
+        if (shown != null)
+          ..._mounts(context, l10n, shown.fs, timedOut: timedOut),
       ],
     );
   }

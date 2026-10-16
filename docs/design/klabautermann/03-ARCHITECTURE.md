@@ -4563,14 +4563,17 @@ critical and fullest first, each with an icon and its level in words
 (pseudo filesystems stay out: a squashfs image is always full). After
 the four cards, Disks lists the first eight mounts the System tab lists
 by default, each with a bar that warns at the same levels, its use,
-size and inodes, and after a `df` timeout the last reading's mounts
-with their use unknown; Network gives NET-01's total rates; Host gives
-the OS and kernel from `identity` and the uptime and boot time from
-`core`, unknown with D50's reason in a container. The health and Disks
-cards give their own age, stale at the fleet rows' 240 s `fs` limit,
-which also judges `failedUnits` (60 s); the health card takes the older
-reading's. The Overview's subscription already named every stream these
-read (network rates come with `core`), so K21's mapping is unchanged.
+size and inodes, after a `df` timeout the last reading's mounts with
+their use unknown, and after another failure only why, as the System
+tab does; Network gives NET-01's total rates; Host gives the OS and
+kernel from `identity` and the uptime and boot time from `core`,
+unknown with D50's reason in a container. The health and Disks cards
+give their own age, stale at the fleet rows' 240 s `fs` limit, which
+also judges `failedUnits` (60 s); the health card takes the oldest
+reading it shows, so after a failed `df`, when it names no mount, the
+listing's age drops out. The Overview's subscription already named
+every stream these read (network rates come with `core`), so K21's
+mapping is unchanged.
 `threshold.dart` holds the rule model and no levels, so the fleet rows'
 levels stand in until OV-11.
 The health card ends with a link to D60's switch, which reaches the

@@ -218,6 +218,14 @@ Future<_Panel> _pump(
 Iterable<StackedBar> _bars(WidgetTester tester) =>
     tester.widgetList<StackedBar>(find.byType(StackedBar));
 
+/// [matching] inside the card headed [title].
+Finder _inCard(String title, Finder matching) => find.descendant(
+  of: find.byWidgetPredicate(
+    (widget) => widget is PanelSection && widget.title == title,
+  ),
+  matching: matching,
+);
+
 /// 03 §10.2's Overview tab, part one: OV-01's CPU, load, memory and swap,
 /// OV-03's sparklines and gauges, and OV-04's staleness.
 void main() {
@@ -739,6 +747,61 @@ void main() {
       findsOneWidget,
     );
     expect(find.textContaining('of its space used'), findsNothing);
+  });
+
+  testWidgets('another df failure shows only why, as the System tab does', (
+    tester,
+  ) async {
+    final panel = await _pump(tester);
+    await panel.sample(tester, FsResult(_fs), stream: SampleStream.fs);
+    await panel.sample(
+      tester,
+      const CollectorUnavailable(CollectorUnavailableReason.denied),
+      stream: SampleStream.fs,
+    );
+
+    expect(
+      _inCard('Disks', find.text('The server refused this reading.')),
+      findsOneWidget,
+    );
+    expect(find.text('/var'), findsNothing);
+    expect(find.text('85%'), findsNothing);
+    expect(_bars(tester).where((bar) => bar.label.startsWith('/')), isEmpty);
+    expect(
+      find.text('Disk use is unknown: the server refused the reading.'),
+      findsOneWidget,
+    );
+    // Neither card shows anything from the older listing, so neither
+    // gives its age.
+    expect(find.textContaining('pdated'), findsNothing);
+  });
+
+  testWidgets('the health card is as old as the oldest reading it shows', (
+    tester,
+  ) async {
+    final panel = await _pump(tester);
+    await panel.sample(tester, FsResult(_fs), stream: SampleStream.fs);
+    panel.now = _start.add(const Duration(minutes: 3));
+    await panel.sample(tester, _failed(), stream: SampleStream.failedUnits);
+    panel.now = _start.add(const Duration(minutes: 5));
+    await tester.pump(const Duration(seconds: 1));
+    expect(
+      _inCard('Health', find.text('Stale: updated 5 min ago')),
+      findsOneWidget,
+    );
+
+    // A hung mount: the card names no mount from the last listing, so
+    // only the unit list's age counts, while Disks keeps the listing's.
+    await panel.sample(
+      tester,
+      const CollectorUnavailable(CollectorUnavailableReason.timeout),
+      stream: SampleStream.fs,
+    );
+    expect(_inCard('Health', find.text('Updated 2 min ago')), findsOneWidget);
+    expect(
+      _inCard('Disks', find.text('Stale: updated 5 min ago')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('OV-02: the health card lists failed units and full disks', (
