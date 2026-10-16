@@ -16,6 +16,11 @@ enum ChartGapReason {
 
   /// The link to the server was down.
   disconnected,
+
+  /// Sampling ran but gave no reading: one was lost to a deadline, a
+  /// framing error or a sampler restart (03 §6.2), or the collector
+  /// reported a status other than `ok`.
+  readingFailed,
 }
 
 /// A period without data, drawn as a hatched band labelled with its

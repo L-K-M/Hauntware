@@ -12,6 +12,7 @@ ChartStrings klabautermannChartStrings(AppLocalizations l10n) {
     gapAppClosed: l10n.chartGapAppClosed,
     gapBackground: l10n.chartGapBackground,
     gapDisconnected: l10n.chartGapDisconnected,
+    gapReadingFailed: l10n.chartGapReadingFailed,
     gapSummary: l10n.chartGapSummary,
     gapOngoing: l10n.chartGapOngoing,
     time: l10n.chartTime,

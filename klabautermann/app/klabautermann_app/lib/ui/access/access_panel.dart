@@ -563,7 +563,7 @@ List<Widget> _engineLines(BuildContext context, List<EngineEndpoint> engines) {
           children: [
             Text(
               l10n.accessEngineAt(
-                _engineName(l10n, engine),
+                engineNameText(l10n, engine),
                 engine.socket.path,
               ),
               style: theme.textTheme.bodyMedium,
@@ -581,7 +581,9 @@ List<Widget> _engineLines(BuildContext context, List<EngineEndpoint> engines) {
   ];
 }
 
-String _engineName(AppLocalizations l10n, EngineEndpoint engine) => switch ((
+/// [engine]'s runtime and mode in words, such as "Docker, rootful": the
+/// Access and Docker tabs' engine lines and the server header's runtime.
+String engineNameText(AppLocalizations l10n, EngineEndpoint engine) => switch ((
   engine.runtime,
   engine.mode,
 )) {

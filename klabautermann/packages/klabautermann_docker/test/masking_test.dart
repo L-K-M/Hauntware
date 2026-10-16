@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:klabautermann_docker/klabautermann_docker.dart';
 import 'package:test/test.dart';
 
@@ -74,6 +76,51 @@ void main() {
         'postgres://admin:${MaskedValue.maskToken}@db:5432/app',
       );
       expect(maskUrlCredentials('no url here'), 'no url here');
+    });
+
+    test('maskUrlCredentials masks what the rule as one regular '
+        'expression masks', () {
+      // The rule as it reads in 03 §8.9, which backtracks over each start
+      // in a run of scheme characters.
+      final rule = RegExp(
+        r'([A-Za-z][A-Za-z0-9+.\-]*://)([^/@\s:]+):([^/@\s]+)@',
+      );
+      final random = Random(89);
+      const pieces = ['a', 'Z', '1', '+', '-', '.', ':', '/', '@', ' '];
+      const urls = ['://', 'u:p@', 'ab://u:p@h/', '\t'];
+      for (var i = 0; i < 20000; i++) {
+        final text = [
+          for (var n = random.nextInt(12); n > 0; n--)
+            random.nextInt(4) == 0
+                ? urls[random.nextInt(urls.length)]
+                : pieces[random.nextInt(pieces.length)],
+        ].join();
+        expect(
+          maskUrlCredentials(text),
+          text.replaceAllMapped(
+            rule,
+            (m) => '${m[1]}${m[2]}:${MaskedValue.maskToken}@',
+          ),
+          reason: text,
+        );
+      }
+    });
+
+    test('maskUrlCredentials takes time linear in the text', () {
+      // A user on a monitored host controls process arguments of up to
+      // 128 KiB each (Linux's MAX_ARG_STRLEN); a match that restarts at
+      // each scheme character takes minutes over one.
+      final watch = Stopwatch()..start();
+      for (final text in [
+        'a' * 131072,
+        '${'a' * 131072}://',
+        '${'a' * 65536}://u:${'p' * 65536}',
+        'a://' * 32768,
+        'a://u:' * 21845,
+      ]) {
+        expect(maskUrlCredentials(text), text);
+      }
+      expect(watch.elapsed, lessThan(const Duration(seconds: 2)));
     });
 
     test('maskedValueWithUrlCheck masks a URL even under a plain key', () {

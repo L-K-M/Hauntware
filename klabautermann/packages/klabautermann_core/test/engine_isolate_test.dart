@@ -4,6 +4,7 @@ import 'dart:io';
 import 'dart:isolate';
 
 import 'package:klabautermann_core/klabautermann_core.dart';
+import 'package:klabautermann_core/src/capabilities/capability_cache.dart';
 import 'package:klabautermann_core/src/engine/engine_isolate.dart';
 import 'package:klabautermann_core/src/fleet/ssh_config_import_store.dart'
     show sshConfigImportsFileName, sshConfigImportsSchemaVersion;
@@ -24,9 +25,13 @@ void main() {
 
   /// A real engine isolate over [directory] (the test's support directory
   /// by default), shut down after the test.
-  Future<IsolateEngineClient> spawnEngine({String? directory}) async {
+  Future<IsolateEngineClient> spawnEngine({
+    String? directory,
+    SupportDirectoryAccess access = SupportDirectoryAccess.unguarded,
+  }) async {
     final client = await IsolateEngineClient.spawn(
       supportDirectory: directory ?? support.path,
+      supportDirectoryAccess: access,
     );
     addTearDown(client.shutdown);
     return client;
@@ -457,6 +462,184 @@ void main() {
       expect(((await next(events)) as SshConfigImported).saved, isFalse);
       expect(importsFile.readAsStringSync(), newer);
     });
+  });
+
+  group('the capability cache (03 §6.1, D59)', () {
+    const web = 'ssh-config:web';
+    const webConfig = 'Host web\n  HostName 192.0.2.10\n';
+    const otherConfig = 'Host other\n  HostName 192.0.2.11\n';
+
+    File cacheFile() => File(
+      '${support.path}/$capabilityCacheDirectoryName/'
+      '${capabilityCacheFileName(web)}',
+    );
+
+    /// Imports [config] and waits for the answer.
+    Future<void> import(
+      IsolateEngineClient client,
+      StreamIterator<EngineEvent> events,
+      String config,
+    ) async {
+      client.send(ImportSshConfig(config));
+      expect(await next(events), isA<CatalogReplaced>());
+      expect(await next(events), isA<SshConfigImported>());
+    }
+
+    /// Caches a profile for `web`, as an earlier run's probe would have.
+    Future<void> cacheWeb() async {
+      final cache = await CapabilityCache.open(
+        support,
+        access: SupportDirectoryAccess.exclusive,
+        fleet: const {web},
+        purge: CachePurge.removedServers,
+      );
+      await cache.probed(web, HostProfile(systemdVersion: 252));
+    }
+
+    test('a known server shows its cached profile once, when a request '
+        'first names it', () async {
+      final first = await spawnEngine();
+      final (events: firstEvents, fleet: _) = await started(first);
+      await import(first, firstEvents, webConfig);
+      await firstEvents.cancel();
+      await first.shutdown();
+      await cacheWeb();
+
+      final client = await spawnEngine();
+      final (:events, fleet: _) = await started(client);
+      client.send(const Connect(web));
+      final cached = await next(events) as HostProfileChanged;
+      expect(cached.serverId, web);
+      expect(cached.profile.systemdVersion, 252);
+      expect(cached.cachedAt, isNotNull);
+      expect((await next(events) as RequestRejected).requestName, 'Connect');
+
+      client
+        ..send(
+          const Subscribe(
+            serverId: web,
+            subscriptionId: 'tab',
+            streams: {SampleStream.core},
+          ),
+        )
+        ..send(const Connect('probe'));
+      expect((await next(events) as RequestRejected).requestName, 'Connect');
+
+      // A rail or tab subscription often names the server first.
+      final subscriber = await spawnEngine();
+      final (events: subscriberEvents, fleet: _) = await started(subscriber);
+      subscriber
+        ..send(
+          const Subscribe(
+            serverId: web,
+            subscriptionId: 'rail',
+            streams: {SampleStream.core},
+          ),
+        )
+        ..send(const Connect('probe'));
+      final subscribed = await next(subscriberEvents) as HostProfileChanged;
+      expect(subscribed.serverId, web);
+      expect(subscribed.cachedAt, isNotNull);
+      expect(
+        (await next(subscriberEvents) as RequestRejected).requestName,
+        'Connect',
+      );
+    });
+
+    test('a server that leaves the fleet loses its file, unless another '
+        'instance may share the directory (SYN-08)', () async {
+      // `web` is outside the unguarded engine's fleet, and requests wait
+      // for the cache to open, so the answer below comes after any start
+      // sweep. capability_cache_test.dart pins the unguarded forget.
+      await cacheWeb();
+      final unguarded = await spawnEngine();
+      final (events: unguardedEvents, fleet: _) = await started(unguarded);
+      await import(unguarded, unguardedEvents, otherConfig);
+      expect(cacheFile().existsSync(), isTrue);
+      await unguardedEvents.cancel();
+      await unguarded.shutdown();
+
+      final client = await spawnEngine(
+        access: SupportDirectoryAccess.exclusive,
+      );
+      final (:events, fleet: _) = await started(client);
+      await import(client, events, webConfig);
+      await cacheWeb();
+      await import(client, events, otherConfig);
+      final sw = Stopwatch()..start();
+      while (cacheFile().existsSync()) {
+        if (sw.elapsed > const Duration(seconds: 5)) fail('file not purged');
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+    });
+
+    test('a re-import that gives a server another endpoint drops its '
+        'cached profile and file, and one that keeps it does not '
+        '(SYN-08)', () async {
+      final first = await spawnEngine();
+      final (events: firstEvents, fleet: _) = await started(first);
+      await import(first, firstEvents, webConfig);
+      await firstEvents.cancel();
+      await first.shutdown();
+      await cacheWeb();
+
+      final kept = await spawnEngine(access: SupportDirectoryAccess.exclusive);
+      final (events: keptEvents, fleet: _) = await started(kept);
+      await import(kept, keptEvents, '$webConfig$otherConfig');
+      kept.send(const Connect(web));
+      expect(
+        (await next(keptEvents) as HostProfileChanged).cachedAt,
+        isNotNull,
+      );
+      await keptEvents.cancel();
+      await kept.shutdown();
+
+      final client = await spawnEngine(
+        access: SupportDirectoryAccess.exclusive,
+      );
+      final (:events, fleet: _) = await started(client);
+      await import(client, events, 'Host web\n  HostName 198.51.100.99\n');
+      client.send(const Connect(web));
+      expect((await next(events) as RequestRejected).requestName, 'Connect');
+      final sw = Stopwatch()..start();
+      while (cacheFile().existsSync()) {
+        if (sw.elapsed > const Duration(seconds: 5)) fail('file not purged');
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+    });
+
+    for (final (kind, leave) in [
+      (
+        ImportStoreIssueKind.newerVersion,
+        () => importsFile.writeAsStringSync(
+          jsonEncode({
+            'version': sshConfigImportsSchemaVersion + 1,
+            'entries': <Object?>[],
+          }),
+        ),
+      ),
+      // A directory cannot be read as the file, also by root.
+      (
+        ImportStoreIssueKind.leftAsIs,
+        () => Directory(importsFile.path).createSync(),
+      ),
+    ]) {
+      test('a store the engine leaves as it is (${kind.name}) purges no '
+          'file: its empty fleet removed no server', () async {
+        await cacheWeb();
+        leave();
+
+        final client = await spawnEngine(
+          access: SupportDirectoryAccess.exclusive,
+        );
+        expect(client.ready.importStoreIssue?.kind, kind);
+        final (:events, fleet: _) = await started(client);
+        // Requests wait for the cache to open, so an answer comes after
+        // any start sweep.
+        await import(client, events, otherConfig);
+        expect(cacheFile().existsSync(), isTrue);
+      });
+    }
   });
 
   group('engineMain raw messages', () {
