@@ -676,6 +676,11 @@ Host gw
         LinkFailureKind.timedOut,
       ),
       (
+        'a connect timeout from Darwin',
+        const SocketException('timed out', osError: OSError('', 60)),
+        LinkFailureKind.timedOut,
+      ),
+      (
         'a handshake timeout',
         TimeoutException('handshake'),
         LinkFailureKind.timedOut,
