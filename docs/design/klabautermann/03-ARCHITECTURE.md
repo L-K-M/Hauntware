@@ -2711,6 +2711,36 @@ no longer holds that value.
 - **v1.x.** Timer creator, output capture, dead-man pings (T1, +E), missed
   runs, fleet jobs overview.
 
+As built in M2 (`app/klabautermann_app/lib/ui/jobs_panel.dart`,
+`jobs_view.dart`), the Jobs tab lists the `cron` stream's jobs rows and
+a row per `timers` entry in the sortable table, next run first, with
+each row's source and the user its line names:
+
+- Schedules come from ARB templates: a cron schedule field by field as
+  written, as clock times when the minute and hour fields hold single
+  values only, its day fields joined by crontab(5)'s either or both
+  rule; a macro by name; a `CRON_TZ` zone after the schedule; an
+  `OnCalendar=` expression verbatim; a monotonic trigger as its span
+  after its base.
+- A cron run shows on its zone's clock with that zone's offset, and its
+  gap, overlap or near-transition note beside it (the table marks it
+  with an icon). The tab names the server zone whose rules the engine
+  used, or why the runs use the probe's offset (D58); a `CRON_TZ` run
+  names its zone in the table.
+- A timer's next run is the `list-timers` instant at the probe's offset,
+  and the tab says a DST change before it does not show: `TimersResult`
+  carries no offset per elapse. Without a probed offset it shows in UTC.
+  The engine does not yet read a timer's triggers, `RandomizedDelaySec`
+  or calendar elapses (D57), so the row says they are not read; a row
+  that carries them shows the elapses as `systemd-analyze` printed
+  them, the random delay as a note and, below systemd 242, that only
+  the next run is listed.
+- A row opens everything the table cuts short in a sheet. Times turn
+  grey once the older stream's reading is past 120 s, twice the 6.4
+  period, beside the freshness line; a failed reading's reason stands
+  above the last rows; an unclear `crontab -l` says the user's own jobs
+  may be missing. The phone reaches the tab once More lists it (10.5).
+
 ### 7.8 Packages and updates (PKG)
 
 - **v1 (read-only).** `apt-get -s upgrade` (`Inst` lines; not `apt`, whose
