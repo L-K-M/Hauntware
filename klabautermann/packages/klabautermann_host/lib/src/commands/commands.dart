@@ -7,6 +7,10 @@ library;
 import '../hws/collector.dart' show ArgValidators;
 import '../hws/request.dart' show ShellQuote;
 
+/// The first systemd major whose `systemd-analyze calendar` takes
+/// `--iterations`; older ones print one elapse per expression (03 §7.7).
+const int kCalendarIterationsSystemd = 242;
+
 /// A command refused before building: an argument failed its validator
 /// (03 §8.8).
 final class HostCommandError implements Exception {
@@ -230,7 +234,7 @@ abstract final class HostCommands {
     if (iterations <= 0) {
       throw const HostCommandError('iterations must be positive');
     }
-    final it = systemdMajor != null && systemdMajor < 242
+    final it = systemdMajor != null && systemdMajor < kCalendarIterationsSystemd
         ? ''
         : ' --iterations=$iterations';
     return [

@@ -207,6 +207,9 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     // An assert message; programmer diagnostic, never rendered.
     "'new controllers come with a new tree (KlabautermannApp, D44)'",
   },
+  // The probe's tool name for crontab, looked up in its answer; never
+  // rendered.
+  'lib/ui/jobs_panel.dart': {"'crontab'"},
   'lib/ui/logs/log_query.dart': {
     // The path rule's separators and dot parts (03 §8.8), and the empty
     // defaults of the text filters.
@@ -275,6 +278,24 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'commands reach the macOS application menu through appMenuOnMac'",
     r"'${placement.group}:${placement.order}'",
     r"'${command.id} shares menu slot ${placement.group}:${placement.order}'",
+  },
+  'lib/ui/processes_panel.dart': {
+    // The key tests find a phone row by, in the table rows' form, and the
+    // line break between its cells in its screen-reader label, each ARB
+    // text.
+    r"'${SampleStream.procs.name}.row.${row.pid}'",
+    r"'\n'",
+  },
+  'lib/ui/processes_view.dart': {
+    // The ellipsis ending a cut command line, the space between its
+    // arguments, and the filter's term separator and the line break
+    // between the fields it searches. The plus sign GNU ps ends a cut
+    // user name with, which is matched, never shown.
+    r"'${text.substring(0, end)}…'",
+    "' '",
+    r"r'\s+'",
+    r"'\n'",
+    "'+'",
   },
   // An assert message; programmer diagnostic, never rendered.
   'lib/ui/server_surfaces.dart': {

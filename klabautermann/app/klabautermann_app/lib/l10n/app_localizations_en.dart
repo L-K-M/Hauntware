@@ -633,6 +633,143 @@ class AppLocalizationsEn extends AppLocalizations {
   String get serverTabMore => 'More';
 
   @override
+  String get processesWaiting => 'Waiting for the first process list.';
+
+  @override
+  String processesUnavailable(String reason) {
+    String _temp0 = intl.Intl.selectLogic(reason, {
+      'missing': 'The server lacks a tool the process list needs.',
+      'denied': 'The server refused the process list.',
+      'timeout': 'The process list did not finish in time.',
+      'other': 'The process list failed.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String processesShownOf(int shown, int total) {
+    final intl.NumberFormat shownNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String shownString = shownNumberFormat.format(shown);
+    final intl.NumberFormat totalNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String totalString = totalNumberFormat.format(total);
+
+    return 'Showing $shownString of $totalString processes';
+  }
+
+  @override
+  String processesShownSome(int shown) {
+    final intl.NumberFormat shownNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String shownString = shownNumberFormat.format(shown);
+
+    return 'Showing $shownString processes; the server left others out';
+  }
+
+  @override
+  String get processesFilterHint => 'Filter processes';
+
+  @override
+  String get processesFilterClear => 'Clear filter';
+
+  @override
+  String get processesSortBy => 'Sort by';
+
+  @override
+  String get processesEmpty => 'The server listed no processes.';
+
+  @override
+  String get processesNoMatch => 'No process matches the filter.';
+
+  @override
+  String get processesColumnCommand => 'Command';
+
+  @override
+  String get processesColumnPid => 'PID';
+
+  @override
+  String get processesColumnUser => 'User';
+
+  @override
+  String get processesColumnCpu => 'CPU';
+
+  @override
+  String get processesColumnMemory => 'Memory';
+
+  @override
+  String get processesColumnStarted => 'Started';
+
+  @override
+  String get processesParentPid => 'Parent PID';
+
+  @override
+  String get processesState => 'State';
+
+  @override
+  String processesUid(int uid) {
+    return 'UID $uid';
+  }
+
+  @override
+  String processesCpu(double share) {
+    final intl.NumberFormat shareNumberFormat =
+        intl.NumberFormat.decimalPercentPattern(
+          locale: localeName,
+          decimalDigits: 1,
+        );
+    final String shareString = shareNumberFormat.format(share);
+
+    return '$shareString';
+  }
+
+  @override
+  String processesStartedTime(DateTime time) {
+    final intl.DateFormat timeDateFormat = intl.DateFormat.jm(localeName);
+    final String timeString = timeDateFormat.format(time);
+
+    return '$timeString';
+  }
+
+  @override
+  String processesStartedDate(DateTime date) {
+    final intl.DateFormat dateDateFormat = intl.DateFormat.yMMMd(localeName);
+    final String dateString = dateDateFormat.format(date);
+
+    return '$dateString';
+  }
+
+  @override
+  String get processesCommandUnavailable => 'Command line unavailable';
+
+  @override
+  String processesCommandUnavailableOf(String name) {
+    return '$name (command line unavailable)';
+  }
+
+  @override
+  String get processesMasked => '(masked)';
+
+  @override
+  String processesFact(String label, String value) {
+    return '$label: $value';
+  }
+
+  @override
+  String get processesCommandLineTitle => 'Command line';
+
+  @override
+  String processesRevealNote(int seconds) {
+    return 'Select a masked argument to show it for $seconds seconds.';
+  }
+
+  @override
+  String get processesRevealHint => 'Show the masked value';
+
+  @override
+  String get processesHideHint => 'Mask again';
+
+  @override
   String get systemIdentityTitle => 'Identity';
 
   @override
@@ -1747,4 +1884,428 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get overviewSwapNone => 'No swap is set up.';
+
+  @override
+  String get jobsWaiting => 'Waiting for the first reading.';
+
+  @override
+  String jobsEmpty(String crontab, String timers) {
+    String _temp0 = intl.Intl.selectLogic(timers, {
+      'read':
+          'No jobs found in your crontab, the system cron files or systemd timers.',
+      'other': 'No jobs found in your crontab or the system cron files.',
+    });
+    String _temp1 = intl.Intl.selectLogic(timers, {
+      'read': 'No jobs found in the system cron files or systemd timers.',
+      'other': 'No jobs found in the system cron files.',
+    });
+    String _temp2 = intl.Intl.selectLogic(crontab, {
+      'read': '$_temp0',
+      'other': '$_temp1',
+    });
+    return '$_temp2';
+  }
+
+  @override
+  String get jobsNoSystemd =>
+      'This server does not run systemd, so it has no timers.';
+
+  @override
+  String jobsUnavailable(String source, String reason) {
+    String _temp0 = intl.Intl.selectLogic(source, {
+      'cron': 'Cron jobs',
+      'other': 'Timers',
+    });
+    String _temp1 = intl.Intl.selectLogic(reason, {
+      'missing': 'the server lacks a file or tool this reading needs.',
+      'denied': 'the server refused this reading.',
+      'timeout': 'this reading took too long, so the server stopped it.',
+      'other': 'this reading failed on the server.',
+    });
+    return '$_temp0 could not be read: $_temp1';
+  }
+
+  @override
+  String get jobsOwnCrontabUnknown =>
+      'Your own crontab could not be read, so its jobs may be missing.';
+
+  @override
+  String jobsZoneRules(String zone) {
+    return 'Cron times are in $zone, the server\'s time zone.';
+  }
+
+  @override
+  String jobsZoneFixed(String offset, String reason) {
+    String _temp0 = intl.Intl.selectLogic(reason, {
+      'noZoneName': 'as it reported no time zone name',
+      'unknownZone': 'as this device does not know its time zone',
+      'other': 'as its time zone name and offset disagree',
+    });
+    return 'Cron times are at the server\'s offset now, $offset, $_temp0, so later DST changes do not show.';
+  }
+
+  @override
+  String jobsTimerZone(String offset) {
+    return 'Timer times are at the server\'s offset now, $offset; a DST change before a run does not show.';
+  }
+
+  @override
+  String get jobsTimerZoneUtc =>
+      'Timer times are in UTC, as the server\'s offset is not known yet.';
+
+  @override
+  String get jobsColumnJob => 'Job';
+
+  @override
+  String get jobsColumnSource => 'Source';
+
+  @override
+  String get jobsColumnSchedule => 'Schedule';
+
+  @override
+  String get jobsColumnNext => 'Next run';
+
+  @override
+  String jobsNextRun(DateTime time) {
+    final intl.DateFormat timeDateFormat = intl.DateFormat.MMMEd(
+      localeName,
+    ).add_jm();
+    final String timeString = timeDateFormat.format(time);
+
+    return '$timeString';
+  }
+
+  @override
+  String jobsRunInZone(String time, String zone) {
+    return '$time in $zone';
+  }
+
+  @override
+  String jobsNextRunAtOffset(DateTime time, String offset) {
+    final intl.DateFormat timeDateFormat = intl.DateFormat.MMMEd(
+      localeName,
+    ).add_jm();
+    final String timeString = timeDateFormat.format(time);
+
+    return '$timeString $offset';
+  }
+
+  @override
+  String jobsNextRunDst(String time) {
+    return '$time (DST)';
+  }
+
+  @override
+  String jobsRunTime(DateTime time, String offset) {
+    final intl.DateFormat timeDateFormat = intl.DateFormat.yMMMEd(
+      localeName,
+    ).add_jm();
+    final String timeString = timeDateFormat.format(time);
+
+    return '$timeString $offset';
+  }
+
+  @override
+  String jobsUtcOffset(String sign, DateTime time) {
+    final intl.DateFormat timeDateFormat = intl.DateFormat.Hm(localeName);
+    final String timeString = timeDateFormat.format(time);
+
+    String _temp0 = intl.Intl.selectLogic(sign, {
+      'zero': 'UTC',
+      'minus': 'UTC−$timeString',
+      'other': 'UTC+$timeString',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get jobsSourceOwnCrontab => 'Your crontab';
+
+  @override
+  String jobsSourceAsUser(String source, String user) {
+    return '$source, as $user';
+  }
+
+  @override
+  String get jobsSourceTimer => 'systemd timer';
+
+  @override
+  String get jobsTimerTriggersUnread =>
+      'Triggers are not read in this version.';
+
+  @override
+  String get jobsDetailsWritten => 'As written';
+
+  @override
+  String get jobsDetailsStarts => 'Starts';
+
+  @override
+  String get jobsDetailsNextRuns => 'Next runs';
+
+  @override
+  String jobsScheduleCron(String schedule) {
+    return 'Runs $schedule';
+  }
+
+  @override
+  String jobsScheduleCronMacro(String macro) {
+    String _temp0 = intl.Intl.selectLogic(macro, {
+      'reboot': 'Runs when cron starts',
+      'yearly': 'Runs once a year, at midnight on 1 January',
+      'annually': 'Runs once a year, at midnight on 1 January',
+      'monthly': 'Runs once a month, at midnight on the 1st',
+      'weekly': 'Runs once a week, at midnight on Sunday',
+      'daily': 'Runs every day at midnight',
+      'midnight': 'Runs every day at midnight',
+      'other': 'Runs every hour, on the hour',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String jobsScheduleInZone(String schedule, String zone) {
+    return '$schedule ($zone time)';
+  }
+
+  @override
+  String jobsScheduleCalendar(String expression) {
+    return 'On calendar $expression';
+  }
+
+  @override
+  String jobsScheduleMonotonic(String base, String span) {
+    String _temp0 = intl.Intl.selectLogic(base, {
+      'active': '$span after the timer starts',
+      'boot': '$span after boot',
+      'startup': '$span after systemd starts',
+      'unitActive': '$span after the job last started',
+      'other': '$span after the job last finished',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String jobsCronMinute(
+    String shape,
+    String items,
+    int step,
+    String first,
+    String last,
+  ) {
+    String _temp0 = intl.Intl.selectLogic(shape, {
+      'all': 'every minute',
+      'step': 'every $step minutes',
+      'rangeStep': 'every $step minutes from minute $first to $last',
+      'value': 'at minute $items',
+      'other': 'at minutes $items',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String jobsCronHour(
+    String shape,
+    String items,
+    int step,
+    String first,
+    String last,
+  ) {
+    String _temp0 = intl.Intl.selectLogic(shape, {
+      'all': 'every hour',
+      'step': 'every $step hours',
+      'rangeStep': 'every $step hours from hour $first to $last',
+      'value': 'during hour $items',
+      'other': 'during hours $items',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String jobsCronDayOfMonth(
+    String shape,
+    String items,
+    int step,
+    String first,
+    String last,
+  ) {
+    String _temp0 = intl.Intl.selectLogic(shape, {
+      'rangeStep': 'every $step days of the month from day $first to $last',
+      'value': 'on day $items of the month',
+      'other': 'on days $items of the month',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String jobsCronMonth(
+    String shape,
+    String items,
+    int step,
+    String first,
+    String last,
+  ) {
+    String _temp0 = intl.Intl.selectLogic(shape, {
+      'step': 'every $step months',
+      'rangeStep': 'every $step months from $first to $last',
+      'other': 'in $items',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String jobsCronDayOfWeek(
+    String shape,
+    String items,
+    int step,
+    String first,
+    String last,
+  ) {
+    String _temp0 = intl.Intl.selectLogic(shape, {
+      'step': 'every $step days of the week',
+      'rangeStep': 'every $step days of the week from $first to $last',
+      'other': 'on $items',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String jobsCronHoursStepped(String first, String last, int step) {
+    return 'during hours $first to $last in steps of $step';
+  }
+
+  @override
+  String jobsCronTimes(String times) {
+    return 'at $times';
+  }
+
+  @override
+  String jobsCronRange(String first, String last) {
+    return '$first to $last';
+  }
+
+  @override
+  String jobsCronItemStep(int step, String first, String last) {
+    return 'every $step from $first to $last';
+  }
+
+  @override
+  String jobsCronDaysEither(String dom, String dow) {
+    return '$dom or $dow';
+  }
+
+  @override
+  String jobsCronDaysBoth(String dom, String dow) {
+    return '$dom, but only $dow';
+  }
+
+  @override
+  String jobsPhrasePair(String first, String second) {
+    return '$first, $second';
+  }
+
+  @override
+  String jobsListPair(String first, String second) {
+    return '$first and $second';
+  }
+
+  @override
+  String jobsListMore(String first, String rest) {
+    return '$first, $rest';
+  }
+
+  @override
+  String jobsSpanDays(int days) {
+    return '$days d';
+  }
+
+  @override
+  String jobsSpanHours(int hours) {
+    return '$hours h';
+  }
+
+  @override
+  String jobsSpanMinutes(int minutes) {
+    return '$minutes min';
+  }
+
+  @override
+  String jobsSpanSeconds(num seconds) {
+    final intl.NumberFormat secondsNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String secondsString = secondsNumberFormat.format(seconds);
+
+    return '$secondsString s';
+  }
+
+  @override
+  String jobsSpanPair(String first, String second) {
+    return '$first $second';
+  }
+
+  @override
+  String jobsRunsUnknown(String reason, int limit, int years) {
+    String _temp0 = intl.Intl.selectLogic(reason, {
+      'reboot': 'Runs when cron starts, not at a time.',
+      'unparsed': 'The schedule does not parse, so its runs are unknown.',
+      'timeZoneUnresolved':
+          'This device does not know the CRON_TZ zone, so its runs are unknown.',
+      'serverZoneUnknown':
+          'The server\'s time zone is not known yet, so its runs are unknown.',
+      'noRunInHorizon': 'No run falls in the next $years years.',
+      'notEvaluated':
+          'Runs are worked out for the first $limit cron lines only.',
+      'anacron':
+          'anacron runs this directory; its timing is not shown in this version.',
+      'other': 'No cron line runs this directory.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String jobsNextRunUnknown(String reason, int years) {
+    String _temp0 = intl.Intl.selectLogic(reason, {
+      'reboot': 'At cron start',
+      'unparsed': 'Unreadable schedule',
+      'timeZoneUnresolved': 'Zone not known',
+      'serverZoneUnknown': 'Zone not known yet',
+      'noRunInHorizon': 'None in $years years',
+      'notEvaluated': 'Not worked out',
+      'anacron': 'Timed by anacron',
+      'other': 'Not run',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String jobsRunGap(DateTime time) {
+    final intl.DateFormat timeDateFormat = intl.DateFormat.jm(localeName);
+    final String timeString = timeDateFormat.format(time);
+
+    return '$timeString does not occur that day because of the DST change, so the job runs at the change.';
+  }
+
+  @override
+  String jobsRunOverlap(DateTime time) {
+    final intl.DateFormat timeDateFormat = intl.DateFormat.jm(localeName);
+    final String timeString = timeDateFormat.format(time);
+
+    return '$timeString occurs twice at this DST change; the job runs at the first only.';
+  }
+
+  @override
+  String get jobsRunNearTransition =>
+      'Within an hour of a DST change: the server\'s own zone data may move this run by an hour.';
+
+  @override
+  String jobsTimerRandomDelay(String span) {
+    return 'Each run starts up to $span late, at random (RandomizedDelaySec).';
+  }
+
+  @override
+  String get jobsTimerOneRun =>
+      'systemd\'s timer list gives only the next run, so later runs are not shown.';
+
+  @override
+  String get jobsCalendarOneRun =>
+      'systemd before version 242 lists only the next run, so later runs are not shown.';
 }

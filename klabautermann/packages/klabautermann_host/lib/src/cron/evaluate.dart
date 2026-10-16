@@ -110,6 +110,10 @@ final class CronRun {
   };
 }
 
+/// How many days ahead [nextCronRuns] looks for a run by default: ten
+/// years with their leap days.
+const int kCronHorizonDays = 3653;
+
 /// Lists up to [count] runs of [expression] strictly after [afterUtc]
 /// (03 §7.7) by [clock] in [zone]: the server's zone for
 /// [CronClock.server], the line's for [CronClock.line]. A line clock
@@ -138,7 +142,7 @@ List<CronRun> nextCronRuns(
   CronClock clock = CronClock.server,
   ServerZone? serverZone,
   int count = 5,
-  int horizonDays = 3653,
+  int horizonDays = kCronHorizonDays,
 }) {
   assert(
     clock == CronClock.line || serverZone == null,

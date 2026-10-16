@@ -7,8 +7,10 @@ import '../l10n/app_localizations.dart';
 import 'access/access_panel.dart';
 import 'access/panel_gate.dart';
 import 'inspector_pane.dart' show PlaceholderPaneBody;
+import 'jobs_panel.dart';
 import 'logs/logs_panel.dart';
 import 'overview_panel.dart';
+import 'processes_panel.dart';
 import 'server_coverage.dart';
 import 'server_header.dart';
 import 'server_surfaces.dart';
@@ -179,12 +181,22 @@ class _PanelsState extends State<_Panels> {
                         visible: tabs.index == index,
                       ),
                     ),
+                    ServerPanel.processes => ProcessesPanel(
+                      monitoring: monitoring,
+                      serverId: serverId,
+                      visible: tabs.index == index,
+                    ),
                     ServerPanel.services => ServicesPanel(
                       monitoring: monitoring,
                       serverId: serverId,
                       visible: tabs.index == index,
                     ),
                     ServerPanel.logs => LogsPanel(
+                      monitoring: monitoring,
+                      serverId: serverId,
+                      visible: tabs.index == index,
+                    ),
+                    ServerPanel.jobs => JobsPanel(
                       monitoring: monitoring,
                       serverId: serverId,
                       visible: tabs.index == index,

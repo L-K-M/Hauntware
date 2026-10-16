@@ -338,7 +338,7 @@ packages:
     source: path
     version: "1.9.0"
   klabautermann_host:
-    dependency: transitive
+    dependency: "direct dev"
     description:
       path: "../../packages/klabautermann_host"
       relative: true

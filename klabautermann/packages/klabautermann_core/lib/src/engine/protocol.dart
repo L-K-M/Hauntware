@@ -66,6 +66,9 @@ import 'package:meta/meta.dart';
 /// [HostProfileChanged] gained `cachedAt` for a profile the device cache
 /// kept (D59), within v3 the same way.
 ///
+/// [ProcessRow] then gained `startedAt`, its start by the engine's clock
+/// (03 §7.2), within v3 the same way.
+///
 /// [LogStreamRunning] then gained [LogContinuity], whether a follow that
 /// ran again may lack records (03 §7.6), within v3 the same way.
 const int kEngineProtocolVersion = 3;
@@ -1994,6 +1997,7 @@ final class ProcessRow {
     this.residentBytes,
     this.cpuPercent,
     this.startTicks,
+    this.startedAt,
     this.arguments,
   });
 
@@ -2018,6 +2022,14 @@ final class ProcessRow {
   /// `/proc/<pid>/stat`): with [pid], what PRC-02's PID-reuse guard
   /// compares before signalling it.
   final int? startTicks;
+
+  /// When it started by the engine's clock, UTC: the reading's time less
+  /// the host's uptime, plus [startTicks] at 100 a second, the USER_HZ the
+  /// CPU shares assume too (7.2). Null without either, before the probe
+  /// reports its lxcfs mounts, and where lxcfs serves a container's own
+  /// age as `/proc/uptime`, since start ticks count from the kernel's
+  /// boot (D50).
+  final DateTime? startedAt;
 
   /// The command line, one item per argument (per whitespace token on a
   /// host where only `ps` lists it, 7.2), each masked by 03 §8.9's rules;
