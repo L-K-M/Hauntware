@@ -22,6 +22,9 @@ paths = [
   '''^(seance/)?app/seance_app/test/credential_prompt_test\.dart$''',
   '''^(seance/)?packages/seance_core/test/pure_logic_test\.dart$''',
   '''^(seance/)?packages/seance_core/test/quoted_secret_redaction_test\.dart$''',
+  # Synthetic secret-shaped inputs that the fixture capture redaction
+  # must remove; no credential.
+  '''^klabautermann/packages/klabautermann_core/test/capture_fixtures/redaction_test\.dart$''',
   '''^klabautermann/app/klabautermann_app/android/app/ci-release\.jks$''',
   '''^klabautermann/app/klabautermann_app/android/key\.properties$''',
 ]
