@@ -188,12 +188,17 @@ final _credentials = [
   ),
 ];
 
-/// A network filesystem's source starting a `df` row: NFS and sshfs
-/// `[user@]server:/path`, CIFS `//server/share`. A server given by
+/// A network filesystem's source starting a `df` row, up to its path: a
+/// URL (davfs, curlftpfs's `curlftpfs#ftp://`), CIFS `//server/share`,
+/// and NFS, sshfs, Ceph and GlusterFS
+/// `[user@]server[:port][,server[:port]]...:[path]`. A server given by
 /// address is left to the address rules.
 final _mountSource = RegExp(
-  r'^(?:(//)[A-Za-z][^/\s]*(?=/)|'
-  r'(?:[^\s/@:]+@)?[A-Za-z][A-Za-z0-9.-]*(?=:/))',
+  r'^(?:([^\s#/]*#)?([A-Za-z][A-Za-z0-9+.-]*://)(?:[^\s/@]*@)?'
+  r'[A-Za-z][^\s/:]*|'
+  r'(//)(?:[^\s/@]*@)?[A-Za-z][^/\s]*(?=/)|'
+  r'(?:[^\s/@:]+@)?[A-Za-z][A-Za-z0-9.-]+(?::\d+)?'
+  r'(?:,[A-Za-z0-9][A-Za-z0-9.-]*(?::\d+)?)*(?=:(?!//)))',
   multiLine: true,
 );
 
@@ -406,7 +411,7 @@ final class Redactor {
     if (collector == Collector.fs.wireName) {
       text = text.replaceAllMapped(_mountSource, (m) {
         count('mount source');
-        return '${m[1] ?? ''}$_serverPlaceholder';
+        return '${m[1] ?? ''}${m[2] ?? ''}${m[3] ?? ''}$_serverPlaceholder';
       });
     }
     if (_literal case final literal?) {

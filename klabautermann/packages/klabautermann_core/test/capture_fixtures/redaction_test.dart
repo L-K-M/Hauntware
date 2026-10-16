@@ -323,6 +323,37 @@ void main() {
       expect(_redact(cpe), cpe);
     });
 
+    test('network mount sources in their other forms', () {
+      // davfs and curlftpfs URLs, sshfs's `host:` with no or a relative
+      // path, Ceph monitors with ports.
+      const fs =
+          '== blocks ==\n'
+          'https://dav.corp.acme.io/remote.php/webdav/ fuse 1 1 0 1% /mnt/d\n'
+          'https://anke@dav.corp.acme.io:8443/x fuse 1 1 0 1% /mnt/d2\n'
+          'https://10.0.0.5/dav fuse 1 1 0 1% /mnt/d3\n'
+          'nas.corp.acme.io:      fuse.sshfs 1 1 0 1% /mnt/nas\n'
+          'nas.corp.acme.io:backups fuse.sshfs 1 1 0 1% /mnt/nas2\n'
+          'mon1.corp.acme.io:6789:/ ceph 1 1 0 1% /mnt/ceph\n'
+          'mon1.x.io:6789,mon2.x.io:6789:/ ceph 1 1 0 1% /mnt/c2\n'
+          'curlftpfs#ftp://ftp.corp.acme.io/ fuse 1 1 0 1% /mnt/ftp\n'
+          'tmpfs tmpfs 1 1 0 1% /run\n'
+          'C:\\ 9p 1 1 0 1% /mnt/c';
+      expect(
+        _redact(fs, collector: 'fs'),
+        '== blocks ==\n'
+        'https://fixture-nas/remote.php/webdav/ fuse 1 1 0 1% /mnt/d\n'
+        'https://fixture-nas:8443/x fuse 1 1 0 1% /mnt/d2\n'
+        'https://192.0.2.1/dav fuse 1 1 0 1% /mnt/d3\n'
+        'fixture-nas:      fuse.sshfs 1 1 0 1% /mnt/nas\n'
+        'fixture-nas:backups fuse.sshfs 1 1 0 1% /mnt/nas2\n'
+        'fixture-nas:/ ceph 1 1 0 1% /mnt/ceph\n'
+        'fixture-nas:/ ceph 1 1 0 1% /mnt/c2\n'
+        'curlftpfs#ftp://fixture-nas/ fuse 1 1 0 1% /mnt/ftp\n'
+        'tmpfs tmpfs 1 1 0 1% /run\n'
+        'C:\\ 9p 1 1 0 1% /mnt/c',
+      );
+    });
+
     test('counts replacements per rule and keeps other bytes', () {
       final payload = [...latin1.encode('a 10.0.0.1 10.0.0.2 '), 0xff, 0x0a];
       final r = Redactor(const RedactionLiterals()).redact('fs', payload);
