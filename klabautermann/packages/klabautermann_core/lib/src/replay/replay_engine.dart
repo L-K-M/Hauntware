@@ -242,9 +242,7 @@ final class _ReplayEngine {
         host.readOnce.add(stream);
         continue;
       }
-      // A late step reads once and keeps the period's grid (03 §6.2).
-      final next = host.due[stream]! + period;
-      host.due[stream] = next > now ? next : now + period;
+      host.due[stream] = nextGridRead(host.due[stream]!, period, now);
     }
 
     final collectors = {

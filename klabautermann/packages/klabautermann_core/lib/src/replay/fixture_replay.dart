@@ -213,6 +213,15 @@ final class ReplaySchedule {
   }
 }
 
+/// When a stream due at [due] every [period] reads next after reading at
+/// [now]: one period on, or, when [now] is a period or more late, the
+/// first slot of that grid after [now], the slots passed over skipped as
+/// a busy sampler skips its ticks (03 §6.2).
+Duration nextGridRead(Duration due, Duration period, Duration now) {
+  final passed = (now - due).inMicroseconds ~/ period.inMicroseconds;
+  return due + period * (passed + 1);
+}
+
 /// A follow's input: [rows], `journalctl -o json` lines, cycled to make
 /// up one second of [linesPerSecond] (at least one pass over [rows]),
 /// each ended by a newline, and handed out in order from where the last

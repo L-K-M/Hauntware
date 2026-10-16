@@ -7,6 +7,8 @@ import 'dart:io';
 
 import 'package:klabautermann_core/klabautermann_core.dart';
 import 'package:klabautermann_core/replay.dart';
+import 'package:klabautermann_core/src/replay/fixture_replay.dart'
+    show nextGridRead;
 import 'package:test/test.dart';
 
 import '../../tool/src/engine_budget.dart' show findHostFixtures;
@@ -216,6 +218,21 @@ void main() {
     ]);
     expect(states('log-2'), [const LogStreamEnded(LogStreamEndReason.missing)]);
     expect(states('log-3'), [const LogStreamEnded(LogStreamEndReason.invalid)]);
+  });
+
+  test('a late read keeps its period\'s grid, skipping the slots it '
+      'passed (03 §6.2)', () {
+    const period = Duration(seconds: 2);
+    Duration next(int ms) => nextGridRead(
+      const Duration(seconds: 1),
+      period,
+      Duration(milliseconds: ms),
+    );
+
+    expect(next(1000), const Duration(seconds: 3));
+    expect(next(2990), const Duration(seconds: 3));
+    expect(next(3000), const Duration(seconds: 5));
+    expect(next(7500), const Duration(seconds: 9));
   });
 
   test('rejects what it does not serve and exits on shutdown', () async {
