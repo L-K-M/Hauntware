@@ -69,6 +69,9 @@ import 'package:meta/meta.dart';
 /// [ProcessRow] then gained `startedAt`, its start by the engine's clock
 /// (03 §7.2), within v3 the same way.
 ///
+/// [LogStreamRunning] then gained [LogContinuity], whether a follow that
+/// ran again may lack records (03 §7.6), within v3 the same way.
+///
 /// [RefreshSubscription] then joined, reading a subscription's streams at
 /// once for the phones' pull to refresh (PLT-02), within v3 the same way.
 const int kEngineProtocolVersion = 3;
@@ -940,7 +943,7 @@ final class LogStreamSpec {
   /// record. journalctl refuses `--since` together with a cursor, so with
   /// one the engine applies [JournalLogSource.since] itself: a window ends
   /// with [LogStreamEndReason.oldestReached] at the first record older
-  /// than it, and a follow reads on from the cursor alone.
+  /// than it, and a follow skips such records, as it does without one.
   final String? afterCursor;
 }
 
@@ -1124,14 +1127,32 @@ final class LogStreamWaiting extends LogStreamStatus {
 
 /// The read runs on the host: a window until it ends, a follow live.
 /// [reader] says which of its source's readers serves it, so the view can
-/// name where a kernel log came from (LOG-03).
+/// name where a kernel log came from (LOG-03), and [continuity] whether a
+/// follow that waited may lack records written meanwhile (LOG-02).
 final class LogStreamRunning extends LogStreamStatus {
-  const LogStreamRunning({this.reader = LogReader.primary});
+  const LogStreamRunning({
+    this.reader = LogReader.primary,
+    this.continuity = LogContinuity.complete,
+  });
 
   final LogReader reader;
+  final LogContinuity continuity;
 
   @override
-  List<Object?> get _values => [reader];
+  List<Object?> get _values => [reader, continuity];
+}
+
+/// Whether a running stream holds every record since it opened (03 §7.6).
+enum LogContinuity {
+  /// Every record arrived or was counted in a [LogBatch.dropped]: a
+  /// window, a follow on its first run, or one that resumed after its
+  /// newest journal cursor.
+  complete,
+
+  /// A follow without a cursor to resume after, such as a file's `tail
+  /// -F`, started again after it waited and delivers only new records:
+  /// records written while it waited may be missing, uncounted.
+  gap,
 }
 
 /// Which reader a [LogStreamRunning] stream reads with (03 §7.6).
