@@ -195,66 +195,95 @@ class FleetCoverageChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final theme = Theme.of(context);
-    final colors = theme.colorScheme;
     return ListenableBuilder(
       listenable: fleet,
       builder: (context, _) {
         final coverage = FleetCoverage.of(fleet.servers);
         if (coverage.serverCount == 0) return const SizedBox.shrink();
 
-        final label = l10n.coverageChip(
-          coverage.watchedCount,
-          coverage.serverCount,
-        );
         return Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           child: Align(
             alignment: AlignmentDirectional.centerStart,
-            // One node with the words, the action and its focus: the eye
-            // is decoration.
-            child: MergeSemantics(
-              child: Semantics(
-                button: true,
-                onTapHint: l10n.coverageChipHint,
-                child: Material(
-                  color: colors.secondaryContainer,
-                  borderRadius: BorderRadius.circular(14),
-                  clipBehavior: Clip.antiAlias,
-                  child: InkWell(
-                    onTap: () => unawaited(showCoverageSheet(context, fleet)),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 6,
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.visibility_outlined,
-                            size: 16,
-                            color: colors.onSecondaryContainer,
-                          ),
-                          const SizedBox(width: 6),
-                          Flexible(
-                            child: Text(
-                              label,
-                              style: theme.textTheme.labelMedium?.copyWith(
-                                color: colors.onSecondaryContainer,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
+            child: _CoverageChip(
+              label: l10n.coverageChip(
+                coverage.watchedCount,
+                coverage.serverCount,
               ),
+              fleet: fleet,
             ),
           ),
         );
       },
+    );
+  }
+}
+
+/// The server header's coverage chip (03 §10.2): the server's tier and
+/// how it is read, opening the coverage sheet. Only T0 exists, and no
+/// monitor set watches a server yet (FL-21), so every server reads the
+/// same until they arrive.
+class ServerCoverageChip extends StatelessWidget {
+  const ServerCoverageChip({super.key, required this.fleet});
+
+  final FleetController fleet;
+
+  @override
+  Widget build(BuildContext context) => _CoverageChip(
+    label: AppLocalizations.of(context).coverageServerChip,
+    fleet: fleet,
+  );
+}
+
+/// A coverage chip's face: [label] beside an eye, opening the coverage
+/// sheet over [fleet].
+class _CoverageChip extends StatelessWidget {
+  const _CoverageChip({required this.label, required this.fleet});
+
+  final String label;
+  final FleetController fleet;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    // One node with the words, the action and its focus: the eye is
+    // decoration.
+    return MergeSemantics(
+      child: Semantics(
+        button: true,
+        onTapHint: AppLocalizations.of(context).coverageChipHint,
+        child: Material(
+          color: colors.secondaryContainer,
+          borderRadius: BorderRadius.circular(14),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: () => unawaited(showCoverageSheet(context, fleet)),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.visibility_outlined,
+                    size: 16,
+                    color: colors.onSecondaryContainer,
+                  ),
+                  const SizedBox(width: 6),
+                  Flexible(
+                    child: Text(
+                      label,
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        color: colors.onSecondaryContainer,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
