@@ -508,13 +508,13 @@ void main() {
 
     test('a server that leaves the fleet loses its file, unless another '
         'instance may share the directory (SYN-08)', () async {
+      // `web` is outside the unguarded engine's fleet, and requests wait
+      // for the cache to open, so the answer below comes after any start
+      // sweep. capability_cache_test.dart pins the unguarded forget.
+      await cacheWeb();
       final unguarded = await spawnEngine();
       final (events: unguardedEvents, fleet: _) = await started(unguarded);
-      await import(unguarded, unguardedEvents, webConfig);
-      await cacheWeb();
       await import(unguarded, unguardedEvents, otherConfig);
-      // Time for a purge to land, as it does below within milliseconds.
-      await Future<void>.delayed(const Duration(milliseconds: 200));
       expect(cacheFile().existsSync(), isTrue);
       await unguardedEvents.cancel();
       await unguarded.shutdown();
