@@ -59,7 +59,10 @@ final class BandWatch {
 
   /// The band [value], read [at], moves the value into, or null when it
   /// stays. The first known value only says where it starts, since the
-  /// card already shows it; an unknown one holds the band.
+  /// card already shows it; an unknown one holds the band. A band is
+  /// taken only with a value inside it: each level's rule settles on its
+  /// own, so after one reading between the levels the lower rule can
+  /// still be settling when the value has gone past both.
   ChartSeverity? observe(double? value, DateTime at) {
     if (value == null || value.isNaN) return null;
 
@@ -86,7 +89,7 @@ final class BandWatch {
         : _warned.raised
         ? ChartSeverity.warning
         : ChartSeverity.normal;
-    if (now == band) return null;
+    if (now == band || now != _levels.severityOf(value)) return null;
 
     _band = now;
     return now;

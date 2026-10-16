@@ -922,6 +922,28 @@ void main() {
       expect(heard(tester), ['CPU 96%: critical level']);
     });
 
+    test('a band is heard only with a value inside it', () {
+      // Each change as (seconds, value, band), readings 2 s apart.
+      List<(int, double, ChartSeverity)> changes(List<double> values) {
+        final watch = BandWatch(BandMetric.cpu);
+        return [
+          for (final (i, value) in values.indexed)
+            if (watch.observe(value, _start.add(Duration(seconds: 2 * i)))
+                case final band?)
+              (2 * i, value, band),
+        ];
+      }
+
+      // One reading in the warning band on the way down or up must not
+      // be heard as a warning at 40 % or 95 % before the real change.
+      expect(changes([95, 95, 87, 40, 40, 40, 40, 40, 40, 40, 40]), [
+        (16, 40.0, ChartSeverity.normal),
+      ]);
+      expect(changes([50, 85, 95, 95, 95, 95, 95, 95, 95]), [
+        (14, 95.0, ChartSeverity.critical),
+      ]);
+    });
+
     testWidgets('each listed mount is heard by its own band', (tester) async {
       final announce = ValueNotifier(true);
       addTearDown(announce.dispose);
