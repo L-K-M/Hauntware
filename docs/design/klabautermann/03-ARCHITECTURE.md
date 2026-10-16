@@ -2751,9 +2751,10 @@ are K26.
   `Disconnect`, the server leaving the fleet and `Shutdown` end every
   stream of the server as failed, waiting ones included, since nothing
   would bring a link back for them. The background closes the running
-  reads' processes without an event and queues them ahead of the
-  others, and the foreground runs them again from the start; a window
-  sends its records as it ends, so a paused one has sent none.
+  reads' processes without ending them, reports every read as waiting
+  for the foreground and queues the paused ones ahead of the others,
+  and the foreground runs them again from the start; a window sends its
+  records as it ends, so a paused one has sent none.
 
 ### 7.7 Scheduled jobs (JOB)
 
