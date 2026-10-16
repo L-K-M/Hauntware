@@ -18,9 +18,9 @@ const double _wideWidth = 600;
 const double _gap = 16;
 const double _sparklineHeight = 40;
 
-/// A per-core bar's track, between the core's name and its figure, before
-/// text scaling, and the gap between a core's name, bar and figure.
-const double _coreBarWidth = 72;
+/// A per-core bar's width with its figure's box, beside the core's name,
+/// before text scaling, and the gap between a core's name, bar and figure.
+const double _coreBarAndFigureWidth = 106;
 const double _coreGap = 8;
 
 /// The widest a core's name gets before text scaling; only a name no
@@ -450,7 +450,9 @@ class _CoreBars extends StatelessWidget {
       ),
     );
     // Every figure gets the widest one's room, so its digits take none of
-    // its bar's length and the bars compare across cores.
+    // its bar's length and the bars compare across cores. That room comes
+    // out of the bar, not the row, so the boxes cost no column of cores on
+    // a narrow phone.
     final figureWidth = measure(
       formatChartValue(100, ChartUnit.percent, strings),
     );
@@ -460,11 +462,7 @@ class _CoreBars extends StatelessWidget {
       children: [
         for (final (name, value) in cores)
           SizedBox(
-            width:
-                nameWidth +
-                scaler.scale(_coreBarWidth) +
-                figureWidth +
-                2 * _coreGap,
+            width: nameWidth + _coreGap + scaler.scale(_coreBarAndFigureWidth),
             child: MergeSemantics(
               child: Row(
                 spacing: _coreGap,

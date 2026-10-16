@@ -346,7 +346,47 @@ void main() {
       expect(track('cpu2'), track('cpu0'), reason: '50% beside 5%');
       expect(tester.takeException(), isNull);
     });
+
+    testWidgets('a core\'s figure box takes its room from the bar at '
+        '${(textScale * 100).round()} % text', (tester) async {
+      final panel = await _pump(tester, textScale: textScale);
+      await panel.sample(tester, _core());
+
+      final bar = find.byWidgetPredicate(
+        (widget) => widget is StackedBar && widget.label == 'cpu0',
+      );
+      final row = tester.getSize(
+        find.ancestor(of: bar, matching: find.byType(MergeSemantics)).first,
+      );
+      final name = tester.getSize(
+        find
+            .ancestor(of: find.text('cpu0'), matching: find.byType(SizedBox))
+            .first,
+      );
+      // The bar, the gap and the widest figure's box share a fixed 106 px,
+      // so a row grows only with its name and the boxes cost no column of
+      // cores.
+      expect(row.width - name.width, 8 + 106 * textScale);
+    });
   }
+
+  testWidgets(
+    'four cores sit side by side on a 375 px phone',
+    skip: !goldensCompareHere,
+    (tester) async {
+      final panel = await _pump(tester, size: const Size(375, 1400));
+      await panel.sample(tester, _core());
+
+      const cores = {'cpu0', 'cpu1', 'cpu2', 'cpu3'};
+      final columns = {
+        for (final bar in _bars(tester))
+          if (cores.contains(bar.label))
+            tester.getTopLeft(find.byWidget(bar)).dx,
+      };
+      // In the goldens' Roboto, at the width of an iPhone SE or 13 mini.
+      expect(columns, hasLength(2));
+    },
+  );
 
   testWidgets('SYS-04: figures a container withholds say why', (tester) async {
     const reason = MetricWithheldReason.containerHostFigures;
