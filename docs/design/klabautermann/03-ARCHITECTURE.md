@@ -4086,6 +4086,48 @@ reads the reading's age, since its phase began only then. The monitoring
 controller keeps each server's latest `SamplingState` and the phase
 before it.
 
+As built in M2 for items 3, 5 and 6
+(`app/klabautermann_app/lib/ui/server_coverage.dart`), the coverage card
+follows the Overview's cards on desktops and phones: the T0 badge with
+the tier's meaning and what live reading is doing (from `SamplingState`,
+or the tier's rule before the engine says anything), a chart of the last
+10 minutes of CPU busy from the `core` stream, the external-monitor
+finding, and what is not covered in the coverage sheet's words, with no
+control for T1 or T2. K04's rule recognises node_exporter, Netdata, the
+Zabbix agent, Telegraf, collectd, Prometheus and Grafana's agents
+(Agent, Agent Flow, Alloy) by their packaged systemd units in a complete
+`units` list; a monitor outside systemd is not seen, and the card names
+the units as the server lists them. The card subscribes `units` under an
+id of its own while it shows, until the first `units` sample of the
+engine run, so the Overview reads the list once rather than at the
+Services tab's cadence; a list that tab reads later replaces it. The
+desktop inspector's body shows the selected server's coverage: the
+badge, the `core` stream's freshness, the external-monitor finding, the
+recent gaps with a known cause in words ("No data yet" before any
+reading, so an empty record never reads as a complete one; a break while
+no view read `core` has none), the newest five with a count of the rest,
+and what is not covered with each reason; it reads what the panels
+sample and subscribes nothing. Beside the session rings, the monitoring
+controller keeps a time-series ring per series of `core`: a background
+pause, a link lost while sampling, or a return from the background to a
+link still down opens a labelled gap when `SamplingState` says so,
+ending an open "reading failed" one, which it outranks; a `Gap`, or a
+`CollectorUnavailable` reading, opens one only if none is open, labelled
+"reading failed" for a lost or failed reading; the next reading closes
+it. A `Gap` also breaks the sparklines' session rings, so no line joins
+across it, and a stream no subscription names ends its open gap with an
+unknown reading, which breaks the line without a label. On a phone's
+server screen, and in the workspace of an iOS or Android tablet wide
+enough for the desktop layout, the return banner sits under the header,
+scrolling past a fifth of the screen's height, after a return from the
+background that paused that server: the engine had it in `sampling` as
+the app left, or said it paused it while away; a subscription alone, as
+while links are off, reads nothing to pause. It gives this device's
+times of leaving and returning (to the second when both fall in one
+minute) until dismissed, until that screen is left or until the next
+pause; a desktop platform never reports the background, so it never
+shows there.
+
 ---
 
 ## 10. UI shell
@@ -4447,8 +4489,8 @@ the engine in `engine_isolate.dart` beside it):
   streams' last reading (a stream without one has no gap) to the
   resuming one, with its cause (background, disconnected, or a reading
   lost to a deadline, a framing error or a sampler restart, 6.2), so a
-  chart labels the band (9.5 item 5, whose labels do not yet word a lost
-  reading). While a gap is open,
+  chart labels the band (9.5 item 5; a lost reading reads "reading
+  failed"). While a gap is open,
   a background or disconnected one shows in `SamplingState`; a lost
   reading leaves the phase at sampling and shows only as an ageing
   `Sample.at`. A lost link or the background outranks a lost reading
@@ -4535,7 +4577,8 @@ the engine in `engine_isolate.dart` beside it):
   while its tab or destination is selected: Overview `core`, `fs`,
   `identity` and `failedUnits`; Processes `procs`; Services `units`; Jobs
   `timers` and `cron`; System `identity`, `fs` and `core`; Logs, Docker
-  and Access none. Hidden pages stay built, so visibility comes from the
+  and Access none. The Overview's coverage card also reads `units`
+  once (9.5). Hidden pages stay built, so visibility comes from the
   tab controller's index. The app sends `SetAppActivity` only on a change,
   and the engine starts with the app in the foreground. Phones report the
   background while hidden, paused or detached. A desktop app stays in the

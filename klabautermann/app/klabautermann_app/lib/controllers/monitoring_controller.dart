@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 
 import '../ui/charts/series_ring.dart';
+import '../ui/charts/time_series.dart';
 import 'log_reads.dart';
 import 'log_streams.dart';
 
@@ -67,6 +68,30 @@ Duration? sampleAge(DateTime? at, DateTime now) {
   if (at == null) return null;
   final age = now.difference(at);
   return age.isNegative ? Duration.zero : age;
+}
+
+/// Why a session history has no data, from a [Gap]'s cause (03 §9.5
+/// item 5).
+ChartGapReason chartGapReasonOf(GapCause cause) => switch (cause) {
+  GapCause.background => ChartGapReason.background,
+  GapCause.disconnected => ChartGapReason.disconnected,
+  GapCause.readingLost => ChartGapReason.readingFailed,
+};
+
+/// A phone's time in the background (03 §9.5 item 6): from [start] to
+/// [end] by this device's clock, which paused sampling [serverIds], the
+/// servers the engine was sampling, or said it paused, whose screen was
+/// open at the return.
+@immutable
+final class BackgroundPause {
+  BackgroundPause({
+    required this.start,
+    required this.end,
+    required Set<String> serverIds,
+  }) : serverIds = Set.unmodifiable(serverIds);
+
+  final DateTime start, end;
+  final Set<String> serverIds;
 }
 
 /// What the engine last said sampling a server is doing ([state]), and
@@ -151,6 +176,13 @@ final class MonitoringController extends ChangeNotifier {
   AppActivity _activity = AppActivity.foreground;
   bool _engineStopped = false;
 
+  /// When the app last went to the background, and the servers the
+  /// engine was sampling then or said it paused since; the return words
+  /// [backgroundPause] from them.
+  DateTime? _backgroundSince;
+  Set<String> _pausedServers = {};
+  final ValueNotifier<BackgroundPause?> _backgroundPause = ValueNotifier(null);
+
   /// The latest sample of [serverId]'s [stream]. A surface listens to this
   /// one box instead of the whole controller.
   ValueListenable<Sample?> sampleFor(String serverId, SampleStream stream) =>
@@ -182,6 +214,27 @@ final class MonitoringController extends ChangeNotifier {
     assert(_ringStreams.contains(stream), '$stream carries no metrics');
     return _server(serverId).rings(stream)[series]!;
   }
+
+  /// The session history of [serverId]'s [series] from the `core` stream
+  /// on a time axis (OV-03, 03 §10.7): a reading per sample at its
+  /// [Sample.at], with a gap labelled with its reason wherever readings
+  /// stopped (03 §9.5 item 5). A background pause, a link lost while
+  /// sampling or a return to a link still down opens one when
+  /// [SamplingState] says so, and a [Gap] or a failed reading opens one
+  /// if none is open; the next reading closes it. A stream no
+  /// subscription names ends its gap with an unknown reading, which
+  /// breaks the line without a label.
+  TimeSeriesRing historyFor(String serverId, MetricSeries series) =>
+      _server(serverId).history[series]!;
+
+  /// The phone's last time in the background while the engine sampled
+  /// a server open at the return (03 §9.5 item 6), until the user
+  /// dismisses it, leaves that server or the app goes to the background
+  /// again; null otherwise, and always on a desktop, which never reports
+  /// the background.
+  ValueListenable<BackgroundPause?> get backgroundPause => _backgroundPause;
+
+  void dismissBackgroundPause() => _backgroundPause.value = null;
 
   /// The freshness clock: this device's time, notifying every
   /// [kFreshnessTick] while anything listens, so an age keeps counting
@@ -269,7 +322,7 @@ final class MonitoringController extends ChangeNotifier {
     scheduleMicrotask(() {
       final unnamed = left.difference(_ringStreamsNamed(serverId));
       for (final stream in unnamed) {
-        _readings[serverId]?.unnamed(stream);
+        _readings[serverId]?.unnamed(stream, _clock.value);
       }
     });
   }
@@ -313,6 +366,7 @@ final class MonitoringController extends ChangeNotifier {
     }
 
     _openViews.remove(serverId);
+    _forgetPause(serverId);
     // A stopped engine (or a disposed controller) holds no link, nor does
     // the engine hold one for a server the fleet no longer lists, so no
     // grace timer waits to disconnect it.
@@ -332,7 +386,48 @@ final class MonitoringController extends ChangeNotifier {
   void setAppActivity(AppActivity activity) {
     if (activity == _activity) return;
     _activity = activity;
+    _notePause(activity);
     _send(SetAppActivity(activity));
+  }
+
+  /// Keeps when the background began and, on return, the pause it was
+  /// for the open servers the engine had sampling. Only the engine's
+  /// phase says a server was read: a subscription alone samples nothing
+  /// while links are off or the link is down.
+  void _notePause(AppActivity activity) {
+    final now = _clock.value;
+    switch (activity) {
+      case AppActivity.background:
+        _backgroundSince = now;
+        // A server the fleet no longer lists has no phase: its readings
+        // were purged, and its SamplingStates are dropped.
+        _pausedServers = {
+          for (final MapEntry(key: id, value: readings) in _readings.entries)
+            if (readings.sampling.value?.state.phase == SamplingPhase.sampling)
+              id,
+        };
+        _backgroundPause.value = null;
+      case AppActivity.foreground:
+        final since = _backgroundSince;
+        _backgroundSince = null;
+        final shown = _pausedServers.where(_openViews.containsKey).toSet();
+        if (since == null || shown.isEmpty) return;
+        _backgroundPause.value = BackgroundPause(
+          start: since,
+          end: now,
+          serverIds: shown,
+        );
+    }
+  }
+
+  /// The return banner tells of the screen open at the return only.
+  void _forgetPause(String serverId) {
+    final pause = _backgroundPause.value;
+    if (pause == null || !pause.serverIds.contains(serverId)) return;
+    final rest = pause.serverIds.difference({serverId});
+    _backgroundPause.value = rest.isEmpty
+        ? null
+        : BackgroundPause(start: pause.start, end: pause.end, serverIds: rest);
   }
 
   /// Sends [request] unless the engine has stopped: views and surfaces let
@@ -362,8 +457,22 @@ final class MonitoringController extends ChangeNotifier {
       case SamplingState(:final serverId):
         // As for a sample: a server that left the fleet stays purged.
         if (_fleetIds case final ids? when !ids.contains(serverId)) return;
-        final box = _server(serverId).sampling;
-        box.value = SamplingStatus(event, previous: box.value?.state.phase);
+        final readings = _server(serverId);
+        final status = SamplingStatus(
+          event,
+          previous: readings.sampling.value?.state.phase,
+        );
+        readings
+          ..sampling.value = status
+          ..phaseChanged(status);
+        if (_backgroundSince != null &&
+            event.phase == SamplingPhase.pausedInBackground) {
+          _pausedServers.add(serverId);
+        }
+      case Gap(:final serverId):
+        // As for a sample: a server that left the fleet stays purged.
+        if (_fleetIds case final ids? when !ids.contains(serverId)) return;
+        _server(serverId).gap(event);
       case EngineEvent():
         break;
     }
@@ -427,10 +536,17 @@ final class MonitoringController extends ChangeNotifier {
     for (final readings in _readings.values) {
       readings.dispose();
     }
+    // A pending check for unnamed ring streams then finds no readings.
+    _readings.clear();
     _clock.dispose();
+    _backgroundPause.dispose();
     super.dispose();
   }
 }
+
+/// What opened a history gap: a [SamplingState] phase, or a [Gap] or
+/// failed reading, which never relabels an open one.
+enum _HistoryGapSource { phase, reading }
 
 /// [MonitoringController.clock]: one timer for every age on screen.
 final class _FreshnessClock extends ChangeNotifier
@@ -492,7 +608,74 @@ final class _ServerReadings {
   /// before it.
   final ValueNotifier<SamplingStatus?> sampling = ValueNotifier(null);
 
-  void unnamed(SampleStream stream) => _unnamed.add(stream);
+  /// The `core` stream's series on a time axis, made on first use: rows
+  /// read every fleet server's boxes, and only open servers sample `core`.
+  Map<MetricSeries, TimeSeriesRing>? _history;
+  Map<MetricSeries, TimeSeriesRing> get history => _history ??= {
+    for (final series in MetricSeries.values)
+      series: TimeSeriesRing(capacity: kSessionRingCapacity, lanes: 1),
+  };
+  Iterable<TimeSeriesRing> get _historyRings => _history?.values ?? const [];
+
+  /// Opens a gap at [at] in every history ring that has a reading, as
+  /// the engine gives a stream without one no gap. From the phase, a
+  /// background pause or a lost link outranks a lost reading (03 §10.1),
+  /// and a change between them starts a band of its own; a [Gap] or a
+  /// failed reading opens one only where none is open, since the open
+  /// one already says why readings stopped.
+  void _openHistoryGap(
+    DateTime at,
+    ChartGapReason reason,
+    _HistoryGapSource source,
+  ) {
+    if (_unnamed.contains(SampleStream.core)) return;
+    for (final ring in _historyRings) {
+      final last = ring.gaps.lastOrNull;
+      final open = last != null && last.end == null;
+      if (ring.length == 0) continue;
+      if (open && source == _HistoryGapSource.reading) continue;
+      ring.openGap(at, reason);
+    }
+  }
+
+  /// The background pause, and a link lost while sampling, stop readings
+  /// as the phase changes; a return with the link down ends the
+  /// background's gap, as the app is in the foreground from then on.
+  void phaseChanged(SamplingStatus status) {
+    final reason = switch (status.state.phase) {
+      SamplingPhase.pausedInBackground => ChartGapReason.background,
+      SamplingPhase.waitingForLink
+          when status.previous == SamplingPhase.sampling ||
+              status.previous == SamplingPhase.pausedInBackground =>
+        ChartGapReason.disconnected,
+      _ => null,
+    };
+    if (reason == null) return;
+    _openHistoryGap(status.state.since, reason, _HistoryGapSource.phase);
+  }
+
+  /// [gap] precedes the readings that resume its streams: none joins the
+  /// reading before it.
+  void gap(Gap gap) {
+    for (final stream in gap.streams.where(_ringStreams.contains)) {
+      _afterHole.add(stream);
+    }
+    if (gap.streams.contains(SampleStream.core)) {
+      _openHistoryGap(
+        gap.from,
+        chartGapReasonOf(gap.cause),
+        _HistoryGapSource.reading,
+      );
+    }
+  }
+
+  void unnamed(SampleStream stream, DateTime now) {
+    _unnamed.add(stream);
+    if (stream != SampleStream.core) return;
+    for (final ring in _historyRings) {
+      if (ring.length > 0) ring.add(now, const [null]);
+    }
+  }
 
   void named(SampleStream stream) {
     if (_unnamed.remove(stream)) _afterHole.add(stream);
@@ -533,14 +716,33 @@ final class _ServerReadings {
         ring.add(series.readFrom(sample.result));
       }
     }
+    if (sample.stream == SampleStream.core) _record(sample);
     if (sample.result is! CollectorUnavailable) {
       lastReading(sample.stream).value = sample;
     }
     box(sample.stream).value = sample;
   }
 
+  /// Adds [sample] to the history rings; a failed reading opens a gap.
+  void _record(Sample sample) {
+    if (sample.result is CollectorUnavailable) {
+      _openHistoryGap(
+        sample.at,
+        ChartGapReason.readingFailed,
+        _HistoryGapSource.reading,
+      );
+      return;
+    }
+    for (final MapEntry(key: series, value: ring) in history.entries) {
+      ring.add(sample.at, [series.readFrom(sample.result)]);
+    }
+  }
+
   void dispose() {
     sampling.dispose();
+    for (final ring in _historyRings) {
+      ring.dispose();
+    }
     for (final box in [..._boxes.values, ..._lastReadings.values]) {
       box.dispose();
     }
