@@ -1,7 +1,7 @@
 {
-  "nowUtc": "2026-10-14T12:00:00.000Z",
-  "zoneOffsetMinutes": -240,
+  "at": "2026-10-15T12:00:03.000Z",
   "zoneName": "America/New_York",
+  "zoneFallback": null,
   "jobs": [
     {
       "kind": "cron",
@@ -26,14 +26,32 @@
       },
       "nextRuns": [
         {
-          "atUtc": "2026-10-14T12:01:00.000Z",
-          "wall": "2026-10-14T08:01:00.000Z",
+          "atUtc": "2026-10-15T12:01:00.000Z",
+          "wall": "2026-10-15T08:01:00.000Z",
           "offsetMinutes": -240,
           "dst": "none"
         },
         {
-          "atUtc": "2026-10-14T13:01:00.000Z",
-          "wall": "2026-10-14T09:01:00.000Z",
+          "atUtc": "2026-10-15T13:01:00.000Z",
+          "wall": "2026-10-15T09:01:00.000Z",
+          "offsetMinutes": -240,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-15T14:01:00.000Z",
+          "wall": "2026-10-15T10:01:00.000Z",
+          "offsetMinutes": -240,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-15T15:01:00.000Z",
+          "wall": "2026-10-15T11:01:00.000Z",
+          "offsetMinutes": -240,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-15T16:01:00.000Z",
+          "wall": "2026-10-15T12:01:00.000Z",
           "offsetMinutes": -240,
           "dst": "none"
         }
@@ -63,14 +81,32 @@
       },
       "nextRuns": [
         {
-          "atUtc": "2026-10-15T08:02:00.000Z",
-          "wall": "2026-10-15T04:02:00.000Z",
+          "atUtc": "2026-10-16T08:02:00.000Z",
+          "wall": "2026-10-16T04:02:00.000Z",
           "offsetMinutes": -240,
           "dst": "none"
         },
         {
-          "atUtc": "2026-10-16T08:02:00.000Z",
-          "wall": "2026-10-16T04:02:00.000Z",
+          "atUtc": "2026-10-17T08:02:00.000Z",
+          "wall": "2026-10-17T04:02:00.000Z",
+          "offsetMinutes": -240,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-18T08:02:00.000Z",
+          "wall": "2026-10-18T04:02:00.000Z",
+          "offsetMinutes": -240,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-19T08:02:00.000Z",
+          "wall": "2026-10-19T04:02:00.000Z",
+          "offsetMinutes": -240,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-20T08:02:00.000Z",
+          "wall": "2026-10-20T04:02:00.000Z",
           "offsetMinutes": -240,
           "dst": "none"
         }
@@ -110,6 +146,24 @@
           "wall": "2026-10-25T04:22:00.000Z",
           "offsetMinutes": -240,
           "dst": "none"
+        },
+        {
+          "atUtc": "2026-11-01T09:22:00.000Z",
+          "wall": "2026-11-01T04:22:00.000Z",
+          "offsetMinutes": -300,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-11-08T09:22:00.000Z",
+          "wall": "2026-11-08T04:22:00.000Z",
+          "offsetMinutes": -300,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-11-15T09:22:00.000Z",
+          "wall": "2026-11-15T04:22:00.000Z",
+          "offsetMinutes": -300,
+          "dst": "none"
         }
       ],
       "runsUnknown": null
@@ -137,15 +191,33 @@
       },
       "nextRuns": [
         {
-          "atUtc": "2026-11-01T08:42:00.000Z",
+          "atUtc": "2026-11-01T09:42:00.000Z",
           "wall": "2026-11-01T04:42:00.000Z",
-          "offsetMinutes": -240,
+          "offsetMinutes": -300,
           "dst": "none"
         },
         {
-          "atUtc": "2026-12-01T08:42:00.000Z",
+          "atUtc": "2026-12-01T09:42:00.000Z",
           "wall": "2026-12-01T04:42:00.000Z",
-          "offsetMinutes": -240,
+          "offsetMinutes": -300,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2027-01-01T09:42:00.000Z",
+          "wall": "2027-01-01T04:42:00.000Z",
+          "offsetMinutes": -300,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2027-02-01T09:42:00.000Z",
+          "wall": "2027-02-01T04:42:00.000Z",
+          "offsetMinutes": -300,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2027-03-01T09:42:00.000Z",
+          "wall": "2027-03-01T04:42:00.000Z",
+          "offsetMinutes": -300,
           "dst": "none"
         }
       ],
@@ -174,14 +246,32 @@
       },
       "nextRuns": [
         {
-          "atUtc": "2026-10-14T12:01:00.000Z",
-          "wall": "2026-10-14T08:01:00.000Z",
+          "atUtc": "2026-10-15T12:01:00.000Z",
+          "wall": "2026-10-15T08:01:00.000Z",
           "offsetMinutes": -240,
           "dst": "none"
         },
         {
-          "atUtc": "2026-10-14T13:01:00.000Z",
-          "wall": "2026-10-14T09:01:00.000Z",
+          "atUtc": "2026-10-15T13:01:00.000Z",
+          "wall": "2026-10-15T09:01:00.000Z",
+          "offsetMinutes": -240,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-15T14:01:00.000Z",
+          "wall": "2026-10-15T10:01:00.000Z",
+          "offsetMinutes": -240,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-15T15:01:00.000Z",
+          "wall": "2026-10-15T11:01:00.000Z",
+          "offsetMinutes": -240,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-15T16:01:00.000Z",
+          "wall": "2026-10-15T12:01:00.000Z",
           "offsetMinutes": -240,
           "dst": "none"
         }
@@ -230,14 +320,32 @@
       ],
       "nextRuns": [
         {
-          "atUtc": "2026-10-14T12:01:00.000Z",
-          "wall": "2026-10-14T08:01:00.000Z",
+          "atUtc": "2026-10-15T12:01:00.000Z",
+          "wall": "2026-10-15T08:01:00.000Z",
           "offsetMinutes": -240,
           "dst": "none"
         },
         {
-          "atUtc": "2026-10-14T13:01:00.000Z",
-          "wall": "2026-10-14T09:01:00.000Z",
+          "atUtc": "2026-10-15T13:01:00.000Z",
+          "wall": "2026-10-15T09:01:00.000Z",
+          "offsetMinutes": -240,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-15T14:01:00.000Z",
+          "wall": "2026-10-15T10:01:00.000Z",
+          "offsetMinutes": -240,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-15T15:01:00.000Z",
+          "wall": "2026-10-15T11:01:00.000Z",
+          "offsetMinutes": -240,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-15T16:01:00.000Z",
+          "wall": "2026-10-15T12:01:00.000Z",
           "offsetMinutes": -240,
           "dst": "none"
         }
@@ -286,14 +394,32 @@
       ],
       "nextRuns": [
         {
-          "atUtc": "2026-10-14T12:01:00.000Z",
-          "wall": "2026-10-14T08:01:00.000Z",
+          "atUtc": "2026-10-15T12:01:00.000Z",
+          "wall": "2026-10-15T08:01:00.000Z",
           "offsetMinutes": -240,
           "dst": "none"
         },
         {
-          "atUtc": "2026-10-14T13:01:00.000Z",
-          "wall": "2026-10-14T09:01:00.000Z",
+          "atUtc": "2026-10-15T13:01:00.000Z",
+          "wall": "2026-10-15T09:01:00.000Z",
+          "offsetMinutes": -240,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-15T14:01:00.000Z",
+          "wall": "2026-10-15T10:01:00.000Z",
+          "offsetMinutes": -240,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-15T15:01:00.000Z",
+          "wall": "2026-10-15T11:01:00.000Z",
+          "offsetMinutes": -240,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-15T16:01:00.000Z",
+          "wall": "2026-10-15T12:01:00.000Z",
           "offsetMinutes": -240,
           "dst": "none"
         }
@@ -327,14 +453,32 @@
       ],
       "nextRuns": [
         {
-          "atUtc": "2026-10-15T08:02:00.000Z",
-          "wall": "2026-10-15T04:02:00.000Z",
+          "atUtc": "2026-10-16T08:02:00.000Z",
+          "wall": "2026-10-16T04:02:00.000Z",
           "offsetMinutes": -240,
           "dst": "none"
         },
         {
-          "atUtc": "2026-10-16T08:02:00.000Z",
-          "wall": "2026-10-16T04:02:00.000Z",
+          "atUtc": "2026-10-17T08:02:00.000Z",
+          "wall": "2026-10-17T04:02:00.000Z",
+          "offsetMinutes": -240,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-18T08:02:00.000Z",
+          "wall": "2026-10-18T04:02:00.000Z",
+          "offsetMinutes": -240,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-19T08:02:00.000Z",
+          "wall": "2026-10-19T04:02:00.000Z",
+          "offsetMinutes": -240,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-20T08:02:00.000Z",
+          "wall": "2026-10-20T04:02:00.000Z",
           "offsetMinutes": -240,
           "dst": "none"
         }
@@ -378,78 +522,27 @@
           "wall": "2026-10-25T04:22:00.000Z",
           "offsetMinutes": -240,
           "dst": "none"
+        },
+        {
+          "atUtc": "2026-11-01T09:22:00.000Z",
+          "wall": "2026-11-01T04:22:00.000Z",
+          "offsetMinutes": -300,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-11-08T09:22:00.000Z",
+          "wall": "2026-11-08T04:22:00.000Z",
+          "offsetMinutes": -300,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-11-15T09:22:00.000Z",
+          "wall": "2026-11-15T04:22:00.000Z",
+          "offsetMinutes": -300,
+          "dst": "none"
         }
       ],
       "runsUnknown": null
-    },
-    {
-      "kind": "timer",
-      "id": "timer|logrotate.timer",
-      "timer": {
-        "unit": "logrotate.timer",
-        "activates": "logrotate.service",
-        "nextUs": 1699911958000000,
-        "leftUs": 8100000000,
-        "lastUs": 1699903800000000,
-        "passedUs": 600000000,
-        "nextText": "Mon 2023-11-13 21:45:58 UTC",
-        "lastText": "Mon 2023-11-13 19:30:00 UTC"
-      },
-      "triggers": [
-        {
-          "type": "calendar",
-          "normalized": "*-*-* 00:00:00",
-          "elapses": [
-            {
-              "text": "Tue 2023-11-14 00:00:00 EST",
-              "atUtc": "2023-11-14T05:00:00.000Z",
-              "fromNow": "3h 14min left"
-            }
-          ]
-        }
-      ],
-      "randomizedDelayUs": 0
-    },
-    {
-      "kind": "timer",
-      "id": "timer|mdadm-last-resort.timer",
-      "timer": {
-        "unit": "mdadm-last-resort.timer",
-        "activates": "mdadm-last-resort.service",
-        "nextUs": 1699912800000000,
-        "leftUs": 9000000000,
-        "lastUs": null,
-        "passedUs": null,
-        "nextText": "Mon 2023-11-13 22:00:00 UTC",
-        "lastText": "n/a"
-      },
-      "triggers": null,
-      "randomizedDelayUs": null
-    },
-    {
-      "kind": "timer",
-      "id": "timer|fstrim.timer",
-      "timer": {
-        "unit": "fstrim.timer",
-        "activates": "fstrim.service",
-        "nextUs": null,
-        "leftUs": null,
-        "lastUs": null,
-        "passedUs": null,
-        "nextText": "n/a",
-        "lastText": "n/a"
-      },
-      "triggers": null,
-      "randomizedDelayUs": null
     }
-  ],
-  "timerCalendarReads": {
-    "*-*-* 00:00:00": [
-      "sh",
-      "-c",
-      "(unset TZ; systemd-analyze calendar -- \"$1\")",
-      "hws-cal",
-      "*-*-* 00:00:00"
-    ]
-  }
+  ]
 }

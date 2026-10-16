@@ -4,8 +4,14 @@ The capture tooling of spike S2 replaces these fixtures later.
 
 `procs.txt` holds the BusyBox `\037`-separated `cmdline` dump. Alpine has
 no systemd, so `units.txt` and `timers.txt` are the empty payload the
-`units`/`timers` collectors emit when `systemctl` is missing. `cron.txt`
-follows BusyBox crond and crontab(5).
+`units`/`timers` collectors emit when `systemctl` is missing.
+
+`cron.txt` is what the `cron` collector gathers on a BusyBox crond host:
+the probe user's own `crontab -l` (rc 0, no user column) and empty
+system sections. BusyBox crond reads only `/etc/crontabs/<user>`, so
+this host has no `/etc/crontab`, `/etc/cron.d` or `cron.<period>`
+directories. The crontab's lines copy the layout of Alpine's default
+`/etc/crontabs/root`, which runs `/etc/periodic/*` through `run-parts`.
 
 For collector-set version 4 (03 D48) a one-off script rewrote the
 `overview` and `core` payloads from their version 3 form into the

@@ -144,6 +144,26 @@ void main() {
       }
     });
 
+    test('lines past the evaluation limit list no runs and say why', () {
+      final jobs = mergeJobs(
+        cron: _cron(
+          crontab: '0 3 * * * a\n@reboot b\n0 4 * * * c\n0 5 * * * d',
+        ),
+        nowUtc: _now,
+        zone: _fixed(0, 'Etc/UTC'),
+        evaluateLimit: 2,
+      ).cast<CronJobEntry>();
+      // @reboot has nothing to evaluate, so it does not count.
+      expect(jobs.map((j) => j.runsUnknown), [
+        null,
+        JobRunsUnknown.reboot,
+        null,
+        JobRunsUnknown.notEvaluated,
+      ]);
+      expect(jobs[3].schedule!.text, '0 5 * * *');
+      expect(jobs[3].nextRuns, isEmpty);
+    });
+
     test('a spring-forward gap and a fall-back overlap are annotated', () {
       final gap = _only(
         _merge(
@@ -184,8 +204,23 @@ void main() {
         ),
       );
       expect(job.schedule!.timeZone, 'Europe/Berlin');
-      expect(job.nextRuns.first.dst, CronDst.gap);
-      expect(job.nextRuns.last.atUtc, DateTime.utc(2026, 3, 30, 0, 30));
+      // A CRON_TZ line misses its zone's gap (D58): 02:30 CEST next runs
+      // on 2026-03-30, where the fixed +1 would give 01:30Z.
+      expect(job.nextRuns.first.atUtc, DateTime.utc(2026, 3, 30, 0, 30));
+      expect(job.nextRuns.first.offset, const Duration(hours: 2));
+    });
+
+    test('the server zone\'s repeated hour runs no fixed-time line', () {
+      // cronie runs only wildcard jobs while its own zone repeats an
+      // hour, 01:00Z to 02:00Z here, whatever zone a line names.
+      final jobs = _merge(
+        _cron(crontab: 'CRON_TZ=UTC\n30 1 * * * a\n30 * * * * b'),
+        now: DateTime.utc(2026, 10, 25, 0, 45),
+        zone: _berlin(),
+      ).cast<CronJobEntry>();
+      expect(jobs[0].nextRuns.first.atUtc, DateTime.utc(2026, 10, 26, 1, 30));
+      expect(jobs[1].nextRuns.first.atUtc, DateTime.utc(2026, 10, 25, 1, 30));
+      expect(jobs[1].nextRuns.first.dst, CronDst.nearTransition);
     });
 
     test('the server zone answers for its own name', () {
@@ -218,12 +253,38 @@ void main() {
       expect(job.runsUnknown, JobRunsUnknown.timeZoneUnresolved);
     });
 
-    test('an empty CRON_TZ counts as unset', () {
+    test('without a server zone only CRON_TZ lines have runs', () {
+      final jobs = mergeJobs(
+        cron: _cron(crontab: '30 2 * * * a\nCRON_TZ=UTC\n30 2 * * * b'),
+        nowUtc: _now,
+        zone: null,
+      ).cast<CronJobEntry>();
+      expect(jobs[0].nextRuns, isEmpty);
+      expect(jobs[0].runsUnknown, JobRunsUnknown.serverZoneUnknown);
+      expect(jobs[1].nextRuns.first.atUtc, DateTime.utc(2026, 6, 2, 2, 30));
+    });
+
+    test('an empty CRON_TZ names no zone', () {
       final job = _only(
         _merge(_cron(crontab: 'CRON_TZ=\n30 2 * * * a'), zone: _fixed(2)),
       );
       expect(job.schedule!.timeZone, isNull);
       expect(job.nextRuns.first.atUtc, DateTime.utc(2026, 6, 2, 0, 30));
+    });
+
+    test('an empty CRON_TZ line misses the server zone\'s gap', () {
+      // cronie keeps the empty value: the line reads the server's clock
+      // but, as a CRON_TZ line, is never caught up (D58). A plain line
+      // would run at the jump, 2026-03-29T01:00Z.
+      final job = _only(
+        _merge(
+          _cron(crontab: 'CRON_TZ=\n30 2 * * * a'),
+          now: DateTime.utc(2026, 3, 28, 12),
+          zone: _berlin(),
+        ),
+      );
+      expect(job.nextRuns.first.atUtc, DateTime.utc(2026, 3, 30, 0, 30));
+      expect(job.nextRuns.first.dst, CronDst.none);
     });
 
     test('CRON_TZ does not leak into the next cron.d file', () {
@@ -343,6 +404,22 @@ void main() {
         DateTime.utc(2026, 6, 2, 3),
         DateTime.utc(2026, 6, 3, 3),
       ]);
+    });
+
+    test('the scripts of one directory share its drivers and runs', () {
+      // Matching every script against every line was quadratic: 4,000
+      // lines by 4,000 scripts took 37 s and copied each list per row.
+      final jobs = _merge(
+        _cron(
+          etc: '0 3 * * * root run-parts /etc/cron.daily',
+          dirs: 'daily a\ndaily b\nhourly c',
+        ),
+      ).whereType<PeriodicJobEntry>().toList();
+      expect(jobs[0].driverIds, ['cron|/etc/crontab|0']);
+      expect(jobs[1].driverIds, same(jobs[0].driverIds));
+      expect(jobs[1].schedules, same(jobs[0].schedules));
+      expect(jobs[1].nextRuns, same(jobs[0].nextRuns));
+      expect(jobs[2].runsUnknown, JobRunsUnknown.noDriver);
     });
 
     test('a driver without runs passes its reason on', () {

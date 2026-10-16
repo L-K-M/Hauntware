@@ -559,27 +559,3 @@ wiring on Linux.
 Follow-up: this is the suite's fourth copy of the controller. The D32
 review in [SHARED.md](SHARED.md) defers a shared macOS plugin to a
 separate suite PR, which must land before any product makes a fifth.
-
-## Open review findings
-
-GLM's review of PR #190 (2026-10-15) flagged these in code already on
-main. Both were checked against the code and are not fixed yet:
-
-- Alpine cron fixture: `klabautermann_host`'s
-  `test/fixtures/alpine-322/cron.txt` puts BusyBox crontab lines under
-  `etc_crontab`. BusyBox lines have no user column, but the
-  system-crontab parser reads the sixth field as the user, so
-  `cron.golden.json` and `jobs.golden.json` record `user: "run-parts"`
-  and `command: "/etc/periodic/15min"` for all five lines. BusyBox crond
-  reads `/etc/crontabs/<user>` without a user column and has no
-  `/etc/crontab`. Either move the lines to the fixture's `crontab`
-  section or teach the parser a no-user-column flavour. The fixture is
-  hand-written; the S2 capture replaces it.
-- Cron runs after a DST change: `ServerZone` keeps the probe's fixed
-  offset unless the consumer passes `offsetAt`, and nothing does yet
-  (`HostProfile` in `host_profile.dart`, the jobs goldens). A run past a
-  transition keeps the old offset. Examples: the debian-12 golden's
-  Europe/Berlin runs from 2026-10-25 say +120 where CET is +60, and the
-  rhel-8 golden's America/New_York runs from 2026-11-01 say -240 where
-  EST is -300. The first consumer of the jobs list must supply the zone
-  lookup. Until then, the goldens should say they are fixed-offset.

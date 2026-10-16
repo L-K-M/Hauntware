@@ -9,6 +9,7 @@ import 'package:klabautermann_host/klabautermann_host.dart'
         DiskRate,
         FsSnapshot,
         HostProfile,
+        JobEntry,
         LoadAvg,
         NetRate,
         ProcsSelection,
@@ -53,6 +54,9 @@ import 'package:meta/meta.dart';
 /// [ProcsResult] then gained the host's process count and how it chose
 /// its rows, and [ProcessRow] lost the thread count the host no longer
 /// sends (03 D48), within v3 the same way.
+///
+/// [CronResult] then gained the jobs rows with next runs in the server's
+/// zone and that zone's basis (03 §7.7, D58), within v3 the same way.
 const int kEngineProtocolVersion = 3;
 
 /// Every message the UI isolate sends the engine (03 §10.1, D18). Plain data
@@ -1985,9 +1989,50 @@ final class TimersResult extends SampleResult {
   final TimersSnapshot timers;
 }
 
-/// Cron jobs ([SampleStream.cron], 7.7).
+/// Cron jobs ([SampleStream.cron], 7.7): the parsed table, and its jobs
+/// rows with next runs the engine evaluated at the sample's time in the
+/// server's zone (D58), since the zone rules stay in the engine (D52).
 final class CronResult extends SampleResult {
-  const CronResult(this.cron);
+  CronResult(
+    this.cron, {
+    List<JobEntry> jobs = const [],
+    this.zoneName,
+    this.zoneFallback,
+  }) : jobs = List.unmodifiable(jobs),
+       assert(
+         zoneName == null || zoneFallback == null,
+         'zoneName and zoneFallback are mutually exclusive '
+         '(both null means the server zone is unknown)',
+       );
 
   final CronSnapshot cron;
+
+  /// The cron lines, then the `cron.<period>` scripts, as jobs rows with
+  /// their next runs (7.7); the timers' rows come from [TimersResult].
+  final List<JobEntry> jobs;
+
+  /// The IANA zone whose rules the server-zone runs follow; null when
+  /// they follow the probe's fixed offset or no server zone is known.
+  final String? zoneName;
+
+  /// Why the server-zone runs follow the probe's fixed offset; null when
+  /// they follow [zoneName]'s rules or no server zone is known, in which
+  /// case those rows give `JobRunsUnknown.serverZoneUnknown`.
+  final CronZoneFallback? zoneFallback;
+}
+
+/// Why [CronResult]'s server-zone runs follow the probe's fixed offset
+/// instead of a zone's rules, so no DST change after now shows in them
+/// (7.7, D58).
+enum CronZoneFallback {
+  /// The probe found no IANA zone name.
+  noZoneName,
+
+  /// The client's zone database has no zone of that name.
+  unknownZone,
+
+  /// The database's offset for the zone at the probe's clock reading
+  /// differs from the offset the server reported: the name is stale or
+  /// the two zone databases disagree.
+  offsetMismatch,
 }
