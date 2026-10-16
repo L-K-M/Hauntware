@@ -2010,9 +2010,23 @@
       }
     }
   },
+  "jobsNextRunAtOffset": "{time} {offset}",
+  "@jobsNextRunAtOffset": {
+    "description": "A job's next run in the jobs table when the row's cron lines follow different time zones: the date and time on the clock of the zone this run follows, then that zone's UTC offset at the run (jobsUtcOffset).",
+    "placeholders": {
+      "time": {
+        "type": "DateTime",
+        "format": "MMMEd+jm"
+      },
+      "offset": {
+        "type": "String",
+        "example": "UTC−04:00"
+      }
+    }
+  },
   "jobsNextRunDst": "{time} (DST)",
   "@jobsNextRunDst": {
-    "description": "A job's next run in the jobs table when a DST change skips, repeats or nears its time; time is jobsNextRun or jobsRunInZone, and the job's details say what the change does.",
+    "description": "A job's next run in the jobs table when a DST change skips, repeats or nears its time; time is jobsNextRun, jobsRunInZone or jobsNextRunAtOffset, and the job's details say what the change does.",
     "placeholders": {
       "time": {
         "type": "String"

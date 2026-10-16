@@ -2726,7 +2726,8 @@ each row's source and the user its line names:
   gap, overlap or near-transition note beside it (the table marks it
   with an icon). The tab names the server zone whose rules the engine
   used, or why the runs use the probe's offset (D58); a `CRON_TZ` run
-  names its zone in the table.
+  names its zone in the table, and a run of a periodic script whose
+  lines follow different zones names its offset.
 - A timer's next run is the `list-timers` instant at the probe's offset,
   and the tab says a DST change before it does not show: `TimersResult`
   carries no offset per elapse. Without a probed offset it shows in UTC.

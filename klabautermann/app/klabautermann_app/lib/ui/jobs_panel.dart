@@ -323,7 +323,8 @@ String _scheduleCell(AppLocalizations l10n, JobEntry job) {
 /// A row's next run on its zone's clock, and whether a DST change marks
 /// it: a timer's at the server's offset now (systemd gives an instant), or
 /// the text systemd printed when it gave no instant; a cron run with the
-/// `CRON_TZ` zone it follows.
+/// `CRON_TZ` zone it follows, or with its offset when the row's lines
+/// follow different zones, as a periodic script's may.
 ({String time, bool dst}) _next(
   AppLocalizations l10n,
   JobEntry job,
@@ -345,12 +346,21 @@ String _scheduleCell(AppLocalizations l10n, JobEntry job) {
     for (final s in job.schedules)
       if (s is CronSchedule) s.timeZone,
   };
-  final zone = zones.length == 1 ? zones.single : null;
-  final time = l10n.jobsNextRun(wallAt(run.atUtc, run.offset));
-  return (
-    time: zone == null ? time : l10n.jobsRunInZone(time, zone),
-    dst: run.dst != CronDst.none,
-  );
+  final wall = wallAt(run.atUtc, run.offset);
+  final time = switch (zones) {
+    // The merged runs do not say which line each came from, so no one
+    // zone name fits them.
+    Set(length: != 1) => l10n.jobsNextRunAtOffset(
+      wall,
+      utcOffsetText(l10n, run.offset),
+    ),
+    Set(single: final zone?) => l10n.jobsRunInZone(
+      l10n.jobsNextRun(wall),
+      zone,
+    ),
+    _ => l10n.jobsNextRun(wall),
+  };
+  return (time: time, dst: run.dst != CronDst.none);
 }
 
 /// A next run, grey while stale beside the freshness line's history icon

@@ -1732,6 +1732,16 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String jobsNextRunAtOffset(DateTime time, String offset) {
+    final intl.DateFormat timeDateFormat = intl.DateFormat.MMMEd(
+      localeName,
+    ).add_jm();
+    final String timeString = timeDateFormat.format(time);
+
+    return '$timeString $offset';
+  }
+
+  @override
   String jobsNextRunDst(String time) {
     return '$time (DST)';
   }

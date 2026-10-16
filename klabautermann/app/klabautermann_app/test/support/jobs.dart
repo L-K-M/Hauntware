@@ -46,7 +46,9 @@ final HostProfile jobsProfile = HostProfile(
   systemdVersion: 252,
 );
 
-CronJob _line(
+/// A crontab line as the cron parser gives it, with the [user] a system
+/// crontab's line names.
+CronJob cronLine(
   String source,
   String schedule,
   String command, {
@@ -68,28 +70,28 @@ CronJob _line(
 CronResult jobsCron({bool ownCrontabKnown = true}) {
   final cron = CronSnapshot(
     jobs: [
-      _line('crontab', '*/15 * * * *', '/home/deploy/bin/sync-assets'),
-      _line(
+      cronLine('crontab', '*/15 * * * *', '/home/deploy/bin/sync-assets'),
+      cronLine(
         '/etc/crontab',
         '25 6 * * *',
         'test -x /usr/sbin/anacron || ( cd / && run-parts --report '
             '/etc/cron.daily )',
         user: 'root',
       ),
-      _line(
+      cronLine(
         '/etc/cron.d/backup',
         '30 2 * * *',
         '/usr/local/bin/backup',
         user: 'root',
       ),
-      _line(
+      cronLine(
         '/etc/cron.d/report',
         '0 9 * * 1-5',
         '/usr/local/bin/report',
         user: 'deploy',
         cronTz: 'America/New_York',
       ),
-      _line('/etc/cron.d/0anacron', '@reboot', 'anacron -s', user: 'root'),
+      cronLine('/etc/cron.d/0anacron', '@reboot', 'anacron -s', user: 'root'),
     ],
     dirEntries: const [
       CronDirEntry(period: CronPeriod.daily, name: '0anacron'),
@@ -97,17 +99,21 @@ CronResult jobsCron({bool ownCrontabKnown = true}) {
     ],
     ownCrontabPresent: ownCrontabKnown ? true : null,
   );
-  return CronResult(
-    cron,
-    jobs: mergeJobs(
-      cron: cron,
-      nowUtc: jobsNow,
-      zone: berlin,
-      zoneFor: (name) => name == _newYork.ianaName ? _newYork : null,
-    ),
-    zoneName: berlin.ianaName,
-  );
+  return cronResultOf(cron);
 }
+
+/// [cron] with the jobs rows the engine's own merge gives at [jobsNow] in
+/// Berlin, New York resolving as a `CRON_TZ`.
+CronResult cronResultOf(CronSnapshot cron) => CronResult(
+  cron,
+  jobs: mergeJobs(
+    cron: cron,
+    nowUtc: jobsNow,
+    zone: berlin,
+    zoneFor: (name) => name == _newYork.ianaName ? _newYork : null,
+  ),
+  zoneName: berlin.ianaName,
+);
 
 /// The host's timers from `systemctl list-timers --output=json`: one
 /// without a next elapse.

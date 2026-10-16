@@ -7,7 +7,7 @@ import 'package:klabautermann_app/theme/app_theme.dart';
 import 'package:klabautermann_app/ui/jobs_panel.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 import 'package:klabautermann_host/klabautermann_host.dart'
-    show OnCalendarElapse;
+    show CronDirEntry, CronPeriod, OnCalendarElapse;
 
 import 'support/charts.dart'
     show goldenFontFamily, goldensCompareHere, loadGoldenFonts;
@@ -229,6 +229,50 @@ void main() {
     ]) {
       expect(_inSheet(clock(text)), findsWidgets, reason: text);
     }
+  });
+
+  testWidgets('a script run from two zones names each next run\'s offset', (
+    tester,
+  ) async {
+    final panel = await _pump(tester);
+    await panel.emit(tester, HostProfileChanged(_serverId, jobsProfile));
+    await panel.sample(
+      tester,
+      SampleStream.cron,
+      cronResultOf(
+        CronSnapshot(
+          jobs: [
+            cronLine(
+              '/etc/crontab',
+              '0 23 * * *',
+              'run-parts /etc/cron.daily',
+              user: 'root',
+            ),
+            cronLine(
+              '/etc/crontab',
+              '0 13 * * *',
+              'run-parts /etc/cron.daily',
+              user: 'root',
+              cronTz: 'America/New_York',
+            ),
+          ],
+          dirEntries: const [
+            CronDirEntry(period: CronPeriod.daily, name: 'logrotate'),
+          ],
+          ownCrontabPresent: true,
+        ),
+      ),
+    );
+
+    // New York's 1:00 PM comes first, 7:00 PM in Berlin, whose zone the
+    // notice names: the row's time says its offset.
+    expect(
+      find.descendant(
+        of: _row('periodic|daily|logrotate'),
+        matching: find.text(clock('Sat, Oct 24 1:00 PM UTC−04:00')),
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets('a failed or stale reading keeps its rows under the reason', (

@@ -2482,7 +2482,13 @@ abstract class AppLocalizations {
   /// **'{time} in {zone}'**
   String jobsRunInZone(String time, String zone);
 
-  /// A job's next run in the jobs table when a DST change skips, repeats or nears its time; time is jobsNextRun or jobsRunInZone, and the job's details say what the change does.
+  /// A job's next run in the jobs table when the row's cron lines follow different time zones: the date and time on the clock of the zone this run follows, then that zone's UTC offset at the run (jobsUtcOffset).
+  ///
+  /// In en, this message translates to:
+  /// **'{time} {offset}'**
+  String jobsNextRunAtOffset(DateTime time, String offset);
+
+  /// A job's next run in the jobs table when a DST change skips, repeats or nears its time; time is jobsNextRun, jobsRunInZone or jobsNextRunAtOffset, and the job's details say what the change does.
   ///
   /// In en, this message translates to:
   /// **'{time} (DST)'**
