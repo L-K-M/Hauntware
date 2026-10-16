@@ -14,6 +14,10 @@ abstract base class TestLinkBase implements SshLink {
   SshLinkState _state = const SshLinkReady(SshLinkSeen());
   int closes = 0;
 
+  /// What refused opens taught the link; a test sets a learned limit.
+  @override
+  SshLinkSeen seen = const SshLinkSeen();
+
   @override
   SshLinkState get state => _state;
 

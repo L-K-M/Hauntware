@@ -2014,6 +2014,18 @@ per connection, not forwarding channels [R: sshd_config(5)].
   transport. A second connection is opened only for non-interactive auth
   and only when long-lived work exhausts the budget.
 
+As built in M2 (`klabautermann_core/lib/src/links/channel_quota.dart`,
+K25b), the engine keeps a `ChannelQuota` per server below the link's own
+semaphore: 2 short actions and 2 followers at once. A bounded log read
+takes a short-action slot, and one that finds the share full waits in
+the engine as `LogStreamWaiting(channel)`, where the app can show it,
+rather than on the link. A follower (K26) gets no slot while the link
+has learned a session limit below 4 (the two samplers, one follower and
+one short action), so it reports waiting for a channel instead of
+holding the last free one and leaving short actions none; the rest of
+low-session mode is M3. The link still opens every session channel at
+one priority, since `seance_core`'s `start` and `run` take none yet.
+
 ### 5.3 Failure classification
 
 | Symptom | Classification | UI |
@@ -2690,9 +2702,10 @@ no longer holds that value.
   and starts over once shown. The read opens through the controller's
   one owner of log streams, which the Logs panel shares and which gives
   each rejection of `OpenLogStream` to the oldest open without an answer
-  (10.1). Until the service is wired, the page says unit logs are not
-  available in this version; a read the engine can no longer answer,
-  because it stopped, says so and asks for a restart of the app.
+  (10.1). While links are off, as the composition root leaves them
+  until K44, the engine rejects every open and the page says unit logs
+  are not available in this version; a read the engine can no longer
+  answer, because it stopped, says so and asks for a restart of the app.
 
 ### 7.6 Logs (LOG)
 
@@ -2723,10 +2736,11 @@ no longer holds that value.
   size and vacuum, log rate view, syslog-only hosts, split panes.
 
 As built in M2 (`klabautermann_core/lib/src/logs/log_service.dart`,
-K25a; K25b routes `OpenLogStream` to it), `LogService` serves the
-windows (`follow: false`) of one server's link, one host command at a
-time through `HostCommands.commandLine`, and answers each open with a
-`LogStreamState` before it returns. Followers are K26.
+K25a; `log_stream_router.dart`, K25b, routes `OpenLogStream` to it),
+`LogService` serves the windows (`follow: false`) of one server's link,
+one host command at a time through `HostCommands.commandLine`, and
+answers each open with a `LogStreamState` before it returns. Followers
+are K26.
 
 - A window holds 1 to 500 records, LOG-01's page. Any other size, a
   file with a cursor and what 8.8's validators refuse end as an invalid
@@ -2745,7 +2759,9 @@ time through `HostCommands.commandLine`, and answers each open with a
   reading at the cap and keeps its complete entries, so its last cursor
   reads on; `tail` and `dmesg`, which print oldest first, keep their
   last complete lines or records. Journal lines that are not JSON
-  objects count as dropped, as does an entry longer than the cap. A
+  objects count as dropped, as does an entry longer than the cap, and a
+  cut `tail` or `dmesg` output that keeps no whole line or record counts
+  its newest as dropped instead of ending with nothing to show. A
   full journal window left without a record ends as failed: it has no
   cursor to read on from, and journalctl prints an entry's keys in hash
   order, so a cut entry's cursor may lie past the cap.
@@ -2776,6 +2792,24 @@ time through `HostCommands.commandLine`, and answers each open with a
   closed, or its server left the fleet) ends the others as failed. Both
   close the process (TERM, then the channel), one whose channel opens
   late included.
+- `LogStreamRouter` (K25b) owns the engine's streams while links are on;
+  with links off the engine rejects every `OpenLogStream`. It rejects an
+  id an earlier open named (it keeps each id for the engine's lifetime),
+  a follow until K26, a server outside the fleet and a server's 17th
+  open stream [E], and ends a spec 8.8 refuses as invalid at once.
+  Otherwise it answers the open with the read's `LogStreamRunning`, or
+  with `LogStreamWaiting` naming the link (none ready), the foreground
+  (the app is in the background) or a channel (5.2's share is full),
+  and starts the read on its own, oldest first, once that clears.
+- Every stream ends exactly once. A read running on a link that closes
+  or is replaced ends as failed; waiting reads wait for the next link.
+  `Disconnect`, the server leaving the fleet and `Shutdown` end every
+  stream of the server as failed, waiting ones included, since nothing
+  would bring a link back for them. The background closes the running
+  reads' processes without ending them, reports every read as waiting
+  for the foreground and queues the paused ones ahead of the others,
+  and the foreground runs them again from the start; a window sends its
+  records as it ends, so a paused one has sent none.
 
 ### 7.7 Scheduled jobs (JOB)
 
@@ -4464,9 +4498,10 @@ the engine in `engine_isolate.dart` beside it):
   budget, or the foreground), running (with the source's own reader or
   the kernel log's `dmesg` fallback, 7.6), or ended with a reason (window
   filled, oldest record reached, closed, spec refused, source missing,
-  read denied, or failed) and the host's error output. Until the log
-  service is wired, the engine rejects `OpenLogStream` and ignores
-  `CloseStream`, since no stream is open.
+  read denied, or failed) and the host's error output. With links off,
+  as in the app until K44, the engine rejects `OpenLogStream` and
+  ignores `CloseStream`, since no stream is open; with links on, the
+  log stream router serves both (7.6).
   On the app side (M2), `MonitoringController.logs` owns every stream
   of the run, the Logs panel's and the bounded reads `openLogRead`
   opens through it (SVC-04's unit logs, 7.5): it mints `log-N` ids,
