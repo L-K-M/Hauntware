@@ -233,6 +233,27 @@ void main() {
       );
     });
 
+    test('serials in every /dev by-* link and its device unit', () {
+      // USB serial adapters, SAS addresses in by-path, a camera.
+      expect(
+        _redact(
+          '/dev/serial/by-id/usb-FTDI_FT232R_USB_UART_A50285BI-if00-port0 x\n'
+          '/dev/disk/by-path/pci-0000:02:00.0-sas-0x5000c5008e3c1a2d-lun-0\n'
+          'dev-serial-by\\x2did-usb\\x2dSilicon_Labs_CP2102_0001A2B3C4'
+          '\\x2dif00\\x2dport0.device\n'
+          '"dev-disk-by\\\\x2dpath-pci\\\\x2d0000:02:00.0\\\\x2dsas'
+          '\\\\x2d0x5000c5008e3c1a2d\\\\x2dlun\\\\x2d0.device"\n'
+          'dev-v4l-by\\x2did-usb\\x2d046d_C920_ABCD1234\\x2dvideo.device',
+          collector: 'units',
+        ),
+        '/dev/serial/by-id/fixture-device x\n'
+        '/dev/disk/by-path/fixture-disk\n'
+        'dev-serial-by\\x2did-fixture\\x2ddevice.device\n'
+        '"dev-disk-by\\\\x2dpath-fixture\\\\x2ddisk.device"\n'
+        'dev-v4l-by\\x2did-fixture\\x2ddevice.device',
+      );
+    });
+
     test('MACs in interface names, disk ids and hostnamectl fields', () {
       expect(
         _redact(

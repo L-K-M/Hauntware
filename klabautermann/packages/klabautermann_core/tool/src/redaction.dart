@@ -65,6 +65,7 @@ const _emailPlaceholder = 'user@example.com';
 const _uuidPlaceholder = '00000000-0000-0000-0000-000000000000';
 const _macPlaceholder = '00:00:5e:00:53:01';
 const _diskPlaceholder = 'fixture-disk';
+const _devicePlaceholder = 'fixture-device';
 const _ipv6Placeholder = '2001:db8::1';
 const _ipv4Placeholder = '192.0.2.1';
 const _macNamePlaceholder = '00005e005301';
@@ -85,6 +86,7 @@ final _placeholder = RegExp(
       _uuidPlaceholder,
       _macPlaceholder,
       _diskPlaceholder,
+      _devicePlaceholder,
       _ipv6Placeholder,
       _ipv4Placeholder,
       kRedacted,
@@ -95,7 +97,7 @@ final _placeholder = RegExp(
         if (_wordChar.hasMatch(p[p.length - 1])) '(?![A-Za-z0-9])',
       ].join(),
     '(?<![A-Za-z0-9])(0{32,}|(enx|wlx)$_macNamePlaceholder|fixture$_x2d'
-        'disk)(?![A-Za-z0-9])',
+        '(disk|device))(?![A-Za-z0-9])',
   ].join('|'),
 );
 
@@ -107,10 +109,6 @@ const _x2d = r'\\{1,2}x2d';
 
 /// Any character as systemd escapes it in a unit name.
 const _escape = r'\\{1,2}x[0-9a-fA-F]{2}';
-
-/// The `/dev/disk/by-*` links that name a disk by its serial, WWN, UUID
-/// or label rather than by its bus position.
-const _diskLinkKinds = 'id|uuid|partuuid|label|partlabel';
 
 enum _Literal {
   host('host name', _hostPlaceholder, 'still names the host'),
@@ -244,20 +242,24 @@ final _patterns = <(String, RegExp, String Function(Match))>[
     // shape; its unit type is the last label.
     (m) => _unitType.hasMatch(m[0]!) ? m[0]! : _emailPlaceholder,
   ),
-  // udev's links carry the drive's model and serial number or a volume
-  // UUID; device unit names hold them systemd-escaped.
+  // udev's `/dev/<subsystem>/by-<kind>/` links carry a drive's model
+  // and serial number, its WWN or SAS address (also in `by-path`), a
+  // volume UUID or label, a USB serial adapter's or camera's serial
+  // number; device unit names hold them systemd-escaped.
   (
-    'disk id',
-    RegExp('/dev/disk/by-($_diskLinkKinds)/[^\\s"\']+'),
-    (m) => '/dev/disk/by-${m[1]}/$_diskPlaceholder',
+    'device id',
+    RegExp(r'''/dev/([A-Za-z0-9_]+)/by-([A-Za-z0-9-]+)/[^\s"']+'''),
+    (m) =>
+        '/dev/${m[1]}/by-${m[2]}/'
+        '${m[1] == 'disk' ? _diskPlaceholder : _devicePlaceholder}',
   ),
   (
-    'disk id',
+    'device id',
     RegExp(
-      '(dev-disk-by($_x2d)($_diskLinkKinds)-)[^\\s"\']+?'
-      r'''(?=\.(device|swap|service|target)(?![A-Za-z0-9])|[\s"']|$)''',
+      '(dev-([A-Za-z0-9_]+)-by($_x2d)(?:[A-Za-z0-9]|$_x2d)+?-)[^\\s"\']+?'
+      r'''(?=\.(device|swap|service|target|mount)(?![A-Za-z0-9])|[\s"']|$)''',
     ),
-    (m) => '${m[1]}fixture${m[2]}disk',
+    (m) => '${m[1]}fixture${m[3]}${m[2] == 'disk' ? 'disk' : 'device'}',
   ),
   (
     'UUID',
