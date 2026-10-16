@@ -422,6 +422,44 @@ void main() {
       expect(q.closeCalls, 0);
     });
 
+    test('a rotation of a still empty file keeps the follow; only the '
+        'first open ends it, BusyBox\'s words included', () async {
+      const path = '/var/log/nginx/error.log';
+      follower(_spec(const FileLogSource(path))).run(link);
+      final p = await link.process(0);
+      // GNU tail 9.4 as logrotate's create renames the file and makes a
+      // new one a moment later; BusyBox prints the same first line.
+      p.emitStderr(
+        utf8.encode(
+          "tail: '$path' has become inaccessible: No such file or directory\n"
+          "tail: '$path' has appeared;  following new file\n",
+        ),
+      );
+      await pumpEventQueue();
+      expect(ends(), isEmpty);
+      expect(p.closeCalls, 0);
+      p.emitText('after rotation\n');
+      await clock.elapse(Duration.zero);
+      final records = batches().single.records.cast<FileRecord>();
+      expect(records.map((r) => r.text), ['after rotation']);
+
+      events.clear();
+      follower(_spec(const FileLogSource('/var/log/app.log'))).run(link);
+      (await link.process(1)).emitStderr(
+        utf8.encode(
+          "tail: can't open '/var/log/app.log': No such file or directory\n",
+        ),
+      );
+      await pumpEventQueue();
+      expect(ends(), [
+        const LogStreamEnded(
+          LogStreamEndReason.missing,
+          detail:
+              "tail: can't open '/var/log/app.log': No such file or directory",
+        ),
+      ]);
+    });
+
     test('end discards held lines, closes the process and ends once', () async {
       final f = follower(_spec(const JournalLogSource()));
       f.run(link);

@@ -2788,9 +2788,11 @@ answers each open with a `LogStreamState` before it returns, and
 - A follow runs until it is closed, so any exit ends it once the lines
   it holds are sent: as a window's exit would (missing, denied), and as
   failed otherwise, exit 0 included. `tail -F` retries a file it cannot
-  open instead of exiting, so a file follow whose stderr names a refusal
-  before its first line ends as denied or missing. `CloseStream` ends a
-  follow as closed and drops what it holds.
+  open instead of exiting, so a file follow whose open fails with a
+  refusal before its first line (GNU's `cannot open`, BusyBox's `can't
+  open`) ends as denied or missing; a rotation's `has become
+  inaccessible` does not end it. `CloseStream` ends a follow as closed
+  and drops what it holds.
 
 ### 7.7 Scheduled jobs (JOB)
 

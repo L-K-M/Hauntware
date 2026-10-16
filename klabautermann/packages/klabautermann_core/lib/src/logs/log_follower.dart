@@ -52,6 +52,10 @@ const kFollowRingBytes = 4 * 1024 * 1024;
 
 const _newline = 0x0a;
 
+/// A failed open of a followed file: GNU tail's `cannot open '…' for
+/// reading: …` and BusyBox's `can't open '…': …`, in the C locale.
+final _openFailed = RegExp("cannot open|can't open");
+
 /// The follow of one [OpenLogStream], owned by `LogStreamRouter` in the
 /// engine isolate. It parses a line only when a batch takes it, so a
 /// burst the ring drops costs no parsing.
@@ -299,14 +303,17 @@ final class LogFollower {
 
   /// Keeps [chunk] of [run]'s stderr. `tail -F` retries a file it cannot
   /// open instead of exiting, so a file follow that has delivered no line
-  /// ends when stderr names a refusal; after one, a rotation can take the
-  /// file away for a moment.
+  /// ends when the open names a refusal; after one, a rotation can take
+  /// the file away for a moment. Only the open counts: a rotation of a
+  /// file that is still empty prints `has become inaccessible: No such
+  /// file or directory` while tail waits for the new file.
   void _stderr(_Run run, List<int> chunk) {
     run.addStderr(chunk);
     if (_spec.source is! FileLogSource || _received) return;
 
     final stderr = run.stderr;
-    if (logRefusal(stderr) case final reason?) {
+    final opens = stderr.split('\n').where(_openFailed.hasMatch).join('\n');
+    if (logRefusal(opens) case final reason?) {
       _endAfterRing(LogStreamEnded(reason, detail: logEndDetail(stderr)));
     }
   }
