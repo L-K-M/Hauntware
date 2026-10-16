@@ -241,10 +241,11 @@ class ServerCoverageDetails extends StatelessWidget {
   }
 }
 
-/// 03 §9.5 item 6 on a phone's server screen: after a return from the
-/// background that paused this server's readings, when it was paused and
-/// that the charts have no data for it, until dismissed. A desktop never
-/// reports the background, so it never shows there.
+/// 03 §9.5 item 6 on an iOS or Android server screen or workspace: after
+/// a return from the background that paused this server's readings, when
+/// it was paused and that the charts have no data for it, until
+/// dismissed. A desktop platform never reports the background, so it
+/// never shows there.
 class BackgroundReturnBanner extends StatelessWidget {
   const BackgroundReturnBanner({
     super.key,

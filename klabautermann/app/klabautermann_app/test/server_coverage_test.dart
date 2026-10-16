@@ -456,6 +456,17 @@ void main() {
       monitoring.leaveServer(_serverId);
     });
 
+    testWidgets('heads a tablet\'s workspace, as a tablet pauses too', (
+      tester,
+    ) async {
+      await openAwayAndBack(tester, size: const Size(1024, 768));
+      expect(find.textContaining(RegExp(banner)), findsOneWidget);
+      tester.platformDispatcher.textScaleFactorTestValue = 2;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+    }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
+
     testWidgets('never shows on a desktop, which never pauses', (tester) async {
       // A narrow desktop window takes the phone's screens.
       await pumpApp(tester, size: _phone, servers: twoServers);

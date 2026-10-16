@@ -88,6 +88,12 @@ class ServerWorkspace extends StatelessWidget {
           fleet: fleet,
           monitoring: monitoring,
         ),
+        // An iOS or Android tablet takes this layout and pauses in the
+        // background too (03 §9.5 item 6).
+        banner: BackgroundReturnBanner(
+          monitoring: monitoring,
+          serverId: server.id,
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [

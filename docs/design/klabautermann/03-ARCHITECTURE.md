@@ -3855,15 +3855,17 @@ only if none is open, labelled "reading failed" for a lost or failed
 reading; the next reading closes it. A `Gap` also breaks the sparklines'
 session rings, so no line joins across it, and a stream no subscription
 names ends its open gap with an unknown reading, which breaks the line
-without a label. On a phone's server screen, the return banner sits
-under the header, scrolling past a fifth of the screen's height, after
+without a label. On a phone's server screen, and in the workspace of
+an iOS or Android tablet wide enough for the desktop layout, the return
+banner sits under the header, scrolling past a fifth of the screen's
+height, after
 a return from the background that paused that server: the engine had
 it in `sampling` as the app left, or said it paused it while away; a
 subscription alone, as while links are off, reads nothing to pause. It
 gives this device's times of leaving and returning (to the second when
 both fall in one minute) until dismissed, until that screen is left or
-until the next pause; a desktop never reports the background, so it
-never shows there.
+until the next pause; a desktop platform never reports the background,
+so it never shows there.
 
 ---
 
