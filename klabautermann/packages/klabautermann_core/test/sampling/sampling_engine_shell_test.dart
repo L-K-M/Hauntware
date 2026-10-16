@@ -1,10 +1,11 @@
 // The engine samples end to end over a link whose commands run in local
 // shells (03 §6.2, §6.4): dash and bash run the real sampler programs as
 // the login shell and as the samplers' `sh`. This covers start, READY,
-// the probe, ticks through the sample pipeline, a SIGSTOP stall past the
-// fast deadline with its restart, and the background pause, on this
-// machine; it does not replace the SSH fixture tests (K24). Tagged
-// `shell`; a shell that is not installed gets no tests.
+// the probe and its cache file, ticks through the sample pipeline, a
+// SIGSTOP stall past the fast deadline with its restart, and the
+// background pause, on this machine; it does not replace the SSH fixture
+// tests (K24). Tagged `shell`; a shell that is not installed gets no
+// tests.
 @Tags(['shell'])
 library;
 
@@ -13,7 +14,10 @@ import 'dart:io';
 import 'dart:isolate';
 
 import 'package:klabautermann_core/klabautermann_core.dart';
+import 'package:klabautermann_core/src/capabilities/capability_cache.dart';
 import 'package:klabautermann_core/src/engine/engine_isolate.dart';
+import 'package:klabautermann_core/src/fleet/ssh_config_import_store.dart'
+    show sshConfigImportsFileName;
 import 'package:test/test.dart';
 
 import '../support/local_process_link.dart';
@@ -46,6 +50,7 @@ final class _Engine {
         uiPort: port.sendPort,
         supportDirectory: support,
         linksEnabled: true,
+        supportDirectoryAccess: SupportDirectoryAccess.exclusive,
       ),
       dial:
           ({
@@ -108,6 +113,16 @@ void main() {
         (e) => e.phase == SamplingPhase.sampling,
       );
       await engine.until<HostProfileChanged>();
+      // The probe's answer is cached for the next run (D59).
+      final cached = File(
+        '${support.path}/$capabilityCacheDirectoryName/'
+        '${capabilityCacheFileName(_web)}',
+      );
+      final written = Stopwatch()..start();
+      while (!cached.existsSync()) {
+        expect(written.elapsed, lessThan(const Duration(seconds: 5)));
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
       final identity = await engine.until<Sample>(
         (s) => s.stream == SampleStream.identity,
       );
@@ -163,6 +178,50 @@ void main() {
       expect(link.processes, hasLength(started + 2));
 
       // Unsubscribed, nothing runs.
+      engine.send(
+        const Unsubscribe(serverId: _web, subscriptionId: 'overview'),
+      );
+      await engine.until<SamplingState>(
+        (e) => e.phase == SamplingPhase.unsubscribed,
+      );
+      await Future.wait([
+        for (final p in link.processes) p.exit,
+      ]).timeout(const Duration(seconds: 10));
+    });
+  }
+
+  if (_shells.values.firstOrNull case final path?) {
+    test('after an import the store could not save, a probe answer is not '
+        'cached, since the next start reads the older fleet (D59)', () async {
+      final support = Directory.systemTemp.createTempSync('klab-sampling-');
+      addTearDown(() => support.deleteSync(recursive: true));
+      final link = await LocalProcessLink.create(path);
+      addTearDown(link.dispose);
+      final engine = await _Engine.start(support.path, link);
+      // A directory with an entry cannot be replaced by the saved file.
+      Directory(
+        '${support.path}/$sshConfigImportsFileName/entry',
+      ).createSync(recursive: true);
+
+      engine.send(
+        const ImportSshConfig('Host web\n  HostName 192.0.2.10\n  User me\n'),
+      );
+      expect((await engine.until<SshConfigImported>()).saved, isFalse);
+      engine
+        ..send(const Connect(_web))
+        ..send(
+          const Subscribe(
+            serverId: _web,
+            subscriptionId: 'overview',
+            streams: {SampleStream.core},
+          ),
+        );
+      await engine.until<HostProfileChanged>();
+      await Future<void>.delayed(const Duration(seconds: 1));
+      expect(
+        Directory('${support.path}/$capabilityCacheDirectoryName').existsSync(),
+        isFalse,
+      );
       engine.send(
         const Unsubscribe(serverId: _web, subscriptionId: 'overview'),
       );

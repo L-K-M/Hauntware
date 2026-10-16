@@ -368,17 +368,20 @@ void main() {
                 SampleStream.procs,
                 ProcsResult(
                   [
-                    const ProcessRow(
+                    ProcessRow(
                       pid: 812,
                       parentPid: 1,
-                      name: 'sshd',
+                      name: 'mysql',
                       state: 'S',
                       userName: 'root',
                       uid: 0,
                       residentBytes: 8192,
                       cpuPercent: 0.5,
                       startTicks: 1234,
-                      arguments: ['sshd:', 'deploy'],
+                      arguments: [
+                        MaskedValue.plain('mysql'),
+                        MaskedValue.redacted('-p********', '-phunter2'),
+                      ],
                     ),
                   ],
                   totalProcesses: 2083,
@@ -388,15 +391,18 @@ void main() {
               as ProcsResult;
       expect(procs.totalProcesses, 2083);
       expect(procs.selection, ProcsSelection.cpuAndMemory);
-      final sshd = procs.processes.single;
-      expect(sshd.pid, 812);
-      expect(sshd.parentPid, 1);
-      expect(sshd.name, 'sshd');
-      expect(sshd.userName, 'root');
-      expect(sshd.residentBytes, 8192);
-      expect(sshd.cpuPercent, 0.5);
-      expect(sshd.startTicks, 1234);
-      expect(sshd.arguments, ['sshd:', 'deploy']);
+      final mysql = procs.processes.single;
+      expect(mysql.pid, 812);
+      expect(mysql.parentPid, 1);
+      expect(mysql.name, 'mysql');
+      expect(mysql.userName, 'root');
+      expect(mysql.residentBytes, 8192);
+      expect(mysql.cpuPercent, 0.5);
+      expect(mysql.startTicks, 1234);
+      // A masked argument crosses with its real text for the reveal
+      // action (03 §8.9), and shows the mask.
+      expect(mysql.arguments!.map((a) => a.display), ['mysql', '-p********']);
+      expect(mysql.arguments!.last.reveal(), '-phunter2');
 
       const failedUnit = SystemdUnit(unit: 'nginx.service', active: 'failed');
       final units =
@@ -438,6 +444,7 @@ void main() {
           CronJob(
             source: '/etc/crontab',
             schedule: '@daily',
+            user: 'root',
             command: 'backup',
             raw: '@daily root backup',
             expression: CronExpression.parse('@daily'),
@@ -567,10 +574,12 @@ void main() {
                     groups: const ['adm', 'systemd-journal'],
                     tools: const {'timeout': '/usr/bin/timeout', 'zstd': null},
                   ),
+                  cachedAt: DateTime.utc(2026, 10, 15, 9),
                 ),
               )
               as HostProfileChanged;
       expect(changed.serverId, 'srv-1');
+      expect(changed.cachedAt, DateTime.utc(2026, 10, 15, 9));
       expect(changed.profile.systemdVersion, 252);
       expect(changed.profile.groups, ['adm', 'systemd-journal']);
       expect(changed.profile.timeoutPresent, isTrue);
@@ -778,7 +787,7 @@ void main() {
       final statuses = <LogStreamStatus>[
         for (final reason in LogStreamWaitReason.values)
           LogStreamWaiting(reason),
-        const LogStreamRunning(),
+        for (final reader in LogReader.values) LogStreamRunning(reader: reader),
         for (final reason in LogStreamEndReason.values) LogStreamEnded(reason),
         const LogStreamEnded(
           LogStreamEndReason.denied,
@@ -794,8 +803,8 @@ void main() {
         expect(state.status.hashCode, status.hashCode);
       }
 
-      // Every status differs from every other: by variant, reason or
-      // detail.
+      // Every status differs from every other: by variant, reader, reason
+      // or detail.
       for (var i = 0; i < statuses.length; i++) {
         for (var j = i + 1; j < statuses.length; j++) {
           expect(statuses[i], isNot(statuses[j]));

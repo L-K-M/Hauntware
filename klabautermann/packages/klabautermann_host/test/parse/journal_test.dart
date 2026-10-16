@@ -117,9 +117,17 @@ void main() {
       )!;
       expect(e.priority, isNull);
       expect(e.pid, 1);
-      expect(e.message, '{nested: 1}');
+      expect(e.message, isNull);
       expect(e.realtimeUs, isNull);
       expect(e.fields['X'], ',\uFFFD\x00');
+    });
+
+    test('an object value reads as null, however deep it nests', () {
+      // Stringifying this recurses once per level, past the stack.
+      final deep = '${'{"a":' * 20000}1${'}' * 20000}';
+      final e = parseJournalLine('{"__CURSOR":"s=a;i=1","MESSAGE":$deep}')!;
+      expect(e.cursor, 's=a;i=1');
+      expect(e.message, isNull);
     });
   });
 }

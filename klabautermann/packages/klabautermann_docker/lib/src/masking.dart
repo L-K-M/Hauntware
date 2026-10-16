@@ -8,10 +8,24 @@ final RegExp secretKeyPattern = RegExp(
   caseSensitive: false,
 );
 
-/// 03 §8.9: `scheme://user:pass@` credentials inside a value.
-final RegExp _urlCredentialPattern = RegExp(
-  r'([A-Za-z][A-Za-z0-9+.\-]*://)([^/@\s:]+):([^/@\s]+)@',
-);
+/// 03 §8.9: the `user:pass@` of `scheme://user:pass@` credentials, read
+/// after the `://`.
+final RegExp _urlCredentialPattern = RegExp(r'([^/@\s:]+):[^/@\s]+@');
+
+/// Whether the code unit [unit] is an ASCII letter, which a URL scheme
+/// starts with. Code units, not a regular expression per character,
+/// keep the scan of a 128 KiB argument cheap.
+bool _isLetter(int unit) =>
+    (unit >= 0x41 && unit <= 0x5A) || (unit >= 0x61 && unit <= 0x7A);
+
+/// Whether the code unit [unit] is a URL scheme character
+/// (`[A-Za-z0-9+.-]`).
+bool _isSchemeCharacter(int unit) =>
+    _isLetter(unit) ||
+    (unit >= 0x30 && unit <= 0x39) ||
+    unit == 0x2B ||
+    unit == 0x2D ||
+    unit == 0x2E;
 
 /// Whether [key] names a secret under the 03 §8.9 rules.
 bool isSecretKey(String key) => secretKeyPattern.hasMatch(key);
@@ -86,10 +100,48 @@ Map<String, MaskedValue> maskedLabels(Map<String, String> labels) => {
 /// Replaces `scheme://user:pass@` credentials in [text] with the mask
 /// token (03 §8.9: URL credentials are a secret even in a value whose key
 /// does not look secret).
-String maskUrlCredentials(String text) => text.replaceAllMapped(
-  _urlCredentialPattern,
-  (m) => '${m[1]}${m[2]}:${MaskedValue.maskToken}@',
-);
+///
+/// The text may come from a host, a process argument of up to 128 KiB for
+/// one, so the scan is linear: it looks for each `://` and checks the
+/// characters before it once, where one regular expression for the whole
+/// rule would restart at every character of a long scheme-like run.
+String maskUrlCredentials(String text) {
+  final masked = StringBuffer();
+  // The end of the last credentials masked; a scheme starts after it.
+  var copied = 0;
+  for (
+    var separator = text.indexOf('://');
+    separator != -1;
+    separator = text.indexOf('://', separator + 1)
+  ) {
+    if (!_endsScheme(text, copied, separator)) continue;
+    final credentials = _urlCredentialPattern.matchAsPrefix(
+      text,
+      separator + 3,
+    );
+    if (credentials == null) continue;
+
+    masked
+      ..write(text.substring(copied, separator + 3))
+      ..write('${credentials[1]}:${MaskedValue.maskToken}@');
+    copied = credentials.end;
+  }
+  if (copied == 0) return text;
+  return (masked..write(text.substring(copied))).toString();
+}
+
+/// Whether the run of scheme characters that ends at [end], starting at
+/// [start] or later, holds a letter a scheme can start with. The runs
+/// before two `://` never overlap, since `:` ends a run.
+bool _endsScheme(String text, int start, int end) {
+  var letter = false;
+  for (var at = end - 1; at >= start; at--) {
+    final unit = text.codeUnitAt(at);
+    if (!_isSchemeCharacter(unit)) break;
+    letter = letter || _isLetter(unit);
+  }
+  return letter;
+}
 
 /// A value whose key is not secret but which contains URL credentials is
 /// still masked (03 §8.9).

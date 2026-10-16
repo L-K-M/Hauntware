@@ -26,6 +26,7 @@ final class ChartStrings {
     required this.gapAppClosed,
     required this.gapBackground,
     required this.gapDisconnected,
+    required this.gapReadingFailed,
     required this.gapSummary,
     required this.gapOngoing,
     required this.time,
@@ -64,11 +65,12 @@ final class ChartStrings {
   final String unknownValue;
 
   /// The labels of a time-series chart's bands without data (03 §9.5
-  /// item 5): the app was not running, was in the background, or had no
-  /// link to the server.
+  /// item 5): the app was not running, was in the background, had no
+  /// link to the server, or the server gave no reading.
   final String gapAppClosed;
   final String gapBackground;
   final String gapDisconnected;
+  final String gapReadingFailed;
 
   /// A band without data as a screen reader hears it: when it began and
   /// ended, and its label.
