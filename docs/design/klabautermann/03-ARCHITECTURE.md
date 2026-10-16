@@ -2341,23 +2341,30 @@ fragments (D48).
 - The diagnostic bundle (CN-18, v1) exports the same raw format, redacted
   by `SecretRedactor`, so a user report becomes a fixture.
 - Capture redaction: the host's names (kernel, `/etc/hostname`,
-  hostnamectl) and each FQDN's first label, the names and home
-  directories of personal accounts (uid 1000 to 60000, login.defs'
-  defaults; the capturing user at any uid from 1000 but 65534, as
-  directory-service and systemd-homed accounts lie above that range)
-  and `--redact` values become fixed placeholders, names as
-  whole words in any case, a `-` in them also as device-mapper's `--`
-  and systemd's `\x2d`; `localhost` and the os-release `ID` and
-  `ID_LIKE` words stay, as fixtures need them. IPv4 and IPv6 addresses
-  other than loopback and `0.0.0.0`, MAC addresses (also in `enx`/`wlx`
-  names), UUIDs, hex ids of 32 or more digits (machine and boot ids),
-  the names in `/dev/disk/by-{id,uuid,partuuid,label,partlabel}/` links
-  and in their device units, UUIDs too in systemd's `\x2d` escaping,
-  network mount servers in `fs`,
+  hostnamectl) and each FQDN's first label, the domains of those names
+  and of resolv.conf's search list (each suffix of two labels or more),
+  the names and home directories of personal accounts (any uid from
+  1000, login.defs' UID_MIN, but `nobody`'s, as directory-service and
+  systemd-homed accounts lie above UID_MAX; no passwd account whose
+  home is `/nonexistent`) and `--redact` values become fixed
+  placeholders, names as whole words in any case, a `-` in them also
+  as device-mapper's `--` and systemd's `\x2d`, a non-ASCII byte also
+  as its `\xNN`; `localhost` and the os-release `ID` and
+  `ID_LIKE` words stay, as fixtures need them. Every `/home/<name>`
+  path and home mount unit, logind's `Session <id> of User <name>` and
+  the `ps` fallback's USER column name no account but root. IPv4 and
+  IPv6 addresses other than loopback and `0.0.0.0` (also EC2's
+  `ip-a-b-c-d` names), MAC addresses (also hyphenated, dotted and in
+  `enx`/`wlx`/`wwx` names), UUIDs, hex ids of 32 or more digits
+  (machine and boot ids), the names in `/dev/<subsystem>/by-*/` links
+  (disk serials, WWNs, SAS addresses, labels, USB serial numbers) and
+  in their device units, UUIDs too in systemd's `\x2d` escaping,
+  network mount servers in `fs` (NFS, sshfs, Ceph, CIFS and URL
+  sources),
   hostnamectl's serial, asset-tag, pretty-name and location fields
   (also as machine-info's `PRETTY_HOSTNAME`, `LOCATION` and `TAGS`),
   email addresses, URL credentials, private-key headers, what
-  `SecretRedactor` masks and the crontab credentials it misses (values
+  `SecretRedactor` masks and the credentials it misses (values
   of assignments and options whose names hold PASS, PWD, SECRET, TOKEN,
   KEY, AUTH or CRED, HTTP basic auth, `-u`/`-U user:password`, Samba's
   `-U user%password`, the password options of the MySQL, MongoDB and
@@ -2365,7 +2372,12 @@ fragments (D48).
   become placeholders too (documentation
   addresses where an address is expected). In `procs` every command
   line keeps argv[0] up to its first space and the rest reads
-  `[redacted]`: arguments carry secrets, process titles user names. A
+  `[redacted]`: arguments carry secrets, process titles user names. In
+  `cron`, for the same reason, each job keeps its schedule, a `root`
+  user field (others read `user`) and its first command word; the
+  rest, comments and environment values but `CRON_TZ` read
+  `[redacted]`, and a line `parseCron` reads as no job keeps its first
+  word only. A
   review then reads every file; a line that still holds a literal
   outside a placeholder, a secret, a private-key mention or 40 or more
   mixed base64 characters stops the tool before it writes anything. A `.txt` fixture holds the payload
