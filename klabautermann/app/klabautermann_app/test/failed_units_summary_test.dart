@@ -51,4 +51,29 @@ void main() {
       expect(tester.getTopLeft(find.text('and 1 more')).dx, buttonX);
     });
   }
+
+  testWidgets('a stale list is grey to its last line', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: GhostTheme.light(klabautermannThemeStyle),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(
+          body: FailedUnitsSummary(
+            failed: [_failed('nginx.service'), _failed('backup.service')],
+            maxShown: 1,
+            stale: true,
+          ),
+        ),
+      ),
+    );
+
+    final muted = Theme.of(
+      tester.element(find.byType(FailedUnitsSummary)),
+    ).colorScheme.onSurfaceVariant;
+    for (final text in ['2 failed units', 'nginx.service: failed']) {
+      expect(tester.widget<Text>(find.text(text)).style?.color, muted);
+    }
+    expect(tester.widget<Text>(find.text('and 1 more')).style?.color, muted);
+  });
 }

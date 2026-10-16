@@ -71,7 +71,9 @@ class FailedUnitsSummary extends StatelessWidget {
             padding: const EdgeInsetsDirectional.only(start: 28, top: 4),
             child: Text(
               l10n.servicesFailedMore(hidden),
-              style: theme.textTheme.bodySmall,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: stale ? theme.colorScheme.onSurfaceVariant : null,
+              ),
             ),
           ),
       ],
