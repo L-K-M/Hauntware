@@ -905,7 +905,9 @@ Proposals awaiting the owner close the section; they are not decisions.
   files of servers outside the fleet and the leftovers of interrupted
   writes. It does all three only when `EngineStart.supportDirectoryAccess`
   says the process holds the directory alone (the desktop instance lock,
-  or a phone), and reads either way. At start it reads every fleet
+  or a phone), and reads either way. It deletes nothing while the import
+  store is left as it is (`leftAsIs`, `newerVersion`), since that run's
+  fleet is not saved and removes no server. At start it reads every fleet
   server's fresh file and sends that profile as a `HostProfileChanged`
   with `cachedAt` when a `Connect` or `Subscribe` first names the server
   before a probe of the run answers: startup events reach only the app's

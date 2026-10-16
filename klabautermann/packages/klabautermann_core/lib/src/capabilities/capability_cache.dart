@@ -128,22 +128,40 @@ enum CacheUpdate {
   /// The server id names no cache file.
   unnamed,
 
+  /// The fleet is not saved this run ([CachePurge.never]), so the purge
+  /// kept the file.
+  purgeWithheld,
+
   /// The file system refused it.
   failed,
+}
+
+/// Whether the cache deletes the files of servers outside its fleet.
+enum CachePurge {
+  /// The fleet is the one the device keeps, so a server outside it was
+  /// removed (SYN-08) and its file goes.
+  removedServers,
+
+  /// The fleet is not saved this run, as when the engine leaves the import
+  /// store as it is: a server outside it may still be the device's, so no
+  /// file goes.
+  never,
 }
 
 /// The engine's capability cache. It reads every fleet server's fresh
 /// profile when it opens, hands each out once ([takeCached]) unless a
 /// probe of this run answered first, rewrites a server's file on each
 /// probe answer ([probed]) and deletes it when the server leaves the
-/// fleet ([forget], SYN-08). It writes and deletes only with
-/// [SupportDirectoryAccess.exclusive] access, and one file operation at a
-/// time, in call order, so a purge cannot overtake a write.
+/// fleet ([forget], SYN-08), unless [CachePurge.never] keeps it. It
+/// writes and deletes only with [SupportDirectoryAccess.exclusive] access,
+/// and one file operation at a time, in call order, so a purge cannot
+/// overtake a write.
 final class CapabilityCache {
-  CapabilityCache._(this._directory, this._access, this._now);
+  CapabilityCache._(this._directory, this._access, this._purge, this._now);
 
   final Directory _directory;
   final SupportDirectoryAccess _access;
+  final CachePurge _purge;
   final DateTime Function() _now;
 
   /// Fresh profiles read at open and not handed out or superseded yet.
@@ -152,13 +170,14 @@ final class CapabilityCache {
   Future<void> _tail = Future.value();
 
   /// Opens the cache in [supportDirectory] for [fleet]: with exclusive
-  /// access it first deletes the files of servers outside [fleet] and the
-  /// temporary files interrupted writes left, then it reads each fleet
-  /// server's file. Never throws.
+  /// access and [CachePurge.removedServers] it first deletes the files of
+  /// servers outside [fleet] and the temporary files interrupted writes
+  /// left, then it reads each fleet server's file. Never throws.
   static Future<CapabilityCache> open(
     Directory supportDirectory, {
     required SupportDirectoryAccess access,
     required Set<String> fleet,
+    required CachePurge purge,
     @visibleForTesting DateTime Function() now = _utcNow,
   }) async {
     final cache = CapabilityCache._(
@@ -167,9 +186,13 @@ final class CapabilityCache {
         '$capabilityCacheDirectoryName',
       ),
       access,
+      purge,
       now,
     );
-    if (access == SupportDirectoryAccess.exclusive) await cache._sweep(fleet);
+    if (access == SupportDirectoryAccess.exclusive &&
+        purge == CachePurge.removedServers) {
+      await cache._sweep(fleet);
+    }
     for (final serverId in fleet) {
       if (await cache.read(serverId) case final CachedProfileFresh fresh) {
         cache._unsent[serverId] = fresh;
@@ -215,6 +238,11 @@ final class CapabilityCache {
   /// Forgets [serverIds], which left the fleet, deleting their files.
   Future<List<CacheUpdate>> forget(Set<String> serverIds) {
     serverIds.forEach(_unsent.remove);
+    if (_purge == CachePurge.never) {
+      return Future.value([
+        for (final _ in serverIds) CacheUpdate.purgeWithheld,
+      ]);
+    }
     return Future.wait([
       for (final serverId in serverIds)
         _change(serverId, (file) => file.delete()),

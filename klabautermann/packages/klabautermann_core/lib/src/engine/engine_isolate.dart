@@ -314,6 +314,13 @@ void engineMain(
           Directory(start.supportDirectory),
           access: start.supportDirectoryAccess,
           fleet: fleetIds,
+          // A store left as it is saves no import this run, so its fleet
+          // says nothing about which servers the user removed.
+          purge: switch (store.issue?.kind) {
+            ImportStoreIssueKind.leftAsIs ||
+            ImportStoreIssueKind.newerVersion => CachePurge.never,
+            ImportStoreIssueKind.recovered || null => CachePurge.removedServers,
+          },
         );
       });
   commands.listen((message) {

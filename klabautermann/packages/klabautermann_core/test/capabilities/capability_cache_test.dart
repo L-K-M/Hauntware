@@ -81,10 +81,12 @@ void main() {
     Future<CapabilityCache> open({
       Set<String> fleet = const {_web},
       SupportDirectoryAccess access = SupportDirectoryAccess.exclusive,
+      CachePurge purge = CachePurge.removedServers,
     }) => CapabilityCache.open(
       support,
       access: access,
       fleet: fleet,
+      purge: purge,
       now: () => clock,
     );
 
@@ -199,6 +201,16 @@ void main() {
       expect(file(_web).existsSync(), isFalse);
       expect(later.takeCached(_web), isNull);
       expect(await later.forget({_web}), [CacheUpdate.applied]);
+    });
+
+    test('a fleet that is not saved this run purges nothing, and the cache '
+        'still writes', () async {
+      await probed(_web);
+      final unsaved = await open(fleet: const {}, purge: CachePurge.never);
+      expect(file(_web).existsSync(), isTrue, reason: 'no sweep');
+      expect(await unsaved.forget({_web}), [CacheUpdate.purgeWithheld]);
+      expect(file(_web).existsSync(), isTrue);
+      expect(await unsaved.probed(_db, _profile()), CacheUpdate.applied);
     });
 
     test('opening sweeps the files of servers outside the fleet and '
