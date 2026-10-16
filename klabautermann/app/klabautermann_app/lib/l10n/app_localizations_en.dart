@@ -1849,6 +1849,9 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get overviewHealthAnnouncementsHint => 'Opens Settings';
+
+  @override
   String get overviewDiskSize => 'Size';
 
   @override

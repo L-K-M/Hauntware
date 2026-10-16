@@ -403,16 +403,23 @@ final class _PartTwo {
         if (scope != null)
           Align(
             alignment: AlignmentDirectional.centerStart,
-            child: TextButton.icon(
-              onPressed: () => scope.openSettings(context),
-              icon: Icon(
-                announce
-                    ? Icons.record_voice_over_outlined
-                    : Icons.voice_over_off_outlined,
-              ),
-              label: Text(
-                l10n.overviewHealthAnnouncements(
-                  (announce ? _SwitchState.on : _SwitchState.off).name,
+            // The label states the switch, so the hint says that the
+            // button opens Settings rather than flipping it here.
+            child: MergeSemantics(
+              child: Semantics(
+                hint: l10n.overviewHealthAnnouncementsHint,
+                child: TextButton.icon(
+                  onPressed: () => scope.openSettings(context),
+                  icon: Icon(
+                    announce
+                        ? Icons.record_voice_over_outlined
+                        : Icons.voice_over_off_outlined,
+                  ),
+                  label: Text(
+                    l10n.overviewHealthAnnouncements(
+                      (announce ? _SwitchState.on : _SwitchState.off).name,
+                    ),
+                  ),
                 ),
               ),
             ),

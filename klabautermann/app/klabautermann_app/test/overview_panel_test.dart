@@ -975,6 +975,17 @@ void main() {
     addTearDown(announce.dispose);
     final panel = await _pump(tester, announce: announce);
 
+    // The label states the switch; the hint says activating it does not
+    // flip it here.
+    expect(
+      tester.getSemantics(find.text('Threshold announcements: on')),
+      isSemantics(
+        label: 'Threshold announcements: on',
+        hint: 'Opens Settings',
+        isButton: true,
+        hasTapAction: true,
+      ),
+    );
     await tester.tap(find.text('Threshold announcements: on'));
     expect(panel.settingsOpened, 1);
 

@@ -2620,6 +2620,12 @@ abstract class AppLocalizations {
   /// **'{state, select, on{Threshold announcements: on} other{Threshold announcements: off}}'**
   String overviewHealthAnnouncements(String state);
 
+  /// Screen reader hint on the health card's threshold announcement link: activating it opens Settings, where the switch is, rather than switching announcements on the spot.
+  ///
+  /// In en, this message translates to:
+  /// **'Opens Settings'**
+  String get overviewHealthAnnouncementsHint;
+
   /// A mount's size in the Overview's Disks card.
   ///
   /// In en, this message translates to:

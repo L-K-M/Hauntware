@@ -2154,6 +2154,10 @@
       }
     }
   },
+  "overviewHealthAnnouncementsHint": "Opens Settings",
+  "@overviewHealthAnnouncementsHint": {
+    "description": "Screen reader hint on the health card's threshold announcement link: activating it opens Settings, where the switch is, rather than switching announcements on the spot."
+  },
   "overviewDiskSize": "Size",
   "@overviewDiskSize": {
     "description": "A mount's size in the Overview's Disks card."
