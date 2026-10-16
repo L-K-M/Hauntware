@@ -262,12 +262,16 @@ class _ThresholdAnnouncerState extends State<ThresholdAnnouncer> {
     return const [];
   }
 
-  /// The announcement for [key]'s band change at [value], or null.
+  /// The announcement for [key]'s band change at [value], or null. The
+  /// band is judged on the whole percent the announcement speaks, so a
+  /// figure never contradicts its band: 79.6 % is not "80%: back to
+  /// normal".
   String? _observe(_WatchKey key, double? value, DateTime at) {
     final (metric, mountPoint) = key;
+    final spoken = value?.roundToDouble();
     final band = _watches
         .putIfAbsent(key, () => BandWatch(metric))
-        .observe(value, at);
+        .observe(spoken, at);
     if (band == null) return null;
 
     final name = switch (metric) {
@@ -278,7 +282,7 @@ class _ThresholdAnnouncerState extends State<ThresholdAnnouncer> {
     };
     return _l10n.overviewBandAnnouncement(
       name,
-      _l10n.chartPercent(value! / 100),
+      _l10n.chartPercent(spoken! / 100),
       band.name,
     );
   }

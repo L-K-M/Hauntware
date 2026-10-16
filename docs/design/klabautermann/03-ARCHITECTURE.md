@@ -1130,11 +1130,12 @@ Proposals awaiting the owner close the section; they are not decisions.
   until OV-11, since `threshold.dart` holds the rule model and no levels.
   A change is heard once it has held for 10 s, through that model's
   hysteresis rules with the hold as `for` on both sides, and only with a
-  value inside the new band, since each level's rule settles on its own;
-  the first reading only sets where a value starts. *Rejected:* a synced
-  preference (one device's screen reader would switch another's); a
-  clear level below each level as the debounce (a threshold OV-11 has
-  not set).
+  value inside the new band, since each level's rule settles on its own.
+  The value is judged as the whole percent the announcement speaks, so
+  79.6 % is never "80%: back to normal"; the first reading only sets
+  where a value starts. *Rejected:* a synced preference (one device's
+  screen reader would switch another's); a clear level below each level
+  as the debounce (a threshold OV-11 has not set).
 
 ### Proposals awaiting the owner
 

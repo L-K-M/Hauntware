@@ -1102,6 +1102,35 @@ void main() {
       ]);
     });
 
+    testWidgets('a spoken figure always lies in the band it names', (
+      tester,
+    ) async {
+      final announce = ValueNotifier(true);
+      addTearDown(announce.dispose);
+      final panel = await _pump(tester, announce: announce);
+      var seconds = 0;
+      // Each value held past the band hold.
+      Future<List<String>> hold(double percent) async {
+        for (final _ in [0, 1]) {
+          await panel.sample(
+            tester,
+            busy(percent),
+            at: _start.add(Duration(seconds: seconds)),
+          );
+          seconds += 12;
+        }
+        return heard(tester);
+      }
+
+      await hold(85);
+      // 79.6 % reads "80%", which is no longer back to normal.
+      expect(await hold(79.6), isEmpty);
+      expect(await hold(95), ['CPU 95%: critical level']);
+      expect(await hold(89.6), isEmpty);
+      expect(await hold(89.4), ['CPU 89%: warning level']);
+      expect(await hold(79.4), ['CPU 79%: back to normal']);
+    });
+
     testWidgets('each listed mount is heard by its own band', (tester) async {
       final announce = ValueNotifier(true);
       addTearDown(announce.dispose);
