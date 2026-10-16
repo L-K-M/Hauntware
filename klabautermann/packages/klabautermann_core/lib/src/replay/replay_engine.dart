@@ -38,9 +38,10 @@ final class ReplayPlan {
   final List<String> journalRows;
   final int hosts;
 
-  /// What every server reads whether or not a view subscribed it, as
-  /// FL-21's monitor set will have it read. The default is 04 §13 S5's
-  /// load: `core` every 2 s on each server.
+  /// What every server reads whether or not a view subscribed it. The
+  /// default is 04 §13 S5's load, `core` every 2 s on each server:
+  /// heavier than FL-21's monitor set, whose fleet rows read `overview`
+  /// (03 §6.4).
   final Set<SampleStream> monitored;
 
   final int logLinesPerSecond;

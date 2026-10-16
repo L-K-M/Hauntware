@@ -5044,8 +5044,9 @@ palette) and presets in the preview. v1: paste from Séance and Poltergeist
   replay engine (`package:klabautermann_core/replay.dart`, test support
   the app's `lib/` never imports) that serves the host fixtures through
   the real parsers and sample pipeline across the production client's
-  isolate hop: ten servers reading `core` every 2 s, as the monitor set
-  will, and a 1,000 lines/s journal follow while the Logs panel shows.
+  isolate hop: ten servers reading `core` every 2 s (04 section 13's S5
+  load, heavier than the monitor set's `overview` fleet rows in 6.4) and
+  a 1,000 lines/s journal follow while the Logs panel shows.
   It reports `FrameTiming` build and raster times (p90, p99, maximum and
   frames over 16 ms) for the fleet list, a server's Overview and its
   Logs panel. `klabautermann/scripts/bench-frame-timing.sh` runs it in
