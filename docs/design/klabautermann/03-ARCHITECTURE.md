@@ -4664,7 +4664,8 @@ subscribes while it shows:
   the text scale, the rows become two-line entries with a sort menu
   rather than a squeezed table. The row-action slot stays empty until
   PRC-02 (M4). A row opens the process's details in a sheet: its figures,
-  parent PID, state and each argument (8.9's reveal).
+  parent PID, state and each argument (8.9's reveal), as read, under
+  that reading's freshness line and grey once it is stale.
 - A user reads as a name only where the host gives one: a `ps`
   fallback's column, unless GNU `ps` cut it to 7 characters and a `+`,
   or the probe's login user for that uid; otherwise "UID n". A start

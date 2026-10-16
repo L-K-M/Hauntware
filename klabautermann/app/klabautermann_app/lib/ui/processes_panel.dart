@@ -1,5 +1,6 @@
 import 'dart:async' show Timer, unawaited;
 
+import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 import 'package:ghost_ui/ghost_ui.dart'
     show ghostFormatBinarySize, ghostIsDesktopPlatform;
@@ -109,15 +110,7 @@ class _ProcessesPanelState extends State<ProcessesPanel> {
   }
 
   Freshness _freshness(Sample? reading, SamplingStatus? sampling) =>
-      freshnessOf(
-        now: widget.monitoring.clock.value,
-        staleAfter: _staleAfter,
-        lastSampleAt: reading?.at,
-        // No monitor set watches a server yet (FL-21): this panel samples
-        // it while it shows.
-        watched: false,
-        sampling: sampling,
-      );
+      _freshnessAt(widget.monitoring.clock.value, reading, sampling);
 
   Widget _build(
     BuildContext context,
@@ -198,7 +191,13 @@ class _ProcessesPanelState extends State<ProcessesPanel> {
               ? l10n.processesEmpty
               : l10n.processesNoMatch,
         );
-        void open(ProcessRow row) => _showProcess(context, row, columns);
+        void open(ProcessRow row) => _showProcess(
+          context,
+          row,
+          columns,
+          clock: widget.monitoring.clock,
+          freshness: (now) => _freshnessAt(now, reading, sampling),
+        );
         final body = wide
             ? SortableTable<ProcessRow>(
                 tableId: SampleStream.procs.name,
@@ -390,6 +389,20 @@ class _ProcessesPanelState extends State<ProcessesPanel> {
   }
 }
 
+Freshness _freshnessAt(
+  DateTime now,
+  Sample? reading,
+  SamplingStatus? sampling,
+) => freshnessOf(
+  now: now,
+  staleAfter: _staleAfter,
+  lastSampleAt: reading?.at,
+  // No monitor set watches a server yet (FL-21): the panel samples it
+  // while it shows.
+  watched: false,
+  sampling: sampling,
+);
+
 /// The columns whose largest values matter, which start descending.
 const _firstDirection = {ProcessColumn.cpu, ProcessColumn.memory};
 
@@ -558,12 +571,15 @@ class _CommandText extends StatelessWidget {
 
 /// [row]'s details in a sheet, as read: its figures in [columns]' words,
 /// its parent and state, and each argument, a masked one revealed only on
-/// a tap there (03 §8.9).
+/// a tap there (03 §8.9). The sheet keeps that reading, so it says the
+/// reading's [freshness] by [clock] and greys its figures once stale.
 void _showProcess(
   BuildContext context,
   ProcessRow row,
-  List<SortableTableColumn<ProcessRow>> columns,
-) {
+  List<SortableTableColumn<ProcessRow>> columns, {
+  required ValueListenable<DateTime> clock,
+  required Freshness Function(DateTime now) freshness,
+}) {
   final l10n = AppLocalizations.of(context);
   final unknown = l10n.chartUnknownValue;
   unawaited(
@@ -573,6 +589,8 @@ void _showProcess(
       showDragHandle: true,
       builder: (context) => _ProcessSheet(
         row: row,
+        clock: clock,
+        freshness: freshness,
         facts: [
           for (final column in columns.skip(1))
             (column.label, column.text(row)),
@@ -590,10 +608,17 @@ void _showProcess(
 /// (SAF-07). Inactive precedes hidden on the way to the background, while
 /// a frame can still draw the mask before an app switcher's snapshot.
 class _ProcessSheet extends StatefulWidget {
-  const _ProcessSheet({required this.row, required this.facts});
+  const _ProcessSheet({
+    required this.row,
+    required this.facts,
+    required this.clock,
+    required this.freshness,
+  });
 
   final ProcessRow row;
   final List<(String, String)> facts;
+  final ValueListenable<DateTime> clock;
+  final Freshness Function(DateTime now) freshness;
 
   @override
   State<_ProcessSheet> createState() => _ProcessSheetState();
@@ -657,26 +682,50 @@ class _ProcessSheetState extends State<_ProcessSheet> {
           style: theme.textTheme.titleMedium,
         ),
       ),
-      Wrap(
-        spacing: 24,
-        runSpacing: 12,
-        children: [
-          for (final (label, value) in widget.facts)
-            MergeSemantics(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+      ListenableBuilder(
+        listenable: widget.clock,
+        builder: (context, _) {
+          final freshness = widget.freshness(widget.clock.value);
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            spacing: 12,
+            children: [
+              _Notice(
+                icon: freshness.stale ? Icons.history : Icons.schedule,
+                text: freshnessText(l10n, freshness),
+              ),
+              Wrap(
+                spacing: 24,
+                runSpacing: 12,
                 children: [
-                  Text(
-                    label,
-                    style: theme.textTheme.labelMedium?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
+                  for (final (label, value) in widget.facts)
+                    MergeSemantics(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            label,
+                            style: theme.textTheme.labelMedium?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                          Text(
+                            value,
+                            // Grey once stale (03 §9.5 item 4).
+                            style: theme.textTheme.bodyLarge?.copyWith(
+                              color: freshness.stale
+                                  ? theme.colorScheme.onSurfaceVariant
+                                  : null,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                  Text(value, style: theme.textTheme.bodyLarge),
                 ],
               ),
-            ),
-        ],
+            ],
+          );
+        },
       ),
       Semantics(
         header: true,

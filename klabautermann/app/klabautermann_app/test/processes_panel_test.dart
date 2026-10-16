@@ -322,6 +322,31 @@ void main() {
     expect(_order(tester), hasLength(5));
   });
 
+  testWidgets('the details say how old their reading is, grey once stale', (
+    tester,
+  ) async {
+    final panel = await _pump(tester);
+    await panel.all(tester);
+    _clock = _now.add(const Duration(seconds: 25));
+    await tester.pump(const Duration(seconds: 1));
+
+    await tester.tap(_row(812));
+    await tester.pumpAndSettle();
+    final sheet = find.byType(BottomSheet);
+    expect(
+      find.descendant(
+        of: sheet,
+        matching: find.text('Stale: updated 25 s ago'),
+      ),
+      findsOneWidget,
+    );
+    final memory = find.descendant(of: sheet, matching: find.text('512 MiB'));
+    expect(
+      tester.widget<Text>(memory).style?.color,
+      Theme.of(tester.element(memory)).colorScheme.onSurfaceVariant,
+    );
+  });
+
   testWidgets('a failure before any list says so instead of waiting', (
     tester,
   ) async {
