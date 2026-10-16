@@ -1,0 +1,409 @@
+import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:klabautermann_core/klabautermann_core.dart';
+import 'package:test/test.dart';
+
+/// Why the fixture suites skip: run.sh exports the fixture's environment.
+const fixtureSkipReason =
+    'needs the sshd fixture: run klabautermann/test/integration/run.sh';
+
+/// The fleet aliases [Fixture.sshConfig] defines.
+const directServer = 'ssh-config:direct';
+const agentServer = 'ssh-config:agent';
+const behindServer = 'ssh-config:behind';
+
+/// The Compose services of klabautermann/test/integration.
+enum FixtureService {
+  /// The sampled host, published on loopback and reached by the jump host
+  /// under its service name.
+  sshd,
+
+  /// The ProxyJump host.
+  jump,
+}
+
+/// What a host-key prompt's machine is: its host and port.
+typedef Endpoint = ({String host, int port});
+
+/// The sshd fixture run.sh started (03 §11.3, D53), from the variables it
+/// exports.
+final class Fixture {
+  Fixture._(this._environment);
+
+  final Map<String, String> _environment;
+
+  /// The running fixture, or null when run.sh did not start one. A run.sh
+  /// that exports only some of the variables fails the suite instead.
+  static Fixture? fromEnvironment() {
+    final environment = Platform.environment;
+    if (!environment.containsKey('KLABAUTERMANN_FIXTURE_COMPOSE_FILE')) {
+      return null;
+    }
+    return Fixture._(environment);
+  }
+
+  String _variable(String name) {
+    final value = _environment['KLABAUTERMANN_FIXTURE_$name'];
+    if (value == null || value.isEmpty) {
+      throw StateError('run.sh exported no KLABAUTERMANN_FIXTURE_$name');
+    }
+    return value;
+  }
+
+  String get _composeFile => _variable('COMPOSE_FILE');
+  String get _project => _variable('COMPOSE_PROJECT');
+  String get _host => _variable('HOST');
+  int get _port => int.parse(_variable('PORT'));
+  int get _jumpPort => int.parse(_variable('JUMP_PORT'));
+  String get _user => _variable('USER');
+
+  /// Where the engine dials the sampled host and the jump host, and where
+  /// the jump host reaches the sampled host.
+  Endpoint get direct => (host: _host, port: _port);
+  Endpoint get jumpHost => (host: _host, port: _jumpPort);
+  Endpoint get behind => (host: FixtureService.sshd.name, port: 22);
+
+  /// The key file the `IdentityFile` hosts sign in with.
+  String get identityFile => _variable('IDENTITY_FILE');
+
+  /// The SHA256 fingerprints of the key file's key and of the key only the
+  /// agent holds, as sshd logs an accepted key.
+  String get identityFingerprint => _variable('IDENTITY_FINGERPRINT');
+  String get agentFingerprint => _variable('AGENT_FINGERPRINT');
+
+  /// Where run.sh collects evidence (`$KLABAUTERMANN_EVIDENCE_DIR`), or
+  /// null.
+  String? get evidenceDirectory =>
+      switch (_environment['KLABAUTERMANN_EVIDENCE_DIR']) {
+        final path? when path.isNotEmpty => '$path/fixture',
+        _ => null,
+      };
+
+  /// The client config the engine imports: [directServer] with the key
+  /// file, [agentServer] with the agent, and [behindServer] through the
+  /// jump host, which reaches the sampled host by its service name.
+  String get sshConfig =>
+      '''
+Host direct
+  HostName $_host
+  Port $_port
+  User $_user
+  IdentityFile $identityFile
+
+Host agent
+  HostName $_host
+  Port $_port
+  User $_user
+
+Host behind
+  HostName ${behind.host}
+  Port ${behind.port}
+  User $_user
+  IdentityFile $identityFile
+  ProxyJump hop
+
+Host hop
+  HostName $_host
+  Port $_jumpPort
+  User $_user
+  IdentityFile $identityFile
+''';
+
+  /// Each endpoint a host-key prompt may name, with the fingerprints of the
+  /// service that answers there.
+  Future<Map<Endpoint, Set<String>>> hostKeys() async {
+    final sshd = await _hostKeyFingerprints(FixtureService.sshd);
+    return {
+      direct: sshd,
+      behind: sshd,
+      jumpHost: await _hostKeyFingerprints(FixtureService.jump),
+    };
+  }
+
+  Future<Set<String>> _hostKeyFingerprints(FixtureService service) async {
+    final listing = await exec(service, [
+      'sh',
+      '-c',
+      'for key in /etc/ssh/ssh_host_*_key.pub; do ssh-keygen -lf "\$key"; done',
+    ]);
+    return {
+      for (final line in const LineSplitter().convert(listing))
+        if (line.split(' ') case [_, final fingerprint, ...]) fingerprint,
+    };
+  }
+
+  /// Runs `docker compose` on the fixture's project and returns its
+  /// stdout; a failure fails the test.
+  Future<String> compose(List<String> arguments) async {
+    final result = await Process.run('docker', [
+      'compose',
+      '--project-name',
+      _project,
+      '--file',
+      _composeFile,
+      ...arguments,
+    ]);
+    if (result.exitCode != 0) {
+      fail(
+        'docker compose ${arguments.join(' ')} exited ${result.exitCode}: '
+        '${result.stderr}',
+      );
+    }
+    return '${result.stdout}';
+  }
+
+  /// Runs [command] as root in [service]'s container, out of the engine's
+  /// sight: the tests' side channel for signals and flags.
+  Future<String> exec(FixtureService service, List<String> command) =>
+      compose(['exec', '-T', service.name, ...command]);
+
+  /// The lines [service] has logged so far.
+  Future<List<String>> logs(FixtureService service) async =>
+      const LineSplitter().convert(
+        await compose(['logs', '--no-color', '--no-log-prefix', service.name]),
+      );
+
+  /// The PIDs of the engine's sampler shells on the sampled host, oldest
+  /// first (`sshd/samplers.sh`).
+  Future<List<int>> samplerPids() async => [
+    for (final line in const LineSplitter().convert(
+      await exec(FixtureService.sshd, ['fixture-samplers']),
+    ))
+      int.parse(line),
+  ];
+}
+
+/// The real engine, spawned as the app spawns it but with links on, which
+/// the app's composition root still leaves off ([EngineStart.linksEnabled]).
+/// Each test starts its own, so host-key pins and links never carry over.
+/// Stopping it disconnects every server first, so the fixture's sampler
+/// shells end with their links.
+final class FixtureEngine {
+  FixtureEngine._(this._fixture, this._client, this._events, this._support);
+
+  final Fixture _fixture;
+  final IsolateEngineClient _client;
+  final StreamIterator<EngineEvent> _events;
+  final Directory _support;
+  final _clock = Stopwatch()..start();
+  final _log = StringBuffer();
+  final _connected = <String>{};
+
+  /// Every event read so far, in order.
+  final seen = <EngineEvent>[];
+
+  /// Starts an engine and imports [Fixture.sshConfig]. [name] titles the
+  /// event log it leaves in the evidence directory.
+  static Future<FixtureEngine> start(Fixture fixture, String name) async {
+    final support = await Directory.systemTemp.createTemp('klab-fixture-');
+    final client = await IsolateEngineClient.spawn(
+      supportDirectory: support.path,
+      linksEnabled: true,
+    );
+    final engine = FixtureEngine._(
+      fixture,
+      client,
+      StreamIterator(client.events),
+      support,
+    );
+    addTearDown(() => engine._stop(name));
+
+    await engine.until<CatalogReplaced>();
+    engine.send(ImportSshConfig(fixture.sshConfig));
+    await engine.until<SshConfigImported>(
+      (event) => event.importedCount == 4 && event.skippedCount == 0,
+    );
+    return engine;
+  }
+
+  /// The support directory, where the engine keeps its files.
+  String get supportDirectory => _support.path;
+
+  void send(EngineRequest request) {
+    note('> ${request.runtimeType}');
+    _client.send(request);
+  }
+
+  /// Reads events until one of type [T] that [test] accepts; fails after
+  /// [timeout] without one. A host-key prompt fails the test: only
+  /// [connect] expects them.
+  Future<T> until<T extends EngineEvent>([
+    bool Function(T event)? test,
+    Duration timeout = const Duration(seconds: 30),
+  ]) async {
+    final deadline = _clock.elapsed + timeout;
+    while (true) {
+      final left = deadline - _clock.elapsed;
+      final arrived = await _events.moveNext().timeout(
+        left.isNegative ? Duration.zero : left,
+        onTimeout: () => fail('no $T within $timeout'),
+      );
+      expect(arrived, isTrue, reason: 'the engine stopped');
+      final event = _events.current;
+      seen.add(event);
+      note('< ${describe(event)}');
+      if (event is T && (test?.call(event) ?? true)) return event;
+      if (event is Prompt && T != Prompt) {
+        fail('unexpected prompt: ${describe(event)}');
+      }
+    }
+  }
+
+  /// Connects [serverId] interactively, trusting each host key the fixture
+  /// really has at the prompting endpoint, and returns the endpoints that
+  /// prompted, in order.
+  Future<List<Endpoint>> connect(
+    String serverId,
+    Map<Endpoint, Set<String>> hostKeys,
+  ) async {
+    final prompted = <Endpoint>[];
+    send(Connect(serverId));
+    _connected.add(serverId);
+    while (true) {
+      final event = await until<EngineEvent>(
+        (event) =>
+            event is Prompt ||
+            (event is LinkState && event.serverId == serverId),
+      );
+      switch (event) {
+        case Prompt(
+          :final promptId,
+          :final host,
+          :final port,
+          request: HostKeyPromptRequest(:final fingerprintSha256),
+        ):
+          final endpoint = (host: host, port: port);
+          expect(hostKeys[endpoint], contains(fingerprintSha256));
+          prompted.add(endpoint);
+          send(AnswerPrompt(promptId, const PromptTrustAnswer(true)));
+        case LinkState(status: LinkReady()):
+          return prompted;
+        case LinkState(status: LinkClosed() || LinkBlocked()):
+          fail('connect failed: ${describe(event)}');
+        default:
+          break;
+      }
+    }
+  }
+
+  /// Subscribes [serverId]'s [streams] and waits until it samples.
+  Future<void> subscribe(String serverId, Set<SampleStream> streams) async {
+    send(
+      Subscribe(
+        serverId: serverId,
+        subscriptionId: 'fixture',
+        streams: streams,
+      ),
+    );
+    await until<SamplingState>(
+      (event) =>
+          event.serverId == serverId && event.phase == SamplingPhase.sampling,
+    );
+  }
+
+  /// The first sample of [serverId]'s [stream] read so far, or else the
+  /// next one.
+  Future<Sample> firstSample(String serverId, SampleStream stream) async {
+    for (final event in seen) {
+      if (event is Sample &&
+          event.serverId == serverId &&
+          event.stream == stream) {
+        return event;
+      }
+    }
+    return sample(serverId, stream);
+  }
+
+  /// The next sample of [serverId]'s [stream] that [test] accepts.
+  Future<Sample> sample(
+    String serverId,
+    SampleStream stream, {
+    bool Function(Sample sample)? test,
+    Duration timeout = const Duration(seconds: 30),
+  }) => until<Sample>(
+    (event) =>
+        event.serverId == serverId &&
+        event.stream == stream &&
+        (test?.call(event) ?? true),
+    timeout,
+  );
+
+  /// The link statuses [serverId] reported from [from] on in [seen].
+  List<LinkStatus> statusesSince(String serverId, int from) => [
+    for (final event in seen.skip(from))
+      if (event is LinkState && event.serverId == serverId) event.status,
+  ];
+
+  Future<void> _stop(String name) async {
+    try {
+      for (final serverId in _connected) {
+        send(Disconnect(serverId));
+        await until<LinkState>(
+          (event) =>
+              event.serverId == serverId &&
+              event.status == const LinkClosed(LinkClosedReason.closedByOwner),
+          const Duration(seconds: 10),
+        );
+      }
+    } on Object catch (error) {
+      // A test that failed mid-connect may leave nothing to close, or a
+      // prompt open; its own failure is the one to report.
+      note('! stop: $error');
+    } finally {
+      // The iterator goes first: it pauses the client's broadcast stream
+      // while no read is pending, and a paused listener would hold up the
+      // stream's close in shutdown.
+      await _events.cancel();
+      await _client.shutdown();
+      await _support.delete(recursive: true);
+      if (_fixture.evidenceDirectory case final directory?) {
+        final file = File('$directory/${name.replaceAll(' ', '-')}.events');
+        await file.create(recursive: true);
+        await file.writeAsString('$_log');
+      }
+    }
+  }
+
+  /// Logs [line] for the evidence file and a failed test's output, such
+  /// as what a test does to the fixture behind the engine's back.
+  void note(String line) {
+    final stamped =
+        '${(_clock.elapsedMilliseconds / 1000).toStringAsFixed(3).padLeft(8)} '
+        '$line';
+    _log.writeln(stamped);
+    printOnFailure(stamped);
+  }
+}
+
+/// One line about [event] for the evidence log and failure messages.
+String describe(EngineEvent event) => switch (event) {
+  LinkState(:final serverId, :final status) =>
+    'LinkState $serverId ${_status(status)}',
+  Sample(:final serverId, :final stream, :final seq, :final result) =>
+    'Sample $serverId ${stream.name} seq=$seq ${_result(result)}',
+  Gap(:final serverId, :final streams, :final cause) =>
+    'Gap $serverId ${cause.name} ${[for (final s in streams) s.name]}',
+  SamplingState(:final serverId, :final phase) =>
+    'SamplingState $serverId ${phase.name}',
+  Prompt(:final serverId, :final host, :final port, :final request) =>
+    'Prompt $serverId $host:$port ${request.kind.name}',
+  RequestRejected(:final requestName, :final reason) =>
+    'RequestRejected $requestName: $reason',
+  _ => '${event.runtimeType}',
+};
+
+String _status(LinkStatus status) => switch (status) {
+  LinkClosed(:final reason, :final failure) =>
+    'closed ${reason.name}${failure == null ? '' : ' ${failure.name}'}',
+  LinkBlocked(:final reason) => 'blocked ${reason.name}',
+  LinkNeedsUser(:final kind) => 'needsUser ${kind.name}',
+  _ => '${status.runtimeType}',
+};
+
+String _result(SampleResult result) => switch (result) {
+  CollectorUnavailable(:final reason, :final detail) =>
+    'unavailable ${reason.name}${detail == null ? '' : ' ($detail)'}',
+  _ => '${result.runtimeType}',
+};
