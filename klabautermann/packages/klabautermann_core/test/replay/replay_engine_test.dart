@@ -3,6 +3,7 @@
 // fleet it serves, the samples it reads for the monitored streams and the
 // subscriptions, its follows and windows, and a clean exit.
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:klabautermann_core/klabautermann_core.dart';
@@ -16,6 +17,7 @@ import '../../tool/src/engine_budget.dart' show findHostFixtures;
 void main() {
   late List<HostFixture> fixtures;
   late List<String> journalRows;
+  late ReplayPlan plan;
   late IsolateEngineClient client;
   late List<EngineEvent> events;
 
@@ -26,7 +28,7 @@ void main() {
   });
 
   Future<void> spawn({int hosts = 1, Set<SampleStream>? monitored}) async {
-    final plan = ReplayPlan(
+    plan = ReplayPlan(
       fixtures: fixtures,
       journalRows: journalRows,
       hosts: hosts,
@@ -55,10 +57,15 @@ void main() {
   test('serves the fleet linked and probed, and samples each server\'s '
       'monitored streams', () async {
     await spawn(hosts: 2, monitored: const {SampleStream.core});
-    // The second server's first read waits half the 2 s period.
     await until(
       () => samples('replay-1').isNotEmpty,
       'core sample of the second server',
+    );
+    // The second server's first read waits half the 2 s period, by the
+    // engine's clock; the bound leaves room for a slow first step.
+    expect(
+      samples('replay-1').first.at.difference(samples('replay-0').first.at),
+      greaterThanOrEqualTo(const Duration(milliseconds: 500)),
     );
 
     final fleet = events.whereType<CatalogReplaced>().single.entries;
@@ -164,11 +171,24 @@ void main() {
         .whereType<LogBatch>()
         .where((b) => b.streamId == streamId)
         .toList();
+    int records(String streamId) =>
+        batches(streamId).fold(0, (n, b) => n + b.records.length);
 
     client.send(OpenLogStream(streamId: 'log-0', spec: spec()));
-    await until(
-      () => batches('log-0').fold(0, (n, b) => n + b.records.length) >= 200,
-      'follow records',
+    await until(() => records('log-0') > 0, 'follow records');
+    // The plan's rate over a measured second, loosely, for a loaded
+    // machine's late batches.
+    final clock = Stopwatch()..start();
+    final from = records('log-0');
+    await Future<void>.delayed(const Duration(seconds: 1));
+    final perSecond =
+        (records('log-0') - from) / (clock.elapsedMicroseconds / 1e6);
+    expect(
+      perSecond,
+      inInclusiveRange(
+        plan.logLinesPerSecond * 0.5,
+        plan.logLinesPerSecond * 1.5,
+      ),
     );
     expect(states('log-0'), [const LogStreamRunning()]);
     expect(batches('log-0').first.records.first, isA<JournalRecord>());
@@ -206,7 +226,15 @@ void main() {
     await until(() => states('log-4').length == 2, 'whole-journal window');
     // A window of 2 leaves older rows; one larger than the journal reads
     // them all (protocol.dart's LogStreamEndReason).
-    expect(batches('log-1').single.records, hasLength(2));
+    String? cursor(String row) =>
+        (jsonDecode(row) as Map<String, Object?>)['__CURSOR'] as String?;
+    expect(
+      [
+        for (final record in batches('log-1').single.records)
+          (record as JournalRecord).cursor,
+      ],
+      [for (final row in journalRows.reversed.take(2)) cursor(row)],
+    );
     expect(states('log-1'), [
       const LogStreamRunning(),
       const LogStreamEnded(LogStreamEndReason.windowFilled),
