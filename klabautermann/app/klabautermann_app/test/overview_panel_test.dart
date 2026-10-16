@@ -3,7 +3,8 @@ import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:klabautermann_app/controllers/monitoring_controller.dart';
 import 'package:klabautermann_app/l10n/app_localizations.dart';
-import 'package:klabautermann_app/ui/charts/charts.dart' show StackedBar;
+import 'package:klabautermann_app/ui/charts/charts.dart'
+    show ChartSeverity, StackedBar;
 import 'package:klabautermann_app/ui/overview_panel.dart';
 import 'package:klabautermann_app/ui/server_surfaces.dart';
 import 'package:klabautermann_app/ui/system_panel.dart' show PanelSection;
@@ -15,7 +16,8 @@ import 'support/fake_engine.dart';
 import 'support/harness.dart';
 
 const _serverId = 'srv-1';
-const _mib = 1024 * 1024;
+const _kib = 1024;
+const _mib = 1024 * _kib;
 const _gib = 1024 * _mib;
 
 const _wide = Size(900, 1000);
@@ -52,8 +54,62 @@ CoreResult _core({
   memory: memory,
   load: const LoadAvg(load1: 0.52, load5: 0.4, load15: 0.333),
   loadPerCore: 0.13,
+  network: const {
+    'eth0': NetRate(
+      rxBytesPerSecond: 1.25 * _mib,
+      txBytesPerSecond: 200.0 * _kib,
+    ),
+    'eth1': NetRate(
+      rxBytesPerSecond: 0.25 * _mib,
+      txBytesPerSecond: 100.0 * _kib,
+    ),
+  },
+  uptime: const Duration(days: 12, hours: 3, minutes: 7),
+  bootedAt: DateTime.utc(2026, 10, 3, 11, 23),
   withheld: withheld,
 );
+
+/// A mount of [gib] GiB with [use] percent of its space and [inodes]
+/// percent of its inodes used.
+FsMount _mount(
+  String mountPoint, {
+  String type = 'ext4',
+  int gib = 100,
+  int? use,
+  int? inodes,
+}) => FsMount(
+  device: '/dev/sda1',
+  type: type,
+  mountPoint: mountPoint,
+  sizeBytes: gib * _gib,
+  usedBytes: use == null ? null : gib * _gib * use ~/ 100,
+  availBytes: use == null ? null : gib * _gib * (100 - use) ~/ 100,
+  capacityPercent: use,
+  inodeUsePercent: inodes,
+);
+
+final _fs = FsSnapshot([
+  _mount('/', gib: 50, use: 45, inodes: 12),
+  _mount('/run', type: 'tmpfs', gib: 1, use: 1, inodes: 1),
+  _mount('/var', use: 85, inodes: 30),
+]);
+
+const _identity = IdentityResult(
+  osPrettyName: 'Ubuntu 24.04.1 LTS',
+  kernelName: 'Linux',
+  kernelRelease: '6.8.0-45-generic',
+);
+
+FailedUnitsResult _failed([List<String> units = const []]) =>
+    FailedUnitsResult([
+      for (final unit in units)
+        SystemdUnit(
+          unit: unit,
+          load: 'loaded',
+          active: 'failed',
+          sub: 'failed',
+        ),
+    ]);
 
 final class _Panel {
   _Panel(this.engine, this.visible);
@@ -69,11 +125,12 @@ final class _Panel {
     WidgetTester tester,
     SampleResult result, {
     DateTime? at,
+    SampleStream stream = SampleStream.core,
   }) async {
     engine.emit(
       Sample(
         serverId: _serverId,
-        stream: SampleStream.core,
+        stream: stream,
         seq: ++_seq,
         at: at ?? now,
         result: result,
@@ -283,8 +340,9 @@ void main() {
       CoreResult(memory: const MemoryUsage(totalBytes: 16 * _gib)),
     );
 
-    // 3 CPU + 1 per core + 4 load + 4 memory (total is known) + 1 swap.
-    expect(find.text('Unknown'), findsNWidgets(13));
+    // 3 CPU + 1 per core + 4 load + 4 memory (total is known) + 1 swap,
+    // 2 network, and OS, kernel, uptime and boot time.
+    expect(find.text('Unknown'), findsNWidgets(19));
     expect(find.text('0%'), findsNothing);
     expect(find.text('0.00'), findsNothing);
     expect(find.textContaining('0 B'), findsNothing);
@@ -551,18 +609,245 @@ void main() {
     ) async {
       final panel = await _pump(tester, size: size, textScale: 2);
       await panel.sample(tester, _core());
+      await panel.sample(tester, FsResult(_fs), stream: SampleStream.fs);
+      await panel.sample(tester, _identity, stream: SampleStream.identity);
+      await panel.sample(
+        tester,
+        _failed(['a-unit-with-a-rather-long-name@instance.service']),
+        stream: SampleStream.failedUnits,
+      );
       expect(tester.takeException(), isNull);
       expect(find.text('ZFS ARC counted as used'), findsOneWidget);
+      expect(find.text('Linux 6.8.0-45-generic'), findsOneWidget);
     });
   }
 
+  test('OV-02 flags listed mounts at the fleet rows\' levels, most severe '
+      'and fullest first', () {
+    final alarms = diskAlarms(
+      FsSnapshot([
+        _mount('/', use: 79, inodes: 12),
+        _mount('/var', use: 80, inodes: 95),
+        _mount('/srv', use: 91),
+        // A squashfs image is always full; it is a pseudo filesystem.
+        _mount('/snap/core/1', type: 'squashfs', use: 100, inodes: 100),
+        _mount('/data'),
+      ]),
+    );
+
+    expect(
+      [
+        for (final a in alarms)
+          (a.mountPoint, a.measure, a.percent, a.severity),
+      ],
+      [
+        ('/var', DiskMeasure.inodes, 95, ChartSeverity.critical),
+        ('/srv', DiskMeasure.space, 91, ChartSeverity.critical),
+        ('/var', DiskMeasure.space, 80, ChartSeverity.warning),
+      ],
+    );
+  });
+
+  testWidgets('OV-01 adds mounts, network, uptime, OS and kernel in IEC '
+      'units', (tester) async {
+    final panel = await _pump(tester);
+    await panel.sample(tester, _core());
+    await panel.sample(tester, FsResult(_fs), stream: SampleStream.fs);
+    await panel.sample(tester, _identity, stream: SampleStream.identity);
+
+    for (final text in [
+      'Disks',
+      '/',
+      '/var',
+      '45%',
+      '85%',
+      '50 GiB',
+      '100 GiB',
+      'Network',
+      '1.5 MiB/s',
+      '300 KiB/s',
+      'Host',
+      'Ubuntu 24.04.1 LTS',
+      'Linux 6.8.0-45-generic',
+      '12 days, 3 hours',
+    ]) {
+      expect(find.text(text), findsOneWidget, reason: text);
+    }
+    // The System tab lists pseudo filesystems behind its filter.
+    expect(find.text('/run'), findsNothing);
+    expect(find.textContaining('GB'), findsNothing);
+    // A mount's bar warns at the fleet rows' levels, as the health card
+    // does.
+    final varBar = _bars(tester).singleWhere((bar) => bar.label == '/var');
+    expect(varBar.thresholds, isNotNull);
+  });
+
+  testWidgets('a df timeout keeps the last mounts with their use unknown', (
+    tester,
+  ) async {
+    final panel = await _pump(tester);
+    await panel.sample(tester, FsResult(_fs), stream: SampleStream.fs);
+    await panel.sample(
+      tester,
+      const CollectorUnavailable(CollectorUnavailableReason.timeout),
+      stream: SampleStream.fs,
+    );
+
+    expect(
+      find.textContaining('Disk usage did not finish in time.'),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining('These mounts are from the reading at'),
+      findsOneWidget,
+    );
+    expect(find.text('/var'), findsOneWidget);
+    expect(find.text('85%'), findsNothing);
+    expect(_bars(tester).where((bar) => bar.label.startsWith('/')), isEmpty);
+    // Which mount hung is not known, so the health card names none.
+    expect(
+      find.text('Disk use is unknown: the reading did not finish in time.'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('of its space used'), findsNothing);
+  });
+
+  testWidgets('OV-02: the health card lists failed units and full disks', (
+    tester,
+  ) async {
+    final panel = await _pump(tester);
+    expect(
+      find.text('Waiting for the first check of failed units.'),
+      findsOneWidget,
+    );
+    expect(find.text('Waiting for the first disk reading.'), findsNWidgets(2));
+
+    await panel.sample(
+      tester,
+      _failed(['nginx.service']),
+      stream: SampleStream.failedUnits,
+    );
+    await panel.sample(
+      tester,
+      FsResult(
+        FsSnapshot([
+          _mount('/', use: 92),
+          _mount('/var', use: 40, inodes: 85),
+          _mount('/home', use: 50),
+        ]),
+      ),
+      stream: SampleStream.fs,
+    );
+    for (final text in [
+      '1 failed unit',
+      'nginx.service: failed',
+      '/: 92% of its space used, critical',
+      '/var: 85% of its inodes used, warning',
+    ]) {
+      expect(find.text(text), findsOneWidget, reason: text);
+    }
+    expect(find.byIcon(Icons.error_outline), findsWidgets);
+    expect(find.byIcon(Icons.warning_amber_outlined), findsOneWidget);
+
+    await panel.sample(tester, _failed(), stream: SampleStream.failedUnits);
+    await panel.sample(tester, FsResult(_fs), stream: SampleStream.fs);
+    expect(find.text('No failed units'), findsOneWidget);
+    // /var's 85% shows in the Disks card; the health card judges it.
+    expect(find.text('/var: 85% of its space used, warning'), findsOneWidget);
+
+    await panel.sample(
+      tester,
+      FsResult(FsSnapshot([_mount('/', use: 45)])),
+      stream: SampleStream.fs,
+    );
+    expect(
+      find.text('No disk has 80% or more of its space or inodes used.'),
+      findsOneWidget,
+    );
+
+    // A failed check says why above the last list.
+    await panel.sample(
+      tester,
+      const CollectorUnavailable(CollectorUnavailableReason.missing),
+      stream: SampleStream.failedUnits,
+    );
+    expect(
+      find.text('Failed units are unknown: this server lacks systemctl.'),
+      findsOneWidget,
+    );
+    expect(find.text('No failed units'), findsOneWidget);
+  });
+
+  testWidgets('slow readings grey with their age once older than the fs '
+      'limit', (tester) async {
+    final panel = await _pump(tester);
+    await panel.sample(tester, _failed(), stream: SampleStream.failedUnits);
+    await panel.sample(tester, FsResult(_fs), stream: SampleStream.fs);
+    expect(find.text('Updated 0 s ago'), findsNWidgets(2));
+
+    panel.now = _start.add(const Duration(minutes: 5));
+    await tester.pump(const Duration(seconds: 1));
+    // The health and Disks cards' own lines.
+    expect(find.text('Stale: updated 5 min ago'), findsNWidgets(2));
+    final mountBars = _bars(tester).where((bar) => bar.label.startsWith('/'));
+    expect(mountBars, isNotEmpty);
+    expect(mountBars.every((bar) => bar.stale), isTrue);
+  });
+
+  testWidgets('SYS-04: an uptime and boot time a container withholds say '
+      'why', (tester) async {
+    final panel = await _pump(tester);
+    panel.engine.emit(
+      HostProfileChanged(
+        _serverId,
+        HostProfile(
+          virtualization: 'lxc',
+          container: 'lxc',
+          lxcfsMounts: const [],
+        ),
+      ),
+    );
+    await panel.sample(tester, _core());
+
+    expect(find.text('12 days, 3 hours'), findsNothing);
+    expect(
+      find.descendant(
+        of: find.byWidgetPredicate(
+          (widget) => widget is PanelSection && widget.title == 'Host',
+        ),
+        matching: find.text(
+          'Inside this container these figures would be the host\'s, so '
+          'they are not shown.',
+        ),
+      ),
+      findsOneWidget,
+    );
+  });
+
   group('golden', () {
-    // 03 §11.1: a healthy server with ZFS on a wide panel, and a stale
-    // reading on a phone.
+    // 03 §11.1: a server with ZFS, a failed unit and a full mount on a
+    // wide panel, and the same readings gone stale on a phone; every card
+    // in view.
+    Future<_Panel> pumpAll(
+      WidgetTester tester,
+      Size size,
+      Brightness brightness,
+    ) async {
+      final panel = await _pump(tester, size: size, brightness: brightness);
+      await panel.sample(tester, _core());
+      await panel.sample(tester, FsResult(_fs), stream: SampleStream.fs);
+      await panel.sample(tester, _identity, stream: SampleStream.identity);
+      await panel.sample(
+        tester,
+        _failed(['backup.service']),
+        stream: SampleStream.failedUnits,
+      );
+      return panel;
+    }
+
     for (final brightness in Brightness.values) {
       testWidgets('desktop, ${brightness.name}', (tester) async {
-        final panel = await _pump(tester, brightness: brightness);
-        await panel.sample(tester, _core());
+        await pumpAll(tester, const Size(900, 1500), brightness);
         await expectLater(
           find.byType(OverviewPanel),
           matchesGoldenFile('goldens/overview_desktop_${brightness.name}.png'),
@@ -570,9 +855,8 @@ void main() {
       }, skip: !goldensCompareHere);
 
       testWidgets('phone, ${brightness.name}', (tester) async {
-        final panel = await _pump(tester, size: _phone, brightness: brightness);
-        await panel.sample(tester, _core());
-        panel.now = _start.add(const Duration(minutes: 3));
+        final panel = await pumpAll(tester, const Size(390, 2600), brightness);
+        panel.now = _start.add(const Duration(minutes: 5));
         await tester.pump(const Duration(seconds: 1));
         await expectLater(
           find.byType(OverviewPanel),

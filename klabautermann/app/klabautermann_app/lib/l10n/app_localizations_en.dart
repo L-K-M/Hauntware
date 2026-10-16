@@ -1745,4 +1745,76 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get overviewSwapNone => 'No swap is set up.';
+
+  @override
+  String get overviewHealthTitle => 'Health';
+
+  @override
+  String get overviewHealthUnitsWaiting =>
+      'Waiting for the first check of failed units.';
+
+  @override
+  String overviewHealthUnitsUnknown(String reason) {
+    String _temp0 = intl.Intl.selectLogic(reason, {
+      'missing': 'Failed units are unknown: this server lacks systemctl.',
+      'denied': 'Failed units are unknown: the server refused the check.',
+      'timeout': 'Failed units are unknown: the check took too long.',
+      'other': 'Failed units are unknown: the check failed.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get overviewDisksWaiting => 'Waiting for the first disk reading.';
+
+  @override
+  String overviewHealthDisksUnknown(String reason) {
+    String _temp0 = intl.Intl.selectLogic(reason, {
+      'missing': 'Disk use is unknown: this server lacks df.',
+      'denied': 'Disk use is unknown: the server refused the reading.',
+      'timeout': 'Disk use is unknown: the reading did not finish in time.',
+      'other': 'Disk use is unknown: the reading failed.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String overviewHealthDisksOk(String level) {
+    return 'No disk has $level or more of its space or inodes used.';
+  }
+
+  @override
+  String overviewHealthDiskSpace(String mount, String percent, String band) {
+    String _temp0 = intl.Intl.selectLogic(band, {
+      'critical': 'critical',
+      'other': 'warning',
+    });
+    return '$mount: $percent of its space used, $_temp0';
+  }
+
+  @override
+  String overviewHealthDiskInodes(String mount, String percent, String band) {
+    String _temp0 = intl.Intl.selectLogic(band, {
+      'critical': 'critical',
+      'other': 'warning',
+    });
+    return '$mount: $percent of its inodes used, $_temp0';
+  }
+
+  @override
+  String get overviewDiskSize => 'Size';
+
+  @override
+  String overviewDisksMore(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count more mounts are on the System tab.',
+      one: '1 more mount is on the System tab.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get overviewHostTitle => 'Host';
 }

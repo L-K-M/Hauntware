@@ -179,7 +179,7 @@ class _SystemPanelState extends State<SystemPanel> {
               label: l10n.systemOperatingSystem,
               value: identity.osPrettyName,
             ),
-            _Fact(label: l10n.systemKernel, value: _kernel(l10n, identity)),
+            _Fact(label: l10n.systemKernel, value: kernelText(l10n, identity)),
             _Fact(label: l10n.systemArchitecture, value: identity.arch),
           ],
         ),
@@ -453,14 +453,6 @@ String _used(AppLocalizations l10n, FsMount mount) {
     ghostFormatBinarySize(size),
   );
 }
-
-String? _kernel(AppLocalizations l10n, IdentityResult identity) =>
-    switch ((identity.kernelName, identity.kernelRelease)) {
-      (final name?, final release?) => l10n.systemKernelValue(name, release),
-      (final name?, null) => name,
-      (null, final release?) => release,
-      (null, null) => null,
-    };
 
 /// A mount's full mount point, device and type with the figures a narrow
 /// table leaves out, in a sheet (03 §10.5: details push further). It shows

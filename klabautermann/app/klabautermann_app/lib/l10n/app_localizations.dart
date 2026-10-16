@@ -2517,6 +2517,72 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'No swap is set up.'**
   String get overviewSwapNone;
+
+  /// Heading of the Overview's health card (OV-02): failed units and full disks.
+  ///
+  /// In en, this message translates to:
+  /// **'Health'**
+  String get overviewHealthTitle;
+
+  /// The health card before the server sent its list of failed systemd units.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for the first check of failed units.'**
+  String get overviewHealthUnitsWaiting;
+
+  /// The health card when the server could not list its failed systemd units; systemctl is a command name, kept as written.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, missing{Failed units are unknown: this server lacks systemctl.} denied{Failed units are unknown: the server refused the check.} timeout{Failed units are unknown: the check took too long.} other{Failed units are unknown: the check failed.}}'**
+  String overviewHealthUnitsUnknown(String reason);
+
+  /// The Overview's health and Disks cards before the server sent its first disk usage reading.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for the first disk reading.'**
+  String get overviewDisksWaiting;
+
+  /// The health card when the latest disk usage reading failed; df is a command name, kept as written.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, missing{Disk use is unknown: this server lacks df.} denied{Disk use is unknown: the server refused the reading.} timeout{Disk use is unknown: the reading did not finish in time.} other{Disk use is unknown: the reading failed.}}'**
+  String overviewHealthDisksUnknown(String reason);
+
+  /// The health card when every listed mount is below the warning level; level is that level as a percentage, such as 80%.
+  ///
+  /// In en, this message translates to:
+  /// **'No disk has {level} or more of its space or inodes used.'**
+  String overviewHealthDisksOk(String level);
+
+  /// A health card line for a mount whose space use reached a level; mount is the mount point (server data), percent its use, and band the level it reached.
+  ///
+  /// In en, this message translates to:
+  /// **'{mount}: {percent} of its space used, {band, select, critical{critical} other{warning}}'**
+  String overviewHealthDiskSpace(String mount, String percent, String band);
+
+  /// A health card line for a mount whose inode use reached a level; mount is the mount point (server data), percent its inode use, and band the level it reached.
+  ///
+  /// In en, this message translates to:
+  /// **'{mount}: {percent} of its inodes used, {band, select, critical{critical} other{warning}}'**
+  String overviewHealthDiskInodes(String mount, String percent, String band);
+
+  /// A mount's size in the Overview's Disks card.
+  ///
+  /// In en, this message translates to:
+  /// **'Size'**
+  String get overviewDiskSize;
+
+  /// Under the Overview's Disks card when it lists only the first mounts; the System tab lists them all.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 more mount is on the System tab.} other{{count} more mounts are on the System tab.}}'**
+  String overviewDisksMore(int count);
+
+  /// Heading of the Overview's card with the server's operating system, kernel, uptime and boot time.
+  ///
+  /// In en, this message translates to:
+  /// **'Host'**
+  String get overviewHostTitle;
 }
 
 class _AppLocalizationsDelegate

@@ -4507,7 +4507,7 @@ As built in M2 for OV-01, OV-03 and OV-04
 (`app/klabautermann_app/lib/ui/overview_panel.dart`), the Overview tab
 shows CPU, load, memory and swap cards from the `core` stream's last
 reading, in two columns from the System tab's 600 px panel width:
-- One freshness line heads the cards in 9.5 item 4's words, stale at
+- One freshness line heads the panel in 9.5 item 4's words, stale at
   the fleet rows' 20 s `core` limit (10.3). Stale values, bars and
   sparkline lines turn grey beside its history icon. A failed reading
   says why above the last values rather than clearing them.
@@ -4535,6 +4535,25 @@ reading, in two columns from the System tab's 600 px panel width:
   withheld, the container's own load averages show and the note says
   the core count would be the host's.
 - No radial `Gauge` exists yet; the stacked bar is the gauge.
+
+As built in M2 for the rest of OV-01 and OV-02 (the same file), the
+health card follows the freshness line: the failed units through the
+Services tab's summary over the `failedUnits` stream, then every listed
+mount whose space or inode use reaches the fleet rows' 80 % or 90 %,
+critical and fullest first, each with an icon and its level in words
+(pseudo filesystems stay out: a squashfs image is always full). After
+the four cards, Disks lists the first eight mounts the System tab lists
+by default, each with a bar that warns at the same levels, its use,
+size and inodes, and after a `df` timeout the last reading's mounts
+with their use unknown; Network gives NET-01's total rates; Host gives
+the OS and kernel from `identity` and the uptime and boot time from
+`core`, unknown with D50's reason in a container. The health and Disks
+cards give their own age, stale at the fleet rows' 240 s `fs` limit,
+which also judges `failedUnits` (60 s); the health card takes the older
+reading's. The Overview's subscription already named every stream these
+read (network rates come with `core`), so K21's mapping is unchanged.
+`threshold.dart` holds the rule model and no levels, so the fleet rows'
+levels stand in until OV-11.
 
 ### 10.5 Phone (under 600 dp) and tablet
 
