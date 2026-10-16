@@ -498,12 +498,46 @@ void main() {
       expect(statuses('t'), [_running, gap]);
     });
 
-    test('a follow lost on a live link runs again there', () async {
-      open('f', follow: true);
+    test('a follow lost on a live link runs again there, in its own slot '
+        'and ahead of a follow waiting for a channel', () async {
+      for (final id in ['f1', 'f2', 'f3']) {
+        open(id, follow: true);
+      }
       (await link.process(0)).end(const RemoteExit());
       await pumpEventQueue();
-      expect(link.commands, hasLength(2));
-      expect(statuses('f'), [_running]);
+      expect(link.commands, hasLength(3));
+      expect(statuses('f1'), [_running]);
+      expect(statuses('f3'), [_forChannel]);
+    });
+
+    test('a follow the host ended sends its last batch and ends through '
+        'the background or a replaced link, and runs no more', () async {
+      for (final way in ['background', 'replaced link']) {
+        link = ScriptedLink();
+        links['srv-1'] = link;
+        events = [];
+        start();
+        open('f', follow: true);
+        final p = await link.process(0);
+        p.emitText(_follow(1, 1));
+        await clock.elapse(Duration.zero);
+        p
+          ..emitText(_follow(2, 2))
+          ..end(const RemoteExit(exitCode: 1));
+        await pumpEventQueue();
+
+        final next = ScriptedLink();
+        if (way == 'background') {
+          router.activity = AppActivity.background;
+        } else {
+          links['srv-1'] = next;
+          router.update('srv-1');
+        }
+        await clock.elapse(const Duration(milliseconds: 50));
+        expect(events.whereType<LogBatch>(), hasLength(2), reason: way);
+        expect(statuses('f'), [_running, _failed], reason: way);
+        expect(next.commands, isEmpty, reason: way);
+      }
     });
 
     test('the background pauses a follow and the foreground resumes it; '
@@ -548,6 +582,9 @@ void main() {
         expect(events.whereType<LogBatch>().single.streamId, 'f1');
         expect(statuses('f1'), [_running, _failed]);
         expect(statuses('f3'), [_forChannel, _running]);
+
+        router.closeStream('f1');
+        expect(statuses('f1'), [_running, _failed]);
       },
     );
 
