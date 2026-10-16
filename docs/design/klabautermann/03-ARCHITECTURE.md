@@ -2657,7 +2657,15 @@ unless the user enables admin mode for that panel.
   block precedes every command line. Command lines are masked per
   argument (8.9);
   the `ps` fallback joins arguments with spaces, so masking there works on
-  whitespace tokens. Kill and signal
+  whitespace tokens, and the `[comm]` it prints for an empty command line
+  (`[comm] <defunct>` for a GNU zombie) reads as none where it matches
+  the row's `comm`. The engine dates each
+  start as the reading's time
+  less the reply's uptime plus the start ticks at USER_HZ 100, as the CPU
+  shares assume; the start is unknown until the probe reports its lxcfs
+  mounts and where lxcfs serves the container's own age as
+  `/proc/uptime` (D50), since start ticks count from the kernel's boot.
+  Kill and signal
   (PRC-02): the plan records the PID and its start
   time (field 22 of `/proc/<pid>/stat`: fields resume at 3, `state`,
   after the last `)`, because `comm` may contain spaces and `)`, so
@@ -3683,6 +3691,14 @@ CI.
   and header values (`Authorization: Bearer`). Masking the argument after
   any `-p`, `-a` or `-u` would also hide `ssh -p 22`, `mkdir -p` and
   `sudo -u`, so the trade-off is left to a follow-up after K33.
+- Reveal (M2, the Processes tab): a tap on a masked argument in a
+  process's details shows it there for 30 s, and it is masked again
+  sooner when the details close or the app turns inactive, as it loses
+  focus or before it is hidden, so an app switcher's snapshot keeps the
+  mask. The revealed text lives in that sheet's state only: it is never
+  sent, stored or logged, and the table, its filter and its command sort
+  read display text only. A screen reader hears "(masked)" where the
+  screen shows the mask.
 - Every export, share and diagnostic bundle passes `SecretRedactor`
   (`SC/src/llm/redaction.dart`) by default, with an explicit include-secrets
   toggle.
@@ -4598,8 +4614,8 @@ the engine in `engine_isolate.dart` beside it):
   map null until a previous reading exists, so unknown never sums to
   zero, and a `withheld` map naming each value left null because a
   container host's `/proc` would supply it (D50); for `procs`,
-  per-process CPU shares with the start time PRC-02 checks, each
-  argument as a `MaskedValue` (8.9), plus the
+  per-process CPU shares with the start time PRC-02 checks and its
+  wall-clock time (7.2), each argument as a `MaskedValue` (8.9), plus the
   host's process count and how it chose the rows it sent (D48); for
   `identity`, the strings SYS-01 shows, resolved in the engine so the
   host's JSON never crosses (6.5); the parsed tables for `fs`,
@@ -4943,6 +4959,33 @@ reading, in two columns from the System tab's 600 px panel width:
   withheld, the container's own load averages show and the note says
   the core count would be the host's.
 - No radial `Gauge` exists yet; the stacked bar is the gauge.
+
+As built in M2 (`app/klabautermann_app/lib/ui/processes_panel.dart`), the
+Processes tab lists PRC-01's processes from the `procs` stream it
+subscribes while it shows:
+
+- The sortable table orders by CPU (the first sort, busiest on top),
+  memory in IEC units, user, start time and command, with the PID
+  beside them. In a panel narrower than 600 px, a width that grows with
+  the text scale, the rows become two-line entries with a sort menu
+  rather than a squeezed table. The row-action slot stays empty until
+  PRC-02 (M4). A row opens the process's details in a sheet: its figures,
+  parent PID, state and each argument (8.9's reveal), as read, under
+  that reading's freshness line and grey once it is stale.
+- A user reads as a name only where the host gives one: a `ps`
+  fallback's column, unless GNU `ps` cut it to 7 characters and a `+`,
+  or the probe's login user for that uid; otherwise "UID n". A start
+  shows its time on the day of the reading, else its date, and
+  "unknown" where the engine could not date it (7.2). A row with no
+  command line shows the kernel's name and "command line unavailable".
+- The filter needs every term in the PID, name, user or shown command
+  line. It draws and searches at most 4,096 characters of a command
+  line or argument, which can fill the 1 MiB section.
+- Through a failed reading the last good list stays, under the
+  freshness line (9.5 item 4) and the failure's reason; it turns grey
+  once older than 20 s, twice the stream's slowest cadence. A cut list
+  says "Showing N of M processes" (D48). The phone's server screen
+  reaches the tab once More lists the panels (10.5).
 
 ### 10.5 Phone (under 600 dp) and tablet
 
