@@ -19,8 +19,9 @@ Klabautermann is a scaffold: the pure-Dart packages
 (`klabautermann_host`, `klabautermann_docker`, `klabautermann_core`)
 carry the collector parsers, the Docker client and the engine-isolate
 protocol, and the app carries its adaptive shell, themes and settings
-route. Nothing connects to a host yet; that lands with the transport
-milestone (M2). Implementation follows
+route. Opening a server imported from `~/.ssh/config` connects to it
+over SSH and shows its health; the rest of the host milestone (M2) is
+still landing. Implementation follows
 [`../docs/design/klabautermann/`](../docs/design/klabautermann/); the
 decision log is `03-ARCHITECTURE.md` section 2 and the milestone plan is
 `04-IMPLEMENTATION.md` section 13. Current state and open manual checks
