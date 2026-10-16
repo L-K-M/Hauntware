@@ -174,13 +174,18 @@ void main() {
           'root:x:0:0:root:/root:/bin/bash\n'
           'ubuntu:x:1001:1001::/home/ubuntu:/bin/sh\n'
           'bob:x:1002:1002:Bob,,,:/srv/bob:/bin/bash\n'
+          'carol:x:70000:70000::/home/carol:/bin/bash\n'
+          'snap_daemon:x:584788:584788::/nonexistent:/usr/bin/false\n'
           'nobody:x:65534:65534::/nonexistent:/usr/sbin/nologin\n'
+          'nfsnobody:x:4294967294:4294967294::/var/lib/nfs:/sbin/nologin\n'
           'broken line\n',
       extra: ['nas07'],
     );
     expect(literals.hostNames, ['web1.corp.example.org', 'web1']);
-    expect(literals.userNames, ['anke', 'bob']);
-    expect(literals.homeDirs, ['/home/anke', '/srv/bob']);
+    // Above UID_MAX too, as for the capturing user; no account whose
+    // home is Debian's /nonexistent for system accounts.
+    expect(literals.userNames, ['anke', 'bob', 'carol']);
+    expect(literals.homeDirs, ['/home/anke', '/srv/bob', '/home/carol']);
     expect(literals.extra, ['nas07']);
   });
 

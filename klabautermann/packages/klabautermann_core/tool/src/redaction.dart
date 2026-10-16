@@ -197,6 +197,31 @@ final _unitType = RegExp(
 );
 
 final _patterns = <(String, RegExp, String Function(Match))>[
+  // Every account's home, not only the literals': directory-service
+  // accounts are missing from /etc/passwd, and homes also lie under
+  // /var/home (Fedora Atomic) or in an NFS export.
+  (
+    'home directory',
+    RegExp(r'''/home/[^/\s"'\\:;,)\]}\x00-\x1f]+'''),
+    (_) => _homePlaceholder,
+  ),
+  // The same homes as mount unit names (`home-erin-Music.mount` for
+  // /home/erin/Music), where systemd escapes a `-` or a non-ASCII byte.
+  (
+    'home directory',
+    RegExp(
+      '(?<![^\\s"\'\\[,])((?:(?:$_escape|[^\\s"\'@/\\\\-])+-)*home-)'
+      '(?:$_escape|[^\\s"\'@/\\\\-])+'
+      r'''(?=(-[^\s"']*)?\.(auto)?mount(?![A-Za-z0-9]))''',
+    ),
+    (m) => '${m[1]}$_userPlaceholder',
+  ),
+  // logind's session scopes, described as `Session <id> of User <name>`.
+  (
+    'user name',
+    RegExp(r'(Session \S+ of User )([^\s"\\]+)'),
+    (m) => m[2] == 'root' ? m[0]! : '${m[1]}$_userPlaceholder',
+  ),
   (
     'URL credentials',
     RegExp(
@@ -460,6 +485,7 @@ String _redactArgv(String text, void Function(String rule) count) {
   var part = _ProcsPart.rows;
   var entryStart = false;
   var column = 0;
+  var userField = -1;
   for (final line in text.split('\n')) {
     var redacted = line;
     switch (part) {
@@ -489,12 +515,19 @@ String _redactArgv(String text, void Function(String rule) count) {
         entryStart = false;
       case _ProcsPart.psHeader:
         column = max(0, line.indexOf('COMMAND'));
+        userField = line.trim().split(RegExp(r'\s+')).indexOf('USER');
         part = _ProcsPart.ps;
-      case _ProcsPart.ps when line.length > column:
-        redacted =
-            line.substring(0, column) + _keepFirstWord(line.substring(column));
       case _ProcsPart.ps:
-        break;
+        final cut = min(column, line.length);
+        final head = line.substring(0, cut);
+        final user = _psUser(head, userField);
+        if (user != head) count('user name');
+        redacted = user + _keepFirstWord(line.substring(cut));
+        if (redacted.substring(user.length) != line.substring(cut)) {
+          count('argv');
+        }
+        out.add(redacted);
+        continue;
     }
     if (redacted != line) count('argv');
     out.add(redacted);
@@ -628,6 +661,17 @@ String _firstWordOnly(String s, void Function(String rule) count) {
   ].join(' ');
   if (out != s) count('cron text');
   return out;
+}
+
+/// [head], the columns of a `ps` row before its command, with the word
+/// in the USER column ([field], -1 for none) reading `user` unless it is
+/// root, padded so that the columns stay aligned.
+String _psUser(String head, int field) {
+  if (field < 0) return head;
+  final m = RegExp('^(\\s*(?:\\S+\\s+){$field})(\\S+)').firstMatch(head);
+  if (m == null || m[2] == 'root') return head;
+  return '${m[1]}${_userPlaceholder.padRight(m[2]!.length)}'
+      '${head.substring(m.end)}';
 }
 
 /// Keeps leading spaces and the first word of [s]; anything after that

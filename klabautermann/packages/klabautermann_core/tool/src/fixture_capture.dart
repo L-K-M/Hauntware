@@ -123,17 +123,25 @@ String? platformIdFor(HostProfile profile) {
   return isPlatformId(platform) ? platform : null;
 }
 
-/// useradd's UID_MIN and UID_MAX defaults (login.defs(5)) on Debian,
-/// Ubuntu, Fedora, RHEL and Arch: accounts in this range are people's.
-const _personalUids = (min: 1000, max: 60000);
+/// useradd's UID_MIN default (login.defs(5)) on Debian, Ubuntu, Fedora,
+/// RHEL and Arch: accounts from here up are people's, also the
+/// directory-service (sssd, FreeIPA) and systemd-homed ones above
+/// UID_MAX.
+const _minPersonalUid = 1000;
 
-/// The kernel's overflow uid, `nobody`'s.
-const _nobodyUid = 65534;
+/// The kernel's overflow uid, `nobody`'s, and the -2 of older systems'
+/// `nfsnobody`.
+const _nobodyUids = {65534, 4294967294};
+
+/// The home Debian and Ubuntu give system accounts without one; no
+/// person's account has it.
+const _noHome = '/nonexistent';
 
 /// The literals a local capture redacts: [hostNames] with each FQDN's
-/// first label, the name and home directory of the capturing user (home
-/// [home], unless `/` or `/root`) unless their uid is a system one, and
-/// those of every personal account in [passwd]. Names a
+/// first label, and the names and home directories (unless `/`, `/root`
+/// or [_noHome]) of personal accounts, those from [_minPersonalUid] but
+/// `nobody`: the capturing user (home [home]) and every such account in
+/// [passwd] whose home is not [_noHome]. Names a
 /// fixture keeps are left out: `localhost` and the os-release ID and
 /// ID_LIKE words, which cloud images use as host and default user names
 /// and which the `identity` and probe payloads must keep.
@@ -151,25 +159,23 @@ RedactionLiterals captureLiterals(
   };
   bool keep(String name) =>
       name.isNotEmpty && !generic.contains(name.toLowerCase());
-  bool personal(int? uid) =>
-      uid != null && uid >= _personalUids.min && uid <= _personalUids.max;
+  bool personal(int uid) =>
+      uid >= _minPersonalUid && !_nobodyUids.contains(uid);
 
   final hosts = <String>{
     for (final h in hostNames) ...[h, h.split('.').first],
   }.where(keep);
-  // Directory-service (sssd, FreeIPA) and systemd-homed accounts lie
-  // above UID_MAX, so the capturing user need only be no system account;
-  // an unknown uid fails safe.
+  // An unknown uid fails safe.
   final uid = profile.uid;
-  final capturer =
-      uid == null || (uid >= _personalUids.min && uid != _nobodyUid);
+  final capturer = uid == null || personal(uid);
   // User name to home directory; the capturing user comes first.
   final accounts = <String, String>{
     if (profile.user case final user? when capturer) user: home,
   };
   // name:password:uid:gid:gecos:home:shell (passwd(5)).
   for (final fields in LineSplitter.split(passwd).map((l) => l.split(':'))) {
-    if (fields.length < 7 || !personal(int.tryParse(fields[2]))) continue;
+    final uid = fields.length < 7 ? null : int.tryParse(fields[2]);
+    if (uid == null || !personal(uid) || fields[5] == _noHome) continue;
     accounts.putIfAbsent(fields[0], () => fields[5]);
   }
   accounts.removeWhere((user, _) => !keep(user));
@@ -177,7 +183,7 @@ RedactionLiterals captureLiterals(
     hostNames: hosts.toList(),
     userNames: accounts.keys.toList(),
     homeDirs: accounts.values
-        .where((h) => h != '/' && h != '/root')
+        .where((h) => h != '/' && h != '/root' && h != _noHome)
         .toSet()
         .toList(),
     extra: extra,

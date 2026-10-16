@@ -82,11 +82,11 @@ void main() {
     test('a name after any systemd escape', () {
       const units =
           r'mnt-Backup\x20web1.mount media-x\x20anke.mount '
-          r'"home-x\\x40anke.mount"';
+          r'"srv-x\\x40anke.mount"';
       expect(
         _redact(units, literals: literals),
         r'mnt-Backup\x20fixture-host.mount media-x\x20user.mount '
-        r'"home-x\\x40user.mount"',
+        r'"srv-x\\x40user.mount"',
       );
       expect(Redactor(literals).review(units), [
         (1, 'still names the host'),
@@ -259,7 +259,7 @@ void main() {
         'fixture-nas:/volume1/backups\n'
         '                        nfs4 100 50 50 50% /mnt/backup\n'
         '//fixture-nas/share           cifs 100 50 50 50% /mnt/share\n'
-        'fixture-nas:/home/anke     fuse.sshfs 1 1 0 100% /mnt/box\n'
+        'fixture-nas:/home/user     fuse.sshfs 1 1 0 100% /mnt/box\n'
         '192.0.2.1:/export        nfs 1 1 0 100% /mnt/x\n'
         '/dev/sda1               ext4 1 1 0 100% /',
       );
@@ -278,6 +278,84 @@ void main() {
 
   // These rules hold for every payload; in `cron` the job structure
   // (the cron group) removes command arguments first.
+  group('other accounts', () {
+    // Directory-service accounts and passwd accounts outside the literal
+    // set (the second verification's erin, carol and dave).
+    test('every home directory path, also another account\'s', () {
+      expect(
+        _redact(
+          '/home/erin/bin/syncer /var/home/erin fixture-nas:/export/home/dave\n'
+          '/home/erin@corp.example/x /home /home/user/x "/home/j\xc3\xbcrgen" '
+          'PATH=/home/carol/bin:/usr/bin',
+        ),
+        '/home/user/bin/syncer /var/home/user fixture-nas:/export/home/user\n'
+        '/home/user/x /home /home/user/x "/home/user" '
+        'PATH=/home/user/bin:/usr/bin',
+      );
+    });
+
+    test('home mount units in their systemd-escaped names', () {
+      const units =
+          'home-erin.mount home-erin-Music.mount var-home-erin.automount\n'
+          '"home-j\\\\xc3\\\\xbcrgen.mount" home-a.mueller.mount '
+          r'home-anke\x2dm.mount'
+          '\n'
+          'home.mount home-user.mount home-assistant.service '
+          'systemd-homed.service';
+      expect(
+        _redact(units, collector: 'units'),
+        'home-user.mount home-user-Music.mount var-home-user.automount\n'
+        '"home-user.mount" home-user.mount home-user.mount\n'
+        'home.mount home-user.mount home-assistant.service '
+        'systemd-homed.service',
+      );
+    });
+
+    test('session scopes name no account but root', () {
+      expect(
+        _redact(
+          '{"unit":"session-5.scope","description":"Session 5 of User erin"}\n'
+          'session-c1.scope loaded active running Session c1 of User gdm\n'
+          '"Session 3 of User root"',
+          collector: 'units',
+        ),
+        '{"unit":"session-5.scope","description":"Session 5 of User user"}\n'
+        'session-c1.scope loaded active running Session c1 of User user\n'
+        '"Session 3 of User root"',
+      );
+    });
+
+    test('ps fallback rows name no account but root', () {
+      const rows = '== rows ==\n4242 S 1 1 1 1 0 100 x\n== cmdline ==\n';
+      expect(
+        _redact(
+          '$rows== ps ==\n'
+          '    PID    PPID USER     STAT   RSS COMMAND\n'
+          '   4242       1 erin     S      100 /home/erin/bin/syncer --x\n'
+          '   4243       1 root     S      100 cron -f\n'
+          '   4244       1 www-data S',
+          collector: 'procs',
+        ),
+        '$rows== ps ==\n'
+        '    PID    PPID USER     STAT   RSS COMMAND\n'
+        '   4242       1 user     S      100 /home/user/bin/syncer [redacted]\n'
+        '   4243       1 root     S      100 cron [redacted]\n'
+        '   4244       1 user     S',
+      );
+      expect(
+        _redact(
+          '$rows== ps_w ==\n'
+          '  PID USER       TIME COMMAND\n'
+          '    1 dave       0:01 init',
+          collector: 'procs',
+        ),
+        '$rows== ps_w ==\n'
+        '  PID USER       TIME COMMAND\n'
+        '    1 user       0:01 init',
+      );
+    });
+  });
+
   group('secrets', () {
     const cron =
         '== crontab ==\n'
