@@ -80,7 +80,8 @@ ChartGapReason chartGapReasonOf(GapCause cause) => switch (cause) {
 
 /// A phone's time in the background (03 §9.5 item 6): from [start] to
 /// [end] by this device's clock, which paused sampling [serverIds], the
-/// servers some surface had subscribed when it began.
+/// servers the engine was sampling, or said it paused, whose screen was
+/// open at the return.
 @immutable
 final class BackgroundPause {
   BackgroundPause({
@@ -175,10 +176,11 @@ final class MonitoringController extends ChangeNotifier {
   AppActivity _activity = AppActivity.foreground;
   bool _engineStopped = false;
 
-  /// When the app last went to the background, and the servers that
-  /// paused then; the return words [backgroundPause] from them.
+  /// When the app last went to the background, and the servers the
+  /// engine was sampling then or said it paused since; the return words
+  /// [backgroundPause] from them.
   DateTime? _backgroundSince;
-  Set<String> _pausedServers = const {};
+  Set<String> _pausedServers = {};
   final ValueNotifier<BackgroundPause?> _backgroundPause = ValueNotifier(null);
 
   /// The latest sample of [serverId]'s [stream]. A surface listens to this
@@ -224,10 +226,11 @@ final class MonitoringController extends ChangeNotifier {
   TimeSeriesRing historyFor(String serverId, MetricSeries series) =>
       _server(serverId).history[series]!;
 
-  /// The phone's last time in the background while something was
-  /// sampled (03 §9.5 item 6), from its return until the user dismisses
-  /// it or the app goes to the background again; null otherwise, and
-  /// always on a desktop, which never reports the background.
+  /// The phone's last time in the background while the engine sampled
+  /// a server open at the return (03 §9.5 item 6), until the user
+  /// dismisses it, leaves that server or the app goes to the background
+  /// again; null otherwise, and always on a desktop, which never reports
+  /// the background.
   ValueListenable<BackgroundPause?> get backgroundPause => _backgroundPause;
 
   void dismissBackgroundPause() => _backgroundPause.value = null;
@@ -362,6 +365,7 @@ final class MonitoringController extends ChangeNotifier {
     }
 
     _openViews.remove(serverId);
+    _forgetPause(serverId);
     // A stopped engine (or a disposed controller) holds no link, nor does
     // the engine hold one for a server the fleet no longer lists, so no
     // grace timer waits to disconnect it.
@@ -386,27 +390,42 @@ final class MonitoringController extends ChangeNotifier {
   }
 
   /// Keeps when the background began and, on return, the pause it was
-  /// for the servers something sampled.
+  /// for the open servers the engine had sampling. Only the engine's
+  /// phase says a server was read: a subscription alone samples nothing
+  /// while links are off or the link is down.
   void _notePause(AppActivity activity) {
     final now = _clock.value;
     switch (activity) {
       case AppActivity.background:
         _backgroundSince = now;
         _pausedServers = {
-          for (final (serverId, _) in _subscribed.keys)
-            if (_listed(serverId)) serverId,
+          for (final MapEntry(key: id, value: readings) in _readings.entries)
+            if (_listed(id) &&
+                readings.sampling.value?.state.phase == SamplingPhase.sampling)
+              id,
         };
         _backgroundPause.value = null;
       case AppActivity.foreground:
         final since = _backgroundSince;
         _backgroundSince = null;
-        if (since == null || _pausedServers.isEmpty) return;
+        final shown = _pausedServers.where(_openViews.containsKey).toSet();
+        if (since == null || shown.isEmpty) return;
         _backgroundPause.value = BackgroundPause(
           start: since,
           end: now,
-          serverIds: _pausedServers,
+          serverIds: shown,
         );
     }
+  }
+
+  /// The return banner tells of the screen open at the return only.
+  void _forgetPause(String serverId) {
+    final pause = _backgroundPause.value;
+    if (pause == null || !pause.serverIds.contains(serverId)) return;
+    final rest = pause.serverIds.difference({serverId});
+    _backgroundPause.value = rest.isEmpty
+        ? null
+        : BackgroundPause(start: pause.start, end: pause.end, serverIds: rest);
   }
 
   /// Sends [request] unless the engine has stopped: views and surfaces let
@@ -444,6 +463,10 @@ final class MonitoringController extends ChangeNotifier {
         readings
           ..sampling.value = status
           ..phaseChanged(status);
+        if (_backgroundSince != null &&
+            event.phase == SamplingPhase.pausedInBackground) {
+          _pausedServers.add(serverId);
+        }
       case Gap(:final serverId):
         // As for a sample: a server that left the fleet stays purged.
         if (_fleetIds case final ids? when !ids.contains(serverId)) return;

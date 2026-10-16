@@ -331,22 +331,35 @@ void main() {
       }
     }
 
+    /// Opens web-1 on a phone of [size], has the engine say it samples
+    /// it unless not [sampled], and sends the app away and back.
+    Future<void> openAwayAndBack(
+      WidgetTester tester, {
+      Size size = _phone,
+      bool sampled = true,
+    }) async {
+      final harness = await pumpApp(tester, size: size, servers: twoServers);
+      await tester.tap(find.text('web-1'));
+      await tester.pumpAndSettle();
+      if (sampled) {
+        harness.engine.emit(
+          SamplingState(
+            serverId: _serverId,
+            phase: SamplingPhase.sampling,
+            since: DateTime.now().toUtc(),
+          ),
+        );
+        await tester.pumpAndSettle();
+      }
+      awayAndBack(tester);
+      await tester.pumpAndSettle();
+    }
+
     testWidgets('says a phone paused the open server until dismissed', (
       tester,
     ) async {
-      await pumpApp(tester, size: _phone, servers: twoServers);
-      await tester.tap(find.text('web-1'));
-      await tester.pumpAndSettle();
-      expect(find.textContaining(RegExp(banner)), findsNothing);
-
-      awayAndBack(tester);
-      await tester.pumpAndSettle();
+      await openAwayAndBack(tester);
       expect(find.textContaining(RegExp(banner)), findsOneWidget);
-      // It wraps rather than clips at 200 % text (A11Y-09).
-      tester.platformDispatcher.textScaleFactorTestValue = 2;
-      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
-      await tester.pumpAndSettle();
-      expect(tester.takeException(), isNull);
 
       await tester.tap(find.text('Dismiss'));
       await tester.pumpAndSettle();
@@ -355,13 +368,10 @@ void main() {
 
     // A11Y-09: past its share of the screen the banner scrolls, so the
     // panel under it keeps its room on a small or landscape phone.
-    for (final size in [const Size(360, 640), const Size(568, 320)]) {
+    for (final size in [_phone, const Size(360, 640), const Size(568, 320)]) {
       testWidgets('fits at 200 % text on a ${size.width.round()} x '
           '${size.height.round()} phone', (tester) async {
-        await pumpApp(tester, size: size, servers: twoServers);
-        await tester.tap(find.text('web-1'));
-        await tester.pumpAndSettle();
-        awayAndBack(tester);
+        await openAwayAndBack(tester, size: size);
         tester.platformDispatcher.textScaleFactorTestValue = 2;
         addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
         await tester.pumpAndSettle();
@@ -370,13 +380,80 @@ void main() {
       });
     }
 
-    testWidgets('stays away when nothing was sampled', (tester) async {
-      await pumpApp(tester, size: _phone, servers: twoServers);
-      awayAndBack(tester);
+    testWidgets('stays away while the engine sampled nothing', (tester) async {
+      // An open server's subscription alone, as while links are off.
+      await openAwayAndBack(tester, sampled: false);
+      expect(find.textContaining(RegExp(banner)), findsNothing);
+    });
+
+    testWidgets('tells only the screen open at the return', (tester) async {
+      await openAwayAndBack(tester);
+      expect(find.textContaining(RegExp(banner)), findsOneWidget);
+
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('db-1'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining(RegExp(banner)), findsNothing);
+
+      // Leaving the server's screen ended its banner.
+      await tester.pageBack();
       await tester.pumpAndSettle();
       await tester.tap(find.text('web-1'));
       await tester.pumpAndSettle();
       expect(find.textContaining(RegExp(banner)), findsNothing);
+    });
+
+    testWidgets('gives the times to the second within one minute', (
+      tester,
+    ) async {
+      final engine = FakeEngineClient();
+      var now = _start;
+      final monitoring = MonitoringController(
+        engine,
+        now: () => now,
+        linkGrace: Duration.zero,
+      );
+      addTearDown(() async {
+        monitoring.dispose();
+        await engine.close();
+      });
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(
+            body: BackgroundReturnBanner(
+              monitoring: monitoring,
+              serverId: _serverId,
+            ),
+          ),
+        ),
+      );
+      monitoring.openServer(_serverId);
+      engine.emit(
+        SamplingState(
+          serverId: _serverId,
+          phase: SamplingPhase.sampling,
+          since: _start.toUtc(),
+        ),
+      );
+      await tester.pump();
+
+      // "12:10:00 PM to 12:10:35 PM", then "12:10 PM to 12:24 PM".
+      const seconds = r'^Paused \d+:\d\d:\d\d\D+ to \d+:\d\d:\d\d\D+ while';
+      const minutes = r'^Paused \d+:\d\d\D+ to \d+:\d\d\D+ while';
+      for (final (away, pattern) in [
+        (const Duration(seconds: 35), seconds),
+        (const Duration(minutes: 14), minutes),
+      ]) {
+        monitoring.setAppActivity(AppActivity.background);
+        now = now.add(away);
+        monitoring.setAppActivity(AppActivity.foreground);
+        await tester.pump();
+        expect(find.textContaining(RegExp(pattern)), findsOneWidget);
+      }
+      monitoring.leaveServer(_serverId);
     });
 
     testWidgets('never shows on a desktop, which never pauses', (tester) async {

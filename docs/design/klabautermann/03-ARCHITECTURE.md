@@ -3856,11 +3856,13 @@ session rings, so no line joins across it, and a stream no subscription
 names ends its open gap with an unknown reading, which breaks the line
 without a label. On a phone's server screen, the return banner sits
 under the header, scrolling past a fifth of the screen's height, after
-a return from the background that paused a server
-some surface had subscribed, with this device's times of leaving and
-returning (to the second when both fall in one minute), until dismissed
-or the next pause; a desktop never reports the background, so it never
-shows there.
+a return from the background that paused that server: the engine had
+it in `sampling` as the app left, or said it paused it while away; a
+subscription alone, as while links are off, reads nothing to pause. It
+gives this device's times of leaving and returning (to the second when
+both fall in one minute) until dismissed, until that screen is left or
+until the next pause; a desktop never reports the background, so it
+never shows there.
 
 ---
 

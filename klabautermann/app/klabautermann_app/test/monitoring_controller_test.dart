@@ -889,19 +889,29 @@ void main() {
       },
     );
 
-    test('a phone keeps its last background pause for the servers it '
-        'paused', () {
+    test('a phone keeps its last background pause for the open servers '
+        'the engine was sampling', () async {
       var now = t0;
-      final timed = MonitoringController(engine, now: () => now);
+      final timed = MonitoringController(
+        engine,
+        now: () => now,
+        linkGrace: Duration.zero,
+      );
       addTearDown(timed.dispose);
-
-      // Nothing sampled: a pause stops nothing anyone sees.
-      timed
+      void awayAndBack() => timed
         ..setAppActivity(AppActivity.background)
         ..setAppActivity(AppActivity.foreground);
+
+      // Subscribed, but the engine never said it sampled (links off):
+      // a pause stops nothing.
+      timed
+        ..openServer('srv-1')
+        ..subscribe('srv-1', 'overview-0', {core});
+      awayAndBack();
       expect(timed.backgroundPause.value, isNull);
 
-      timed.subscribe('srv-1', 'overview-0', {core});
+      phase(SamplingPhase.sampling, 0);
+      await settle();
       timed.setAppActivity(AppActivity.background);
       now = at(780);
       timed.setAppActivity(AppActivity.foreground);
@@ -916,6 +926,36 @@ void main() {
         ..setAppActivity(AppActivity.foreground)
         ..dismissBackgroundPause();
       expect(timed.backgroundPause.value, isNull);
+
+      // It belongs to the screen open at the return: leaving clears it,
+      // and a server shown only later has no return to tell.
+      awayAndBack();
+      timed.leaveServer('srv-1');
+      expect(timed.backgroundPause.value, isNull);
+      awayAndBack();
+      expect(timed.backgroundPause.value, isNull);
+    });
+
+    test('a server the engine pauses while the app is away counts', () async {
+      final timed = MonitoringController(engine, linkGrace: Duration.zero);
+      addTearDown(timed.dispose);
+      timed
+        ..openServer('srv-1')
+        ..subscribe('srv-1', 'overview-0', {core});
+      phase(SamplingPhase.waitingForLink, 0);
+      await settle();
+
+      // Waiting for its link, it had nothing to pause.
+      timed
+        ..setAppActivity(AppActivity.background)
+        ..setAppActivity(AppActivity.foreground);
+      expect(timed.backgroundPause.value, isNull);
+
+      timed.setAppActivity(AppActivity.background);
+      phase(SamplingPhase.pausedInBackground, 5);
+      await settle();
+      timed.setAppActivity(AppActivity.foreground);
+      expect(timed.backgroundPause.value?.serverIds, {'srv-1'});
     });
   });
 }

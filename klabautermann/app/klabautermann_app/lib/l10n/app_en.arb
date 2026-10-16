@@ -621,7 +621,7 @@
   },
   "coverageReturnBanner": "Paused {start} to {end} while in background. No data for that period.",
   "@coverageReturnBanner": {
-    "description": "Banner on a phone's server screen after the app returns from the background (03 §9.5 item 6): when reading this server stopped and resumed, as times of day in the UI locale. The charts show the same period as a hatched band.",
+    "description": "Banner on a phone's server screen after the app returns from the background (03 §9.5 item 6): when the app left for the background and returned, as times of day in the UI locale. It shows only for a server the engine was reading or said it paused; once the server has readings, its charts show the same period as a hatched band.",
     "placeholders": {
       "start": {
         "type": "String",
