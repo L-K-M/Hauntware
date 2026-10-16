@@ -5,37 +5,6 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:poltergeist_app/services/secure_master_key.dart';
 
-/// A keystore in the exact state the Ubuntu bug report hit: every access
-/// throws the libsecret "KeyringLocked" PlatformException.
-class _LockedKeystore extends FlutterSecureStorage {
-  _LockedKeystore();
-
-  @override
-  Future<String?> read({
-    required String key,
-    AppleOptions? iOptions,
-    AndroidOptions? aOptions,
-    LinuxOptions? lOptions,
-    WebOptions? webOptions,
-    AppleOptions? mOptions,
-    WindowsOptions? wOptions,
-  }) =>
-      throw PlatformException(code: 'KeyringLocked', message: 'KeyringLocked');
-
-  @override
-  Future<void> write({
-    required String key,
-    required String? value,
-    AppleOptions? iOptions,
-    AndroidOptions? aOptions,
-    LinuxOptions? lOptions,
-    WebOptions? webOptions,
-    AppleOptions? mOptions,
-    WindowsOptions? wOptions,
-  }) =>
-      throw PlatformException(code: 'KeyringLocked', message: 'KeyringLocked');
-}
-
 /// In-memory keystore that can be "locked" on demand, to test the recovery
 /// transition (keyring gets unlocked while the app runs).
 class _ToggleableKeystore extends FlutterSecureStorage {
@@ -82,71 +51,17 @@ class _ToggleableKeystore extends FlutterSecureStorage {
 }
 
 void main() {
-  group('MasterKeyManager on a locked keystore (the Ubuntu KeyringLocked bug)',
-      () {
-    test('probeKeystore returns null and marks the keystore unavailable',
-        () async {
-      final keys = MasterKeyManager(_LockedKeystore());
-      final key = await keys.probeKeystore();
-      expect(key, isNull);
-      expect(keys.keystoreStatus, KeystoreStatus.unavailable);
-      expect(keys.lastKeystoreError, contains('KeyringLocked'));
-    });
-
-    test('reads degrade to "not set" instead of throwing', () async {
-      final keys = MasterKeyManager(_LockedKeystore());
-      expect(await keys.getApiKey('sync.token'), isNull);
-      expect(keys.keystoreStatus, KeystoreStatus.unavailable);
-    });
-
-    test('writes throw a clear KeystoreException', () async {
-      final keys = MasterKeyManager(_LockedKeystore());
-      await expectLater(
-        () => keys.setKeystoreKey(List.filled(32, 7)),
-        throwsA(
-          isA<KeystoreException>()
-              .having((e) => e.message, 'message', contains('keyring')),
-        ),
-      );
-      expect(keys.keystoreStatus, KeystoreStatus.unavailable);
-    });
-
-    test('a keystore that comes back is picked up on re-probe', () async {
-      final storage = _ToggleableKeystore()..locked = true;
-      final keys = MasterKeyManager(storage);
-
-      expect(await keys.probeKeystore(), isNull);
-      expect(keys.keystoreStatus, KeystoreStatus.unavailable);
-
-      storage.locked = false;
-      final key = await keys.probeKeystore();
-      expect(key, isNotNull);
-      expect(key, hasLength(32));
-      expect(keys.keystoreStatus, KeystoreStatus.available);
-      expect(keys.lastKeystoreError, isNull);
-
-      // The created key persists: a second probe returns the same one.
-      expect(await keys.probeKeystore(), equals(key));
-    });
-
+  // The locked-keystore group moved to
+  // planchette/packages/ghost_keystore/test/master_key_manager_test.dart
+  // with MasterKeyManager (F3c); this binding keeps its entry name here.
+  group("Poltergeist's MasterKeyManager binding", () {
     test('the master key is stored under the Poltergeist entry name',
         () async {
       final storage = _ToggleableKeystore();
-      final keys = MasterKeyManager(storage);
+      final keys = poltergeistMasterKeyManager(storage);
 
       await keys.probeKeystore();
       expect(storage._map.keys, contains('poltergeist.vault.masterKey.v1'));
-    });
-
-    test('probeKeystore never fabricates an ephemeral key while locked',
-        () async {
-      // Regression guard for the tempting wrong fix: if probeKeystore had
-      // returned a fresh random key under a locked keystore, anything saved
-      // this session would decrypt to garbage (or appear corrupt) forever
-      // after — "unavailable" is the only honest answer.
-      final keys = MasterKeyManager(_LockedKeystore());
-      expect(await keys.probeKeystore(), isNull);
-      expect(await keys.probeKeystore(), isNull);
     });
   });
 

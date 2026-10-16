@@ -28,8 +28,9 @@ dependencies:
     sdk: flutter
   flutter_localizations:
     sdk: flutter
-  # The OS-keystore access behind the vault master key; version-matched to
-  # Séance's lock so the ported MasterKeyManager behavior is identical.
+  # The OS-keystore plugin behind ghost_keystore's MasterKeyManager, pinned
+  # here so the plugin's native code and default options stay what this
+  # app shipped with.
   flutter_secure_storage: 10.3.1
   intl: 0.20.3
   macos_window_utils: 1.9.1
@@ -54,6 +55,10 @@ dependencies:
   # The server list's sectioning, shared with Séance.
   ghost_servers:
     path: ../../../planchette/packages/ghost_servers
+  # The vault master key and API-key entries in the OS keystore, shared
+  # with Séance and Klabautermann.
+  ghost_keystore:
+    path: ../../../planchette/packages/ghost_keystore
   poltergeist_core:
     path: ../../packages/poltergeist_core
   poltergeist_sync:

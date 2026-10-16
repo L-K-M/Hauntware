@@ -72,8 +72,8 @@ void main() {
     test('token write/read/delete round-trips under the §4.5 keystore name',
         () async {
       final keystore = _ToggleableKeystore();
-      final store =
-          SecureSyncCredentialStore(keys: MasterKeyManager(keystore));
+      final store = SecureSyncCredentialStore(
+          keys: poltergeistMasterKeyManager(keystore));
 
       await store.writeToken('token-abc');
       expect(keystore.map.keys,
@@ -88,7 +88,7 @@ void main() {
     test('a locked keystore fails writes loudly, reads and deletes tolerate',
         () async {
       final keystore = _ToggleableKeystore()..locked = true;
-      final keys = MasterKeyManager(keystore);
+      final keys = poltergeistMasterKeyManager(keystore);
       final store = SecureSyncCredentialStore(keys: keys);
 
       // Enrollment must fail loudly rather than drop a live session.
@@ -103,8 +103,8 @@ void main() {
 
     test('writeVaultKey lands under the vault master-key entry', () async {
       final keystore = _ToggleableKeystore();
-      final store =
-          SecureSyncCredentialStore(keys: MasterKeyManager(keystore));
+      final store = SecureSyncCredentialStore(
+          keys: poltergeistMasterKeyManager(keystore));
 
       await store.writeVaultKey(List.filled(32, 9));
       expect(keystore.map.keys, contains('poltergeist.vault.masterKey.v1'));
@@ -189,8 +189,8 @@ void main() {
     test('nothing persisted outside the keystore contains the token',
         () async {
       final keystore = _ToggleableKeystore();
-      final credentials =
-          SecureSyncCredentialStore(keys: MasterKeyManager(keystore));
+      final credentials = SecureSyncCredentialStore(
+          keys: poltergeistMasterKeyManager(keystore));
       final state = newState();
       const token = 'bearer-9f8e7d6c';
 

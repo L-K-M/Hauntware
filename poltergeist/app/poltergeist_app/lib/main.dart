@@ -137,7 +137,7 @@ Future<void> main(List<String> args) async {
   // of them. DynamicSecretVault re-resolves the key per call —
   // enrollment's re-key swaps the keystore entry underneath long-lived
   // consumers like the prompt coordinator.
-  final masterKeys = MasterKeyManager();
+  final masterKeys = poltergeistMasterKeyManager();
   final vaultStore = FileVaultStore(
     File('${supportDirectory.path}${Platform.pathSeparator}vault.json'),
   );
