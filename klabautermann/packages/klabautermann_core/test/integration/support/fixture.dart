@@ -63,6 +63,11 @@ final class Fixture {
   int get _jumpPort => int.parse(_variable('JUMP_PORT'));
   String get _user => _variable('USER');
 
+  /// run.sh's directory for this run, which it removes on every exit. A
+  /// second signal ends the suites before their teardowns run, so files
+  /// kept anywhere else would outlive a signalled run.
+  String get _runtimeDirectory => _variable('RUNTIME');
+
   /// Where the engine dials the sampled host and the jump host, and where
   /// the jump host reaches the sampled host.
   Endpoint get direct => (host: _host, port: _port);
@@ -205,7 +210,9 @@ final class FixtureEngine {
   /// Starts an engine and imports [Fixture._sshConfig]. [name] titles the
   /// event log it leaves in the evidence directory.
   static Future<FixtureEngine> start(Fixture fixture, String name) async {
-    final support = await Directory.systemTemp.createTemp('klab-fixture-');
+    final support = await Directory(
+      fixture._runtimeDirectory,
+    ).createTemp('engine-');
     final client = await IsolateEngineClient.spawn(
       supportDirectory: support.path,
       linksEnabled: true,

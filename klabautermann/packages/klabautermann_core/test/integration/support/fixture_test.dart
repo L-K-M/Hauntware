@@ -1,12 +1,15 @@
 // The fixture helpers without the fixture: when the engine suites run,
-// and how a wait that timed out leaves the engine's events.
+// where an engine keeps its files, and how a wait that timed out leaves
+// the engine's events.
+import 'dart:io';
+
 import 'package:klabautermann_core/klabautermann_core.dart';
 import 'package:test/test.dart';
 
 import 'fixture.dart';
 
-/// Every variable run.sh exports for the suites, for a fixture that is
-/// not running: nothing here dials it.
+/// The variables run.sh exports for the suites, but its runtime directory,
+/// for a fixture that is not running: nothing here dials it.
 const _offline = {
   'KLABAUTERMANN_FIXTURE_COMPOSE_FILE': '/nonexistent/docker-compose.yml',
   'KLABAUTERMANN_FIXTURE_COMPOSE_PROJECT': 'klabautermann-offline',
@@ -20,6 +23,18 @@ const _offline = {
 };
 
 void main() {
+  late Directory runtime;
+
+  setUp(() async {
+    runtime = await Directory.systemTemp.createTemp('klab-runtime-');
+    addTearDown(() => runtime.delete(recursive: true));
+  });
+
+  Fixture offline() => Fixture.fromEnvironment({
+    ..._offline,
+    'KLABAUTERMANN_FIXTURE_RUNTIME': runtime.path,
+  })!;
+
   test('without run.sh there is no fixture, and the suites skip', () {
     expect(Fixture.fromEnvironment({'PATH': '/usr/bin'}), isNull);
   });
@@ -33,11 +48,16 @@ void main() {
     expect(() => fixture!.compose(['ps']), throwsStateError);
   });
 
+  test('an engine keeps its files in run.sh\'s runtime directory', () async {
+    // run.sh removes it on every exit, also when a second signal ends the
+    // suites before their teardowns run.
+    final engine = await FixtureEngine.start(offline(), 'runtime files');
+
+    expect(engine.supportDirectory, startsWith('${runtime.path}/'));
+  });
+
   test('a timed-out wait leaves its read to the next one', () async {
-    final engine = await FixtureEngine.start(
-      Fixture.fromEnvironment(_offline)!,
-      'timed out wait',
-    );
+    final engine = await FixtureEngine.start(offline(), 'timed out wait');
     await expectLater(
       engine.until<Gap>(null, const Duration(milliseconds: 200)),
       throwsA(isA<TestFailure>()),
