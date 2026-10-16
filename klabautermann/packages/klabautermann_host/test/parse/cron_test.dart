@@ -185,17 +185,18 @@ void main() {
     });
 
     test('a system macro line that ends at its user field is no job', () {
-      // cron takes the first word after the macro as the user whatever
-      // it looks like, then skips a line with nothing after it.
+      // cron reads the first word after the macro as the user without
+      // checking that it exists (cronie loads such a line for an unknown
+      // user), then skips a line with nothing after it.
       final r = parseCron(
         _payload(
-          etc: '@reboot /usr/bin/x\n@daily /opt/run.sh --flag\n@weekly',
+          etc: '@reboot /usr/bin/x\n@daily /opt/run.sh nightly\n@weekly',
           cronD: 'f\t@hourly root  ',
         ),
         _ctx,
       );
       expect(_shapes(r.value), [
-        ('/etc/crontab', '@daily', '/opt/run.sh', '--flag'),
+        ('/etc/crontab', '@daily', '/opt/run.sh', 'nightly'),
       ]);
       expect(r.warnings, hasLength(3));
     });
