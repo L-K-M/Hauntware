@@ -1,5 +1,51 @@
 # Séance ports and pin audits
 
+## Pure stores move, F3b-1 (2026-10-16)
+
+Poltergeist's `FileHostKeyStore` moves into `seance_core`
+(`../../docs/design/catalog-library.md` sections 2.1 and 8, row 7 of
+section 13, taken in three PRs: F3b-1 moves the host-key store, F3b-2
+the vault store and its re-key journal, and a Séance follow-up switches
+Séance's own stores). The class body moves unchanged; only its default
+writer, its location and the quarantine helper's name change. The
+catalog library exports both, and the `poltergeist_core` barrel
+re-exports them, so `main.dart`, `engine_session.dart` and their tests
+build the same store through the barrel.
+
+| Left `poltergeist_app/lib/services/file_stores.dart` | Now `seance_core/lib/src/store/` |
+|---|---|
+| `FileHostKeyStore` | `file_host_key_store.dart` |
+| `_quarantineCorruptFile` | `corrupt_file_quarantine.dart`, as `quarantineCorruptFile` |
+
+- Writer: the default changes from the app's `writeStringAtomically` to
+  `AtomicFileWriter` (`catalog/atomic_file_writer.dart`), as in PR 1a;
+  the `atomicWriter` seam stays. `host_keys.json` stays at the process
+  default mode, so the writer's fail-closed owner-only chmod does not
+  apply. The other differences: the temp file is the sibling
+  `host_keys.json.tmp-<16 hex>` rather than `.poltergeist-<uuid>.tmp`,
+  and the directory is fsynced after the rename. A failed directory
+  sync now fails the write after the file is replaced; the store then
+  keeps its previous cache, as for any failed write.
+- Bytes: `seance_core/test/store/host_keys_golden_test.dart` holds a byte
+  golden captured from the pre-move store. It passes unchanged against
+  the moved store, and the same sequence through the `poltergeist_core`
+  re-export wrote identical bytes.
+- Quarantine: the helper moves with the store. `FileVaultStore`, which
+  stays in the app until F3b-2, calls it through the barrel. The stamp
+  and the best-effort rename are unchanged.
+- Barrel: `package:seance_core/catalog.dart`, not `seance_core.dart`. The
+  Séance app imports `seance_core.dart` beside its own
+  `FileHostKeyStore`, which would make the name ambiguous until the
+  Séance follow-up switches it.
+- Tests: the `FileHostKeyStore` group of `test/file_stores_test.dart`
+  moves to `seance_core/test/store/file_host_key_store_test.dart` on
+  `package:test`, changed only in imports and the temp-directory prefix;
+  `seance_dart` runs it. The vault group stays. The app's localization
+  allowlist drops the eight `file_stores.dart` entries that named the
+  moved literals.
+- `seance_core` gains no dependency. Séance's own `FileHostKeyStore`
+  (`seance_app/lib/services/file_stores.dart`) is not switched here.
+
 ## Catalog library move, PR 1c (2026-10-13)
 
 The shared coordinator gains the pull-only policy Klabautermann's MVP
@@ -599,6 +645,11 @@ port candidates.
 - Port-back candidates: UTC-stamped quarantine names (shared with the
   atomic_file entry). Upstream #172 closes the serialized host-key
   load/flush candidate from review round 1 of PR #32.
+- 2026-10-16 (F3b-1): `FileHostKeyStore` and the corrupt-file quarantine
+  left this file for `seance_core/lib/src/store/` (see "Pure stores
+  move, F3b-1" above). The file keeps `FileVaultStore`,
+  `VaultRekeyJournal` and `VaultRekeyOutcome` until F3b-2, and the vault
+  store quarantines through the shared helper.
 
 ## app/poltergeist_app/lib/services/locked_secret_vault.dart
 
