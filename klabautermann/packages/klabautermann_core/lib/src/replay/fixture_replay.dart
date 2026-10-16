@@ -248,9 +248,6 @@ final class JournalFeed {
   late final List<int> _lineStarts;
   int _next = 0;
 
-  /// The bytes of one cycle, which a run holds while it feeds.
-  int get cycleBytes => _bytes.length;
-
   /// Hands [follow] the next [lines] lines and returns their bytes.
   int feed(FollowReplay follow, int lines) {
     final cycle = _lineStarts.length - 1;
