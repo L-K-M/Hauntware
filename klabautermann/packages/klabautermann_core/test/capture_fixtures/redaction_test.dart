@@ -131,7 +131,8 @@ void main() {
     test('a home directory goes before the user name', () {
       expect(
         _redact('/srv/anke-home/bin /srv/anke-home2', literals: literals),
-        '/home/user/bin /srv/user-home2',
+        // A home is numbered by its last directory, here not the name.
+        '/home/user/bin /srv/user2-home2',
       );
     });
 
@@ -156,7 +157,8 @@ void main() {
       );
       expect(
         latin1.decode(r.bytes),
-        'user=user home=/home/user fixture-host user x/home/user/bin',
+        // anke is another account than the one named user.
+        'user=user home=/home/user fixture-host user2 x/home/user/bin',
       );
       // Only what changed counts.
       expect(r.counts, {'host name': 1, 'user name': 1});
@@ -391,6 +393,85 @@ void main() {
       );
     });
 
+    test('a remote user before a mount server address goes too', () {
+      const fs =
+          '== blocks ==\n'
+          'dave@10.0.0.5:/data fuse.sshfs 1 1 0 1% /mnt/a\n'
+          'dave@[2001:db8:1::5]:/data fuse.sshfs 1 1 0 1% /mnt/b\n'
+          '//dave@10.0.0.5/share cifs 1 1 0 1% /mnt/c\n'
+          'https://dave:pw@10.0.0.5/dav fuse 1 1 0 1% /mnt/d\n'
+          'curlftpfs#ftp://dave@10.0.0.5/ fuse 1 1 0 1% /mnt/e\n'
+          '/dev/sda1 ext4 1 1 0 1% /';
+      expect(
+        _redact(fs, collector: 'fs'),
+        '== blocks ==\n'
+        'user@192.0.2.1:/data fuse.sshfs 1 1 0 1% /mnt/a\n'
+        'user@[2001:db8::1]:/data fuse.sshfs 1 1 0 1% /mnt/b\n'
+        '//fixture-nas/share cifs 1 1 0 1% /mnt/c\n'
+        'https://user@192.0.2.1/dav fuse 1 1 0 1% /mnt/d\n'
+        'curlftpfs#ftp://fixture-nas/ fuse 1 1 0 1% /mnt/e\n'
+        '/dev/sda1 ext4 1 1 0 1% /',
+      );
+    });
+
+    test('distinct ids and homes keep distinct placeholders', () {
+      // Two containers, two pods, two homes: parseFs joins the inode
+      // rows to the mounts by mount point.
+      final a = 'a' * 64, b = 'b' * 64;
+      const pod = '6f1d2c3b-aaaa-4bbb-8ccc-0123456789a';
+      String rows(String n) =>
+          'overlay $n /var/lib/docker/overlay2/$a/merged\n'
+          'overlay $n /var/lib/docker/overlay2/$b/merged\n'
+          'tmpfs $n /var/lib/kubelet/pods/${pod}b/volumes\n'
+          'tmpfs $n /var/lib/kubelet/pods/${pod}c/volumes\n'
+          '/dev/sdb1 $n /home/alice\n'
+          '/dev/sdc1 $n /home/bob\n'
+          '/dev/sdd1 $n /home/carol';
+      final fs =
+          '== blocks ==\n'
+          'Filesystem Type 1B-blocks Used Available Capacity Mounted on\n'
+          '${rows('overlay 100 50 50 50%')}\n'
+          '== inodes ==\n'
+          'Filesystem Inodes IUsed IFree IUse% Mounted on\n'
+          '${rows('1966080 1 1966079 1%')}';
+      final redactor = Redactor(
+        const RedactionLiterals(
+          userNames: ['carol', 'alice'],
+          homeDirs: ['/home/carol', '/home/alice'],
+        ),
+      );
+      final redacted = latin1.decode(
+        redactor.redact('fs', latin1.encode(fs)).bytes,
+      );
+      expect(parseShapeChange(Collector.fs, fs, redacted), isNull);
+      expect(redacted.split('\n').sublist(2, 9).map((l) => l.split(' ').last), [
+        '/var/lib/docker/overlay2/${'0' * 64}/merged',
+        '/var/lib/docker/overlay2/${'0' * 63}1/merged',
+        '/var/lib/kubelet/pods/00000000-0000-0000-0000-000000000000/volumes',
+        '/var/lib/kubelet/pods/00000000-0000-0000-0000-000000000001/volumes',
+        '/home/user',
+        '/home/user2',
+        '/home/user3',
+      ]);
+      // The same name keeps its placeholder in every form and payload.
+      expect(
+        latin1.decode(
+          redactor
+              .redact(
+                'units',
+                latin1.encode(
+                  'home-bob.mount Session 4 of User BOB carol '
+                  'Session 5 of User alice',
+                ),
+              )
+              .bytes,
+        ),
+        'home-user2.mount Session 4 of User user2 user3 '
+        'Session 5 of User user',
+      );
+      expect(redactor.review(redacted), isEmpty);
+    });
+
     test('counts replacements per rule and keeps other bytes', () {
       final payload = [...latin1.encode('a 10.0.0.1 10.0.0.2 '), 0xff, 0x0a];
       final r = Redactor(const RedactionLiterals()).redact('fs', payload);
@@ -440,9 +521,9 @@ void main() {
           '/home/erin@corp.example/x /home /home/user/x "/home/j\xc3\xbcrgen" '
           'PATH=/home/carol/bin:/usr/bin',
         ),
-        '/home/user/bin/syncer /var/home/user fixture-nas:/export/home/user\n'
-        '/home/user/x /home /home/user/x "/home/user" '
-        'PATH=/home/user/bin:/usr/bin',
+        '/home/user/bin/syncer /var/home/user fixture-nas:/export/home/user2\n'
+        '/home/user3/x /home /home/user4/x "/home/user5" '
+        'PATH=/home/user6/bin:/usr/bin',
       );
     });
 
@@ -457,8 +538,8 @@ void main() {
       expect(
         _redact(units, collector: 'units'),
         'home-user.mount home-user-Music.mount var-home-user.automount\n'
-        '"home-user.mount" home-user.mount home-user.mount\n'
-        'home.mount home-user.mount home-assistant.service '
+        '"home-user2.mount" home-user3.mount home-user4.mount\n'
+        'home.mount home-user5.mount home-assistant.service '
         'systemd-homed.service',
       );
     });
@@ -474,9 +555,9 @@ void main() {
           collector: 'units',
         ),
         '{"unit":"session-5.scope","description":"Session 5 of User user"}\n'
-        'session-c1.scope loaded active running Session c1 of User user\n'
+        'session-c1.scope loaded active running Session c1 of User user2\n'
         '"Session 3 of User root"\n'
-        'session-6.scope loaded active running Session 6 of user user',
+        'session-6.scope loaded active running Session 6 of user user3',
       );
     });
 

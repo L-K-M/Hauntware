@@ -70,10 +70,10 @@ const _ipv6Placeholder = '2001:db8::1';
 const _ipv4Placeholder = '192.0.2.1';
 const _macNamePlaceholder = '00005e005301';
 
-/// Every placeholder. [Redactor.review] reads past them, as one can hold
-/// a literal: `/home/user` holds the user `user`. An end that is a letter
-/// or digit needs a non-word neighbour, so that `user` in `superuser`
-/// stays text.
+/// Every placeholder, also numbered (`user2`, [_Pseudonyms]).
+/// [Redactor.review] reads past them, as one can hold a literal:
+/// `/home/user` holds the user `user`. An end that is a letter or digit
+/// needs a non-word neighbour, so that `user` in `superuser` stays text.
 final _placeholder = RegExp(
   [
     for (final p in [
@@ -94,7 +94,7 @@ final _placeholder = RegExp(
       [
         if (_wordChar.hasMatch(p[0])) '(?<![A-Za-z0-9])',
         RegExp.escape(p),
-        if (_wordChar.hasMatch(p[p.length - 1])) '(?![A-Za-z0-9])',
+        if (_wordChar.hasMatch(p[p.length - 1])) r'\d*(?![A-Za-z0-9])',
       ].join(),
     '(?<![A-Za-z0-9])(0{32,}|(en|wl|ww)x$_macNamePlaceholder|fixture$_x2d'
         '(disk|device))(?![A-Za-z0-9])',
@@ -121,6 +121,47 @@ enum _Literal {
 
   final String rule, replacement, residue;
 }
+
+/// Distinct values keep distinct placeholders, numbered in the order they
+/// are met, so that a fixture still tells two containers or two homes
+/// apart: `parseFs` joins its tables on the mount point. One instance
+/// serves every payload of a capture.
+final class _Pseudonyms {
+  final _seen = <String, Map<String, int>>{};
+
+  int _index(String kind, String key) {
+    final seen = _seen[kind] ??= {};
+    return seen.putIfAbsent(key, () => seen.length);
+  }
+
+  /// `user`, then `user2`, `user3`, ... per account name, in any case and
+  /// systemd escaping.
+  String user(String name) {
+    final i = _index('user', _unescape(name).toLowerCase());
+    return i == 0 ? _userPlaceholder : '$_userPlaceholder${i + 1}';
+  }
+
+  /// [id]'s length of zeros that end in its ordinal, in hex.
+  String hex(String id) =>
+      _index('hex', id.toLowerCase()).toRadixString(16).padLeft(id.length, '0');
+
+  /// The UUID placeholder ending in [id]'s ordinal, its groups joined by
+  /// [separator].
+  String uuid(String id, String separator) {
+    final i = _index('uuid', _unescape(id).toLowerCase());
+    return '${_uuidPlaceholder.substring(0, 24)}'
+            '${i.toRadixString(16).padLeft(12, '0')}'
+        .replaceAll('-', separator);
+  }
+}
+
+/// [text] with each systemd escape (`\x2d`, its backslash doubled in
+/// JSON) read as the byte it stands for, as [_decode] maps it.
+String _unescape(String text) =>
+    text.replaceAllMapped(RegExp(r'\\{1,2}x([0-9a-fA-F]{2})'), (m) {
+      final b = int.parse(m[1]!, radix: 16);
+      return String.fromCharCode(b < 0x80 ? b : _byte + b);
+    });
 
 /// [bytes] as text the rules read: ASCII as itself, every other byte as
 /// a private-use character. As Latin-1, the A0 that ends many UTF-8
@@ -234,6 +275,14 @@ final _mountSource = RegExp(
   multiLine: true,
 );
 
+/// The login before a network mount server given by address, which
+/// [_mountSource] leaves to the address rules (`dave@10.0.0.5:/data`,
+/// `//dave@10.0.0.5/share`), a password with it.
+final _mountUser = RegExp(
+  r'^((?:[^\s#/]*#)?(?:[A-Za-z][A-Za-z0-9+.-]*://|//)?)[^\s/@]+@',
+  multiLine: true,
+);
+
 /// An IPv4 octet, also zero-padded.
 const _octet = r'(25[0-5]|2[0-4]\d|[01]?\d?\d)';
 
@@ -242,14 +291,21 @@ final _unitType = RegExp(
   r'scope)$',
 );
 
-final _patterns = <(String, RegExp, String Function(Match))>[
+/// A rule: its name for the counts, its pattern and the replacement of
+/// a match.
+typedef _Rule = (String, RegExp, String Function(Match m, _Pseudonyms ids));
+
+/// The rules for account names in fixed positions. They run before the
+/// literals, which number the same names, so that no rule reads a name
+/// another has already replaced.
+final _accountPatterns = <_Rule>[
   // Every account's home, not only the literals': directory-service
   // accounts are missing from /etc/passwd, and homes also lie under
   // /var/home (Fedora Atomic) or in an NFS export.
   (
     'home directory',
-    RegExp(r'''/home/[^/\s"'\\:;,)\]}\x00-\x1f]+'''),
-    (_) => _homePlaceholder,
+    RegExp(r'''/home/([^/\s"'\\:;,)\]}\x00-\x1f]+)'''),
+    (m, ids) => '/home/${ids.user(m[1]!)}',
   ),
   // The same homes as mount unit names (`home-erin-Music.mount` for
   // /home/erin/Music), where systemd escapes a `-` or a non-ASCII byte.
@@ -260,29 +316,32 @@ final _patterns = <(String, RegExp, String Function(Match))>[
       '(?:$_escape|[^\\s"\'@/\\\\-])+'
       r'''(?=(-[^\s"']*)?\.(auto)?mount(?![A-Za-z0-9]))''',
     ),
-    (m) => '${m[1]}$_userPlaceholder',
+    (m, ids) => '${m[1]}${ids.user(m[0]!.substring(m[1]!.length))}',
   ),
   // logind's session scopes, described as `Session <id> of User <name>`
   // (`of user` before systemd 249).
   (
     'user name',
     RegExp(r'(Session \S+ of User )([^\s"\\]+)', caseSensitive: false),
-    (m) => m[2] == 'root' ? m[0]! : '${m[1]}$_userPlaceholder',
+    (m, ids) => m[2] == 'root' ? m[0]! : '${m[1]}${ids.user(m[2]!)}',
   ),
+];
+
+final _patterns = <_Rule>[
   (
     'URL credentials',
     RegExp(
       // Not across a `"`: a URL ending one JSON string is no user name.
       r'(?<![A-Za-z0-9+.-])([A-Za-z][A-Za-z0-9+.-]*://)[^\s/@:"]*:[^\s/@"]*@',
     ),
-    (m) => '${m[1]}$kRedacted@',
+    (m, _) => '${m[1]}$kRedacted@',
   ),
   (
     'email address',
     RegExp(r'[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}'),
     // A systemd template instance (`getty@tty1.service`) has the same
     // shape; its unit type is the last label.
-    (m) => _unitType.hasMatch(m[0]!) ? m[0]! : _emailPlaceholder,
+    (m, _) => _unitType.hasMatch(m[0]!) ? m[0]! : _emailPlaceholder,
   ),
   // udev's `/dev/<subsystem>/by-<kind>/` links carry a drive's model
   // and serial number, its WWN or SAS address (also in `by-path`), a
@@ -291,7 +350,7 @@ final _patterns = <(String, RegExp, String Function(Match))>[
   (
     'device id',
     RegExp(r'''/dev/([A-Za-z0-9_]+)/by-([A-Za-z0-9-]+)/[^\s"']+'''),
-    (m) =>
+    (m, _) =>
         '/dev/${m[1]}/by-${m[2]}/'
         '${m[1] == 'disk' ? _diskPlaceholder : _devicePlaceholder}',
   ),
@@ -301,7 +360,7 @@ final _patterns = <(String, RegExp, String Function(Match))>[
       '(dev-([A-Za-z0-9_]+)-by($_x2d)(?:[A-Za-z0-9]|$_x2d)+?-)[^\\s"\']+?'
       r'''(?=\.(device|swap|service|target|mount)(?![A-Za-z0-9])|[\s"']|$)''',
     ),
-    (m) => '${m[1]}fixture${m[3]}${m[2] == 'disk' ? 'disk' : 'device'}',
+    (m, _) => '${m[1]}fixture${m[3]}${m[2] == 'disk' ? 'disk' : 'device'}',
   ),
   (
     'UUID',
@@ -309,20 +368,20 @@ final _patterns = <(String, RegExp, String Function(Match))>[
       '(?:(?<![0-9A-Fa-f])|(?<=$_x2d))[0-9a-fA-F]{8}(-|$_x2d)[0-9a-fA-F]{4}'
       r'\1[0-9a-fA-F]{4}\1[0-9a-fA-F]{4}\1[0-9a-fA-F]{12}(?![0-9A-Fa-f-])',
     ),
-    (m) => _uuidPlaceholder.replaceAll('-', m[1]!),
+    (m, ids) => ids.uuid(m[0]!, m[1]!),
   ),
   // Machine and boot ids, container ids, digests.
   (
     'hex id',
     RegExp(r'(?<![0-9A-Fa-f])[0-9a-fA-F]{32,}(?![0-9A-Fa-f])'),
-    (m) => '0' * m[0]!.length,
+    (m, ids) => ids.hex(m[0]!),
   ),
   (
     'MAC address',
     RegExp(
       r'(?<![0-9A-Fa-f:])([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}(?![0-9A-Fa-f:])',
     ),
-    (_) => _macPlaceholder,
+    (_, _) => _macPlaceholder,
   ),
   // The same in the notations of other systems and network gear.
   (
@@ -330,20 +389,20 @@ final _patterns = <(String, RegExp, String Function(Match))>[
     RegExp(
       r'(?<![0-9A-Fa-f-])([0-9a-fA-F]{2}-){5}[0-9a-fA-F]{2}(?![0-9A-Fa-f-])',
     ),
-    (_) => _macPlaceholder.replaceAll(':', '-'),
+    (_, _) => _macPlaceholder.replaceAll(':', '-'),
   ),
   (
     'MAC address',
     RegExp(
       r'(?<![0-9A-Fa-f.])([0-9a-fA-F]{4}\.){2}[0-9a-fA-F]{4}(?![0-9A-Fa-f.])',
     ),
-    (_) => '0000.5e00.5301',
+    (_, _) => '0000.5e00.5301',
   ),
   // systemd names USB, wireless and WWAN interfaces after their MAC.
   (
     'MAC address',
     RegExp(r'(?<![A-Za-z0-9])(en|wl|ww)x[0-9a-fA-F]{12}(?![A-Za-z0-9])'),
-    (m) => '${m[1]}x$_macNamePlaceholder',
+    (m, _) => '${m[1]}x$_macNamePlaceholder',
   ),
   // hostnamectl's serial, asset tag and free-text naming fields.
   (
@@ -352,19 +411,20 @@ final _patterns = <(String, RegExp, String Function(Match))>[
       r'"(\w*Serial\w*|\w*AssetTag|PrettyHostname|Location)"(\s*:\s*)"'
       r'(?:[^"\\]|\\.)*"',
     ),
-    (m) => '"${m[1]}"${m[2]}"$kRedacted"',
+    (m, _) => '"${m[1]}"${m[2]}"$kRedacted"',
   ),
   // systemd 256 and later repeat /etc/machine-info, 262 adds its TAGS= as
   // a list.
   (
     'identity field',
     RegExp(r'"(PRETTY_HOSTNAME|LOCATION|TAGS)=(?:[^"\\]|\\.)*"'),
-    (m) => '"${m[1]}=$kRedacted"',
+    (m, _) => '"${m[1]}=$kRedacted"',
   ),
   (
     'identity field',
     RegExp(r'"MachineTags"(\s*:\s*)\[((?:[^\]"]|"(?:[^"\\]|\\.)*")*)\]'),
-    (m) => m[2]!.contains('"') ? '"MachineTags"${m[1]}["$kRedacted"]' : m[0]!,
+    (m, _) =>
+        m[2]!.contains('"') ? '"MachineTags"${m[1]}["$kRedacted"]' : m[0]!,
   ),
   // An IPv6 address ending in an IPv4 one: this rule takes the prefix,
   // unless it is the generic IPv4-mapped or NAT64 one, the IPv4 rule the
@@ -376,7 +436,7 @@ final _patterns = <(String, RegExp, String Function(Match))>[
       r'(?:(?:[0-9a-fA-F]{1,4}:)+|:):(?:[0-9a-fA-F]{1,4}:)*)'
       '(?=($_octet\\.){3}$_octet(?![0-9]))',
     ),
-    (m) => const {'::', '::ffff:', '64:ff9b::'}.contains(m[0]!.toLowerCase())
+    (m, _) => const {'::', '::ffff:', '64:ff9b::'}.contains(m[0]!.toLowerCase())
         ? m[0]!
         : '2001:db8::',
   ),
@@ -391,7 +451,7 @@ final _patterns = <(String, RegExp, String Function(Match))>[
       r'::[0-9a-fA-F]{1,4}(:[0-9a-fA-F]{1,4}){0,6})'
       r'(?=(:\d{1,5})?(?![0-9A-Za-z:]|\.\d))',
     ),
-    (m) => m[0] == '::1' ? '::1' : _ipv6Placeholder,
+    (m, _) => m[0] == '::1' ? '::1' : _ipv6Placeholder,
   ),
   (
     'IPv4 address',
@@ -400,7 +460,7 @@ final _patterns = <(String, RegExp, String Function(Match))>[
       // after an ellipsis; a `.` after it may end the sentence.
       '(?<![0-9]|[0-9A-Za-z]\\.)($_octet\\.){3}$_octet(?!\\.?[0-9])',
     ),
-    (m) {
+    (m, _) {
       final ip = m[0]!;
       return ip.startsWith('127.') || ip == '0.0.0.0' ? ip : _ipv4Placeholder;
     },
@@ -409,7 +469,7 @@ final _patterns = <(String, RegExp, String Function(Match))>[
   (
     'IPv4 address',
     RegExp('(?<![A-Za-z0-9])ip-($_octet-){3}$_octet(?![0-9])'),
-    (_) => 'ip-${_ipv4Placeholder.replaceAll('.', '-')}',
+    (_, _) => 'ip-${_ipv4Placeholder.replaceAll('.', '-')}',
   ),
 ];
 
@@ -454,6 +514,8 @@ final class Redactor {
 
   final List<_Literal> _kinds;
 
+  final _ids = _Pseudonyms();
+
   /// One alternative per literal, each in its own group.
   final RegExp? _literal;
 
@@ -473,12 +535,24 @@ final class Redactor {
         count('mount source');
         return '${m[1] ?? ''}${m[2] ?? ''}${m[3] ?? ''}$_serverPlaceholder';
       });
+      text = text.replaceAllMapped(_mountUser, (m) {
+        final r = '${m[1]}$_userPlaceholder@';
+        if (r != m[0]) count('mount source');
+        return r;
+      });
     }
+    text = _apply(text, _accountPatterns, count);
     if (_literal case final literal?) {
       text = text.replaceAllMapped(literal, (m) {
         final kind = _kindOf(m);
-        if (m[0] != kind.replacement) count(kind.rule);
-        return kind.replacement;
+        final r = switch (kind) {
+          _Literal.user => _ids.user(m[0]!),
+          // Numbered by the last directory, its account in the usual case.
+          _Literal.home => '/home/${_ids.user(m[0]!.split('/').last)}',
+          _ => kind.replacement,
+        };
+        if (r != m[0]) count(kind.rule);
+        return r;
       });
     }
 
@@ -498,14 +572,22 @@ final class Redactor {
       return kRedacted;
     });
 
-    for (final (rule, re, replace) in _patterns) {
+    return RedactedPayload(_encode(_apply(text, _patterns, count)), counts);
+  }
+
+  String _apply(
+    String text,
+    List<_Rule> rules,
+    void Function(String rule) count,
+  ) {
+    for (final (rule, re, replace) in rules) {
       text = text.replaceAllMapped(re, (m) {
-        final r = replace(m);
+        final r = replace(m, _ids);
         if (r != m[0]) count(rule);
         return r;
       });
     }
-    return RedactedPayload(_encode(text), counts);
+    return text;
   }
 
   /// The 1-based line numbers of [text], a file's bytes as Latin-1, that
