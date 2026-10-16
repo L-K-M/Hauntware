@@ -536,6 +536,8 @@ final class MonitoringController extends ChangeNotifier {
     for (final readings in _readings.values) {
       readings.dispose();
     }
+    // A pending check for unnamed ring streams then finds no readings.
+    _readings.clear();
     _clock.dispose();
     _backgroundPause.dispose();
     super.dispose();

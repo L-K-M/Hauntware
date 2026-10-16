@@ -874,6 +874,20 @@ void main() {
       },
     );
 
+    test('a controller disposed as a ring stream goes unnamed leaves its '
+        'rings alone', () async {
+      final own = MonitoringController(engine)
+        ..subscribe('srv-1', 'overview-0', {core});
+      sample(0);
+      await settle();
+      own
+        ..unsubscribe('srv-1', 'overview-0')
+        ..dispose();
+      // Whether no subscription names `core` is settled after the turn,
+      // when the disposed rings must not be written.
+      await settle();
+    });
+
     test('a pause before any reading opens no gap', () async {
       // Shown already, as the coverage card asks for it as it builds.
       final history = monitoring.historyFor('srv-1', MetricSeries.cpuBusy);
