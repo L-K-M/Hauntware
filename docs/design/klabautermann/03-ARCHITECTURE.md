@@ -4343,10 +4343,11 @@ the engine in `engine_isolate.dart` beside it):
     for every name or for none, as `Match final all` does; one that asks
     for it for some names only, such as a `CanonicalizeHostname` in a
     `Host` block, falls outside what the import models, like any other
-    value that file sets. A first hop's own route is still checked as
-    where ssh dials that hop as itself, so a host behind a first hop
-    whose own route fails the check is left out and counted, although
-    ssh may reach it: that is conservative, not what ssh does. With
+    value that file sets. A first hop's own route is checked as if ssh
+    dialed that hop directly, whichever pass the host behind it keeps.
+    So a host behind a first hop whose own route fails the check is left
+    out and counted, although ssh may reach it: that is conservative,
+    not what ssh does. With
     `Host *.example.com` / `User ops` / `ProxyJump bastion.example.com`,
     `Host bastion` / `HostName bastion.example.com`, `Host bastion2` /
     `HostName b2.example.com` and `Host web` / `HostName 10.0.0.5` /
