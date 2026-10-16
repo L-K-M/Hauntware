@@ -1914,9 +1914,14 @@
   "@jobsWaiting": {
     "description": "The Jobs tab before the server's cron jobs or timers have been read."
   },
-  "jobsEmpty": "No cron jobs or timers on this server.",
+  "jobsEmpty": "{crontab, select, read{No jobs found in your crontab, the system cron files or systemd timers.} other{No jobs found in the system cron files or systemd timers.}}",
   "@jobsEmpty": {
-    "description": "The Jobs tab when every source was read and none holds a job."
+    "description": "The Jobs tab when every source it reads was read and none holds a job: the login user's crontab (crontab -l), /etc/crontab, /etc/cron.d and the cron.<period> directories, and systemd timers. Other users' crontabs are not read. crontab is read, or unread when crontab -l gave no clear answer, so the user's own jobs are unknown.",
+    "placeholders": {
+      "crontab": {
+        "type": "String"
+      }
+    }
   },
   "jobsUnavailable": "{source, select, cron{Cron jobs} other{Timers}} could not be read: {reason, select, missing{the server lacks a file or tool this reading needs.} denied{the server refused this reading.} timeout{this reading took too long, so the server stopped it.} other{this reading failed on the server.}}",
   "@jobsUnavailable": {

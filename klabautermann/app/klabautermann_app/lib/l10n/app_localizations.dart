@@ -2404,11 +2404,11 @@ abstract class AppLocalizations {
   /// **'Waiting for the first reading.'**
   String get jobsWaiting;
 
-  /// The Jobs tab when every source was read and none holds a job.
+  /// The Jobs tab when every source it reads was read and none holds a job: the login user's crontab (crontab -l), /etc/crontab, /etc/cron.d and the cron.<period> directories, and systemd timers. Other users' crontabs are not read. crontab is read, or unread when crontab -l gave no clear answer, so the user's own jobs are unknown.
   ///
   /// In en, this message translates to:
-  /// **'No cron jobs or timers on this server.'**
-  String get jobsEmpty;
+  /// **'{crontab, select, read{No jobs found in your crontab, the system cron files or systemd timers.} other{No jobs found in the system cron files or systemd timers.}}'**
+  String jobsEmpty(String crontab);
 
   /// Why the Jobs tab's latest cron or timers reading has no rows; the rows of the last reading, if any, stay listed below it.
   ///

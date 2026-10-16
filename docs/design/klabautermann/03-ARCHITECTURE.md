@@ -2743,7 +2743,8 @@ each row's source and the user its line names:
   turn grey once the older stream's reading is past 120 s, twice the 6.4
   period, beside the freshness line; a failed reading's reason stands
   above the last rows; an unclear `crontab -l` says the user's own jobs
-  may be missing. The phone reaches the tab once More lists it (10.5).
+  may be missing, and an empty list names only the sources read, never
+  other users' crontabs (JOB-03). The phone reaches the tab once More lists it (10.5).
 
 ### 7.8 Packages and updates (PKG)
 

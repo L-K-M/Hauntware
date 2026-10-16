@@ -1659,7 +1659,14 @@ class AppLocalizationsEn extends AppLocalizations {
   String get jobsWaiting => 'Waiting for the first reading.';
 
   @override
-  String get jobsEmpty => 'No cron jobs or timers on this server.';
+  String jobsEmpty(String crontab) {
+    String _temp0 = intl.Intl.selectLogic(crontab, {
+      'read':
+          'No jobs found in your crontab, the system cron files or systemd timers.',
+      'other': 'No jobs found in the system cron files or systemd timers.',
+    });
+    return '$_temp0';
+  }
 
   @override
   String jobsUnavailable(String source, String reason) {

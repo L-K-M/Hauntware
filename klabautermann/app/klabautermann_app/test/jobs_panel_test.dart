@@ -398,22 +398,32 @@ void main() {
     );
   });
 
-  testWidgets('only both readings say the server has no job', (tester) async {
+  testWidgets('an empty list names only the sources read', (tester) async {
     final panel = await _pump(tester);
-    const empty = 'No cron jobs or timers on this server.';
+    const all =
+        'No jobs found in your crontab, the system cron files or systemd '
+        'timers.';
     await panel.sample(
       tester,
       SampleStream.cron,
       CronResult(CronSnapshot(ownCrontabPresent: true)),
     );
-    expect(find.text(empty), findsNothing);
+    expect(find.text(all), findsNothing);
 
     await panel.sample(
       tester,
       SampleStream.timers,
       TimersResult(TimersSnapshot()),
     );
-    expect(find.text(empty), findsOneWidget);
+    expect(find.text(all), findsOneWidget);
+
+    // An unclear crontab -l leaves the user's own jobs unknown.
+    await panel.sample(tester, SampleStream.cron, CronResult(CronSnapshot()));
+    expect(find.text(all), findsNothing);
+    expect(
+      find.text('No jobs found in the system cron files or systemd timers.'),
+      findsOneWidget,
+    );
   });
 
   group('a timer with its triggers read', () {
