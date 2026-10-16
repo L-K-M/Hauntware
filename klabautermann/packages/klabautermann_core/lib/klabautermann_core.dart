@@ -87,6 +87,7 @@ export 'package:klabautermann_host/klabautermann_host.dart'
         evaluatePanel;
 export 'package:seance_core/seance_core.dart' show quoteShellWord;
 // The coverage card's external-monitor finding (03 §9.5 item 3): K04's
-// rule over a `units` reading, which arrives only from an `ok` section.
+// rule over a `units` reading, and what it reports.
 export 'package:klabautermann_host/klabautermann_host.dart'
-    show ExternalMonitorReport, ExternalMonitorUnit, detectExternalMonitors;
+    show ExternalMonitorReport, ExternalMonitorUnit;
+export 'src/sampling/sample_results.dart' show externalMonitorsIn;

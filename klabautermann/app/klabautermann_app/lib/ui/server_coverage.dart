@@ -32,15 +32,10 @@ const String _unitsSurface = 'coverage';
   required Sample? latest,
   required Sample? reading,
 }) {
-  final units = switch (reading?.result) {
-    UnitsResult(:final units) => units,
+  final report = switch (reading?.result) {
+    final UnitsResult units => externalMonitorsIn(units),
     _ => null,
   };
-  // A list arrives only from an `ok` section (a failed one is
-  // unavailable), so the HWS/1 status type stays inside the engine.
-  final report = units == null
-      ? null
-      : detectExternalMonitors(units, status: .ok);
   String names({required bool running}) => [
     for (final unit in report!.units)
       if (unit.running == running) unit.unit,

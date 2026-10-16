@@ -24,6 +24,13 @@ Collector sampleStreamCollector(SampleStream stream) => switch (stream) {
   SampleStream.cron => Collector.cron,
 };
 
+/// K04's external-monitor rule over a `units` reading (03 §9.5 item 3).
+/// The engine makes a [UnitsResult] only from an `ok` section (a failed
+/// one is a [CollectorUnavailable]), so the app need not name the HWS/1
+/// section status.
+ExternalMonitorReport externalMonitorsIn(UnitsResult result) =>
+    detectExternalMonitors(result.units, status: SectionStatus.ok);
+
 /// The most a [CollectorUnavailable.detail] keeps of a collector's error
 /// output: its end, the latest output, as the sampler's stderr ring
 /// keeps. A section may carry up to 1 MiB, which would otherwise cross
