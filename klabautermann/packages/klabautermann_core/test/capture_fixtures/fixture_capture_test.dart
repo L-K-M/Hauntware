@@ -75,7 +75,8 @@ void main() {
       'SOURCE.md',
     });
     expect(_text(f, 'procs.txt'), '== x ==\nprocs at 192.0.2.1\n');
-    expect(f.counts, {'IPv4 address': 8});
+    // cron's line is no job: it keeps its first word.
+    expect(f.counts, {'IPv4 address': 7, 'cron text': 1});
     expect(f.residue, isEmpty);
   });
 
@@ -114,16 +115,21 @@ void main() {
       source,
       contains('Probe areas: kernel ok, distro ok, identity ok, session ok.'),
     );
-    expect(source, contains('Redaction (03 §6.5): IPv4 address 8.'));
+    expect(
+      source,
+      contains('Redaction (03 §6.5): IPv4 address 7, cron text 1.'),
+    );
   });
 
   test('a line the review flags is reported, with file and line', () {
     final f = renderFixtureFiles(
-      _capture(cron: '== crontab ==\n0 3 * * * backup # its private key'),
+      _capture(identity: '== x ==\nbackup # its private key'),
       Redactor(const RedactionLiterals(userNames: ['anke'])),
       capturedAt: at,
     );
-    expect(f.residue.map((r) => '$r'), ['cron.txt:2: mentions a private key']);
+    expect(f.residue.map((r) => '$r'), [
+      'identity.txt:2: mentions a private key',
+    ]);
     expect(_text(f, 'probe.sections'), contains('user=user\ngroups=user sudo'));
   });
 
@@ -264,7 +270,7 @@ void main() {
     final root = Directory.systemTemp.createTempSync('klab-fixtures-');
     addTearDown(() => root.deleteSync(recursive: true));
     final flagged = renderFixtureFiles(
-      _capture(cron: 'Description=Load the private key'),
+      _capture(identity: 'Description=Load the private key'),
       redactor,
       capturedAt: at,
     );

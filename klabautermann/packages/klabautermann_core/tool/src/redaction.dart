@@ -11,7 +11,7 @@ import 'dart:convert';
 import 'dart:math';
 
 import 'package:klabautermann_host/klabautermann_host.dart'
-    show Collector, kTimeoutAbsentMarker;
+    show Collector, CronExpression, kTimeoutAbsentMarker;
 import 'package:seance_core/seance_core.dart' show SecretRedactor;
 
 /// Stands in for a removed argument, secret, field or `--redact` value.
@@ -351,6 +351,7 @@ final class Redactor {
 
     var text = latin1.decode(payload);
     if (collector == Collector.procs.wireName) text = _redactArgv(text, count);
+    if (collector == Collector.cron.wireName) text = _redactCron(text, count);
     if (collector == Collector.fs.wireName) {
       text = text.replaceAllMapped(_mountSource, (m) {
         count('mount source');
@@ -499,6 +500,134 @@ String _redactArgv(String text, void Function(String rule) count) {
     out.add(redacted);
   }
   return out.join('\n');
+}
+
+/// A block header of a collector payload, as `splitBlocks` reads it.
+final _blockHeader = RegExp(r'^== ([a-z0-9_-]+) ==$');
+
+/// A crontab(5) environment line, as `parseCron` reads it: the name, `=`
+/// and the blanks around it, then the value.
+final _cronEnv = RegExp(r'^(\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*)([^\n]*)$');
+
+/// A crontab job line: its schedule (an `@` macro or five fields) with
+/// the blanks after it, then the rest.
+final _cronJob = RegExp(
+  r'^(\s*(@\S+|\S+\s+\S+\s+\S+\s+\S+\s+\S+)\s+)(\S[^\n]*)$',
+);
+
+/// What follows a system crontab's schedule: the user field, then the
+/// command.
+final _cronUser = RegExp(r'^(\S+)(\s+)(\S[^\n]*)$');
+
+/// The `crontab_meta` lines `parseCron` reads.
+final _cronStatus = RegExp(r'^\s*(rc=-?\d+|tool=missing)\s*$');
+
+/// A `cron_dirs` entry: `<period> <name>`.
+final _cronDirEntry = RegExp(r'^\s*(hourly|daily|weekly|monthly) ');
+
+final _firstWord = RegExp(r'^(\s*)(\S+)([^\n]*)$');
+
+/// Rewrites a `cron` payload (03 §7.7) the way [_redactArgv] does
+/// `procs`: a command carries the same secrets, user names and hosts as
+/// an argv, and `parseCron` only keeps it as text. Each job keeps its
+/// schedule, a user field of `root` (others read `user`) and the first
+/// word of its command; comment text and environment values but
+/// `CRON_TZ`, which jobs are evaluated in, read [kRedacted]. The blocks
+/// are found as `parseCron` finds them; a line it reads as no job, entry
+/// or status keeps its first word only. A failed `crontab -l` keeps its
+/// output, from which `parseCron` reads "no crontab".
+String _redactCron(String text, void Function(String rule) count) {
+  final lines = text.split('\n');
+  // parseCron reads the last `rc=` of every crontab_meta line.
+  var block = '';
+  var missing = false;
+  int? rc;
+  for (final line in lines) {
+    final header = _blockHeader.firstMatch(line.trim());
+    if (header != null) {
+      block = header[1]!;
+    } else if (block == 'crontab_meta') {
+      final t = line.trim();
+      if (t == 'tool=missing') missing = true;
+      if (t.startsWith('rc=')) rc = int.tryParse(t.substring(3));
+    }
+  }
+  final ownJobs = !missing && rc == 0;
+
+  block = '';
+  final out = <String>[];
+  for (final line in lines) {
+    final header = _blockHeader.firstMatch(line.trim());
+    if (header != null) block = header[1]!;
+    final tab = line.indexOf('\t');
+    out.add(switch (block) {
+      _ when header != null || line == kTimeoutAbsentMarker => line,
+      'crontab_meta' when _cronStatus.hasMatch(line) => line,
+      'crontab' when ownJobs => _crontabLine(line, false, count),
+      'crontab' when line.toLowerCase().contains('no crontab') => line,
+      'etc_crontab' => _crontabLine(line, true, count),
+      'cron_d' when tab >= 0 =>
+        line.substring(0, tab + 1) +
+            _crontabLine(line.substring(tab + 1), true, count),
+      'cron_dirs' when line.trim().isEmpty || _cronDirEntry.hasMatch(line) =>
+        line,
+      _ => _firstWordOnly(line, count),
+    });
+  }
+  return out.join('\n');
+}
+
+/// One crontab line, `parseCron`'s order: a comment, an environment
+/// line, a job; [system] for the user field of `/etc/crontab` and
+/// `/etc/cron.d`. A line whose schedule does not parse keeps its first
+/// word only, so that no name lands where a command word is kept.
+String _crontabLine(String line, bool system, void Function(String) count) {
+  final t = line.trim();
+  if (t.isEmpty) return line;
+  if (t.startsWith('#')) {
+    if (t == '#') return line;
+    count('cron text');
+    return '${line.substring(0, line.indexOf('#') + 1)} $kRedacted';
+  }
+  if (_cronEnv.firstMatch(line) case final env?) {
+    if (env[2] == 'CRON_TZ' || env[3]!.trim().isEmpty) return line;
+    count('cron text');
+    return '${env[1]}$kRedacted';
+  }
+  final job = _cronJob.firstMatch(line);
+  if (job == null || CronExpression.parse(job[2]!) == null) {
+    return _firstWordOnly(line, count);
+  }
+  var command = job[3]!;
+  var user = '';
+  if (system) {
+    final field = _cronUser.firstMatch(command);
+    if (field == null) return _firstWordOnly(line, count);
+    final name = field[1]!;
+    final kept = name == 'root' ? name : _userPlaceholder;
+    if (kept != name) count('user name');
+    user = '$kept${field[2]}';
+    command = field[3]!;
+  }
+  return '${job[1]}$user${_firstWordOnly(command, count)}';
+}
+
+/// Keeps leading blanks and the first word of [s], then one [kRedacted]
+/// for the rest. An assignment's value (`PGPASSWORD=x pg_dump`) goes too.
+String _firstWordOnly(String s, void Function(String rule) count) {
+  final m = _firstWord.firstMatch(s);
+  if (m == null) return s;
+  final word = m[2]!;
+  final eq = word.indexOf('=');
+  final kept = eq < 0 || eq == word.length - 1
+      ? word
+      : '${word.substring(0, eq + 1)}$kRedacted';
+  final out = [
+    '${m[1]}$kept',
+    if (m[3]!.trim().isNotEmpty) kRedacted,
+  ].join(' ');
+  if (out != s) count('cron text');
+  return out;
 }
 
 /// Keeps leading spaces and the first word of [s]; anything after that

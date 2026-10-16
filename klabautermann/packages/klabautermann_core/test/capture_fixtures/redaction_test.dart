@@ -276,6 +276,8 @@ void main() {
     });
   });
 
+  // These rules hold for every payload; in `cron` the job structure
+  // (the cron group) removes command arguments first.
   group('secrets', () {
     const cron =
         '== crontab ==\n'
@@ -290,7 +292,7 @@ void main() {
     test('secrets, URL credentials and private keys become placeholders', () {
       final r = Redactor(
         const RedactionLiterals(),
-      ).redact('cron', utf8.encode(cron));
+      ).redact('units', utf8.encode(cron));
       expect(
         latin1.decode(r.bytes),
         '== crontab ==\n'
@@ -308,7 +310,7 @@ void main() {
         _redact(
           'redis-cli -u redis://:Hunter2@localhost:6379/0 ping\n'
           'x rediss://:Hunter2@10.0.0.5:6379',
-          collector: 'cron',
+          collector: 'units',
         ),
         'redis-cli -u redis://[redacted]@localhost:6379/0 ping\n'
         'x rediss://[redacted]@192.0.2.1:6379',
@@ -345,7 +347,7 @@ void main() {
       ];
       final redactor = Redactor(const RedactionLiterals());
       final text = lines.map((l) => l.$1).join('\n');
-      final r = redactor.redact('cron', latin1.encode(text));
+      final r = redactor.redact('units', latin1.encode(text));
       final redacted = latin1.decode(r.bytes);
       expect(redacted, lines.map((l) => l.$2).join('\n'));
       expect(r.counts, {'secret': 8});
@@ -357,7 +359,7 @@ void main() {
       const plain =
           'mkdir -p /x; ssh -p 2222 h; mysqldump -p db | pigz -p4\n'
           'rsync -u h:/src /dst; sudo -u www-data x; mysql -uroot';
-      expect(_redact(plain, collector: 'cron'), plain);
+      expect(_redact(plain, collector: 'units'), plain);
     });
 
     test('secret-named options and the password options of clients', () {
@@ -398,7 +400,7 @@ void main() {
       ];
       final redactor = Redactor(const RedactionLiterals());
       final text = lines.map((l) => l.$1).join('\n');
-      final redacted = _redact(text, collector: 'cron');
+      final redacted = _redact(text, collector: 'units');
       expect(redacted, lines.map((l) => l.$2).join('\n'));
       expect(redactor.review(text), [
         for (var i = 1; i <= lines.length; i++) (i, 'looks like a secret'),
@@ -409,13 +411,132 @@ void main() {
           'ldapsearch -W -x; 7z x -p a.7z; ls -a /x; tar -P -cf x\n'
           '0 3 * * * mysqldump db\n0 4 * * * pigz -p4 x\n'
           'systemctl --no-ask-password stop x';
-      expect(_redact(plain, collector: 'cron'), plain);
+      expect(_redact(plain, collector: 'units'), plain);
     });
 
     test('a private-key header without its end becomes a placeholder', () {
       expect(
-        _redact('$_pemBegin\nb3Blbg', collector: 'cron'),
+        _redact('$_pemBegin\nb3Blbg', collector: 'units'),
         '[redacted]\nb3Blbg',
+      );
+    });
+  });
+
+  group('cron', () {
+    // The second verification's lines: crontab(5) environment syntax,
+    // password options of clients no rule lists, positional secrets.
+    const cron =
+        '== crontab_meta ==\n'
+        'rc=0\n'
+        '== crontab ==\n'
+        '# m h dom mon dow command\n'
+        'MYSQL_PWD = Hunter2spaced\n'
+        'DB_PASS= Hunter2nsb\n'
+        'RESTIC_PASSWORD=correct horse battery staple\n'
+        'DB_PW=Hunter2xyz\n'
+        'CRON_TZ=Europe/Berlin\n'
+        '*/5 * * * * docker login -u ci -p Hunter2xyz registry.example.net\n'
+        "0 2 * * * lftp -u backup,Hunter2ftp -e 'mirror -R /srv /bk; quit' x\n"
+        '0 1 * * * azcopy sync /srv "https://a.blob.core.windows.net/bk?sv=1'
+        '&sig=Zx8sQ2kLm4%2FpRt7Yv1Wn9Bc3Df5Gh6Jk0Lq2Ws4Ed8%3D"\n'
+        "@reboot echo 'Hunter2sudo' | sudo -S mount -a\n"
+        '30 4 * * * PGPASSWORD=Hunter2 pg_dump db\r\n'
+        '== etc_crontab ==\n'
+        'SHELL=/bin/sh\n'
+        '# mirror //admin:Hunter2xyz@mirror/x, pushes to...10.20.30.40\n'
+        '#\n'
+        '*/5 * * * * root ipmitool -H 10.0.0.9 -U admin -P Hunter2xyz power\n'
+        '17 * * * * www-data sqlplus -s scott/Hunter2ora@orcl @/opt/r.sql\n'
+        '@reboot erin /opt/bin/syncer --token x\n'
+        '61 * * * * root curl -u admin:Hunter2xyz https://x\n'
+        '== cron_d ==\n'
+        'zz-hostile\tDB_PASS =Hunter2nsa\n'
+        'zz-hostile\t0 1 * * * carol /opt/bin/sync.sh -p Hunter2xyz\n'
+        'zz-hostile\tbackup\t0 1 * * * carol /opt/bin/sync.sh\n'
+        'no-tab line\n'
+        '== cron_dirs ==\n'
+        'daily logrotate\n'
+        'weekly\n'
+        'hw_timeout=absent';
+
+    test('jobs keep their schedule and first command word', () {
+      expect(
+        _redact(cron, collector: 'cron'),
+        '== crontab_meta ==\n'
+        'rc=0\n'
+        '== crontab ==\n'
+        '# [redacted]\n'
+        'MYSQL_PWD = [redacted]\n'
+        'DB_PASS= [redacted]\n'
+        'RESTIC_PASSWORD=[redacted]\n'
+        'DB_PW=[redacted]\n'
+        'CRON_TZ=Europe/Berlin\n'
+        '*/5 * * * * docker [redacted]\n'
+        '0 2 * * * lftp [redacted]\n'
+        '0 1 * * * azcopy [redacted]\n'
+        '@reboot echo [redacted]\n'
+        '30 4 * * * PGPASSWORD=[redacted] [redacted]\n'
+        '== etc_crontab ==\n'
+        'SHELL=[redacted]\n'
+        '# [redacted]\n'
+        '#\n'
+        '*/5 * * * * root ipmitool [redacted]\n'
+        '17 * * * * user sqlplus [redacted]\n'
+        '@reboot user /opt/bin/syncer [redacted]\n'
+        '61 [redacted]\n'
+        '== cron_d ==\n'
+        'zz-hostile\tDB_PASS =[redacted]\n'
+        'zz-hostile\t0 1 * * * user /opt/bin/sync.sh [redacted]\n'
+        'zz-hostile\tbackup [redacted]\n'
+        'no-tab [redacted]\n'
+        '== cron_dirs ==\n'
+        'daily logrotate\n'
+        'weekly\n'
+        'hw_timeout=absent',
+      );
+    });
+
+    test('the redacted payload parses to the same schedules', () {
+      const ctx = ParseContext.standard;
+      final before = parseCron(cron, ctx).value;
+      final after = parseCron(_redact(cron, collector: 'cron'), ctx).value;
+      List<Object?> schedules(CronSnapshot s) => [
+        for (final j in s.jobs)
+          if (j.expression != null) (j.source, j.schedule, j.cronTz),
+      ];
+      expect(schedules(after), schedules(before));
+      expect(schedules(after), hasLength(9));
+      expect(after.ownCrontabPresent, isTrue);
+      expect(
+        after.dirEntries.map((e) => e.name),
+        before.dirEntries.map((e) => e.name),
+      );
+      expect(after.jobs.map((j) => j.user).nonNulls.toSet(), {'root', 'user'});
+    });
+
+    test("a failed crontab -l keeps its diagnostic, nothing else", () {
+      const failed =
+          'preamble x y\n'
+          '== crontab_meta ==\n'
+          'rc=1\n'
+          'stray words\n'
+          '== crontab ==\n'
+          'no crontab for anke\n'
+          '0 3 * * * /usr/bin/backup --all';
+      final redacted = _redact(failed, collector: 'cron');
+      expect(
+        redacted,
+        'preamble [redacted]\n'
+        '== crontab_meta ==\n'
+        'rc=1\n'
+        'stray [redacted]\n'
+        '== crontab ==\n'
+        'no crontab for anke\n'
+        '0 [redacted]',
+      );
+      expect(
+        parseCron(redacted, ParseContext.standard).value.ownCrontabPresent,
+        isFalse,
       );
     });
   });
@@ -431,7 +552,7 @@ void main() {
 
     test('a redacted payload passes', () {
       final redacted = redactor.redact(
-        'cron',
+        'units',
         utf8.encode(
           'DB_PASSWORD=hunter2 --password=x\n'
           '$_pemBegin\nAAAA\n$_pemEnd\n'
@@ -545,7 +666,7 @@ void main() {
 
     test('other collectors keep their argv-like text', () {
       const cron = '== crontab ==\n0 3 * * * /usr/bin/backup --all\x1fx';
-      expect(_redact(cron, collector: 'cron'), cron);
+      expect(_redact(cron, collector: 'units'), cron);
     });
   });
 }
