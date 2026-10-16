@@ -140,6 +140,15 @@ Future<_Panel> _pump(
 
 Finder _row(String id) => find.byKey(ValueKey('jobs.row.$id'));
 
+/// The table's row ids, top to bottom.
+List<String> _rowOrder() => [
+  for (final element in find.byType(Semantics).evaluate())
+    if (element.widget.key case ValueKey<String>(
+      :final value,
+    ) when value.startsWith('jobs.row.'))
+      value.substring('jobs.row.'.length),
+];
+
 Finder _inSheet(String text) =>
     find.descendant(of: find.byType(BottomSheet), matching: find.text(text));
 
@@ -229,13 +238,7 @@ void main() {
     expect(find.bySemanticsLabel(RegExp(r'2:30\sAM \(DST\)')), findsOneWidget);
 
     // The next job to run leads; unknown runs sort last.
-    final order = [
-      for (final element in find.byType(Semantics).evaluate())
-        if (element.widget.key case ValueKey<String>(
-          :final value,
-        ) when value.startsWith('jobs.row.'))
-          value.substring('jobs.row.'.length),
-    ];
+    final order = _rowOrder();
     expect(order.take(2), ['cron|crontab|0', 'timer|apt-daily.timer']);
     expect(order.last, 'timer|certbot.timer');
   });
@@ -398,7 +401,12 @@ void main() {
       SampleStream.cron,
       cronResultOf(
         CronSnapshot(
-          jobs: [cronLine('crontab', '* * * * *', '/usr/local/bin/tick')],
+          jobs: [
+            cronLine('crontab', '* * * * *', '/usr/local/bin/tick'),
+            // 12:01 and 12:05 UTC, and 12:03 between them.
+            cronLine('crontab', '1,5 14 * * *', '/usr/local/bin/twice'),
+            cronLine('crontab', '3 14 * * *', '/usr/local/bin/once'),
+          ],
           ownCrontabPresent: true,
         ),
       ),
@@ -426,6 +434,12 @@ void main() {
       next('timer|tick.timer', 'Sat, Oct 24 2:00 PM UTC+02:00'),
       findsOneWidget,
     );
+    final before = _rowOrder();
+    expect(before.first, 'timer|tick.timer');
+    expect(
+      before.indexOf('cron|crontab|1'),
+      lessThan(before.indexOf('cron|crontab|2')),
+    );
 
     // Still fresh, the reading's first run and the timer's one elapse
     // have passed: the next listed run leads, and the timer waits for
@@ -435,6 +449,13 @@ void main() {
     expect(find.text('Updated 1 min ago'), findsOneWidget);
     expect(next('cron|crontab|0', 'Sat, Oct 24 2:02 PM'), findsOneWidget);
     expect(next('timer|tick.timer', 'unknown'), findsOneWidget);
+    // The rows sort by the runs they show.
+    expect(_rowOrder(), [
+      'cron|crontab|0',
+      'cron|crontab|2',
+      'cron|crontab|1',
+      'timer|tick.timer',
+    ]);
 
     await tester.tap(_row('cron|crontab|0'));
     await tester.pumpAndSettle();
