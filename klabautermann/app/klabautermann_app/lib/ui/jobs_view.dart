@@ -7,9 +7,6 @@ import '../l10n/app_localizations.dart';
 /// PM") before it reads its minute and hour fields apart.
 const int _maxListedTimes = 6;
 
-/// The source name the cron collector gives the login user's own crontab.
-const String _ownCrontab = 'crontab';
-
 /// The shapes whose phrase repeats ("every 15 minutes").
 const _repeating = {_Shape.all, _Shape.step, _Shape.rangeStep};
 
@@ -299,9 +296,14 @@ String? runNote(AppLocalizations l10n, CronRun run) => switch (run.dst) {
   CronDst.nearTransition => l10n.jobsRunNearTransition,
 };
 
-/// Why a row lists no runs, in words.
+/// Why a row lists no runs, in words, with the engine's limits.
 String runsUnknownText(AppLocalizations l10n, JobRunsUnknown reason) =>
-    l10n.jobsRunsUnknown(reason.name);
+    l10n.jobsRunsUnknown(
+      reason.name,
+      kCronLinesEvaluated,
+      // In whole years.
+      kCronHorizonDays ~/ 365,
+    );
 
 /// The row's name: a cron line's command, a periodic script's name or a
 /// timer's unit, all server data.
@@ -315,7 +317,7 @@ String jobTitle(JobEntry job) => switch (job) {
 /// names one (JOB-01).
 String sourceText(AppLocalizations l10n, JobEntry job) => switch (job) {
   CronJobEntry(:final job) => switch ((job.source, job.user)) {
-    (_ownCrontab, _) => l10n.jobsSourceOwnCrontab,
+    (kOwnCrontabSource, _) => l10n.jobsSourceOwnCrontab,
     (final source, final user?) => l10n.jobsSourceAsUser(source, user),
     (final source, null) => source,
   },
@@ -339,5 +341,5 @@ String sourceText(AppLocalizations l10n, JobEntry job) => switch (job) {
 /// (03 §7.7), so a single run there is not the whole list.
 bool listsOneElapse(HostProfile? profile) {
   final version = profile?.systemdVersion;
-  return version != null && version < 242;
+  return version != null && version < kCalendarIterationsSystemd;
 }

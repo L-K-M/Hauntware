@@ -150,6 +150,14 @@ void main() {
       runsUnknownText(_l10n, JobRunsUnknown.noDriver),
       'No cron line runs this directory.',
     );
+    expect(
+      runsUnknownText(_l10n, JobRunsUnknown.notEvaluated),
+      'Runs are worked out for the first 200 cron lines only.',
+    );
+    expect(
+      runsUnknownText(_l10n, JobRunsUnknown.noRunInHorizon),
+      'No run falls in the next 10 years.',
+    );
     expect(listsOneElapse(HostProfile(systemdVersion: 239)), isTrue);
     expect(listsOneElapse(HostProfile(systemdVersion: 242)), isFalse);
     expect(listsOneElapse(HostProfile()), isFalse);

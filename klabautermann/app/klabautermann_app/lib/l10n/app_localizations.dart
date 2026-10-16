@@ -2728,11 +2728,11 @@ abstract class AppLocalizations {
   /// **'{first} {second}'**
   String jobsSpanPair(String first, String second);
 
-  /// Why a job lists no next runs (03 §7.7); reason is the engine's JobRunsUnknown name, and other is noDriver.
+  /// Why a job lists no next runs (03 §7.7); reason is the engine's JobRunsUnknown name, and other is noDriver. limit is how many cron lines a reading works out runs for, and years how far ahead it looks.
   ///
   /// In en, this message translates to:
-  /// **'{reason, select, reboot{Runs when cron starts, not at a time.} unparsed{The schedule does not parse, so its runs are unknown.} timeZoneUnresolved{This device does not know the CRON_TZ zone, so its runs are unknown.} serverZoneUnknown{The server\'s time zone is not known yet, so its runs are unknown.} noRunInHorizon{No run falls in the next ten years.} notEvaluated{Runs are worked out for the first 200 cron lines only.} anacron{anacron runs this directory; its timing is not shown in this version.} other{No cron line runs this directory.}}'**
-  String jobsRunsUnknown(String reason);
+  /// **'{reason, select, reboot{Runs when cron starts, not at a time.} unparsed{The schedule does not parse, so its runs are unknown.} timeZoneUnresolved{This device does not know the CRON_TZ zone, so its runs are unknown.} serverZoneUnknown{The server\'s time zone is not known yet, so its runs are unknown.} noRunInHorizon{No run falls in the next {years} years.} notEvaluated{Runs are worked out for the first {limit} cron lines only.} anacron{anacron runs this directory; its timing is not shown in this version.} other{No cron line runs this directory.}}'**
+  String jobsRunsUnknown(String reason, int limit, int years);
 
   /// Beside a cron run that a DST change skips: time is the clock time the line was written for; the run time shown is the change.
   ///

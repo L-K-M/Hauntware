@@ -2014,7 +2014,7 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String jobsRunsUnknown(String reason) {
+  String jobsRunsUnknown(String reason, int limit, int years) {
     String _temp0 = intl.Intl.selectLogic(reason, {
       'reboot': 'Runs when cron starts, not at a time.',
       'unparsed': 'The schedule does not parse, so its runs are unknown.',
@@ -2022,8 +2022,9 @@ class AppLocalizationsEn extends AppLocalizations {
           'This device does not know the CRON_TZ zone, so its runs are unknown.',
       'serverZoneUnknown':
           'The server\'s time zone is not known yet, so its runs are unknown.',
-      'noRunInHorizon': 'No run falls in the next ten years.',
-      'notEvaluated': 'Runs are worked out for the first 200 cron lines only.',
+      'noRunInHorizon': 'No run falls in the next $years years.',
+      'notEvaluated':
+          'Runs are worked out for the first $limit cron lines only.',
       'anacron':
           'anacron runs this directory; its timing is not shown in this version.',
       'other': 'No cron line runs this directory.',
