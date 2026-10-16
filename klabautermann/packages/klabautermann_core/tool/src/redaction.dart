@@ -206,6 +206,9 @@ final _mountSource = RegExp(
   multiLine: true,
 );
 
+/// An IPv4 octet, also zero-padded.
+const _octet = r'(25[0-5]|2[0-4]\d|[01]?\d?\d)';
+
 final _unitType = RegExp(
   r'\.(service|socket|device|mount|automount|swap|target|path|timer|slice|'
   r'scope)$',
@@ -333,6 +336,20 @@ final _patterns = <(String, RegExp, String Function(Match))>[
     RegExp(r'"MachineTags"(\s*:\s*)\[((?:[^\]"]|"(?:[^"\\]|\\.)*")*)\]'),
     (m) => m[2]!.contains('"') ? '"MachineTags"${m[1]}["$kRedacted"]' : m[0]!,
   ),
+  // An IPv6 address ending in an IPv4 one: this rule takes the prefix,
+  // unless it is the generic IPv4-mapped or NAT64 one, the IPv4 rule the
+  // tail.
+  (
+    'IPv6 address',
+    RegExp(
+      r'(?<![0-9A-Za-z:])((?:[0-9a-fA-F]{1,4}:){6}|'
+      r'(?:(?:[0-9a-fA-F]{1,4}:)+|:):(?:[0-9a-fA-F]{1,4}:)*)'
+      '(?=($_octet\\.){3}$_octet(?![0-9]))',
+    ),
+    (m) => const {'::', '::ffff:', '64:ff9b::'}.contains(m[0]!.toLowerCase())
+        ? m[0]!
+        : '2001:db8::',
+  ),
   (
     'IPv6 address',
     RegExp(
@@ -349,14 +366,20 @@ final _patterns = <(String, RegExp, String Function(Match))>[
   (
     'IPv4 address',
     RegExp(
-      r'(?<![0-9.])((25[0-5]|2[0-4]\d|1?\d?\d)\.){3}'
-      // A `.` may end the sentence, not a longer dotted number.
-      r'(25[0-5]|2[0-4]\d|1?\d?\d)(?!\.?[0-9])',
+      // Not inside a longer dotted number (`so.1.2.3.4`, `1.2.3.4.5`), but
+      // after an ellipsis; a `.` after it may end the sentence.
+      '(?<![0-9]|[0-9A-Za-z]\\.)($_octet\\.){3}$_octet(?!\\.?[0-9])',
     ),
     (m) {
       final ip = m[0]!;
       return ip.startsWith('127.') || ip == '0.0.0.0' ? ip : _ipv4Placeholder;
     },
+  ),
+  // EC2's internal host names spell the address with hyphens.
+  (
+    'IPv4 address',
+    RegExp('(?<![A-Za-z0-9])ip-($_octet-){3}$_octet(?![0-9])'),
+    (_) => 'ip-${_ipv4Placeholder.replaceAll('.', '-')}',
   ),
 ];
 

@@ -162,6 +162,29 @@ void main() {
       );
     });
 
+    test('IPv4 after an ellipsis, zero-padded, in EC2 host names', () {
+      expect(
+        _redact(
+          '# pushes to...10.20.30.40 010.020.030.040 so.1.2.3.4\n'
+          'ip-10-0-1-99.eu-central-1.compute.internal ip-10-0-1-300',
+          collector: 'units',
+        ),
+        '# pushes to...192.0.2.1 192.0.2.1 so.1.2.3.4\n'
+        'ip-192-0-2-1.eu-central-1.compute.internal ip-10-0-1-300',
+      );
+    });
+
+    test('IPv6 ending in IPv4 keeps only generic prefixes', () {
+      expect(
+        _redact(
+          '2a01:4f8:c17:1234::10.0.0.5 ::ffff:10.0.0.1 64:ff9b::10.0.0.2 '
+          '1:2:3:4:5:6:10.0.0.3',
+        ),
+        '2001:db8::192.0.2.1 ::ffff:192.0.2.1 64:ff9b::192.0.2.1 '
+        '2001:db8::192.0.2.1',
+      );
+    });
+
     test('IPv6 keeps ::1 and leaves clock times and C++ names alone', () {
       expect(
         _redact(
