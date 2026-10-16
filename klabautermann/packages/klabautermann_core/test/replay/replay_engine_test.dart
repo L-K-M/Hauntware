@@ -5,6 +5,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:isolate';
 
 import 'package:klabautermann_core/klabautermann_core.dart';
 import 'package:klabautermann_core/replay.dart';
@@ -27,7 +28,12 @@ void main() {
     journalRows = loadJournalRows(root);
   });
 
-  Future<void> spawn({int hosts = 1, Set<SampleStream>? monitored}) async {
+  Future<void> spawn({
+    int hosts = 1,
+    Set<SampleStream>? monitored,
+    void Function(EngineStart start) Function(ReplayPlan plan) engine =
+        replayEngine,
+  }) async {
     plan = ReplayPlan(
       fixtures: fixtures,
       journalRows: journalRows,
@@ -36,17 +42,21 @@ void main() {
     );
     client = await IsolateEngineClient.spawn(
       supportDirectory: Directory.systemTemp.path,
-      entryPoint: replayEngine(plan),
+      entryPoint: engine(plan),
     );
     events = [];
     client.events.listen(events.add);
     addTearDown(client.shutdown);
   }
 
-  Future<void> until(bool Function() done, String what) async {
+  Future<void> until(
+    bool Function() done,
+    String what, {
+    Duration within = const Duration(seconds: 5),
+  }) async {
     final clock = Stopwatch()..start();
     while (!done()) {
-      if (clock.elapsed > const Duration(seconds: 5)) fail('no $what');
+      if (clock.elapsed > within) fail('no $what');
       await Future<void>.delayed(const Duration(milliseconds: 10));
     }
   }
@@ -263,6 +273,26 @@ void main() {
     expect(next(7500), const Duration(seconds: 9));
   });
 
+  test('a read a period late resumes on its grid', () async {
+    await spawn(monitored: const {SampleStream.core}, engine: _stalled);
+    await until(
+      () => samples('replay-0').length >= 3,
+      'core samples around the stall',
+      within: const Duration(seconds: 10),
+    );
+    final [first, late, next, ...] = [
+      for (final sample in samples('replay-0')) sample.at,
+    ];
+    // Due at 2 s, the read ran past 4 s: the next is the 6 s slot, not
+    // a period after the late read (about 6.9 s). The bounds leave room
+    // for a slow first step.
+    expect(
+      late.difference(first),
+      greaterThan(_stall - const Duration(milliseconds: 100)),
+    );
+    expect(next.difference(first).inMilliseconds, inInclusiveRange(5500, 6500));
+  });
+
   test('rejects what it does not serve and exits on shutdown', () async {
     await spawn();
     client
@@ -282,3 +312,30 @@ void main() {
     await client.shutdown().timeout(const Duration(seconds: 1));
   });
 }
+
+/// How long [_stalled] blocks its engine: from the first `core` read to
+/// half way between the 4 s and 6 s slots, so the read due at 2 s runs
+/// over a period late.
+const _stall = Duration(milliseconds: 4900);
+
+/// A replay engine over [plan] whose isolate blocks for [_stall] once its
+/// first sample is out, as an engine busy elsewhere would. Its events
+/// reach the client through a port of its own, which watches for that
+/// sample.
+void Function(EngineStart start) _stalled(ReplayPlan plan) => (start) {
+  final relay = RawReceivePort();
+  var stalled = false;
+  relay.handler = (Object? message) {
+    start.uiPort.send(message);
+    if (stalled || message is! Sample) return;
+
+    stalled = true;
+    sleep(_stall);
+  };
+  replayEngine(plan)(
+    EngineStart(
+      uiPort: relay.sendPort,
+      supportDirectory: start.supportDirectory,
+    ),
+  );
+};
