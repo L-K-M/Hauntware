@@ -41,17 +41,23 @@ void main() {
   late List<EngineEvent> events;
   late FakeClock clock;
   late LogStreamRouter router;
+  late List<LogService> services;
 
   void start() {
+    services = [];
     router = LogStreamRouter(
       linkFor: (serverId) => links[serverId],
       emit: events.add,
-      openService: (link, emit) => LogService(
-        link: link,
-        quote: quoteShellWord,
-        emit: emit,
-        startTimer: clock.startTimer,
-      ),
+      openService: (link, emit) {
+        final service = LogService(
+          link: link,
+          quote: quoteShellWord,
+          emit: emit,
+          startTimer: clock.startTimer,
+        );
+        services.add(service);
+        return service;
+      },
     )..retain({'srv-1', 'srv-2'});
     addTearDown(router.close);
   }
@@ -88,6 +94,25 @@ void main() {
   ];
 
   int ends(String id) => statuses(id).whereType<LogStreamEnded>().length;
+
+  /// Whether [service] is closed: a closed one refuses every open, and an
+  /// open one ends this refused spec at once without running anything.
+  bool closed(LogService service) {
+    try {
+      service.open(
+        'probe',
+        LogStreamSpec(
+          serverId: 'srv-1',
+          source: const JournalLogSource(),
+          window: 0,
+          follow: false,
+        ),
+      );
+      return false;
+    } on StateError {
+      return true;
+    }
+  }
 
   /// Ends [link]'s [index]th process with [count] entries.
   Future<void> play(ScriptedLink link, int index, [int count = 2]) async {
@@ -282,6 +307,46 @@ void main() {
       await pumpEventQueue();
       expect(ends('a'), 1, reason: way);
     }
+  });
+
+  group('a server left without streams', () {
+    test('closes its service once its last window ends', () async {
+      open('a');
+      await play(link, 0);
+      await _until(() => ends('a') == 1);
+      expect(closed(services.single), isTrue);
+
+      open('b');
+      expect(services, hasLength(2), reason: 'a new service');
+    });
+
+    test('closes its service once CloseStream ends its last stream while '
+        'it waits', () {
+      open('a');
+      router.activity = AppActivity.background;
+      router.closeStream('a');
+      expect(closed(services.single), isTrue);
+
+      open('b');
+      router.activity = AppActivity.foreground;
+      expect(statuses('b'), [_forForeground, _running]);
+      expect(services, hasLength(2), reason: 'a new service');
+    });
+  });
+
+  test('close completes once the processes have closed', () async {
+    open('a');
+    final first = await link.process(0);
+    final hold = first.holdClose = Completer<void>();
+
+    var done = false;
+    unawaited(router.close().then((_) => done = true));
+    await pumpEventQueue();
+    expect(first.closeCalls, 1);
+    expect(done, isFalse);
+
+    hold.complete();
+    await _until(() => done);
   });
 
   group('opens', () {
