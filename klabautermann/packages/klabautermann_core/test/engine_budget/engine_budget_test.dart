@@ -144,15 +144,28 @@ void main() {
     expect(follow.linesParsed, rows.length);
   });
 
-  test('replays the platform fixtures, not the container captures', () {
+  test('replays the platform fixtures, not the container or runner-VM '
+      'captures', () {
     final root = findHostFixtures()!;
-    final captures = [
-      for (final dir in Directory(root).listSync().whereType<Directory>())
-        if (dir.path.contains('-docker-')) dir.path,
-    ];
-    expect(captures, isNotEmpty, reason: 'capture.sh commits them');
-    expect([
-      for (final fixture in loadHostFixtures(root)) fixture.platform,
-    ], allOf(isNotEmpty, everyElement(isNot(contains('-docker-')))));
+    final dirs = Directory(root).listSync().whereType<Directory>().toList();
+    for (final (mark, script) in [
+      ('-docker-', 'capture.sh'),
+      ('-runner-', 'runner_vm.sh'),
+    ]) {
+      expect(
+        dirs.where((dir) => dir.path.contains(mark)),
+        isNotEmpty,
+        reason: '$script commits them',
+      );
+    }
+    expect(
+      [for (final fixture in loadHostFixtures(root)) fixture.platform],
+      allOf(
+        isNotEmpty,
+        everyElement(
+          allOf(isNot(contains('-docker-')), isNot(contains('-runner-'))),
+        ),
+      ),
+    );
   });
 }

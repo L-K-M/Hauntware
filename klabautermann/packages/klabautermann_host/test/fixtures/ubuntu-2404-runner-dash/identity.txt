@@ -1,0 +1,18 @@
+== os-release ==
+PRETTY_NAME="Ubuntu 24.04.5 LTS"
+NAME="Ubuntu"
+VERSION_ID="24.04"
+VERSION="24.04.5 LTS (Noble Numbat)"
+VERSION_CODENAME=noble
+ID=ubuntu
+ID_LIKE=debian
+HOME_URL="https://www.ubuntu.com/"
+SUPPORT_URL="https://help.ubuntu.com/"
+BUG_REPORT_URL="https://bugs.launchpad.net/ubuntu/"
+PRIVACY_POLICY_URL="https://www.ubuntu.com/legal/terms-and-policies/privacy-policy"
+UBUNTU_CODENAME=noble
+LOGO=ubuntu-logo
+== uname ==
+Linux 6.17.0-1022-azure x86_64
+== hostnamectl ==
+{"Hostname":"fixture-host","StaticHostname":"fixture-host","PrettyHostname":null,"DefaultHostname":"localhost","HostnameSource":"static","IconName":"computer-vm","Chassis":"vm","Deployment":null,"Location":null,"KernelName":"Linux","KernelRelease":"6.17.0-1022-azure","KernelVersion":"#22-Ubuntu SMP Mon Jul 27 17:24:03 UTC 2026","OperatingSystemPrettyName":"Ubuntu 24.04.5 LTS","OperatingSystemCPEName":null,"OperatingSystemHomeURL":"https://www.ubuntu.com/","HardwareVendor":"Microsoft Corporation","HardwareModel":"Virtual Machine","HardwareSerial":null,"FirmwareVersion":"Hyper-V UEFI Release v4.1","FirmwareVendor":"Microsoft Corporation","FirmwareDate":1776816000000000,"MachineID":"00000000000000000000000000000000","BootID":"00000000000000000000000000000001","ProductUUID":null}

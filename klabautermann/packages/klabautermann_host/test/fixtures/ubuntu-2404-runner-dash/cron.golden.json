@@ -1,0 +1,830 @@
+{
+  "result": {
+    "jobs": [
+      {
+        "source": "/etc/crontab",
+        "schedule": "17 * * * *",
+        "command": "cd [redacted] run-parts [redacted] /etc/cron.hourly",
+        "user": "root",
+        "cronTz": null,
+        "expression": {
+          "minutes": [
+            17
+          ],
+          "hours": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23
+          ],
+          "monthDays": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23,
+            24,
+            25,
+            26,
+            27,
+            28,
+            29,
+            30,
+            31
+          ],
+          "months": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12
+          ],
+          "weekDays": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6
+          ],
+          "domStar": true,
+          "dowStar": true,
+          "isReboot": false
+        },
+        "raw": "17 *\t* * *\troot\tcd [redacted] run-parts [redacted] /etc/cron.hourly"
+      },
+      {
+        "source": "/etc/crontab",
+        "schedule": "25 6 * * *",
+        "command": "test [redacted] /usr/sbin/anacron [redacted] run-parts [redacted] /etc/cron.daily; [redacted]",
+        "user": "root",
+        "cronTz": null,
+        "expression": {
+          "minutes": [
+            25
+          ],
+          "hours": [
+            6
+          ],
+          "monthDays": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23,
+            24,
+            25,
+            26,
+            27,
+            28,
+            29,
+            30,
+            31
+          ],
+          "months": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12
+          ],
+          "weekDays": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6
+          ],
+          "domStar": true,
+          "dowStar": true,
+          "isReboot": false
+        },
+        "raw": "25 6\t* * *\troot\ttest [redacted] /usr/sbin/anacron [redacted] run-parts [redacted] /etc/cron.daily; [redacted]"
+      },
+      {
+        "source": "/etc/crontab",
+        "schedule": "47 6 * * 7",
+        "command": "test [redacted] /usr/sbin/anacron [redacted] run-parts [redacted] /etc/cron.weekly; [redacted]",
+        "user": "root",
+        "cronTz": null,
+        "expression": {
+          "minutes": [
+            47
+          ],
+          "hours": [
+            6
+          ],
+          "monthDays": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23,
+            24,
+            25,
+            26,
+            27,
+            28,
+            29,
+            30,
+            31
+          ],
+          "months": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12
+          ],
+          "weekDays": [
+            0
+          ],
+          "domStar": true,
+          "dowStar": false,
+          "isReboot": false
+        },
+        "raw": "47 6\t* * 7\troot\ttest [redacted] /usr/sbin/anacron [redacted] run-parts [redacted] /etc/cron.weekly; [redacted]"
+      },
+      {
+        "source": "/etc/crontab",
+        "schedule": "52 6 1 * *",
+        "command": "test [redacted] /usr/sbin/anacron [redacted] run-parts [redacted] /etc/cron.monthly; [redacted]",
+        "user": "root",
+        "cronTz": null,
+        "expression": {
+          "minutes": [
+            52
+          ],
+          "hours": [
+            6
+          ],
+          "monthDays": [
+            1
+          ],
+          "months": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12
+          ],
+          "weekDays": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6
+          ],
+          "domStar": false,
+          "dowStar": true,
+          "isReboot": false
+        },
+        "raw": "52 6\t1 * *\troot\ttest [redacted] /usr/sbin/anacron [redacted] run-parts [redacted] /etc/cron.monthly; [redacted]"
+      },
+      {
+        "source": "/etc/cron.d/e2scrub_all",
+        "schedule": "30 3 * * 0",
+        "command": "test [redacted]",
+        "user": "root",
+        "cronTz": null,
+        "expression": {
+          "minutes": [
+            30
+          ],
+          "hours": [
+            3
+          ],
+          "monthDays": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23,
+            24,
+            25,
+            26,
+            27,
+            28,
+            29,
+            30,
+            31
+          ],
+          "months": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12
+          ],
+          "weekDays": [
+            0
+          ],
+          "domStar": true,
+          "dowStar": false,
+          "isReboot": false
+        },
+        "raw": "30 3 * * 0 root test [redacted]"
+      },
+      {
+        "source": "/etc/cron.d/e2scrub_all",
+        "schedule": "10 3 * * *",
+        "command": "test [redacted]",
+        "user": "root",
+        "cronTz": null,
+        "expression": {
+          "minutes": [
+            10
+          ],
+          "hours": [
+            3
+          ],
+          "monthDays": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23,
+            24,
+            25,
+            26,
+            27,
+            28,
+            29,
+            30,
+            31
+          ],
+          "months": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12
+          ],
+          "weekDays": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6
+          ],
+          "domStar": true,
+          "dowStar": true,
+          "isReboot": false
+        },
+        "raw": "10 3 * * * root test [redacted]"
+      },
+      {
+        "source": "/etc/cron.d/php",
+        "schedule": "09,39 * * * *",
+        "command": "[ [redacted]",
+        "user": "root",
+        "cronTz": null,
+        "expression": {
+          "minutes": [
+            9,
+            39
+          ],
+          "hours": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23
+          ],
+          "monthDays": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23,
+            24,
+            25,
+            26,
+            27,
+            28,
+            29,
+            30,
+            31
+          ],
+          "months": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12
+          ],
+          "weekDays": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6
+          ],
+          "domStar": true,
+          "dowStar": true,
+          "isReboot": false
+        },
+        "raw": "09,39 *     * * *     root   [ [redacted]"
+      },
+      {
+        "source": "/etc/cron.d/sphinxsearch",
+        "schedule": "@daily",
+        "command": "[redacted]",
+        "user": "user",
+        "cronTz": null,
+        "expression": {
+          "minutes": [
+            0
+          ],
+          "hours": [
+            0
+          ],
+          "monthDays": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23,
+            24,
+            25,
+            26,
+            27,
+            28,
+            29,
+            30,
+            31
+          ],
+          "months": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12
+          ],
+          "weekDays": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6
+          ],
+          "domStar": true,
+          "dowStar": true,
+          "isReboot": false
+        },
+        "raw": "@daily      user [redacted]"
+      },
+      {
+        "source": "/etc/cron.d/sysstat",
+        "schedule": "5-55/10 * * * *",
+        "command": "command [redacted]",
+        "user": "root",
+        "cronTz": null,
+        "expression": {
+          "minutes": [
+            5,
+            15,
+            25,
+            35,
+            45,
+            55
+          ],
+          "hours": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23
+          ],
+          "monthDays": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23,
+            24,
+            25,
+            26,
+            27,
+            28,
+            29,
+            30,
+            31
+          ],
+          "months": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12
+          ],
+          "weekDays": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6
+          ],
+          "domStar": true,
+          "dowStar": true,
+          "isReboot": false
+        },
+        "raw": "5-55/10 * * * * root command [redacted]"
+      },
+      {
+        "source": "/etc/cron.d/sysstat",
+        "schedule": "59 23 * * *",
+        "command": "command [redacted]",
+        "user": "root",
+        "cronTz": null,
+        "expression": {
+          "minutes": [
+            59
+          ],
+          "hours": [
+            23
+          ],
+          "monthDays": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23,
+            24,
+            25,
+            26,
+            27,
+            28,
+            29,
+            30,
+            31
+          ],
+          "months": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12
+          ],
+          "weekDays": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6
+          ],
+          "domStar": true,
+          "dowStar": true,
+          "isReboot": false
+        },
+        "raw": "59 23 * * * root command [redacted]"
+      }
+    ],
+    "dirEntries": [
+      {
+        "period": "daily",
+        "name": "apache2"
+      },
+      {
+        "period": "daily",
+        "name": "apport"
+      },
+      {
+        "period": "daily",
+        "name": "apt-compat"
+      },
+      {
+        "period": "daily",
+        "name": "dpkg"
+      },
+      {
+        "period": "daily",
+        "name": "logrotate"
+      },
+      {
+        "period": "daily",
+        "name": "man-db"
+      },
+      {
+        "period": "daily",
+        "name": "microsoft-edge"
+      },
+      {
+        "period": "daily",
+        "name": "sysstat"
+      },
+      {
+        "period": "weekly",
+        "name": "man-db"
+      }
+    ],
+    "ownCrontabPresent": false,
+    "timeoutAbsent": false
+  },
+  "warnings": []
+}

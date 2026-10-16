@@ -1,0 +1,1088 @@
+{
+  "at": "2026-10-15T12:00:03.000Z",
+  "zoneName": "Etc/UTC",
+  "zoneFallback": null,
+  "jobs": [
+    {
+      "kind": "cron",
+      "id": "cron|/etc/crontab|0",
+      "source": "/etc/crontab",
+      "user": "root",
+      "command": "cd [redacted] run-parts [redacted] /etc/cron.hourly",
+      "raw": "17 *\t* * *\troot\tcd [redacted] run-parts [redacted] /etc/cron.hourly",
+      "schedule": {
+        "type": "cron",
+        "text": "17 * * * *",
+        "macro": null,
+        "fields": {
+          "minute": "17",
+          "hour": "*",
+          "dayOfMonth": "*",
+          "month": "*",
+          "dayOfWeek": "*"
+        },
+        "dayMatch": "both",
+        "timeZone": null
+      },
+      "nextRuns": [
+        {
+          "atUtc": "2026-10-15T12:17:00.000Z",
+          "wall": "2026-10-15T12:17:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-15T13:17:00.000Z",
+          "wall": "2026-10-15T13:17:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-15T14:17:00.000Z",
+          "wall": "2026-10-15T14:17:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-15T15:17:00.000Z",
+          "wall": "2026-10-15T15:17:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-15T16:17:00.000Z",
+          "wall": "2026-10-15T16:17:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        }
+      ],
+      "runsUnknown": null
+    },
+    {
+      "kind": "cron",
+      "id": "cron|/etc/crontab|1",
+      "source": "/etc/crontab",
+      "user": "root",
+      "command": "test [redacted] /usr/sbin/anacron [redacted] run-parts [redacted] /etc/cron.daily; [redacted]",
+      "raw": "25 6\t* * *\troot\ttest [redacted] /usr/sbin/anacron [redacted] run-parts [redacted] /etc/cron.daily; [redacted]",
+      "schedule": {
+        "type": "cron",
+        "text": "25 6 * * *",
+        "macro": null,
+        "fields": {
+          "minute": "25",
+          "hour": "6",
+          "dayOfMonth": "*",
+          "month": "*",
+          "dayOfWeek": "*"
+        },
+        "dayMatch": "both",
+        "timeZone": null
+      },
+      "nextRuns": [
+        {
+          "atUtc": "2026-10-16T06:25:00.000Z",
+          "wall": "2026-10-16T06:25:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-17T06:25:00.000Z",
+          "wall": "2026-10-17T06:25:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-18T06:25:00.000Z",
+          "wall": "2026-10-18T06:25:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-19T06:25:00.000Z",
+          "wall": "2026-10-19T06:25:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-20T06:25:00.000Z",
+          "wall": "2026-10-20T06:25:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        }
+      ],
+      "runsUnknown": null
+    },
+    {
+      "kind": "cron",
+      "id": "cron|/etc/crontab|2",
+      "source": "/etc/crontab",
+      "user": "root",
+      "command": "test [redacted] /usr/sbin/anacron [redacted] run-parts [redacted] /etc/cron.weekly; [redacted]",
+      "raw": "47 6\t* * 7\troot\ttest [redacted] /usr/sbin/anacron [redacted] run-parts [redacted] /etc/cron.weekly; [redacted]",
+      "schedule": {
+        "type": "cron",
+        "text": "47 6 * * 7",
+        "macro": null,
+        "fields": {
+          "minute": "47",
+          "hour": "6",
+          "dayOfMonth": "*",
+          "month": "*",
+          "dayOfWeek": "7"
+        },
+        "dayMatch": "both",
+        "timeZone": null
+      },
+      "nextRuns": [
+        {
+          "atUtc": "2026-10-18T06:47:00.000Z",
+          "wall": "2026-10-18T06:47:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-25T06:47:00.000Z",
+          "wall": "2026-10-25T06:47:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-11-01T06:47:00.000Z",
+          "wall": "2026-11-01T06:47:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-11-08T06:47:00.000Z",
+          "wall": "2026-11-08T06:47:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-11-15T06:47:00.000Z",
+          "wall": "2026-11-15T06:47:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        }
+      ],
+      "runsUnknown": null
+    },
+    {
+      "kind": "cron",
+      "id": "cron|/etc/crontab|3",
+      "source": "/etc/crontab",
+      "user": "root",
+      "command": "test [redacted] /usr/sbin/anacron [redacted] run-parts [redacted] /etc/cron.monthly; [redacted]",
+      "raw": "52 6\t1 * *\troot\ttest [redacted] /usr/sbin/anacron [redacted] run-parts [redacted] /etc/cron.monthly; [redacted]",
+      "schedule": {
+        "type": "cron",
+        "text": "52 6 1 * *",
+        "macro": null,
+        "fields": {
+          "minute": "52",
+          "hour": "6",
+          "dayOfMonth": "1",
+          "month": "*",
+          "dayOfWeek": "*"
+        },
+        "dayMatch": "both",
+        "timeZone": null
+      },
+      "nextRuns": [
+        {
+          "atUtc": "2026-11-01T06:52:00.000Z",
+          "wall": "2026-11-01T06:52:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-12-01T06:52:00.000Z",
+          "wall": "2026-12-01T06:52:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2027-01-01T06:52:00.000Z",
+          "wall": "2027-01-01T06:52:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2027-02-01T06:52:00.000Z",
+          "wall": "2027-02-01T06:52:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2027-03-01T06:52:00.000Z",
+          "wall": "2027-03-01T06:52:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        }
+      ],
+      "runsUnknown": null
+    },
+    {
+      "kind": "cron",
+      "id": "cron|/etc/cron.d/e2scrub_all|0",
+      "source": "/etc/cron.d/e2scrub_all",
+      "user": "root",
+      "command": "test [redacted]",
+      "raw": "30 3 * * 0 root test [redacted]",
+      "schedule": {
+        "type": "cron",
+        "text": "30 3 * * 0",
+        "macro": null,
+        "fields": {
+          "minute": "30",
+          "hour": "3",
+          "dayOfMonth": "*",
+          "month": "*",
+          "dayOfWeek": "0"
+        },
+        "dayMatch": "both",
+        "timeZone": null
+      },
+      "nextRuns": [
+        {
+          "atUtc": "2026-10-18T03:30:00.000Z",
+          "wall": "2026-10-18T03:30:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-25T03:30:00.000Z",
+          "wall": "2026-10-25T03:30:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-11-01T03:30:00.000Z",
+          "wall": "2026-11-01T03:30:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-11-08T03:30:00.000Z",
+          "wall": "2026-11-08T03:30:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-11-15T03:30:00.000Z",
+          "wall": "2026-11-15T03:30:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        }
+      ],
+      "runsUnknown": null
+    },
+    {
+      "kind": "cron",
+      "id": "cron|/etc/cron.d/e2scrub_all|1",
+      "source": "/etc/cron.d/e2scrub_all",
+      "user": "root",
+      "command": "test [redacted]",
+      "raw": "10 3 * * * root test [redacted]",
+      "schedule": {
+        "type": "cron",
+        "text": "10 3 * * *",
+        "macro": null,
+        "fields": {
+          "minute": "10",
+          "hour": "3",
+          "dayOfMonth": "*",
+          "month": "*",
+          "dayOfWeek": "*"
+        },
+        "dayMatch": "both",
+        "timeZone": null
+      },
+      "nextRuns": [
+        {
+          "atUtc": "2026-10-16T03:10:00.000Z",
+          "wall": "2026-10-16T03:10:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-17T03:10:00.000Z",
+          "wall": "2026-10-17T03:10:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-18T03:10:00.000Z",
+          "wall": "2026-10-18T03:10:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-19T03:10:00.000Z",
+          "wall": "2026-10-19T03:10:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-20T03:10:00.000Z",
+          "wall": "2026-10-20T03:10:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        }
+      ],
+      "runsUnknown": null
+    },
+    {
+      "kind": "cron",
+      "id": "cron|/etc/cron.d/php|0",
+      "source": "/etc/cron.d/php",
+      "user": "root",
+      "command": "[ [redacted]",
+      "raw": "09,39 *     * * *     root   [ [redacted]",
+      "schedule": {
+        "type": "cron",
+        "text": "09,39 * * * *",
+        "macro": null,
+        "fields": {
+          "minute": "9,39",
+          "hour": "*",
+          "dayOfMonth": "*",
+          "month": "*",
+          "dayOfWeek": "*"
+        },
+        "dayMatch": "both",
+        "timeZone": null
+      },
+      "nextRuns": [
+        {
+          "atUtc": "2026-10-15T12:09:00.000Z",
+          "wall": "2026-10-15T12:09:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-15T12:39:00.000Z",
+          "wall": "2026-10-15T12:39:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-15T13:09:00.000Z",
+          "wall": "2026-10-15T13:09:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-15T13:39:00.000Z",
+          "wall": "2026-10-15T13:39:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-15T14:09:00.000Z",
+          "wall": "2026-10-15T14:09:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        }
+      ],
+      "runsUnknown": null
+    },
+    {
+      "kind": "cron",
+      "id": "cron|/etc/cron.d/sphinxsearch|0",
+      "source": "/etc/cron.d/sphinxsearch",
+      "user": "user",
+      "command": "[redacted]",
+      "raw": "@daily      user [redacted]",
+      "schedule": {
+        "type": "cron",
+        "text": "@daily",
+        "macro": "daily",
+        "fields": {
+          "minute": "0",
+          "hour": "0",
+          "dayOfMonth": "*",
+          "month": "*",
+          "dayOfWeek": "*"
+        },
+        "dayMatch": "both",
+        "timeZone": null
+      },
+      "nextRuns": [
+        {
+          "atUtc": "2026-10-16T00:00:00.000Z",
+          "wall": "2026-10-16T00:00:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-17T00:00:00.000Z",
+          "wall": "2026-10-17T00:00:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-18T00:00:00.000Z",
+          "wall": "2026-10-18T00:00:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-19T00:00:00.000Z",
+          "wall": "2026-10-19T00:00:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-20T00:00:00.000Z",
+          "wall": "2026-10-20T00:00:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        }
+      ],
+      "runsUnknown": null
+    },
+    {
+      "kind": "cron",
+      "id": "cron|/etc/cron.d/sysstat|0",
+      "source": "/etc/cron.d/sysstat",
+      "user": "root",
+      "command": "command [redacted]",
+      "raw": "5-55/10 * * * * root command [redacted]",
+      "schedule": {
+        "type": "cron",
+        "text": "5-55/10 * * * *",
+        "macro": null,
+        "fields": {
+          "minute": "5-55/10",
+          "hour": "*",
+          "dayOfMonth": "*",
+          "month": "*",
+          "dayOfWeek": "*"
+        },
+        "dayMatch": "both",
+        "timeZone": null
+      },
+      "nextRuns": [
+        {
+          "atUtc": "2026-10-15T12:05:00.000Z",
+          "wall": "2026-10-15T12:05:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-15T12:15:00.000Z",
+          "wall": "2026-10-15T12:15:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-15T12:25:00.000Z",
+          "wall": "2026-10-15T12:25:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-15T12:35:00.000Z",
+          "wall": "2026-10-15T12:35:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-15T12:45:00.000Z",
+          "wall": "2026-10-15T12:45:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        }
+      ],
+      "runsUnknown": null
+    },
+    {
+      "kind": "cron",
+      "id": "cron|/etc/cron.d/sysstat|1",
+      "source": "/etc/cron.d/sysstat",
+      "user": "root",
+      "command": "command [redacted]",
+      "raw": "59 23 * * * root command [redacted]",
+      "schedule": {
+        "type": "cron",
+        "text": "59 23 * * *",
+        "macro": null,
+        "fields": {
+          "minute": "59",
+          "hour": "23",
+          "dayOfMonth": "*",
+          "month": "*",
+          "dayOfWeek": "*"
+        },
+        "dayMatch": "both",
+        "timeZone": null
+      },
+      "nextRuns": [
+        {
+          "atUtc": "2026-10-15T23:59:00.000Z",
+          "wall": "2026-10-15T23:59:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-16T23:59:00.000Z",
+          "wall": "2026-10-16T23:59:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-17T23:59:00.000Z",
+          "wall": "2026-10-17T23:59:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-18T23:59:00.000Z",
+          "wall": "2026-10-18T23:59:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-19T23:59:00.000Z",
+          "wall": "2026-10-19T23:59:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        }
+      ],
+      "runsUnknown": null
+    },
+    {
+      "kind": "periodic",
+      "id": "periodic|daily|apache2",
+      "period": "daily",
+      "name": "apache2",
+      "directory": "/etc/cron.daily",
+      "driverIds": [
+        "cron|/etc/crontab|1"
+      ],
+      "schedules": [
+        {
+          "type": "cron",
+          "text": "25 6 * * *",
+          "macro": null,
+          "fields": {
+            "minute": "25",
+            "hour": "6",
+            "dayOfMonth": "*",
+            "month": "*",
+            "dayOfWeek": "*"
+          },
+          "dayMatch": "both",
+          "timeZone": null
+        }
+      ],
+      "nextRuns": [
+        {
+          "atUtc": "2026-10-16T06:25:00.000Z",
+          "wall": "2026-10-16T06:25:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-17T06:25:00.000Z",
+          "wall": "2026-10-17T06:25:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-18T06:25:00.000Z",
+          "wall": "2026-10-18T06:25:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-19T06:25:00.000Z",
+          "wall": "2026-10-19T06:25:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-20T06:25:00.000Z",
+          "wall": "2026-10-20T06:25:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        }
+      ],
+      "runsUnknown": null
+    },
+    {
+      "kind": "periodic",
+      "id": "periodic|daily|apport",
+      "period": "daily",
+      "name": "apport",
+      "directory": "/etc/cron.daily",
+      "driverIds": [
+        "cron|/etc/crontab|1"
+      ],
+      "schedules": [
+        {
+          "type": "cron",
+          "text": "25 6 * * *",
+          "macro": null,
+          "fields": {
+            "minute": "25",
+            "hour": "6",
+            "dayOfMonth": "*",
+            "month": "*",
+            "dayOfWeek": "*"
+          },
+          "dayMatch": "both",
+          "timeZone": null
+        }
+      ],
+      "nextRuns": [
+        {
+          "atUtc": "2026-10-16T06:25:00.000Z",
+          "wall": "2026-10-16T06:25:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-17T06:25:00.000Z",
+          "wall": "2026-10-17T06:25:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-18T06:25:00.000Z",
+          "wall": "2026-10-18T06:25:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-19T06:25:00.000Z",
+          "wall": "2026-10-19T06:25:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-20T06:25:00.000Z",
+          "wall": "2026-10-20T06:25:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        }
+      ],
+      "runsUnknown": null
+    },
+    {
+      "kind": "periodic",
+      "id": "periodic|daily|apt-compat",
+      "period": "daily",
+      "name": "apt-compat",
+      "directory": "/etc/cron.daily",
+      "driverIds": [
+        "cron|/etc/crontab|1"
+      ],
+      "schedules": [
+        {
+          "type": "cron",
+          "text": "25 6 * * *",
+          "macro": null,
+          "fields": {
+            "minute": "25",
+            "hour": "6",
+            "dayOfMonth": "*",
+            "month": "*",
+            "dayOfWeek": "*"
+          },
+          "dayMatch": "both",
+          "timeZone": null
+        }
+      ],
+      "nextRuns": [
+        {
+          "atUtc": "2026-10-16T06:25:00.000Z",
+          "wall": "2026-10-16T06:25:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-17T06:25:00.000Z",
+          "wall": "2026-10-17T06:25:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-18T06:25:00.000Z",
+          "wall": "2026-10-18T06:25:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-19T06:25:00.000Z",
+          "wall": "2026-10-19T06:25:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-20T06:25:00.000Z",
+          "wall": "2026-10-20T06:25:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        }
+      ],
+      "runsUnknown": null
+    },
+    {
+      "kind": "periodic",
+      "id": "periodic|daily|dpkg",
+      "period": "daily",
+      "name": "dpkg",
+      "directory": "/etc/cron.daily",
+      "driverIds": [
+        "cron|/etc/crontab|1"
+      ],
+      "schedules": [
+        {
+          "type": "cron",
+          "text": "25 6 * * *",
+          "macro": null,
+          "fields": {
+            "minute": "25",
+            "hour": "6",
+            "dayOfMonth": "*",
+            "month": "*",
+            "dayOfWeek": "*"
+          },
+          "dayMatch": "both",
+          "timeZone": null
+        }
+      ],
+      "nextRuns": [
+        {
+          "atUtc": "2026-10-16T06:25:00.000Z",
+          "wall": "2026-10-16T06:25:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-17T06:25:00.000Z",
+          "wall": "2026-10-17T06:25:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-18T06:25:00.000Z",
+          "wall": "2026-10-18T06:25:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-19T06:25:00.000Z",
+          "wall": "2026-10-19T06:25:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-20T06:25:00.000Z",
+          "wall": "2026-10-20T06:25:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        }
+      ],
+      "runsUnknown": null
+    },
+    {
+      "kind": "periodic",
+      "id": "periodic|daily|logrotate",
+      "period": "daily",
+      "name": "logrotate",
+      "directory": "/etc/cron.daily",
+      "driverIds": [
+        "cron|/etc/crontab|1"
+      ],
+      "schedules": [
+        {
+          "type": "cron",
+          "text": "25 6 * * *",
+          "macro": null,
+          "fields": {
+            "minute": "25",
+            "hour": "6",
+            "dayOfMonth": "*",
+            "month": "*",
+            "dayOfWeek": "*"
+          },
+          "dayMatch": "both",
+          "timeZone": null
+        }
+      ],
+      "nextRuns": [
+        {
+          "atUtc": "2026-10-16T06:25:00.000Z",
+          "wall": "2026-10-16T06:25:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-17T06:25:00.000Z",
+          "wall": "2026-10-17T06:25:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-18T06:25:00.000Z",
+          "wall": "2026-10-18T06:25:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-19T06:25:00.000Z",
+          "wall": "2026-10-19T06:25:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-20T06:25:00.000Z",
+          "wall": "2026-10-20T06:25:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        }
+      ],
+      "runsUnknown": null
+    },
+    {
+      "kind": "periodic",
+      "id": "periodic|daily|man-db",
+      "period": "daily",
+      "name": "man-db",
+      "directory": "/etc/cron.daily",
+      "driverIds": [
+        "cron|/etc/crontab|1"
+      ],
+      "schedules": [
+        {
+          "type": "cron",
+          "text": "25 6 * * *",
+          "macro": null,
+          "fields": {
+            "minute": "25",
+            "hour": "6",
+            "dayOfMonth": "*",
+            "month": "*",
+            "dayOfWeek": "*"
+          },
+          "dayMatch": "both",
+          "timeZone": null
+        }
+      ],
+      "nextRuns": [
+        {
+          "atUtc": "2026-10-16T06:25:00.000Z",
+          "wall": "2026-10-16T06:25:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-17T06:25:00.000Z",
+          "wall": "2026-10-17T06:25:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-18T06:25:00.000Z",
+          "wall": "2026-10-18T06:25:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-19T06:25:00.000Z",
+          "wall": "2026-10-19T06:25:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-20T06:25:00.000Z",
+          "wall": "2026-10-20T06:25:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        }
+      ],
+      "runsUnknown": null
+    },
+    {
+      "kind": "periodic",
+      "id": "periodic|daily|microsoft-edge",
+      "period": "daily",
+      "name": "microsoft-edge",
+      "directory": "/etc/cron.daily",
+      "driverIds": [
+        "cron|/etc/crontab|1"
+      ],
+      "schedules": [
+        {
+          "type": "cron",
+          "text": "25 6 * * *",
+          "macro": null,
+          "fields": {
+            "minute": "25",
+            "hour": "6",
+            "dayOfMonth": "*",
+            "month": "*",
+            "dayOfWeek": "*"
+          },
+          "dayMatch": "both",
+          "timeZone": null
+        }
+      ],
+      "nextRuns": [
+        {
+          "atUtc": "2026-10-16T06:25:00.000Z",
+          "wall": "2026-10-16T06:25:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-17T06:25:00.000Z",
+          "wall": "2026-10-17T06:25:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-18T06:25:00.000Z",
+          "wall": "2026-10-18T06:25:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-19T06:25:00.000Z",
+          "wall": "2026-10-19T06:25:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-20T06:25:00.000Z",
+          "wall": "2026-10-20T06:25:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        }
+      ],
+      "runsUnknown": null
+    },
+    {
+      "kind": "periodic",
+      "id": "periodic|daily|sysstat",
+      "period": "daily",
+      "name": "sysstat",
+      "directory": "/etc/cron.daily",
+      "driverIds": [
+        "cron|/etc/crontab|1"
+      ],
+      "schedules": [
+        {
+          "type": "cron",
+          "text": "25 6 * * *",
+          "macro": null,
+          "fields": {
+            "minute": "25",
+            "hour": "6",
+            "dayOfMonth": "*",
+            "month": "*",
+            "dayOfWeek": "*"
+          },
+          "dayMatch": "both",
+          "timeZone": null
+        }
+      ],
+      "nextRuns": [
+        {
+          "atUtc": "2026-10-16T06:25:00.000Z",
+          "wall": "2026-10-16T06:25:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-17T06:25:00.000Z",
+          "wall": "2026-10-17T06:25:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-18T06:25:00.000Z",
+          "wall": "2026-10-18T06:25:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-19T06:25:00.000Z",
+          "wall": "2026-10-19T06:25:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-20T06:25:00.000Z",
+          "wall": "2026-10-20T06:25:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        }
+      ],
+      "runsUnknown": null
+    },
+    {
+      "kind": "periodic",
+      "id": "periodic|weekly|man-db",
+      "period": "weekly",
+      "name": "man-db",
+      "directory": "/etc/cron.weekly",
+      "driverIds": [
+        "cron|/etc/crontab|2"
+      ],
+      "schedules": [
+        {
+          "type": "cron",
+          "text": "47 6 * * 7",
+          "macro": null,
+          "fields": {
+            "minute": "47",
+            "hour": "6",
+            "dayOfMonth": "*",
+            "month": "*",
+            "dayOfWeek": "7"
+          },
+          "dayMatch": "both",
+          "timeZone": null
+        }
+      ],
+      "nextRuns": [
+        {
+          "atUtc": "2026-10-18T06:47:00.000Z",
+          "wall": "2026-10-18T06:47:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-10-25T06:47:00.000Z",
+          "wall": "2026-10-25T06:47:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-11-01T06:47:00.000Z",
+          "wall": "2026-11-01T06:47:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-11-08T06:47:00.000Z",
+          "wall": "2026-11-08T06:47:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        },
+        {
+          "atUtc": "2026-11-15T06:47:00.000Z",
+          "wall": "2026-11-15T06:47:00.000Z",
+          "offsetMinutes": 0,
+          "dst": "none"
+        }
+      ],
+      "runsUnknown": null
+    }
+  ]
+}

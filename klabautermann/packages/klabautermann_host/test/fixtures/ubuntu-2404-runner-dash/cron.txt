@@ -1,0 +1,73 @@
+== crontab_meta ==
+rc=1
+== crontab ==
+no crontab for user2
+== etc_crontab ==
+# [redacted]
+# [redacted]
+# [redacted]
+# [redacted]
+# [redacted]
+
+SHELL=[redacted]
+# [redacted]
+# [redacted]
+
+# [redacted]
+# [redacted]
+# [redacted]
+# [redacted]
+# [redacted]
+# [redacted]
+# [redacted]
+# [redacted]
+17 *	* * *	root	cd [redacted] run-parts [redacted] /etc/cron.hourly
+25 6	* * *	root	test [redacted] /usr/sbin/anacron [redacted] run-parts [redacted] /etc/cron.daily; [redacted]
+47 6	* * 7	root	test [redacted] /usr/sbin/anacron [redacted] run-parts [redacted] /etc/cron.weekly; [redacted]
+52 6	1 * *	root	test [redacted] /usr/sbin/anacron [redacted] run-parts [redacted] /etc/cron.monthly; [redacted]
+#
+== cron_d ==
+e2scrub_all	30 3 * * 0 root test [redacted]
+e2scrub_all	10 3 * * * root test [redacted]
+php	# [redacted]
+php	# [redacted]
+php	# [redacted]
+php	# [redacted]
+php	# [redacted]
+php	# [redacted]
+php	#
+php	# [redacted]
+php	# [redacted]
+php	# [redacted]
+php	# [redacted]
+php	
+php	# [redacted]
+php	09,39 *     * * *     root   [ [redacted]
+sphinxsearch	
+sphinxsearch	# [redacted]
+sphinxsearch	@daily      user [redacted]
+sphinxsearch	
+sphinxsearch	# [redacted]
+sphinxsearch	# [redacted]
+sphinxsearch	
+sphinxsearch	# [redacted]
+sphinxsearch	
+sysstat	# [redacted]
+sysstat	# [redacted]
+sysstat	PATH=[redacted]
+sysstat	
+sysstat	# [redacted]
+sysstat	5-55/10 * * * * root command [redacted]
+sysstat	
+sysstat	# [redacted]
+sysstat	59 23 * * * root command [redacted]
+== cron_dirs ==
+daily apache2
+daily apport
+daily apt-compat
+daily dpkg
+daily logrotate
+daily man-db
+daily microsoft-edge
+daily sysstat
+weekly man-db

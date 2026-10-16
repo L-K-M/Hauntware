@@ -1,0 +1,179 @@
+{
+  "result": {
+    "timers": [
+      {
+        "unit": "sysstat-collect.timer",
+        "activates": "sysstat-collect.service",
+        "nextUs": 1792189800000000,
+        "leftUs": 1792189800000000,
+        "lastUs": 0,
+        "passedUs": 0,
+        "nextText": null,
+        "lastText": null
+      },
+      {
+        "unit": "update-notifier-download.timer",
+        "activates": "update-notifier-download.service",
+        "nextUs": 1792189874759699,
+        "leftUs": 1792189874759699,
+        "lastUs": 0,
+        "passedUs": 0,
+        "nextText": null,
+        "lastText": null
+      },
+      {
+        "unit": "phpsessionclean.timer",
+        "activates": "phpsessionclean.service",
+        "nextUs": 1792190340000000,
+        "leftUs": 1792190340000000,
+        "lastUs": 1792189583013370,
+        "passedUs": 10101367,
+        "nextText": null,
+        "lastText": null
+      },
+      {
+        "unit": "podman-auto-update.timer",
+        "activates": "podman-auto-update.service",
+        "nextUs": 1792190450136015,
+        "leftUs": 1792190450136015,
+        "lastUs": 1791839760873057,
+        "passedUs": 0,
+        "nextText": null,
+        "lastText": null
+      },
+      {
+        "unit": "systemd-tmpfiles-clean.timer",
+        "activates": "systemd-tmpfiles-clean.service",
+        "nextUs": 1792190472912003,
+        "leftUs": 1792190472912003,
+        "lastUs": 0,
+        "passedUs": 0,
+        "nextText": null,
+        "lastText": null
+      },
+      {
+        "unit": "dpkg-db-backup.timer",
+        "activates": "dpkg-db-backup.service",
+        "nextUs": 1792195200000000,
+        "leftUs": 1792195200000000,
+        "lastUs": 1792189583014676,
+        "passedUs": 10102674,
+        "nextText": null,
+        "lastText": null
+      },
+      {
+        "unit": "logrotate.timer",
+        "activates": "logrotate.service",
+        "nextUs": 1792195200000000,
+        "leftUs": 1792195200000000,
+        "lastUs": 1792189583013960,
+        "passedUs": 10101957,
+        "nextText": null,
+        "lastText": null
+      },
+      {
+        "unit": "sysstat-summary.timer",
+        "activates": "sysstat-summary.service",
+        "nextUs": 1792195620000000,
+        "leftUs": 1792195620000000,
+        "lastUs": 0,
+        "passedUs": 0,
+        "nextText": null,
+        "lastText": null
+      },
+      {
+        "unit": "motd-news.timer",
+        "activates": "motd-news.service",
+        "nextUs": 1792200311893498,
+        "leftUs": 1792200311893498,
+        "lastUs": 1791839113084803,
+        "passedUs": 0,
+        "nextText": null,
+        "lastText": null
+      },
+      {
+        "unit": "man-db.timer",
+        "activates": "man-db.service",
+        "nextUs": 1792230422365185,
+        "leftUs": 1792230422365185,
+        "lastUs": 1791839113080944,
+        "passedUs": 0,
+        "nextText": null,
+        "lastText": null
+      },
+      {
+        "unit": "e2scrub_all.timer",
+        "activates": "e2scrub_all.service",
+        "nextUs": 1792293002122350,
+        "leftUs": 1792293002122350,
+        "lastUs": 1791839113059160,
+        "passedUs": 0,
+        "nextText": null,
+        "lastText": null
+      },
+      {
+        "unit": "fstrim.timer",
+        "activates": "fstrim.service",
+        "nextUs": 1792372107349096,
+        "leftUs": 1792372107349096,
+        "lastUs": 1791839113068118,
+        "passedUs": 0,
+        "nextText": null,
+        "lastText": null
+      },
+      {
+        "unit": "update-notifier-motd.timer",
+        "activates": "update-notifier-motd.service",
+        "nextUs": 1792436023449949,
+        "leftUs": 1792436023449949,
+        "lastUs": 1791839113098147,
+        "passedUs": 0,
+        "nextText": null,
+        "lastText": null
+      },
+      {
+        "unit": "apport-autoreport.timer",
+        "activates": "apport-autoreport.service",
+        "nextUs": null,
+        "leftUs": null,
+        "lastUs": 0,
+        "passedUs": 0,
+        "nextText": null,
+        "lastText": null
+      },
+      {
+        "unit": "fwupd-refresh.timer",
+        "activates": null,
+        "nextUs": null,
+        "leftUs": null,
+        "lastUs": 0,
+        "passedUs": 0,
+        "nextText": null,
+        "lastText": null
+      },
+      {
+        "unit": "snapd.snap-repair.timer",
+        "activates": "snapd.snap-repair.service",
+        "nextUs": null,
+        "leftUs": null,
+        "lastUs": 0,
+        "passedUs": 0,
+        "nextText": null,
+        "lastText": null
+      },
+      {
+        "unit": "ua-timer.timer",
+        "activates": "ua-timer.service",
+        "nextUs": null,
+        "leftUs": null,
+        "lastUs": 0,
+        "passedUs": 0,
+        "nextText": null,
+        "lastText": null
+      }
+    ],
+    "format": "json",
+    "timeoutAbsent": false
+  },
+  "warnings": []
+}

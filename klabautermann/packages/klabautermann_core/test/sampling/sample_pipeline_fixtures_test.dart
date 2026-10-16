@@ -58,6 +58,9 @@ final _expected = <String, (Set<MetricField>, bool)>{
   ),
   'rhel-8': (const {}, false),
   'ubuntu-2404': (const {}, false),
+  // The runner-VM capture of klabautermann/test/integration/runner_vm.sh:
+  // a Hyper-V guest, whose values hold as measured.
+  'ubuntu-2404-runner-dash': (const {}, false),
   // The container captures of klabautermann/test/integration/capture.sh.
   // Where the image has systemd-detect-virt, it names the container, and
   // every field is withheld; elsewhere nothing tells, as on alpine-322.
