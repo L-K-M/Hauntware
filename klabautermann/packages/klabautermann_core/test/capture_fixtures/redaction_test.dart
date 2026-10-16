@@ -254,6 +254,20 @@ void main() {
       );
     });
 
+    test('MACs in wwx names, with hyphens and in dotted form', () {
+      expect(
+        _redact(
+          'wwx001e101f2a3b 1000 2000\n'
+          'sys-subsystem-net-devices-wwx001e101f2a3b.device\n'
+          '00-1E-10-1F-2A-3B 001e.101f.2a3b',
+          collector: 'units',
+        ),
+        'wwx00005e005301 1000 2000\n'
+        'sys-subsystem-net-devices-wwx00005e005301.device\n'
+        '00-00-5e-00-53-01 0000.5e00.5301',
+      );
+    });
+
     test('MACs in interface names, disk ids and hostnamectl fields', () {
       expect(
         _redact(

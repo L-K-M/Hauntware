@@ -96,7 +96,7 @@ final _placeholder = RegExp(
         RegExp.escape(p),
         if (_wordChar.hasMatch(p[p.length - 1])) '(?![A-Za-z0-9])',
       ].join(),
-    '(?<![A-Za-z0-9])(0{32,}|(enx|wlx)$_macNamePlaceholder|fixture$_x2d'
+    '(?<![A-Za-z0-9])(0{32,}|(en|wl|ww)x$_macNamePlaceholder|fixture$_x2d'
         '(disk|device))(?![A-Za-z0-9])',
   ].join('|'),
 );
@@ -282,11 +282,26 @@ final _patterns = <(String, RegExp, String Function(Match))>[
     ),
     (_) => _macPlaceholder,
   ),
-  // systemd names USB and wireless interfaces after their MAC.
+  // The same in the notations of other systems and network gear.
   (
     'MAC address',
-    RegExp(r'(?<![A-Za-z0-9])(enx|wlx)[0-9a-fA-F]{12}(?![A-Za-z0-9])'),
-    (m) => '${m[1]}$_macNamePlaceholder',
+    RegExp(
+      r'(?<![0-9A-Fa-f-])([0-9a-fA-F]{2}-){5}[0-9a-fA-F]{2}(?![0-9A-Fa-f-])',
+    ),
+    (_) => _macPlaceholder.replaceAll(':', '-'),
+  ),
+  (
+    'MAC address',
+    RegExp(
+      r'(?<![0-9A-Fa-f.])([0-9a-fA-F]{4}\.){2}[0-9a-fA-F]{4}(?![0-9A-Fa-f.])',
+    ),
+    (_) => '0000.5e00.5301',
+  ),
+  // systemd names USB, wireless and WWAN interfaces after their MAC.
+  (
+    'MAC address',
+    RegExp(r'(?<![A-Za-z0-9])(en|wl|ww)x[0-9a-fA-F]{12}(?![A-Za-z0-9])'),
+    (m) => '${m[1]}x$_macNamePlaceholder',
   ),
   // hostnamectl's serial, asset tag and free-text naming fields.
   (
