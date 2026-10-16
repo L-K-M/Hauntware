@@ -2073,8 +2073,9 @@ takes a short-action slot, and one that finds the share full waits in
 the engine as `LogStreamWaiting(channel)`, where the app can show it,
 rather than on the link. A follower (K26) gets no slot while the link
 has learned a session limit below 4 (the two samplers, one follower and
-one short action), so it reports waiting for a channel instead of
-holding the last free one and leaving short actions none; the rest of
+one short action), and only one at 4, each session above it making room
+for one more, so it reports waiting for a channel instead of holding
+the last free one and leaving short actions none; the rest of
 low-session mode is M3. The link still opens every session channel at
 one priority, since `seance_core`'s `start` and `run` take none yet.
 
@@ -2803,8 +2804,8 @@ As built in M2 (`klabautermann_core/lib/src/logs/log_service.dart`,
 K25a; `log_stream_router.dart`, K25b, routes `OpenLogStream` to it),
 `LogService` serves the windows (`follow: false`) of one server's link,
 one host command at a time through `HostCommands.commandLine`, and
-answers each open with a `LogStreamState` before it returns. Followers
-are K26.
+answers each open with a `LogStreamState` before it returns, and
+`LogFollower` (`log_follower.dart`, K26) serves each follow.
 
 - A window holds 1 to 500 records, LOG-01's page. Any other size, a
   file with a cursor and what 8.8's validators refuse end as an invalid
@@ -2859,21 +2860,62 @@ are K26.
 - `LogStreamRouter` (K25b) owns the engine's streams while links are on;
   with links off the engine rejects every `OpenLogStream`. It rejects an
   id an earlier open named (it keeps each id for the engine's lifetime),
-  a follow until K26, a server outside the fleet and a server's 17th
-  open stream [E], and ends a spec 8.8 refuses as invalid at once.
+  a server outside the fleet and a server's 17th open stream [E], and
+  ends a spec 8.8 refuses as invalid at once.
   Otherwise it answers the open with the read's `LogStreamRunning`, or
   with `LogStreamWaiting` naming the link (none ready), the foreground
   (the app is in the background) or a channel (5.2's share is full),
   and starts the read on its own, oldest first, once that clears.
-- Every stream ends exactly once. A read running on a link that closes
-  or is replaced ends as failed; waiting reads wait for the next link.
+- Every stream ends exactly once. A window running on a link that
+  closes or is replaced ends as failed, a follow waits and resumes
+  (below), and waiting reads wait for the next link.
   `Disconnect`, the server leaving the fleet and `Shutdown` end every
   stream of the server as failed, waiting ones included, since nothing
   would bring a link back for them. The background closes the running
   reads' processes without ending them, reports every read as waiting
   for the foreground and queues the paused ones ahead of the others,
-  and the foreground runs them again from the start; a window sends its
-  records as it ends, so a paused one has sent none.
+  and the foreground runs a window again from the start, since it sends
+  its records as it ends, and resumes a follow.
+- A follow runs `journalctl -f -o json`, with `-k -b` for the kernel
+  log (`dmesg` serves only windows), or `tail -n <window> -F --` on its
+  own process in a follower slot (5.2), stopped as a window's command
+  is. Its first run delivers up to `window` (0 to 500) earlier records
+  oldest first, or every record after the spec's `afterCursor`
+  (`--after-cursor` with `--no-tail`: up to systemd 253, the 10 lines
+  `-f` implies end the first pass and hold the rest back until the
+  journal next changes). journalctl gets no `--since`, which up to
+  systemd 253 it seeks before `-n`, printing the range's oldest records;
+  the engine drops records older than `since` itself. A follow with
+  `until` ends as invalid.
+- Output is split into lines as it arrives, each cut at 256 KiB, and
+  held in a ring of at most 5,000 lines and 4 MiB [E], oldest dropped
+  first. A batch takes every line held, parsed only then, at most every
+  50 ms, so a stream sends at most 20 `LogBatch` a second [E], each
+  counting the lines dropped since the last: ring overflow, cut journal
+  entries and lines that are not JSON objects (a cut file line keeps its
+  first bytes). At 1,000 lines/s a batch holds about 50 lines.
+- When its link closes or is replaced, or the app leaves the
+  foreground, a follow's process closes and the follow keeps the lines
+  it holds and waits; a replaced link needs no wait. The next run
+  resumes a journal follow after the newest valid cursor received, or
+  the spec's `afterCursor`, so nothing repeats or goes missing. Once it
+  has received a line, a file follow, or a journal follow with no valid
+  cursor, starts again with new lines only (`-n 0`), and its
+  `LogStreamRunning` says records may be missing (`LogContinuity.gap`);
+  before any line arrives, a follow reads its window again. The router
+  sends a state only when it changes, so on a replaced link a journal
+  follow that resumes after a cursor sends none, while one that starts
+  again with a gap sends `LogStreamRunning` once. A process lost on a
+  live link (no exit status) runs again once, and a second loss before
+  any line ends the follow as failed.
+- A follow runs until it is closed, so any exit ends it once the lines
+  it holds are sent: as a window's exit would (missing, denied), and as
+  failed otherwise, exit 0 included. `tail -F` retries a file it cannot
+  open instead of exiting, so a file follow whose open fails with a
+  refusal before its process's first line (GNU's `cannot open`,
+  BusyBox's `can't open`), a resumed run's included, ends as denied or
+  missing; a rotation's `has become inaccessible` does not end it. `CloseStream` ends a follow as closed
+  and drops what it holds.
 
 ### 7.7 Scheduled jobs (JOB)
 
@@ -4674,11 +4716,11 @@ the engine in `engine_isolate.dart` beside it):
   --after-cursor` does. journalctl refuses `--since` with a cursor, so
   with one the engine applies the `since` filter itself: a window stops
   at the first record older than it and ends as oldest record reached,
-  and a follow reads on from the cursor alone. A follow delivers up to
-  `window` earlier records oldest first, then each new one as the host
-  writes it, and `afterCursor` resumes it after a record the app holds
-  instead: it delivers every record after that one, so a reconnect
-  leaves no gap, and `window` does not apply.
+  and a follow skips such records, as it does without one (7.6). A
+  follow delivers up to `window` earlier records oldest first, then each
+  new one as the host writes it, and `afterCursor` resumes it after a
+  record the app holds instead: it delivers every record after that one,
+  so a reconnect leaves no gap, and `window` does not apply.
   `LogBatch(streamId, records, dropped)` carries sealed records, which
   the engine resolves so the app parses nothing (6.5): a journal entry's
   cursor, time, priority as a syslog severity, unit, identifier, PID,
@@ -4690,7 +4732,9 @@ the engine in `engine_isolate.dart` beside it):
   `LogStreamState(streamId, status)` carries a sealed status that
   compares by value: waiting (for the link, a free channel under 5.2's
   budget, or the foreground), running (with the source's own reader or
-  the kernel log's `dmesg` fallback, 7.6), or ended with a reason (window
+  the kernel log's `dmesg` fallback, 7.6, and whether a follow that ran
+  again after waiting, with no cursor to resume after, may lack records
+  written meanwhile), or ended with a reason (window
   filled, oldest record reached, closed, spec refused, source missing,
   read denied, or failed) and the host's error output. With links off,
   as in the app until K44, the engine rejects `OpenLogStream` and
@@ -5180,7 +5224,9 @@ a session channel), Disconnected (waiting for the link), Paused (Live
 off, or the app in the background), Stopped (ended, or a file without
 a valid path) or Unavailable (refused). A status line, a live region
 for screen readers, says the same in a sentence with any host error
-output, and offers Retry after a refusal or a failed read. LOG-04's
+output, says that lines may be missing while a follow without a cursor
+runs again after it waited (K26), and offers Retry after a refusal or a
+failed read. LOG-04's
 notice shows above the journal when the access check's journal row
 says the account sees only its own entries (K04), from the probe's
 profile, and above the kernel log, of which the journal then shows it
