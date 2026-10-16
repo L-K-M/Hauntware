@@ -24,13 +24,17 @@ that other jobs shared; each file records the load average before and
 after.
 
 The runs used the harness as `cb1b7056` added it, before its review
-fixes (from `88407c86` on), two of which touch its output. The follow's stand-in now also holds a batch back while it
-would be the 21st within a second (03 §10.1); the 50 ms beat alone let
-a late batch and the next go a few milliseconds apart. Over 10 s of
-10 ms steps with 2 ms of jitter it sends 198 or 199 batches where the
-beat alone sent 200, so the batch figures below would move by under
-1 %. And the `ui` counts now include samples by server, the servers
-profiled and the samples with rates, which these files lack.
+fixes (from `88407c86` on), three of which touch its output. The
+follow's stand-in now also holds a batch back while it would be the 21st
+within a second (03 §10.1); the 50 ms beat alone let a late batch and
+the next go a few milliseconds apart. Over 10 s of 10 ms steps with 2 ms
+of jitter it sends 198 or 199 batches where the beat alone sent 200, so
+the batch figures below would move by under 1 %. The last step now also
+feeds the follow the lines due since the step before, which it left out:
+ten lines at 1,000 a second when it runs on time, too few to show here,
+and more when a loaded machine delays it. And the `ui` counts now
+include samples by server, the servers profiled and the samples with
+rates, which these files lack.
 
 **These numbers are provisional.** A shared container is neither 03
 §11.4's reference VM nor a phone. Device numbers and the UI frame p99

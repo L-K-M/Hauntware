@@ -469,6 +469,9 @@ final class _Replay {
     final now = _clock.elapsed;
     if (now >= _plan.warmup + _plan.measure) {
       timer.cancel();
+      // The lines due by now still reach the follow, so a step that a
+      // loaded machine delays to the end leaves the follow no shorter.
+      if (_plan.logLinesPerSecond > 0) _feed(now);
       _finish(now);
       return;
     }
