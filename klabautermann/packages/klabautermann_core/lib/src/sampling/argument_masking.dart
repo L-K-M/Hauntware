@@ -20,9 +20,9 @@ final _option = RegExp(r'^--?([A-Za-z][A-Za-z0-9_.-]*)$');
 /// shell's `-c` command line and, for a `ps` fallback row, are the
 /// arguments themselves (7.2). A secret value that starts an argument
 /// runs to that argument's end, spaces included; one inside an argument,
-/// a word of a `-c` line, ends at whitespace as the shell splits it, and
-/// a `ps` row's value holding spaces is masked up to its first space
-/// only. In each token:
+/// a word of a `-c` line, runs to the end of that word as the shell reads
+/// it, through quotes and escaped spaces, and a `ps` row's value holding
+/// spaces is masked up to its first space only. In each token:
 ///
 /// - the value of `name=value` whose name matches 03 §8.9's key pattern
 ///   (`--password=`, `-Dapp.token=`, `API_TOKEN=`), also where the name
@@ -46,10 +46,11 @@ List<MaskedValue> maskCommandLine(List<String> arguments) {
   ];
   final shown = [for (final _ in arguments) <_Shown>[]];
   var valueOfSecretOption = false;
-  // The argument whose rest a value that starts it already masked.
-  int? maskedArgument;
+  // Where the last masked value ends in its argument; the tokens before
+  // that end belong to it.
+  var maskedTo = (argument: -1, end: 0);
   for (final (argument, position, match) in tokens) {
-    if (argument == maskedArgument) continue;
+    if (argument == maskedTo.argument && match.start < maskedTo.end) continue;
     final text = match[0]!;
     final program = argument == 0 && position == 0;
     final kept = valueOfSecretOption && !text.startsWith('-')
@@ -68,13 +69,16 @@ List<MaskedValue> maskCommandLine(List<String> arguments) {
       continue;
     }
 
-    final end = position == 0 ? arguments[argument].length : match.end;
+    final whole = arguments[argument];
+    final end = position == 0
+        ? whole.length
+        : _shellWordEnd(whole, match.start);
     shown[argument].add((
       start: match.start,
       end: end,
       display: '$kept${MaskedValue.maskToken}',
     ));
-    if (position == 0) maskedArgument = argument;
+    maskedTo = (argument: argument, end: end);
   }
 
   return [
@@ -102,6 +106,32 @@ String? _keptBeforeValue(String token, {required bool program}) {
   if (token.length > 2 && token.startsWith('-p')) return '-p';
   return null;
 }
+
+/// Where the shell word of [text] that starts at [start] ends: at the
+/// first space, tab or newline outside quotes, or at the text's end while
+/// a quote is open. A backslash escapes the next character, except inside
+/// single quotes.
+int _shellWordEnd(String text, int start) {
+  int? quote;
+  for (var at = start; at < text.length; at++) {
+    final unit = text.codeUnitAt(at);
+    if (quote == null && _blanks.contains(unit)) return at;
+    if (unit == _backslash && quote != _singleQuote) {
+      at++;
+    } else if (unit == quote) {
+      quote = null;
+    } else if (quote == null && _quotes.contains(unit)) {
+      quote = unit;
+    }
+  }
+  return text.length;
+}
+
+/// Space, tab and newline: what a shell splits words at.
+const _blanks = {0x20, 0x09, 0x0A};
+const _singleQuote = 0x27;
+const _quotes = {_singleQuote, 0x22};
+const _backslash = 0x5C;
 
 /// Whether [token] is an option whose value, the next token, is secret.
 bool _isSecretOption(String token) {

@@ -135,6 +135,36 @@ void main() {
       ]);
     });
 
+    test('a quoted value inside a -c line runs to its closing quote, as '
+        'the shell reads it', () {
+      expect(
+        _shown(['sh', '-c', "mysql --password='correct horse battery' db"]),
+        ['sh', '-c', 'mysql --password=$_mask db'],
+      );
+      expect(_shown(['sh', '-c', 'cd /x && PGPASSWORD="two words" psql']), [
+        'sh',
+        '-c',
+        'cd /x && PGPASSWORD=$_mask psql',
+      ]);
+      expect(_shown(['sh', '-c', 'cd /x && app --token "a b c" -v']), [
+        'sh',
+        '-c',
+        'cd /x && app --token $_mask -v',
+      ]);
+      // Backslashes escape a quote or a space; an unclosed quote holds the
+      // rest of the argument.
+      expect(_shown(['sh', '-c', r'app -p"a \" b" --password=a\ b c']), [
+        'sh',
+        '-c',
+        'app -p$_mask --password=$_mask c',
+      ]);
+      expect(_shown(['sh', '-c', "app --password='a b"]), [
+        'sh',
+        '-c',
+        'app --password=$_mask',
+      ]);
+    });
+
     test('a ps fallback keeps no boundaries: a value with spaces is masked '
         'up to its first space only', () {
       // `ps` joins arguments with spaces (7.2), so `--password 'a b'`

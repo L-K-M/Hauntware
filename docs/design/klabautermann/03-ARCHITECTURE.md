@@ -3456,7 +3456,8 @@ CI.
   starts with `-` or the option is a `--no-` flag) and URL credentials.
   A value that starts an argument is masked to that argument's end,
   spaces included, and one inside an argument (a `-c` line's word) ends
-  at whitespace. A `ps` fallback row has lost the boundaries, so it masks
+  where the shell ends that word, so quoted and escaped spaces stay in
+  it. A `ps` fallback row has lost the boundaries, so it masks
   a value holding spaces up to its first space only. The program is
   never read as an option; over-masking such as `-print` is the safe
   direction.
