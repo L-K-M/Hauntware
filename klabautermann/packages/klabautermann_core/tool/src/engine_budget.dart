@@ -157,6 +157,43 @@ List<String> loadJournalRows(String root) {
   return rows;
 }
 
+const _optionNames = {
+  'scenario',
+  'seconds',
+  'warmup',
+  'log-rate',
+  'fixtures',
+  'out',
+};
+
+/// `tool/engine_budget.dart`'s [args]: each option's value by name, and
+/// whether `--heap` asks for heap readings. Throws [FormatException]
+/// naming the argument that does not fit.
+({Map<String, String> options, HeapReadings heap}) parseBudgetArgs(
+  List<String> args,
+) {
+  final options = <String, String>{};
+  var heap = HeapReadings.off;
+  for (var i = 0; i < args.length; i++) {
+    if (args[i] == '--heap') {
+      heap = HeapReadings.afterFullCollection;
+      continue;
+    }
+    final name = args[i].startsWith('--') ? args[i].substring(2) : '';
+    if (!_optionNames.contains(name) || i + 1 == args.length) {
+      throw FormatException('unexpected argument ${args[i]}');
+    }
+    // An option where the value belongs means the value was left out, as
+    // in `--out --heap`, which would otherwise write to a file `--heap`.
+    final value = args[++i];
+    if (value.startsWith('--')) {
+      throw FormatException('--$name needs a value, not $value');
+    }
+    options[name] = value;
+  }
+  return (options: options, heap: heap);
+}
+
 /// `klabautermann_host`'s fixtures, from this package or from
 /// `klabautermann/`; null when neither has them.
 String? findHostFixtures() {
@@ -296,6 +333,9 @@ Future<Map<String, Object?>> runEngineBudget(
     // reported has already exited.
     engine?.kill(priority: Isolate.immediate);
     port.close();
+    // A reading still running when the replay failed would fail on the
+    // closed probe, and that unawaited error would mask the replay's own.
+    await heapReads.catchError((Object _) {});
     await heap?.close();
   }
 }

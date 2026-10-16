@@ -18,8 +18,8 @@ linux_x64 in a 4-CPU container (Intel Xeon at 2.10 GHz, kernel 6.18)
 that other jobs shared; each file records the load average before and
 after.
 
-The runs predate the harness's review fixes, two of which touch its
-output. The follow's stand-in now also holds a batch back while it
+The runs used the harness as `cb1b7056` added it, before its review
+fixes (from `88407c86` on), two of which touch its output. The follow's stand-in now also holds a batch back while it
 would be the 21st within a second (03 §10.1); the 50 ms beat alone let
 a late batch and the next go a few milliseconds apart. Over 10 s of
 10 ms steps with 2 ms of jitter it sends 198 or 199 batches where the
@@ -57,7 +57,10 @@ here sets a budget.
   framing (`HwsTickAssembler`), pipeline (parsers, rates, the protocol's
   values) and send (the isolate copy); per second, that plus the
   follow's parsing and batch sends (`busyMsPerSecond`). On an idle core
-  it is CPU time.
+  it is CPU time. `eventsPerTick` is the engine events a tick produced:
+  one sample for each stream its reply serves, so 1.27 for `phone`,
+  where a `core` reply also serves its `overview` row, and 2.0 for
+  `tenHostsCoreAt2s`.
 - **Process CPU.** `utime + stime` of the whole process from
   `/proc/self/stat`, which also counts the receiving isolate, the timers
   and the VM's own threads (and, under JIT, the compiler).

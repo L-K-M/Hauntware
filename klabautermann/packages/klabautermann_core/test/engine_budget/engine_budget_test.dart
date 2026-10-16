@@ -92,6 +92,48 @@ void main() {
     );
   });
 
+  group('parseBudgetArgs', () {
+    test('reads each option and --heap', () {
+      final parsed = parseBudgetArgs([
+        '--scenario',
+        'phone',
+        '--heap',
+        '--out',
+        'run.json',
+      ]);
+      expect(parsed.options, {'scenario': 'phone', 'out': 'run.json'});
+      expect(parsed.heap, HeapReadings.afterFullCollection);
+      expect(parseBudgetArgs(const []).heap, HeapReadings.off);
+    });
+
+    test('refuses an option where a value belongs', () {
+      expect(
+        () => parseBudgetArgs(['--out', '--heap']),
+        throwsA(
+          isA<FormatException>().having(
+            (e) => e.message,
+            'message',
+            '--out needs a value, not --heap',
+          ),
+        ),
+      );
+    });
+
+    test('refuses an unknown option and a missing value', () {
+      for (final args in [
+        ['--rate', '5'],
+        ['phone'],
+        ['--seconds'],
+      ]) {
+        expect(
+          () => parseBudgetArgs(args),
+          throwsFormatException,
+          reason: '$args',
+        );
+      }
+    });
+  });
+
   test('every journal fixture row parses', () {
     final rows = loadJournalRows(findHostFixtures()!);
     final follow = FollowReplay(streamId: 's', maxPending: 100)
