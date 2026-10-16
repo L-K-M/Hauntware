@@ -1360,7 +1360,14 @@ that sampling results and `HostProfileChanged` carry (10.1),
 `JournalEntry` (the log viewer's journal rows, 10.8), and the access
 check over a `HostProfile` (`evaluateAccess` and its `AccessReport`,
 whose journal row drives the Logs panel's LOG-04 notice, 10.8); each
-list changes only as a milestone wires a type in or retires one. No `ghost_*` package
+list changes only as a milestone wires a type in or retires one. The
+Jobs tab (7.7) adds the jobs rows and schedule descriptions a
+`CronResult` carries, `TimerJobEntry`, which the app builds from a
+`TimersResult`'s timers, and the engine limits and names its words
+follow. The app's tests alone also depend on `klabautermann_host`, to
+build jobs rows with the engine's `mergeJobs`, since those rows have no
+public constructor; `depend_on_referenced_packages` keeps `lib/` from
+importing that dev dependency. No `ghost_*` package
 depends on `seance_core`; `klabautermann_core` is a product package, and
 the curated lines above are its only
 `seance_core` edge. Poltergeist's and
