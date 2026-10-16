@@ -602,18 +602,19 @@ String _redactArgv(String text, void Function(String rule) count) {
 final _blockHeader = RegExp(r'^== ([a-z0-9_-]+) ==$');
 
 /// A crontab(5) environment line, as `parseCron` reads it: the name, `=`
-/// and the blanks around it, then the value.
-final _cronEnv = RegExp(r'^(\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*)([^\n]*)$');
+/// and the blanks around it, then the value. `.` stops at a CR, so a
+/// CRLF line is a job line to `parseCron`, and to this.
+final _cronEnv = RegExp(r'^(\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*)(.*)$');
 
-/// A crontab job line: its schedule (an `@` macro or five fields) with
-/// the blanks after it, then the rest.
+/// A trimmed crontab job line as `parseCron` splits it: its schedule (an
+/// `@` macro or five fields), the blanks after it, then the rest.
 final _cronJob = RegExp(
-  r'^(\s*(@\S+|\S+\s+\S+\s+\S+\s+\S+\s+\S+)\s+)(\S[^\n]*)$',
+  r'^(@\S+|\S+\s+\S+\s+\S+\s+\S+\s+\S+)(\s+)(\S[\s\S]*)$',
 );
 
 /// What follows a system crontab's schedule: the user field, then the
 /// command.
-final _cronUser = RegExp(r'^(\S+)(\s+)(\S[^\n]*)$');
+final _cronUser = RegExp(r'^(\S+)(\s+)(\S[\s\S]*)$');
 
 /// The `crontab_meta` lines `parseCron` reads.
 final _cronStatus = RegExp(r'^\s*(rc=-?\d+|tool=missing)\s*$');
@@ -621,17 +622,25 @@ final _cronStatus = RegExp(r'^\s*(rc=-?\d+|tool=missing)\s*$');
 /// A `cron_dirs` entry: `<period> <name>`.
 final _cronDirEntry = RegExp(r'^\s*(hourly|daily|weekly|monthly) ');
 
-final _firstWord = RegExp(r'^(\s*)(\S+)([^\n]*)$');
+/// Words of a cron command that stay wherever they stand: those
+/// `mergeJobs` reads to find what runs the periodic directories
+/// (`run-parts`, the directory, anacron). They are fixed, so no secret.
+final _periodicWord = RegExp(
+  r'^(?:(?:(?:/usr)?/s?bin/)?run-parts|'
+  r'/etc/cron\.(?:hourly|daily|weekly|monthly)/?|'
+  r'(?:(?:/usr)?/s?bin/|/etc/init\.d/)?anacron)$',
+);
 
 /// Rewrites a `cron` payload (03 §7.7) the way [_redactArgv] does
 /// `procs`: a command carries the same secrets, user names and hosts as
 /// an argv, and `parseCron` only keeps it as text. Each job keeps its
-/// schedule, a user field of `root` (others read `user`) and the first
-/// word of its command; comment text and environment values but
+/// schedule, a user field of `root` (others read `user`), the first word
+/// of its command when that is a program (no user field, or `root`) and
+/// the [_periodicWord]s; comment text and environment values but
 /// `CRON_TZ`, which jobs are evaluated in, read [kRedacted]. The blocks
 /// are found as `parseCron` finds them; a line it reads as no job, entry
-/// or status keeps its first word only. A failed `crontab -l` keeps its
-/// output, from which `parseCron` reads "no crontab".
+/// or status keeps no word. A failed `crontab -l` keeps its output, from
+/// which `parseCron` reads "no crontab".
 String _redactCron(String text, void Function(String rule) count) {
   final lines = text.split('\n');
   // parseCron reads the last `rc=` of every crontab_meta line.
@@ -667,7 +676,7 @@ String _redactCron(String text, void Function(String rule) count) {
             _crontabLine(line.substring(tab + 1), true, count),
       'cron_dirs' when line.trim().isEmpty || _cronDirEntry.hasMatch(line) =>
         line,
-      _ => _firstWordOnly(line, count),
+      _ => _cronLineText(line, (_) => kRedacted, count),
     });
   }
   return out.join('\n');
@@ -675,55 +684,105 @@ String _redactCron(String text, void Function(String rule) count) {
 
 /// One crontab line, `parseCron`'s order: a comment, an environment
 /// line, a job; [system] for the user field of `/etc/crontab` and
-/// `/etc/cron.d`. A line whose schedule does not parse keeps its first
-/// word only, so that no name lands where a command word is kept.
+/// `/etc/cron.d`.
 String _crontabLine(String line, bool system, void Function(String) count) {
-  final t = line.trim();
-  if (t.isEmpty) return line;
-  if (t.startsWith('#')) {
-    if (t == '#') return line;
-    count('cron text');
-    return '${line.substring(0, line.indexOf('#') + 1)} $kRedacted';
-  }
   if (_cronEnv.firstMatch(line) case final env?) {
     if (env[2] == 'CRON_TZ' || env[3]!.trim().isEmpty) return line;
     count('cron text');
     return '${env[1]}$kRedacted';
   }
-  final job = _cronJob.firstMatch(line);
-  if (job == null || CronExpression.parse(job[2]!) == null) {
-    return _firstWordOnly(line, count);
-  }
-  var command = job[3]!;
-  var user = '';
-  if (system) {
-    final field = _cronUser.firstMatch(command);
-    if (field == null) return _firstWordOnly(line, count);
-    final name = field[1]!;
-    final kept = name == 'root' ? name : _userPlaceholder;
-    if (kept != name) count('user name');
-    user = '$kept${field[2]}';
-    command = field[3]!;
-  }
-  return '${job[1]}$user${_firstWordOnly(command, count)}';
+  return _cronLineText(line, (t) {
+    if (t.startsWith('#')) return t == '#' ? t : '# $kRedacted';
+    return _cronJobText(t, system, count);
+  }, count);
 }
 
-/// Keeps leading blanks and the first word of [s], then one [kRedacted]
-/// for the rest. An assignment's value (`PGPASSWORD=x pg_dump`) goes too.
-String _firstWordOnly(String s, void Function(String rule) count) {
-  final m = _firstWord.firstMatch(s);
-  if (m == null) return s;
-  final word = m[2]!;
-  final eq = word.indexOf('=');
-  final kept = eq < 0 || eq == word.length - 1
-      ? word
-      : '${word.substring(0, eq + 1)}$kRedacted';
-  final out = [
-    '${m[1]}$kept',
-    if (m[3]!.trim().isNotEmpty) kRedacted,
-  ].join(' ');
-  if (out != s) count('cron text');
-  return out;
+/// [line] with its trimmed text rewritten by [rewrite]; the blanks
+/// around it, a CR among them, stay.
+String _cronLineText(
+  String line,
+  String Function(String text) rewrite,
+  void Function(String rule) count,
+) {
+  final body = line.trimRight();
+  final t = body.trimLeft();
+  if (t.isEmpty) return line;
+  final redacted = rewrite(t);
+  if (redacted == t) return line;
+  count('cron text');
+  return '${body.substring(0, body.length - t.length)}$redacted'
+      '${line.substring(body.length)}';
+}
+
+/// A trimmed job line [t] as `parseCron` splits it. A line too short for
+/// a job keeps no word; so does a job whose schedule does not parse, but
+/// it keeps its shape (five fields, a user field, a command), as
+/// `parseCron` still lists it. A user field other than `root` may be a
+/// command shifted left by a missing user field, so that job's command
+/// keeps no first word.
+String _cronJobText(String t, bool system, void Function(String) count) {
+  final job = _cronJob.firstMatch(t);
+  final macro = t.startsWith('@');
+  if (macro && job == null) {
+    return CronExpression.parse(t) == null ? '@$kRedacted' : t;
+  }
+  if (job == null ||
+      !macro && t.split(RegExp(r'\s+')).length < (system ? 7 : 6)) {
+    return kRedacted;
+  }
+  final schedule = macro ? job[1]! : job[1]!.split(RegExp(r'\s+')).join(' ');
+  if (CronExpression.parse(schedule) == null) {
+    return macro
+        ? '@$kRedacted $kRedacted'
+        : [
+            for (var i = 0; i < 5; i++) kRedacted,
+            if (system) _userPlaceholder,
+            kRedacted,
+          ].join(' ');
+  }
+  final head = '${job[1]}${job[2]}';
+  if (!system) return '$head${_cronCommand(job[3]!, keepFirst: true)}';
+  final field = _cronUser.firstMatch(job[3]!);
+  if (field == null) return '$head$kRedacted';
+  final root = field[1] == 'root';
+  if (!root && field[1] != _userPlaceholder) count('user name');
+  return '$head${root ? 'root' : _userPlaceholder}${field[2]}'
+      '${_cronCommand(field[3]!, keepFirst: root)}';
+}
+
+/// [command] reduced to the first word if [keepFirst] (up to a `%`,
+/// which starts the job's input, and without an assignment's value:
+/// `PGPASSWORD=x pg_dump`) and the [_periodicWord]s, split on `;` as
+/// `mergeJobs` splits them; each run of other words reads one
+/// [kRedacted].
+String _cronCommand(String command, {required bool keepFirst}) {
+  final out = <String>[];
+  void add(String word) {
+    if (word != kRedacted || out.lastOrNull != kRedacted) out.add(word);
+  }
+
+  for (final (i, word) in command.trim().split(RegExp(r'\s+')).indexed) {
+    if (i == 0 && keepFirst) {
+      final percent = word.indexOf('%');
+      final name = percent < 0 ? word : word.substring(0, percent);
+      final eq = name.indexOf('=');
+      if (name.isNotEmpty) {
+        add(
+          eq < 0 || eq == name.length - 1
+              ? name
+              : '${name.substring(0, eq + 1)}$kRedacted',
+        );
+      }
+      if (percent >= 0) add(kRedacted);
+    } else if (word
+        .split(';')
+        .every((w) => w.isEmpty || _periodicWord.hasMatch(w))) {
+      add(word);
+    } else {
+      add(kRedacted);
+    }
+  }
+  return out.join(' ');
 }
 
 /// [head], the columns of a `ps` row before its command, with the word

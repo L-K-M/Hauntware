@@ -156,6 +156,53 @@ void main() {
     );
   });
 
+  test('every committed fixture renders without residue', () {
+    final root = [
+      '../klabautermann_host/test/fixtures',
+      'packages/klabautermann_host/test/fixtures',
+    ].firstWhere((p) => Directory(p).existsSync());
+    final platforms = Directory(root).listSync().whereType<Directory>();
+    expect(platforms, hasLength(greaterThanOrEqualTo(6)));
+    for (final dir in platforms) {
+      String read(String name) => File('${dir.path}/$name').readAsStringSync();
+      final probe = <HwsSection>[];
+      for (final block in read(
+        'probe.sections',
+      ).split(RegExp('^### ', multiLine: true)).skip(1)) {
+        final nl = block.indexOf('\n');
+        final [area, status] = block.substring(0, nl).split(' ');
+        probe.add(
+          _section(
+            '$kProbeSectionPrefix$area',
+            block.substring(nl + 1).replaceFirst(RegExp(r'\n$'), ''),
+            SectionStatus.values.byName(status),
+          ),
+        );
+      }
+      final capture = Capture(SamplerLaunch.stdinShell('sh'), {
+        for (final c in kFixtureCollectors)
+          c: _section(
+            c.wireName,
+            read('${c.wireName}.txt').replaceFirst(RegExp(r'\n$'), ''),
+          ),
+      }, probe);
+      final profile = capture.profile;
+      final f = renderFixtureFiles(
+        capture,
+        Redactor(
+          captureLiterals(
+            profile,
+            hostNames: capture.hostNames,
+            home: '/home/${profile.user}',
+            passwd: '',
+          ),
+        ),
+        capturedAt: at,
+      );
+      expect(f.residue.map((r) => '$r'), isEmpty, reason: dir.path);
+    }
+  });
+
   test('SOURCE.md and probe.sections are redacted and reviewed too', () {
     final f = renderFixtureFiles(
       _capture(

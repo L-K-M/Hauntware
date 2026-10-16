@@ -465,10 +465,12 @@ Probe areas: ${areas.join(', ')}.
 
 Redaction (03 §6.5): $summary. Every `procs` argument after argv[0], and
 the part of argv[0] after its first space, reads `$kRedacted`. Every
-`cron` job keeps its schedule and the first word of its command, the
-rest of which, comments and environment values but `CRON_TZ` read
-`$kRedacted`, and user fields but `root` read `user`. The review found
-nothing left.
+`cron` job keeps its schedule, the first word of a command run as
+`root` or from a user crontab, and `run-parts`, the `/etc/cron.<period>`
+directories and anacron; the rest of the command, comments, environment
+values but `CRON_TZ` and lines that are no job read `$kRedacted`, and
+user fields but `root` read `user`. The review found nothing left, and
+every file parses as the capture did.
 ''';
 }
 

@@ -6,6 +6,7 @@ import 'dart:convert';
 import 'package:klabautermann_host/klabautermann_host.dart';
 import 'package:test/test.dart';
 
+import '../../tool/src/fixture_capture.dart' show parseShapeChange;
 import '../../tool/src/redaction.dart';
 
 // Split so that no file carries a private-key header.
@@ -645,6 +646,9 @@ void main() {
   });
 
   group('cron', () {
+    // The five fields of a job whose schedule does not parse: the line
+    // may be no job at all.
+    const unparsed = '[redacted] [redacted] [redacted] [redacted] [redacted]';
     // The second verification's lines: crontab(5) environment syntax,
     // password options of clients no rule lists, positional secrets.
     const cron =
@@ -681,7 +685,7 @@ void main() {
         'weekly\n'
         'hw_timeout=absent';
 
-    test('jobs keep their schedule and first command word', () {
+    test('jobs keep their schedule and a root job its first word', () {
       expect(
         _redact(cron, collector: 'cron'),
         '== crontab_meta ==\n'
@@ -697,23 +701,23 @@ void main() {
         '0 2 * * * lftp [redacted]\n'
         '0 1 * * * azcopy [redacted]\n'
         '@reboot echo [redacted]\n'
-        '30 4 * * * PGPASSWORD=[redacted] [redacted]\n'
+        '30 4 * * * PGPASSWORD=[redacted] [redacted]\r\n'
         '== etc_crontab ==\n'
         'SHELL=[redacted]\n'
         '# [redacted]\n'
         '#\n'
         '*/5 * * * * root ipmitool [redacted]\n'
-        '17 * * * * user sqlplus [redacted]\n'
-        '@reboot user /opt/bin/syncer [redacted]\n'
-        '61 [redacted]\n'
+        '17 * * * * user [redacted]\n'
+        '@reboot user [redacted]\n'
+        '$unparsed user [redacted]\n'
         '== cron_d ==\n'
         'zz-hostile\tDB_PASS =[redacted]\n'
-        'zz-hostile\t0 1 * * * user /opt/bin/sync.sh [redacted]\n'
-        'zz-hostile\tbackup [redacted]\n'
-        'no-tab [redacted]\n'
+        'zz-hostile\t0 1 * * * user [redacted]\n'
+        'zz-hostile\t$unparsed user [redacted]\n'
+        '[redacted]\n'
         '== cron_dirs ==\n'
         'daily logrotate\n'
-        'weekly\n'
+        '[redacted]\n'
         'hw_timeout=absent',
       );
     });
@@ -748,18 +752,181 @@ void main() {
       final redacted = _redact(failed, collector: 'cron');
       expect(
         redacted,
-        'preamble [redacted]\n'
+        '[redacted]\n'
         '== crontab_meta ==\n'
         'rc=1\n'
-        'stray [redacted]\n'
+        '[redacted]\n'
         '== crontab ==\n'
         'no crontab for anke\n'
-        '0 [redacted]',
+        '[redacted]',
       );
       expect(
         parseCron(redacted, ParseContext.standard).value.ownCrontabPresent,
         isFalse,
       );
+    });
+
+    // The third verification's lines: a system job written without its
+    // user field shifts the command into that field.
+    test('a system job keeps no word of its command unless run as root', () {
+      const system =
+          '== crontab_meta ==\n'
+          'rc=1\n'
+          '== crontab ==\n'
+          'no crontab for anke\n'
+          '== etc_crontab ==\n'
+          '15 3 * * * mysqldump -pQuokka7NoUser db > /x.sql\n'
+          '20 3 * * * /usr/local/bin/backup.sh Walrus5Positional\n'
+          '@reboot /usr/local/bin/start.sh Zebra4Macro\n'
+          '@reboot root /usr/local/bin/warm-cache Zebra5Macro\n'
+          '== cron_d ==\n'
+          'backup\t0 2 * * * /usr/local/bin/push.sh Narwhal4Arg extra\n'
+          'backup\t*/10 * * * * sshpass -pZebra6 ssh x\n'
+          'backup\t*/10 * * * * root sshpass -pZebra6 ssh x';
+      final redacted = _redact(system, collector: 'cron');
+      expect(
+        redacted,
+        '== crontab_meta ==\n'
+        'rc=1\n'
+        '== crontab ==\n'
+        'no crontab for anke\n'
+        '== etc_crontab ==\n'
+        '15 3 * * * user [redacted]\n'
+        '20 3 * * * user [redacted]\n'
+        '@reboot user [redacted]\n'
+        '@reboot root /usr/local/bin/warm-cache [redacted]\n'
+        '== cron_d ==\n'
+        'backup\t0 2 * * * user [redacted]\n'
+        'backup\t*/10 * * * * user [redacted]\n'
+        'backup\t*/10 * * * * root sshpass [redacted]',
+      );
+      expect(Redactor(const RedactionLiterals()).review(redacted), isEmpty);
+    });
+
+    test('a line parseCron reads as no job keeps no word', () {
+      // Continuation lines, which cron does not have but people write,
+      // and a job whose schedule does not parse.
+      const lines =
+          '== crontab_meta ==\n'
+          'rc=0\n'
+          '== crontab ==\n'
+          '0 1 * * * /usr/bin/x \\\n'
+          '  Zebra3Bare\n'
+          '@hourly\n'
+          '@yearlyish /opt/x Zebra4Macro\n'
+          '== etc_crontab ==\n'
+          '30 2 * * * root mysqldump -u backup \\\n'
+          '    -pZebra9Mysql --all-databases > /var/backups/all.sql\n'
+          '0 25 * * * root /opt/x Zebra2Hour\n'
+          '== cron_d ==\n'
+          'backup\t    Narwhal8Cont more';
+      final redacted = _redact(lines, collector: 'cron');
+      expect(
+        redacted,
+        '== crontab_meta ==\n'
+        'rc=0\n'
+        '== crontab ==\n'
+        '0 1 * * * /usr/bin/x [redacted]\n'
+        '  [redacted]\n'
+        '@hourly\n'
+        '@[redacted] [redacted]\n'
+        '== etc_crontab ==\n'
+        '30 2 * * * root mysqldump [redacted]\n'
+        '    [redacted]\n'
+        '$unparsed user [redacted]\n'
+        '== cron_d ==\n'
+        'backup\t    [redacted]',
+      );
+      expect(parseShapeChange(Collector.cron, lines, redacted), isNull);
+    });
+
+    test(
+      'jobs that run the periodic directories keep what mergeJobs reads',
+      () {
+        // Debian 12's /etc/crontab and /etc/cron.d/anacron.
+        const debian =
+            '== crontab_meta ==\n'
+            'rc=1\n'
+            '== crontab ==\n'
+            'no crontab for root\n'
+            '== etc_crontab ==\n'
+            '17 *\t* * *\troot\tcd / && run-parts --report /etc/cron.hourly\n'
+            '25 6\t* * *\troot\ttest -x /usr/sbin/anacron || '
+            '{ cd / && run-parts --report /etc/cron.daily; }\n'
+            '47 6\t* * 7\troot\ttest -x /usr/sbin/anacron || '
+            '{ cd / && run-parts --report /etc/cron.weekly; }\n'
+            '52 6\t1 * *\troot\ttest -x /usr/sbin/anacron || '
+            '{ cd / && run-parts --report /etc/cron.monthly; }\n'
+            '== cron_d ==\n'
+            'anacron\t30 7-23 * * *   root\t[ -x /etc/init.d/anacron ] && '
+            'if [ ! -d /run/systemd/system ]; then '
+            '/usr/sbin/invoke-rc.d anacron start >/dev/null; fi\n'
+            '== cron_dirs ==\n'
+            'hourly backup-db\n'
+            'daily 0anacron\n'
+            'daily logrotate\n'
+            'weekly 0anacron\n'
+            'monthly 0anacron';
+        final redacted = _redact(debian, collector: 'cron');
+        expect(redacted.split('\n').sublist(5, 11), [
+          '17 *\t* * *\troot\tcd [redacted] run-parts [redacted] '
+              '/etc/cron.hourly',
+          '25 6\t* * *\troot\ttest [redacted] /usr/sbin/anacron [redacted] '
+              'run-parts [redacted] /etc/cron.daily; [redacted]',
+          '47 6\t* * 7\troot\ttest [redacted] /usr/sbin/anacron [redacted] '
+              'run-parts [redacted] /etc/cron.weekly; [redacted]',
+          '52 6\t1 * *\troot\ttest [redacted] /usr/sbin/anacron [redacted] '
+              'run-parts [redacted] /etc/cron.monthly; [redacted]',
+          '== cron_d ==',
+          'anacron\t30 7-23 * * *   root\t[ [redacted] /etc/init.d/anacron '
+              '[redacted] anacron [redacted]',
+        ]);
+        List<Object?> periodic(String payload) => [
+          for (final j in mergeJobs(
+            cron: parseCron(payload, ParseContext.standard).value,
+            nowUtc: DateTime.utc(2026, 10, 14, 12),
+            zone: const ServerZone(offset: Duration.zero),
+            runCount: 2,
+          ))
+            if (j is PeriodicJobEntry)
+              (
+                j.entry.name,
+                j.driverIds.join(' '),
+                j.nextRuns.length,
+                j.runsUnknown,
+              ),
+        ];
+        expect(periodic(redacted), periodic(debian));
+        expect(
+          periodic(debian),
+          contains(('backup-db', 'cron|/etc/crontab|0', 2, null)),
+        );
+      },
+    );
+
+    test('a % ends the kept word, a CR stays', () {
+      const lines =
+          '== crontab_meta ==\n'
+          'rc=0\n'
+          '== crontab ==\n'
+          '0 4 * * * cat%Hunter2Stdin%second\n'
+          '0 5 * * * /usr/bin/psql%Zebra9Quokka\n'
+          'TOKEN=Kiwi3Crlf\r\n'
+          '# note Hunter3\r\n'
+          '0 6 * * * /usr/bin/x Hunter4\r';
+      final redacted = _redact(lines, collector: 'cron');
+      expect(
+        redacted,
+        '== crontab_meta ==\n'
+        'rc=0\n'
+        '== crontab ==\n'
+        '0 4 * * * cat [redacted]\n'
+        '0 5 * * * /usr/bin/psql [redacted]\n'
+        '[redacted]\r\n'
+        '# [redacted]\r\n'
+        '0 6 * * * /usr/bin/x [redacted]\r',
+      );
+      expect(parseShapeChange(Collector.cron, lines, redacted), isNull);
     });
   });
 
