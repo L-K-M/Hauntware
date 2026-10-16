@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:isolate';
 
@@ -5,6 +6,7 @@ import 'package:meta/meta.dart';
 import 'package:seance_core/seance_core.dart'
     show ImportedHost, InMemoryHostKeyStore, SshLink;
 
+import '../capabilities/capability_cache.dart';
 import '../fleet/imported_fleet.dart';
 import '../fleet/ssh_config_entries.dart';
 import '../fleet/ssh_config_import_store.dart';
@@ -14,6 +16,7 @@ import '../links/link_supervisor.dart';
 import '../links/prompt_broker.dart';
 import '../sampling/sampling_scheduler.dart';
 import '../sampling/subscriptions.dart';
+import '../settings/instance_lock.dart' show SupportDirectoryAccess;
 import 'protocol.dart';
 
 /// What the engine isolate starts with, sent once by `Isolate.spawn`
@@ -27,6 +30,7 @@ final class EngineStart {
     required this.uiPort,
     required this.supportDirectory,
     this.linksEnabled = false,
+    this.supportDirectoryAccess = SupportDirectoryAccess.unguarded,
   });
 
   /// The client isolate's port.
@@ -42,6 +46,10 @@ final class EngineStart {
   /// and no [Prompt] is ever open. The app's composition root leaves
   /// them off; tests turn them on.
   final bool linksEnabled;
+
+  /// Whether this process alone uses [supportDirectory]: the engine writes
+  /// and purges its capability cache there only then (03 §4.10, D59).
+  final SupportDirectoryAccess supportDirectoryAccess;
 }
 
 /// The engine isolate's entry point (03 D18): one isolate owns the SSH links,
@@ -55,7 +63,9 @@ final class EngineStart {
 /// [Unsubscribe] and [SetCadenceProfile] update the sampling subscriptions,
 /// which the sampling scheduler runs over each server's ready link as
 /// [Sample], [Gap], [SamplingState] and [HostProfileChanged] events
-/// (03 §6.4; links off, nothing samples), [ImportSshConfig] gets
+/// (03 §6.4; links off, nothing samples), a server's cached profile goes
+/// out as a [HostProfileChanged] when a [Connect] or [Subscribe] first
+/// names it (03 §6.1, D59), [ImportSshConfig] gets
 /// [CatalogReplaced] and [SshConfigImported], [Connect], [Disconnect] and
 /// [SetAppActivity] go to the link supervisor and [AnswerPrompt] to the
 /// prompt broker (03 §5.1), [CloseStream] does nothing (no log stream is
@@ -92,6 +102,10 @@ void engineMain(
   // F3) carry them after the synced entries. The store hands them out
   // unmodifiable, so building a snapshot cannot edit them in place.
   late final SshConfigImportStore imports;
+
+  // Each fleet server's last probed profile (03 §6.1, D59), opened with
+  // the import store.
+  CapabilityCache? capabilities;
 
   // The login name for imported hosts and hops that name no user.
   final localUser = localUserName(Platform.environment);
@@ -141,6 +155,8 @@ void engineMain(
       emit: uiPort.send,
       deadPeerHint: links.deadPeerHint,
       clearDeadPeerHint: links.clearDeadPeerHint,
+      probed: (serverId, profile) =>
+          unawaited(capabilities?.probed(serverId, profile)),
     );
   }
 
@@ -159,6 +175,15 @@ void engineMain(
     sampling.fleet = fleetIds;
     scheduler?.retain(fleetIds);
     links?.forget(before.difference(fleetIds));
+    unawaited(capabilities?.forget(before.difference(fleetIds)));
+  }
+
+  // A server's cached profile goes out when a request first names it,
+  // since the startup events reach only the app's first listener.
+  void sendCachedProfile(String serverId) {
+    if (capabilities?.takeCached(serverId) case final cached?) {
+      uiPort.send(cached);
+    }
   }
 
   Future<void> handle(Object? message) async {
@@ -182,6 +207,7 @@ void engineMain(
         // them before the user does anything.
         uiPort.send(CatalogReplaced(fleet.entries));
       case Connect(:final serverId):
+        sendCachedProfile(serverId);
         // The app sends it when the user opens the server (03 §10.1), so
         // the connect may prompt.
         if (links == null) {
@@ -207,6 +233,7 @@ void engineMain(
             reject(message, 'the answer does not fit prompt $promptId');
         }
       case Subscribe():
+        sendCachedProfile(message.serverId);
         sampling.subscribe(message);
         scheduler?.subscribed(message);
       case Unsubscribe(:final serverId):
@@ -280,9 +307,14 @@ void engineMain(
           '${start.supportDirectory}${Platform.pathSeparator}'
           '$sshConfigImportsFileName',
         ),
-      ).then((store) {
+      ).then((store) async {
         imports = store;
         refreshFleet();
+        capabilities = await CapabilityCache.open(
+          Directory(start.supportDirectory),
+          access: start.supportDirectoryAccess,
+          fleet: fleetIds,
+        );
       });
   commands.listen((message) {
     queue = queue.then((_) => handle(message));

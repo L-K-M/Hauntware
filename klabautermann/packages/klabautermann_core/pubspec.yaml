@@ -24,6 +24,9 @@ dependencies:
   # DockerQuery/DockerResult.
   klabautermann_docker:
     path: ../klabautermann_docker
+  # The SHA-256 that names an import's capability cache file (03 §4.10,
+  # D59); seance_core already resolves it.
+  crypto: ^3.0.0
   # @immutable on the protocol's plain-data types.
   meta: ^1.15.0
   # The IANA zone rules cron next runs follow in the server's zone

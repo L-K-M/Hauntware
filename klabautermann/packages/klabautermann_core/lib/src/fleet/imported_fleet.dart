@@ -9,7 +9,7 @@ import 'jump_routes.dart';
 /// Prefixes an imported host's alias to form its [FleetEntry.serverId].
 /// Synced ids are bare UUIDs, so the two can never collide; import ids are
 /// device-local and never become record ids.
-const String _importIdPrefix = 'ssh-config:';
+const String importIdPrefix = 'ssh-config:';
 
 /// The variables [localUserName] reads, in order.
 const List<String> _userVariables = ['USER', 'USERNAME'];
@@ -113,7 +113,7 @@ final class ImportedFleet {
       mapped.add((
         host: host,
         route: route,
-        config: config('$_importIdPrefix${host.alias}', host, route.lastOrNull),
+        config: config('$importIdPrefix${host.alias}', host, route.lastOrNull),
       ));
     }
 

@@ -4,6 +4,7 @@ import 'dart:io';
 import 'dart:isolate';
 
 import 'package:klabautermann_core/klabautermann_core.dart';
+import 'package:klabautermann_core/src/capabilities/capability_cache.dart';
 import 'package:klabautermann_core/src/engine/engine_isolate.dart';
 import 'package:klabautermann_core/src/fleet/ssh_config_import_store.dart'
     show sshConfigImportsFileName, sshConfigImportsSchemaVersion;
@@ -24,9 +25,13 @@ void main() {
 
   /// A real engine isolate over [directory] (the test's support directory
   /// by default), shut down after the test.
-  Future<IsolateEngineClient> spawnEngine({String? directory}) async {
+  Future<IsolateEngineClient> spawnEngine({
+    String? directory,
+    SupportDirectoryAccess access = SupportDirectoryAccess.unguarded,
+  }) async {
     final client = await IsolateEngineClient.spawn(
       supportDirectory: directory ?? support.path,
+      supportDirectoryAccess: access,
     );
     addTearDown(client.shutdown);
     return client;
@@ -416,6 +421,95 @@ void main() {
       expect(((await next(events)) as CatalogReplaced).entries, hasLength(1));
       expect(((await next(events)) as SshConfigImported).saved, isFalse);
       expect(importsFile.readAsStringSync(), newer);
+    });
+  });
+
+  group('the capability cache (03 §6.1, D59)', () {
+    const web = 'ssh-config:web';
+    const webConfig = 'Host web\n  HostName 192.0.2.10\n';
+    const otherConfig = 'Host other\n  HostName 192.0.2.11\n';
+
+    File cacheFile() => File(
+      '${support.path}/$capabilityCacheDirectoryName/'
+      '${capabilityCacheFileName(web)}',
+    );
+
+    /// Imports [config] and waits for the answer.
+    Future<void> import(
+      IsolateEngineClient client,
+      StreamIterator<EngineEvent> events,
+      String config,
+    ) async {
+      client.send(ImportSshConfig(config));
+      expect(await next(events), isA<CatalogReplaced>());
+      expect(await next(events), isA<SshConfigImported>());
+    }
+
+    /// Caches a profile for `web`, as an earlier run's probe would have.
+    Future<void> cacheWeb() async {
+      final cache = await CapabilityCache.open(
+        support,
+        access: SupportDirectoryAccess.exclusive,
+        fleet: const {web},
+      );
+      await cache.probed(web, HostProfile(systemdVersion: 252));
+    }
+
+    test('a known server shows its cached profile once, when a request '
+        'first names it', () async {
+      final first = await spawnEngine();
+      final (events: firstEvents, fleet: _) = await started(first);
+      await import(first, firstEvents, webConfig);
+      await firstEvents.cancel();
+      await first.shutdown();
+      await cacheWeb();
+
+      final client = await spawnEngine();
+      final (:events, fleet: _) = await started(client);
+      client.send(const Connect(web));
+      final cached = await next(events) as HostProfileChanged;
+      expect(cached.serverId, web);
+      expect(cached.profile.systemdVersion, 252);
+      expect(cached.cachedAt, isNotNull);
+      expect((await next(events) as RequestRejected).requestName, 'Connect');
+
+      client
+        ..send(
+          const Subscribe(
+            serverId: web,
+            subscriptionId: 'tab',
+            streams: {SampleStream.core},
+          ),
+        )
+        ..send(const Connect('probe'));
+      expect((await next(events) as RequestRejected).requestName, 'Connect');
+    });
+
+    test('a server that leaves the fleet loses its file, unless another '
+        'instance may share the directory (SYN-08)', () async {
+      final unguarded = await spawnEngine();
+      final (events: unguardedEvents, fleet: _) = await started(unguarded);
+      await import(unguarded, unguardedEvents, webConfig);
+      await cacheWeb();
+      await import(unguarded, unguardedEvents, otherConfig);
+      // Time for a purge to land, as it does below within milliseconds.
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+      expect(cacheFile().existsSync(), isTrue);
+      await unguardedEvents.cancel();
+      await unguarded.shutdown();
+
+      final client = await spawnEngine(
+        access: SupportDirectoryAccess.exclusive,
+      );
+      final (:events, fleet: _) = await started(client);
+      await import(client, events, webConfig);
+      await cacheWeb();
+      await import(client, events, otherConfig);
+      final sw = Stopwatch()..start();
+      while (cacheFile().existsSync()) {
+        if (sw.elapsed > const Duration(seconds: 5)) fail('file not purged');
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
     });
   });
 

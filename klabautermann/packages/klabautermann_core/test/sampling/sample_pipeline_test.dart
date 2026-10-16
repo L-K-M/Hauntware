@@ -578,7 +578,7 @@ void main() {
   });
 
   test('process rows: RSS in bytes; a ps fallback row lists its '
-      'whitespace tokens (7.2)', () {
+      'whitespace tokens (7.2); every argument is masked (8.9)', () {
     final rows = procsResult(
       ProcsSnapshot(
         processes: [
@@ -586,15 +586,20 @@ void main() {
           ProcEntry(pid: 2, argsJoined: 'nginx -g daemon off;'),
           ProcEntry(pid: 3, argsJoined: ''),
           ProcEntry(pid: 4),
+          ProcEntry(pid: 5, argv: const ['mysql', '-phunter2']),
+          ProcEntry(pid: 6, argsJoined: 'app --token t0k3n'),
         ],
       ),
     ).processes;
-    expect(rows.map((r) => r.arguments), [
+    expect(rows.map((r) => r.arguments?.map((a) => a.display)), [
       ['sh', '-c', 'a b'],
       ['nginx', '-g', 'daemon', 'off;'],
       isEmpty,
       isNull,
+      ['mysql', '-p********'],
+      ['app', '--token', '********'],
     ]);
+    expect(rows[4].arguments![1].reveal(), '-phunter2');
     expect(rows.first.residentBytes, 2048);
   });
 

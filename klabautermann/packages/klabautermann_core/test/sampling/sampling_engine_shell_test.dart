@@ -1,10 +1,11 @@
 // The engine samples end to end over a link whose commands run in local
 // shells (03 §6.2, §6.4): dash and bash run the real sampler programs as
 // the login shell and as the samplers' `sh`. This covers start, READY,
-// the probe, ticks through the sample pipeline, a SIGSTOP stall past the
-// fast deadline with its restart, and the background pause, on this
-// machine; it does not replace the SSH fixture tests (K24). Tagged
-// `shell`; a shell that is not installed gets no tests.
+// the probe and its cache file, ticks through the sample pipeline, a
+// SIGSTOP stall past the fast deadline with its restart, and the
+// background pause, on this machine; it does not replace the SSH fixture
+// tests (K24). Tagged `shell`; a shell that is not installed gets no
+// tests.
 @Tags(['shell'])
 library;
 
@@ -13,6 +14,7 @@ import 'dart:io';
 import 'dart:isolate';
 
 import 'package:klabautermann_core/klabautermann_core.dart';
+import 'package:klabautermann_core/src/capabilities/capability_cache.dart';
 import 'package:klabautermann_core/src/engine/engine_isolate.dart';
 import 'package:test/test.dart';
 
@@ -46,6 +48,7 @@ final class _Engine {
         uiPort: port.sendPort,
         supportDirectory: support,
         linksEnabled: true,
+        supportDirectoryAccess: SupportDirectoryAccess.exclusive,
       ),
       dial:
           ({
@@ -108,6 +111,16 @@ void main() {
         (e) => e.phase == SamplingPhase.sampling,
       );
       await engine.until<HostProfileChanged>();
+      // The probe's answer is cached for the next run (D59).
+      final cached = File(
+        '${support.path}/$capabilityCacheDirectoryName/'
+        '${capabilityCacheFileName(_web)}',
+      );
+      final written = Stopwatch()..start();
+      while (!cached.existsSync()) {
+        expect(written.elapsed, lessThan(const Duration(seconds: 5)));
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
       final identity = await engine.until<Sample>(
         (s) => s.stream == SampleStream.identity,
       );
