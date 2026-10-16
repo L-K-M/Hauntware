@@ -7,7 +7,8 @@
 /// app's truth types cross this boundary: each app describes the prompt as
 /// a [GhostCredentialRequest] and maps the [GhostCredentialReply] onto its
 /// own answer type in its adapter. File access stays with the host, through
-/// the picker or reader it injects. Wording comes in through
+/// the picker or reader it injects, or with the host's own reader behind
+/// the [GhostKeyField.passphraseOnly] form. Wording comes in through
 /// [GhostCredentialStrings], the key and endpoint face as the host's
 /// monospace style (§3 to §5).
 library;
@@ -17,11 +18,12 @@ import 'package:seance_protocol/seance_protocol.dart' show AuthMethod;
 
 /// How the prompt takes a private key, and with it the rest of the form.
 ///
-/// Each mode is one app's form as it stood before the move, so each keeps
-/// its own details beyond the key input: the layout, the secret fields'
-/// input flags, when the answer is enabled, how an error reads and whether
-/// the verbs check that the dialog's route is current. Converging them is a
-/// behaviour change for its own PR.
+/// [pastedPem] and [filePath] are each one app's form as it stood before
+/// the move, so each keeps its own details beyond the key input: the
+/// layout, the secret fields' input flags, when the answer is enabled, how
+/// an error reads and whether the verbs check that the dialog's route is
+/// current. Converging them is a behaviour change for its own PR.
+/// [passphraseOnly] is new, and decides each of those details itself.
 enum GhostKeyField {
   /// Key text pasted into a multi-line field, or filled in from a file the
   /// host picks (`pickKeyText`). Séance's recovery form: a dialog of fixed
@@ -35,6 +37,19 @@ enum GhostKeyField {
   /// from the password or passphrase, a spinner while the file is read, and
   /// verbs that act only while the dialog's route is current.
   filePath,
+
+  /// A known identity file, shown by its path
+  /// ([GhostCredentialRequest.initialKeyPath]), and only its passphrase
+  /// asked for. The host reads the file itself, so no key text crosses into
+  /// the dialog or its reply ([GhostKeyPassphraseReply]); no injector is
+  /// taken. Klabautermann's form, where the engine reads key files: a
+  /// scrollable dialog, suggestions and IME learning off in the secret
+  /// field, no reveal toggle (as in the other forms), the answer enabled and
+  /// Enter answering only once the secret is typed (a key that has no
+  /// passphrase never needs this prompt), and verbs that act only while the
+  /// dialog's route is current. A password prompt in this mode is the same
+  /// form with a password field.
+  passphraseOnly,
 }
 
 /// What the prompt asks for, and about which server.
@@ -68,7 +83,9 @@ final class GhostCredentialRequest {
   final String? host;
   final int? port;
 
-  /// The identity file path a [GhostKeyField.filePath] field starts with.
+  /// The identity file path a [GhostKeyField.filePath] field starts with,
+  /// or the one a [GhostKeyField.passphraseOnly] key prompt shows, where it
+  /// is required.
   final String? initialKeyPath;
 
   /// Whether to offer keeping the answer in the host's vault
@@ -99,7 +116,8 @@ final class GhostPasswordReply extends GhostCredentialReply {
 }
 
 /// The private key's text, pasted, picked or read from the identity file,
-/// and its passphrase.
+/// and its passphrase. Never the answer to a [GhostKeyField.passphraseOnly]
+/// prompt.
 final class GhostPrivateKeyReply extends GhostCredentialReply {
   const GhostPrivateKeyReply(
     this.privateKeyPem, {
@@ -113,14 +131,27 @@ final class GhostPrivateKeyReply extends GhostCredentialReply {
   final String? keyPassphrase;
 }
 
+/// The passphrase alone, for the identity file a
+/// [GhostKeyField.passphraseOnly] prompt showed. The host knows the file and
+/// reads it itself; no key text rides this reply.
+final class GhostKeyPassphraseReply extends GhostCredentialReply {
+  const GhostKeyPassphraseReply(this.keyPassphrase, {super.saveToVault = false})
+    : assert(keyPassphrase != '', 'the prompt answers only once typed');
+
+  /// The typed passphrase, never empty.
+  final String keyPassphrase;
+}
+
 /// The prompt's words, as one bag. The defaults are Séance's, so Séance
 /// passes nothing; a host with localized copy passes its own. The members
-/// only the [GhostKeyField.filePath] form or the vault offer use default to
-/// plain English, since Séance has no words for them.
+/// only the [GhostKeyField.filePath] and [GhostKeyField.passphraseOnly]
+/// forms or the vault offer use default to plain English, since Séance has
+/// no words for them.
 final class GhostCredentialStrings {
   const GhostCredentialStrings({
     this.passwordTitle = _passwordTitle,
     this.privateKeyTitle = _privateKeyTitle,
+    this.keyPassphraseTitle = _keyPassphraseTitle,
     this.explanation =
         'Saved on this device, in its encrypted vault, and used for '
         'this server from now on.',
@@ -136,15 +167,18 @@ final class GhostCredentialStrings {
     this.keyFileRequired = 'Choose a key file.',
     this.keyFileError = _keyFileError,
     this.passphraseField = 'Key passphrase (if it has one)',
+    this.keyPassphraseField = 'Passphrase',
     this.saveInVault = 'Save in vault',
     this.cancel = 'Cancel',
     this.connect = 'Save and connect',
   });
 
-  /// The titles over a password and a private-key prompt, from the
-  /// request's [GhostCredentialRequest.endpointLabel].
+  /// The titles over a password, a private-key and a
+  /// [GhostKeyField.passphraseOnly] key prompt, from the request's
+  /// [GhostCredentialRequest.endpointLabel].
   final String Function(String label) passwordTitle;
   final String Function(String label) privateKeyTitle;
+  final String Function(String label) keyPassphraseTitle;
 
   /// The line under the title saying what happens to the answer; null for
   /// none.
@@ -166,8 +200,9 @@ final class GhostCredentialStrings {
   final String keyPemField;
   final String keyPemHint;
 
-  /// The [GhostKeyField.filePath] form's path label, and the error for an
-  /// empty path.
+  /// The [GhostKeyField.filePath] form's path label, which also labels the
+  /// path a [GhostKeyField.passphraseOnly] prompt shows, and the error for
+  /// an empty path.
   final String keyFileField;
   final String keyFileRequired;
 
@@ -177,8 +212,12 @@ final class GhostCredentialStrings {
   /// Séance's picker words for the user, and nothing of any other error.
   final String Function(Object error) keyFileError;
 
-  /// The passphrase field's label.
+  /// The passphrase field's label where a passphrase is optional.
   final String passphraseField;
+
+  /// The [GhostKeyField.passphraseOnly] form's passphrase label, where the
+  /// passphrase is the whole answer.
+  final String keyPassphraseField;
 
   /// The vault offer's label.
   final String saveInVault;
@@ -192,6 +231,8 @@ String _passwordTitle(String label) => 'Password for $label';
 
 String _privateKeyTitle(String label) => 'Private key for $label';
 
+String _keyPassphraseTitle(String label) => 'Key passphrase for $label';
+
 String _endpoint(String? username, String host, int port) =>
     username == null ? '$host:$port' : '$username@$host:$port';
 
@@ -204,8 +245,9 @@ const _opensshPemHeader =
 String _keyFileError(Object error) =>
     error is FormatException ? error.message : 'That file could not be opened.';
 
-/// Asks for the credential [request] describes: the server's password, or
-/// its private key and passphrase. Null when the user cancels.
+/// Asks for the credential [request] describes: the server's password, its
+/// private key and passphrase, or a known key's passphrase alone. Null when
+/// the user cancels.
 ///
 /// The injector matching [GhostCredentialRequest.keyField] is required:
 /// [GhostKeyField.pastedPem] fills its key field through [pickKeyText],
@@ -214,6 +256,10 @@ String _keyFileError(Object error) =>
 /// missing one throws [ArgumentError] before the dialog opens; the other is
 /// ignored. Either may throw: the dialog stays open and shows
 /// [GhostCredentialStrings.keyFileError].
+///
+/// [GhostKeyField.passphraseOnly] takes neither: the host reads the key, so
+/// passing either throws [ArgumentError], as does a key prompt without a
+/// [GhostCredentialRequest.initialKeyPath] to show.
 ///
 /// [monoStyle] is the host's monospace stack for the key text and the
 /// endpoint line; the dialog sets the size. [dialogKey] keys the dialog, so
@@ -233,6 +279,7 @@ Future<GhostCredentialReply?> showGhostCredentialDialog(
   final missingInjector = switch (request.keyField) {
     GhostKeyField.pastedPem => pickKeyText == null ? 'pickKeyText' : null,
     GhostKeyField.filePath => readKeyFile == null ? 'readKeyFile' : null,
+    GhostKeyField.passphraseOnly => null,
   };
   if (missingInjector != null) {
     throw ArgumentError.value(
@@ -240,6 +287,32 @@ Future<GhostCredentialReply?> showGhostCredentialDialog(
       missingInjector,
       '${request.keyField} needs it to take a private key',
     );
+  }
+
+  if (request.keyField == GhostKeyField.passphraseOnly) {
+    // Rejected rather than ignored: a host that hands this form a picker or
+    // reader expects key text back, and this form never takes any.
+    final unwantedInjector = pickKeyText != null
+        ? 'pickKeyText'
+        : readKeyFile != null
+        ? 'readKeyFile'
+        : null;
+    if (unwantedInjector != null) {
+      throw ArgumentError(
+        '${request.keyField} reads no key; the host does',
+        unwantedInjector,
+      );
+    }
+
+    final keyPath = request.initialKeyPath;
+    if (request.authMethod == AuthMethod.privateKey &&
+        (keyPath == null || keyPath.isEmpty)) {
+      throw ArgumentError.value(
+        keyPath,
+        'initialKeyPath',
+        '${request.keyField} shows the key it asks about',
+      );
+    }
   }
 
   return showDialog<GhostCredentialReply>(
@@ -270,7 +343,8 @@ class _CredentialDialog extends StatefulWidget {
   final GhostCredentialStrings strings;
 
   /// Set for [GhostKeyField.pastedPem], [readKeyFile] for
-  /// [GhostKeyField.filePath]; [showGhostCredentialDialog] checks both.
+  /// [GhostKeyField.filePath], neither for [GhostKeyField.passphraseOnly];
+  /// [showGhostCredentialDialog] checks them.
   final Future<String?> Function()? pickKeyText;
   final Future<String> Function(String path)? readKeyFile;
 
@@ -281,7 +355,7 @@ class _CredentialDialog extends StatefulWidget {
 }
 
 class _CredentialDialogState extends State<_CredentialDialog> {
-  /// The password, or the pasted key's text.
+  /// The password, the pasted key's text, or the passphrase alone.
   final _secret = TextEditingController();
   late final _keyPath = TextEditingController(
     text: widget.request.initialKeyPath ?? '',
@@ -317,7 +391,7 @@ class _CredentialDialogState extends State<_CredentialDialog> {
     // Séance's form never checked its route before cancelling.
     final checksRoute = switch (widget.request.keyField) {
       GhostKeyField.pastedPem => false,
-      GhostKeyField.filePath => true,
+      GhostKeyField.filePath || GhostKeyField.passphraseOnly => true,
     };
     if (checksRoute && !_isCurrentRoute) return;
 
@@ -379,6 +453,18 @@ class _CredentialDialogState extends State<_CredentialDialog> {
     Navigator.pop<GhostCredentialReply>(context, _reply(pem));
   }
 
+  void _submitSecretOnly() {
+    final secret = _secret.text;
+    if (secret.isEmpty || !_isCurrentRoute) return;
+
+    Navigator.pop<GhostCredentialReply>(
+      context,
+      _isKey
+          ? GhostKeyPassphraseReply(secret, saveToVault: _saveToVault)
+          : GhostPasswordReply(secret, saveToVault: _saveToVault),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final request = widget.request;
@@ -415,6 +501,7 @@ class _CredentialDialogState extends State<_CredentialDialog> {
         ...switch (request.keyField) {
           GhostKeyField.pastedPem => _pastedFields(mono, scheme),
           GhostKeyField.filePath => _pathFields(scheme),
+          GhostKeyField.passphraseOnly => _passphraseOnlyFields(mono),
         },
         if (request.offerVaultSave && !request.vaultUnavailable)
           CheckboxListTile(
@@ -428,11 +515,14 @@ class _CredentialDialogState extends State<_CredentialDialog> {
           ),
       ],
     );
-    final title = Text(
-      _isKey
-          ? strings.privateKeyTitle(request.endpointLabel)
-          : strings.passwordTitle(request.endpointLabel),
-    );
+    final title = Text(switch ((_isKey, request.keyField)) {
+      (false, _) => strings.passwordTitle(request.endpointLabel),
+      (true, GhostKeyField.pastedPem || GhostKeyField.filePath) =>
+        strings.privateKeyTitle(request.endpointLabel),
+      (true, GhostKeyField.passphraseOnly) => strings.keyPassphraseTitle(
+        request.endpointLabel,
+      ),
+    });
     final cancel = TextButton(onPressed: _cancel, child: Text(strings.cancel));
 
     return switch (request.keyField) {
@@ -469,6 +559,19 @@ class _CredentialDialogState extends State<_CredentialDialog> {
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
                 : Text(strings.connect),
+          ),
+        ],
+      ),
+      GhostKeyField.passphraseOnly => AlertDialog(
+        scrollable: true,
+        title: title,
+        content: content,
+        actions: [
+          cancel,
+          FilledButton(
+            key: const ValueKey('credential.save'),
+            onPressed: _secret.text.isEmpty ? null : _submitSecretOnly,
+            child: Text(strings.connect),
           ),
         ],
       ),
@@ -573,6 +676,36 @@ class _CredentialDialogState extends State<_CredentialDialog> {
           onSubmitted: (_) => _submitPath(),
           decoration: InputDecoration(labelText: strings.passwordField),
         ),
+    ];
+  }
+
+  List<Widget> _passphraseOnlyFields(TextStyle mono) {
+    final strings = widget.strings;
+    return [
+      if (_isKey) ...[
+        InputDecorator(
+          key: const ValueKey('credential.keyPath'),
+          decoration: InputDecoration(labelText: strings.keyFileField),
+          child: SelectableText(widget.request.initialKeyPath!, style: mono),
+        ),
+        const SizedBox(height: 8),
+      ],
+      TextField(
+        key: ValueKey(_isKey ? 'credential.passphrase' : 'credential.password'),
+        controller: _secret,
+        autofocus: true,
+        obscureText: true,
+        autocorrect: false,
+        enableSuggestions: false,
+        enableIMEPersonalizedLearning: false,
+        onChanged: (_) => setState(() {}),
+        onSubmitted: (_) => _submitSecretOnly(),
+        decoration: InputDecoration(
+          labelText: _isKey
+              ? strings.keyPassphraseField
+              : strings.passwordField,
+        ),
+      ),
     ];
   }
 }

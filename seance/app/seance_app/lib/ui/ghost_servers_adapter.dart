@@ -90,11 +90,17 @@ GhostCredentialRequest ghostCredentialRequestOf({
 /// [GhostCredentialReply.saveToVault] carries nothing here. [UseSshAgent]
 /// never comes from the prompt: the tab offers the agent as its own button,
 /// beside the one that opens the prompt, and supplies it directly.
+/// [GhostKeyPassphraseReply] never comes either: it answers only the
+/// passphrase-only form, and [ghostCredentialRequestOf] always asks for a
+/// pasted key.
 MissingCredential missingCredentialOf(GhostCredentialReply reply) =>
     switch (reply) {
       GhostPasswordReply(:final password) => MissingPassword(password),
       GhostPrivateKeyReply(:final privateKeyPem, :final keyPassphrase) =>
         MissingPrivateKey(privateKeyPem, passphrase: keyPassphrase),
+      GhostKeyPassphraseReply() => throw StateError(
+        'Séance never raises the passphrase-only credential prompt',
+      ),
     };
 
 /// The theme's status colours ([StatusColors]) as the package takes them.

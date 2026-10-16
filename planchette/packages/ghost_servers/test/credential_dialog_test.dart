@@ -577,4 +577,291 @@ void main() {
       expect(find.byKey(const ValueKey('credential.password')), findsOne);
     });
   });
+  group('the passphrase-only form', () {
+    const keyPath = '~/.ssh/id_work';
+
+    GhostCredentialRequest passphraseRequest({
+      AuthMethod authMethod = AuthMethod.privateKey,
+      String? initialKeyPath = keyPath,
+      bool offerVaultSave = false,
+      bool vaultUnavailable = false,
+    }) => GhostCredentialRequest(
+      authMethod: authMethod,
+      endpointLabel: 'box',
+      keyField: GhostKeyField.passphraseOnly,
+      username: 'deploy',
+      host: 'example.com',
+      port: 2222,
+      initialKeyPath: initialKeyPath,
+      offerVaultSave: offerVaultSave,
+      vaultUnavailable: vaultUnavailable,
+    );
+
+    TextField field(WidgetTester tester, String key) =>
+        tester.widget<TextField>(find.byKey(ValueKey(key)));
+
+    testWidgets('shows the known key and asks only for its passphrase', (
+      tester,
+    ) async {
+      await openRequest(tester, passphraseRequest());
+      expect(find.text('Key passphrase for box'), findsOneWidget);
+      expect(find.text('deploy@example.com:2222'), findsOneWidget);
+      expect(find.text('Key file'), findsOneWidget);
+
+      final path = tester.widget<SelectableText>(
+        find.descendant(
+          of: find.byKey(const ValueKey('credential.keyPath')),
+          matching: find.byType(SelectableText),
+        ),
+      );
+      expect(path.data, keyPath);
+      expect(path.style!.fontFamily, 'Host Mono');
+      expect(path.style!.fontSize, 12);
+      // The path is shown, not edited: no field holds it.
+      expect(find.byKey(const ValueKey('credential.keyFile')), findsNothing);
+      expect(find.byKey(const ValueKey('credential.key')), findsNothing);
+      expect(find.byKey(const ValueKey('credential.chooseFile')), findsNothing);
+      expect(find.byKey(const ValueKey('credential.password')), findsNothing);
+
+      final passphrase = field(tester, 'credential.passphrase');
+      expect(passphrase.decoration!.labelText, 'Passphrase');
+      expect(passphrase.obscureText, isTrue);
+      expect(passphrase.autofocus, isTrue);
+      expect(passphrase.autocorrect, isFalse);
+      expect(passphrase.enableSuggestions, isFalse);
+      expect(passphrase.enableIMEPersonalizedLearning, isFalse);
+      // No reveal toggle, as in the other two forms.
+      expect(
+        find.descendant(
+          of: find.byType(AlertDialog),
+          matching: find.byType(IconButton),
+        ),
+        findsNothing,
+      );
+      expect(find.byType(CheckboxListTile), findsNothing);
+    });
+
+    testWidgets('the passphrase alone is the answer, on Enter or the button', (
+      tester,
+    ) async {
+      for (final viaEnter in [true, false]) {
+        answers.clear();
+        await openRequest(tester, passphraseRequest());
+        await tester.enterText(
+          find.byKey(const ValueKey('credential.passphrase')),
+          'pp',
+        );
+        await tester.pump();
+        if (viaEnter) {
+          await tester.testTextInput.receiveAction(TextInputAction.done);
+        } else {
+          await tester.tap(find.text('Save and connect'));
+        }
+        await tester.pumpAndSettle();
+
+        final reply = answers.single;
+        expect(reply, isA<GhostKeyPassphraseReply>(), reason: '$viaEnter');
+        expect((reply! as GhostKeyPassphraseReply).keyPassphrase, 'pp');
+        expect(reply.saveToVault, isFalse);
+      }
+    });
+
+    testWidgets('an empty passphrase cannot answer', (tester) async {
+      await openRequest(tester, passphraseRequest());
+      expect(save(tester).onPressed, isNull);
+
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsOneWidget);
+      expect(answers, isEmpty);
+
+      await tester.enterText(
+        find.byKey(const ValueKey('credential.passphrase')),
+        'p',
+      );
+      await tester.pump();
+      expect(save(tester).onPressed, isNotNull);
+
+      await tester.enterText(
+        find.byKey(const ValueKey('credential.passphrase')),
+        '',
+      );
+      await tester.pump();
+      expect(save(tester).onPressed, isNull);
+    });
+
+    testWidgets('a password prompt in this mode asks for the password', (
+      tester,
+    ) async {
+      await openRequest(
+        tester,
+        passphraseRequest(
+          authMethod: AuthMethod.password,
+          initialKeyPath: null,
+        ),
+      );
+      expect(find.text('Password for box'), findsOneWidget);
+      expect(find.byKey(const ValueKey('credential.keyPath')), findsNothing);
+      expect(find.byKey(const ValueKey('credential.passphrase')), findsNothing);
+      expect(save(tester).onPressed, isNull);
+
+      final password = field(tester, 'credential.password');
+      expect(password.obscureText, isTrue);
+      expect(password.enableSuggestions, isFalse);
+      expect(password.enableIMEPersonalizedLearning, isFalse);
+
+      await tester.enterText(
+        find.byKey(const ValueKey('credential.password')),
+        'pw',
+      );
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+
+      expect((answers.single! as GhostPasswordReply).password, 'pw');
+    });
+
+    testWidgets('takes no injector and needs the key path', (tester) async {
+      late BuildContext context;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Builder(
+            builder: (built) {
+              context = built;
+              return const SizedBox();
+            },
+          ),
+        ),
+      );
+
+      Matcher rejects(String name) =>
+          throwsA(isA<ArgumentError>().having((e) => e.name, 'name', name));
+
+      // An injector is rejected, not ignored: the form never takes key text.
+      expect(
+        () => showGhostCredentialDialog(
+          context,
+          passphraseRequest(),
+          pickKeyText: () async => 'PEM',
+          monoStyle: _mono,
+        ),
+        rejects('pickKeyText'),
+      );
+      expect(
+        () => showGhostCredentialDialog(
+          context,
+          passphraseRequest(authMethod: AuthMethod.password),
+          readKeyFile: (_) async => 'PEM',
+          monoStyle: _mono,
+        ),
+        rejects('readKeyFile'),
+      );
+      for (final missing in [null, '']) {
+        expect(
+          () => showGhostCredentialDialog(
+            context,
+            passphraseRequest(initialKeyPath: missing),
+            monoStyle: _mono,
+          ),
+          rejects('initialKeyPath'),
+          reason: '$missing',
+        );
+      }
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsNothing);
+    });
+
+    testWidgets('cancelling answers nothing', (tester) async {
+      await openRequest(tester, passphraseRequest());
+      await tester.enterText(
+        find.byKey(const ValueKey('credential.passphrase')),
+        'pp',
+      );
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+
+      expect(answers, [null]);
+      expect(find.text('open'), findsOneWidget);
+    });
+
+    testWidgets('the verbs act only while the dialog is the top route', (
+      tester,
+    ) async {
+      final dialogKey = GlobalKey();
+      await openRequest(tester, passphraseRequest(), dialogKey: dialogKey);
+      await tester.enterText(
+        find.byKey(const ValueKey('credential.passphrase')),
+        'pp',
+      );
+      await tester.pump();
+      final answer = save(tester).onPressed!;
+      final cancel = tester
+          .widget<TextButton>(find.widgetWithText(TextButton, 'Cancel'))
+          .onPressed!;
+
+      unawaited(
+        Navigator.of(
+          dialogKey.currentContext!,
+        ).push(MaterialPageRoute<void>(builder: (_) => const Text('on top'))),
+      );
+      await tester.pumpAndSettle();
+
+      answer();
+      cancel();
+      await tester.pumpAndSettle();
+      expect(find.text('on top'), findsOneWidget);
+      expect(answers, isEmpty);
+    });
+
+    testWidgets('the vault offer rides the reply', (tester) async {
+      await openRequest(tester, passphraseRequest(offerVaultSave: true));
+      await tester.tap(find.widgetWithText(CheckboxListTile, 'Save in vault'));
+      await tester.pump();
+      await tester.enterText(
+        find.byKey(const ValueKey('credential.passphrase')),
+        'pp',
+      );
+      await tester.pump();
+      await tester.tap(find.text('Save and connect'));
+      await tester.pumpAndSettle();
+
+      final reply = answers.single! as GhostKeyPassphraseReply;
+      expect(reply.keyPassphrase, 'pp');
+      expect(reply.saveToVault, isTrue);
+    });
+
+    testWidgets('an unavailable vault explains itself without an offer', (
+      tester,
+    ) async {
+      await openRequest(
+        tester,
+        passphraseRequest(offerVaultSave: true, vaultUnavailable: true),
+      );
+      expect(
+        find.text(
+          'Saved secrets are unavailable. You can still enter the secret '
+          'below.',
+        ),
+        findsOneWidget,
+      );
+      expect(find.byType(CheckboxListTile), findsNothing);
+      expect(find.byKey(const ValueKey('credential.passphrase')), findsOne);
+    });
+
+    testWidgets("a host's words label the form", (tester) async {
+      await openRequest(
+        tester,
+        passphraseRequest(),
+        strings: GhostCredentialStrings(
+          keyPassphraseTitle: (label) => 'Unlock the key for $label',
+          keyFileField: 'Identity file',
+          keyPassphraseField: 'Key passphrase',
+          connect: 'Connect',
+        ),
+      );
+      expect(find.text('Unlock the key for box'), findsOneWidget);
+      expect(find.text('Identity file'), findsOneWidget);
+      expect(find.text('Key passphrase'), findsOneWidget);
+      expect(find.text('Connect'), findsOneWidget);
+    });
+  });
 }
