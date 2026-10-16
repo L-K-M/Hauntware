@@ -186,9 +186,9 @@ gates nothing.
   16 ms; the Overview 1.88 ms and 22.0 ms, with 10 of 288 over; the Logs
   panel with the follow 15.1 ms and 63.2 ms, with 119 of 351 over, and
   328 young-generation collections in 20 s against 10 to 12 on the other
-  surfaces. On this loaded machine the follow is the cost to watch: the
-  device run should show whether the Logs panel's build holds 16 ms at
-  1,000 lines a second.
+  surfaces. On this loaded machine the follow is the cost to watch;
+  whether the Logs panel's build holds 16 ms at 1,000 lines a second is
+  for the device sign-off (06) to show.
 - **Raster:** 47 to 68 ms on average and 152 to 168 ms at p99 on every
   surface, every frame over 16 ms. That is llvmpipe on a shared CPU and
   says nothing about a phone's GPU.
@@ -196,7 +196,10 @@ gates nothing.
 ### Not covered in part 2
 
 - **Devices.** The low-end Android phone and the older iPhone of 06 stay
-  manual.
+  manual, and this test cannot run on them yet: it reads the fixtures
+  from the checkout through `dart:io` (`KLABAUTERMANN_REPLAY_FIXTURES`),
+  so it runs only on a desktop target. A device run needs them bundled
+  first, as assets or generated Dart.
 - **The phone layout.** The window is a desktop one; the phone shell (03
   §10.5) is not measured.
 - **The real engine.** The replay engine stands in for it: no links, no
