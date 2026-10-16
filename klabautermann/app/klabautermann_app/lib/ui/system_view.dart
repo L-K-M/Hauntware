@@ -65,6 +65,16 @@ String? virtualizationText(AppLocalizations l10n, HostProfile? profile) {
   return (rx: rx, tx: tx);
 }
 
+/// SYS-01's kernel as `uname` names it, name and release, or whichever
+/// the host reported; null when neither.
+String? kernelText(AppLocalizations l10n, IdentityResult identity) =>
+    switch ((identity.kernelName, identity.kernelRelease)) {
+      (final name?, final release?) => l10n.systemKernelValue(name, release),
+      (final name?, null) => name,
+      (null, final release?) => release,
+      (null, null) => null,
+    };
+
 /// BOOT-01's uptime in words: whole days and hours from a day on, hours
 /// and minutes from an hour on, else minutes. Each part rounds down, so a
 /// host never reads as up longer than it has been.

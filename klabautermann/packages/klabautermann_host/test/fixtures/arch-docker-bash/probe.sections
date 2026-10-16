@@ -1,0 +1,88 @@
+### kernel ok
+Linux 6.18.44-fc-v139 x86_64
+### distro ok
+NAME="Arch Linux"
+PRETTY_NAME="Arch Linux"
+ID=arch
+BUILD_ID=rolling
+VERSION_ID=20261011.0.609700
+ANSI_COLOR="38;2;23;147;209"
+HOME_URL="https://archlinux.org/"
+DOCUMENTATION_URL="https://wiki.archlinux.org/"
+SUPPORT_URL="https://bbs.archlinux.org/"
+BUG_REPORT_URL="https://gitlab.archlinux.org/groups/archlinux/-/issues"
+PRIVACY_POLICY_URL="https://terms.archlinux.org/docs/privacy-policy/"
+LOGO=archlinux-logo
+### init ok
+pid1_comm=sleep
+systemd_dir=no
+systemctl_rc=0
+systemctl_version=systemd 262 (262-1-arch)
+### virt ok
+virt_rc=0
+virt=docker
+container_rc=0
+container=docker
+### lxcfs ok
+mounts=
+### identity ok
+uid=0
+user=root
+groups=root
+### elev ok
+sudo_version=
+sudo_noninteractive=
+doas=absent
+doas_noninteractive=
+run0=present
+printf=builtin
+### tools ok
+journalctl=/usr/sbin/journalctl
+crontab=
+ss=/usr/sbin/ss
+ip=/usr/sbin/ip
+lsblk=/usr/sbin/lsblk
+findmnt=/usr/sbin/findmnt
+smartctl=
+sensors=
+docker=
+podman=
+socat=
+timeout=/usr/sbin/timeout
+setsid=/usr/sbin/setsid
+ncdu=
+gdu=
+sadf=
+logger=/usr/sbin/logger
+systemd-run=/usr/sbin/systemd-run
+systemd-analyze=/usr/sbin/systemd-analyze
+apt-get=
+dnf=
+dnf5=
+apk=
+pacman=/usr/sbin/pacman
+zypper=
+nvidia-smi=
+dmesg=/usr/sbin/dmesg
+tail=/usr/sbin/tail
+### kfeat ok
+psi=yes
+cgroup_v2=no
+### locale ok
+c_utf8=yes
+### sockets ok
+/var/run/docker.sock no no
+/run/podman/podman.sock no no
+/run/user/0/docker.sock no no
+/run/user/0/podman/podman.sock no no
+### session ok
+ssh_connection=
+ppid=6
+ppid_comm=dart:capture_fi
+### clock ok
+epoch=1792173373
+offset=+0000
+timedatectl_error=yes
+### linger ok
+xdg_runtime_dir=
+linger_error=yes

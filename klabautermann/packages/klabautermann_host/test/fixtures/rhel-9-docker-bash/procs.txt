@@ -1,0 +1,14 @@
+== meta ==
+total=3
+selection=all
+== rows ==
+1 S 0 2 0 327153 0 2784 sleep
+18 R 6 0 1 327184 0 3748 sh
+6 S 0 2 1 327172 0 8564 dart:capture_fi
+== cmdline ==
+==> 1/cmdline <==
+/usr/bin/coreutils[redacted][redacted][redacted]
+==> 18/cmdline <==
+/tmp/klab-sh-SNDBCI/sh[redacted]
+==> 6/cmdline <==
+/opt/klab/capture_fixtures[redacted][redacted][redacted][redacted][redacted][redacted][redacted]
