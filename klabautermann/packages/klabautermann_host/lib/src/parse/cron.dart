@@ -12,6 +12,10 @@ import '../hws/program.dart' show kTimeoutAbsentMarker;
 import 'models.dart' show splitBlocks;
 import 'parse_result.dart';
 
+/// The [CronJob.source] of a line in the invoking user's own crontab
+/// (`crontab -l`); system crontab lines carry their file path.
+const String kOwnCrontabSource = 'crontab';
+
 /// Which `cron.{hourly,daily,weekly,monthly}` directory a script came
 /// from (03 §7.7 JOB-04).
 enum CronPeriod { hourly, daily, weekly, monthly }
@@ -134,7 +138,7 @@ ParseResult<CronSnapshot> parseCron(String raw, ParseContext ctx) {
   if (ownPresent == true) {
     _parseCrontab(
       blocks['crontab'] ?? const [],
-      source: 'crontab',
+      source: kOwnCrontabSource,
       table: _CronTable.user,
       jobs: jobs,
       warnings: warnings,
