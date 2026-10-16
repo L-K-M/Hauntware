@@ -157,6 +157,7 @@ void main() {
         open(id);
       }
       router.closeStream('c');
+      router.closeStream('c');
       expect(statuses('c'), [_forChannel, _closed]);
 
       router.closeStream('a');
@@ -261,6 +262,8 @@ void main() {
       final first = await link.process(0);
 
       end();
+      // The app's CloseStream crossing the end changes nothing.
+      router.closeStream('c');
       for (final id in ['a', 'b', 'c']) {
         expect(statuses(id).last, _failed, reason: '$way $id');
         expect(ends(id), 1, reason: '$way $id');
