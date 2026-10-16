@@ -33,6 +33,7 @@ export 'src/settings/instance_lock.dart'
         InstanceLockAttempt,
         InstanceLockHeld,
         InstanceLockUnavailable,
+        SupportDirectoryAccess,
         instanceLockFileName;
 
 // 03 §3.2: the app reaches seance_core, klabautermann_host and
@@ -112,6 +113,10 @@ export 'package:klabautermann_host/klabautermann_host.dart'
         HostPanel,
         evaluatePanel;
 export 'package:seance_core/seance_core.dart' show quoteShellWord;
+// A process row's masked arguments (03 §8.9): the Processes panel shows
+// their display and reveals one on request.
+export 'package:klabautermann_docker/klabautermann_docker.dart'
+    show MaskedValue;
 // The coverage card's external-monitor finding (03 §9.5 item 3): K04's
 // rule over a `units` reading, and what it reports.
 export 'package:klabautermann_host/klabautermann_host.dart'
