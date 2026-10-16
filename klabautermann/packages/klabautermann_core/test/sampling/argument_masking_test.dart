@@ -194,6 +194,21 @@ void main() {
     });
   });
 
+  test('masking takes time linear in an argument, whatever a host user '
+      'puts in one', () {
+    // An argument can hold 128 KiB (Linux's MAX_ARG_STRLEN), and every
+    // procs sample masks them all in the one engine isolate.
+    final watch = Stopwatch()..start();
+    for (final argument in ['a=' * 65536, 'a' * 131072, '-x ${'a=' * 65535}']) {
+      expect(_shown(['sh', argument]), ['sh', argument]);
+    }
+    expect(_shown(['sh', '${'a=' * 65535}KEY=x']), [
+      'sh',
+      '${'a=' * 65535}KEY=$_mask',
+    ]);
+    expect(watch.elapsed, lessThan(const Duration(seconds: 2)));
+  });
+
   group('tokens that only look secret stay as they are', () {
     for (final (what, argv) in [
       ('the program, even a secret-sounding one', ['/usr/bin/passwd', 'me']),

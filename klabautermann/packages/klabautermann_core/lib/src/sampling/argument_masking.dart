@@ -5,7 +5,7 @@
 library;
 
 import 'package:klabautermann_docker/klabautermann_docker.dart'
-    show MaskedValue, isSecretKey, maskUrlCredentials;
+    show MaskedValue, isSecretKey, maskUrlCredentials, secretKeyPattern;
 
 /// A whitespace-delimited token inside one argument.
 final _token = RegExp(r'\S+');
@@ -88,13 +88,16 @@ List<MaskedValue> maskCommandLine(List<String> arguments) {
 String? _keptBeforeValue(String token, {required bool program}) {
   if (program) return null;
 
-  // Each `=` before a non-empty value ends a candidate name, so a secret
-  // assignment inside an option's value is found as well.
-  var equals = token.indexOf('=', 1);
-  while (equals != -1 && equals < token.length - 1) {
-    final name = token.substring(0, equals);
-    if (isSecretKey(name)) return '${maskUrlCredentials(name)}=';
-    equals = token.indexOf('=', equals + 1);
+  // The name runs to the first `=` after the leftmost key match, so a
+  // secret assignment inside an option's value is found as well. That
+  // match ends first: no word of the pattern holds another but `PASS`,
+  // which comes before `PASSWORD`. One match keeps this linear in a
+  // token a host user may fill with 128 KiB of `a=`.
+  if (secretKeyPattern.firstMatch(token) case final key?) {
+    final equals = token.indexOf('=', key.end);
+    if (equals != -1 && equals < token.length - 1) {
+      return '${maskUrlCredentials(token.substring(0, equals))}=';
+    }
   }
   if (token.length > 2 && token.startsWith('-p')) return '-p';
   return null;
