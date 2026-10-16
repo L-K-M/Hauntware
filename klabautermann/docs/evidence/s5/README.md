@@ -144,7 +144,8 @@ engine answering log streams as K25b's router does. Later commits change
 only this README and the report. The test started at 14:03 UTC on
 2026-10-16, with Flutter 3.47.2, in the same kind of shared 4-CPU
 container. Other jobs kept the 1-minute load average at 9.6 when the
-test started and 9.3 when it ended, and at 12 while the app built.
+test started and 9.3 when it ended; it read 12.1 when the app's build
+started.
 
 **These are not device numbers.** Xvfb has no GPU: Mesa's llvmpipe
 rasterizes in software on the CPUs that the app, the replay engine and
