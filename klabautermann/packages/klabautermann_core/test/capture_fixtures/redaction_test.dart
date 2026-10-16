@@ -203,6 +203,24 @@ void main() {
       );
     });
 
+    test('IPv4 spelled into neighbours\' host names', () {
+      // Hetzner's static.<a.b.c.d>.clients names, EC2's public names,
+      // Kubernetes pod names.
+      expect(
+        _redact(
+          'autossh@static.88.198.10.20.clients.your-server.de.service\n'
+          'ec2-54-12-34-56.compute-1.amazonaws.com '
+          '10-0-0-5.default.pod.cluster.local\n'
+          'libfoo.so.1.2.3.4 v1-2-3-4 backup-10-12-20-23.timer',
+          collector: 'units',
+        ),
+        'autossh@static.192.0.2.1.clients.your-server.de.service\n'
+        'ec2-192-0-2-1.compute-1.amazonaws.com '
+        '192-0-2-1.default.pod.cluster.local\n'
+        'libfoo.so.1.2.3.4 v1-2-3-4 backup-10-12-20-23.timer',
+      );
+    });
+
     test('IPv6 ending in IPv4 keeps only generic prefixes', () {
       expect(
         _redact(

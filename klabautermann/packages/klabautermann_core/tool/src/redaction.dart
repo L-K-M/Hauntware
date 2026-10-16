@@ -475,19 +475,25 @@ final _patterns = <_Rule>[
     'IPv4 address',
     RegExp(
       // Not inside a longer dotted number (`so.1.2.3.4`, `1.2.3.4.5`), but
-      // after an ellipsis; a `.` after it may end the sentence.
-      '(?<![0-9]|[0-9A-Za-z]\\.)($_octet\\.){3}$_octet(?!\\.?[0-9])',
+      // after an ellipsis; a `.` after it may end the sentence. Between
+      // two host name labels it is one (`static.a.b.c.d.clients`).
+      '(?<![0-9]|[0-9A-Za-z]\\.)($_octet\\.){3}$_octet(?!\\.?[0-9])|'
+      '(?<=[A-Za-z]\\.)($_octet\\.){3}$_octet(?=\\.[A-Za-z])',
     ),
     (m, _) {
       final ip = m[0]!;
       return ip.startsWith('127.') || ip == '0.0.0.0' ? ip : _ipv4Placeholder;
     },
   ),
-  // EC2's internal host names spell the address with hyphens.
+  // EC2's internal and public host names spell the address with
+  // hyphens, so do Kubernetes pod names before their namespace.
   (
     'IPv4 address',
-    RegExp('(?<![A-Za-z0-9])ip-($_octet-){3}$_octet(?![0-9])'),
-    (_, _) => 'ip-${_ipv4Placeholder.replaceAll('.', '-')}',
+    RegExp(
+      '(?<![A-Za-z0-9])(ip-|ec2-)($_octet-){3}$_octet(?![0-9])|'
+      '(?<![A-Za-z0-9-])($_octet-){3}$_octet(?=\\.[A-Za-z])',
+    ),
+    (m, _) => '${m[1] ?? ''}${_ipv4Placeholder.replaceAll('.', '-')}',
   ),
 ];
 
