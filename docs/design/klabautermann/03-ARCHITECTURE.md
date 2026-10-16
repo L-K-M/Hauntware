@@ -1434,8 +1434,8 @@ and `engine_isolate.dart` only dispatches to them (D52). They use
 |---|---|---|
 | `klabautermann_host` | HWS/1 program text and collector fragments; frame parser; one pure parser per collector (`ParseResult<T> parseX(String raw, ParseContext ctx)`, never throws); typed snapshots; counter-to-rate maths with wrap and reboot detection; cron parser and next-run evaluation in the server time zone; command builders with validators for `systemctl`, `journalctl`, `crontab`, `df`, `ss`, package tools; threshold rule evaluator with hysteresis; T1 script templates and health-file schema (v1.x); alert format v1 model and validator, spool record schema (v1.x, D42) | Injected `CommandRunner` and `ShellChannel` interfaces (RemoteGit precedent, `SC/src/ssh/remote_git.dart`) |
 | `klabautermann_docker` | HTTP/1.1 client; NDJSON, JSON-seq and JSON Lines scanner; stdcopy demultiplexer; versioned API client with negotiation and feature gates; tolerant models; event refresher logic; compose label model, project grouping, ownership markers, compose command builders and output parsers; image digest comparison | Injected `DuplexOpener` returning a `ByteDuplex` |
-| `klabautermann_core` | Host engine: connections over `SshLink`, channel scheduling, sampler runner, followers, Docker endpoint discovery and transport selection, operation plans and runner, detached runner, admin-mode state machine over `seance_core` elevation, protected targets, masking rules, alert scheduling, history rollups and ring files, catalog adapters (monitor set, endpoint pins), audit writer, engine-isolate protocol; alert inbox client (fetch, open, validate, acknowledge, delete) over `seance_core`'s `InboxApi` and sender lifecycle (v1.x, D42) | `SshLink` and the catalog library |
-| `klabautermann_app` | Composition root, controllers, UI, ARB catalog, settings window, platform folders | `klabautermann_core` barrel only |
+| `klabautermann_core` | Host engine: connections over `SshLink`, channel scheduling, sampler runner, followers, Docker endpoint discovery and transport selection, operation plans and runner, detached runner, admin-mode state machine over `seance_core` elevation, protected targets, masking rules, alert scheduling, history rollups and ring files, catalog adapters (monitor set, endpoint pins), audit writer, engine-isolate protocol; alert inbox client (fetch, open, validate, acknowledge, delete) over `seance_core`'s `InboxApi` and sender lifecycle (v1.x, D42); in a library of its own (`replay.dart`), the fixture replay engine of the frame-timing test (11.4) | `SshLink` and the catalog library |
+| `klabautermann_app` | Composition root, controllers, UI, ARB catalog, settings window, platform folders | `klabautermann_core` barrel only; its `integration_test/` also imports `replay.dart`, test support that `lib/` never imports (11.4) |
 | `klabautermann/rust/` (Cargo, not a Dart package) | `klabautermann-inbox` (sealing under the alert domain, alert format v1, HTTPS posting), `klabautermann-notify` binary (v1.x), companion (M9) | Runs on the host; talks only to the sync server's producer endpoint |
 
 ### 3.4 Machine-enforced rules
@@ -5348,6 +5348,21 @@ palette) and presets in the preview. v1: paste from Séance and Poltergeist
   and (under `dart run`) the live heap. Its runs are provisional
   evidence in `klabautermann/docs/evidence/s5/` and set no budget; CI
   runs only its smoke test.
+- UI side (spike S5 part 2): the app's
+  `integration_test/frame_timing_test.dart` drives the real app over a
+  replay engine (`package:klabautermann_core/replay.dart`, test support
+  the app's `lib/` never imports) that serves the host fixtures through
+  the real parsers and sample pipeline across the production client's
+  isolate hop: ten servers reading `core` every 2 s (04 section 13's S5
+  load, heavier than the monitor set's `overview` fleet rows in 6.4) and
+  a 1,000 lines/s journal follow while the Logs panel shows.
+  It reports `FrameTiming` build and raster times (p90, p99, maximum and
+  frames over 16 ms) for the fleet list, a server's Overview and its
+  Logs panel. `klabautermann/scripts/bench-frame-timing.sh` runs it in
+  profile mode under Xvfb (the `klabautermann_frame_timing` job, 11.6);
+  its software-rendered numbers are provisional evidence in
+  `klabautermann/docs/evidence/s5/` and gate nothing, and the device
+  figure above stays a manual sign-off.
 
 ### 11.5 Host write inventory test
 
