@@ -7,6 +7,8 @@ import 'package:klabautermann_app/controllers/monitoring_controller.dart';
 import 'package:klabautermann_app/l10n/app_localizations.dart';
 import 'package:klabautermann_app/ui/charts/charts.dart'
     show ChartSeverity, StackedBar;
+import 'package:klabautermann_app/ui/fleet_row_state.dart'
+    show kFleetRowThresholds;
 import 'package:klabautermann_app/ui/overview_panel.dart';
 import 'package:klabautermann_app/ui/server_surfaces.dart';
 import 'package:klabautermann_app/ui/system_panel.dart' show PanelSection;
@@ -728,7 +730,7 @@ void main() {
     // A mount's bar warns at the fleet rows' levels, as the health card
     // does.
     final varBar = _bars(tester).singleWhere((bar) => bar.label == '/var');
-    expect(varBar.thresholds, isNotNull);
+    expect(varBar.thresholds, same(kFleetRowThresholds));
   });
 
   testWidgets('a df timeout keeps the last mounts with their use unknown', (
