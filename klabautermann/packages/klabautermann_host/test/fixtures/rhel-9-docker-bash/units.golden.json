@@ -1,0 +1,12 @@
+{
+  "result": {
+    "units": [],
+    "failed": [],
+    "format": "json",
+    "timeoutAbsent": false
+  },
+  "warnings": [
+    "units units_json: not JSON",
+    "units failed_json: not JSON"
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "result": {
+    "timers": [],
+    "format": "json",
+    "timeoutAbsent": false
+  },
+  "warnings": [
+    "timers_json: not JSON"
+  ]
+}
