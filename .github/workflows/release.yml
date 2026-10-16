@@ -353,6 +353,7 @@ jobs:
           (cd planchette/packages/ghost_marks && flutter pub get)
           (cd planchette/packages/ghost_theme && flutter pub get)
           (cd planchette/packages/ghost_servers && flutter pub get)
+          (cd planchette/packages/ghost_keystore && flutter pub get)
           (cd planchette/app/planchette_app && flutter pub get)
       - name: Planchette — analyze and test shared packages and app
         run: |
@@ -363,6 +364,7 @@ jobs:
           (cd planchette/packages/ghost_marks && flutter analyze --no-pub && flutter test --no-pub)
           (cd planchette/packages/ghost_theme && flutter analyze --no-pub && flutter test --no-pub)
           (cd planchette/packages/ghost_servers && flutter analyze --no-pub && flutter test --no-pub)
+          (cd planchette/packages/ghost_keystore && flutter analyze --no-pub && flutter test --no-pub)
           (cd planchette/app/planchette_app && flutter analyze --no-pub && flutter test --no-pub)
       - name: Séance — analyze and test app and vendored xterm fork
         run: |

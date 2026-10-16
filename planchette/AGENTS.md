@@ -37,6 +37,11 @@ packages/
                           (today the server list's sectioning and the
                           status-dot vocabulary), over seance_protocol
                           and ghost_ui; outside the workspace
+  ghost_keystore/         the OS-keystore vault master key and API-key
+                          entries (MasterKeyManager, parameterized by each
+                          product's entry names) over
+                          flutter_secure_storage and seance_protocol;
+                          outside the workspace
 app/
   planchette_app/         Flutter client — NOT a workspace member (it needs
                           the Flutter SDK; members must not).
@@ -68,6 +73,7 @@ dart test    packages/planchette_core
 (cd packages/ghost_marks && flutter pub get && flutter analyze && flutter test)
 (cd packages/ghost_theme && flutter pub get && flutter analyze && flutter test)
 (cd packages/ghost_servers && flutter pub get && flutter analyze && flutter test)
+(cd packages/ghost_keystore && flutter pub get && flutter analyze && flutter test)
 (cd app/planchette_app && flutter pub get && flutter analyze && flutter test)
 
 # Desktop app for this host, staged into dist/
