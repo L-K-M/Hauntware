@@ -50,10 +50,12 @@ String? commandLineText(ProcessRow row, {String? maskWord}) {
 /// login user (`id -un`) for that user's uid. Null otherwise, leaving the
 /// uid: the host sends no user table, and a name is never guessed. GNU
 /// `ps` cuts a name wider than its 8-column field to 7 characters and a
-/// `+`, which is not the name.
+/// `+`, which is not the name. GNU and BusyBox `ps` print the uid where
+/// no passwd entry names it, which is not a name either.
 String? processUserName(ProcessRow row, HostProfile? profile) {
   if (row.userName case final name?
-      when !(name.length == 8 && name.endsWith('+'))) {
+      when !(name.length == 8 && name.endsWith('+')) &&
+          name != row.uid?.toString()) {
     return name;
   }
 

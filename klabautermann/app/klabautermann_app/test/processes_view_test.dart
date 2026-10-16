@@ -74,6 +74,11 @@ void main() {
       processUserName(_row(1, userName: 'systemd+', uid: 101), profile),
       isNull,
     );
+    // GNU and BusyBox ps print the uid where no passwd entry names it.
+    expect(
+      processUserName(_row(1, userName: '123456', uid: 123456), profile),
+      isNull,
+    );
     expect(processUserName(_row(1, uid: 1000), profile), 'deploy');
     expect(processUserName(_row(1, uid: 0), profile), isNull);
     expect(processUserName(_row(1, uid: 1000), null), isNull);
@@ -88,6 +93,7 @@ void main() {
       _row(3),
       _row(4, userName: 'alice'),
       _row(5, uid: 0),
+      _row(6, userName: '123456', uid: 123456),
     ];
     final user = SortableTableColumn<ProcessRow>(
       id: 'user',
@@ -99,7 +105,7 @@ void main() {
       user,
     ], const TableSort('user', TableSortDirection.ascending));
 
-    expect([for (final row in sorted) row.pid], [4, 1, 5, 2, 3]);
+    expect([for (final row in sorted) row.pid], [4, 1, 5, 2, 6, 3]);
   });
 
   group('filterProcesses', () {
