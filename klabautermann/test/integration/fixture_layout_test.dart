@@ -93,10 +93,38 @@ void main() {
     expect(File('${root.path}$_safetyChecker').existsSync(), isTrue);
     final run = read('klabautermann/test/integration/run.sh');
     expect(run, contains('/../$_safetyChecker'));
+    expect(
+      run.replaceAll(RegExp(r'\s*\\\n\s*'), ' '),
+      contains(
+        'compose config --format json | "\$dart_binary" run "\$safety_checker"',
+      ),
+    );
     final copies = Directory('${root.path}klabautermann/test')
         .listSync(recursive: true)
         .where((entity) => entity.path.endsWith('/check_config.dart'));
     expect(copies, isEmpty);
+  });
+
+  test('run.sh locks, checks and arms teardown before it starts the '
+      'fixture', () {
+    final run = read('klabautermann/test/integration/run.sh');
+    final lines = run.split('\n');
+    int at(String line) {
+      final index = lines.indexOf(line);
+      expect(index, isNonNegative, reason: 'run.sh has no line "$line"');
+      return index;
+    }
+
+    // Whole unindented lines: the script's own steps, not a function's.
+    final firstCompose = at('compose down --volumes --remove-orphans');
+    expect(at('if ! flock --nonblock 9; then'), lessThan(firstCompose));
+    expect(at('trap on_exit EXIT'), lessThan(firstCompose));
+    final up = at('compose up --detach --build');
+    expect(
+      at('check_rendered_config'),
+      allOf(greaterThan(firstCompose), lessThan(up)),
+    );
+    expect(run, contains('compose down --volumes --remove-orphans || '));
   });
 
   test('run.sh exports every variable the engine suites read', () {
