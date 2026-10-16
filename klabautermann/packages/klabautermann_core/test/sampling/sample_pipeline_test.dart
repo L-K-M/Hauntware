@@ -501,6 +501,25 @@ void main() {
     expect(emoji, '${'\u{1F600}' * 2047}z');
   });
 
+  test('a units reading gives K04\'s external-monitor finding', () {
+    UnitsResult list(List<SystemdUnit> units) =>
+        UnitsResult(UnitsSnapshot(units: units, format: UnitListFormat.json));
+    final report = externalMonitorsIn(
+      list([
+        SystemdUnit(
+          unit: 'netdata.service',
+          load: 'loaded',
+          active: 'active',
+          sub: 'running',
+        ),
+      ]),
+    );
+    expect(report.status, AccessStatus.ok);
+    expect(report.units.single.unit, 'netdata.service');
+    // An empty list means systemctl failed, which rules nothing out.
+    expect(externalMonitorsIn(list(const [])).status, AccessStatus.unknown);
+  });
+
   test('a reply\'s uptime times procs only when procs leads it', () {
     // The host reads the `B` uptime before the first collector, so a slow
     // `fs` ahead of `procs` would count toward the interval.
