@@ -472,23 +472,34 @@ Future<List<String>> showGhostKeyboardInteractiveDialog(BuildContext context,
     {GhostKeyboardInteractiveStrings strings = const GhostKeyboardInteractiveStrings(),
     GlobalKey? dialogKey, bool submitOnEnter = true});
 
-// src/credential_dialog.dart
-enum GhostKeyField { pastedPem, filePath }
+// src/credential_dialog.dart (as built in PR 6a and 6c; see the notes
+// after this block)
+enum GhostKeyField { pastedPem, filePath, passphraseOnly }
 final class GhostCredentialRequest {
   const GhostCredentialRequest({required this.authMethod,    // AuthMethod, seance_protocol
-      required this.endpointLabel, this.username, this.host, this.port,
-      this.keyField = GhostKeyField.filePath, this.initialKeyPath,
+      required this.endpointLabel, required this.keyField,
+      this.username, this.host, this.port, this.initialKeyPath,
       this.offerVaultSave = false, this.vaultUnavailable = false});
 }
+sealed class GhostCredentialReply { final bool saveToVault; }
+final class GhostPasswordReply extends GhostCredentialReply {
+  final String password; }
+final class GhostPrivateKeyReply extends GhostCredentialReply {
+  final String privateKeyPem; final String? keyPassphrase; }  // never ''
+final class GhostKeyPassphraseReply extends GhostCredentialReply {
+  final String keyPassphrase; }                                // never ''
 Future<GhostCredentialReply?> showGhostCredentialDialog(BuildContext context,
     GhostCredentialRequest request,
     {GhostCredentialStrings strings = const GhostCredentialStrings(),
     Future<String?> Function()? pickKeyText,          // Séance: file_picker
     Future<String> Function(String path)? readKeyFile, // Poltergeist: audited read
-    GlobalKey? dialogKey});
+    required TextStyle monoStyle, GlobalKey? dialogKey,
+    bool barrierDismissible = false});
 // The injector matching request.keyField is required: pastedPem needs
 // pickKeyText, filePath needs readKeyFile; a missing one throws
-// ArgumentError before the dialog opens.
+// ArgumentError before the dialog opens, and the other is ignored.
+// passphraseOnly takes neither: passing either throws ArgumentError, as
+// does a privateKey request without an initialKeyPath to show.
 
 // src/connection_log_view.dart
 class GhostConnectionLogView extends StatelessWidget {
@@ -523,6 +534,61 @@ String ghostFormatByteRate(num bytesPerSecond,               // moved: platform
 String ghostFormatCompactEta(Duration eta);                  // moved formatTransferEta
 int? ghostParseByteRate(String input, {required int maxBytesPerSecond});
 ```
+
+The credential prompt as built differs from the first draft above in
+these ways (PR 6a; the amendment came with PR 6c):
+
+- Each key field carries its app's whole form, not only the key input.
+  The two prompts differ in more than §1.4 lists: the layout (a fixed
+  520-wide content with an inner scroll, or a scrollable `AlertDialog`),
+  the secret fields' IME flags, when the answer is enabled, whether the
+  verbs check that the dialog's route is current, and how an error
+  renders. Converging them is a behaviour change, so every divergence is
+  an exhaustive `switch` on the key field.
+- The reply is sealed, not the §3 record of nullable fields, so each
+  adapter switches exhaustively and an unmapped later variant fails to
+  compile.
+- `keyField` is required rather than defaulting to `filePath`: it picks
+  the whole form and the injector that must be passed.
+- `GhostCredentialStrings` has one `keyFileError(Object error)` member
+  instead of `keyFileUnreadable` plus `keyFileReadError(e)` (§4). The
+  package cannot see Poltergeist's `IdentityFileReadException`, so the
+  host decides what of an error it shows. The default is Séance's rule:
+  a `FormatException`'s message, otherwise "That file could not be
+  opened."
+- `barrierDismissible` defaults to false, like the other two shared
+  prompts and Poltergeist; Séance passes true to keep its behaviour.
+  `monoStyle` is required and injected (the host's monospace stack).
+- The endpoint line receives the host as configured, without IPv6
+  brackets, because Poltergeist's credential dialog shows the raw host.
+
+`GhostKeyField.passphraseOnly` (PR 6c) is for a host whose engine reads
+key files itself, as Klabautermann's does (its credential source records
+each read in `identity_reads.jsonl`), so the UI never sends key text
+across the isolate. It shows `initialKeyPath` read-only, in the mono
+style under the `keyFileField` label, and asks only for the passphrase;
+the answer is `GhostKeyPassphraseReply`, which carries no key text. It is
+a new form, so it decides each detail the other two keep from their
+apps:
+
+- Layout and verbs: a scrollable `AlertDialog`; Cancel and the answer act
+  only while the dialog's route is current.
+- Secret field: obscured, autofocused, suggestions, autocorrect and IME
+  learning off, and no reveal toggle, as in the other two forms.
+- Empty input: the answer is disabled, and Enter does nothing, until the
+  secret is typed. A key without a passphrase never needs this prompt,
+  and an empty passphrase cannot open one that has one.
+- Injectors: rejected rather than ignored, since a host passing a picker
+  or reader expects key text back.
+- A password request in this mode is the same form with a password field
+  and a `GhostPasswordReply` under the same empty-input rule, so one host
+  form serves both methods.
+- Words: `keyPassphraseTitle(label)` ("Key passphrase for …") and
+  `keyPassphraseField` ("Passphrase") join the bag; the existing
+  `passphraseField` says "(if it has one)", which does not fit a required
+  passphrase. The vault offer and banner behave as in the other forms.
+- Séance's adapter maps the new reply to a `StateError`, since it only
+  ever asks for a pasted key. Klabautermann's adapter comes with K45b.
 
 Adapters. One per app, holding the bags and every core-type conversion:
 
