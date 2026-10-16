@@ -12,6 +12,10 @@ dependencies:
     sdk: flutter
   flutter_localizations:
     sdk: flutter
+  # The OS-keystore plugin behind ghost_keystore's MasterKeyManager, pinned
+  # to Poltergeist's version so the plugin's native code and default
+  # options match the sibling's.
+  flutter_secure_storage: 10.3.1
   # gen-l10n's generated localizations use intl primitives.
   intl: 0.20.3
   # The engine-isolate protocol and client the app composes over (03 D18).
@@ -32,6 +36,11 @@ dependencies:
   # value the light and dark themes are built from (03 D9, §10.9).
   ghost_theme:
     path: ../../../planchette/packages/ghost_theme
+  # The vault master key and the sync token in the OS keystore (03 §4.5),
+  # which the app answers for the engine (D62): the plugin's channels
+  # answer only this isolate.
+  ghost_keystore:
+    path: ../../../planchette/packages/ghost_keystore
   # The log viewer's text search (LOG-05, 03 D56): Planchette's find-bar
   # search with its case folding.
   planchette_core:

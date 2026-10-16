@@ -132,6 +132,9 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   'lib/services/settings_window/remote_settings.dart': {
     "'Settings link closed'",
   },
+  // A keystore failure's text, which the answer carries to the engine as
+  // a diagnostic; surfaces show ARB text (syncFailedKeystore).
+  'lib/services/engine_keystore.dart': {r"'$error'"},
   'lib/services/ssh_config_source.dart': {
     // The environment variable the Windows home directory is read from, and
     // the file path the import expands.
