@@ -336,7 +336,7 @@ void main() {
   });
 
   testWidgets('SAF-07: a tap reveals one argument in the details, for 30 s, '
-      'and hiding the app masks it again', (tester) async {
+      'and leaving the app masks it again', (tester) async {
     final handle = tester.ensureSemantics();
     final panel = await _pump(tester);
     await panel.all(tester);
@@ -374,17 +374,12 @@ void main() {
     await tester.tap(masked);
     await tester.pumpAndSettle();
     expect(find.text('--password=hunter2'), findsOneWidget);
-    // A hidden app draws no frames, so the mask shows on return.
-    for (final state in [
-      AppLifecycleState.inactive,
-      AppLifecycleState.hidden,
-      AppLifecycleState.inactive,
-      AppLifecycleState.resumed,
-    ]) {
-      tester.binding.handleAppLifecycleStateChanged(state);
-    }
+    // Inactive comes before hidden, while the app still draws a frame
+    // that an app switcher's snapshot would keep.
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
     await tester.pump();
     expect(find.text('--password=hunter2'), findsNothing);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
     handle.dispose();
   });
 

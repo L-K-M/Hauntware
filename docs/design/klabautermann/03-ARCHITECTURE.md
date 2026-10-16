@@ -3487,10 +3487,12 @@ CI.
   `sudo -u`, so the trade-off is left to a follow-up after K33.
 - Reveal (M2, the Processes tab): a tap on a masked argument in a
   process's details shows it there for 30 s, and it is masked again
-  sooner when the app is hidden or the details close. The revealed text
-  lives in that sheet's state only: it is never sent, stored or logged,
-  and the table, its filter and its command sort read display text
-  only. A screen reader hears "(masked)" where the screen shows the mask.
+  sooner when the details close or the app turns inactive, as it loses
+  focus or before it is hidden, so an app switcher's snapshot keeps the
+  mask. The revealed text lives in that sheet's state only: it is never
+  sent, stored or logged, and the table, its filter and its command sort
+  read display text only. A screen reader hears "(masked)" where the
+  screen shows the mask.
 - Every export, share and diagnostic bundle passes `SecretRedactor`
   (`SC/src/llm/redaction.dart`) by default, with an explicit include-secrets
   toggle.

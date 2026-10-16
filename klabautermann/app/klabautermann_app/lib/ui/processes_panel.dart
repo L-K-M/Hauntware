@@ -582,8 +582,10 @@ void _showProcess(
 }
 
 /// A process's details. Revealed arguments live in this sheet only: each
-/// is masked again after [kRevealDuration], when the app is hidden, and
-/// when the sheet closes, and nothing sends, stores or logs them (SAF-07).
+/// is masked again after [kRevealDuration], when the app turns inactive,
+/// and when the sheet closes, and nothing sends, stores or logs them
+/// (SAF-07). Inactive precedes hidden on the way to the background, while
+/// a frame can still draw the mask before an app switcher's snapshot.
 class _ProcessSheet extends StatefulWidget {
   const _ProcessSheet({required this.row, required this.facts});
 
@@ -602,7 +604,7 @@ class _ProcessSheetState extends State<_ProcessSheet> {
   @override
   void initState() {
     super.initState();
-    _lifecycle = AppLifecycleListener(onHide: _maskAll);
+    _lifecycle = AppLifecycleListener(onInactive: _maskAll);
   }
 
   @override
