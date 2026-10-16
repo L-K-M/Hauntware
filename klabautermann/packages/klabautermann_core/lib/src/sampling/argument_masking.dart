@@ -22,13 +22,14 @@ final _option = RegExp(r'^--?([A-Za-z][A-Za-z0-9_.-]*)$');
 /// runs to that argument's end, spaces included; one inside an argument,
 /// a word of a `-c` line, runs to the end of that word as the shell reads
 /// it, through quotes and escaped spaces, and a `ps` row's value holding
-/// spaces is masked up to its first space only. In each token:
+/// spaces is masked up to its first space only. In each token, the first
+/// rule that applies:
 ///
+/// - the attached value of `-p<value>`, as the MySQL clients take a
+///   password, whatever the option means to its program;
 /// - the value of `name=value` whose name matches 03 §8.9's key pattern
 ///   (`--password=`, `-Dapp.token=`, `API_TOKEN=`), also where the name
 ///   runs through an earlier `=`, as in `--env=DB_PASSWORD=<value>`;
-/// - the attached value of `-p<value>`, as the MySQL clients take a
-///   password, whatever the option means to its program;
 /// - URL credentials (`scheme://user:pass@`) anywhere else.
 ///
 /// The token after an option whose name matches the key pattern
@@ -92,6 +93,11 @@ List<MaskedValue> maskCommandLine(List<String> arguments) {
 String? _keptBeforeValue(String token, {required bool program}) {
   if (program) return null;
 
+  // An attached `-p` value goes first: read as `name=value`, a password
+  // such as `-pmyAuth=xyz` would show all but its tail. `-password=x`
+  // shows as `-p********` too.
+  if (token.length > 2 && token.startsWith('-p')) return '-p';
+
   // The name runs to the first `=` after the leftmost key match, so a
   // secret assignment inside an option's value is found as well. That
   // match ends first: no word of the pattern holds another but `PASS`,
@@ -103,7 +109,6 @@ String? _keptBeforeValue(String token, {required bool program}) {
       return '${maskUrlCredentials(token.substring(0, equals))}=';
     }
   }
-  if (token.length > 2 && token.startsWith('-p')) return '-p';
   return null;
 }
 

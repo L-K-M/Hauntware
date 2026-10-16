@@ -3454,9 +3454,10 @@ CI.
   boundaries 7.2 preserves (`-p<secret>`, `--password=`), URL credentials
   (`scheme://user:pass@`), image history `CreatedBy`. From M2 the engine
   masks every process argument before its row crosses, reading
-  whitespace tokens, so also inside a shell's `-c` line: the value of
-  `name=value` whose name matches the pattern, also a name that runs
-  through an earlier `=` (`--env=DB_PASSWORD=`), an attached `-p` value,
+  whitespace tokens, so also inside a shell's `-c` line: an attached
+  `-p` value, read first so that a password holding a key word and `=`
+  stays whole, the value of `name=value` whose name matches the pattern,
+  also a name that runs through an earlier `=` (`--env=DB_PASSWORD=`),
   the token after an option whose name matches it (unless that token
   starts with `-` or the option is a `--no-` flag) and URL credentials.
   A value that starts an argument is masked to that argument's end,

@@ -25,6 +25,25 @@ void main() {
       expect(masked[1].isMasked, isFalse);
     });
 
+    test('an attached -p value is masked whole even where it holds a secret '
+        'name and a later `=`', () {
+      expect(
+        _shown([
+          'mysql',
+          '-pPassw0rd=1',
+          '-pMonkey=Banana1',
+          '-pS3cretKEY==',
+          '-password=x',
+        ]),
+        ['mysql', '-p$_mask', '-p$_mask', '-p$_mask', '-p$_mask'],
+      );
+      expect(_shown(['sh', '-c', 'mysqldump -uroot -pmyAuth=xyz db']), [
+        'sh',
+        '-c',
+        'mysqldump -uroot -p$_mask db',
+      ]);
+    });
+
     test('the value of an option or variable whose name is secret', () {
       expect(
         _shown([
