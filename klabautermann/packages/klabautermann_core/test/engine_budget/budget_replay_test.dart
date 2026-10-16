@@ -5,10 +5,9 @@ import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:klabautermann_core/klabautermann_core.dart';
+import 'package:klabautermann_core/src/replay/fixture_replay.dart';
 import 'package:klabautermann_host/klabautermann_host.dart';
 import 'package:test/test.dart';
-
-import '../../tool/src/budget_replay.dart';
 
 const _core = '''
 == stat ==

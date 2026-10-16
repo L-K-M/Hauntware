@@ -5,9 +5,10 @@
 // a one-second run on a shared machine mean nothing.
 import 'dart:convert';
 
+import 'package:klabautermann_core/src/replay/fixture_replay.dart';
+import 'package:klabautermann_core/src/replay/host_fixtures.dart';
 import 'package:test/test.dart';
 
-import '../../tool/src/budget_replay.dart';
 import '../../tool/src/engine_budget.dart';
 
 void main() {
