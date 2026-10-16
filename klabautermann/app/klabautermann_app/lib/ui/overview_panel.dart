@@ -106,10 +106,13 @@ class OverviewPanel extends StatelessWidget {
     final sampling = monitoring.samplingFor(serverId);
     final slow = _Slow(monitoring, serverId);
     final scope = AnnouncementScope.maybeOf(context);
+    // False while a pushed route, such as a phone's Settings, covers the
+    // panel; it rebuilds when that changes.
+    final onstage = TickerMode.valuesOf(context).enabled;
     return ThresholdAnnouncer(
       core: latest,
       fs: slow.fs,
-      active: visible && (scope?.notifier?.value ?? false),
+      active: visible && onstage && (scope?.notifier?.value ?? false),
       child: ListenableBuilder(
         listenable: Listenable.merge([latest, reading, sampling, ...slow.all]),
         builder: (context, _) => ListenableBuilder(

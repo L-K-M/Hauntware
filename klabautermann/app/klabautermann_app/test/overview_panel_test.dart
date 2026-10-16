@@ -1,3 +1,5 @@
+import 'dart:async' show unawaited;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter_test/flutter_test.dart';
@@ -996,6 +998,44 @@ void main() {
       await cpu(32, 95);
       await cpu(44, 95);
       expect(heard(tester), ['CPU 95%: critical level']);
+    });
+
+    testWidgets('nothing is heard while a pushed route covers the Overview', (
+      tester,
+    ) async {
+      final announce = ValueNotifier(true);
+      addTearDown(announce.dispose);
+      final panel = await _pump(tester, announce: announce);
+      Future<void> cpu(int seconds, double percent) => panel.sample(
+        tester,
+        busy(percent),
+        at: _start.add(Duration(seconds: seconds)),
+      );
+      await cpu(0, 50);
+
+      // Settings on a phone is such a route, opened from the health card.
+      final navigator = Navigator.of(
+        tester.element(find.byType(OverviewPanel)),
+      );
+      unawaited(
+        navigator.push(
+          MaterialPageRoute<void>(builder: (_) => const Scaffold()),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await cpu(2, 95);
+      await cpu(14, 95);
+      expect(heard(tester), isEmpty);
+
+      // Back on stage: where the value stands now is the start.
+      navigator.pop();
+      await tester.pumpAndSettle();
+      await cpu(16, 95);
+      await cpu(28, 95);
+      expect(heard(tester), isEmpty);
+      await cpu(30, 50);
+      await cpu(42, 50);
+      expect(heard(tester), ['CPU 50%: back to normal']);
     });
 
     testWidgets('a server that left the fleet and came back is still heard '
