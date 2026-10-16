@@ -281,6 +281,7 @@ void main() {
       CoreResult(memory: const MemoryUsage(totalBytes: 16 * _gib)),
     );
 
+    // 3 CPU + 1 per core + 4 load + 4 memory (total is known) + 1 swap.
     expect(find.text('Unknown'), findsNWidgets(13));
     expect(find.text('0%'), findsNothing);
     expect(find.text('0.00'), findsNothing);
