@@ -74,11 +74,18 @@ fingerprint() {
 
 runtime_dir=''
 agent_started=0
+suites_pid=''
 
 on_exit() {
   local status="$?" cleanup=0
   trap - EXIT
 
+  # Before the fixture goes: the suites would fail against it, and they
+  # hold the lock.
+  if [[ -n "$suites_pid" ]]; then
+    kill "$suites_pid" 2>/dev/null || true
+    wait "$suites_pid" || true
+  fi
   if [[ -n "$runtime_dir" ]]; then
     if [[ -n "$evidence_dir" ]]; then
       compose logs --no-color --timestamps >"$evidence_dir/compose.log" 2>&1 || true
@@ -168,6 +175,14 @@ if [[ -n "$evidence_dir" ]]; then
 fi
 
 # One test at a time: they share the fixture, and some restart or pause it.
+# On a signal, bash runs the EXIT trap without waiting for a foreground
+# child, so the suites run in the background, where on_exit can stop
+# them.
 cd "$klabautermann_dir"
 "$dart_binary" test --concurrency=1 --tags integration "${reporter[@]}" \
-  packages/klabautermann_core/test/integration
+  packages/klabautermann_core/test/integration &
+suites_pid="$!"
+suites_status=0
+wait "$suites_pid" || suites_status="$?"
+suites_pid=''
+exit "$suites_status"
