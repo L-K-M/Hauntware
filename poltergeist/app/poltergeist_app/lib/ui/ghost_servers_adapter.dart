@@ -8,6 +8,7 @@ import 'package:ghost_servers/ghost_servers.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
 
 import '../l10n/app_localizations.dart';
+import '../services/identity_file_reader.dart';
 import '../theme/app_theme.dart';
 
 /// The status words in ARB. [status] picks the word for an attempt in
@@ -113,6 +114,52 @@ GhostKeyboardInteractiveStrings poltergeistKeyboardInteractiveStrings(
   cancel: l10n.keyboardCancel,
   submit: l10n.keyboardSubmit,
 );
+
+/// The engine's credential prompt as the shared dialog shows it: the
+/// identity-file form, prefilled with the config's path, and the vault
+/// offer only where the config names a secretRef (04 §2.1). The endpoint
+/// shows the host as configured, without IPv6 brackets.
+GhostCredentialRequest ghostCredentialRequestOf(
+  CredentialPromptData data, {
+  required bool vaultUnavailable,
+}) => GhostCredentialRequest(
+  authMethod: data.authMethod,
+  endpointLabel: data.host,
+  keyField: GhostKeyField.filePath,
+  username: data.username,
+  host: data.host,
+  port: data.port,
+  initialKeyPath: data.identityFilePath,
+  offerVaultSave: data.secretRef != null,
+  vaultUnavailable: vaultUnavailable,
+);
+
+/// The credential prompt's words in ARB: one title for both methods and no
+/// explanation line. A read failure shows the audited reader's file-system
+/// detail (D18) and nothing of any other error.
+GhostCredentialStrings poltergeistCredentialStrings(AppLocalizations l10n) =>
+    GhostCredentialStrings(
+      passwordTitle: (_) => l10n.credentialTitle,
+      privateKeyTitle: (_) => l10n.credentialTitle,
+      explanation: null,
+      endpoint: (username, host, port) => username == null
+          ? l10n.hostKeyEndpoint(host, port)
+          : l10n.credentialEndpoint(username, host, port),
+      vaultUnavailable: l10n.credentialVaultUnavailable,
+      passwordField: l10n.credentialPasswordField,
+      keyFileField: l10n.credentialKeyFileField,
+      keyFileRequired: l10n.credentialKeyFileRequired,
+      keyFileError: (error) => l10n.credentialKeyFileReadError(
+        error is IdentityFileReadException &&
+                error.kind == IdentityFileReadFailureKind.fileSystem
+            ? error.message
+            : l10n.credentialKeyFileUnreadable,
+      ),
+      passphraseField: l10n.credentialPassphraseField,
+      saveInVault: l10n.credentialSaveInVault,
+      cancel: l10n.credentialCancel,
+      connect: l10n.credentialConnect,
+    );
 
 /// The chrome's status colours as the package takes them.
 GhostStatusColors poltergeistStatusColors(PoltergeistChrome chrome) =>
