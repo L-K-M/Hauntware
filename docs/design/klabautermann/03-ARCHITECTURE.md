@@ -2021,8 +2021,9 @@ takes a short-action slot, and one that finds the share full waits in
 the engine as `LogStreamWaiting(channel)`, where the app can show it,
 rather than on the link. A follower (K26) gets no slot while the link
 has learned a session limit below 4 (the two samplers, one follower and
-one short action), so it reports waiting for a channel instead of
-holding the last free one and leaving short actions none; the rest of
+one short action), and only one at 4, each session above it making room
+for one more, so it reports waiting for a channel instead of holding
+the last free one and leaving short actions none; the rest of
 low-session mode is M3. The link still opens every session channel at
 one priority, since `seance_core`'s `start` and `run` take none yet.
 
