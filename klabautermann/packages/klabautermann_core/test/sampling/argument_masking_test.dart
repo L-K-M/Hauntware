@@ -198,6 +198,11 @@ void main() {
     for (final (what, argv) in [
       ('the program, even a secret-sounding one', ['/usr/bin/passwd', 'me']),
       ('a login shell\'s dash', ['-bash']),
+      ('a login shell that starts like an attached -p', ['-pwsh']),
+      (
+        'a program named like a secret option, before an argument',
+        ['--password-helper', 'run'],
+      ),
       ('a bare -p and a separate port', ['ssh', '-p', '2222', 'me@host']),
       ('an upper-case -P and a port option', ['mysql', '-P3306', '--port=1']),
       ('an empty secret assignment', ['app', '--password=']),
