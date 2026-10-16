@@ -2457,6 +2457,61 @@ timed-out channel or no READY, would hold the fast one until it does).
   wrapped `df` lines; Swarm task names (ServerBox #1226 [R]).
 - The diagnostic bundle (CN-18, v1) exports the same raw format, redacted
   by `SecretRedactor`, so a user report becomes a fixture.
+- Capture redaction: the host's names (kernel, `/etc/hostname`,
+  hostnamectl) that are no address and each FQDN's first label, the
+  domains of those names and of resolv.conf's search list (each suffix
+  of two labels or more), the names and home directories of personal
+  accounts (any uid from login.defs' UID_MIN, 1000 without one, but
+  `nobody`'s, as directory-service and systemd-homed accounts lie
+  above UID_MAX; no passwd account whose home is `/nonexistent`) and
+  `--redact` values become fixed placeholders, names as whole words in
+  any case, a `-` in them also as device-mapper's `--` and systemd's
+  `\x2d`, a non-ASCII byte also as its `\xNN`; `localhost`, the
+  os-release `ID` and `ID_LIKE` words and the words the probe and
+  hostnamectl print from fixed sets (probe keys, kernel name and
+  machine, PID 1, virtualization, tools, time zone words, chassis)
+  stay, as fixtures need them. Every `/home/<name>` path and home mount
+  unit, udisks2's `/media/<name>/` and `/run/media/<name>/` and their
+  mount units, logind's `Session <id> of User <name>` and the `ps`
+  fallback's USER column name no account but root. IPv4 and IPv6
+  addresses other than loopback and `0.0.0.0` (also between host name
+  labels and in EC2's `ip-`/`ec2-` and Kubernetes pods' hyphenated
+  names), MAC addresses (also hyphenated, dotted and in
+  `enx`/`wlx`/`wwx` names), UUIDs, hex ids of 32 or more digits
+  (machine and boot ids), the names in `/dev/<subsystem>/by-*/` links
+  (disk serials, WWNs, SAS addresses, labels, USB serial numbers) and
+  in their device units, UUIDs too in systemd's `\x2d` escaping,
+  network mount servers and logins in `fs` (NFS, sshfs, Ceph, CIFS and
+  URL sources), hostnamectl's serial, asset-tag, pretty-name and
+  location fields (also as machine-info's `PRETTY_HOSTNAME`, `LOCATION`
+  and `TAGS`), email addresses, URL credentials, private-key headers,
+  what `SecretRedactor` masks and the credentials it misses (values of
+  assignments and options whose names hold PASS, PWD, SECRET, TOKEN,
+  KEY, AUTH or CRED, HTTP basic auth, `-u`/`-U user:password`, Samba's
+  `-U user%password`, the password options of the MySQL, MongoDB and
+  OpenLDAP clients, sshpass, redis-cli, zip and 7-Zip) become
+  placeholders too (documentation addresses where an address is
+  expected). Distinct ids, UUIDs and accounts keep distinct numbered
+  placeholders (`user2`), as parsers join tables on mount points. In
+  `procs` every command line keeps argv[0] up to its first space and
+  the rest reads `[redacted]`: arguments carry secrets, process titles
+  user names. In `cron`, for the same reason, each job keeps a schedule
+  that parses, a `root` user field (others read `user`, as a missing
+  user field shifts the program into it), the first word of a command
+  run as root or from a user crontab, and the words `mergeJobs` reads
+  (`run-parts`, the periodic directories, anacron); the rest,
+  comments, environment values but `CRON_TZ` and lines `parseCron`
+  reads as no job read `[redacted]`. A unit description that is a
+  systemd-run command line (its tag, an absolute program, a `run-u<n>`
+  name) keeps its first word, and a device unit's reads `[redacted]`,
+  as it holds the filesystem label; a `timers_text` table is padded
+  again where a placeholder widens a cell. A review then reads every
+  file; a line that still holds a literal outside a placeholder, a
+  secret, a private-key mention or 40 or more mixed base64 characters
+  stops the tool before it writes anything, and so does a payload, the
+  probe or the job list that parses differently from the capture in
+  anything but text. A `.txt` fixture holds the payload only, so
+  `SOURCE.md` records each section's status.
 
 ### 6.6 Portability matrix (CN-11 to CN-14)
 
