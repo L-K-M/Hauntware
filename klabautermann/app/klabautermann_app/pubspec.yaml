@@ -66,6 +66,11 @@ dev_dependencies:
   # as Poltergeist consumes it; test-only, nothing shipped.
   l10n_contract:
     path: ../../../tool/l10n_contract
+  # The jobs tests build the rows a CronResult carries with the engine's
+  # own mergeJobs, as those rows have no public constructor. lib/ reaches
+  # host types only through klabautermann_core's barrel (03 §3.2).
+  klabautermann_host:
+    path: ../../packages/klabautermann_host
   # Launcher icons (config in flutter_launcher_icons.yaml):
   # dart run flutter_launcher_icons
   flutter_launcher_icons: 0.14.4
