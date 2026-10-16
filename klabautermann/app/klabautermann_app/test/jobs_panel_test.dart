@@ -585,6 +585,28 @@ void main() {
         );
       });
     }
+
+    testWidgets('drops a calendar run the clock has passed', (tester) async {
+      await _frame(
+        tester,
+        SingleChildScrollView(
+          child: JobDetails(
+            job: timer(),
+            now: DateTime.utc(2026, 10, 25, 5, 0, 30),
+            profile: HostProfile(zoneOffset: '+0200', systemdVersion: 252),
+          ),
+        ),
+        size: _phone,
+      );
+      expect(find.text('Sun 2026-10-25 06:00:00 CET'), findsNothing);
+      // The list-timers elapse at 05:12 has not passed; the calendar's
+      // only listed run has, until the next reading.
+      expect(
+        find.text(clock('Sun, Oct 25, 2026 7:12 AM UTC+02:00')),
+        findsOneWidget,
+      );
+      expect(find.text('unknown'), findsOneWidget);
+    });
   });
 
   for (final (name, size) in [('desktop', _wide), ('phone', _phone)]) {

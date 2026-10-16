@@ -651,8 +651,8 @@ class JobDetails extends StatelessWidget {
   }
 
   /// The next elapse systemd listed, then each calendar trigger's elapses
-  /// as the host's `systemd-analyze calendar` printed them, on the
-  /// server's clock.
+  /// after [now] as the host's `systemd-analyze calendar` printed them, on
+  /// the server's clock.
   List<Widget> _timerRuns(AppLocalizations l10n, TimerJobEntry job) {
     final timer = job.timer;
     final offset = profile?.serverZone?.offset ?? Duration.zero;
@@ -669,17 +669,25 @@ class JobDetails extends StatelessWidget {
       for (final trigger in job.triggers ?? const <ScheduleDescription>[])
         if (trigger case CalendarSchedule(:final elapses?))
           _Labelled(scheduleText(l10n, trigger), [
-            for (final elapse in elapses)
-              _Run(
-                elapse.text ??
-                    switch (elapse.atUtc) {
-                      final at? => l10n.jobsRunTime(
-                        at,
-                        utcOffsetText(l10n, Duration.zero),
-                      ),
-                      null => l10n.chartUnknownValue,
-                    },
-              ),
+            // A run the clock has passed since the reading drops out, as
+            // the list-timers elapse does; one without an instant stays,
+            // as nothing tells when it falls.
+            ...switch (elapses.where((e) => e.atUtc?.isAfter(now) ?? true)) {
+              Iterable(isEmpty: true) => [_Run(l10n.chartUnknownValue)],
+              final ahead => [
+                for (final elapse in ahead)
+                  _Run(
+                    elapse.text ??
+                        switch (elapse.atUtc) {
+                          final at? => l10n.jobsRunTime(
+                            at,
+                            utcOffsetText(l10n, Duration.zero),
+                          ),
+                          null => l10n.chartUnknownValue,
+                        },
+                  ),
+              ],
+            },
             if (listsOneElapse(profile)) _Run.note(l10n.jobsCalendarOneRun),
           ]),
       if (delay != null && delay > Duration.zero)
