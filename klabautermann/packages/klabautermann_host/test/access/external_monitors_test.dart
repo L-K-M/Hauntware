@@ -1,6 +1,7 @@
 // External-monitor rule tests (03 §9.5 coverage card): node_exporter,
-// Netdata, the Zabbix agent and Telegraf are found in the units list, and
-// the answer stays unknown until a complete list has loaded.
+// Netdata, the Zabbix agent, Telegraf, collectd, Prometheus and Grafana's
+// agents are found in the units list, and the answer stays unknown until
+// a complete list has loaded.
 import 'package:klabautermann_host/klabautermann_host.dart';
 import 'package:test/test.dart';
 
@@ -87,6 +88,10 @@ void main() {
       'zabbix-agent.service': ExternalMonitor.zabbixAgent,
       'zabbix-agent2.service': ExternalMonitor.zabbixAgent,
       'telegraf.service': ExternalMonitor.telegraf,
+      'collectd.service': ExternalMonitor.collectd,
+      'prometheus.service': ExternalMonitor.prometheus,
+      'grafana-agent.service': ExternalMonitor.grafanaAgent,
+      'alloy.service': ExternalMonitor.grafanaAgent,
     };
     for (final MapEntry(key: name, value: monitor) in cases.entries) {
       final report = _detect(_units([_unit(name, 'active')]));
@@ -125,5 +130,21 @@ void main() {
       ),
     );
     expect(report.running, [ExternalMonitor.zabbixAgent]);
+  });
+
+  test('a running monitor is counted once among stopped ones', () {
+    final report = _detect(
+      _units([
+        _unit('grafana-agent.service', 'inactive'),
+        _unit('alloy.service', 'active'),
+        _unit('collectd.service', 'reloading'),
+      ]),
+    );
+    expect(report.status, AccessStatus.ok);
+    expect(report.running, [
+      ExternalMonitor.collectd,
+      ExternalMonitor.grafanaAgent,
+    ]);
+    expect(report.units, hasLength(3));
   });
 }
