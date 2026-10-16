@@ -91,13 +91,15 @@ Future<void> _frame(
       theme: theme,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
-      home: MediaQuery.withClampedTextScaling(
+      // Above the Navigator, so a row's details sheet scales too.
+      builder: (context, navigator) => MediaQuery.withClampedTextScaling(
         minScaleFactor: textScale,
         maxScaleFactor: textScale,
-        child: Scaffold(
-          body: RepaintBoundary(
-            child: ColoredBox(color: theme.colorScheme.surface, child: child),
-          ),
+        child: navigator!,
+      ),
+      home: Scaffold(
+        body: RepaintBoundary(
+          child: ColoredBox(color: theme.colorScheme.surface, child: child),
         ),
       ),
     ),
@@ -686,7 +688,10 @@ void main() {
       await tester.tap(_row('cron|crontab|0'));
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
-      expect(_inSheet('/home/deploy/bin/sync-assets'), findsWidgets);
+      final command = _inSheet('/home/deploy/bin/sync-assets');
+      expect(command, findsWidgets);
+      final sheetText = tester.element(command.first);
+      expect(MediaQuery.textScalerOf(sheetText).scale(10), 20);
     });
   }
 
