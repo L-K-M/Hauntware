@@ -79,6 +79,10 @@ suites_pid=''
 on_exit() {
   local status="$?" cleanup=0
   trap - EXIT
+  # A further signal, such as a second Ctrl-C or a supervisor's repeated
+  # SIGTERM, would otherwise end this shell part-way through teardown and
+  # leave the fixture, the agent or the key directory behind.
+  trap '' INT TERM HUP
 
   # Before the fixture goes: the suites would fail against it, and they
   # hold the lock. package:test lets the running test finish after a

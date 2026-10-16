@@ -17,11 +17,13 @@ const _lockLine = "readonly lock_file='/tmp/klabautermann-fixture.lock'";
 /// their PID in `$STUB_SUITES_PID` while they run, and exit with
 /// `$STUB_SUITES_EXIT` when it is set. Otherwise they stop as package:test
 /// does: a first SIGTERM lets the running test finish, here 30 s after the
-/// start, and a second one stops them at once.
+/// start, and a second one stops them at once. `compose down` takes
+/// `$STUB_DOWN_SECONDS` when it is set.
 const _stubs = {
   'docker': r'''
 echo "docker $*" >>"$STUB_LOG"
 if [[ "$*" == *' port '* ]]; then echo '127.0.0.1:49152'; fi
+if [[ "$*" == *' down '* ]]; then sleep "${STUB_DOWN_SECONDS:-0}"; fi
 ''',
   'ssh-keygen': r'''
 if [[ "$1" == -lf ]]; then echo '256 SHA256:stub stub (ED25519)'; exit 0; fi
@@ -32,6 +34,7 @@ done
 ''',
   'ssh-keyscan': "echo '127.0.0.1 ssh-ed25519 stub'\n",
   'ssh-agent': r'''
+echo "ssh-agent $*" >>"$STUB_LOG"
 if [[ "$1" == -s ]]; then echo 'SSH_AGENT_PID=0; export SSH_AGENT_PID;'; fi
 ''',
   'ssh-add': '',
@@ -105,7 +108,7 @@ void main() {
 
   /// Starts the copy, and completes once the suites have started.
   Future<({Process process, Future<int> exitCode, StringBuffer output})>
-  startRun({String? suitesExit}) async {
+  startRun({String? suitesExit, String? downSeconds}) async {
     final process = await Process.start(
       'bash',
       [run.path],
@@ -115,6 +118,7 @@ void main() {
         'STUB_LOG': log.path,
         'STUB_SUITES_PID': suitesPid.path,
         'STUB_SUITES_EXIT': ?suitesExit,
+        'STUB_DOWN_SECONDS': ?downSeconds,
       },
       includeParentEnvironment: false,
     );
@@ -165,6 +169,47 @@ void main() {
       fixtureLifetime(),
       contains('suites stopped'),
       reason: 'run.sh did not stop the suites before compose down',
+    );
+  });
+
+  test('a second signal during teardown does not cut it short', () async {
+    final (:process, :exitCode, :output) = await startRun(downSeconds: '2');
+
+    process.kill();
+    final deadline = DateTime.now().add(const Duration(seconds: 15));
+    while (!log.readAsLinesSync().contains('suites stopped')) {
+      if (DateTime.now().isAfter(deadline)) {
+        fail('run.sh never reached compose down:\n$output');
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    }
+    // compose down follows at once and takes 2 s: signal it mid-way.
+    await Future<void>.delayed(const Duration(milliseconds: 500));
+    process.kill();
+
+    final status = await exitCode.timeout(
+      const Duration(seconds: 15),
+      onTimeout: () {
+        process.kill(ProcessSignal.sigkill);
+        fail('run.sh did not exit:\n$output');
+      },
+    );
+    expect(status, isNot(0), reason: '$output');
+    final lines = log.readAsLinesSync();
+    expect(
+      lines.skip(lines.indexOf('suites stopped')),
+      containsAllInOrder([
+        endsWith(' down --volumes --remove-orphans'),
+        'ssh-agent -k',
+      ]),
+      reason: 'run.sh did not finish its teardown',
+    );
+    expect(
+      sandbox.listSync().where(
+        (entry) => entry.path.contains('/klabautermann-fixture.'),
+      ),
+      isEmpty,
+      reason: 'run.sh left its key directory behind',
     );
   });
 
