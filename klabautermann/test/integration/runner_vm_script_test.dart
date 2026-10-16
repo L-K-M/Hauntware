@@ -93,8 +93,8 @@ fi
 if [[ "$1" == -u ]]; then echo 4242; else echo "uid=4242($user)"; fi
 ''',
   'getent': r'''
-mkdir -p "$STUB_STATE/home/$3"
-echo "$3:x:4242:4242::$STUB_STATE/home/$3:/bin/sh"
+mkdir -p "$STUB_STATE/home/$2"
+echo "$2:x:4242:4242::$STUB_STATE/home/$2:/bin/sh"
 ''',
   'pgrep': 'exit 1\n',
   'ssh':
@@ -111,7 +111,9 @@ while (($#)); do
 done
 ''',
   'ssh-keyscan': "echo '127.0.0.1 ssh-ed25519 stub'\n",
-  'systemctl': "echo 'systemd 255 (255.4-1ubuntu8)'\n",
+  'systemctl':
+      r'echo "${STUB_SYSTEMCTL_VERSION-systemd 255 (255.4-1ubuntu8)}"'
+      '\n',
   'dart': r'''
 echo "$$" >"$STUB_SUITE_PID"
 trap 'rm -f -- "$STUB_SUITE_PID"' EXIT
@@ -450,6 +452,22 @@ void main() {
       expect(File('${state.path}/users/$_limitedUser').existsSync(), isTrue);
     });
 
+    test('fails without a systemd version, before any account', () async {
+      final (process: _, :exitCode, :output) = await start({
+        ...onRunner,
+        'STUB_SYSTEMCTL_VERSION': 'not systemd',
+      });
+
+      expect(await exitCode, 1, reason: '$output');
+      expect('$output', contains('no systemd version from systemctl'));
+      expect(logged(), isNot(contains(startsWith('sudo useradd'))));
+      expect(
+        sandbox.listSync().where((e) => e.path.contains('runner-vm.')),
+        isEmpty,
+        reason: 'a directory is left',
+      );
+    });
+
     test('sets up the leg, runs the suite and tears down after it', () async {
       final (process: _, :exitCode, :output) = await start({
         ...onRunner,
@@ -478,6 +496,13 @@ void main() {
         lines.where((l) => l.startsWith('sudo useradd ')).last,
         endsWith('--groups systemd-journal $_journalUser'),
       );
+      for (final user in [_limitedUser, _journalUser]) {
+        expect(
+          File('${state.path}/home/$user/.ssh/authorized_keys').existsSync(),
+          isTrue,
+          reason: 'each account has a home of its own',
+        );
+      }
       final config = File('${state.path}/sshd_config').readAsLinesSync();
       expect(config, contains('ListenAddress 127.0.0.1:2243'));
       expect(config, contains('AllowUsers $_limitedUser $_journalUser'));

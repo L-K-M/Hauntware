@@ -162,11 +162,12 @@ void main() {
       systemdMajor: profile.systemdVersion,
     );
     expect(reads.keys, [vm.calendar]);
-    final readAt = DateTime.now().toUtc();
     final calendarText = await vm.ssh(
       vm.limitedUser,
       HostCommands.commandLine(reads[vm.calendar]!, quote: quoteShellWord),
     );
+    // After the read: the timer can come due while systemd-analyze runs.
+    final readAt = DateTime.now().toUtc();
     engine.note('= systemd-analyze calendar:\n$calendarText');
     final calendar = parseOnCalendar(calendarText);
     expect(calendar.warnings, isEmpty);
