@@ -2725,7 +2725,9 @@ time through `HostCommands.commandLine`, and answers each open with a
 ### 7.7 Scheduled jobs (JOB)
 
 - **MVP.** Unified list (JOB-01): own `crontab -l` (exit 1 with "no crontab"
-  means empty), `/etc/crontab` and `/etc/cron.d/*` (with the user field),
+  means empty), `/etc/crontab` and `/etc/cron.d/*` (with the user field,
+  which follows an `@` macro too; a line that ends before its command is
+  no job [R: cronie `entry.c` `load_entry`]),
   `cron.{hourly,daily,weekly,monthly}` names, and
   `systemctl list-timers --all --output=json`. Schedules in words and next runs
   (JOB-02): a Dart cron parser in `klabautermann_host` (5 fields, ranges, steps,

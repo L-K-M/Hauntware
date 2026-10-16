@@ -300,6 +300,24 @@ void main() {
       expect(jobs[1].schedule!.timeZone, isNull);
       expect(jobs[1].nextRuns, isNotEmpty);
     });
+
+    test('a system macro line keeps its user, CRON_TZ and driver role', () {
+      final jobs = _merge(
+        _cron(
+          etc: 'CRON_TZ=UTC\n@daily backup /opt/run.sh',
+          cronD: 'p\t@daily root run-parts /etc/cron.daily',
+          dirs: 'daily x',
+        ),
+        zone: _fixed(2),
+      );
+      final line = jobs.whereType<CronJobEntry>().first;
+      expect((line.job.user, line.job.command), ('backup', '/opt/run.sh'));
+      expect(line.schedule!.timeZone, 'UTC');
+      expect(line.nextRuns.first.atUtc, DateTime.utc(2026, 6, 2));
+      final script = jobs.whereType<PeriodicJobEntry>().single;
+      expect(script.driverIds, ['cron|/etc/cron.d/p|0']);
+      expect(script.nextRuns.first.atUtc, DateTime.utc(2026, 6, 1, 22));
+    });
   });
 
   group('periodic scripts', () {

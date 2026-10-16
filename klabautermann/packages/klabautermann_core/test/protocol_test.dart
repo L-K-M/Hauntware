@@ -438,6 +438,7 @@ void main() {
           CronJob(
             source: '/etc/crontab',
             schedule: '@daily',
+            user: 'root',
             command: 'backup',
             raw: '@daily root backup',
             expression: CronExpression.parse('@daily'),
