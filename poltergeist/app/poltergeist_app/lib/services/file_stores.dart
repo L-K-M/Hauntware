@@ -8,24 +8,6 @@ import 'package:poltergeist_core/poltergeist_core.dart';
 
 import 'atomic_file.dart';
 
-/// Moves a corrupt store file aside so a bad file cannot wedge startup.
-/// UTC-stamped per this repo's atomic-file port (a repeated corruption never
-/// overwrites the previous evidence); best-effort like the Séance source —
-/// if it cannot be moved, the caller still starts empty.
-Future<void> _quarantineCorruptFile(File file) async {
-  try {
-    final stamp = DateTime.now()
-        .toUtc()
-        .toIso8601String()
-        .replaceAll('-', '')
-        .replaceAll(':', '')
-        .replaceAll('.', '');
-    await file.rename('${file.path}.corrupt-$stamp');
-  } catch (_) {
-    // Best effort: if we can't move it aside, the caller still starts empty.
-  }
-}
-
 /// What settling a staged re-key did with the journal it found.
 enum VaultRekeyOutcome {
   /// Nothing was staged; the stored vault was already the only generation.
@@ -124,7 +106,7 @@ class FileVaultStore implements VaultStore, VaultRekeyJournal {
       map.forEach((k, v) => _blobs[k as String] = v as String);
     } catch (_) {
       _blobs.clear();
-      await _quarantineCorruptFile(file);
+      await quarantineCorruptFile(file);
     }
   }
 
@@ -169,7 +151,7 @@ class FileVaultStore implements VaultStore, VaultRekeyJournal {
       }
       return _stringMap(journal['snapshots']);
     } catch (_) {
-      await _quarantineCorruptFile(_rekeyFile);
+      await quarantineCorruptFile(_rekeyFile);
       return null;
     }
   }
@@ -349,7 +331,7 @@ class FileVaultStore implements VaultStore, VaultRekeyJournal {
         (await VaultCrypto.openJson(key, base64.decode(sealed)))['blobs'],
       );
     } catch (_) {
-      await _quarantineCorruptFile(_rekeyFile);
+      await quarantineCorruptFile(_rekeyFile);
       _rekeySnapshots = null;
       return VaultRekeyOutcome.discarded;
     }
@@ -366,119 +348,4 @@ class FileVaultStore implements VaultStore, VaultRekeyJournal {
     _rekeySnapshots = null;
     return VaultRekeyOutcome.adopted;
   });
-}
-
-/// JSON-file [HostKeyStore] for pinned TOFU keys.
-class FileHostKeyStore implements ConflictAwareHostKeyStore {
-  final File file;
-  final Future<void> Function(File target, String contents) _atomicWriter;
-  final Map<String, HostKey> _keys = {};
-  bool _loaded = false;
-  Future<void> _pending = Future<void>.value();
-
-  FileHostKeyStore(
-    this.file, {
-    Future<void> Function(File target, String contents)? atomicWriter,
-  }) : _atomicWriter = atomicWriter ?? writeStringAtomically;
-
-  Future<void> _load() async {
-    if (_loaded) return;
-    if (await file.exists()) {
-      try {
-        final list = jsonDecode(await file.readAsString()) as List;
-        for (final j in list) {
-          final k = HostKey.fromJson((j as Map).cast<String, dynamic>());
-          _keys[k.locator] = k;
-        }
-      } catch (_) {
-        _keys.clear();
-        await _quarantineCorruptFile(file);
-      }
-    }
-    _loaded = true;
-  }
-
-  Future<void> _flush(Map<String, HostKey> keys) async {
-    await _atomicWriter(
-      file,
-      jsonEncode(keys.values.map((key) => key.toJson()).toList()),
-    );
-  }
-
-  Future<T> _serialize<T>(Future<T> Function() body) {
-    final operation = _pending.then((_) async {
-      await _load();
-      return body();
-    });
-    _pending = operation.then<void>(
-      (_) {},
-      onError: (Object _, StackTrace _) {},
-    );
-    return operation;
-  }
-
-  @override
-  Future<List<HostKey>> all() => _serialize(() async => _keys.values.toList());
-
-  @override
-  Future<HostKey?> get(String host, int port) =>
-      _serialize(() async => _keys['$host:$port']);
-
-  @override
-  Future<void> put(HostKey key) => _serialize(() async {
-    final next = Map<String, HostKey>.of(_keys)..[key.locator] = key;
-    await _flush(next);
-
-    _keys
-      ..clear()
-      ..addAll(next);
-  });
-
-  @override
-  Future<HostKeyInstallResult> putIfNoConflict(HostKey key) =>
-      _serialize(() async {
-        final current = _keys[key.locator];
-        if (current != null && current.conflictsWith(key)) {
-          return HostKeyInstallResult.conflict;
-        }
-
-        final next = Map<String, HostKey>.of(_keys)..[key.locator] = key;
-        await _flush(next);
-
-        _keys
-          ..clear()
-          ..addAll(next);
-        return HostKeyInstallResult.installed;
-      });
-
-  @override
-  Future<HostKeyInstallResult> replaceIfCurrent(
-    HostKey expected,
-    HostKey replacement,
-  ) {
-    if (expected.locator != replacement.locator) {
-      throw ArgumentError.value(
-        replacement.locator,
-        'replacement',
-        'must use the expected host-key locator',
-      );
-    }
-
-    return _serialize(() async {
-      final current = _keys[expected.locator];
-      if (current == null ||
-          current.fingerprintSha256 != expected.fingerprintSha256) {
-        return HostKeyInstallResult.conflict;
-      }
-
-      final next = Map<String, HostKey>.of(_keys)
-        ..[replacement.locator] = replacement;
-      await _flush(next);
-
-      _keys
-        ..clear()
-        ..addAll(next);
-      return HostKeyInstallResult.installed;
-    });
-  }
 }

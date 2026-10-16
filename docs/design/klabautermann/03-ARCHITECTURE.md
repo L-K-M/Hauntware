@@ -245,7 +245,7 @@ D47 sampler deadlines · D48 host-side filtering · D49 collector locale ·
 D50 LXC values · D51 Access tab · D52 runtime placement · D53 integration
 placement · D54 runtime override in M3 · D55 no health overlay in the MVP
 · D56 log search through `planchette_core` · D57 timer triggers · D58
-cron zone rules · D59 capability cache.
+cron zone rules · D59 capability cache · D60 threshold announcements.
 Proposals awaiting the owner close the section; they are not decisions.
 
 ### Shape and scope
@@ -1212,6 +1212,23 @@ Proposals awaiting the owner close the section; they are not decisions.
   viewer (10.8). *Rejected:* a search of the app's own (a second copy of
   the same rules); `planchette_editor`'s find (an editor for one text
   buffer, 10.8).
+- **D60. Threshold-band announcements are a device setting.** A11Y-15's
+  switch is `klabautermann.accessibility.announceThresholdBands` in
+  `settings.json` (4.10), on by default and never synced, since whether
+  a screen reader runs differs per device; it sits on Settings' General
+  tab, which the Overview's health card links to. While a server's
+  Overview shows and the switch is on, the screen reader hears CPU busy,
+  used memory and each listed mount's space and inode use cross into or
+  out of the warning or critical band: the fleet rows' 80 % and 90 %
+  until OV-11, since `threshold.dart` holds the rule model and no levels.
+  A change is heard once it has held for 10 s, through that model's
+  hysteresis rules with the hold as `for` on both sides, and only with a
+  value inside the new band, since each level's rule settles on its own.
+  The value is judged as the whole percent the announcement speaks, so
+  79.6 % is never "80%: back to normal"; the first reading only sets
+  where a value starts. *Rejected:* a synced preference (one device's
+  screen reader would switch another's); a clear level below each level
+  as the debounce (a threshold OV-11 has not set).
 
 ### Proposals awaiting the owner
 
@@ -1402,16 +1419,17 @@ The barrel's `klabautermann_host` export shows only the plain-data types
 that sampling results and `HostProfileChanged` carry (10.1),
 `JournalEntry` (the log viewer's journal rows, 10.8), and the access
 check over a `HostProfile` (`evaluateAccess` and its `AccessReport`,
-whose journal row drives the Logs panel's LOG-04 notice, 10.8). The
-Jobs tab (7.7) adds the jobs rows and schedule descriptions a
-`CronResult` carries, `TimerJobEntry`, which the app builds from a
-`TimersResult`'s timers, and the engine limits and names its words
-follow. The barrel's `klabautermann_docker` export shows only
-`MaskedValue`, the masked process arguments a `ProcsResult` carries
-(8.9). Each list changes only as a milestone wires a type in or retires
-one. The app's tests alone also depend on `klabautermann_host`, to
-build jobs rows with the engine's `mergeJobs`, since those rows have no
-public constructor; `depend_on_referenced_packages` keeps `lib/` from
+whose journal row drives the Logs panel's LOG-04 notice, 10.8), and the
+threshold rule model whose evaluator debounces the Overview's band
+announcements (7.19, D60). The Jobs tab (7.7) adds the jobs rows and
+schedule descriptions a `CronResult` carries, `TimerJobEntry`, which
+the app builds from a `TimersResult`'s timers, and the engine limits
+and names its words follow. The barrel's `klabautermann_docker` export
+shows only `MaskedValue`, the masked process arguments a `ProcsResult`
+carries (8.9). Each list changes only as a milestone wires a type in or
+retires one. The app's tests alone also depend on `klabautermann_host`,
+to build jobs rows with the engine's `mergeJobs`, since those rows have
+no public constructor; `depend_on_referenced_packages` keeps `lib/` from
 importing that dev dependency. No `ghost_*` package
 depends on `seance_core`; `klabautermann_core` is a product package, and
 the curated lines above are its only
@@ -1900,7 +1918,7 @@ platform identities in 04, section 12.3):
 | `host_keys.json`, verdict and tripwire files | Pins and quarantine state | catalog library | MVP |
 | `endpoint_pins.json` | Confirmed endpoints | catalog library | MVP |
 | `ssh_config_imports.json` [E] | D13's device-local store for FL-02 imports from `~/.ssh/config`, replaced whole by each import; never pushed (D14). Schema 3 (M2) holds each host's alias, host, port, user, `IdentityFile` and `ProxyJump` with the values ssh would use (10.1): the effective host (`%h` expanded, lowercased unless an address) and port, the first `IdentityFile` that is not `none`, and the `ProxyJump` as written; under `hops` it holds the same for each other name a stored route gives. An older file holds addresses only: schema 1 (M1) kept no `IdentityFile` or `ProxyJump` and kept `HostName` as written, `%h` included, and schema 2 read each host's values from its first block alone. Its hosts are listed as stored, with no `jumpRoute`, `authKind` or `locatorConflict`, and get no connect config until the next import rewrites the file. Built in M1: the engine isolate loads it at start and saves each import atomically before it answers (10.1). A damaged file is renamed to `ssh_config_imports.json.corrupt-<UTC time>`; a file it cannot read or rename, or one from a newer schema, is left as it is and no import is saved that run | `klabautermann_core` [E] | MVP |
-| `settings.json` | Device settings, `klabautermann.sync.deviceId` (minted once, never regenerated), whether the first-run coverage card was dismissed (`klabautermann.coverage.firstRunCardDismissed`, M2, 9.5; anything but `true` shows the card again), monitor set, per-server device preferences | app | MVP |
+| `settings.json` | Device settings, `klabautermann.sync.deviceId` (minted once, never regenerated), whether the first-run coverage card was dismissed (`klabautermann.coverage.firstRunCardDismissed`, M2, 9.5; anything but `true` shows the card again), whether threshold-band changes are announced (`klabautermann.accessibility.announceThresholdBands`, M2, D60; anything but `false` announces), monitor set, per-server device preferences | app | MVP |
 | `window_state.json` | The desktop main window's last normal frame and its maximized and full-screen flags (10.2), in the shape Séance's file established (`x`, `y`, `width`, `height`, `isMaximized`, `isFullScreen`; physical pixels on Windows); never synced. Added in M1, a deviation from the plan, which listed no window file: kept out of `settings.json`, as Séance and Planchette keep theirs, so debounced drag saves never rewrite the file that holds the device id | app | MVP |
 | `instance.lock` [E] | Empty. One desktop instance per support directory (built in M2): the composition root takes an exclusive, non-blocking advisory lock on it after the settings window's branch and before `settings.json` and `window_state.json` open and the engine isolate starts, so one process mints the device id and writes these files, and holds it for the life of the process; the file is never deleted. A second instance opens no other file and only says it is already running, until the user quits it. A lock that fails for another reason (no write access, no lock support) lets the app run unguarded and says so at startup. Phones run one process per app and take none | app, through `klabautermann_core`'s `InstanceLock` | MVP |
 | `identity_reads.jsonl` [E] | Audit trail of identity-file reads (M2): one JSON line per attempt to read a server's or jump hop's `IdentityFile`, read or not (UTC time, server id and label, the expanded path, the error), through `seance_core`'s `IdentityAuditLog`, under the name Séance and Poltergeist use. Owner-only on Linux and macOS, also through rotation, which keeps the newest 500 lines once the file passes 1,000; never synced. Recording is best effort and never fails a connect. Added in M2, a deviation from the plan, which listed no such file | `klabautermann_core` | MVP |
@@ -4978,7 +4996,7 @@ As built in M2 for OV-01, OV-03 and OV-04
 (`app/klabautermann_app/lib/ui/overview_panel.dart`), the Overview tab
 shows CPU, load, memory and swap cards from the `core` stream's last
 reading, in two columns from the System tab's 600 px panel width:
-- One freshness line heads the cards in 9.5 item 4's words, stale at
+- One freshness line heads the panel in 9.5 item 4's words, stale at
   the fleet rows' 20 s `core` limit (10.3). Stale values, bars and
   sparkline lines turn grey beside its history icon. A failed reading
   says why above the last values rather than clearing them.
@@ -5006,6 +5024,34 @@ reading, in two columns from the System tab's 600 px panel width:
   withheld, the container's own load averages show and the note says
   the core count would be the host's.
 - No radial `Gauge` exists yet; the stacked bar is the gauge.
+
+As built in M2 for the rest of OV-01 and OV-02 (the same file), the
+health card follows the freshness line: the failed units through the
+Services tab's summary over the `failedUnits` stream, then every listed
+mount whose space or inode use reaches the fleet rows' 80 % or 90 %,
+critical and fullest first, each with an icon and its level in words
+(pseudo filesystems stay out: a squashfs image is always full). After
+the four cards, Disks lists the first eight mounts the System tab lists
+by default, each with a bar that warns at the same levels, its use,
+size and inodes, after a `df` timeout the last reading's mounts with
+their use unknown, and after another failure only why, as the System
+tab does; Network gives NET-01's total rates; Host gives the OS and
+kernel from `identity` and the uptime and boot time from `core`,
+unknown with D50's reason in a container, and waits for or says why it
+lacks an `identity` reading, as the System tab does; read once per
+session, the OS and kernel grey with the panel's line. The health and
+Disks cards give their own age, stale at the fleet rows' 240 s `fs`
+limit, which also judges `failedUnits` (60 s); the health card takes
+the oldest reading it shows, so after a failed `df`, when it names no
+mount, the listing's age drops out. The Overview's subscription already
+named every stream these read (network rates come with `core`), so
+K21's mapping is unchanged.
+`threshold.dart` holds the rule model and no levels, so the fleet rows'
+levels stand in until OV-11.
+The health card ends with a link to D60's switch, which reaches the
+Overview, and its announcer in `threshold_announcer.dart`, through an
+inherited scope above the navigator, as the macOS toolbar band does,
+since a phone pushes the server screen as a route of its own.
 
 As built in M2 (`app/klabautermann_app/lib/ui/processes_panel.dart`), the
 Processes tab lists PRC-01's processes from the `procs` stream it
@@ -5256,6 +5302,9 @@ palette) and presets in the preview. v1: paste from Séance and Poltergeist
   threshold-band changes (values refreshing every 1 to 5 s are not live
   regions). v1: text scaling to 200 %, full keyboard reachability, log
   readability. v1.x: more languages, right-to-left layout.
+- Announcements (A11Y-15, M2): link changes from the fleet rows (10.3)
+  and threshold-band changes from the Overview (10.4, D60), where the
+  platform takes none (Android) as the label of a live region.
 - Tables (A11Y-03, M2): until F5e lifts it into `ghost_ui`, the app's
   `SortableTable` gives each row one node whose label is its cells as
   "column: value" and whose custom semantics actions are the row's

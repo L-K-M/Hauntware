@@ -349,6 +349,7 @@ if [[ ! -x "$sshd_binary" ]]; then
   install_openssh_server
 fi
 systemd_version="$(systemctl --version | sed -n '1s/^systemd \([0-9]*\).*/\1/p')"
+[[ -n "$systemd_version" ]] || die 'no systemd version from systemctl --version'
 readonly systemd_version
 sh_target="$(readlink -f "$system_sh")"
 [[ "$sh_target" == */dash ]] || die "$system_sh is $sh_target, not dash"

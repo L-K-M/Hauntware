@@ -58,11 +58,54 @@ final _expected = <String, (Set<MetricField>, bool)>{
   ),
   'rhel-8': (const {}, false),
   'ubuntu-2404': (const {}, false),
+  // The runner-VM capture of klabautermann/test/integration/runner_vm.sh:
+  // a Hyper-V guest, whose values hold as measured.
+  'ubuntu-2404-runner-dash': (const {}, false),
+  // The container captures of klabautermann/test/integration/capture.sh.
+  // Where the image has systemd-detect-virt, it names the container, and
+  // every field is withheld; elsewhere nothing tells, as on alpine-322.
+  for (final platform in _containersNamed) platform: (_allD50, false),
+  for (final platform in _containersUnnamed) platform: (const {}, false),
 };
+
+/// Container captures whose probe names the container.
+const _containersNamed = [
+  'arch-docker-bash',
+  'rhel-9-docker-bash',
+  'rhel-10-docker-bash',
+];
+
+/// Container captures without `systemd-detect-virt`.
+const _containersUnnamed = [
+  'debian-12-docker-bash',
+  'debian-12-docker-dash',
+  'debian-13-docker-bash',
+  'debian-13-docker-busybox',
+  'debian-13-docker-dash',
+  'debian-13-docker-login-bash',
+  'debian-13-docker-login-fish',
+  'debian-13-docker-login-tcsh',
+  'debian-13-docker-login-zsh',
+  'debian-13-docker-mksh',
+  'debian-13-docker-zsh',
+  'fedora-44-docker-bash',
+  'ubuntu-2204-docker-bash',
+  'ubuntu-2204-docker-dash',
+  'ubuntu-2604-docker-bash',
+  'ubuntu-2604-docker-dash',
+];
 
 void main() {
   final root = _fixturesRoot();
   final t0 = DateTime.utc(2026, 10, 15, 12);
+
+  test('every platform fixture has an expectation', () {
+    final platforms = [
+      for (final dir in Directory(root).listSync().whereType<Directory>())
+        dir.uri.pathSegments[dir.uri.pathSegments.length - 2],
+    ];
+    expect(_expected.keys, unorderedEquals(platforms));
+  });
 
   for (final MapEntry(key: platform, value: (withheld, arcUsed))
       in _expected.entries) {
@@ -92,11 +135,15 @@ void main() {
       ]);
 
       // Two fast readings, two seconds of host uptime apart.
+      final overviewText = _countersOf(
+        fixture('overview.txt'),
+        fixture('core.txt'),
+      );
       final first = _results(
         pipeline.addTick(
           _fast,
           reply(1, 1000, [
-            ok('overview', fixture('overview.txt')),
+            ok('overview', overviewText),
             ok('core', fixture('core.txt')),
           ]),
           t0,
@@ -110,7 +157,7 @@ void main() {
         pipeline.addTick(
           _fast,
           reply(2, 1002, [
-            ok('overview', _advance(fixture('overview.txt'))),
+            ok('overview', _advance(overviewText)),
             ok('core', _advance(fixture('core.txt'))),
           ]),
           t0.add(const Duration(seconds: 2)),
@@ -228,6 +275,43 @@ Map<SampleStream, SampleResult> _results(List<EngineEvent> events) {
   return {for (final s in samples) s.stream: s.result};
 }
 
+/// A `== <block> ==` header line of a metric payload.
+final _blockHeader = RegExp(r'^== ([a-z0-9_-]+) ==$');
+
+/// [overview] with the aggregate `cpu` line and the `netdev` rows of
+/// [core]. Both results of a reply diff against the latest `core`
+/// reading (D43), and a reply's two sections read the counters a moment
+/// apart, the later one in `core`. A captured fixture's sections come
+/// from separate requests, its `overview` before its `core`, so a
+/// counter could go back between them; the readings here share core's
+/// counters, as the hand-written fixtures do, so that the second
+/// reading's deltas are exactly the advanced amounts.
+String _countersOf(String overview, String core) {
+  final coreBlocks = <String, List<String>>{};
+  var block = '';
+  for (final line in core.split('\n')) {
+    if (_blockHeader.firstMatch(line) case final header?) {
+      block = header[1]!;
+      coreBlocks[block] = [];
+    } else if (line.isNotEmpty) {
+      coreBlocks[block]?.add(line);
+    }
+  }
+  final cpu = coreBlocks['stat']!.firstWhere((l) => l.startsWith('cpu '));
+
+  final out = <String>[];
+  for (final line in overview.split('\n')) {
+    if (_blockHeader.firstMatch(line) case final header?) {
+      block = header[1]!;
+      out.add(line);
+      if (block == 'netdev') out.addAll(coreBlocks['netdev']!);
+    } else if (block != 'netdev') {
+      out.add(block == 'stat' && line.startsWith('cpu ') ? cpu : line);
+    }
+  }
+  return out.join('\n');
+}
+
 /// [payload] a reading later: every counter advanced by fixed amounts
 /// (the aggregate CPU by 30 user, 10 system, 50 idle and 10 iowait
 /// jiffies; each core by 25 busy and 75 idle; each interface by 2,000
@@ -237,7 +321,7 @@ String _advance(String payload) {
   var block = '';
   final out = <String>[];
   for (final line in payload.split('\n')) {
-    final header = RegExp(r'^== ([a-z0-9_-]+) ==$').firstMatch(line);
+    final header = _blockHeader.firstMatch(line);
     if (header != null) {
       block = header[1]!;
       out.add(line);

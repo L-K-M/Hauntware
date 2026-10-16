@@ -4,6 +4,7 @@
 // and the report holds each figure. It checks no budget; the figures of
 // a one-second run on a shared machine mean nothing.
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:klabautermann_core/src/replay/fixture_replay.dart';
 import 'package:klabautermann_core/src/replay/host_fixtures.dart';
@@ -141,5 +142,30 @@ void main() {
       ..add(utf8.encode('${rows.join('\n')}\n'));
     expect(follow.malformed, 0);
     expect(follow.linesParsed, rows.length);
+  });
+
+  test('replays the platform fixtures, not the container or runner-VM '
+      'captures', () {
+    final root = findHostFixtures()!;
+    final dirs = Directory(root).listSync().whereType<Directory>().toList();
+    for (final (mark, script) in [
+      ('-docker-', 'capture.sh'),
+      ('-runner-', 'runner_vm.sh'),
+    ]) {
+      expect(
+        dirs.where((dir) => dir.path.contains(mark)),
+        isNotEmpty,
+        reason: '$script commits them',
+      );
+    }
+    expect(
+      [for (final fixture in loadHostFixtures(root)) fixture.platform],
+      allOf(
+        isNotEmpty,
+        everyElement(
+          allOf(isNot(contains('-docker-')), isNot(contains('-runner-'))),
+        ),
+      ),
+    );
   });
 }
