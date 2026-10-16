@@ -64,13 +64,16 @@ CronJob cronLine(
   cronTz: cronTz,
 );
 
-/// A Debian host's cron table: the login user's crontab, /etc/crontab with
-/// anacron installed, a cron.d file and a CRON_TZ line, evaluated by the
-/// engine's own merge at [jobsNow] in Berlin.
+/// A Debian host's cron table: the login user's crontab with an @reboot
+/// line, /etc/crontab with anacron installed, a cron.d file and a CRON_TZ
+/// line, evaluated by the engine's own merge at [jobsNow] in Berlin. The
+/// parser keeps a system crontab's @macro line's user in its command, so
+/// the @reboot line is the user's own.
 CronResult jobsCron({bool ownCrontabKnown = true}) {
   final cron = CronSnapshot(
     jobs: [
       cronLine('crontab', '*/15 * * * *', '/home/deploy/bin/sync-assets'),
+      cronLine('crontab', '@reboot', '/home/deploy/bin/start-tunnel'),
       cronLine(
         '/etc/crontab',
         '25 6 * * *',
@@ -91,7 +94,6 @@ CronResult jobsCron({bool ownCrontabKnown = true}) {
         user: 'deploy',
         cronTz: 'America/New_York',
       ),
-      cronLine('/etc/cron.d/0anacron', '@reboot', 'anacron -s', user: 'root'),
     ],
     dirEntries: const [
       CronDirEntry(period: CronPeriod.daily, name: '0anacron'),
