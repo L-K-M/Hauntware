@@ -88,7 +88,7 @@ void main() {
     }
   });
 
-  test('a span keeps every unit and fraction; an offset its sign', () {
+  test('a span keeps every unit and its milliseconds; an offset its sign', () {
     expect(
       spanText(_l10n, const Duration(hours: 1, minutes: 30)),
       '1 h 30 min',

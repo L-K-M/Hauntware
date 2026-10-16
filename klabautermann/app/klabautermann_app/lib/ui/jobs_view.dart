@@ -244,8 +244,9 @@ String _list(AppLocalizations l10n, List<String> items) {
   return l10n.jobsListMore(items.first, _list(l10n, items.sublist(1)));
 }
 
-/// [span] in its nonzero units, largest first ("1 h 30 min"), fractional
-/// seconds kept: a systemd span is shown whole, never rounded.
+/// [span] in its nonzero units, largest first ("1 h 30 min"), with its
+/// seconds to the millisecond, which the catalog's decimal format keeps;
+/// a smaller remainder rounds.
 String spanText(AppLocalizations l10n, Duration span) {
   final micros = span.inMicroseconds % Duration.microsecondsPerMinute;
   final parts = [
