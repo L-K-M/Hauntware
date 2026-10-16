@@ -2704,7 +2704,7 @@ abstract class AppLocalizations {
   /// **'{base, select, active{{span} after the timer starts} boot{{span} after boot} startup{{span} after systemd starts} unitActive{{span} after the job last started} other{{span} after the job last finished}}'**
   String jobsScheduleMonotonic(String base, String span);
 
-  /// A cron schedule's minute field in words. shape picks how the field is written: all is *, step is */n, rangeStep is a-b/n, value is one value, other is a list (items) of values, ranges (jobsCronRange) and steps (jobsCronItemStep). step is n; first and last are the range ends.
+  /// A cron schedule's minute field in words. shape picks how the field is written: all is *, step is */n where n divides the field's cycle (runs an even interval apart), rangeStep is a-b/n or any other */n (*/45 minutes runs at :00 and :45), value is one value, other is a list (items) of values, ranges (jobsCronRange) and steps (jobsCronItemStep). step is n; first and last are the range ends.
   ///
   /// In en, this message translates to:
   /// **'{shape, select, all{every minute} step{every {step} minutes} rangeStep{every {step} minutes from minute {first} to {last}} value{at minute {items}} other{at minutes {items}}}'**
@@ -2716,7 +2716,7 @@ abstract class AppLocalizations {
     String last,
   );
 
-  /// A cron schedule's hour field in words, hours counted 0 to 23. shape picks how the field is written: all is *, step is */n, rangeStep is a-b/n, value is one value, other is a list (items) of values, ranges (jobsCronRange) and steps (jobsCronItemStep). step is n; first and last are the range ends.
+  /// A cron schedule's hour field in words, hours counted 0 to 23. shape picks how the field is written: all is *, step is */n where n divides the field's cycle (runs an even interval apart), rangeStep is a-b/n or any other */n (*/45 minutes runs at :00 and :45), value is one value, other is a list (items) of values, ranges (jobsCronRange) and steps (jobsCronItemStep). step is n; first and last are the range ends.
   ///
   /// In en, this message translates to:
   /// **'{shape, select, all{every hour} step{every {step} hours} rangeStep{every {step} hours from hour {first} to {last}} value{during hour {items}} other{during hours {items}}}'**
@@ -2728,10 +2728,10 @@ abstract class AppLocalizations {
     String last,
   );
 
-  /// A cron schedule's day-of-month field in words; never all, which says nothing. shape picks how the field is written: all is *, step is */n, rangeStep is a-b/n, value is one value, other is a list (items) of values, ranges (jobsCronRange) and steps (jobsCronItemStep). step is n; first and last are the range ends.
+  /// A cron schedule's day-of-month field in words; never all, which says nothing. shape picks how the field is written: all is *, rangeStep is a-b/n or */n (a month's length varies, so no step is even), value is one value, other is a list (items) of values, ranges (jobsCronRange) and steps (jobsCronItemStep). step is n; first and last are the range ends.
   ///
   /// In en, this message translates to:
-  /// **'{shape, select, step{every {step} days of the month} rangeStep{every {step} days of the month from day {first} to {last}} value{on day {items} of the month} other{on days {items} of the month}}'**
+  /// **'{shape, select, rangeStep{every {step} days of the month from day {first} to {last}} value{on day {items} of the month} other{on days {items} of the month}}'**
   String jobsCronDayOfMonth(
     String shape,
     String items,
@@ -2740,7 +2740,7 @@ abstract class AppLocalizations {
     String last,
   );
 
-  /// A cron schedule's month field in words, months by name; never all. shape picks how the field is written: all is *, step is */n, rangeStep is a-b/n, value is one value, other is a list (items) of values, ranges (jobsCronRange) and steps (jobsCronItemStep). step is n; first and last are the range ends.
+  /// A cron schedule's month field in words, months by name; never all. shape picks how the field is written: all is *, step is */n where n divides the field's cycle (runs an even interval apart), rangeStep is a-b/n or any other */n (*/45 minutes runs at :00 and :45), value is one value, other is a list (items) of values, ranges (jobsCronRange) and steps (jobsCronItemStep). step is n; first and last are the range ends.
   ///
   /// In en, this message translates to:
   /// **'{shape, select, step{every {step} months} rangeStep{every {step} months from {first} to {last}} other{in {items}}}'**
@@ -2752,7 +2752,7 @@ abstract class AppLocalizations {
     String last,
   );
 
-  /// A cron schedule's day-of-week field in words, days by name; never all. shape picks how the field is written: all is *, step is */n, rangeStep is a-b/n, value is one value, other is a list (items) of values, ranges (jobsCronRange) and steps (jobsCronItemStep). step is n; first and last are the range ends.
+  /// A cron schedule's day-of-week field in words, days by name; never all. shape picks how the field is written: all is *, step is */n where n divides the field's cycle (runs an even interval apart), rangeStep is a-b/n or any other */n (*/45 minutes runs at :00 and :45), value is one value, other is a list (items) of values, ranges (jobsCronRange) and steps (jobsCronItemStep). step is n; first and last are the range ends.
   ///
   /// In en, this message translates to:
   /// **'{shape, select, step{every {step} days of the week} rangeStep{every {step} days of the week from {first} to {last}} other{on {items}}}'**

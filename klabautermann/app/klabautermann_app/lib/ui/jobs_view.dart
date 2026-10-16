@@ -19,10 +19,11 @@ enum _Shape {
   /// `*`.
   all,
 
-  /// `*/n`.
+  /// `*/n` whose runs fall an even interval apart ([_evenStep]).
   step,
 
-  /// `a-b/n`, or `a/n`, which runs to the field's maximum.
+  /// `a-b/n`, or `a/n`, which runs to the field's maximum, or a `*/n`
+  /// that restarts with its field's cycle at an uneven interval.
   rangeStep,
 
   /// One value.
@@ -65,7 +66,9 @@ String _fieldsText(
   CronDayMatch dayMatch,
 ) {
   String? restricted(_Field field, List<CronFieldItem> items) =>
-      _shapeOf(items) == _Shape.all ? null : _fieldText(l10n, field, items);
+      _shapeOf(field, items) == _Shape.all
+      ? null
+      : _fieldText(l10n, field, items);
 
   final dom = restricted(_Field.dayOfMonth, fields.dayOfMonth);
   final dow = restricted(_Field.dayOfWeek, fields.dayOfWeek);
@@ -107,8 +110,8 @@ String _timeText(
   }
 
   final minuteText = _fieldText(l10n, _Field.minute, minute);
-  final minuteShape = _shapeOf(minute);
-  final hourShape = _shapeOf(hour);
+  final minuteShape = _shapeOf(_Field.minute, minute);
+  final hourShape = _shapeOf(_Field.hour, hour);
   if (hourShape == _Shape.all &&
       (minuteShape == _Shape.all || minuteShape == _Shape.step)) {
     return minuteText;
@@ -144,14 +147,28 @@ List<int>? _singleValues(List<CronFieldItem> items) {
 /// over nothing.
 int? _step(CronFieldItem item) => item.step == 1 ? null : item.step;
 
-_Shape _shapeOf(List<CronFieldItem> items) {
+_Shape _shapeOf(_Field field, List<CronFieldItem> items) {
   if (items.length != 1) return _Shape.other;
 
   final item = items.single;
   final step = _step(item);
-  if (item.start == null) return step == null ? _Shape.all : _Shape.step;
+  if (item.start == null) {
+    if (step == null) return _Shape.all;
+    return _evenStep(field, step) ? _Shape.step : _Shape.rangeStep;
+  }
   if (step != null) return _Shape.rangeStep;
   return item.end == null ? _Shape.value : _Shape.other;
+}
+
+/// Whether `*/[step]` in [field] runs an even interval apart: the step
+/// divides the field's cycle. `*/45` minutes runs at :00 and :45, 45 then
+/// 15 minutes apart, and a month's varying length leaves no day-of-month
+/// step even, so those read with their bounds.
+bool _evenStep(_Field field, int step) {
+  if (field == _Field.dayOfMonth) return false;
+
+  final (min, max) = _bounds(field);
+  return (max - min + 1) % step == 0;
 }
 
 String _fieldText(
@@ -159,7 +176,7 @@ String _fieldText(
   _Field field,
   List<CronFieldItem> items,
 ) {
-  final shape = _shapeOf(items).name;
+  final shape = _shapeOf(field, items).name;
   final item = items.first;
   final step = _step(item) ?? 1;
   final first = _value(l10n, field, item.start ?? _bounds(field).$1);

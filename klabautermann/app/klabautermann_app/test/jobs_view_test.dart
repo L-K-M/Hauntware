@@ -45,8 +45,23 @@ void main() {
           'Saturday',
       '0 0 * * 5-7': 'Runs at 12:00 AM, on Friday to Sunday',
       '0 4 1 * mon': 'Runs at 4:00 AM, on day 1 of the month or on Monday',
+      // A month's length varies, so a stepped day of the month always
+      // names its bounds.
       '0 4 */2 * 1':
-          'Runs at 4:00 AM, every 2 days of the month, but only on Monday',
+          'Runs at 4:00 AM, every 2 days of the month from day 1 to 31, '
+          'but only on Monday',
+      // A step that does not divide its field's cycle restarts with it:
+      // */45 runs at :00 and :45, so it names its bounds.
+      '*/45 * * * *': 'Runs every 45 minutes from minute 0 to 59, every hour',
+      '*/7 * * * *': 'Runs every 7 minutes from minute 0 to 59, every hour',
+      '0 */5 * * *': 'Runs at minute 0, every 5 hours from hour 0 to 23',
+      '0 0 1 */5 *':
+          'Runs at 12:00 AM, on day 1 of the month, every 5 months from '
+          'January to December',
+      '0 0 1 */3 *': 'Runs at 12:00 AM, on day 1 of the month, every 3 months',
+      '0 0 * * */2':
+          'Runs at 12:00 AM, every 2 days of the week from Sunday to '
+          'Saturday',
       '1,*/20 3 * * *':
           'Runs at minutes 1 and every 20 from 0 to 59, '
           'during hour 3',

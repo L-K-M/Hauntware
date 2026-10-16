@@ -1990,7 +1990,6 @@ class AppLocalizationsEn extends AppLocalizations {
     String last,
   ) {
     String _temp0 = intl.Intl.selectLogic(shape, {
-      'step': 'every $step days of the month',
       'rangeStep': 'every $step days of the month from day $first to $last',
       'value': 'on day $items of the month',
       'other': 'on days $items of the month',
