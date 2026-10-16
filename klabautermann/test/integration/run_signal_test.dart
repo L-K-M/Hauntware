@@ -15,8 +15,9 @@ const _lockLine = "readonly lock_file='/tmp/klabautermann-fixture.lock'";
 
 /// Bodies of the stand-ins, which log to `$STUB_LOG`. The suites keep
 /// their PID in `$STUB_SUITES_PID` while they run, and exit with
-/// `$STUB_SUITES_EXIT` when it is set, or otherwise once a SIGTERM stops
-/// them.
+/// `$STUB_SUITES_EXIT` when it is set. Otherwise they stop as package:test
+/// does: a first SIGTERM lets the running test finish, here 30 s after the
+/// start, and a second one stops them at once.
 const _stubs = {
   'docker': r'''
 echo "docker $*" >>"$STUB_LOG"
@@ -38,7 +39,14 @@ if [[ "$1" == -s ]]; then echo 'SSH_AGENT_PID=0; export SSH_AGENT_PID;'; fi
 if [[ "$1" == run ]]; then cat >/dev/null; exit 0; fi
 echo "$$" >"$STUB_SUITES_PID"
 trap 'rm -f -- "$STUB_SUITES_PID"' EXIT
-trap 'echo "suites stopped" >>"$STUB_LOG"; exit 143' TERM
+signals=0
+on_term() {
+  signals=$((signals + 1))
+  if ((signals == 1)); then echo 'suites draining' >>"$STUB_LOG"; return; fi
+  echo 'suites stopped' >>"$STUB_LOG"
+  exit 143
+}
+trap on_term TERM
 echo 'suites started' >>"$STUB_LOG"
 if [[ -n "${STUB_SUITES_EXIT:-}" ]]; then exit "$STUB_SUITES_EXIT"; fi
 for ((i = 0; i < 300; i++)); do sleep 0.1; done
@@ -145,11 +153,14 @@ void main() {
     final (:process, :exitCode, :output) = await startRun();
 
     process.kill();
-    expect(
-      await exitCode.timeout(const Duration(seconds: 20)),
-      isNot(0),
-      reason: '$output',
+    final status = await exitCode.timeout(
+      const Duration(seconds: 15),
+      onTimeout: () {
+        process.kill(ProcessSignal.sigkill);
+        fail('run.sh waited for the running test to finish:\n$output');
+      },
     );
+    expect(status, isNot(0), reason: '$output');
     expect(
       fixtureLifetime(),
       contains('suites stopped'),

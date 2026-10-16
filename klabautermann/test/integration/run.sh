@@ -81,8 +81,13 @@ on_exit() {
   trap - EXIT
 
   # Before the fixture goes: the suites would fail against it, and they
-  # hold the lock.
+  # hold the lock. package:test lets the running test finish after a
+  # first signal, which can take up to its timeout, and exits at once on
+  # a second; a supervisor may send SIGKILL before then, which would skip
+  # compose down. The pause keeps the two signals from merging into one.
   if [[ -n "$suites_pid" ]]; then
+    kill "$suites_pid" 2>/dev/null || true
+    sleep 0.5
     kill "$suites_pid" 2>/dev/null || true
     wait "$suites_pid" || true
   fi
