@@ -342,6 +342,9 @@ ProcsResult procsResult(
   final cpu = previous != null && elapsed != null
       ? procCpuPercent(previous, next, elapsed)
       : const <int, double>{};
+  // One budget for every row, so that many processes cannot multiply
+  // the masking's work.
+  final masking = ArgumentMaskingBudget();
   return ProcsResult(
     [
       for (final p in next.processes)
@@ -361,7 +364,9 @@ ProcsResult procsResult(
           // argument crosses to the app as plain text.
           arguments: switch (p.argv ?? _tokens(p.argsJoined)) {
             null => null,
-            final argv => List.unmodifiable(maskCommandLine(argv)),
+            final argv => List.unmodifiable(
+              maskCommandLine(argv, budget: masking),
+            ),
           },
         ),
     ],

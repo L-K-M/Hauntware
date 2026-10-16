@@ -4,6 +4,8 @@
 import 'dart:convert';
 
 import 'package:klabautermann_core/klabautermann_core.dart';
+import 'package:klabautermann_core/src/sampling/argument_masking.dart'
+    show kArgumentTokensMasked;
 import 'package:klabautermann_core/src/sampling/sample_pipeline.dart';
 import 'package:klabautermann_core/src/sampling/sample_results.dart';
 import 'package:klabautermann_core/src/sampling/sampler_session.dart';
@@ -601,6 +603,26 @@ void main() {
     ]);
     expect(rows[4].arguments![1].reveal(), '-phunter2');
     expect(rows.first.residentBytes, 2048);
+  });
+
+  test('the rows of one procs reading share one masking budget, so many '
+      'processes cannot multiply the work (8.9)', () {
+    final half = [for (var i = 0; i < kArgumentTokensMasked ~/ 2; i++) 'a'];
+    final rows = procsResult(
+      ProcsSnapshot(
+        processes: [
+          ProcEntry(pid: 1, argv: half),
+          ProcEntry(pid: 2, argv: half),
+          ProcEntry(pid: 3, argv: const ['mysql', 'db']),
+        ],
+      ),
+    ).processes;
+
+    expect(rows[1].arguments!.last.display, 'a');
+    expect(rows[2].arguments, [
+      MaskedValue.secret('mysql'),
+      MaskedValue.secret('db'),
+    ]);
   });
 
   group('host profile', () {

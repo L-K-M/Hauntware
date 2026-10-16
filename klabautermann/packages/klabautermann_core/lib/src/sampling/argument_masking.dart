@@ -14,6 +14,20 @@ final _token = RegExp(r'\S+');
 /// `-passin`, whose value would be the next token.
 final _option = RegExp(r'^--?([A-Za-z][A-Za-z0-9_.-]*)$');
 
+/// The most whitespace tokens the masking of one procs reading reads
+/// (03 §8.9). A token costs up to about a microsecond in the engine
+/// isolate, which every server shares, and a 1 MiB section can hold half
+/// a million; past them every argument is masked whole, which the reveal
+/// undoes.
+const kArgumentTokensMasked = 1 << 16;
+
+/// The tokens the masking of one procs reading may still read.
+final class ArgumentMaskingBudget {
+  ArgumentMaskingBudget([this._tokensLeft = kArgumentTokensMasked]);
+
+  int _tokensLeft;
+}
+
 /// Masks [arguments], one [MaskedValue] per argument, in order.
 ///
 /// The rules read whitespace tokens, which inside an argument split a
@@ -39,53 +53,73 @@ final _option = RegExp(r'^--?([A-Za-z][A-Za-z0-9_.-]*)$');
 /// stays as it is. Over-masking is the safe direction (`-print` shows as
 /// `-p********`, `MONKEY=1` is masked, and so is the rest of a `-c` line
 /// that starts with a secret assignment): the reveal shows the real text.
-List<MaskedValue> maskCommandLine(List<String> arguments) {
-  final tokens = [
-    for (final (argument, text) in arguments.indexed)
-      for (final (position, match) in _token.allMatches(text).indexed)
-        (argument, position, match),
-  ];
-  final shown = [for (final _ in arguments) <_Shown>[]];
+///
+/// [budget], one per procs reading, bounds the tokens read, those inside
+/// a masked value included: past it, the rest of the argument and every
+/// later one are masked whole. A call without one gets its own.
+List<MaskedValue> maskCommandLine(
+  List<String> arguments, {
+  ArgumentMaskingBudget? budget,
+}) {
+  final tokens = budget ?? ArgumentMaskingBudget();
   var valueOfSecretOption = false;
-  // Where the last masked value ends in its argument; the tokens before
-  // that end belong to it.
-  var maskedTo = (argument: -1, end: 0);
-  for (final (argument, position, match) in tokens) {
-    if (argument == maskedTo.argument && match.start < maskedTo.end) continue;
-    final text = match[0]!;
-    final program = argument == 0 && position == 0;
-    final kept = valueOfSecretOption && !text.startsWith('-')
-        ? ''
-        : _keptBeforeValue(text, program: program);
-    valueOfSecretOption = !program && _isSecretOption(text);
-    if (kept == null) {
-      final display = maskUrlCredentials(text);
-      if (display != text) {
-        shown[argument].add((
-          start: match.start,
-          end: match.end,
-          display: display,
-        ));
-      }
+  final masked = <MaskedValue>[];
+  for (final (index, whole) in arguments.indexed) {
+    if (tokens._tokensLeft < 0) {
+      masked.add(
+        whole.isEmpty ? MaskedValue.plain(whole) : MaskedValue.secret(whole),
+      );
       continue;
     }
 
-    final whole = arguments[argument];
-    final end = position == 0
-        ? whole.length
-        : _shellWordEnd(whole, match.start);
-    shown[argument].add((
-      start: match.start,
-      end: end,
-      display: '$kept${MaskedValue.maskToken}',
-    ));
-    maskedTo = (argument: argument, end: end);
-  }
+    List<_Shown>? shown;
+    // Where the last masked value ends; the tokens before it belong to it.
+    var maskedTo = 0;
+    var startsArgument = true;
+    for (final match in _token.allMatches(whole)) {
+      final first = startsArgument;
+      startsArgument = false;
+      tokens._tokensLeft--;
+      if (match.start < maskedTo) continue;
+      if (tokens._tokensLeft < 0) {
+        (shown ??= []).add((
+          start: match.start,
+          end: whole.length,
+          display: MaskedValue.maskToken,
+        ));
+        break;
+      }
 
-  return [
-    for (final (index, argument) in arguments.indexed)
-      _masked(argument, shown[index]),
-  ];
+      final text = match[0]!;
+      final program = index == 0 && first;
+      final kept = valueOfSecretOption && !text.startsWith('-')
+          ? ''
+          : _keptBeforeValue(text, program: program);
+      valueOfSecretOption = !program && _isSecretOption(text);
+      if (kept == null) {
+        final display = maskUrlCredentials(text);
+        if (display != text) {
+          (shown ??= []).add((
+            start: match.start,
+            end: match.end,
+            display: display,
+          ));
+        }
+        continue;
+      }
+
+      final end = first ? whole.length : _shellWordEnd(whole, match.start);
+      (shown ??= []).add((
+        start: match.start,
+        end: end,
+        display: '$kept${MaskedValue.maskToken}',
+      ));
+      if (end == whole.length) break;
+      maskedTo = end;
+    }
+    masked.add(_masked(whole, shown));
+  }
+  return masked;
 }
 
 /// The part of [token] shown before its secret value, which runs to the
@@ -97,6 +131,7 @@ String? _keptBeforeValue(String token, {required bool program}) {
   // such as `-pmyAuth=xyz` would show all but its tail. `-password=x`
   // shows as `-p********` too.
   if (token.length > 2 && token.startsWith('-p')) return '-p';
+  if (!token.contains('=')) return null;
 
   // The name runs to the first `=` after the leftmost key match, so a
   // secret assignment inside an option's value is found as well. That
@@ -140,6 +175,7 @@ const _backslash = 0x5C;
 
 /// Whether [token] is an option whose value, the next token, is secret.
 bool _isSecretOption(String token) {
+  if (!token.startsWith('-')) return false;
   final name = _option.firstMatch(token)?[1];
   return name != null && !name.startsWith('no-') && isSecretKey(name);
 }
@@ -148,8 +184,8 @@ bool _isSecretOption(String token) {
 typedef _Shown = ({int start, int end, String display});
 
 /// [argument] with each of [shown]'s spans replaced by its display.
-MaskedValue _masked(String argument, List<_Shown> shown) {
-  if (shown.isEmpty) return MaskedValue.plain(argument);
+MaskedValue _masked(String argument, List<_Shown>? shown) {
+  if (shown == null) return MaskedValue.plain(argument);
   if (shown case [
     (start: 0, :final end, display: MaskedValue.maskToken),
   ] when end == argument.length) {

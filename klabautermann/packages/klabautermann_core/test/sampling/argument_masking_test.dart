@@ -258,6 +258,42 @@ void main() {
     expect(watch.elapsed, lessThan(const Duration(seconds: 2)));
   });
 
+  group('one budget bounds the tokens read; past it, arguments are masked '
+      'whole', () {
+    test('the rest of the argument that runs out, then every later one', () {
+      final budget = ArgumentMaskingBudget(4);
+
+      final first = maskCommandLine(['sh', '-c', 'a b c d'], budget: budget);
+      expect([for (final m in first) m.display], ['sh', '-c', 'a b $_mask']);
+      expect(first[2].reveal(), 'a b c d');
+
+      final later = maskCommandLine(['ls', '', 'x y'], budget: budget);
+      expect([for (final m in later) m.display], [_mask, '', _mask]);
+      expect(later[2], MaskedValue.secret('x y'));
+    });
+
+    test('tokens inside a masked value count as read', () {
+      expect(
+        [
+          for (final m in maskCommandLine([
+            'sh',
+            '-c',
+            "app --password='a b c' d e",
+          ], budget: ArgumentMaskingBudget(5)))
+            m.display,
+        ],
+        ['sh', '-c', 'app --password=$_mask $_mask'],
+      );
+    });
+
+    test('a call without one gets its own', () {
+      final argv = ['sh', for (var i = 0; i < kArgumentTokensMasked; i++) 'a'];
+
+      expect(_shown(argv).last, _mask);
+      expect(_shown(argv.sublist(1)).last, 'a');
+    });
+  });
+
   group('tokens that only look secret stay as they are', () {
     for (final (what, argv) in [
       ('the program, even a secret-sounding one', ['/usr/bin/passwd', 'me']),
