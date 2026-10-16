@@ -399,6 +399,35 @@ void main() {
     });
   });
 
+  test('no rule cuts a UTF-8 character, and cron splits as parseCron', () {
+    // à is C3 A0, Р is D0 A0: A0 is a no-break space in Latin-1.
+    String redactUtf8(String text, String collector) => utf8.decode(
+      Redactor(
+        const RedactionLiterals(),
+      ).redact(collector, utf8.encode(text)).bytes,
+    );
+    expect(
+      redactUtf8('/home/àlex/x /dev/disk/by-label/Données_à', 'units'),
+      '/home/user/x /dev/disk/by-label/fixture-disk',
+    );
+    const cron =
+        '== crontab_meta ==\nrc=0\n== crontab ==\n'
+        '0 3 * * * /opt/Работа/run.sh --x\n'
+        '0 4 * * * cmd Hunter5 more\n'
+        '== etc_crontab ==\n'
+        '0 5 * * * root cmd x';
+    final redacted = redactUtf8(cron, 'cron');
+    expect(
+      redacted,
+      '== crontab_meta ==\nrc=0\n== crontab ==\n'
+      '0 3 * * * /opt/Работа/run.sh [redacted]\n'
+      '0 4 * * * cmd [redacted]\n'
+      '== etc_crontab ==\n'
+      '0 5 * * * root cmd [redacted]',
+    );
+    expect(parseShapeChange(Collector.cron, cron, redacted), isNull);
+  });
+
   // These rules hold for every payload; in `cron` the job structure
   // (the cron group) removes command arguments first.
   group('other accounts', () {

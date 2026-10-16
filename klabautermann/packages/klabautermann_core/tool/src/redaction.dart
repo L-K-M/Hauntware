@@ -1,10 +1,10 @@
 /// Redaction of raw captures before they become fixtures (03 §6.5).
 ///
-/// Payloads are handled as Latin-1 so that every byte, valid UTF-8 or
-/// not, survives unchanged unless a rule replaces it; the replacements
-/// are ASCII. [Redactor.review] then reads the redacted text for what
-/// the rules missed or cannot judge, and the capture tool writes nothing
-/// while it finds anything.
+/// Payloads are handled byte for byte ([_decode]), so that every byte,
+/// valid UTF-8 or not, survives unchanged unless a rule replaces it; the
+/// replacements are ASCII. [Redactor.review] then reads the redacted text
+/// for what the rules missed or cannot judge, and the capture tool writes
+/// nothing while it finds anything.
 library;
 
 import 'dart:convert';
@@ -120,6 +120,34 @@ enum _Literal {
   const _Literal(this.rule, this.replacement, this.residue);
 
   final String rule, replacement, residue;
+}
+
+/// [bytes] as text the rules read: ASCII as itself, every other byte as
+/// a private-use character. As Latin-1, the A0 that ends many UTF-8
+/// characters (`à`, `Р`) would be a blank to `\s` and cut the character.
+String _decode(List<int> bytes) =>
+    String.fromCharCodes([for (final b in bytes) b < 0x80 ? b : _byte + b]);
+
+/// The bytes of text from [_decode], with ASCII replacements.
+List<int> _encode(String text) => [
+  for (final c in text.codeUnits) c >= _byte ? c - _byte : c,
+];
+
+/// Where [_decode] puts the bytes from 0x80: the private-use area, which
+/// holds no blank, letter or case pair.
+const _byte = 0xE000;
+
+/// [text] from [_decode] rewritten by [rewrite] as UTF-8 text when it is
+/// valid UTF-8, so that `\s` splits it where a parser of the decoded
+/// payload does (a no-break space included).
+String _asUtf8(String text, String Function(String text) rewrite) {
+  final String decoded;
+  try {
+    decoded = utf8.decode(_encode(text));
+  } on FormatException {
+    return rewrite(text);
+  }
+  return _decode(utf8.encode(rewrite(decoded)));
 }
 
 final _secrets = SecretRedactor();
@@ -432,9 +460,11 @@ final class Redactor {
     final counts = <String, int>{};
     void count(String rule) => counts[rule] = (counts[rule] ?? 0) + 1;
 
-    var text = latin1.decode(payload);
+    var text = _decode(payload);
     if (collector == Collector.procs.wireName) text = _redactArgv(text, count);
-    if (collector == Collector.cron.wireName) text = _redactCron(text, count);
+    if (collector == Collector.cron.wireName) {
+      text = _asUtf8(text, (t) => _redactCron(t, count));
+    }
     if (collector == Collector.fs.wireName) {
       text = text.replaceAllMapped(_mountSource, (m) {
         count('mount source');
@@ -472,15 +502,16 @@ final class Redactor {
         return r;
       });
     }
-    return RedactedPayload(latin1.encode(text), counts);
+    return RedactedPayload(_encode(text), counts);
   }
 
-  /// The 1-based line numbers of [text] that still hold a literal, a
-  /// secret `SecretRedactor` would mask, or text no rule rewrites, each
-  /// with the reason; empty when the text may be written.
+  /// The 1-based line numbers of [text], a file's bytes as Latin-1, that
+  /// still hold a literal, a secret `SecretRedactor` would mask, or text
+  /// no rule rewrites, each with the reason; empty when the text may be
+  /// written.
   List<(int, String)> review(String text) {
     final findings = <(int, String)>[];
-    final lines = text.split('\n');
+    final lines = _decode(latin1.encode(text)).split('\n');
     for (var i = 0; i < lines.length; i++) {
       final line = lines[i];
       final reasons = {
@@ -515,14 +546,13 @@ final class Redactor {
   /// follow any systemd escape (`\x2d`, a space's `\x20`), and a
   /// non-ASCII byte also matches its own (`j\xc3\xbcrgen`).
   static String _literalPattern(_Literal kind, String value) {
-    String byte(String c) => c.codeUnitAt(0) < 0x80
-        ? RegExp.escape(c)
-        : '(?:${RegExp.escape(c)}|\\\\{1,2}x'
-              '${c.codeUnitAt(0).toRadixString(16)})';
-    final escaped = latin1
-        .decode(utf8.encode(value))
+    String byte(int b) => b < 0x80
+        ? RegExp.escape(String.fromCharCode(b))
+        : '(?:${String.fromCharCode(_byte + b)}|\\\\{1,2}x'
+              '${b.toRadixString(16)})';
+    final escaped = value
         .split('-')
-        .map((part) => part.split('').map(byte).join())
+        .map((part) => utf8.encode(part).map(byte).join())
         .join('(?:-{1,2}|(?:$_x2d){1,2})');
     return switch (kind) {
       _Literal.host || _Literal.domain || _Literal.user =>
