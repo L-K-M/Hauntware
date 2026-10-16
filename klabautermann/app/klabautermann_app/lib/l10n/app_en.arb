@@ -700,6 +700,20 @@
   "@processesMasked": {
     "description": "What a screen reader says in place of a masked secret in a command line (SAF-07)."
   },
+  "processesFact": "{label}: {value}",
+  "@processesFact": {
+    "description": "One of a process's figures as drawn under its command line in the phone layout's list: the table column's header label, then the value.",
+    "placeholders": {
+      "label": {
+        "type": "String",
+        "example": "Memory"
+      },
+      "value": {
+        "type": "String",
+        "example": "512 MiB"
+      }
+    }
+  },
   "processesCommandLineTitle": "Command line",
   "@processesCommandLineTitle": {
     "description": "Heading of a process's arguments in its details."

@@ -1060,6 +1060,12 @@ abstract class AppLocalizations {
   /// **'(masked)'**
   String get processesMasked;
 
+  /// One of a process's figures as drawn under its command line in the phone layout's list: the table column's header label, then the value.
+  ///
+  /// In en, this message translates to:
+  /// **'{label}: {value}'**
+  String processesFact(String label, String value);
+
   /// Heading of a process's arguments in its details.
   ///
   /// In en, this message translates to:

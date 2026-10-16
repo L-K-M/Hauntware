@@ -342,20 +342,13 @@ class _ProcessesPanelState extends State<ProcessesPanel> {
       separatorBuilder: (context, _) => const Divider(height: 1),
       itemBuilder: (context, index) {
         final row = sorted[index];
-        final facts = [
-          for (final column in columns.skip(1))
-            l10n.tableCellSemantics(column.label, column.text(row)),
-        ];
         return Semantics(
           key: ValueKey('${SampleStream.procs.name}.row.${row.pid}'),
           container: true,
           button: true,
           label: [
-            l10n.tableCellSemantics(
-              columns.first.label,
-              columns.first.text(row),
-            ),
-            ...facts,
+            for (final column in columns)
+              l10n.tableCellSemantics(column.label, column.text(row)),
           ].join('\n'),
           excludeSemantics: true,
           onTap: () => open(row),
@@ -372,9 +365,9 @@ class _ProcessesPanelState extends State<ProcessesPanel> {
                     spacing: 16,
                     runSpacing: 2,
                     children: [
-                      for (final fact in facts)
+                      for (final column in columns.skip(1))
                         Text(
-                          fact,
+                          l10n.processesFact(column.label, column.text(row)),
                           style: Theme.of(context).textTheme.bodySmall,
                         ),
                     ],

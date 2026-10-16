@@ -660,6 +660,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get processesMasked => '(masked)';
 
   @override
+  String processesFact(String label, String value) {
+    return '$label: $value';
+  }
+
+  @override
   String get processesCommandLineTitle => 'Command line';
 
   @override
