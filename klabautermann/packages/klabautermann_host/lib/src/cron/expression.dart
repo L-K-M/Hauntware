@@ -147,6 +147,18 @@ final class CronExpression {
   /// Not part of [toJson], which carries the expanded sets.
   final CronFields? fields;
 
+  /// The cronie MIN_STAR/HR_STAR flags: the minute or hour field text
+  /// starts with `*` (a macro's as expanded, so `@hourly` counts). cron
+  /// runs such a wildcard job by the clock when a DST change moves it,
+  /// and catches up or skips only fixed-time jobs (`nextCronRuns`).
+  bool get hasWildcardTime {
+    final f = fields;
+    // An item without a start is a `*`, and a field's first item opens
+    // its text.
+    return f != null &&
+        (f.minute.first.start == null || f.hour.first.start == null);
+  }
+
   /// Whether [wall] (a zone-local wall-clock time) matches.
   bool matches(DateTime wall) {
     if (isReboot) return false;

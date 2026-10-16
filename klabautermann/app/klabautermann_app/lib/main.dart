@@ -50,7 +50,11 @@ Future<void> main(List<String> args) async {
   // says so after the first frame rather than refusing to start.
   final supportDirectory = await getApplicationSupportDirectory();
   InstanceLockUnavailable? instanceLockIssue;
-  switch (await lockInstanceFor(defaultTargetPlatform, supportDirectory)) {
+  final instanceLock = await lockInstanceFor(
+    defaultTargetPlatform,
+    supportDirectory,
+  );
+  switch (instanceLock) {
     case null || InstanceLockAcquired():
       break;
     case InstanceLockHeld():
@@ -110,9 +114,12 @@ Future<void> main(List<String> args) async {
   // Links stay off (03 §10.1): host-key pins would last only until the
   // engine stops, since the catalog library's `host_keys.json` has not
   // landed (03 §4.10), and the app cannot show the engine's prompts yet.
+  // The engine writes its capability cache only while this process holds
+  // the directory alone (D59).
   final engine = await IsolateEngineClient.spawn(
     supportDirectory: supportDirectory.path,
     linksEnabled: false,
+    supportDirectoryAccess: supportDirectoryAccessFor(instanceLock),
   );
   final importStoreIssue = engine.ready.importStoreIssue;
   if (importStoreIssue != null) {

@@ -99,6 +99,12 @@ final class SamplerLaunch {
   /// The shell's path.
   final String shell;
   final _LaunchMode _mode;
+
+  /// The command line as a fixture's SOURCE.md names it.
+  String get label => switch (_mode) {
+    _LaunchMode.stdinShell => '$shell -s',
+    _LaunchMode.loginShell => "$shell -c '$kSamplerStartCommand'",
+  };
 }
 
 /// The session could not start or continue.

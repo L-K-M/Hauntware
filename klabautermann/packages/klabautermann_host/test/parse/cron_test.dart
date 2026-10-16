@@ -6,6 +6,19 @@ import 'package:test/test.dart';
 
 const _ctx = ParseContext.standard;
 
+/// A `cron` payload with a present own crontab and these blocks.
+String _payload({String crontab = '', String etc = '', String cronD = ''}) =>
+    '== crontab_meta ==\nrc=0\n'
+    '== crontab ==\n$crontab\n'
+    '== etc_crontab ==\n$etc\n'
+    '== cron_d ==\n$cronD\n'
+    '== cron_dirs ==\n';
+
+/// Each job's source, schedule, user and command.
+List<(String, String, String?, String)> _shapes(CronSnapshot s) => [
+  for (final j in s.jobs) (j.source, j.schedule, j.user, j.command),
+];
+
 void main() {
   test('crontab -l jobs parse without a user field', () {
     final raw = [
@@ -34,6 +47,31 @@ void main() {
     expect(r.value.jobs.last.schedule, '@daily');
     expect(r.value.jobs.last.command, '/usr/bin/find /tmp -mindepth 1 -delete');
     expect(r.value.jobs.last.expression!.hours, {0});
+  });
+
+  test('a BusyBox crontab -l has no user column', () {
+    // BusyBox crond reads /etc/crontabs/<user> and has no /etc/crontab;
+    // Alpine's default crontab separates fields with tabs.
+    final raw = [
+      '== crontab_meta ==',
+      'rc=0',
+      '== crontab ==',
+      '# min\thour\tday\tmonth\tweekday\tcommand',
+      '*/15\t*\t*\t*\t*\trun-parts /etc/periodic/15min',
+      '0\t3\t*\t*\t6\trun-parts /etc/periodic/weekly',
+      '== etc_crontab ==',
+      '== cron_d ==',
+      '== cron_dirs ==',
+    ].join('\n');
+
+    final r = parseCron(raw, _ctx);
+    expect(r.warnings, isEmpty);
+    expect(r.value.jobs.map((j) => (j.source, j.user, j.command)), [
+      ('crontab', null, 'run-parts /etc/periodic/15min'),
+      ('crontab', null, 'run-parts /etc/periodic/weekly'),
+    ]);
+    expect(r.value.jobs.first.expression!.minutes, {0, 15, 30, 45});
+    expect(r.value.jobs.last.expression!.weekDays, {6});
   });
 
   test('/etc/crontab carries the user column', () {
@@ -109,6 +147,83 @@ void main() {
       CronPeriod.weekly,
       CronPeriod.monthly,
     });
+  });
+
+  // cron reads a system table's user field after an `@` macro as after
+  // five fields, and a user crontab has none [R: cronie `entry.c`
+  // `load_entry`].
+  group('@ macros', () {
+    test('a system table reads the user field after every macro', () {
+      for (final macro in CronMacro.values) {
+        final r = parseCron(
+          _payload(
+            etc: '@${macro.name} root /usr/bin/x --flag',
+            cronD: 'f\t@${macro.name}\tbackup\t/opt/run.sh',
+          ),
+          _ctx,
+        );
+        expect(r.warnings, isEmpty, reason: macro.name);
+        expect(_shapes(r.value), [
+          ('/etc/crontab', '@${macro.name}', 'root', '/usr/bin/x --flag'),
+          ('/etc/cron.d/f', '@${macro.name}', 'backup', '/opt/run.sh'),
+        ], reason: macro.name);
+        expect(r.value.jobs.map((j) => j.expression?.macro), [macro, macro]);
+      }
+    });
+
+    test('a user crontab reads no user field after a macro', () {
+      for (final macro in CronMacro.values) {
+        final r = parseCron(
+          _payload(crontab: '@${macro.name} /usr/bin/x --flag'),
+          _ctx,
+        );
+        expect(r.warnings, isEmpty, reason: macro.name);
+        expect(_shapes(r.value), [
+          ('crontab', '@${macro.name}', null, '/usr/bin/x --flag'),
+        ], reason: macro.name);
+      }
+    });
+
+    test('a system macro line that ends at its user field is no job', () {
+      // cron reads the first word after the macro as the user without
+      // checking that it exists (cronie loads such a line for an unknown
+      // user), then skips a line with nothing after it.
+      final r = parseCron(
+        _payload(
+          etc: '@reboot /usr/bin/x\n@daily /opt/run.sh nightly\n@weekly',
+          cronD: 'f\t@hourly root  ',
+        ),
+        _ctx,
+      );
+      expect(_shapes(r.value), [
+        ('/etc/crontab', '@daily', '/opt/run.sh', 'nightly'),
+      ]);
+      expect(r.warnings, hasLength(3));
+    });
+
+    test('an unknown macro keeps the system shape and warns', () {
+      final r = parseCron(_payload(etc: '@every root /usr/bin/x'), _ctx);
+      expect(_shapes(r.value), [
+        ('/etc/crontab', '@every', 'root', '/usr/bin/x'),
+      ]);
+      expect(r.value.jobs.single.expression, isNull);
+      expect(r.warnings, [contains('unparseable')]);
+    });
+  });
+
+  test('a command keeps its blanks, past those that end the fields', () {
+    final r = parseCron(
+      _payload(
+        crontab: "0 3 * * * echo 'a  b'",
+        etc: "@daily\troot\techo a\tb\n0 3 * * * root  echo  'x  y'",
+      ),
+      _ctx,
+    );
+    expect(r.value.jobs.map((j) => j.command), [
+      "echo 'a  b'",
+      'echo a\tb',
+      "echo  'x  y'",
+    ]);
   });
 
   test('a malformed schedule warns but the job is kept', () {

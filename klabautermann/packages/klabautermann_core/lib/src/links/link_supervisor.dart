@@ -40,6 +40,14 @@ const Duration kConnectAttemptDeadline = Duration(seconds: 60);
 /// (D34, 03 §5.1).
 const Duration kBackgroundGracePeriod = Duration(seconds: 30);
 
+/// How long a link may stay silent after a dead-peer hint before the
+/// supervisor closes it as a dead peer [E]. The hint comes as the
+/// restarted fast sampler starts, after its restart delay, so the grace
+/// covers only the start: the READY deadline (15 s from the opened
+/// channel, 03 §6.2) and 5 s for the channel to open. A live peer whose
+/// sampler only stalled answers in time, however often it stalled.
+const Duration kDeadPeerGrace = Duration(seconds: 20);
+
 /// What the platform does with links while the app is in the background.
 enum BackgroundLinkPolicy {
   /// Phones and tablets: links close after [kBackgroundGracePeriod] (D34)
@@ -78,6 +86,9 @@ typedef LinkConnect =
 ///   [BackgroundLinkPolicy.closeAfterGrace] links close after
 ///   [kBackgroundGracePeriod] and redial on return.
 /// - A server that leaves the fleet is forgotten ([forget]).
+/// - A dead-peer hint ([deadPeerHint]) closes a link that stays silent
+///   for [kDeadPeerGrace], as a lost one, sooner than its own ping
+///   (CN-06).
 ///
 /// The engine isolate owns it and hands it `Connect`, `Disconnect` and
 /// `SetAppActivity`.
@@ -213,6 +224,43 @@ final class LinkSupervisor {
       _enqueue(_Attempt(server, ConnectPurpose.background));
     }
     _pump();
+  }
+
+  /// Takes a dead-peer hint about [link], [serverId]'s current link: a
+  /// fast-sampler request missed its deadline (03 §6.2), which only a
+  /// stalled sampler or a silent peer explains, and the restarted
+  /// sampler is starting. Unless
+  /// [clearDeadPeerHint] follows within [kDeadPeerGrace], the link is
+  /// closed and reported [LinkClosedReason.pingTimeout], and the server
+  /// backs off and redials as after a lost link. A hint about any other
+  /// link, or one while a hint runs, changes nothing.
+  void deadPeerHint(String serverId, SshLink link) {
+    final server = _servers[serverId];
+    if (server == null || !identical(server.link, link)) return;
+    if (server.deadPeer != null) return;
+
+    server.deadPeer = _startTimer(kDeadPeerGrace, () {
+      server.deadPeer = null;
+      if (!identical(server.link, link)) return;
+
+      server.link = null;
+      unawaited(server.states?.cancel());
+      server.states = null;
+      _closeLink(link);
+      _set(server, const LinkClosed(LinkClosedReason.pingTimeout));
+      if (server.wanted) _backoff(server);
+    });
+  }
+
+  /// Ends the hint [deadPeerHint] took about [link]: its peer answered,
+  /// or nothing watches it any more, which leaves its liveness to the
+  /// link's own ping.
+  void clearDeadPeerHint(String serverId, SshLink link) {
+    final server = _servers[serverId];
+    if (server == null || !identical(server.link, link)) return;
+
+    server.deadPeer?.cancel();
+    server.deadPeer = null;
   }
 
   void _closeForBackground() {
@@ -439,6 +487,8 @@ final class LinkSupervisor {
         // Lost underneath: the supervisor's own closes cancel this
         // subscription first.
         server.link = null;
+        server.deadPeer?.cancel();
+        server.deadPeer = null;
         unawaited(server.states?.cancel());
         server.states = null;
         _set(server, LinkClosed(_closedReason(reason)));
@@ -483,6 +533,8 @@ final class LinkSupervisor {
     final link = server.link;
     if (link != null) {
       server.link = null;
+      server.deadPeer?.cancel();
+      server.deadPeer = null;
       unawaited(server.states?.cancel());
       server.states = null;
       _closeLink(link);
@@ -567,6 +619,9 @@ final class _Server {
   bool wanted = false;
   SshLink? link;
   StreamSubscription<SshLinkState>? states;
+
+  /// The grace of a dead-peer hint about [link].
+  Timer? deadPeer;
 
   /// The current attempt, queued, in its slot or dialing.
   _Attempt? attempt;

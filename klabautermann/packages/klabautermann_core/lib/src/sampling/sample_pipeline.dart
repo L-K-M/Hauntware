@@ -53,8 +53,9 @@ SamplingPhase samplingPhase({
 }
 
 /// Profile fields a probe changes every time (the clock) or per session;
-/// a [HostProfileChanged] ignores them (03 §10.1).
-const _volatileProfileKeys = {
+/// a [HostProfileChanged] ignores them (03 §10.1), and the device cache
+/// keeps none of them (D59).
+const volatileProfileKeys = {
   'epochSeconds',
   'zoneOffset',
   'sshConnection',
@@ -62,10 +63,10 @@ const _volatileProfileKeys = {
   'sessionParentComm',
 };
 
-/// [profile] without its [_volatileProfileKeys], for comparing.
+/// [profile] without its [volatileProfileKeys], for comparing.
 String _stableKey(HostProfile profile) => jsonEncode({
   for (final e in profile.toJson().entries)
-    if (!_volatileProfileKeys.contains(e.key)) e.key: e.value,
+    if (!volatileProfileKeys.contains(e.key)) e.key: e.value,
 });
 
 /// An open [Gap] of one stream: no reading since [from], for [cause].
@@ -292,7 +293,11 @@ final class ServerSamplePipeline {
             SampleStream.timers => TimersResult(
               parseTimers(text(s), ctx).value,
             ),
-            SampleStream.cron => CronResult(parseCron(text(s), ctx).value),
+            SampleStream.cron => cronResult(
+              parseCron(text(s), ctx).value,
+              _profile,
+              at,
+            ),
           };
     }
 

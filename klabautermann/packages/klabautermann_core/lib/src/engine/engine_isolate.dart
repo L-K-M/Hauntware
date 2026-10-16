@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:isolate';
 
@@ -5,6 +6,7 @@ import 'package:meta/meta.dart';
 import 'package:seance_core/seance_core.dart'
     show ImportedHost, InMemoryHostKeyStore, SshLink;
 
+import '../capabilities/capability_cache.dart';
 import '../fleet/imported_fleet.dart';
 import '../fleet/ssh_config_entries.dart';
 import '../fleet/ssh_config_import_store.dart';
@@ -12,7 +14,10 @@ import '../links/credential_source.dart';
 import '../links/link_connector.dart';
 import '../links/link_supervisor.dart';
 import '../links/prompt_broker.dart';
+import '../logs/log_stream_router.dart';
+import '../sampling/sampling_scheduler.dart';
 import '../sampling/subscriptions.dart';
+import '../settings/instance_lock.dart' show SupportDirectoryAccess;
 import 'protocol.dart';
 
 /// What the engine isolate starts with, sent once by `Isolate.spawn`
@@ -26,6 +31,7 @@ final class EngineStart {
     required this.uiPort,
     required this.supportDirectory,
     this.linksEnabled = false,
+    this.supportDirectoryAccess = SupportDirectoryAccess.unguarded,
   });
 
   /// The client isolate's port.
@@ -35,11 +41,17 @@ final class EngineStart {
   final String supportDirectory;
 
   /// Whether the engine opens SSH links (03 §5.1, §10.1). Without them it
-  /// has no link supervisor: [Connect] gets [RequestRejected] and nothing
-  /// dials, [Disconnect] and [SetAppActivity] change nothing, and no
-  /// [Prompt] is ever open. The app's composition root leaves them off;
-  /// tests turn them on.
+  /// has no link supervisor, sampling scheduler or log streams: [Connect]
+  /// and [OpenLogStream] get [RequestRejected] and nothing dials, samples
+  /// or reads, [CloseStream], [Disconnect] and
+  /// [SetAppActivity] change nothing, subscriptions are only recorded,
+  /// and no [Prompt] is ever open. The app's composition root leaves
+  /// them off; tests turn them on.
   final bool linksEnabled;
+
+  /// Whether this process alone uses [supportDirectory]: the engine writes
+  /// and purges its capability cache there only then (03 §4.10, D59).
+  final SupportDirectoryAccess supportDirectoryAccess;
 }
 
 /// The engine isolate's entry point (03 D18): one isolate owns the SSH links,
@@ -50,18 +62,22 @@ final class EngineStart {
 /// whether links are on. The engine first returns its command port, then
 /// answers requests on the client's port: [Hello] gets [EngineReady] and
 /// the fleet it started with in a [CatalogReplaced], [Subscribe],
-/// [Unsubscribe] and [SetCadenceProfile] update the sampling subscriptions
-/// (silently: no sampler runs them yet), [ImportSshConfig] gets
+/// [Unsubscribe] and [SetCadenceProfile] update the sampling subscriptions,
+/// which the sampling scheduler runs over each server's ready link as
+/// [Sample], [Gap], [SamplingState] and [HostProfileChanged] events
+/// (03 §6.4; links off, nothing samples), a server's cached profile goes
+/// out as a [HostProfileChanged] when a [Connect] or [Subscribe] first
+/// names it (03 §6.1, D59), [ImportSshConfig] gets
 /// [CatalogReplaced] and [SshConfigImported], [Connect], [Disconnect] and
 /// [SetAppActivity] go to the link supervisor and [AnswerPrompt] to the
-/// prompt broker (03 §5.1), [CloseStream] does nothing (no log stream is
-/// open), [Shutdown] exits, and every other 03 §10.1 row, [OpenLogStream]
-/// included, gets [RequestRejected] until its milestone lands.
+/// prompt broker (03 §5.1), [OpenLogStream] and [CloseStream] go to the
+/// log streams, which read each window over its server's link (03 §5.2,
+/// §7.6), [Shutdown] ends every log stream and exits, and every other
+/// 03 §10.1 row gets [RequestRejected] until its milestone lands.
 ///
 /// [dial] replaces `SshLink.connect`, so tests can run the engine's links
 /// without a network. [subscriptions], when given, holds the sampling
-/// subscriptions, so tests can read what no event shows until samplers
-/// run them.
+/// subscriptions, so tests can read them.
 void engineMain(
   EngineStart start, {
   @visibleForTesting LinkDialer dial = SshLink.connect,
@@ -75,9 +91,17 @@ void engineMain(
       uiPort.send(RequestRejected(request.runtimeType.toString(), reason));
 
   // Which streams each server's surfaces subscribed, and the cadence
-  // profile (D45). Nothing samples them yet; the scheduler of 03 §6.4
-  // reads them once the samplers are wired.
+  // profile (D45), which the scheduler below samples.
   final sampling = subscriptions ?? SamplingSubscriptions();
+
+  // Samples each subscribed server over its ready link (03 §6.4). None
+  // while links are off, since no link would ever be ready. It follows
+  // every LinkState the supervisor reports.
+  SamplingScheduler? scheduler;
+
+  // The log streams over each server's ready link (03 §7.6); none while
+  // links are off. They follow every LinkState as the scheduler does.
+  LogStreamRouter? logs;
 
   // FL-02's imported hosts, in D13's device-local store (03 §4.10),
   // opened before the first request is handled. Each import replaces the
@@ -85,6 +109,10 @@ void engineMain(
   // F3) carry them after the synced entries. The store hands them out
   // unmodifiable, so building a snapshot cannot edit them in place.
   late final SshConfigImportStore imports;
+
+  // Each fleet server's last probed profile (03 §6.1, D59), opened with
+  // the import store.
+  CapabilityCache? capabilities;
 
   // The login name for imported hosts and hops that name no user.
   final localUser = localUserName(Platform.environment);
@@ -118,16 +146,37 @@ void engineMain(
           // Fleet entries only: the fleet's hop configs serve their routes.
           configFor: (id) =>
               fleetIds.contains(id) ? fleet.serverConfig(id) : null,
-          emit: uiPort.send,
+          emit: (event) {
+            uiPort.send(event);
+            if (event is LinkState) {
+              scheduler?.update(event.serverId);
+              logs?.update(event.serverId);
+            }
+          },
           policy: Platform.isAndroid || Platform.isIOS
               ? BackgroundLinkPolicy.closeAfterGrace
               : BackgroundLinkPolicy.keepOpen,
         )
       : null;
+  if (links != null) {
+    scheduler = SamplingScheduler(
+      subscriptions: sampling,
+      linkFor: links.link,
+      emit: uiPort.send,
+      deadPeerHint: links.deadPeerHint,
+      clearDeadPeerHint: links.clearDeadPeerHint,
+      probed: (serverId, profile) =>
+          unawaited(capabilities?.probed(serverId, profile)),
+    );
+    logs = LogStreamRouter(linkFor: links.link, emit: uiPort.send);
+  }
 
   // Rebuilds the fleet from the store. A server that left it is forgotten
-  // (03 §5.1): its link and attempts end and its subscriptions go.
+  // (03 §5.1): its samplers, link and attempts end and its subscriptions
+  // go. One that keeps its id under another endpoint loses its cached
+  // profile, which describes another machine (SYN-08).
   void refreshFleet() {
+    final previous = fleetIds.isEmpty ? null : fleet;
     fleet = ImportedFleet(
       imports.hosts,
       hops: imports.hops,
@@ -137,7 +186,25 @@ void engineMain(
     final before = fleetIds;
     fleetIds = {for (final entry in fleet.entries) entry.serverId};
     sampling.fleet = fleetIds;
+    scheduler?.retain(fleetIds);
+    logs?.retain(fleetIds);
     links?.forget(before.difference(fleetIds));
+    unawaited(
+      capabilities?.forget({
+        for (final id in before)
+          if (!fleetIds.contains(id) ||
+              previous?.endpointOf(id) != fleet.endpointOf(id))
+            id,
+      }),
+    );
+  }
+
+  // A server's cached profile goes out when a request first names it,
+  // since the startup events reach only the app's first listener.
+  void sendCachedProfile(String serverId) {
+    if (capabilities?.takeCached(serverId) case final cached?) {
+      uiPort.send(cached);
+    }
   }
 
   Future<void> handle(Object? message) async {
@@ -161,6 +228,7 @@ void engineMain(
         // them before the user does anything.
         uiPort.send(CatalogReplaced(fleet.entries));
       case Connect(:final serverId):
+        sendCachedProfile(serverId);
         // The app sends it when the user opens the server (03 §10.1), so
         // the connect may prompt.
         if (links == null) {
@@ -172,9 +240,14 @@ void engineMain(
           reject(message, 'no fleet server $serverId the engine can dial');
         }
       case Disconnect(:final serverId):
+        // Its streams end before its link closes, so none reports
+        // waiting for that link first.
+        logs?.disconnect(serverId);
         links?.disconnect(serverId);
       case SetAppActivity(:final activity):
         links?.setActivity(activity);
+        scheduler?.activity = activity;
+        logs?.activity = activity;
       case AnswerPrompt(:final promptId, :final answer):
         switch (prompts.answer(promptId, answer)) {
           case PromptAnswerResult.answered:
@@ -185,16 +258,23 @@ void engineMain(
             reject(message, 'the answer does not fit prompt $promptId');
         }
       case Subscribe():
+        sendCachedProfile(message.serverId);
         sampling.subscribe(message);
-      case Unsubscribe():
+        scheduler?.subscribed(message);
+      case Unsubscribe(:final serverId):
         sampling.unsubscribe(message);
+        scheduler?.update(serverId);
       case SetCadenceProfile(:final profile):
         sampling.profile = profile;
-      case CloseStream():
-        // Closing a stream that is not open does nothing (03 §10.1), and
-        // none is: until the log service lands, OpenLogStream gets
-        // RequestRejected, since no answer would leave its view waiting.
-        break;
+        scheduler?.profileChanged();
+      case OpenLogStream():
+        final reason = switch (logs) {
+          null => 'links are off in this engine',
+          final logs => logs.open(message),
+        };
+        if (reason != null) reject(message, reason);
+      case CloseStream(:final streamId):
+        logs?.closeStream(streamId);
       case ImportSshConfig(:final text):
         final ({
           List<ImportedHost> hosts,
@@ -214,8 +294,10 @@ void engineMain(
         }
         // Saved before the fleet changes, so a restart after the answer
         // finds the import. A failed save still shows it for this run, and
-        // the answer says it was not kept.
+        // the answer says it was not kept; the capability cache then
+        // writes nothing until an import saves (D59).
         final saved = await imports.replace(result.hosts, hops: result.hops);
+        capabilities?.fleetSave = saved ? FleetSave.saved : FleetSave.unsaved;
         refreshFleet();
         uiPort.send(CatalogReplaced(fleet.entries));
         uiPort.send(
@@ -226,6 +308,9 @@ void engineMain(
           ),
         );
       case Shutdown():
+        // Each stream's end goes out before the isolate does, and its
+        // process goes with the isolate.
+        unawaited(logs?.close());
         commands.close();
         Isolate.exit();
       case EngineRequest():
@@ -255,9 +340,21 @@ void engineMain(
           '${start.supportDirectory}${Platform.pathSeparator}'
           '$sshConfigImportsFileName',
         ),
-      ).then((store) {
+      ).then((store) async {
         imports = store;
         refreshFleet();
+        capabilities = await CapabilityCache.open(
+          Directory(start.supportDirectory),
+          access: start.supportDirectoryAccess,
+          fleet: fleetIds,
+          // A store left as it is saves no import this run, so its fleet
+          // says nothing about which servers the user removed.
+          purge: switch (store.issue?.kind) {
+            ImportStoreIssueKind.leftAsIs ||
+            ImportStoreIssueKind.newerVersion => CachePurge.never,
+            ImportStoreIssueKind.recovered || null => CachePurge.removedServers,
+          },
+        );
       });
   commands.listen((message) {
     queue = queue.then((_) => handle(message));

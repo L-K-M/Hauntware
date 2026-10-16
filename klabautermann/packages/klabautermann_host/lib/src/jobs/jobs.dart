@@ -7,6 +7,7 @@ import 'package:meta/meta.dart';
 
 import '../commands/commands.dart';
 import '../cron/evaluate.dart';
+import '../cron/expression.dart';
 import '../hws/collector.dart' show ArgValidators;
 import '../parse/cron.dart';
 import '../parse/oncalendar.dart';
@@ -25,8 +26,16 @@ enum JobRunsUnknown {
   /// `CRON_TZ` names a zone the client cannot resolve.
   timeZoneUnresolved,
 
+  /// The line runs in the server's zone, which is not known, such as
+  /// before a probe has reported its offset.
+  serverZoneUnknown,
+
   /// No minute within the evaluation horizon matches (`0 0 30 2 *`).
   noRunInHorizon,
+
+  /// The line lies past [mergeJobs]'s evaluation limit, which bounds the
+  /// work a huge crontab costs.
+  notEvaluated,
 
   /// anacron runs the directory, and the MVP does not model its timing
   /// (JOB-04 is v1). The payload shows anacron installed, and the
@@ -106,16 +115,12 @@ final class CronJobEntry extends JobEntry {
 /// schedules and merged runs of every cron line that runs its directory
 /// through `run-parts` without deferring to anacron.
 final class PeriodicJobEntry extends JobEntry {
-  PeriodicJobEntry._({
-    required this.entry,
-    List<String> driverIds = const [],
-    List<CronSchedule> schedules = const [],
-    List<CronRun> nextRuns = const [],
-    this.runsUnknown,
-  }) : driverIds = List.unmodifiable(driverIds),
-       schedules = List.unmodifiable(schedules),
-       nextRuns = List.unmodifiable(nextRuns),
-       assert(nextRuns.isEmpty != (runsUnknown == null));
+  /// The scripts of one directory share [drivers]' lists.
+  PeriodicJobEntry._(this.entry, _DirectoryDrivers drivers)
+    : driverIds = drivers.driverIds,
+      schedules = drivers.schedules,
+      nextRuns = drivers.nextRuns,
+      runsUnknown = drivers.runsUnknown;
 
   final CronDirEntry entry;
 
@@ -258,19 +263,45 @@ typedef CronZoneResolver = ServerZone? Function(String timeZone);
 ///
 /// Cron lines run in [zone], the server zone from the probe, unless a
 /// `CRON_TZ` applies: [zoneFor] resolves it first, then a name equal to
-/// the server zone's or a UTC alias. Each lists up to [runCount] runs
-/// strictly after [nowUtc]. Pure; throws only for a nonpositive
+/// the server zone's or a UTC alias, and the line follows that zone's
+/// clock under [zone]'s repeated hours ([CronClock.line]); an empty
+/// `CRON_TZ=` keeps [zone] but follows [CronClock.line] too. A null [zone]
+/// means the server zone is unknown, and lines without a `CRON_TZ` list
+/// no runs. Each lists up to [runCount] runs strictly after [nowUtc];
+/// with an [evaluateLimit], only that many lines in payload order get
+/// their runs evaluated, and later ones give
+/// [JobRunsUnknown.notEvaluated]. Pure; throws only for a nonpositive
 /// [runCount], a caller error.
 List<JobEntry> mergeJobs({
   CronSnapshot? cron,
   TimersSnapshot? timers,
   required DateTime nowUtc,
-  required ServerZone zone,
+  required ServerZone? zone,
   CronZoneResolver? zoneFor,
   int runCount = 5,
+  int? evaluateLimit,
 }) {
   if (runCount <= 0) {
     throw ArgumentError.value(runCount, 'runCount', 'must be positive');
+  }
+
+  var evaluated = 0;
+  List<CronRun>? evaluate(
+    CronExpression expression,
+    ServerZone runZone,
+    CronClock clock,
+  ) {
+    if (evaluateLimit != null && evaluated >= evaluateLimit) return null;
+
+    evaluated++;
+    return nextCronRuns(
+      expression,
+      afterUtc: nowUtc,
+      zone: runZone,
+      clock: clock,
+      serverZone: clock == CronClock.line ? zone : null,
+      count: runCount,
+    );
   }
 
   final cronEntries = <CronJobEntry>[];
@@ -282,10 +313,9 @@ List<JobEntry> mergeJobs({
       _cronEntry(
         'cron|${job.source}|$ordinal',
         job,
-        nowUtc: nowUtc,
         zone: zone,
         zoneFor: zoneFor,
-        runCount: runCount,
+        evaluate: evaluate,
       ),
     );
   }
@@ -297,9 +327,20 @@ List<JobEntry> mergeJobs({
   final anacron =
       dirEntries.any((e) => e.name == '0anacron') ||
       cronEntries.any((e) => e.job.source == '/etc/cron.d/anacron');
+  // Once per directory, not per script: matching every script against
+  // every line is quadratic in a large payload.
+  final drivers = <CronPeriod, _DirectoryDrivers>{};
   final periodic = [
     for (final entry in dirEntries)
-      _periodicEntry(entry, cronEntries, runCount, anacron: anacron),
+      PeriodicJobEntry._(
+        entry,
+        drivers[entry.period] ??= _directoryDrivers(
+          entry.period,
+          cronEntries,
+          runCount,
+          anacron: anacron,
+        ),
+      ),
   ];
 
   return [
@@ -310,13 +351,15 @@ List<JobEntry> mergeJobs({
   ];
 }
 
+/// The row of [job]; [evaluate] lists its runs in a zone by a clock, or
+/// returns null past the evaluation limit.
 CronJobEntry _cronEntry(
   String id,
   CronJob job, {
-  required DateTime nowUtc,
-  required ServerZone zone,
+  required ServerZone? zone,
   required CronZoneResolver? zoneFor,
-  required int runCount,
+  required List<CronRun>? Function(CronExpression, ServerZone, CronClock)
+  evaluate,
 }) {
   final expression = job.expression;
   if (expression == null) {
@@ -327,7 +370,8 @@ CronJobEntry _cronEntry(
     );
   }
 
-  // An empty `CRON_TZ=` counts as unset, here and in [_cronZone].
+  // An empty `CRON_TZ=` names no zone, here and in [_cronZone], so the
+  // line runs in the server's zone; the clock below reads the raw value.
   final cronTz = (job.cronTz?.isEmpty ?? true) ? null : job.cronTz;
   final schedule = CronSchedule(
     text: job.schedule,
@@ -349,16 +393,26 @@ CronJobEntry _cronEntry(
       id: id,
       job: job,
       schedule: schedule,
-      runsUnknown: JobRunsUnknown.timeZoneUnresolved,
+      runsUnknown: cronTz == null
+          ? JobRunsUnknown.serverZoneUnknown
+          : JobRunsUnknown.timeZoneUnresolved,
     );
   }
 
-  final runs = nextCronRuns(
-    expression,
-    afterUtc: nowUtc,
-    zone: runZone,
-    count: runCount,
-  );
+  // cronie converts its minutes into any CRON_TZ zone, even one named
+  // like its own, and matches the line there. An empty value stays in
+  // the line's environment, so cronie skips that line during catch-up
+  // like any other CRON_TZ line (D58).
+  final clock = job.cronTz == null ? CronClock.server : CronClock.line;
+  final runs = evaluate(expression, runZone, clock);
+  if (runs == null) {
+    return CronJobEntry._(
+      id: id,
+      job: job,
+      schedule: schedule,
+      runsUnknown: JobRunsUnknown.notEvaluated,
+    );
+  }
   return CronJobEntry._(
     id: id,
     job: job,
@@ -375,33 +429,52 @@ const _utcNames = {'UTC', 'Etc/UTC', 'GMT', 'Etc/GMT'};
 /// resolved.
 ServerZone? _cronZone(
   String? cronTz,
-  ServerZone server,
+  ServerZone? server,
   CronZoneResolver? zoneFor,
 ) {
   if (cronTz == null) return server;
 
   final resolved = zoneFor?.call(cronTz);
   if (resolved != null) return resolved;
-  if (cronTz == server.ianaName) return server;
+  if (server != null && cronTz == server.ianaName) return server;
   if (_utcNames.contains(cronTz)) {
     return ServerZone(offset: Duration.zero, ianaName: cronTz);
   }
   return null;
 }
 
-/// A periodic script with the schedules of the `run-parts` lines for its
-/// directory that do not defer to anacron, and the first [runCount] of
-/// their runs. Debian's `test -x /usr/sbin/anacron || run-parts ...`
-/// lines do nothing while [anacron] is installed and run the directory
-/// otherwise; anacron's own delays are v1 (JOB-04). Without runs, the
-/// first direct line's reason stands.
-PeriodicJobEntry _periodicEntry(
-  CronDirEntry entry,
+/// What every script in one `cron.<period>` directory takes from the
+/// cron lines (see [PeriodicJobEntry]'s fields).
+final class _DirectoryDrivers {
+  _DirectoryDrivers({
+    List<String> driverIds = const [],
+    List<CronSchedule> schedules = const [],
+    List<CronRun> nextRuns = const [],
+    this.runsUnknown,
+  }) : driverIds = List.unmodifiable(driverIds),
+       schedules = List.unmodifiable(schedules),
+       nextRuns = List.unmodifiable(nextRuns),
+       assert(nextRuns.isEmpty != (runsUnknown == null));
+
+  final List<String> driverIds;
+  final List<CronSchedule> schedules;
+  final List<CronRun> nextRuns;
+  final JobRunsUnknown? runsUnknown;
+}
+
+/// The schedules of the `run-parts` lines for [period]'s directory that
+/// do not defer to anacron, and the first [runCount] of their runs.
+/// Debian's `test -x /usr/sbin/anacron || run-parts ...` lines do
+/// nothing while [anacron] is installed and run the directory otherwise;
+/// anacron's own delays are v1 (JOB-04). Without runs, the first direct
+/// line's reason stands.
+_DirectoryDrivers _directoryDrivers(
+  CronPeriod period,
   List<CronJobEntry> cronEntries,
   int runCount, {
   required bool anacron,
 }) {
-  final directory = _periodDirectory(entry.period);
+  final directory = _periodDirectory(period);
   final drivers = cronEntries
       .where((e) => _runsParts(e.job.command, directory))
       .toList();
@@ -414,9 +487,8 @@ PeriodicJobEntry _periodicEntry(
     // anacron's default anacrontab runs the daily, weekly and monthly
     // directories, not the hourly one.
     final byAnacron =
-        drivers.isNotEmpty || (anacron && entry.period != CronPeriod.hourly);
-    return PeriodicJobEntry._(
-      entry: entry,
+        drivers.isNotEmpty || (anacron && period != CronPeriod.hourly);
+    return _DirectoryDrivers(
       driverIds: driverIds,
       runsUnknown: byAnacron ? JobRunsUnknown.anacron : JobRunsUnknown.noDriver,
     );
@@ -428,8 +500,7 @@ PeriodicJobEntry _periodicEntry(
       .where((r) => instants.add(r.atUtc))
       .take(runCount)
       .toList();
-  return PeriodicJobEntry._(
-    entry: entry,
+  return _DirectoryDrivers(
     driverIds: driverIds,
     schedules: [for (final d in direct) ?d.schedule],
     nextRuns: merged,

@@ -10,6 +10,8 @@ import 'dart:math';
 import 'package:klabautermann_host/klabautermann_host.dart';
 
 import '../engine/protocol.dart';
+import 'argument_masking.dart';
+import 'cron_zone.dart';
 
 /// The collector a [SampleStream] reads (03 §6.4): `units` serves both
 /// the Services panel and the health card (D45).
@@ -347,6 +349,9 @@ ProcsResult procsResult(
   final cpu = previous != null && elapsed != null
       ? procCpuPercent(previous, next, elapsed)
       : const <int, double>{};
+  // One budget for every row, so that many processes cannot multiply
+  // the masking's work.
+  final masking = ArgumentMaskingBudget();
   return ProcsResult(
     [
       for (final p in next.processes)
@@ -362,8 +367,14 @@ ProcsResult procsResult(
           startTicks: p.startTicks,
           // A `ps` fallback row joined its arguments with spaces, so their
           // boundaries are lost; it lists the whitespace tokens, so 8.9's
-          // per-argument masking works on those (7.2).
-          arguments: p.argv ?? _tokens(p.argsJoined),
+          // per-argument masking works on those (7.2). Masked here, so no
+          // argument crosses to the app as plain text.
+          arguments: switch (p.argv ?? _tokens(p.argsJoined)) {
+            null => null,
+            final argv => List.unmodifiable(
+              maskCommandLine(argv, budget: masking),
+            ),
+          },
         ),
     ],
     totalProcesses: next.totalProcesses,
@@ -375,7 +386,34 @@ ProcsResult procsResult(
 /// single spaces; none for an empty one.
 List<String>? _tokens(String? joined) => joined == null
     ? null
-    : List.unmodifiable(joined.isEmpty ? const <String>[] : joined.split(' '));
+    : joined.isEmpty
+    ? const []
+    : joined.split(' ');
+
+/// The most cron lines whose next runs one `cron` reading evaluates.
+/// A line can cost about 2 ms in the engine isolate, which every server
+/// shares, and a 1 MiB section holds some 75,000 lines; later lines give
+/// `JobRunsUnknown.notEvaluated`.
+const kCronLinesEvaluated = 200;
+
+/// [cron] with its jobs rows (7.7): each line's next runs after [at] in
+/// the server zone of [profile] or the line's `CRON_TZ` (D58), for the
+/// first [kCronLinesEvaluated] lines.
+CronResult cronResult(CronSnapshot cron, HostProfile? profile, DateTime at) {
+  final server = serverCronZone(profile, at);
+  return CronResult(
+    cron,
+    jobs: mergeJobs(
+      cron: cron,
+      nowUtc: at,
+      zone: server.zone,
+      zoneFor: (name) => cronTzZone(name, at),
+      evaluateLimit: kCronLinesEvaluated,
+    ),
+    zoneName: server.zoneName,
+    zoneFallback: server.fallback,
+  );
+}
 
 /// SYS-01's identity, resolved from hostnamectl, then os-release and
 /// `uname` (03 §6.5).

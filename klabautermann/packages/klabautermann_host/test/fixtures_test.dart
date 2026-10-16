@@ -1,7 +1,10 @@
 // Golden tests for the platform fixture shapes (03 §6.5). Each
 // fixture directory holds hand-written collector payloads plus a
 // `<collector>.golden.json` per payload; `tool/regen_goldens.dart`
-// rewrites the goldens. Fixture provenance is in each SOURCE.md.
+// rewrites the goldens. Fixture provenance is in each SOURCE.md. The
+// cron rows of the jobs list built from these fixtures have their
+// golden in klabautermann_core, whose zone database the next runs need
+// (D58); the timer rows have `timer_jobs.golden.json` here.
 import 'dart:convert';
 import 'dart:io';
 
@@ -125,6 +128,12 @@ void main() {
           );
         });
       }
+      test('timer jobs', () {
+        expect(
+          _timerJobsJson('$root/$platform'),
+          equals(_golden('$root/$platform/timer_jobs.golden.json')),
+        );
+      });
 
       test('probe', () {
         final sections = _probeSections(
@@ -139,13 +148,6 @@ void main() {
         expect(
           HostProfile.fromJson(json! as Map<String, Object?>).toJson(),
           json,
-        );
-      });
-
-      test('jobs', () {
-        expect(
-          _jobsJson('$root/$platform'),
-          equals(_golden('$root/$platform/jobs.golden.json')),
         );
       });
     });
@@ -171,34 +173,22 @@ Map<String, Object?> _optionalJson(String read, String payload) =>
       _ => throw StateError(read),
     };
 
-/// The merged jobs list (03 §7.7) of a fixture's `cron` and `timers`
-/// payloads, two runs each, evaluated at a fixed instant in the probe's
-/// zone at its fixed offset. Where the fixture has a `timer_detail`
-/// payload, the first timer takes it (D57) with the `oncalendar` read of
-/// the expression that read echoes, and the golden records the reads the
-/// probe's systemd version gets. `tool/regen_goldens.dart` mirrors it.
-Map<String, Object?> _jobsJson(String dir) {
-  final now = DateTime.utc(2026, 10, 14, 12);
+/// The timer rows of the jobs list (03 §7.7) from a fixture's `timers`
+/// payload. Where the fixture carries a `timer_detail` payload, the
+/// first timer takes it (D57) with the `oncalendar` read of the
+/// expression that read echoes, and the golden records the reads the
+/// probe's systemd version gets. Timer rows need no zone; the cron
+/// rows' golden is in klabautermann_core. `tool/regen_goldens.dart`
+/// mirrors it.
+Map<String, Object?> _timerJobsJson(String dir) {
   final profile = parseProbe(
     _probeSections(File('$dir/probe.sections').readAsStringSync()),
     _ctx,
   ).value;
-  final offset = RegExp(
-    r'^([+-])(\d\d)(\d\d)$',
-  ).firstMatch(profile.zoneOffset ?? '');
-  final minutes = offset == null
-      ? 0
-      : (int.parse(offset[2]!) * 60 + int.parse(offset[3]!)) *
-            (offset[1] == '-' ? -1 : 1);
   final jobs = mergeJobs(
-    cron: parseCron(File('$dir/cron.txt').readAsStringSync(), _ctx).value,
     timers: parseTimers(File('$dir/timers.txt').readAsStringSync(), _ctx).value,
-    nowUtc: now,
-    zone: ServerZone(
-      offset: Duration(minutes: minutes),
-      ianaName: profile.timezone,
-    ),
-    runCount: 2,
+    nowUtc: DateTime.utc(2026, 10, 14, 12),
+    zone: null,
   );
   final detailFile = File('$dir/timer_detail.txt');
   final detail = detailFile.existsSync()
@@ -218,9 +208,6 @@ Map<String, Object?> _jobsJson(String dir) {
     );
   }
   return {
-    'nowUtc': now.toIso8601String(),
-    'zoneOffsetMinutes': minutes,
-    'zoneName': profile.timezone,
     'jobs': jobs.map((j) => j.toJson()).toList(),
     if (detail != null)
       'timerCalendarReads': timerCalendarCommands(
