@@ -386,7 +386,9 @@ void main() {
         ),
       )
       ..send(OpenLogStream(streamId: 'window', spec: spec(follow: false)));
-    await until(() => states('window').isNotEmpty, 'the window');
+    // The window's end is a message of its own after its start, so wait
+    // for both; the earlier opens' states arrived before either.
+    await until(() => states('window').length == 2, 'the window');
     for (var i = 0; i < share; i++) {
       expect(states('follow-$i'), [const LogStreamRunning()]);
     }
