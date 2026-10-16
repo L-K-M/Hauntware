@@ -91,6 +91,7 @@ void main() {
       'collectd.service': ExternalMonitor.collectd,
       'prometheus.service': ExternalMonitor.prometheus,
       'grafana-agent.service': ExternalMonitor.grafanaAgent,
+      'grafana-agent-flow.service': ExternalMonitor.grafanaAgent,
       'alloy.service': ExternalMonitor.grafanaAgent,
     };
     for (final MapEntry(key: name, value: monitor) in cases.entries) {

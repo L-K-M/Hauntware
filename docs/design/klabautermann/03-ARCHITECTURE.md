@@ -3834,7 +3834,7 @@ or the tier's rule before the engine says anything), a chart of the last
 finding, and what is not covered in the coverage sheet's words, with no
 control for T1 or T2. K04's rule recognises node_exporter, Netdata, the
 Zabbix agent, Telegraf, collectd, Prometheus and Grafana's agents
-(Grafana Agent and Alloy) by their packaged systemd units in a complete
+(Agent, Agent Flow, Alloy) by their packaged systemd units in a complete
 `units` list; a monitor outside systemd is not seen, and the card names
 the units as the server lists them. The card subscribes `units` under an
 id of its own while it shows, until the first `units` sample of the

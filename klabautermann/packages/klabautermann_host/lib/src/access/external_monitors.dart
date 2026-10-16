@@ -26,8 +26,13 @@ enum ExternalMonitor {
   /// host and alert or forward without the app.
   prometheus(['prometheus.service']),
 
-  /// Grafana's collectors: the Grafana Agent and Alloy, its successor.
-  grafanaAgent(['grafana-agent.service', 'alloy.service']);
+  /// Grafana's collectors: the Grafana Agent in static or Flow mode, and
+  /// Alloy, its successor.
+  grafanaAgent([
+    'grafana-agent.service',
+    'grafana-agent-flow.service',
+    'alloy.service',
+  ]);
 
   const ExternalMonitor(this.units);
 
