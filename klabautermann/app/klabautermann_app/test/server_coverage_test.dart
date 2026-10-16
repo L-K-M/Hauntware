@@ -497,7 +497,7 @@ void main() {
     }
 
     testWidgets('stays away while the engine sampled nothing', (tester) async {
-      // An open server's subscription alone, as while links are off.
+      // An open server's subscription alone, as before its link is up.
       await openAwayAndBack(tester, sampled: false);
       expect(find.textContaining(RegExp(banner)), findsNothing);
     });

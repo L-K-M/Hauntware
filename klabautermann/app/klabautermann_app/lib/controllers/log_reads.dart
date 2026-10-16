@@ -24,8 +24,9 @@ final class LogReadReported extends LogReadState {
 }
 
 /// No answer for the read follows: the engine refused the open outright
-/// with a [RequestRejected], as it does for every open while links are
-/// off (03 §10.1), or it stopped and will answer nothing.
+/// with a [RequestRejected], as it does for a server outside its fleet or
+/// a server's 17th stream (03 §7.6), or it stopped and will answer
+/// nothing.
 final class LogReadRefused extends LogReadState {
   const LogReadRefused(this.rejection);
 

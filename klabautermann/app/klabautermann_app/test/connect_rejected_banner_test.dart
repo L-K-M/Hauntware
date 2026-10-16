@@ -56,11 +56,14 @@ void main() {
     }
   }
 
-  testWidgets('a rejection while links are off shows nothing', (tester) async {
+  testWidgets('a RequestRejected of Connect shows nothing', (tester) async {
     final harness = await _openWeb(tester, _desktop);
 
     harness.engine.emit(
-      const RequestRejected('Connect', 'links are off in this engine'),
+      const RequestRejected(
+        'Connect',
+        'no fleet server srv-1 the engine can dial',
+      ),
     );
     await tester.pumpAndSettle();
 
