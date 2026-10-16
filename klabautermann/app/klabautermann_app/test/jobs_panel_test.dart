@@ -38,17 +38,19 @@ final class _Panel {
     await tester.pumpAndSettle();
   }
 
+  /// A reading of [stream] taken [at], by default [jobsNow].
   Future<void> sample(
     WidgetTester tester,
     SampleStream stream,
-    SampleResult result,
-  ) => emit(
+    SampleResult result, {
+    DateTime? at,
+  }) => emit(
     tester,
     Sample(
       serverId: _serverId,
       stream: stream,
       seq: ++_seq,
-      at: jobsNow,
+      at: at ?? jobsNow,
       result: result,
     ),
   );
@@ -383,19 +385,42 @@ void main() {
     final panel = await _pump(tester, visible: false);
     await panel.all(tester);
     expect(find.text('Updated 0 s ago'), findsOneWidget);
+    final table = find.byType(SortableTable<JobEntry>);
+    final before = tester.widget(table);
 
-    // Hidden: nothing ages.
-    panel.now = jobsNow.add(const Duration(seconds: 19));
+    // Hidden: nothing ages, and the table does not follow the clock past
+    // the instant its times turn stale.
+    panel.now = jobsNow.add(const Duration(minutes: 3));
     await tester.pump(const Duration(seconds: 2));
     expect(find.text('Updated 0 s ago'), findsOneWidget);
+    expect(tester.widget(table), same(before));
 
     panel.visible.value = true;
     await tester.pump();
-    expect(find.text('Updated 19 s ago'), findsOneWidget);
+    expect(find.text('Stale: updated 3 min ago'), findsOneWidget);
 
-    panel.now = jobsNow.add(const Duration(seconds: 25));
+    panel.now = jobsNow.add(const Duration(minutes: 4));
     await tester.pump(const Duration(seconds: 1));
-    expect(find.text('Updated 25 s ago'), findsOneWidget);
+    expect(find.text('Stale: updated 4 min ago'), findsOneWidget);
+  });
+
+  testWidgets('the list is as fresh as its older stream', (tester) async {
+    final panel = await _pump(tester);
+    await panel.emit(tester, HostProfileChanged(_serverId, jobsProfile));
+    await panel.sample(tester, SampleStream.cron, jobsCron());
+    await panel.sample(
+      tester,
+      SampleStream.timers,
+      jobsTimers(),
+      at: jobsNow.subtract(const Duration(minutes: 3)),
+    );
+
+    expect(find.text('Stale: updated 3 min ago'), findsOneWidget);
+    final next = find.text(clock('Sat, Oct 24 7:41 PM UTC+02:00'));
+    expect(
+      tester.widget<Text>(next).style?.color,
+      Theme.of(tester.element(next)).colorScheme.onSurfaceVariant,
+    );
   });
 
   testWidgets('a run the clock has passed no longer reads as next', (
