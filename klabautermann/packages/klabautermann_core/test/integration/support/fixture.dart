@@ -195,6 +195,10 @@ final class FixtureEngine {
   final _log = StringBuffer();
   final _connected = <String>{};
 
+  /// The read a timed-out [until] left pending, which the next one takes
+  /// over: a [StreamIterator] allows one at a time.
+  Future<bool>? _pending;
+
   /// Every event read so far, in order.
   final seen = <EngineEvent>[];
 
@@ -240,10 +244,11 @@ final class FixtureEngine {
     final deadline = _clock.elapsed + timeout;
     while (true) {
       final left = deadline - _clock.elapsed;
-      final arrived = await _events.moveNext().timeout(
+      final arrived = await (_pending ??= _events.moveNext()).timeout(
         left.isNegative ? Duration.zero : left,
         onTimeout: () => fail('no $T within $timeout'),
       );
+      _pending = null;
       expect(arrived, isTrue, reason: 'the engine stopped');
       final event = _events.current;
       seen.add(event);

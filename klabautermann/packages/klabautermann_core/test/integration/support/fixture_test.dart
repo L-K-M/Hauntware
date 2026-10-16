@@ -1,4 +1,6 @@
-// The fixture helpers without the fixture: when the engine suites run.
+// The fixture helpers without the fixture: when the engine suites run,
+// and how a wait that timed out leaves the engine's events.
+import 'package:klabautermann_core/klabautermann_core.dart';
 import 'package:test/test.dart';
 
 import 'fixture.dart';
@@ -29,5 +31,22 @@ void main() {
     final fixture = Fixture.fromEnvironment(partial);
     expect(fixture, isNotNull);
     expect(() => fixture!.compose(['ps']), throwsStateError);
+  });
+
+  test('a timed-out wait leaves its read to the next one', () async {
+    final engine = await FixtureEngine.start(
+      Fixture.fromEnvironment(_offline)!,
+      'timed out wait',
+    );
+    await expectLater(
+      engine.until<Gap>(null, const Duration(milliseconds: 200)),
+      throwsA(isA<TestFailure>()),
+    );
+
+    // A StreamIterator takes one read at a time. A second moveNext would
+    // throw, and the teardown's wait for each link to close would end at
+    // once, leaving the link open on the shared fixture.
+    engine.send(const ImportSshConfig('Host spare\n  HostName 127.0.0.1\n'));
+    expect(await engine.until<SshConfigImported>(), isA<SshConfigImported>());
   });
 }
