@@ -189,7 +189,10 @@ class _ProcessesPanelState extends State<ProcessesPanel> {
         }
 
         final columns = _columns(l10n, profile, reading.at);
-        final rows = filterProcesses(result.processes, _filter.text, profile);
+        final user = columns.firstWhere(
+          (column) => column.id == ProcessColumn.user.name,
+        );
+        final rows = filterProcesses(result.processes, _filter.text, user.text);
         final empty = Text(
           _filter.text.trim().isEmpty
               ? l10n.processesEmpty

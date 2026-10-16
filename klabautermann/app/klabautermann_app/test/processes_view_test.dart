@@ -107,8 +107,14 @@ void main() {
       ),
       _row(2, name: 'kthreadd'),
     ];
+    // The user column's text without a profile.
+    String user(ProcessRow row) => switch ((row.userName, row.uid)) {
+      (final name?, _) => name,
+      (null, final uid?) => 'UID $uid',
+      (null, null) => 'unknown',
+    };
     List<int> pids(String query) => [
-      for (final row in filterProcesses(rows, query, null)) row.pid,
+      for (final row in filterProcesses(rows, query, user)) row.pid,
     ];
 
     test('keeps every row for a blank query', () {
@@ -121,6 +127,8 @@ void main() {
       expect(pids('init'), [1]);
       expect(pids('kthread'), [2]);
       expect(pids('812'), [812]);
+      expect(pids('UID 27'), [812]);
+      expect(pids('uid 0'), [1]);
       expect(pids('mysqld init'), isEmpty);
     });
 

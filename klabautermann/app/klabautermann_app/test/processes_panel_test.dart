@@ -280,6 +280,11 @@ void main() {
     await tester.pumpAndSettle();
     expect(_order(tester), [812]);
 
+    // The user as the column shows it.
+    await tester.enterText(find.byType(TextField), 'UID 27');
+    await tester.pumpAndSettle();
+    expect(_order(tester), [812]);
+
     await tester.enterText(find.byType(TextField), 'hunter2');
     await tester.pumpAndSettle();
     expect(_order(tester), isEmpty);

@@ -83,12 +83,13 @@ final class _UserKey implements Comparable<_UserKey> {
 
 /// The rows whose PID, name, user or shown command line hold every
 /// whitespace-separated term of [query], ignoring case; every row for a
-/// blank query. It reads shown text only, so a masked secret never
-/// decides a match (03 §8.9).
+/// blank query. The user is [userText], as its column shows it, or the
+/// uid. It reads shown text only, so a masked secret never decides a
+/// match (03 §8.9).
 List<ProcessRow> filterProcesses(
   List<ProcessRow> rows,
   String query,
-  HostProfile? profile,
+  String Function(ProcessRow row) userText,
 ) {
   final terms = query.toLowerCase().split(_whitespace)
     ..removeWhere((term) => term.isEmpty);
@@ -96,7 +97,7 @@ List<ProcessRow> filterProcesses(
 
   return [
     for (final row in rows)
-      if (_haystack(row, profile) case final haystack
+      if (_haystack(row, userText) case final haystack
           when terms.every(haystack.contains))
         row,
   ];
@@ -104,10 +105,10 @@ List<ProcessRow> filterProcesses(
 
 final _whitespace = RegExp(r'\s+');
 
-String _haystack(ProcessRow row, HostProfile? profile) => [
+String _haystack(ProcessRow row, String Function(ProcessRow) userText) => [
   row.pid,
   ?row.name,
-  ?processUserName(row, profile),
+  userText(row),
   ?row.uid,
   ?commandLineText(row),
 ].join('\n').toLowerCase();
