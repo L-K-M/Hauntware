@@ -53,7 +53,8 @@ dart analyze packages/klabautermann_core
 dart test    packages/klabautermann_core
 dart test    test/integration
 # The sshd fixture and the engine's tests against it (Docker with Compose,
-# OpenSSH's client tools); it tears everything down when it exits
+# OpenSSH's client tools, util-linux flock); it tears everything down
+# when it exits
 test/integration/run.sh
 
 # Flutter app

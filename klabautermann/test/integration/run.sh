@@ -2,8 +2,8 @@
 # Runs Klabautermann's SSH integration fixture and the engine suites
 # against it (03 §11.3, D53). The klabautermann_integration CI job runs it
 # from klabautermann/; it runs the same way locally, given Docker with the
-# Compose plugin, OpenSSH's client tools and the Dart SDK with the
-# workspace resolved.
+# Compose plugin, OpenSSH's client tools, util-linux flock and the Dart
+# SDK with the workspace resolved.
 #
 # It owns the whole run: client keys and an agent made for this run only
 # (never committed, D53), the safety check of the rendered Compose config,
