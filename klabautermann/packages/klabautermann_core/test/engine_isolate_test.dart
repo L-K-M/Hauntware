@@ -88,21 +88,14 @@ void main() {
       final (:events, fleet: _) = await started(client);
 
       client
-        ..send(const EnrollSync())
-        ..send(const RunSyncRound())
         ..send(const PlanAction(ActionIntent(serverId: 'srv-1', action: 'x')))
         ..send(const SetMonitorSet(['srv-1']));
 
       final names = [
-        for (var i = 0; i < 4; i++)
+        for (var i = 0; i < 2; i++)
           ((await next(events)) as RequestRejected).requestName,
       ];
-      expect(names, [
-        'EnrollSync',
-        'RunSyncRound',
-        'PlanAction',
-        'SetMonitorSet',
-      ]);
+      expect(names, ['PlanAction', 'SetMonitorSet']);
     });
 
     test('links stay off unless spawn turns them on', () async {

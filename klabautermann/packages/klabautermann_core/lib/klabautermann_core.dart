@@ -4,6 +4,12 @@
 /// (docs/design/klabautermann/03, sections 3.2, 4.10, 10.1 and 10.8).
 library;
 
+// Pull-only sync (D14, D63): the policy the engine's coordinator runs
+// under, which the app's pull-only test checks, and the keystore entry
+// names the app binds ghost_keystore with (03 §4.5, D62).
+export 'src/catalog/engine_sync.dart' show engineSyncPushPolicy;
+export 'src/catalog/sync_credentials.dart'
+    show klabautermannApiKeyPrefix, klabautermannMasterKeyEntry;
 export 'src/engine/engine_client.dart';
 // What a substitute engine for IsolateEngineClient.spawn's entryPoint is
 // handed; the app's restart test runs one.
@@ -113,6 +119,12 @@ export 'package:klabautermann_host/klabautermann_host.dart'
         HostPanel,
         evaluatePanel;
 export 'package:seance_core/seance_core.dart' show quoteShellWord;
+// The sync sign-in form (03 §4.3 step 1) checks its fields with the
+// suite's enrollment rule before the engine is asked, and the pull-only
+// test names the push policy.
+export 'package:seance_core/catalog.dart' show PushPolicy;
+export 'package:seance_core/seance_core.dart'
+    show SyncEnrollmentIssue, SyncEnrollmentMode, validateSyncEnrollment;
 // A process row's masked arguments (03 §8.9): the Processes panel shows
 // their display and reveals one on request.
 export 'package:klabautermann_docker/klabautermann_docker.dart'

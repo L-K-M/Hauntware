@@ -1,4 +1,4 @@
-/// The engine's durable pin verdicts and decode tripwires (03 §4.10, D60):
+/// The engine's durable pin verdicts and decode tripwires (03 §4.10, D62):
 /// the catalog library's `PinVerdictStore` and `SyncTripwireStore` seams
 /// over files of their own under the support directory, never the record
 /// store, whose corruption quarantine restarts it empty and would erase

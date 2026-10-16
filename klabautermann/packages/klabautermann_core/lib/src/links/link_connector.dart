@@ -105,10 +105,10 @@ final class LinkConnectFailed extends LinkConnectResult {
 /// the attempt's phases through `onPhase` and gives it up through
 /// `abandoned`.
 final class LinkConnector {
-  /// [hostKeys] holds the pins. Until the suite's file-backed host-key
-  /// store lands (F3b), the engine passes an in-memory one, so pins last
-  /// for the engine's lifetime only. `hopConfig` looks up a jump hop's
-  /// config by id, such as `ImportedFleet.serverConfig`.
+  /// [hostKeys] holds the pins: the engine's one store, which its sync
+  /// shares, over `host_keys.json` while the engine holds the support
+  /// directory alone and in memory otherwise (03 §4.10). `hopConfig` looks
+  /// up a jump hop's config by id, such as `ImportedFleet.serverConfig`.
   LinkConnector({
     required CredentialSource credentials,
     required this._hostKeys,
