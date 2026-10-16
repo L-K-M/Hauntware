@@ -10,9 +10,6 @@ import 'package:klabautermann_docker/klabautermann_docker.dart'
 /// A whitespace-delimited token inside one argument.
 final _token = RegExp(r'\S+');
 
-/// `name=value` with a non-empty value; the name ends at the first `=`.
-final _assignment = RegExp(r'^([^=]+)=(.+)$');
-
 /// An option without an attached value, such as `--password` or
 /// `-passin`, whose value would be the next token.
 final _option = RegExp(r'^--?([A-Za-z][A-Za-z0-9_.-]*)$');
@@ -28,7 +25,8 @@ final _option = RegExp(r'^--?([A-Za-z][A-Za-z0-9_.-]*)$');
 /// only. In each token:
 ///
 /// - the value of `name=value` whose name matches 03 §8.9's key pattern
-///   (`--password=`, `-Dapp.token=`, `API_TOKEN=`);
+///   (`--password=`, `-Dapp.token=`, `API_TOKEN=`), also where the name
+///   runs through an earlier `=`, as in `--env=DB_PASSWORD=<value>`;
 /// - the attached value of `-p<value>`, as the MySQL clients take a
 ///   password, whatever the option means to its program;
 /// - URL credentials (`scheme://user:pass@`) anywhere else.
@@ -90,9 +88,13 @@ List<MaskedValue> maskCommandLine(List<String> arguments) {
 String? _keptBeforeValue(String token, {required bool program}) {
   if (program) return null;
 
-  final assignment = _assignment.firstMatch(token);
-  if (assignment != null && isSecretKey(assignment[1]!)) {
-    return '${maskUrlCredentials(assignment[1]!)}=';
+  // Each `=` before a non-empty value ends a candidate name, so a secret
+  // assignment inside an option's value is found as well.
+  var equals = token.indexOf('=', 1);
+  while (equals != -1 && equals < token.length - 1) {
+    final name = token.substring(0, equals);
+    if (isSecretKey(name)) return '${maskUrlCredentials(name)}=';
+    equals = token.indexOf('=', equals + 1);
   }
   if (token.length > 2 && token.startsWith('-p')) return '-p';
   return null;

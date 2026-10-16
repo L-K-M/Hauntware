@@ -3448,7 +3448,8 @@ CI.
   (`scheme://user:pass@`), image history `CreatedBy`. From M2 the engine
   masks every process argument before its row crosses, reading
   whitespace tokens, so also inside a shell's `-c` line: the value of
-  `name=value` whose name matches the pattern, an attached `-p` value,
+  `name=value` whose name matches the pattern, also a name that runs
+  through an earlier `=` (`--env=DB_PASSWORD=`), an attached `-p` value,
   the token after an option whose name matches it (unless that token
   starts with `-` or the option is a `--no-` flag) and URL credentials.
   A value that starts an argument is masked to that argument's end,

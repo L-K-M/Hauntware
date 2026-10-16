@@ -44,6 +44,27 @@ void main() {
       );
     });
 
+    test('a secret assignment inside an option\'s value', () {
+      expect(
+        _shown([
+          'docker',
+          '--env=DB_PASSWORD=hunter2',
+          '--build-arg=GITHUB_TOKEN=x',
+          '--set=db.password=a=b',
+          '--password=a=b',
+          '--env=PATH=/usr/bin',
+        ]),
+        [
+          'docker',
+          '--env=DB_PASSWORD=$_mask',
+          '--build-arg=GITHUB_TOKEN=$_mask',
+          '--set=db.password=$_mask',
+          '--password=$_mask',
+          '--env=PATH=/usr/bin',
+        ],
+      );
+    });
+
     test('the argument after a secret-named option, unless it is an '
         'option itself', () {
       final masked = maskCommandLine([
