@@ -2690,7 +2690,9 @@ time through `HostCommands.commandLine`, and answers each open with a
   reading at the cap and keeps its complete entries, so its last cursor
   reads on; `tail` and `dmesg`, which print oldest first, keep their
   last complete lines or records. Journal lines that are not JSON
-  objects count as dropped, as does an entry longer than the cap. A
+  objects count as dropped, as does an entry longer than the cap, and a
+  cut `tail` or `dmesg` output that keeps no whole line or record counts
+  its newest as dropped instead of ending with nothing to show. A
   full journal window left without a record ends as failed: it has no
   cursor to read on from, and journalctl prints an entry's keys in hash
   order, so a cut entry's cursor may lie past the cap.

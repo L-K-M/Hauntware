@@ -353,6 +353,21 @@ void main() {
       expect(texts('k'), ['ring 9', 'ring 8', 'ring 7']);
     });
 
+    test('a cut that keeps no whole record counts the newest as '
+        'dropped', () async {
+      start(maxOutputBytes: 16);
+      final dmesg = await fallBackProcess('k');
+      dmesg
+        ..emitText(
+          '{\n   "dmesg": [\n      {\n         "pri": "info",\n'
+          '         "msg": "${'x' * 40}"\n      }\n   ]\n}\n',
+        )
+        ..end();
+      expect(await ended('k'), _filled);
+      expect(records('k'), isEmpty);
+      expect(events.whereType<LogBatch>().single.dropped, 1);
+    });
+
     test("a missing journalctl falls back; dmesg's refusal ends it", () async {
       (await open('k', _spec(_kernel)))
         ..emitStderr(utf8.encode('sh: 1: exec: journalctl: not found\n'))
@@ -447,6 +462,18 @@ void main() {
       p.end();
       expect(await ended('f'), _filled);
       expect(texts('f'), ['line-9', 'line-8']);
+    });
+
+    test('a cut that keeps no whole line counts the newest as '
+        'dropped', () async {
+      start(maxOutputBytes: 16);
+      final p = await open('f', _spec(syslog, window: 9));
+      p
+        ..emitText('x' * 40)
+        ..end();
+      expect(await ended('f'), _filled);
+      expect(records('f'), isEmpty);
+      expect(events.whereType<LogBatch>().single.dropped, 1);
     });
 
     test('a missing file reads as missing, an unreadable one denied', () async {

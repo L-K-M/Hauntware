@@ -212,6 +212,10 @@ final class LogService {
   /// record and `dmesg` has no cursor, nor after a cut, signal, timeout or
   /// lost link.
   Future<void> _fallBack(_Read read) async {
+    // An ended read sends nothing more. _serve calls this as soon as
+    // _output returns, without yielding, so this states the invariant
+    // here rather than guarding a path that runs today.
+    if (read.ended) return;
     _emit(
       LogStreamState(
         read.streamId,
@@ -428,7 +432,8 @@ _Window _journalWindow(_Output out, int window, {DateTime? since}) {
 }
 
 /// A `dmesg --json --decode` window: dmesg prints its whole ring oldest
-/// first, so the window is the newest [window] records, reversed.
+/// first, so the window is the newest [window] records, reversed. A cut
+/// whose kept tail holds no whole record counts the newest as dropped.
 _Window _dmesgWindow(_Output out, int window) {
   var text = utf8.decode(out.stdout, allowMalformed: true);
   if (out.cut) {
@@ -453,7 +458,7 @@ _Window _dmesgWindow(_Output out, int window) {
           },
         ),
     ],
-    dropped: 0,
+    dropped: out.cut && all.isEmpty ? 1 : 0,
     end: out.cut || all.length > window
         ? LogStreamEndReason.windowFilled
         : LogStreamEndReason.oldestReached,
@@ -462,7 +467,8 @@ _Window _dmesgWindow(_Output out, int window) {
 
 /// A `tail -n` window: the file's last lines, reversed, each without its
 /// line break. A cut kept the newest bytes, so its first line, which
-/// starts before them, goes.
+/// starts before them, goes; when that leaves no line, the newest line
+/// was longer than the cap and counts as dropped.
 _Window _fileWindow(_Output out, int window) {
   final bytes = out.stdout;
   var start = 0;
@@ -486,7 +492,7 @@ _Window _fileWindow(_Output out, int window) {
           line.endsWith('\r') ? line.substring(0, line.length - 1) : line,
         ),
     ],
-    dropped: 0,
+    dropped: out.cut && newest.isEmpty ? 1 : 0,
     end: out.cut || lines.length >= window
         ? LogStreamEndReason.windowFilled
         : LogStreamEndReason.oldestReached,
