@@ -2778,7 +2778,8 @@ no longer holds that value.
   read does until lines arrive: waiting for an answer, the link, a
   channel or the foreground, reading, no lines, or the end's reason with
   the host's error text. A read still running when its tab hides stops
-  and starts over once shown. The read opens through the controller's
+  and starts over once shown. On a phone the page opens the lines in a
+  bottom sheet instead, which reads them while it is open (10.5). The read opens through the controller's
   one owner of log streams, which the Logs panel shares and which gives
   each rejection of `OpenLogStream` to the oldest open without an answer
   (10.1). While links are off, as the composition root leaves them
@@ -2985,8 +2986,8 @@ each row's source and the user its line names:
   `crontab` command, and an empty list names only the sources read,
   never other users' crontabs (JOB-03). Where the
   probe finds systemd not running, the tab says the server has no timers
-  instead of a failed timers reading. The phone reaches the tab once
-  More lists it (10.5).
+  instead of a failed timers reading. The phone reaches the tab
+  through More (10.5).
 
 ### 7.8 Packages and updates (PKG)
 
@@ -4895,8 +4896,7 @@ tab:
   its values read "unknown". A hidden tab is not built, so it samples
   nothing; it names what is missing and links to the Access tab, which
   the desktop strip selects, moving keyboard focus into it, and a phone
-  pushes. The phone's More destination does not list Access yet, so
-  there the link is the way in.
+  pushes. The phone's More destination lists it too (10.5).
 - Each row shows its state as an icon and a word, its reason, SAF-08's
   badge on a root-equivalent right, and its fix as one line: the
   elevation prefix, then each word, quoted (8.8) only where a shell
@@ -4937,8 +4937,9 @@ and DSK-01's and DSK-02's mounts in the sortable table, in IEC units:
 As built in M2 (`app/klabautermann_app/lib/ui/server_header.dart`), the
 server header shows the name (the phone's app bar carries it instead),
 the link state, the coverage chip, the detected runtime and a slot for
-client-limitation messages, which stays empty until 5.3's rows are
-worded (K45); the transport label, privilege badges, admin mode and
+client-limitation messages, which holds only PLT-04's background line
+on an iOS or Android phone's screen (10.5) until 5.3's rows are worded
+(K45); the transport label, privilege badges, admin mode and
 the read-only and low-session indicators come with their subsystems.
 The state resolves through `ghost_servers`' indicator under the rail
 rule, as the server's row does, as a dot, an icon and a word, with
@@ -5041,7 +5042,7 @@ subscribes while it shows:
   freshness line (9.5 item 4) and the failure's reason; it turns grey
   once older than 20 s, twice the stream's slowest cadence. A cut list
   says "Showing N of M processes" (D48). The phone's server screen
-  reaches the tab once More lists the panels (10.5).
+  reaches the tab through More (10.5).
 
 ### 10.5 Phone (under 600 dp) and tablet
 
@@ -5053,6 +5054,58 @@ mutation (PLT-03). The first-run flow (4.3) is a sequence of full-screen
 steps with "confirm all shown". iOS and Android say plainly that sampling
 stops in the background (PLT-04) and show the return banner. Tablets use a
 two-pane layout (PLT-05, v1).
+
+As built in M2 (`app/klabautermann_app/lib/ui/server_detail_page.dart`,
+`phone_shell.dart`), the pushed screen's More destination lists
+Processes, Services, Jobs, System and Access in the desktop strip's
+order. Each opens full-screen under an app bar naming the panel and the
+server, in the layout the panel takes at that width, on a phone its
+narrow one (Processes' two-line entries, System's three columns, a
+unit's page in the list's place), with the return banner the screen
+under it shows. That screen holds the server
+open, and with More selected none of its destinations samples, so the
+pushed panel's subscription is the only one. Access is the page a
+hidden panel's link already pushed, and a panel the probe hides links
+there from its own page too.
+
+- Logs: the Logs destination stays the Logs panel, whose source and
+  filters already open sheets on phones (10.8); a log that a detail
+  opens is a sheet. In M2 that is SVC-04's lines: a unit's page on the
+  phone offers them behind a button and reads them in a modal bottom
+  sheet that opens at 60 % of the screen and drags from a quarter to
+  the full height, following this section over SVC-04's lines on the
+  page itself. The sheet opens its read as it opens, and closing it by
+  its button, a drag or Back closes a read still running. The desktop
+  keeps the lines on the page.
+- Pull to refresh: the Overview and every pushed panel that samples
+  pull to refresh. A pull sends `RefreshSubscription` for the surface's
+  own subscription (10.1), and the indicator waits until each of its
+  streams has a newer sample, failed readings included, until the
+  server stops sampling, or for 10 s [E]; with nothing sampling, as
+  while links are off (K44), it ends at once. It takes vertical scrolls
+  at any depth, so a panel's own list pulls from its top, and an
+  always-scrollable view of the panel's size pulls a panel whose content
+  fits. Logs and Access sample nothing and do not pull, and the desktop
+  has no pull. Screen readers and keyboards have no refresh action yet;
+  sampling goes on at its cadence meanwhile.
+- PLT-04: on iOS and Android the server header's limitation slot (10.4)
+  says "Reading stops while Klabautermann is in the background and
+  resumes when you return.", the coverage sheet's words, under every
+  destination. That is what the app does: it reports the background
+  (10.1), and the engine pauses every subscription, probe and log read
+  at once, closes the links after 30 s (D34) and resumes them all on
+  return. A desktop window narrow enough for this screen stays in the
+  foreground and does not say so, and a tablet in the desktop layout
+  has it in the inspector's coverage (9.5).
+- SYN-08 (task #50): a server that leaves the fleet, removed by a sync
+  or left out of a new import, closes its screen with everything the
+  screen opened (More's panels, the Access page, sheets and dialogs),
+  back to the fleet list, as the desktop workspace's selection clears.
+  The list then says "web-1 is no longer in your fleet, so its screen
+  closed." in a live region styled as the return banner, until the user
+  dismisses it or opens a server. The desktop shows no such notice yet.
+  Reads close as their sheets go, and the monitoring controller already
+  sends the server nothing (10.1).
 
 ### 10.6 Command palette and keyboard model (v1)
 

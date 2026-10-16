@@ -98,8 +98,9 @@ class AccessPage extends StatelessWidget {
       title: Text(AppLocalizations.of(context).accessPageTitle(serverName)),
     ),
     // A server leaving the fleet takes its profile listenable with it
-    // (SYN-08), and one that returns gets a new one: the panel reads it
-    // again on each fleet change, as the server screen under it does.
+    // (SYN-08) and closes this screen with the server's; until the screen
+    // has gone, the panel reads the listenable again on each fleet
+    // change, as the server screen under it does.
     body: SafeArea(
       child: ListenableBuilder(
         listenable: fleet,

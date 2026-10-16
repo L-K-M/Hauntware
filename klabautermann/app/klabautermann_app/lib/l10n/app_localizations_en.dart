@@ -633,6 +633,19 @@ class AppLocalizationsEn extends AppLocalizations {
   String get serverTabMore => 'More';
 
   @override
+  String serverPanelPageTitle(String panel, String name) {
+    return '$panel on $name';
+  }
+
+  @override
+  String fleetServerLeftNotice(String name) {
+    return '$name is no longer in your fleet, so its screen closed.';
+  }
+
+  @override
+  String get fleetServerLeftDismiss => 'Dismiss';
+
+  @override
   String get processesWaiting => 'Waiting for the first process list.';
 
   @override

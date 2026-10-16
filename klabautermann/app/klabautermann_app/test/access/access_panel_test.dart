@@ -533,29 +533,42 @@ void main() {
     expect(find.byType(AccessPanel), findsOneWidget);
   });
 
-  testWidgets('a pushed Access screen follows its server out of the fleet '
-      'and back', (tester) async {
+  testWidgets('a pushed Access screen closes with its server out of the '
+      'fleet, and opens on the new profile once it is back', (tester) async {
     const rootLogin = 'You log in as root, so no elevation or group is needed.';
     final harness = await _openWeb1(
       tester,
       _phone,
       profile: alpineContainer(tools: {'tail': null}),
     );
-    await tester.tap(find.text('Logs'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Open Access'));
-    await tester.pumpAndSettle();
+    Future<void> openAccess() async {
+      await tester.tap(find.text('Logs'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Open Access'));
+      await tester.pumpAndSettle();
+    }
+
+    await openAccess();
     expect(find.text(rootLogin), findsWidgets);
 
-    // SYN-08: the profile leaves with its server.
+    // SYN-08 (task #50): the server's screens close back to the fleet.
     harness.engine.emit(CatalogReplaced(const [_db1Entry]));
     await tester.pumpAndSettle();
-    expect(find.text(rootLogin), findsNothing);
-    expect(find.text(_notChecked), findsOneWidget);
+    expect(find.byType(AccessPanel), findsNothing);
+    expect(find.text('db-1'), findsOneWidget);
 
+    // Back, the profile left with it, so a new one shows.
     harness.engine
       ..emit(CatalogReplaced(const [_web1Entry, _db1Entry]))
-      ..emit(HostProfileChanged('srv-1', debianHost()));
+      ..emit(
+        HostProfileChanged('srv-1', alpineContainer(tools: {'tail': null})),
+      );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('web-1'));
+    await tester.pumpAndSettle();
+    await openAccess();
+    expect(find.text(rootLogin), findsWidgets);
+    harness.engine.emit(HostProfileChanged('srv-1', debianHost()));
     await tester.pumpAndSettle();
     expect(find.text(rootLogin), findsNothing);
     expect(find.text('sudo usermod -aG systemd-journal alice'), findsOneWidget);
