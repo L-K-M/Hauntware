@@ -12,11 +12,20 @@ final RegExp secretKeyPattern = RegExp(
 /// after the `://`.
 final RegExp _urlCredentialPattern = RegExp(r'([^/@\s:]+):[^/@\s]+@');
 
-/// A character of a URL scheme (`[A-Za-z0-9+.-]`).
-final RegExp _schemeCharacter = RegExp(r'[A-Za-z0-9+.\-]');
+/// Whether the code unit [unit] is an ASCII letter, which a URL scheme
+/// starts with. Code units, not a regular expression per character,
+/// keep the scan of a 128 KiB argument cheap.
+bool _isLetter(int unit) =>
+    (unit >= 0x41 && unit <= 0x5A) || (unit >= 0x61 && unit <= 0x7A);
 
-/// A letter, which a URL scheme starts with.
-final RegExp _letter = RegExp('[A-Za-z]');
+/// Whether the code unit [unit] is a URL scheme character
+/// (`[A-Za-z0-9+.-]`).
+bool _isSchemeCharacter(int unit) =>
+    _isLetter(unit) ||
+    (unit >= 0x30 && unit <= 0x39) ||
+    unit == 0x2B ||
+    unit == 0x2D ||
+    unit == 0x2E;
 
 /// Whether [key] names a secret under the 03 §8.9 rules.
 bool isSecretKey(String key) => secretKeyPattern.hasMatch(key);
@@ -127,9 +136,9 @@ String maskUrlCredentials(String text) {
 bool _endsScheme(String text, int start, int end) {
   var letter = false;
   for (var at = end - 1; at >= start; at--) {
-    final character = text[at];
-    if (!_schemeCharacter.hasMatch(character)) break;
-    letter = letter || _letter.hasMatch(character);
+    final unit = text.codeUnitAt(at);
+    if (!_isSchemeCharacter(unit)) break;
+    letter = letter || _isLetter(unit);
   }
   return letter;
 }
