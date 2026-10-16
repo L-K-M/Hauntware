@@ -4,6 +4,25 @@ Living snapshot of where Poltergeist is, what's proven, and what to pick up
 next. Read [AGENTS.md](../AGENTS.md) for build/test commands and
 [09-PLAYBOOK.md](plan/09-PLAYBOOK.md) for the PR process.
 
+## D12 runner-image baseline refresh (2026-10-16)
+
+Main run 38642392417 exposed `ubuntu-latest` rotating from
+`20261004.327.1` to `20261012.334.1`: enforced tier B failed on the
+controlled fingerprint, tier A drift-skipped, and the persisted
+runner-image streak reached the 7-run staleness gate. Exact-fingerprint
+artifacts from main runs 38668350527, 38718111021, 38790068258,
+38841624155, and 38865653985 on `AMD EPYC 7763 64-Core Processor` yield
+P1 1119.692 ms (n=15), P2 11119.811 ms (n=15), and P4 49.156 ms (n=25).
+P6 remains absent because all fifteen rows errored below its
+frame-capture floor.
+
+The tier-A calibrated runner image moves with no threshold,
+scenario-config, landed-state, or enforcement change. The enforced `ab`
+checker passes against all five pooled artifacts. The persisted streak
+clears only on the first clean main run on the recorded CPU; until then
+main runs on other CPUs still fail tier B as stale. No Séance source or
+port changed.
+
 ## Pair-editor exclude row polish (2026-10-13)
 
 Two follow-ups GLM raised on the rule sets PR and deferred there. Adding
