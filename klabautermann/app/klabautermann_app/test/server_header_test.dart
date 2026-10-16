@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show DiagnosticsDebugCreator;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ghost_theme/ghost_theme.dart' show GhostChrome;
 import 'package:ghost_ui/ghost_ui.dart' show SelectedTabView;
@@ -7,6 +8,7 @@ import 'package:klabautermann_app/controllers/monitoring_controller.dart';
 import 'package:klabautermann_app/l10n/app_localizations.dart';
 import 'package:klabautermann_app/theme/app_theme.dart';
 import 'package:klabautermann_app/ui/server_header.dart';
+import 'package:klabautermann_app/ui/server_workspace.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 
 import 'access/profiles.dart';
@@ -54,6 +56,21 @@ bool _dotBarred(WidgetTester tester) => find
     )
     .evaluate()
     .isNotEmpty;
+
+/// Whether [details] names the widget that raised it and that widget sits
+/// outside every [T]. An error without a creator cannot be placed, so it
+/// counts as inside.
+bool _raisedOutside<T extends Widget>(FlutterErrorDetails details) {
+  for (final node in details.informationCollector?.call() ?? const []) {
+    if (node case DiagnosticsDebugCreator(
+      value: DebugCreator(:final element),
+    )) {
+      return element.widget is! T &&
+          element.findAncestorWidgetOfExactType<T>() == null;
+    }
+  }
+  return false;
+}
 
 Future<AppHarness> _openWeb1(
   WidgetTester tester,
@@ -280,6 +297,66 @@ void main() {
         lessThanOrEqualTo(tester.getRect(viewport).bottom),
       );
       expect(tester.takeException(), isNull);
+    });
+  }
+
+  // A narrow desktop window at 200 % text: the rail leaves the workspace
+  // 398 px, where the header wraps to over 500 px. 960 x 500 also
+  // overflows the fleet rail's own column (fleet_rows.dart), which no
+  // window this short avoids at this text size and which is not the
+  // workspace's concern, so only errors raised inside the workspace count.
+  for (final height in const [600.0, 500.0]) {
+    testWidgets('a 960 x ${height.round()} desktop window keeps most of the '
+        'workspace for the panel at 200 % text', (tester) async {
+      tester.platformDispatcher.textScaleFactorTestValue = 2;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      final reportError = FlutterError.onError!;
+      FlutterError.onError = (details) {
+        if (!_raisedOutside<ServerWorkspace>(details)) reportError(details);
+      };
+      try {
+        final harness = await pumpApp(
+          tester,
+          size: Size(960, height),
+          servers: twoServers,
+        );
+        // At this size the server's row sits under the rail's fold, so
+        // the selection comes from the controller rather than a tap.
+        harness.fleet.select('srv-1');
+        harness.engine
+          ..emit(const LinkState('srv-1', LinkReady()))
+          ..emit(HostProfileChanged('srv-1', _twoEngines));
+        await tester.pumpAndSettle();
+
+        expect(tester.takeException(), isNull);
+        // The header takes at most 40 %; the tab strip and the panel
+        // under it keep the rest.
+        final workspace = tester.getRect(find.byType(ServerWorkspace));
+        final strip = tester.getRect(find.byType(TabBar));
+        final panel = tester.getRect(find.byType(SelectedTabView));
+        expect(
+          panel.bottom - strip.top,
+          greaterThanOrEqualTo(workspace.height * 0.6 - 0.5),
+        );
+        expect(panel.bottom, lessThanOrEqualTo(workspace.bottom + 0.5));
+
+        final viewport = find
+            .ancestor(
+              of: find.byType(ServerHeader),
+              matching: find.byType(Scrollable),
+            )
+            .first;
+        final runtime = _inHeader(find.text(_twoEnginesText));
+        await tester.drag(viewport, const Offset(0, -2000));
+        await tester.pumpAndSettle();
+        expect(
+          tester.getRect(runtime).bottom,
+          lessThanOrEqualTo(tester.getRect(viewport).bottom),
+        );
+        expect(tester.takeException(), isNull);
+      } finally {
+        FlutterError.onError = reportError;
+      }
     });
   }
 }

@@ -81,25 +81,25 @@ class ServerWorkspace extends StatelessWidget {
 
     return DefaultTabController(
       length: _panels.length,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-            child: ServerHeader(
-              server: server,
-              fleet: fleet,
-              monitoring: monitoring,
+      child: HeaderedBody(
+        headerPadding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+        header: ServerHeader(
+          server: server,
+          fleet: fleet,
+          monitoring: monitoring,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            TabBar(
+              isScrollable: true,
+              tabs: [for (final panel in _panels) Tab(text: panel.label(l10n))],
             ),
-          ),
-          TabBar(
-            isScrollable: true,
-            tabs: [for (final panel in _panels) Tab(text: panel.label(l10n))],
-          ),
-          Expanded(
-            child: _Panels(monitoring: monitoring, serverId: server.id),
-          ),
-        ],
+            Expanded(
+              child: _Panels(monitoring: monitoring, serverId: server.id),
+            ),
+          ],
+        ),
       ),
     );
   }

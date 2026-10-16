@@ -91,46 +91,51 @@ class _ServerDetailPageState extends State<ServerDetailPage>
   Widget _build(BuildContext context, AppLocalizations l10n) {
     return Scaffold(
       appBar: AppBar(title: Text(l10n.serverTitle(widget.server.displayName))),
-      body: _HeaderedBody(
-        header: ServerHeader(
-          server: widget.server,
-          fleet: widget.fleet,
-          monitoring: widget.monitoring,
-          showTitle: false,
-        ),
-        child: SelectedTabView(
-          controller: _destinations,
-          children: [
-            for (final (index, panel) in ServerDetailPage._panels.indexed)
-              GatedPanel(
-                monitoring: widget.monitoring,
-                serverId: widget.server.id,
-                panel: panel,
-                onOpenAccess: _openAccess,
-                child: SampledSurface(
+      // The header heads the body rather than the app bar's fixed-height
+      // bottom, so it grows with large text instead of clipping (A11Y-09).
+      body: SafeArea(
+        child: HeaderedBody(
+          headerPadding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          header: ServerHeader(
+            server: widget.server,
+            fleet: widget.fleet,
+            monitoring: widget.monitoring,
+            showTitle: false,
+          ),
+          child: SelectedTabView(
+            controller: _destinations,
+            children: [
+              for (final (index, panel) in ServerDetailPage._panels.indexed)
+                GatedPanel(
                   monitoring: widget.monitoring,
                   serverId: widget.server.id,
-                  surface: panel.name,
-                  streams: panel.streams,
-                  visible: _destinations.index == index,
-                  child: switch (panel) {
-                    ServerPanel.overview => OverviewPanel(
-                      monitoring: widget.monitoring,
-                      serverId: widget.server.id,
-                      visible: _destinations.index == index,
-                    ),
-                    ServerPanel.logs => LogsPanel(
-                      monitoring: widget.monitoring,
-                      serverId: widget.server.id,
-                      visible: _destinations.index == index,
-                    ),
-                    _ => const PlaceholderPaneBody(),
-                  },
+                  panel: panel,
+                  onOpenAccess: _openAccess,
+                  child: SampledSurface(
+                    monitoring: widget.monitoring,
+                    serverId: widget.server.id,
+                    surface: panel.name,
+                    streams: panel.streams,
+                    visible: _destinations.index == index,
+                    child: switch (panel) {
+                      ServerPanel.overview => OverviewPanel(
+                        monitoring: widget.monitoring,
+                        serverId: widget.server.id,
+                        visible: _destinations.index == index,
+                      ),
+                      ServerPanel.logs => LogsPanel(
+                        monitoring: widget.monitoring,
+                        serverId: widget.server.id,
+                        visible: _destinations.index == index,
+                      ),
+                      _ => const PlaceholderPaneBody(),
+                    },
+                  ),
                 ),
-              ),
-            // More: the other panels, pushed further (03 §10.5).
-            const PlaceholderPaneBody(),
-          ],
+              // More: the other panels, pushed further (03 §10.5).
+              const PlaceholderPaneBody(),
+            ],
+          ),
         ),
       ),
       bottomNavigationBar: NavigationBar(
@@ -150,45 +155,6 @@ class _ServerDetailPageState extends State<ServerDetailPage>
       ),
     );
   }
-}
-
-/// The most of the body's height the header takes; past it, it scrolls.
-const double _headerMaxShare = 0.4;
-
-/// The safe area with [header] over [child]: the header heads the body
-/// rather than the app bar's fixed-height bottom, so it grows with large
-/// text instead of clipping (A11Y-09). On a short screen at large text,
-/// such as a landscape phone, it scrolls within [_headerMaxShare] of the
-/// body, so the panel keeps the rest.
-class _HeaderedBody extends StatelessWidget {
-  const _HeaderedBody({required this.header, required this.child});
-
-  final Widget header;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) => SafeArea(
-    child: LayoutBuilder(
-      builder: (context, box) => Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          ConstrainedBox(
-            constraints: BoxConstraints(
-              maxHeight: box.maxHeight * _headerMaxShare,
-            ),
-            // Not primary: the panel's scroll view answers a status bar
-            // tap.
-            child: SingleChildScrollView(
-              primary: false,
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-              child: header,
-            ),
-          ),
-          Expanded(child: child),
-        ],
-      ),
-    ),
-  );
 }
 
 const Map<ServerPanel, IconData> _destinationIcons = {

@@ -113,6 +113,52 @@ class ServerHeader extends StatelessWidget {
   }
 }
 
+/// The most of its surface's height the server header takes; past it, it
+/// scrolls.
+const double _headerMaxShare = 0.4;
+
+/// [header] over [child], as both server surfaces stack them: the header
+/// grows with large text instead of clipping (A11Y-09), and where it
+/// would pass [_headerMaxShare] of the height, as on a landscape phone or
+/// a narrow desktop window at 200 % text, it scrolls, so [child] keeps the
+/// rest.
+class HeaderedBody extends StatelessWidget {
+  const HeaderedBody({
+    super.key,
+    required this.header,
+    required this.headerPadding,
+    required this.child,
+  });
+
+  final Widget header;
+
+  /// Around [header], inside its scroll view.
+  final EdgeInsetsGeometry headerPadding;
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, box) => Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: box.maxHeight * _headerMaxShare,
+          ),
+          // Not primary: the panel's scroll view answers a status bar tap.
+          child: SingleChildScrollView(
+            primary: false,
+            padding: headerPadding,
+            child: header,
+          ),
+        ),
+        Expanded(child: child),
+      ],
+    ),
+  );
+}
+
 /// A server's link state as a dot, an icon and a word, read as one node
 /// ("Server status: Connected").
 class ServerLinkState extends StatelessWidget {

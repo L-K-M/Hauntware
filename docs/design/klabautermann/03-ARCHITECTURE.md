@@ -2675,6 +2675,61 @@ no longer holds that value.
   timestamp, structured fields, saved queries (`query` records), journal
   size and vacuum, log rate view, syslog-only hosts, split panes.
 
+As built in M2 (`klabautermann_core/lib/src/logs/log_service.dart`,
+K25a; K25b routes `OpenLogStream` to it), `LogService` serves the
+windows (`follow: false`) of one server's link, one host command at a
+time through `HostCommands.commandLine`, and answers each open with a
+`LogStreamState` before it returns. Followers are K26.
+
+- A window holds 1 to 500 records, LOG-01's page. Any other size, a
+  file with a cursor and what 8.8's validators refuse end as an invalid
+  spec before anything runs. The journal reads
+  `journalctl -o json --no-pager -r -n <window>` with the source's
+  filters and `--after-cursor`. SVC-04's unit logs are that read with
+  `-u` and 50 records, newest first like every window; the unit page
+  lists them oldest first itself. A file reads `tail -n <window> --`.
+- Each command keeps at most 4 MiB of stdout and runs for at most 30 s
+  once its channel is open, `SshLink.run`'s one-shot deadline (the link
+  bounds the open). The 256 KiB default cap would cut a 500-entry window
+  of 1 to 2 KiB `-o json` entries short; 4 MiB is 8 KiB per entry, the
+  `dmesg --json` of a ring up to about 1.5 MiB, and an eighth of the
+  viewer's 32 MiB cap (10.8, 11.4). A cut keeps the newest bytes and
+  ends as window filled with fewer records: a journal window stops
+  reading at the cap and keeps its complete entries, so its last cursor
+  reads on; `tail` and `dmesg`, which print oldest first, keep their
+  last complete lines or records. Journal lines that are not JSON
+  objects count as dropped, as does an entry longer than the cap. A
+  full journal window left without a record ends as failed: it has no
+  cursor to read on from, and journalctl prints an entry's keys in hash
+  order, so a cut entry's cursor may lie past the cap.
+- The kernel log reads `journalctl -k -b` and falls back to
+  `dmesg --json --decode` when that exited without a kernel record,
+  whatever its exit code. That is what an account outside
+  `systemd-journal`, `adm` and `wheel` sees, since kernel entries are
+  never its own (K04's `kPanelNeeds`), and what a host without
+  journalctl or without kernel entries in its journal gives, so the
+  fallback needs neither the profile nor another probe. It never
+  follows a cursor (an empty older page is the oldest record), a cut, a
+  signal, a timeout or a lost link, which end the read as failed.
+  `LogStreamRunning` names the reader (`LogReader.fallback`), so the view
+  can say where even an empty read came from; a failed fallback ends
+  with `dmesg`'s reason and output.
+- Exit 0 ends as window filled when the window is full, otherwise as
+  oldest record reached, which a window after a cursor also reaches at
+  its first entry older than `since` (10.1). Exit 127 (the shell's
+  `exec` found no command), `No such file or directory` and an unknown
+  option (`dmesg --json` needs util-linux 2.38; BusyBox has none) are
+  source missing. Exit 126, `Permission denied`, `Operation not
+  permitted` and journalctl's "insufficient permissions" are read
+  denied. Any other status, a signal, a timeout, a refused channel or a
+  lost link is failed. Commands run in the C locale, so the texts
+  match; the detail is the last 4 KiB of stderr through
+  `stripControlChars`.
+- `CloseStream` ends a read as closed, and closing the service (its link
+  closed, or its server left the fleet) ends the others as failed. Both
+  close the process (TERM, then the channel), one whose channel opens
+  late included.
+
 ### 7.7 Scheduled jobs (JOB)
 
 - **MVP.** Unified list (JOB-01): own `crontab -l` (exit 1 with "no crontab"
@@ -4402,7 +4457,8 @@ the engine in `engine_isolate.dart` beside it):
   records discarded since the stream's previous batch.
   `LogStreamState(streamId, status)` carries a sealed status that
   compares by value: waiting (for the link, a free channel under 5.2's
-  budget, or the foreground), running, or ended with a reason (window
+  budget, or the foreground), running (with the source's own reader or
+  the kernel log's `dmesg` fallback, 7.6), or ended with a reason (window
   filled, oldest record reached, closed, spec refused, source missing,
   read denied, or failed) and the host's error output. Until the log
   service is wired, the engine rejects `OpenLogStream` and ignores
@@ -4636,8 +4692,9 @@ check's engines over the probe's profile, as the Access tab lists
 them, with its caveat that Podman can also answer on Docker's socket
 path whenever a Docker engine is named. On phones the header heads the
 body under the app bar, whose fixed-height bottom would clip it at
-large text; past 40 % of the body's height, as on a landscape phone at
-200 % text, it scrolls, so the panel keeps the rest.
+large text. On both surfaces it scrolls past 40 % of the height it
+heads, as on a landscape phone or a narrow desktop window at 200 %
+text, so the panel, with the desktop's tab strip, keeps the rest.
 
 As built in M2 for OV-01, OV-03 and OV-04
 (`app/klabautermann_app/lib/ui/overview_panel.dart`), the Overview tab
@@ -5025,6 +5082,14 @@ palette) and presets in the preview. v1: paste from Séance and Poltergeist
   10-minute run in the `klabautermann_integration` job (every job needs a
   `timeout-minutes`, `scripts/check-workflows.sh` [V]) and a 24 h run
   before M4 and M7 (manual sign-off).
+- Engine side (spike S5 part 1): `klabautermann_core/tool/engine_budget.dart`
+  replays the host fixtures for ten hosts at the Phone cadence and a
+  1,000 lines/s journal follow through the frame reader, the sample
+  pipeline, the journal parser and an isolate send, and reports time per
+  tick and per second, reply bytes, lines per second, the resident set
+  and (under `dart run`) the live heap. Its runs are provisional
+  evidence in `klabautermann/docs/evidence/s5/` and set no budget; CI
+  runs only its smoke test.
 
 ### 11.5 Host write inventory test
 
