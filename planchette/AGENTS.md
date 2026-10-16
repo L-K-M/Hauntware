@@ -34,9 +34,10 @@ packages/
                           chrome extension, and the per-app style and codec
                           seams; outside the workspace
   ghost_servers/          server surfaces shared by Séance and Poltergeist
-                          (today the server list's sectioning and the
-                          status-dot vocabulary), over seance_protocol
-                          and ghost_ui; outside the workspace
+                          (today the server list's sectioning, the
+                          status-dot vocabulary and the host-key prompt),
+                          over seance_protocol and ghost_ui; outside the
+                          workspace
 app/
   planchette_app/         Flutter client — NOT a workspace member (it needs
                           the Flutter SDK; members must not).
