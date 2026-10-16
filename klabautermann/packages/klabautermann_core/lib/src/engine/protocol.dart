@@ -1986,9 +1986,10 @@ final class ProcessRow {
 
   /// When it started by the engine's clock, UTC: the reading's time less
   /// the host's uptime, plus [startTicks] at 100 a second, the USER_HZ the
-  /// CPU shares assume too (7.2). Null without either, and where lxcfs
-  /// serves a container's own age as `/proc/uptime`, since start ticks
-  /// count from the kernel's boot (D50).
+  /// CPU shares assume too (7.2). Null without either, before the probe
+  /// reports its lxcfs mounts, and where lxcfs serves a container's own
+  /// age as `/proc/uptime`, since start ticks count from the kernel's
+  /// boot (D50).
   final DateTime? startedAt;
 
   /// The command line, one item per argument (per whitespace token on a

@@ -2587,9 +2587,10 @@ unless the user enables admin mode for that panel.
   the row's `comm`. The engine dates each
   start as the reading's time
   less the reply's uptime plus the start ticks at USER_HZ 100, as the CPU
-  shares assume; the start is unknown where lxcfs serves the container's
-  own age as `/proc/uptime` (D50), since start ticks count from the
-  kernel's boot. Kill and signal
+  shares assume; the start is unknown until the probe reports its lxcfs
+  mounts and where lxcfs serves the container's own age as
+  `/proc/uptime` (D50), since start ticks count from the kernel's boot.
+  Kill and signal
   (PRC-02): the plan records the PID and its start
   time (field 22 of `/proc/<pid>/stat`: fields resume at 3, `state`,
   after the last `)`, because `comm` may contain spaces and `)`, so
