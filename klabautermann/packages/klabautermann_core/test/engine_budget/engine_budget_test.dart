@@ -5,9 +5,10 @@
 // a one-second run on a shared machine mean nothing.
 import 'dart:convert';
 
+import 'package:klabautermann_core/src/replay/fixture_replay.dart';
+import 'package:klabautermann_core/src/replay/host_fixtures.dart';
 import 'package:test/test.dart';
 
-import '../../tool/src/budget_replay.dart';
 import '../../tool/src/engine_budget.dart';
 
 void main() {
@@ -90,6 +91,48 @@ void main() {
       (json['engine']! as Map<String, Object?>)['busyMsPerSecond']! as num,
       greaterThan(0),
     );
+  });
+
+  group('parseBudgetArgs', () {
+    test('reads each option and --heap', () {
+      final parsed = parseBudgetArgs([
+        '--scenario',
+        'phone',
+        '--heap',
+        '--out',
+        'run.json',
+      ]);
+      expect(parsed.options, {'scenario': 'phone', 'out': 'run.json'});
+      expect(parsed.heap, HeapReadings.afterFullCollection);
+      expect(parseBudgetArgs(const []).heap, HeapReadings.off);
+    });
+
+    test('refuses an option where a value belongs', () {
+      expect(
+        () => parseBudgetArgs(['--out', '--heap']),
+        throwsA(
+          isA<FormatException>().having(
+            (e) => e.message,
+            'message',
+            '--out needs a value, not --heap',
+          ),
+        ),
+      );
+    });
+
+    test('refuses an unknown option and a missing value', () {
+      for (final args in [
+        ['--rate', '5'],
+        ['phone'],
+        ['--seconds'],
+      ]) {
+        expect(
+          () => parseBudgetArgs(args),
+          throwsFormatException,
+          reason: '$args',
+        );
+      }
+    });
   });
 
   test('every journal fixture row parses', () {
