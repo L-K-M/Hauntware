@@ -1,0 +1,10 @@
+{
+  "result": {
+    "timers": [],
+    "format": "none",
+    "timeoutAbsent": false
+  },
+  "warnings": [
+    "timers: no timers block"
+  ]
+}

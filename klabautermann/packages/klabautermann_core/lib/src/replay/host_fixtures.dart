@@ -28,14 +28,24 @@ final class HostFixture {
   String get core => payloads[Collector.core.wireName]!;
 }
 
+/// Marks the container captures of `test/integration/capture.sh`
+/// (`<platform>-docker-<shell>`).
+const _containerCapture = '-docker-';
+
 /// Every platform under [root] with a probe and the fast collectors'
-/// fixtures, by name.
+/// fixtures, by name. The container captures are left out: they are shell
+/// and userland variants of a few platforms, which would crowd the others
+/// out of a ten-host fleet taken in name order, and spike S5 part 1
+/// replayed the platform fixtures alone (docs/evidence/s5).
 List<HostFixture> loadHostFixtures(String root) {
   final dirs = Directory(root).listSync().whereType<Directory>().toList()
     ..sort((a, b) => a.path.compareTo(b.path));
   File file(Directory dir, String name) => File('${dir.path}/$name');
   final fixtures = <HostFixture>[];
   for (final dir in dirs) {
+    final platform = dir.uri.pathSegments.lastWhere((s) => s.isNotEmpty);
+    if (platform.contains(_containerCapture)) continue;
+
     final probe = file(dir, 'probe.sections');
     if (!probe.existsSync()) continue;
 
@@ -50,7 +60,7 @@ List<HostFixture> loadHostFixtures(String root) {
 
     fixtures.add(
       HostFixture(
-        platform: dir.uri.pathSegments.lastWhere((s) => s.isNotEmpty),
+        platform: platform,
         probe: parseProbeSections(probe.readAsStringSync()),
         payloads: payloads,
       ),
