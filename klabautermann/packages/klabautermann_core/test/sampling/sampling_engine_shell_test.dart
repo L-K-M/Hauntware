@@ -16,6 +16,8 @@ import 'dart:isolate';
 import 'package:klabautermann_core/klabautermann_core.dart';
 import 'package:klabautermann_core/src/capabilities/capability_cache.dart';
 import 'package:klabautermann_core/src/engine/engine_isolate.dart';
+import 'package:klabautermann_core/src/fleet/ssh_config_import_store.dart'
+    show sshConfigImportsFileName;
 import 'package:test/test.dart';
 
 import '../support/local_process_link.dart';
@@ -176,6 +178,50 @@ void main() {
       expect(link.processes, hasLength(started + 2));
 
       // Unsubscribed, nothing runs.
+      engine.send(
+        const Unsubscribe(serverId: _web, subscriptionId: 'overview'),
+      );
+      await engine.until<SamplingState>(
+        (e) => e.phase == SamplingPhase.unsubscribed,
+      );
+      await Future.wait([
+        for (final p in link.processes) p.exit,
+      ]).timeout(const Duration(seconds: 10));
+    });
+  }
+
+  if (_shells.values.firstOrNull case final path?) {
+    test('after an import the store could not save, a probe answer is not '
+        'cached, since the next start reads the older fleet (D59)', () async {
+      final support = Directory.systemTemp.createTempSync('klab-sampling-');
+      addTearDown(() => support.deleteSync(recursive: true));
+      final link = await LocalProcessLink.create(path);
+      addTearDown(link.dispose);
+      final engine = await _Engine.start(support.path, link);
+      // A directory with an entry cannot be replaced by the saved file.
+      Directory(
+        '${support.path}/$sshConfigImportsFileName/entry',
+      ).createSync(recursive: true);
+
+      engine.send(
+        const ImportSshConfig('Host web\n  HostName 192.0.2.10\n  User me\n'),
+      );
+      expect((await engine.until<SshConfigImported>()).saved, isFalse);
+      engine
+        ..send(const Connect(_web))
+        ..send(
+          const Subscribe(
+            serverId: _web,
+            subscriptionId: 'overview',
+            streams: {SampleStream.core},
+          ),
+        );
+      await engine.until<HostProfileChanged>();
+      await Future<void>.delayed(const Duration(seconds: 1));
+      expect(
+        Directory('${support.path}/$capabilityCacheDirectoryName').existsSync(),
+        isFalse,
+      );
       engine.send(
         const Unsubscribe(serverId: _web, subscriptionId: 'overview'),
       );

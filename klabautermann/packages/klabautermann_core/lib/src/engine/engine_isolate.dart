@@ -275,8 +275,10 @@ void engineMain(
         }
         // Saved before the fleet changes, so a restart after the answer
         // finds the import. A failed save still shows it for this run, and
-        // the answer says it was not kept.
+        // the answer says it was not kept; the capability cache then
+        // writes nothing until an import saves (D59).
         final saved = await imports.replace(result.hosts, hops: result.hops);
+        capabilities?.fleetSave = saved ? FleetSave.saved : FleetSave.unsaved;
         refreshFleet();
         uiPort.send(CatalogReplaced(fleet.entries));
         uiPort.send(

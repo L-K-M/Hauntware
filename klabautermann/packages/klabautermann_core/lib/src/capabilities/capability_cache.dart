@@ -132,8 +132,23 @@ enum CacheUpdate {
   /// kept the file.
   purgeWithheld,
 
+  /// An import of this run was not saved ([FleetSave.unsaved]), so the
+  /// write left the file as it is.
+  unsavedFleet,
+
   /// The file system refused it.
   failed,
+}
+
+/// Whether the import store holds the fleet the engine runs (D59).
+enum FleetSave {
+  /// It does, so the next start reads the same servers and endpoints.
+  saved,
+
+  /// An import of this run was not saved, so the next start reads an
+  /// older fleet, in which a server may keep its id under its old
+  /// endpoint.
+  unsaved,
 }
 
 /// Whether the cache deletes the files of servers outside its fleet.
@@ -151,11 +166,12 @@ enum CachePurge {
 /// The engine's capability cache. It reads every fleet server's fresh
 /// profile when it opens, hands each out once ([takeCached]) unless a
 /// probe of this run answered first, rewrites a server's file on each
-/// probe answer ([probed]) and deletes it when the server leaves the
-/// fleet or its endpoint changes ([forget], SYN-08), unless
-/// [CachePurge.never] keeps it. It writes and deletes only with
-/// [SupportDirectoryAccess.exclusive] access, and one file operation at a
-/// time, in call order, so a purge cannot overtake a write.
+/// probe answer ([probed]) while the store holds the fleet it runs
+/// ([fleetSave]) and deletes it when the server leaves the fleet or its
+/// endpoint changes ([forget], SYN-08), unless [CachePurge.never] keeps
+/// it. It writes and deletes only with [SupportDirectoryAccess.exclusive]
+/// access, and one file operation at a time, in call order, so a purge
+/// cannot overtake a write.
 final class CapabilityCache {
   CapabilityCache._(this._directory, this._access, this._purge, this._now);
 
@@ -168,6 +184,12 @@ final class CapabilityCache {
   final Map<String, CachedProfileFresh> _unsent = {};
 
   Future<void> _tail = Future.value();
+
+  /// Set after each import: while [FleetSave.unsaved], [probed] writes no
+  /// file, which the next start would read for the store's older
+  /// endpoint. Purges go on, since a file deleted early only waits for
+  /// the next probe.
+  FleetSave fleetSave = FleetSave.saved;
 
   /// Opens the cache in [supportDirectory] for [fleet]: with exclusive
   /// access and [CachePurge.removedServers] it first deletes the files of
@@ -219,6 +241,9 @@ final class CapabilityCache {
   /// session fields, probed now.
   Future<CacheUpdate> probed(String serverId, HostProfile profile) {
     _unsent.remove(serverId);
+    if (fleetSave == FleetSave.unsaved) {
+      return Future.value(CacheUpdate.unsavedFleet);
+    }
     final document = {
       'format': _format,
       'version': _version,

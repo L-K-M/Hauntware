@@ -222,6 +222,25 @@ void main() {
       expect(await unsaved.probed(_db, _profile()), CacheUpdate.applied);
     });
 
+    test('after an import that was not saved, a probe writes no file until '
+        'an import saves, since the next start reads the older fleet; '
+        'purges go on', () async {
+      await probed(_db);
+      final store = await open(fleet: const {_web, _db});
+
+      store.fleetSave = FleetSave.unsaved;
+      expect(await store.probed(_web, _profile()), CacheUpdate.unsavedFleet);
+      expect(file(_web).existsSync(), isFalse);
+      expect(await store.probed(_db, _profile()), CacheUpdate.unsavedFleet);
+      expect(store.takeCached(_db), isNull, reason: 'this run probed it');
+      expect(await store.forget({_db}), [CacheUpdate.applied]);
+      expect(file(_db).existsSync(), isFalse);
+
+      store.fleetSave = FleetSave.saved;
+      expect(await store.probed(_web, _profile()), CacheUpdate.applied);
+      expect(file(_web).existsSync(), isTrue);
+    });
+
     test('opening sweeps the files of servers outside the fleet and '
         'leftover temporary files, and nothing else', () async {
       final writer = await open(fleet: const {_web, _db, _uuid});
