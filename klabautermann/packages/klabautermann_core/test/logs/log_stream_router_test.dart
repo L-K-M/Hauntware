@@ -244,6 +244,15 @@ void main() {
     expect(statuses('c').last, _running);
   });
 
+  test('a window opened in the background says so again when a later '
+      'background pauses it', () {
+    router.activity = AppActivity.background;
+    open('a');
+    router.activity = AppActivity.foreground;
+    router.activity = AppActivity.background;
+    expect(statuses('a'), [_forForeground, _running, _forForeground]);
+  });
+
   test('Disconnect, fleet removal and close end every window as failed, '
       'once', () async {
     final ways = <String, void Function()>{
