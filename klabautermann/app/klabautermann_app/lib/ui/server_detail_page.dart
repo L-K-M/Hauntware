@@ -9,6 +9,7 @@ import 'access/panel_gate.dart';
 import 'inspector_pane.dart' show PlaceholderPaneBody;
 import 'logs/logs_panel.dart';
 import 'overview_panel.dart';
+import 'server_coverage.dart';
 import 'server_header.dart';
 import 'server_surfaces.dart';
 
@@ -102,6 +103,10 @@ class _ServerDetailPageState extends State<ServerDetailPage>
             monitoring: widget.monitoring,
             showTitle: false,
           ),
+          banner: BackgroundReturnBanner(
+            monitoring: widget.monitoring,
+            serverId: widget.server.id,
+          ),
           child: SelectedTabView(
             controller: _destinations,
             children: [
@@ -122,6 +127,11 @@ class _ServerDetailPageState extends State<ServerDetailPage>
                         monitoring: widget.monitoring,
                         serverId: widget.server.id,
                         visible: _destinations.index == index,
+                        coverage: ServerCoverageCard(
+                          monitoring: widget.monitoring,
+                          serverId: widget.server.id,
+                          visible: _destinations.index == index,
+                        ),
                       ),
                       ServerPanel.logs => LogsPanel(
                         monitoring: widget.monitoring,

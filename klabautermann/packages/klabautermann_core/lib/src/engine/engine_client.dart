@@ -3,6 +3,7 @@ import 'dart:isolate';
 
 import 'package:meta/meta.dart';
 
+import '../settings/instance_lock.dart' show SupportDirectoryAccess;
 import 'engine_isolate.dart';
 import 'protocol.dart';
 
@@ -64,12 +65,16 @@ final class IsolateEngineClient implements EngineClient {
   /// the [Hello]/[EngineReady] handshake, so a returned client is ready
   /// for feature requests. [linksEnabled] turns on the engine's SSH links
   /// ([EngineStart.linksEnabled]); they stay off unless a caller asks.
+  /// [supportDirectoryAccess] lets it write its caches
+  /// ([EngineStart.supportDirectoryAccess]).
   ///
   /// Throws [StateError] when the engine exits or refuses [Hello] before
   /// it is ready. [entryPoint] lets tests substitute a misbehaving engine.
   static Future<IsolateEngineClient> spawn({
     required String supportDirectory,
     bool linksEnabled = false,
+    SupportDirectoryAccess supportDirectoryAccess =
+        SupportDirectoryAccess.unguarded,
     @visibleForTesting void Function(EngineStart start) entryPoint = engineMain,
   }) async {
     final fromEngine = ReceivePort('klabautermann engine events');
@@ -80,6 +85,7 @@ final class IsolateEngineClient implements EngineClient {
         uiPort: fromEngine.sendPort,
         supportDirectory: supportDirectory,
         linksEnabled: linksEnabled,
+        supportDirectoryAccess: supportDirectoryAccess,
       ),
       onExit: exitPort.sendPort,
     );

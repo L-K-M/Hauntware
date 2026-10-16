@@ -1,14 +1,24 @@
 import 'package:flutter/material.dart';
 
 import '../controllers/fleet_controller.dart';
+import '../controllers/monitoring_controller.dart';
 import '../l10n/app_localizations.dart';
+import 'server_coverage.dart';
 
 /// The desktop inspector of 03 §10.2: Details, Alerts (v1), Operations,
-/// Coverage and Audit sections, empty until a server is selected.
+/// Coverage and Audit sections, empty until a server is selected. The
+/// selected server's coverage (03 §9.5 item 3) is the first to land.
 class InspectorPane extends StatelessWidget {
-  const InspectorPane({super.key, required this.fleet});
+  const InspectorPane({
+    super.key,
+    required this.fleet,
+    required this.monitoring,
+  });
 
   final FleetController fleet;
+
+  /// What the selected server's coverage reads.
+  final MonitoringController monitoring;
 
   @override
   Widget build(BuildContext context) {
@@ -28,7 +38,15 @@ class InspectorPane extends StatelessWidget {
             Expanded(
               child: ListenableBuilder(
                 listenable: fleet,
-                builder: (context, _) => const InspectorEmptyBody(),
+                builder: (context, _) => switch (fleet.selectedServer?.id) {
+                  final serverId? => ServerCoverageDetails(
+                    // A new server's details start at their top.
+                    key: ValueKey(serverId),
+                    monitoring: monitoring,
+                    serverId: serverId,
+                  ),
+                  null => const InspectorEmptyBody(),
+                },
               ),
             ),
           ],

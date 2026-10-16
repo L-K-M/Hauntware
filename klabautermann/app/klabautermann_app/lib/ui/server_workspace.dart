@@ -9,6 +9,7 @@ import 'access/panel_gate.dart';
 import 'inspector_pane.dart' show PlaceholderPaneBody;
 import 'logs/logs_panel.dart';
 import 'overview_panel.dart';
+import 'server_coverage.dart';
 import 'server_header.dart';
 import 'server_surfaces.dart';
 import 'services_panel.dart';
@@ -86,6 +87,12 @@ class ServerWorkspace extends StatelessWidget {
           server: server,
           fleet: fleet,
           monitoring: monitoring,
+        ),
+        // An iOS or Android tablet takes this layout and pauses in the
+        // background too (03 §9.5 item 6).
+        banner: BackgroundReturnBanner(
+          monitoring: monitoring,
+          serverId: server.id,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -166,6 +173,11 @@ class _PanelsState extends State<_Panels> {
                       monitoring: monitoring,
                       serverId: serverId,
                       visible: tabs.index == index,
+                      coverage: ServerCoverageCard(
+                        monitoring: monitoring,
+                        serverId: serverId,
+                        visible: tabs.index == index,
+                      ),
                     ),
                     ServerPanel.services => ServicesPanel(
                       monitoring: monitoring,

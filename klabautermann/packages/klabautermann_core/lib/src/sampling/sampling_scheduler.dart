@@ -17,7 +17,7 @@ library;
 import 'dart:async';
 
 import 'package:klabautermann_host/klabautermann_host.dart'
-    show Collector, SamplerKind;
+    show Collector, HostProfile, SamplerKind;
 import 'package:seance_core/seance_core.dart' show SshLink, quoteShellWord;
 
 import '../engine/protocol.dart';
@@ -81,6 +81,8 @@ SamplerSession _defaultSamplerOpener(SshLink link, SamplerKind kind) =>
 
 DateTime _utcNow() => DateTime.now().toUtc();
 
+void _ignoreProbe(String serverId, HostProfile profile) {}
+
 Duration Function() _monotonicClock() {
   final watch = Stopwatch()..start();
   return () => watch.elapsed;
@@ -100,6 +102,8 @@ Duration Function() _monotonicClock() {
 final class SamplingScheduler {
   /// [linkFor] gives a server's ready link, null while it has none.
   /// [deadPeerHint] and [clearDeadPeerHint] reach the link supervisor.
+  /// [probed] hears every probe answer, changed or not, for the
+  /// capability cache (D59).
   /// [openSampler], [startTimer], [now] (the clock events carry) and
   /// [elapsed] (a monotonic clock, which due times follow so that a
   /// changed wall clock cannot stall sampling) are test seams.
@@ -109,6 +113,7 @@ final class SamplingScheduler {
     required this._emit,
     required this._deadPeerHint,
     required this._clearDeadPeerHint,
+    this._probed = _ignoreProbe,
     this._openSampler = _defaultSamplerOpener,
     this._startTimer = Timer.new,
     this._now = _utcNow,
@@ -120,6 +125,7 @@ final class SamplingScheduler {
   final void Function(EngineEvent event) _emit;
   final void Function(String serverId, SshLink link) _deadPeerHint;
   final void Function(String serverId, SshLink link) _clearDeadPeerHint;
+  final void Function(String serverId, HostProfile profile) _probed;
   final SamplerOpener _openSampler;
   final Timer Function(Duration duration, void Function() callback) _startTimer;
   final DateTime Function() _now;
@@ -370,6 +376,9 @@ final class SamplingScheduler {
           run.probeRetry = doubled < _maxProbeRetry ? doubled : _maxProbeRetry;
         }
         _emitAll(server.pipeline.addProbe(outcome));
+        if (outcome is SamplerReplied) {
+          _probed(server.pipeline.serverId, server.pipeline.profile!);
+        }
         _schedule(server, run, run.slow);
         _schedule(server, run, run.fast);
       }),

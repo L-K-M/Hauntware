@@ -328,12 +328,7 @@ class CoverageSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
-    // PLT-04: iOS and Android pause in the background (D34).
-    final pausesInBackground = const {
-      TargetPlatform.android,
-      TargetPlatform.iOS,
-    }.contains(theme.platform);
-    List<Widget> section(String heading, List<_SheetItem> items) => [
+    List<Widget> section(String heading, List<CoverageItem> items) => [
       Semantics(
         header: true,
         child: Text(heading, style: theme.textTheme.titleMedium),
@@ -358,7 +353,7 @@ class CoverageSheet extends StatelessWidget {
         final coverage = FleetCoverage.of(fleet.servers);
         // Continuous watching is covered only once a server is watched.
         final watching = coverage.watchedCount > 0;
-        final watched = _SheetItem(
+        final watched = CoverageItem(
           leading: watching ? covered : notCovered,
           title: l10n.coverageWatchedTitle,
           body: l10n.coverageWatchedBody(coverage.watchedCount),
@@ -397,14 +392,14 @@ class CoverageSheet extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   spacing: 12,
                   children: [
-                    _SheetItem(
-                      leading: const _TierBadge(),
+                    CoverageItem(
+                      leading: const CoverageTierBadge(),
                       title: l10n.coverageTierTitle,
                       body: l10n.coverageTierBody,
                     ),
                     const SizedBox(height: 4),
                     ...section(l10n.coverageCoveredHeading, [
-                      _SheetItem(
+                      CoverageItem(
                         leading: covered,
                         title: l10n.coverageLiveTitle,
                         body: l10n.coverageLiveBody,
@@ -414,23 +409,23 @@ class CoverageSheet extends StatelessWidget {
                     const SizedBox(height: 4),
                     ...section(l10n.coverageNotCoveredHeading, [
                       if (!watching) watched,
-                      _SheetItem(
+                      CoverageItem(
                         leading: notCovered,
                         title: l10n.coverageClosedTitle,
                         body: l10n.coverageClosedBody,
                       ),
-                      _SheetItem(
+                      CoverageItem(
                         leading: notCovered,
                         title: l10n.coverageHostDownTitle,
                         body: l10n.coverageHostDownBody,
                       ),
-                      _SheetItem(
+                      CoverageItem(
                         leading: notCovered,
                         title: l10n.coverageHistoryTitle,
                         body: l10n.coverageHistoryBody,
                       ),
-                      if (pausesInBackground)
-                        _SheetItem(
+                      if (pausesInBackground(context))
+                        CoverageItem(
                           leading: notCovered,
                           title: l10n.coverageBackgroundTitle,
                           body: l10n.coverageBackgroundBody,
@@ -447,10 +442,17 @@ class CoverageSheet extends StatelessWidget {
   }
 }
 
+/// Whether this platform pauses sampling in the background: iOS and
+/// Android (PLT-04, D34).
+bool pausesInBackground(BuildContext context) => const {
+  TargetPlatform.android,
+  TargetPlatform.iOS,
+}.contains(Theme.of(context).platform);
+
 /// The T0 badge. 03 §9.5 item 3 gives each server's card a T0, T1 or T2
 /// badge; only T0 exists, so the whole fleet runs at it.
-class _TierBadge extends StatelessWidget {
-  const _TierBadge();
+class CoverageTierBadge extends StatelessWidget {
+  const CoverageTierBadge({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -472,18 +474,19 @@ class _TierBadge extends StatelessWidget {
   }
 }
 
-/// One line of the coverage sheet, read as one node: [leading] beside
-/// [title] over [body].
-class _SheetItem extends StatelessWidget {
-  const _SheetItem({
+/// One line of the coverage sheet or a server's coverage, read as one
+/// node: [leading] beside [title] over [body], if any.
+class CoverageItem extends StatelessWidget {
+  const CoverageItem({
+    super.key,
     required this.leading,
     required this.title,
-    required this.body,
+    this.body,
   });
 
   final Widget leading;
   final String title;
-  final String body;
+  final String? body;
 
   @override
   Widget build(BuildContext context) {
@@ -500,12 +503,13 @@ class _SheetItem extends StatelessWidget {
               spacing: 2,
               children: [
                 Text(title, style: theme.textTheme.titleSmall),
-                Text(
-                  body,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
+                if (body case final body?)
+                  Text(
+                    body,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
                   ),
-                ),
               ],
             ),
           ),

@@ -38,6 +38,10 @@ void main() {
         final first = await lockInstanceFor(platform, directory);
         expect(first, isA<InstanceLockAcquired>());
         addTearDown((first! as InstanceLockAcquired).lock.release);
+        expect(
+          supportDirectoryAccessFor(first),
+          SupportDirectoryAccess.exclusive,
+        );
 
         expect(
           await lockInstanceFor(platform, directory),
@@ -52,6 +56,23 @@ void main() {
         expect(directory.listSync(), isEmpty);
       });
     }
+
+    test('lets the engine write its caches only with the directory to '
+        'itself (D59)', () {
+      final lock = InstanceLockUnavailable(
+        const FileSystemException('no locks'),
+      );
+      expect(supportDirectoryAccessFor(null), SupportDirectoryAccess.exclusive);
+      expect(supportDirectoryAccessFor(lock), SupportDirectoryAccess.unguarded);
+      expect(
+        supportDirectoryAccessFor(const InstanceLockHeld()),
+        SupportDirectoryAccess.unguarded,
+      );
+      expect(
+        readSource('lib/main.dart'),
+        contains('supportDirectoryAccess: supportDirectoryAccessFor('),
+      );
+    });
 
     test('comes after the settings window\'s branch and before the '
         'titlebar, the settings store, the window state and the engine', () {

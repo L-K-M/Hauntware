@@ -7,6 +7,19 @@ import 'package:meta/meta.dart';
 /// a later instance lock a new file at the same path beside the old one.
 const String instanceLockFileName = 'instance.lock';
 
+/// Whether this process alone writes the files in the app's support
+/// directory (03 §4.10). The engine writes and purges its per-server
+/// caches there only when it does (D59).
+enum SupportDirectoryAccess {
+  /// The desktop instance lock is held, or the platform runs one process
+  /// per app (phones).
+  exclusive,
+
+  /// The lock could not be taken, so another instance may write the same
+  /// files: the engine reads its caches and writes none.
+  unguarded,
+}
+
 /// What [InstanceLock.acquire] found.
 sealed class InstanceLockAttempt {
   const InstanceLockAttempt();

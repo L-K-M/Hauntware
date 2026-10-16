@@ -16,6 +16,10 @@ import 'package:klabautermann_host/klabautermann_host.dart'
         SystemdUnit,
         TimersSnapshot,
         UnitsSnapshot;
+// A masked process argument (03 §8.9): its display and toString carry the
+// mask, so the app shows a secret only through the reveal action.
+import 'package:klabautermann_docker/klabautermann_docker.dart'
+    show MaskedValue;
 import 'package:meta/meta.dart';
 
 /// The isolate protocol version; [Hello] and [EngineReady] compare it so an
@@ -57,6 +61,10 @@ import 'package:meta/meta.dart';
 ///
 /// [CronResult] then gained the jobs rows with next runs in the server's
 /// zone and that zone's basis (03 §7.7, D58), within v3 the same way.
+///
+/// [ProcessRow.arguments] then became masked values (03 §8.9), and
+/// [HostProfileChanged] gained `cachedAt` for a profile the device cache
+/// kept (D59), within v3 the same way.
 const int kEngineProtocolVersion = 3;
 
 /// Every message the UI isolate sends the engine (03 §10.1, D18). Plain data
@@ -496,13 +504,23 @@ final class Gap extends EngineEvent {
 /// `sessionParentComm`), which may therefore be older than the last
 /// probe. The probe is not a [SampleStream]: the engine runs it itself
 /// after connecting.
+///
+/// A profile the device cache kept from an earlier run (D59) comes first,
+/// with [cachedAt], when a [Connect] or [Subscribe] first names the
+/// server and no probe has answered in this run; the run's first probe
+/// answer follows it, changed or not.
 final class HostProfileChanged extends EngineEvent {
-  const HostProfileChanged(this.serverId, this.profile);
+  const HostProfileChanged(this.serverId, this.profile, {this.cachedAt});
 
   final String serverId;
 
-  /// The probe's findings; what it could not tell stays null.
+  /// The probe's findings; what it could not tell stays null. A cached
+  /// profile carries no clock or session fields.
   final HostProfile profile;
+
+  /// When the probe behind a cached [profile] answered, by the engine's
+  /// clock in UTC; null when a probe in this run found it.
+  final DateTime? cachedAt;
 }
 
 /// The next records of the [OpenLogStream] stream [streamId], in the
@@ -1981,9 +1999,10 @@ final class ProcessRow {
   final int? startTicks;
 
   /// The command line, one item per argument (per whitespace token on a
-  /// host where only `ps` lists it, 7.2); null when it could not be read
-  /// (7.2's "command line unavailable"). Pass an unmodifiable list.
-  final List<String>? arguments;
+  /// host where only `ps` lists it, 7.2), each masked by 03 §8.9's rules;
+  /// null when it could not be read (7.2's "command line unavailable").
+  /// Pass an unmodifiable list.
+  final List<MaskedValue>? arguments;
 }
 
 /// Every systemd unit and the failed ones ([SampleStream.units], 7.5).

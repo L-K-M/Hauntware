@@ -245,7 +245,7 @@ D47 sampler deadlines · D48 host-side filtering · D49 collector locale ·
 D50 LXC values · D51 Access tab · D52 runtime placement · D53 integration
 placement · D54 runtime override in M3 · D55 no health overlay in the MVP
 · D56 log search through `planchette_core` · D57 timer triggers · D58
-cron zone rules.
+cron zone rules · D59 capability cache.
 Proposals awaiting the owner close the section; they are not decisions.
 
 ### Shape and scope
@@ -888,6 +888,48 @@ Proposals awaiting the owner close the section; they are not decisions.
   horizon); the dependency in `klabautermann_host` (3.1); fixed-offset
   goldens labelled as such (every run after the next change stays
   wrong).
+- **D59. The capability cache's names, writes and delivery.** Each fleet
+  server's last probed `HostProfile` lives in `capabilities/<name>.json`
+  under the support directory (4.10), usable for 24 h after its probe
+  (6.1). A synced id names `<uuid>.json` once it is validated as a UUID,
+  in lowercase. An import id, `ssh-config:<alias>`, names `ssh-config-`
+  and the lowercase hex SHA-256 of the alias's UTF-8 bytes through
+  `package:crypto`, a new direct dependency of `klabautermann_core` that
+  `seance_core` already resolves. Any other id, a jump hop's included,
+  names no file. A file holds a format marker, a version, the server id,
+  the probe's UTC time and the profile without its clock and session
+  fields; a file of another format or server, a newer version or a
+  broken field is rejected as such and replaced by the next probe. The
+  engine rewrites a server's file after every probe answer and deletes
+  it, with a profile not yet sent, when the server leaves the fleet or a
+  re-import gives its id another endpoint (each hop's and the host's
+  address, port and login name; SYN-08); at start it deletes the
+  files of servers outside the fleet and the leftovers of interrupted
+  writes. It does all three only when `EngineStart.supportDirectoryAccess`
+  says the process holds the directory alone (the desktop instance lock,
+  or a phone), and reads either way. It deletes nothing while the import
+  store is left as it is (`leftAsIs`, `newerVersion`), since that run's
+  fleet is not saved and removes no server. After an import the store
+  could not save, it writes no file until an import saves, since the
+  next start reads the older fleet, where a server may keep its id
+  under its old endpoint; purges go on. The file keeps no endpoint: the
+  saved import changes only through the running engine, but synced
+  entries (F3) change while it is closed and will need one. At start it reads
+  every fleet server's fresh file and sends that profile as a
+  `HostProfileChanged` with `cachedAt` when a `Connect` or `Subscribe`
+  first names the server before a probe of the run answers: startup
+  events reach only the app's first listener (10.1), which is not the
+  monitoring controller.
+  Sampling still waits for the run's own probe, whose answer is always
+  sent. The event carries the profile, not the access check's rows: the
+  app evaluates `evaluateAccess` and the panel rules over it (D51), and
+  rows in the event would repeat that. Why: 4.10's reasons for the name
+  (no separator or `:`, safe under case folding, never a UUID); two
+  instances writing one file race (4.10's `instance.lock`). *Rejected:*
+  an escaped alias (case folding still collides); seeding the scheduler
+  with the cached profile (a stale container answer would withhold or
+  show the wrong figures, D50, until the probe); sending cached profiles
+  with the startup fleet.
 
 ### Privilege and safety
 
@@ -1245,7 +1287,7 @@ klabautermann/
   packages/
     klabautermann_host/          pure Dart; dependencies meta, collection
     klabautermann_docker/        pure Dart; dependencies meta, collection; no dart:io in lib/
-    klabautermann_core/          pure Dart; dependencies seance_core, klabautermann_host, klabautermann_docker, timezone (D58)
+    klabautermann_core/          pure Dart; dependencies seance_core, klabautermann_host, klabautermann_docker, timezone (D58), crypto (D59)
       lib/src/{links,sampling,logs,capabilities}/   runtime services beside lib/src/engine/ (D52)
       test/integration/          engine tests against the fixture, tagged, skipped without it (D53)
       tool/capture_fixtures.dart                    fixture capture (6.5, D53)
@@ -1359,7 +1401,9 @@ The barrel's `klabautermann_host` export shows only the plain-data types
 that sampling results and `HostProfileChanged` carry (10.1),
 `JournalEntry` (the log viewer's journal rows, 10.8), and the access
 check over a `HostProfile` (`evaluateAccess` and its `AccessReport`,
-whose journal row drives the Logs panel's LOG-04 notice, 10.8); each
+whose journal row drives the Logs panel's LOG-04 notice, 10.8). Its
+`klabautermann_docker` export shows only `MaskedValue`, the masked
+process arguments a `ProcsResult` carries (8.9). Each
 list changes only as a milestone wires a type in or retires one. No `ghost_*` package
 depends on `seance_core`; `klabautermann_core` is a product package, and
 the curated lines above are its only
@@ -1852,7 +1896,7 @@ platform identities in 04, section 12.3):
 | `window_state.json` | The desktop main window's last normal frame and its maximized and full-screen flags (10.2), in the shape Séance's file established (`x`, `y`, `width`, `height`, `isMaximized`, `isFullScreen`; physical pixels on Windows); never synced. Added in M1, a deviation from the plan, which listed no window file: kept out of `settings.json`, as Séance and Planchette keep theirs, so debounced drag saves never rewrite the file that holds the device id | app | MVP |
 | `instance.lock` [E] | Empty. One desktop instance per support directory (built in M2): the composition root takes an exclusive, non-blocking advisory lock on it after the settings window's branch and before `settings.json` and `window_state.json` open and the engine isolate starts, so one process mints the device id and writes these files, and holds it for the life of the process; the file is never deleted. A second instance opens no other file and only says it is already running, until the user quits it. A lock that fails for another reason (no write access, no lock support) lets the app run unguarded and says so at startup. Phones run one process per app and take none | app, through `klabautermann_core`'s `InstanceLock` | MVP |
 | `identity_reads.jsonl` [E] | Audit trail of identity-file reads (M2): one JSON line per attempt to read a server's or jump hop's `IdentityFile`, read or not (UTC time, server id and label, the expanded path, the error), through `seance_core`'s `IdentityAuditLog`, under the name Séance and Poltergeist use. Owner-only on Linux and macOS, also through rotation, which keeps the newest 500 lines once the file passes 1,000; never synced. Recording is best effort and never fails a connect. Added in M2, a deviation from the plan, which listed no such file | `klabautermann_core` | MVP |
-| `capabilities/<serverId>.json` | Cached probe results, 24 h TTL | `klabautermann_core` | MVP |
+| `capabilities/<name>.json` | Cached probe results, 24 h TTL; named, written only by a process that holds the directory alone, and purged as D59 decides | `klabautermann_core` | MVP |
 | `audit/<serverId>.jsonl` | Audit log, 90-day retention [E] | `klabautermann_core` | MVP |
 | `history/<serverId>/<tier>.ring` | Fixed-size binary rollups (`RandomAccessFile`, no rewrite per sample) | `klabautermann_core` | v1 |
 | `alerts.jsonl` | In-app alert history, 30 days [E]; from v1.x also host alerts fetched from the inbox or read from a host spool, with source tier, server item ids and status (D42) | `klabautermann_core` | v1 |
@@ -1872,9 +1916,9 @@ as a file name: `:` is invalid in Windows file names, and an alias is any
 run of non-blank characters, so it can contain path separators, or differ
 from another alias only in case and collide on a case-insensitive file
 system (the macOS and Windows defaults). The import store keeps every
-alias inside one file and needs no such name, so the encoding is decided
+alias inside one file and needs no such name, so the encoding was decided
 with the first per-server file an import gets (the capability cache,
-M2). *Proposal, not decided:* name an import's files
+M2, D59): an import's files are named
 `ssh-config-` followed by the lowercase hex SHA-256 of the alias's UTF-8
 bytes, for example `capabilities/ssh-config-<64 hex digits>.json`. The
 name uses only lowercase letters, digits and hyphens, has a fixed length
@@ -2013,6 +2057,18 @@ per connection, not forwarding channels [R: sshd_config(5)].
 - Interactive-auth servers get exactly one connection, never a second
   transport. A second connection is opened only for non-interactive auth
   and only when long-lived work exhausts the budget.
+
+As built in M2 (`klabautermann_core/lib/src/links/channel_quota.dart`,
+K25b), the engine keeps a `ChannelQuota` per server below the link's own
+semaphore: 2 short actions and 2 followers at once. A bounded log read
+takes a short-action slot, and one that finds the share full waits in
+the engine as `LogStreamWaiting(channel)`, where the app can show it,
+rather than on the link. A follower (K26) gets no slot while the link
+has learned a session limit below 4 (the two samplers, one follower and
+one short action), so it reports waiting for a channel instead of
+holding the last free one and leaving short actions none; the rest of
+low-session mode is M3. The link still opens every session channel at
+one priority, since `seance_core`'s `start` and `run` take none yet.
 
 ### 5.3 Failure classification
 
@@ -2189,7 +2245,8 @@ sweeps, at most 6 concurrent [V]) and run only for confirmed endpoints.
 
 The first request on the slow sampler after connect returns a `HostProfile`,
 cached for the session and on the device for 24 h so panels render before
-the probe returns:
+the probe returns (D59: the app gets the device copy when a request first
+names the server):
 
 | Section | Source |
 |---|---|
@@ -2457,6 +2514,61 @@ timed-out channel or no READY, would hold the fast one until it does).
   wrapped `df` lines; Swarm task names (ServerBox #1226 [R]).
 - The diagnostic bundle (CN-18, v1) exports the same raw format, redacted
   by `SecretRedactor`, so a user report becomes a fixture.
+- Capture redaction: the host's names (kernel, `/etc/hostname`,
+  hostnamectl) that are no address and each FQDN's first label, the
+  domains of those names and of resolv.conf's search list (each suffix
+  of two labels or more), the names and home directories of personal
+  accounts (any uid from login.defs' UID_MIN, 1000 without one, but
+  `nobody`'s, as directory-service and systemd-homed accounts lie
+  above UID_MAX; no passwd account whose home is `/nonexistent`) and
+  `--redact` values become fixed placeholders, names as whole words in
+  any case, a `-` in them also as device-mapper's `--` and systemd's
+  `\x2d`, a non-ASCII byte also as its `\xNN`; `localhost`, the
+  os-release `ID` and `ID_LIKE` words and the words the probe and
+  hostnamectl print from fixed sets (probe keys, kernel name and
+  machine, PID 1, virtualization, tools, time zone words, chassis)
+  stay, as fixtures need them. Every `/home/<name>` path and home mount
+  unit, udisks2's `/media/<name>/` and `/run/media/<name>/` and their
+  mount units, logind's `Session <id> of User <name>` and the `ps`
+  fallback's USER column name no account but root. IPv4 and IPv6
+  addresses other than loopback and `0.0.0.0` (also between host name
+  labels and in EC2's `ip-`/`ec2-` and Kubernetes pods' hyphenated
+  names), MAC addresses (also hyphenated, dotted and in
+  `enx`/`wlx`/`wwx` names), UUIDs, hex ids of 32 or more digits
+  (machine and boot ids), the names in `/dev/<subsystem>/by-*/` links
+  (disk serials, WWNs, SAS addresses, labels, USB serial numbers) and
+  in their device units, UUIDs too in systemd's `\x2d` escaping,
+  network mount servers and logins in `fs` (NFS, sshfs, Ceph, CIFS and
+  URL sources), hostnamectl's serial, asset-tag, pretty-name and
+  location fields (also as machine-info's `PRETTY_HOSTNAME`, `LOCATION`
+  and `TAGS`), email addresses, URL credentials, private-key headers,
+  what `SecretRedactor` masks and the credentials it misses (values of
+  assignments and options whose names hold PASS, PWD, SECRET, TOKEN,
+  KEY, AUTH or CRED, HTTP basic auth, `-u`/`-U user:password`, Samba's
+  `-U user%password`, the password options of the MySQL, MongoDB and
+  OpenLDAP clients, sshpass, redis-cli, zip and 7-Zip) become
+  placeholders too (documentation addresses where an address is
+  expected). Distinct ids, UUIDs and accounts keep distinct numbered
+  placeholders (`user2`), as parsers join tables on mount points. In
+  `procs` every command line keeps argv[0] up to its first space and
+  the rest reads `[redacted]`: arguments carry secrets, process titles
+  user names. In `cron`, for the same reason, each job keeps a schedule
+  that parses, a `root` user field (others read `user`, as a missing
+  user field shifts the program into it), the first word of a command
+  run as root or from a user crontab, and the words `mergeJobs` reads
+  (`run-parts`, the periodic directories, anacron); the rest,
+  comments, environment values but `CRON_TZ` and lines `parseCron`
+  reads as no job read `[redacted]`. A unit description that is a
+  systemd-run command line (its tag, an absolute program, a `run-u<n>`
+  name) keeps its first word, and a device unit's reads `[redacted]`,
+  as it holds the filesystem label; a `timers_text` table is padded
+  again where a placeholder widens a cell. A review then reads every
+  file; a line that still holds a literal outside a placeholder, a
+  secret, a private-key mention or 40 or more mixed base64 characters
+  stops the tool before it writes anything, and so does a payload, the
+  probe or the job list that parses differently from the capture in
+  anything but text. A `.txt` fixture holds the payload only, so
+  `SOURCE.md` records each section's status.
 
 ### 6.6 Portability matrix (CN-11 to CN-14)
 
@@ -2635,9 +2747,10 @@ no longer holds that value.
   and starts over once shown. The read opens through the controller's
   one owner of log streams, which the Logs panel shares and which gives
   each rejection of `OpenLogStream` to the oldest open without an answer
-  (10.1). Until the service is wired, the page says unit logs are not
-  available in this version; a read the engine can no longer answer,
-  because it stopped, says so and asks for a restart of the app.
+  (10.1). While links are off, as the composition root leaves them
+  until K44, the engine rejects every open and the page says unit logs
+  are not available in this version; a read the engine can no longer
+  answer, because it stopped, says so and asks for a restart of the app.
 
 ### 7.6 Logs (LOG)
 
@@ -2668,10 +2781,11 @@ no longer holds that value.
   size and vacuum, log rate view, syslog-only hosts, split panes.
 
 As built in M2 (`klabautermann_core/lib/src/logs/log_service.dart`,
-K25a; K25b routes `OpenLogStream` to it), `LogService` serves the
-windows (`follow: false`) of one server's link, one host command at a
-time through `HostCommands.commandLine`, and answers each open with a
-`LogStreamState` before it returns. Followers are K26.
+K25a; `log_stream_router.dart`, K25b, routes `OpenLogStream` to it),
+`LogService` serves the windows (`follow: false`) of one server's link,
+one host command at a time through `HostCommands.commandLine`, and
+answers each open with a `LogStreamState` before it returns. Followers
+are K26.
 
 - A window holds 1 to 500 records, LOG-01's page. Any other size, a
   file with a cursor and what 8.8's validators refuse end as an invalid
@@ -2690,7 +2804,9 @@ time through `HostCommands.commandLine`, and answers each open with a
   reading at the cap and keeps its complete entries, so its last cursor
   reads on; `tail` and `dmesg`, which print oldest first, keep their
   last complete lines or records. Journal lines that are not JSON
-  objects count as dropped, as does an entry longer than the cap. A
+  objects count as dropped, as does an entry longer than the cap, and a
+  cut `tail` or `dmesg` output that keeps no whole line or record counts
+  its newest as dropped instead of ending with nothing to show. A
   full journal window left without a record ends as failed: it has no
   cursor to read on from, and journalctl prints an entry's keys in hash
   order, so a cut entry's cursor may lie past the cap.
@@ -2721,11 +2837,31 @@ time through `HostCommands.commandLine`, and answers each open with a
   closed, or its server left the fleet) ends the others as failed. Both
   close the process (TERM, then the channel), one whose channel opens
   late included.
+- `LogStreamRouter` (K25b) owns the engine's streams while links are on;
+  with links off the engine rejects every `OpenLogStream`. It rejects an
+  id an earlier open named (it keeps each id for the engine's lifetime),
+  a follow until K26, a server outside the fleet and a server's 17th
+  open stream [E], and ends a spec 8.8 refuses as invalid at once.
+  Otherwise it answers the open with the read's `LogStreamRunning`, or
+  with `LogStreamWaiting` naming the link (none ready), the foreground
+  (the app is in the background) or a channel (5.2's share is full),
+  and starts the read on its own, oldest first, once that clears.
+- Every stream ends exactly once. A read running on a link that closes
+  or is replaced ends as failed; waiting reads wait for the next link.
+  `Disconnect`, the server leaving the fleet and `Shutdown` end every
+  stream of the server as failed, waiting ones included, since nothing
+  would bring a link back for them. The background closes the running
+  reads' processes without ending them, reports every read as waiting
+  for the foreground and queues the paused ones ahead of the others,
+  and the foreground runs them again from the start; a window sends its
+  records as it ends, so a paused one has sent none.
 
 ### 7.7 Scheduled jobs (JOB)
 
 - **MVP.** Unified list (JOB-01): own `crontab -l` (exit 1 with "no crontab"
-  means empty), `/etc/crontab` and `/etc/cron.d/*` (with the user field),
+  means empty), `/etc/crontab` and `/etc/cron.d/*` (with the user field,
+  which follows an `@` macro too; a line that ends before its command is
+  no job [R: cronie `entry.c` `load_entry`]),
   `cron.{hourly,daily,weekly,monthly}` names, and
   `systemctl list-timers --all --output=json`. Schedules in words and next runs
   (JOB-02): a Dart cron parser in `klabautermann_host` (5 fields, ranges, steps,
@@ -3465,7 +3601,28 @@ CI.
   `PASS|PASSWORD|SECRET|TOKEN|KEY|PRIVATE|CREDENTIAL|AUTH|DSN|DATABASE_URL`
   (case-insensitive), `.env` values, process arguments split at the
   boundaries 7.2 preserves (`-p<secret>`, `--password=`), URL credentials
-  (`scheme://user:pass@`), image history `CreatedBy`.
+  (`scheme://user:pass@`), image history `CreatedBy`. From M2 the engine
+  masks every process argument before its row crosses, reading
+  whitespace tokens, so also inside a shell's `-c` line: an attached
+  `-p` value, read first so that a password holding a key word and `=`
+  stays whole, the value of `name=value` whose name matches the pattern,
+  also a name that runs through an earlier `=` (`--env=DB_PASSWORD=`),
+  the token after an option whose name matches it (unless that token
+  starts with `-` or the option is a `--no-` flag) and URL credentials.
+  A value that starts an argument is masked to that argument's end,
+  spaces included, and one inside an argument (a `-c` line's word) ends
+  where the shell ends that word, so quoted and escaped spaces stay in
+  it. A `ps` fallback row has lost the boundaries, so it masks
+  a value holding spaces up to its first space only. The program is
+  never read as an option; over-masking such as `-print` is the safe
+  direction. One procs reading reads at most 65,536 tokens: a 1 MiB
+  section can hold half a million one-letter arguments, each costing up
+  to a microsecond in the shared engine isolate, so past that budget the
+  rest of the argument and every later one are masked whole. Not masked yet: a short option's separate value
+  (`docker login -p`, `sshpass -p`, `redis-cli -a`), `curl -u user:pass`
+  and header values (`Authorization: Bearer`). Masking the argument after
+  any `-p`, `-a` or `-u` would also hide `ssh -p 22`, `mkdir -p` and
+  `sudo -u`, so the trade-off is left to a follow-up after K33.
 - Every export, share and diagnostic bundle passes `SecretRedactor`
   (`SC/src/llm/redaction.dart`) by default, with an explicit include-secrets
   toggle.
@@ -3997,6 +4154,48 @@ reads the reading's age, since its phase began only then. The monitoring
 controller keeps each server's latest `SamplingState` and the phase
 before it.
 
+As built in M2 for items 3, 5 and 6
+(`app/klabautermann_app/lib/ui/server_coverage.dart`), the coverage card
+follows the Overview's cards on desktops and phones: the T0 badge with
+the tier's meaning and what live reading is doing (from `SamplingState`,
+or the tier's rule before the engine says anything), a chart of the last
+10 minutes of CPU busy from the `core` stream, the external-monitor
+finding, and what is not covered in the coverage sheet's words, with no
+control for T1 or T2. K04's rule recognises node_exporter, Netdata, the
+Zabbix agent, Telegraf, collectd, Prometheus and Grafana's agents
+(Agent, Agent Flow, Alloy) by their packaged systemd units in a complete
+`units` list; a monitor outside systemd is not seen, and the card names
+the units as the server lists them. The card subscribes `units` under an
+id of its own while it shows, until the first `units` sample of the
+engine run, so the Overview reads the list once rather than at the
+Services tab's cadence; a list that tab reads later replaces it. The
+desktop inspector's body shows the selected server's coverage: the
+badge, the `core` stream's freshness, the external-monitor finding, the
+recent gaps with a known cause in words ("No data yet" before any
+reading, so an empty record never reads as a complete one; a break while
+no view read `core` has none), the newest five with a count of the rest,
+and what is not covered with each reason; it reads what the panels
+sample and subscribes nothing. Beside the session rings, the monitoring
+controller keeps a time-series ring per series of `core`: a background
+pause, a link lost while sampling, or a return from the background to a
+link still down opens a labelled gap when `SamplingState` says so,
+ending an open "reading failed" one, which it outranks; a `Gap`, or a
+`CollectorUnavailable` reading, opens one only if none is open, labelled
+"reading failed" for a lost or failed reading; the next reading closes
+it. A `Gap` also breaks the sparklines' session rings, so no line joins
+across it, and a stream no subscription names ends its open gap with an
+unknown reading, which breaks the line without a label. On a phone's
+server screen, and in the workspace of an iOS or Android tablet wide
+enough for the desktop layout, the return banner sits under the header,
+scrolling past a fifth of the screen's height, after a return from the
+background that paused that server: the engine had it in `sampling` as
+the app left, or said it paused it while away; a subscription alone, as
+while links are off, reads nothing to pause. It gives this device's
+times of leaving and returning (to the second when both fall in one
+minute) until dismissed, until that screen is left or until the next
+pause; a desktop platform never reports the background, so it never
+shows there.
+
 ---
 
 ## 10. UI shell
@@ -4019,7 +4218,7 @@ before it.
 | `ConfirmEndpoints(ids)`, `SetMonitorSet(ids)` | `EndpointChanged(serverId)` |
 | `Connect(serverId)`, `Disconnect(serverId)` | `LinkState(serverId, status)` (D46's states plus `blocked`; typed reasons inside the status) |
 | `Subscribe(serverId, subscriptionId, streams)`, `Unsubscribe(serverId, subscriptionId)`, `SetCadenceProfile(profile)`; app activity is a separate request too (D45) | `Sample(serverId, stream, seq, at, result)` (engine-owned `seq`, D44; rates and derived values, D43), `SamplingState(serverId, phase, since)`, `Gap(serverId, streams, from, until, cause)` |
-| none: the engine probes after connecting (6.1) | `HostProfileChanged(serverId, profile)` |
+| none: the engine probes after connecting (6.1) | `HostProfileChanged(serverId, profile, cachedAt)` (`cachedAt` only on the device cache's copy, D59) |
 | `OpenLogStream(streamId, spec)`, `CloseStream(streamId)` | `LogBatch(streamId, records, dropped)` (at most 20 per second per stream [E]), `LogStreamState(streamId, status)` |
 | `DockerQuery(serverId, query)` | `DockerResult`, `DockerEvent` |
 | `PlanAction(intent)`, `RunAction(planId, confirmation)` | `ActionPlanned(preview)`, `ActionProgress`, `ActionFinished` |
@@ -4045,7 +4244,9 @@ the engine in `engine_isolate.dart` beside it):
   with typed entries and added the import row.
 - **Start.** The app spawns the engine with
   `IsolateEngineClient.spawn(supportDirectory:)`, its support directory,
-  where the engine keeps its own files (4.10). `EngineReady` carries
+  where the engine keeps its own files (4.10), and from M2
+  `supportDirectoryAccess`, whether the process holds it alone (D59).
+  `EngineReady` carries
   `importStoreIssue`, what was wrong with `ssh_config_imports.json` at
   start, or none, and the engine follows it at once with a
   `CatalogReplaced` holding the imports an earlier run saved. The client
@@ -4315,7 +4516,8 @@ the engine in `engine_isolate.dart` beside it):
   the probe, which the engine runs itself after connecting and reports as
   `HostProfileChanged` when it first knows a server's profile in a run or
   a later probe finds a different one, ignoring the clock and session
-  fields that change with every probe. The same ids again replace a
+  fields that change with every probe; a profile the device cache kept
+  comes first, with `cachedAt` (D59). The same ids again replace a
   subscription's streams, and an empty set drops it. `SetCadenceProfile`
   picks the 6.4 column (Desktop until the app sends one); a stream the
   column reads on demand is read once per `Subscribe` naming it, a
@@ -4335,7 +4537,8 @@ the engine in `engine_isolate.dart` beside it):
   map null until a previous reading exists, so unknown never sums to
   zero, and a `withheld` map naming each value left null because a
   container host's `/proc` would supply it (D50); for `procs`,
-  per-process CPU shares with the start time PRC-02 checks, plus the
+  per-process CPU shares with the start time PRC-02 checks, each
+  argument as a `MaskedValue` (8.9), plus the
   host's process count and how it chose the rows it sent (D48); for
   `identity`, the strings SYS-01 shows, resolved in the engine so the
   host's JSON never crosses (6.5); the parsed tables for `fs`,
@@ -4358,8 +4561,8 @@ the engine in `engine_isolate.dart` beside it):
   streams' last reading (a stream without one has no gap) to the
   resuming one, with its cause (background, disconnected, or a reading
   lost to a deadline, a framing error or a sampler restart, 6.2), so a
-  chart labels the band (9.5 item 5, whose labels do not yet word a lost
-  reading). While a gap is open,
+  chart labels the band (9.5 item 5; a lost reading reads "reading
+  failed"). While a gap is open,
   a background or disconnected one shows in `SamplingState`; a lost
   reading leaves the phase at sampling and shows only as an ageing
   `Sample.at`. A lost link or the background outranks a lost reading
@@ -4409,9 +4612,10 @@ the engine in `engine_isolate.dart` beside it):
   budget, or the foreground), running (with the source's own reader or
   the kernel log's `dmesg` fallback, 7.6), or ended with a reason (window
   filled, oldest record reached, closed, spec refused, source missing,
-  read denied, or failed) and the host's error output. Until the log
-  service is wired, the engine rejects `OpenLogStream` and ignores
-  `CloseStream`, since no stream is open.
+  read denied, or failed) and the host's error output. With links off,
+  as in the app until K44, the engine rejects `OpenLogStream` and
+  ignores `CloseStream`, since no stream is open; with links on, the
+  log stream router serves both (7.6).
   On the app side (M2), `MonitoringController.logs` owns every stream
   of the run, the Logs panel's and the bounded reads `openLogRead`
   opens through it (SVC-04's unit logs, 7.5): it mints `log-N` ids,
@@ -4445,7 +4649,8 @@ the engine in `engine_isolate.dart` beside it):
   while its tab or destination is selected: Overview `core`, `fs`,
   `identity` and `failedUnits`; Processes `procs`; Services `units`; Jobs
   `timers` and `cron`; System `identity`, `fs` and `core`; Logs, Docker
-  and Access none. Hidden pages stay built, so visibility comes from the
+  and Access none. The Overview's coverage card also reads `units`
+  once (9.5). Hidden pages stay built, so visibility comes from the
   tab controller's index. The app sends `SetAppActivity` only on a change,
   and the engine starts with the app in the foreground. Phones report the
   background while hidden, paused or detached. A desktop app stays in the
