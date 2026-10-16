@@ -53,7 +53,7 @@ String? localUserName(Map<String, String> environment) {
 /// `CredentialResolver.jumpHostResolver`. Built from what the import store
 /// holds; nothing here crosses the isolate boundary but [entries].
 final class ImportedFleet {
-  ImportedFleet._(this.entries, this._configs);
+  ImportedFleet._(this.entries, this._configs, this._endpoints);
 
   /// Maps [hosts], in order, through the hop records [hops], logging in
   /// as [localUser] wherever a host or hop names no user. A host whose
@@ -143,6 +143,14 @@ final class ImportedFleet {
           ),
       ]),
       configs,
+      {
+        for (final (:host, :route, :config) in mapped)
+          config.id: jsonEncode([
+            for (final hop in route)
+              [hop.host, hop.port, hop.user ?? localUser],
+            [config.host, config.port, host.user ?? localUser],
+          ]),
+      },
     );
   }
 
@@ -151,11 +159,19 @@ final class ImportedFleet {
 
   final Map<String, ServerConfig> _configs;
 
+  final Map<String, String> _endpoints;
+
   /// The config of an imported host (`ssh-config:<alias>`) or a jump hop
   /// (`ssh-config-hop:...`); null for any other id, for a host or hop with
   /// no login name ([localUserName] found none) or behind such a hop, and
   /// for every host with [ImportedHostDetail.addressOnly].
   ServerConfig? serverConfig(String id) => _configs[id];
+
+  /// What a connect to the imported host [id] reaches, to compare across
+  /// imports: the address, port and login name of each hop and then of
+  /// the host (03 §4.7's endpoint, with each hop by its address). Null for
+  /// an id the fleet does not list.
+  String? endpointOf(String id) => _endpoints[id];
 
   /// For each of [mapped], the ids of the others that pin a host key at
   /// one of its pin locators (`host:port`, 03 §4.6) behind another route,

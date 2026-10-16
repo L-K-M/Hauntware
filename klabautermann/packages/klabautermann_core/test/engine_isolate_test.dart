@@ -533,6 +533,41 @@ void main() {
       }
     });
 
+    test('a re-import that gives a server another endpoint drops its '
+        'cached profile and file, and one that keeps it does not '
+        '(SYN-08)', () async {
+      final first = await spawnEngine();
+      final (events: firstEvents, fleet: _) = await started(first);
+      await import(first, firstEvents, webConfig);
+      await firstEvents.cancel();
+      await first.shutdown();
+      await cacheWeb();
+
+      final kept = await spawnEngine(access: SupportDirectoryAccess.exclusive);
+      final (events: keptEvents, fleet: _) = await started(kept);
+      await import(kept, keptEvents, '$webConfig$otherConfig');
+      kept.send(const Connect(web));
+      expect(
+        (await next(keptEvents) as HostProfileChanged).cachedAt,
+        isNotNull,
+      );
+      await keptEvents.cancel();
+      await kept.shutdown();
+
+      final client = await spawnEngine(
+        access: SupportDirectoryAccess.exclusive,
+      );
+      final (:events, fleet: _) = await started(client);
+      await import(client, events, 'Host web\n  HostName 198.51.100.99\n');
+      client.send(const Connect(web));
+      expect((await next(events) as RequestRejected).requestName, 'Connect');
+      final sw = Stopwatch()..start();
+      while (cacheFile().existsSync()) {
+        if (sw.elapsed > const Duration(seconds: 5)) fail('file not purged');
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+    });
+
     test('a store the engine leaves as it is purges no file: its empty '
         'fleet removed no server', () async {
       await cacheWeb();

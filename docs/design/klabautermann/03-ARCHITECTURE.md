@@ -901,17 +901,22 @@ Proposals awaiting the owner close the section; they are not decisions.
   fields; a file of another format or server, a newer version or a
   broken field is rejected as such and replaced by the next probe. The
   engine rewrites a server's file after every probe answer and deletes
-  it when the server leaves the fleet (SYN-08); at start it deletes the
+  it, with a profile not yet sent, when the server leaves the fleet or a
+  re-import gives its id another endpoint (each hop's and the host's
+  address, port and login name; SYN-08); at start it deletes the
   files of servers outside the fleet and the leftovers of interrupted
   writes. It does all three only when `EngineStart.supportDirectoryAccess`
   says the process holds the directory alone (the desktop instance lock,
   or a phone), and reads either way. It deletes nothing while the import
   store is left as it is (`leftAsIs`, `newerVersion`), since that run's
-  fleet is not saved and removes no server. At start it reads every fleet
-  server's fresh file and sends that profile as a `HostProfileChanged`
-  with `cachedAt` when a `Connect` or `Subscribe` first names the server
-  before a probe of the run answers: startup events reach only the app's
-  first listener (10.1), which is not the monitoring controller.
+  fleet is not saved and removes no server. The file keeps no endpoint:
+  an import changes only through the running engine, but synced entries
+  (F3) change while it is closed and will need one. At start it reads
+  every fleet server's fresh file and sends that profile as a
+  `HostProfileChanged` with `cachedAt` when a `Connect` or `Subscribe`
+  first names the server before a probe of the run answers: startup
+  events reach only the app's first listener (10.1), which is not the
+  monitoring controller.
   Sampling still waits for the run's own probe, whose answer is always
   sent. The event carries the profile, not the access check's rows: the
   app evaluates `evaluateAccess` and the panel rules over it (D51), and

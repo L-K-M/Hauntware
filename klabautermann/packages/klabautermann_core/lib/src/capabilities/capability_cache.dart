@@ -152,10 +152,10 @@ enum CachePurge {
 /// profile when it opens, hands each out once ([takeCached]) unless a
 /// probe of this run answered first, rewrites a server's file on each
 /// probe answer ([probed]) and deletes it when the server leaves the
-/// fleet ([forget], SYN-08), unless [CachePurge.never] keeps it. It
-/// writes and deletes only with [SupportDirectoryAccess.exclusive] access,
-/// and one file operation at a time, in call order, so a purge cannot
-/// overtake a write.
+/// fleet or its endpoint changes ([forget], SYN-08), unless
+/// [CachePurge.never] keeps it. It writes and deletes only with
+/// [SupportDirectoryAccess.exclusive] access, and one file operation at a
+/// time, in call order, so a purge cannot overtake a write.
 final class CapabilityCache {
   CapabilityCache._(this._directory, this._access, this._purge, this._now);
 
@@ -235,7 +235,8 @@ final class CapabilityCache {
     );
   }
 
-  /// Forgets [serverIds], which left the fleet, deleting their files.
+  /// Forgets [serverIds], which left the fleet or moved to another
+  /// endpoint, deleting their files.
   Future<List<CacheUpdate>> forget(Set<String> serverIds) {
     serverIds.forEach(_unsent.remove);
     if (_purge == CachePurge.never) {

@@ -162,8 +162,10 @@ void engineMain(
 
   // Rebuilds the fleet from the store. A server that left it is forgotten
   // (03 §5.1): its samplers, link and attempts end and its subscriptions
-  // go.
+  // go. One that keeps its id under another endpoint loses its cached
+  // profile, which describes another machine (SYN-08).
   void refreshFleet() {
+    final previous = fleetIds.isEmpty ? null : fleet;
     fleet = ImportedFleet(
       imports.hosts,
       hops: imports.hops,
@@ -175,7 +177,14 @@ void engineMain(
     sampling.fleet = fleetIds;
     scheduler?.retain(fleetIds);
     links?.forget(before.difference(fleetIds));
-    unawaited(capabilities?.forget(before.difference(fleetIds)));
+    unawaited(
+      capabilities?.forget({
+        for (final id in before)
+          if (!fleetIds.contains(id) ||
+              previous?.endpointOf(id) != fleet.endpointOf(id))
+            id,
+      }),
+    );
   }
 
   // A server's cached profile goes out when a request first names it,
