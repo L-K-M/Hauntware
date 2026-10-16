@@ -673,6 +673,143 @@ class AppLocalizationsEn extends AppLocalizations {
   String get serverTabMore => 'More';
 
   @override
+  String get processesWaiting => 'Waiting for the first process list.';
+
+  @override
+  String processesUnavailable(String reason) {
+    String _temp0 = intl.Intl.selectLogic(reason, {
+      'missing': 'The server lacks a tool the process list needs.',
+      'denied': 'The server refused the process list.',
+      'timeout': 'The process list did not finish in time.',
+      'other': 'The process list failed.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String processesShownOf(int shown, int total) {
+    final intl.NumberFormat shownNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String shownString = shownNumberFormat.format(shown);
+    final intl.NumberFormat totalNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String totalString = totalNumberFormat.format(total);
+
+    return 'Showing $shownString of $totalString processes';
+  }
+
+  @override
+  String processesShownSome(int shown) {
+    final intl.NumberFormat shownNumberFormat =
+        intl.NumberFormat.decimalPattern(localeName);
+    final String shownString = shownNumberFormat.format(shown);
+
+    return 'Showing $shownString processes; the server left others out';
+  }
+
+  @override
+  String get processesFilterHint => 'Filter processes';
+
+  @override
+  String get processesFilterClear => 'Clear filter';
+
+  @override
+  String get processesSortBy => 'Sort by';
+
+  @override
+  String get processesEmpty => 'The server listed no processes.';
+
+  @override
+  String get processesNoMatch => 'No process matches the filter.';
+
+  @override
+  String get processesColumnCommand => 'Command';
+
+  @override
+  String get processesColumnPid => 'PID';
+
+  @override
+  String get processesColumnUser => 'User';
+
+  @override
+  String get processesColumnCpu => 'CPU';
+
+  @override
+  String get processesColumnMemory => 'Memory';
+
+  @override
+  String get processesColumnStarted => 'Started';
+
+  @override
+  String get processesParentPid => 'Parent PID';
+
+  @override
+  String get processesState => 'State';
+
+  @override
+  String processesUid(int uid) {
+    return 'UID $uid';
+  }
+
+  @override
+  String processesCpu(double share) {
+    final intl.NumberFormat shareNumberFormat =
+        intl.NumberFormat.decimalPercentPattern(
+          locale: localeName,
+          decimalDigits: 1,
+        );
+    final String shareString = shareNumberFormat.format(share);
+
+    return '$shareString';
+  }
+
+  @override
+  String processesStartedTime(DateTime time) {
+    final intl.DateFormat timeDateFormat = intl.DateFormat.jm(localeName);
+    final String timeString = timeDateFormat.format(time);
+
+    return '$timeString';
+  }
+
+  @override
+  String processesStartedDate(DateTime date) {
+    final intl.DateFormat dateDateFormat = intl.DateFormat.yMMMd(localeName);
+    final String dateString = dateDateFormat.format(date);
+
+    return '$dateString';
+  }
+
+  @override
+  String get processesCommandUnavailable => 'Command line unavailable';
+
+  @override
+  String processesCommandUnavailableOf(String name) {
+    return '$name (command line unavailable)';
+  }
+
+  @override
+  String get processesMasked => '(masked)';
+
+  @override
+  String processesFact(String label, String value) {
+    return '$label: $value';
+  }
+
+  @override
+  String get processesCommandLineTitle => 'Command line';
+
+  @override
+  String processesRevealNote(int seconds) {
+    return 'Select a masked argument to show it for $seconds seconds.';
+  }
+
+  @override
+  String get processesRevealHint => 'Show the masked value';
+
+  @override
+  String get processesHideHint => 'Mask again';
+
+  @override
   String get systemIdentityTitle => 'Identity';
 
   @override
@@ -1601,6 +1738,8 @@ class AppLocalizationsEn extends AppLocalizations {
       'waitingLink': 'Waiting for the connection to the server.',
       'waitingChannel': 'Waiting for a free session on the server.',
       'waitingBackground': 'Paused while the app is in the background.',
+      'gap':
+          'Following again. Lines written while it was paused or disconnected may be missing.',
       'loading': 'Loading entries…',
       'invalid': 'The engine refused this filter or path.',
       'missing': 'The server has no such file or log tool.',

@@ -1096,6 +1096,180 @@ abstract class AppLocalizations {
   /// **'More'**
   String get serverTabMore;
 
+  /// The Processes tab before the server sent its first process list (PRC-01).
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for the first process list.'**
+  String get processesWaiting;
+
+  /// Why the server's latest process list failed; reason is missing, denied, timeout or error. The last list, if any, stays below with its age.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, missing{The server lacks a tool the process list needs.} denied{The server refused the process list.} timeout{The process list did not finish in time.} other{The process list failed.}}'**
+  String processesUnavailable(String reason);
+
+  /// The server lists at most 500 processes (D48); shown is how many the tab lists, total how many the server counted.
+  ///
+  /// In en, this message translates to:
+  /// **'Showing {shown} of {total} processes'**
+  String processesShownOf(int shown, int total);
+
+  /// As processesShownOf, when the server did not say how many it counted.
+  ///
+  /// In en, this message translates to:
+  /// **'Showing {shown} processes; the server left others out'**
+  String processesShownSome(int shown);
+
+  /// Hint of the Processes tab's filter field, which matches PIDs, names, users and the shown command lines.
+  ///
+  /// In en, this message translates to:
+  /// **'Filter processes'**
+  String get processesFilterHint;
+
+  /// Tooltip of the button that empties the Processes tab's filter field.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear filter'**
+  String get processesFilterClear;
+
+  /// Label of the phone layout's menu that picks the column the processes are ordered by.
+  ///
+  /// In en, this message translates to:
+  /// **'Sort by'**
+  String get processesSortBy;
+
+  /// The Processes tab when the server's list holds no process.
+  ///
+  /// In en, this message translates to:
+  /// **'The server listed no processes.'**
+  String get processesEmpty;
+
+  /// The Processes tab when its filter matches none of the listed processes.
+  ///
+  /// In en, this message translates to:
+  /// **'No process matches the filter.'**
+  String get processesNoMatch;
+
+  /// Processes column header: the process's command line.
+  ///
+  /// In en, this message translates to:
+  /// **'Command'**
+  String get processesColumnCommand;
+
+  /// Processes column header: the process ID.
+  ///
+  /// In en, this message translates to:
+  /// **'PID'**
+  String get processesColumnPid;
+
+  /// Processes column header: the user the process runs as.
+  ///
+  /// In en, this message translates to:
+  /// **'User'**
+  String get processesColumnUser;
+
+  /// Processes column header: the process's share of one CPU since the previous reading.
+  ///
+  /// In en, this message translates to:
+  /// **'CPU'**
+  String get processesColumnCpu;
+
+  /// Processes column header: the process's resident memory.
+  ///
+  /// In en, this message translates to:
+  /// **'Memory'**
+  String get processesColumnMemory;
+
+  /// Processes column header: when the process started.
+  ///
+  /// In en, this message translates to:
+  /// **'Started'**
+  String get processesColumnStarted;
+
+  /// Label of the process ID of a process's parent, in a process's details.
+  ///
+  /// In en, this message translates to:
+  /// **'Parent PID'**
+  String get processesParentPid;
+
+  /// Label of a process's run state letter as the kernel reports it (such as R or S), in a process's details.
+  ///
+  /// In en, this message translates to:
+  /// **'State'**
+  String get processesState;
+
+  /// A process's user when only its numeric user ID is known.
+  ///
+  /// In en, this message translates to:
+  /// **'UID {uid}'**
+  String processesUid(int uid);
+
+  /// A process's CPU share; share arrives as a fraction where 1 is one full CPU, so it can exceed 100%.
+  ///
+  /// In en, this message translates to:
+  /// **'{share}'**
+  String processesCpu(double share);
+
+  /// When a process started, if on the day of the reading: a time in the UI locale and this device's time zone.
+  ///
+  /// In en, this message translates to:
+  /// **'{time}'**
+  String processesStartedTime(DateTime time);
+
+  /// When a process started, if before the day of the reading: a date in the UI locale.
+  ///
+  /// In en, this message translates to:
+  /// **'{date}'**
+  String processesStartedDate(DateTime date);
+
+  /// In place of a command line the server did not give, as for a kernel thread (03 §7.2).
+  ///
+  /// In en, this message translates to:
+  /// **'Command line unavailable'**
+  String get processesCommandUnavailable;
+
+  /// A process's kernel name in place of a command line the server did not give.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} (command line unavailable)'**
+  String processesCommandUnavailableOf(String name);
+
+  /// What a screen reader says in place of a masked secret in a command line (SAF-07).
+  ///
+  /// In en, this message translates to:
+  /// **'(masked)'**
+  String get processesMasked;
+
+  /// One of a process's figures as drawn under its command line in the phone layout's list: the table column's header label, then the value.
+  ///
+  /// In en, this message translates to:
+  /// **'{label}: {value}'**
+  String processesFact(String label, String value);
+
+  /// Heading of a process's arguments in its details.
+  ///
+  /// In en, this message translates to:
+  /// **'Command line'**
+  String get processesCommandLineTitle;
+
+  /// Note above a process's arguments when some are masked secrets (SAF-07): a reveal is temporary and stays on this device.
+  ///
+  /// In en, this message translates to:
+  /// **'Select a masked argument to show it for {seconds} seconds.'**
+  String processesRevealNote(int seconds);
+
+  /// Screen-reader hint of a masked argument, which shows its value for a while when activated.
+  ///
+  /// In en, this message translates to:
+  /// **'Show the masked value'**
+  String get processesRevealHint;
+
+  /// Screen-reader hint of a revealed argument, which masks it again when activated.
+  ///
+  /// In en, this message translates to:
+  /// **'Mask again'**
+  String get processesHideHint;
+
   /// Heading of the System tab's section about what the server is: host name, operating system, kernel, architecture and virtualization (SYS-01).
   ///
   /// In en, this message translates to:
@@ -2317,7 +2491,7 @@ abstract class AppLocalizations {
   /// Status line above the log saying what reading it is doing or why it stopped.
   ///
   /// In en, this message translates to:
-  /// **'{status, select, opening{Opening the log…} waitingLink{Waiting for the connection to the server.} waitingChannel{Waiting for a free session on the server.} waitingBackground{Paused while the app is in the background.} loading{Loading entries…} invalid{The engine refused this filter or path.} missing{The server has no such file or log tool.} denied{The server denied access to this log.} failed{Reading the log failed.} rejected{The engine did not open this log.} other{Choose or type the absolute path of a file to tail.}}'**
+  /// **'{status, select, opening{Opening the log…} waitingLink{Waiting for the connection to the server.} waitingChannel{Waiting for a free session on the server.} waitingBackground{Paused while the app is in the background.} gap{Following again. Lines written while it was paused or disconnected may be missing.} loading{Loading entries…} invalid{The engine refused this filter or path.} missing{The server has no such file or log tool.} denied{The server denied access to this log.} failed{Reading the log failed.} rejected{The engine did not open this log.} other{Choose or type the absolute path of a file to tail.}}'**
   String logsPanelStatus(String status);
 
   /// Button that opens the log again after it stopped or was refused.
