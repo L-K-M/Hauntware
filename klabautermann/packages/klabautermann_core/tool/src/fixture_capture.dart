@@ -221,14 +221,17 @@ final class Residue {
   const Residue(this.file, this.line, this.reason, this.text);
 
   final String file;
+
+  /// 1-based; 0 for the file as a whole.
   final int line;
+
   final String reason;
 
   /// The line itself, as Latin-1 text.
   final String text;
 
   @override
-  String toString() => '$file:$line: $reason';
+  String toString() => line == 0 ? '$file: $reason' : '$file:$line: $reason';
 }
 
 /// The fixture files of a capture and what the redaction and review
@@ -249,7 +252,9 @@ final class FixtureFiles {
 /// Redacts [capture], renders its fixture files and reviews them:
 /// `<collector>.txt` (the payload and a final newline), `probe.sections`
 /// (the `### <area> <status>` format) and `SOURCE.md` (provenance, the
-/// section statuses the `.txt` files do not hold, the redaction).
+/// section statuses the `.txt` files do not hold, the redaction). Each
+/// payload, the probe and the jobs list must also parse as the capture
+/// did ([parseShapeChange]).
 FixtureFiles renderFixtureFiles(
   Capture capture,
   Redactor redactor, {
@@ -263,12 +268,17 @@ FixtureFiles renderFixtureFiles(
     return r.bytes;
   }
 
+  final redacted = <Collector, String>{};
   for (final c in kFixtureCollectors) {
     final s = capture.sections[c]!;
-    files['${c.wireName}.txt'] = [...redact(c.wireName, s.payload), 0x0a];
+    final payload = redact(c.wireName, s.payload);
+    redacted[c] = _text(payload);
+    files['${c.wireName}.txt'] = [...payload, 0x0a];
   }
 
   final probe = BytesBuilder();
+  final rawProbe = <ProbeSection>[];
+  final redactedProbe = <ProbeSection>[];
   for (final event in capture.probe) {
     final s = ProbeSection.fromEvent(event);
     if (s == null) continue;
@@ -276,6 +286,8 @@ FixtureFiles renderFixtureFiles(
     if (latin1.decode(payload).split('\n').any((l) => l.startsWith('### '))) {
       throw CaptureFailure('probe area ${s.name} has a "### " line');
     }
+    rawProbe.add(s);
+    redactedProbe.add(ProbeSection(s.name, s.status, _text(payload)));
     probe
       ..add(latin1.encode('### ${s.name} ${s.status.name}\n'))
       ..add(payload)
@@ -300,7 +312,124 @@ FixtureFiles renderFixtureFiles(
       residue.add(Residue(name, line, reason, lines[line - 1]));
     }
   });
+
+  // A fixture must parse as the host's output did: a placeholder can
+  // break a format word or a column (a host named like a probe key, a
+  // replacement wider than its column), which no rule can foresee.
+  void compare(String file, String what, Object? raw, Object? fixture) {
+    if (_shapeDiff(raw, fixture, '') case final diff?) {
+      residue.add(Residue(file, 0, '$what parses differently: $diff', ''));
+    }
+  }
+
+  for (final c in kFixtureCollectors) {
+    final raw = _text(capture.sections[c]!.payload);
+    if (parseShapeChange(c, raw, redacted[c]!) case final diff?) {
+      residue.add(
+        Residue('${c.wireName}.txt', 0, 'parses differently: $diff', ''),
+      );
+    }
+  }
+  final rawProfile = parseProbe(rawProbe, _ctx);
+  final fixtureProfile = parseProbe(redactedProbe, _ctx);
+  compare(
+    'probe.sections',
+    'the probe',
+    _json(rawProfile, (p) => p.toJson()),
+    _json(fixtureProfile, (p) => p.toJson()),
+  );
+  compare(
+    'jobs',
+    'mergeJobs over cron.txt and timers.txt',
+    _jobs(
+      _text(capture.sections[Collector.cron]!.payload),
+      _text(capture.sections[Collector.timers]!.payload),
+      rawProfile.value,
+    ),
+    _jobs(
+      redacted[Collector.cron]!,
+      redacted[Collector.timers]!,
+      fixtureProfile.value,
+    ),
+  );
   return FixtureFiles(files, counts, residue);
+}
+
+const _ctx = ParseContext.standard;
+
+/// A payload as the parsers read a fixture file.
+String _text(List<int> bytes) => utf8.decode(bytes, allowMalformed: true);
+
+/// A parse result as `regen_goldens` writes it.
+Map<String, Object?> _json<T>(
+  ParseResult<T> result,
+  Map<String, Object?> Function(T value) toJson,
+) => {'result': toJson(result.value), 'warnings': result.warnings};
+
+/// The jobs list as `regen_goldens` builds it, at a fixed instant.
+List<Object?> _jobs(String cron, String timers, HostProfile profile) => [
+  for (final job in mergeJobs(
+    cron: parseCron(cron, _ctx).value,
+    timers: parseTimers(timers, _ctx).value,
+    nowUtc: DateTime.utc(2026, 10, 14, 12),
+    zone: ServerZone(offset: Duration.zero, ianaName: profile.timezone),
+    runCount: 2,
+  ))
+    job.toJson(),
+];
+
+/// Where [redacted], [collector]'s payload after redaction, parses
+/// differently from [raw], the payload as captured; null when it parses
+/// the same. Text may differ, as the redaction rewrites it; nulls,
+/// numbers, booleans, entry counts and keys may not.
+String? parseShapeChange(Collector collector, String raw, String redacted) {
+  Map<String, Object?>? parse(String p) => switch (collector) {
+    Collector.overview => _json(parseOverview(p, _ctx), (v) => v.toJson()),
+    Collector.core => _json(parseCore(p, _ctx), (v) => v.toJson()),
+    Collector.fs => _json(parseFs(p, _ctx), (v) => v.toJson()),
+    Collector.identity => _json(parseIdentity(p, _ctx), (v) => v.toJson()),
+    Collector.procs => _json(parseProcs(p, _ctx), (v) => v.toJson()),
+    Collector.units => _json(parseUnits(p, _ctx), (v) => v.toJson()),
+    Collector.timers => _json(parseTimers(p, _ctx), (v) => v.toJson()),
+    Collector.cron => _json(parseCron(p, _ctx), (v) => v.toJson()),
+    _ => null,
+  };
+  return _shapeDiff(parse(raw), parse(redacted), '');
+}
+
+/// The first place where [a] and [b], parse results as JSON, differ in
+/// anything but text, as `<path>: <a>, then <b>`. Text is never shown:
+/// it may hold what the redaction removed.
+String? _shapeDiff(Object? a, Object? b, String path) {
+  String show(Object? v) => switch (v) {
+    String _ => 'text',
+    List(:final length) => '$length entries',
+    Map _ => 'an object',
+    _ => '$v',
+  };
+  if (a is String && b is String) return null;
+  if (a is List && b is List && a.length == b.length) {
+    for (var i = 0; i < a.length; i++) {
+      if (_shapeDiff(a[i], b[i], '$path[$i]') case final diff?) return diff;
+    }
+    return null;
+  }
+  if (a is Map && b is Map && a.length == b.length) {
+    for (final MapEntry(:key, :value) in a.entries) {
+      if (!b.containsKey(key)) return '$path: an object, then another';
+      if (_shapeDiff(value, b[key], '$path.$key') case final diff?) {
+        return diff;
+      }
+    }
+    return null;
+  }
+  if (a == b) return null;
+  var where = path.startsWith('.') ? path.substring(1) : path;
+  if (where.isEmpty) where = '[]';
+  if (a is List && b is List) {
+    return '$where: ${a.length} entries, then ${b.length}';
+  }
+  return '$where: ${show(a)}, then ${show(b)}';
 }
 
 String _sourceMd(Capture capture, DateTime capturedAt, String summary) {

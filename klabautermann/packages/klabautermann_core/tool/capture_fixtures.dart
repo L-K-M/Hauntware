@@ -158,15 +158,21 @@ Future<void> _capture(Map<String, List<String>> options) async {
     for (final r in rendered.residue) {
       stderr.writeln('  $r');
       // Never into a log: the line may hold the secret it was flagged for.
-      if (stderr.hasTerminal) {
+      if (stderr.hasTerminal && r.text.isNotEmpty) {
         stderr.writeln(
           '    ${utf8.decode(latin1.encode(r.text), allowMalformed: true)}',
         );
       }
     }
     _fail(
-      'remove each value with --redact <text>, or fix the host, and '
-      'capture again',
+      [
+        'remove each value with --redact <text>, or fix the host, and '
+            'capture again',
+        // A residue for a whole file is a parse change.
+        if (rendered.residue.any((r) => r.line == 0))
+          'a fixture that parses differently has a name that is also a '
+              'word of the payload: capture as another account or host',
+      ].join('; '),
     );
   }
 

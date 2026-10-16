@@ -133,6 +133,29 @@ void main() {
     expect(_text(f, 'probe.sections'), contains('user=user\ngroups=user sudo'));
   });
 
+  test('a fixture that parses differently from its capture is refused', () {
+    // A user named rc turns `rc=0` into `user=0`: no crontab, no job.
+    final f = renderFixtureFiles(
+      _capture(
+        cron:
+            '== crontab_meta ==\nrc=0\n== crontab ==\n0 1 * * * /usr/bin/x\n'
+            '== etc_crontab ==\n== cron_d ==\n== cron_dirs ==',
+      ),
+      Redactor(const RedactionLiterals(userNames: ['rc'])),
+      capturedAt: at,
+    );
+    expect(f.residue.map((r) => '$r'), [
+      'cron.txt: parses differently: result.jobs: 1 entries, then 0',
+      'jobs: mergeJobs over cron.txt and timers.txt parses differently: '
+          '[]: 1 entries, then 0',
+    ]);
+    expect(
+      parseShapeChange(Collector.cron, 'rc=0', 'rc=0 # x'),
+      isNull,
+      reason: 'text may differ',
+    );
+  });
+
   test('SOURCE.md and probe.sections are redacted and reviewed too', () {
     final f = renderFixtureFiles(
       _capture(
