@@ -746,12 +746,25 @@ final _cronDirEntry = RegExp(r'^\s*(hourly|daily|weekly|monthly) ');
 
 /// Words of a cron command that stay wherever they stand: those
 /// `mergeJobs` reads to find what runs the periodic directories
-/// (`run-parts`, the directory, anacron). They are fixed, so no secret.
+/// (`run-parts`, the directory, anacron) in their usual forms. They are
+/// fixed, so no secret.
 final _periodicWord = RegExp(
   r'^(?:(?:(?:/usr)?/s?bin/)?run-parts|'
   r'/etc/cron\.(?:hourly|daily|weekly|monthly)/?|'
   r'(?:(?:/usr)?/s?bin/|/etc/init\.d/)?anacron)$',
 );
+
+/// [word] as it stays in a cron command, null for a word `mergeJobs`
+/// does not read: a [_periodicWord] itself, another path to run-parts as
+/// `run-parts` and another word holding `anacron` as `anacron`, which
+/// `mergeJobs` reads the same way (`endsWith('/run-parts')`,
+/// `contains('anacron')`) without their other text.
+String? _periodicPart(String word) {
+  if (_periodicWord.hasMatch(word)) return word;
+  if (word.endsWith('/run-parts')) return 'run-parts';
+  if (word.contains('anacron')) return 'anacron';
+  return null;
+}
 
 /// Rewrites a `cron` payload (03 §7.7) the way [_redactArgv] does
 /// `procs`: a command carries the same secrets, user names and hosts as
@@ -874,7 +887,7 @@ String _cronJobText(String t, bool system, void Function(String) count) {
 
 /// [command] reduced to the first word if [keepFirst] (up to a `%`,
 /// which starts the job's input, and without an assignment's value:
-/// `PGPASSWORD=x pg_dump`) and the [_periodicWord]s, split on `;` as
+/// `PGPASSWORD=x pg_dump`) and the [_periodicPart]s, split on `;` as
 /// `mergeJobs` splits them; each run of other words reads one
 /// [kRedacted].
 String _cronCommand(String command, {required bool keepFirst}) {
@@ -896,12 +909,15 @@ String _cronCommand(String command, {required bool keepFirst}) {
         );
       }
       if (percent >= 0) add(kRedacted);
-    } else if (word
-        .split(';')
-        .every((w) => w.isEmpty || _periodicWord.hasMatch(w))) {
-      add(word);
     } else {
-      add(kRedacted);
+      final parts = [
+        for (final w in word.split(';')) w.isEmpty ? w : _periodicPart(w),
+      ];
+      add(
+        parts.any((w) => w != null && w.isNotEmpty)
+            ? parts.map((w) => w ?? kRedacted).join(';')
+            : kRedacted,
+      );
     }
   }
   return out.join(' ');

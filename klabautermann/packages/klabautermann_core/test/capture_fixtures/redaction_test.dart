@@ -25,6 +25,19 @@ String _redact(
   Redactor(literals).redact(collector, latin1.encode(text)).bytes,
 );
 
+/// The periodic jobs mergeJobs finds in a cron [payload]: each entry's
+/// name, drivers, number of runs and why runs are unknown.
+List<Object?> _periodic(String payload) => [
+  for (final j in mergeJobs(
+    cron: parseCron(payload, ParseContext.standard).value,
+    nowUtc: DateTime.utc(2026, 10, 14, 12),
+    zone: const ServerZone(offset: Duration.zero),
+    runCount: 2,
+  ))
+    if (j is PeriodicJobEntry)
+      (j.entry.name, j.driverIds.join(' '), j.nextRuns.length, j.runsUnknown),
+];
+
 void main() {
   group('literals', () {
     const literals = RedactionLiterals(
@@ -1079,28 +1092,41 @@ void main() {
           'anacron\t30 7-23 * * *   root\t[ [redacted] /etc/init.d/anacron '
               '[redacted] anacron [redacted]',
         ]);
-        List<Object?> periodic(String payload) => [
-          for (final j in mergeJobs(
-            cron: parseCron(payload, ParseContext.standard).value,
-            nowUtc: DateTime.utc(2026, 10, 14, 12),
-            zone: const ServerZone(offset: Duration.zero),
-            runCount: 2,
-          ))
-            if (j is PeriodicJobEntry)
-              (
-                j.entry.name,
-                j.driverIds.join(' '),
-                j.nextRuns.length,
-                j.runsUnknown,
-              ),
-        ];
-        expect(periodic(redacted), periodic(debian));
+        expect(_periodic(redacted), _periodic(debian));
         expect(
-          periodic(debian),
+          _periodic(debian),
           contains(('backup-db', 'cron|/etc/crontab|0', 2, null)),
         );
       },
     );
+
+    test('run-parts and anacron count in every form mergeJobs reads', () {
+      // A run-parts path and an anacron word of any form, and words
+      // joined by `;`, which mergeJobs splits on.
+      const lines =
+          '== crontab_meta ==\n'
+          'rc=1\n'
+          '== crontab ==\n'
+          'no crontab for root\n'
+          '== etc_crontab ==\n'
+          '17 * * * * root nice /opt/acme/bin/run-parts /etc/cron.hourly\n'
+          '25 6 * * * root test -x /opt/acme/anacron || '
+          'run-parts /etc/cron.daily\n'
+          '47 6 * * 7 root cd /;run-parts /etc/cron.weekly\n'
+          '== cron_d ==\n'
+          '== cron_dirs ==\n'
+          'hourly a\n'
+          'daily 0anacron\n'
+          'weekly b';
+      final redacted = _redact(lines, collector: 'cron');
+      expect(redacted.split('\n').sublist(5, 8), [
+        '17 * * * * root nice run-parts /etc/cron.hourly',
+        '25 6 * * * root test [redacted] anacron [redacted] run-parts '
+            '/etc/cron.daily',
+        '47 6 * * 7 root cd [redacted];run-parts /etc/cron.weekly',
+      ]);
+      expect(_periodic(redacted), _periodic(lines));
+    });
 
     test('a % ends the kept word, a CR stays', () {
       const lines =
