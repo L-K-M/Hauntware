@@ -3,7 +3,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:klabautermann_app/controllers/monitoring_controller.dart';
 import 'package:klabautermann_app/l10n/app_localizations.dart';
 import 'package:klabautermann_app/l10n/app_localizations_en.dart';
-import 'package:klabautermann_app/ui/charts/charts.dart' show TimeSeriesChart;
+import 'package:klabautermann_app/ui/chart_strings.dart';
+import 'package:klabautermann_app/ui/charts/charts.dart'
+    show TimeSeriesChart, chartGapText;
 import 'package:klabautermann_app/ui/server_coverage.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 
@@ -345,6 +347,42 @@ void main() {
       find.text('No pauses, lost links or failed readings.'),
       findsNothing,
     );
+  });
+
+  testWidgets('the inspector lists the newest gaps and counts the rest', (
+    tester,
+  ) async {
+    final harness = await pumpApp(tester, servers: twoServers);
+    await tester.tap(find.text('web-1'));
+    await tester.pumpAndSettle();
+
+    // A collector failing every other reading, a minute apart, so each
+    // gap has its own times.
+    final start = DateTime.now().subtract(const Duration(minutes: 24));
+    for (var i = 0; i < 24; i++) {
+      harness.engine.emit(
+        Sample(
+          serverId: _serverId,
+          stream: SampleStream.core,
+          seq: i + 1,
+          at: start.add(Duration(minutes: i)),
+          result: i.isOdd
+              ? const CollectorUnavailable(CollectorUnavailableReason.timeout)
+              : _cpu(10),
+        ),
+      );
+    }
+    await tester.pumpAndSettle();
+
+    final gaps = harness.monitoring
+        .historyFor(_serverId, MetricSeries.cpuBusy)
+        .gaps;
+    expect(gaps, hasLength(12));
+    final strings = klabautermannChartStrings(AppLocalizationsEn());
+    expect(find.textContaining(RegExp(r': reading failed$')), findsNWidgets(5));
+    expect(find.text(chartGapText(gaps.last, strings)), findsOne);
+    expect(find.text(chartGapText(gaps[6], strings)), findsNothing);
+    expect(find.text('7 earlier gaps not shown.'), findsOne);
   });
 
   testWidgets('the inspector lists only the gaps with a known cause', (

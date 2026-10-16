@@ -582,6 +582,17 @@ class AppLocalizationsEn extends AppLocalizations {
       'No pauses, lost links or failed readings.';
 
   @override
+  String coverageDetailsEarlierGaps(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count earlier gaps not shown.',
+      one: '1 earlier gap not shown.',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String coverageReturnBanner(String start, String end) {
     return 'Paused $start to $end while in background. No data for that period.';
   }

@@ -21,6 +21,11 @@ const double _sessionChartHeight = 160;
 /// The most of the screen's height the return banner takes.
 const double _bannerMaxShare = 0.2;
 
+/// The most gaps the inspector lists, newest first, counting the rest: a
+/// collector failing every other reading would otherwise fill it with
+/// lines and push what is not covered out of sight.
+const int _listedGaps = 5;
+
 /// The subscription surface of the card's one `units` read (D45).
 const String _unitsSurface = 'coverage';
 
@@ -203,12 +208,19 @@ class ServerCoverageDetails extends StatelessWidget {
               Text(l10n.coverageFreshnessNoData)
             else if (history.gaps.isEmpty)
               Text(l10n.coverageDetailsNoGaps)
-            else
-              for (final gap in history.gaps.reversed)
+            else ...[
+              for (final gap in history.gaps.reversed.take(_listedGaps))
                 Padding(
                   padding: const EdgeInsets.only(bottom: 4),
                   child: Text(chartGapText(gap, strings)),
                 ),
+              if (history.gaps.length > _listedGaps)
+                Text(
+                  l10n.coverageDetailsEarlierGaps(
+                    history.gaps.length - _listedGaps,
+                  ),
+                ),
+            ],
             const SizedBox(height: 16),
             _NotCovered(detailed: true),
           ],

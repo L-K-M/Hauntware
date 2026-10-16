@@ -958,6 +958,12 @@ abstract class AppLocalizations {
   /// **'No pauses, lost links or failed readings.'**
   String get coverageDetailsNoGaps;
 
+  /// Under the newest gaps listed below coverageDetailsGaps, when the recent readings have more gaps than the inspector lists: how many older ones it leaves out.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 earlier gap not shown.} other{{count} earlier gaps not shown.}}'**
+  String coverageDetailsEarlierGaps(int count);
+
   /// Banner on a phone's server screen after the app returns from the background (03 §9.5 item 6): when the app left for the background and returned, as times of day in the UI locale. It shows only for a server the engine was reading or said it paused; once the server has readings, its charts show the same period as a hatched band.
   ///
   /// In en, this message translates to:

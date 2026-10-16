@@ -3844,27 +3844,28 @@ desktop inspector's body shows the selected server's coverage: the
 badge, the `core` stream's freshness, the external-monitor finding, the
 recent gaps with a known cause in words ("No data yet" before any
 reading, so an empty record never reads as a complete one; a break while
-no view read `core` has none) and what is not covered with each reason;
-it reads what the panels sample and subscribes nothing. Beside the
-session rings, the monitoring controller keeps a time-series ring per
-series of `core`: a background pause, a link lost while sampling, or a
-return from the background to a link still down opens a labelled gap
-when `SamplingState` says so, ending an open "reading failed" one, which
-it outranks; a `Gap`, or a `CollectorUnavailable` reading, opens one
-only if none is open, labelled "reading failed" for a lost or failed
-reading; the next reading closes it. A `Gap` also breaks the sparklines'
-session rings, so no line joins across it, and a stream no subscription
-names ends its open gap with an unknown reading, which breaks the line
-without a label. On a phone's server screen, and in the workspace of an
-iOS or Android tablet wide enough for the desktop layout, the return
-banner sits under the header, scrolling past a fifth of the screen's
-height, after a return from the background that paused that server: the
-engine had it in `sampling` as the app left, or said it paused it while
-away; a subscription alone, as while links are off, reads nothing to
-pause. It gives this device's times of leaving and returning (to the
-second when both fall in one minute) until dismissed, until that screen
-is left or until the next pause; a desktop platform never reports the
-background, so it never shows there.
+no view read `core` has none), the newest five with a count of the rest,
+and what is not covered with each reason; it reads what the panels
+sample and subscribes nothing. Beside the session rings, the monitoring
+controller keeps a time-series ring per series of `core`: a background
+pause, a link lost while sampling, or a return from the background to a
+link still down opens a labelled gap when `SamplingState` says so,
+ending an open "reading failed" one, which it outranks; a `Gap`, or a
+`CollectorUnavailable` reading, opens one only if none is open, labelled
+"reading failed" for a lost or failed reading; the next reading closes
+it. A `Gap` also breaks the sparklines' session rings, so no line joins
+across it, and a stream no subscription names ends its open gap with an
+unknown reading, which breaks the line without a label. On a phone's
+server screen, and in the workspace of an iOS or Android tablet wide
+enough for the desktop layout, the return banner sits under the header,
+scrolling past a fifth of the screen's height, after a return from the
+background that paused that server: the engine had it in `sampling` as
+the app left, or said it paused it while away; a subscription alone, as
+while links are off, reads nothing to pause. It gives this device's
+times of leaving and returning (to the second when both fall in one
+minute) until dismissed, until that screen is left or until the next
+pause; a desktop platform never reports the background, so it never
+shows there.
 
 ---
 
