@@ -4624,6 +4624,60 @@ and DSK-01's and DSK-02's mounts in the sortable table, in IEC units:
   without `timeout` is told that a stale mount can stall disk readings.
 - The usage bars carry no thresholds until OV-11 (v1) sets them.
 
+As built in M2 (`app/klabautermann_app/lib/ui/server_header.dart`), the
+server header shows the name (the phone's app bar carries it instead),
+the link state, the coverage chip, the detected runtime and a slot for
+client-limitation messages, which stays empty until 5.3's rows are
+worded (K45); the transport label, privilege badges, admin mode and
+the read-only and low-session indicators come with their subsystems.
+The state resolves through `ghost_servers`' indicator under the rail
+rule, as the server's row does, as a dot, an icon and a word, with
+the link's own word where the indicator shows none; the kit keeps its
+dot painter private, so the header draws the indicator's dot itself.
+The chip reads "T0: sampled only while open" until FL-21's monitor set
+exists, and opens the coverage sheet; it avoids "read only", which the
+header's read-only indicator means. The runtime is the access
+check's engines over the probe's profile, as the Access tab lists
+them, with its caveat that Podman can also answer on Docker's socket
+path whenever a Docker engine is named. On phones the header heads the
+body under the app bar, whose fixed-height bottom would clip it at
+large text. On both surfaces it scrolls past 40 % of the height it
+heads, as on a landscape phone or a narrow desktop window at 200 %
+text, so the panel, with the desktop's tab strip, keeps the rest.
+
+As built in M2 for OV-01, OV-03 and OV-04
+(`app/klabautermann_app/lib/ui/overview_panel.dart`), the Overview tab
+shows CPU, load, memory and swap cards from the `core` stream's last
+reading, in two columns from the System tab's 600 px panel width:
+- One freshness line heads the cards in 9.5 item 4's words, stale at
+  the fleet rows' 20 s `core` limit (10.3). Stale values, bars and
+  sparkline lines turn grey beside its history icon. A failed reading
+  says why above the last values rather than clearing them.
+- CPU: a busy gauge and session sparkline, then user, system and idle,
+  then a bar per core in the host's numeric order, wrapping into as
+  many columns as fit, until `CoreHeatmap` (10.7) exists to compact
+  many cores on phones. Load: the 1, 5 and 15 minute averages and the
+  load per core, to two decimals, without a sparkline, since the charts
+  have no unitless scale yet. Memory: used on a bar out of the total,
+  the total, available, buffers, cache and shared beside it, and
+  MEM-01's "ZFS ARC counted as used" note. MEM-01 asks for a stacked
+  bar, but used is the total less `MemAvailable` (7.1), which never
+  counts shared memory and keeps part of the cache back, while the
+  cache counts `Cached` with its shared memory: stacked, the parts
+  overlap and would fill the bar while memory is still available, so
+  only used is drawn. Swap: used on a bar out of the total, the total
+  beside it, or "No swap is set up."
+- The CPU and memory gauges and the CPU sparkline warn at the fleet
+  rows' 80 % and 90 % until OV-11, so a server's row and Overview
+  agree; swap, load and the per-core figures carry no thresholds.
+- Every figure goes through the chart formatters' IEC units, and a
+  test keeps the decimal `ghostFormatFileSize` and `ghostFormatByteRate`
+  out of `lib/`. A figure the container withholds (D50) reads unknown
+  with SYS-04's reason, once per card. With only the load per core
+  withheld, the container's own load averages show and the note says
+  the core count would be the host's.
+- No radial `Gauge` exists yet; the stacked bar is the gauge.
+
 ### 10.5 Phone (under 600 dp) and tablet
 
 The fleet list is home; a server opens a pushed screen with a bottom bar

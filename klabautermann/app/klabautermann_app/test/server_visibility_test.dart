@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:klabautermann_app/app.dart';
 import 'package:klabautermann_app/controllers/monitoring_controller.dart';
 import 'package:klabautermann_app/ui/inspector_pane.dart';
+import 'package:klabautermann_app/ui/overview_panel.dart';
 import 'package:klabautermann_app/ui/server_surfaces.dart';
 import 'package:klabautermann_core/klabautermann_core.dart';
 
@@ -76,7 +77,8 @@ void main() {
     expect(overview.serverId, 'srv-1');
     expect(overview.streams, ServerPanel.overview.streams);
     // The shown panel only: the others are not built or not visible.
-    expect(find.byType(PlaceholderPaneBody), findsOneWidget);
+    expect(find.byType(OverviewPanel), findsOneWidget);
+    expect(find.byType(PlaceholderPaneBody), findsNothing);
 
     // An engine with links off rejects the connect; nothing shows it.
     engine.emit(
