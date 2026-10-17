@@ -14,6 +14,9 @@
   host keys or AES-CBC ciphers still connect. Servers that offer only
   `diffie-hellman-group1-sha1`, `hmac-md5` or truncated `hmac-sha2-*-96`
   MACs no longer connect. Each product's changelog has the details.
+- Séance's terminal text size, font, ligatures and colour choice moved
+  from Settings ▸ General to Settings ▸ Appearance. Its preview there now
+  draws in the terminal's font instead of the code font.
 
 ### Added
 
