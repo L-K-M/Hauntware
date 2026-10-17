@@ -84,6 +84,7 @@ class _SettingsWindowAppState extends State<SettingsWindowApp> {
             : SettingsPage(
                 key: ValueKey(page.generation),
                 appearance: remote.appearance,
+                announcements: remote.announcements,
                 initialTab: page.tab,
                 tabRequests: remote.tabRequests,
               );

@@ -163,6 +163,29 @@ void main() {
       );
     });
 
+    test('a follow after a cursor prints every record after it', () {
+      // Up to systemd 253, the 10 lines -f implies end the first pass.
+      expect(
+        HostCommands.journalctl(cursor: 's=1', order: JournalOrder.follow),
+        [
+          ...['journalctl', '-o', 'json', '--no-pager'],
+          ...['--after-cursor=s=1', '--no-tail', '-f'],
+        ],
+      );
+      expect(
+        HostCommands.journalctl(cursor: 's=1', order: JournalOrder.newestFirst),
+        isNot(contains('--no-tail')),
+      );
+      expect(
+        () => HostCommands.journalctl(
+          cursor: 's=1',
+          lines: 10,
+          order: JournalOrder.follow,
+        ),
+        throwsA(isA<HostCommandError>()),
+      );
+    });
+
     test('shell syntax in a filter stays one argument', () {
       const identifier = r"x'; rm -rf / #$(id)`id`";
       final argv = HostCommands.journalctl(identifier: identifier);

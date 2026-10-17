@@ -1,17 +1,20 @@
-/// The pure pieces of the engine budget harness (spike S5 part 1,
-/// `tool/engine_budget.dart`, 03 §11.4): the fixture counters a replayed
-/// host advances, the HWS/1 frames it prints, when each host reads, and
-/// the follow's batches. Nothing here owns a clock, a file or an
-/// isolate.
+/// The pure pieces of the fixture replays (03 §11.4): the engine budget
+/// harness (spike S5 part 1, `tool/engine_budget.dart`) and the replay
+/// engine the app's frame-timing test runs on (part 2). They hold the
+/// fixture counters a replayed host advances, the HWS/1 frames it prints,
+/// when each host reads, and the follow's input and batches. Nothing here
+/// owns a clock, a file or an isolate.
 library;
 
 import 'dart:collection';
 import 'dart:convert';
+import 'dart:math' as math;
 import 'dart:typed_data';
 
-import 'package:klabautermann_core/klabautermann_core.dart';
-import 'package:klabautermann_core/src/logs/journal_record.dart';
 import 'package:klabautermann_host/klabautermann_host.dart';
+
+import '../engine/protocol.dart';
+import '../logs/journal_record.dart';
 
 /// One section of a replayed reply: the collector or `probe_<area>`, its
 /// status and payload.
@@ -207,6 +210,57 @@ final class ReplaySchedule {
       out.add((host: host, slot: passed - 1));
     }
     return out;
+  }
+}
+
+/// When a stream due at [due] every [period] reads next after reading at
+/// [now]: one period on, or, when [now] is a period or more late, the
+/// first slot of that grid after [now], the slots passed over skipped as
+/// a busy sampler skips its ticks (03 §6.2).
+Duration nextGridRead(Duration due, Duration period, Duration now) {
+  final passed = (now - due).inMicroseconds ~/ period.inMicroseconds;
+  return due + period * (passed + 1);
+}
+
+/// A follow's input: [rows], `journalctl -o json` lines, cycled to make
+/// up one second of [linesPerSecond] (at least one pass over [rows]),
+/// each ended by a newline, and handed out in order from where the last
+/// [feed] stopped, wrapping around.
+final class JournalFeed {
+  JournalFeed(List<String> rows, int linesPerSecond) {
+    if (rows.isEmpty) throw ArgumentError.value(rows, 'rows', 'is empty');
+
+    final count = math.max(rows.length, linesPerSecond);
+    final out = BytesBuilder(copy: false);
+    _lineStarts = [0];
+    for (var i = 0; i < count; i++) {
+      out
+        ..add(utf8.encode(rows[i % rows.length]))
+        ..addByte(0x0a);
+      _lineStarts.add(out.length);
+    }
+    _bytes = out.toBytes();
+  }
+
+  late final Uint8List _bytes;
+
+  /// Where each line starts in [_bytes], with its end last.
+  late final List<int> _lineStarts;
+  int _next = 0;
+
+  /// Hands [follow] the next [lines] lines and returns their bytes.
+  int feed(FollowReplay follow, int lines) {
+    final cycle = _lineStarts.length - 1;
+    var bytes = 0;
+    while (lines > 0) {
+      final take = math.min(lines, cycle - _next);
+      final from = _lineStarts[_next], to = _lineStarts[_next + take];
+      follow.add(Uint8List.sublistView(_bytes, from, to));
+      bytes += to - from;
+      _next = (_next + take) % cycle;
+      lines -= take;
+    }
+    return bytes;
   }
 }
 

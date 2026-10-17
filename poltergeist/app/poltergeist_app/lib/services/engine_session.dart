@@ -6,7 +6,6 @@ import 'package:poltergeist_core/poltergeist_core.dart';
 
 import 'application_error_reporter.dart';
 import 'connection_state_bridge.dart';
-import 'file_stores.dart';
 import 'atomic_file.dart';
 import 'identity_file_reader.dart';
 import 'pane_engine_lanes.dart';

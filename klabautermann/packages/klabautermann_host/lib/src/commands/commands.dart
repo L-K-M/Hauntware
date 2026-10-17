@@ -111,10 +111,13 @@ abstract final class HostCommands {
   /// Refused here are what journalctl refuses, `--since` with a cursor
   /// (it takes one starting point) and a range that ends before it
   /// starts, and, as this builder's choice, a follow with `--until`,
-  /// since a follow reads on to the present. The kernel log takes unit
-  /// and identifier filters: journald names its records (`kernel`, or
-  /// the `name[pid]:` prefix of a line written to `/dev/kmsg`) and gives
-  /// the lines it wrote there itself its own unit.
+  /// since a follow reads on to the present. A follow after a cursor
+  /// prints every record after it (`--no-tail`), so it takes no [lines]:
+  /// up to systemd 253, the 10 lines `-f` implies end its first pass and
+  /// hold the rest back until the journal next changes. The kernel log
+  /// takes unit and identifier filters: journald names its records
+  /// (`kernel`, or the `name[pid]:` prefix of a line written to
+  /// `/dev/kmsg`) and gives the lines it wrote there itself its own unit.
   static List<String> journalctl({
     bool kernel = false,
     String? unit,
@@ -144,6 +147,10 @@ abstract final class HostCommands {
     if (until != null && order == JournalOrder.follow) {
       throw const HostCommandError('a follow reads up to the present');
     }
+    final resume = cursor != null && order == JournalOrder.follow;
+    if (resume && lines != null) {
+      throw const HostCommandError('a resumed follow prints all after it');
+    }
     if (since != null && until != null && since.isAfter(until)) {
       throw const HostCommandError('--since is after --until');
     }
@@ -160,6 +167,7 @@ abstract final class HostCommands {
       if (since != null) '--since=${_journalTime(since)}',
       if (until != null) '--until=${_journalTime(until)}',
       if (cursor != null) '--after-cursor=$cursor',
+      if (resume) '--no-tail',
       if (lines != null) ...['-n', '$lines'],
       ...switch (order) {
         JournalOrder.oldestFirst => const <String>[],

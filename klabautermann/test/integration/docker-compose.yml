@@ -1,0 +1,37 @@
+# Klabautermann's SSH integration fixture (03 §11.3, D53). Start it with
+# run.sh, which generates the client keys this file mounts, checks the
+# rendered config with Poltergeist's safety checker, runs the engine
+# suites and tears everything down. Ports publish on loopback only.
+name: klabautermann-integration
+
+x-sshd: &sshd
+  image: klabautermann-sshd:fixture
+  build:
+    context: sshd
+  volumes:
+    # Poltergeist's common sshd config, reused by path rather than copied
+    # (03 §11.3).
+    - ../../../poltergeist/test/integration/sshd-common/config:/etc/ssh/fixture:ro
+    - ${KLABAUTERMANN_FIXTURE_RUNTIME:?start the fixture with run.sh}/authorized_keys:/run/fixture/authorized_keys:ro
+
+# Fixed ports: `compose restart` would give an ephemeral one a new number,
+# and the engine redials the address it imported. With the fixed project
+# name they allow one run per Docker host, which run.sh's lock enforces.
+services:
+  sshd:
+    <<: *sshd
+    command: /etc/klabautermann/sshd_config.target
+    ports:
+      - target: 22
+        host_ip: 127.0.0.1
+        published: "2241"
+        protocol: tcp
+
+  jump:
+    <<: *sshd
+    command: /etc/klabautermann/sshd_config.jump
+    ports:
+      - target: 22
+        host_ip: 127.0.0.1
+        published: "2242"
+        protocol: tcp

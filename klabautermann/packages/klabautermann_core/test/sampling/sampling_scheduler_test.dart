@@ -340,6 +340,73 @@ void main() {
     expect(next.linesOf(_slow), ['hw_o probe', 'hw_t identity']);
   });
 
+  test('a refresh reads the subscription\'s streams at once, identity '
+      'included, and their periods carry on (PLT-02)', () async {
+    subscribe({SampleStream.fs, SampleStream.identity}, id: 'system');
+    await clock.elapse(const Duration(seconds: 10));
+    expect(link.linesOf(_slow), ['hw_o probe', 'hw_t fs identity']);
+
+    scheduler.refresh(_s1, {SampleStream.fs, SampleStream.identity});
+    await settle();
+    expect(link.linesOf(_slow).skip(2), ['hw_t fs identity']);
+    expect(samples().skip(2), ['fs@10', 'identity@10']);
+
+    await clock.elapse(const Duration(seconds: 20));
+    expect(link.linesOf(_slow).skip(3), ['hw_t fs']);
+  });
+
+  test('a refresh of a riding stream reads its coverer with it', () async {
+    subscribe({SampleStream.units}, id: 'services');
+    subscribe({SampleStream.failedUnits}, id: 'health');
+    await clock.elapse(const Duration(seconds: 5));
+
+    scheduler.refresh(_s1, {SampleStream.failedUnits});
+    await settle();
+    expect(link.linesOf(_slow), ['hw_o probe', 'hw_t units', 'hw_t units']);
+    expect(samples(SampleStream.failedUnits), [
+      'failedUnits@0',
+      'failedUnits@5',
+    ]);
+  });
+
+  test('a refresh a busy sampler holds goes out once the outstanding '
+      'request settles, and costs no skipped tick', () async {
+    subscribe({SampleStream.procs});
+    await settle();
+    link.stalled.add(_slow);
+    await clock.elapse(const Duration(seconds: 3));
+    scheduler.refresh(_s1, {SampleStream.procs});
+    await clock.elapse(const Duration(seconds: 1));
+    expect(link.linesOf(_slow), ['hw_o probe', 'hw_t procs', 'hw_t procs']);
+
+    link.stalled.clear();
+    final process = link.running.singleWhere((p) => p.kind == _slow);
+    process.answer(process.held.single);
+    await settle();
+    expect(link.linesOf(_slow).skip(3), ['hw_t procs']);
+    expect(samples().skip(1), ['procs@4', 'procs@4']);
+    expect(sessions.singleWhere((s) => s.kind == _slow).skippedTicks, 0);
+  });
+
+  test('a refresh while sampling is paused reads nothing then, and '
+      'identity again as sampling resumes on the same link', () async {
+    subscribe({SampleStream.identity}, id: 'system');
+    await settle();
+    scheduler.activity = AppActivity.background;
+    await settle();
+
+    scheduler
+      ..refresh(_s1, {SampleStream.identity})
+      // A server the engine does not sample has nothing to refresh.
+      ..refresh('s2', {SampleStream.identity});
+    await clock.elapse(const Duration(minutes: 1));
+    expect(link.linesOf(_slow), ['hw_o probe', 'hw_t identity']);
+
+    scheduler.activity = AppActivity.foreground;
+    await settle();
+    expect(link.linesOf(_slow).skip(2), ['hw_t identity']);
+  });
+
   test('a tick that would overlap is skipped and counted, never queued, '
       'and leaves no gap', () async {
     subscribe({SampleStream.procs});
