@@ -22,6 +22,8 @@ const String _appearanceKey = 'klabautermann.appearance';
 const String _firstRunCardKey = 'klabautermann.coverage.firstRunCardDismissed';
 const String _announceBandsKey =
     'klabautermann.accessibility.announceThresholdBands';
+const String _rootEquivalenceNoticeKey =
+    'klabautermann.docker.rootEquivalenceNoticeDismissed';
 
 /// Replaces a file's contents. [DeviceSettingsStore] writes the settings
 /// document and the copy of a damaged file through it.
@@ -97,8 +99,9 @@ final class DeviceSettingsReadOnlyException implements Exception {
 
 /// This device's `settings.json` (03 §4.10): the device id, the appearance,
 /// whether the first-run coverage card was dismissed, whether screen
-/// readers hear threshold-band changes (D60) and, later, the monitor set
-/// and per-server device preferences.
+/// readers hear threshold-band changes (D60), whether the Docker tab's
+/// root-equivalence notice was dismissed (SAF-08) and, later, the monitor
+/// set and per-server device preferences.
 ///
 /// The app's isolate owns it: the composition root opens it once and the
 /// controllers write through it. The desktop settings window runs no store
@@ -259,6 +262,20 @@ final class DeviceSettingsStore {
   /// way.
   Future<void> setAnnounceThresholdBands(bool announce) async {
     _values[_announceBandsKey] = announce;
+    await _save();
+  }
+
+  /// Whether the user dismissed the Docker tab's root-equivalence notice
+  /// (SAF-08, 03 §8.4). As for the coverage card, anything but `true`
+  /// reads as not dismissed, so a damaged value shows the notice again.
+  bool get rootEquivalenceNoticeDismissed =>
+      _values[_rootEquivalenceNoticeKey] == true;
+
+  /// Records the notice's dismissal and writes the document. Throws when
+  /// the write fails or this session is read-only; the dismissal stays in
+  /// memory either way.
+  Future<void> dismissRootEquivalenceNotice() async {
+    _values[_rootEquivalenceNoticeKey] = true;
     await _save();
   }
 

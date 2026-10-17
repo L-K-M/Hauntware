@@ -11,6 +11,7 @@ import 'package:path_provider/path_provider.dart';
 import 'app.dart';
 import 'controllers/announcement_controller.dart';
 import 'controllers/coverage_controller.dart';
+import 'controllers/docker_notice_controller.dart';
 import 'controllers/fleet_controller.dart';
 import 'controllers/monitoring_controller.dart';
 import 'controllers/prompt_controller.dart';
@@ -174,6 +175,13 @@ Future<void> main(List<String> args) async {
     save: settings.setAnnounceThresholdBands,
   );
 
+  // SAF-08's notice heads the Docker tab until dismissed on this device,
+  // which settings.json keeps (03 §8.4).
+  final dockerNotice = DockerNoticeController(
+    dismissed: settings.rootEquivalenceNoticeDismissed,
+    saveDismissal: settings.dismissRootEquivalenceNotice,
+  );
+
   // Desktop only: the runners there host the settings window; phones keep
   // the settings route.
   final settingsWindow = settingsWindowHostFor(
@@ -190,6 +198,7 @@ Future<void> main(List<String> args) async {
       appearance: appearance,
       coverage: coverage,
       announcements: announcements,
+      dockerNotice: dockerNotice,
       sync: sync,
       settingsIssue: settings.issue,
       importStoreIssue: importStoreIssue,
