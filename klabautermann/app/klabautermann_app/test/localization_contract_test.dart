@@ -302,6 +302,18 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'\n'",
     "'+'",
   },
+  'lib/ui/prompts/prompt_host.dart': {
+    // An assert message; programmer diagnostic, never rendered.
+    "'new controllers come with a new tree (KlabautermannApp, D44)'",
+    // Error-report context of a dialog that failed; the prompt is then
+    // declined, and the dialog's own words are ARB text.
+    "'while showing an engine prompt'",
+    // An IPv6 host's brackets in the endpoint line, which ARB text
+    // (promptEndpoint) frames; machine data, not copy.
+    "':'",
+    "'['",
+    r"'[$host]'",
+  },
   // An assert message; programmer diagnostic, never rendered.
   'lib/ui/server_surfaces.dart': {
     "'new controllers come with a new tree (KlabautermannApp, D44)'",

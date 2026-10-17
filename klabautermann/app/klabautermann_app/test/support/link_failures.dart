@@ -28,6 +28,9 @@ const Map<LinkFailureKind, String> failureTexts = {
   LinkFailureKind.hostKeyDeclined:
       "This server's host key has not been trusted, so Klabautermann did not "
       'connect.',
+  LinkFailureKind.keyboardInteractiveCancelled:
+      "The server's sign-in questions were cancelled, so Klabautermann did "
+      'not connect.',
   LinkFailureKind.unsupportedAlgorithm:
       'This server requires an algorithm Klabautermann does not support yet.',
   LinkFailureKind.insecureAlgorithmsOnly:

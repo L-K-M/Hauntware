@@ -11,6 +11,7 @@ import 'controllers/appearance_controller.dart';
 import 'controllers/coverage_controller.dart';
 import 'controllers/fleet_controller.dart';
 import 'controllers/monitoring_controller.dart';
+import 'controllers/prompt_controller.dart';
 import 'l10n/app_localizations.dart';
 import 'services/settings_window/settings_window_link.dart';
 import 'theme/app_theme.dart';
@@ -18,6 +19,7 @@ import 'ui/adaptive_shell.dart';
 import 'ui/macos_toolbar_band.dart';
 import 'ui/menus/app_commands.dart';
 import 'ui/menus/app_menu_host.dart';
+import 'ui/prompts/prompt_host.dart';
 import 'ui/server_surfaces.dart' show AppActivityReporter;
 import 'ui/settings_page.dart';
 import 'ui/startup_issue_notice.dart';
@@ -28,13 +30,14 @@ import 'ui/threshold_announcer.dart' show AnnouncementScope;
 const String kSettingsRoute = '/settings';
 
 /// The composition root's view (03 §10.1): one `MaterialApp` whose only
-/// rebuild input is [AppearanceController]; fleet and monitoring changes
-/// reach surfaces through their own listenables.
+/// rebuild input is [AppearanceController]; fleet, monitoring and prompt
+/// changes reach surfaces through their own listenables.
 class KlabautermannApp extends StatelessWidget {
   const KlabautermannApp({
     super.key,
     required this.fleet,
     required this.monitoring,
+    required this.prompts,
     required this.appearance,
     required this.coverage,
     required this.announcements,
@@ -47,6 +50,9 @@ class KlabautermannApp extends StatelessWidget {
 
   final FleetController fleet;
   final MonitoringController monitoring;
+
+  /// The engine's prompts, which [PromptHost] shows over every route.
+  final PromptController prompts;
   final AppearanceController appearance;
 
   /// Whether the first-run coverage card still shows (03 §9.5 item 1).
@@ -105,7 +111,7 @@ class KlabautermannApp extends StatelessWidget {
     // the ones they were built with, so new ones remount the whole tree:
     // every surface then opens and subscribes on the new engine.
     return _RemountOnChange(
-      identity: (fleet, monitoring),
+      identity: (fleet, monitoring, prompts),
       // On phones the engine pauses sampling while the user cannot see the
       // app (03 §6.4); the reporter tells it when that changes.
       child: AppActivityReporter(
@@ -148,26 +154,31 @@ class KlabautermannApp extends StatelessWidget {
             settingsIssue: settingsIssue,
             importStoreIssue: importStoreIssue,
             instanceLockIssue: instanceLockIssue,
-            child: Builder(
-              builder: (context) {
-                void openSettings() => unawaited(_openSettings(context));
-                // The desktop menus and their shortcuts (03 §10.2), from
-                // the one command registry.
-                return AppMenuHost(
-                  listenable: fleet,
-                  commands: buildAppCommands(
-                    platform: Theme.of(context).platform,
-                    fleet: fleet,
-                    onOpenSettings: openSettings,
-                  ),
-                  child: AdaptiveShell(
-                    fleet: fleet,
-                    monitoring: monitoring,
-                    coverage: coverage,
-                    onOpenSettings: openSettings,
-                  ),
-                );
-              },
+            // The home route stays mounted under every other route, so
+            // its dialogs come up over Settings too.
+            child: PromptHost(
+              prompts: prompts,
+              child: Builder(
+                builder: (context) {
+                  void openSettings() => unawaited(_openSettings(context));
+                  // The desktop menus and their shortcuts (03 §10.2),
+                  // from the one command registry.
+                  return AppMenuHost(
+                    listenable: fleet,
+                    commands: buildAppCommands(
+                      platform: Theme.of(context).platform,
+                      fleet: fleet,
+                      onOpenSettings: openSettings,
+                    ),
+                    child: AdaptiveShell(
+                      fleet: fleet,
+                      monitoring: monitoring,
+                      coverage: coverage,
+                      onOpenSettings: openSettings,
+                    ),
+                  );
+                },
+              ),
             ),
           ),
           routes: {

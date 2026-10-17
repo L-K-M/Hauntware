@@ -478,6 +478,8 @@ final class LinkSupervisor {
     LinkFailureKind.hostKeyDeclined ||
     LinkFailureKind.authenticationRejected => true,
     LinkFailureKind.keyPassphraseRequired => false,
+    // The user's own answer to the questions; asking again would repeat it.
+    LinkFailureKind.keyboardInteractiveCancelled => false,
     LinkFailureKind.unreachable ||
     LinkFailureKind.timedOut ||
     LinkFailureKind.credentialUnavailable ||

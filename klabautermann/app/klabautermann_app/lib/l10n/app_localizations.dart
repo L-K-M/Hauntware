@@ -388,6 +388,12 @@ abstract class AppLocalizations {
   /// **'This server\'s host key has not been trusted, so Klabautermann did not connect.'**
   String get linkFailureHostKeyDeclined;
 
+  /// Why a connect failed (03 §10.1): the user cancelled the server's keyboard-interactive questions, such as a one-time code.
+  ///
+  /// In en, this message translates to:
+  /// **'The server\'s sign-in questions were cancelled, so Klabautermann did not connect.'**
+  String get linkFailureKeyboardInteractiveCancelled;
+
   /// Client limitation (03 §5.3, CN-23): the server requires an algorithm the SSH library does not implement, such as an ML-KEM key exchange.
   ///
   /// In en, this message translates to:
@@ -3159,6 +3165,114 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'systemd before version 242 lists only the next run, so later runs are not shown.'**
   String get jobsCalendarOneRun;
+
+  /// Title of the review shown before a server's or jump host's first-seen host key is trusted (03 §4.6).
+  ///
+  /// In en, this message translates to:
+  /// **'Unknown host key'**
+  String get hostKeyUnknownTitle;
+
+  /// Title of the review shown when a server presents a key other than the one trusted before. In capitals on purpose, as an alarm, as in Séance and Poltergeist.
+  ///
+  /// In en, this message translates to:
+  /// **'HOST KEY CHANGED'**
+  String get hostKeyChangedTitle;
+
+  /// Warning at the top of the changed-key review; host is the server's host name or address as configured.
+  ///
+  /// In en, this message translates to:
+  /// **'The key for {host} does not match the one you previously trusted. This can mean a man-in-the-middle attack. Only continue if you know why the key changed.'**
+  String hostKeyChangedWarning(String host);
+
+  /// The machine a prompt comes from: the server or one of its jump hosts. An IPv6 host arrives in brackets.
+  ///
+  /// In en, this message translates to:
+  /// **'{host}:{port}'**
+  String promptEndpoint(String host, int port);
+
+  /// The machine and account a keyboard-interactive prompt comes from, in ssh's user@host notation. An IPv6 host arrives in brackets.
+  ///
+  /// In en, this message translates to:
+  /// **'{user}@{host}:{port}'**
+  String promptEndpointWithUser(String user, String host, int port);
+
+  /// Label over a first-seen key's type and SHA-256 fingerprint.
+  ///
+  /// In en, this message translates to:
+  /// **'Fingerprint'**
+  String get hostKeyFingerprintLabel;
+
+  /// Label over the key the server presents now, in the changed-key review.
+  ///
+  /// In en, this message translates to:
+  /// **'New key'**
+  String get hostKeyNewKeyLabel;
+
+  /// Label over the key trusted before, in the changed-key review.
+  ///
+  /// In en, this message translates to:
+  /// **'Previously trusted'**
+  String get hostKeyPreviousLabel;
+
+  /// Declines the host key; the connect then fails.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get hostKeyCancel;
+
+  /// Trusts a first-seen host key and goes on connecting.
+  ///
+  /// In en, this message translates to:
+  /// **'Trust and connect'**
+  String get hostKeyTrustConnect;
+
+  /// Trusts the changed key in place of the one trusted before, after the review.
+  ///
+  /// In en, this message translates to:
+  /// **'Trust the new key'**
+  String get hostKeyTrustNewKey;
+
+  /// Title of the dialog with a server's keyboard-interactive questions (RFC 4256), such as a password and a one-time code.
+  ///
+  /// In en, this message translates to:
+  /// **'Authentication'**
+  String get keyboardTitle;
+
+  /// Label over the machine and account the questions come from, which the app knows, apart from the server's own words below it.
+  ///
+  /// In en, this message translates to:
+  /// **'Request from'**
+  String get keyboardRequestFrom;
+
+  /// Label over the name and instruction the server sent with its questions, shown as the server sent them.
+  ///
+  /// In en, this message translates to:
+  /// **'Server message'**
+  String get keyboardServerMessage;
+
+  /// Tooltip of the button that reveals a masked answer.
+  ///
+  /// In en, this message translates to:
+  /// **'Show answer'**
+  String get keyboardShowAnswer;
+
+  /// Tooltip of the button that masks a revealed answer again.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide answer'**
+  String get keyboardHideAnswer;
+
+  /// Declines the questions; the connect then fails.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get keyboardCancel;
+
+  /// Sends the answers to the server.
+  ///
+  /// In en, this message translates to:
+  /// **'Submit'**
+  String get keyboardSubmit;
 
   /// Heading of the accessibility settings on the General settings tab.
   ///

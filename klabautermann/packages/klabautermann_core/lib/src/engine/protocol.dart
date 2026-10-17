@@ -77,6 +77,11 @@ import 'package:meta/meta.dart';
 ///
 /// [RefreshSubscription] then joined, reading a subscription's streams at
 /// once for the phones' pull to refresh (PLT-02), within v3 the same way.
+///
+/// [KeyboardInteractivePromptRequest] then gained `user`, the account it
+/// signs in as, [PromptCancelAnswer] joined to decline its questions, and
+/// [LinkFailureKind] gained `keyboardInteractiveCancelled` for the attempt
+/// a cancel ends (03 §10.1), within v3 the same way.
 const int kEngineProtocolVersion = 3;
 
 /// Every message the UI isolate sends the engine (03 §10.1, D18). Plain data
@@ -1351,13 +1356,19 @@ final class HostKeyPromptRequest extends PromptRequest {
 /// The server's keyboard-interactive challenge (RFC 4256), shown as the
 /// server sent it. It carries no echo flags (`seance_core`'s
 /// `KeyboardInteractiveChallenge` has none), so a surface masks every
-/// answer. [PromptResponsesAnswer] answers [questions] in order.
+/// answer. [PromptResponsesAnswer] answers [questions] in order, and
+/// [PromptCancelAnswer] declines them.
 final class KeyboardInteractivePromptRequest extends PromptRequest {
   const KeyboardInteractivePromptRequest({
+    this.user,
     this.name = '',
     this.instruction = '',
     this.questions = const [],
   });
+
+  /// The account the engine signs in as on the asking machine; null
+  /// where it does not say.
+  final String? user;
 
   final String name;
   final String instruction;
@@ -1429,6 +1440,16 @@ final class PromptResponsesAnswer extends PromptAnswer {
   const PromptResponsesAnswer(this.responses);
 
   final List<String> responses;
+}
+
+/// The user declined [PromptKind.keyboardInteractive]'s questions. The
+/// engine sends the server no responses, so the attempt fails with
+/// [LinkFailureKind.keyboardInteractiveCancelled] at once rather than
+/// when the prompt expires. Only that kind takes it: a host key is
+/// declined with `PromptTrustAnswer(false)`, a password prompt dismissed
+/// with `PromptSecretAnswer(null)`.
+final class PromptCancelAnswer extends PromptAnswer {
+  const PromptCancelAnswer();
 }
 
 /// One alert as the UI shows it (v1.x, 03 §10.1, D42).
@@ -1603,7 +1624,7 @@ enum LinkClosedReason {
   connectFailed,
 }
 
-/// What the engine found behind a [LinkClosed]. The first seven are the
+/// What the engine found behind a [LinkClosed]. The first eight are the
 /// connect failures protocol version 3 classifies (03 §10.1); the last
 /// three are 03 §5.3's client limitations.
 enum LinkFailureKind {
@@ -1634,6 +1655,10 @@ enum LinkFailureKind {
 
   /// The user, or the background rule, declined a first-seen host key.
   hostKeyDeclined,
+
+  /// The user cancelled keyboard-interactive questions the server or one
+  /// of its jump hosts asked ([PromptCancelAnswer]).
+  keyboardInteractiveCancelled,
 
   /// The server requires an algorithm the client does not support yet
   /// (CN-23).

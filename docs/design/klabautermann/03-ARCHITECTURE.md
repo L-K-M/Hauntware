@@ -4419,7 +4419,7 @@ shows there.
 | `OpenLogStream(streamId, spec)`, `CloseStream(streamId)` | `LogBatch(streamId, records, dropped)` (at most 20 per second per stream [E]), `LogStreamState(streamId, status)` |
 | `DockerQuery(serverId, query)` | `DockerResult`, `DockerEvent` |
 | `PlanAction(intent)`, `RunAction(planId, confirmation)` | `ActionPlanned(preview)`, `ActionProgress`, `ActionFinished` |
-| `AnswerPrompt(promptId, answer)` | `Prompt(promptId, serverId, host, port, request)` (host key, keyboard-interactive, credential, elevation), `PromptWithdrawn(promptId, reason)` |
+| `AnswerPrompt(promptId, answer)` (trust, responses or cancel, secret) | `Prompt(promptId, serverId, host, port, request)` (host key, keyboard-interactive, credential, elevation), `PromptWithdrawn(promptId, reason)` |
 | `SetAppActivity(activity)` (foreground or background; D34, D45) | no event: it changes what runs |
 | none: the engine's probe sweeps (5.12) | `Reachability(serverId, status)` (FL-04) |
 | `HandleAlert(alertRef, acknowledge or dismiss)` (v1.x; inbox fetch runs inside `RunSyncRound`) | `AlertsArrived(serverId, alerts)`, `AlertStatusChanged` (D42) |
@@ -4704,8 +4704,8 @@ the engine in `engine_isolate.dart` beside it):
   so `Connect` gets `RequestRejected` and nothing dials, while
   `Disconnect` and `SetAppActivity` change nothing. The composition root
   keeps them off until pins outlive the engine (the catalog library's
-  `host_keys.json`, 4.10; until then the engine pins in memory) and the
-  app can show prompts; tests turn them on.
+  `host_keys.json`, 4.10; until then the engine pins in memory), though
+  the app can show prompts (M2 prompts, below); tests turn them on.
 - **Version 3 (M2 sampling).** Sampling joined version 3 without a bump,
   as the import store's fields joined version 2, before any version 3
   build shipped. `Subscribe` names the surface's `SampleStream`s: the 6.4
@@ -4860,6 +4860,38 @@ the engine in `engine_isolate.dart` beside it):
   the app's copy for both kinds says to load the key into ssh-agent and
   drop the `IdentityFile` line that names it, since an import that
   names a key file offers only that file.
+- **Version 3 (M2 prompts).** The app's prompts joined version 3 the same
+  way. `KeyboardInteractivePromptRequest` gained `user`, the account the
+  asking machine signs in as (the challenge's `server.username`), so the
+  dialog names the account as the siblings' do. `PromptCancelAnswer`
+  declines a keyboard-interactive prompt's questions: a
+  `PromptResponsesAnswer` must hold one response per question, so an
+  empty one cannot decline, and a declined prompt would otherwise wait
+  out its expiry. The broker closes the prompt at once, the engine sends
+  the server no responses, which dartssh2 refuses by closing the
+  connection, and the attempt fails with its own failure kind,
+  keyboard-interactive cancelled, as a declined host key fails with
+  host key declined, then waits for the user's next connect (5.1). Only
+  that kind takes a cancel: a host key is declined with
+  `PromptTrustAnswer(false)` and a password prompt dismissed with
+  `PromptSecretAnswer(null)`. A keyboard-interactive prompt that expires
+  or is withdrawn is no cancel, and the failure that follows is
+  classified as any other.
+  On the app side, the prompt controller queues the engine's prompts in
+  arrival order, and the app shows one at a time through
+  `ghost_servers`' dialogs (D8): a first-seen host key as the first-use
+  review, answered with `PromptTrustAnswer`, and keyboard-interactive
+  questions, answered with `PromptResponsesAnswer` or, on Cancel,
+  `PromptCancelAnswer`. `PromptWithdrawn` closes its prompt's dialog
+  without an answer, or drops the prompt from the queue, and an engine
+  that stops closes them all; what a closed dialog returns is never
+  sent: the app checks after each await that the prompt is still open.
+  Each dialog is keyed, so a close removes its own route, even under
+  another. Credential and elevation prompts have
+  no producer and no dialog yet; the app dismisses one with
+  `PromptSecretAnswer(null)` rather than leave the attempt waiting out
+  the expiry. With links off, as in the app until K44, no prompt
+  arrives.
 - **`SetAppActivity(activity)`** is a request of its own and applies to
   every subscription, link and probe at once: 6.4 pauses everything while
   the app is in the background, and D34 adds the phones' grace period

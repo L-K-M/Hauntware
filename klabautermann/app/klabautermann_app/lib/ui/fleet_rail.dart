@@ -154,6 +154,8 @@ String? linkFailureText(AppLocalizations l10n, LinkStatus status) {
       LinkFailureKind.keyFileHiddenBySandbox =>
         l10n.linkFailureKeyFileHiddenBySandbox,
       LinkFailureKind.hostKeyDeclined => l10n.linkFailureHostKeyDeclined,
+      LinkFailureKind.keyboardInteractiveCancelled =>
+        l10n.linkFailureKeyboardInteractiveCancelled,
       LinkFailureKind.unsupportedAlgorithm =>
         l10n.linkFailureUnsupportedAlgorithm,
       LinkFailureKind.insecureAlgorithmsOnly =>
