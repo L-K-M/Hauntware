@@ -101,7 +101,9 @@ final class FileSyncEnrollmentState implements SyncEnrollmentState {
 
   @override
   Future<void> setPassphraseUnverified(bool value) {
-    if (_unverified == value) return Future.value();
+    if (_unverified == value && !_file.hasUnsavedChanges) {
+      return Future.value();
+    }
     _unverified = value;
     return _save();
   }
@@ -112,7 +114,7 @@ final class FileSyncEnrollmentState implements SyncEnrollmentState {
   @override
   Future<void> setNotice(String notice, bool active) {
     final changed = active ? _notices.add(notice) : _notices.remove(notice);
-    return changed ? _save() : Future.value();
+    return changed || _file.hasUnsavedChanges ? _save() : Future.value();
   }
 
   @override
@@ -120,7 +122,9 @@ final class FileSyncEnrollmentState implements SyncEnrollmentState {
 
   @override
   Future<void> setAccount(SyncAccount? account) {
-    if (_sameAccount(_account, account)) return Future.value();
+    if (_sameAccount(_account, account) && !_file.hasUnsavedChanges) {
+      return Future.value();
+    }
     _account = account;
     return _save();
   }

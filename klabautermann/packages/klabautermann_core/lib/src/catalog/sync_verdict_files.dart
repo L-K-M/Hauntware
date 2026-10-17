@@ -77,12 +77,16 @@ final class FilePinVerdictStore implements PinVerdictStore {
     // contract): the verdict belonged to the forgotten trust decision.
     final added = _negative.add(locator);
     final dropped = _kept.remove(locator) != null;
-    return added || dropped ? _save() : Future.value();
+    return added || dropped || _file.hasUnsavedChanges
+        ? _save()
+        : Future.value();
   }
 
   @override
   Future<void> removeNegativePin(String locator) =>
-      _negative.remove(locator) ? _save() : Future.value();
+      _negative.remove(locator) || _file.hasUnsavedChanges
+      ? _save()
+      : Future.value();
 
   @override
   Future<String?> rejectedFingerprintFor(String locator) async =>
@@ -90,7 +94,9 @@ final class FilePinVerdictStore implements PinVerdictStore {
 
   @override
   Future<void> recordKeptVerdict(String locator, String rejectedFingerprint) {
-    if (_kept[locator] == rejectedFingerprint) return Future.value();
+    if (_kept[locator] == rejectedFingerprint && !_file.hasUnsavedChanges) {
+      return Future.value();
+    }
     _kept[locator] = rejectedFingerprint;
     return _save();
   }
@@ -169,10 +175,12 @@ final class FileSyncTripwireStore implements SyncTripwireStore {
   Future<Set<String>> trippedIds() async => Set.of(_ids);
 
   @override
-  Future<void> trip(String id) => _ids.add(id) ? _save() : Future.value();
+  Future<void> trip(String id) =>
+      _ids.add(id) || _file.hasUnsavedChanges ? _save() : Future.value();
 
   @override
-  Future<void> clear(String id) => _ids.remove(id) ? _save() : Future.value();
+  Future<void> clear(String id) =>
+      _ids.remove(id) || _file.hasUnsavedChanges ? _save() : Future.value();
 
   Future<void> _save() => _file.save({_trippedIdsKey: _ids.toList()..sort()});
 }
