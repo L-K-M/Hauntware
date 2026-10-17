@@ -1,0 +1,70 @@
+{
+  "result": {
+    "processes": [
+      {
+        "pid": 1,
+        "ppid": 0,
+        "comm": "sleep",
+        "state": "S",
+        "uid": 0,
+        "rssKb": 1472,
+        "userName": null,
+        "utime": 1,
+        "stime": 1,
+        "startTicks": 324603,
+        "argv": [
+          "sleep",
+          "[redacted]"
+        ],
+        "argsJoined": null
+      },
+      {
+        "pid": 18,
+        "ppid": 8,
+        "comm": "sh",
+        "state": "R",
+        "uid": 0,
+        "rssKb": 1876,
+        "userName": null,
+        "utime": 1,
+        "stime": 0,
+        "startTicks": 324634,
+        "argv": [
+          "/tmp/klab-sh-ZIJKOO/sh",
+          "[redacted]"
+        ],
+        "argsJoined": null
+      },
+      {
+        "pid": 8,
+        "ppid": 0,
+        "comm": "dart:capture_fi",
+        "state": "S",
+        "uid": 0,
+        "rssKb": 8524,
+        "userName": null,
+        "utime": 3,
+        "stime": 1,
+        "startTicks": 324627,
+        "argv": [
+          "/opt/klab/capture_fixtures",
+          "[redacted]",
+          "[redacted]",
+          "[redacted]",
+          "[redacted]",
+          "[redacted]",
+          "[redacted]",
+          "[redacted]"
+        ],
+        "argsJoined": null
+      }
+    ],
+    "totalProcesses": 3,
+    "selection": "all",
+    "argvSource": "cmdline",
+    "forgedHeaders": 0,
+    "skippedPids": 0,
+    "timeoutAbsent": false
+  },
+  "warnings": []
+}

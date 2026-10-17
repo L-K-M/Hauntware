@@ -20,6 +20,8 @@ const String _versionKey = 'klabautermann.settings.version';
 const String _deviceIdKey = 'klabautermann.sync.deviceId';
 const String _appearanceKey = 'klabautermann.appearance';
 const String _firstRunCardKey = 'klabautermann.coverage.firstRunCardDismissed';
+const String _announceBandsKey =
+    'klabautermann.accessibility.announceThresholdBands';
 
 /// Replaces a file's contents. [DeviceSettingsStore] writes the settings
 /// document and the copy of a damaged file through it.
@@ -94,8 +96,9 @@ final class DeviceSettingsReadOnlyException implements Exception {
 }
 
 /// This device's `settings.json` (03 §4.10): the device id, the appearance,
-/// whether the first-run coverage card was dismissed and, later, the
-/// monitor set and per-server device preferences.
+/// whether the first-run coverage card was dismissed, whether screen
+/// readers hear threshold-band changes (D60) and, later, the monitor set
+/// and per-server device preferences.
 ///
 /// The app's isolate owns it: the composition root opens it once and the
 /// controllers write through it. The desktop settings window runs no store
@@ -243,6 +246,19 @@ final class DeviceSettingsStore {
   /// memory either way.
   Future<void> dismissFirstRunCard() async {
     _values[_firstRunCardKey] = true;
+    await _save();
+  }
+
+  /// Whether screen readers hear a value cross into or out of a warning or
+  /// critical band (A11Y-15, D60): on unless the user turned it off, so
+  /// anything but `false` reads as on rather than failing the file.
+  bool get announceThresholdBands => _values[_announceBandsKey] != false;
+
+  /// Stores [announce] and writes the document. Throws when the write
+  /// fails or this session is read-only; the value stays in memory either
+  /// way.
+  Future<void> setAnnounceThresholdBands(bool announce) async {
+    _values[_announceBandsKey] = announce;
     await _save();
   }
 

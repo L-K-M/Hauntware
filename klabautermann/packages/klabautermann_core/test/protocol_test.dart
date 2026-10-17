@@ -378,6 +378,7 @@ void main() {
                       residentBytes: 8192,
                       cpuPercent: 0.5,
                       startTicks: 1234,
+                      startedAt: DateTime.utc(2026, 10, 15, 9, 41),
                       arguments: [
                         MaskedValue.plain('mysql'),
                         MaskedValue.redacted('-p********', '-phunter2'),
@@ -399,6 +400,7 @@ void main() {
       expect(mysql.residentBytes, 8192);
       expect(mysql.cpuPercent, 0.5);
       expect(mysql.startTicks, 1234);
+      expect(mysql.startedAt, DateTime.utc(2026, 10, 15, 9, 41));
       // A masked argument crosses with its real text for the reveal
       // action (03 §8.9), and shows the mask.
       expect(mysql.arguments!.map((a) => a.display), ['mysql', '-p********']);
@@ -788,6 +790,7 @@ void main() {
         for (final reason in LogStreamWaitReason.values)
           LogStreamWaiting(reason),
         for (final reader in LogReader.values) LogStreamRunning(reader: reader),
+        const LogStreamRunning(continuity: LogContinuity.gap),
         for (final reason in LogStreamEndReason.values) LogStreamEnded(reason),
         const LogStreamEnded(
           LogStreamEndReason.denied,
@@ -803,8 +806,8 @@ void main() {
         expect(state.status.hashCode, status.hashCode);
       }
 
-      // Every status differs from every other: by variant, reader, reason
-      // or detail.
+      // Every status differs from every other: by variant, reader,
+      // continuity, reason or detail.
       for (var i = 0; i < statuses.length; i++) {
         for (var j = i + 1; j < statuses.length; j++) {
           expect(statuses[i], isNot(statuses[j]));
@@ -1001,6 +1004,20 @@ void main() {
         // run-time DateTime arrives as a copy, so equality is by value.
         expect(received.status, status);
         expect(received.status.hashCode, status.hashCode);
+      }
+    });
+
+    test('every failure kind survives on a closed link', () async {
+      for (final failure in LinkFailureKind.values) {
+        final status = LinkClosed(
+          LinkClosedReason.connectFailed,
+          failure: failure,
+        );
+        final received =
+            await roundTrip(LinkState('srv-1', status)) as LinkState;
+
+        expect(received.status, status);
+        expect((received.status as LinkClosed).failure, failure);
       }
     });
 

@@ -639,7 +639,6 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'$stackTrace'",
     r"'the file picker returned no content for $sourceName'",
   },
-  'lib/ui/prompts/host_key_dialog.dart': {"'\$type\\n\$value'"},
   'lib/ui/adaptive_shell.dart': {
     "'primary-pane'",
     "'secondary-pane'",

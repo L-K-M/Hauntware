@@ -4,6 +4,12 @@
 tags:
   # Real-shell tests: dash and bash where installed.
   shell:
+  # Engine tests against the sshd fixture, which run.sh starts; skipped
+  # without it (03 §11.3, D53).
+  integration:
+  # Engine tests against the runner VM's systemd, which runner_vm.sh
+  # starts from run.sh on a GitHub-hosted runner; skipped without it.
+  runner-vm:
 # A wedged shell test (an unread pipe or a hung child shell) would pin the
 # VM; cap every test instead.
 timeout: 60s

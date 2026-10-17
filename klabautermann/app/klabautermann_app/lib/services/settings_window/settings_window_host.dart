@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:ghost_desktop/ghost_desktop.dart';
 import 'package:ghost_theme/ghost_theme.dart' show ThemeModePreference;
 
+import '../../controllers/announcement_controller.dart';
 import '../../controllers/appearance_controller.dart';
 import 'settings_window_link.dart';
 
@@ -17,10 +18,10 @@ import 'settings_window_link.dart';
 SettingsWindowHost? settingsWindowHostFor(
   TargetPlatform platform, {
   required AppearanceSettings appearance,
+  required AnnouncementSettings announcements,
 }) => switch (platform) {
-  TargetPlatform.macOS ||
-  TargetPlatform.linux ||
-  TargetPlatform.windows => SettingsWindowHost(appearance: appearance),
+  TargetPlatform.macOS || TargetPlatform.linux || TargetPlatform.windows =>
+    SettingsWindowHost(appearance: appearance, announcements: announcements),
   TargetPlatform.android ||
   TargetPlatform.iOS ||
   TargetPlatform.fuchsia => null,
@@ -38,10 +39,12 @@ final class SettingsWindowHost {
   /// app's own observers.
   SettingsWindowHost({
     required AppearanceSettings appearance,
+    required AnnouncementSettings announcements,
     MethodChannel control = settingsWindowControlChannel,
     MethodChannel link = settingsWindowLinkChannel,
     @visibleForTesting Future<AppExitResponse> Function()? requestAppExit,
-  }) : _appearance = appearance {
+  }) : _appearance = appearance,
+       _announcements = announcements {
     _engine = GhostSettingsWindowHost(
       control: control,
       link: link,
@@ -49,7 +52,7 @@ final class SettingsWindowHost {
       sections: GhostSettingsSections(
         snapshot: _snapshot,
         handleCall: _handleCall,
-        changes: [appearance],
+        changes: [appearance, announcements],
       ),
       encodeError: encodeLinkError,
       requestAppExit: requestAppExit,
@@ -57,6 +60,7 @@ final class SettingsWindowHost {
   }
 
   final AppearanceSettings _appearance;
+  final AnnouncementSettings _announcements;
   late final GhostSettingsWindowHost<SettingsTab> _engine;
 
   @visibleForTesting
@@ -75,6 +79,7 @@ final class SettingsWindowHost {
   /// Everything the window renders.
   Map<String, Object?> _snapshot() => {
     SettingsLinkKey.appearance.name: encodeAppearance(_appearance.value),
+    SettingsLinkKey.announceThresholdBands.name: _announcements.value,
   };
 
   Future<Object?> _handleCall(String name, Object? argument) async {
@@ -85,6 +90,8 @@ final class SettingsWindowHost {
         await _appearance.setMode(
           ThemeModePreference.values.byName(argument! as String),
         );
+      case SettingsLinkMethod.setAnnounceThresholdBands:
+        await _announcements.setAnnounceThresholdBands(argument! as bool);
     }
     return null;
   }

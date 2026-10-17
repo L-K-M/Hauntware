@@ -374,7 +374,11 @@ rule through that adapter directly (so `railIndicatorOf`, left without
 a caller, was removed), the rail's paint map and the
 sidebar's hidden-live header dot draw through `ghostStatusDot` and
 `ghostHiddenLiveIndicator`, and the pane-tab `ServerStateGlyph` paint
-stays here.
+stays here. The host-key prompt followed on 2026-10-16 in that
+package's `host_key_dialog.dart`: `ui/prompts/host_key_dialog.dart`
+keeps its name and signature as a delegate that maps the engine payload
+and ARB words through `ui/ghost_servers_adapter.dart`, so the prompt
+coordinator and the server editor's trial call it unchanged.
 
 ## Cross-app deep links (2026-10-02)
 
@@ -791,7 +795,18 @@ port candidates.
   `b8fc1111119cd6c0744b9de9bc35d16c07ae3e9d`, 2026-09-09) — upstream now
   sets `AlertDialog.scrollable` with its own reachability regressions, so
   both divergences are closed.
-- Port-back candidates: none.
+- Shared: 2026-10-16. Séance's dialog moved to Planchette's
+  `ghost_servers` (`lib/src/host_key_dialog.dart`) as the shared body,
+  with a `GhostHostKeyPrompt` view model, a `GhostHostKeyStrings` bag
+  whose defaults are Séance's words, the coordinator's `dialogKey` and
+  an injected monospace style. This file is now a delegate: it maps
+  `HostKeyPromptData` and the ARB strings through
+  `ui/ghost_servers_adapter.dart` and passes `poltergeistMonoTextStyle`.
+  The payload carries no pinned key type, so a changed key's pinned
+  fingerprint keeps the presented key's type, as before; Séance passes
+  its pinned key's type.
+- Port-back candidates: none; the source now lives in the shared
+  `ghost_servers` package, which both apps consume.
 
 ## app/poltergeist_app/test/ui/prompts/host_key_dialog_test.dart
 
@@ -811,6 +826,10 @@ port candidates.
   view, pinned buttons); this port retains its property-level check
   (`AlertDialog.scrollable`) that the behavior assertions subsume, so the
   candidate is closed, not merged back.
+- Shared: 2026-10-16. The source test moved with the dialog to
+  `ghost_servers` (`test/host_key_dialog_test.dart`). This file is
+  unchanged and now covers the delegate: the payload mapping, the ARB
+  words, the barrier and Esc.
 - Port-back candidates: mounted harness guard.
 
 ## app/poltergeist_app/lib/ui/prompts/keyboard_interactive_dialog.dart

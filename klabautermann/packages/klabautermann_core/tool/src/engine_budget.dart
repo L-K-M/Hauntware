@@ -24,12 +24,13 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:klabautermann_core/klabautermann_core.dart';
+import 'package:klabautermann_core/src/replay/fixture_replay.dart';
+import 'package:klabautermann_core/src/replay/host_fixtures.dart';
 import 'package:klabautermann_core/src/sampling/sample_pipeline.dart';
 import 'package:klabautermann_core/src/sampling/sampler_session.dart'
     show SamplerReplied;
 import 'package:klabautermann_host/klabautermann_host.dart';
 
-import 'budget_replay.dart';
 import 'heap_probe.dart';
 import 'local_sampler.dart' show clockTicksPerSecond, readProcessCpu;
 
@@ -104,57 +105,41 @@ final class BudgetPlan {
   final HeapReadings heap;
 }
 
-/// One platform's fixtures: the probe's sections and the fast
-/// collectors' payloads.
-typedef HostFixture = ({
-  String platform,
-  List<ReplaySection> probe,
-  String overview,
-  String core,
-});
+const _optionNames = {
+  'scenario',
+  'seconds',
+  'warmup',
+  'log-rate',
+  'fixtures',
+  'out',
+};
 
-/// Every platform under [root] with a probe, `overview` and `core`
-/// fixture, by name.
-List<HostFixture> loadHostFixtures(String root) {
-  final dirs = Directory(root).listSync().whereType<Directory>().toList()
-    ..sort((a, b) => a.path.compareTo(b.path));
-  String read(Directory dir, String name) =>
-      File('${dir.path}/$name').readAsStringSync();
-  final fixtures = [
-    for (final dir in dirs)
-      if (const [
-        'probe.sections',
-        'overview.txt',
-        'core.txt',
-      ].every((name) => File('${dir.path}/$name').existsSync()))
-        (
-          platform: dir.uri.pathSegments.lastWhere((s) => s.isNotEmpty),
-          probe: parseProbeSections(read(dir, 'probe.sections')),
-          overview: read(dir, 'overview.txt'),
-          core: read(dir, 'core.txt'),
-        ),
-  ];
-  if (fixtures.isEmpty) throw StateError('no host fixtures under $root');
-  return fixtures;
-}
-
-/// The `journalctl -o json` rows of every platform's `journal.txt` under
-/// [root], in name order.
-List<String> loadJournalRows(String root) {
-  final files =
-      Directory(root)
-          .listSync()
-          .whereType<Directory>()
-          .map((dir) => File('${dir.path}/journal.txt'))
-          .where((file) => file.existsSync())
-          .toList()
-        ..sort((a, b) => a.path.compareTo(b.path));
-  final rows = [
-    for (final file in files)
-      ...file.readAsLinesSync().where((line) => line.trim().isNotEmpty),
-  ];
-  if (rows.isEmpty) throw StateError('no journal.txt rows under $root');
-  return rows;
+/// `tool/engine_budget.dart`'s [args]: each option's value by name, and
+/// whether `--heap` asks for heap readings. Throws [FormatException]
+/// naming the argument that does not fit.
+({Map<String, String> options, HeapReadings heap}) parseBudgetArgs(
+  List<String> args,
+) {
+  final options = <String, String>{};
+  var heap = HeapReadings.off;
+  for (var i = 0; i < args.length; i++) {
+    if (args[i] == '--heap') {
+      heap = HeapReadings.afterFullCollection;
+      continue;
+    }
+    final name = args[i].startsWith('--') ? args[i].substring(2) : '';
+    if (!_optionNames.contains(name) || i + 1 == args.length) {
+      throw FormatException('unexpected argument ${args[i]}');
+    }
+    // An option where the value belongs means the value was left out, as
+    // in `--out --heap`, which would otherwise write to a file `--heap`.
+    final value = args[++i];
+    if (value.startsWith('--')) {
+      throw FormatException('--$name needs a value, not $value');
+    }
+    options[name] = value;
+  }
+  return (options: options, heap: heap);
 }
 
 /// `klabautermann_host`'s fixtures, from this package or from
@@ -296,6 +281,9 @@ Future<Map<String, Object?>> runEngineBudget(
     // reported has already exited.
     engine?.kill(priority: Isolate.immediate);
     port.close();
+    // A reading still running when the replay failed would fail on the
+    // closed probe, and that unawaited error would mask the replay's own.
+    await heapReads.catchError((Object _) {});
     await heap?.close();
   }
 }
@@ -403,11 +391,8 @@ final class _Replay {
   final _startedAt = DateTime.now().toUtc();
   late final List<_Host> _hosts;
 
-  /// One second of the follow's lines, cycling through the journal
-  /// rows, each ended by a newline, and where each starts (with the end
-  /// last).
-  late final Uint8List _journal;
-  late final List<int> _lineStarts;
+  /// One second of the follow's lines.
+  late final JournalFeed _journal;
 
   _Window? _window;
   var _linesFed = 0;
@@ -416,7 +401,7 @@ final class _Replay {
   BudgetPlan get _plan => _setup.plan;
 
   void start() {
-    _prepareJournal();
+    _journal = JournalFeed(_setup.journalRows, _plan.logLinesPerSecond);
     final end = _plan.warmup + _plan.measure;
     _hosts = [
       for (var i = 0; i < _plan.hosts; i++)
@@ -478,26 +463,15 @@ final class _Replay {
     );
   }
 
-  void _prepareJournal() {
-    final rows = _setup.journalRows;
-    final count = math.max(rows.length, _plan.logLinesPerSecond);
-    final out = BytesBuilder(copy: false);
-    _lineStarts = [0];
-    for (var i = 0; i < count; i++) {
-      out
-        ..add(utf8.encode(rows[i % rows.length]))
-        ..addByte(0x0a);
-      _lineStarts.add(out.length);
-    }
-    _journal = out.toBytes();
-  }
-
   void _send(EngineEvent event) => _setup.ui.send(event);
 
   void _step(Timer timer) {
     final now = _clock.elapsed;
     if (now >= _plan.warmup + _plan.measure) {
       timer.cancel();
+      // The lines due by now still reach the follow, so a step that a
+      // loaded machine delays to the end leaves the follow no shorter.
+      if (_plan.logLinesPerSecond > 0) _feed(now);
       _finish(now);
       return;
     }
@@ -569,28 +543,18 @@ final class _Replay {
         _plan.logLinesPerSecond *
         now.inMicroseconds ~/
         Duration.microsecondsPerSecond;
-    var lines = due - _linesFed;
+    final lines = due - _linesFed;
     if (lines <= 0) return;
 
-    final fedBefore = _linesFed;
-    final cycle = _lineStarts.length - 1;
-    var bytes = 0;
     final clock = Stopwatch()..start();
-    while (lines > 0) {
-      final row = _linesFed % cycle;
-      final take = math.min(lines, cycle - row);
-      final from = _lineStarts[row], to = _lineStarts[row + take];
-      _follow.add(Uint8List.sublistView(_journal, from, to));
-      bytes += to - from;
-      _linesFed += take;
-      lines -= take;
-    }
+    final bytes = _journal.feed(_follow, lines);
+    _linesFed += lines;
 
     final window = _window;
     if (window == null) return;
 
     window.feedUs += clock.elapsedMicroseconds;
-    window.linesFed += _linesFed - fedBefore;
+    window.linesFed += lines;
     window.bytesFed += bytes;
   }
 

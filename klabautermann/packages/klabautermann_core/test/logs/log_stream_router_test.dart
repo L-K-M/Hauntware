@@ -7,7 +7,13 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 import 'package:klabautermann_core/src/logs/log_service.dart';
 import 'package:klabautermann_core/src/logs/log_stream_router.dart';
 import 'package:seance_core/seance_core.dart'
-    show RemoteExit, SshLink, SshLinkSeen, quoteShellWord;
+    show
+        RemoteExit,
+        SshLink,
+        SshLinkClosed,
+        SshLinkClosedReason,
+        SshLinkSeen,
+        quoteShellWord;
 import 'package:test/test.dart';
 
 import '../support/fake_clock.dart';
@@ -25,6 +31,12 @@ const _forForeground = LogStreamWaiting(LogStreamWaitReason.background);
 String _entries(int count) => [
   for (var n = count; n >= 1; n--)
     '${jsonEncode({'__CURSOR': 'c$n', 'MESSAGE': 'entry $n'})}\n',
+].join();
+
+/// Journal entries [from] to [to] as `journalctl -f -o json` prints them.
+String _follow(int from, int to) => [
+  for (var n = from; n <= to; n++)
+    '${jsonEncode({'__CURSOR': 's=$n', 'MESSAGE': 'entry $n'})}\n',
 ].join();
 
 Future<void> _until(bool Function() condition) async {
@@ -58,6 +70,8 @@ void main() {
         services.add(service);
         return service;
       },
+      startTimer: clock.startTimer,
+      elapsed: () => clock.elapsed,
     )..retain({'srv-1', 'srv-2'});
     addTearDown(router.close);
   }
@@ -75,12 +89,13 @@ void main() {
     String serverId = 'srv-1',
     int window = 10,
     bool follow = false,
+    LogSource source = const JournalLogSource(),
   }) => router.open(
     OpenLogStream(
       streamId: id,
       spec: LogStreamSpec(
         serverId: serverId,
-        source: const JournalLogSource(),
+        source: source,
         window: window,
         follow: follow,
       ),
@@ -359,14 +374,13 @@ void main() {
   });
 
   group('opens', () {
-    test('a reused id, a follow, a server outside the fleet and a server '
-        'at its cap are rejected without a state', () {
+    test('a reused id, a server outside the fleet and a server at its cap '
+        'are rejected without a state', () {
       links['srv-1'] = null;
       expect(open('a'), isNull);
       router.closeStream('a');
       expect(open('a'), contains('used before'));
-      expect(open('f', follow: true), contains('not implemented'));
-      expect(open('f'), contains('used before'));
+      expect(open('a', follow: true), contains('used before'));
       expect(open('x', serverId: 'gone'), contains('no fleet server'));
 
       for (var i = 0; i < kLogStreamsPerServerMax; i++) {
@@ -376,7 +390,7 @@ void main() {
       expect(open('other', serverId: 'srv-2'), isNull);
 
       expect(statuses('a'), [_forLink, _closed]);
-      for (final id in ['f', 'x', 'over']) {
+      for (final id in ['x', 'over']) {
         expect(statuses(id), isEmpty, reason: id);
       }
     });
@@ -388,6 +402,222 @@ void main() {
       expect(statuses('a'), [const LogStreamEnded(LogStreamEndReason.invalid)]);
       expect(statuses('b'), [const LogStreamEnded(LogStreamEndReason.invalid)]);
       expect(link.commands, isEmpty);
+    });
+  });
+
+  group('follows (K26)', () {
+    test('two follows run a server and a third waits for a channel; '
+        'windows keep their own share, and a close frees a slot', () {
+      for (final id in ['f1', 'f2', 'f3']) {
+        open(id, follow: true);
+      }
+      open('w');
+      expect(statuses('f2'), [_running]);
+      expect(statuses('f3'), [_forChannel]);
+      expect(statuses('w'), [_running]);
+      expect(link.commands, hasLength(3));
+
+      router
+        ..closeStream('f3')
+        ..closeStream('f1')
+        ..closeStream('f1');
+      expect(statuses('f3'), [_forChannel, _closed]);
+      expect(statuses('f1'), [_running, _closed]);
+      open('f4', follow: true);
+      expect(statuses('f4'), [_running]);
+    });
+
+    test('under a learned session limit below 4 a follow waits for a '
+        'channel; windows still run', () {
+      link.seen = const SshLinkSeen(learnedSessionLimit: 3);
+      open('f', follow: true);
+      open('w');
+      expect(statuses('f'), [_forChannel]);
+      expect(statuses('w'), [_running]);
+    });
+
+    test('at a learned session limit of 4 one follow runs and the next '
+        'waits for a channel', () {
+      link.seen = const SshLinkSeen(learnedSessionLimit: 4);
+      open('f1', follow: true);
+      open('f2', follow: true);
+      expect(statuses('f1'), [_running]);
+      expect(statuses('f2'), [_forChannel]);
+    });
+
+    test('a lost link pauses a follow, which resumes after its newest '
+        'cursor on the next link and never ends', () async {
+      open('f', follow: true);
+      final p = await link.process(0);
+      p.emitText(_follow(1, 2));
+      await clock.elapse(Duration.zero);
+
+      // The process goes before the supervisor reports the closed link.
+      link.state = const SshLinkClosed(SshLinkClosedReason.linkLost);
+      p.end(const RemoteExit());
+      await pumpEventQueue();
+      expect(statuses('f'), [_running, _forLink]);
+      links['srv-1'] = null;
+      router.update('srv-1');
+
+      final next = ScriptedLink();
+      links['srv-1'] = next;
+      router.update('srv-1');
+      expect(statuses('f'), [_running, _forLink, _running]);
+      expect(next.commands.single, contains("'--after-cursor=s=2'"));
+      expect(link.commands, hasLength(1));
+      expect(ends('f'), 0);
+    });
+
+    test('a replaced link moves a journal follow without a state, and a '
+        'file once with a gap, while a window on the old link fails', () async {
+      open('f', follow: true);
+      open('w');
+      open('t', follow: true, source: const FileLogSource('/var/log/app.log'));
+      final p = await link.process(0);
+      p.emitText(_follow(1, 1));
+      (await link.process(2)).emitText('one\n');
+      await clock.elapse(Duration.zero);
+
+      final next = ScriptedLink();
+      links['srv-1'] = next;
+      router.update('srv-1');
+      expect(statuses('f'), [_running]);
+      expect(statuses('w'), [_running, _failed]);
+      const gap = LogStreamRunning(continuity: LogContinuity.gap);
+      expect(statuses('t'), [_running, gap]);
+      // The failed window does not run again.
+      expect(next.commands, hasLength(2));
+      expect(next.commands.first, contains("'--after-cursor=s=1'"));
+      await pumpEventQueue();
+      expect(p.closeCalls, 1);
+
+      links['srv-1'] = ScriptedLink();
+      router.update('srv-1');
+      expect(statuses('f'), [_running]);
+      expect(statuses('t'), [_running, gap]);
+    });
+
+    test('a follow lost on a live link runs again there, in its own slot '
+        'and ahead of a follow waiting for a channel', () async {
+      for (final id in ['f1', 'f2', 'f3']) {
+        open(id, follow: true);
+      }
+      (await link.process(0)).end(const RemoteExit());
+      await pumpEventQueue();
+      expect(link.commands, hasLength(3));
+      expect(statuses('f1'), [_running]);
+      expect(statuses('f3'), [_forChannel]);
+    });
+
+    test('a follow the host ended sends its last batch and ends through '
+        'the background or a replaced link, and runs no more', () async {
+      for (final way in ['background', 'replaced link']) {
+        link = ScriptedLink();
+        links['srv-1'] = link;
+        events = [];
+        start();
+        open('f', follow: true);
+        final p = await link.process(0);
+        p.emitText(_follow(1, 1));
+        await clock.elapse(Duration.zero);
+        p
+          ..emitText(_follow(2, 2))
+          ..end(const RemoteExit(exitCode: 1));
+        await pumpEventQueue();
+
+        final next = ScriptedLink();
+        if (way == 'background') {
+          router.activity = AppActivity.background;
+        } else {
+          links['srv-1'] = next;
+          router.update('srv-1');
+        }
+        await clock.elapse(const Duration(milliseconds: 50));
+        expect(events.whereType<LogBatch>(), hasLength(2), reason: way);
+        expect(statuses('f'), [_running, _failed], reason: way);
+        expect(next.commands, isEmpty, reason: way);
+      }
+    });
+
+    test('the background pauses a follow and the foreground resumes it; '
+        'a file says lines may be missing', () async {
+      open('f', follow: true);
+      open('t', follow: true, source: const FileLogSource('/var/log/app.log'));
+      final journal = await link.process(0);
+      journal.emitText(_follow(1, 2));
+      (await link.process(1)).emitText('one\n');
+      await clock.elapse(Duration.zero);
+
+      router.activity = AppActivity.background;
+      expect(statuses('f'), [_running, _forForeground]);
+      await pumpEventQueue();
+      expect(journal.closeCalls, 1);
+      await clock.elapse(const Duration(minutes: 1));
+
+      router.activity = AppActivity.foreground;
+      expect(statuses('f'), [_running, _forForeground, _running]);
+      expect(statuses('t'), [
+        _running,
+        _forForeground,
+        const LogStreamRunning(continuity: LogContinuity.gap),
+      ]);
+      expect(link.commands[2], contains("'--after-cursor=s=2'"));
+      expect(link.commands[3], contains("'tail' '-n' '0' '-F'"));
+    });
+
+    test(
+      'a follow the host ends frees its slot after its last batch',
+      () async {
+        for (final id in ['f1', 'f2', 'f3']) {
+          open(id, follow: true);
+        }
+        (await link.process(0))
+          ..emitText(_follow(1, 1))
+          ..end(const RemoteExit(exitCode: 1));
+        await pumpEventQueue();
+        expect(statuses('f3'), [_forChannel]);
+
+        await clock.elapse(Duration.zero);
+        expect(events.whereType<LogBatch>().single.streamId, 'f1');
+        expect(statuses('f1'), [_running, _failed]);
+        expect(statuses('f3'), [_forChannel, _running]);
+
+        router.closeStream('f1');
+        expect(statuses('f1'), [_running, _failed]);
+      },
+    );
+
+    test('Disconnect, fleet removal and close end every follow as failed, '
+        'once, and stop its timer', () async {
+      final ways = <String, void Function()>{
+        'disconnect': () => router.disconnect('srv-1'),
+        'fleet removal': () => router.retain({'srv-2'}),
+        'close': () => unawaited(router.close()),
+      };
+      for (final MapEntry(key: way, value: end) in ways.entries) {
+        link = ScriptedLink();
+        links['srv-1'] = link;
+        events = [];
+        start();
+        for (final id in ['f1', 'f2', 'f3']) {
+          open(id, follow: true);
+        }
+        final first = await link.process(0);
+        first.emitText(_follow(1, 1));
+        await pumpEventQueue();
+
+        end();
+        router.closeStream('f3');
+        for (final id in ['f1', 'f2', 'f3']) {
+          expect(statuses(id).last, _failed, reason: '$way $id');
+          expect(ends(id), 1, reason: '$way $id');
+        }
+        final count = events.length;
+        await clock.elapse(const Duration(seconds: 1));
+        expect(events, hasLength(count), reason: '$way: nothing after');
+        expect(first.closeCalls, 1, reason: way);
+      }
     });
   });
 }

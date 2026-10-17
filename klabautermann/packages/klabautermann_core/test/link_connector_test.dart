@@ -19,6 +19,7 @@ import 'package:seance_core/seance_core.dart'
         ResolvedSshHost,
         ServerConfig,
         SshConnectException,
+        SshConnectFailureKind,
         SshConnectionLog,
         SshCredentials,
         SshJumpHostResolver,
@@ -82,8 +83,10 @@ KeyboardInteractiveChallenge _challenge(List<String> questions) =>
       instruction: '',
     );
 
-SshConnectException _connectError(Object cause) =>
-    SshConnectException('failed', cause, SshConnectionLog());
+SshConnectException _connectError(
+  Object cause, {
+  SshConnectFailureKind kind = SshConnectFailureKind.other,
+}) => SshConnectException('failed', cause, SshConnectionLog(), kind: kind);
 
 LinkFailureKind? _failure(LinkConnectResult result) =>
     (result as LinkConnectFailed).failure;
@@ -112,10 +115,11 @@ void main() {
   LinkConnector connector({
     bool realDial = false,
     ServerConfig? Function(String id)? hopConfig,
+    Map<String, String> environment = const {},
   }) => LinkConnector(
     credentials: EngineCredentialSource(
       identityAuditLogIn(temp.path),
-      environment: {'HOME': temp.path},
+      environment: {'HOME': temp.path, ...environment},
       isMacOS: false,
     ),
     hostKeys: pins,
@@ -148,10 +152,11 @@ void main() {
     ServerConfig? server,
     ConnectPurpose purpose = ConnectPurpose.background,
     bool realDial = false,
+    Map<String, String> environment = const {},
     void Function(LinkStatus phase)? onPhase,
     void Function()? onDialing,
     Future<void>? abandoned,
-  }) => connector(realDial: realDial).connect(
+  }) => connector(realDial: realDial, environment: environment).connect(
     server ?? _server(),
     purpose: purpose,
     onPhase: onPhase,
@@ -548,6 +553,48 @@ void main() {
         IdentityFileFailure.notFound,
       );
     });
+
+    group('inside the Flatpak sandbox', () {
+      const flatpak = {'FLATPAK_ID': 'ch.lkmc.klabautermann'};
+
+      test('a key file it hides is its own failure', () async {
+        final result = await connect(
+          server: _server(
+            authMethod: AuthMethod.privateKey,
+            identityFilePath: '~/.ssh/id_ed25519',
+          ),
+          environment: flatpak,
+        );
+
+        expect(_failure(result), LinkFailureKind.keyFileHiddenBySandbox);
+        expect(
+          (result as LinkConnectFailed).identityFile,
+          IdentityFileFailure.sandboxDenied,
+        );
+        expect(dials, isEmpty);
+      });
+
+      test('so is a hop key file it hides', () async {
+        hops['ssh-config-hop:gw'] = _keyedHop();
+        onDial = (dial) async {
+          try {
+            await dial.resolveJumpHost!('ssh-config-hop:gw');
+          } on Exception catch (error) {
+            // seance_core types a resolver error as other; its cause says
+            // what failed.
+            throw _connectError(error);
+          }
+          return _FakeLink();
+        };
+
+        final result = await connect(
+          server: _server(jumpHostId: 'ssh-config-hop:gw'),
+          environment: flatpak,
+        );
+
+        expect(_failure(result), LinkFailureKind.keyFileHiddenBySandbox);
+      });
+    });
   });
 
   test('an ssh_config import reaches the dial through the store and '
@@ -629,17 +676,107 @@ Host gw
         LinkFailureKind.timedOut,
       ),
       (
+        'a connect timeout from Darwin',
+        const SocketException('timed out', osError: OSError('', 60)),
+        LinkFailureKind.timedOut,
+      ),
+      (
         'a handshake timeout',
         TimeoutException('handshake'),
         LinkFailureKind.timedOut,
       ),
       ('anything else', Exception('auth failed'), null),
     ]) {
-      test('$name is ${kind?.name ?? 'not classified'}', () async {
+      test('untyped, $name is ${kind?.name ?? 'not classified'}', () async {
         onDial = (_) async => throw _connectError(cause);
 
         expect(_failure(await connect()), kind);
       });
     }
+
+    group('a typed connect failure', () {
+      // Each cause alone would classify otherwise, or not at all, so only
+      // the kind can give the expected failure.
+      const refused = SocketException('Connection refused');
+      final typed = <SshConnectFailureKind, (Object, LinkFailureKind?)>{
+        SshConnectFailureKind.unreachable: (
+          TimeoutException('connect'),
+          LinkFailureKind.unreachable,
+        ),
+        SshConnectFailureKind.timedOut: (refused, LinkFailureKind.timedOut),
+        SshConnectFailureKind.routeInvalid: (refused, null),
+        SshConnectFailureKind.keyPassphraseRequired: (
+          refused,
+          LinkFailureKind.keyPassphraseRequired,
+        ),
+        SshConnectFailureKind.keyPassphraseWrong: (
+          refused,
+          LinkFailureKind.keyPassphraseRequired,
+        ),
+        SshConnectFailureKind.keyUnreadable: (
+          refused,
+          LinkFailureKind.credentialUnavailable,
+        ),
+        SshConnectFailureKind.agentEmpty: (
+          refused,
+          LinkFailureKind.credentialUnavailable,
+        ),
+        SshConnectFailureKind.authenticationRejected: (
+          refused,
+          LinkFailureKind.authenticationRejected,
+        ),
+        SshConnectFailureKind.hostKeyRefused: (refused, null),
+      };
+
+      test('covers every kind but other', () {
+        expect(
+          typed.keys.toSet(),
+          SshConnectFailureKind.values.toSet()
+            ..remove(SshConnectFailureKind.other),
+        );
+      });
+
+      for (final MapEntry(key: kind, value: (cause, failure))
+          in typed.entries) {
+        test('${kind.name} is ${failure?.name ?? 'not classified'}, '
+            'whatever its cause', () async {
+          onDial = (_) async => throw _connectError(cause, kind: kind);
+
+          expect(_failure(await connect()), failure);
+        });
+      }
+
+      test('a host key the attempt declined keeps its verdict', () async {
+        onDial = (dial) async {
+          final decision = await dial.tofu.check(_key('192.0.2.10'));
+          await dial.onHostKey(decision);
+          throw _connectError(
+            Exception('host key'),
+            kind: SshConnectFailureKind.hostKeyRefused,
+          );
+        };
+
+        expect(_failure(await connect()), LinkFailureKind.hostKeyDeclined);
+      });
+
+      test('a key file that holds no key fails before dialing, through the '
+          'real SshLink', () async {
+        final key = File('${temp.path}/.ssh/id_ed25519');
+        await key.create(recursive: true);
+        await key.writeAsString('not a key');
+
+        final result = await connect(
+          // A documentation address: the key is read before any socket.
+          server: _server(
+            authMethod: AuthMethod.privateKey,
+            identityFilePath: '~/.ssh/id_ed25519',
+          ),
+          realDial: true,
+        );
+
+        expect(_failure(result), LinkFailureKind.credentialUnavailable);
+        expect((result as LinkConnectFailed).identityFile, isNull);
+      });
+    });
   });
 }

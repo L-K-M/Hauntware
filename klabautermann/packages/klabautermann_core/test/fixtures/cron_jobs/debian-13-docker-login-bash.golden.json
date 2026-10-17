@@ -1,0 +1,29 @@
+{
+  "at": "2026-10-15T12:00:03.000Z",
+  "zoneName": "Etc/UTC",
+  "zoneFallback": null,
+  "jobs": [
+    {
+      "kind": "periodic",
+      "id": "periodic|daily|apt-compat",
+      "period": "daily",
+      "name": "apt-compat",
+      "directory": "/etc/cron.daily",
+      "driverIds": [],
+      "schedules": [],
+      "nextRuns": [],
+      "runsUnknown": "noDriver"
+    },
+    {
+      "kind": "periodic",
+      "id": "periodic|daily|dpkg",
+      "period": "daily",
+      "name": "dpkg",
+      "directory": "/etc/cron.daily",
+      "driverIds": [],
+      "schedules": [],
+      "nextRuns": [],
+      "runsUnknown": "noDriver"
+    }
+  ]
+}

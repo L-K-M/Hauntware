@@ -109,6 +109,46 @@
       }
     }
   },
+  "linkFailureUnreachable": "This server could not be reached. Check its address and your network connection.",
+  "@linkFailureUnreachable": {
+    "description": "Why a connect failed (03 §10.1), under the server header and in the fleet row's tooltip: the connection was refused, the host had no route or address, or a jump host could not forward to it."
+  },
+  "linkFailureTimedOut": "This server did not answer in time. Check that it is running and that your network reaches it.",
+  "@linkFailureTimedOut": {
+    "description": "Why a connect failed (03 §10.1): connecting, the handshake or signing in ran past its deadline."
+  },
+  "linkFailureAuthenticationRejected": "The server rejected your credentials. Make sure it trusts your key or password.",
+  "@linkFailureAuthenticationRejected": {
+    "description": "Why a connect failed (03 §10.1): the server refused every credential offered."
+  },
+  "linkFailureCredentialUnavailable": "No credential could be offered to this server. Check that its key file can be read and holds a supported key, or load a key into ssh-agent.",
+  "@linkFailureCredentialUnavailable": {
+    "description": "Why a connect failed (03 §10.1): a key file could not be read or holds no key the app can use, or ssh-agent holds no keys. ssh-agent is the OpenSSH program's name, not translated."
+  },
+  "linkFailureKeyPassphraseRequired": "A key for this server needs a passphrase, which Klabautermann cannot ask for. Load the key into ssh-agent and remove the IdentityFile line that names it from ~/.ssh/config, then import the config again.",
+  "@linkFailureKeyPassphraseRequired": {
+    "description": "Why a connect failed (03 §10.1): the private key of this server or of a jump host on its route is encrypted, and the app has no passphrase prompt yet. A server whose ssh_config entry names a key file uses only that file, so the agent signs only once the IdentityFile line is gone and the config is imported again. ssh-agent, IdentityFile and ~/.ssh/config are OpenSSH names, not translated."
+  },
+  "linkFailureKeyFileHiddenBySandbox": "A key file for this server cannot be read in the Flatpak sandbox. Load the key into ssh-agent and remove the IdentityFile line that names it from ~/.ssh/config, then import the config again.",
+  "@linkFailureKeyFileHiddenBySandbox": {
+    "description": "Why a connect failed (03 §4.5, §10.1): the Flatpak sandbox shows the app only the paths its manifest grants, so the key file of this server or of a jump host on its route reads as missing. A server whose ssh_config entry names a key file uses only that file, so the agent signs only once the IdentityFile line is gone and the config is imported again. ssh-agent, IdentityFile and ~/.ssh/config are OpenSSH names, not translated."
+  },
+  "linkFailureHostKeyDeclined": "This server's host key has not been trusted, so Klabautermann did not connect.",
+  "@linkFailureHostKeyDeclined": {
+    "description": "Why a connect failed (03 §4.6, §10.1): the user declined a first-seen host key, or a connect the user did not start declined it without asking."
+  },
+  "linkFailureUnsupportedAlgorithm": "This server requires an algorithm Klabautermann does not support yet.",
+  "@linkFailureUnsupportedAlgorithm": {
+    "description": "Client limitation (03 §5.3, CN-23): the server requires an algorithm the SSH library does not implement, such as an ML-KEM key exchange."
+  },
+  "linkFailureInsecureAlgorithmsOnly": "This server offers only algorithms Klabautermann refuses as insecure.",
+  "@linkFailureInsecureAlgorithmsOnly": {
+    "description": "Client limitation (03 §5.3, D23): the server offers only key exchanges or MACs the suite refuses as broken."
+  },
+  "linkFailureKeyExchangeTimedOut": "Klabautermann could not finish this server's key exchange in time on this device.",
+  "@linkFailureKeyExchangeTimedOut": {
+    "description": "Client limitation (03 §5.3, CN-23): on Android, the server gave up while a finite-field Diffie-Hellman key exchange was still being computed."
+  },
   "fleetRowProbeOnline": "Online",
   "@fleetRowProbeOnline": {
     "description": "Fleet row state (FL-04): the reachability probe reached the server's SSH port, and nothing is connected to it."
@@ -664,6 +704,190 @@
   "workspaceTabSystem": "System",
   "workspaceTabAccess": "Access",
   "serverTabMore": "More",
+  "processesWaiting": "Waiting for the first process list.",
+  "@processesWaiting": {
+    "description": "The Processes tab before the server sent its first process list (PRC-01)."
+  },
+  "processesUnavailable": "{reason, select, missing{The server lacks a tool the process list needs.} denied{The server refused the process list.} timeout{The process list did not finish in time.} other{The process list failed.}}",
+  "@processesUnavailable": {
+    "description": "Why the server's latest process list failed; reason is missing, denied, timeout or error. The last list, if any, stays below with its age.",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "processesShownOf": "Showing {shown} of {total} processes",
+  "@processesShownOf": {
+    "description": "The server lists at most 500 processes (D48); shown is how many the tab lists, total how many the server counted.",
+    "placeholders": {
+      "shown": {
+        "type": "int",
+        "format": "decimalPattern"
+      },
+      "total": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "processesShownSome": "Showing {shown} processes; the server left others out",
+  "@processesShownSome": {
+    "description": "As processesShownOf, when the server did not say how many it counted.",
+    "placeholders": {
+      "shown": {
+        "type": "int",
+        "format": "decimalPattern"
+      }
+    }
+  },
+  "processesFilterHint": "Filter processes",
+  "@processesFilterHint": {
+    "description": "Hint of the Processes tab's filter field, which matches PIDs, names, users and the shown command lines."
+  },
+  "processesFilterClear": "Clear filter",
+  "@processesFilterClear": {
+    "description": "Tooltip of the button that empties the Processes tab's filter field."
+  },
+  "processesSortBy": "Sort by",
+  "@processesSortBy": {
+    "description": "Label of the phone layout's menu that picks the column the processes are ordered by."
+  },
+  "processesEmpty": "The server listed no processes.",
+  "@processesEmpty": {
+    "description": "The Processes tab when the server's list holds no process."
+  },
+  "processesNoMatch": "No process matches the filter.",
+  "@processesNoMatch": {
+    "description": "The Processes tab when its filter matches none of the listed processes."
+  },
+  "processesColumnCommand": "Command",
+  "@processesColumnCommand": {
+    "description": "Processes column header: the process's command line."
+  },
+  "processesColumnPid": "PID",
+  "@processesColumnPid": {
+    "description": "Processes column header: the process ID."
+  },
+  "processesColumnUser": "User",
+  "@processesColumnUser": {
+    "description": "Processes column header: the user the process runs as."
+  },
+  "processesColumnCpu": "CPU",
+  "@processesColumnCpu": {
+    "description": "Processes column header: the process's share of one CPU since the previous reading."
+  },
+  "processesColumnMemory": "Memory",
+  "@processesColumnMemory": {
+    "description": "Processes column header: the process's resident memory."
+  },
+  "processesColumnStarted": "Started",
+  "@processesColumnStarted": {
+    "description": "Processes column header: when the process started."
+  },
+  "processesParentPid": "Parent PID",
+  "@processesParentPid": {
+    "description": "Label of the process ID of a process's parent, in a process's details."
+  },
+  "processesState": "State",
+  "@processesState": {
+    "description": "Label of a process's run state letter as the kernel reports it (such as R or S), in a process's details."
+  },
+  "processesUid": "UID {uid}",
+  "@processesUid": {
+    "description": "A process's user when only its numeric user ID is known.",
+    "placeholders": {
+      "uid": {
+        "type": "int"
+      }
+    }
+  },
+  "processesCpu": "{share}",
+  "@processesCpu": {
+    "description": "A process's CPU share; share arrives as a fraction where 1 is one full CPU, so it can exceed 100%.",
+    "placeholders": {
+      "share": {
+        "type": "double",
+        "format": "decimalPercentPattern",
+        "optionalParameters": {
+          "decimalDigits": 1
+        }
+      }
+    }
+  },
+  "processesStartedTime": "{time}",
+  "@processesStartedTime": {
+    "description": "When a process started, if on the day of the reading: a time in the UI locale and this device's time zone.",
+    "placeholders": {
+      "time": {
+        "type": "DateTime",
+        "format": "jm"
+      }
+    }
+  },
+  "processesStartedDate": "{date}",
+  "@processesStartedDate": {
+    "description": "When a process started, if before the day of the reading: a date in the UI locale.",
+    "placeholders": {
+      "date": {
+        "type": "DateTime",
+        "format": "yMMMd"
+      }
+    }
+  },
+  "processesCommandUnavailable": "Command line unavailable",
+  "@processesCommandUnavailable": {
+    "description": "In place of a command line the server did not give, as for a kernel thread (03 §7.2)."
+  },
+  "processesCommandUnavailableOf": "{name} (command line unavailable)",
+  "@processesCommandUnavailableOf": {
+    "description": "A process's kernel name in place of a command line the server did not give.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "kthreadd"
+      }
+    }
+  },
+  "processesMasked": "(masked)",
+  "@processesMasked": {
+    "description": "What a screen reader says in place of a masked secret in a command line (SAF-07)."
+  },
+  "processesFact": "{label}: {value}",
+  "@processesFact": {
+    "description": "One of a process's figures as drawn under its command line in the phone layout's list: the table column's header label, then the value.",
+    "placeholders": {
+      "label": {
+        "type": "String",
+        "example": "Memory"
+      },
+      "value": {
+        "type": "String",
+        "example": "512 MiB"
+      }
+    }
+  },
+  "processesCommandLineTitle": "Command line",
+  "@processesCommandLineTitle": {
+    "description": "Heading of a process's arguments in its details."
+  },
+  "processesRevealNote": "Select a masked argument to show it for {seconds} seconds.",
+  "@processesRevealNote": {
+    "description": "Note above a process's arguments when some are masked secrets (SAF-07): a reveal is temporary and stays on this device.",
+    "placeholders": {
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "processesRevealHint": "Show the masked value",
+  "@processesRevealHint": {
+    "description": "Screen-reader hint of a masked argument, which shows its value for a while when activated."
+  },
+  "processesHideHint": "Mask again",
+  "@processesHideHint": {
+    "description": "Screen-reader hint of a revealed argument, which masks it again when activated."
+  },
   "systemIdentityTitle": "Identity",
   "@systemIdentityTitle": {
     "description": "Heading of the System tab's section about what the server is: host name, operating system, kernel, architecture and virtualization (SYS-01)."
@@ -1800,7 +2024,7 @@
   "@logsPanelKernelLimited": {
     "description": "Notice above the kernel log when the server's journal shows the signed-in account only its own entries, which never include kernel messages. The group names are names on the server and stay as they are."
   },
-  "logsPanelStatus": "{status, select, opening{Opening the log…} waitingLink{Waiting for the connection to the server.} waitingChannel{Waiting for a free session on the server.} waitingBackground{Paused while the app is in the background.} loading{Loading entries…} invalid{The engine refused this filter or path.} missing{The server has no such file or log tool.} denied{The server denied access to this log.} failed{Reading the log failed.} rejected{The engine did not open this log.} other{Choose or type the absolute path of a file to tail.}}",
+  "logsPanelStatus": "{status, select, opening{Opening the log…} waitingLink{Waiting for the connection to the server.} waitingChannel{Waiting for a free session on the server.} waitingBackground{Paused while the app is in the background.} gap{Following again. Lines written while it was paused or disconnected may be missing.} loading{Loading entries…} invalid{The engine refused this filter or path.} missing{The server has no such file or log tool.} denied{The server denied access to this log.} failed{Reading the log failed.} rejected{The engine did not open this log.} other{Choose or type the absolute path of a file to tail.}}",
   "@logsPanelStatus": {
     "description": "Status line above the log saying what reading it is doing or why it stopped.",
     "placeholders": {
@@ -2611,5 +2835,161 @@
   "jobsCalendarOneRun": "systemd before version 242 lists only the next run, so later runs are not shown.",
   "@jobsCalendarOneRun": {
     "description": "Under an OnCalendar trigger's run on a server whose systemd predates 242, which cannot list more than one."
+  },
+  "settingsAccessibilityTitle": "Accessibility",
+  "@settingsAccessibilityTitle": {
+    "description": "Heading of the accessibility settings on the General settings tab."
+  },
+  "settingsAnnounceBands": "Announce threshold changes",
+  "@settingsAnnounceBands": {
+    "description": "Switch on the General settings tab (A11Y-15): whether screen readers hear a server's values cross a warning or critical level."
+  },
+  "settingsAnnounceBandsDetail": "While a server's Overview shows, your screen reader hears when CPU, memory or a disk crosses into or out of its warning or critical level. Values that refresh every few seconds are never read out.",
+  "@settingsAnnounceBandsDetail": {
+    "description": "Explanation under the threshold announcement switch on the General settings tab (A11Y-15)."
+  },
+  "settingsAnnounceNotSaved": "The setting changed, but it could not be saved, so it will not be kept after a restart.",
+  "@settingsAnnounceNotSaved": {
+    "description": "Toast when the threshold announcement switch applied but settings.json could not be written."
+  },
+  "settingsAnnounceNotChanged": "The setting could not be changed.",
+  "@settingsAnnounceNotChanged": {
+    "description": "Toast when the app did not take a change of the threshold announcement switch."
+  },
+  "overviewBandAnnouncement": "{metric} {value}: {band, select, warning{warning level} critical{critical level} other{back to normal}}",
+  "@overviewBandAnnouncement": {
+    "description": "Screen-reader announcement (A11Y-15) when a value on a server's Overview has crossed into the warning or critical band, or back below the warning level; metric names the value (CPU, Memory, Disk /var), value is its percentage.",
+    "placeholders": {
+      "metric": {
+        "type": "String"
+      },
+      "value": {
+        "type": "String"
+      },
+      "band": {
+        "type": "String"
+      }
+    }
+  },
+  "overviewBandDisk": "Disk {mount}",
+  "@overviewBandDisk": {
+    "description": "A mount's space use as a threshold announcement names it; mount is the mount point, server data such as /var.",
+    "placeholders": {
+      "mount": {
+        "type": "String"
+      }
+    }
+  },
+  "overviewBandInodes": "Inodes on {mount}",
+  "@overviewBandInodes": {
+    "description": "A mount's inode use as a threshold announcement names it; mount is the mount point, server data such as /var.",
+    "placeholders": {
+      "mount": {
+        "type": "String"
+      }
+    }
+  },
+  "overviewHealthTitle": "Health",
+  "@overviewHealthTitle": {
+    "description": "Heading of the Overview's health card (OV-02): failed units and full disks."
+  },
+  "overviewHealthUnitsWaiting": "Waiting for the first check of failed units.",
+  "@overviewHealthUnitsWaiting": {
+    "description": "The health card before the server sent its list of failed systemd units."
+  },
+  "overviewHealthUnitsCheckFailed": "{reason, select, missing{The last check of failed units could not run: this server lacks systemctl.} denied{The server refused the last check of failed units.} timeout{The last check of failed units took too long.} other{The last check of failed units failed.}}",
+  "@overviewHealthUnitsCheckFailed": {
+    "description": "The health card when the server could not list its failed systemd units this time; the list from the check before, if any, stays shown below it. systemctl is a command name, kept as written.",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "overviewDisksWaiting": "Waiting for the first disk reading.",
+  "@overviewDisksWaiting": {
+    "description": "The Overview's health and Disks cards before the server sent its first disk usage reading."
+  },
+  "overviewHealthDisksUnknown": "{reason, select, missing{Disk use is unknown: this server lacks df.} denied{Disk use is unknown: the server refused the reading.} timeout{Disk use is unknown: the reading did not finish in time.} other{Disk use is unknown: the reading failed.}}",
+  "@overviewHealthDisksUnknown": {
+    "description": "The health card when the latest disk usage reading failed; df is a command name, kept as written.",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "overviewHealthDisksOk": "No disk has {level} or more of its space or inodes used.",
+  "@overviewHealthDisksOk": {
+    "description": "The health card when every listed mount is below the warning level; level is that level as a percentage, such as 80%.",
+    "placeholders": {
+      "level": {
+        "type": "String"
+      }
+    }
+  },
+  "overviewHealthDiskSpace": "{mount}: {percent} of its space used, {band, select, critical{critical} other{warning}}",
+  "@overviewHealthDiskSpace": {
+    "description": "A health card line for a mount whose space use reached a level; mount is the mount point (server data), percent its use, and band the level it reached.",
+    "placeholders": {
+      "mount": {
+        "type": "String"
+      },
+      "percent": {
+        "type": "String"
+      },
+      "band": {
+        "type": "String"
+      }
+    }
+  },
+  "overviewHealthDiskInodes": "{mount}: {percent} of its inodes used, {band, select, critical{critical} other{warning}}",
+  "@overviewHealthDiskInodes": {
+    "description": "A health card line for a mount whose inode use reached a level; mount is the mount point (server data), percent its inode use, and band the level it reached.",
+    "placeholders": {
+      "mount": {
+        "type": "String"
+      },
+      "percent": {
+        "type": "String"
+      },
+      "band": {
+        "type": "String"
+      }
+    }
+  },
+  "overviewHealthAnnouncements": "{state, select, on{Threshold announcements: on} other{Threshold announcements: off}}",
+  "@overviewHealthAnnouncements": {
+    "description": "The health card's link to the threshold announcement switch in Settings (A11Y-15), with the switch's state.",
+    "placeholders": {
+      "state": {
+        "type": "String"
+      }
+    }
+  },
+  "overviewHealthAnnouncementsHint": "Opens Settings",
+  "@overviewHealthAnnouncementsHint": {
+    "description": "Screen reader hint on the health card's threshold announcement link: activating it opens Settings, where the switch is, rather than switching announcements on the spot."
+  },
+  "overviewDiskSize": "Size",
+  "@overviewDiskSize": {
+    "description": "A mount's size in the Overview's Disks card."
+  },
+  "overviewDisksMore": "{count, plural, =1{1 more mount is on the System tab.} other{{count} more mounts are on the System tab.}}",
+  "@overviewDisksMore": {
+    "description": "Under the Overview's Disks card when it lists only the first mounts; the System tab lists them all.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "overviewHostTitle": "Host",
+  "@overviewHostTitle": {
+    "description": "Heading of the Overview's card with the server's operating system, kernel, uptime and boot time."
+  },
+  "overviewHostWaiting": "Waiting for the operating system and kernel.",
+  "@overviewHostWaiting": {
+    "description": "The Overview's Host card before the server sent its operating system and kernel."
   }
 }

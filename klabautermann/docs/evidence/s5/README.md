@@ -1,7 +1,12 @@
-# Spike S5, part 1: engine budgets replayed on one machine
+# Spike S5: engine budgets and UI frame timing replayed on one machine
 
-Each JSON file is the output of `klabautermann_core/tool/engine_budget.dart`,
-run from `klabautermann/packages/klabautermann_core`:
+Part 1 measures the engine side, part 2 (below) the app's frames.
+
+## Part 1: engine budgets
+
+Each `local-phone-*` and `local-ten-hosts-*` file is the output of
+`klabautermann_core/tool/engine_budget.dart`, run from
+`klabautermann/packages/klabautermann_core`:
 
 | File | Command |
 |---|---|
@@ -18,21 +23,25 @@ linux_x64 in a 4-CPU container (Intel Xeon at 2.10 GHz, kernel 6.18)
 that other jobs shared; each file records the load average before and
 after.
 
-The runs predate the harness's review fixes, two of which touch its
-output. The follow's stand-in now also holds a batch back while it
-would be the 21st within a second (03 §10.1); the 50 ms beat alone let
-a late batch and the next go a few milliseconds apart. Over 10 s of
-10 ms steps with 2 ms of jitter it sends 198 or 199 batches where the
-beat alone sent 200, so the batch figures below would move by under
-1 %. And the `ui` counts now include samples by server, the servers
-profiled and the samples with rates, which these files lack.
+The runs used the harness as `cb1b7056` added it, before its review
+fixes (from `88407c86` on), three of which touch its output. The
+follow's stand-in now also holds a batch back while it would be the 21st
+within a second (03 §10.1); the 50 ms beat alone let a late batch and
+the next go a few milliseconds apart. Over 10 s of 10 ms steps with 2 ms
+of jitter it sends 198 or 199 batches where the beat alone sent 200, so
+the batch figures below would move by under 1 %. The last step now also
+feeds the follow the lines due since the step before, which it left out:
+ten lines at 1,000 a second when it runs on time, too few to show here,
+and more when a loaded machine delays it. And the `ui` counts now
+include samples by server, the servers profiled and the samples with
+rates, which these files lack.
 
 **These numbers are provisional.** A shared container is neither 03
 §11.4's reference VM nor a phone. Device numbers and the UI frame p99
-belong to spike S5 part 2 (K29b) and the manual gate of 06, and nothing
-here sets a budget.
+belong to the manual gate of 06 (part 2 below has provisional UI
+numbers), and nothing here sets a budget.
 
-## Method
+### Method
 
 - **Hosts.** Ten, taking the six platform fixtures of
   `klabautermann_host/test/fixtures` in name order, so `alpine-322`
@@ -57,7 +66,10 @@ here sets a budget.
   framing (`HwsTickAssembler`), pipeline (parsers, rates, the protocol's
   values) and send (the isolate copy); per second, that plus the
   follow's parsing and batch sends (`busyMsPerSecond`). On an idle core
-  it is CPU time.
+  it is CPU time. `eventsPerTick` is the engine events a tick produced:
+  one sample for each stream its reply serves, so 1.27 for `phone`,
+  where a `core` reply also serves its `overview` row, and 2.0 for
+  `tenHostsCoreAt2s`.
 - **Process CPU.** `utime + stime` of the whole process from
   `/proc/self/stat`, which also counts the receiving isolate, the timers
   and the VM's own threads (and, under JIT, the compiler).
@@ -70,7 +82,7 @@ here sets a budget.
 - **Bytes.** `replyBytes` is what the host sends per tick, the figure 03
   §11.4's tick and 10-host budgets name, at the fixtures' sizes.
 
-## What it shows
+### What it shows
 
 - **Phone, AOT, 600 s.** 740 ticks (1.23 a second), none skipped. Engine
   time per tick: 0.21 ms at the median, 1.10 ms at p99, 4.99 ms at most;
@@ -106,17 +118,103 @@ here sets a budget.
   loaded machine; the run cannot tell which. Its resident set (367 to
   402 MB) is the JIT VM's.
 
-## Not covered here
+### Not covered in part 1
 
 - **SSH.** No dartssh2 decryption, MAC or window handling, which run in
-  the engine isolate too (D18). K29b's replay and the integration tests
-  reach it.
+  the engine isolate too (D18). Part 2's replay engine has none either;
+  the integration tests reach it.
 - **Slow collectors.** `procs` (up to 500 rows every 5 s while visible,
   03 §6.4), `fs`, `units`, `timers` and `cron` are not replayed; real
   captures (K28) size them.
 - **Bigger hosts.** `core` replies here come from 2 to 16 CPUs. Per-core
   and per-disk rows grow the replies and the pipeline's work.
 - **The UI side.** The receiving isolate only counts messages; what the
-  app does with them is K29b's frame timing.
+  app does with them is part 2's frame timing.
 - **Cadences.** The phone schedule is this harness's reading of 03 §6.4;
   K22's scheduler decides the real one.
+
+## Part 2: UI frame timing under Xvfb
+
+`local-frame-timing-xvfb.json` is the report of
+`klabautermann/scripts/bench-frame-timing.sh`, run from `klabautermann/`
+with `LIBGL_ALWAYS_SOFTWARE=1` and `KLABAUTERMANN_EVIDENCE_DIR` set. It
+was built from `54fc3d46`, with a clean working tree: the harness after
+its review fixes, merged with `main` at `3fff564e`, and with the replay
+engine answering log streams as K25b's router does. Later commits change
+only this README and the report. The test started at 14:03 UTC on
+2026-10-16, with Flutter 3.47.2, in the same kind of shared 4-CPU
+container. Other jobs kept the 1-minute load average at 9.6 when the
+test started and 9.3 when it ended; it read 12.1 when the app's build
+started.
+
+**These are not device numbers.** Xvfb has no GPU: Mesa's llvmpipe
+rasterizes in software on the CPUs that the app, the replay engine and
+the other jobs share. 03 §11.4's frame p99 stays a device measurement
+with manual sign-off (06). CI's `klabautermann_frame_timing` job runs
+the same script on main pushes and dispatch and uploads its report; it
+gates nothing.
+
+### Method
+
+- **The app.** `app/klabautermann_app/integration_test/frame_timing_test.dart`
+  builds `main.dart`'s controllers over `IsolateEngineClient.spawn` with
+  the replay engine as its entry point and pumps the real
+  `KlabautermannApp` in profile mode in the Linux runner's 1280 by 720
+  window, the desktop shell.
+- **The replay engine** (`package:klabautermann_core/replay.dart`, 03
+  §11.4) builds on part 1's replay: the same ten servers, each reading
+  `core` every 2 s with the first reads spread over the 2 s, through the
+  frame reader and each server's sample pipeline; the Desktop periods
+  for what a view subscribes (the Overview adds `fs`, `identity` and
+  `failedUnits`); and a journal follow at 1,000 lines a second through
+  `FollowReplay`. Every server is linked and online; there is no SSH.
+- **Surfaces**, 20 s each, in order: the fleet list with nothing
+  selected; `debian-12-1`'s Overview; its Logs panel, opened by tapping
+  its tab, whose follow runs while it shows. The rail stays on screen,
+  so the later surfaces carry the fleet's updates too.
+- **Frames.** `watchPerformance` collects the `FrameTiming`s and
+  `FrameTimingSummarizer` reduces them: build (UI thread) and raster
+  times as average, p90, p99 and worst, the frames over its 16 ms
+  budget (`missed_frame_*_budget_count`) and the collections, without
+  the per-frame lists. Under `benchmarkLive` the test's pumps draw
+  nothing, but the live test binding asks for a frame after each one it
+  draws, so the app redraws as fast as the display allows (10 to 16
+  frames a second in this run) and frames that changed nothing count
+  too.
+  `load` is what reached the app per second in each window; the run
+  fails when no sample arrived in a window, or fewer than 500 log
+  records a second in the Logs window, never on a slow frame.
+
+### What it shows
+
+- **The load reached the app as planned:** 5.0 samples a second on every
+  surface, and 1,004.1 log records in 19.6 batches a second while the
+  Logs panel showed.
+- **Build**, the Dart side a device's CPU also runs: the fleet list took
+  0.94 ms on average and 9.67 ms at p99, with 2 of 327 frames over
+  16 ms; the Overview 3.15 ms and 43.6 ms, with 18 of 249 over; the Logs
+  panel with the follow 27.0 ms and 88.2 ms, with 131 of 199 over, and
+  232 young-generation collections in 20 s against 16 and 10 on the
+  other surfaces. On this loaded machine the follow is the cost to watch;
+  whether the Logs panel's build holds 16 ms at 1,000 lines a second is
+  for the device sign-off (06) to show.
+- **Raster:** 56 to 79 ms on average and 103 to 146 ms at p99 on every
+  surface, every frame over 16 ms. That is llvmpipe on a shared CPU and
+  says nothing about a phone's GPU.
+
+### Not covered in part 2
+
+- **Devices.** The low-end Android phone and the older iPhone of 06 stay
+  manual, and this test cannot run on them yet: it reads the fixtures
+  from the checkout through `dart:io` (`KLABAUTERMANN_REPLAY_FIXTURES`),
+  so it runs only on a desktop target. A device run needs them bundled
+  first, as assets or generated Dart.
+- **The phone layout.** The window is a desktop one; the phone shell (03
+  §10.5) is not measured.
+- **The real engine.** The replay engine stands in for it: no links, no
+  K22 scheduler (it keeps its own cadences and spread), no log service
+  (it answers log streams as K25b's router does and follows them itself
+  until K26), and its CPU time competes with the app's on the same
+  machine.
+- **Other panels and input.** Only these three surfaces, and the test
+  scrolls nothing.

@@ -87,6 +87,7 @@ void main() {
             'proves nothing about declining a changed key',
       );
       expect(failure.isHostKeyRefusal, isTrue);
+      expect(failure.kind, SshConnectFailureKind.hostKeyRefused);
     });
 
     test('a first-use key the user declines is a host-key refusal', () async {
@@ -103,6 +104,7 @@ void main() {
 
       expect(verdicts, [HostKeyVerdict.firstUse]);
       expect(failure.isHostKeyRefusal, isTrue);
+      expect(failure.kind, SshConnectFailureKind.hostKeyRefused);
       // TOFU pins only what the user accepts: a declined stranger must
       // leave the store empty, or its next attempt would go unasked.
       expect(await store.get(_host, _port), isNull);
@@ -123,6 +125,7 @@ void main() {
         final pinned = await store.get(_host, _port);
         expect(pinned?.fingerprintSha256, _hostKeyFingerprint);
         expect(failure.isHostKeyRefusal, isFalse);
+        expect(failure.kind, SshConnectFailureKind.other);
       },
     );
   });

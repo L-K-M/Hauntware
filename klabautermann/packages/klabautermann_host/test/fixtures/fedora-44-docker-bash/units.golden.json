@@ -1,0 +1,11 @@
+{
+  "result": {
+    "units": [],
+    "failed": [],
+    "format": "none",
+    "timeoutAbsent": false
+  },
+  "warnings": [
+    "units: no units block"
+  ]
+}

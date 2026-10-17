@@ -139,7 +139,7 @@ server_config_store.dart        FileServerConfigStore (servers.json)
 catalog_snapshot.dart           CatalogSnapshot: the read-only interface apps consume
 catalog_controller.dart         CatalogController: CatalogSnapshot plus replace/onReplaced, held only by RecordCoordinator
 catalog_writer.dart             CatalogWriter: the shared write path (03 4.4 "Write semantics")
-endpoint_pin_store.dart         EndpointPinStore (new, D16/4.7: designed, not extracted)
+endpoint_pin_store.dart         EndpointPin, EndpointPinStore (new, D16/4.7)
 enrollment.dart                 SyncEnrollment, SyncEnrollmentApi, SyncAccount,
                                 SyncAccountMode, SyncCredentialStore,
                                 SyncEnrollmentState, EnrollmentResult,
@@ -174,7 +174,10 @@ string stays).
 
 Under `SC/lib/src/store/` (F3b): `file_vault_store.dart`
 (`FileVaultStore`, `VaultRekeyJournal`, `VaultRekeyOutcome`) and
-`file_host_key_store.dart` (`FileHostKeyStore`).
+`file_host_key_store.dart` (`FileHostKeyStore`). Beside them,
+`file_endpoint_pin_store.dart` (`FileEndpointPinStore`,
+`EndpointPinsNewerVersionException`, `endpointPinsFileName`) is the
+first `EndpointPinStore` (section 2.2).
 
 Under `planchette/packages/ghost_keystore/` (F3c): a Flutter package
 wrapping `flutter_secure_storage`, so it cannot live in pure-Dart
@@ -249,12 +252,32 @@ crash semantics are otherwise identical, and the `atomicWriter`
 constructor seam stays for deterministic tests.
 
 Layering: app adapters implement `SyncCredentialStore`,
-`PinVerdictStore`, `SyncTripwireStore` and `EndpointPinStore`
-persistence, and supply their prefix handlers (`BookmarkHandler` for
-Poltergeist, the `klabautermann:` handler for the new app).
+`PinVerdictStore` and `SyncTripwireStore` persistence, and supply
+their prefix handlers (`BookmarkHandler` for Poltergeist, the
+`klabautermann:` handler for the new app).
 `CatalogWriter` is library code the apps call, not a seam they
 implement. The catalog depends on `seance_protocol` and app-injected
 stores only; apps depend on `catalog.dart`, never the reverse.
+
+`EndpointPinStore` persistence is library code instead:
+`FileEndpointPinStore` keeps `endpoint_pins.json` (03 4.10) as
+`{"version": 1, "pins": [...]}`, each pin `{serverId, host, port,
+username, jumpRouteIds, confirmedAt}` with `confirmedAt` in epoch
+milliseconds, sorted by `serverId` and rewritten whole through
+`AtomicFileWriter` at the process default mode, with the `atomicWriter`
+seam. It follows `FileHostKeyStore`'s conventions: serialized loads and
+mutations, a load-once cache that changes only after the write lands,
+and `quarantineCorruptFile` for a corrupt file (bad JSON, shape or
+version, or any malformed or duplicate entry), after which the store
+starts empty. A newer `version` is left in place: lookups find no pin
+and changes throw `EndpointPinsNewerVersionException`. Both failures
+fail closed, since a server without a pin gets no background
+connection. `confirm` replaces a server's pin whole, `drop` of a server
+without a pin is a no-op, and `pinFor` answers null for one. The
+interface and `EndpointPin` live under `SC/lib/src/catalog/`, the file
+store under `SC/lib/src/store/` beside `FileHostKeyStore`; the catalog
+barrel exports all of them, so Klabautermann (and later Séance and
+Poltergeist, D16) construct the store over their own support directory.
 
 ## 3. String injection
 
@@ -447,8 +470,9 @@ final class CatalogController implements CatalogSnapshot {
   void replace(Iterable<ServerConfig> servers);
 }
 
-/// Confirmed endpoint tuple per serverId (D16, 03 4.7). Designed here;
-/// first implementation ships with its first consumer, the MVP.
+/// Confirmed endpoint tuple per serverId (D16, 03 4.7): `EndpointPin`
+/// is `{serverId, host, port, username, jumpRouteIds, confirmedAt}`.
+/// `FileEndpointPinStore` implements it (section 2.2).
 abstract interface class EndpointPinStore {
   Future<EndpointPin?> pinFor(String serverId);
   Future<void> confirm(EndpointPin pin);
@@ -997,10 +1021,10 @@ the fix (D15; 03 4.6 and 4.3).
   change hands. Mitigation: golden files gate PR 1; `AtomicFileWriter`
   preserves `atomicRewrite`'s write order
   (`transfer_journal.dart:1352-1393`).
-- `EndpointPinStore` is designed, not extracted: no implementation
-  exists in either app today (03 4.7). Its first store ships with its
-  first consumer (the MVP); naming it in the API now fixes the seam
-  without speculative code.
+- `EndpointPinStore` is new, not extracted: no implementation existed
+  in either app (03 4.7). Its file store landed in `seance_core`
+  (section 2.2) ahead of its first consumer, Klabautermann's endpoint
+  confirmation (SAF-09).
 - Keystore prefix regressions destroy vaults (a wrong entry mints over
   an existing vault). Mitigation: literal-name tests, `hasExistingVault`
   contract tests, the manual macOS keychain check.

@@ -17,6 +17,7 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 import 'support/charts.dart';
 import 'support/fake_engine.dart';
 import 'support/harness.dart';
+import 'support/link_failures.dart';
 
 final _t0 = DateTime.utc(2026, 10, 15, 12);
 const _gibibyte = 1024 * 1024 * 1024;
@@ -216,6 +217,41 @@ void main() {
       expect(_row(tester, 'srv-1').trailingIcon, Icons.block);
       expect(_row(tester, 'srv-1').status?.style, SidebarDotStyle.blocked);
       expect(_row(tester, 'srv-1').markRing, isNull);
+    });
+  });
+
+  group('a failed link (03 §5.3, §10.1)', () {
+    for (final MapEntry(key: failure, value: text) in failureTexts.entries) {
+      testWidgets('${failure.name} says why in the tooltip and the label', (
+        tester,
+      ) async {
+        final rows = await _pump(tester);
+        await rows.emit(tester, [
+          LinkState(
+            'srv-1',
+            LinkClosed(LinkClosedReason.connectFailed, failure: failure),
+          ),
+        ]);
+
+        // The row keeps its one line of state.
+        expect(find.text('Failed · web-1.example'), findsOneWidget);
+        expect(_row(tester, 'srv-1').tooltip, contains(text));
+        expect(
+          find.bySemanticsLabel(
+            'web-1, web-1.example, Server status: Failed, $text',
+          ),
+          findsOneWidget,
+        );
+      });
+    }
+
+    testWidgets('an unclassified one names no reason', (tester) async {
+      final rows = await _pump(tester);
+      await rows.emit(tester, const [
+        LinkState('srv-1', LinkClosed(LinkClosedReason.connectFailed)),
+      ]);
+
+      expect(_row(tester, 'srv-1').tooltip, 'web-1.example\nFailed');
     });
   });
 

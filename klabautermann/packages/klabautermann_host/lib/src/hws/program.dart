@@ -34,7 +34,9 @@ const kSamplerStartCommand =
 /// ARC to `core` (D48).
 /// Version 5 bounds `procs` to [kProcsRowCap] trimmed rows (D48).
 /// Version 6 adds the on-demand `timer_detail` to the slow sampler (D57).
-const kCollectorSetVersion = '6';
+/// Version 7 reads a guarded command BusyBox's `timeout` stopped as a
+/// timeout.
+const kCollectorSetVersion = '7';
 
 /// The most `procs` rows one reply carries (D48). With more processes the
 /// fragment keeps the union of the [kProcsRowCap] / 2 with the highest CPU
@@ -188,11 +190,14 @@ hw_sdfmt() {
 }
 
 # Maps an exit status plus captured stderr to a section status
-# (03 §6.2): permission errors surface as `denied`.
+# (03 §6.2): permission errors surface as `denied`. GNU's timeout exits
+# 124 when it stops a command; BusyBox's exits with the command's own
+# status, 143 after its SIGTERM, so a guarded 143 is a timeout too.
 hw_st() {
   case $1 in
     0) printf ok ;;
     124) printf timeout ;;
+    143) if [ -n "$_HW_T" ]; then printf timeout; else printf error; fi ;;
     *)
       case $2 in
         *'Permission denied'* | *'permission denied'* | *'Operation not permitted'* | *EACCES*)
