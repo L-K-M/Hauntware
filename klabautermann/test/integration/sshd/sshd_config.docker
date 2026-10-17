@@ -1,0 +1,7 @@
+# The Docker host. sshd keeps the first value it reads for a keyword
+# (sshd_config(5)), and the common config sets AllowTcpForwarding no,
+# which refuses streamlocal too (03 §5.3), so the local forwarding that
+# direct-streamlocal to the engine socket needs comes before the Include
+# (03 §11.3).
+AllowTcpForwarding local
+Include /etc/ssh/fixture/sshd_config.common
