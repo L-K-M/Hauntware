@@ -238,8 +238,9 @@ void main() {
     expect(
       written,
       greaterThan(
-        lines.indexWhere(
-          (line) => line.endsWith('>"\$runtime_dir/authorized_keys"'),
+        at(
+          'cat "\$runtime_dir/identity.pub" "\$runtime_dir/agent.pub" '
+          '>"\$runtime_dir/authorized_keys"',
         ),
       ),
     );

@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:io';
 
 import 'package:klabautermann_core/src/docker/duplex_adapters.dart';
