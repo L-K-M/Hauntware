@@ -171,6 +171,54 @@ void main() {
     });
   });
 
+  group('system df endpoint', () {
+    Future<(String, DockerParseResult<SystemDf>)> fetch(
+      ApiVersion version,
+      String fixture, {
+      SystemDfType? type,
+    }) async {
+      final daemon = FakeDaemon();
+      final sent = clientFor(daemon, version).systemDf(type: type);
+      await daemon.gotBytes(1);
+      daemon.feed(jsonResponse(fixtureBytes(fixture)));
+      final r = await sent;
+      return (daemon.text, r);
+    }
+
+    test('reads the shape the negotiated version gates', () async {
+      final (legacyText, legacy) = await fetch(
+        const ApiVersion(1, 44),
+        'system-df-1.44.json',
+      );
+      expect(legacyText, startsWith('GET /v1.44/system/df HTTP/1.1'));
+      expect(legacy.warnings, isEmpty);
+      expect(legacy.value.images!.reclaimable, 10800000);
+
+      final (_, v152) = await fetch(
+        const ApiVersion(1, 52),
+        'system-df-1.52.json',
+      );
+      expect(v152.warnings, isEmpty);
+      expect(v152.value.reclaimable, 4130000);
+
+      final (_, v155) = await fetch(
+        const ApiVersion(1, 55),
+        'system-df-1.53.json',
+      );
+      expect(v155.warnings, isEmpty);
+      expect(v155.value.volumes!.reclaimable, 104857600);
+    });
+
+    test('sends the type filter', () async {
+      final (text, _) = await fetch(
+        const ApiVersion(1, 53),
+        'system-df-1.53.json',
+        type: SystemDfType.buildCache,
+      );
+      expect(text, startsWith('GET /v1.53/system/df?type=build-cache '));
+    });
+  });
+
   group('events endpoint', () {
     test('streams parsed events and resumes with since', () async {
       final daemon = FakeDaemon();
