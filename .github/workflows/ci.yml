@@ -1284,6 +1284,7 @@ jobs:
           (cd planchette/packages/ghost_theme && flutter pub get)
           (cd planchette/packages/ghost_servers && flutter pub get)
           (cd planchette/packages/ghost_keystore && flutter pub get)
+          (cd planchette/packages/ghost_apk_update && flutter pub get)
           (cd planchette/app/planchette_app && flutter pub get)
       - name: Shared UI primitives
         working-directory: planchette/packages/ghost_ui
@@ -1325,6 +1326,11 @@ jobs:
         run: |
           flutter analyze --no-pub
           flutter test --no-pub
+      - name: Shared Android in-app update
+        working-directory: planchette/packages/ghost_apk_update
+        run: |
+          flutter analyze --no-pub
+          flutter test --no-pub
       - name: Standalone app
         working-directory: planchette/app/planchette_app
         run: |
@@ -1339,7 +1345,7 @@ jobs:
           planchette/packages/ghost_desktop
           planchette/packages/ghost_marks planchette/packages/ghost_theme
           planchette/packages/ghost_servers planchette/packages/ghost_keystore
-          planchette/app/planchette_app
+          planchette/packages/ghost_apk_update planchette/app/planchette_app
 
   seance_flutter:
     name: Séance app (analyze + test)

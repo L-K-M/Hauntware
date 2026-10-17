@@ -1,0 +1,32 @@
+name: ghost_apk_update
+description: >-
+  The Android in-app update shared by Seance and Poltergeist: downloads a
+  release APK the user chose to install, proves its size and SHA-256, and
+  hands it to the system package installer. Android only; the apps keep
+  the release lookup and every user-facing string.
+version: 1.9.0
+publish_to: none
+
+environment:
+  sdk: ^3.12.0
+  flutter: '>=3.47.2'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  # Each app's lock holds the resolved versions; these ranges admit them.
+  # http 1.5 introduced the abortable request that Cancel uses.
+  http: ^1.5.0
+  crypto: ^3.0.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  plugin:
+    platforms:
+      android:
+        package: ch.lkmc.ghost.apkupdate
+        pluginClass: GhostApkUpdatePlugin
