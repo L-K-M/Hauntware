@@ -988,11 +988,15 @@ Proposals awaiting the owner close the section; they are not decisions.
   until the next enrollment, which sets the push hold again); a file
   that cannot be read or renamed, or one from a newer schema, is left as
   it is and no change is saved that session; writes are whole-file and
-  atomic through `writeFileAtomically` and queue in call order; they
-  happen only with `SupportDirectoryAccess.exclusive`, so an unguarded
-  process reads the files, renames nothing and keeps changes in memory,
-  as the capability cache does (D59). They hold no secret and keep the
-  process default mode, like `host_keys.json`. The `SyncCredentialStore`
+  atomic through `writeFileAtomically` and queue in call order; a write
+  that fails is thrown to the caller and leaves the change in memory
+  and `hasUnsavedChanges` true, so the stores save again on the next
+  call even when that call changes nothing in memory, and retrying a
+  failed change persists it; writes happen only with
+  `SupportDirectoryAccess.exclusive`, so an unguarded process reads the
+  files, renames nothing and keeps changes in memory, as the capability
+  cache does (D59). They hold no secret and keep the process default
+  mode, like `host_keys.json`. The `SyncCredentialStore`
   (`KeystoreSyncCredentialStore`) stays engine-side over a pure-Dart
   `SyncKeystore` port named after `ghost_keystore`'s `MasterKeyManager`
   (put, get and delete an API key; read and write the master key), with
@@ -4907,13 +4911,15 @@ the engine in `engine_isolate.dart` beside it):
   the engine cannot follow and a host-key refusal without a declined
   prompt (a key-exchange signature that did not verify) stay
   unclassified; `other` falls back to the error behind it, so a jump
-  hop's key file keeps its kind. 5.3's three client limitations wait
-  for `seance_core` to type them. No prompt asks for a passphrase until
-  the owner decides (2, "Encrypted keys and agent order"), so the
-  supervisor does not hand such a failure to the user's request, and
-  the app's copy for both kinds says to load the key into ssh-agent and
-  drop the `IdentityFile` line that names it, since an import that
-  names a key file offers only that file.
+  hop's key file keeps its kind. 5.3's three client limitations arrive
+  typed from `seance_core` (X5b), which reads the server's cleartext
+  KEXINIT, and keep their names: `unsupportedAlgorithm`,
+  `insecureAlgorithmsOnly` and `keyExchangeTimedOut`. No prompt asks
+  for a passphrase until the owner decides (2, "Encrypted keys and agent
+  order"), so the supervisor does not hand such a failure to the
+  user's request, and the app's copy for both kinds says to load the key
+  into ssh-agent and drop the `IdentityFile` line that names it, since
+  an import that names a key file offers only that file.
 - **Version 3 (M2 prompts).** The app's prompts joined version 3 the same
   way. `KeyboardInteractivePromptRequest` gained `user`, the account the
   asking machine signs in as (the challenge's `server.username`), so the
