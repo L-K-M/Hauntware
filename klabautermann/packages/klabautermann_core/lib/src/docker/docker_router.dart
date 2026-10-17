@@ -22,9 +22,10 @@
 /// waits for the endpoint, pauses while it drops and resumes over the
 /// next one, and ends with the session or a failed endpoint.
 ///
-/// Each ready endpoint has its [StackSources], whose verdicts the stacks
-/// list a watch gets carries. Their commands take short-action slots of
-/// the session's quota on every rank, since each is an exec channel.
+/// Each ready endpoint has its [StackSources]: the stacks list a watch
+/// gets carries their verdicts, and a [DockerStackFileQuery] reads a
+/// verified stack's file. Their commands take short-action slots of the
+/// session's quota on every rank, since each is an exec channel.
 library;
 
 import 'dart:async';
@@ -366,6 +367,7 @@ final class DockerRouter {
                   maxOutputBytes: maxOutputBytes,
                 ),
               ),
+          openFileSystem: link.openFileSystem,
         );
         session.endpoint = endpoint;
         _state(
@@ -557,6 +559,11 @@ final class DockerRouter {
         case DockerImagesQuery():
           final images = await client.listImages();
           return read(DockerImagesPayload(images.value), images.warnings);
+        case DockerStackFileQuery(:final project, :final path):
+          return read(
+            await endpoint.stacks.readFile(client, project, path),
+            const [],
+          );
       }
     } on DockerException catch (e) {
       final (:failure, :dropped) = dockerReadFailure(e);
@@ -571,8 +578,19 @@ final class DockerRouter {
   /// Whether [spec] names what it reads in a form the engine takes.
   static bool _valid(DockerQuerySpec spec) => switch (spec) {
     DockerContainerQuery(:final containerId) => containerId.isNotEmpty,
+    DockerStackFileQuery(:final project, :final path) =>
+      composeNamePattern.hasMatch(project) && _absolute(path),
     _ => true,
   };
+
+  static bool _absolute(String path) {
+    try {
+      validateAbsolutePath(path);
+      return true;
+    } on ArgumentError {
+      return false;
+    }
+  }
 
   /// Runs [action] once a short-action slot of [session]'s quota is
   /// free, and frees it after (M9).

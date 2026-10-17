@@ -1,7 +1,8 @@
-// Stack source verification (03 §7.16 STK-01, STK-05, STK-10; M11) over
-// a forwarding link double whose execs the test answers: each verdict,
-// the hash flag fallback, the legacy CLI, the short-action slots, and
-// the quoting through a real `sh`.
+// Stack source verification and file reads (03 §7.16 STK-01, STK-04,
+// STK-05, STK-10; M11) over a forwarding link double whose execs the test
+// answers and a fake SFTP file system: each verdict, the hash flag
+// fallback, the legacy CLI, the short-action slots, masked and capped
+// reads, refusals, and the quoting through a real `sh`.
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -94,12 +95,79 @@ List<String> _argv(String command) {
 
 enum _Run { test, cli, config }
 
+/// An SFTP file system over a map of files, which reads in 32 KiB chunks
+/// and stops with `cancelled` once asked, as the real one does.
+final class _Files implements RemoteFileSystem {
+  final files = <String, List<int>>{};
+  final failures = <String, RemoteFileErrorKind>{};
+  final types = <String, RemoteFileType>{};
+  final calls = <String>[];
+  bool cancelled = false;
+
+  @override
+  Future<RemoteFileEntry> stat(String path, {bool followLinks = true}) async {
+    calls.add('stat $path');
+    final kind = failures[path] ?? (files[path] == null ? _notFound : null);
+    if (kind != null) {
+      throw RemoteFileException(kind: kind, operation: 'stat', message: '');
+    }
+    return RemoteFileEntry(
+      path: path,
+      name: path.split('/').last,
+      type: types[path] ?? RemoteFileType.file,
+      size: files[path]!.length,
+    );
+  }
+
+  static const _notFound = RemoteFileErrorKind.notFound;
+
+  @override
+  Future<RemoteFileEntry> download(
+    String path,
+    StreamSink<List<int>> destination, {
+    RemoteTransferProgress? onProgress,
+    RemoteTransferCancellation? cancellation,
+    bool computeHash = true,
+  }) async {
+    calls.add('download $path');
+    final bytes = files[path]!;
+    final chunks = [
+      for (var at = 0; at < bytes.length; at += 32 * 1024)
+        bytes.sublist(at, (at + 32 * 1024).clamp(0, bytes.length)),
+    ];
+    await destination.addStream(
+      Stream.fromIterable(
+        chunks,
+      ).takeWhile((_) => !(cancellation?.isCancelled ?? false)),
+    );
+    if (cancellation?.isCancelled ?? false) {
+      cancelled = true;
+      throw const RemoteFileException(
+        kind: RemoteFileErrorKind.cancelled,
+        operation: 'download',
+        message: 'Transfer cancelled.',
+      );
+    }
+    return RemoteFileEntry(
+      path: path,
+      name: path.split('/').last,
+      type: RemoteFileType.file,
+      size: bytes.length,
+    );
+  }
+
+  @override
+  Never noSuchMethod(Invocation invocation) =>
+      throw UnsupportedError('${invocation.memberName}');
+}
+
 /// A router over one server whose execs the test answers: which config
 /// files exist, the CLI detection's output and `config --hash`'s.
 final class _Harness {
   _Harness(List<Map<String, Object?>> containers) {
     forwarding
       ..daemons[_socket] = daemon
+      ..fileSystem = files
       ..answer = _answer;
     daemon.routes[_containersPath] = jsonEncode(containers);
     router = DockerRouter(
@@ -113,6 +181,7 @@ final class _Harness {
   final clock = FakeClock();
   final daemon = EngineDaemon();
   final forwarding = ForwardingLink();
+  final files = _Files();
   late final DockerRouter router;
   final events = <EngineEvent>[];
 
@@ -183,6 +252,23 @@ final class _Harness {
     await settle();
     return stacks().last;
   }
+
+  Future<DockerPayload> read(String project, String path) async {
+    router.probed(_srv, _profile);
+    final id = 'q-${events.length}';
+    router.query(
+      DockerQuery(
+        serverId: _srv,
+        queryId: id,
+        query: DockerStackFileQuery(project: project, path: path),
+      ),
+    );
+    await settle();
+    return events
+        .whereType<DockerResult>()
+        .singleWhere((r) => r.queryId == id)
+        .payload;
+  }
 }
 
 List<Map<String, Object?>> _demo({String webHash = 'feed01'}) => [
@@ -192,6 +278,8 @@ List<Map<String, Object?>> _demo({String webHash = 'feed01'}) => [
 
 TypeMatcher<StackUnverified> _unverified(StackUnverifiedReason reason) =>
     isA<StackUnverified>().having((v) => v.reason, 'reason', reason);
+
+String _shown(List<MaskedValue> spans) => spans.map((s) => s.display).join();
 
 void main() {
   group('verification (STK-01, STK-05)', () {
@@ -443,6 +531,155 @@ void main() {
     });
   });
 
+  group('file reads (STK-04, M11)', () {
+    test('a verified compose file arrives masked, with its size', () async {
+      const text =
+          'services:\n'
+          '  db:\n'
+          '    environment:\n'
+          '      POSTGRES_PASSWORD: hunter2\n'
+          '      - API_TOKEN=tok\n'
+          '      DATABASE_HOST: postgres://app:pw@db/app\n';
+      final h = _Harness(_demo());
+      h.files.files[_compose] = utf8.encode(text);
+
+      final payload = await h.read('demo', _compose) as DockerStackFilePayload;
+      expect(payload.project, 'demo');
+      expect(payload.path, _compose);
+      expect(payload.size, text.length);
+      expect(payload.truncated, isFalse);
+      expect(
+        _shown(payload.text),
+        'services:\n'
+        '  db:\n'
+        '    environment:\n'
+        '      POSTGRES_PASSWORD: ${MaskedValue.maskToken}\n'
+        '      - API_TOKEN=${MaskedValue.maskToken}\n'
+        '      DATABASE_HOST: postgres://app:${MaskedValue.maskToken}@db/app\n',
+      );
+      expect(
+        [for (final s in payload.text) ?s.reveal()],
+        ['hunter2', 'tok', 'pw'],
+      );
+      expect(h.files.calls, ['stat $_compose', 'download $_compose']);
+    });
+
+    test("the working directory's .env and a recorded env file read with "
+        'every value masked', () async {
+      final h = _Harness([
+        _container(
+          'w1',
+          _labels(service: 'web', hash: 'feed01', envFile: '/srv/env/prod.env'),
+        ),
+        _container('d1', _labels(service: 'db', hash: 'feed02')),
+      ]);
+      h.files.files['/srv/demo/.env'] = utf8.encode('TAG=1.2\n');
+      h.files.files['/srv/env/prod.env'] = utf8.encode('MODE=prod\n');
+
+      for (final path in ['/srv/demo/.env', '/srv/env/prod.env']) {
+        final payload = await h.read('demo', path) as DockerStackFilePayload;
+        expect(_shown(payload.text), endsWith('=${MaskedValue.maskToken}\n'));
+      }
+      expect(
+        h.runs.last.$2,
+        containsAllInOrder(['--env-file', '/srv/env/prod.env', 'config']),
+      );
+    });
+
+    test('a file over the cap is read to it and cancelled, keeping its '
+        'complete lines', () async {
+      final line = '${'x' * 99}\n';
+      final big = StringBuffer();
+      while (big.length <= kStackFileMaxBytes + 4096) {
+        big.write(line);
+      }
+      big.write('DB_PASSWORD: tail\n');
+      final h = _Harness(_demo());
+      h.files.files[_compose] = utf8.encode(big.toString());
+
+      final payload = await h.read('demo', _compose) as DockerStackFilePayload;
+      expect(payload.truncated, isTrue);
+      expect(payload.size, big.length);
+      expect(h.files.cancelled, isTrue);
+      final shown = _shown(payload.text);
+      expect(shown.length, lessThanOrEqualTo(kStackFileMaxBytes));
+      expect(shown.length % line.length, 0);
+      expect(shown, isNot(contains('tail')));
+    });
+
+    test('SFTP refusals arrive typed', () async {
+      final h = _Harness(_demo());
+      h.files
+        ..failures[_compose] = RemoteFileErrorKind.permissionDenied
+        ..failures['/srv/demo/.env'] = RemoteFileErrorKind.disconnected;
+      expect(
+        await h.read('demo', _compose),
+        isA<DockerStackFileFailed>().having(
+          (f) => f.failure,
+          'failure',
+          StackFileFailure.permissionDenied,
+        ),
+      );
+      expect(
+        (await h.read('demo', '/srv/demo/.env') as DockerStackFileFailed)
+            .failure,
+        StackFileFailure.readFailed,
+      );
+
+      h.files
+        ..failures.clear()
+        ..files[_compose] = const []
+        ..types[_compose] = RemoteFileType.symbolicLink;
+      expect(
+        (await h.read('demo', _compose) as DockerStackFileFailed).failure,
+        StackFileFailure.notRegularFile,
+      );
+      h.files.files.remove(_compose);
+      expect(
+        (await h.read('demo', _compose) as DockerStackFileFailed).failure,
+        StackFileFailure.notFound,
+      );
+    });
+
+    test('an unverified stack, a path that is none of its files and an '
+        'unknown stack are refused without SFTP', () async {
+      final h = _Harness(_demo(webHash: 'dead00'));
+      h.files.files[_compose] = utf8.encode('services: {}\n');
+
+      expect(
+        (await h.read('demo', _compose) as DockerStackFileFailed).failure,
+        StackFileFailure.notVerified,
+      );
+      expect(
+        (await h.read('demo', '/etc/shadow') as DockerStackFileFailed).failure,
+        StackFileFailure.notStackFile,
+      );
+      expect(
+        (await h.read('nope', _compose) as DockerStackFileFailed).failure,
+        StackFileFailure.unknownStack,
+      );
+      expect(h.files.calls, isEmpty);
+    });
+
+    test('a query with a relative path or a bad project name is '
+        'invalid', () async {
+      final h = _Harness(_demo());
+      for (final (project, path) in [
+        ('demo', 'compose.yaml'),
+        ('Demo', _compose),
+      ]) {
+        expect(
+          await h.read(project, path),
+          isA<DockerQueryFailed>().having(
+            (f) => f.failure,
+            'failure',
+            DockerQueryFailure.invalidQuery,
+          ),
+        );
+      }
+    });
+  });
+
   test('the file checks quote paths through a real sh', () async {
     final dir = await Directory.systemTemp.createTemp('klab stacks ');
     addTearDown(() => dir.delete(recursive: true));
@@ -467,6 +704,7 @@ void main() {
           exitCode: r.exitCode,
         );
       },
+      openFileSystem: () => throw UnimplementedError(),
     );
     ContainerSummary container(String project, String files) =>
         ContainerSummary(

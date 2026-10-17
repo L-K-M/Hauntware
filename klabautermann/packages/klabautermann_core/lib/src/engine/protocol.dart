@@ -139,9 +139,11 @@ import '../docker/docker_ladder.dart'
 /// [LogStreamEndReason] gained `logDriverUnreadable`, whose detail names
 /// the driver.
 ///
-/// Stack verification then joined v3 the same way (03 §7.16 STK-01,
+/// Stack sources then joined v3 the same way (03 §7.16 STK-01, STK-04,
 /// STK-05): [DockerStacksPayload] gained each project's [StackVerdict]
-/// and the [DockerComposeCli] found.
+/// and the [DockerComposeCli] found, and [DockerStackFileQuery] reads a
+/// verified stack's file, answered by [DockerStackFilePayload] or
+/// [DockerStackFileFailed].
 const int kEngineProtocolVersion = 3;
 
 /// Every message the UI isolate sends the engine (03 §10.1, D18). Plain data
@@ -1596,6 +1598,21 @@ final class DockerImagesQuery extends DockerQuerySpec {
   const DockerImagesQuery();
 }
 
+/// One file of the compose project [project] (03 §7.16 STK-04, M11):
+/// a config file or an environment file its containers recorded, or the
+/// `.env` in its working directory, read over SFTP once the project's
+/// source is verified. Answered by [DockerStackFilePayload] or
+/// [DockerStackFileFailed].
+final class DockerStackFileQuery extends DockerQuerySpec {
+  const DockerStackFileQuery({required this.project, required this.path});
+
+  /// The compose project name.
+  final String project;
+
+  /// The file's absolute path, as the project's labels name it.
+  final String path;
+}
+
 /// A list a [DockerWatch] follows (03 §7.12 to §7.14).
 enum DockerWatchList {
   /// Every container (CTR-01), as [DockerContainersPayload].
@@ -1765,6 +1782,66 @@ final class DockerComposeCli {
   /// Whether the standalone binary is the Python Compose v1, unmaintained
   /// since 2023 and read-only here (STK-05).
   bool get standaloneLegacy => standaloneVersion?.startsWith('1.') ?? false;
+}
+
+/// One stack file (03 §7.16 STK-04, M11) as spans whose
+/// [MaskedValue.display]s joined are the file with its secrets masked
+/// (03 §8.9); the app reveals one span at a time. Read fresh for each
+/// query, and never cached or logged by the engine.
+final class DockerStackFilePayload extends DockerPayload {
+  const DockerStackFilePayload({
+    required this.project,
+    required this.path,
+    required this.text,
+    required this.size,
+    this.truncated = false,
+  });
+
+  final String project;
+  final String path;
+  final List<MaskedValue> text;
+
+  /// The file's size in bytes, as SFTP reported it.
+  final int size;
+
+  /// Whether the file is over [kStackFileMaxBytes], so [text] holds only
+  /// its complete lines within that many bytes.
+  final bool truncated;
+}
+
+/// The most bytes of a stack file the engine reads (M11 [E]).
+const kStackFileMaxBytes = 1024 * 1024;
+
+/// A [DockerStackFileQuery] the engine did not answer with the file.
+final class DockerStackFileFailed extends DockerPayload {
+  const DockerStackFileFailed(this.failure);
+
+  final StackFileFailure failure;
+}
+
+/// Why a [DockerStackFileQuery] read no file.
+enum StackFileFailure {
+  /// No container belongs to the project.
+  unknownStack,
+
+  /// The project's source is not verified ([StackVerdict]).
+  notVerified,
+
+  /// The path is none of the project's files.
+  notStackFile,
+
+  /// SFTP found no file at the path.
+  notFound,
+
+  /// The login user cannot read the file; admin mode's elevated read
+  /// arrives with M4.
+  permissionDenied,
+
+  /// The path is a symbolic link, directory or other non-regular file.
+  notRegularFile,
+
+  /// SFTP failed, or the file changed while it was read.
+  readFailed,
 }
 
 /// One stats round over a watch's `statsFor` (CST-01): a row for each

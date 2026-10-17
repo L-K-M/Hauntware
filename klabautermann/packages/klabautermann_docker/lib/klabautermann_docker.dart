@@ -44,6 +44,7 @@ export 'src/compose/commands.dart'
         validateComposeProjectName,
         validateComposeServiceName,
         validateSocketPath;
+export 'src/compose/file_masking.dart' show StackFileKind, maskStackFile;
 export 'src/compose/grouping.dart'
     show ComposeGrouping, ComposeProject, ComposeService, groupComposeProjects;
 export 'src/compose/labels.dart' show ComposeLabelKeys, ComposeLabels;
@@ -121,7 +122,8 @@ export 'src/masking.dart'
         maskedLabels,
         maskedValueFor,
         maskedValueWithUrlCheck,
-        secretKeyPattern;
+        secretKeyPattern,
+        urlCredentialSpans;
 export 'src/models/container.dart'
     show
         ContainerConfig,

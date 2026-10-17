@@ -1,5 +1,6 @@
-/// Compose stack sources (03 §7.16 STK-01, STK-05; M11): whether the
-/// files a project's containers name are its source.
+/// Compose stack sources (03 §7.16 STK-01, STK-04, STK-05; M11): whether
+/// the files a project's containers name are its source, and reading
+/// them once they are.
 ///
 /// ```text
 ///   project from the container list
@@ -9,14 +10,18 @@
 ///     ├─ compose CLI, looked for once: none, standalone only ─▶ unverified
 ///     └─ compose config --hash '*' (one exec) ─▶ every service's hash
 ///          matches its containers' label ─▶ verified, else unverified
+///   stack file of a verified project ─▶ SFTP stat, read at most 1 MiB
+///     ─▶ masked spans (03 §8.9)
 /// ```
 ///
-/// Nothing `config` prints is kept: the hash run's output is hashes, and
-/// its error text is read only for the flag refusal and dropped.
+/// Nothing a file or `config` holds is kept: the hash run's output is
+/// hashes, its error text is read only for the flag refusal and dropped,
+/// and a file's text leaves in the one answer it was read for.
 library;
 
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:klabautermann_docker/klabautermann_docker.dart';
 import 'package:klabautermann_host/klabautermann_host.dart' show HostCommands;
@@ -25,6 +30,11 @@ import 'package:seance_core/seance_core.dart'
         ChannelOpenException,
         RemoteCommandException,
         RemoteCommandResult,
+        RemoteFileErrorKind,
+        RemoteFileException,
+        RemoteFileSystem,
+        RemoteFileType,
+        RemoteTransferCancellation,
         quoteShellWord;
 
 import '../engine/protocol.dart';
@@ -66,11 +76,17 @@ final _versionPattern = RegExp(
 /// kept per project until its labels change or [forget], and the CLI is
 /// looked for once.
 final class StackSources {
-  /// [run] runs a command on the server in a short-action slot.
-  StackSources({required this._socketPath, required this._run});
+  /// [run] runs a command on the server in a short-action slot, and
+  /// [openFileSystem] opens its SFTP file system.
+  StackSources({
+    required this._socketPath,
+    required this._run,
+    required this._openFileSystem,
+  });
 
   final String _socketPath;
   final StackCommandRunner _run;
+  final Future<RemoteFileSystem> Function() _openFileSystem;
 
   DockerComposeCli? _cli;
   Future<DockerComposeCli?>? _detecting;
@@ -126,6 +142,34 @@ final class StackSources {
     final kept = _verdicts[project.name];
     if (kept != null && kept.key == _keyOf(project)) return kept.verdict;
     return _fromLabels(project).verdict;
+  }
+
+  /// Reads [path] of [project] (STK-04): only a file of a verified
+  /// project, over SFTP, at most [kStackFileMaxBytes], masked (M11).
+  /// [client] lists the project's containers, so the verdict is the
+  /// one for its labels now.
+  Future<DockerPayload> readFile(
+    DockerClient client,
+    String project,
+    String path,
+  ) async {
+    final list = await client.listContainers(
+      filters: {
+        'label': ['${ComposeLabelKeys.project}=$project'],
+      },
+    );
+    final found = groupComposeProjects(list.value).project(project);
+    if (found == null) {
+      return const DockerStackFileFailed(StackFileFailure.unknownStack);
+    }
+    final kind = _fileKind(found, path);
+    if (kind == null) {
+      return const DockerStackFileFailed(StackFileFailure.notStackFile);
+    }
+    if (await verdict(found) is! StackVerified) {
+      return const DockerStackFileFailed(StackFileFailure.notVerified);
+    }
+    return _read(project, path, kind);
   }
 
   // -- verification ---------------------------------------------------
@@ -312,6 +356,72 @@ final class StackSources {
         '${service.name} ${container.labels[ComposeLabelKeys.configHash]} '
             '${container.labels[ComposeLabelKeys.oneoff]}',
   ].join('\u0000');
+
+  // -- files ----------------------------------------------------------
+
+  /// How [path] of [project] is masked, or null when it is none of the
+  /// project's files: a config file is compose, an environment file or
+  /// the working directory's `.env` is environment.
+  static StackFileKind? _fileKind(ComposeProject project, String path) {
+    if (project.configFiles.contains(path)) return StackFileKind.compose;
+    if (project.environmentFiles.contains(path)) {
+      return StackFileKind.environment;
+    }
+    final directory = project.workingDir;
+    if (directory == null) return null;
+    final dotEnv = directory.endsWith('/')
+        ? '$directory.env'
+        : '$directory/.env';
+    return path == dotEnv ? StackFileKind.environment : null;
+  }
+
+  Future<DockerPayload> _read(
+    String project,
+    String path,
+    StackFileKind kind,
+  ) async {
+    final cancellation = RemoteTransferCancellation();
+    final sink = _BoundedSink(kStackFileMaxBytes, cancellation);
+    final int size;
+    try {
+      final files = await _openFileSystem();
+      final entry = await files.stat(path, followLinks: false);
+      if (entry.type != RemoteFileType.file) {
+        return const DockerStackFileFailed(StackFileFailure.notRegularFile);
+      }
+      size = entry.size ?? 0;
+      try {
+        await files.download(
+          path,
+          sink,
+          cancellation: cancellation,
+          computeHash: false,
+        );
+      } on RemoteFileException {
+        // Past the cap the read was cancelled, and what came is kept.
+        if (!sink.full) rethrow;
+      }
+    } on RemoteFileException catch (e) {
+      // `unsupported` also means SFTP itself is missing; the stat above
+      // has told a non-regular file apart already.
+      return DockerStackFileFailed(switch (e.kind) {
+        RemoteFileErrorKind.notFound => StackFileFailure.notFound,
+        RemoteFileErrorKind.permissionDenied =>
+          StackFileFailure.permissionDenied,
+        _ => StackFileFailure.readFailed,
+      });
+    } on ChannelOpenException {
+      return const DockerStackFileFailed(StackFileFailure.readFailed);
+    }
+
+    return DockerStackFilePayload(
+      project: project,
+      path: path,
+      text: maskStackFile(sink.text, kind),
+      size: size,
+      truncated: sink.full,
+    );
+  }
 }
 
 typedef _Labels = ({
@@ -319,3 +429,51 @@ typedef _Labels = ({
   ComposeInvocation? invocation,
   Map<String, Set<String>>? expected,
 });
+
+/// Takes up to [_cap] bytes; a write past it cancels the transfer.
+final class _BoundedSink implements StreamSink<List<int>> {
+  _BoundedSink(this._cap, this._cancellation);
+
+  final int _cap;
+  final RemoteTransferCancellation _cancellation;
+  final _bytes = BytesBuilder();
+  final _done = Completer<void>();
+
+  /// Whether the file went past the cap.
+  bool full = false;
+
+  /// The bytes as text; past the cap only up to the last complete line,
+  /// so no value is cut where its masking rule could no longer see it.
+  String get text {
+    var bytes = _bytes.toBytes();
+    if (full) {
+      final end = bytes.lastIndexOf(0x0A);
+      bytes = Uint8List.sublistView(bytes, 0, end + 1);
+    }
+    return utf8.decode(bytes, allowMalformed: true);
+  }
+
+  @override
+  void add(List<int> data) {
+    if (full) return;
+    final room = _cap - _bytes.length;
+    if (data.length <= room) return _bytes.add(data);
+    _bytes.add(data.sublist(0, room));
+    full = true;
+    _cancellation.cancel();
+  }
+
+  @override
+  void addError(Object error, [StackTrace? stackTrace]) {}
+
+  @override
+  Future<void> addStream(Stream<List<int>> stream) => stream.forEach(add);
+
+  @override
+  Future<void> close() async {
+    if (!_done.isCompleted) _done.complete();
+  }
+
+  @override
+  Future<void> get done => _done.future;
+}
