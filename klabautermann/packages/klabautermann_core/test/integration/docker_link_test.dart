@@ -2,37 +2,19 @@
 // rank 1, `direct-streamlocal` to dind's socket through
 // `SshLink.openUnixStream`, with klabautermann_docker's HTTP client on
 // the duplex. It is the repository's first real `forwardLocalUnix` call
-// and spike S1's streamlocal evidence. run.sh starts the fixture and
-// seeds the engine (seed_docker.sh); without it these skip.
+// and spike S1's streamlocal evidence; the refusals, `klab-nosock`'s
+// included, are docker_refusal_test.dart's. run.sh starts the fixture
+// and seeds the engine (seed_docker.sh); without it these skip.
 @Tags(['integration', 'docker'])
 @Timeout(Duration(minutes: 2))
 library;
 
-import 'dart:async';
-import 'dart:io';
-
 import 'package:klabautermann_docker/klabautermann_docker.dart' as docker;
-import 'package:seance_core/seance_core.dart'
-    show
-        AuthMethod,
-        ByteDuplex,
-        ChannelOpenException,
-        HostKeyVerdict,
-        InMemoryHostKeyStore,
-        ServerConfig,
-        SshCredentials,
-        SshLink,
-        TofuVerifier;
+import 'package:seance_core/seance_core.dart' show SshLink;
 import 'package:test/test.dart';
 
+import 'support/docker_host.dart';
 import 'support/fixture.dart';
-
-/// The engine's first candidate path (03 §5.4), a link to dind's socket
-/// on the Docker host (`sshd/docker-setup.sh`).
-const _socket = '/var/run/docker.sock';
-
-/// The Docker host's account outside its `docker` group.
-const _negativeUser = 'klab-nosock';
 
 void main() {
   final fixture = Fixture.fromEnvironment();
@@ -41,53 +23,13 @@ void main() {
     return;
   }
 
-  late Set<String> hostKeys;
-  setUpAll(
-    () async =>
-        hostKeys = await fixture.hostKeyFingerprints(FixtureService.dockerHost),
-  );
-
-  /// A link to the Docker host as [user], trusting only a host key the
-  /// container really has.
-  Future<SshLink> connect(String user) async {
-    final link = await SshLink.connect(
-      config: ServerConfig(
-        id: 'docker-host-$user',
-        label: 'docker host',
-        host: fixture.dockerHost.host,
-        port: fixture.dockerHost.port,
-        username: user,
-        authMethod: AuthMethod.privateKey,
-        identityFilePath: fixture.identityFile,
-        createdAt: 0,
-        updatedAt: 0,
-      ),
-      credentials: SshCredentials.privateKey(
-        await File(fixture.identityFile).readAsString(),
-      ),
-      tofu: TofuVerifier(InMemoryHostKeyStore()),
-      onHostKey: (decision) async =>
-          decision.verdict == HostKeyVerdict.firstUse &&
-          hostKeys.contains(decision.presented.fingerprintSha256),
-    );
-    addTearDown(link.close);
-    return link;
-  }
-
-  /// An HTTP client whose every connection is a new streamlocal duplex to
-  /// [socket] over [link].
-  docker.DockerHttpClient client(SshLink link, String socket) {
-    final http = docker.DockerHttpClient(
-      () async => _StreamlocalDuplex(await link.openUnixStream(socket)),
-    );
-    addTearDown(http.close);
-    return http;
-  }
+  Future<SshLink> connect(String user) =>
+      connectDockerHost(fixture, FixtureService.dockerHost, user);
 
   test('the fixture user pings and negotiates with dind over '
       'streamlocal', () async {
     final link = await connect(fixture.user);
-    final http = client(link, _socket);
+    final http = streamlocalClient(link, dockerSocket);
 
     final probe = docker.DockerClient(
       http,
@@ -121,7 +63,7 @@ void main() {
       'managers', () async {
     final link = await connect(fixture.user);
     final (engine, _) = await docker.negotiateDockerClient(
-      client(link, _socket),
+      streamlocalClient(link, dockerSocket),
     );
 
     final listed = await engine.listContainers();
@@ -156,52 +98,14 @@ void main() {
     final link = await connect(fixture.user);
     final uid = (await link.run('id -u')).stdout.trim();
     final (first, _) = await docker.negotiateDockerClient(
-      client(link, _socket),
+      streamlocalClient(link, dockerSocket),
     );
     final (second, _) = await docker.negotiateDockerClient(
-      client(link, '/run/user/$uid/docker.sock'),
+      streamlocalClient(link, '/run/user/$uid/docker.sock'),
     );
 
     final id = (await first.info())['ID'];
     expect(id, isA<String>());
     expect((await second.info())['ID'], id);
   });
-
-  test('a user outside the docker group cannot open the socket', () async {
-    final link = await connect(_negativeUser);
-
-    // The socket is there and refuses this account (EACCES), so sshd
-    // refuses the open.
-    expect((await link.run('test -S $_socket')).exitCode, 0);
-    expect((await link.run('test -w $_socket')).exitCode, isNot(0));
-    await expectLater(
-      link.openUnixStream(_socket),
-      throwsA(isA<ChannelOpenException>()),
-    );
-  });
-}
-
-/// seance_core's duplex as klabautermann_docker's seam, its half-close
-/// the sink's close (channel EOF with the read side open). The engine's
-/// own adapter comes with M3's transport PR (D04); this one serves the
-/// smoke test until then.
-final class _StreamlocalDuplex implements docker.ByteDuplex {
-  _StreamlocalDuplex(this._channel);
-
-  final ByteDuplex _channel;
-
-  @override
-  Stream<List<int>> get stream => _channel.stream;
-
-  @override
-  StreamSink<List<int>> get sink => _channel.sink;
-
-  @override
-  Future<void> closeWrite() => _channel.sink.close();
-
-  @override
-  Future<void> close() => _channel.close();
-
-  @override
-  Future<void> get done => _channel.done;
 }

@@ -57,6 +57,45 @@ void main() {
     expect(findDockerExposureErrors(_config()), isEmpty);
   });
 
+  test("the Docker host's negative variants pass", () {
+    // Same image and socket volume as the Docker host, ports 2245 to 2250
+    // on loopback, neg-restrict's keys bound from the run's directory.
+    final variant = {
+      'image': 'klabautermann-docker-sshd:fixture',
+      'volumes': [
+        {
+          'type': 'bind',
+          'source': '/tmp/klabautermann-fixture.x/authorized_keys.restrict',
+          'target': '/run/fixture/authorized_keys',
+        },
+        {
+          'type': 'volume',
+          'source': 'docker-run',
+          'target': '/run/docker-fixture',
+        },
+      ],
+    };
+    expect(
+      findDockerExposureErrors(
+        _config(
+          extra: {
+            for (final (name, port) in [
+              ('neg-nostreamlocal', 2245),
+              ('neg-restrict', 2250),
+            ])
+              name: {
+                ...variant,
+                'ports': [
+                  {'target': 22, 'host_ip': '127.0.0.1', 'published': '$port'},
+                ],
+              },
+          },
+        ),
+      ),
+      isEmpty,
+    );
+  });
+
   test('a config without services fails', () {
     expect(findDockerExposureErrors({}), [
       'rendered config has no services map',

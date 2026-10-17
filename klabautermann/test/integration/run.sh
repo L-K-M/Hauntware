@@ -39,7 +39,10 @@ readonly pull_attempts=3
 readonly dart_binary="${DART_BIN:-dart}"
 readonly evidence_dir="${KLABAUTERMANN_EVIDENCE_DIR:+$KLABAUTERMANN_EVIDENCE_DIR/fixture}"
 readonly fixture_user='klab'
-readonly services=(sshd jump docker-sshd)
+# Every sshd service, the Docker host's negative variants (M3 D11)
+# included, each of which run.sh waits for.
+readonly services=(sshd jump docker-sshd neg-nostreamlocal
+  neg-disableforwarding neg-notcp neg-permitopen neg-maxsessions2 neg-restrict)
 readonly ready_attempts=60
 # The project name and loopback ports are fixed, and a run starts by
 # removing what a killed run left, so two runs on one Docker host would
@@ -245,6 +248,10 @@ ssh-keygen -q -t ed25519 -N '' -C 'klabautermann fixture agent' \
   -f "$runtime_dir/agent"
 cat "$runtime_dir/identity.pub" "$runtime_dir/agent.pub" \
   >"$runtime_dir/authorized_keys"
+# The same keys behind the `restrict` option for neg-restrict, whose sshd
+# allows forwarding: the key option alone refuses it.
+sed 's/^/restrict /' "$runtime_dir/authorized_keys" \
+  >"$runtime_dir/authorized_keys.restrict"
 # The agent outlives a killed run, so it must not inherit the lock.
 eval "$(ssh-agent -s 9>&-)" >/dev/null
 agent_started=1

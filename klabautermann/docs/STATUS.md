@@ -1098,6 +1098,19 @@ M2, the host read MVP, is the current milestone. What is on main:
   pings, negotiates and lists over `SshLink.openUnixStream`, reaches the
   second path, and sees `klab-nosock` refused. Locally it adds about
   16 s to `run.sh` with the images cached.
+- Negative sshd variants and refusal evidence (M3, 03 §5.3, §11.3,
+  D11): six Docker hosts on 127.0.0.1:2245 to 2250 refuse with
+  `AllowStreamLocalForwarding no`, `DisableForwarding yes`,
+  `AllowTcpForwarding no`, `PermitOpen 127.0.0.1:1`, `MaxSessions 2`
+  and a `restrict` key. `docker_refusal_test.dart` records, on the
+  base's OpenSSH 10.6, that every forwarding variant refuses
+  streamlocal (reason 2, "open failed", `forwardDisabled`), that only
+  `AllowStreamLocalForwarding no` still opens `direct-tcpip`, that
+  `MaxSessions 2` teaches the link a limit of 2, and that `klab-nosock`
+  sees the socket, fails `test -w` and gets `EACCES` from the docker
+  CLI. Each result, with sshd's log lines, goes to
+  `$KLABAUTERMANN_EVIDENCE_DIR/fixture/refusals/`. Locally it adds
+  about 8 s to `run.sh` with the images cached.
 - Desktop settings window (03 §10.2, D32): on macOS, Linux and Windows,
   Settings opens in a native window of its own through `ghost_desktop`'s
   `GhostSettingsWindowHost`; phones, and a desktop runner that cannot
