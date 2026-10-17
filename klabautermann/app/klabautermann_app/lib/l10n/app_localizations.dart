@@ -346,6 +346,66 @@ abstract class AppLocalizations {
   /// **'Server status: {status}'**
   String statusSemantics(String status);
 
+  /// Why a connect failed (03 §10.1), under the server header and in the fleet row's tooltip: the connection was refused, the host had no route or address, or a jump host could not forward to it.
+  ///
+  /// In en, this message translates to:
+  /// **'This server could not be reached. Check its address and your network connection.'**
+  String get linkFailureUnreachable;
+
+  /// Why a connect failed (03 §10.1): connecting, the handshake or signing in ran past its deadline.
+  ///
+  /// In en, this message translates to:
+  /// **'This server did not answer in time. Check that it is running and that your network reaches it.'**
+  String get linkFailureTimedOut;
+
+  /// Why a connect failed (03 §10.1): the server refused every credential offered.
+  ///
+  /// In en, this message translates to:
+  /// **'The server rejected your credentials. Make sure it trusts your key or password.'**
+  String get linkFailureAuthenticationRejected;
+
+  /// Why a connect failed (03 §10.1): a key file could not be read or holds no key the app can use, or ssh-agent holds no keys. ssh-agent is the OpenSSH program's name, not translated.
+  ///
+  /// In en, this message translates to:
+  /// **'No credential could be offered to this server. Check that its key file can be read and holds a supported key, or load a key into ssh-agent.'**
+  String get linkFailureCredentialUnavailable;
+
+  /// Why a connect failed (03 §10.1): the private key of this server or of a jump host on its route is encrypted, and the app has no passphrase prompt yet. A server whose ssh_config entry names a key file uses only that file, so the agent signs only once the IdentityFile line is gone and the config is imported again. ssh-agent, IdentityFile and ~/.ssh/config are OpenSSH names, not translated.
+  ///
+  /// In en, this message translates to:
+  /// **'A key for this server needs a passphrase, which Klabautermann cannot ask for. Load the key into ssh-agent and remove the IdentityFile line that names it from ~/.ssh/config, then import the config again.'**
+  String get linkFailureKeyPassphraseRequired;
+
+  /// Why a connect failed (03 §4.5, §10.1): the Flatpak sandbox shows the app only the paths its manifest grants, so the key file of this server or of a jump host on its route reads as missing. A server whose ssh_config entry names a key file uses only that file, so the agent signs only once the IdentityFile line is gone and the config is imported again. ssh-agent, IdentityFile and ~/.ssh/config are OpenSSH names, not translated.
+  ///
+  /// In en, this message translates to:
+  /// **'A key file for this server cannot be read in the Flatpak sandbox. Load the key into ssh-agent and remove the IdentityFile line that names it from ~/.ssh/config, then import the config again.'**
+  String get linkFailureKeyFileHiddenBySandbox;
+
+  /// Why a connect failed (03 §4.6, §10.1): the user declined a first-seen host key, or a connect the user did not start declined it without asking.
+  ///
+  /// In en, this message translates to:
+  /// **'This server\'s host key has not been trusted, so Klabautermann did not connect.'**
+  String get linkFailureHostKeyDeclined;
+
+  /// Client limitation (03 §5.3, CN-23): the server requires an algorithm the SSH library does not implement, such as an ML-KEM key exchange.
+  ///
+  /// In en, this message translates to:
+  /// **'This server requires an algorithm Klabautermann does not support yet.'**
+  String get linkFailureUnsupportedAlgorithm;
+
+  /// Client limitation (03 §5.3, D23): the server offers only key exchanges or MACs the suite refuses as broken.
+  ///
+  /// In en, this message translates to:
+  /// **'This server offers only algorithms Klabautermann refuses as insecure.'**
+  String get linkFailureInsecureAlgorithmsOnly;
+
+  /// Client limitation (03 §5.3, CN-23): on Android, the server gave up while a finite-field Diffie-Hellman key exchange was still being computed.
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann could not finish this server\'s key exchange in time on this device.'**
+  String get linkFailureKeyExchangeTimedOut;
+
   /// Fleet row state (FL-04): the reachability probe reached the server's SSH port, and nothing is connected to it.
   ///
   /// In en, this message translates to:

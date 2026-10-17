@@ -4771,6 +4771,27 @@ the engine in `engine_isolate.dart` beside it):
   must therefore do, and if nothing else in the app sends
   `OpenLogStream`: a second sender with its own queue would take each
   rejection as its own as well.
+- **Version 3 (M2 failure kinds).** Two failure kinds joined version 3
+  the same way. `keyPassphraseRequired` names an encrypted private key,
+  the server's or a jump host's, that no passphrase the engine holds
+  opens, whether none was given or a wrong one; nothing reached the
+  server. `keyFileHiddenBySandbox` names a key file that reads as
+  missing inside the Flatpak sandbox (4.5). The connector reads
+  `seance_core`'s typed `SshConnectException.kind`, never its English
+  summary: unreachable and timed out keep their names, a missing or
+  wrong passphrase is `keyPassphraseRequired` (one remedy, so one kind),
+  a key the client cannot read and an agent with no keys are credentials
+  unavailable, and a refused sign-in is credentials rejected. A route
+  the engine cannot follow and a host-key refusal without a declined
+  prompt (a key-exchange signature that did not verify) stay
+  unclassified; `other` falls back to the error behind it, so a jump
+  hop's key file keeps its kind. 5.3's three client limitations wait
+  for `seance_core` to type them. No prompt asks for a passphrase until
+  the owner decides (2, "Encrypted keys and agent order"), so the
+  supervisor does not hand such a failure to the user's request, and
+  the app's copy for both kinds says to load the key into ssh-agent and
+  drop the `IdentityFile` line that names it, since an import that
+  names a key file offers only that file.
 - **`SetAppActivity(activity)`** is a request of its own and applies to
   every subscription, link and probe at once: 6.4 pauses everything while
   the app is in the background, and D34 adds the phones' grace period
@@ -4907,8 +4928,10 @@ The bar and age show only where the row still fits the name and state
 word in full and the age fits beside it, each measured as drawn at the
 current text scale; elsewhere they give way, staying in the tooltip and
 the label. The warning always shows, and a touch on it shows its
-words. A collapsed or filtered section that hides a live server does
-not yet say so in its header (`ghostHiddenLiveIndicator`).
+words. A closed link's failure kind takes a sentence, as under the
+server header (10.4), which only the tooltip and the label carry. A
+collapsed or filtered section that hides a live server does not yet
+say so in its header (`ghostHiddenLiveIndicator`).
 The filter (FL-05) is the kit's `SidebarFilterField`
 over `FleetEntry.searchText`, name and address standing in without it:
 every term must occur, Enter opens the first match and Esc clears.
@@ -4973,10 +4996,12 @@ and DSK-01's and DSK-02's mounts in the sortable table, in IEC units:
 
 As built in M2 (`app/klabautermann_app/lib/ui/server_header.dart`), the
 server header shows the name (the phone's app bar carries it instead),
-the link state, the coverage chip, the detected runtime and a slot for
-client-limitation messages, which stays empty until 5.3's rows are
-worded (K45); the transport label, privilege badges, admin mode and
-the read-only and low-session indicators come with their subsystems.
+the link state, the coverage chip, the detected runtime and, under
+them, why a closed link failed when the engine classified it: each
+failure kind of 10.1 in a sentence that says what to do, 5.3's client
+limitations in their own words. The transport label, privilege badges,
+admin mode and the read-only and low-session indicators come with
+their subsystems.
 The state resolves through `ghost_servers`' indicator under the rail
 rule, as the server's row does, as a dot, an icon and a word, with
 the link's own word where the indicator shows none; the kit keeps its

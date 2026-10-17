@@ -1007,6 +1007,20 @@ void main() {
       }
     });
 
+    test('every failure kind survives on a closed link', () async {
+      for (final failure in LinkFailureKind.values) {
+        final status = LinkClosed(
+          LinkClosedReason.connectFailed,
+          failure: failure,
+        );
+        final received =
+            await roundTrip(LinkState('srv-1', status)) as LinkState;
+
+        expect(received.status, status);
+        expect((received.status as LinkClosed).failure, failure);
+      }
+    });
+
     test('link statuses differ by variant and by every value', () {
       final distinct = <LinkStatus>[
         const LinkIdle(),

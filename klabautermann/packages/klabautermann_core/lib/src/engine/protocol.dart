@@ -71,6 +71,9 @@ import 'package:meta/meta.dart';
 ///
 /// [LogStreamRunning] then gained [LogContinuity], whether a follow that
 /// ran again may lack records (03 §7.6), within v3 the same way.
+///
+/// [LinkFailureKind] then gained `keyPassphraseRequired` and
+/// `keyFileHiddenBySandbox` (03 §10.1), within v3 the same way.
 const int kEngineProtocolVersion = 3;
 
 /// Every message the UI isolate sends the engine (03 §10.1, D18). Plain data
@@ -1575,7 +1578,7 @@ enum LinkClosedReason {
   connectFailed,
 }
 
-/// What the engine found behind a [LinkClosed]. The first five are the
+/// What the engine found behind a [LinkClosed]. The first seven are the
 /// connect failures protocol version 3 classifies (03 §10.1); the last
 /// three are 03 §5.3's client limitations.
 enum LinkFailureKind {
@@ -1588,9 +1591,21 @@ enum LinkFailureKind {
   /// The server refused every credential offered.
   authenticationRejected,
 
-  /// No credential could be offered: no agent answered, or a key file
-  /// could not be read.
+  /// No credential could be offered: the ssh-agent holds no keys, a key
+  /// file could not be read or holds no key the client can use, or a
+  /// stored secret is not on this device.
   credentialUnavailable,
+
+  /// The private key is encrypted and the engine has no passphrase that
+  /// opens it: none was given, or the one given was wrong. Nothing reached
+  /// the server. No prompt asks for one yet, so only an agent holding the
+  /// key gets past it.
+  keyPassphraseRequired,
+
+  /// Inside the Flatpak sandbox, a key file could not be found: the
+  /// sandbox shows only the paths its manifest grants, so a key outside
+  /// them reads as missing whether or not it exists (03 §4.5).
+  keyFileHiddenBySandbox,
 
   /// The user, or the background rule, declined a first-seen host key.
   hostKeyDeclined,
