@@ -13,14 +13,6 @@ const _generatedDartSuffixes = {'.freezed.dart', '.g.dart', '.mocks.dart'};
 
 // Technical literals are reviewed per file so an allowlist cannot hide UI copy.
 const _allowedTechnicalLiterals = <String, Set<String>>{
-  // The trusted keyboard-interactive endpoint brackets IPv6 machine data
-  // before the localized endpoint template renders it.
-  'lib/ui/prompts/keyboard_interactive_dialog.dart': {
-    "':'",
-    "'['",
-    "']'",
-    r"'[$rawHost]'",
-  },
   // View schema keys and validation diagnostics, never rendered UI copy.
   'lib/services/view_preferences_store.dart': {
     "'view.preferences'",
