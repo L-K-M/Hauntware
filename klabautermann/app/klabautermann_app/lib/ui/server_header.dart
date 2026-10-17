@@ -31,6 +31,7 @@ class ServerHeader extends StatelessWidget {
     required this.fleet,
     required this.monitoring,
     this.showTitle = true,
+    this.limitations = const [],
   });
 
   final FleetServer server;
@@ -43,6 +44,10 @@ class ServerHeader extends StatelessWidget {
   final MonitoringController monitoring;
 
   final bool showTitle;
+
+  /// Further client-limitation messages (03 §5.3), each ARB text, shown
+  /// under the link failure: the phones' background line (PLT-04).
+  final List<String> limitations;
 
   @override
   Widget build(BuildContext context) {
@@ -90,7 +95,7 @@ class ServerHeader extends StatelessWidget {
             ),
           ],
         ),
-        if (failure != null)
+        for (final message in [?failure, ...limitations])
           MergeSemantics(
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -102,7 +107,7 @@ class ServerHeader extends StatelessWidget {
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
                 Expanded(
-                  child: Text(failure, style: theme.textTheme.bodyMedium),
+                  child: Text(message, style: theme.textTheme.bodyMedium),
                 ),
               ],
             ),

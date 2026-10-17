@@ -75,6 +75,9 @@ import 'package:meta/meta.dart';
 /// [LinkFailureKind] then gained `keyPassphraseRequired` and
 /// `keyFileHiddenBySandbox` (03 §10.1), within v3 the same way.
 ///
+/// [RefreshSubscription] then joined, reading a subscription's streams at
+/// once for the phones' pull to refresh (PLT-02), within v3 the same way.
+///
 /// [KeyboardInteractivePromptRequest] then gained `user`, the account it
 /// signs in as, [PromptCancelAnswer] joined to decline its questions, and
 /// [LinkFailureKind] gained `keyboardInteractiveCancelled` for the attempt
@@ -208,6 +211,28 @@ final class Subscribe extends EngineRequest {
 /// The engine stops a stream once no subscription for the server names it.
 final class Unsubscribe extends EngineRequest {
   const Unsubscribe({required this.serverId, required this.subscriptionId});
+
+  final String serverId;
+  final String subscriptionId;
+}
+
+/// Reads the streams of the subscription [Subscribe] made with the same
+/// ids at once rather than at their next 03 §6.4 tick, as a pull to
+/// refresh asks (PLT-02). While the server samples, each stream is read
+/// once more as soon as its sampler is free, a busy, restarting or
+/// probing sampler holding the reading rather than losing it, and a
+/// stream that rides on another's collector (`overview` on `core`,
+/// `failedUnits` on `units`) is read through that collector. `identity`,
+/// otherwise read once per link, is read again too. While the server is
+/// [SamplingPhase.waitingForLink] or [SamplingPhase.pausedInBackground],
+/// nothing is read now, and sampling resumes with every stream the
+/// subscription names. No event answers it but the readings, and a
+/// subscription the engine does not hold changes nothing.
+final class RefreshSubscription extends EngineRequest {
+  const RefreshSubscription({
+    required this.serverId,
+    required this.subscriptionId,
+  });
 
   final String serverId;
   final String subscriptionId;
