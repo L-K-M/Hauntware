@@ -353,6 +353,46 @@ void main() {
       expect(killed, [2]);
       handle.dispose();
     });
+
+    testWidgets('a row without verbs keeps its slot empty: no button, menu, '
+        'sheet or actions', (tester) async {
+      final handle = tester.ensureSemantics();
+      await _pump(tester, rowActions: (_) => const []);
+
+      // The slot keeps its width, so verbs added later move no column.
+      expect(
+        tester.getTopRight(_header('state')).dx,
+        tester.getTopRight(find.byType(SortableTable<_Proc>)).dx -
+            _desktopRowExtent,
+      );
+      expect(find.byType(IconButton), findsNothing);
+      expect(
+        tester.getSemantics(_row(2)),
+        isSemantics(label: 'Name: nginx\nPID: 2\nCPU: 4.2 %\nState: running'),
+      );
+      // A right-click opens no menu, which would have taken focus.
+      await tester.tap(_row(2), buttons: kSecondaryButton);
+      await tester.pumpAndSettle();
+      expect(
+        FocusManager.instance.primaryFocus?.debugLabel,
+        isNot('SortableTable'),
+      );
+      handle.dispose();
+    });
+
+    testWidgets('a long press on a touch row without verbs opens no sheet', (
+      tester,
+    ) async {
+      await _pump(
+        tester,
+        platform: TargetPlatform.android,
+        rowActions: (_) => const [],
+      );
+
+      await tester.longPress(_row(2));
+      await tester.pumpAndSettle();
+      expect(find.byType(BottomSheet), findsNothing);
+    });
   });
 
   group('keyboard focus', () {

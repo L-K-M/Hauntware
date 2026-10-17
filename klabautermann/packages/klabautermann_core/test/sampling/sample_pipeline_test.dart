@@ -539,6 +539,36 @@ void main() {
     expect(share([_procsSection(1000), fs], 1018, 18), 100);
   });
 
+  test('a reply\'s uptime dates each process\'s start where it counts '
+      'from the kernel\'s boot (7.2, D50)', () {
+    final streams = {SampleStream.fs, SampleStream.procs};
+    final p = _sampling(streams: streams);
+    // Read 1,000 s after boot; pid 1 started 5 s after it.
+    DateTime? started({List<TestSection>? sections}) => _result<ProcsResult>(
+      p.addTick(
+        streams,
+        reply(1, 1000, sections ?? [_procsSection(100)]),
+        _at(1000),
+      ),
+    ).processes.single.startedAt;
+
+    // Before the probe nothing says what `/proc/uptime` counts from.
+    expect(started(), isNull);
+
+    p.addProbe(_probe());
+    expect(started(), _at(5));
+    // Unlike CPU shares, a start does not need procs to lead the reply.
+    expect(started(sections: [ok('fs', ''), _procsSection(100)]), _at(5));
+
+    // lxcfs over another file leaves the kernel's uptime in place.
+    p.addProbe(_probe(container: 'lxc', lxcfs: '/proc/meminfo'));
+    expect(started(), _at(5));
+
+    // Over `/proc/uptime` it serves the container's age instead.
+    p.addProbe(_probe(container: 'lxc', lxcfs: '/proc/uptime'));
+    expect(started(), isNull);
+  });
+
   test('a truncated process list carries the host\'s count and how it '
       'chose the rows; a full one counts every row (D48)', () {
     // Above 500 processes the host keeps the top rows by CPU share and by
@@ -622,6 +652,54 @@ void main() {
     ]);
     expect(rows[4].arguments![1].reveal(), '-phunter2');
     expect(rows.first.residentBytes, 2048);
+  });
+
+  test('ps\'s bracketed name for an empty command line is no command '
+      'line, as the kernel thread\'s empty cmdline is (7.2)', () {
+    final rows = procsResult(
+      ProcsSnapshot(
+        processes: [
+          ProcEntry(pid: 2, comm: 'kthreadd', argsJoined: '[kthreadd]'),
+          ProcEntry(pid: 3, comm: 'kthreadd', argsJoined: '[kthreadd] x'),
+          ProcEntry(pid: 4, argsJoined: '[kthreadd]'),
+          ProcEntry(pid: 5, comm: 'app', argv: const ['[app]']),
+          // GNU ps's zombie, whose cmdline is empty too.
+          ProcEntry(pid: 6, comm: 'bash', argsJoined: '[bash] <defunct>'),
+        ],
+      ),
+    ).processes;
+
+    expect(rows.map((r) => r.arguments?.map((a) => a.display)), [
+      isEmpty,
+      ['[kthreadd]', 'x'],
+      // Without /proc's name nothing says the brackets are ps's.
+      ['[kthreadd]'],
+      // A real argument vector is what the process set.
+      ['[app]'],
+      isEmpty,
+    ]);
+  });
+
+  test('a start is the boot time plus its ticks at 100 a second, and '
+      'unknown without either (7.2)', () {
+    final booted = DateTime.utc(2026, 10, 3, 11, 23);
+    final rows = procsResult(
+      ProcsSnapshot(
+        processes: [ProcEntry(pid: 1, startTicks: 250), ProcEntry(pid: 2)],
+      ),
+      bootedAt: booted,
+    ).processes;
+
+    expect(rows.map((r) => r.startedAt), [
+      booted.add(const Duration(milliseconds: 2500)),
+      isNull,
+    ]);
+    expect(
+      procsResult(
+        ProcsSnapshot(processes: [ProcEntry(pid: 1, startTicks: 250)]),
+      ).processes.single.startedAt,
+      isNull,
+    );
   });
 
   test('the rows of one procs reading share one masking budget, so many '

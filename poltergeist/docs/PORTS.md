@@ -443,7 +443,14 @@ rule through that adapter directly (so `railIndicatorOf`, left without
 a caller, was removed), the rail's paint map and the
 sidebar's hidden-live header dot draw through `ghostStatusDot` and
 `ghostHiddenLiveIndicator`, and the pane-tab `ServerStateGlyph` paint
-stays here.
+stays here. The host-key prompt followed on 2026-10-16 in that
+package's `host_key_dialog.dart`: `ui/prompts/host_key_dialog.dart`
+keeps its name and signature as a delegate that maps the engine payload
+and ARB words through `ui/ghost_servers_adapter.dart`, so the prompt
+coordinator and the server editor's trial call it unchanged. The
+keyboard-interactive prompt followed the same day in
+`keyboard_interactive_dialog.dart`, with
+`ui/prompts/keyboard_interactive_dialog.dart` kept the same way.
 
 ## Cross-app deep links (2026-10-02)
 
@@ -869,7 +876,18 @@ port candidates.
   `b8fc1111119cd6c0744b9de9bc35d16c07ae3e9d`, 2026-09-09) — upstream now
   sets `AlertDialog.scrollable` with its own reachability regressions, so
   both divergences are closed.
-- Port-back candidates: none.
+- Shared: 2026-10-16. Séance's dialog moved to Planchette's
+  `ghost_servers` (`lib/src/host_key_dialog.dart`) as the shared body,
+  with a `GhostHostKeyPrompt` view model, a `GhostHostKeyStrings` bag
+  whose defaults are Séance's words, the coordinator's `dialogKey` and
+  an injected monospace style. This file is now a delegate: it maps
+  `HostKeyPromptData` and the ARB strings through
+  `ui/ghost_servers_adapter.dart` and passes `poltergeistMonoTextStyle`.
+  The payload carries no pinned key type, so a changed key's pinned
+  fingerprint keeps the presented key's type, as before; Séance passes
+  its pinned key's type.
+- Port-back candidates: none; the source now lives in the shared
+  `ghost_servers` package, which both apps consume.
 
 ## app/poltergeist_app/test/ui/prompts/host_key_dialog_test.dart
 
@@ -889,6 +907,10 @@ port candidates.
   view, pinned buttons); this port retains its property-level check
   (`AlertDialog.scrollable`) that the behavior assertions subsume, so the
   candidate is closed, not merged back.
+- Shared: 2026-10-16. The source test moved with the dialog to
+  `ghost_servers` (`test/host_key_dialog_test.dart`). This file is
+  unchanged and now covers the delegate: the payload mapping, the ARB
+  words, the barrier and Esc.
 - Port-back candidates: mounted harness guard.
 
 ## app/poltergeist_app/lib/ui/prompts/keyboard_interactive_dialog.dart
@@ -912,8 +934,20 @@ port candidates.
   `5d9da5195a3a9a4d8110d0b2425d55e5cb3fddde`, merge
   `5cadb18e823ca1ae089b9fdd940432876e93fd9c`, 2026-09-09) with the same
   `ModalRoute.isCurrent` semantics, so that divergence is closed.
-- Port-back candidates: Enter focus navigation/final submission; preserve
-  RFC 4256's per-prompt echo bit once the upstream responder exposes it.
+- Shared: 2026-10-16. Séance's dialog moved to Planchette's
+  `ghost_servers` (`lib/src/keyboard_interactive_dialog.dart`) as the
+  shared body, with a `GhostKeyboardPrompt` view model (its username is
+  optional), a `GhostKeyboardInteractiveStrings` bag whose defaults are
+  Séance's words, the coordinator's `dialogKey`, and this port's Enter
+  focus navigation behind `submitOnEnter`, on by default. The package
+  brackets a bare IPv6 host before the bag's endpoint formatter sees it.
+  This file is now a delegate: it maps `KeyboardInteractivePromptData`
+  and the ARB strings through `ui/ghost_servers_adapter.dart`. Séance
+  passes `submitOnEnter: false` until a follow-up adopts the focus chain
+  (ghost-servers-part1 §6).
+- Port-back candidates: none; the source now lives in the shared
+  `ghost_servers` package, which both apps consume. RFC 4256's per-prompt
+  echo bit still waits on the upstream responder exposing it.
 
 ## app/poltergeist_app/test/ui/prompts/keyboard_interactive_dialog_test.dart
 
@@ -928,9 +962,14 @@ port candidates.
   coverage exist upstream at the recorded commit; the earlier
   "adds reveal-toggle" wording was corrected against that re-diff
   (2026-09-09); the original dated port provenance stands.
-- Port-back candidates: Enter-navigation and autofocus tests (upstream has
-  no autofocus test); the repeated-submit route-safety regression went
-  upstream with Séance #82 in its double-activation form.
+- Shared: 2026-10-16. The source test moved with the dialog to
+  `ghost_servers` (`test/keyboard_interactive_dialog_test.dart`), which
+  adds its own `submitOnEnter` cases. This file is unchanged and now
+  covers the delegate: the payload mapping, the ARB words and the Enter
+  navigation Poltergeist keeps.
+- Port-back candidates: autofocus test (the shared test has none); the
+  repeated-submit route-safety regression went upstream with Séance #82
+  in its double-activation form.
 
 ## app/poltergeist_app/lib/services/identity_audit_log.dart
 

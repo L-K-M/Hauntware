@@ -57,6 +57,63 @@ GhostProbeState? ghostProbeOf(ProbeStatus? probe) => switch (probe) {
   null => null,
 };
 
+/// The engine's host-key prompt as the shared dialog shows it, field for
+/// field. The payload names no pinned key type, so a changed key's pinned
+/// fingerprint is labelled with the presented key's type.
+GhostHostKeyPrompt ghostHostKeyPromptOf(HostKeyPromptData data) =>
+    GhostHostKeyPrompt(
+      host: data.host,
+      port: data.port,
+      keyType: data.keyType,
+      fingerprintSha256: data.fingerprintSha256,
+      pinnedFingerprintSha256: data.pinnedFingerprintSha256,
+    );
+
+/// The host-key prompt's words in ARB.
+GhostHostKeyStrings poltergeistHostKeyStrings(AppLocalizations l10n) =>
+    GhostHostKeyStrings(
+      unknownTitle: l10n.hostKeyUnknownTitle,
+      changedTitle: l10n.hostKeyChangedTitle,
+      changedWarning: l10n.hostKeyChangedWarning,
+      endpoint: l10n.hostKeyEndpoint,
+      fingerprintLabel: l10n.hostKeyFingerprintLabel,
+      newKeyLabel: l10n.hostKeyNewLabel,
+      previousLabel: l10n.hostKeyPreviousLabel,
+      cancel: l10n.hostKeyCancel,
+      trustConnect: l10n.hostKeyTrustConnect,
+      trustNewKey: l10n.hostKeyTrustNewKey,
+    );
+
+/// The engine's keyboard-interactive prompt as the shared dialog shows it,
+/// field for field.
+GhostKeyboardPrompt ghostKeyboardPromptOf(KeyboardInteractivePromptData data) =>
+    GhostKeyboardPrompt(
+      username: data.username,
+      host: data.host,
+      port: data.port,
+      name: data.name,
+      instruction: data.instruction,
+      prompts: data.prompts,
+    );
+
+/// The keyboard-interactive prompt's words in ARB. The engine payload
+/// always names the user; without one the endpoint reads as the host-key
+/// prompt's host and port.
+GhostKeyboardInteractiveStrings poltergeistKeyboardInteractiveStrings(
+  AppLocalizations l10n,
+) => GhostKeyboardInteractiveStrings(
+  title: l10n.keyboardAuthTitle,
+  requestFrom: l10n.keyboardRequestFrom,
+  serverMessage: l10n.keyboardServerMessage,
+  endpoint: (username, host, port) => username == null
+      ? l10n.hostKeyEndpoint(host, port)
+      : l10n.credentialEndpoint(username, host, port),
+  showAnswer: l10n.keyboardShowAnswer,
+  hideAnswer: l10n.keyboardHideAnswer,
+  cancel: l10n.keyboardCancel,
+  submit: l10n.keyboardSubmit,
+);
+
 /// The chrome's status colours as the package takes them.
 GhostStatusColors poltergeistStatusColors(PoltergeistChrome chrome) =>
     GhostStatusColors(

@@ -1,4 +1,4 @@
-/// The engine's sync credentials (03 §4.5, D60): the catalog library's
+/// The engine's sync credentials (03 §4.5, D62): the catalog library's
 /// `SyncCredentialStore` seam over a narrow OS-keystore port.
 ///
 /// The keystore is `ghost_keystore`'s `MasterKeyManager` over

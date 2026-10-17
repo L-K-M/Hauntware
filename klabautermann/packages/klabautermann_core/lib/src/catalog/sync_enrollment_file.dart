@@ -1,4 +1,4 @@
-/// The engine's durable enrollment state (03 §4.10, D60): the catalog
+/// The engine's durable enrollment state (03 §4.10, D62): the catalog
 /// library's `SyncEnrollmentState` seam over a file of its own under the
 /// support directory, never the record store, whose corruption quarantine
 /// restarts it empty and must not erase the push hold. The device id is

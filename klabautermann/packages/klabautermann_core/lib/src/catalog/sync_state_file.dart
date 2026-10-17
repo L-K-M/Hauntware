@@ -1,5 +1,5 @@
 /// The JSON document behind each of the engine's sync state files (03
-/// §4.10, D60): the pin verdicts, the decode tripwires and the enrollment
+/// §4.10, D62): the pin verdicts, the decode tripwires and the enrollment
 /// state. One place for how they open, set a damaged file aside, refuse
 /// to replace a file they could not read, and write only while this
 /// process holds the support directory alone.

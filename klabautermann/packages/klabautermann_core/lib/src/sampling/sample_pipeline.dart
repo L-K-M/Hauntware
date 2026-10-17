@@ -285,6 +285,7 @@ final class ServerSamplePipeline {
               // collector, so it times `procs` only when `procs` ran
               // first; behind another, its share interval is unknown.
               identical(s, reply.sections.first) ? reply.uptimeSeconds : null,
+              _bootedAt(reply.uptimeSeconds, at),
             ),
             SampleStream.units => UnitsResult(parseUnits(text(s), ctx).value),
             SampleStream.failedUnits => FailedUnitsResult(
@@ -314,7 +315,7 @@ final class ServerSamplePipeline {
     ];
   }
 
-  ProcsResult _procs(ProcsSnapshot next, double? uptime) {
+  ProcsResult _procs(ProcsSnapshot next, double? uptime, DateTime? bootedAt) {
     final last = _lastProcs;
     _lastProcs = (snapshot: next, uptime: uptime);
     final lastUptime = last?.uptime;
@@ -324,6 +325,26 @@ final class ServerSamplePipeline {
       elapsed: uptime != null && lastUptime != null && uptime > lastUptime
           ? uptime - lastUptime
           : null,
+      bootedAt: bootedAt,
+    );
+  }
+
+  /// When the kernel booted by the engine's clock, from a reply read at
+  /// [at] whose host read [uptime] before its first collector: late by
+  /// the time the reply took, under a second for a `procs` tick. Null
+  /// unless the probe's lxcfs mounts show that `/proc/uptime` is the
+  /// kernel's, which `/proc/<pid>/stat` start ticks count from (D50).
+  DateTime? _bootedAt(double? uptime, DateTime at) {
+    final profile = _profile;
+    final mounts = profile?.lxcfsMounts;
+    if (uptime == null || mounts == null) return null;
+    if (mounts.isNotEmpty &&
+        profile!.showsHostFigures(SystemWideProcFile.uptime) != true) {
+      return null;
+    }
+
+    return at.subtract(
+      Duration(microseconds: (uptime * Duration.microsecondsPerSecond).round()),
     );
   }
 

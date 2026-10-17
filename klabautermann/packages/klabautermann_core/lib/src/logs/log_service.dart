@@ -1,7 +1,7 @@
 /// The engine's bounded log reads (03 §7.6, §10.1): an [OpenLogStream]
 /// with `follow: false` reads one window of a server's logs over its link
-/// and ends. `LogStreamRouter` decides when each read opens here.
-/// Followers arrive with K26.
+/// and ends. `LogStreamRouter` decides when each read opens here; a
+/// follow is a `LogFollower`'s.
 ///
 /// A read runs one host command at a time through
 /// [HostCommands.commandLine]: `journalctl -o json -r -n <window>` for the
@@ -267,7 +267,10 @@ final class LogService {
       case _Unfinished(:final stderr):
         _end(
           read,
-          LogStreamEnded(LogStreamEndReason.failed, detail: _detail(stderr)),
+          LogStreamEnded(
+            LogStreamEndReason.failed,
+            detail: logEndDetail(stderr),
+          ),
         );
         return null;
     }
@@ -545,11 +548,16 @@ final _missingText = RegExp(
 
 /// The end [out]'s exit asks for; null when the window is read: the
 /// command exited 0, or the read closed it at the cap.
-LogStreamEnded? _failure(_Output out) {
-  final exit = out.exit;
-  if (exit == null || exit.exitCode == 0) return null;
+LogStreamEnded? _failure(_Output out) => switch (out.exit) {
+  final exit? => logExitEnd(exit, out.stderr),
+  null => null,
+};
 
-  final stderr = out.stderr;
+/// The end a log command's [exit] asks for, with its [stderr] as the
+/// detail; null when it exited 0. Shared with `LogFollower`.
+LogStreamEnded? logExitEnd(RemoteExit exit, String stderr) {
+  if (exit.exitCode == 0) return null;
+
   final reason = switch (exit.exitCode) {
     // A signal or a lost link stopped the command before its end, so
     // stderr naming a refusal does not explain the end.
@@ -557,16 +565,22 @@ LogStreamEnded? _failure(_Output out) {
     // The shell's `exec` found no such command, or could not run it.
     127 => LogStreamEndReason.missing,
     126 => LogStreamEndReason.denied,
-    _ when _deniedText.hasMatch(stderr) => LogStreamEndReason.denied,
-    _ when _missingText.hasMatch(stderr) => LogStreamEndReason.missing,
-    _ => LogStreamEndReason.failed,
+    _ => logRefusal(stderr) ?? LogStreamEndReason.failed,
   };
-  return LogStreamEnded(reason, detail: _detail(stderr));
+  return LogStreamEnded(reason, detail: logEndDetail(stderr));
+}
+
+/// The refusal a log command's [stderr] names, [LogStreamEndReason.denied]
+/// or [LogStreamEndReason.missing]; null when it names none.
+LogStreamEndReason? logRefusal(String stderr) {
+  if (_deniedText.hasMatch(stderr)) return LogStreamEndReason.denied;
+  if (_missingText.hasMatch(stderr)) return LogStreamEndReason.missing;
+  return null;
 }
 
 /// [stderr] as [LogStreamEnded.detail]: control characters stripped,
 /// null when nothing is left.
-String? _detail(String stderr) {
+String? logEndDetail(String stderr) {
   final text = stripControlChars(stderr).trim();
   return text.isEmpty ? null : text;
 }

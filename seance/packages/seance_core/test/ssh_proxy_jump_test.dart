@@ -244,17 +244,117 @@ void main() {
           keepAliveInterval: null,
         ),
         throwsA(
-          isA<SshConnectException>().having(
-            (error) => error.message,
-            'message',
-            contains('missing'),
-          ),
+          isA<SshConnectException>()
+              .having((error) => error.message, 'message', contains('missing'))
+              .having(
+                (error) => error.kind,
+                'kind',
+                SshConnectFailureKind.routeInvalid,
+              ),
         ),
       );
 
       expect(connections, 0);
       expect(forwards, 0);
     });
+
+    test('every route that cannot be followed fails before dialing', () async {
+      final jump = _server(id: 'jump', host: 'jump.internal', port: 2219);
+      final target = _server(
+        id: 'target',
+        host: 'target.internal',
+        port: 2220,
+        jumpHostId: jump.id,
+      );
+      // A chain one hop longer than the limit of 16, each hop naming the
+      // next; the last one never needs to resolve.
+      ServerConfig hop(int i) => _server(
+        id: 'hop$i',
+        host: 'hop$i.internal',
+        port: 2300 + i,
+        jumpHostId: 'hop${i + 1}',
+      );
+      // Each case names the message of the branch it is for.
+      final cases = <String, (ServerConfig, SshJumpHostResolver?)>{
+        'cannot be resolved': (target, null),
+        'resolved to a different server': (
+          target,
+          (id) async => ResolvedSshHost(
+            _server(id: 'other', host: 'other.internal', port: 2221),
+            const SshCredentials.password('other-password'),
+          ),
+        ),
+        'exceeds 16 hops': (
+          hop(0),
+          (id) async => ResolvedSshHost(
+            hop(int.parse(id.substring(3))),
+            const SshCredentials.password('hop-password'),
+          ),
+        ),
+      };
+
+      for (final MapEntry(key: name, value: (config, resolver))
+          in cases.entries) {
+        var connections = 0;
+        await expectLater(
+          openAuthenticatedClient(
+            config: config,
+            credentials: const SshCredentials.password('target-password'),
+            tofu: TofuVerifier(InMemoryHostKeyStore()),
+            onHostKey: (_) async => true,
+            connect: (host, port, timeout) async {
+              connections++;
+              return _HopSocket();
+            },
+            resolveJumpHost: resolver,
+            keepAliveInterval: null,
+          ),
+          throwsA(
+            allOf(
+              _failureOfKind(SshConnectFailureKind.routeInvalid),
+              isA<SshConnectException>().having(
+                (error) => error.message,
+                'message',
+                contains(name),
+              ),
+            ),
+          ),
+          reason: name,
+        );
+        expect(connections, 0, reason: name);
+      }
+    });
+
+    test(
+      'a jump-host resolver that throws keeps its error as the cause',
+      () async {
+        // Such as a hop's missing credential: the caller classifies it.
+        final target = _server(
+          id: 'target',
+          host: 'target.internal',
+          port: 2222,
+          jumpHostId: 'jump',
+        );
+
+        await expectLater(
+          openAuthenticatedClient(
+            config: target,
+            credentials: const SshCredentials.password('target-password'),
+            tofu: TofuVerifier(InMemoryHostKeyStore()),
+            onHostKey: (_) async => true,
+            connect: (host, port, timeout) async => _HopSocket(),
+            resolveJumpHost: (id) async => throw StateError('vault locked'),
+            keepAliveInterval: null,
+          ),
+          throwsA(
+            allOf(
+              _failureCausedBy(_stateError('vault locked')),
+              _failureOfKind(SshConnectFailureKind.other),
+            ),
+          ),
+        );
+      },
+    );
 
     test(
       'a self-referencing jump host fails before network activity',
@@ -375,7 +475,44 @@ void main() {
               throw StateError('forward refused'),
           keepAliveInterval: null,
         ),
-        throwsA(_failureCausedBy(_stateError('forward refused'))),
+        throwsA(
+          allOf(
+            _failureCausedBy(_stateError('forward refused')),
+            _failureOfKind(SshConnectFailureKind.unreachable),
+          ),
+        ),
+      );
+
+      expect(physical.closeCalls, 1);
+    });
+
+    test('a forward past its deadline fails as timedOut', () async {
+      final jump = _server(id: 'jump', host: 'jump.invalid', port: 2223);
+      final target = _server(
+        id: 'target',
+        host: 'target.internal',
+        port: 2224,
+        jumpHostId: jump.id,
+      );
+      final physical = _HopSocket();
+
+      await expectLater(
+        openAuthenticatedClient(
+          config: target,
+          credentials: const SshCredentials.password('target-password'),
+          tofu: TofuVerifier(InMemoryHostKeyStore()),
+          onHostKey: (_) async => true,
+          connect: (host, port, timeout) async => physical,
+          resolveJumpHost: (id) async => ResolvedSshHost(
+            jump,
+            const SshCredentials.password('jump-password'),
+          ),
+          // What the default forwarder's deadline throws.
+          forward: (client, host, port, timeout) async =>
+              throw TimeoutException('forward', timeout),
+          keepAliveInterval: null,
+        ),
+        throwsA(_failureOfKind(SshConnectFailureKind.timedOut)),
       );
 
       expect(physical.closeCalls, 1);
@@ -406,7 +543,12 @@ void main() {
           forward: (client, host, port, timeout) async => forwarded,
           keepAliveInterval: null,
         ),
-        throwsA(_failureCausedBy(_stateError('sink unavailable'))),
+        throwsA(
+          allOf(
+            _failureCausedBy(_stateError('sink unavailable')),
+            _failureOfKind(SshConnectFailureKind.other),
+          ),
+        ),
       );
 
       expect(forwarded.closeCalls, 1);
@@ -438,7 +580,12 @@ void main() {
           forward: (client, host, port, timeout) async => rejected,
           keepAliveInterval: null,
         ),
-        throwsA(_failureCausedBy(isA<SSHAuthFailError>())),
+        throwsA(
+          allOf(
+            _failureCausedBy(isA<SSHAuthFailError>()),
+            _failureOfKind(SshConnectFailureKind.authenticationRejected),
+          ),
+        ),
       );
 
       expect(rejected.closeCalls, 1);
@@ -494,11 +641,16 @@ void main() {
   });
 }
 
-final Matcher _cycleFailure = isA<SshConnectException>().having(
-  (error) => error.message.toLowerCase(),
-  'message',
-  contains('cycle'),
-);
+final Matcher _cycleFailure = isA<SshConnectException>()
+    .having(
+      (error) => error.message.toLowerCase(),
+      'message',
+      contains('cycle'),
+    )
+    .having((error) => error.kind, 'kind', SshConnectFailureKind.routeInvalid);
+
+Matcher _failureOfKind(SshConnectFailureKind kind) =>
+    isA<SshConnectException>().having((error) => error.kind, 'kind', kind);
 
 // The cause names the step that failed, so a broken handshake before it
 // cannot pass for the failure under test.

@@ -4,10 +4,12 @@
 // and the report holds each figure. It checks no budget; the figures of
 // a one-second run on a shared machine mean nothing.
 import 'dart:convert';
+import 'dart:io';
 
+import 'package:klabautermann_core/src/replay/fixture_replay.dart';
+import 'package:klabautermann_core/src/replay/host_fixtures.dart';
 import 'package:test/test.dart';
 
-import '../../tool/src/budget_replay.dart';
 import '../../tool/src/engine_budget.dart';
 
 void main() {
@@ -92,11 +94,78 @@ void main() {
     );
   });
 
+  group('parseBudgetArgs', () {
+    test('reads each option and --heap', () {
+      final parsed = parseBudgetArgs([
+        '--scenario',
+        'phone',
+        '--heap',
+        '--out',
+        'run.json',
+      ]);
+      expect(parsed.options, {'scenario': 'phone', 'out': 'run.json'});
+      expect(parsed.heap, HeapReadings.afterFullCollection);
+      expect(parseBudgetArgs(const []).heap, HeapReadings.off);
+    });
+
+    test('refuses an option where a value belongs', () {
+      expect(
+        () => parseBudgetArgs(['--out', '--heap']),
+        throwsA(
+          isA<FormatException>().having(
+            (e) => e.message,
+            'message',
+            '--out needs a value, not --heap',
+          ),
+        ),
+      );
+    });
+
+    test('refuses an unknown option and a missing value', () {
+      for (final args in [
+        ['--rate', '5'],
+        ['phone'],
+        ['--seconds'],
+      ]) {
+        expect(
+          () => parseBudgetArgs(args),
+          throwsFormatException,
+          reason: '$args',
+        );
+      }
+    });
+  });
+
   test('every journal fixture row parses', () {
     final rows = loadJournalRows(findHostFixtures()!);
     final follow = FollowReplay(streamId: 's', maxPending: 100)
       ..add(utf8.encode('${rows.join('\n')}\n'));
     expect(follow.malformed, 0);
     expect(follow.linesParsed, rows.length);
+  });
+
+  test('replays the platform fixtures, not the container or runner-VM '
+      'captures', () {
+    final root = findHostFixtures()!;
+    final dirs = Directory(root).listSync().whereType<Directory>().toList();
+    for (final (mark, script) in [
+      ('-docker-', 'capture.sh'),
+      ('-runner-', 'runner_vm.sh'),
+    ]) {
+      expect(
+        dirs.where((dir) => dir.path.contains(mark)),
+        isNotEmpty,
+        reason: '$script commits them',
+      );
+    }
+    expect(
+      [for (final fixture in loadHostFixtures(root)) fixture.platform],
+      allOf(
+        isNotEmpty,
+        everyElement(
+          allOf(isNot(contains('-docker-')), isNot(contains('-runner-'))),
+        ),
+      ),
+    );
   });
 }
