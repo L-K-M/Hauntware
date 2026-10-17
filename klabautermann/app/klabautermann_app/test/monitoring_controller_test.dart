@@ -692,11 +692,14 @@ void main() {
         ..emit(const ConnectRejected('srv-2', addressOnly));
       await settle();
       final before = engine.sentOfType<Connect>().length;
+      var notified = 0;
+      monitoring.connectRejections.addListener(() => notified++);
 
       engine.emit(CatalogReplaced([_entry('srv-1')]));
       await settle();
 
       expect(monitoring.connectRejections.value, isEmpty);
+      expect(notified, 1, reason: 'one change for the whole fleet');
       expect(
         [
           for (final Connect(:serverId)
@@ -706,8 +709,11 @@ void main() {
         ['srv-1'],
       );
 
-      // Still without a config, it is rejected again.
-      engine.emit(const ConnectRejected('srv-1', noUser));
+      // Still without a config, it is rejected again. A rejection still
+      // on its way for the server that left is not kept.
+      engine
+        ..emit(const ConnectRejected('srv-1', noUser))
+        ..emit(const ConnectRejected('srv-2', addressOnly));
       await settle();
       expect(monitoring.connectRejections.value, {'srv-1': noUser});
     });

@@ -528,19 +528,20 @@ final class MonitoringController extends ChangeNotifier {
         _replaceFleet(fleetIds);
         // A new fleet may give a rejected server a config, so its views
         // connect again; one that still has none is rejected again. One
-        // that left the fleet takes its rejection with it.
+        // that left the fleet takes its rejection with it. Cleared first,
+        // so listeners hear one change rather than one per server.
+        if (rejected.isNotEmpty) _connectRejections.value = const {};
         for (final serverId in rejected) {
           if (fleetIds.contains(serverId) && _openViews.containsKey(serverId)) {
             _connect(serverId);
           }
         }
-        if (_connectRejections.value.isNotEmpty) {
-          _connectRejections.value = const {};
-        }
       case ConnectRejected(:final serverId, :final reason):
         // Only for a server a view still holds: one whose views all left
-        // has nothing to show it on.
+        // has nothing to show it on. One answered after its server left
+        // the fleet stays purged, as a sample does.
         if (!_openViews.containsKey(serverId)) return;
+        if (_fleetIds case final ids? when !ids.contains(serverId)) return;
         _connectRejections.value = Map.unmodifiable({
           ..._connectRejections.value,
           serverId: reason,

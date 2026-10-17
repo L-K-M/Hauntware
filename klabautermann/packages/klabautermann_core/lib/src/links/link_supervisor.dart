@@ -194,7 +194,11 @@ final class LinkSupervisor {
 
     server.wanted = false;
     if (server.hold == _Hold.untilForeground) server.hold = _Hold.none;
-    final reviewing = server.attempt?.changedKey == ChangedHostKey.review;
+    final attempt = server.attempt;
+    final reviewing =
+        attempt != null &&
+        attempt.changedKey == ChangedHostKey.review &&
+        !attempt.serverKeyTrusted;
     if (!_tearDown(server)) return;
 
     if (reviewing) {
@@ -427,6 +431,7 @@ final class LinkSupervisor {
     } else if (server.status is LinkNeedsUser) {
       _armDeadline(attempt);
     }
+    if (phase is LinkAuthenticating) attempt.serverKeyTrusted = true;
     _set(server, phase);
   }
 
@@ -687,6 +692,12 @@ final class _Attempt {
   /// [ChangedHostKey.review] only for the user's request to a server a
   /// changed host key blocked.
   final ChangedHostKey changedKey;
+
+  /// The server's own host key passed its check, so its user
+  /// authentication runs. A trusted answer to a review has already
+  /// re-pinned the key by then (`TofuVerifier.pin`), so the review is
+  /// decided.
+  bool serverKeyTrusted = false;
   bool holdsSlot = false;
   bool dialing = false;
 
