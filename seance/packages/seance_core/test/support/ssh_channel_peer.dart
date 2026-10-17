@@ -59,6 +59,7 @@ Future<TestLink> openTestLink({
   Duration closeTimeout = const Duration(seconds: 5),
   Duration sftpIdleRelease = const Duration(seconds: 60),
   int sessionBudget = 8,
+  SshConnectionLog? log,
 }) async {
   final socket = SshPeerSocket();
   final peer = SshChannelPeer(socket);
@@ -76,6 +77,7 @@ Future<TestLink> openTestLink({
     closeTimeout: closeTimeout,
     sftpIdleRelease: sftpIdleRelease,
     sessionBudget: sessionBudget,
+    log: log,
   );
   return (link: link, peer: peer, socket: socket);
 }
@@ -139,6 +141,11 @@ final class SshPeerChannel {
   /// Runs for inbound bytes on a non-session channel; when null the peer
   /// records them in [SshPeerChannel.stdinBytes], as it does for a session.
   void Function(SshPeerChannel channel, Uint8List data)? onData;
+
+  /// Runs for each stdin chunk on a session channel, after the peer
+  /// recorded it in [SshPeerChannel.stdinBytes]: a streaming exec reads
+  /// its input here.
+  void Function(SshPeerChannel channel, Uint8List data)? onStdin;
 
   var _sftpMode = false;
   final _outbox = Queue<Uint8List>();
@@ -493,6 +500,7 @@ final class SshChannelPeer {
     }
     if (channel.type == 'session') {
       channel.stdinBytes.addAll(data);
+      channel.onStdin?.call(channel, data);
       return;
     }
     final handler = channel.onData;

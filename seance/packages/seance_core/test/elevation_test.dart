@@ -881,6 +881,595 @@ void main() {
     );
   });
 
+  group('ElevatedExecutor.start against the wire fixture', () {
+    Future<TestLink> quietLink({SshConnectionLog? log}) async {
+      final link = await openTestLink(log: log);
+      addTearDown(link.link.close);
+      // Every reply below is scripted by the test, step by step.
+      link.peer.onExec = SshChannelPeer.execQuietFollower;
+      return link;
+    }
+
+    test('the prelude sends the password line, then passes stdin through '
+        'and leaves it open', () async {
+      final link = await quietLink();
+      final executor = ElevatedExecutor(link.link, _passwordSudo);
+
+      final process = await executor.start([
+        'docker',
+        'system',
+        'dial-stdio',
+      ], password: _password);
+      final channel = await _channel(link.peer, 0);
+
+      expect(
+        channel.execCommand,
+        "env LC_ALL=C sh -c $_quotedPrelude elevate "
+        "'docker' 'system' 'dial-stdio'",
+      );
+      await _eventually(() => channel.stdinBytes.isNotEmpty);
+      expect(utf8.decode(channel.stdinBytes), '$_password\n');
+
+      process.stdin.add(utf8.encode('GET /_ping HTTP/1.1\r\n'));
+      await _eventually(() => utf8.decode(channel.stdinBytes).endsWith('\r\n'));
+      expect(
+        utf8.decode(channel.stdinBytes),
+        '$_password\nGET /_ping HTTP/1.1\r\n',
+      );
+      expect(channel.eofFromClient, isFalse);
+
+      final stdout = _collect(process.stdout);
+      channel.sendData(utf8.encode('HTTP/1.1 200 OK\r\n'));
+      expect(await process.refusal, isNull);
+
+      await process.stdin.close();
+      await _eventually(() => channel.eofFromClient);
+      _finish(channel);
+      expect((await process.exit).exitCode, 0);
+      expect(utf8.decode(await stdout), 'HTTP/1.1 200 OK\r\n');
+      expect(link.peer.channels, hasLength(1));
+    });
+
+    test('a refusal before stdout is classified, with the status', () async {
+      final link = await quietLink();
+      final executor = ElevatedExecutor(link.link, _passwordSudo);
+
+      final process = await executor.start(['id'], password: 'wrong');
+      final stderr = _collect(process.stderr);
+      final stdout = _collect(process.stdout);
+      _finish(
+        await _channel(link.peer, 0),
+        exit: ElevatedExecutor.passwordRejectedExit,
+        stderr: _e8WrongPassword,
+      );
+
+      expect(
+        await process.refusal,
+        isA<ElevationException>()
+            .having((e) => e.kind, 'kind', ElevationFailureKind.wrongPassword)
+            .having((e) => e.stderr, 'stderr', _e8WrongPassword),
+      );
+      expect(
+        (await process.exit).exitCode,
+        ElevatedExecutor.passwordRejectedExit,
+      );
+      expect(utf8.decode(await stderr), _e8WrongPassword);
+      expect(await stdout, isEmpty);
+      // A wrong password is final: rung 4 answers only a missing cache.
+      expect(link.peer.channels, hasLength(1));
+    });
+
+    test('no refusal once stdout carried a byte', () async {
+      final link = await quietLink();
+      final executor = ElevatedExecutor(link.link, _passwordSudo);
+
+      final process = await executor.start(['tool'], password: _password);
+      final channel = await _channel(link.peer, 0);
+      channel.sendData(utf8.encode('partial\n'));
+
+      expect(await process.refusal, isNull);
+      _finish(
+        channel,
+        exit: ElevatedExecutor.passwordRejectedExit,
+        stderr: 'Sorry, try again.\n',
+      );
+      expect(
+        (await process.exit).exitCode,
+        ElevatedExecutor.passwordRejectedExit,
+      );
+      expect(utf8.decode(await _collect(process.stdout)), 'partial\n');
+      expect(
+        utf8.decode(await _collect(process.stderr)),
+        'Sorry, try again.\n',
+      );
+    });
+
+    test('an exit without stdout or a refusal text completes null', () async {
+      final link = await quietLink();
+      final executor = ElevatedExecutor(link.link, _passwordSudo);
+
+      final process = await executor.start([
+        'docker',
+        'ps',
+      ], password: _password);
+      _finish(
+        await _channel(link.peer, 0),
+        exit: 125,
+        stderr: 'docker: error during connect\n',
+      );
+
+      expect(await process.refusal, isNull);
+      expect((await process.exit).exitCode, 125);
+    });
+
+    test('exit completes while stdout is still unread', () async {
+      final link = await quietLink();
+      final executor = ElevatedExecutor(link.link, _nopasswdSudo);
+
+      final process = await executor.start(['cat', '/etc/shadow']);
+      _finish(await _channel(link.peer, 0), stdout: 'root:*:1::::::\n');
+
+      expect((await process.exit).exitCode, 0);
+      expect(await process.refusal, isNull);
+      expect(utf8.decode(await _collect(process.stdout)), 'root:*:1::::::\n');
+    });
+
+    test('the command\'s own stderr is not held back', () async {
+      final link = await quietLink();
+      final executor = ElevatedExecutor(link.link, _passwordSudo);
+
+      final process = await executor.start([
+        'tail',
+        '-F',
+        '/var/log/x',
+      ], password: _password);
+      final stderr = <int>[];
+      process.stderr.listen(stderr.addAll);
+      (await _channel(
+        link.peer,
+        0,
+      )).sendStderr(utf8.encode("tail: cannot open '/var/log/x'\n"));
+
+      // The prelude could still fall back to rung 4, yet the line is no
+      // request for a password, so it arrives while the command runs.
+      await _eventually(() => stderr.isNotEmpty);
+      expect(utf8.decode(stderr), "tail: cannot open '/var/log/x'\n");
+      await process.close();
+    });
+
+    test('rung 4 follows the prelude and replays stdin after the password '
+        'line', () async {
+      final link = await quietLink();
+      final executor = ElevatedExecutor(link.link, _passwordSudo);
+
+      final process = await executor.start([
+        'tee',
+        '/etc/motd',
+      ], password: _password);
+      final stderr = _collect(process.stderr);
+      process.stdin.add(utf8.encode('hello\n'));
+      await process.stdin.close();
+      final prelude = await _channel(link.peer, 0);
+      await _eventually(() => prelude.eofFromClient);
+      _finish(prelude, exit: 1, stderr: _e8PasswordRequired);
+
+      final retry = await _channel(link.peer, 1);
+      expect(
+        retry.execCommand,
+        "env LC_ALL=C sudo -S -p '' -- 'tee' '/etc/motd'",
+      );
+      await _eventually(() => retry.eofFromClient);
+      expect(utf8.decode(retry.stdinBytes), '$_password\nhello\n');
+      _finish(retry, stdout: 'hello\n');
+
+      expect(await process.refusal, isNull);
+      expect((await process.exit).exitCode, 0);
+      expect(utf8.decode(await _collect(process.stdout)), 'hello\n');
+      // The prelude's request for a password was answered, not reported.
+      expect(await stderr, isEmpty);
+    });
+
+    test('rung 4 reports a second refusal instead of retrying again', () async {
+      final link = await quietLink();
+      final executor = ElevatedExecutor(link.link, _passwordSudo);
+
+      final process = await executor.start(['id'], password: _password);
+      _finish(
+        await _channel(link.peer, 0),
+        exit: 1,
+        stderr: _e8PasswordRequired,
+      );
+      _finish(await _channel(link.peer, 1), exit: 1, stderr: _e8WrongPassword);
+
+      expect(
+        await process.refusal,
+        isA<ElevationException>().having(
+          (e) => e.kind,
+          'kind',
+          ElevationFailureKind.wrongPassword,
+        ),
+      );
+      expect((await process.exit).exitCode, 1);
+      expect(link.peer.channels, hasLength(2));
+    });
+
+    group('nopasswdFirst', () {
+      test('runs sudo -n first although the probe saw password sudo', () async {
+        final link = await quietLink();
+        final executor = ElevatedExecutor(link.link, _passwordSudo);
+
+        final process = await executor.start(
+          ['docker', 'system', 'dial-stdio'],
+          password: _password,
+          attempt: ElevationAttempt.nopasswdFirst,
+        );
+        final channel = await _channel(link.peer, 0);
+        process.stdin.add(utf8.encode('GET /_ping\r\n'));
+        await _eventually(() => channel.stdinBytes.isNotEmpty);
+        channel.sendData(utf8.encode('OK'));
+
+        expect(await process.refusal, isNull);
+        expect(
+          channel.execCommand,
+          "env LC_ALL=C sudo -n -- 'docker' 'system' 'dial-stdio'",
+        );
+        // A scoped rule needs no password, so none was sent.
+        expect(utf8.decode(channel.stdinBytes), 'GET /_ping\r\n');
+        _finish(channel);
+        expect((await process.exit).exitCode, 0);
+        expect(link.peer.channels, hasLength(1));
+      });
+
+      test(
+        'falls back to the prelude and replays what sudo -n never read',
+        () async {
+          final link = await quietLink();
+          final executor = ElevatedExecutor(link.link, _passwordSudo);
+
+          final process = await executor.start(
+            ['docker', 'system', 'dial-stdio'],
+            password: _password,
+            attempt: ElevationAttempt.nopasswdFirst,
+          );
+          final stderr = _collect(process.stderr);
+          process.stdin.add(utf8.encode('GET /_ping\r\n'));
+          final sudoN = await _channel(link.peer, 0);
+          await _eventually(() => sudoN.stdinBytes.isNotEmpty);
+          _finish(
+            sudoN,
+            exit: 1,
+            stderr:
+                'sudo: unable to resolve host web1: Name or service not known\n'
+                '$_e8PasswordRequired',
+          );
+
+          final prelude = await _channel(link.peer, 1);
+          expect(prelude.execCommand, contains('sh -c '));
+          await _eventually(
+            () => utf8.decode(prelude.stdinBytes).endsWith('\r\n'),
+          );
+          expect(utf8.decode(prelude.stdinBytes), '$_password\nGET /_ping\r\n');
+          process.stdin.add(utf8.encode('more'));
+          await _eventually(
+            () => utf8.decode(prelude.stdinBytes).endsWith('more'),
+          );
+          prelude.sendData(utf8.encode('OK'));
+
+          expect(await process.refusal, isNull);
+          expect(prelude.eofFromClient, isFalse);
+          _finish(prelude);
+          expect((await process.exit).exitCode, 0);
+          expect(await stderr, isEmpty);
+          expect(link.peer.channels, hasLength(2));
+        },
+      );
+
+      test('without a password the sudo -n refusal is final', () async {
+        final link = await quietLink();
+        final executor = ElevatedExecutor(link.link, _passwordSudo);
+
+        final process = await executor.start([
+          'id',
+        ], attempt: ElevationAttempt.nopasswdFirst);
+        _finish(
+          await _channel(link.peer, 0),
+          exit: 1,
+          stderr: _e8PasswordRequired,
+        );
+
+        expect(
+          await process.refusal,
+          isA<ElevationException>()
+              .having(
+                (e) => e.kind,
+                'kind',
+                ElevationFailureKind.passwordRequired,
+              )
+              .having((e) => e.stderr, 'stderr', _e8PasswordRequired),
+        );
+        expect(link.peer.channels, hasLength(1));
+      });
+
+      test('tries sudo -n where the probe found no rung at all', () async {
+        final link = await quietLink();
+        // No builtin printf, so not even the prelude applies.
+        final executor = ElevatedExecutor(
+          link.link,
+          const ElevationProbe(sudoVersionLine: _sudoVersion),
+        );
+
+        final process = await executor.start(
+          ['docker', 'ps'],
+          password: _password,
+          attempt: ElevationAttempt.nopasswdFirst,
+        );
+        final channel = await _channel(link.peer, 0);
+        _finish(channel, stdout: 'CONTAINER ID\n');
+
+        expect(await process.refusal, isNull);
+        expect(channel.execCommand, "env LC_ALL=C sudo -n -- 'docker' 'ps'");
+      });
+
+      test('a policy refusal of the command does not fall back', () async {
+        final link = await quietLink();
+        final executor = ElevatedExecutor(link.link, _passwordSudo);
+        const notAllowed =
+            "Sorry, user lukas is not allowed to execute '/usr/bin/docker' "
+            'as root on web1.\n';
+
+        final process = await executor.start(
+          ['docker', 'ps'],
+          password: _password,
+          attempt: ElevationAttempt.nopasswdFirst,
+        );
+        final stderr = _collect(process.stderr);
+        _finish(await _channel(link.peer, 0), exit: 1, stderr: notAllowed);
+
+        expect(
+          await process.refusal,
+          isA<ElevationException>().having(
+            (e) => e.kind,
+            'kind',
+            ElevationFailureKind.notInSudoers,
+          ),
+        );
+        expect(utf8.decode(await stderr), notAllowed);
+        expect(link.peer.channels, hasLength(1));
+      });
+
+      test(
+        'more stdin than the replay keeps makes sudo -n the last rung',
+        () async {
+          final link = await quietLink();
+          final executor = ElevatedExecutor(link.link, _passwordSudo);
+
+          final process = await executor.start(
+            ['docker', 'load'],
+            password: _password,
+            attempt: ElevationAttempt.nopasswdFirst,
+          );
+          process.stdin.add(List.filled(ElevatedProcess.replayLimit + 1, 0x41));
+          _finish(
+            await _channel(link.peer, 0),
+            exit: 1,
+            stderr: _e8PasswordRequired,
+          );
+
+          expect(
+            await process.refusal,
+            isA<ElevationException>().having(
+              (e) => e.kind,
+              'kind',
+              ElevationFailureKind.passwordRequired,
+            ),
+          );
+          expect(link.peer.channels, hasLength(1));
+        },
+      );
+
+      test('a root login runs the argv as it is', () async {
+        final link = await quietLink();
+        final executor = ElevatedExecutor(
+          link.link,
+          const ElevationProbe(isRoot: true, sudoVersionLine: _sudoVersion),
+        );
+
+        final process = await executor.start(
+          ['id', '-u'],
+          password: _password,
+          attempt: ElevationAttempt.nopasswdFirst,
+        );
+        final channel = await _channel(link.peer, 0);
+        _finish(channel, stdout: '0\n');
+
+        expect(await process.refusal, isNull);
+        expect(channel.execCommand, "env LC_ALL=C 'id' '-u'");
+        expect(channel.stdinBytes, isEmpty);
+      });
+    });
+
+    test('close ends the process and opens no further rung', () async {
+      final link = await quietLink();
+      final executor = ElevatedExecutor(link.link, _passwordSudo);
+
+      final process = await executor.start(
+        ['id'],
+        password: _password,
+        attempt: ElevationAttempt.nopasswdFirst,
+      );
+      final channel = await _channel(link.peer, 0);
+      await process.close();
+
+      expect((await process.exit).exitCode, isNull);
+      expect(await process.refusal, isNull);
+      await _eventually(() => channel.signalsSeen.contains('TERM'));
+      expect(link.peer.channels, hasLength(1));
+    });
+
+    test('refuses before any channel when no rung can start', () async {
+      final link = await quietLink();
+
+      await expectLater(
+        ElevatedExecutor(link.link, _passwordSudo).start(['id']),
+        throwsA(
+          isA<ElevationException>().having(
+            (e) => e.kind,
+            'kind',
+            ElevationFailureKind.passwordRequired,
+          ),
+        ),
+      );
+      await expectLater(
+        ElevatedExecutor(
+          link.link,
+          const ElevationProbe(),
+        ).start(['id'], attempt: ElevationAttempt.nopasswdFirst),
+        throwsA(
+          isA<ElevationException>().having(
+            (e) => e.kind,
+            'kind',
+            ElevationFailureKind.unavailable,
+          ),
+        ),
+      );
+      for (final argv in [
+        <String>[],
+        ['FOO=bar', 'id'],
+      ]) {
+        await expectLater(
+          ElevatedExecutor(
+            link.link,
+            _passwordSudo,
+          ).start(argv, password: _password),
+          throwsArgumentError,
+        );
+      }
+      expect(link.peer.channels, isEmpty);
+    });
+
+    // SAF-02 (03 §8.2): the password reaches stdin of the rungs that read
+    // it, as the first line, and nothing else: no command line, no SSH env
+    // request, no transcript line, no error, nothing printed.
+    test(
+      'the password never leaves the stdin of the rungs that read it',
+      () async {
+        const secret = 'leak-scan-sentinel-password';
+        final printed = <String>[];
+        final seen = <String>[];
+        final log = SshConnectionLog();
+
+        await runZoned(
+          () async {
+            final link = await openTestLink(log: log);
+            addTearDown(link.link.close);
+            final replies = <String, _Reply>{
+              'run-ok': _reply(stdout: 'ok\n'),
+              'run-wrong': _reply(
+                exit: ElevatedExecutor.passwordRejectedExit,
+                stderr: _e8WrongPassword,
+              ),
+            };
+            link.peer.onExec = (channel, command) {
+              final key = replies.keys.where(command.contains).firstOrNull;
+              if (key == null) return;
+              _answers([replies[key]!])(channel, command);
+            };
+            final executor = ElevatedExecutor(link.link, _passwordSudo);
+
+            await executor.run(['run-ok'], password: secret);
+            try {
+              await executor.run(['run-wrong'], password: secret);
+            } on ElevationException catch (error) {
+              seen.add('$error');
+            }
+            for (final bad in ['$secret\nx', '$secret\r', '$secret\u0000']) {
+              for (final call in [
+                () => executor.run(['id'], password: bad),
+                () => executor.start(['id'], password: bad),
+              ]) {
+                try {
+                  await call();
+                } on ArgumentError catch (error) {
+                  seen.add('$error');
+                }
+              }
+            }
+
+            // start: sudo -n refused, then the prelude refused for want of a
+            // cache, then rung 4 refused the password.
+            final process = await executor.start(
+              ['stream'],
+              password: secret,
+              attempt: ElevationAttempt.nopasswdFirst,
+            );
+            final stderr = _collect(process.stderr);
+            process.stdin.add(utf8.encode('payload\n'));
+            for (final (index, refusal) in [
+              (2, _e8PasswordRequired),
+              (3, _e8PasswordRequired),
+              (4, _e8WrongPassword),
+            ]) {
+              final channel = await _channel(link.peer, index);
+              await _eventually(
+                () => utf8.decode(channel.stdinBytes).endsWith('payload\n'),
+              );
+              _finish(channel, exit: 1, stderr: refusal);
+            }
+            seen
+              ..add('${await process.refusal}')
+              ..add('${await process.exit}')
+              ..add(utf8.decode(await stderr))
+              ..add('$process');
+
+            final channels = link.peer.channels;
+            expect(channels, hasLength(5));
+            for (final channel in channels) {
+              seen
+                ..add(channel.execCommand ?? '')
+                ..addAll(channel.requestsSeen);
+              expect(channel.requestsSeen, isNot(contains('env')));
+            }
+            // Only the prelude and rung 4 read a password line; sudo -n's
+            // stdin is the caller's alone.
+            final stdinFirstLines = [
+              for (final channel in channels)
+                utf8.decode(channel.stdinBytes).split('\n').first,
+            ];
+            expect(stdinFirstLines, [
+              secret,
+              secret,
+              'payload',
+              secret,
+              secret,
+            ]);
+            for (final channel in channels) {
+              expect(
+                secret.allMatches(utf8.decode(channel.stdinBytes)),
+                hasLength(
+                  channel.execCommand!.startsWith('env LC_ALL=C sudo -n --')
+                      ? 0
+                      : 1,
+                ),
+              );
+            }
+          },
+          zoneSpecification: ZoneSpecification(
+            print: (_, _, _, line) => printed.add(line),
+          ),
+        );
+
+        seen
+          ..add(log.toString())
+          ..addAll(printed);
+        expect(log.lines, isNotEmpty, reason: 'the transcript was recorded');
+        for (final text in seen) {
+          expect(text, isNot(contains(secret)));
+          expect(text, isNot(contains('sentinel')));
+        }
+      },
+    );
+  });
+
   group('end to end through local shells and a fake sudo', () {
     late Directory root;
     late String fakeBin;
@@ -1140,6 +1729,37 @@ Future<ProcessResult> _runWithFakeSudo(
     utf8.decode(await stdout),
     utf8.decode(await stderr),
   );
+}
+
+/// Waits for [condition]; the fixture answers on the same event loop, so a
+/// bounded number of turns is enough and no real delay is involved.
+Future<void> _eventually(bool Function() condition) async {
+  for (var attempt = 0; attempt < 5000; attempt++) {
+    if (condition()) return;
+    await Future<void>.delayed(Duration.zero);
+  }
+  fail('The fixture never reported the expected wire traffic.');
+}
+
+/// The peer's channel number [index], once the client opened it.
+Future<SshPeerChannel> _channel(SshChannelPeer peer, int index) async {
+  await _eventually(() => peer.channels.length > index);
+  return peer.channels[index];
+}
+
+/// Ends a scripted exec: [stdout], [stderr], the status, EOF and close.
+void _finish(
+  SshPeerChannel channel, {
+  int exit = 0,
+  String stdout = '',
+  String stderr = '',
+}) {
+  if (stdout.isNotEmpty) channel.sendData(utf8.encode(stdout));
+  if (stderr.isNotEmpty) channel.sendStderr(utf8.encode(stderr));
+  channel
+    ..sendExitStatus(exit)
+    ..sendEof()
+    ..sendClose();
 }
 
 Future<List<int>> _collect(Stream<List<int>> stream) =>
