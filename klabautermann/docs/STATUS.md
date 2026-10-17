@@ -174,6 +174,13 @@ M2, the host read MVP, is the current milestone. What is on main:
   scanning, stdcopy, versioned API models and negotiation, compose labels
   and grouping, and `/system/df` across its shapes with the OV-05 summary
   maths.
+- Docker transport (M3, D04, 03 §5.3, §5.9): `klabautermann_core`'s
+  `DockerLadder.resolve` picks rank 1 (streamlocal), 2 (`dial-stdio`
+  with `--host`, Podman's `--url`) or 4 (socat, then `nc -U`), with one
+  exec probe per refused socket telling missing, denied and disabled
+  apart; rank 3 says "needs admin mode" until M4. The streamlocal and
+  relay-process duplexes are tested over fakes only; nothing calls them
+  until the engine's Docker session (D05).
 - `klabautermann_core`: the D18 engine isolate skeleton: the plain-data
   request/event protocol of 03 §10.1 as sealed classes, `engineMain`
   answering the requests whose milestones have landed (below) and
