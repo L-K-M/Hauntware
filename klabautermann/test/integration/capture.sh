@@ -13,6 +13,11 @@
 #                                          goldens
 #   test/integration/capture.sh --list     print the evidence directory and
 #                                          the capture list; needs no Docker
+#   test/integration/capture.sh --docker-api-only [--update]
+#                                          only the recorded Docker API
+#                                          corpora (below); the other modes
+#                                          also run them after the shell
+#                                          captures
 #
 # Needs Linux on x86_64 (the pinned packages and the fixtures are amd64),
 # Docker, curl, sha256sum, realpath and the Dart SDK with the klabautermann
@@ -28,6 +33,9 @@
 #   logs/<name>.log   the tool's output for each capture
 #   images.txt        each image's pinned reference, local id and
 #                     os-release
+#   docker-api/<corpus>/  the recorded Docker API corpora of
+#                     capture_docker_api.sh, sourced below, with their
+#                     logs as logs/docker-api-<corpus>*.log
 #
 # The tool only ever writes redacted, reviewed files; the unredacted
 # sections never leave the container. Only --update writes inside the
@@ -35,7 +43,9 @@
 # the evidence copy, removes the `-docker-` fixtures no longer listed,
 # then runs the existing golden regeneration (klabautermann_host's
 # tool/regen_goldens.dart and klabautermann_core's KLAB_REGEN_GOLDENS=1
-# pipeline test). Review the diff before committing.
+# pipeline test), and replaces klabautermann_docker/test/fixtures/api-*/
+# with the recorded Docker API corpora. Review the diff before
+# committing.
 #
 # How a capture runs: the tool, compiled ahead of time, captures the
 # machine it runs on (local mode), so each capture gets a fresh container
@@ -121,8 +131,12 @@ readonly captures=(
   'arch-docker-bash             arch         sh     bash'
 )
 
+# The recorded Docker API corpora: their pins, targets and steps.
+# shellcheck source=capture_docker_api.sh
+source "$klab_dir/test/integration/capture_docker_api.sh"
+
 usage() {
-  echo 'usage: capture.sh [--update | --list]' >&2
+  echo 'usage: capture.sh [--update | --list] [--docker-api-only]' >&2
   exit 2
 }
 
@@ -132,13 +146,26 @@ die() {
 }
 
 mode=check
-case "${1:-}" in
-  '') ;;
-  --update) mode=update ;;
-  --list) mode=list ;;
-  *) usage ;;
-esac
-[[ "$#" -le 1 ]] || usage
+scope=all
+for arg in "$@"; do
+  case "$arg" in
+    --update) [[ "$mode" == check ]] || usage; mode=update ;;
+    --list) [[ "$mode" == check ]] || usage; mode=list ;;
+    --docker-api-only) [[ "$scope" == all ]] || usage; scope=docker-api ;;
+    *) usage ;;
+  esac
+done
+readonly mode scope
+
+# The shell captures and images this run needs; --docker-api-only runs
+# none of the captures and needs only the image its tool runs in.
+selected=("${captures[@]}")
+image_keys=("${!images[@]}")
+if [[ "$scope" == docker-api ]]; then
+  selected=()
+  image_keys=(debian-13)
+fi
+readonly selected image_keys
 
 # realpath -m resolves a relative path against the working directory
 # without creating it, so --list stays free of side effects.
@@ -154,10 +181,11 @@ readonly evidence="$evidence_root/capture"
 
 if [[ "$mode" == list ]]; then
   echo "evidence $evidence"
-  for entry in "${captures[@]}"; do
+  for entry in "${selected[@]}"; do
     read -r name image launch shell packages <<<"$entry"
     echo "capture $name ${images[$image]} $launch $shell${packages:+ $packages}"
   done
+  api_list
   exit 0
 fi
 
@@ -181,7 +209,13 @@ teardown() {
   ids="$(docker ps -aq --filter "label=$run_label" 2>/dev/null)" || ids=''
   if [[ -n "$ids" ]]; then
     # shellcheck disable=SC2086 # one id per word
-    docker rm -f $ids >/dev/null 2>&1 || true
+    docker rm -fv $ids >/dev/null 2>&1 || true
+  fi
+  ids="$(docker volume ls -q --filter "label=$run_label" 2>/dev/null)" ||
+    ids=''
+  if [[ -n "$ids" ]]; then
+    # shellcheck disable=SC2086 # one name per word
+    docker volume rm -f $ids >/dev/null 2>&1 || true
   fi
   if [[ -n "$work" ]]; then
     rm -rf -- "$work"
@@ -196,24 +230,31 @@ work="$(mktemp -d "${TMPDIR:-/tmp}/klab-capture.XXXXXX")"
 rm -rf -- "$evidence"
 mkdir -p "$evidence/fixtures" "$evidence/logs" "$work/stage/out" "$work/debs"
 
-echo '== Compiling the capture tool'
-(
-  cd "$klab_dir/packages/klabautermann_core"
-  dart compile exe --verbosity=warning tool/capture_fixtures.dart \
-    -o "$work/stage/capture_fixtures"
-)
+if [[ "$scope" == all ]]; then
+  echo '== Compiling the capture tool'
+  (
+    cd "$klab_dir/packages/klabautermann_core"
+    dart compile exe --verbosity=warning tool/capture_fixtures.dart \
+      -o "$work/stage/capture_fixtures"
+  )
+fi
 
-echo '== Fetching the pinned Debian packages'
-for package in "${!debs[@]}"; do
-  read -r pool sha <<<"${debs[$package]}"
-  curl -fsSL --retry 5 --retry-all-errors --connect-timeout 30 \
-    -o "$work/debs/$package.deb" "$deb_snapshot/$pool"
-  echo "$sha  $work/debs/$package.deb" | sha256sum --check --quiet ||
-    die "$package: the download does not match its pinned SHA-256"
-done
+echo '== Compiling the Docker API capture tool, pulling its daemons'
+api_prepare
+
+if [[ "$scope" == all ]]; then
+  echo '== Fetching the pinned Debian packages'
+  for package in "${!debs[@]}"; do
+    read -r pool sha <<<"${debs[$package]}"
+    curl -fsSL --retry 5 --retry-all-errors --connect-timeout 30 \
+      -o "$work/debs/$package.deb" "$deb_snapshot/$pool"
+    echo "$sha  $work/debs/$package.deb" | sha256sum --check --quiet ||
+      die "$package: the download does not match its pinned SHA-256"
+  done
+fi
 
 echo '== Pulling the images'
-for key in "${!images[@]}"; do
+for key in "${image_keys[@]}"; do
   ref="${images[$key]}"
   for ((attempt = 1; ; attempt++)); do
     docker pull --quiet "$ref" >/dev/null && break
@@ -221,7 +262,7 @@ for key in "${!images[@]}"; do
     sleep $((attempt * 10))
   done
 done
-for key in $(printf '%s\n' "${!images[@]}" | sort); do
+for key in $(printf '%s\n' "${image_keys[@]}" | sort); do
   ref="${images[$key]}"
   {
     echo "== $key $ref"
@@ -305,7 +346,7 @@ shape() {
 
 failed=()
 names=()
-for entry in "${captures[@]}"; do
+for entry in "${selected[@]}"; do
   read -r name image launch shell packages <<<"$entry"
   names+=("$name")
   echo "== $name: $launch $shell in $image"
@@ -328,11 +369,19 @@ for entry in "${captures[@]}"; do
   fi
 done
 
+api_captures
+
+total=$((${#selected[@]} + ${#api_targets[@]}))
 if [[ "${#failed[@]}" -gt 0 ]]; then
-  die "${#failed[@]} of ${#captures[@]} captures failed or differ: ${failed[*]}"
+  die "${#failed[@]} of $total captures failed or differ: ${failed[*]}"
 fi
 
 if [[ "$mode" == update ]]; then
+  echo '== Replacing the committed Docker API corpora'
+  api_update
+fi
+
+if [[ "$mode" == update && "$scope" == all ]]; then
   echo '== Replacing the committed fixtures'
   for dir in "$fixtures_root"/*-docker-*/; do
     stale="$(basename "$dir")"
@@ -351,4 +400,4 @@ if [[ "$mode" == update ]]; then
   )
 fi
 
-echo "== ${#captures[@]} captures in $evidence"
+echo "== $total captures in $evidence"
