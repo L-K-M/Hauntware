@@ -1152,6 +1152,7 @@ class _SessionViewState extends State<_SessionView> {
   void dispose() {
     _focus.removeListener(_reportTerminalFocus);
     _focus.removeListener(_hideSelectionToolbarOnBlur);
+    _terminalController.removeListener(_hideSelectionToolbarWithoutSelection);
     _selectionToolbar.remove();
     if (identical(widget.tab.controller, _terminalController)) {
       widget.tab.controller = null;
