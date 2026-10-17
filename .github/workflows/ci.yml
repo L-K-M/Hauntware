@@ -833,13 +833,14 @@ jobs:
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
-      # klabautermann_client's GTK toolchain, plus xvfb and the Mesa stack
-      # for a headless display with real GLES (llvmpipe through
-      # LIBGL_ALWAYS_SOFTWARE).
+      # klabautermann_client's GTK toolchain and keyring libraries, plus
+      # xvfb and the Mesa stack for a headless display with real GLES
+      # (llvmpipe through LIBGL_ALWAYS_SOFTWARE).
       - name: Install Linux desktop and display toolchain
         run: >-
           sudo apt-get update && sudo apt-get install -y
           clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev
+          libsecret-1-dev libjsoncpp-dev
           xvfb libegl1 libgles2 libgl1-mesa-dri
       - name: Resolve app dependencies
         working-directory: klabautermann/app/klabautermann_app
@@ -1815,17 +1816,16 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      # GTK toolchain for the Flutter Linux embedder; imagemagick and file
-      # feed scripts/package-linux.sh (icon resize, appimagetool), xvfb and
-      # xdotool the launch check. No plugin links libsecret or jsoncpp yet:
-      # add libsecret-1-dev and libjsoncpp-dev with the first keyring
-      # plugin, as the siblings do.
+      # GTK toolchain for the Flutter Linux embedder, plus libsecret/jsoncpp
+      # for flutter_secure_storage's keyring backend (ghost_keystore);
+      # imagemagick and file feed scripts/package-linux.sh (icon resize,
+      # appimagetool), xvfb and xdotool the launch check.
       - name: Install Linux desktop toolchain
         if: startsWith(matrix.target, 'linux')
         run: >-
           sudo apt-get update && sudo apt-get install -y
           clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev
-          imagemagick file xvfb xdotool
+          libsecret-1-dev libjsoncpp-dev imagemagick file xvfb xdotool
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}

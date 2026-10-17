@@ -14,6 +14,8 @@ import 'controllers/coverage_controller.dart';
 import 'controllers/fleet_controller.dart';
 import 'controllers/monitoring_controller.dart';
 import 'controllers/prompt_controller.dart';
+import 'controllers/sync_controller.dart';
+import 'services/engine_keystore.dart';
 import 'services/instance_guard.dart';
 import 'services/macos_titlebar.dart';
 import 'services/settings_window/settings_window_host.dart';
@@ -27,8 +29,9 @@ import 'ui/already_running_app.dart';
 /// The composition root (03 §10.1): the settings-window branch, the
 /// instance lock, the macOS titlebar, then the device settings store, the
 /// main window's restored frame, the engine isolate, one `ChangeNotifier`
-/// controller per concern built over them, and `runApp`. The catalog
-/// stores and vault join this list as their milestones land.
+/// controller per concern built over them, the keystore that answers the
+/// engine's sync (D62), and `runApp`. The catalog stores and the vault
+/// are the engine's (03 §4.10, D63).
 Future<void> main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -115,12 +118,15 @@ Future<void> main(List<String> args) async {
   // Links are on (03 §10.1): opening a server's view connects to it, and
   // the prompt controller below shows the host-key and keyboard prompts
   // a connect raises. The engine writes its capability cache and
-  // `host_keys.json` only while this process holds the directory alone;
-  // otherwise it keeps this run's pins in memory (D59, D61).
+  // `host_keys.json`, and syncs, only while this process holds the
+  // directory alone; otherwise it keeps this run's pins in memory (D59,
+  // D61, D63). It gets the device id read above, after the lock, so
+  // enrollment never reads an id another process may have minted.
   final engine = await IsolateEngineClient.spawn(
     supportDirectory: supportDirectory.path,
     linksEnabled: true,
     supportDirectoryAccess: supportDirectoryAccessFor(instanceLock),
+    deviceId: settings.deviceId,
   );
   final importStoreIssue = engine.ready.importStoreIssue;
   if (importStoreIssue != null) {
@@ -146,6 +152,14 @@ Future<void> main(List<String> args) async {
   // The host-key and keyboard-interactive prompts the engine raises while
   // it connects, shown one at a time over every route.
   final prompts = PromptController(engine);
+  // Pull-only sync (03 §4.3, D14): the sign-in and rounds the user asks
+  // for, and the OS keystore the engine's sync reaches through this
+  // isolate, which alone can call the keystore plugin (D62).
+  final sync = SyncController(engine, account: engine.ready.syncAccount);
+  EngineKeystoreResponder(engine, klabautermannMasterKeyManager());
+  for (final issue in engine.ready.syncStoreIssues) {
+    debugPrint('${issue.fileName}: ${issue.kind.name} ${issue.detail ?? ''}');
+  }
   final appearance = appearanceFromSettings(settings);
   // 03 §9.5 item 1: the first-run card shows until dismissed on this
   // device, which settings.json keeps.
@@ -176,8 +190,10 @@ Future<void> main(List<String> args) async {
       appearance: appearance,
       coverage: coverage,
       announcements: announcements,
+      sync: sync,
       settingsIssue: settings.issue,
       importStoreIssue: importStoreIssue,
+      syncStoreIssues: engine.ready.syncStoreIssues,
       instanceLockIssue: instanceLockIssue,
       openSettingsWindow: settingsWindow?.open,
       toolbarBand: toolbarBand,

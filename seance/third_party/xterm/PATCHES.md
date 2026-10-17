@@ -507,6 +507,19 @@ Regressions: `test/src/ui/selection_gesture_test.dart`, "void past the content".
     workaround still applies. Cursor, selection and highlights are
     overlays and are unchanged.
 
+### Touch selection toolbar (regressions: `test/src/ui/selection_gesture_test.dart`, `app/seance_app/test/terminal_selection_toolbar_test.dart`)
+
+39. **Touch selections report their end** (`terminal_view.dart`
+    `onTouchSelectionEnd`, `TerminalViewState.selectionToolbarAnchors`,
+    `ui/gesture/gesture_handler.dart#onLongPressEnd`): upstream selects on
+    a touch long-press or double tap but tells the host nothing, and touch
+    has no secondary click, so a host could not offer Copy. The view now
+    calls `onTouchSelectionEnd` when a long-press lifts or a touch
+    double/triple tap lifts with a selection, and
+    `selectionToolbarAnchors` gives the global points above the first and
+    below the last selected row, clamped to the view. Mouse selections do
+    not report.
+
 ### App-layer notes (outside this package)
 
 - The app passes `shortcuts: {}` and instead routes ⌘C/⌘V/⌘A on

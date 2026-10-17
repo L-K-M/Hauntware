@@ -4,7 +4,11 @@ import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 import 'package:ghost_theme/ghost_theme.dart' show GhostTheme;
 import 'package:klabautermann_core/klabautermann_core.dart'
-    show DeviceSettingsIssue, ImportStoreIssue, InstanceLockUnavailable;
+    show
+        DeviceSettingsIssue,
+        ImportStoreIssue,
+        InstanceLockUnavailable,
+        SyncStoreIssue;
 
 import 'controllers/announcement_controller.dart';
 import 'controllers/appearance_controller.dart';
@@ -12,6 +16,7 @@ import 'controllers/coverage_controller.dart';
 import 'controllers/fleet_controller.dart';
 import 'controllers/monitoring_controller.dart';
 import 'controllers/prompt_controller.dart';
+import 'controllers/sync_controller.dart';
 import 'l10n/app_localizations.dart';
 import 'services/settings_window/settings_window_link.dart';
 import 'theme/app_theme.dart';
@@ -41,8 +46,10 @@ class KlabautermannApp extends StatelessWidget {
     required this.appearance,
     required this.coverage,
     required this.announcements,
+    this.sync,
     this.settingsIssue,
     this.importStoreIssue,
+    this.syncStoreIssues = const [],
     this.instanceLockIssue,
     this.openSettingsWindow,
     this.toolbarBand,
@@ -63,12 +70,20 @@ class KlabautermannApp extends StatelessWidget {
   /// [appearance], it outlives an engine run.
   final AnnouncementController announcements;
 
+  /// The sync account (03 §4.3), one engine run's like [fleet]; null in
+  /// tests that leave sync out, which shows the sync control idle.
+  final SyncController? sync;
+
   /// What went wrong opening `settings.json`, told once at startup.
   final DeviceSettingsIssue? settingsIssue;
 
   /// What went wrong when the engine loaded `ssh_config_imports.json`,
   /// told once at startup beside [settingsIssue].
   final ImportStoreIssue? importStoreIssue;
+
+  /// What was wrong with the engine's sync state files at start (03
+  /// §4.10), told once beside [importStoreIssue].
+  final List<SyncStoreIssue> syncStoreIssues;
 
   /// Why the instance lock could not be taken, told once at startup: this
   /// desktop instance runs without the guard against a second one.
@@ -153,6 +168,7 @@ class KlabautermannApp extends StatelessWidget {
           home: StartupIssueNotice(
             settingsIssue: settingsIssue,
             importStoreIssue: importStoreIssue,
+            syncStoreIssues: syncStoreIssues,
             instanceLockIssue: instanceLockIssue,
             // The home route stays mounted under every other route, so
             // its dialogs come up over Settings too.
@@ -175,6 +191,7 @@ class KlabautermannApp extends StatelessWidget {
                       monitoring: monitoring,
                       coverage: coverage,
                       onOpenSettings: openSettings,
+                      sync: sync,
                     ),
                   );
                 },

@@ -3141,5 +3141,181 @@
   "overviewHostWaiting": "Waiting for the operating system and kernel.",
   "@overviewHostWaiting": {
     "description": "The Overview's Host card before the server sent its operating system and kernel."
+  },
+  "syncSignInTooltip": "Sign in to your Séance account to list its servers",
+  "@syncSignInTooltip": {
+    "description": "Tooltip of the sync control in the fleet rail and on phones while this device is not signed in to the Séance sync account; selecting it opens the sign-in. Also told when a sync is asked for before signing in."
+  },
+  "syncNowTooltip": "Synchronize with {host} as {username}",
+  "@syncNowTooltip": {
+    "description": "Tooltip of the sync control once signed in; selecting it pulls the account's latest servers.",
+    "placeholders": {
+      "username": {
+        "type": "String",
+        "example": "ops"
+      },
+      "host": {
+        "type": "String",
+        "example": "sync.example.com"
+      }
+    }
+  },
+  "syncSignInTitle": "Sign in to your Séance account",
+  "@syncSignInTitle": {
+    "description": "Title of the sync sign-in's first step (03 §4.3 step 1)."
+  },
+  "syncSignInBody": "Klabautermann lists the servers you keep in Séance. Sign in with the server address, account name, password and encryption passphrase you use in Séance.",
+  "@syncSignInBody": {
+    "description": "Explains where the server list comes from, on the sign-in's first step. Séance is the sibling app whose sync account holds the servers."
+  },
+  "syncServerAddress": "Server address",
+  "@syncServerAddress": {
+    "description": "Label of the sync server's address field, for example https://sync.example.com."
+  },
+  "syncAccountName": "Account name",
+  "@syncAccountName": {
+    "description": "Label of the sync account's user name field."
+  },
+  "syncPassword": "Password",
+  "@syncPassword": {
+    "description": "Label of the sync account's password field."
+  },
+  "syncPassphrase": "Encryption passphrase",
+  "@syncPassphrase": {
+    "description": "Label of the field for the passphrase that encrypts the account's records."
+  },
+  "syncPassphraseHelper": "Often the same as your password.",
+  "@syncPassphraseHelper": {
+    "description": "Helper text under the encryption passphrase field."
+  },
+  "syncConfirmTitle": "Before you sign in",
+  "@syncConfirmTitle": {
+    "description": "Title of the sign-in's second step, the fleet assertion and disclosures (03 §4.3 step 2)."
+  },
+  "syncFleetAssertion": "Every device that uses this account runs Séance 0.9.0 or later.",
+  "@syncFleetAssertion": {
+    "description": "Checkbox the user must tick before signing in; the version number stays literal."
+  },
+  "syncFleetAssertionDetail": "Older Séance releases can mistake records from other apps for servers.",
+  "@syncFleetAssertionDetail": {
+    "description": "Why the fleet assertion matters, under its checkbox."
+  },
+  "syncDisclosureAccountKey": "Your encryption passphrase opens the records of every app on this account, Séance and Poltergeist included.",
+  "@syncDisclosureAccountKey": {
+    "description": "Disclosure on the sign-in's second step: the account key decrypts every app's records. Séance and Poltergeist are the sibling apps."
+  },
+  "syncDisclosurePullOnly": "Klabautermann only reads this account. It publishes nothing: no servers, host keys or passwords.",
+  "@syncDisclosurePullOnly": {
+    "description": "Disclosure on the sign-in's second step: the app is pull-only and writes nothing to the account."
+  },
+  "syncSignInAction": "Sign in",
+  "@syncSignInAction": {
+    "description": "The button that sends the sign-in, enabled once the fleet assertion is ticked."
+  },
+  "syncSignedIn": "Signed in. Your Séance servers are now in the fleet.",
+  "@syncSignedIn": {
+    "description": "Toast after a successful sign-in."
+  },
+  "syncPassphraseUnverified": "No record on the account has confirmed your encryption passphrase yet. If servers are missing, sign in again with the passphrase you use in Séance.",
+  "@syncPassphraseUnverified": {
+    "description": "Toast after a sign-in or sync in which no record could be decrypted to prove the passphrase: it may be wrong, or the account holds nothing yet."
+  },
+  "syncValidationServerAddress": "Enter the server address, starting with https:// or http://.",
+  "@syncValidationServerAddress": {
+    "description": "Sign-in error: the server address is missing or not a web address."
+  },
+  "syncValidationUrlCredentials": "Leave your account name and password out of the server address.",
+  "@syncValidationUrlCredentials": {
+    "description": "Sign-in error: the server address contains a user name or password."
+  },
+  "syncValidationAccountName": "Enter your account name.",
+  "@syncValidationAccountName": {
+    "description": "Sign-in error: the account name is empty."
+  },
+  "syncValidationPassword": "Enter your password.",
+  "@syncValidationPassword": {
+    "description": "Sign-in error: the password is empty."
+  },
+  "syncValidationPassphrase": "Enter your encryption passphrase.",
+  "@syncValidationPassphrase": {
+    "description": "Sign-in error: the encryption passphrase is empty."
+  },
+  "syncFailedDirectoryShared": "Sync is off because Klabautermann could not check whether another copy of it is running.",
+  "@syncFailedDirectoryShared": {
+    "description": "Sync error: the instance lock could not be taken, so the app signs in and syncs nothing."
+  },
+  "syncFailedNoDeviceId": "Sync is off because this device's settings file could not be read or saved.",
+  "@syncFailedNoDeviceId": {
+    "description": "Sync error: settings.json gave no device id this session."
+  },
+  "syncFailedOtherAccount": "This device is already signed in to another account.",
+  "@syncFailedOtherAccount": {
+    "description": "Sync error: signing in to a second account while one is signed in."
+  },
+  "syncFailedKdfDowngrade": "The server asked for weaker password protection than Klabautermann accepts, so nothing was sent. The server may have been tampered with.",
+  "@syncFailedKdfDowngrade": {
+    "description": "Sign-in error: the server offered key derivation parameters below the suite's minimum (a possible downgrade attack)."
+  },
+  "syncFailedCredentials": "The server did not accept this account name and password.",
+  "@syncFailedCredentials": {
+    "description": "Sign-in error: the server refused the login."
+  },
+  "syncFailedSession": "The server no longer accepts this device's sign-in. Sign in again.",
+  "@syncFailedSession": {
+    "description": "Sync error: the server rejected the stored session token."
+  },
+  "syncFailedUnreachable": "The sync server could not be reached. Check the address and your connection.",
+  "@syncFailedUnreachable": {
+    "description": "Sync error: the server did not answer."
+  },
+  "syncFailedServer": "The sync server reported an error. Try again later.",
+  "@syncFailedServer": {
+    "description": "Sync error: the server answered with an error."
+  },
+  "syncFailedKeystore": "The system keychain could not store or hand over the sync keys. Unlock it and try again.",
+  "@syncFailedKeystore": {
+    "description": "Sync error: the OS keystore refused to store or read the sync token or vault key."
+  },
+  "syncFailedStore": "A sync file could not be saved, so the sign-in was not kept.",
+  "@syncFailedStore": {
+    "description": "Sync error: a sync state file is left as it is this session."
+  },
+  "syncFailed": "Sync failed.",
+  "@syncFailed": {
+    "description": "Sync error with no more specific cause."
+  },
+  "syncFileRecovered": "The sync file {fileName} could not be read and was cleared. The old file is kept as {keptAs}.",
+  "@syncFileRecovered": {
+    "description": "Startup notice: a sync state file was damaged and renamed aside; for the enrollment file the device then reads as not signed in.",
+    "placeholders": {
+      "fileName": {
+        "type": "String",
+        "example": "pin_verdicts.json"
+      },
+      "keptAs": {
+        "type": "String",
+        "example": "pin_verdicts.json.corrupt-20261016T093005250Z"
+      }
+    }
+  },
+  "syncFileLeftAsIs": "The sync file {fileName} could not be read, so it was left as it is. Sync changes will not be kept after a restart.",
+  "@syncFileLeftAsIs": {
+    "description": "Startup notice: a sync state file could not be read or renamed aside, so it is not written this session.",
+    "placeholders": {
+      "fileName": {
+        "type": "String",
+        "example": "sync_enrollment.json"
+      }
+    }
+  },
+  "syncFileNewer": "The sync file {fileName} was saved by a newer version of Klabautermann. Sync changes will not be kept after a restart.",
+  "@syncFileNewer": {
+    "description": "Startup notice: a newer app version wrote a sync state file, so this version does not write it.",
+    "placeholders": {
+      "fileName": {
+        "type": "String",
+        "example": "sync_enrollment.json"
+      }
+    }
   }
 }

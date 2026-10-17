@@ -121,8 +121,9 @@ final class LinkConnectFailed extends LinkConnectResult {
 /// `abandoned`.
 final class LinkConnector {
   /// [hostKeys] holds the pins: the engine's one store, which
-  /// `openHostKeyPins` opens (D61, P14). `hopConfig` looks up a jump
-  /// hop's config by id, such as `ImportedFleet.serverConfig`.
+  /// `openHostKeyPins` opens and its sync shares (D61, D63, P14).
+  /// `hopConfig` looks up a jump hop's config by id, such as
+  /// `ImportedFleet.serverConfig`.
   LinkConnector({
     required CredentialSource credentials,
     required this._hostKeys,

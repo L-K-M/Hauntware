@@ -3417,6 +3417,222 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Waiting for the operating system and kernel.'**
   String get overviewHostWaiting;
+
+  /// Tooltip of the sync control in the fleet rail and on phones while this device is not signed in to the Séance sync account; selecting it opens the sign-in. Also told when a sync is asked for before signing in.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in to your Séance account to list its servers'**
+  String get syncSignInTooltip;
+
+  /// Tooltip of the sync control once signed in; selecting it pulls the account's latest servers.
+  ///
+  /// In en, this message translates to:
+  /// **'Synchronize with {host} as {username}'**
+  String syncNowTooltip(String username, String host);
+
+  /// Title of the sync sign-in's first step (03 §4.3 step 1).
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in to your Séance account'**
+  String get syncSignInTitle;
+
+  /// Explains where the server list comes from, on the sign-in's first step. Séance is the sibling app whose sync account holds the servers.
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann lists the servers you keep in Séance. Sign in with the server address, account name, password and encryption passphrase you use in Séance.'**
+  String get syncSignInBody;
+
+  /// Label of the sync server's address field, for example https://sync.example.com.
+  ///
+  /// In en, this message translates to:
+  /// **'Server address'**
+  String get syncServerAddress;
+
+  /// Label of the sync account's user name field.
+  ///
+  /// In en, this message translates to:
+  /// **'Account name'**
+  String get syncAccountName;
+
+  /// Label of the sync account's password field.
+  ///
+  /// In en, this message translates to:
+  /// **'Password'**
+  String get syncPassword;
+
+  /// Label of the field for the passphrase that encrypts the account's records.
+  ///
+  /// In en, this message translates to:
+  /// **'Encryption passphrase'**
+  String get syncPassphrase;
+
+  /// Helper text under the encryption passphrase field.
+  ///
+  /// In en, this message translates to:
+  /// **'Often the same as your password.'**
+  String get syncPassphraseHelper;
+
+  /// Title of the sign-in's second step, the fleet assertion and disclosures (03 §4.3 step 2).
+  ///
+  /// In en, this message translates to:
+  /// **'Before you sign in'**
+  String get syncConfirmTitle;
+
+  /// Checkbox the user must tick before signing in; the version number stays literal.
+  ///
+  /// In en, this message translates to:
+  /// **'Every device that uses this account runs Séance 0.9.0 or later.'**
+  String get syncFleetAssertion;
+
+  /// Why the fleet assertion matters, under its checkbox.
+  ///
+  /// In en, this message translates to:
+  /// **'Older Séance releases can mistake records from other apps for servers.'**
+  String get syncFleetAssertionDetail;
+
+  /// Disclosure on the sign-in's second step: the account key decrypts every app's records. Séance and Poltergeist are the sibling apps.
+  ///
+  /// In en, this message translates to:
+  /// **'Your encryption passphrase opens the records of every app on this account, Séance and Poltergeist included.'**
+  String get syncDisclosureAccountKey;
+
+  /// Disclosure on the sign-in's second step: the app is pull-only and writes nothing to the account.
+  ///
+  /// In en, this message translates to:
+  /// **'Klabautermann only reads this account. It publishes nothing: no servers, host keys or passwords.'**
+  String get syncDisclosurePullOnly;
+
+  /// The button that sends the sign-in, enabled once the fleet assertion is ticked.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in'**
+  String get syncSignInAction;
+
+  /// Toast after a successful sign-in.
+  ///
+  /// In en, this message translates to:
+  /// **'Signed in. Your Séance servers are now in the fleet.'**
+  String get syncSignedIn;
+
+  /// Toast after a sign-in or sync in which no record could be decrypted to prove the passphrase: it may be wrong, or the account holds nothing yet.
+  ///
+  /// In en, this message translates to:
+  /// **'No record on the account has confirmed your encryption passphrase yet. If servers are missing, sign in again with the passphrase you use in Séance.'**
+  String get syncPassphraseUnverified;
+
+  /// Sign-in error: the server address is missing or not a web address.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the server address, starting with https:// or http://.'**
+  String get syncValidationServerAddress;
+
+  /// Sign-in error: the server address contains a user name or password.
+  ///
+  /// In en, this message translates to:
+  /// **'Leave your account name and password out of the server address.'**
+  String get syncValidationUrlCredentials;
+
+  /// Sign-in error: the account name is empty.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter your account name.'**
+  String get syncValidationAccountName;
+
+  /// Sign-in error: the password is empty.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter your password.'**
+  String get syncValidationPassword;
+
+  /// Sign-in error: the encryption passphrase is empty.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter your encryption passphrase.'**
+  String get syncValidationPassphrase;
+
+  /// Sync error: the instance lock could not be taken, so the app signs in and syncs nothing.
+  ///
+  /// In en, this message translates to:
+  /// **'Sync is off because Klabautermann could not check whether another copy of it is running.'**
+  String get syncFailedDirectoryShared;
+
+  /// Sync error: settings.json gave no device id this session.
+  ///
+  /// In en, this message translates to:
+  /// **'Sync is off because this device\'s settings file could not be read or saved.'**
+  String get syncFailedNoDeviceId;
+
+  /// Sync error: signing in to a second account while one is signed in.
+  ///
+  /// In en, this message translates to:
+  /// **'This device is already signed in to another account.'**
+  String get syncFailedOtherAccount;
+
+  /// Sign-in error: the server offered key derivation parameters below the suite's minimum (a possible downgrade attack).
+  ///
+  /// In en, this message translates to:
+  /// **'The server asked for weaker password protection than Klabautermann accepts, so nothing was sent. The server may have been tampered with.'**
+  String get syncFailedKdfDowngrade;
+
+  /// Sign-in error: the server refused the login.
+  ///
+  /// In en, this message translates to:
+  /// **'The server did not accept this account name and password.'**
+  String get syncFailedCredentials;
+
+  /// Sync error: the server rejected the stored session token.
+  ///
+  /// In en, this message translates to:
+  /// **'The server no longer accepts this device\'s sign-in. Sign in again.'**
+  String get syncFailedSession;
+
+  /// Sync error: the server did not answer.
+  ///
+  /// In en, this message translates to:
+  /// **'The sync server could not be reached. Check the address and your connection.'**
+  String get syncFailedUnreachable;
+
+  /// Sync error: the server answered with an error.
+  ///
+  /// In en, this message translates to:
+  /// **'The sync server reported an error. Try again later.'**
+  String get syncFailedServer;
+
+  /// Sync error: the OS keystore refused to store or read the sync token or vault key.
+  ///
+  /// In en, this message translates to:
+  /// **'The system keychain could not store or hand over the sync keys. Unlock it and try again.'**
+  String get syncFailedKeystore;
+
+  /// Sync error: a sync state file is left as it is this session.
+  ///
+  /// In en, this message translates to:
+  /// **'A sync file could not be saved, so the sign-in was not kept.'**
+  String get syncFailedStore;
+
+  /// Sync error with no more specific cause.
+  ///
+  /// In en, this message translates to:
+  /// **'Sync failed.'**
+  String get syncFailed;
+
+  /// Startup notice: a sync state file was damaged and renamed aside; for the enrollment file the device then reads as not signed in.
+  ///
+  /// In en, this message translates to:
+  /// **'The sync file {fileName} could not be read and was cleared. The old file is kept as {keptAs}.'**
+  String syncFileRecovered(String fileName, String keptAs);
+
+  /// Startup notice: a sync state file could not be read or renamed aside, so it is not written this session.
+  ///
+  /// In en, this message translates to:
+  /// **'The sync file {fileName} could not be read, so it was left as it is. Sync changes will not be kept after a restart.'**
+  String syncFileLeftAsIs(String fileName);
+
+  /// Startup notice: a newer app version wrote a sync state file, so this version does not write it.
+  ///
+  /// In en, this message translates to:
+  /// **'The sync file {fileName} was saved by a newer version of Klabautermann. Sync changes will not be kept after a restart.'**
+  String syncFileNewer(String fileName);
 }
 
 class _AppLocalizationsDelegate

@@ -87,6 +87,13 @@ import 'package:meta/meta.dart';
 /// `pinnedKeyType` for the re-pin review of a changed key, and
 /// [ConnectRejected] joined to say why a [Connect] to a fleet server
 /// cannot start (03 §4.6, §10.1, D61), within v3 the same way.
+///
+/// Pull-only sync then joined v3 the same way (03 §4.3, D63): [EnrollSync]
+/// carries the account to sign in to, [SyncStatus] reports each sync
+/// operation with a typed [SyncFailure], [EngineReady] gains the enrolled
+/// account and what was wrong with the sync state files, and the engine
+/// asks the app for the OS keystore with [KeystoreRequest], which
+/// [AnswerKeystore] answers.
 const int kEngineProtocolVersion = 3;
 
 /// Every message the UI isolate sends the engine (03 §10.1, D18). Plain data
@@ -114,14 +121,42 @@ final class Shutdown extends EngineRequest {
   const Shutdown();
 }
 
-/// Enroll this device into catalog sync (03 §10.1). Pull-only under D14: the
-/// catalog applies pulled records and never seals dirty ones.
+/// Signs this device in to the user's Séance sync account (03 §4.3 step
+/// 1, §10.1): the shared enrollment (prelogin, KDF-downgrade refusal,
+/// login, a full pull and the passphrase trial), the vault re-key through
+/// its journal, then the pulled records applied. Pull-only under D14: the
+/// catalog applies pulled records and never seals dirty ones. Answered by
+/// [SyncStatus] events for [SyncOperation.enroll], and the fleet in a
+/// [CatalogReplaced] when it succeeds.
+///
+/// The fields hold the user's secrets for the length of the request; the
+/// engine keeps neither, and only the derived token and vault key reach
+/// the keystore (03 §4.5).
 final class EnrollSync extends EngineRequest {
-  const EnrollSync();
+  const EnrollSync({
+    required this.baseUrl,
+    required this.username,
+    required this.password,
+    required this.encryptionPassphrase,
+  });
+
+  /// The sync server's address, as Séance's account settings show it.
+  final String baseUrl;
+  final String username;
+
+  /// The account password, which derives the login verifier.
+  final String password;
+
+  /// The encryption passphrase, which derives the key every record of the
+  /// account is sealed with; often the same as [password].
+  final String encryptionPassphrase;
 }
 
-/// Runs one sync round (pull and, once D14's push policy allows, seal and
-/// push local catalog records). Alert inbox fetches ride inside it (D42).
+/// Runs one sync round on the enrolled account: a pull, applied under
+/// D14's push policy, which seals and pushes nothing in the MVP. Answered
+/// by [SyncStatus] events for [SyncOperation.round], and the fleet in a
+/// [CatalogReplaced] when it succeeds. Alert inbox fetches ride inside it
+/// (v1.x, D42).
 final class RunSyncRound extends EngineRequest {
   const RunSyncRound();
 }
@@ -320,6 +355,16 @@ final class AnswerPrompt extends EngineRequest {
   final PromptAnswer answer;
 }
 
+/// Answers the [KeystoreRequest] with [requestId] (03 §10.1, D62, D63).
+/// The engine takes it ahead of the requests queued before it, since the
+/// sync operation that asked waits on it.
+final class AnswerKeystore extends EngineRequest {
+  const AnswerKeystore(this.requestId, this.result);
+
+  final int requestId;
+  final KeystoreResult result;
+}
+
 /// Acknowledges or dismisses one alert (v1.x, 03 §10.1, D42).
 final class HandleAlert extends EngineRequest {
   const HandleAlert(this.alertRef, this.action);
@@ -352,7 +397,12 @@ sealed class EngineEvent {
 /// engine follows it at once with a [CatalogReplaced] holding the fleet it
 /// started with: the imports an earlier run saved.
 final class EngineReady extends EngineEvent {
-  const EngineReady(this.protocolVersion, {this.importStoreIssue});
+  const EngineReady(
+    this.protocolVersion, {
+    this.importStoreIssue,
+    this.syncAccount,
+    this.syncStoreIssues = const [],
+  });
 
   final int protocolVersion;
 
@@ -360,6 +410,14 @@ final class EngineReady extends EngineEvent {
   /// it at start, or null when it was fine or absent. Told once, here, so
   /// the app can report it with its other startup problems.
   final ImportStoreIssue? importStoreIssue;
+
+  /// The sync account this device is enrolled in, or null when it is not
+  /// (03 §4.3). Later changes arrive in [SyncStatus.account].
+  final SyncAccountInfo? syncAccount;
+
+  /// What was wrong with each sync state file the engine opened at start
+  /// (03 §4.10, D62), told once like [importStoreIssue].
+  final List<SyncStoreIssue> syncStoreIssues;
 }
 
 /// The engine refused a request it does not serve (yet). The 03 §10.1 table
@@ -418,11 +476,35 @@ final class SshConfigImported extends EngineEvent {
   final bool saved;
 }
 
-/// The sync round's phase changed (03 §10.1).
+/// A sync operation started or ended (03 §10.1). Operations run one at a
+/// time in request order, each reported [SyncPhase.running] and then
+/// [SyncPhase.succeeded] or [SyncPhase.failed].
 final class SyncStatus extends EngineEvent {
-  const SyncStatus(this.phase, {this.detail});
+  const SyncStatus(
+    this.phase, {
+    required this.operation,
+    this.account,
+    this.failure,
+    this.passphraseUnverified = false,
+    this.detail,
+  });
 
   final SyncPhase phase;
+  final SyncOperation operation;
+
+  /// The enrolled account as the operation leaves it, or null when this
+  /// device is not enrolled.
+  final SyncAccountInfo? account;
+
+  /// Why the operation failed; set with [SyncPhase.failed] only.
+  final SyncFailure? failure;
+
+  /// Whether no pulled record has proved the encryption passphrase yet
+  /// (the push hold of 03 §4.5): the passphrase may be wrong, or the
+  /// account holds nothing to check it against.
+  final bool passphraseUnverified;
+
+  /// The failure behind [failure], for diagnostics only.
   final String? detail;
 }
 
@@ -725,6 +807,18 @@ final class PromptWithdrawn extends EngineEvent {
 
   final String promptId;
   final PromptWithdrawnReason reason;
+}
+
+/// The engine asks the app for the OS keystore (03 §4.5, §10.1, D62): the
+/// keystore plugin answers only the app's root isolate, so the app runs
+/// [operation] and answers [AnswerKeystore] with [requestId]. A sync
+/// operation waits for the answer.
+final class KeystoreRequest extends EngineEvent {
+  const KeystoreRequest(this.requestId, this.operation);
+
+  /// Unique for the engine's lifetime.
+  final int requestId;
+  final KeystoreOperation operation;
 }
 
 /// Alerts fetched for one server inside a sync round (v1.x, 03 §10.1, D42).
@@ -1735,6 +1829,199 @@ enum ReachabilityStatus {
 
 /// The sync round's phase behind [SyncStatus] (03 §10.1).
 enum SyncPhase { idle, running, succeeded, failed }
+
+/// The request a [SyncStatus] answers.
+enum SyncOperation {
+  /// [EnrollSync].
+  enroll,
+
+  /// [RunSyncRound].
+  round,
+}
+
+/// Why a sync operation failed (03 §4.3, §4.5).
+enum SyncFailure {
+  /// This process does not hold the support directory alone (03 §4.10,
+  /// D63): the instance lock could not be taken, so the engine signs in
+  /// and syncs nothing.
+  directoryShared,
+
+  /// `settings.json` gave no device id this session, so no record could
+  /// carry this install's authorship.
+  noDeviceId,
+
+  /// A round was asked for, but this device is not enrolled.
+  notEnrolled,
+
+  /// The device is enrolled in another account; signing out comes later.
+  otherAccount,
+
+  /// The server address, account name, password or passphrase is not
+  /// one the engine can send (`validateSyncEnrollment`).
+  invalidRequest,
+
+  /// The server offered weaker key derivation than the suite accepts, so
+  /// no key was derived (03 §4.5).
+  kdfDowngrade,
+
+  /// The server refused the account name and password.
+  credentialsRejected,
+
+  /// The server refused the stored session: the account was deleted or
+  /// signed out elsewhere.
+  sessionRejected,
+
+  /// The server could not be reached or did not answer in time.
+  unreachable,
+
+  /// The server answered with an error of its own.
+  serverError,
+
+  /// The OS keystore could not store or hand over the session token or
+  /// the vault key.
+  keystoreUnavailable,
+
+  /// A sync state file is left as it is this session, so the operation's
+  /// state could not be saved.
+  storeUnavailable,
+
+  /// Anything else; [SyncStatus.detail] says what.
+  other,
+}
+
+/// The enrolled sync account as the app shows it: never a secret.
+@immutable
+final class SyncAccountInfo {
+  const SyncAccountInfo({required this.baseUrl, required this.username});
+
+  final String baseUrl;
+  final String username;
+
+  @override
+  bool operator ==(Object other) =>
+      other is SyncAccountInfo &&
+      baseUrl == other.baseUrl &&
+      username == other.username;
+
+  @override
+  int get hashCode => Object.hash(baseUrl, username);
+}
+
+/// What went wrong with a sync state file when the engine opened it (03
+/// §4.10, D62).
+enum SyncStoreIssueKind {
+  /// It was damaged and renamed to [SyncStoreIssue.preservedAs]; the store
+  /// started empty.
+  recovered,
+
+  /// It could not be read, or was damaged and could not be renamed. It is
+  /// left as it is and nothing is saved to it this session.
+  leftAsIs,
+
+  /// A newer build wrote it. It is left as it is and nothing is saved to
+  /// it this session.
+  newerVersion,
+}
+
+/// One sync state file's problem at start, carried by [EngineReady].
+@immutable
+final class SyncStoreIssue {
+  const SyncStoreIssue(
+    this.fileName,
+    this.kind, {
+    this.preservedAs,
+    this.detail,
+  });
+
+  /// The file's name in the support directory, such as
+  /// `sync_enrollment.json`.
+  final String fileName;
+  final SyncStoreIssueKind kind;
+
+  /// The damaged file's new path; set for [SyncStoreIssueKind.recovered]
+  /// only.
+  final String? preservedAs;
+
+  /// The failure behind [kind], for diagnostics only.
+  final String? detail;
+}
+
+/// One OS-keystore call a [KeystoreRequest] carries: the engine's
+/// `SyncKeystore` port, which the app forwards to `ghost_keystore`'s
+/// `MasterKeyManager` under Klabautermann's entry names (03 §4.5, D62).
+@immutable
+sealed class KeystoreOperation {
+  const KeystoreOperation();
+}
+
+/// Store [value] under the API-key [name]; answered [KeystoreDone].
+final class KeystorePutApiKey extends KeystoreOperation {
+  const KeystorePutApiKey(this.name, this.value);
+
+  final String name;
+  final String value;
+}
+
+/// Read the API-key [name]; answered [KeystoreApiKey].
+final class KeystoreGetApiKey extends KeystoreOperation {
+  const KeystoreGetApiKey(this.name);
+
+  final String name;
+}
+
+/// Forget the API-key [name]; answered [KeystoreDone].
+final class KeystoreDeleteApiKey extends KeystoreOperation {
+  const KeystoreDeleteApiKey(this.name);
+
+  final String name;
+}
+
+/// Read the vault master key without minting one; answered
+/// [KeystoreMasterKey].
+final class KeystoreReadMasterKey extends KeystoreOperation {
+  const KeystoreReadMasterKey();
+}
+
+/// Replace the vault master key with [key]; answered [KeystoreDone].
+final class KeystoreWriteMasterKey extends KeystoreOperation {
+  const KeystoreWriteMasterKey(this.key);
+
+  final Uint8List key;
+}
+
+/// The app's answer to a [KeystoreOperation].
+@immutable
+sealed class KeystoreResult {
+  const KeystoreResult();
+}
+
+/// A write or delete finished.
+final class KeystoreDone extends KeystoreResult {
+  const KeystoreDone();
+}
+
+/// An API key's value, or null when there is none or the keystore cannot
+/// answer.
+final class KeystoreApiKey extends KeystoreResult {
+  const KeystoreApiKey(this.value);
+
+  final String? value;
+}
+
+/// The vault master key, or null when there is none or the keystore cannot
+/// answer.
+final class KeystoreMasterKey extends KeystoreResult {
+  const KeystoreMasterKey(this.key);
+
+  final Uint8List? key;
+}
+
+/// The keystore refused the operation; [detail] says why, for diagnostics.
+final class KeystoreRefused extends KeystoreResult {
+  const KeystoreRefused(this.detail);
+
+  final String detail;
+}
 
 /// What a [Subscribe] names and each [Sample] carries: the 03 §6.4
 /// collectors as surfaces see them. [units] and [failedUnits] both come

@@ -247,7 +247,8 @@ placement · D54 runtime override in M3 · D55 no health overlay in the MVP
 · D56 log search through `planchette_core` · D57 timer triggers · D58
 cron zone rules · D59 capability cache · D60 threshold announcements ·
 D61 host-key pins and re-pin ·
-D62 sync state files and the keystore port.
+D62 sync state files and the keystore port · D63 pull-only sync in the
+engine.
 Proposals awaiting the owner close the section; they are not decisions.
 
 ### Shape and scope
@@ -988,11 +989,15 @@ Proposals awaiting the owner close the section; they are not decisions.
   until the next enrollment, which sets the push hold again); a file
   that cannot be read or renamed, or one from a newer schema, is left as
   it is and no change is saved that session; writes are whole-file and
-  atomic through `writeFileAtomically` and queue in call order; they
-  happen only with `SupportDirectoryAccess.exclusive`, so an unguarded
-  process reads the files, renames nothing and keeps changes in memory,
-  as the capability cache does (D59). They hold no secret and keep the
-  process default mode, like `host_keys.json`. The `SyncCredentialStore`
+  atomic through `writeFileAtomically` and queue in call order; a write
+  that fails is thrown to the caller and leaves the change in memory
+  and `hasUnsavedChanges` true, so the stores save again on the next
+  call even when that call changes nothing in memory, and retrying a
+  failed change persists it; writes happen only with
+  `SupportDirectoryAccess.exclusive`, so an unguarded process reads the
+  files, renames nothing and keeps changes in memory, as the capability
+  cache does (D59). They hold no secret and keep the process default
+  mode, like `host_keys.json`. The `SyncCredentialStore`
   (`KeystoreSyncCredentialStore`) stays engine-side over a pure-Dart
   `SyncKeystore` port named after `ghost_keystore`'s `MasterKeyManager`
   (put, get and delete an API key; read and write the master key), with
@@ -1010,17 +1015,52 @@ Proposals awaiting the owner close the section; they are not decisions.
   `MasterKeyManager` and answers the port's calls over the engine
   protocol, as Poltergeist's UI isolate answers its engine's trash
   channel (`PA/services/engine_session.dart`); K49b adds that request
-  pair and the binding. Not yet built: the app's dependency on
-  `ghost_keystore` adds `flutter_secure_storage`, whose Linux plugin
-  needs `libsecret-1-dev` and `libjsoncpp-dev` in the
-  `klabautermann_client` CI job (a root-shared file, 06), so it lands
-  with K49b. *Rejected:* `BackgroundIsolateBinaryMessenger` in the
+  pair and the binding (D63). The app's dependency on `ghost_keystore`
+  adds `flutter_secure_storage`, whose Linux plugin needs
+  `libsecret-1-dev` and `libjsoncpp-dev` in the `klabautermann_client`
+  CI job (a root-shared file, 06), so it lands with K49b too.
+  *Rejected:* `BackgroundIsolateBinaryMessenger` in the
   engine (needs a Flutter import and an app-owned engine entry point,
   and every keystore plugin's background-isolate support verified per
   platform); the keys sent to the engine at start (the token and master
   key would sit in engine memory before any sync runs, and an enrollment
   still has to write them back); the state kept in `settings.json`
   (the engine would write the app isolate's file through the protocol).
+- **D63. Pull-only sync in the engine (K49b, M2).** The engine handles
+  `EnrollSync` and `RunSyncRound` (10.1) with the catalog library's
+  `SyncEnrollment` and a shared-mode `RecordCoordinator` under
+  `PushPolicy.none` (D14), over its own files in the support directory
+  (4.10): `sync_records.json`, `servers.json`, `host_keys.json`,
+  `vault.json` and D62's state files. One `FileHostKeyStore` per engine
+  serves both the coordinator and the links, since two instances over
+  one file would each write back their own cache. The coordinator has
+  no vault and no `syncSecrets` switch yet, so it applies no `secret:`
+  record (4.5). Operations run one at a time in request order beside
+  the request queue, not in it: an enrollment waits on the network, a
+  key derivation and the app's keystore answers, while links, sampling
+  and imports go on. The keystore answer (`AnswerKeystore`) is taken
+  ahead of the queue. Sync runs only with
+  `SupportDirectoryAccess.exclusive`: the catalog library's stores write
+  their files whenever they change, so a second process over the same
+  files would race them, and enrollment reads the device id only after
+  the instance lock (4.10) is held, so no other process can have minted
+  it; an unguarded or id-less engine refuses with a typed failure. The
+  first enrollment of an install without `vault.json` installs the
+  account key directly (nothing to re-seal; D62's journal needs an
+  installed key to stage from); an existing vault is re-keyed through
+  the journal. Synced servers join the fleet ahead of the imports as
+  `FleetEntry` values with `origin: synced`, their group, sign-in kind,
+  search text and jump route by label, and no connect config, so no link
+  dials one before its endpoint is confirmed (4.7, K41). An enrolled
+  device signs in again only to the same account; signing out and
+  switching accounts come later. The app's sign-in (4.3 steps 1 and 2)
+  sends nothing before the fleet assertion is ticked, so no record is
+  pulled before it. *Rejected:* sync in the request queue (one sign-in
+  would hold every connect and subscription for its network round trips
+  and key derivation); sync while unguarded with in-memory stores (an
+  enrollment that a restart forgets, and a token in the keystore with no
+  account behind it); synced servers as connect targets before K41
+  (SAF-09).
 
 ### Privilege and safety
 
@@ -1759,6 +1799,17 @@ One flow, built for phones with many servers:
 5. **Observe-only notice (SAF-01).** Every server starts read-only;
    management is a per-server switch.
 
+As built in M2 (K49b, D63), steps 1 and 2 are one sheet behind the sync
+control (the fleet rail's sync chip, the phone's sync button) while the
+device is not signed in: step 1 explains and takes the server address,
+account name, password and encryption passphrase (Séance accounts may
+have both), checked with the suite's `validateSyncEnrollment`; step 2
+holds the fleet assertion and the two MVP disclosures, and its "Sign in"
+stays disabled until the assertion is ticked, so `EnrollSync` is sent
+only then. Once signed in, the control runs a round; it opens the sheet
+again while no record has confirmed the passphrase or after the server
+refused the session. Steps 3 to 5 come with K41 and K30.
+
 ### 4.4 The catalog library
 
 Contents, moved rather than rewritten (F3a): `SyncTuple` (from
@@ -1838,8 +1889,12 @@ re-push (c1 §2.4).
   (`MacOsOptions(usesDataProtectionKeychain: false)`), like both siblings.
   As built in M2 (K49a, D62): the engine's `SyncCredentialStore` works
   over a `SyncKeystore` port that the app answers with `ghost_keystore`,
-  since the plugin's channels answer only the root isolate; the binding
-  and its protocol requests land with K49b.
+  since the plugin's channels answer only the root isolate. K49b (D63)
+  carries the port's calls as `KeystoreRequest` and `AnswerKeystore`
+  (10.1) and binds `MasterKeyManager(masterKeyEntry:
+  'klabautermann.vault.masterKey.v1', apiKeyPrefix:
+  'klabautermann.apikey.')` in the app, reading the master key only
+  through `probeKeystore(hasExistingVault: true)`.
 - **Synced secrets.** Applied only when the device `syncSecrets` switch is
   on, the server has `syncSecret: true`, it is not excluded, and the record
   passes the freshness floor (c1 §2.2). Otherwise the app prompts and stores
@@ -2013,9 +2068,9 @@ platform identities in 04, section 12.3):
 
 | File | Content | Owner | Release |
 |---|---|---|---|
-| `servers.json`, `sync_records.json` | Catalog mirror and materialized list | catalog library | MVP |
+| `servers.json`, `sync_records.json` | Catalog mirror and materialized list; written by the engine's coordinator (M2, K49b, D63) only with exclusive access | catalog library | MVP |
 | `vault.json`, `vault.json.rekey` | Credentials and re-key journal | `SC/src/store/` | MVP |
-| `host_keys.json`, `pin_verdicts.json`, `sync_tripwires.json` | Pins and quarantine state. From M2 the engine pins through the catalog library's `FileHostKeyStore`, one instance per engine, and writes `host_keys.json` only while the process holds the directory alone; otherwise it reads the file once and keeps pins in memory (D61). As built in M2 (K49a, D62), the verdict and tripwire files are named `pin_verdicts.json` (negative pins and kept verdicts) and `sync_tripwires.json` (tripped record ids), owned by `klabautermann_core` over the catalog library's seams. A damaged file is renamed to `<name>.corrupt-<UTC time>` and the store starts empty; one it cannot read or rename, or one from a newer schema, is left as it is and no change is saved that run; nothing is written or renamed without exclusive access | catalog library; the verdict and tripwire files `klabautermann_core` [E] | MVP |
+| `host_keys.json`, `pin_verdicts.json`, `sync_tripwires.json` | Pins and quarantine state. From M2 the engine pins through the catalog library's `FileHostKeyStore`, one instance per engine that its links and, from K49b (D63), its sync coordinator share, and writes `host_keys.json` only while the process holds the directory alone; otherwise it reads the file once and keeps pins in memory (D61). As built in M2 (K49a, D62), the verdict and tripwire files are named `pin_verdicts.json` (negative pins and kept verdicts) and `sync_tripwires.json` (tripped record ids), owned by `klabautermann_core` over the catalog library's seams. A damaged file is renamed to `<name>.corrupt-<UTC time>` and the store starts empty; one it cannot read or rename, or one from a newer schema, is left as it is and no change is saved that run; nothing is written or renamed without exclusive access | catalog library; the verdict and tripwire files `klabautermann_core` [E] | MVP |
 | `sync_enrollment.json` [E] | Enrollment state (M2, K49a, D62): the push hold, the raised notices and the enrolled account (server URL, user name, mode); never the token or vault key, which stay in the keystore (4.5), and not the device id, which stays in `settings.json`. Kept like the verdict files; a damaged file reads as not enrolled | `klabautermann_core` [E] | MVP |
 | `endpoint_pins.json` | Confirmed endpoints | catalog library | MVP |
 | `ssh_config_imports.json` [E] | D13's device-local store for FL-02 imports from `~/.ssh/config`, replaced whole by each import; never pushed (D14). Schema 3 (M2) holds each host's alias, host, port, user, `IdentityFile` and `ProxyJump` with the values ssh would use (10.1): the effective host (`%h` expanded, lowercased unless an address) and port, the first `IdentityFile` that is not `none`, and the `ProxyJump` as written; under `hops` it holds the same for each other name a stored route gives. An older file holds addresses only: schema 1 (M1) kept no `IdentityFile` or `ProxyJump` and kept `HostName` as written, `%h` included, and schema 2 read each host's values from its first block alone. Its hosts are listed as stored, with no `jumpRoute`, `authKind` or `locatorConflict`, and get no connect config until the next import rewrites the file. Built in M1: the engine isolate loads it at start and saves each import atomically before it answers (10.1). A damaged file is renamed to `ssh_config_imports.json.corrupt-<UTC time>`; a file it cannot read or rename, or one from a newer schema, is left as it is and no import is saved that run | `klabautermann_core` [E] | MVP |
@@ -4459,7 +4514,8 @@ shows there.
 
 | Requests (UI to engine) | Events (engine to UI) |
 |---|---|
-| `EnrollSync`, `RunSyncRound` | `CatalogReplaced(entries)`, `SyncStatus` |
+| `EnrollSync(baseUrl, username, password, encryptionPassphrase)`, `RunSyncRound` | `CatalogReplaced(entries)`, `SyncStatus(phase, operation, account, failure, passphraseUnverified)` |
+| `AnswerKeystore(requestId, result)` (D62) | `KeystoreRequest(requestId, operation)`: the engine asks the app for the OS keystore |
 | `ImportSshConfig(text)` (FL-02, desktop) | `CatalogReplaced(entries)` with the imports, then `SshConfigImported(importedCount, skippedCount, saved)` |
 | `ConfirmEndpoints(ids)`, `SetMonitorSet(ids)` | `EndpointChanged(serverId)` |
 | `Connect(serverId)`, `Disconnect(serverId)` | `LinkState(serverId, status)` (D46's states plus `blocked`; typed reasons inside the status), `ConnectRejected(serverId, reason)` (no config to dial with, D61) |
@@ -4505,8 +4561,8 @@ the engine in `engine_isolate.dart` beside it):
 - **`CatalogReplaced(entries)`** carries the whole fleet in display order
   as a read-only list of immutable `FleetEntry` values: `serverId`,
   `label`, `host`, `port`, `origin` (`synced` or `sshConfig`) and the
-  optional `user` and `group`. Synced entries come first (none until the
-  catalog library lands, F3), then imports in file order; the catalog's
+  optional `user` and `group`. Synced entries come first (from M2, K49b:
+  the catalog's order, by label), then imports in file order; the catalog's
   record types stay engine-side. A synced entry's `serverId` is the
   record's bare UUID; an import's is `ssh-config:<alias>`, device-local
   and never sent to the sync server. Imports carry no group.
@@ -4907,13 +4963,15 @@ the engine in `engine_isolate.dart` beside it):
   the engine cannot follow and a host-key refusal without a declined
   prompt (a key-exchange signature that did not verify) stay
   unclassified; `other` falls back to the error behind it, so a jump
-  hop's key file keeps its kind. 5.3's three client limitations wait
-  for `seance_core` to type them. No prompt asks for a passphrase until
-  the owner decides (2, "Encrypted keys and agent order"), so the
-  supervisor does not hand such a failure to the user's request, and
-  the app's copy for both kinds says to load the key into ssh-agent and
-  drop the `IdentityFile` line that names it, since an import that
-  names a key file offers only that file.
+  hop's key file keeps its kind. 5.3's three client limitations arrive
+  typed from `seance_core` (X5b), which reads the server's cleartext
+  KEXINIT, and keep their names: `unsupportedAlgorithm`,
+  `insecureAlgorithmsOnly` and `keyExchangeTimedOut`. No prompt asks
+  for a passphrase until the owner decides (2, "Encrypted keys and agent
+  order"), so the supervisor does not hand such a failure to the
+  user's request, and the app's copy for both kinds says to load the key
+  into ssh-agent and drop the `IdentityFile` line that names it, since
+  an import that names a key file offers only that file.
 - **Version 3 (M2 prompts).** The app's prompts joined version 3 the same
   way. `KeyboardInteractivePromptRequest` gained `user`, the account the
   asking machine signs in as (the challenge's `server.username`), so the
@@ -4964,6 +5022,23 @@ the engine in `engine_isolate.dart` beside it):
   rejected server it still lists, so an import that fixes the config
   connects the open view. With links off, the engine answers `Connect`
   with `RequestRejected` before it looks for a config.
+- **Version 3 (M2 sync).** Pull-only sync joined version 3 the same way
+  (K49b, D63). `IsolateEngineClient.spawn(deviceId:)` hands the engine
+  the id `settings.json` holds, read after the instance lock.
+  `EnrollSync` carries the account; `SyncStatus` reports each operation
+  (`enroll` or `round`) as `running`, then `succeeded` or `failed` with
+  a typed `SyncFailure` (support directory shared, no device id, not
+  enrolled, another account, a field the suite rule refuses, KDF
+  downgrade, credentials or session rejected, unreachable, server error,
+  keystore or state file unavailable, other), the account as the
+  operation leaves it and whether the passphrase is still unverified
+  (4.5). A success first sends `CatalogReplaced` with the synced
+  entries. `EngineReady` gains `syncAccount` and `syncStoreIssues`, what
+  was wrong with each of D62's files at start. `KeystoreRequest` names
+  one call of D62's port (put, get or delete an API key, read the master
+  key without minting, write it) and `AnswerKeystore` carries its
+  result (done, a value, or refused with a diagnostic); a write the app
+  refuses throws in the engine, and a read reads as none.
 - **`SetAppActivity(activity)`** is a request of its own and applies to
   every subscription, link and probe at once: 6.4 pauses everything while
   the app is in the background, and D34 adds the phones' grace period

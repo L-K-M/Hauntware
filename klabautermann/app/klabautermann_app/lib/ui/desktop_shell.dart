@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../controllers/coverage_controller.dart';
 import '../controllers/fleet_controller.dart';
 import '../controllers/monitoring_controller.dart';
+import '../controllers/sync_controller.dart';
 import 'coverage.dart';
 import 'fleet_rail.dart';
 import 'inspector_pane.dart';
@@ -19,6 +20,7 @@ class DesktopShell extends StatelessWidget {
     required this.coverage,
     required this.onOpenSettings,
     this.onAddServer,
+    this.sync,
   });
 
   final FleetController fleet;
@@ -28,6 +30,7 @@ class DesktopShell extends StatelessWidget {
   final CoverageController coverage;
   final VoidCallback onOpenSettings;
   final VoidCallback? onAddServer;
+  final SyncController? sync;
 
   /// The rail's fixed width; the kit's rows keep their own insets.
   static const double railWidth = 260;
@@ -67,6 +70,7 @@ class DesktopShell extends StatelessWidget {
                       monitoring: monitoring,
                       onOpenSettings: onOpenSettings,
                       onAddServer: onAddServer,
+                      sync: sync,
                     ),
                   ),
                 ),
