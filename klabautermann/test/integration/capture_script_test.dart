@@ -5,6 +5,7 @@
 // tests read both files and run the `--list` mode, which needs neither
 // Docker nor the network, so the pins, the teardown, where it writes
 // and the committed fixture set are checked on every package run.
+import 'dart:convert';
 import 'dart:io';
 import 'dart:isolate';
 
@@ -40,6 +41,7 @@ void main() {
   late String scriptPath;
   late String fixturesRoot;
   late String api;
+  late String apiFixturesRoot;
 
   setUpAll(() async {
     final workspace = await Isolate.resolvePackageUri(
@@ -54,6 +56,7 @@ void main() {
     api = await File(
       '${klab.path}test/integration/capture_docker_api.sh',
     ).readAsString();
+    apiFixturesRoot = '${klab.path}packages/klabautermann_docker/test/fixtures';
   });
 
   /// Runs `capture.sh --list` (plus [extra]) from [workingDirectory] with
@@ -554,6 +557,36 @@ void main() {
         contains(r'"$work/api-stage/capture_api" check "$committed"'),
       );
     });
+
+    test('matches the committed corpora', () async {
+      final listed = await targets();
+      final committed = [
+        for (final dir in Directory(apiFixturesRoot).listSync())
+          if (dir is Directory &&
+              dir.uri.pathSegments.reversed.elementAt(1).startsWith('api-'))
+            dir.uri.pathSegments.reversed.elementAt(1),
+      ];
+      expect([for (final t in listed) t[0]], unorderedEquals(committed));
+      final seed = RegExp(r"api_seed_image='([^']+)'").firstMatch(api)![1];
+      for (final [name, image, runtime, version] in listed) {
+        final manifest =
+            jsonDecode(
+                  await File(
+                    '$apiFixturesRoot/$name/MANIFEST.json',
+                  ).readAsString(),
+                )
+                as Map<String, Object?>;
+        final daemon = manifest['daemon']! as Map<String, Object?>;
+        expect(daemon['runtime'], runtime, reason: name);
+        expect(daemon['apiVersion'], version, reason: name);
+        expect(daemon['image'], image, reason: name);
+        expect(
+          (manifest['images']! as Map<String, Object?>)['seed'],
+          seed,
+          reason: name,
+        );
+      }
+    }, testOn: 'linux');
   });
 }
 
