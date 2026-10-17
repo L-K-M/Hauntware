@@ -2,13 +2,13 @@
 total=3
 selection=all
 == rows ==
-1 S 0 2 0 327366 0 1772 sleep
-16 R 6 1 0 327390 0 3996 sh
-6 S 0 2 1 327381 0 9184 dart:capture_fi
+1 S 0 2 0 630959 0 1740 sleep
+18 R 7 0 1 630977 0 4016 sh
+7 S 0 2 1 630971 0 8988 dart:capture_fi
 == cmdline ==
 ==> 1/cmdline <==
 sleep[redacted]
-==> 16/cmdline <==
-/tmp/klab-sh-BNZEAU/sh[redacted]
-==> 6/cmdline <==
+==> 18/cmdline <==
+/tmp/klab-sh-UAJRBF/sh[redacted]
+==> 7/cmdline <==
 /opt/klab/capture_fixtures[redacted][redacted][redacted][redacted][redacted][redacted][redacted]
