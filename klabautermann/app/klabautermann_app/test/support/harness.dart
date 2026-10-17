@@ -7,6 +7,7 @@ import 'package:klabautermann_app/controllers/appearance_controller.dart';
 import 'package:klabautermann_app/controllers/coverage_controller.dart';
 import 'package:klabautermann_app/controllers/fleet_controller.dart';
 import 'package:klabautermann_app/controllers/monitoring_controller.dart';
+import 'package:klabautermann_app/controllers/prompt_controller.dart';
 import 'package:klabautermann_app/services/settings_window/settings_window_link.dart';
 import 'package:klabautermann_app/services/ssh_config_source.dart';
 import 'package:klabautermann_core/klabautermann_core.dart'
@@ -21,6 +22,7 @@ final class AppHarness {
     required this.engine,
     required this.fleet,
     required this.monitoring,
+    required this.prompts,
     required this.appearance,
     required this.coverage,
     required this.announcements,
@@ -29,6 +31,7 @@ final class AppHarness {
   final FakeEngineClient engine;
   final FleetController fleet;
   final MonitoringController monitoring;
+  final PromptController prompts;
   final AppearanceController appearance;
   final CoverageController coverage;
   final AnnouncementController announcements;
@@ -36,6 +39,7 @@ final class AppHarness {
   void dispose() {
     fleet.dispose();
     monitoring.dispose();
+    prompts.dispose();
     appearance.dispose();
     coverage.dispose();
     announcements.dispose();
@@ -84,6 +88,7 @@ Future<AppHarness> pumpApp(
     engine: engine,
     fleet: FleetController(engine, servers: servers, sshConfig: sshConfig),
     monitoring: MonitoringController(engine, linkGrace: linkGrace),
+    prompts: PromptController(engine),
     appearance: appearance ?? AppearanceController(),
     coverage: coverage ?? CoverageController(firstRunCardDismissed: true),
     announcements: announcements ?? AnnouncementController(),
@@ -97,6 +102,7 @@ Future<AppHarness> pumpApp(
     KlabautermannApp(
       fleet: harness.fleet,
       monitoring: harness.monitoring,
+      prompts: harness.prompts,
       appearance: harness.appearance,
       coverage: harness.coverage,
       announcements: harness.announcements,

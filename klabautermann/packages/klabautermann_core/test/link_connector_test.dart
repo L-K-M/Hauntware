@@ -46,6 +46,7 @@ ServerConfig _server({
   String id = 'ssh-config:web',
   String host = '192.0.2.10',
   int port = 22,
+  String username = 'me',
   AuthMethod authMethod = AuthMethod.agent,
   String? identityFilePath,
   String? jumpHostId,
@@ -54,7 +55,7 @@ ServerConfig _server({
   label: id,
   host: host,
   port: port,
-  username: 'me',
+  username: username,
   authMethod: authMethod,
   identityFilePath: identityFilePath,
   jumpHostId: jumpHostId,
@@ -268,7 +269,11 @@ void main() {
         onDial = (dial) async {
           responses = await dial.onKeyboardInteractive!(
             KeyboardInteractiveChallenge(
-              server: _server(host: '198.51.100.7', port: 2222),
+              server: _server(
+                host: '198.51.100.7',
+                port: 2222,
+                username: 'jump',
+              ),
               prompts: ['Code:'],
               name: 'otp',
               instruction: 'Enter the code',
@@ -286,6 +291,8 @@ void main() {
         expect(responses, ['123456']);
         expect((prompt.host, prompt.port), ('198.51.100.7', 2222));
         final request = prompt.request as KeyboardInteractivePromptRequest;
+        // The asking machine's own user, not the server's.
+        expect(request.user, 'jump');
         expect((request.name, request.instruction), ('otp', 'Enter the code'));
         expect(request.questions, ['Code:']);
       },
@@ -321,6 +328,41 @@ void main() {
 
       expect(responses, isEmpty);
       expect(events.last, isA<PromptWithdrawn>());
+    });
+
+    test('fails as cancelled at once when the user declines the '
+        'questions', () async {
+      late List<String> responses;
+      // dartssh2 closes the connection on a count other than the
+      // question count, so the dial fails.
+      onDial = (dial) async {
+        responses = await dial.onKeyboardInteractive!(_challenge(['Code:']));
+        if (responses.isEmpty) throw _connectError(Exception('count'));
+        return _FakeLink();
+      };
+
+      final result = connect(purpose: ConnectPurpose.interactive);
+      await answerNext(const PromptCancelAnswer());
+
+      expect(
+        _failure(await result),
+        LinkFailureKind.keyboardInteractiveCancelled,
+      );
+      expect(responses, isEmpty);
+      // Answered: nothing was left to withdraw.
+      expect(events.single, isA<Prompt>());
+    });
+
+    test('an expired challenge is no cancel', () async {
+      broker = PromptBroker(emit: events.add, expiry: Duration.zero);
+      onDial = (dial) async {
+        await dial.onKeyboardInteractive!(_challenge(['Code:']));
+        throw _connectError(Exception('count'));
+      };
+
+      final result = await connect(purpose: ConnectPurpose.interactive);
+
+      expect(_failure(result), isNull);
     });
 
     test('withdraws prompts still open when the attempt ends', () async {

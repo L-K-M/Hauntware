@@ -205,6 +205,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'This server\'s host key has not been trusted, so Klabautermann did not connect.';
 
   @override
+  String get linkFailureKeyboardInteractiveCancelled =>
+      'The server\'s sign-in questions were cancelled, so Klabautermann did not connect.';
+
+  @override
   String get linkFailureUnsupportedAlgorithm =>
       'This server requires an algorithm Klabautermann does not support yet.';
 
@@ -2367,6 +2371,66 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get jobsCalendarOneRun =>
       'systemd before version 242 lists only the next run, so later runs are not shown.';
+
+  @override
+  String get hostKeyUnknownTitle => 'Unknown host key';
+
+  @override
+  String get hostKeyChangedTitle => 'HOST KEY CHANGED';
+
+  @override
+  String hostKeyChangedWarning(String host) {
+    return 'The key for $host does not match the one you previously trusted. This can mean a man-in-the-middle attack. Only continue if you know why the key changed.';
+  }
+
+  @override
+  String promptEndpoint(String host, int port) {
+    return '$host:$port';
+  }
+
+  @override
+  String promptEndpointWithUser(String user, String host, int port) {
+    return '$user@$host:$port';
+  }
+
+  @override
+  String get hostKeyFingerprintLabel => 'Fingerprint';
+
+  @override
+  String get hostKeyNewKeyLabel => 'New key';
+
+  @override
+  String get hostKeyPreviousLabel => 'Previously trusted';
+
+  @override
+  String get hostKeyCancel => 'Cancel';
+
+  @override
+  String get hostKeyTrustConnect => 'Trust and connect';
+
+  @override
+  String get hostKeyTrustNewKey => 'Trust the new key';
+
+  @override
+  String get keyboardTitle => 'Authentication';
+
+  @override
+  String get keyboardRequestFrom => 'Request from';
+
+  @override
+  String get keyboardServerMessage => 'Server message';
+
+  @override
+  String get keyboardShowAnswer => 'Show answer';
+
+  @override
+  String get keyboardHideAnswer => 'Hide answer';
+
+  @override
+  String get keyboardCancel => 'Cancel';
+
+  @override
+  String get keyboardSubmit => 'Submit';
 
   @override
   String get settingsAccessibilityTitle => 'Accessibility';

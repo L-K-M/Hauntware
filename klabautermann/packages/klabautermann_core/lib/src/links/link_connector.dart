@@ -175,6 +175,10 @@ final class LinkConnector {
     );
     var answeredQuestions = false;
 
+    // Whether the user declined keyboard-interactive questions: the
+    // closed connection that follows says nothing of why.
+    var cancelledQuestions = false;
+
     // The verdict of a host key the attempt refused, declined or expired:
     // only this tells a declined key from a changed one, which
     // SshConnectException's isHostKeyRefusal cannot.
@@ -219,14 +223,17 @@ final class LinkConnector {
                   host: challenge.server.host,
                   port: challenge.server.port,
                   request: KeyboardInteractivePromptRequest(
+                    user: challenge.server.username,
                     name: challenge.name,
                     instruction: challenge.instruction,
                     questions: challenge.prompts,
                   ),
                 );
-                // A withdrawn prompt answers with no responses: dartssh2
-                // rejects a count other than the question count by closing
-                // the connection, so no made-up answer reaches the server.
+                // A withdrawn or cancelled prompt answers with no
+                // responses: dartssh2 rejects a count other than the
+                // question count by closing the connection, so no made-up
+                // answer reaches the server.
+                if (answer is PromptCancelAnswer) cancelledQuestions = true;
                 if (answer is! PromptResponsesAnswer) return const [];
                 answeredQuestions = true;
                 phase(progress());
@@ -247,13 +254,17 @@ final class LinkConnector {
       );
       return LinkConnected(link, keyboardInteractive: answeredQuestions);
     } on Exception catch (error) {
-      return _classify(error, refused);
+      return _classify(error, refused, cancelledQuestions: cancelledQuestions);
     } finally {
       attempt.end();
     }
   }
 
-  static LinkConnectResult _classify(Exception error, HostKeyVerdict? refused) {
+  static LinkConnectResult _classify(
+    Exception error,
+    HostKeyVerdict? refused, {
+    required bool cancelledQuestions,
+  }) {
     switch (refused) {
       case HostKeyVerdict.changed:
         return LinkConnectBlocked(LinkBlockedReason.hostKeyChanged, error);
@@ -264,6 +275,14 @@ final class LinkConnector {
         );
       case HostKeyVerdict.trusted || null:
         break;
+    }
+
+    // The user's refusal, as a declined host key is.
+    if (cancelledQuestions) {
+      return LinkConnectFailed(
+        error,
+        failure: LinkFailureKind.keyboardInteractiveCancelled,
+      );
     }
 
     // seance_core says which step failed; its English summary is never
