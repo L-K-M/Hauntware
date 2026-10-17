@@ -206,6 +206,14 @@ void main() {
       );
     });
 
+    test('leaves out keys that follow the host, not the API', () {
+      // Docker 25's /info on a cgroup v1 host and on a cgroup v2 host.
+      final v1 = {'KernelMemory': true, 'KernelMemoryTCP': true, 'Name': 'h'};
+      final v2 = {'Name': 'h'};
+      expect(jsonKeyPaths(v1), {'Name'});
+      expect(jsonKeyPaths(v1), jsonKeyPaths(v2));
+    });
+
     test('stops below free-form maps and collapses id keys', () {
       final id = 'a' * 64;
       expect(

@@ -325,18 +325,27 @@ const Set<String> opaqueKeys = {
   'pids_stats',
 };
 
+/// Keys a daemon sends or omits by the host it runs on rather than by
+/// the API: Docker 25's `/info` reports `KernelMemory` and
+/// `KernelMemoryTCP` on a cgroup v1 host and leaves them out on cgroup
+/// v2 (the CI runners). The check leaves them and their children out on
+/// both sides.
+const Set<String> hostDependentKeys = {'KernelMemory', 'KernelMemoryTCP'};
+
 /// A key that is an object id, such as the container ids keying a
 /// Podman network's `Containers`; it changes with every run.
 final RegExp _idKey = RegExp(r'^[0-9a-f]{64}$');
 
 /// Every key path in [value]: `a.b` for nested objects, `a[]` for the
 /// elements of a list (all elements merged), `<id>` for a 64-digit hex
-/// id key, stopping below [opaqueKeys]. Values themselves never appear.
+/// id key, stopping below [opaqueKeys] and leaving out
+/// [hostDependentKeys]. Values themselves never appear.
 Set<String> jsonKeyPaths(Object? value) {
   final paths = <String>{};
   void walk(Object? node, String prefix) {
     if (node is Map) {
       for (final MapEntry(:key, value: child) in node.entries) {
+        if (hostDependentKeys.contains(key)) continue;
         final name = _idKey.hasMatch('$key') ? '<id>' : '$key';
         final path = prefix.isEmpty ? name : '$prefix.$name';
         paths.add(path);
