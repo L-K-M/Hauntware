@@ -1090,6 +1090,10 @@ class _SessionViewState extends State<_SessionView> {
   // Our own controller so the copy/paste menu can read (and set) the selection.
   final TerminalController _terminalController = TerminalController();
 
+  // Copy/Paste/Select all over a touch selection. Touch has no secondary
+  // click, so without it a long-press selection could not be copied.
+  final ContextMenuController _selectionToolbar = ContextMenuController();
+
   // Find in scrollback: the view's key and scroll position let a search
   // reveal a hit; the session exists only while the find bar is open.
   final GlobalKey<TerminalViewState> _viewKey = GlobalKey();
@@ -1106,6 +1110,8 @@ class _SessionViewState extends State<_SessionView> {
     // to the terminal when a terminal (not a text field) is focused.
     widget.tab.controller = _terminalController;
     _focus.addListener(_reportTerminalFocus);
+    _focus.addListener(_hideSelectionToolbarOnBlur);
+    _terminalController.addListener(_hideSelectionToolbarWithoutSelection);
     _wasConnected = widget.tab.status == TerminalStatus.connected;
     if (_wasConnected && widget.isActive) _requestTerminalFocus();
   }
@@ -1145,6 +1151,8 @@ class _SessionViewState extends State<_SessionView> {
   @override
   void dispose() {
     _focus.removeListener(_reportTerminalFocus);
+    _focus.removeListener(_hideSelectionToolbarOnBlur);
+    _selectionToolbar.remove();
     if (identical(widget.tab.controller, _terminalController)) {
       widget.tab.controller = null;
     }
@@ -1238,8 +1246,59 @@ class _SessionViewState extends State<_SessionView> {
         shortcuts: const <ShortcutActivator, Intent>{},
         onSecondaryTapDown: (details, _) =>
             _showContextMenu(context, details.globalPosition),
+        onTouchSelectionEnd: _showSelectionToolbar,
         padding: const EdgeInsets.all(6),
       );
+
+  /// Shows the platform's selection toolbar over a touch selection, as
+  /// Android and iOS text does. Copy ends the selection, as it does there.
+  void _showSelectionToolbar() {
+    final anchors = _viewKey.currentState?.selectionToolbarAnchors;
+    if (anchors == null) return;
+
+    _selectionToolbar.show(
+      context: context,
+      contextMenuBuilder: (context) => AdaptiveTextSelectionToolbar.buttonItems(
+        anchors: anchors,
+        buttonItems: [
+          ContextMenuButtonItem(
+            type: ContextMenuButtonType.copy,
+            onPressed: () {
+              terminalCopy(widget.tab);
+              _terminalController.clearSelection();
+            },
+          ),
+          ContextMenuButtonItem(
+            type: ContextMenuButtonType.paste,
+            onPressed: () {
+              _selectionToolbar.remove();
+              unawaited(terminalPaste(widget.tab));
+            },
+          ),
+          ContextMenuButtonItem(
+            type: ContextMenuButtonType.selectAll,
+            onPressed: () {
+              terminalSelectAll(widget.tab);
+              _showSelectionToolbar();
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// A tap that clears the selection takes its toolbar with it.
+  void _hideSelectionToolbarWithoutSelection() {
+    if (_terminalController.selection != null) return;
+    _selectionToolbar.remove();
+  }
+
+  /// The toolbar lives in the root overlay, so it would float over another
+  /// tab or a route pushed over the terminal; focus leaves for both.
+  void _hideSelectionToolbarOnBlur() {
+    if (_focus.hasFocus) return;
+    _selectionToolbar.remove();
+  }
 
   /// Opens the find bar, or focuses it when it is already open. A one-line
   /// selection becomes the query; otherwise the last query comes back.

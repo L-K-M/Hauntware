@@ -25,6 +25,7 @@ class TerminalGestureHandler extends StatefulWidget {
     this.onSecondaryTapUp,
     this.onTertiaryTapDown,
     this.onTertiaryTapUp,
+    this.onLongPressEnd,
     this.readOnly = false,
   });
 
@@ -49,6 +50,10 @@ class TerminalGestureHandler extends StatefulWidget {
   final GestureTapDownCallback? onTertiaryTapDown;
 
   final GestureTapUpCallback? onTertiaryTapUp;
+
+  /// [seance fork] A touch long-press (with or without a drag) has finished
+  /// selecting.
+  final GestureLongPressEndCallback? onLongPressEnd;
 
   final bool readOnly;
 
@@ -126,7 +131,7 @@ class _TerminalGestureHandlerState extends State<TerminalGestureHandler> {
       onLongPressStart: onLongPressStart,
       onLongPressMoveUpdate: onLongPressMoveUpdate,
       onLongPressUp: onLongPressUp,
-      onLongPressEnd: (_) => _endSelectionGesture(),
+      onLongPressEnd: onLongPressEnd,
       onLongPressCancel: _endSelectionGesture,
       onDragStart: onDragStart,
       onDragUpdate: onDragUpdate,
@@ -276,6 +281,11 @@ class _TerminalGestureHandlerState extends State<TerminalGestureHandler> {
 
   void onLongPressUp() {
     _endSelectionGesture();
+  }
+
+  void onLongPressEnd(LongPressEndDetails details) {
+    _endSelectionGesture();
+    widget.onLongPressEnd?.call(details);
   }
 
   /// [seance fork] The drag's granularity follows the press it grew out of:
