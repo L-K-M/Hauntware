@@ -1,5 +1,5 @@
 // The engine's host-key pins against the sshd fixture (03 §4.6, §11.3;
-// D60): a pin outlives the engine in host_keys.json, a host that gets new
+// D61): a pin outlives the engine in host_keys.json, a host that gets new
 // keys stays blocked after a restart, and the user's next Connect reviews
 // the changed key, whose re-pin the next engine keeps. run.sh starts the
 // fixture and runs this after or before the engine suite, one file at a

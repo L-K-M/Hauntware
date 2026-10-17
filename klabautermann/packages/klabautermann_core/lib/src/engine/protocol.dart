@@ -72,6 +72,12 @@ import 'package:meta/meta.dart';
 /// [LogStreamRunning] then gained [LogContinuity], whether a follow that
 /// ran again may lack records (03 §7.6), within v3 the same way.
 ///
+/// [LinkFailureKind] then gained `keyPassphraseRequired` and
+/// `keyFileHiddenBySandbox` (03 §10.1), within v3 the same way.
+///
+/// [RefreshSubscription] then joined, reading a subscription's streams at
+/// once for the phones' pull to refresh (PLT-02), within v3 the same way.
+///
 /// [KeyboardInteractivePromptRequest] then gained `user`, the account it
 /// signs in as, [PromptCancelAnswer] joined to decline its questions, and
 /// [LinkFailureKind] gained `keyboardInteractiveCancelled` for the attempt
@@ -80,7 +86,7 @@ import 'package:meta/meta.dart';
 /// [HostKeyPromptRequest] then gained `pinnedFingerprintSha256` and
 /// `pinnedKeyType` for the re-pin review of a changed key, and
 /// [ConnectRejected] joined to say why a [Connect] to a fleet server
-/// cannot start (03 §4.6, §10.1, D60), within v3 the same way.
+/// cannot start (03 §4.6, §10.1, D61), within v3 the same way.
 const int kEngineProtocolVersion = 3;
 
 /// Every message the UI isolate sends the engine (03 §10.1, D18). Plain data
@@ -155,7 +161,7 @@ final class SetMonitorSet extends EngineRequest {
 /// Opens the SSH link to one server (03 §10.1). The app sends it when the
 /// user opens the server, so the connect may prompt; to a server blocked
 /// by [LinkBlockedReason.hostKeyChanged] it reviews the changed key
-/// (D60). A fleet server the engine cannot dial gets [ConnectRejected].
+/// (D61). A fleet server the engine cannot dial gets [ConnectRejected].
 final class Connect extends EngineRequest {
   const Connect(this.serverId);
 
@@ -213,6 +219,28 @@ final class Subscribe extends EngineRequest {
 /// The engine stops a stream once no subscription for the server names it.
 final class Unsubscribe extends EngineRequest {
   const Unsubscribe({required this.serverId, required this.subscriptionId});
+
+  final String serverId;
+  final String subscriptionId;
+}
+
+/// Reads the streams of the subscription [Subscribe] made with the same
+/// ids at once rather than at their next 03 §6.4 tick, as a pull to
+/// refresh asks (PLT-02). While the server samples, each stream is read
+/// once more as soon as its sampler is free, a busy, restarting or
+/// probing sampler holding the reading rather than losing it, and a
+/// stream that rides on another's collector (`overview` on `core`,
+/// `failedUnits` on `units`) is read through that collector. `identity`,
+/// otherwise read once per link, is read again too. While the server is
+/// [SamplingPhase.waitingForLink] or [SamplingPhase.pausedInBackground],
+/// nothing is read now, and sampling resumes with every stream the
+/// subscription names. No event answers it but the readings, and a
+/// subscription the engine does not hold changes nothing.
+final class RefreshSubscription extends EngineRequest {
+  const RefreshSubscription({
+    required this.serverId,
+    required this.subscriptionId,
+  });
 
   final String serverId;
   final String subscriptionId;
@@ -416,7 +444,7 @@ final class LinkState extends EngineEvent {
 }
 
 /// A [Connect] to the fleet server [serverId] could not start, because the
-/// engine has no config to dial it with (03 §10.1, D60). Nothing about
+/// engine has no config to dial it with (03 §10.1, D61). Nothing about
 /// the server's link changes; a later [CatalogReplaced] may give it one.
 /// A [Connect] for an id outside the fleet still gets [RequestRejected].
 final class ConnectRejected extends EngineEvent {
@@ -1343,7 +1371,7 @@ sealed class PromptRequest {
 /// (03 §4.6). A key that differs from the pinned one blocks the link with
 /// [LinkBlockedReason.hostKeyChanged]; only the user's next [Connect] to
 /// the blocked server asks about it, with the pinned key in
-/// [pinnedFingerprintSha256] and [pinnedKeyType] (D60). Trusting it
+/// [pinnedFingerprintSha256] and [pinnedKeyType] (D61). Trusting it
 /// replaces the pin. An unattended connect never asks.
 final class HostKeyPromptRequest extends PromptRequest {
   const HostKeyPromptRequest({
@@ -1642,7 +1670,7 @@ enum LinkClosedReason {
   connectFailed,
 }
 
-/// What the engine found behind a [LinkClosed]. The first six are the
+/// What the engine found behind a [LinkClosed]. The first eight are the
 /// connect failures protocol version 3 classifies (03 §10.1); the last
 /// three are 03 §5.3's client limitations.
 enum LinkFailureKind {
@@ -1655,9 +1683,21 @@ enum LinkFailureKind {
   /// The server refused every credential offered.
   authenticationRejected,
 
-  /// No credential could be offered: no agent answered, or a key file
-  /// could not be read.
+  /// No credential could be offered: the ssh-agent holds no keys, a key
+  /// file could not be read or holds no key the client can use, or a
+  /// stored secret is not on this device.
   credentialUnavailable,
+
+  /// The private key is encrypted and the engine has no passphrase that
+  /// opens it: none was given, or the one given was wrong. Nothing reached
+  /// the server. No prompt asks for one yet, so only an agent holding the
+  /// key gets past it.
+  keyPassphraseRequired,
+
+  /// Inside the Flatpak sandbox, a key file could not be found: the
+  /// sandbox shows only the paths its manifest grants, so a key outside
+  /// them reads as missing whether or not it exists (03 §4.5).
+  keyFileHiddenBySandbox,
 
   /// The user, or the background rule, declined a first-seen host key.
   hostKeyDeclined,

@@ -245,7 +245,8 @@ D47 sampler deadlines · D48 host-side filtering · D49 collector locale ·
 D50 LXC values · D51 Access tab · D52 runtime placement · D53 integration
 placement · D54 runtime override in M3 · D55 no health overlay in the MVP
 · D56 log search through `planchette_core` · D57 timer triggers · D58
-cron zone rules · D59 capability cache · D60 host-key pins and re-pin.
+cron zone rules · D59 capability cache · D60 threshold announcements ·
+D61 host-key pins and re-pin.
 Proposals awaiting the owner close the section; they are not decisions.
 
 ### Shape and scope
@@ -930,7 +931,7 @@ Proposals awaiting the owner close the section; they are not decisions.
   with the cached profile (a stale container answer would withhold or
   show the wrong figures, D50, until the probe); sending cached profiles
   with the startup fleet.
-- **D60. Host-key pins persist, and the user's connect re-pins a changed
+- **D61. Host-key pins persist, and the user's connect re-pins a changed
   key.** The engine keeps one host-key store for its lifetime:
   `seance_core`'s `FileHostKeyStore` over `host_keys.json` in the support
   directory (4.10) when `EngineStart.supportDirectoryAccess` says the
@@ -1250,6 +1251,23 @@ Proposals awaiting the owner close the section; they are not decisions.
   viewer (10.8). *Rejected:* a search of the app's own (a second copy of
   the same rules); `planchette_editor`'s find (an editor for one text
   buffer, 10.8).
+- **D60. Threshold-band announcements are a device setting.** A11Y-15's
+  switch is `klabautermann.accessibility.announceThresholdBands` in
+  `settings.json` (4.10), on by default and never synced, since whether
+  a screen reader runs differs per device; it sits on Settings' General
+  tab, which the Overview's health card links to. While a server's
+  Overview shows and the switch is on, the screen reader hears CPU busy,
+  used memory and each listed mount's space and inode use cross into or
+  out of the warning or critical band: the fleet rows' 80 % and 90 %
+  until OV-11, since `threshold.dart` holds the rule model and no levels.
+  A change is heard once it has held for 10 s, through that model's
+  hysteresis rules with the hold as `for` on both sides, and only with a
+  value inside the new band, since each level's rule settles on its own.
+  The value is judged as the whole percent the announcement speaks, so
+  79.6 % is never "80%: back to normal"; the first reading only sets
+  where a value starts. *Rejected:* a synced preference (one device's
+  screen reader would switch another's); a clear level below each level
+  as the debounce (a threshold OV-11 has not set).
 
 ### Proposals awaiting the owner
 
@@ -1440,16 +1458,17 @@ The barrel's `klabautermann_host` export shows only the plain-data types
 that sampling results and `HostProfileChanged` carry (10.1),
 `JournalEntry` (the log viewer's journal rows, 10.8), and the access
 check over a `HostProfile` (`evaluateAccess` and its `AccessReport`,
-whose journal row drives the Logs panel's LOG-04 notice, 10.8). The
-Jobs tab (7.7) adds the jobs rows and schedule descriptions a
-`CronResult` carries, `TimerJobEntry`, which the app builds from a
-`TimersResult`'s timers, and the engine limits and names its words
-follow. The barrel's `klabautermann_docker` export shows only
-`MaskedValue`, the masked process arguments a `ProcsResult` carries
-(8.9). Each list changes only as a milestone wires a type in or retires
-one. The app's tests alone also depend on `klabautermann_host`, to
-build jobs rows with the engine's `mergeJobs`, since those rows have no
-public constructor; `depend_on_referenced_packages` keeps `lib/` from
+whose journal row drives the Logs panel's LOG-04 notice, 10.8), and the
+threshold rule model whose evaluator debounces the Overview's band
+announcements (7.19, D60). The Jobs tab (7.7) adds the jobs rows and
+schedule descriptions a `CronResult` carries, `TimerJobEntry`, which
+the app builds from a `TimersResult`'s timers, and the engine limits
+and names its words follow. The barrel's `klabautermann_docker` export
+shows only `MaskedValue`, the masked process arguments a `ProcsResult`
+carries (8.9). Each list changes only as a milestone wires a type in or
+retires one. The app's tests alone also depend on `klabautermann_host`,
+to build jobs rows with the engine's `mergeJobs`, since those rows have
+no public constructor; `depend_on_referenced_packages` keeps `lib/` from
 importing that dev dependency. No `ghost_*` package
 depends on `seance_core`; `klabautermann_core` is a product package, and
 the curated lines above are its only
@@ -1813,7 +1832,7 @@ re-push (c1 §2.4).
   never auto-repins, with the pin locator `ServerConfig.host` verbatim plus
   port so pins match across apps.
 - Pins persist in `host_keys.json` (4.10) through the engine's one
-  `FileHostKeyStore` (D60). A changed key blocks the server, and
+  `FileHostKeyStore` (D61). A changed key blocks the server, and
   background connects never ask about it (4.5). Only the user's next
   connect to the blocked server asks, showing the pinned key beside the
   new one, and trusting it re-pins (`TofuVerifier.pin`).
@@ -1940,10 +1959,10 @@ platform identities in 04, section 12.3):
 |---|---|---|---|
 | `servers.json`, `sync_records.json` | Catalog mirror and materialized list | catalog library | MVP |
 | `vault.json`, `vault.json.rekey` | Credentials and re-key journal | `SC/src/store/` | MVP |
-| `host_keys.json`, verdict and tripwire files | Pins and quarantine state. From M2 the engine pins through the catalog library's `FileHostKeyStore`, one instance per engine, and writes `host_keys.json` only while the process holds the directory alone; otherwise it reads the file once and keeps pins in memory (D60) | catalog library | MVP |
+| `host_keys.json`, verdict and tripwire files | Pins and quarantine state. From M2 the engine pins through the catalog library's `FileHostKeyStore`, one instance per engine, and writes `host_keys.json` only while the process holds the directory alone; otherwise it reads the file once and keeps pins in memory (D61) | catalog library | MVP |
 | `endpoint_pins.json` | Confirmed endpoints | catalog library | MVP |
 | `ssh_config_imports.json` [E] | D13's device-local store for FL-02 imports from `~/.ssh/config`, replaced whole by each import; never pushed (D14). Schema 3 (M2) holds each host's alias, host, port, user, `IdentityFile` and `ProxyJump` with the values ssh would use (10.1): the effective host (`%h` expanded, lowercased unless an address) and port, the first `IdentityFile` that is not `none`, and the `ProxyJump` as written; under `hops` it holds the same for each other name a stored route gives. An older file holds addresses only: schema 1 (M1) kept no `IdentityFile` or `ProxyJump` and kept `HostName` as written, `%h` included, and schema 2 read each host's values from its first block alone. Its hosts are listed as stored, with no `jumpRoute`, `authKind` or `locatorConflict`, and get no connect config until the next import rewrites the file. Built in M1: the engine isolate loads it at start and saves each import atomically before it answers (10.1). A damaged file is renamed to `ssh_config_imports.json.corrupt-<UTC time>`; a file it cannot read or rename, or one from a newer schema, is left as it is and no import is saved that run | `klabautermann_core` [E] | MVP |
-| `settings.json` | Device settings, `klabautermann.sync.deviceId` (minted once, never regenerated), whether the first-run coverage card was dismissed (`klabautermann.coverage.firstRunCardDismissed`, M2, 9.5; anything but `true` shows the card again), monitor set, per-server device preferences | app | MVP |
+| `settings.json` | Device settings, `klabautermann.sync.deviceId` (minted once, never regenerated), whether the first-run coverage card was dismissed (`klabautermann.coverage.firstRunCardDismissed`, M2, 9.5; anything but `true` shows the card again), whether threshold-band changes are announced (`klabautermann.accessibility.announceThresholdBands`, M2, D60; anything but `false` announces), monitor set, per-server device preferences | app | MVP |
 | `window_state.json` | The desktop main window's last normal frame and its maximized and full-screen flags (10.2), in the shape Séance's file established (`x`, `y`, `width`, `height`, `isMaximized`, `isFullScreen`; physical pixels on Windows); never synced. Added in M1, a deviation from the plan, which listed no window file: kept out of `settings.json`, as Séance and Planchette keep theirs, so debounced drag saves never rewrite the file that holds the device id | app | MVP |
 | `instance.lock` [E] | Empty. One desktop instance per support directory (built in M2): the composition root takes an exclusive, non-blocking advisory lock on it after the settings window's branch and before `settings.json` and `window_state.json` open and the engine isolate starts, so one process mints the device id and writes these files, and holds it for the life of the process; the file is never deleted. A second instance opens no other file and only says it is already running, until the user quits it. A lock that fails for another reason (no write access, no lock support) lets the app run unguarded and says so at startup. Phones run one process per app and take none | app, through `klabautermann_core`'s `InstanceLock` | MVP |
 | `identity_reads.jsonl` [E] | Audit trail of identity-file reads (M2): one JSON line per attempt to read a server's or jump hop's `IdentityFile`, read or not (UTC time, server id and label, the expanded path, the error), through `seance_core`'s `IdentityAuditLog`, under the name Séance and Poltergeist use. Owner-only on Linux and macOS, also through rotation, which keeps the newest 500 lines once the file passes 1,000; never synced. Recording is best effort and never fails a connect. Added in M2, a deviation from the plan, which listed no such file | `klabautermann_core` | MVP |
@@ -2030,7 +2049,7 @@ abstract interface class RemoteProcess {
   unattended (4.5). A changed host key blocks the server, also across
   engine restarts since pins persist (4.10), and nothing unattended
   dials it; the user's next connect reviews the key and re-pins it if
-  the user trusts it (4.6, D60).
+  the user trusts it (4.6, D61).
 - **Attempts.** `SshLink.connect` shows no state before it returns, so
   the supervisor reports `connecting` while an attempt queues and dials,
   `authenticating` once the server's own host key has passed (each jump
@@ -2808,7 +2827,8 @@ no longer holds that value.
   read does until lines arrive: waiting for an answer, the link, a
   channel or the foreground, reading, no lines, or the end's reason with
   the host's error text. A read still running when its tab hides stops
-  and starts over once shown. The read opens through the controller's
+  and starts over once shown. On a phone the page opens the lines in a
+  bottom sheet instead, which reads them while it is open (10.5). The read opens through the controller's
   one owner of log streams, which the Logs panel shares and which gives
   each rejection of `OpenLogStream` to the oldest open without an answer
   (10.1). While links are off, as the composition root leaves them
@@ -3056,8 +3076,8 @@ each row's source and the user its line names:
   `crontab` command, and an empty list names only the sources read,
   never other users' crontabs (JOB-03). Where the
   probe finds systemd not running, the tab says the server has no timers
-  instead of a failed timers reading. The phone reaches the tab once
-  More lists it (10.5).
+  instead of a failed timers reading. The phone reaches the tab
+  through More (10.5).
 
 ### 7.8 Packages and updates (PKG)
 
@@ -4381,8 +4401,8 @@ shows there.
 | `EnrollSync`, `RunSyncRound` | `CatalogReplaced(entries)`, `SyncStatus` |
 | `ImportSshConfig(text)` (FL-02, desktop) | `CatalogReplaced(entries)` with the imports, then `SshConfigImported(importedCount, skippedCount, saved)` |
 | `ConfirmEndpoints(ids)`, `SetMonitorSet(ids)` | `EndpointChanged(serverId)` |
-| `Connect(serverId)`, `Disconnect(serverId)` | `LinkState(serverId, status)` (D46's states plus `blocked`; typed reasons inside the status), `ConnectRejected(serverId, reason)` (no config to dial with, D60) |
-| `Subscribe(serverId, subscriptionId, streams)`, `Unsubscribe(serverId, subscriptionId)`, `SetCadenceProfile(profile)`; app activity is a separate request too (D45) | `Sample(serverId, stream, seq, at, result)` (engine-owned `seq`, D44; rates and derived values, D43), `SamplingState(serverId, phase, since)`, `Gap(serverId, streams, from, until, cause)` |
+| `Connect(serverId)`, `Disconnect(serverId)` | `LinkState(serverId, status)` (D46's states plus `blocked`; typed reasons inside the status), `ConnectRejected(serverId, reason)` (no config to dial with, D61) |
+| `Subscribe(serverId, subscriptionId, streams)`, `Unsubscribe(serverId, subscriptionId)`, `RefreshSubscription(serverId, subscriptionId)` (a phone's pull to refresh, PLT-02), `SetCadenceProfile(profile)`; app activity is a separate request too (D45) | `Sample(serverId, stream, seq, at, result)` (engine-owned `seq`, D44; rates and derived values, D43), `SamplingState(serverId, phase, since)`, `Gap(serverId, streams, from, until, cause)` |
 | none: the engine probes after connecting (6.1) | `HostProfileChanged(serverId, profile, cachedAt)` (`cachedAt` only on the device cache's copy, D59) |
 | `OpenLogStream(streamId, spec)`, `CloseStream(streamId)` | `LogBatch(streamId, records, dropped)` (at most 20 per second per stream [E]), `LogStreamState(streamId, status)` |
 | `DockerQuery(serverId, query)` | `DockerResult`, `DockerEvent` |
@@ -4411,7 +4431,7 @@ the engine in `engine_isolate.dart` beside it):
   `IsolateEngineClient.spawn(supportDirectory:)`, its support directory,
   where the engine keeps its own files (4.10), and from M2
   `supportDirectoryAccess`, whether the process holds it alone (D59,
-  D60).
+  D61).
   `EngineReady` carries
   `importStoreIssue`, what was wrong with `ssh_config_imports.json` at
   start, or none, and the engine follows it at once with a
@@ -4692,7 +4712,17 @@ the engine in `engine_isolate.dart` beside it):
   repeat included, so a surface refreshes it by resending. While the
   server is `waitingForLink` or `pausedInBackground`, that reading waits
   until the link is ready and the app is in the foreground, and resends
-  in the meantime add no further reading. The engine
+  in the meantime add no further reading. `RefreshSubscription` (K40)
+  reads one subscription's streams at once in any column, for a phone's
+  pull to refresh (PLT-02): each is read once more as soon as its
+  sampler is free, a busy, restarting or probing sampler holding the
+  reading as it holds a first one rather than losing it, a stream that
+  rides on another's collector through that collector, and `identity`,
+  otherwise read once per link, too. While the server waits for its
+  link or the foreground nothing is read, and sampling resumes with
+  every stream the subscription names. No event answers it but the
+  readings; with links off, or for a subscription the engine does not
+  hold, it reads nothing. The engine
   sends one `Sample` per subscribed stream and reading: `seq` counts per
   server across its streams (D44), `at` is the engine's own clock in UTC,
   since a host's clock may be off, and `result` is a sealed value per
@@ -4799,6 +4829,27 @@ the engine in `engine_isolate.dart` beside it):
   must therefore do, and if nothing else in the app sends
   `OpenLogStream`: a second sender with its own queue would take each
   rejection as its own as well.
+- **Version 3 (M2 failure kinds).** Two failure kinds joined version 3
+  the same way. `keyPassphraseRequired` names an encrypted private key,
+  the server's or a jump host's, that no passphrase the engine holds
+  opens, whether none was given or a wrong one; nothing reached the
+  server. `keyFileHiddenBySandbox` names a key file that reads as
+  missing inside the Flatpak sandbox (4.5). The connector reads
+  `seance_core`'s typed `SshConnectException.kind`, never its English
+  summary: unreachable and timed out keep their names, a missing or
+  wrong passphrase is `keyPassphraseRequired` (one remedy, so one kind),
+  a key the client cannot read and an agent with no keys are credentials
+  unavailable, and a refused sign-in is credentials rejected. A route
+  the engine cannot follow and a host-key refusal without a declined
+  prompt (a key-exchange signature that did not verify) stay
+  unclassified; `other` falls back to the error behind it, so a jump
+  hop's key file keeps its kind. 5.3's three client limitations wait
+  for `seance_core` to type them. No prompt asks for a passphrase until
+  the owner decides (2, "Encrypted keys and agent order"), so the
+  supervisor does not hand such a failure to the user's request, and
+  the app's copy for both kinds says to load the key into ssh-agent and
+  drop the `IdentityFile` line that names it, since an import that
+  names a key file offers only that file.
 - **Version 3 (M2 prompts).** The app's prompts joined version 3 the same
   way. `KeyboardInteractivePromptRequest` gained `user`, the account the
   asking machine signs in as (the challenge's `server.username`), so the
@@ -4832,7 +4883,7 @@ the engine in `engine_isolate.dart` beside it):
   the expiry. With links off, as in the app until K44, no prompt
   arrives.
 - **Version 3 (M2 pins).** Persistent pins and the re-pin joined version
-  3 the same way (D60). `HostKeyPromptRequest` gained
+  3 the same way (D61). `HostKeyPromptRequest` gained
   `pinnedFingerprintSha256` and `pinnedKeyType`, set only when the
   presented key differs from the pinned one, which only the user's
   `Connect` to a server blocked by `hostKeyChanged` asks about. The app
@@ -4986,8 +5037,10 @@ The bar and age show only where the row still fits the name and state
 word in full and the age fits beside it, each measured as drawn at the
 current text scale; elsewhere they give way, staying in the tooltip and
 the label. The warning always shows, and a touch on it shows its
-words. A collapsed or filtered section that hides a live server does
-not yet say so in its header (`ghostHiddenLiveIndicator`).
+words. A closed link's failure kind takes a sentence, as under the
+server header (10.4), which only the tooltip and the label carry. A
+collapsed or filtered section that hides a live server does not yet
+say so in its header (`ghostHiddenLiveIndicator`).
 The filter (FL-05) is the kit's `SidebarFilterField`
 over `FleetEntry.searchText`, name and address standing in without it:
 every term must occur, Enter opens the first match and Esc clears.
@@ -5011,8 +5064,7 @@ tab:
   its values read "unknown". A hidden tab is not built, so it samples
   nothing; it names what is missing and links to the Access tab, which
   the desktop strip selects, moving keyboard focus into it, and a phone
-  pushes. The phone's More destination does not list Access yet, so
-  there the link is the way in.
+  pushes. The phone's More destination lists it too (10.5).
 - Each row shows its state as an icon and a word, its reason, SAF-08's
   badge on a root-equivalent right, and its fix as one line: the
   elevation prefix, then each word, quoted (8.8) only where a shell
@@ -5052,10 +5104,13 @@ and DSK-01's and DSK-02's mounts in the sortable table, in IEC units:
 
 As built in M2 (`app/klabautermann_app/lib/ui/server_header.dart`), the
 server header shows the name (the phone's app bar carries it instead),
-the link state, the coverage chip, the detected runtime and a slot for
-client-limitation messages, which stays empty until 5.3's rows are
-worded (K45); the transport label, privilege badges, admin mode and
-the read-only and low-session indicators come with their subsystems.
+the link state, the coverage chip, the detected runtime and, under
+them, why a closed link failed when the engine classified it: each
+failure kind of 10.1 in a sentence that says what to do, 5.3's client
+limitations in their own words, and PLT-04's background line on an iOS
+or Android phone's screen (10.5). The transport label, privilege
+badges, admin mode and the read-only and low-session indicators come
+with their subsystems.
 The state resolves through `ghost_servers`' indicator under the rail
 rule, as the server's row does, as a dot, an icon and a word, with
 the link's own word where the indicator shows none; the kit keeps its
@@ -5075,7 +5130,7 @@ As built in M2 for OV-01, OV-03 and OV-04
 (`app/klabautermann_app/lib/ui/overview_panel.dart`), the Overview tab
 shows CPU, load, memory and swap cards from the `core` stream's last
 reading, in two columns from the System tab's 600 px panel width:
-- One freshness line heads the cards in 9.5 item 4's words, stale at
+- One freshness line heads the panel in 9.5 item 4's words, stale at
   the fleet rows' 20 s `core` limit (10.3). Stale values, bars and
   sparkline lines turn grey beside its history icon. A failed reading
   says why above the last values rather than clearing them.
@@ -5104,6 +5159,34 @@ reading, in two columns from the System tab's 600 px panel width:
   the core count would be the host's.
 - No radial `Gauge` exists yet; the stacked bar is the gauge.
 
+As built in M2 for the rest of OV-01 and OV-02 (the same file), the
+health card follows the freshness line: the failed units through the
+Services tab's summary over the `failedUnits` stream, then every listed
+mount whose space or inode use reaches the fleet rows' 80 % or 90 %,
+critical and fullest first, each with an icon and its level in words
+(pseudo filesystems stay out: a squashfs image is always full). After
+the four cards, Disks lists the first eight mounts the System tab lists
+by default, each with a bar that warns at the same levels, its use,
+size and inodes, after a `df` timeout the last reading's mounts with
+their use unknown, and after another failure only why, as the System
+tab does; Network gives NET-01's total rates; Host gives the OS and
+kernel from `identity` and the uptime and boot time from `core`,
+unknown with D50's reason in a container, and waits for or says why it
+lacks an `identity` reading, as the System tab does; read once per
+session, the OS and kernel grey with the panel's line. The health and
+Disks cards give their own age, stale at the fleet rows' 240 s `fs`
+limit, which also judges `failedUnits` (60 s); the health card takes
+the oldest reading it shows, so after a failed `df`, when it names no
+mount, the listing's age drops out. The Overview's subscription already
+named every stream these read (network rates come with `core`), so
+K21's mapping is unchanged.
+`threshold.dart` holds the rule model and no levels, so the fleet rows'
+levels stand in until OV-11.
+The health card ends with a link to D60's switch, which reaches the
+Overview, and its announcer in `threshold_announcer.dart`, through an
+inherited scope above the navigator, as the macOS toolbar band does,
+since a phone pushes the server screen as a route of its own.
+
 As built in M2 (`app/klabautermann_app/lib/ui/processes_panel.dart`), the
 Processes tab lists PRC-01's processes from the `procs` stream it
 subscribes while it shows:
@@ -5129,7 +5212,7 @@ subscribes while it shows:
   freshness line (9.5 item 4) and the failure's reason; it turns grey
   once older than 20 s, twice the stream's slowest cadence. A cut list
   says "Showing N of M processes" (D48). The phone's server screen
-  reaches the tab once More lists the panels (10.5).
+  reaches the tab through More (10.5).
 
 ### 10.5 Phone (under 600 dp) and tablet
 
@@ -5141,6 +5224,58 @@ mutation (PLT-03). The first-run flow (4.3) is a sequence of full-screen
 steps with "confirm all shown". iOS and Android say plainly that sampling
 stops in the background (PLT-04) and show the return banner. Tablets use a
 two-pane layout (PLT-05, v1).
+
+As built in M2 (`app/klabautermann_app/lib/ui/server_detail_page.dart`,
+`phone_shell.dart`), the pushed screen's More destination lists
+Processes, Services, Jobs, System and Access in the desktop strip's
+order. Each opens full-screen under an app bar naming the panel and the
+server, in the layout the panel takes at that width, on a phone its
+narrow one (Processes' two-line entries, System's three columns, a
+unit's page in the list's place), with the return banner the screen
+under it shows. That screen holds the server
+open, and with More selected none of its destinations samples, so the
+pushed panel's subscription is the only one. Access is the page a
+hidden panel's link already pushed, and a panel the probe hides links
+there from its own page too.
+
+- Logs: the Logs destination stays the Logs panel, whose source and
+  filters already open sheets on phones (10.8); a log that a detail
+  opens is a sheet. In M2 that is SVC-04's lines: a unit's page on the
+  phone offers them behind a button and reads them in a modal bottom
+  sheet that opens at 60 % of the screen and drags from a quarter to
+  the full height, following this section over SVC-04's lines on the
+  page itself. The sheet opens its read as it opens, and closing it by
+  its button, a drag or Back closes a read still running. The desktop
+  keeps the lines on the page.
+- Pull to refresh: the Overview and every pushed panel that samples
+  pull to refresh. A pull sends `RefreshSubscription` for the surface's
+  own subscription (10.1), and the indicator waits until each of its
+  streams has a newer sample, failed readings included, until the
+  server stops sampling, or for 10 s [E]; with nothing sampling, as
+  while links are off (K44), it ends at once. It takes vertical scrolls
+  at any depth, so a panel's own list pulls from its top, and an
+  always-scrollable view of the panel's size pulls a panel whose content
+  fits. Logs and Access sample nothing and do not pull, and the desktop
+  has no pull. Screen readers and keyboards have no refresh action yet;
+  sampling goes on at its cadence meanwhile.
+- PLT-04: on iOS and Android the server header's limitation slot (10.4)
+  says "Reading stops while Klabautermann is in the background and
+  resumes when you return.", the coverage sheet's words, under every
+  destination. That is what the app does: it reports the background
+  (10.1), and the engine pauses every subscription, probe and log read
+  at once, closes the links after 30 s (D34) and resumes them all on
+  return. A desktop window narrow enough for this screen stays in the
+  foreground and does not say so, and a tablet in the desktop layout
+  has it in the inspector's coverage (9.5).
+- SYN-08 (task #50): a server that leaves the fleet, removed by a sync
+  or left out of a new import, closes its screen with everything the
+  screen opened (More's panels, the Access page, sheets and dialogs),
+  back to the fleet list, as the desktop workspace's selection clears.
+  The list then says "web-1 is no longer in your fleet, so its screen
+  closed." in a live region styled as the return banner, until the user
+  dismisses it or opens a server. The desktop shows no such notice yet.
+  Reads close as their sheets go, and the monitoring controller already
+  sends the server nothing (10.1).
 
 ### 10.6 Command palette and keyboard model (v1)
 
@@ -5353,6 +5488,9 @@ palette) and presets in the preview. v1: paste from Séance and Poltergeist
   threshold-band changes (values refreshing every 1 to 5 s are not live
   regions). v1: text scaling to 200 %, full keyboard reachability, log
   readability. v1.x: more languages, right-to-left layout.
+- Announcements (A11Y-15, M2): link changes from the fleet rows (10.3)
+  and threshold-band changes from the Overview (10.4, D60), where the
+  platform takes none (Android) as the label of a live region.
 - Tables (A11Y-03, M2): until F5e lifts it into `ghost_ui`, the app's
   `SortableTable` gives each row one node whose label is its cells as
   "column: value" and whose custom semantics actions are the row's
@@ -5470,6 +5608,34 @@ palette) and presets in the preview. v1: paste from Séance and Poltergeist
   `sender.conf`, reachable from the sshd host, so the helper's deposits
   and the app's fetch, acknowledgement and deletion run end to end.
 
+As built in M2 (K28a, `klabautermann/test/integration/runner_vm.sh`),
+`run.sh` runs the runner-VM leg after the fixture suites, only on a
+GitHub-hosted runner (`GITHUB_ACTIONS`, `RUNNER_ENVIRONMENT`); anywhere
+else it skips with a notice and changes nothing. It starts a second
+sshd on 127.0.0.1:2243 with its own config, host key and PID file in a
+root-owned temporary directory, keys only and PAM as the system sshd
+uses it, and creates two throwaway accounts whose login shell is
+`/bin/sh` (dash): `klab-vm`, outside `systemd-journal`, `adm` and
+`wheel` (LOG-04), and `klab-vm-journal`, in `systemd-journal`. As
+`klab-vm` it captures the host's collector fixtures into the evidence
+directory (`runner-vm/fixtures/ubuntu-2404-runner-dash/`); then it
+starts a transient system timer and runs
+`klabautermann_core/test/integration/runner_vm_test.dart` (tag
+`runner-vm`). The suite covers the units and timers lists on systemd's
+JSON path; the timer's next run against `systemd-analyze calendar` for
+the `OnCalendar` expression D57's `timer_detail` read gives; a journal
+follow resumed after its cursor across a reconnect forced by killing
+the connection's sshd processes while the listener is stopped, with no
+record lost, repeated or dropped and no gap reported, its journalctl
+running with `--no-pager`, `SYSTEMD_PAGER=` and no terminal; unit logs;
+the kernel log, from the journal for the `systemd-journal` account and
+from the `dmesg` fallback for the other, which `kernel.dmesg_restrict`
+refuses; LOG-04's silent truncation; and cursor paging. Teardown on
+every exit removes the accounts with their sessions, the sshd, the
+timer and the directories; the system sshd, its config and port 22 stay
+untouched. The accounts with sudo, `systemd-run`, linger, the elevation
+prelude and the detached runners remain for later legs.
+
 ### 11.4 Performance budgets (gated from M2)
 
 - Fast tick at most 2.5 KB, plus 30 B for each CPU beyond 32 (D48), and
@@ -5509,6 +5675,38 @@ palette) and presets in the preview. v1: paste from Séance and Poltergeist
   its software-rendered numbers are provisional evidence in
   `klabautermann/docs/evidence/s5/` and gate nothing, and the device
   figure above stays a manual sign-off.
+
+As built in M2 (K28b,
+`klabautermann_core/test/integration/soak_test.dart`, tag `soak`),
+`run.sh` runs the soak after the runner-VM leg, whatever the legs before
+it gave: `KLABAUTERMANN_SOAK_SECONDS` of window (600 on GitHub Actions,
+60 elsewhere) after a warm-up of a tenth of it (10 to 60 s), with the
+numbers in `$KLABAUTERMANN_EVIDENCE_DIR/soak/soak.json` (default
+`klabautermann/build/integration-evidence/soak/`); a soak that passes
+without that file skipped, and fails the run. Ten aliases of the
+fixture's sshd (`alias-0` to `alias-9`, one address and port) are ten
+fleet servers with ten links and twenty sampler shells, at the Phone
+cadence with `alias-0` open, as S5's `phone` scenario: `overview` every
+10 s on each, `core` every 3 s on the open one. A test-only meter wraps
+each link the engine dials, through `IsolateEngineClient.spawn`'s
+`entryPoint` and `engineMain`'s `dial`, and counts open channels and
+process-channel bytes, splitting a sampler's stdout into replies at
+each request line; no engine or `seance_core` API changes. It asserts
+every fast reply in the window against 2.5 KB plus 30 B per CPU beyond
+32 (the sampled host's `/proc/stat`), all channel output of the ten
+hosts against 1 KB/s, no growth (the median of the window's last third
+of 21 readings against its first: none in channels per link, two
+descriptors, 1 MiB of live heap after a full collection, 32 MiB of
+resident set, all provisional), ten links dialed once, no gap, link or
+sampling change, and each server's samples at its period. It records,
+without a budget, the engine process's CPU (`/proc/self/stat` of the
+`dart test` process, which also holds the test isolate and the JIT), the
+SSH payload per connection from `ss`'s `tcp_info` where iproute2 is
+installed, and the sampler shells' CPU per fast tick (utime, stime and
+waited-for children from `/proc/<pid>/stat` in the container) against
+the 5 ms above, which is set for the reference VM: the fixture's
+BusyBox ash in a container on a shared runner is not that VM, so the
+figure is evidence, as S2's was. The 24 h soak stays a manual sign-off.
 
 ### 11.5 Host write inventory test
 

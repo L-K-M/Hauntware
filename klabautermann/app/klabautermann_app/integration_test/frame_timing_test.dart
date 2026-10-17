@@ -18,6 +18,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:klabautermann_app/app.dart';
+import 'package:klabautermann_app/controllers/announcement_controller.dart';
 import 'package:klabautermann_app/controllers/appearance_controller.dart';
 import 'package:klabautermann_app/controllers/coverage_controller.dart';
 import 'package:klabautermann_app/controllers/fleet_controller.dart';
@@ -73,6 +74,7 @@ void main() {
     final prompts = PromptController(engine);
     final appearance = AppearanceController();
     final coverage = CoverageController(firstRunCardDismissed: true);
+    final announcements = AnnouncementController();
     final load = _Load(engine.events);
     addTearDown(() async {
       await load.cancel();
@@ -81,6 +83,7 @@ void main() {
       prompts.dispose();
       appearance.dispose();
       coverage.dispose();
+      announcements.dispose();
       await engine.shutdown();
     });
 
@@ -115,6 +118,7 @@ void main() {
         prompts: prompts,
         appearance: appearance,
         coverage: coverage,
+        announcements: announcements,
       ),
     );
     await _until(

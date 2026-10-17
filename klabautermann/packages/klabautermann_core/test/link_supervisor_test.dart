@@ -369,8 +369,11 @@ void main() {
     null,
     LinkFailureKind.authenticationRejected,
     LinkFailureKind.credentialUnavailable,
+    LinkFailureKind.keyPassphraseRequired,
+    LinkFailureKind.keyFileHiddenBySandbox,
     LinkFailureKind.hostKeyDeclined,
     LinkFailureKind.unsupportedAlgorithm,
+    LinkFailureKind.insecureAlgorithmsOnly,
     LinkFailureKind.keyExchangeTimedOut,
   ]) {
     test('${failure?.name ?? 'an unclassified failure'} waits for an '
@@ -390,7 +393,7 @@ void main() {
     });
   }
 
-  group('a changed host key (D60)', () {
+  group('a changed host key (D61)', () {
     const blocked = LinkBlocked(LinkBlockedReason.hostKeyChanged);
 
     setUp(() async {
@@ -810,6 +813,20 @@ void main() {
 
       expect(calls, hasLength(1));
       expect(statuses().last, _failed(LinkFailureKind.unsupportedAlgorithm));
+    });
+
+    // No prompt asks for a passphrase until K45b, so the user's attempt
+    // would fail the same way.
+    test('does not take over a key that needs a passphrase, and nothing '
+        'redials it', () async {
+      await askDuringDial();
+      calls.single.fail(LinkFailureKind.keyPassphraseRequired);
+      await clock.elapse(const Duration(minutes: 5));
+      supervisor.connect('s1', purpose: _background);
+      await clock.elapse(const Duration(minutes: 5));
+
+      expect(calls, hasLength(1));
+      expect(statuses().last, _failed(LinkFailureKind.keyPassphraseRequired));
     });
 
     test('ends when that dial is given up', () async {

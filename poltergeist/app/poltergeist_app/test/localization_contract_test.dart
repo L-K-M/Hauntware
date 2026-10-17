@@ -524,21 +524,6 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'Could not save $what to the OS keyring (${_describe(e)}). Unlock '",
     r"'the login keyring or install gnome-keyring, then try again.'",
   },
-  // Ported Séance vault/rekey-journal format (see docs/PORTS.md): the
-  // document keys, journal file suffix, and thrown diagnostics are the
-  // frozen on-disk format and reported faults, never rendered UI copy.
-  'lib/services/file_stores.dart': {
-    r"'${file.path}.rekey'",
-    "'version'",
-    "'snapshots'",
-    "'blobs'",
-    "'Expected a vault map.'",
-    "'Invalid vault map entry.'",
-    "'Invalid vault recovery journal.'",
-    "'Finish vault recovery before changing credentials.'",
-    "'A pending vault recovery must be completed first.'",
-    "'No matching snapshot.'",
-  },
   'lib/services/settings_store.dart': {
     "'settings root'",
     "'settings key'",

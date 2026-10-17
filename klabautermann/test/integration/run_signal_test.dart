@@ -1,5 +1,6 @@
-// How run.sh ends (03 §11.3, D53), checked without Docker: a copy of it
-// runs with stand-ins for Docker, OpenSSH and Dart.
+// How run.sh ends (03 §11.3, §11.4, D53), checked without Docker: a copy
+// of it runs with stand-ins for Docker, OpenSSH, Dart and the runner-VM
+// leg.
 @TestOn('linux')
 library;
 
@@ -13,12 +14,15 @@ import 'package:test/test.dart';
 /// a real fixture run on this machine.
 const _lockLine = "readonly lock_file='/tmp/klabautermann-fixture.lock'";
 
-/// Bodies of the stand-ins, which log to `$STUB_LOG`. The suites keep
-/// their PID in `$STUB_SUITES_PID` while they run, and exit with
-/// `$STUB_SUITES_EXIT` when it is set. Otherwise they stop as package:test
-/// does: a first SIGTERM lets the running test finish, here 30 s after the
-/// start, and a second one stops them at once. `compose down` takes
-/// `$STUB_DOWN_SECONDS` when it is set.
+/// Bodies of the stand-ins, which log to `$STUB_LOG`. `dart test` plays
+/// the suites, or with `--tags soak` the soak; either keeps its PID in
+/// `$STUB_SUITES_PID` while it runs. The suites exit with
+/// `$STUB_SUITES_EXIT` when it is set; the soak exits at once with
+/// `$STUB_SOAK_EXIT` (default 0), having written soak.json unless
+/// `$STUB_SOAK_NO_EVIDENCE` is set, or with `$STUB_SOAK_HOLD` set it runs.
+/// A run stops as package:test does: a first SIGTERM lets the running test
+/// finish, here 30 s after the start, and a second one stops it at once.
+/// `compose down` takes `$STUB_DOWN_SECONDS` when it is set.
 const _stubs = {
   'docker': r'''
 echo "docker $*" >>"$STUB_LOG"
@@ -40,21 +44,43 @@ if [[ "$1" == -s ]]; then echo 'SSH_AGENT_PID=0; export SSH_AGENT_PID;'; fi
   'ssh-add': '',
   'dart': r'''
 if [[ "$1" == run ]]; then cat >/dev/null; exit 0; fi
+run=suites
+exit_status="${STUB_SUITES_EXIT:-}"
+if [[ " $* " == *' --tags soak '* ]]; then
+  run=soak
+  echo "soak seconds $KLABAUTERMANN_SOAK_SECONDS dir $KLABAUTERMANN_SOAK_DIR" >>"$STUB_LOG"
+  exit_status=''
+  if [[ -z "${STUB_SOAK_HOLD:-}" ]]; then exit_status="${STUB_SOAK_EXIT:-0}"; fi
+fi
 echo "$$" >"$STUB_SUITES_PID"
 trap 'rm -f -- "$STUB_SUITES_PID"' EXIT
 signals=0
 on_term() {
   signals=$((signals + 1))
-  if ((signals == 1)); then echo 'suites draining' >>"$STUB_LOG"; return; fi
-  echo 'suites stopped' >>"$STUB_LOG"
+  if ((signals == 1)); then echo "$run draining" >>"$STUB_LOG"; return; fi
+  echo "$run stopped" >>"$STUB_LOG"
   exit 143
 }
 trap on_term TERM
-echo 'suites started' >>"$STUB_LOG"
-if [[ -n "${STUB_SUITES_EXIT:-}" ]]; then exit "$STUB_SUITES_EXIT"; fi
+echo "$run started" >>"$STUB_LOG"
+if [[ "$run" == soak && -z "${STUB_SOAK_NO_EVIDENCE:-}" ]]; then
+  echo '{}' >"$KLABAUTERMANN_SOAK_DIR/soak.json"
+fi
+if [[ -n "$exit_status" ]]; then exit "$exit_status"; fi
 for ((i = 0; i < 300; i++)); do sleep 0.1; done
 ''',
 };
+
+/// The runner-VM leg's stand-in, beside the copy of run.sh: it exits at
+/// once with `$STUB_RUNNER_VM_EXIT` (default 0), or with
+/// `$STUB_RUNNER_VM_HOLD` set runs until a SIGTERM, as runner_vm.sh does
+/// until its teardown.
+const _runnerVm = r'''
+echo 'runner-vm started' >>"$STUB_LOG"
+if [[ -z "${STUB_RUNNER_VM_HOLD:-}" ]]; then exit "${STUB_RUNNER_VM_EXIT:-0}"; fi
+trap 'echo "runner-vm stopped" >>"$STUB_LOG"; exit 143' TERM
+for ((i = 0; i < 300; i++)); do sleep 0.1; done
+''';
 
 void main() {
   late Directory sandbox;
@@ -99,16 +125,28 @@ void main() {
     for (final MapEntry(key: name, value: body) in _stubs.entries) {
       File('${bin.path}/$name').writeAsStringSync('#!/usr/bin/env bash\n$body');
     }
+    final runnerVm = File('${integration.path}/runner_vm.sh')
+      ..writeAsStringSync('#!/usr/bin/env bash\n$_runnerVm');
     final chmod = await Process.run('chmod', [
       '+x',
       for (final name in _stubs.keys) '${bin.path}/$name',
+      runnerVm.path,
     ]);
     expect(chmod.exitCode, 0, reason: '${chmod.stderr}');
   });
 
   /// Starts the copy, and completes once the suites have started.
   Future<({Process process, Future<int> exitCode, StringBuffer output})>
-  startRun({String? suitesExit, String? downSeconds}) async {
+  startRun({
+    String? suitesExit,
+    String? downSeconds,
+    String? runnerVmExit,
+    bool holdRunnerVm = false,
+    String? soakExit,
+    bool holdSoak = false,
+    bool soakEvidence = true,
+    Map<String, String> environment = const {},
+  }) async {
     final process = await Process.start(
       'bash',
       [run.path],
@@ -119,6 +157,12 @@ void main() {
         'STUB_SUITES_PID': suitesPid.path,
         'STUB_SUITES_EXIT': ?suitesExit,
         'STUB_DOWN_SECONDS': ?downSeconds,
+        'STUB_RUNNER_VM_EXIT': ?runnerVmExit,
+        if (holdRunnerVm) 'STUB_RUNNER_VM_HOLD': '1',
+        'STUB_SOAK_EXIT': ?soakExit,
+        if (holdSoak) 'STUB_SOAK_HOLD': '1',
+        if (!soakEvidence) 'STUB_SOAK_NO_EVIDENCE': '1',
+        ...environment,
       },
       includeParentEnvironment: false,
     );
@@ -221,7 +265,185 @@ void main() {
       3,
       reason: '$output',
     );
-    // Its expectations check that teardown ran after the suites.
-    fixtureLifetime();
+    // Its expectations check that teardown ran after the suites, and
+    // the runner-VM leg and the soak run whatever they gave.
+    expect(
+      fixtureLifetime(),
+      containsAllInOrder(['runner-vm started', 'soak started']),
+    );
+  });
+
+  test('run.sh exits with the runner-VM leg\'s status once the suites '
+      'pass', () async {
+    final (process: _, :exitCode, :output) = await startRun(
+      suitesExit: '0',
+      runnerVmExit: '4',
+    );
+
+    expect(
+      await exitCode.timeout(const Duration(seconds: 20)),
+      4,
+      reason: '$output',
+    );
+    expect(
+      fixtureLifetime(),
+      containsAllInOrder(['suites started', 'runner-vm started']),
+    );
+  });
+
+  test('a signal during the runner-VM leg stops it before the fixture '
+      'goes', () async {
+    final (:process, :exitCode, :output) = await startRun(
+      suitesExit: '0',
+      holdRunnerVm: true,
+    );
+    final deadline = DateTime.now().add(const Duration(seconds: 20));
+    while (!log.readAsLinesSync().contains('runner-vm started')) {
+      if (DateTime.now().isAfter(deadline)) {
+        fail('The runner-VM leg never started:\n$output');
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    }
+
+    process.kill();
+    final status = await exitCode.timeout(
+      const Duration(seconds: 15),
+      onTimeout: () {
+        process.kill(ProcessSignal.sigkill);
+        fail('run.sh did not exit:\n$output');
+      },
+    );
+    expect(status, isNot(0), reason: '$output');
+    expect(
+      fixtureLifetime(),
+      contains('runner-vm stopped'),
+      reason: 'run.sh did not stop the runner-VM leg before compose down',
+    );
+  });
+
+  test('run.sh exits with the soak\'s status once the legs before it '
+      'pass', () async {
+    final (process: _, :exitCode, :output) = await startRun(
+      suitesExit: '0',
+      soakExit: '5',
+    );
+
+    expect(
+      await exitCode.timeout(const Duration(seconds: 20)),
+      5,
+      reason: '$output',
+    );
+    expect(
+      fixtureLifetime(),
+      containsAllInOrder([
+        'suites started',
+        'runner-vm started',
+        'soak started',
+      ]),
+    );
+  });
+
+  test('run.sh passes when every leg passes and the soak left its '
+      'numbers', () async {
+    final (process: _, :exitCode, :output) = await startRun(suitesExit: '0');
+
+    expect(
+      await exitCode.timeout(const Duration(seconds: 20)),
+      0,
+      reason: '$output',
+    );
+    // Outside GitHub Actions the soak is a one-minute smoke run, and its
+    // numbers go under build/ by an absolute path.
+    expect(
+      log.readAsLinesSync(),
+      contains(
+        'soak seconds 60 dir '
+        '${sandbox.path}/klabautermann/build/integration-evidence/soak',
+      ),
+    );
+  });
+
+  test('the soak runs ten minutes on GitHub Actions, into the evidence '
+      'directory', () async {
+    final (process: _, :exitCode, :output) = await startRun(
+      suitesExit: '0',
+      environment: {
+        'GITHUB_ACTIONS': 'true',
+        'KLABAUTERMANN_EVIDENCE_DIR': '${sandbox.path}/evidence',
+      },
+    );
+
+    expect(
+      await exitCode.timeout(const Duration(seconds: 20)),
+      0,
+      reason: '$output',
+    );
+    expect(
+      log.readAsLinesSync(),
+      contains('soak seconds 600 dir ${sandbox.path}/evidence/soak'),
+    );
+  });
+
+  test('a soak that passes without soak.json fails the run, since it '
+      'skipped', () async {
+    final (process: _, :exitCode, :output) = await startRun(
+      suitesExit: '0',
+      soakEvidence: false,
+    );
+
+    expect(
+      await exitCode.timeout(const Duration(seconds: 20)),
+      1,
+      reason: '$output',
+    );
+    expect('$output', contains('it skipped'));
+  });
+
+  test('a signal during the soak stops it before the fixture goes', () async {
+    final (:process, :exitCode, :output) = await startRun(
+      suitesExit: '0',
+      holdSoak: true,
+    );
+    final deadline = DateTime.now().add(const Duration(seconds: 20));
+    while (!log.readAsLinesSync().contains('soak started')) {
+      if (DateTime.now().isAfter(deadline)) {
+        fail('The soak never started:\n$output');
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    }
+
+    process.kill();
+    final status = await exitCode.timeout(
+      const Duration(seconds: 15),
+      onTimeout: () {
+        process.kill(ProcessSignal.sigkill);
+        fail('run.sh waited for the soak to finish:\n$output');
+      },
+    );
+    expect(status, isNot(0), reason: '$output');
+    expect(
+      fixtureLifetime(),
+      contains('soak stopped'),
+      reason: 'run.sh did not stop the soak before compose down',
+    );
+  });
+
+  test('a soak length that is not a whole number stops run.sh before the '
+      'fixture starts', () async {
+    final result = await Process.run(
+      'bash',
+      [run.path],
+      environment: {
+        'PATH': '${bin.path}:${Platform.environment['PATH']}',
+        'TMPDIR': sandbox.path,
+        'STUB_LOG': log.path,
+        'KLABAUTERMANN_SOAK_SECONDS': '10m',
+      },
+      includeParentEnvironment: false,
+    );
+
+    expect(result.exitCode, 64, reason: '${result.stderr}');
+    expect('${result.stderr}', contains('KLABAUTERMANN_SOAK_SECONDS'));
+    expect(log.existsSync(), isFalse, reason: 'run.sh called Docker');
   });
 }

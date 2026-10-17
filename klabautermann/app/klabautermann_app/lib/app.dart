@@ -6,6 +6,7 @@ import 'package:ghost_theme/ghost_theme.dart' show GhostTheme;
 import 'package:klabautermann_core/klabautermann_core.dart'
     show DeviceSettingsIssue, ImportStoreIssue, InstanceLockUnavailable;
 
+import 'controllers/announcement_controller.dart';
 import 'controllers/appearance_controller.dart';
 import 'controllers/coverage_controller.dart';
 import 'controllers/fleet_controller.dart';
@@ -22,6 +23,7 @@ import 'ui/prompts/prompt_host.dart';
 import 'ui/server_surfaces.dart' show AppActivityReporter;
 import 'ui/settings_page.dart';
 import 'ui/startup_issue_notice.dart';
+import 'ui/threshold_announcer.dart' show AnnouncementScope;
 
 /// The settings route's name: Settings on phones, and on a desktop whose
 /// runner cannot open the settings window (D32).
@@ -38,6 +40,7 @@ class KlabautermannApp extends StatelessWidget {
     required this.prompts,
     required this.appearance,
     required this.coverage,
+    required this.announcements,
     this.settingsIssue,
     this.importStoreIssue,
     this.instanceLockIssue,
@@ -55,6 +58,10 @@ class KlabautermannApp extends StatelessWidget {
   /// Whether the first-run coverage card still shows (03 §9.5 item 1).
   /// Like [appearance], it outlives an engine run.
   final CoverageController coverage;
+
+  /// Whether threshold-band changes are announced (A11Y-15, D60); like
+  /// [appearance], it outlives an engine run.
+  final AnnouncementController announcements;
 
   /// What went wrong opening `settings.json`, told once at startup.
   final DeviceSettingsIssue? settingsIssue;
@@ -132,9 +139,14 @@ class KlabautermannApp extends StatelessWidget {
           darkTheme: themes.darkTheme,
           themeMode: themes.themeMode,
           // The band is reserved above every route, so nothing
-          // interactive lands under the traffic lights.
-          builder: (context, child) =>
-              withMacosToolbarBand(toolbarBand, child: child!),
+          // interactive lands under the traffic lights. The Overview reads
+          // the announcement switch on every route, the phone's pushed
+          // server screen included.
+          builder: (context, child) => AnnouncementScope(
+            announce: announcements,
+            openSettings: (context) => unawaited(_openSettings(context)),
+            child: withMacosToolbarBand(toolbarBand, child: child!),
+          ),
           // The shell's settings callback and the menus' commands need a
           // context under the MaterialApp's Navigator; the
           // ListenableBuilder's own context sits above it.
@@ -169,7 +181,12 @@ class KlabautermannApp extends StatelessWidget {
               ),
             ),
           ),
-          routes: {kSettingsRoute: (_) => SettingsPage(appearance: appearance)},
+          routes: {
+            kSettingsRoute: (_) => SettingsPage(
+              appearance: appearance,
+              announcements: announcements,
+            ),
+          },
         );
       },
     );

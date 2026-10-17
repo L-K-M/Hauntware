@@ -155,4 +155,38 @@ void main() {
     final tags = loadYaml(read('klabautermann/dart_test.yaml'))['tags'];
     expect((tags as YamlMap).containsKey('integration'), isTrue);
   });
+
+  test('run.sh runs the tagged soak alone with the variables it reads', () {
+    // The soak skips without them, and run.sh's soak.json check is what
+    // keeps a renamed one from passing the job.
+    final support = read(
+      'klabautermann/packages/klabautermann_core/test/integration/support/'
+      'soak.dart',
+    );
+    final variables = {
+      for (final match in RegExp(
+        r"environment\['(KLABAUTERMANN_SOAK_\w+)'\]",
+      ).allMatches(support))
+        match[1]!,
+    };
+    expect(variables, {'KLABAUTERMANN_SOAK_SECONDS', 'KLABAUTERMANN_SOAK_DIR'});
+    final run = read('klabautermann/test/integration/run.sh');
+    for (final name in variables) {
+      expect(run, contains('$name="\$'), reason: name);
+    }
+    expect(run, contains('test --concurrency=1 --tags soak'));
+    expect(
+      run,
+      contains('packages/klabautermann_core/test/integration/soak_test.dart'),
+    );
+    expect(
+      read(
+        'klabautermann/packages/klabautermann_core/test/integration/'
+        'soak_test.dart',
+      ),
+      contains("@Tags(['soak'])"),
+    );
+    final tags = loadYaml(read('klabautermann/dart_test.yaml'))['tags'];
+    expect((tags as YamlMap).containsKey('soak'), isTrue);
+  });
 }

@@ -234,6 +234,18 @@ void main() {
       }
     });
 
+    test('refuses as insecure exactly what 3.1.0 removed as broken', () {
+      // What a failed handshake is checked against to tell a server that
+      // offers only these from one that needs an algorithm dartssh2 lacks.
+      final refused = suiteRefusedSshAlgorithms;
+      expect([
+        ...refused.kex.toNameList(),
+        ...refused.hostkey.toNameList(),
+        ...refused.cipher.toNameList(),
+        ...refused.mac.toNameList(),
+      ], _brokenIn310);
+    });
+
     test('cannot be edited by a consumer', () {
       // Shared by every client in two products; an add() in one would
       // change the proposal of all of them.

@@ -16,7 +16,7 @@ import '../settings/instance_lock.dart' show SupportDirectoryAccess;
 const String hostKeysFileName = 'host_keys.json';
 
 /// Opens the engine's host-key pins in [supportDirectory] (03 §4.6,
-/// §4.10, D60). With [SupportDirectoryAccess.exclusive] access they are
+/// §4.10, D61). With [SupportDirectoryAccess.exclusive] access they are
 /// `seance_core`'s [FileHostKeyStore] over [hostKeysFileName], so a pin
 /// outlives the engine. Without it another instance may write that file,
 /// so the pins it holds are read once and then kept in memory: a pin or

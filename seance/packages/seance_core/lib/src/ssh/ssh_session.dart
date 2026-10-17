@@ -16,6 +16,7 @@ import 'remote_command.dart';
 import 'remote_file_system.dart';
 import 'remote_process.dart';
 import 'sequential_cleanup.dart';
+import 'server_kex_init.dart';
 import 'ssh_agent.dart';
 import 'ssh_algorithms.dart';
 
@@ -402,7 +403,8 @@ enum SshConnectFailureKind {
   unreachable,
 
   /// Connecting, a jump-route forward, or the handshake and authentication
-  /// ran past their deadline.
+  /// ran past their deadline, other than during the key exchange that
+  /// [keyExchangeTimedOut] covers.
   timedOut,
 
   /// The jump-host route cannot be followed: it has a cycle or too many
@@ -431,6 +433,28 @@ enum SshConnectFailureKind {
   /// [SshConnectException.isHostKeyRefusal] reports it: a declined key, or a
   /// key-exchange signature that did not verify.
   hostKeyRefused,
+
+  /// For key exchange, host key, cipher or MAC, the server's KEXINIT shares
+  /// no algorithm with the suite proposal, and would not even if the suite
+  /// accepted what it refuses as insecure: the server requires an algorithm
+  /// dartssh2 does not implement, such as ML-KEM key exchange, or one the
+  /// suite does not propose (03 §5.3, CN-23).
+  unsupportedAlgorithm,
+
+  /// The server's KEXINIT would agree with the suite proposal only on
+  /// algorithms the suite refuses as insecure (`suiteRefusedSshAlgorithms`):
+  /// `diffie-hellman-group1-sha1` key exchange, or `hmac-md5` or truncated
+  /// `hmac-sha2-*-96` MACs (03 §5.3).
+  insecureAlgorithmsOnly,
+
+  /// A finite-field Diffie-Hellman key exchange was agreed, and the
+  /// connection closed without a reason from the server, or ran past its
+  /// deadline, before the exchange reached host-key verification. dartssh2
+  /// computes these exchanges in a separate isolate, whose start can take
+  /// longer than a server waits on a memory-constrained device (03 §5.3,
+  /// CN-23). The symptom is the same on any platform, so it is classified
+  /// on every one.
+  keyExchangeTimedOut,
 
   /// Anything else, among them a jump-host resolver that threw (its error
   /// is the [SshConnectException.cause]), an ssh-agent that could not be
@@ -519,6 +543,130 @@ SshConnectFailureKind _keyLoadFailureKind(
   return credentials.keyPassphrase == null
       ? SshConnectFailureKind.keyPassphraseRequired
       : SshConnectFailureKind.keyPassphraseWrong;
+}
+
+/// The key exchanges dartssh2 4.1.0 computes in a separate isolate
+/// (`SSHTransport._handleMessageKexInit`, `kex_dh.dart:63,89`): finite-field
+/// Diffie-Hellman, whose cost the server controls. The curve exchanges run
+/// on the calling isolate.
+const _finiteFieldKex = {
+  SSHKexType.dh1Sha1,
+  SSHKexType.dh14Sha1,
+  SSHKexType.dh14Sha256,
+  SSHKexType.dhGexSha1,
+  SSHKexType.dhGexSha256,
+};
+
+/// The suite proposal as it would read if the suite accepted what it
+/// refuses as insecure.
+final SSHAlgorithms _suiteAndRefusedSshAlgorithms = SSHAlgorithms(
+  kex: [...suiteSshAlgorithms.kex, ...suiteRefusedSshAlgorithms.kex],
+  hostkey: [
+    ...suiteSshAlgorithms.hostkey,
+    ...suiteRefusedSshAlgorithms.hostkey,
+  ],
+  cipher: [...suiteSshAlgorithms.cipher, ...suiteRefusedSshAlgorithms.cipher],
+  mac: [...suiteSshAlgorithms.mac, ...suiteRefusedSshAlgorithms.mac],
+);
+
+/// A failed handshake that 03 §5.3 counts as a client limitation, with the
+/// summary that explains it.
+typedef _ClientLimitation = ({SshConnectFailureKind kind, String summary});
+
+/// The client limitation behind a failed handshake, read from what [tap]
+/// saw of the server's key exchange, or null when the failure is not one.
+/// dartssh2 4.1.0 reports a mismatch only as a `StateError` naming the
+/// first part that failed, so the server's offer comes from the tap.
+///
+/// [hostKeyReached] is whether dartssh2 asked to verify the host key, which
+/// it does once the exchange is computed and signed: from then on a slow
+/// answer is the user's, not the key exchange's.
+_ClientLimitation? _clientLimitation(
+  Object error,
+  ServerKexTap tap, {
+  required bool hostKeyReached,
+  required String target,
+}) {
+  final offer = tap.serverKexInit;
+  // Both come after the algorithms were agreed.
+  if (offer == null || error is SSHAuthFailError || _isHostKeyRefusal(error)) {
+    return null;
+  }
+
+  // A mismatch fails the handshake whatever dartssh2 reports first.
+  final unshared = offer.unshared(suiteSshAlgorithms);
+  if (unshared.isNotEmpty) {
+    final unsupported = offer.unshared(_suiteAndRefusedSshAlgorithms);
+    if (unsupported.isNotEmpty) {
+      return (
+        kind: SshConnectFailureKind.unsupportedAlgorithm,
+        summary: 'Could not agree on SSH algorithms with $target: the '
+            'server requires a ${_categoryNames(unsupported)} algorithm this '
+            'client does not support.',
+      );
+    }
+    final refused = _refusedAlgorithmsOffered(offer, unshared).join(', ');
+    return (
+      kind: SshConnectFailureKind.insecureAlgorithmsOnly,
+      summary: 'Could not agree on SSH algorithms with $target: the server '
+          'offers only algorithms this client refuses as insecure '
+          '($refused).',
+    );
+  }
+
+  final kex = offer.negotiatedKex(suiteSshAlgorithms);
+  if (kex == null || hostKeyReached || !_finiteFieldKex.contains(kex)) {
+    return null;
+  }
+  // A server that sent SSH_MSG_DISCONNECT gave its own reason.
+  if (tap.serverDisconnected) return null;
+  if (!_endedWithoutReason(error) && !_isTimeout(error)) return null;
+  return (
+    kind: SshConnectFailureKind.keyExchangeTimedOut,
+    summary: 'Could not finish key exchange with $target in time. '
+        '${kex.name} is finite-field Diffie-Hellman, which can be too slow '
+        'on some devices; enabling curve25519-sha256 or an ecdh-sha2 key '
+        'exchange on the server avoids it.',
+  );
+}
+
+/// The transport ended under the handshake without a reason from the
+/// server: an orderly close, or a socket error such as a reset, rather than
+/// SSH_MSG_DISCONNECT or a failure of this client's own.
+bool _endedWithoutReason(Object error) =>
+    error is SSHAuthAbortError &&
+    (error.reason == null || error.reason is SSHSocketError);
+
+/// The refused algorithms [offer] holds in the [unshared] parts.
+List<String> _refusedAlgorithmsOffered(
+  ServerKexInit offer,
+  Set<SshAlgorithmCategory> unshared,
+) =>
+    [
+      if (unshared.contains(SshAlgorithmCategory.keyExchange))
+        for (final kex in suiteRefusedSshAlgorithms.kex)
+          if (offer.kex.contains(kex.name)) kex.name,
+      if (unshared.contains(SshAlgorithmCategory.mac))
+        for (final mac in suiteRefusedSshAlgorithms.mac)
+          if (offer.macClientToServer.contains(mac.name) ||
+              offer.macServerToClient.contains(mac.name))
+            mac.name,
+    ];
+
+/// [categories] as one phrase, such as "key exchange or cipher".
+String _categoryNames(Set<SshAlgorithmCategory> categories) {
+  final names = [
+    for (final category in SshAlgorithmCategory.values)
+      if (categories.contains(category))
+        switch (category) {
+          SshAlgorithmCategory.keyExchange => 'key exchange',
+          SshAlgorithmCategory.hostKey => 'host key',
+          SshAlgorithmCategory.cipher => 'cipher',
+          SshAlgorithmCategory.mac => 'MAC',
+        },
+  ];
+  if (names.length == 1) return names.single;
+  return '${names.sublist(0, names.length - 1).join(', ')} or ${names.last}';
 }
 
 /// A live SSH shell session wired to a [TerminalEngine].
@@ -1061,23 +1209,30 @@ Future<(SSHClient, AuthKind)> _authenticateSshHost({
     AuthMethod.password => AuthKind.storedPassword,
   };
 
+  // Reads the server's offer for 03 §5.3's client limitations; dartssh2
+  // gets the same bytes as without it.
+  final kexTap = ServerKexTap();
+  var hostKeyReached = false;
   SSHClient? client;
   try {
     client = SSHClient(
-      socket,
+      kexTap.observe(socket),
       username: config.username,
       // Every hop of a ProxyJump route is authenticated here, so this one
       // argument covers the whole chain as well as a direct connection.
       algorithms: suiteSshAlgorithms,
       keepAliveInterval: keepAliveInterval,
-      onVerifyHostKey: (type, fingerprint) => _verifyHostKey(
-        tofu: tofu,
-        onHostKey: onHostKey,
-        host: config.host,
-        port: config.port,
-        type: type,
-        fingerprintBytes: fingerprint,
-      ),
+      onVerifyHostKey: (type, fingerprint) {
+        hostKeyReached = true;
+        return _verifyHostKey(
+          tofu: tofu,
+          onHostKey: onHostKey,
+          host: config.host,
+          port: config.port,
+          type: type,
+          fingerprintBytes: fingerprint,
+        );
+      },
       identities: host.identities,
       onPasswordRequest: credentials.method == AuthMethod.password
           ? () {
@@ -1104,8 +1259,15 @@ Future<(SSHClient, AuthKind)> _authenticateSshHost({
     );
     return (client, authKind);
   } catch (error) {
-    final summary = SshSessionManager._summarizeFailure(
-        error, config, target, credentials, log);
+    final limitation = _clientLimitation(
+      error,
+      kexTap,
+      hostKeyReached: hostKeyReached,
+      target: target,
+    );
+    final summary = limitation?.summary ??
+        SshSessionManager._summarizeFailure(
+            error, config, target, credentials, log);
     note('');
     note(summary);
     final openedClient = client;
@@ -1116,7 +1278,7 @@ Future<(SSHClient, AuthKind)> _authenticateSshHost({
       summary,
       error,
       log ?? SshConnectionLog(),
-      kind: _handshakeFailureKind(error),
+      kind: limitation?.kind ?? _handshakeFailureKind(error),
     );
   }
 }

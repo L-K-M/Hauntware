@@ -1,5 +1,77 @@
 # Séance ports and pin audits
 
+## Pure stores move, F3b-2 (2026-10-16)
+
+Poltergeist's `FileVaultStore` and its re-key journal move into
+`seance_core` (`../../docs/design/catalog-library.md` sections 2.1 and
+8, row 7 of section 13; the second of the three F3b PRs below). The
+bodies move unchanged; only the writer calls, the location and two doc
+references to the old writer change. The catalog library exports the
+three types and the `poltergeist_core` barrel re-exports them, so
+`main.dart` and `sync_credentials.dart` build and drive the same store
+through the barrel. `poltergeist_app/lib/services/file_stores.dart` is
+removed.
+
+| Left `poltergeist_app/lib/services/file_stores.dart` | Now `seance_core/lib/src/store/` |
+|---|---|
+| `FileVaultStore`, `VaultRekeyJournal`, `VaultRekeyOutcome` | `file_vault_store.dart` |
+
+- Writer: `_flush` and `stageRekey` call `AtomicFileWriter`
+  (`catalog/atomic_file_writer.dart`) with `AtomicFilePrivacy.ownerOnly`
+  instead of the app's `writeStringAtomically` with the same privacy, as
+  in F3b-1 (plan decision P12). The store never had an `atomicWriter`
+  seam and gains none. Owner-only is kept: both writers create the temp
+  empty, restrict it to 0600 before any content lands and abort on a
+  failed chmod, so `vault.json` and `vault.json.rekey` stay 0600 on
+  Linux and macOS; other platforms keep their storage ACLs under both.
+  `AtomicFileWriter` restricts through the `chmod` executable, as
+  Poltergeist's transfer journal, checkouts and preview cache already
+  do, rather than the `chmod(2)` call, and chmods the target again after
+  the rename. The other differences match F3b-1: the temp is the sibling
+  `vault.json.tmp-<16 hex>` rather than `.poltergeist-<uuid>.tmp`, and
+  the directory is fsynced after the rename, which the journal's rename
+  needs to survive a power loss before the keystore write.
+- After-rename failures: that chmod and the directory fsync can now fail
+  after the file is replaced. A failed mutation then restores the
+  previous cache while the file holds the new map, as F3b-1 records for
+  host keys. A failed `stageRekey` leaves a journal on disk that the
+  store does not treat as staged: mutations stay allowed, a retry is
+  refused because the file exists, and the next launch settles the
+  journal, which can undo credentials changed after the failure. This
+  is recorded as a follow-up, not changed here.
+- Read path: opening a vault still tightens an existing file best-effort
+  through `restrictFileToOwner`, which `seance_core` already owned.
+- Bytes: `seance_core/test/store/vault_golden_test.dart` holds goldens
+  captured from the pre-move store. `vault.json` is compared byte for
+  byte. `vault.json.rekey` is compared in layers, since every seal takes
+  a random nonce: the document around the two sealed generations byte
+  for byte, then each generation's plaintext. They pass unchanged
+  against the moved store, and the same sequences through the
+  `poltergeist_core` re-export wrote identical bytes and views. The same
+  file checks that both files are 0600 after every write, including over
+  a vault made lax after the store opened it.
+- Barrel: `package:seance_core/catalog.dart`, as in F3b-1; the Séance
+  app's own `FileVaultStore`, `VaultRekeyJournal` and
+  `VaultRekeyOutcome` would clash on `seance_core.dart`.
+  `quarantineCorruptFile` leaves both barrels: this store was its only
+  consumer outside `seance_core`.
+- Tests: the `FileVaultStore` group of `test/file_stores_test.dart`
+  moves to `seance_core/test/store/file_vault_store_test.dart`, changed
+  only in imports and the temp-directory prefix. The "FileVaultStore
+  re-key journal" group of `test/vault_rekey_journal_test.dart` moves to
+  `seance_core/test/store/vault_rekey_journal_test.dart`, where
+  `crashMidRekey` drops its fake-keystore write and `installed`
+  argument: the keystore fake is an app class, the store never reads the
+  keystore, and each test already settles with the key the keystore
+  would hold. The `SecureSyncCredentialStore` group stays in the app.
+  `seance_dart` runs the moved tests. The app's localization allowlist
+  drops the `file_stores.dart` entry, now dead.
+- Left in the app: settings keys, error reporting (`main.dart` reports a
+  failed startup settle), `MasterKeyManager` and the keystore-driven
+  re-key in `SecureSyncCredentialStore`. `seance_core` gains no
+  dependency (`crypto` and `posix` were declared). Séance's own vault
+  store is not switched here.
+
 ## Pure stores move, F3b-1 (2026-10-16)
 
 Poltergeist's `FileHostKeyStore` moves into `seance_core`
@@ -650,6 +722,10 @@ port candidates.
   move, F3b-1" above). The file keeps `FileVaultStore`,
   `VaultRekeyJournal` and `VaultRekeyOutcome` until F3b-2, and the vault
   store quarantines through the shared helper.
+- 2026-10-16 (F3b-2): `FileVaultStore`, `VaultRekeyJournal` and
+  `VaultRekeyOutcome` left for `seance_core/lib/src/store/` too (see
+  "Pure stores move, F3b-2" above), and the file is removed. This entry
+  stays as the record of the port and its divergences.
 
 ## app/poltergeist_app/lib/services/locked_secret_vault.dart
 
@@ -690,6 +766,11 @@ port candidates.
   a `failWrite` keystore mode covers refusal-without-storing, which
   upstream's file-level fakes did not exercise.
 - Port-back candidates: none.
+- 2026-10-16 (F3b-2): the "FileVaultStore re-key journal" group moved
+  to `seance_core/test/store/vault_rekey_journal_test.dart` with the
+  store (see "Pure stores move, F3b-2" above); its `crashMidRekey` no
+  longer writes the fake keystore. The `SecureSyncCredentialStore` group
+  stays here.
 
 ## app/poltergeist_app/lib/ui/prompts/host_key_dialog.dart
 
