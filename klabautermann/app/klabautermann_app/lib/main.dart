@@ -144,6 +144,10 @@ Future<void> main(List<String> args) async {
   final fleet = FleetController(
     engine,
     sshConfig: sshConfigSourceFor(defaultTargetPlatform, Platform.environment),
+    // The rail's pinned shortlist (03 §10.3), device-local in
+    // settings.json as Séance keeps its pins.
+    pinnedServerIds: settings.pinnedServerIds,
+    savePins: settings.setPinnedServerIds,
   );
   // Spawned once per launch: a restarted engine would be a new client
   // with new controllers over it, whose seq floors start empty (D44), and

@@ -22,6 +22,7 @@ const String _appearanceKey = 'klabautermann.appearance';
 const String _firstRunCardKey = 'klabautermann.coverage.firstRunCardDismissed';
 const String _announceBandsKey =
     'klabautermann.accessibility.announceThresholdBands';
+const String _pinnedServersKey = 'klabautermann.fleet.pinnedServerIds';
 
 /// Replaces a file's contents. [DeviceSettingsStore] writes the settings
 /// document and the copy of a damaged file through it.
@@ -97,8 +98,9 @@ final class DeviceSettingsReadOnlyException implements Exception {
 
 /// This device's `settings.json` (03 §4.10): the device id, the appearance,
 /// whether the first-run coverage card was dismissed, whether screen
-/// readers hear threshold-band changes (D60) and, later, the monitor set
-/// and per-server device preferences.
+/// readers hear threshold-band changes (D60), the servers pinned to the
+/// top of the fleet list (03 §10.3) and, later, the monitor set and
+/// per-server device preferences.
 ///
 /// The app's isolate owns it: the composition root opens it once and the
 /// controllers write through it. The desktop settings window runs no store
@@ -259,6 +261,23 @@ final class DeviceSettingsStore {
   /// way.
   Future<void> setAnnounceThresholdBands(bool announce) async {
     _values[_announceBandsKey] = announce;
+    await _save();
+  }
+
+  /// The ids of the servers pinned to the top of this device's fleet list
+  /// (03 §10.3). Device-local, as Séance keeps its pins: they are never
+  /// synced. A value that is not a list reads as none and items that are
+  /// not strings are skipped, rather than failing the file.
+  Set<String> get pinnedServerIds => switch (_values[_pinnedServersKey]) {
+    final List<Object?> ids => Set.unmodifiable(ids.whereType<String>()),
+    _ => const {},
+  };
+
+  /// Stores [ids], sorted so the document does not churn with pin order,
+  /// and writes the document. Throws when the write fails or this session
+  /// is read-only; the value stays in memory either way.
+  Future<void> setPinnedServerIds(Set<String> ids) async {
+    _values[_pinnedServersKey] = ids.toList()..sort();
     await _save();
   }
 
