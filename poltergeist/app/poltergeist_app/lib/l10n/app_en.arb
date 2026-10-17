@@ -2811,7 +2811,7 @@
   "@updateCheckEnabledLabel": {
     "description": "Settings toggle for the D19 link-only update check (opt-out)."
   },
-  "updateCheckEnabledSubtitle": "Checks GitHub on launch and only links to the release page — it never downloads anything.",
+  "updateCheckEnabledSubtitle": "Checks GitHub on launch. Nothing is downloaded until you choose to update.",
   "@updateCheckEnabledSubtitle": {
     "description": "Explainer under the update-check toggle; the D19/D23 trust claim."
   },
@@ -8573,9 +8573,81 @@
       }
     }
   },
+  "alertUpdateDownloadSize": "{size} download",
+  "@alertUpdateDownloadSize": {
+    "description": "Detail under the update alert on Android, before the user chooses Update: the APK's size, e.g. \"104 MB download\".",
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "alertUpdateDownloading": "Downloading Poltergeist {version}…",
+  "@alertUpdateDownloading": {
+    "description": "Update alert title on Android while the release APK downloads.",
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "alertUpdateProgress": "{received} of {total}",
+  "@alertUpdateProgress": {
+    "description": "Detail under the downloading update alert, e.g. \"12 MB of 104 MB\".",
+    "placeholders": {
+      "received": {
+        "type": "String"
+      },
+      "total": {
+        "type": "String"
+      }
+    }
+  },
+  "alertUpdateReady": "Poltergeist {version} is ready to install",
+  "@alertUpdateReady": {
+    "description": "Update alert title on Android once the verified APK went to the system installer and the user backed out of it.",
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "alertUpdateFailed": "Poltergeist {version} could not be installed",
+  "@alertUpdateFailed": {
+    "description": "Update alert title on Android after the download or the installer failed; the detail says which.",
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "alertUpdateFailedDownload": "The download did not finish. Check your connection and try again.",
+  "@alertUpdateFailedDownload": {
+    "description": "Detail of a failed Android update: offline, timed out, or the server refused the file."
+  },
+  "alertUpdateFailedVerification": "The download did not match the release and was discarded.",
+  "@alertUpdateFailedVerification": {
+    "description": "Detail of a failed Android update: the APK's size or SHA-256 digest differed from the release's."
+  },
+  "alertUpdateFailedInstaller": "Android could not open the installer.",
+  "@alertUpdateFailedInstaller": {
+    "description": "Detail of a failed Android update: the system installer could not be opened or refused the file."
+  },
+  "alertActionUpdate": "Update",
+  "@alertActionUpdate": {
+    "description": "Alert row action on Android: download the release APK and open the system installer."
+  },
+  "alertActionInstall": "Install",
+  "@alertActionInstall": {
+    "description": "Alert row action on Android: reopen the system installer for the downloaded update."
+  },
+  "alertActionCancel": "Cancel",
+  "@alertActionCancel": {
+    "description": "Alert row action: stop the running update download."
+  },
   "alertActionRetry": "Retry",
   "@alertActionRetry": {
-    "description": "Alert row action: retry the failed transfer."
+    "description": "Alert row action: retry the failed transfer or update."
   },
   "alertActionShow": "Show",
   "@alertActionShow": {

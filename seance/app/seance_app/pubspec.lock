@@ -295,6 +295,13 @@ packages:
     description: flutter
     source: sdk
     version: "0.0.0"
+  ghost_apk_update:
+    dependency: "direct main"
+    description:
+      path: "../../../planchette/packages/ghost_apk_update"
+      relative: true
+    source: path
+    version: "1.9.0"
   ghost_desktop:
     dependency: "direct main"
     description:

@@ -64,6 +64,7 @@ below, not captured from a host.
 |---|---|---|
 | `containers-1.41.json` | Container list before health and mounts were common | 7.12 CTR-01 |
 | `containers-1.44.json` | Container list with health, ports, mounts, compose labels | 7.12 CTR-01 |
+| `containers-1.52.json` | Container list with the 1.52 `Health` object, paused and created containers | 7.12 CTR-01, CTR-04 |
 | `containers-podman-1.44.json` | Podman compat container list with a quadlet unit label | 7.12 DKE-10 |
 | `container-inspect-1.44.json` | Inspect with env secrets, health log and mounts | 7.12 CTR-03, 8.9 |
 | `images-1.52.json` | Image list below the 1.51 `Containers` gate | 7.14 IMG-01 |
@@ -75,6 +76,9 @@ below, not captured from a host.
 | `info-podman-1.44.json` | Podman engine info, rootless | 7.12 DKE-01 |
 | `events-1.52.ndjson` | Event-v2 stream without the legacy fields | 5.6, 7.12 DKE-02 |
 | `events-legacy-1.41.ndjson` | Pre-1.52 event stream with `status`, `id`, `from` | 5.6, 7.12 DKE-02 |
+| `system-df-1.44.json` | Legacy `/system/df` lists with unknown sizes and shared build cache | 5.8, 7.1 OV-05 |
+| `system-df-1.52.json` | `/system/df` with both the legacy lists and the usage objects | 5.8, 7.1 OV-05 |
+| `system-df-1.53.json` | `/system/df` usage objects only | 5.8, 7.1 OV-05 |
 | `stats-1.44.json` | One stats sample (one-shot shape) | 5.6, 7.12 CST-01 |
 | `stats-stream-1.52.ndjson` | Two stats samples for the client-side delta | 5.6, 7.12 CST-01 |
 | `pull-progress-1.44.json` | Concatenated pull progress values | 5.6, 7.14 IMG-03 |
