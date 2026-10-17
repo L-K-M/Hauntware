@@ -361,6 +361,7 @@ final class EngineSession {
     required GlobalKey<NavigatorState> navigatorKey,
     required GlobalKey<ScaffoldMessengerState>? scaffoldMessengerKey,
     required IdentityFileReader identityReader,
+    this.fallbackHome,
     SecretVault? vault,
     this._trashServer,
   }) : _engine = engine,
@@ -388,6 +389,10 @@ final class EngineSession {
   final IncidentStore _incidentStore;
   final BookmarkRepository _bookmarks;
   final ApplicationErrorReporter _errors;
+
+  /// The app-owned local home, also used to label restored tabs before
+  /// their browse channels open.
+  final String? fallbackHome;
 
   /// The UI-isolate end of the D15 trash channel (03 §7.1): serves the
   /// engine's channel invocations on the SendPort the spawn config
@@ -801,6 +806,7 @@ Future<EngineSession?> startEngineSession({
   try {
     return EngineSession._(
       engine: engine,
+      fallbackHome: fallbackHome,
       pinStore: pinsStore,
       incidentStore: incidentsStore,
       bookmarks: bookmarks,

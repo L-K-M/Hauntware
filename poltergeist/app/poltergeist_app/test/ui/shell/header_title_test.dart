@@ -5,6 +5,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:poltergeist_app/app.dart';
 import 'package:poltergeist_app/services/engine_session.dart';
 import 'package:poltergeist_app/services/pane_controller.dart';
+import 'package:poltergeist_app/ui/compact/compact_browser.dart';
+import 'package:poltergeist_app/ui/compact/compact_posture.dart';
+import 'package:poltergeist_app/ui/compact/compact_workspace.dart';
 import 'package:poltergeist_app/ui/panes/pane_tabs_view.dart';
 import 'package:poltergeist_app/ui/server_state_indicator.dart';
 import 'package:poltergeist_app/ui/shell/header_toolbar.dart';
@@ -12,6 +15,8 @@ import 'package:poltergeist_core/poltergeist_core.dart';
 
 import '../../services/engine_session_test.dart' as session_test;
 import '../../support/fake_bookmark_store.dart';
+
+const _appStorage = '/data/user/0/ch.lkmc.poltergeist/app_flutter';
 
 RemoteFileEntry _entry(String parent, String name) => RemoteFileEntry(
   path: '$parent/$name',
@@ -56,8 +61,12 @@ void main() {
       ..listings['/srv/www'] = [_entry('/srv/www', 'index.html')];
   });
 
-  Future<void> pumpApp(WidgetTester tester) async {
-    tester.view.physicalSize = const Size(1400, 900);
+  Future<void> pumpApp(
+    WidgetTester tester, {
+    String? fallbackHome,
+    Size size = const Size(1400, 900),
+  }) async {
+    tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     addTearDown(engine.close);
@@ -67,6 +76,7 @@ void main() {
     final bookmarks = FakeBookmarkStore();
     final session = await startEngineSession(
       supportDirectoryPath: supportDir.path,
+      fallbackHome: fallbackHome,
       bookmarks: bookmarks,
       navigatorKey: navigatorKey,
       pinStore: InMemoryHostKeyStore(),
@@ -96,6 +106,15 @@ void main() {
       .workspace
       .activeTabController!;
 
+  void useAppStorage() {
+    engine.localChannels
+      ..clear()
+      ..addAll([
+        session_test.FakeAppBrowseChannel(homePath: _appStorage),
+        session_test.FakeAppBrowseChannel(homePath: _appStorage),
+      ]);
+  }
+
   testWidgets('a local folder: its name, no second line, the path in a '
       'tooltip', (tester) async {
     await pumpApp(tester);
@@ -118,5 +137,73 @@ void main() {
     expect(inHeader(find.text('deploy@web.example.com')), findsOneWidget);
     expect(inHeader(find.textContaining('/srv/www')), findsNothing);
     expect(tooltip('deploy@web.example.com:/srv/www'), findsOneWidget);
+  });
+
+  testWidgets('Android app storage has a friendly name on every title', (
+    tester,
+  ) async {
+    useAppStorage();
+    await pumpApp(tester, fallbackHome: _appStorage);
+
+    expect(
+      tester.widget<Text>(find.byKey(const ValueKey('header.title'))).data,
+      'App storage',
+    );
+    expect(find.text('app_flutter'), findsNothing);
+    expect(find.text('App storage'), findsNWidgets(5));
+    expect(tooltip(_appStorage), findsOneWidget);
+    final pane = activePane(tester);
+    expect(pane.location?.path, _appStorage);
+
+    pane.navigate('$_appStorage/Downloads');
+    await tester.pumpAndSettle();
+    expect(
+      tester.widget<Text>(find.byKey(const ValueKey('header.title'))).data,
+      'Downloads',
+    );
+    await tester.tap(find.byKey(ValueKey('${pane.paneTabId}.path.ancestors')));
+    await tester.pumpAndSettle();
+    expect(find.text('app_flutter'), findsNothing);
+    expect(find.text('App storage'), findsNWidgets(3));
+  });
+
+  testWidgets('compact app storage titles and breadcrumbs use its label', (
+    tester,
+  ) async {
+    useAppStorage();
+    await pumpApp(
+      tester,
+      fallbackHome: _appStorage,
+      size: const Size(390, 844),
+    );
+    tester
+        .state<CompactWorkspaceState>(find.byType(CompactWorkspace))
+        .showBrowser();
+    await tester.pumpAndSettle();
+
+    expect(
+      tester
+          .widget<Text>(find.byKey(const ValueKey(CompactKey.browserTitle)))
+          .data,
+      'App storage',
+    );
+    expect(find.text('app_flutter'), findsNothing);
+    final crumb = find.byKey(
+      const ValueKey((CompactKey.breadcrumb, _appStorage)),
+    );
+    expect(
+      find.descendant(of: crumb, matching: find.text('App storage')),
+      findsOneWidget,
+    );
+
+    final pane = tester
+        .widget<CompactBrowser>(find.byType(CompactBrowser))
+        .workspace
+        .activeTabController!;
+    pane.navigate('$_appStorage/Downloads');
+    await tester.pumpAndSettle();
+    await tester.tap(crumb);
+    await tester.pumpAndSettle();
+    expect(pane.location?.path, _appStorage);
   });
 }
