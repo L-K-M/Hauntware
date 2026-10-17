@@ -10,6 +10,7 @@ import '../../controllers/monitoring_controller.dart';
 import '../../l10n/app_localizations.dart';
 import '../inspector_pane.dart' show PlaceholderPaneBody;
 import '../server_header.dart' show HeaderedBody;
+import 'containers_panel.dart';
 import 'docker_endpoint.dart';
 
 /// Hands the Docker tab SAF-08's notice state on every route (M3's M12):
@@ -42,9 +43,11 @@ enum DockerSubTab {
 
 /// The Docker tab once [serverId]'s endpoint is ready (03 §10.2): SAF-08's
 /// notice until it is dismissed on this device, the engine strip
-/// (DKE-01), and the sub-tabs, whose bodies land with their panels. While
+/// (DKE-01), and the sub-tabs: Containers ([ContainersPanel]), then
+/// Images and Stacks, whose bodies land with their panels. While
 /// [visible], the tab counts as a view of the server's Docker engine
-/// ([DockerController.openView]), so a ready endpoint's details are read.
+/// ([DockerController.openView]), so a ready endpoint's details are read,
+/// and the Containers sub-tab watches the containers while it shows.
 class DockerPanel extends StatefulWidget {
   const DockerPanel({
     super.key,
@@ -135,11 +138,28 @@ class _DockerPanelState extends State<DockerPanel> {
               ],
             ),
             Expanded(
-              child: SelectedTabView(
-                children: [
-                  for (final _ in DockerSubTab.values)
-                    const PlaceholderPaneBody(),
-                ],
+              child: Builder(
+                builder: (context) {
+                  final tabs = DefaultTabController.of(context);
+                  return ListenableBuilder(
+                    listenable: tabs,
+                    builder: (context, _) => SelectedTabView(
+                      children: [
+                        for (final tab in DockerSubTab.values)
+                          switch (tab) {
+                            DockerSubTab.containers => ContainersPanel(
+                              monitoring: widget.monitoring,
+                              serverId: widget.serverId,
+                              visible:
+                                  widget.visible && tabs.index == tab.index,
+                            ),
+                            DockerSubTab.images ||
+                            DockerSubTab.stacks => const PlaceholderPaneBody(),
+                          },
+                      ],
+                    ),
+                  );
+                },
               ),
             ),
           ],

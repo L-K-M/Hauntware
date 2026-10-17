@@ -2877,4 +2877,151 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get dockerNoticeNotSaved =>
       'Klabautermann could not save that you dismissed the root-equivalence note, so it shows again after a restart.';
+
+  @override
+  String get dockerContainersColumnName => 'Name';
+
+  @override
+  String get dockerContainersColumnState => 'State';
+
+  @override
+  String get dockerContainersColumnHealth => 'Health';
+
+  @override
+  String get dockerContainersColumnStatus => 'Status';
+
+  @override
+  String get dockerContainersColumnImage => 'Image';
+
+  @override
+  String get dockerContainersColumnPorts => 'Ports';
+
+  @override
+  String get dockerContainersColumnStack => 'Stack';
+
+  @override
+  String get dockerContainersColumnCpu => 'CPU';
+
+  @override
+  String get dockerContainersColumnMemory => 'Memory';
+
+  @override
+  String dockerContainerState(String state) {
+    String _temp0 = intl.Intl.selectLogic(state, {
+      'created': 'Created',
+      'running': 'Running',
+      'paused': 'Paused',
+      'restarting': 'Restarting',
+      'removing': 'Removing',
+      'exited': 'Exited',
+      'dead': 'Dead',
+      'other': 'Unknown',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String dockerContainerHealth(String health) {
+    String _temp0 = intl.Intl.selectLogic(health, {
+      'healthy': 'Healthy',
+      'unhealthy': 'Unhealthy',
+      'starting': 'Starting',
+      'other': 'No health check',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String dockerContainersCpu(double share) {
+    final intl.NumberFormat shareNumberFormat =
+        intl.NumberFormat.decimalPercentPattern(
+          locale: localeName,
+          decimalDigits: 1,
+        );
+    final String shareString = shareNumberFormat.format(share);
+
+    return '$shareString';
+  }
+
+  @override
+  String dockerContainersStale(String value) {
+    return '$value, stale';
+  }
+
+  @override
+  String dockerContainersSwarmService(String service) {
+    return '$service (Swarm)';
+  }
+
+  @override
+  String get dockerContainersNoStack => 'Not in a stack';
+
+  @override
+  String dockerContainersGroupSummary(int count, int up) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count containers',
+      one: '1 container',
+    );
+    return '$_temp0, $up running';
+  }
+
+  @override
+  String get dockerContainersSearchHint => 'Search by name, image or ID';
+
+  @override
+  String get dockerContainersSearchClear => 'Clear search';
+
+  @override
+  String get dockerContainersRunningOnly => 'Running only';
+
+  @override
+  String get dockerContainersSortBy => 'Sort by';
+
+  @override
+  String dockerContainersFact(String label, String value) {
+    return '$label: $value';
+  }
+
+  @override
+  String get dockerContainersReading => 'Reading the containers…';
+
+  @override
+  String get dockerContainersEmpty => 'This engine has no containers.';
+
+  @override
+  String get dockerContainersNoneRunning =>
+      'No container is running. Turn off Running only to see the stopped ones.';
+
+  @override
+  String get dockerContainersNoMatch => 'No container matches the search.';
+
+  @override
+  String dockerContainersFailed(String reason) {
+    String _temp0 = intl.Intl.selectLogic(reason, {
+      'tooManyQueries':
+          'This server already has as many Docker watches open as Klabautermann allows.',
+      'daemonError': 'The engine refused or failed to list the containers.',
+      'connectionFailed':
+          'The connection to the engine failed while listing the containers.',
+      'other': 'The containers could not be listed.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get dockerContainersKept => 'The list below is the last one read.';
+
+  @override
+  String get dockerContainersStatsFailed =>
+      'The CPU and memory figures could not be read, so the ones shown may be old.';
+
+  @override
+  String get dockerContainersLowSession =>
+      'Low-session mode: stats are read one container at a time, so they update more slowly.';
+
+  @override
+  String get dockerContainersLowSessionRelay =>
+      'Low-session mode: the list is read again every 15 seconds instead of following engine events, and stats are read one container at a time.';
 }

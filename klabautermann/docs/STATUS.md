@@ -194,7 +194,8 @@ M2, the host read MVP, is the current milestone. What is on main:
   resume with `since`, a full re-list after a gap over 60 s) and reads
   one-shot list stats for the ids on screen every 5 s (4 at once on
   streamlocal, one at a time on a relay), all as `DockerListChanged`.
-  Tested over fakes only; the app does not watch yet (D13).
+  Tested over fakes only; the app watches the containers and their
+  stats since D13 (below), and no other list yet (D16, D17).
 - Container logs (M3, D07, 03 §5.6, §10.1): `ContainerLogSource`
   streams a container's logs through `OpenLogStream` as
   `ContainerRecord`s over the server's Docker endpoint: framing by
@@ -231,8 +232,6 @@ M2, the host read MVP, is the current milestone. What is on main:
   while a watch holds, after 5 s doubling to 2 min. Tested over fakes
   only at learned limits of 2 to 4; D22 checks `MaxSessions 2` on a
   real sshd, and the app shows no mode yet (D12).
-  only; no `/system/df` (D03), no watch or events (D06), no
-  low-session mode (D09).
 - Docker in the app (M3, D12, 03 §5.9, §8.4, §10.2): a Docker controller
   per engine run asks for each server's endpoint as its link comes up
   and keeps its `DockerEndpointState`; the server header names the
@@ -241,8 +240,22 @@ M2, the host read MVP, is the current milestone. What is on main:
   names (M13). The Docker tab waits, looks or says why no route works
   (with the Access link and a retry), then shows SAF-08's notice until
   it is dismissed on the device (`settings.json`), the engine strip
-  (DKE-01) and the Containers, Images and Stacks sub-tabs, still empty
-  (D13, D16, D17). Tested against the fake engine only.
+  (DKE-01) and the Containers, Images and Stacks sub-tabs, the last two
+  still empty (D16, D17). Tested against the fake engine only.
+- Containers in the app (M3, D13, 03 §7.12, §10.4): the Containers
+  sub-tab holds one `DockerWatch` of the containers and their stats per
+  server while it shows and sends `DockerUnwatch` once hidden; the
+  running rows on screen go to `statsFor` under the same watch id after
+  a 250 ms settle. The sortable table lists name, state, health, the
+  engine's status text (the uptime, which sorts by the duration it
+  names), image, ports, compose project or Swarm service, CPU and
+  memory (IEC), grouped by compose project under headings that fold,
+  with a running-only toggle and a search by name, image or ID; phones
+  and 200 % text get two-line rows with a sort menu. Stats older than
+  20 s turn grey beside a history icon and read "stale"; a failed read
+  keeps the last list with why and a retry, and low-session mode is
+  named. No sizes (the watch never asks for `size=1`) and no details
+  (D14). Tested against the fake engine only.
 - `klabautermann_core`: the D18 engine isolate skeleton: the plain-data
   request/event protocol of 03 §10.1 as sealed classes, `engineMain`
   answering the requests whose milestones have landed (below) and
