@@ -4665,6 +4665,186 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{reason, select, none{This container keeps no logs: driver none.} podman{Podman cannot read this container\'s logs: driver {driver}. Podman reads only the json-file, k8s-file and journald drivers.} cacheDisabled{Docker cannot read this container\'s logs: driver {driver}, cache disabled. Docker reads another driver\'s logs only through its local cache.} other{Docker cannot read this container\'s logs: its logging driver keeps none it can read.}}'**
   String dockerLogsDriverUnreadable(String reason, String driver);
+
+  /// Stacks list: shown until the first list arrives.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading the stacks…'**
+  String get dockerStacksReading;
+
+  /// Stacks list: why the list could not be read. reason is the engine's failure name.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, tooManyQueries{This server already has as many Docker watches open as Klabautermann allows.} daemonError{The engine refused or failed to list the containers the stacks are read from.} connectionFailed{The connection to the engine failed while listing the stacks.} other{The stacks could not be listed.}}'**
+  String dockerStacksFailed(String reason);
+
+  /// Stacks list: under a failed read, the list it keeps is older.
+  ///
+  /// In en, this message translates to:
+  /// **'The list below is the last one read.'**
+  String get dockerStacksKept;
+
+  /// Stacks list: the engine has no container that docker compose created (STK-01).
+  ///
+  /// In en, this message translates to:
+  /// **'This engine runs no compose stacks.'**
+  String get dockerStacksEmpty;
+
+  /// Stacks list: the server's link has a session limit (03 §5.2) on a relay route, where the list polls.
+  ///
+  /// In en, this message translates to:
+  /// **'Low-session mode: the stacks are read again every 15 seconds instead of following engine events.'**
+  String get dockerStacksLowSessionRelay;
+
+  /// Stacks list: the label before the compose command-line tools found on the host (STK-05).
+  ///
+  /// In en, this message translates to:
+  /// **'Compose CLI'**
+  String get dockerStacksCliLabel;
+
+  /// Stacks list: the compose plugin found on the host and its version (STK-05). The product name stays as it is.
+  ///
+  /// In en, this message translates to:
+  /// **'Docker Compose {version}'**
+  String dockerStacksCliPlugin(String version);
+
+  /// Stacks list: the standalone docker-compose binary found on the host and its version (STK-05), which Klabautermann only reads with. legacy is true for the Python Compose v1, unmaintained since 2023. The command name stays as it is.
+  ///
+  /// In en, this message translates to:
+  /// **'{legacy, select, true{docker-compose {version} (Compose v1, unmaintained): read-only} other{docker-compose {version} (standalone): read-only}}'**
+  String dockerStacksCliStandalone(String legacy, String version);
+
+  /// Stacks list: after the Compose CLI label, the host has neither the compose plugin nor docker-compose (STK-05).
+  ///
+  /// In en, this message translates to:
+  /// **'None found, so no stack\'s source can be verified.'**
+  String get dockerStacksCliNone;
+
+  /// Stacks: the chip saying whether a stack's compose files on the host are its source (STK-01). verdict is verifying, verified, notOnHost or unverified.
+  ///
+  /// In en, this message translates to:
+  /// **'{verdict, select, verifying{Checking source…} verified{Verified source} notOnHost{Source not on host} other{Unverified source}}'**
+  String dockerStackVerdict(String verdict);
+
+  /// Stacks: the chip of a stack whose compose files are missing from the host, deployed by a manager that runs compose in its own container (STK-01, Dockge's rule). manager is the product name, never translated.
+  ///
+  /// In en, this message translates to:
+  /// **'Source not on host (deployed by {manager})'**
+  String dockerStackNotOnHostDeployedBy(String manager);
+
+  /// Stacks: the chip of a stack whose files are not its verified source, with why (STK-01). reason is the engine's reason name. docker-compose and compose config stay as they are.
+  ///
+  /// In en, this message translates to:
+  /// **'{reason, select, noSourceLabels{Unverified source: no compose files recorded} unsafeLabels{Unverified source: unsafe names in the labels} noHashLabels{Unverified source: a service has no config hash} noComposeCli{Unverified source: no compose CLI} standaloneComposeOnly{Unverified source: standalone docker-compose only} cliCouldNotHash{Unverified source: the compose CLI cannot hash} configFailed{Unverified source: compose config failed} hashMismatch{Unverified source: the files changed since the deploy} checkFailed{Unverified source: the check could not run} other{Unverified source}}'**
+  String dockerStackUnverified(String reason);
+
+  /// Stack overview: under the verdict chip, what it means (STK-01). verdict is verifying, verified, notOnHost or unverified.
+  ///
+  /// In en, this message translates to:
+  /// **'{verdict, select, verifying{Klabautermann is checking the compose files on the host against the running containers.} verified{The compose files on the host are the ones these containers were deployed from.} notOnHost{A compose file the containers name is not on the host. A manager that runs compose in its own container records paths inside that container.} other{The compose files on the host could not be matched to the ones these containers were deployed from, so they are not treated as the stack\'s source.}}'**
+  String dockerStackVerdictNote(String verdict);
+
+  /// Stacks: the badge of a stack another tool owns (STK-10, DKE-10). manager is the product name, such as Coolify, never translated.
+  ///
+  /// In en, this message translates to:
+  /// **'Managed by {manager}: read-only'**
+  String dockerStackManagedBy(String manager);
+
+  /// Stack overview: under the managed-by badge. manager is the owning tool's product name; label is the container label that marks the ownership, server data.
+  ///
+  /// In en, this message translates to:
+  /// **'Changes made outside {manager} can be overwritten by it, so Klabautermann treats this stack as read-only. The label {label} marks it.'**
+  String dockerStackManagedByNote(String manager, String label);
+
+  /// Stacks: how many compose services a stack has (STK-02).
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 service} other{{count} services}}'**
+  String dockerStackServices(int count);
+
+  /// Stacks: how many of a stack's containers run, paused and restarting ones included, as docker ps lists them.
+  ///
+  /// In en, this message translates to:
+  /// **'{up} of {total} running'**
+  String dockerStackRunning(int up, int total);
+
+  /// Stacks: how many of a stack's containers report an unhealthy health check, beside an error icon.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} unhealthy'**
+  String dockerStackUnhealthy(int count);
+
+  /// Screen-reader hint of a stack's row on a phone, which opens its overview on a page of its own.
+  ///
+  /// In en, this message translates to:
+  /// **'Show the stack\'s overview'**
+  String get dockerStackOpenHint;
+
+  /// Stack overview: the heading over where the stack's compose files are, as its labels record them.
+  ///
+  /// In en, this message translates to:
+  /// **'Source'**
+  String get dockerStackSource;
+
+  /// Stack overview: the directory docker compose ran in, as the stack's labels record it.
+  ///
+  /// In en, this message translates to:
+  /// **'Working directory'**
+  String get dockerStackWorkingDir;
+
+  /// Stack overview: the compose files the stack was deployed from, as its labels record them.
+  ///
+  /// In en, this message translates to:
+  /// **'Compose files'**
+  String get dockerStackConfigFiles;
+
+  /// Stack overview: the environment files the stack was deployed with, as its labels record them.
+  ///
+  /// In en, this message translates to:
+  /// **'Environment files'**
+  String get dockerStackEnvFiles;
+
+  /// Stack overview: the label over the compose version the containers were created with.
+  ///
+  /// In en, this message translates to:
+  /// **'Deployed with Compose'**
+  String get dockerStackComposeVersion;
+
+  /// Stack overview: the stack's labels record no such file or directory.
+  ///
+  /// In en, this message translates to:
+  /// **'None recorded'**
+  String get dockerStackNoneRecorded;
+
+  /// Stack overview: the heading over the stack's services and their containers (STK-02).
+  ///
+  /// In en, this message translates to:
+  /// **'Services'**
+  String get dockerStackServicesHeading;
+
+  /// Stack overview: beside a service whose containers docker compose run created, which start and stop skip (STK-03).
+  ///
+  /// In en, this message translates to:
+  /// **'one-off'**
+  String get dockerStackOneOff;
+
+  /// Stack overview: a container's published ports, as docker ps lists them; ports is server data.
+  ///
+  /// In en, this message translates to:
+  /// **'Ports {ports}'**
+  String dockerStackPorts(String ports);
+
+  /// Screen-reader hint of a container in a stack's overview, which opens its details.
+  ///
+  /// In en, this message translates to:
+  /// **'Show the container\'s details'**
+  String get dockerStackOpenContainerHint;
+
+  /// Stack overview: the stack left the list, as its last container was removed.
+  ///
+  /// In en, this message translates to:
+  /// **'This stack has no containers any more.'**
+  String get dockerStackGone;
 }
 
 class _AppLocalizationsDelegate

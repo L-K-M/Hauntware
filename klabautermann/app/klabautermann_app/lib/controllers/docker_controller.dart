@@ -36,6 +36,17 @@ import 'package:klabautermann_core/klabautermann_core.dart';
 /// re-lists the containers but not the images, so only the container
 /// list follows a container created or removed.
 ///
+/// A Stacks view that shows a server ([watchStacks]) has its compose
+/// stacks watched (03 §7.16 STK-01, STK-02, STK-05): a [DockerWatch] of
+/// the stacks alone, one per server while any such view shows. Asking
+/// for the stacks starts the engine's source checks, which run compose
+/// commands on the host (`test -f`, `compose config --hash`), and a
+/// watch that asks again runs them again, so only a shown Stacks view
+/// holds it and nothing else asks. The engine sends a project it has not
+/// checked as [StackVerifying] and the list again once it has. The
+/// stacks carry the full container list, so details views follow it as
+/// they follow the container watch's.
+///
 /// A details view that shows a container ([openContainer]) has it
 /// inspected (03 §7.12 CTR-03, CTR-04): one [DockerContainerQuery] as the
 /// first view opens, and another whenever the container's row in a
@@ -88,6 +99,64 @@ final class DockerController {
   /// could not be read.
   ValueListenable<DockerImageList> imagesFor(String serverId) =>
       _server(serverId).images;
+
+  /// What [serverId]'s stack watch last delivered: the compose projects
+  /// with their source verdicts and the compose CLI found, or why they
+  /// could not be read.
+  ValueListenable<DockerStackList> stacksFor(String serverId) =>
+      _server(serverId).stacks;
+
+  /// A Stacks view shows [serverId]; [unwatchStacks] says it no longer
+  /// does. The first view starts the server's stack watch, and with it
+  /// the engine's source checks.
+  void watchStacks(String serverId) {
+    if (!_listed(serverId)) return;
+    final server = _server(serverId);
+    server.stackViews++;
+    if (server.stackViews > 1) return;
+
+    _watchStacks(serverId, server);
+  }
+
+  /// The last view to hide ends the server's stack watch.
+  void unwatchStacks(String serverId) {
+    final server = _servers[serverId];
+    if (server == null || server.stackViews == 0) return;
+    server.stackViews--;
+    if (server.stackViews > 0) return;
+
+    _unwatchStacks(serverId, server);
+  }
+
+  /// Watches [serverId]'s stacks anew after a failure, under a new id, as
+  /// [retryContainers] does; the engine checks the sources again.
+  void retryStacks(String serverId) {
+    final server = _servers[serverId];
+    if (server == null || server.stacksWatchId == null) return;
+
+    _unwatchStacks(serverId, server);
+    _watchStacks(serverId, server);
+  }
+
+  void _watchStacks(String serverId, _DockerServer server) {
+    if (_stopped) return;
+
+    final watchId = server.stacksWatchId ??= 'stacks-${_count++}';
+    _send(
+      DockerWatch(
+        serverId: serverId,
+        watchId: watchId,
+        lists: const {DockerWatchList.stacks},
+      ),
+    );
+  }
+
+  void _unwatchStacks(String serverId, _DockerServer server) {
+    final watchId = server.stacksWatchId;
+    server.stacksWatchId = null;
+    if (watchId == null || _stopped) return;
+    _send(DockerUnwatch(serverId: serverId, watchId: watchId));
+  }
 
   /// An Images view shows [serverId]; [unwatchImages] says it no longer
   /// does. The first view starts the server's image watch.
@@ -494,6 +563,16 @@ final class DockerController {
         if (list == DockerWatchList.images) {
           server.images.value = server.images.value.took(payload, at);
         }
+        if (list == DockerWatchList.stacks) {
+          server.stacks.value = server.stacks.value.took(payload, at);
+          // The grouping holds every container the list read.
+          if (payload case DockerStacksPayload(:final grouping)) {
+            _followInspected(serverId, server, [
+              for (final project in grouping.projects) ...project.containers,
+              ...grouping.unmanaged,
+            ]);
+          }
+        }
       case CatalogReplaced(:final entries):
         // SYN-08: a server leaving the fleet takes its endpoint with it.
         final ids = _fleetIds = {for (final entry in entries) entry.serverId};
@@ -658,6 +737,34 @@ final class DockerImageList {
   };
 }
 
+/// What a server's stack watch delivered (03 §7.16 STK-01, STK-05).
+@immutable
+final class DockerStackList {
+  const DockerStackList({this.stacks, this.at, this.failure});
+
+  /// The latest stacks read: the compose projects, each one's verdict
+  /// and the compose CLI found; null until one was.
+  final DockerStacksPayload? stacks;
+
+  /// When the engine read [stacks], by this device's clock.
+  final DateTime? at;
+
+  /// Why the latest read failed, or the engine refused the watch, while
+  /// [stacks] keeps the list before; null once one is read.
+  final DockerQueryFailed? failure;
+
+  /// This list with [payload], read at [at], taken in.
+  DockerStackList took(DockerPayload payload, DateTime at) => switch (payload) {
+    final DockerStacksPayload stacks => DockerStackList(stacks: stacks, at: at),
+    final DockerQueryFailed failure => DockerStackList(
+      stacks: stacks,
+      at: this.at,
+      failure: failure,
+    ),
+    _ => this,
+  };
+}
+
 /// Whether a container's row changed in a way its inspect may show: its
 /// state, the engine's status text (a restart resets its uptime), its
 /// health or its image.
@@ -750,6 +857,9 @@ final class _DockerServer {
   final ValueNotifier<DockerImageList> images = ValueNotifier(
     const DockerImageList(),
   );
+  final ValueNotifier<DockerStackList> stacks = ValueNotifier(
+    const DockerStackList(),
+  );
 
   /// The engine query in flight, whose answer [engine] takes.
   String? engineQuery;
@@ -775,6 +885,12 @@ final class _DockerServer {
   /// The image watch the engine holds, while any Images view shows.
   String? imagesWatchId;
 
+  /// How many Stacks views show the server.
+  int stackViews = 0;
+
+  /// The stack watch the engine holds, while any Stacks view shows.
+  String? stacksWatchId;
+
   /// The containers details views show, by full id.
   final Map<String, _InspectedContainer> inspected = {};
 
@@ -783,6 +899,7 @@ final class _DockerServer {
     engine.dispose();
     containers.dispose();
     images.dispose();
+    stacks.dispose();
     for (final container in inspected.values) {
       container.dispose();
     }

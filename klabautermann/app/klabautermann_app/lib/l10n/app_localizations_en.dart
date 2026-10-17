@@ -3486,4 +3486,170 @@ class AppLocalizationsEn extends AppLocalizations {
     });
     return '$_temp0';
   }
+
+  @override
+  String get dockerStacksReading => 'Reading the stacks…';
+
+  @override
+  String dockerStacksFailed(String reason) {
+    String _temp0 = intl.Intl.selectLogic(reason, {
+      'tooManyQueries':
+          'This server already has as many Docker watches open as Klabautermann allows.',
+      'daemonError':
+          'The engine refused or failed to list the containers the stacks are read from.',
+      'connectionFailed':
+          'The connection to the engine failed while listing the stacks.',
+      'other': 'The stacks could not be listed.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get dockerStacksKept => 'The list below is the last one read.';
+
+  @override
+  String get dockerStacksEmpty => 'This engine runs no compose stacks.';
+
+  @override
+  String get dockerStacksLowSessionRelay =>
+      'Low-session mode: the stacks are read again every 15 seconds instead of following engine events.';
+
+  @override
+  String get dockerStacksCliLabel => 'Compose CLI';
+
+  @override
+  String dockerStacksCliPlugin(String version) {
+    return 'Docker Compose $version';
+  }
+
+  @override
+  String dockerStacksCliStandalone(String legacy, String version) {
+    String _temp0 = intl.Intl.selectLogic(legacy, {
+      'true': 'docker-compose $version (Compose v1, unmaintained): read-only',
+      'other': 'docker-compose $version (standalone): read-only',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get dockerStacksCliNone =>
+      'None found, so no stack\'s source can be verified.';
+
+  @override
+  String dockerStackVerdict(String verdict) {
+    String _temp0 = intl.Intl.selectLogic(verdict, {
+      'verifying': 'Checking source…',
+      'verified': 'Verified source',
+      'notOnHost': 'Source not on host',
+      'other': 'Unverified source',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String dockerStackNotOnHostDeployedBy(String manager) {
+    return 'Source not on host (deployed by $manager)';
+  }
+
+  @override
+  String dockerStackUnverified(String reason) {
+    String _temp0 = intl.Intl.selectLogic(reason, {
+      'noSourceLabels': 'Unverified source: no compose files recorded',
+      'unsafeLabels': 'Unverified source: unsafe names in the labels',
+      'noHashLabels': 'Unverified source: a service has no config hash',
+      'noComposeCli': 'Unverified source: no compose CLI',
+      'standaloneComposeOnly':
+          'Unverified source: standalone docker-compose only',
+      'cliCouldNotHash': 'Unverified source: the compose CLI cannot hash',
+      'configFailed': 'Unverified source: compose config failed',
+      'hashMismatch': 'Unverified source: the files changed since the deploy',
+      'checkFailed': 'Unverified source: the check could not run',
+      'other': 'Unverified source',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String dockerStackVerdictNote(String verdict) {
+    String _temp0 = intl.Intl.selectLogic(verdict, {
+      'verifying':
+          'Klabautermann is checking the compose files on the host against the running containers.',
+      'verified':
+          'The compose files on the host are the ones these containers were deployed from.',
+      'notOnHost':
+          'A compose file the containers name is not on the host. A manager that runs compose in its own container records paths inside that container.',
+      'other':
+          'The compose files on the host could not be matched to the ones these containers were deployed from, so they are not treated as the stack\'s source.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String dockerStackManagedBy(String manager) {
+    return 'Managed by $manager: read-only';
+  }
+
+  @override
+  String dockerStackManagedByNote(String manager, String label) {
+    return 'Changes made outside $manager can be overwritten by it, so Klabautermann treats this stack as read-only. The label $label marks it.';
+  }
+
+  @override
+  String dockerStackServices(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count services',
+      one: '1 service',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String dockerStackRunning(int up, int total) {
+    return '$up of $total running';
+  }
+
+  @override
+  String dockerStackUnhealthy(int count) {
+    return '$count unhealthy';
+  }
+
+  @override
+  String get dockerStackOpenHint => 'Show the stack\'s overview';
+
+  @override
+  String get dockerStackSource => 'Source';
+
+  @override
+  String get dockerStackWorkingDir => 'Working directory';
+
+  @override
+  String get dockerStackConfigFiles => 'Compose files';
+
+  @override
+  String get dockerStackEnvFiles => 'Environment files';
+
+  @override
+  String get dockerStackComposeVersion => 'Deployed with Compose';
+
+  @override
+  String get dockerStackNoneRecorded => 'None recorded';
+
+  @override
+  String get dockerStackServicesHeading => 'Services';
+
+  @override
+  String get dockerStackOneOff => 'one-off';
+
+  @override
+  String dockerStackPorts(String ports) {
+    return 'Ports $ports';
+  }
+
+  @override
+  String get dockerStackOpenContainerHint => 'Show the container\'s details';
+
+  @override
+  String get dockerStackGone => 'This stack has no containers any more.';
 }

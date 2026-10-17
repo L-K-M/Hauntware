@@ -4282,5 +4282,206 @@
         "type": "String"
       }
     }
+  },
+  "dockerStacksReading": "Reading the stacks…",
+  "@dockerStacksReading": {
+    "description": "Stacks list: shown until the first list arrives."
+  },
+  "dockerStacksFailed": "{reason, select, tooManyQueries{This server already has as many Docker watches open as Klabautermann allows.} daemonError{The engine refused or failed to list the containers the stacks are read from.} connectionFailed{The connection to the engine failed while listing the stacks.} other{The stacks could not be listed.}}",
+  "@dockerStacksFailed": {
+    "description": "Stacks list: why the list could not be read. reason is the engine's failure name.",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "dockerStacksKept": "The list below is the last one read.",
+  "@dockerStacksKept": {
+    "description": "Stacks list: under a failed read, the list it keeps is older."
+  },
+  "dockerStacksEmpty": "This engine runs no compose stacks.",
+  "@dockerStacksEmpty": {
+    "description": "Stacks list: the engine has no container that docker compose created (STK-01)."
+  },
+  "dockerStacksLowSessionRelay": "Low-session mode: the stacks are read again every 15 seconds instead of following engine events.",
+  "@dockerStacksLowSessionRelay": {
+    "description": "Stacks list: the server's link has a session limit (03 §5.2) on a relay route, where the list polls."
+  },
+  "dockerStacksCliLabel": "Compose CLI",
+  "@dockerStacksCliLabel": {
+    "description": "Stacks list: the label before the compose command-line tools found on the host (STK-05)."
+  },
+  "dockerStacksCliPlugin": "Docker Compose {version}",
+  "@dockerStacksCliPlugin": {
+    "description": "Stacks list: the compose plugin found on the host and its version (STK-05). The product name stays as it is.",
+    "placeholders": {
+      "version": {
+        "type": "String",
+        "example": "2.29.7"
+      }
+    }
+  },
+  "dockerStacksCliStandalone": "{legacy, select, true{docker-compose {version} (Compose v1, unmaintained): read-only} other{docker-compose {version} (standalone): read-only}}",
+  "@dockerStacksCliStandalone": {
+    "description": "Stacks list: the standalone docker-compose binary found on the host and its version (STK-05), which Klabautermann only reads with. legacy is true for the Python Compose v1, unmaintained since 2023. The command name stays as it is.",
+    "placeholders": {
+      "legacy": {
+        "type": "String"
+      },
+      "version": {
+        "type": "String",
+        "example": "1.29.2"
+      }
+    }
+  },
+  "dockerStacksCliNone": "None found, so no stack's source can be verified.",
+  "@dockerStacksCliNone": {
+    "description": "Stacks list: after the Compose CLI label, the host has neither the compose plugin nor docker-compose (STK-05)."
+  },
+  "dockerStackVerdict": "{verdict, select, verifying{Checking source…} verified{Verified source} notOnHost{Source not on host} other{Unverified source}}",
+  "@dockerStackVerdict": {
+    "description": "Stacks: the chip saying whether a stack's compose files on the host are its source (STK-01). verdict is verifying, verified, notOnHost or unverified.",
+    "placeholders": {
+      "verdict": {
+        "type": "String"
+      }
+    }
+  },
+  "dockerStackNotOnHostDeployedBy": "Source not on host (deployed by {manager})",
+  "@dockerStackNotOnHostDeployedBy": {
+    "description": "Stacks: the chip of a stack whose compose files are missing from the host, deployed by a manager that runs compose in its own container (STK-01, Dockge's rule). manager is the product name, never translated.",
+    "placeholders": {
+      "manager": {
+        "type": "String",
+        "example": "Dockge"
+      }
+    }
+  },
+  "dockerStackUnverified": "{reason, select, noSourceLabels{Unverified source: no compose files recorded} unsafeLabels{Unverified source: unsafe names in the labels} noHashLabels{Unverified source: a service has no config hash} noComposeCli{Unverified source: no compose CLI} standaloneComposeOnly{Unverified source: standalone docker-compose only} cliCouldNotHash{Unverified source: the compose CLI cannot hash} configFailed{Unverified source: compose config failed} hashMismatch{Unverified source: the files changed since the deploy} checkFailed{Unverified source: the check could not run} other{Unverified source}}",
+  "@dockerStackUnverified": {
+    "description": "Stacks: the chip of a stack whose files are not its verified source, with why (STK-01). reason is the engine's reason name. docker-compose and compose config stay as they are.",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "dockerStackVerdictNote": "{verdict, select, verifying{Klabautermann is checking the compose files on the host against the running containers.} verified{The compose files on the host are the ones these containers were deployed from.} notOnHost{A compose file the containers name is not on the host. A manager that runs compose in its own container records paths inside that container.} other{The compose files on the host could not be matched to the ones these containers were deployed from, so they are not treated as the stack's source.}}",
+  "@dockerStackVerdictNote": {
+    "description": "Stack overview: under the verdict chip, what it means (STK-01). verdict is verifying, verified, notOnHost or unverified.",
+    "placeholders": {
+      "verdict": {
+        "type": "String"
+      }
+    }
+  },
+  "dockerStackManagedBy": "Managed by {manager}: read-only",
+  "@dockerStackManagedBy": {
+    "description": "Stacks: the badge of a stack another tool owns (STK-10, DKE-10). manager is the product name, such as Coolify, never translated.",
+    "placeholders": {
+      "manager": {
+        "type": "String",
+        "example": "Coolify"
+      }
+    }
+  },
+  "dockerStackManagedByNote": "Changes made outside {manager} can be overwritten by it, so Klabautermann treats this stack as read-only. The label {label} marks it.",
+  "@dockerStackManagedByNote": {
+    "description": "Stack overview: under the managed-by badge. manager is the owning tool's product name; label is the container label that marks the ownership, server data.",
+    "placeholders": {
+      "manager": {
+        "type": "String",
+        "example": "Coolify"
+      },
+      "label": {
+        "type": "String",
+        "example": "coolify.managed"
+      }
+    }
+  },
+  "dockerStackServices": "{count, plural, =1{1 service} other{{count} services}}",
+  "@dockerStackServices": {
+    "description": "Stacks: how many compose services a stack has (STK-02).",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "dockerStackRunning": "{up} of {total} running",
+  "@dockerStackRunning": {
+    "description": "Stacks: how many of a stack's containers run, paused and restarting ones included, as docker ps lists them.",
+    "placeholders": {
+      "up": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "dockerStackUnhealthy": "{count} unhealthy",
+  "@dockerStackUnhealthy": {
+    "description": "Stacks: how many of a stack's containers report an unhealthy health check, beside an error icon.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "dockerStackOpenHint": "Show the stack's overview",
+  "@dockerStackOpenHint": {
+    "description": "Screen-reader hint of a stack's row on a phone, which opens its overview on a page of its own."
+  },
+  "dockerStackSource": "Source",
+  "@dockerStackSource": {
+    "description": "Stack overview: the heading over where the stack's compose files are, as its labels record them."
+  },
+  "dockerStackWorkingDir": "Working directory",
+  "@dockerStackWorkingDir": {
+    "description": "Stack overview: the directory docker compose ran in, as the stack's labels record it."
+  },
+  "dockerStackConfigFiles": "Compose files",
+  "@dockerStackConfigFiles": {
+    "description": "Stack overview: the compose files the stack was deployed from, as its labels record them."
+  },
+  "dockerStackEnvFiles": "Environment files",
+  "@dockerStackEnvFiles": {
+    "description": "Stack overview: the environment files the stack was deployed with, as its labels record them."
+  },
+  "dockerStackComposeVersion": "Deployed with Compose",
+  "@dockerStackComposeVersion": {
+    "description": "Stack overview: the label over the compose version the containers were created with."
+  },
+  "dockerStackNoneRecorded": "None recorded",
+  "@dockerStackNoneRecorded": {
+    "description": "Stack overview: the stack's labels record no such file or directory."
+  },
+  "dockerStackServicesHeading": "Services",
+  "@dockerStackServicesHeading": {
+    "description": "Stack overview: the heading over the stack's services and their containers (STK-02)."
+  },
+  "dockerStackOneOff": "one-off",
+  "@dockerStackOneOff": {
+    "description": "Stack overview: beside a service whose containers docker compose run created, which start and stop skip (STK-03)."
+  },
+  "dockerStackPorts": "Ports {ports}",
+  "@dockerStackPorts": {
+    "description": "Stack overview: a container's published ports, as docker ps lists them; ports is server data.",
+    "placeholders": {
+      "ports": {
+        "type": "String",
+        "example": "0.0.0.0:8080->80/tcp"
+      }
+    }
+  },
+  "dockerStackOpenContainerHint": "Show the container's details",
+  "@dockerStackOpenContainerHint": {
+    "description": "Screen-reader hint of a container in a stack's overview, which opens its details."
+  },
+  "dockerStackGone": "This stack has no containers any more.",
+  "@dockerStackGone": {
+    "description": "Stack overview: the stack left the list, as its last container was removed."
   }
 }

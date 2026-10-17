@@ -617,7 +617,7 @@ class _ContainersPanelState extends State<ContainersPanel> {
       ),
       column(
         ContainerColumn.state,
-        (container) => _stateText(l10n, container.state),
+        (container) => containerStateText(l10n, container.state),
         (container) => _stateRank(container.state),
         extent: const FixedColumnExtent(88),
       ),
@@ -712,8 +712,8 @@ String _label(AppLocalizations l10n, ContainerColumn column) =>
     };
 
 /// A state in words; one the API does not list reads as the engine gave
-/// it, and none as unknown.
-String _stateText(AppLocalizations l10n, String? state) {
+/// it, and none as unknown. The Stacks sub-tab's overview shares it.
+String containerStateText(AppLocalizations l10n, String? state) {
   if (state == null || state.isEmpty) return l10n.chartUnknownValue;
   return switch (EngineContainerState.of(state)) {
     final known? => l10n.dockerContainerState(known.name),
