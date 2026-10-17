@@ -93,7 +93,9 @@ class _CompactBreadcrumbsState extends State<CompactBreadcrumbs> {
             // The root chip names the place, not the slash: the server
             // for a remote pane, the volume glyph for a local one.
             final root = index == 0;
-            final label = root && remote != null ? remote.label : segment.label;
+            final label = root && remote != null
+                ? remote.label
+                : controller.pathLabel(segment.path, l10n);
             return _Crumb(
               key: ValueKey((CompactKey.breadcrumb, segment.path)),
               label: label,
