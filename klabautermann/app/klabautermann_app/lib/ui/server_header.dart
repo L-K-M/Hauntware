@@ -10,14 +10,14 @@ import '../l10n/app_localizations.dart';
 import '../theme/app_theme.dart';
 import 'access/access_panel.dart' show engineNameText;
 import 'coverage.dart' show ServerCoverageChip;
-import 'fleet_rail.dart' show linkStatusWord;
+import 'fleet_rail.dart' show linkFailureText, linkStatusWord;
 import 'fleet_row_state.dart';
 import 'fleet_rows.dart' show fleetStatusIcon, fleetStatusStrings;
 
 /// The server header of 03 §10.2 and §10.5: the server's name, unless the
 /// phone's app bar carries it, its link state, the coverage chip, the
-/// detected runtime, and any messages about what this client cannot do
-/// for the server.
+/// detected runtime, and why the link failed when the engine could tell,
+/// a client limitation (03 §5.3) included.
 ///
 /// The state resolves through `ghostServerIndicator` under the rail rule,
 /// as the server's fleet row does, so both read the same: a dot, an icon
@@ -45,13 +45,17 @@ class ServerHeader extends StatelessWidget {
 
   final bool showTitle;
 
-  /// Client-limitation messages (03 §5.3), each ARB text, shown under the
-  /// header's facts. None arrive before K45 words them.
+  /// Further client-limitation messages (03 §5.3), each ARB text, shown
+  /// under the link failure: the phones' background line (PLT-04).
   final List<String> limitations;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final failure = linkFailureText(
+      AppLocalizations.of(context),
+      fleet.linkStatusFor(server.id),
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       spacing: 8,
@@ -91,7 +95,7 @@ class ServerHeader extends StatelessWidget {
             ),
           ],
         ),
-        for (final message in limitations)
+        for (final message in [?failure, ...limitations])
           MergeSemantics(
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,

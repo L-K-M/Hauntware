@@ -177,6 +177,46 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get linkFailureUnreachable =>
+      'This server could not be reached. Check its address and your network connection.';
+
+  @override
+  String get linkFailureTimedOut =>
+      'This server did not answer in time. Check that it is running and that your network reaches it.';
+
+  @override
+  String get linkFailureAuthenticationRejected =>
+      'The server rejected your credentials. Make sure it trusts your key or password.';
+
+  @override
+  String get linkFailureCredentialUnavailable =>
+      'No credential could be offered to this server. Check that its key file can be read and holds a supported key, or load a key into ssh-agent.';
+
+  @override
+  String get linkFailureKeyPassphraseRequired =>
+      'A key for this server needs a passphrase, which Klabautermann cannot ask for. Load the key into ssh-agent and remove the IdentityFile line that names it from ~/.ssh/config, then import the config again.';
+
+  @override
+  String get linkFailureKeyFileHiddenBySandbox =>
+      'A key file for this server cannot be read in the Flatpak sandbox. Load the key into ssh-agent and remove the IdentityFile line that names it from ~/.ssh/config, then import the config again.';
+
+  @override
+  String get linkFailureHostKeyDeclined =>
+      'This server\'s host key has not been trusted, so Klabautermann did not connect.';
+
+  @override
+  String get linkFailureUnsupportedAlgorithm =>
+      'This server requires an algorithm Klabautermann does not support yet.';
+
+  @override
+  String get linkFailureInsecureAlgorithmsOnly =>
+      'This server offers only algorithms Klabautermann refuses as insecure.';
+
+  @override
+  String get linkFailureKeyExchangeTimedOut =>
+      'Klabautermann could not finish this server\'s key exchange in time on this device.';
+
+  @override
   String get fleetRowProbeOnline => 'Online';
 
   @override
