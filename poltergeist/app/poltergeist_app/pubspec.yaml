@@ -46,6 +46,9 @@ dependencies:
     path: ../../../planchette/packages/planchette_editor
   ghost_desktop:
     path: ../../../planchette/packages/ghost_desktop
+  # The Android in-app update: download, verify and open the release APK.
+  ghost_apk_update:
+    path: ../../../planchette/packages/ghost_apk_update
   # The bundled monospace fonts behind the app's code stack.
   ghost_fonts:
     path: ../../../planchette/packages/ghost_fonts

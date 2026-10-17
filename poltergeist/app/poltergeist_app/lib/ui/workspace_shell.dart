@@ -2119,6 +2119,10 @@ class _WorkspaceShellState extends State<WorkspaceShell>
             ? null
             : onReviewLocalEdits,
         openRelease: (info) => unawaited(launchUrl(info.releasesUrl)),
+        installUpdate: widget.updateCheck == null
+            ? null
+            : () => unawaited(widget.updateCheck!.installUpdate()),
+        cancelUpdate: widget.updateCheck?.cancelUpdate,
       ),
       preview: preview,
       pdfRenderer: pdfPreviewBuilder,

@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- **Update from the Alerts tab on Android.** The update alert offers
+  Update with the download size. Poltergeist downloads the release APK,
+  shows its progress with Cancel, discards it unless its size and
+  SHA-256 match the release, and opens Android's installer. If you back
+  out of the installer, Install reopens it without downloading again.
+  Nothing downloads until you tap Update; desktop builds still link to
+  the release page.
 - **Choose the editor's font.** Settings → Appearance lists the four
   included fonts under the editor's text size, each in its own face,
   with a Ligatures switch. Editor windows and the compare view draw in
