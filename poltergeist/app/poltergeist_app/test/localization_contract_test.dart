@@ -511,18 +511,14 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   },
   // Ported Séance contracts (see docs/PORTS.md): the exception messages are
   // frozen port text, kept byte-identical to the source. D20 localization
-  // applies where the UI renders them (the prompt-UI slice), not here.
+  // applies where the UI renders them (the prompt-UI slice), not here. The
+  // keystore entry names are persisted identities, never rendered.
   'lib/services/secure_master_key.dart': {
     r"'Saved secrets are unavailable: the OS keyring is locked '",
     r"'or missing. Unlock the login keyring (or install gnome-keyring), '",
     r"'then retry.'",
     r"'poltergeist.vault.masterKey.v1'",
-    r"'poltergeist.apikey.$name'",
-    r"'${e.code} — $msg'",
-    r"'the vault master key'",
-    r"'the $name key'",
-    r"'Could not save $what to the OS keyring (${_describe(e)}). Unlock '",
-    r"'the login keyring or install gnome-keyring, then try again.'",
+    r"'poltergeist.apikey.'",
   },
   'lib/services/settings_store.dart': {
     "'settings root'",
@@ -604,7 +600,6 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   // Monospace rendering of machine data (fingerprints, endpoints,
   // transcripts) plus list joins — no authored copy.
   'lib/ui/connection_status_panel.dart': {"'\\n'"},
-  'lib/ui/prompts/credential_dialog.dart': {"''"},
   // Monospace rendering of machine data (endpoints, identity paths) plus
   // null-fallbacks for optional labels — no authored copy.
   'lib/ui/import/ssh_config_import_dialog.dart': {
