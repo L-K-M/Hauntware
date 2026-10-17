@@ -23,6 +23,12 @@ const int kSessionRingCapacity = 300;
 /// freshness in seconds ("updated 4 s ago").
 const Duration kFreshnessTick = Duration(seconds: 1);
 
+/// The longest a refresh waits for its readings (PLT-02) [E]: a slow
+/// sampler's reply on a slow link comes well within it, and a hung `df`
+/// does not keep the pull indicator spinning. The panel's freshness line
+/// keeps telling a reading's age after it.
+const Duration kRefreshWait = Duration(seconds: 10);
+
 /// The streams whose readings feed [MetricSeries] rings.
 const Set<SampleStream> _ringStreams = {
   SampleStream.overview,
@@ -153,6 +159,9 @@ final class MonitoringController extends ChangeNotifier {
   late final StreamSubscription<EngineEvent> _events;
 
   final Map<String, _ServerReadings> _readings = {};
+
+  /// The refreshes waiting for their readings.
+  final Set<_PendingRefresh> _refreshes = {};
 
   /// The fleet's ids from the last [CatalogReplaced] this controller saw.
   /// The engine's startup fleet goes to the fleet controller, its client's
@@ -295,6 +304,35 @@ final class MonitoringController extends ChangeNotifier {
     _followRingStreams(serverId, named);
     if (!_listed(serverId)) return;
     _send(Unsubscribe(serverId: serverId, subscriptionId: subscriptionId));
+  }
+
+  /// Asks the engine to read the streams of [serverId]'s subscription
+  /// [subscriptionId] at once (PLT-02's pull to refresh). Completes once
+  /// each has a newer sample, failed readings included, once the server
+  /// stops sampling, or after [kRefreshWait]; at once when the engine is
+  /// not sampling the server, as while links are off or the link is down,
+  /// since no reading would come.
+  Future<void> refresh(String serverId, String subscriptionId) {
+    final streams = _subscribed[(serverId, subscriptionId)];
+    if (streams == null || !_listed(serverId)) return Future.value();
+
+    _send(
+      RefreshSubscription(serverId: serverId, subscriptionId: subscriptionId),
+    );
+    final readings = _readings[serverId];
+    if (_engineStopped ||
+        readings == null ||
+        readings.sampling.value?.state.phase != SamplingPhase.sampling) {
+      return Future.value();
+    }
+    final refresh = _PendingRefresh(
+      serverId,
+      readings,
+      streams,
+      _refreshes.remove,
+    );
+    _refreshes.add(refresh);
+    return refresh.done;
   }
 
   /// Whether the fleet lists [serverId]. The engine holds no link or
@@ -491,6 +529,9 @@ final class MonitoringController extends ChangeNotifier {
   void _replaceFleet(Set<String> fleetIds) {
     final before = _fleetIds;
     _fleetIds = fleetIds;
+    for (final refresh in _refreshes.toList()) {
+      if (!fleetIds.contains(refresh.serverId)) refresh.finish();
+    }
     _readings.removeWhere((serverId, readings) {
       if (fleetIds.contains(serverId)) return false;
       readings.dispose();
@@ -536,6 +577,9 @@ final class MonitoringController extends ChangeNotifier {
     unawaited(_events.cancel());
     logs.dispose();
     _onEngineDone();
+    for (final refresh in _refreshes.toList()) {
+      refresh.finish();
+    }
     for (final readings in _readings.values) {
       readings.dispose();
     }
@@ -544,6 +588,58 @@ final class MonitoringController extends ChangeNotifier {
     _clock.dispose();
     _backgroundPause.dispose();
     super.dispose();
+  }
+}
+
+/// A [MonitoringController.refresh] waiting for a newer sample of each of
+/// its streams, while the server samples, for at most [kRefreshWait].
+final class _PendingRefresh {
+  _PendingRefresh(
+    this.serverId,
+    this._readings,
+    Set<SampleStream> streams,
+    this._onDone,
+  ) : _before = {
+        for (final stream in streams) stream: _readings.box(stream).value?.seq,
+      } {
+    for (final stream in _before.keys) {
+      _readings.box(stream).addListener(_check);
+    }
+    _readings.sampling.addListener(_check);
+    _timer = Timer(kRefreshWait, finish);
+  }
+
+  final String serverId;
+  final _ServerReadings _readings;
+
+  /// Each stream's latest seq when the refresh went out.
+  final Map<SampleStream, int?> _before;
+  final void Function(_PendingRefresh refresh) _onDone;
+  final Completer<void> _done = Completer();
+  late final Timer _timer;
+
+  Future<void> get done => _done.future;
+
+  void _check() {
+    final sampling =
+        _readings.sampling.value?.state.phase == SamplingPhase.sampling;
+    final read = _before.entries.every((entry) {
+      final seq = _readings.box(entry.key).value?.seq;
+      return seq != null && seq > (entry.value ?? -1);
+    });
+    if (!sampling || read) finish();
+  }
+
+  /// Stops waiting; once only.
+  void finish() {
+    if (_done.isCompleted) return;
+    _timer.cancel();
+    for (final stream in _before.keys) {
+      _readings.box(stream).removeListener(_check);
+    }
+    _readings.sampling.removeListener(_check);
+    _onDone(this);
+    _done.complete();
   }
 }
 

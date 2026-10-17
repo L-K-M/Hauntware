@@ -2782,7 +2782,8 @@ no longer holds that value.
   read does until lines arrive: waiting for an answer, the link, a
   channel or the foreground, reading, no lines, or the end's reason with
   the host's error text. A read still running when its tab hides stops
-  and starts over once shown. The read opens through the controller's
+  and starts over once shown. On a phone the page opens the lines in a
+  bottom sheet instead, which reads them while it is open (10.5). The read opens through the controller's
   one owner of log streams, which the Logs panel shares and which gives
   each rejection of `OpenLogStream` to the oldest open without an answer
   (10.1). While links are off, as the composition root leaves them
@@ -3030,8 +3031,8 @@ each row's source and the user its line names:
   `crontab` command, and an empty list names only the sources read,
   never other users' crontabs (JOB-03). Where the
   probe finds systemd not running, the tab says the server has no timers
-  instead of a failed timers reading. The phone reaches the tab once
-  More lists it (10.5).
+  instead of a failed timers reading. The phone reaches the tab
+  through More (10.5).
 
 ### 7.8 Packages and updates (PKG)
 
@@ -4356,7 +4357,7 @@ shows there.
 | `ImportSshConfig(text)` (FL-02, desktop) | `CatalogReplaced(entries)` with the imports, then `SshConfigImported(importedCount, skippedCount, saved)` |
 | `ConfirmEndpoints(ids)`, `SetMonitorSet(ids)` | `EndpointChanged(serverId)` |
 | `Connect(serverId)`, `Disconnect(serverId)` | `LinkState(serverId, status)` (D46's states plus `blocked`; typed reasons inside the status) |
-| `Subscribe(serverId, subscriptionId, streams)`, `Unsubscribe(serverId, subscriptionId)`, `SetCadenceProfile(profile)`; app activity is a separate request too (D45) | `Sample(serverId, stream, seq, at, result)` (engine-owned `seq`, D44; rates and derived values, D43), `SamplingState(serverId, phase, since)`, `Gap(serverId, streams, from, until, cause)` |
+| `Subscribe(serverId, subscriptionId, streams)`, `Unsubscribe(serverId, subscriptionId)`, `RefreshSubscription(serverId, subscriptionId)` (a phone's pull to refresh, PLT-02), `SetCadenceProfile(profile)`; app activity is a separate request too (D45) | `Sample(serverId, stream, seq, at, result)` (engine-owned `seq`, D44; rates and derived values, D43), `SamplingState(serverId, phase, since)`, `Gap(serverId, streams, from, until, cause)` |
 | none: the engine probes after connecting (6.1) | `HostProfileChanged(serverId, profile, cachedAt)` (`cachedAt` only on the device cache's copy, D59) |
 | `OpenLogStream(streamId, spec)`, `CloseStream(streamId)` | `LogBatch(streamId, records, dropped)` (at most 20 per second per stream [E]), `LogStreamState(streamId, status)` |
 | `DockerQuery(serverId, query)` | `DockerResult`, `DockerEvent` |
@@ -4664,7 +4665,17 @@ the engine in `engine_isolate.dart` beside it):
   repeat included, so a surface refreshes it by resending. While the
   server is `waitingForLink` or `pausedInBackground`, that reading waits
   until the link is ready and the app is in the foreground, and resends
-  in the meantime add no further reading. The engine
+  in the meantime add no further reading. `RefreshSubscription` (K40)
+  reads one subscription's streams at once in any column, for a phone's
+  pull to refresh (PLT-02): each is read once more as soon as its
+  sampler is free, a busy, restarting or probing sampler holding the
+  reading as it holds a first one rather than losing it, a stream that
+  rides on another's collector through that collector, and `identity`,
+  otherwise read once per link, too. While the server waits for its
+  link or the foreground nothing is read, and sampling resumes with
+  every stream the subscription names. No event answers it but the
+  readings; with links off, or for a subscription the engine does not
+  hold, it reads nothing. The engine
   sends one `Sample` per subscribed stream and reading: `seq` counts per
   server across its streams (D44), `at` is the engine's own clock in UTC,
   since a host's clock may be off, and `result` is a sealed value per
@@ -4955,8 +4966,7 @@ tab:
   its values read "unknown". A hidden tab is not built, so it samples
   nothing; it names what is missing and links to the Access tab, which
   the desktop strip selects, moving keyboard focus into it, and a phone
-  pushes. The phone's More destination does not list Access yet, so
-  there the link is the way in.
+  pushes. The phone's More destination lists it too (10.5).
 - Each row shows its state as an icon and a word, its reason, SAF-08's
   badge on a root-equivalent right, and its fix as one line: the
   elevation prefix, then each word, quoted (8.8) only where a shell
@@ -4999,9 +5009,10 @@ server header shows the name (the phone's app bar carries it instead),
 the link state, the coverage chip, the detected runtime and, under
 them, why a closed link failed when the engine classified it: each
 failure kind of 10.1 in a sentence that says what to do, 5.3's client
-limitations in their own words. The transport label, privilege badges,
-admin mode and the read-only and low-session indicators come with
-their subsystems.
+limitations in their own words, and PLT-04's background line on an iOS
+or Android phone's screen (10.5). The transport label, privilege
+badges, admin mode and the read-only and low-session indicators come
+with their subsystems.
 The state resolves through `ghost_servers`' indicator under the rail
 rule, as the server's row does, as a dot, an icon and a word, with
 the link's own word where the indicator shows none; the kit keeps its
@@ -5103,7 +5114,7 @@ subscribes while it shows:
   freshness line (9.5 item 4) and the failure's reason; it turns grey
   once older than 20 s, twice the stream's slowest cadence. A cut list
   says "Showing N of M processes" (D48). The phone's server screen
-  reaches the tab once More lists the panels (10.5).
+  reaches the tab through More (10.5).
 
 ### 10.5 Phone (under 600 dp) and tablet
 
@@ -5115,6 +5126,58 @@ mutation (PLT-03). The first-run flow (4.3) is a sequence of full-screen
 steps with "confirm all shown". iOS and Android say plainly that sampling
 stops in the background (PLT-04) and show the return banner. Tablets use a
 two-pane layout (PLT-05, v1).
+
+As built in M2 (`app/klabautermann_app/lib/ui/server_detail_page.dart`,
+`phone_shell.dart`), the pushed screen's More destination lists
+Processes, Services, Jobs, System and Access in the desktop strip's
+order. Each opens full-screen under an app bar naming the panel and the
+server, in the layout the panel takes at that width, on a phone its
+narrow one (Processes' two-line entries, System's three columns, a
+unit's page in the list's place), with the return banner the screen
+under it shows. That screen holds the server
+open, and with More selected none of its destinations samples, so the
+pushed panel's subscription is the only one. Access is the page a
+hidden panel's link already pushed, and a panel the probe hides links
+there from its own page too.
+
+- Logs: the Logs destination stays the Logs panel, whose source and
+  filters already open sheets on phones (10.8); a log that a detail
+  opens is a sheet. In M2 that is SVC-04's lines: a unit's page on the
+  phone offers them behind a button and reads them in a modal bottom
+  sheet that opens at 60 % of the screen and drags from a quarter to
+  the full height, following this section over SVC-04's lines on the
+  page itself. The sheet opens its read as it opens, and closing it by
+  its button, a drag or Back closes a read still running. The desktop
+  keeps the lines on the page.
+- Pull to refresh: the Overview and every pushed panel that samples
+  pull to refresh. A pull sends `RefreshSubscription` for the surface's
+  own subscription (10.1), and the indicator waits until each of its
+  streams has a newer sample, failed readings included, until the
+  server stops sampling, or for 10 s [E]; with nothing sampling, as
+  while links are off (K44), it ends at once. It takes vertical scrolls
+  at any depth, so a panel's own list pulls from its top, and an
+  always-scrollable view of the panel's size pulls a panel whose content
+  fits. Logs and Access sample nothing and do not pull, and the desktop
+  has no pull. Screen readers and keyboards have no refresh action yet;
+  sampling goes on at its cadence meanwhile.
+- PLT-04: on iOS and Android the server header's limitation slot (10.4)
+  says "Reading stops while Klabautermann is in the background and
+  resumes when you return.", the coverage sheet's words, under every
+  destination. That is what the app does: it reports the background
+  (10.1), and the engine pauses every subscription, probe and log read
+  at once, closes the links after 30 s (D34) and resumes them all on
+  return. A desktop window narrow enough for this screen stays in the
+  foreground and does not say so, and a tablet in the desktop layout
+  has it in the inspector's coverage (9.5).
+- SYN-08 (task #50): a server that leaves the fleet, removed by a sync
+  or left out of a new import, closes its screen with everything the
+  screen opened (More's panels, the Access page, sheets and dialogs),
+  back to the fleet list, as the desktop workspace's selection clears.
+  The list then says "web-1 is no longer in your fleet, so its screen
+  closed." in a live region styled as the return banner, until the user
+  dismisses it or opens a server. The desktop shows no such notice yet.
+  Reads close as their sheets go, and the monitoring controller already
+  sends the server nothing (10.1).
 
 ### 10.6 Command palette and keyboard model (v1)
 

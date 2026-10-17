@@ -850,7 +850,7 @@ abstract class AppLocalizations {
   /// **'While in the background'**
   String get coverageBackgroundTitle;
 
-  /// Body of the coverage sheet's background item, on iOS and Android only.
+  /// Body of the coverage sheet's background item, and a line in the header of a phone's server screen (PLT-04), on iOS and Android only.
   ///
   /// In en, this message translates to:
   /// **'Reading stops while Klabautermann is in the background and resumes when you return.'**
@@ -1095,6 +1095,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'More'**
   String get serverTabMore;
+
+  /// Title of a server panel a phone opens full-screen from its More list (03 §10.5): panel is the panel's name as its tab reads it (Processes, Services, Jobs or System), and name is the server's display name.
+  ///
+  /// In en, this message translates to:
+  /// **'{panel} on {name}'**
+  String serverPanelPageTitle(String panel, String name);
+
+  /// Notice over a phone's fleet list after the server whose screen was open left the fleet, for example removed on another device or left out of a new ssh_config import (SYN-08). The app closed the server's screen and everything opened from it; name is the server's display name.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} is no longer in your fleet, so its screen closed.'**
+  String fleetServerLeftNotice(String name);
+
+  /// Button that hides the notice that a server left the fleet.
+  ///
+  /// In en, this message translates to:
+  /// **'Dismiss'**
+  String get fleetServerLeftDismiss;
 
   /// The Processes tab before the server sent its first process list (PRC-01).
   ///
@@ -2290,11 +2308,23 @@ abstract class AppLocalizations {
   /// **'Close unit details'**
   String get servicesUnitClose;
 
-  /// Heading of a unit's recent journal lines on its details (SVC-04).
+  /// Heading of a unit's recent journal lines on its details (SVC-04), and under the unit's name in the sheet that shows them on a phone.
   ///
   /// In en, this message translates to:
   /// **'Recent log lines'**
   String get servicesLogsTitle;
+
+  /// Button on a unit's details on a phone that opens its recent journal lines in a bottom sheet (SVC-04, PLT-02).
+  ///
+  /// In en, this message translates to:
+  /// **'Show recent log lines'**
+  String get servicesLogsShow;
+
+  /// Tooltip of the button that closes the bottom sheet of a unit's recent journal lines on a phone.
+  ///
+  /// In en, this message translates to:
+  /// **'Close log lines'**
+  String get servicesLogsClose;
 
   /// A unit's log lines were requested and the app has no answer yet.
   ///

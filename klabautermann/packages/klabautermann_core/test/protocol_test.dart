@@ -80,6 +80,7 @@ void main() {
           streams: {SampleStream.overview, SampleStream.fs},
         ),
         const Unsubscribe(serverId: 'srv-1', subscriptionId: 'row'),
+        const RefreshSubscription(serverId: 'srv-1', subscriptionId: 'row'),
         const SetCadenceProfile(CadenceProfile.phone),
         const ImportSshConfig('Host web-1\n  HostName web-1.example\n'),
         OpenLogStream(
@@ -215,6 +216,17 @@ void main() {
               as Unsubscribe;
       expect(unsubscribe.serverId, 'srv-9');
       expect(unsubscribe.subscriptionId, 'row');
+
+      final refresh =
+          await roundTrip(
+                const RefreshSubscription(
+                  serverId: 'srv-9',
+                  subscriptionId: 'processes',
+                ),
+              )
+              as RefreshSubscription;
+      expect(refresh.serverId, 'srv-9');
+      expect(refresh.subscriptionId, 'processes');
 
       for (final profile in CadenceProfile.values) {
         final received =

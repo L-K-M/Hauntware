@@ -493,7 +493,7 @@
   },
   "coverageBackgroundBody": "Reading stops while Klabautermann is in the background and resumes when you return.",
   "@coverageBackgroundBody": {
-    "description": "Body of the coverage sheet's background item, on iOS and Android only."
+    "description": "Body of the coverage sheet's background item, and a line in the header of a phone's server screen (PLT-04), on iOS and Android only."
   },
   "coverageFreshnessSeconds": "{seconds} s",
   "@coverageFreshnessSeconds": {
@@ -704,6 +704,34 @@
   "workspaceTabSystem": "System",
   "workspaceTabAccess": "Access",
   "serverTabMore": "More",
+  "serverPanelPageTitle": "{panel} on {name}",
+  "@serverPanelPageTitle": {
+    "description": "Title of a server panel a phone opens full-screen from its More list (03 §10.5): panel is the panel's name as its tab reads it (Processes, Services, Jobs or System), and name is the server's display name.",
+    "placeholders": {
+      "panel": {
+        "type": "String",
+        "example": "Processes"
+      },
+      "name": {
+        "type": "String",
+        "example": "web-1"
+      }
+    }
+  },
+  "fleetServerLeftNotice": "{name} is no longer in your fleet, so its screen closed.",
+  "@fleetServerLeftNotice": {
+    "description": "Notice over a phone's fleet list after the server whose screen was open left the fleet, for example removed on another device or left out of a new ssh_config import (SYN-08). The app closed the server's screen and everything opened from it; name is the server's display name.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "web-1"
+      }
+    }
+  },
+  "fleetServerLeftDismiss": "Dismiss",
+  "@fleetServerLeftDismiss": {
+    "description": "Button that hides the notice that a server left the fleet."
+  },
   "processesWaiting": "Waiting for the first process list.",
   "@processesWaiting": {
     "description": "The Processes tab before the server sent its first process list (PRC-01)."
@@ -1863,7 +1891,15 @@
   },
   "servicesLogsTitle": "Recent log lines",
   "@servicesLogsTitle": {
-    "description": "Heading of a unit's recent journal lines on its details (SVC-04)."
+    "description": "Heading of a unit's recent journal lines on its details (SVC-04), and under the unit's name in the sheet that shows them on a phone."
+  },
+  "servicesLogsShow": "Show recent log lines",
+  "@servicesLogsShow": {
+    "description": "Button on a unit's details on a phone that opens its recent journal lines in a bottom sheet (SVC-04, PLT-02)."
+  },
+  "servicesLogsClose": "Close log lines",
+  "@servicesLogsClose": {
+    "description": "Tooltip of the button that closes the bottom sheet of a unit's recent journal lines on a phone."
   },
   "servicesLogsRequested": "Asking the server for recent log lines…",
   "@servicesLogsRequested": {
