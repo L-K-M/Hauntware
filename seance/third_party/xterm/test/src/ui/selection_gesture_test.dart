@@ -971,4 +971,100 @@ void main() {
       expect(selection.begin, selection.end);
     });
   });
+
+  // [seance fork] Patch 39: touch has no secondary click, so the host learns
+  // from the view when a touch gesture has selected, and where to point a
+  // selection toolbar.
+  group('touch selection end', () {
+    Future<List<void>> pumpReporting(
+      WidgetTester tester,
+      Terminal terminal,
+      TerminalController controller,
+    ) async {
+      final reports = <void>[];
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: TerminalView(
+              terminal,
+              controller: controller,
+              onTouchSelectionEnd: () => reports.add(null),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      terminal.write('alpha bravo\r\ncharlie delta');
+      await tester.pump();
+      return reports;
+    }
+
+    TextSelectionToolbarAnchors? anchors(WidgetTester tester) => tester
+        .state<TerminalViewState>(find.byType(TerminalView))
+        .selectionToolbarAnchors;
+
+    testWidgets('a long-press reports once it lifts, with anchors around '
+        'the word', (tester) async {
+      final terminal = Terminal();
+      final controller = TerminalController();
+      final reports = await pumpReporting(tester, terminal, controller);
+
+      final gesture = await tester.startGesture(cellCenter(tester, 8, 1));
+      await tester.pump(kLongPressTimeout + const Duration(milliseconds: 50));
+      expect(controller.selection, isNotNull);
+      expect(reports, isEmpty, reason: 'the finger is still down');
+
+      await gesture.up();
+      await tester.pump(const Duration(milliseconds: 600));
+      expect(reports, hasLength(1));
+
+      final row = render(tester).cellSize.height;
+      final word = cellCenter(tester, 8, 1);
+      final points = anchors(tester)!;
+      expect(points.primaryAnchor.dy, closeTo(word.dy - row / 2, 0.01));
+      expect(points.secondaryAnchor!.dy, closeTo(word.dy + row / 2, 0.01));
+    });
+
+    testWidgets('a touch double-tap reports; a mouse double-click does not',
+        (tester) async {
+      final terminal = Terminal();
+      final controller = TerminalController();
+      final reports = await pumpReporting(tester, terminal, controller);
+
+      await multiClick(tester, cellCenter(tester, 2, 0), 2);
+      expect(controller.selection, isNotNull);
+      expect(reports, isEmpty);
+
+      for (var i = 0; i < 2; i++) {
+        await tester.tapAt(cellCenter(tester, 2, 1));
+        await tester.pump(const Duration(milliseconds: 120));
+      }
+      await tester.pump(const Duration(milliseconds: 600));
+      expect(terminal.buffer.getText(controller.selection!).trim(), 'charlie');
+      expect(reports, hasLength(1));
+    });
+
+    testWidgets('anchors are null without a selection and stay in the view',
+        (tester) async {
+      final terminal = Terminal(maxLines: 500);
+      final controller = TerminalController();
+      await pumpReporting(tester, terminal, controller);
+      expect(anchors(tester), isNull);
+
+      for (var i = 0; i < 200; i++) {
+        terminal.write('line $i\r\n');
+      }
+      await tester.pump();
+      controller.setSelection(
+        terminal.buffer.createAnchor(0, 0),
+        terminal.buffer.createAnchor(4, 0),
+      );
+
+      final view = render(tester);
+      final top = view.localToGlobal(Offset.zero).dy;
+      final points = anchors(tester)!;
+      expect(points.primaryAnchor.dy, closeTo(top, 0.01));
+      expect(points.secondaryAnchor!.dy, closeTo(top, 0.01));
+    });
+  });
 }

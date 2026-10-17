@@ -887,9 +887,33 @@ M2, the host read MVP, is the current milestone. What is on main:
   for the app to answer over `ghost_keystore`
   (`klabautermann.vault.masterKey.v1`,
   `klabautermann.apikey.sync.token`), and stages a vault re-key in the
-  shared `FileVaultStore` journal. Nothing opens these stores and the
-  barrel does not export them; the app binding, the engine requests and
-  the wiring are K49b's.
+  shared `FileVaultStore` journal. K49b (below) opens them in the
+  engine and binds the port in the app.
+- Pull-only sync (M2, 03 §4.3 steps 1 and 2, §4.4, §4.5, §10.1, D63,
+  K49b, #261): the engine runs `EnrollSync` and `RunSyncRound` through
+  the catalog library under `PushPolicy.none` (`engineSyncPushPolicy`),
+  one operation at a time in request order beside the request queue,
+  and its coordinator installs pulled pins through the engine's one
+  host-key store (K44a). Sync needs exclusive access to the support
+  directory: an unguarded engine refuses with `directoryShared`, and
+  enrollment uses the device id the app read after taking the instance
+  lock. The app's `EngineKeystoreResponder` answers the engine's
+  keystore requests (`KeystoreRequest`, `AnswerKeystore`) through
+  `ghost_keystore`, and a read never mints a key. You sign in from the
+  sync chip at the foot of the fleet rail, or the sync button on
+  phones, with the server address, account name, password and
+  encryption passphrase, and confirm that every device on the account
+  runs Séance 0.9.0 or later before anything is sent. An existing vault
+  is re-keyed through the journal; a first enrollment without one
+  installs the account key directly. The account's servers then lead
+  the fleet, ahead of imports, and stay after a restart; each round is
+  started by the user, none runs at startup or on a timer. Synced
+  servers have no connect config, so a `Connect` to one is rejected
+  until endpoint confirmation (K41) exists. Sign-out, switching
+  accounts, secrets, quarantine and pin-conflict surfaces are not
+  built. Tested against an in-memory sync server that refuses any push
+  and a fake OS keystore; no real Séance server or OS keystore has been
+  exercised, and the keychain sign-off stays a manual gate (06).
 - Local-only import (FL-02): desktops offer "Import from
   ~/.ssh/config" in the rail's add menu (in the app bar when the window
   is narrower than the desktop breakpoint); phones have no ssh_config and
