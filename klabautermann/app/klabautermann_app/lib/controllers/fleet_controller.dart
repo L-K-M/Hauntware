@@ -392,7 +392,13 @@ final class FleetController extends ChangeNotifier {
     // back in a later fleet, and the maps would grow with every churn.
     final ids = _serverIds = {for (final server in _servers) server.id};
     _linkStatuses.removeWhere((serverId, _) => !ids.contains(serverId));
-    _reachability.removeWhere((serverId, _) => !ids.contains(serverId));
+    // A server waiting for confirmation is not probed (03 §5.12), so an
+    // answer kept from before a sync changed its endpoint would describe
+    // the old one.
+    final pending = {for (final entry in _pendingEndpoints) entry.serverId};
+    _reachability.removeWhere(
+      (serverId, _) => !ids.contains(serverId) || pending.contains(serverId),
+    );
     notifyListeners();
   }
 

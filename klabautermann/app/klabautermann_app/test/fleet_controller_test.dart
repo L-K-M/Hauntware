@@ -176,6 +176,30 @@ void main() {
   });
 
   group('LinkState and Reachability (03 §10.1, D46)', () {
+    test('drop the probe answer of a server whose endpoint waits for '
+        'confirmation (03 §4.7, §5.12)', () async {
+      FleetEntry synced(EndpointConfirmation endpoint) => FleetEntry(
+        serverId: 'srv',
+        label: 'srv',
+        host: 'srv.example.com',
+        port: kSshDefaultPort,
+        origin: FleetEntryOrigin.synced,
+        endpoint: endpoint,
+      );
+      final fleet = controller();
+      engine
+        ..emit(CatalogReplaced([synced(EndpointConfirmation.confirmed)]))
+        ..emit(const Reachability('srv', ReachabilityStatus.online));
+      await settle();
+      expect(fleet.reachabilityFor('srv'), ReachabilityStatus.online);
+
+      engine
+        ..emit(const EndpointChanged('srv'))
+        ..emit(CatalogReplaced([synced(EndpointConfirmation.changed)]));
+      await settle();
+      expect(fleet.reachabilityFor('srv'), isNull);
+    });
+
     test('keep the last value per server and notify once per change', () async {
       final fleet = controller();
       engine.emit(CatalogReplaced([_entry('web-1')]));
