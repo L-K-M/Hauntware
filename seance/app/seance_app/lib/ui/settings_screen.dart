@@ -484,7 +484,8 @@ class _SettingsScreenState extends State<SettingsScreen>
         contentPadding: EdgeInsets.zero,
         title: const Text('Check for updates'),
         subtitle: const Text(
-          'Checks GitHub on launch and only links to the release page.',
+          'Checks GitHub on launch. Nothing is downloaded until you choose '
+          'to update.',
         ),
         value: _checkForUpdates,
         onChanged: (value) {

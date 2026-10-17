@@ -206,21 +206,21 @@ packages:
       path: "../../packages/ghost_desktop"
       relative: true
     source: path
-    version: "1.9.0"
+    version: "1.9.1"
   ghost_fonts:
     dependency: "direct main"
     description:
       path: "../../packages/ghost_fonts"
       relative: true
     source: path
-    version: "1.9.0"
+    version: "1.9.1"
   ghost_ui:
     dependency: "direct main"
     description:
       path: "../../packages/ghost_ui"
       relative: true
     source: path
-    version: "1.9.0"
+    version: "1.9.1"
   http:
     dependency: transitive
     description:
@@ -339,14 +339,14 @@ packages:
       path: "../../packages/planchette_core"
       relative: true
     source: path
-    version: "1.9.0"
+    version: "1.9.1"
   planchette_editor:
     dependency: "direct main"
     description:
       path: "../../packages/planchette_editor"
       relative: true
     source: path
-    version: "1.9.0"
+    version: "1.9.1"
   plugin_platform_interface:
     dependency: "direct dev"
     description:

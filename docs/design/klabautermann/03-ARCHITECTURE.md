@@ -248,7 +248,7 @@ placement · D54 runtime override in M3 · D55 no health overlay in the MVP
 cron zone rules · D59 capability cache · D60 threshold announcements ·
 D61 host-key pins and re-pin ·
 D62 sync state files and the keystore port · D63 pull-only sync in the
-engine.
+engine · D64 a server's confirmation covers its route.
 Proposals awaiting the owner close the section; they are not decisions.
 
 ### Shape and scope
@@ -1060,7 +1060,26 @@ Proposals awaiting the owner close the section; they are not decisions.
   and key derivation); sync while unguarded with in-memory stores (an
   enrollment that a restart forgets, and a token in the keystore with no
   account behind it); synced servers as connect targets before K41
-  (SAF-09).
+  (SAF-09). As built in K41 (D64, 4.7), a synced server gets its
+  `ServerConfig` as its connect config once its endpoint is confirmed.
+- **D64. A server's confirmation covers its route (K41, M2).** A synced
+  server is dialed only while its own endpoint pin and the pin of every
+  jump host on its route that the account holds match their current
+  values, since a connect through a hop hands that hop a credential too
+  (4.7). `ConfirmEndpoints(ids)` pins each named server as it stands and,
+  with it, each hop on its route that this device never confirmed, so
+  the server the user confirmed connects. A hop confirmed before keeps
+  its pin: when a sync changed it, it is listed as changed, and every
+  server behind it waits until the user confirms the hop in its own row,
+  so confirming a server never accepts a hop's new endpoint unseen. A pin
+  is the catalog library's `EndpointPin`, whose route is the hop ids
+  first hop first; a route that loops ends with the id closing the loop.
+  *Rejected:* pinning only the named ids (a server confirmed behind a
+  hop never confirmed would stay unconfirmed with nothing in its row to
+  say why); re-pinning every hop with the server (a hop that a sync
+  rewrote would be accepted through another server's row, whose route
+  shows the hop by label only); gating a server on its own pin alone (a
+  rewritten hop would receive the hop's credential in the background).
 
 ### Privilege and safety
 
@@ -1808,7 +1827,27 @@ holds the fleet assertion and the two MVP disclosures, and its "Sign in"
 stays disabled until the assertion is ticked, so `EnrollSync` is sent
 only then. Once signed in, the control runs a round; it opens the sheet
 again while no record has confirmed the passphrase or after the server
-refused the session. Steps 3 to 5 come with K41 and K30.
+refused the session. Steps 4 and 5 come with K30.
+
+As built in M2 (K41, D64), step 3 is a notice atop the fleet rows of the
+rail and the phone's list, scrolling with them, that counts the synced
+servers waiting for confirmation (never confirmed on this device, or
+changed since) whenever there are any, so it appears right after the
+sign-in's first pull; its "Review" opens the list. Each row shows the
+server's label, `user@host:port` and the jump route by label, and says
+when the endpoint changed since it was confirmed. A search narrows the
+rows by name, user and address, each row has a checkbox toggle, "Confirm
+all shown" confirms every row the search leaves, and "Confirm selected"
+the toggled ones; either sends `ConfirmEndpoints(ids)`. The list closes
+with a toast once the engine's fleet shows them confirmed, and says so
+in place when a pin could not be saved or a server still waits for a
+changed hop. Imports never appear. Whether they should is an owner
+question still open (O6 of the M2 remaining-work plan); until it is
+answered, the plan's recommended default applies: ssh_config imports
+are device-local and count as confirmed on the device that imported
+them, so endpoint pins apply to synced servers only, and an answer the
+other way would list imports here too. Unconfirmed servers stay
+listed in the fleet; opening one shows why it does not connect.
 
 ### 4.4 The catalog library
 
@@ -1981,6 +2020,28 @@ in the catalog library so Séance (which probes every configured server) and
 Poltergeist (which gates probing on a local connect,
 `PA/services/probe_settings_store.dart` [V]) can adopt it.
 
+As built in M2 (K41, D64): the engine opens the catalog library's
+`FileEndpointPinStore` over `endpoint_pins.json` only with
+`SupportDirectoryAccess.exclusive`; otherwise it keeps pins in memory,
+starting empty and reading nothing, since such an engine lists no synced
+server (D63). Each fleet entry of a synced server carries
+`endpoint` (`confirmed`, `unconfirmed`, `changed`); imports carry none
+(O6's default, 4.3). Only a confirmed server has a connect config, the
+synced `ServerConfig`, which the link supervisor and the jump-host
+resolver both read, so neither the user's `Connect` nor a background
+redial, probe or sampler dials any other synced server; the user's
+`Connect` gets `ConnectRejected(endpointNotConfirmed)`, which the
+server's views show as a banner. A sync round that leaves a confirmed
+server unconfirmed (its host, port, user or route changed, or a hop's)
+sends `EndpointChanged(serverId)`, closes its log streams and link,
+purges its capability cache (SYN-08) and then sends the fleet; the
+server's subscriptions stay, so it samples again once the user confirms
+it and its view connects. A pin that cannot be read counts as none. At
+start the engine purges the cached profiles of synced servers that are
+not confirmed. Pins of servers that leave the account are kept, which
+is the safe direction: a server that returns with the same endpoint is
+confirmed again, any other waits.
+
 ### 4.8 Synced record kinds (v1 onward)
 
 Protocol constraints: no envelope, crypto, LWW, blob layout or
@@ -2072,7 +2133,7 @@ platform identities in 04, section 12.3):
 | `vault.json`, `vault.json.rekey` | Credentials and re-key journal | `SC/src/store/` | MVP |
 | `host_keys.json`, `pin_verdicts.json`, `sync_tripwires.json` | Pins and quarantine state. From M2 the engine pins through the catalog library's `FileHostKeyStore`, one instance per engine that its links and, from K49b (D63), its sync coordinator share, and writes `host_keys.json` only while the process holds the directory alone; otherwise it reads the file once and keeps pins in memory (D61). As built in M2 (K49a, D62), the verdict and tripwire files are named `pin_verdicts.json` (negative pins and kept verdicts) and `sync_tripwires.json` (tripped record ids), owned by `klabautermann_core` over the catalog library's seams. A damaged file is renamed to `<name>.corrupt-<UTC time>` and the store starts empty; one it cannot read or rename, or one from a newer schema, is left as it is and no change is saved that run; nothing is written or renamed without exclusive access | catalog library; the verdict and tripwire files `klabautermann_core` [E] | MVP |
 | `sync_enrollment.json` [E] | Enrollment state (M2, K49a, D62): the push hold, the raised notices and the enrolled account (server URL, user name, mode); never the token or vault key, which stay in the keystore (4.5), and not the device id, which stays in `settings.json`. Kept like the verdict files; a damaged file reads as not enrolled | `klabautermann_core` [E] | MVP |
-| `endpoint_pins.json` | Confirmed endpoints | catalog library | MVP |
+| `endpoint_pins.json` | Confirmed endpoints. As built in M2 (K41), written by the engine through the catalog library's `FileEndpointPinStore` only with exclusive access; otherwise pins last for the engine's run (4.7) | catalog library | MVP |
 | `ssh_config_imports.json` [E] | D13's device-local store for FL-02 imports from `~/.ssh/config`, replaced whole by each import; never pushed (D14). Schema 3 (M2) holds each host's alias, host, port, user, `IdentityFile` and `ProxyJump` with the values ssh would use (10.1): the effective host (`%h` expanded, lowercased unless an address) and port, the first `IdentityFile` that is not `none`, and the `ProxyJump` as written; under `hops` it holds the same for each other name a stored route gives. An older file holds addresses only: schema 1 (M1) kept no `IdentityFile` or `ProxyJump` and kept `HostName` as written, `%h` included, and schema 2 read each host's values from its first block alone. Its hosts are listed as stored, with no `jumpRoute`, `authKind` or `locatorConflict`, and get no connect config until the next import rewrites the file. Built in M1: the engine isolate loads it at start and saves each import atomically before it answers (10.1). A damaged file is renamed to `ssh_config_imports.json.corrupt-<UTC time>`; a file it cannot read or rename, or one from a newer schema, is left as it is and no import is saved that run | `klabautermann_core` [E] | MVP |
 | `settings.json` | Device settings, `klabautermann.sync.deviceId` (minted once, never regenerated), whether the first-run coverage card was dismissed (`klabautermann.coverage.firstRunCardDismissed`, M2, 9.5; anything but `true` shows the card again), whether threshold-band changes are announced (`klabautermann.accessibility.announceThresholdBands`, M2, D60; anything but `false` announces), monitor set, per-server device preferences | app | MVP |
 | `window_state.json` | The desktop main window's last normal frame and its maximized and full-screen flags (10.2), in the shape Séance's file established (`x`, `y`, `width`, `height`, `isMaximized`, `isFullScreen`; physical pixels on Windows); never synced. Added in M1, a deviation from the plan, which listed no window file: kept out of `settings.json`, as Séance and Planchette keep theirs, so debounced drag saves never rewrite the file that holds the device id | app | MVP |
@@ -4521,8 +4582,8 @@ shows there.
 | `EnrollSync(baseUrl, username, password, encryptionPassphrase)`, `RunSyncRound` | `CatalogReplaced(entries)`, `SyncStatus(phase, operation, account, failure, passphraseUnverified)` |
 | `AnswerKeystore(requestId, result)` (D62) | `KeystoreRequest(requestId, operation)`: the engine asks the app for the OS keystore |
 | `ImportSshConfig(text)` (FL-02, desktop) | `CatalogReplaced(entries)` with the imports, then `SshConfigImported(importedCount, skippedCount, saved)` |
-| `ConfirmEndpoints(ids)`, `SetMonitorSet(ids)` | `EndpointChanged(serverId)` |
-| `Connect(serverId)`, `Disconnect(serverId)` | `LinkState(serverId, status)` (D46's states plus `blocked`; typed reasons inside the status), `ConnectRejected(serverId, reason)` (no config to dial with, D61) |
+| `ConfirmEndpoints(ids)` (K41, 4.7), `SetMonitorSet(ids)` | `CatalogReplaced(entries)` with each synced entry's `endpoint`, after `RequestRejected` when a pin could not be saved; `EndpointChanged(serverId)` when a sync changes a confirmed endpoint |
+| `Connect(serverId)`, `Disconnect(serverId)` | `LinkState(serverId, status)` (D46's states plus `blocked`; typed reasons inside the status), `ConnectRejected(serverId, reason)` (no config to dial with, D61, or an endpoint not confirmed, 4.7) |
 | `Subscribe(serverId, subscriptionId, streams)`, `Unsubscribe(serverId, subscriptionId)`, `RefreshSubscription(serverId, subscriptionId)` (a phone's pull to refresh, PLT-02), `SetCadenceProfile(profile)`; app activity is a separate request too (D45) | `Sample(serverId, stream, seq, at, result)` (engine-owned `seq`, D44; rates and derived values, D43), `SamplingState(serverId, phase, since)`, `Gap(serverId, streams, from, until, cause)` |
 | none: the engine probes after connecting (6.1) | `HostProfileChanged(serverId, profile, cachedAt)` (`cachedAt` only on the device cache's copy, D59) |
 | `OpenLogStream(streamId, spec)`, `CloseStream(streamId)` | `LogBatch(streamId, records, dropped)` (at most 20 per second per stream [E]), `LogStreamState(streamId, status)` |
@@ -5043,6 +5104,17 @@ the engine in `engine_isolate.dart` beside it):
   key without minting, write it) and `AnswerKeystore` carries its
   result (done, a value, or refused with a diagnostic); a write the app
   refuses throws in the engine, and a read reads as none.
+- **Version 3 (M2 endpoints).** Endpoint confirmation joined version 3
+  the same way (K41, D64, 4.7). `FleetEntry` gained `endpoint`, null for
+  an import; `ConnectRejectedReason` gained `endpointNotConfirmed`;
+  `ConfirmEndpoints(ids)` skips ids that are no synced server and is
+  answered by the fleet, after `RequestRejected` naming
+  `endpoint_pins.json` when a pin was not saved, so the fleet ends the
+  request either way; `EndpointChanged(serverId)` precedes the fleet of
+  the round that changed a confirmed endpoint. The fleet controller
+  keeps the waiting entries for the confirmation list, and the
+  monitoring controller sends `Connect` again for a server a view holds
+  when its endpoint changed, so its banner says why.
 - **Version 3 (M3 Docker reads).** Docker queries joined version 3 the
   same way (D05). Within it the protocol shape is decided here rather
   than in a numbered row: `DockerQuery` carries the app's `queryId`,
@@ -5124,7 +5196,11 @@ the engine in `engine_isolate.dart` beside it):
   client hands the startup fleet to the fleet controller alone, so the
   monitoring controller has no endpoint to compare on the first import
   after launch; that purge needs the engine to report the change
-  (`EndpointChanged`) or the startup entries. The engine's
+  (`EndpointChanged`) or the startup entries. From K41 the engine
+  reports it for synced servers, and purges its own device cache, but
+  the monitoring controller still keeps the session readings across it:
+  the views and fleet rows hold their notifiers, so dropping them needs
+  a reset of each ring and box, which is left for later. The engine's
   `RequestRejected` of `Connect` (an id outside the fleet, or links off)
   shows nothing; a `ConnectRejected` shows on the server's views (M2
   pins, above). A server that leaves the fleet is sent nothing until it

@@ -3346,7 +3346,7 @@ abstract class AppLocalizations {
   /// Explainer under the update-check toggle; the D19/D23 trust claim.
   ///
   /// In en, this message translates to:
-  /// **'Checks GitHub on launch and only links to the release page — it never downloads anything.'**
+  /// **'Checks GitHub on launch. Nothing is downloaded until you choose to update.'**
   String get updateCheckEnabledSubtitle;
 
   /// 04 §4.3's verbatim section title.
@@ -9639,7 +9639,73 @@ abstract class AppLocalizations {
   /// **'Poltergeist {version} is available'**
   String alertUpdateAvailable(String version);
 
-  /// Alert row action: retry the failed transfer.
+  /// Detail under the update alert on Android, before the user chooses Update: the APK's size, e.g. "104 MB download".
+  ///
+  /// In en, this message translates to:
+  /// **'{size} download'**
+  String alertUpdateDownloadSize(String size);
+
+  /// Update alert title on Android while the release APK downloads.
+  ///
+  /// In en, this message translates to:
+  /// **'Downloading Poltergeist {version}…'**
+  String alertUpdateDownloading(String version);
+
+  /// Detail under the downloading update alert, e.g. "12 MB of 104 MB".
+  ///
+  /// In en, this message translates to:
+  /// **'{received} of {total}'**
+  String alertUpdateProgress(String received, String total);
+
+  /// Update alert title on Android once the verified APK went to the system installer and the user backed out of it.
+  ///
+  /// In en, this message translates to:
+  /// **'Poltergeist {version} is ready to install'**
+  String alertUpdateReady(String version);
+
+  /// Update alert title on Android after the download or the installer failed; the detail says which.
+  ///
+  /// In en, this message translates to:
+  /// **'Poltergeist {version} could not be installed'**
+  String alertUpdateFailed(String version);
+
+  /// Detail of a failed Android update: offline, timed out, or the server refused the file.
+  ///
+  /// In en, this message translates to:
+  /// **'The download did not finish. Check your connection and try again.'**
+  String get alertUpdateFailedDownload;
+
+  /// Detail of a failed Android update: the APK's size or SHA-256 digest differed from the release's.
+  ///
+  /// In en, this message translates to:
+  /// **'The download did not match the release and was discarded.'**
+  String get alertUpdateFailedVerification;
+
+  /// Detail of a failed Android update: the system installer could not be opened or refused the file.
+  ///
+  /// In en, this message translates to:
+  /// **'Android could not open the installer.'**
+  String get alertUpdateFailedInstaller;
+
+  /// Alert row action on Android: download the release APK and open the system installer.
+  ///
+  /// In en, this message translates to:
+  /// **'Update'**
+  String get alertActionUpdate;
+
+  /// Alert row action on Android: reopen the system installer for the downloaded update.
+  ///
+  /// In en, this message translates to:
+  /// **'Install'**
+  String get alertActionInstall;
+
+  /// Alert row action: stop the running update download.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get alertActionCancel;
+
+  /// Alert row action: retry the failed transfer or update.
   ///
   /// In en, this message translates to:
   /// **'Retry'**

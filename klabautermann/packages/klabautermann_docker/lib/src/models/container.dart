@@ -158,6 +158,9 @@ final class ContainerSummary {
   final Map<String, MaskedValue> labels;
   final String? state;
   final String? status;
+
+  /// From `Health.Status` (API 1.52+) or the `Status` text; null when
+  /// neither names a state.
   final HealthStatus? health;
   final List<ContainerMount> mounts;
   final String? networkMode;
@@ -198,6 +201,12 @@ final class ContainerSummary {
       }
     }
     final hostConfig = r.map('HostConfig');
+    // From API 1.52 the list carries `Health`; older daemons only mark it
+    // in the `Status` text.
+    final health = r.map('Health');
+    final healthName = health == null
+        ? null
+        : JsonReader(health, r.warnings).string('Status');
     return ContainerSummary(
       id: r.string('Id') ?? '',
       names: r.stringList('Names'),
@@ -213,7 +222,9 @@ final class ContainerSummary {
       labels: maskedLabels(r.stringMap('Labels')),
       state: r.string('State'),
       status: r.string('Status'),
-      health: healthFromStatus(r.string('Status')),
+      health:
+          HealthStatus.fromName(healthName) ??
+          healthFromStatus(r.string('Status')),
       mounts: [
         for (final e in r.list('Mounts') ?? const <Object?>[])
           if (e is Map)
